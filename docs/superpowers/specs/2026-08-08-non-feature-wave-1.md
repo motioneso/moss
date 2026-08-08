@@ -43,13 +43,13 @@ Current `main` (`5a5b0a8a7860`) is green in CI.
 
 ## Architecture and scope
 
-| Issue | Intended files | Smallest implementation |
-| --- | --- | --- |
-| #1448 | `vitest.config.ts`; one focused unit/jsdom regression | Add the real `@moss/news/web` entry before `@moss/news`; remove the local workaround only if the owning test proves it is redundant. |
-| #887 | Existing notification integration test file | Fix the test clock/window; do not change notification production behavior. |
-| #1412 | `packages/ui/src/masthead.tsx`; focused component assertion | Insert semantic whitespace in the shared component. |
-| #903 | `packages/sports/src/followed-groups.ts`, `packages/sports/src/repository.ts`, existing Sports unit test | Add a stable ID tie-break and matching secondary repository order. |
-| #1272 | One focused structured-state manifest/SQL parity test | Compare the declared migration names with the existing SQL directory using the nearest established test pattern. |
+| Issue | Intended files                                                                                           | Smallest implementation                                                                                                              |
+| ----- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| #1448 | `vitest.config.ts`; one focused unit/jsdom regression                                                    | Add the real `@moss/news/web` entry before `@moss/news`; remove the local workaround only if the owning test proves it is redundant. |
+| #887  | Existing notification integration test file                                                              | Fix the test clock/window; do not change notification production behavior.                                                           |
+| #1412 | `packages/ui/src/masthead.tsx`; focused component assertion                                              | Insert semantic whitespace in the shared component.                                                                                  |
+| #903  | `packages/sports/src/followed-groups.ts`, `packages/sports/src/repository.ts`, existing Sports unit test | Add a stable ID tie-break and matching secondary repository order.                                                                   |
+| #1272 | One focused structured-state manifest/SQL parity test                                                    | Compare the declared migration names with the existing SQL directory using the nearest established test pattern.                     |
 
 ## Exit criteria
 
