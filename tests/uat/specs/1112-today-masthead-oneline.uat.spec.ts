@@ -51,3 +51,33 @@ test("greeting and dateline share the same top line on the Today masthead", asyn
   // Guard against a false pass where both boxes collapse to the same degenerate (0,0) origin.
   expect(greetingBox.y).toBeGreaterThan(0);
 });
+
+// #1412: packages/ui/src/masthead.tsx joined the title and accent spans with no whitespace
+// node, so real headline text (e.g. "ONE" + "ON THE BOOKS") rendered as "ONEON THE BOOKS" in
+// DOM text content — broken for copy/paste and screen readers, not just visually. Mode-agnostic:
+// doesn't assume which today-labels.ts buildHeadline() branch the seed data lands on.
+test("masthead title and accent are separated by a real space", async ({ page }) => {
+  const baseURL = process.env.JARVIS_UAT_BASE_URL;
+  if (!baseURL) {
+    throw new Error("JARVIS_UAT_BASE_URL must be set by run-uat.ts");
+  }
+
+  await page.goto(baseURL);
+  await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
+  await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
+  await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
+
+  const titleEl = page.locator(".jds-masthead__title");
+  await expect(titleEl).toBeVisible();
+
+  const accentEl = titleEl.locator(".jds-masthead__accent");
+  if ((await accentEl.count()) === 0) {
+    // buildHeadline() has one branch with no accent; nothing to prove a space between.
+    return;
+  }
+
+  const topText = (await titleEl.locator("> span").first().innerText()).trim();
+  const accentText = (await accentEl.innerText()).trim();
+  const fullText = (await titleEl.innerText()).trim();
+  expect(fullText).toBe(`${topText} ${accentText}`);
+});
