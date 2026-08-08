@@ -4,9 +4,8 @@
 // These exercise the DOM adapter against markup shaped like today-page.tsx's event cards.
 import { describe, expect, it, vi } from "vitest";
 
-// page-context imports app-route-metadata, which reaches `virtual:moss-module-web`. Under jsdom
-// that chain dies on the vitest.config `@moss/news` alias, which prefix-matches `@moss/news/web`
-// and rewrites it to a path that does not exist. Nothing here depends on route headings.
+// page-context imports app-route-metadata, which reaches the shared virtual module fixture. Keep
+// this focused test isolated from unrelated module-web alias coverage (notably sports).
 vi.mock("../../apps/web/src/app-route-metadata.js", () => ({
   resolvePageHeading: () => ({ title: "Today" })
 }));
