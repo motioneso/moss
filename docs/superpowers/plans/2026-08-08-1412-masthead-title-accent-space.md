@@ -51,6 +51,7 @@ expect((await titleEl.innerText()).trim()).toBe(`${topText} ${accentText}`);
 ```
 
 Add one row to `.claude/skills/coordinate/uat-trigger-map.tsv`:
+
 ```
 blocking	packages/ui/src/masthead.tsx	tests/uat/specs/1412-masthead-title-accent-space.uat.spec.ts
 ```
@@ -62,6 +63,7 @@ pnpm test:uat -- 1412-masthead-title-accent-space > /tmp/masthead-uat.log 2>&1; 
 Proof posted via `gh pr comment` at wrap-up.
 
 ## Pre-push (per coordinator note: main was red only on Prettier for the shared spec, fixed at
+
 `00ec6d5f5` — rebase onto origin/main, do not touch the shared spec file in this lane)
 
 ```bash
