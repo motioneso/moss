@@ -1,5 +1,11 @@
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+
+// Written to a TRACKED path (test-results/ is gitignored) so the PNGs can be committed and
+// embedded in the PR as durable evidence (docs/evidence/1185-news-live precedent).
+const EVIDENCE_DIR = join(process.cwd(), "docs/evidence/1412-masthead-space");
 
 // #1112: admin+data seeds the onboarding chunk as complete (tests/uat/seed/levels.ts), so a
 // freshly-logged-in owner at this level lands directly on AppShell/Today — no wizard to dismiss.
@@ -54,13 +60,22 @@ test("greeting and dateline share the same top line on the Today masthead", asyn
 
 // #1412: packages/ui/src/masthead.tsx joined the title and accent spans with no whitespace
 // node, so real headline text (e.g. "ONE" + "ON THE BOOKS") rendered as "ONEON THE BOOKS" in
-// DOM text content — broken for copy/paste and screen readers, not just visually. Mode-agnostic:
-// doesn't assume which today-labels.ts buildHeadline() branch the seed data lands on.
+// DOM text content — broken for copy/paste and screen readers, not just visually.
+//
+// The accent is required, not optional, at this seed level: tests/uat/seed/chunks/tasks.ts seeds
+// a task due before UAT_SEED_BASE_TIMESTAMP (tests/uat/seed/timestamps.ts), which is always in
+// the past relative to real wall-clock time, so isAtRisk()/needsYou stays > 0 forever and
+// apps/web/src/today/today-labels.ts buildHeadline() has no branch that returns an empty accent
+// at admin+data — every path (evening/needsYou/eventsLeft/default) sets a non-empty accent
+// string. A missing accent element here means the fix regressed or the seed data changed
+// underneath this test, not a legitimate "no accent" state — fail loudly instead of skipping.
 test("masthead title and accent are separated by a real space", async ({ page }) => {
   const baseURL = process.env.JARVIS_UAT_BASE_URL;
   if (!baseURL) {
     throw new Error("JARVIS_UAT_BASE_URL must be set by run-uat.ts");
   }
+
+  await mkdir(EVIDENCE_DIR, { recursive: true });
 
   await page.goto(baseURL);
   await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
@@ -71,13 +86,13 @@ test("masthead title and accent are separated by a real space", async ({ page })
   await expect(titleEl).toBeVisible();
 
   const accentEl = titleEl.locator(".jds-masthead__accent");
-  if ((await accentEl.count()) === 0) {
-    // buildHeadline() has one branch with no accent; nothing to prove a space between.
-    return;
-  }
+  await expect(accentEl).toHaveCount(1);
 
   const topText = (await titleEl.locator("> span").first().innerText()).trim();
   const accentText = (await accentEl.innerText()).trim();
   const fullText = (await titleEl.innerText()).trim();
+
+  await page.screenshot({ path: join(EVIDENCE_DIR, "masthead-title-accent-space.png") });
+
   expect(fullText).toBe(`${topText} ${accentText}`);
 });
