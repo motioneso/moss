@@ -439,6 +439,11 @@ describe("Notifications module M5 — actor-scoped hardening", () => {
         repo.getById(scopedDb, deferred.id)
       );
       expect(byId).toBeUndefined();
+
+      const listed = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+        repo.listVisible(scopedDb)
+      );
+      expect(listed.notifications).not.toContainEqual(expect.objectContaining({ id: deferred.id }));
     } finally {
       vi.useRealTimers();
     }
