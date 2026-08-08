@@ -16,7 +16,12 @@ export function Masthead(props: MastheadProps) {
           <p className="jds-masthead__eyebrow">{props.eyebrow}</p>
           <h1 className="jds-masthead__title">
             <span>{props.title}</span>
-            {props.accent ? <span className="jds-masthead__accent">{props.accent}</span> : null}
+            {props.accent ? (
+              <>
+                {" "}
+                <span className="jds-masthead__accent">{props.accent}</span>
+              </>
+            ) : null}
           </h1>
           {props.lede ? <p className="jds-masthead__lede">{props.lede}</p> : null}
         </div>
