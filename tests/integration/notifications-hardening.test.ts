@@ -4,7 +4,7 @@
 // ./notifications-harness.ts. This file builds its own trimmed harness — no workerDb/
 // workerDataContext, no registerNotificationsRoutes probe, no admin/userB context — since none
 // of these tests need them.
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import type { Kysely } from "kysely";
 import pg from "pg";
@@ -413,25 +413,35 @@ describe("Notifications module M5 — actor-scoped hardening", () => {
   });
 
   it("normal notification deferred during active quiet hours; hidden from listVisible", async () => {
-    // All-day UTC window (00:00–23:59) means now() is always inside quiet hours.
-    const allDayPort: QuietHoursPort = {
-      getSettings: async () => ({ enabled: true, start: "00:00", end: "23:59", timezone: "UTC" }),
-      getLocaleTimezone: async () => null
-    };
-    const repo = new NotificationsRepository(allDayPort);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2099-08-08T23:58:30.000Z"));
+    try {
+      // All-day UTC window (00:00–23:59) means now() is always inside quiet hours.
+      const allDayPort: QuietHoursPort = {
+        getSettings: async () => ({ enabled: true, start: "00:00", end: "23:59", timezone: "UTC" }),
+        getLocaleTimezone: async () => null
+      };
+      const repo = new NotificationsRepository(allDayPort);
 
-    const deferred = (await dataContext.withDataContext(userAContext(), (scopedDb) =>
-      repo.create(scopedDb, { moduleId: "briefings", title: "Deferred normal", urgency: "normal" })
-    ))!;
-    expect(deferred.deferred_until).toBeInstanceOf(Date);
-    // deferred_until must be in the future (end of today's 23:59 UTC window)
-    expect(deferred.deferred_until!.getTime()).toBeGreaterThan(Date.now());
+      const deferred = (await dataContext.withDataContext(userAContext(), (scopedDb) =>
+        repo.create(scopedDb, {
+          moduleId: "briefings",
+          title: "Deferred normal",
+          urgency: "normal"
+        })
+      ))!;
+      expect(deferred.deferred_until).toBeInstanceOf(Date);
+      // deferred_until must be in the future (end of the fixed 23:59 UTC window)
+      expect(deferred.deferred_until!.getTime()).toBeGreaterThan(Date.now());
 
-    // Must be hidden from listVisible (filter: deferred_until IS NULL OR now() >= deferred_until)
-    const byId = await dataContext.withDataContext(userAContext(), (scopedDb) =>
-      repo.getById(scopedDb, deferred.id)
-    );
-    expect(byId).toBeUndefined();
+      // Must be hidden from listVisible (filter: deferred_until IS NULL OR now() >= deferred_until)
+      const byId = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+        repo.getById(scopedDb, deferred.id)
+      );
+      expect(byId).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("locale timezone used as fallback; overnight math correct with real PT offset", async () => {
