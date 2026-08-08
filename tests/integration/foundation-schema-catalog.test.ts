@@ -327,7 +327,9 @@ describe("MVP foundation schema catalog", () => {
         // directory, so a core migration would run before 0123/0127/0145 had created the tables
         // and abort 42P01 on a fresh database. Versions stay globally unique.
         { version: "0182", name: "0182_moss_rename_goals.sql" },
-        { version: "0183", name: "0183_moss_rename_ai.sql" }
+        { version: "0183", name: "0183_moss_rename_ai.sql" },
+        // #1383 — narrow audit-insert grant for the sanctioned admin-reset-password CLI.
+        { version: "0184", name: "0184_admin_reset_password_audit_insert.sql" }
       ]);
     } finally {
       await client.end();

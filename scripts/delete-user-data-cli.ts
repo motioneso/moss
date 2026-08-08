@@ -27,6 +27,7 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { assertOperatorConfirmsTargetOwner, createDatabase, getMossDatabaseUrls } from "@moss/db";
 import { getExternalModuleDeletionTables, getModuleDeletionTables } from "@moss/module-registry";
 
 import { deleteUserData } from "./delete-user-data.js";
@@ -42,8 +43,21 @@ async function main(): Promise<void> {
 
   if (!args.userId) {
     throw new Error(
-      "Usage: pnpm delete:user -- --user-id <uuid> [--actor-user-id <uuid>] [--execute --confirm-user-id <uuid>]"
+      "Usage: pnpm delete:user -- --user-id <uuid> [--actor-user-id <uuid>] " +
+        "[--execute --confirm-user-id <uuid> --confirm-owner-email <email>]"
     );
+  }
+
+  if (args.execute) {
+    // #1383: prove this run is pointed at the instance the operator thinks it is before any
+    // destructive DML runs on the bootstrap connection — independent of --confirm-user-id,
+    // which only confirms the target user, not the target database.
+    const db = createDatabase({ connectionString: getMossDatabaseUrls().migration });
+    try {
+      await assertOperatorConfirmsTargetOwner(db, args.confirmOwnerEmail);
+    } finally {
+      await db.destroy();
+    }
   }
 
   const result = await deleteUserData({
@@ -71,12 +85,14 @@ async function main(): Promise<void> {
 
 function parseArgs(args: readonly string[]): {
   readonly actorUserId?: string;
+  readonly confirmOwnerEmail?: string;
   readonly confirmUserId?: string;
   readonly execute: boolean;
   readonly userId?: string;
 } {
   return {
     actorUserId: readFlag(args, "--actor-user-id"),
+    confirmOwnerEmail: readFlag(args, "--confirm-owner-email"),
     confirmUserId: readFlag(args, "--confirm-user-id"),
     execute: args.includes("--execute"),
     userId: readFlag(args, "--user-id")

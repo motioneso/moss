@@ -12,5 +12,6 @@ export * from "./module-storage-rpc.js";
 export * from "./role-bootstrap.js";
 export * from "./secret-cipher.js";
 export * from "./sharing/index.js";
+export * from "./target-identity-guard.js";
 export * from "./types.js";
 export * from "./urls.js";
