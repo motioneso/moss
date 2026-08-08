@@ -16,11 +16,11 @@
 
 | Spec | Issue | Tier | Builder | Status | Agent label | Branch | PR |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `docs/superpowers/specs/2026-08-08-non-feature-wave-1.md` | #1448 | routine | GPT-5.6 Luna high | queued | — | `fix-1448-news-vitest-alias` | — |
-| same | #887 | routine | GPT-5.6 Luna high | queued | — | `fix-887-quiet-hours-flake` | — |
-| same | #1412 | routine | Sonnet 5 (`sonnet`) | queued | — | `fix-1412-masthead-space` | — |
-| same | #903 | routine | Sonnet 5 (`sonnet`) | queued | — | `fix-903-sports-tiebreak` | — |
-| same | #1272 | routine | Sonnet 5 (`sonnet`) | queued | — | `test-1272-structured-state-migrations` | — |
+| `docs/superpowers/specs/2026-08-08-non-feature-wave-1.md` | #1448 | routine | GPT-5.6 Luna high | building | `News alias #1448` / `019fe342-086e-7be3-8ddf-db6a1a5960ad` | `fix-1448-news-vitest-alias` | — |
+| same | #887 | routine | GPT-5.6 Luna high | building | `Quiet-hours #887` / `019fe342-08cc-7b70-a574-dae8c26452b9` | `fix-887-quiet-hours-flake` | — |
+| same | #1412 | routine | Sonnet 5 (`sonnet`) | building | `Masthead #1412` / `b34dd772-ad76-4bba-88c7-084ac05e9b67` | `fix-1412-masthead-space` | — |
+| same | #903 | routine | Sonnet 5 (`sonnet`) | building | `Sports tie-break #903` / `b5d43aea-c5b8-4a5b-bd97-8c914cedd98f` | `fix-903-sports-tiebreak` | — |
+| same | #1272 | routine | Sonnet 5 (`sonnet`) | building | `Migration pin #1272` / `162af5a5-c3f1-48a6-82cb-db4b0e33a3bb` | `test-1272-structured-state-migrations` | — |
 
 ## Dependency and collision map
 
