@@ -28,11 +28,16 @@ export function canonicalClubKey(
 
 // Primary competition selection (spec Design): league beats tournament outright, regardless of
 // recency; only once no league is present (or several tie) does newest `createdAt` decide. ISO
-// timestamps sort correctly lexicographically, so string compare is exact.
+// timestamps sort correctly lexicographically, so string compare is exact. When `createdAt` also
+// ties (#903), ascending `id` breaks it, matching SportsFollowsRepository.list()'s secondary
+// `ORDER BY id` so the in-memory and database orderings agree on the same winner.
 export function selectPrimaryFollow(follows: readonly ResolvedFollow[]): ResolvedFollow {
   const leagues = follows.filter((f) => catalogEntry(f.competitionKey)?.kind === "league");
   const pool = leagues.length > 0 ? leagues : follows;
-  return [...pool].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]!;
+  return [...pool].sort((a, b) => {
+    const byCreatedAt = b.createdAt.localeCompare(a.createdAt);
+    return byCreatedAt !== 0 ? byCreatedAt : a.id.localeCompare(b.id);
+  })[0]!;
 }
 
 /** Groups followed-team rows by canonical club key. A row whose `sourceTeamId` doesn't resolve
