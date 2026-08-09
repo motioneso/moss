@@ -16,10 +16,10 @@ autonomous overnight run across both waves; escalations route to `Agent(model: "
 
 | Spec | Issue | Tier | Status | Agent label | Branch | PR |
 | --- | --- | --- | --- | --- | --- | --- |
-| `docs/superpowers/specs/2026-08-08-non-feature-wave-2.md` | #1155 | routine | queued | — | — | — |
-| same | #1207 | routine | queued | — | — | — |
-| same | #1115 | routine | queued | — | — | — |
-| same | #1433 | routine | queued | — | — | — |
+| `docs/superpowers/specs/2026-08-08-non-feature-wave-2.md` | #1155 | routine | building | `PR1155 schedule key slash` (`pr1155-schedule-key-slash`, w1:p2A) | `fix-1155-schedule-key-slash` | — |
+| same | #1207 | routine | building | `PR1207 transcript aria-live` (`pr1207-transcript-aria-live`, w1:p29) | `fix-1207-transcript-aria-live` | — |
+| same | #1115 | routine | building | `PR1115 overdue indicator` (`pr1115-overdue-indicator`, w1:p2B) | `fix-1115-overdue-indicator` | — |
+| same | #1433 | routine | building | `PR1433 dataset fetch warning` (`pr1433-dataset-fetch-warning`, w1:p2C) | `fix-1433-dataset-fetch-warning` | — |
 | same | #1453 | routine | merged (as Wave 1 unblocker) | `Google schedule root #1453 r2` (reaped) | `fix-1453-google-schedule-root` | #1476 |
 
 ## Grounding evidence
