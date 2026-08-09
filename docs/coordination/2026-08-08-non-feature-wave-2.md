@@ -18,7 +18,7 @@ autonomous overnight run across both waves; escalations route to `Agent(model: "
 | --- | --- | --- | --- | --- | --- | --- |
 | `docs/superpowers/specs/2026-08-08-non-feature-wave-2.md` | #1155 | routine | building | `PR1155 schedule key slash` (`pr1155-schedule-key-slash`, w1:p2A) | `fix-1155-schedule-key-slash` | — |
 | same | #1207 | routine | building | `PR1207 transcript aria-live` (`pr1207-transcript-aria-live`, w1:p29) | `fix-1207-transcript-aria-live` | — |
-| same | #1115 | routine | PR open, gate green (VF_EXIT=0), live-path proof mid-debug (Playwright sign-in POSTs 200 but UI doesn't navigate past sign-in) | `pr1115-relay2` (w1:p2F) | `fix-1115-overdue-indicator` | #1478 |
+| same | #1115 | routine | PR open, gate green (VF_EXIT=0), live-path proof posted, teardown clean, QA running | `pr1115-relay2` (w1:p2F) | `fix-1115-overdue-indicator` | #1478 |
 | same | #1433 | routine | PR open, QA verdict YELLOW (pending CI "Verify foundation and app"; log-safety + exit-criteria confirmed, 0 blocking) | `pr1433-wrapup` (w1:p2E) | `fix-1433-dataset-fetch-warning` | #1477 |
 | same | #1453 | routine | merged (as Wave 1 unblocker) | `Google schedule root #1453 r2` (reaped) | `fix-1453-google-schedule-root` | #1476 |
 
