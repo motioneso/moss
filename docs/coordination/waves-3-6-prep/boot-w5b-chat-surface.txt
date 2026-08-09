@@ -1,5 +1,5 @@
 Build w5b-chat-surface in this fresh worktree. STEP 1 pnpm install. STEP 2 read your handoff doc
-docs/coordination/waves-3-6-prep/handoff-w5b-chat-surface.md (it's short - that's the point) and follow the
-coordinated-build skill. Read the spec/plan by SECTION for your current task only - never in
-full; full-reads bloat a fresh context and trigger premature relays. Reading is not progress:
-BUILD, commit per task, relay only after real work past ~80%. Begin now.
+/home/ben/Jarv1s/docs/coordination/waves-3-6-prep/handoff-w5b-chat-surface.md (it's short - that's the
+point) and follow the coordinated-build skill. Read the spec/plan by SECTION for your current
+task only - never in full; full-reads bloat a fresh context and trigger premature relays.
+Reading is not progress: BUILD, commit per task, relay only after real work past ~80%. Begin now.
