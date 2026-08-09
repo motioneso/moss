@@ -101,6 +101,7 @@ export function Composer(props: {
   // never persisted or reported anywhere.
   const [micError, setMicError] = useState<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
   // #1133 — files staged for the next turn. Uploads start immediately on pick/paste so the
@@ -291,15 +292,22 @@ export function Composer(props: {
 
   const startRecording = async () => {
     setMicError(null);
+    const mediaDevicesAvailable = typeof navigator.mediaDevices?.getUserMedia === "function";
+    if (!mediaDevicesAvailable) {
+      setMicError(classifyMicError(undefined, false));
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
+      streamRef.current = stream;
       chunksRef.current = [];
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) chunksRef.current.push(event.data);
       };
       recorder.onstop = () => {
         for (const track of stream.getTracks()) track.stop();
+        streamRef.current = null;
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
         chunksRef.current = [];
         void transcribeAndInsert(blob);
@@ -307,9 +315,9 @@ export function Composer(props: {
       recorderRef.current = recorder;
       recorder.start();
       setRecording(true);
-    } catch {
+    } catch (error) {
       // Denied permission or no device — surfaced inline, never sent to the server.
-      setMicError("Microphone access was denied or unavailable.");
+      setMicError(classifyMicError(error, true));
     }
   };
 
@@ -318,6 +326,12 @@ export function Composer(props: {
     recorderRef.current = null;
     setRecording(false);
   };
+
+  useEffect(() => {
+    return () => {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
 
   const transcribeAndInsert = async (blob: Blob) => {
     setTranscribing(true);
@@ -528,4 +542,22 @@ export function mergeTranscriptIntoText(current: string, transcript: string): st
   if (!trimmedTranscript) return current;
   const trimmedCurrent = current.trim();
   return trimmedCurrent ? `${trimmedCurrent} ${trimmedTranscript}` : trimmedTranscript;
+}
+
+/**
+ * Classifies a mic-start failure into a user-facing message (#900). Exported so the insecure-origin
+ * and permission/device branches are directly unit-testable without needing a full interactive
+ * render of the composer.
+ */
+export function classifyMicError(error: unknown, mediaDevicesAvailable: boolean): string {
+  if (!mediaDevicesAvailable) {
+    return "Voice input needs a secure connection (HTTPS). You're on an insecure origin.";
+  }
+  if (error instanceof DOMException && (error.name === "NotAllowedError" || error.name === "SecurityError")) {
+    return "Microphone permission was denied. Enable it in your browser settings.";
+  }
+  if (error instanceof DOMException && (error.name === "NotFoundError" || error.name === "NotReadableError")) {
+    return "No microphone found.";
+  }
+  return "Microphone access was denied or unavailable.";
 }
