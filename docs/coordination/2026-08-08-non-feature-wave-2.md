@@ -57,3 +57,10 @@ None. A red check stops the lane.
   plan+handoff doc fix as `e4c064cd2`; successor `pr1115-relay` (`39efc7c2-f3bc-4334-b0e3-55896a542a5c`,
   w1:p2D) confirmed driving `coordinated-wrap-up` (gate running) before the old pane (w1:p2B) was
   closed.
+- `PR1433 dataset fetch warning` / `5d82b132-fa9d-4cb1-a6a2-af5207275c3e` — relayed at 70% during
+  wrap-up (build committed `d4f162343`, gate running in background); self-reported and reverted an
+  accidental main-tree commit (`f76e619ae` → revert `e0ad2b885`, verified clean, no lasting effect).
+  Successor `pr1433-wrapup` (`243bca59-b019-41d2-9e4a-bf45f01ffbf1`, w1:p2E) confirmed driving
+  before the old pane (w1:p2C) was closed. Note: #1155 and #1433 both wrote their plan docs to the
+  shared main tree instead of their worktree (untracked, harmless, left for the lane to self-clean
+  — same pattern #1115 caught).
