@@ -18,7 +18,7 @@ autonomous overnight run across both waves; escalations route to `Agent(model: "
 | --- | --- | --- | --- | --- | --- | --- |
 | `docs/superpowers/specs/2026-08-08-non-feature-wave-2.md` | #1155 | routine | building | `PR1155 schedule key slash` (`pr1155-schedule-key-slash`, w1:p2A) | `fix-1155-schedule-key-slash` | — |
 | same | #1207 | routine | building | `PR1207 transcript aria-live` (`pr1207-transcript-aria-live`, w1:p29) | `fix-1207-transcript-aria-live` | — |
-| same | #1115 | routine | PR open (live-path proof in progress) | `pr1115-relay` (w1:p2D) | `fix-1115-overdue-indicator` | #1478 |
+| same | #1115 | routine | PR open, gate green (VF_EXIT=0), live-path proof mid-debug (Playwright sign-in POSTs 200 but UI doesn't navigate past sign-in) | `pr1115-relay2` (w1:p2F) | `fix-1115-overdue-indicator` | #1478 |
 | same | #1433 | routine | PR open, QA verdict YELLOW (pending CI "Verify foundation and app"; log-safety + exit-criteria confirmed, 0 blocking) | `pr1433-wrapup` (w1:p2E) | `fix-1433-dataset-fetch-warning` | #1477 |
 | same | #1453 | routine | merged (as Wave 1 unblocker) | `Google schedule root #1453 r2` (reaped) | `fix-1453-google-schedule-root` | #1476 |
 
@@ -64,3 +64,10 @@ None. A red check stops the lane.
   before the old pane (w1:p2C) was closed. Note: #1155 and #1433 both wrote their plan docs to the
   shared main tree instead of their worktree (untracked, harmless, left for the lane to self-clean
   — same pattern #1115 caught).
+- `PR1115 relay` / `39efc7c2-f3bc-4334-b0e3-55896a542a5c` — relayed again at its own context
+  threshold while mid-debug on the live-path proof (Playwright sign-in POSTs 200 but UI doesn't
+  navigate past sign-in). PR #1478 already open, gate green (VF_EXIT=0). Continuation doc
+  `docs/superpowers/handoffs/2026-08-09-fix-1115-overdue-indicator-relay-2.md` (`87c4d6e28`). Dev
+  instance left running for the successor (API pid 405565 :3299, web pid 405285 :5299) —
+  successor owns teardown. Successor `pr1115-relay2` (`9907b0d5-55ec-4393-ae36-55ae00ba09a6`,
+  w1:p2F) confirmed actively driving before the old pane (w1:p2D) was closed.
