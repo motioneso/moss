@@ -6,13 +6,10 @@
 
 ## Seams check (file:line citations, current branch `fix-1155-schedule-key-slash`)
 
-- Bug: `packages/module-registry/src/index.ts:910` — `const scheduleKey = \`${actorUserId}:${source}\`;`
-  inside `buildReconcileProactiveSchedule` (`index.ts:904-928`). Used at `index.ts:921` as
-  `boss.schedule(..., { key: scheduleKey })` and `index.ts:924` as
-  `boss.unschedule(PROACTIVE_SCAN_SOURCE_QUEUE.name, scheduleKey)`. Colon is outside pg-boss v12's
-  `assertKey` charset (`/^[\w.\-/]+$/`), so `boss.schedule` throws `AssertionError` for any enabled
-  source — confirmed live by memory `mem_mrqn1sof_9d500c7ebba4` (2026-07-18), which flagged this
-  exact line as the "latent sibling" of the job-reconciler bug fixed in `1c2477cb6` (#1147).
+- Bug: `packages/module-registry/src/index.ts:910` — `const scheduleKey = \`${actorUserId}:${source}\`;`inside`buildReconcileProactiveSchedule` (`index.ts:904-928`). Used at `index.ts:921`as`boss.schedule(..., { key: scheduleKey })`and`index.ts:924`as`boss.unschedule(PROACTIVE_SCAN_SOURCE_QUEUE.name, scheduleKey)`. Colon is outside pg-boss v12's
+`assertKey` charset (`/^[\w.\-/]+$/`), so `boss.schedule`throws`AssertionError`for any enabled
+source — confirmed live by memory`mem_mrqn1sof_9d500c7ebba4`(2026-07-18), which flagged this
+exact line as the "latent sibling" of the job-reconciler bug fixed in`1c2477cb6` (#1147).
 - `buildReconcileProactiveSchedule` is **not exported** — confirmed via
   `grep -n "^function buildReconcileProactiveSchedule" packages/module-registry/src/index.ts`
   (only definition, no `export` keyword; only internal call site is `index.ts:1117-1118`). It must
@@ -29,7 +26,7 @@
 - Preference shape: `packages/shared/src/proactive-monitoring-api.ts:55`
   `defaultProactiveMonitoringPreference()` — `ProactiveMonitoringPreferenceV1` with
   `sources: Record<ProactiveSource, { enabled, dailyCardCap }>`, `ProactiveSource` = `"tasks" |
-  "calendar" | "email" | "notes"` (`proactive-monitoring-api.ts:1`). Four built-in manifests declare
+"calendar" | "email" | "notes"` (`proactive-monitoring-api.ts:1`). Four built-in manifests declare
   `proactiveMonitor` (`packages/{tasks,calendar,email,notes}/src/manifest.ts`), so
   `proactiveMonitorProvidersFor(getBuiltInModuleManifests())` yields all four sources in the real
   tree — no fixture manifest needed.
@@ -54,7 +51,7 @@ payload metadata, not a pg-boss key, and is not subject to `assertKey`), no chan
 **File:** `packages/module-registry/src/index.ts`
 
 - Line 904: add `export` — `export function buildReconcileProactiveSchedule(boss: PgBoss):
-  ReconcileProactiveScheduleFn {`
+ReconcileProactiveScheduleFn {`
 - Line 909-910: replace the existing one-line comment and key with:
   ```ts
   // "/" separator, NOT ":" — pg-boss v12's assertKey restricts schedule keys to
@@ -75,15 +72,15 @@ Test cases (behavior + why each fails pre-fix):
 
 1. **"schedules a proactive-monitoring key with a real pg-boss client — no colon"** — build a
    `ProactiveMonitoringPreferenceV1` (spread `defaultProactiveMonitoringPreference()`, `enabled:
-   true`, `sources.tasks.enabled: true`, all other sources left `enabled: false`). Call
+true`, `sources.tasks.enabled: true`, all other sources left `enabled: false`). Call
    `buildReconcileProactiveSchedule(boss)(ids.userA, pref)`. Assert the call **does not throw** —
    pre-fix, `boss.schedule` throws `AssertionError` on the `:`-separated key for the `tasks` source,
    so this assertion fails without the fix and passes with it (this is the real pg-boss v12 path:
    `createPgBossClient` from `@moss/jobs`, not a fake/mock boss).
 2. Query `pgboss.schedule` for `name = PROACTIVE_SCAN_SOURCE_QUEUE.name` via a raw `pg.Client`
    against `connectionStrings.bootstrap` (mirrors `connectors-google-schedule-root.test.ts`'s
-   `scheduleRows()` helper). Assert exactly one row has `key = \`${ids.userA}/tasks\`` and assert
-   that key `.includes(":")` is `false` — proves the persisted key is accepted and slash-separated,
+   `scheduleRows()` helper). Assert exactly one row has `key = \`${ids.userA}/tasks\``and assert
+that key`.includes(":")`is`false` — proves the persisted key is accepted and slash-separated,
    not just that the call didn't throw.
 3. **"unschedules with the same slash-separated key when a source is disabled"** — call reconcile
    again with `sources.tasks.enabled: false`; assert `boss.unschedule` also succeeds (no throw) and
@@ -117,9 +114,11 @@ const { Client } = pg;
 reconcile call itself only needs the preference object, not the provider list.
 
 **Verification:**
+
 ```bash
 tsx scripts/test-integration.ts tests/integration/module-registry-proactive-schedule.test.ts > /tmp/t1155.log 2>&1; echo "EXIT=$?"
 ```
+
 Expect `EXIT=0`, and the log to show the new `describe` block's 3 tests passing.
 
 Confirm the test fails pre-fix: temporarily `git stash` Task 1's change, rerun the same command,

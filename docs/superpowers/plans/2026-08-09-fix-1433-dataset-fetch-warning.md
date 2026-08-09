@@ -20,8 +20,8 @@ degraded envelope with **no log call at all**. Confirmed still true on current b
   already sanitized-only by doc comment at `client.ts:6`). No signature change needed.
 - `NOOP_DATASET_LOGGER` default — `client.ts:11-16`. Unaffected.
 - `HostPinnedFetchError` — `packages/host-fetch/src/index.ts:16-21`, has `readonly code:
-  HostPinnedFetchErrorCode` (`"host_not_declared" | "blocked_address" | "response_too_large" |
-  "fetch_timeout" | "invalid_request"`). No message beyond the code; safe to log.
+HostPinnedFetchErrorCode` (`"host_not_declared" | "blocked_address" | "response_too_large" |
+"fetch_timeout" | "invalid_request"`). No message beyond the code; safe to log.
 - `HostPinningViolationError extends HostPinnedFetchError` — `host-fetch/src/index.ts:23-35`,
   adds `readonly host: string`. Already logged today (`client.ts:161-165`) — untouched by
   this plan.
@@ -74,7 +74,7 @@ Replace the existing test at `dataset-client.test.ts:254-266` ("does not log ord
    degraded"** — adapter throws `new Error("upstream down")`, `staleness: "degrade-empty"`
    (no cache to serve). Assert `warnings` has length 1, `warnings[0][0]` matches
    `{ sourceId: "fixture", datasetKey: "widgets", outcome: "empty-fallback", errorName:
-   "Error" }`, and the envelope is unchanged (`{ data: { empty: true }, degraded: true }`).
+"Error" }`, and the envelope is unchanged (`{ data: { empty: true }, degraded: true }`).
    Fails against current code: `warnings` is empty.
 
 2. **"captures the HostPinnedFetchError code for a non-pinning host-fetch failure"** —
@@ -104,13 +104,16 @@ pass unmodified — proves the pinning branch's behavior and log shape are untou
 ```bash
 pnpm --filter @moss/datasets exec vitest run ../../tests/unit/dataset-client.test.ts > /tmp/1433-unit.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`, all cases in `tests/unit/dataset-client.test.ts` pass including the four
 new/modified cases above.
 
 Full gate (isolated DB, via `verify-gate` skill) at wrap-up:
+
 ```bash
 pnpm verify:foundation > /tmp/1433-gate.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`.
 
 ## Kill gate

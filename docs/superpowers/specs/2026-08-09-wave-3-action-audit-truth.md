@@ -9,7 +9,7 @@
 ## Context
 
 Wave 1 and Wave 2 burned down ten mechanical defects. This wave is deliberately harder: it fixes
-the surfaces the project reaches for to answer *"did that actually happen, and was it allowed?"* —
+the surfaces the project reaches for to answer _"did that actually happen, and was it allowed?"_ —
 the confirmation registry, the action audit log, the operator log, and the prompt boundary.
 
 Three findings from #1234 (JS-03) UAT plus one cross-model review finding say those answers are
@@ -30,7 +30,7 @@ the repo on `c8946358f`. This spec supersedes that pointer for the #1256 fix.
 - **#1251** — a handler throw must reach the operator log with the real error, tool name, and
   requestId, while the model keeps seeing exactly `Tool <name> failed`.
 - **#1055** — `TasksRepository.create`'s idempotency probe must consider only the actor's own rows.
-- **#1136** — persona/role-marker neutralization must apply to *all* third-party text entering the
+- **#1136** — persona/role-marker neutralization must apply to _all_ third-party text entering the
   codex prompt, including the `replayBatch` recalled-memory and cross-tool-summary paths.
 
 ## Non-goals
@@ -53,11 +53,11 @@ the repo on `c8946358f`. This spec supersedes that pointer for the #1256 fix.
 Lanes are module-disjoint. Lane A is internally sequential — all three of its issues edit
 `packages/ai/src/gateway/gateway.ts` and must not be split across builders.
 
-| Lane | Issues | Tier | Module (exclusive) | Intended seam |
-| ---- | ------ | ---- | ------------------ | ------------- |
-| A | #1256, #1252, #1251 | **security** | `packages/ai` | `packages/ai/src/routes.ts:534` (`/api/ai/assistant-actions/:id/resolve`); `packages/ai/src/gateway/gateway.ts` — outcome derivation (`:193`, `:212`, `:564`), bare catches (`:387`, `:473`, `:599`, `:680`), owner/waiter guard (`:388-390`) |
-| B | #1055 | **security** | `packages/tasks` | `packages/tasks/src/repository.ts` — `create()` idempotency probe on `(source, external_key)` |
-| C | #1136 | **security** | `packages/chat/src/live` | `packages/chat/src/live/codex-exec-session.ts` (the issue's `codex-exec.ts` path is stale) and `packages/chat/src/live/prompt-safety.ts` |
+| Lane | Issues              | Tier         | Module (exclusive)       | Intended seam                                                                                                                                                                                                                                 |
+| ---- | ------------------- | ------------ | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A    | #1256, #1252, #1251 | **security** | `packages/ai`            | `packages/ai/src/routes.ts:534` (`/api/ai/assistant-actions/:id/resolve`); `packages/ai/src/gateway/gateway.ts` — outcome derivation (`:193`, `:212`, `:564`), bare catches (`:387`, `:473`, `:599`, `:680`), owner/waiter guard (`:388-390`) |
+| B    | #1055               | **security** | `packages/tasks`         | `packages/tasks/src/repository.ts` — `create()` idempotency probe on `(source, external_key)`                                                                                                                                                 |
+| C    | #1136               | **security** | `packages/chat/src/live` | `packages/chat/src/live/codex-exec-session.ts` (the issue's `codex-exec.ts` path is stale) and `packages/chat/src/live/prompt-safety.ts`                                                                                                      |
 
 **Tier rationale (mechanical, per the coordinate skill):** lane A touches a confirmation/consent
 boundary and a policy-relevant audit record; lane B is an RLS owner-scoping correction; lane C is a
@@ -80,18 +80,18 @@ QA, a mandatory `gh pr comment` verdict, and Ben's explicit merge sign-off.
   A module reports failure by returning a payload carrying `__moduleError`; the worker boundary
   recognizes it and maps it to `ok: false` with an `errorClass`, instead of inferring failure from
   the envelope at `gateway.ts:200-201` / `:240-241`.
-  - *Why this over the alternatives:* a typed `{ok, data|error}` envelope would break every existing
+  - _Why this over the alternatives:_ a typed `{ok, data|error}` envelope would break every existing
     module's return shape; a thrown marker class loses its identity crossing the worker boundary
     (external modules are serialized JSON, not shared objects). The sentinel is additive, survives
     serialization, and needs no module rewrite.
   - The key is **reserved and documented in the SDK** so it cannot be mistaken for a legitimate
     payload field.
   - The audit `outcome` CHECK already accepts `'failed' | 'denied' | 'cancelled' | 'invalid' |
-    'conflict'` after migration `0177` (on `app.moss_action_audit_log`, renamed by `0183`) — **no new
+'conflict'` after migration `0177` (on `app.moss_action_audit_log`, renamed by `0183`) — **no new
     migration is needed**, and this spec introduces no new outcome value.
 - **#1252 back-compatibility — SETTLED: no heuristic.** A module that has not adopted `__moduleError`
   keeps recording `success`. Sniffing for shapes like `{ status: "error" }` would misclassify
-  legitimate payloads that happen to use those keys, and would make the audit log wrong in a *new*
+  legitimate payloads that happen to use those keys, and would make the audit log wrong in a _new_
   way. The honest answer — "only modules that opt in get truthful audit rows" — is documented in the
   SDK and stated on the issue when it closes.
 - **#1055 fix.** Scope the probe to `owner_user_id = current_actor` (or query the owner-only path)
@@ -109,7 +109,7 @@ back-compat heuristic). **No open forks remain — lane A may plan against this 
   live waiter when one exists, and matches the chat route's outcome — including the expired case.
 - #1252: a test proves a module tool returning the reserved `__moduleError` key records a
   non-success audit outcome with an `errorClass`; that the existing envelope-derived path is
-  unchanged for tools that throw; and that a module which has *not* adopted the key behaves exactly
+  unchanged for tools that throw; and that a module which has _not_ adopted the key behaves exactly
   as it does today (the documented, accepted back-compat gap).
 - #1251: a test proves the operator log receives the real error while the returned string stays
   exactly `Tool <name> failed`. A negative assertion proves no secret or handler internal reaches
@@ -131,7 +131,7 @@ earlier merge. Ben signs each merge individually — all three are security tier
 
 ## Hard invariants honored
 
-- **No admin private-data bypass / private by default.** Lane B *tightens* owner scoping; nothing in
+- **No admin private-data bypass / private by default.** Lane B _tightens_ owner scoping; nothing in
   this wave widens an RLS predicate or adds `BYPASSRLS`.
 - **Secrets never escape.** Lane A's #1251 change is explicitly designed so the widened visibility
   reaches the operator log only, never the model, a response, a pg-boss payload, or an export. Lane

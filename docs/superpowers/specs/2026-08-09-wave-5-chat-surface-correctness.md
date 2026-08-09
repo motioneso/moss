@@ -8,7 +8,7 @@
 
 ## Context
 
-Four of these are `sev:major` and share one theme: a feature that is *built* and does not reach the
+Four of these are `sev:major` and share one theme: a feature that is _built_ and does not reach the
 person using it.
 
 - #1449 — #1253's approval-card rehydration is dead code for every user who is not inside a module
@@ -43,7 +43,7 @@ verified.
 
 - No chat redesign, no new surface type, no change to the `surface` param's existing threading
   (JS-00, #1231 already delivered it).
-- No change to what module-authored text is *neutralized* against injection — #1260 narrows the
+- No change to what module-authored text is _neutralized_ against injection — #1260 narrows the
   escape, it does not remove it. This wave must not undo #1136's boundary.
 - No new approval-policy behaviour. #1249 (`risk: "outbound"`) is a different wave.
 - No prefetch framework, suspense architecture, or SSR introduction for #1451 beyond the single
@@ -56,12 +56,12 @@ verified.
 `apps/web` is one app, so its lanes are separated by **file ownership**, and the merge order below is
 load-bearing. Lanes A, C, and D each own distinct files; no two lanes edit the same file.
 
-| Lane | Issues | Tier | Owned files (exclusive) | Intended seam |
-| ---- | ------ | ---- | ----------------------- | ------------- |
-| A | #1449 | **sensitive** | `apps/web/src/shell/app-shell.tsx`, `apps/web/src/chat/use-chat-stream.ts` | Shell passes no surface (`app-shell.tsx:142`); rehydration effect gated `if (!surface || !enabled)` (`use-chat-stream.ts:133`). Fix at the **caller**, and test at the caller. |
-| B | #1259, #1260 | **sensitive** | `packages/chat/src/live/*` (persona composition, `prompt-safety.ts`), `packages/chat/src/live-routes.ts`, plus the job-search module's guidance text | Key persona by `(userId, surface)`; introduce a host-defined **non-tag control token** and rewrite job-search's guidance to use it. `sanitizeExternalData` (`prompt-safety.ts:34-36`) is unchanged. |
-| C | #1254 | **sensitive** | `packages/module-sdk/src/index.ts`, `packages/shared/*-api.ts`, the approval-card component | Optional manifest-declared plain-English action label; render it, fall back to the tool name. |
-| D | #1255, #1451 | **routine** | `apps/web/src/api/use-assistant-name.ts`, the drawer availability gate | Gate on the router's capability answer; prefetch/seed the persona query. |
+| Lane | Issues       | Tier          | Owned files (exclusive)                                                                                                                              | Intended seam                                                                                                                                                                                       |
+| ---- | ------------ | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- | ------------------------------------------------------------------------------------- |
+| A    | #1449        | **sensitive** | `apps/web/src/shell/app-shell.tsx`, `apps/web/src/chat/use-chat-stream.ts`                                                                           | Shell passes no surface (`app-shell.tsx:142`); rehydration effect gated `if (!surface                                                                                                               |     | !enabled)` (`use-chat-stream.ts:133`). Fix at the **caller**, and test at the caller. |
+| B    | #1259, #1260 | **sensitive** | `packages/chat/src/live/*` (persona composition, `prompt-safety.ts`), `packages/chat/src/live-routes.ts`, plus the job-search module's guidance text | Key persona by `(userId, surface)`; introduce a host-defined **non-tag control token** and rewrite job-search's guidance to use it. `sanitizeExternalData` (`prompt-safety.ts:34-36`) is unchanged. |
+| C    | #1254        | **sensitive** | `packages/module-sdk/src/index.ts`, `packages/shared/*-api.ts`, the approval-card component                                                          | Optional manifest-declared plain-English action label; render it, fall back to the tool name.                                                                                                       |
+| D    | #1255, #1451 | **routine**   | `apps/web/src/api/use-assistant-name.ts`, the drawer availability gate                                                                               | Gate on the router's capability answer; prefetch/seed the persona query.                                                                                                                            |
 
 **Tier rationale:** lane A changes runtime chat-shell behaviour on a consent surface; lane B changes
 the module→model instruction contract (cross-module contract change) and the prompt-safety boundary;
@@ -69,7 +69,7 @@ lane C adds a field to the declared module manifest, which is public API. All th
 Lane D is isolated UI with no contract or data change → `routine` — but the Live-Path Gate still
 binds it.
 
-Lane B is *not* a `security` tier despite touching `prompt-safety.ts`: under the settled non-token
+Lane B is _not_ a `security` tier despite touching `prompt-safety.ts`: under the settled non-token
 design the blanket escape at `prompt-safety.ts:34-36` is unchanged and nothing is ever unescaped, so
 no new untrusted-text path is created. **Standing guard: if lane B's implementation ends up
 unescaping any module-supplied substring, it has left the approved design — stop, re-tier to
@@ -85,7 +85,7 @@ unescaping any module-supplied substring, it has left the approved design — st
   escape. It stays a blanket escape with **no exceptions**. Modules reference the control channel by
   a token that is never a tag, so a module's guidance and the control turn it later receives spell
   the channel identically without any unescaping.
-  - *Why this over the alternatives:* unescaping a closed host-owned tag set after sanitizing needs
+  - _Why this over the alternatives:_ unescaping a closed host-owned tag set after sanitizing needs
     no module rewrite, but it carves an allowlist into a security boundary that every future tag must
     remember to join — exactly the kind of exception that silently rots. One rule with no exceptions
     is the cheaper thing to keep correct.

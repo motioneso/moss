@@ -50,12 +50,12 @@ the honest precondition for either epic.
 All four lanes are module-disjoint. Lane A's two issues share `packages/db` and must be one builder.
 Lane C's three issues share `packages/module-registry/src/external/` and must be one builder.
 
-| Lane | Issues | Tier | Module (exclusive) | Intended seam |
-| ---- | ------ | ---- | ------------------ | ------------- |
-| A | #942, #943 | **security** | `packages/db` | `packages/db/src/migrations/module-sql-runner.ts` (statement splitter); `packages/db/src/module-storage-rpc.ts` (`SET LOCAL ROLE` scope) |
-| B | #946 | **security** | `packages/host-fetch` | `packages/host-fetch/src/index.ts`, `packages/host-fetch/src/policy.ts` — blocklist entry + six control tests |
-| C | #1274, #1275, #1279 | **security** | `packages/module-registry/src/external` | `packages/module-registry/src/external/validate.ts` and the gateway-validator binding |
-| D | #1141 | **security** | `packages/chat/src/live` + `packages/ai/src/adapters` | `packages/chat/src/live/provider-probe.ts:44-49`; `packages/ai/src/adapters/tmux-bridge.ts:12-13,48` — mirror the correct pattern at `packages/cli-runner/src/terminal-session.ts:46-50` |
+| Lane | Issues              | Tier         | Module (exclusive)                                    | Intended seam                                                                                                                                                                            |
+| ---- | ------------------- | ------------ | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A    | #942, #943          | **security** | `packages/db`                                         | `packages/db/src/migrations/module-sql-runner.ts` (statement splitter); `packages/db/src/module-storage-rpc.ts` (`SET LOCAL ROLE` scope)                                                 |
+| B    | #946                | **security** | `packages/host-fetch`                                 | `packages/host-fetch/src/index.ts`, `packages/host-fetch/src/policy.ts` — blocklist entry + six control tests                                                                            |
+| C    | #1274, #1275, #1279 | **security** | `packages/module-registry/src/external`               | `packages/module-registry/src/external/validate.ts` and the gateway-validator binding                                                                                                    |
+| D    | #1141               | **security** | `packages/chat/src/live` + `packages/ai/src/adapters` | `packages/chat/src/live/provider-probe.ts:44-49`; `packages/ai/src/adapters/tmux-bridge.ts:12-13,48` — mirror the correct pattern at `packages/cli-runner/src/terminal-session.ts:46-50` |
 
 **Tier rationale:** every lane hits a `security` trigger — SQL policy injection (A), network-exposed
 SSRF surface (B), untrusted-input validation and rate/ReDoS bounds (C), credential-environment
@@ -83,7 +83,7 @@ which Wave 3 lanes A and C also occupy. **Wave 4 must not run concurrently with 
   fails closed on invalid ones (#1265 QA fix), and its own comment at `:35-36` names the gap: a
   declared `pattern` "compiles and matches here, on the host API event loop, unconfined and untimed."
   Lane C adds an install-time lint that rejects patterns failing a complexity bound.
-  - *Why this over the alternatives:* a worker-thread time budget genuinely bounds the damage but
+  - _Why this over the alternatives:_ a worker-thread time budget genuinely bounds the damage but
     adds a thread hop to every validated call; narrowing the manifest to a non-backtracking subset is
     the strongest contract but is **breaking**, and the manifest schema is the model's only view of a
     module's tools, so narrowing it is a product decision, not a security fix.
@@ -140,7 +140,7 @@ that touches modules Wave 3 also touched, so it takes the freshest rebase.
 - **Module isolation.** Lanes A and C strengthen the declared module boundary; no lane reaches into
   another module's internals or tables.
 - **Never edit an applied migration.** No lane adds or edits a migration. Lane A changes the
-  *runner*, not any applied SQL file.
+  _runner_, not any applied SQL file.
 - **Vault I/O goes through `VaultContext`.** No lane performs filesystem I/O.
 - **`AccessContext`.** Untouched.
 - **Provider-agnostic AI.** Lane D fixes the Claude-specific probe by generalizing the env

@@ -55,11 +55,11 @@ The chain has no logging at any step.
 
 ## Lanes, tiers, and collision map
 
-| Lane | Issues | Tier | Owned surface (exclusive) | Intended seam |
-| ---- | ------ | ---- | ------------------------- | ------------- |
-| A | #1403 | **security** | `infra/`, compose, `apps/api/src/server.ts` trusted-origins config, docs runbook | Add a `tailscale serve` entry mapping an HTTPS port to the app's local HTTP port; add the resulting `https://<machine>.<tailnet>.ts.net[:port]` origin to the auth trusted-origins list. |
-| B | #900, #1134 | **routine** | `apps/web/src/chat/composer.tsx` | Bind the caught error (`catch (err)`), branch on `err.name` / `navigator.mediaDevices === undefined`; stop the `MediaStreamTrack`s on drawer close. |
-| C | #1402 | **sensitive** | `packages/weather`, `packages/settings`, `apps/web/src/settings` | **Two stages.** Stage 1 (independent of lane A): a settings surface calling the existing `GET`/`PUT /api/me/weather-location` routes, plus timezone-derived approximation as the automatic fallback, plus logging at each step of `resolveLocation`. Stage 2 (after lane A is live): `navigator.geolocation` as the accurate path, falling back to timezone on denial or insecure origin. |
+| Lane | Issues      | Tier          | Owned surface (exclusive)                                                        | Intended seam                                                                                                                                                                                                                                                                                                                                                                             |
+| ---- | ----------- | ------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A    | #1403       | **security**  | `infra/`, compose, `apps/api/src/server.ts` trusted-origins config, docs runbook | Add a `tailscale serve` entry mapping an HTTPS port to the app's local HTTP port; add the resulting `https://<machine>.<tailnet>.ts.net[:port]` origin to the auth trusted-origins list.                                                                                                                                                                                                  |
+| B    | #900, #1134 | **routine**   | `apps/web/src/chat/composer.tsx`                                                 | Bind the caught error (`catch (err)`), branch on `err.name` / `navigator.mediaDevices === undefined`; stop the `MediaStreamTrack`s on drawer close.                                                                                                                                                                                                                                       |
+| C    | #1402       | **sensitive** | `packages/weather`, `packages/settings`, `apps/web/src/settings`                 | **Two stages.** Stage 1 (independent of lane A): a settings surface calling the existing `GET`/`PUT /api/me/weather-location` routes, plus timezone-derived approximation as the automatic fallback, plus logging at each step of `resolveLocation`. Stage 2 (after lane A is live): `navigator.geolocation` as the accurate path, falling back to timezone on denial or insecure origin. |
 
 **Tier rationale:** lane A changes a network-exposed surface **and** the auth trusted-origins list —
 both `security` triggers, and getting the origin wrong returns 403 on sign-in. Lane C adds a
@@ -75,7 +75,7 @@ files; if Wave 5 is still open, sequence lane B after it.
 #901 ("self-hosted TLS story so LAN browsers get a secure context") and #1403 solve the same problem
 for different audiences. #1403 is one `tailscale serve` entry on a host that **already** terminates
 TLS on two unrelated ports — no certificate, DNS, or firewall work. #901 proposes bundling a Caddy
-or Traefik TLS proxy so *any* self-hoster gets a secure context.
+or Traefik TLS proxy so _any_ self-hoster gets a secure context.
 
 **SETTLED (Ben, 2026-08-09):** do #1403 now (it unblocks Ben's own instance today) and keep #901 open
 as the **distributable tier**, explicitly not a duplicate. #901 is **not closed and not re-scoped in
@@ -96,7 +96,7 @@ instance): `navigator.geolocation` as the accurate path, falling back to timezon
 denies it or the origin is still insecure. `geocodeIp` (`packages/weather/src/ip-geocoder.ts:20-28`)
 stays as-is — it is dead on a LAN by construction and this decision stops depending on it.
 
-*Why this over the alternatives:* geolocation alone is the most accurate but cannot render anything
+_Why this over the alternatives:_ geolocation alone is the most accurate but cannot render anything
 until #1403 lands, which would leave weather broken for however long that takes; a prompt-only path
 contradicts Ben's ruling that automatic detection must work; a coarse server-side lookup is another
 outbound egress for a worse answer than the timezone the browser already reports. Timezone
@@ -151,8 +151,8 @@ stage 2 into stage 1's PR — it would gate a shippable fix on an infrastructure
 ## Hard invariants honored
 
 - **Secrets never escape.** Lane A adds an origin to a trusted-origins list; no credential, cert
-  material, or tailnet key enters the repo, a log, a payload, or a doc. Lane C logs a *step name and
-  outcome* in `resolveLocation`, never a coordinate, IP, or user identifier.
+  material, or tailnet key enters the repo, a log, a payload, or a doc. Lane C logs a _step name and
+  outcome_ in `resolveLocation`, never a coordinate, IP, or user identifier.
 - **Private by default.** A stored weather location is owner-only user preference data on the
   existing `/api/me/weather-location` routes; lane C adds no cross-user read and no new table
   without an RLS classification recorded in the plan.
