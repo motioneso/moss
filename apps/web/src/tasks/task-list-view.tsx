@@ -66,6 +66,9 @@ interface DueInfo {
   readonly label: string;
   readonly tone: "" | "overdue" | "today";
   readonly drift: "atrisk" | "overdue" | null;
+  /** False only when the drift pill already reads "Overdue" (#1115) — avoids showing the
+      icon/text badge and the pill at once for the same non-done overdue task. */
+  readonly showBadge: boolean;
 }
 
 /** Due date → human label + drift signal (system-owned urgency, anti-shame amber).
@@ -79,10 +82,10 @@ export function dueInfo(task: TaskDto, locale: LocaleSettingsDto): DueInfo | nul
   const done = task.status === "done";
 
   if (dueKey < todayKey) {
-    return { label: "Overdue", tone: "overdue", drift: done ? null : "overdue" };
+    return { label: "Overdue", tone: "overdue", drift: done ? null : "overdue", showBadge: done };
   }
   if (dueKey === todayKey) {
-    return { label: "Today", tone: "today", drift: null };
+    return { label: "Today", tone: "today", drift: null, showBadge: true };
   }
   const short = formatDate(task.dueAt, locale, { month: "short", day: "numeric" });
   // Both keys are user-zone `YYYY-MM-DD`, so they parse as UTC midnight and the delta is
@@ -90,7 +93,7 @@ export function dueInfo(task: TaskDto, locale: LocaleSettingsDto): DueInfo | nul
   const driftDays =
     (Date.parse(`${dueKey}T00:00:00Z`) - Date.parse(`${todayKey}T00:00:00Z`)) / 86_400_000;
   const atRisk = !done && driftDays <= 2;
-  return { label: short, tone: "", drift: atRisk ? "atrisk" : null };
+  return { label: short, tone: "", drift: atRisk ? "atrisk" : null, showBadge: true };
 }
 
 /** Single effort dot: empty = quick, left-half = medium, full = large (DS "fill" style). */
@@ -226,7 +229,7 @@ export function TaskRow(props: {
       >
         <span className="tk-task__title">{task.title}</span>
         <span className="tk-task__meta">
-          {due ? (
+          {due?.showBadge ? (
             <span
               className={`tk-meta-due ${due.tone === "overdue" ? "tk-meta-due--overdue" : due.tone === "today" ? "tk-meta-due--today" : ""}`}
             >
