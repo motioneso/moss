@@ -26,7 +26,7 @@
   test controls, rather than relying on timing.
 - `waitFor` helper (`tests/integration/connectors-google-schedule-root.test.ts:96-104`) is a
   bounded poll with a 5s deadline — legitimate for "wait until an event happened," kept as-is. The
-  removed construct is the *fixed* `setTimeout(1_200)` used to prove a negative
+  removed construct is the _fixed_ `setTimeout(1_200)` used to prove a negative
   (`tests/integration/connectors-google-schedule-root.test.ts:133`), which cannot distinguish
   "deduped" from "hasn't fired yet."
 - `vitest.config.ts:302-303` sets `hookTimeout`/`testTimeout` to 30_000ms — enough headroom for a
@@ -52,8 +52,7 @@ File: `tests/integration/connectors-google-schedule-root.test.ts`
 4. After `await makeDue()`, `await jobActive` (replaces the `waitFor(... count === 1)` call —
    still an event-driven wait, not a sleep).
 5. While the job is held active, call
-   `await sendJob(boss, GOOGLE_SYNC_QUEUE, { actorUserId: ids.userA, kind: "google-sync", idempotencyKey: \`schedule:${ids.userA}\` }, { singletonKey: ids.userA })`
-   and `expect(result).toBeNull()`. This is the direct dedup proof the issue and spec ask for.
+   `await sendJob(boss, GOOGLE_SYNC_QUEUE, { actorUserId: ids.userA, kind: "google-sync", idempotencyKey: \`schedule:${ids.userA}\` }, { singletonKey: ids.userA })`and`expect(result).toBeNull()`. This is the direct dedup proof the issue and spec ask for.
 6. Resolve the release gate so the held job completes.
 7. Keep the final two assertions unchanged: `expect(roots).toHaveLength(1)` and the
    `roots[0]?.data` equality check.
@@ -85,12 +84,14 @@ a build-time signal to fall back and escalate to the coordinator, not a design f
 ```bash
 pnpm --filter @moss/connectors exec vitest run tests/integration/connectors-google-schedule-root.test.ts > /tmp/1453-single.log 2>&1; echo "EXIT=$?"
 ```
+
 Actually run from repo root against the workspace test runner — exact invocation confirmed at
 build time from `package.json` scripts; expected exit code `0`.
 
 ```bash
 pnpm vitest run --repeat=5 tests/integration/connectors-google-schedule-root.test.ts > /tmp/1453-repeat.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected exit code `0` on every repeat — satisfies the issue's "repeated run passes consistently"
 acceptance criterion.
 

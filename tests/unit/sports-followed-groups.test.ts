@@ -112,4 +112,21 @@ describe("selectPrimaryFollow", () => {
     const only = follow({ id: "f1", teamKey: "a", competitionKey: "eng.1" });
     expect(selectPrimaryFollow([only])).toBe(only);
   });
+
+  it("tie-breaks by ascending id when createdAt ties (order-independent)", () => {
+    const a = follow({
+      id: "b-id",
+      teamKey: "a",
+      competitionKey: "eng.1",
+      createdAt: "2026-06-01T00:00:00.000Z"
+    });
+    const b = follow({
+      id: "a-id",
+      teamKey: "b",
+      competitionKey: "usa.1",
+      createdAt: "2026-06-01T00:00:00.000Z"
+    });
+    expect(selectPrimaryFollow([a, b])).toBe(b);
+    expect(selectPrimaryFollow([b, a])).toBe(b);
+  });
 });

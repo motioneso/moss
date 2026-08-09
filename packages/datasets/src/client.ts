@@ -1,7 +1,11 @@
 import type { ExternalSourceAdapter, ModuleExternalSourceManifest } from "@moss/module-sdk";
 
 import { DatasetCache, DEFAULT_STALE_RETENTION_MS } from "./cache.js";
-import { createHostPinnedFetch, HostPinningViolationError } from "./host-pinning.js";
+import {
+  createHostPinnedFetch,
+  HostPinnedFetchError,
+  HostPinningViolationError
+} from "./host-pinning.js";
 
 /** Sanitized structured logging for dataset-runtime observability (never secrets/body). */
 export interface DatasetLogger {
@@ -162,6 +166,20 @@ export function createDatasetClient(
           logger.warn(
             { sourceId: source.id, datasetKey, host: error.host },
             "dataset host-pinning violation: blocked fetch outside allowed hosts"
+          );
+        } else {
+          // Sanitized on purpose: no error.message, URL, headers, body, or credentials — only
+          // the closed HostPinnedFetchError code and the error's class name ever reach the log
+          // (#1433 — a total upstream outage previously produced zero log lines).
+          logger.warn(
+            {
+              sourceId: source.id,
+              datasetKey,
+              outcome: hit ? "stale-cache" : "empty-fallback",
+              errorName: error instanceof Error ? error.name : typeof error,
+              ...(error instanceof HostPinnedFetchError ? { errorCode: error.code } : {})
+            },
+            "dataset fetch failed: serving degraded response"
           );
         }
         if (hit) {

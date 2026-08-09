@@ -8,7 +8,13 @@ import {
   GOOGLE_SYNC_QUEUE,
   registerGoogleSyncSweepWorker
 } from "@moss/connectors";
-import { assertMetadataOnlyPayload, createPgBossClient, type Job, type PgBoss } from "@moss/jobs";
+import {
+  assertMetadataOnlyPayload,
+  createPgBossClient,
+  sendJob,
+  type Job,
+  type PgBoss
+} from "@moss/jobs";
 import type { Kysely } from "kysely";
 
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
@@ -93,20 +99,22 @@ describe("Google schedule to root job", () => {
     }
   }
 
-  async function waitFor<T>(read: () => Promise<T>, ready: (value: T) => boolean): Promise<T> {
-    const deadline = Date.now() + 5_000;
-    while (Date.now() < deadline) {
-      const value = await read();
-      if (ready(value)) return value;
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-    return read();
-  }
-
   it("creates exactly one actor-scoped root when the due schedule fires", async () => {
     const roots: Array<Job<Record<string, unknown>>> = [];
+    let markJobActive: (() => void) | undefined;
+    const jobActive = new Promise<void>((resolve) => {
+      markJobActive = resolve;
+    });
+    let releaseJob: (() => void) | undefined;
+    const releaseGate = new Promise<void>((resolve) => {
+      releaseJob = resolve;
+    });
+
     await boss.work(GOOGLE_SYNC_QUEUE, { pollingIntervalSeconds: 1 }, async ([job]) => {
-      if (job) roots.push(job as Job<Record<string, unknown>>);
+      if (!job) return;
+      roots.push(job as Job<Record<string, unknown>>);
+      markJobActive?.();
+      await releaseGate;
     });
 
     await registerGoogleSyncSweepWorker(boss, rootDb);
@@ -126,11 +134,27 @@ describe("Google schedule to root job", () => {
     expect(() => assertMetadataOnlyPayload(beforeDue[0]?.data)).not.toThrow();
     await makeDue();
 
-    await waitFor(
-      async () => roots.length,
-      (count) => count === 1
+    // The due schedule fires and the worker picks up the resulting root job, but holds it
+    // active (via releaseGate) instead of completing it immediately. That lets us prove the
+    // exactly-once property directly: pg-boss's exclusive-policy singletonKey dedup must
+    // refuse a second job for the same actor while the first is still created/active, so a
+    // duplicate schedule fire (or a racing sweep tick) can never produce a second root. This
+    // replaces waiting a fixed interval to observe that a second root did not arrive.
+    await jobActive;
+
+    const duplicateJobId = await sendJob(
+      boss,
+      GOOGLE_SYNC_QUEUE,
+      {
+        actorUserId: ids.userA,
+        kind: "google-sync",
+        idempotencyKey: `schedule:${ids.userA}`
+      },
+      { singletonKey: ids.userA }
     );
-    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    expect(duplicateJobId).toBeNull();
+
+    releaseJob?.();
 
     expect(roots).toHaveLength(1);
     expect(roots[0]?.data).toEqual({

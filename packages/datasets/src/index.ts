@@ -16,6 +16,7 @@ export {
   assertValidFetchHosts,
   createHostPinnedFetch,
   DEFAULT_FETCH_TIMEOUT_MS,
+  HostPinnedFetchError,
   HostPinningViolationError,
   isPinnableHost
 } from "./host-pinning.js";

@@ -142,7 +142,7 @@ export function AssistantSurface(props: AssistantSurfaceViewProps) {
       className={`assistant-surface${threadIsEmpty ? " assistant-surface--empty" : ""}`}
       aria-label={`${assistantName} conversation`}
     >
-      <div className="assistant-surface__thread">
+      <div className="assistant-surface__thread" aria-live="polite">
         {props.localRows?.map((row) => (
           <div
             className={`assistant-surface__row assistant-surface__row--${row.role}`}

@@ -93,6 +93,26 @@ describe("AssistantSurface", () => {
     expect(html).not.toContain("Approve profile");
   });
 
+  it("marks the transcript container as a live region so appended rows are announced (#1207)", () => {
+    const html = renderToString(
+      withPersonaQueryClient(
+        createElement(
+          AssistantSurfaceHostProvider,
+          {
+            value: {
+              records,
+              registerComposer: () => () => undefined,
+              subscribeRecords: () => () => undefined
+            }
+          },
+          createElement(AssistantSurface, {})
+        )
+      )
+    );
+
+    expect(html).toContain('class="assistant-surface__thread" aria-live="polite"');
+  });
+
   it("renders records from the requested surface only", () => {
     const html = renderToString(
       withPersonaQueryClient(

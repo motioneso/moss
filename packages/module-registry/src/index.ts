@@ -901,13 +901,14 @@ export function createNotificationPreferencePort(
   };
 }
 
-function buildReconcileProactiveSchedule(boss: PgBoss): ReconcileProactiveScheduleFn {
+export function buildReconcileProactiveSchedule(boss: PgBoss): ReconcileProactiveScheduleFn {
   return async (actorUserId, pref) => {
     const allProviders = proactiveMonitorProvidersFor(getBuiltInModuleManifests());
     for (const { provider } of allProviders) {
       const source = provider.source as ProactiveSource;
-      // Use actorUserId:source as the pg-boss schedule key — one row per user+source.
-      const scheduleKey = `${actorUserId}:${source}`;
+      // "/" separator, NOT ":" — pg-boss v12's assertKey restricts schedule keys to
+      // [\w.\-/] (see job-reconciler.ts's identical fix, #1147). One row per user+source.
+      const scheduleKey = `${actorUserId}/${source}`;
       if (pref.enabled && pref.sources[source]?.enabled) {
         const data: ProactiveScanSourceJobPayload = {
           actorUserId,
