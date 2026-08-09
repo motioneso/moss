@@ -205,6 +205,11 @@ export default defineConfig({
         replacement: fileURLToPath(new URL("./packages/notes/src/index.ts", import.meta.url))
       },
       {
+        // Subpath export; must precede the bare "@moss/news" alias.
+        find: "@moss/news/web",
+        replacement: fileURLToPath(new URL("./packages/news/src/web/index.tsx", import.meta.url))
+      },
+      {
         // #1025: root-level tests/uat/seed/chunks/news.ts needs NewsPrefsRepository; this
         // alias was missing entirely (every other module package has one).
         find: "@moss/news",
