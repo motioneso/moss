@@ -80,6 +80,35 @@ describe("#601 day-classification buckets in the user's persisted timezone", () 
   });
 });
 
+describe("#1115 one overdue indicator (icon/text badge vs. drift pill)", () => {
+  it("suppresses the icon/text badge for a non-done overdue task — the drift pill already reads Overdue", () => {
+    const due = task("d", { status: "todo", dueAt: "2026-06-29T05:00:00.000Z" });
+    const info = dueInfo(due, locale(UTC));
+    expect(info?.drift).toBe("overdue");
+    expect(info?.showBadge).toBe(false);
+  });
+
+  it("keeps the icon/text badge for a done overdue task — no drift pill renders, so it's the only indicator", () => {
+    const done = task("e", {
+      status: "done",
+      dueAt: "2026-06-29T05:00:00.000Z",
+      completedAt: "2026-06-29T12:00:00.000Z"
+    });
+    const info = dueInfo(done, locale(UTC));
+    expect(info?.drift).toBeNull();
+    expect(info?.showBadge).toBe(true);
+  });
+
+  it("leaves the badge visible for Today and future/at-risk rows, which have no drift pill overlap", () => {
+    const today = task("f", { status: "todo", dueAt: "2026-06-30T05:00:00.000Z" });
+    expect(dueInfo(today, locale(UTC))?.showBadge).toBe(true);
+
+    const atRisk = task("g", { status: "todo", dueAt: "2026-07-01T05:00:00.000Z" });
+    expect(dueInfo(atRisk, locale(UTC))?.drift).toBe("atrisk");
+    expect(dueInfo(atRisk, locale(UTC))?.showBadge).toBe(true);
+  });
+});
+
 const OWNER_ID = "11111111-1111-1111-1111-111111111111";
 
 function locale(timezone: string): LocaleSettingsDto {
