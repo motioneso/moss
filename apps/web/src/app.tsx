@@ -10,7 +10,8 @@ import {
   getMe,
   getModules,
   getMyModules,
-  getOnboardingStatus
+  getOnboardingStatus,
+  getPersonaSettings
 } from "./api/client";
 import { webRoutePath } from "./app-route-metadata";
 import { queryKeys } from "./api/query-keys";
@@ -157,6 +158,12 @@ export function App() {
     queryFn: getOnboardingStatus,
     retry: false // getOnboardingStatus is itself bounded by a 4s timeout (client.ts)
   });
+  const personaQuery = useQuery({
+    queryKey: queryKeys.settings.persona,
+    queryFn: getPersonaSettings,
+    enabled: meQuery.isSuccess,
+    retry: false // getPersonaSettings is itself bounded by a 4s timeout (client.ts)
+  });
 
   const handleAuthenticated = async () => {
     // Data-isolation on the shared house instance: a newly authenticated identity
@@ -200,6 +207,10 @@ export function App() {
         onRetry={() => void queryClient.invalidateQueries({ queryKey: ["auth"] })}
       />
     );
+  }
+
+  if (personaQuery.isLoading) {
+    return <LoadingScreen />;
   }
 
   if (activeForOnboarding) {
