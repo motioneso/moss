@@ -164,6 +164,16 @@ None. A red check stops the lane.
   prior note, no nudge needed. Re-armed an event-driven Monitor on both PRs' CI to terminal state;
   `merges_since_relay` reset to 0. Merge nothing until CI is terminal-green and independent QA
   confirms it, per fixed order #1272 → #1412 → #903.
+- Monitor fired: **both PR #1474 (#1272) and PR #1476 (#1453) are now fully terminal-green**, all
+  6 checks each (publish/compose-smoke/changes/prod-compose-smoke/verify = SUCCESS, docs-gate =
+  SKIPPED). Both QA-ready. Ben approved a conditional idea to disable the CI `publish` job
+  (`.github/workflows/ci.yml:243`, no existing gating var) mid-wave for CI-time savings — moot,
+  both PRs' publish job already ran and passed before it was actioned, nothing changed.
+  Coordinator `3c2ed662…` hit the 70% context-meter relay trigger before starting Phase 3 QA;
+  flushing and relaying to successor r5. Next for r5: (1) re-confirm session-lock authority,
+  (2) spawn `coordinated-qa` on PR #1474/#1272 first (fixed order), merge if green, (3) then
+  #1412 (PR #1473) — last seen red pending the #1453 unblocker + a rebase, re-check fresh,
+  QA/merge once green, (4) #903 (PR #1472) last.
 
 ## Reaped sessions
 
