@@ -16,7 +16,7 @@ autonomous overnight run across both waves; escalations route to `Agent(model: "
 
 | Spec | Issue | Tier | Status | Agent label | Branch | PR |
 | --- | --- | --- | --- | --- | --- | --- |
-| `docs/superpowers/specs/2026-08-08-non-feature-wave-2.md` | #1155 | routine | building | `PR1155 schedule key slash` (`pr1155-schedule-key-slash`, w1:p2A) | `fix-1155-schedule-key-slash` | — |
+| `docs/superpowers/specs/2026-08-08-non-feature-wave-2.md` | #1155 | routine | commits green (fix + real-pg-boss integration test), gate flaked twice on unrelated concurrent-tuple contention (connectors-google.test.ts, then news-discovery-repository.test.ts — different file each time, not this diff), wrapping up | `pr1155successor` (w1:p2G) | `fix-1155-schedule-key-slash` | — |
 | same | #1207 | routine | building | `PR1207 transcript aria-live` (`pr1207-transcript-aria-live`, w1:p29) | `fix-1207-transcript-aria-live` | — |
 | same | #1115 | routine | **QA RED** — live-path comment is text-only, no screenshots attached (fails Live-Path Gate); routed back to build agent to fix | `pr1115-relay2` (w1:p2F) | `fix-1115-overdue-indicator` | #1478 |
 | same | #1433 | routine | PR open, QA verdict YELLOW (pending CI "Verify foundation and app"; log-safety + exit-criteria confirmed, 0 blocking) | `pr1433-wrapup` (w1:p2E) | `fix-1433-dataset-fetch-warning` | #1477 |
@@ -71,3 +71,11 @@ None. A red check stops the lane.
   instance left running for the successor (API pid 405565 :3299, web pid 405285 :5299) —
   successor owns teardown. Successor `pr1115-relay2` (`9907b0d5-55ec-4393-ae36-55ae00ba09a6`,
   w1:p2F) confirmed actively driving before the old pane (w1:p2D) was closed.
+- `PR1155 schedule key slash` / `8337a11c-8d9a-4b3a-ac27-183fbc25df87` — relayed at 70% during
+  pre-push checks/wrap-up. Both commits (fix + real-pg-boss integration test) green and clean on
+  branch; gate flaked twice on unrelated concurrent-tuple contention, a different file each time
+  (connectors-google.test.ts, then news-discovery-repository.test.ts), not this diff. Continuation
+  doc `docs/superpowers/handoffs/2026-08-09-fix-1155-schedule-key-slash-relay.md` (`febb7b133`).
+  Successor `pr1155successor` (`3837a7d0-b917-40b1-bbe9-17b4d8ed43ef`, w1:p2G) confirmed actively
+  driving (session freshly re-resolved via `herdr pane list`) before the old pane (w1:p2A) was
+  closed.
