@@ -18,15 +18,12 @@ approval) are both resolved and were removed on main — the live-path gate was 
 hard invariant in `CLAUDE.md`, and the voice/STT spec turned out to be already approved and built
 (#874), only its status line was stale.
 
-**2026-08-09: `git push origin main` blocked by the auto-mode classifier.** Wave 2 wrap-up:
-local `main` is 39 commits ahead of `origin/main` (all docs/coordination commits from this run,
-plus a clean merge commit `268cb8654` reconciling 6 remote-only Wave 1 merge commits — one trivial
-formatting conflict in a plan doc, resolved by taking origin's copy). Tree is clean, nothing
-destructive. Same classifier pattern as `gh pr merge`/`gh pr comment`/`git commit` earlier this
-session (resolved via `/permissions` + chat authorization). Options: (a) grant push permission via
-`/permissions`, (b) authorize in chat as was done for merges, (c) push yourself. Recommendation:
-(a) or (b) — the commit is inert until pushed, and it's blocking Wave 2 from being visible on
-`origin/main`.
+_No decisions are currently waiting on Ben._
+
+<!-- Resolved 2026-08-09: `git push origin main` blocked by the auto-mode classifier during Wave 2
+wrap-up. Ben re-ran ("try now") and it went through — pushed 39 commits, `f78992b14..46ec9965d`.
+Note: GitHub reports this repo moved to `motioneso/moss.git`; push still succeeded via the old
+remote URL (auto-redirected), not yet acted on beyond noting it. -->
 
 <!-- Resolved 2026-08-09: CI waiver for PR #1479 (#1207), first in Wave 2 merge order. Ben ruled
 (a) — approved the fable-proxy's scoped waiver (2 UAT specs, pre-existing Moss-rename locator
