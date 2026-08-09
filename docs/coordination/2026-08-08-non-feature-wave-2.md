@@ -16,10 +16,10 @@ autonomous overnight run across both waves; escalations route to `Agent(model: "
 
 | Spec | Issue | Tier | Status | Agent label | Branch | PR |
 | --- | --- | --- | --- | --- | --- | --- |
-| `docs/superpowers/specs/2026-08-08-non-feature-wave-2.md` | #1155 | routine | commits green (fix + real-pg-boss integration test), gate flaked twice on unrelated concurrent-tuple contention (connectors-google.test.ts, then news-discovery-repository.test.ts — different file each time, not this diff), wrapping up | `pr1155successor` (w1:p2G) | `fix-1155-schedule-key-slash` | — |
-| same | #1207 | routine | building | `PR1207 transcript aria-live` (`pr1207-transcript-aria-live`, w1:p29) | `fix-1207-transcript-aria-live` | — |
-| same | #1115 | routine | **QA RED** — live-path comment is text-only, no screenshots attached (fails Live-Path Gate); routed back to build agent to fix | `pr1115-relay2` (w1:p2F) | `fix-1115-overdue-indicator` | #1478 |
-| same | #1433 | routine | PR open, QA verdict YELLOW (pending CI "Verify foundation and app"; log-safety + exit-criteria confirmed, 0 blocking) | `pr1433-wrapup` (w1:p2E) | `fix-1433-dataset-fetch-warning` | #1477 |
+| `docs/superpowers/specs/2026-08-08-non-feature-wave-2.md` | #1155 | routine | commits green (fix + real-pg-boss integration test), gate flaked twice on unrelated concurrent-tuple contention (connectors-google.test.ts, then news-discovery-repository.test.ts — different file each time, not this diff), wrapping up (no PR yet; likely mid gate/pre-push run in its own background) | `pr1155successor` (w1:p2G) | `fix-1155-schedule-key-slash` | — |
+| same | #1207 | routine | PR open (mergeable), code fix + regression test committed (red-before/green-after confirmed), gate green on 3rd isolated-DB run (1868/1871; two earlier runs flaked on unrelated sibling-worktree DDL contention — prettier then "tuple concurrently updated" across google-sync-calendar/job-search-store/news-personalization/notes-write-tools/profile-identity, not this diff), relaying for live-path proof (4 blocking UAT specs + DOM-level aria-live evidence) | `pr1207-relay2` (w1:p2J) | `fix-1207-transcript-aria-live` | #1479 |
+| same | #1115 | routine | **QA RED** (live-path comment was text-only, no screenshots) — successor actively generating real screenshots (e.g. `done-overdue.png`) per its own relay handoff plan (gist-hosted images, CI-check reconfirmation, teardown) to fix | `pr1115-relay3` (w1:p2H) | `fix-1115-overdue-indicator` | #1478 |
+| same | #1433 | routine | PR open, QA YELLOW resolved — CI "Verify foundation and app" now **pass**; all checks green except "Build and publish images" (pending — known-disabled mid-wave CI job, not a blocker, see memory `ci-image-build-job-disabled-mid-wave`); merge-ready, awaiting its turn in fixed order | `pr1433-wrapup` (w1:p2E) | `fix-1433-dataset-fetch-warning` | #1477 |
 | same | #1453 | routine | merged (as Wave 1 unblocker) | `Google schedule root #1453 r2` (reaped) | `fix-1453-google-schedule-root` | #1476 |
 
 ## Grounding evidence
@@ -79,3 +79,15 @@ None. A red check stops the lane.
   Successor `pr1155successor` (`3837a7d0-b917-40b1-bbe9-17b4d8ed43ef`, w1:p2G) confirmed actively
   driving (session freshly re-resolved via `herdr pane list`) before the old pane (w1:p2A) was
   closed.
+- `PR1207 transcript aria-live` / `e363dadd-442d-4e7a-b40f-343194239a18` — relayed at context-meter
+  70% after opening PR #1479, committing code fix + regression test, and running gate 3x on an
+  isolated DB (green on the 3rd run; first two flaked on unrelated sibling-worktree DDL contention).
+  Live-path proof (4 blocking UAT specs + aria-live DOM evidence) not yet started. Successor
+  `pr1207-relay2` (`ae627f40-5e40-48ea-a43e-9e07c92f9f8f`, w1:p2J) confirmed actively driving
+  (`run-uat.ts`) before the old pane (w1:p29) was closed.
+- `PR1115 relay2` / `9907b0d5-55ec-4393-ae36-55ae00ba09a6` — relayed after QA posted RED on PR
+  #1478 (narrative-only live-path comment, no attached images). Wrote+committed+pushed continuation
+  doc `docs/superpowers/handoffs/2026-08-09-fix-1115-overdue-indicator-relay-3.md` (fix plan:
+  gist-hosted real screenshots, CI-check reconfirmation, teardown). Successor `pr1115-relay3`
+  (`2601aeeb-0e8f-497a-acee-3d4c0435217b`, w1:p2H) confirmed actively driving (generating real
+  screenshots, e.g. `done-overdue.png`) before the old pane (w1:p2F) was closed.
