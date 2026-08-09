@@ -19,7 +19,7 @@ autonomous overnight run across both waves; escalations route to `Agent(model: "
 | `docs/superpowers/specs/2026-08-08-non-feature-wave-2.md` | #1155 | routine | **merged** — squash-merged `e249850e7`, worktree+branch cleaned up | `pr1155successor` (reaped) | `fix-1155-schedule-key-slash` | #1480 |
 | same | #1207 | routine | **merged** — Ben ruled 2026-08-09 approve fable-proxy's scoped waiver (2 UAT specs waived as pre-existing Moss-rename locator break, #1481, unrelated to this diff); squash-merged `dc5b4f0fb`, worktree+branch cleaned up | `pr1207-relay3`/relay4 (reaped) | `fix-1207-transcript-aria-live` | #1479 |
 | same | #1115 | routine | **merged** — squash-merged `12fdbe8d5`, worktree+branch cleaned up | `pr1115-relay3` (reaped) | `fix-1115-overdue-indicator` | #1478 |
-| same | #1433 | routine | PR open, QA YELLOW resolved — CI "Verify foundation and app" now **pass**; all checks green except "Build and publish images" (pending — known-disabled mid-wave CI job, not a blocker, see memory `ci-image-build-job-disabled-mid-wave`); merge-ready, awaiting its turn in fixed order | `pr1433-wrapup` (w1:p2E) | `fix-1433-dataset-fetch-warning` | #1477 |
+| same | #1433 | routine | **merged** — CI fully green incl. "Build and publish images"; squash-merged `f78992b14`, worktree+branch cleaned up | `pr1433-wrapup` (reaped) | `fix-1433-dataset-fetch-warning` | #1477 |
 | same | #1453 | routine | merged (as Wave 1 unblocker) | `Google schedule root #1453 r2` (reaped) | `fix-1453-google-schedule-root` | #1476 |
 
 ## Grounding evidence
