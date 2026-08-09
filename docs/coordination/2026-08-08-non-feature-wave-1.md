@@ -3,10 +3,10 @@
 **Date:** 2026-08-08
 **Tracking epic:** #1470
 **Coordinator lock:** label `Coordinator`, stable anchor = Claude session id
-`760932a1-2f18-4c4e-8c9c-a4628d7ba908`.
+`3c2ed662-f8df-4f0a-93cd-91c73847189a`.
 **Approval state:** Approved by Ben on 2026-08-08.
 **Merge policy:** autonomous after verified QA for routine lanes; the live-path gate still applies.
-**merges_since_relay:** 2
+**merges_since_relay:** 0
 
 > GitHub project 2 and #1470 are the live status roll-up. This file holds the fleet's operational
 > state. Pane IDs are intentionally omitted because they reflow; agents are tracked by label and
@@ -152,6 +152,18 @@ None. A red check stops the lane.
   (`herdr agent prompt coordinator-wave1-r3`) rather than relaying for one message. CI on #1476 is
   running. Event-driven Monitors are watching PR #1474 and PR #1476 CI to terminal — no manual
   polling. Still merge nothing: neither #1474 nor #1476 has terminal-green CI yet.
+- Successor coordinator `3c2ed662-f8df-4f0a-93cd-91c73847189a` claimed the sole `Coordinator` lock
+  (retiring session `760932a1-2f18-4c4e-8c9c-a4628d7ba908` closed after this note landed) and
+  re-adopted all four live panes by label+session: `Migration pin #1272 r2` (`bb663dc1…`),
+  `Masthead #1412 r2` (`53a9e013…`), `Sports tie-break #903 r3` (`19ca880c…`), `Google schedule
+  root #1453 r2` (`38411432…`). Fresh `gh pr checks`: PR #1474 (#1272) — `Verify foundation and
+  app` still `IN_PROGRESS`; PR #1476 (#1453) — `Compose deployment smoke` and `Verify foundation
+  and app` still `IN_PROGRESS`. Neither is terminal-green yet. #1412 and #903 lanes read idle with
+  only placeholder/suggested-prompt text in their input box (not real unsent input — confirmed by
+  a no-op `send-keys Enter`, so left alone); both are correctly holding on dependencies per the
+  prior note, no nudge needed. Re-armed an event-driven Monitor on both PRs' CI to terminal state;
+  `merges_since_relay` reset to 0. Merge nothing until CI is terminal-green and independent QA
+  confirms it, per fixed order #1272 → #1412 → #903.
 
 ## Reaped sessions
 
@@ -163,4 +175,7 @@ None. A red check stops the lane.
   proof and final report.
 - `Masthead #1412` / `b34dd772-ad76-4bba-88c7-084ac05e9b67` — relayed at context threshold after committed fix, regression, UAT seam, and wrap-up handoff.
 - `Sports tie-break #903` / `b5d43aea-c5b8-4a5b-bd97-8c914cedd98f` — relayed at context threshold after committed build and green pre-push trio.
+- `Coordinator` (retiring, r3) / `760932a1-2f18-4c4e-8c9c-a4628d7ba908` — relayed after re-adopting
+  the fleet and reporting PR #1476 opened; r4 successor (`3c2ed662-f8df-4f0a-93cd-91c73847189a`)
+  confirmed driving before closing this pane.
 - `Migration pin #1272` / `162af5a5-c3f1-48a6-82cb-db4b0e33a3bb` — relayed at context threshold after committed build.
