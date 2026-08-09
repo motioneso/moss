@@ -2,8 +2,8 @@
 
 **Date:** 2026-08-08
 **Tracking epic:** #1470
-**Coordinator lock:** label `Coordinator`, stable anchor = Codex session id
-`019fe36a-3d6c-7cd3-9338-3ed739fca2f1`.
+**Coordinator lock:** label `Coordinator`, stable anchor = Claude session id
+`760932a1-2f18-4c4e-8c9c-a4628d7ba908`.
 **Approval state:** Approved by Ben on 2026-08-08.
 **Merge policy:** autonomous after verified QA for routine lanes; the live-path gate still applies.
 **merges_since_relay:** 2
@@ -20,7 +20,7 @@
 | same | #887 | routine | GPT-5.6 Luna high | merged | `Quiet-hours #887` / `019fe342-08cc-7b70-a574-dae8c26452b9` | `fix-887-quiet-hours-flake` | #1471 |
 | same | #1412 | routine | Sonnet 5 (`sonnet`) | awaiting-ci | `Masthead #1412 r2` / `53a9e013-bb50-4a31-b405-9f0c5ead88af` | `fix-1412-masthead-space` | #1473 |
 | same | #903 | routine | Sonnet 5 (`sonnet`) | qa-green-waiting-order | `Sports tie-break #903 r3` / `19ca880c-56d8-4f02-b798-48167d0fb897` | `fix-903-sports-tiebreak` | #1472 |
-| same | #1272 | routine | Sonnet 5 (`sonnet`) | rebasing | `Migration pin #1272 r2` / `bb663dc1-87c2-433d-8d82-b96ad0b888a0` | `test-1272-structured-state-migrations` | #1474 |
+| same | #1272 | routine | Sonnet 5 (`sonnet`) | awaiting-ci | `Migration pin #1272 r2` / `bb663dc1-87c2-433d-8d82-b96ad0b888a0` | `test-1272-structured-state-migrations` | #1474 |
 
 ## Dependency and collision map
 
@@ -129,6 +129,22 @@ None. A red check stops the lane.
   `38411432-3b25-4807-be15-9888f1d62969` (`Google schedule root #1453 r2`) after focused and five
   repeated runs passed. Relay now because `merges_since_relay` reached 2; merge nothing else until
   the successor coordinator claims the lock and re-adopts the fleet.
+- Successor coordinator `760932a1-2f18-4c4e-8c9c-a4628d7ba908` claimed the sole `Coordinator` lock
+  (retiring Codex session `019fe36a-3d6c-7cd3-9338-3ed739fca2f1` renamed `Coordinator retiring`,
+  closed after this note landed) and re-adopted all live Wave 1/Wave 2 panes by label+session:
+  `Migration pin #1272 r2` (`bb663dc1…`), `Masthead #1412 r2` (`53a9e013…`), `Sports tie-break #903
+  r3` (`19ca880c…`), `Google schedule root #1453 r2` (`38411432…`). PR #1474 (#1272) rebased clean
+  onto `origin/main@cf1637384` at exact SHA `2e292d2fb918fcea9d543ec35ac81f57f962bbc6`, pre-push
+  green, but GitHub CI's `Verify foundation and app` is still `pending` on the new SHA — not
+  QA-ready yet, re-check before spawning QA. PR #1473 (#1412) still shows the prior red
+  `Verify foundation and app` (20m32s fail) from before the #1453 unblocker landed; #1412's build
+  agent already posted its live-path UAT rerun (2/2 pass) and is idle awaiting the unblocker +
+  rebase — do not re-QA until #1453 merges and #1412 rebases onto it. PR #1472 (#903) is
+  unchanged: independent QA GREEN, CI green, correctly holding for merge order. #1453 unblocker
+  (`Google schedule root #1453 r2`) has not yet pushed or opened its PR — its own checklist shows
+  `Push + open PR` and `Report to coordinator` still unchecked — but it is actively mid-turn
+  (`coordinated-wrap-up`, high effort, pushing now), not stalled; no nudge needed. Merge nothing
+  until CI is terminal-green on the relevant PR and independent QA confirms it.
 
 ## Reaped sessions
 
