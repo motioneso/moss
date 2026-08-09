@@ -10,7 +10,7 @@
   — `<div className="assistant-surface__thread">` wraps `props.localRows`, `<Thread records={...}/>`,
   the typing row, and `props.activeControl`. It carried no `aria-live`.
 - Existing (narrower) live region: `apps/web/src/chat/assistant-surface/surface.tsx:266-270` —
-  the `TypingRow` inner `<div>` already has `aria-live="polite"`. This is a *different* element;
+  the `TypingRow` inner `<div>` already has `aria-live="polite"`. This is a _different_ element;
   it stays as-is (removing it is out of scope and would regress the typing announcement).
 - `Thread` (in `apps/web/src/chat/message-row.tsx:45`) also independently carries its own
   `aria-live="polite"` on `chatd-thread`. It covers `props.records` only, not `localRows`,
@@ -69,6 +69,7 @@ not here.
 
 Run all four blocking UAT specs listed above against a live dev instance and post a `gh pr
 comment` with:
+
 - the UAT run output (all four specs passing), and
 - proof the `aria-live="polite"` attribute is present in the **live rendered DOM**, not just a
   visual screenshot of the chat UI — e.g. a devtools Elements-panel screenshot with the attribute
