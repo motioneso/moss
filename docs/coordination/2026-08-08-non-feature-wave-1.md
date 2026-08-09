@@ -7,6 +7,12 @@
 **Approval state:** Approved by Ben on 2026-08-08.
 **Merge policy:** autonomous after verified QA for routine lanes; the live-path gate still applies.
 **merges_since_relay:** 0
+**Overnight escalation ruling (Ben, 2026-08-08, given directly to coordinator r6):** work through
+all wave 1 and wave 2 lanes autonomously overnight. Any decision that would normally escalate to
+Ben — design forks, blocked-lane calls, security-tier sign-off — routes instead to a one-shot
+`Agent(model: "fable", ...)` acting as Ben's proxy; record its verdict inline as the sign-off.
+Genuinely irreversible/destructive actions still pause for Ben himself. This ruling applies only
+to this run; do not carry it into future runs without re-confirming with Ben.
 
 > GitHub project 2 and #1470 are the live status roll-up. This file holds the fleet's operational
 > state. Pane IDs are intentionally omitted because they reflow; agents are tracked by label and
