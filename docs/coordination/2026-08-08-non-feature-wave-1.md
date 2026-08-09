@@ -6,7 +6,7 @@
 `eb429292-7635-428c-920c-13954801415e`.
 **Approval state:** Approved by Ben on 2026-08-08.
 **Merge policy:** autonomous after verified QA for routine lanes; the live-path gate still applies.
-**merges_since_relay:** 0
+**merges_since_relay:** 1
 
 > GitHub project 2 and #1470 are the live status roll-up. This file holds the fleet's operational
 > state. Pane IDs are intentionally omitted because they reflow; agents are tracked by label and
@@ -20,7 +20,7 @@
 | same | #887 | routine | GPT-5.6 Luna high | merged | `Quiet-hours #887` / `019fe342-08cc-7b70-a574-dae8c26452b9` | `fix-887-quiet-hours-flake` | #1471 |
 | same | #1412 | routine | Sonnet 5 (`sonnet`) | awaiting-ci | `Masthead #1412 r2` / `53a9e013-bb50-4a31-b405-9f0c5ead88af` | `fix-1412-masthead-space` | #1473 |
 | same | #903 | routine | Sonnet 5 (`sonnet`) | qa-green-waiting-order | `Sports tie-break #903 r3` / `19ca880c-56d8-4f02-b798-48167d0fb897` | `fix-903-sports-tiebreak` | #1472 |
-| same | #1272 | routine | Sonnet 5 (`sonnet`) | awaiting-ci | `Migration pin #1272 r2` / `bb663dc1-87c2-433d-8d82-b96ad0b888a0` | `test-1272-structured-state-migrations` | #1474 |
+| same | #1272 | routine | Sonnet 5 (`sonnet`) | merged | `Migration pin #1272 r2` / `bb663dc1-87c2-433d-8d82-b96ad0b888a0` | `test-1272-structured-state-migrations` | #1474 |
 | `docs/coordination/wave2-prep/` | #1453 | routine | Sonnet 5 (`sonnet`) | awaiting-ci | `Google schedule root #1453 r2` / `38411432-3b25-4807-be15-9888f1d62969` | `fix-1453-google-schedule-root` | #1476 |
 
 ## Dependency and collision map
@@ -183,6 +183,15 @@ None. A red check stops the lane.
   (`019fe342-086e…`, `w1:p1S`) left over from the already-merged #1448 lane — not reaped by prior
   coordinators; flagging for later cleanup, not blocking Phase 3. Starting Phase 3: QA PR #1474
   (#1272) first per fixed order.
+- `coordinated-qa` on PR #1474 (#1272, routine) returned GREEN/MERGE-READY YES at HEAD
+  `2e292d2fb918fcea9d543ec35ac81f57f962bbc6` (CI green, `audit:preflight` EXIT=0, 0 blocking
+  findings, live-path n/a — internal test-only). Durable verdict:
+  https://github.com/motioneso/moss/pull/1474#issuecomment-5229912815. Session-lock
+  re-confirmed (`eb429292…`) before merge. Merged as `7c3bca53615398411fdb4c44884b506f8067568c`;
+  issue #1272 closed with a pointer comment; project item #1272 already read `Done` on the board
+  (GitHub automation on issue-close, no manual move needed). `merges_since_relay` = 1 (routine —
+  relay trigger fires at 2). Next: fresh `gh pr checks` on PR #1473 (#1412), rebase if needed, QA,
+  merge if green, then #1472 (#903) last per fixed order.
 
 ## Reaped sessions
 
