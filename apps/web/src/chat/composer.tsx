@@ -553,10 +553,16 @@ export function classifyMicError(error: unknown, mediaDevicesAvailable: boolean)
   if (!mediaDevicesAvailable) {
     return "Voice input needs a secure connection (HTTPS). You're on an insecure origin.";
   }
-  if (error instanceof DOMException && (error.name === "NotAllowedError" || error.name === "SecurityError")) {
+  if (
+    error instanceof DOMException &&
+    (error.name === "NotAllowedError" || error.name === "SecurityError")
+  ) {
     return "Microphone permission was denied. Enable it in your browser settings.";
   }
-  if (error instanceof DOMException && (error.name === "NotFoundError" || error.name === "NotReadableError")) {
+  if (
+    error instanceof DOMException &&
+    (error.name === "NotFoundError" || error.name === "NotReadableError")
+  ) {
     return "No microphone found.";
   }
   return "Microphone access was denied or unavailable.";

@@ -8,7 +8,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { LookupAiCapabilityRouteResponse } from "@moss/shared";
 import { queryKeys } from "../../apps/web/src/api/query-keys.js";
-import { Composer, classifyMicError, mergeTranscriptIntoText } from "../../apps/web/src/chat/composer.js";
+import {
+  Composer,
+  classifyMicError,
+  mergeTranscriptIntoText
+} from "../../apps/web/src/chat/composer.js";
 
 // #738 — Chat voice input capture and transcription: composer-side coverage.
 //
