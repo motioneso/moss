@@ -25,7 +25,7 @@ to this run; do not carry it into future runs without re-confirming with Ben.
 | `docs/superpowers/specs/2026-08-08-non-feature-wave-1.md` | #1448 | routine | GPT-5.6 Luna high | merged | `News alias #1448` / `019fe342-086e-7be3-8ddf-db6a1a5960ad` | `fix-1448-news-vitest-alias` | #1475 |
 | same | #887 | routine | GPT-5.6 Luna high | merged | `Quiet-hours #887` / `019fe342-08cc-7b70-a574-dae8c26452b9` | `fix-887-quiet-hours-flake` | #1471 |
 | same | #1412 | routine | Sonnet 5 (`sonnet`) | merged | `Masthead #1412 r2` / `53a9e013-bb50-4a31-b405-9f0c5ead88af` | `fix-1412-masthead-space` | #1473 |
-| same | #903 | routine | Sonnet 5 (`sonnet`) | qa-green-waiting-order | `Sports tie-break #903 r3` / `19ca880c-56d8-4f02-b798-48167d0fb897` | `fix-903-sports-tiebreak` | #1472 |
+| same | #903 | routine | Sonnet 5 (`sonnet`) | merged | `Sports tie-break #903 r3` / `19ca880c-56d8-4f02-b798-48167d0fb897` | `fix-903-sports-tiebreak` | #1472 |
 | same | #1272 | routine | Sonnet 5 (`sonnet`) | merged | `Migration pin #1272 r2` / `bb663dc1-87c2-433d-8d82-b96ad0b888a0` | `test-1272-structured-state-migrations` | #1474 |
 | `docs/coordination/wave2-prep/` | #1453 | routine | Sonnet 5 (`sonnet`) | merged | `Google schedule root #1453 r2` / `38411432-3b25-4807-be15-9888f1d62969` | `fix-1453-google-schedule-root` | #1476 |
 
