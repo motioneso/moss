@@ -50,8 +50,9 @@ const ROLE_MARKER_HEADER_RE =
 
 function neutralizeRoleMarkers(text: string): string {
   return text
-    .replace(ROLE_MARKER_COLON_RE, (_m, prefix: string, role: string, colon: string) =>
-      `${prefix}[${role}]${colon}`
+    .replace(
+      ROLE_MARKER_COLON_RE,
+      (_m, prefix: string, role: string, colon: string) => `${prefix}[${role}]${colon}`
     )
     .replace(ROLE_MARKER_HEADER_RE, (_m, prefix: string, role: string) => `${prefix}[${role}]`);
 }

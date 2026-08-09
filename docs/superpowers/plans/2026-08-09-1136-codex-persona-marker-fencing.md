@@ -8,8 +8,8 @@
 
 - `packages/chat/src/live/prompt-safety.ts:26` — `neutralizeSeedFraming(text)` strips only the
   reserved XML-style delimiter tag set (`memory|conversation|prior-context|retrieved_context|
-  cross_tool_context|page_context|attachments|trusted_instructions|external_source|
-  module_control|module_onboarding_state`). It does **not** touch `User:`/`Assistant:`/`System:`
+cross_tool_context|page_context|attachments|trusted_instructions|external_source|
+module_control|module_onboarding_state`). It does **not** touch `User:`/`Assistant:`/`System:`
   style markers — confirmed by reading the regex, no second pass exists.
 - `packages/chat/src/live/codex-exec-session.ts:95-108` (`buildPrompt`) interpolates
   `this.personaText`, `this.replayBatch`, `this.turns[].user/.assistant`, and the current-turn
@@ -92,8 +92,9 @@ const ROLE_MARKER_HEADER_RE =
 
 function neutralizeRoleMarkers(text: string): string {
   return text
-    .replace(ROLE_MARKER_COLON_RE, (_m, prefix: string, role: string, colon: string) =>
-      `${prefix}[${role}]${colon}`
+    .replace(
+      ROLE_MARKER_COLON_RE,
+      (_m, prefix: string, role: string, colon: string) => `${prefix}[${role}]${colon}`
     )
     .replace(ROLE_MARKER_HEADER_RE, (_m, prefix: string, role: string) => `${prefix}[${role}]`);
 }
@@ -175,14 +176,19 @@ mocking pattern in `tests/unit/cli-chat-engine-probe-security.test.ts:1-11`):
 ## Verification
 
 ```bash
-pnpm --filter @moss/chat test -- chat-recall-seed chat-codex-exec-session > /tmp/w3c-phase1.log 2>&1; echo "EXIT=$?"
+pnpm vitest run tests/unit/chat-recall-seed.test.ts tests/unit/chat-codex-exec-session.test.ts > /tmp/w3c-phase1.log 2>&1; echo "EXIT=$?"
 ```
+
+Corrected 2026-08-09 (relay 4): the original `pnpm --filter @moss/chat test -- ...` is a FALSE GREEN —
+`packages/chat/package.json` declares no `test` script, so pnpm exits 0 having run zero tests. Suites
+live at the repo root and are driven by the root vitest config.
 Expected: `EXIT=0`, all listed cases passing (5 in Task 1's suite, 5 in Task 2's suite, plus every
 pre-existing case in `chat-recall-seed.test.ts` still green).
 
 ```bash
 pnpm format:check && pnpm lint && pnpm typecheck > /tmp/w3c-pretrio.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0` (pre-push trio, run again before the actual push per `coordinated-build` step 3b).
 
 Full gate (`pnpm verify:foundation` on an isolated gate DB, per `verify-gate` skill) runs at
@@ -200,7 +206,7 @@ do not iterate silently past one failed precision case. Owner: this builder, esc
 ## Determinism boundary
 
 N/A — no UI surface, no model-authored user-visible value. This is prompt-construction hardening
-only; the codex model's own output is unchanged in shape (still free text), only the *inputs* it
+only; the codex model's own output is unchanged in shape (still free text), only the _inputs_ it
 receives are hardened against transcript-boundary spoofing.
 
 ## Rulings ledger
