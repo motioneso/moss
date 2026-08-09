@@ -171,4 +171,18 @@ describe("persona/role marker neutralization (#1136)", () => {
     expect(result).toContain("[User]:");
     expect(result).toContain("[System]:");
   });
+
+  it("does not backtrack catastrophically on a long decoration run (ReDoS)", () => {
+    // A 30-dash markdown horizontal rule / email separator is ordinary recalled content, and it
+    // reaches this shared choke point from every engine. With an ambiguously-nested quantifier the
+    // match cost is ~2^n and blocks the API event loop synchronously (measured 6.8s at 30 dashes,
+    // ~0.02ms once the ambiguity is removed), so the budget below is a wide, non-flaky margin.
+    const horizontalRule = "-".repeat(30);
+    const start = performance.now();
+    const result = neutralizeSeedFraming(horizontalRule);
+    const elapsedMs = performance.now() - start;
+
+    expect(result).toBe(horizontalRule);
+    expect(elapsedMs).toBeLessThan(1000);
+  });
 });

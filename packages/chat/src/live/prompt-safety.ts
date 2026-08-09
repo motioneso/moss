@@ -43,10 +43,15 @@ export function neutralizeSeedFraming(text: string): string {
 // role word with NO colon is neutralized only when markdown header/blockquote decoration
 // precedes it — required decoration is the signal that separates a spoofed header from an
 // ordinary sentence starting with "User"/"System"/etc.
-const ROLE_MARKER_COLON_RE =
-  /^([ \t]*(?:[>\-*#]+[ \t]*)*)(user|assistant|system|human|ai)(\s*:)/gim;
+//
+// The decoration group matches ONE decoration character per repetition (`[>\-*#]`, not
+// `[>\-*#]+`). An inner `+` under the outer quantifier makes the partitioning of a decoration run
+// ambiguous, so a plain markdown horizontal rule ("-" x 30) backtracks at ~2^n and blocks the event
+// loop for seconds. Matching one character at a time is unambiguous, linear, and byte-identical in
+// output.
+const ROLE_MARKER_COLON_RE = /^([ \t]*(?:[>\-*#][ \t]*)*)(user|assistant|system|human|ai)(\s*:)/gim;
 const ROLE_MARKER_HEADER_RE =
-  /^([ \t]*(?:[>\-*#]+[ \t]*)+)(user|assistant|system|human|ai)(?=[ \t]*(?:\r?\n|$))/gim;
+  /^([ \t]*(?:[>\-*#][ \t]*)+)(user|assistant|system|human|ai)(?=[ \t]*(?:\r?\n|$))/gim;
 
 function neutralizeRoleMarkers(text: string): string {
   return text
