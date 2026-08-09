@@ -814,7 +814,11 @@ describe("Tasks module M1", () => {
 
   it("does not treat a cross-owner shared task as a duplicate on (source, external_key) collision", async () => {
     const ownedByA = await dataContext.withDataContext(userAContext(), (db) =>
-      repository.create(db, { title: "A's synced item", source: "sync", externalKey: "sync:collide-1" })
+      repository.create(db, {
+        title: "A's synced item",
+        source: "sync",
+        externalKey: "sync:collide-1"
+      })
     );
     await dataContext.withDataContext(userAContext(), (db) =>
       sharesRepository.grant(db, {
@@ -827,7 +831,11 @@ describe("Tasks module M1", () => {
     );
 
     const createdByB = await dataContext.withDataContext(userBContext(), (db) =>
-      repository.create(db, { title: "B's own item", source: "sync", externalKey: "sync:collide-1" })
+      repository.create(db, {
+        title: "B's own item",
+        source: "sync",
+        externalKey: "sync:collide-1"
+      })
     );
 
     expect(createdByB.id).not.toBe(ownedByA.id);

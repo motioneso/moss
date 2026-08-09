@@ -30,8 +30,7 @@ idempotency was always the schema's intent. Folded into Task 2 below.
   `pnpm build:app-map` (script: `tsx scripts/build-app-map.ts`) before any integration test run in
   a fresh worktree. Ran once this session — artifact now exists on disk in this worktree, should
   not need re-running unless the worktree is recreated.
-- Gate DB in use this session: `jarvis_gate_w3b_1055` (created via `docker exec jarv1s-postgres
-  psql`). Still exists — **DROP it when the lane finishes** per `verify-gate` skill.
+- Gate DB in use this session: `jarvis_gate_w3b_1055` (created via `docker exec jarv1s-postgres psql`). Still exists — **DROP it when the lane finishes** per `verify-gate` skill.
 - Recommended test invocation for the successor (avoid the `pnpm test:tasks -- -t '...'` form —
   it echoes a literal `--` before `-t` into the forwarded args, which may cause the filter to be
   ignored; use `pnpm test:tasks -t "cross-owner shared task"`, no extra `--`, and confirm from the
@@ -44,13 +43,8 @@ idempotency was always the schema's intent. Folded into Task 2 below.
   current actor" — false today.
 - RLS reality: `packages/tasks/sql/0019_tasks_owner_or_share.sql:12-22` — `tasks_select` is
   owner-**OR-share**, not owner-only.
-- Existing idiom for the fix, used twice already in the same file — `:191` (`hasRecurringSeries`)
-  and `:265` (`create`'s own `parentTaskId` check): `.where(sql<boolean>\`owner_user_id =
-  app.current_actor_user_id()\`)`. `sql` already imported at `:3`.
-- Unique index proving per-owner idempotency was always intended:
-  `packages/tasks/sql/0039_tasks_foundation.sql:80-81` —
-  `CREATE UNIQUE INDEX ... tasks_source_external_key_idx ON app.tasks (owner_user_id, source,
-  external_key) WHERE external_key IS NOT NULL;`
+- Existing idiom for the fix, used twice already in the same file — `:191` (`hasRecurringSeries`) and `:265` (`create`'s own `parentTaskId` check): ``.where(sql<boolean>`owner_user_id = app.current_actor_user_id()`)``. `sql` already imported at `:3`.
+- Unique index proving per-owner idempotency was always intended: `packages/tasks/sql/0039_tasks_foundation.sql:80-81` — `CREATE UNIQUE INDEX ... tasks_source_external_key_idx ON app.tasks (owner_user_id, source, external_key) WHERE external_key IS NOT NULL;`
 - Test fixtures already present, no new fixture code needed: `tests/integration/tasks-helpers.ts:153`
   (`userAContext`), `:160` (`userBContext`); `tests/integration/test-database.ts:31-32`
   (`ids.userA`, `ids.userB`); `SharesRepository.grant` pattern at `tests/integration/tasks.test.ts:263-271`.
@@ -72,7 +66,11 @@ confirmed correctly red (see Open Question above), not yet committed.
 ```ts
 it("does not treat a cross-owner shared task as a duplicate on (source, external_key) collision", async () => {
   const ownedByA = await dataContext.withDataContext(userAContext(), (db) =>
-    repository.create(db, { title: "A's synced item", source: "sync", externalKey: "sync:collide-1" })
+    repository.create(db, {
+      title: "A's synced item",
+      source: "sync",
+      externalKey: "sync:collide-1"
+    })
   );
   await dataContext.withDataContext(userAContext(), (db) =>
     sharesRepository.grant(db, {
