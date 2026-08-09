@@ -2,12 +2,13 @@ import { readFileSync } from "node:fs";
 
 import { createElement, type ReactElement } from "react";
 import { renderToString } from "react-dom/server";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { LookupAiCapabilityRouteResponse } from "@moss/shared";
 import { queryKeys } from "../../apps/web/src/api/query-keys.js";
-import { Composer, mergeTranscriptIntoText } from "../../apps/web/src/chat/composer.js";
+import { Composer, classifyMicError, mergeTranscriptIntoText } from "../../apps/web/src/chat/composer.js";
 
 // #738 — Chat voice input capture and transcription: composer-side coverage.
 //
@@ -61,6 +62,168 @@ describe("Composer mic control (#738)", () => {
     expect(extractMicButtonTag(html)).toContain("disabled");
   });
 });
+
+// #900 — classifyMicError is a pure function, testable directly without any rendering.
+describe("classifyMicError (#900)", () => {
+  it("reports an insecure origin when mediaDevices is unavailable", () => {
+    expect(classifyMicError(undefined, false)).toBe(
+      "Voice input needs a secure connection (HTTPS). You're on an insecure origin."
+    );
+  });
+
+  it("reports permission denied for NotAllowedError", () => {
+    expect(classifyMicError(new DOMException("x", "NotAllowedError"), true)).toBe(
+      "Microphone permission was denied. Enable it in your browser settings."
+    );
+  });
+
+  it("reports permission denied for SecurityError (same bucket as NotAllowedError)", () => {
+    expect(classifyMicError(new DOMException("x", "SecurityError"), true)).toBe(
+      "Microphone permission was denied. Enable it in your browser settings."
+    );
+  });
+
+  it("reports no microphone found for NotFoundError", () => {
+    expect(classifyMicError(new DOMException("x", "NotFoundError"), true)).toBe(
+      "No microphone found."
+    );
+  });
+
+  it("reports no microphone found for NotReadableError", () => {
+    expect(classifyMicError(new DOMException("x", "NotReadableError"), true)).toBe(
+      "No microphone found."
+    );
+  });
+
+  it("falls back to the generic message for an unclassified error", () => {
+    expect(classifyMicError(new Error("weird"), true)).toBe(
+      "Microphone access was denied or unavailable."
+    );
+  });
+});
+
+// #900 (insecure-origin branch) + #1134 (track cleanup on unmount) — interactive lifecycle,
+// driven through react-test-renderer with stubbed globals since this project's vitest
+// environment is node (no jsdom/MediaRecorder).
+describe("Composer mic lifecycle (#900 insecure origin, #1134 track cleanup)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("shows the insecure-origin message and never calls getUserMedia when mediaDevices is absent", async () => {
+    const getUserMedia = vi.fn();
+    vi.stubGlobal("navigator", {});
+
+    const renderer = await renderInteractiveComposer((client) => {
+      client.setQueryData(queryKeys.ai.capability("transcription"), availableRoute());
+    });
+
+    const micButton = findMicButton(renderer);
+    await act(async () => {
+      micButton.props.onClick();
+    });
+
+    expect(getUserMedia).not.toHaveBeenCalled();
+    const errorText = renderer.root.findByProps({ className: "form-error" });
+    expect(errorText.children).toEqual([
+      "Voice input needs a secure connection (HTTPS). You're on an insecure origin."
+    ]);
+
+    act(() => {
+      renderer.unmount();
+    });
+  });
+
+  it("stops every acquired track when the composer unmounts mid-recording (#1134)", async () => {
+    const tracks = [{ stop: vi.fn() }, { stop: vi.fn() }];
+    const stream = { getTracks: () => tracks };
+    const getUserMedia = vi.fn(async () => stream);
+    vi.stubGlobal("navigator", { mediaDevices: { getUserMedia } });
+    vi.stubGlobal("MediaRecorder", FakeMediaRecorder);
+
+    const renderer = await renderInteractiveComposer((client) => {
+      client.setQueryData(queryKeys.ai.capability("transcription"), availableRoute());
+    });
+
+    const micButton = findMicButton(renderer);
+    await act(async () => {
+      micButton.props.onClick();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(micButton.props["aria-label"]).toBe("Stop recording");
+
+    act(() => {
+      renderer.unmount();
+    });
+
+    for (const track of tracks) {
+      expect(track.stop).toHaveBeenCalledOnce();
+    }
+  });
+
+  it("does not throw on unmount when no recording was ever started", async () => {
+    vi.stubGlobal("navigator", { mediaDevices: { getUserMedia: vi.fn() } });
+
+    const renderer = await renderInteractiveComposer((client) => {
+      client.setQueryData(queryKeys.ai.capability("transcription"), availableRoute());
+    });
+
+    expect(() => {
+      act(() => {
+        renderer.unmount();
+      });
+    }).not.toThrow();
+  });
+});
+
+class FakeMediaRecorder {
+  ondataavailable: ((event: { data: { size: number } }) => void) | null = null;
+  onstop: (() => void) | null = null;
+  mimeType = "audio/webm";
+  constructor(_stream: unknown) {}
+  start() {
+    /* no-op */
+  }
+}
+
+function findMicButton(renderer: ReactTestRenderer) {
+  return renderer.root.find(
+    (node) =>
+      node.type === "button" &&
+      (node.props["aria-label"] === "Record voice message" ||
+        node.props["aria-label"] === "Stop recording")
+  );
+}
+
+async function renderInteractiveComposer(
+  seed: (client: QueryClient) => void,
+  overrides: Partial<{ readOnly: boolean }> = {}
+): Promise<ReactTestRenderer> {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  seed(client);
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement(Composer, {
+          readOnly: overrides.readOnly ?? false,
+          isFounder: false,
+          isSending: false,
+          sendError: null,
+          needsProvider: false,
+          lockedModelUnavailable: false,
+          onSend: () => {},
+          onStop: () => {}
+        }) as ReactElement
+      )
+    );
+  });
+  return renderer;
+}
 
 /** Extracts the mic `<button ...>` opening tag, regardless of the order React writes attributes. */
 function extractMicButtonTag(html: string): string {
