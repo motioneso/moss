@@ -17,7 +17,7 @@ autonomous overnight run across both waves; escalations route to `Agent(model: "
 | Spec | Issue | Tier | Status | Agent label | Branch | PR |
 | --- | --- | --- | --- | --- | --- | --- |
 | `docs/superpowers/specs/2026-08-08-non-feature-wave-2.md` | #1155 | routine | commits green (fix + real-pg-boss integration test), gate flaked twice on unrelated concurrent-tuple contention (connectors-google.test.ts, then news-discovery-repository.test.ts — different file each time, not this diff), wrapping up (no PR yet; likely mid gate/pre-push run in its own background) | `pr1155successor` (w1:p2G) | `fix-1155-schedule-key-slash` | — |
-| same | #1207 | routine | PR open (mergeable), code fix + regression test committed (red-before/green-after confirmed), gate green on 3rd isolated-DB run (1868/1871; two earlier runs flaked on unrelated sibling-worktree DDL contention — prettier then "tuple concurrently updated" across google-sync-calendar/job-search-store/news-personalization/notes-write-tools/profile-identity, not this diff), relaying for live-path proof (4 blocking UAT specs + DOM-level aria-live evidence) | `pr1207-relay2` (w1:p2J) | `fix-1207-transcript-aria-live` | #1479 |
+| same | #1207 | routine | PR open (mergeable), code+test green, gate confirmed clean on isolated DB; relayed again near auto-compact mid live-path UAT run (coordinator-directed relay); successor resuming coordinated-build step 4 (DOM aria-live proof) then wrap-up | `pr1207-relay3` (w1:p2K) | `fix-1207-transcript-aria-live` | #1479 |
 | same | #1115 | routine | **QA RED** (live-path comment was text-only, no screenshots) — successor actively generating real screenshots (e.g. `done-overdue.png`) per its own relay handoff plan (gist-hosted images, CI-check reconfirmation, teardown) to fix | `pr1115-relay3` (w1:p2H) | `fix-1115-overdue-indicator` | #1478 |
 | same | #1433 | routine | PR open, QA YELLOW resolved — CI "Verify foundation and app" now **pass**; all checks green except "Build and publish images" (pending — known-disabled mid-wave CI job, not a blocker, see memory `ci-image-build-job-disabled-mid-wave`); merge-ready, awaiting its turn in fixed order | `pr1433-wrapup` (w1:p2E) | `fix-1433-dataset-fetch-warning` | #1477 |
 | same | #1453 | routine | merged (as Wave 1 unblocker) | `Google schedule root #1453 r2` (reaped) | `fix-1453-google-schedule-root` | #1476 |
@@ -91,3 +91,9 @@ None. A red check stops the lane.
   gist-hosted real screenshots, CI-check reconfirmation, teardown). Successor `pr1115-relay3`
   (`2601aeeb-0e8f-497a-acee-3d4c0435217b`, w1:p2H) confirmed actively driving (generating real
   screenshots, e.g. `done-overdue.png`) before the old pane (w1:p2F) was closed.
+- `PR1207 transcript aria-live (relay2)` / `ae627f40-5e40-48ea-a43e-9e07c92f9f8f` — coordinator
+  directed this relay proactively at 9-10% until auto-compact (past the 70% trigger, mid live-path
+  UAT run) to avoid an in-context compaction. Committed continuation doc `736a66df1` before
+  spawning. Successor `pr1207-relay3` (`d119adac-77d3-4a9d-ae46-3f3e023dd43f`, w1:p2K) self-reported
+  resuming from the handoff doc (coordinated-build step 4, DOM aria-live proof) before the old pane
+  (w1:p2J) was closed.
