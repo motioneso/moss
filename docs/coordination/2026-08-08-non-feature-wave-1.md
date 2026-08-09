@@ -3,7 +3,7 @@
 **Date:** 2026-08-08
 **Tracking epic:** #1470
 **Coordinator lock:** label `Coordinator`, stable anchor = Claude session id
-`3c2ed662-f8df-4f0a-93cd-91c73847189a`.
+`eb429292-7635-428c-920c-13954801415e`.
 **Approval state:** Approved by Ben on 2026-08-08.
 **Merge policy:** autonomous after verified QA for routine lanes; the live-path gate still applies.
 **merges_since_relay:** 0
@@ -174,6 +174,15 @@ None. A red check stops the lane.
   (2) spawn `coordinated-qa` on PR #1474/#1272 first (fixed order), merge if green, (3) then
   #1412 (PR #1473) — last seen red pending the #1453 unblocker + a rebase, re-check fresh,
   QA/merge once green, (4) #903 (PR #1472) last.
+- Successor coordinator `eb429292-7635-428c-920c-13954801415e` claimed the sole `Coordinator` lock.
+  Retiring session `3c2ed662-f8df-4f0a-93cd-91c73847189a` was already absent from `herdr pane list`
+  at adoption time (no pane under that session or under label `Coordinator retiring`) — nothing to
+  close. Re-adopted all four live panes by label+session: `Migration pin #1272 r2` (`bb663dc1…`),
+  `Masthead #1412 r2` (`53a9e013…`), `Sports tie-break #903 r3` (`19ca880c…`), `Google schedule
+  root #1453 r2` (`38411432…`). Also observed a stale `News alias #1448` codex pane
+  (`019fe342-086e…`, `w1:p1S`) left over from the already-merged #1448 lane — not reaped by prior
+  coordinators; flagging for later cleanup, not blocking Phase 3. Starting Phase 3: QA PR #1474
+  (#1272) first per fixed order.
 
 ## Reaped sessions
 
