@@ -31,13 +31,13 @@ disjoint and do not collide with Wave 1.
 
 ## Scope
 
-| Issue | Tier | Intended seam | Smallest implementation and proof |
-| --- | --- | --- | --- |
-| #1155 | routine | `packages/module-registry/src/index.ts`; focused real-pg-boss integration test | Change `${actorUserId}:${source}` to `${actorUserId}/${source}`; assert the persisted schedule key is accepted and contains no `:`. |
-| #1207 | routine | `apps/web/src/chat/assistant-surface/surface.tsx`; focused render assertion | Add `aria-live="polite"` to the transcript container; run all four blocking UAT triggers and post live-UI proof. |
-| #1115 | routine | `apps/web/src/tasks/task-list-view.tsx`; existing Tasks surface test | Suppress the icon/text overdue label only when the overdue pill is present; post manual real-UI proof because no mapped UAT exists. |
-| #1433 | routine | `packages/datasets/src/client.ts`; `tests/unit/dataset-client.test.ts` | Warn once with source ID, dataset key, safe error class/status, and outcome; preserve fallback semantics and assert sensitive fields are absent. |
-| #1453 | routine | `tests/integration/connectors-google-schedule-root.test.ts` | Hold the first job active, directly attempt the duplicate with the same singleton key, and assert pg-boss returns `null`; repeat the focused integration run. |
+| Issue | Tier    | Intended seam                                                                  | Smallest implementation and proof                                                                                                                             |
+| ----- | ------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #1155 | routine | `packages/module-registry/src/index.ts`; focused real-pg-boss integration test | Change `${actorUserId}:${source}` to `${actorUserId}/${source}`; assert the persisted schedule key is accepted and contains no `:`.                           |
+| #1207 | routine | `apps/web/src/chat/assistant-surface/surface.tsx`; focused render assertion    | Add `aria-live="polite"` to the transcript container; run all four blocking UAT triggers and post live-UI proof.                                              |
+| #1115 | routine | `apps/web/src/tasks/task-list-view.tsx`; existing Tasks surface test           | Suppress the icon/text overdue label only when the overdue pill is present; post manual real-UI proof because no mapped UAT exists.                           |
+| #1433 | routine | `packages/datasets/src/client.ts`; `tests/unit/dataset-client.test.ts`         | Warn once with source ID, dataset key, safe error class/status, and outcome; preserve fallback semantics and assert sensitive fields are absent.              |
+| #1453 | routine | `tests/integration/connectors-google-schedule-root.test.ts`                    | Hold the first job active, directly attempt the duplicate with the same singleton key, and assert pg-boss returns `null`; repeat the focused integration run. |
 
 ## Exit criteria
 
