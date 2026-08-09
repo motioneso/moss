@@ -812,6 +812,29 @@ describe("Tasks module M1", () => {
     expect(noListTask.source).toBe("manual");
   });
 
+  it("does not treat a cross-owner shared task as a duplicate on (source, external_key) collision", async () => {
+    const ownedByA = await dataContext.withDataContext(userAContext(), (db) =>
+      repository.create(db, { title: "A's synced item", source: "sync", externalKey: "sync:collide-1" })
+    );
+    await dataContext.withDataContext(userAContext(), (db) =>
+      sharesRepository.grant(db, {
+        resourceType: "task",
+        resourceId: ownedByA.id,
+        ownerUserId: ids.userA,
+        granteeUserId: ids.userB,
+        level: "view"
+      })
+    );
+
+    const createdByB = await dataContext.withDataContext(userBContext(), (db) =>
+      repository.create(db, { title: "B's own item", source: "sync", externalKey: "sync:collide-1" })
+    );
+
+    expect(createdByB.id).not.toBe(ownedByA.id);
+    expect(createdByB.owner_user_id).toBe(ids.userB);
+    expect(createdByB.title).toBe("B's own item");
+  });
+
   it("breakdown augments into a parent; all children done auto-closes parent; grandchild rejected", async () => {
     const breakdown = new TaskBreakdownRepository();
     const { parent, children } = await dataContext.withDataContext(userAContext(), async (db) => {
