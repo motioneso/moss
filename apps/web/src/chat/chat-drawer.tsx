@@ -10,7 +10,6 @@ import {
   clearChat,
   endPrivateChat,
   getChatPrivacyState,
-  getOnboardingStatus,
   listCalendarEvents,
   listChatThreadMessages,
   listChatThreads,
@@ -21,14 +20,19 @@ import {
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { useAssistantName } from "../api/use-assistant-name";
-import type { ChatAttachmentDto, ChatMessageDto, LocaleSettingsDto } from "@moss/shared";
+import type {
+  ChatAttachmentDto,
+  ChatMessageDto,
+  LocaleSettingsDto,
+  LookupAiCapabilityRouteResponse
+} from "@moss/shared";
 import { formatDate, useUserLocale } from "../locale/locale-format";
 import { ChatModelPill } from "./chat-model-pill";
 import { Composer } from "./composer";
 import { ConnectProviderEmpty } from "./connect-provider-empty";
 import { Thread } from "./message-row";
 import { buildChatSeeds } from "./seeds";
-import { hasConnectedProvider, isNoActiveChatModelError } from "../onboarding/chat-availability";
+import { isNoActiveChatModelError } from "../onboarding/chat-availability";
 import {
   shouldEndPrivateChatOnStreamDisconnect,
   type ChatRecordKind,
@@ -156,13 +160,6 @@ export function ChatDrawer(props: {
     );
   }, [props.records]);
 
-  // #369: derive chat availability from the SAME onboarding status #365 added.
-  const onboardingStatusQuery = useQuery({
-    queryKey: queryKeys.onboarding.status,
-    queryFn: getOnboardingStatus,
-    enabled: props.open,
-    retry: false
-  });
   const chatRouteQuery = useQuery({
     queryKey: queryKeys.ai.capability("chat"),
     queryFn: () => lookupAiCapabilityRoute("chat"),
@@ -170,7 +167,7 @@ export function ChatDrawer(props: {
     retry: false
   });
   const lockedModelUnavailable = chatRouteQuery.data?.route?.reason === "admin-pin-unavailable";
-  const chatAvailable = hasConnectedProvider(onboardingStatusQuery.data);
+  const chatAvailable = chatAvailableFromRoute(chatRouteQuery.data);
   const threadsQuery = useQuery({
     queryKey: queryKeys.chat.threads(),
     queryFn: () => listChatThreads(),
@@ -491,7 +488,7 @@ export function ChatDrawer(props: {
               focusActionRequestId={props.focusActionRequestId}
               onActionRequestFocused={props.onActionRequestFocused}
             />
-          ) : onboardingStatusQuery.isSuccess && !chatAvailable ? (
+          ) : chatRouteQuery.isSuccess && !chatAvailable ? (
             <ConnectProviderEmpty isFounder={props.isFounder} />
           ) : (
             <EmptyState
@@ -633,6 +630,12 @@ function HistoryList(props: {
 
 function sameTranscriptRecord(a: TranscriptRecord, b: TranscriptRecord): boolean {
   return a.kind === b.kind && a.text === b.text;
+}
+
+export function chatAvailableFromRoute(
+  data: LookupAiCapabilityRouteResponse | undefined
+): boolean {
+  return data?.route?.available === true;
 }
 
 export function recordsFromMessages(messages: readonly ChatMessageDto[]): TranscriptRecord[] {
