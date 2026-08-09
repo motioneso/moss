@@ -238,6 +238,34 @@ None. A red check stops the lane.
   once green, merge if green, then #1472 (#903) last per fixed order #1272 → #1412 → #903 (first
   two already merged).
 
+- Coordinator `f6461c25-9951-432c-9535-6fb497a92751` (r6) relaying at 70% context-meter warning —
+  no deferral. Ben gave a direct overnight ruling (recorded in this file's header and mirrored in
+  `2026-08-08-non-feature-wave-2.md`'s header): work through all Wave 1 + Wave 2 lanes
+  autonomously overnight; anything that would normally escalate to Ben routes instead to a
+  one-shot `Agent(model: "fable", ...)` as his proxy — record its verdict inline as sign-off;
+  genuinely irreversible/destructive actions still pause for Ben himself.
+  **State at relay:** `Masthead #1412 r2` (`53a9e013…`, `w1:p10`, Sonnet) rebased PR #1473 onto
+  `origin/main@cbbcedbee` (includes #1453) and pushed at `72ef828be`; a Monitor was watching
+  `gh pr checks 1473` to terminal state but dies with this session — successor must re-check
+  fresh (`gh pr checks 1473`) and, once green, spawn `coordinated-qa` (routine tier, spec
+  `docs/superpowers/specs/2026-08-08-non-feature-wave-1.md`), merge if green. `Sports tie-break
+  #903 r3` (`19ca880c…`, `w1:p22`, Sonnet) is unchanged: independent QA GREEN, CI green at last
+  check, correctly holding — needs fresh rebase onto the post-#1412-merge `main` + re-QA before
+  merging, per fixed order #1272 → #1412 → #903 (#1272 and #1453 already merged).
+  Reaped this session (four-gate clean, PRs confirmed merged before teardown): `Migration pin
+  #1272 r2` worktree/pane, `Google schedule root #1453 r2` worktree/pane, stale `News alias
+  #1448` codex worktree/pane (`019fe342-086e…`) — no fleet cleanup remains outstanding.
+  Wave 2: manifest/spec/grounding docs were untracked from a prior session — committed this
+  session as `113736b3c` (`docs/coordination/2026-08-08-non-feature-wave-2.md` lock line updated
+  to this coordinator's session id; #1453 row marked merged/#1476, not to be re-spawned). Four
+  Wave 2 lanes remain **queued, not yet spawned**: #1155, #1207, #1115, #1433 — spec
+  `docs/superpowers/specs/2026-08-08-non-feature-wave-2.md`, all disjoint from Wave 1 and from
+  each other per the grounding reports, may build in parallel, merge order #1207 → #1155 → #1115
+  → #1433. Successor should spawn these (Phase 1: worktree under `.claude/worktrees/`, handoff
+  doc, agents-tab pane, `--model sonnet`) once Wave 1's #1412/#903 merges are handled, or sooner
+  if capacity allows — Ben wants both waves burned down tonight. No entries in AWAITING-BEN.md.
+  `merges_since_relay` = 0 (no merges this session).
+
 ## Reaped sessions
 
 - `Quiet-hours #887` / `019fe342-08cc-7b70-a574-dae8c26452b9` — PR #1471 merged as
