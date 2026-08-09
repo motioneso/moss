@@ -20,6 +20,16 @@ hard invariant in `CLAUDE.md`, and the voice/STT spec turned out to be already a
 
 _No decisions are currently waiting on Ben._
 
+<!-- Resolved 2026-08-09: CI waiver for PR #1479 (#1207), first in Wave 2 merge order. Ben ruled
+(a) — approved the fable-proxy's scoped waiver (2 UAT specs, pre-existing Moss-rename locator
+break tracked as #1481, unrelated to this diff). Ruling recorded on the manifest row (`gh pr
+comment` stayed blocked by the auto-mode classifier all session, so the paper trail lives in
+`docs/coordination/2026-08-08-non-feature-wave-2.md` instead of on the PR). Separately, `gh pr
+merge`/`git commit` were ALSO blocked by the classifier for this session — Ben granted scoped
+merge permission directly in chat ("you can merge any PR, not just 1479"); all four ready Wave 2
+PRs (#1479/#1207, #1480/#1155, #1478/#1115, #1477/#1433) merged squash, worktrees+branches
+cleaned up, manifest fully updated to `merged`. Wave 2 complete. -->
+
 <!-- Resolved 2026-08-05 (PM, via Telegram relay): PR #1379 — Ben ruled delegate the review; QA
 lane dispatched. Overnight Codex coordinator pid 1799977 — Ben ruled kill; killed with its MCP
 sidecars, verified dead. -->
