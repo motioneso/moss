@@ -6,7 +6,7 @@
 `eb429292-7635-428c-920c-13954801415e`.
 **Approval state:** Approved by Ben on 2026-08-08.
 **Merge policy:** autonomous after verified QA for routine lanes; the live-path gate still applies.
-**merges_since_relay:** 1
+**merges_since_relay:** 0
 
 > GitHub project 2 and #1470 are the live status roll-up. This file holds the fleet's operational
 > state. Pane IDs are intentionally omitted because they reflow; agents are tracked by label and
@@ -21,7 +21,7 @@
 | same | #1412 | routine | Sonnet 5 (`sonnet`) | awaiting-ci | `Masthead #1412 r2` / `53a9e013-bb50-4a31-b405-9f0c5ead88af` | `fix-1412-masthead-space` | #1473 |
 | same | #903 | routine | Sonnet 5 (`sonnet`) | qa-green-waiting-order | `Sports tie-break #903 r3` / `19ca880c-56d8-4f02-b798-48167d0fb897` | `fix-903-sports-tiebreak` | #1472 |
 | same | #1272 | routine | Sonnet 5 (`sonnet`) | merged | `Migration pin #1272 r2` / `bb663dc1-87c2-433d-8d82-b96ad0b888a0` | `test-1272-structured-state-migrations` | #1474 |
-| `docs/coordination/wave2-prep/` | #1453 | routine | Sonnet 5 (`sonnet`) | awaiting-ci | `Google schedule root #1453 r2` / `38411432-3b25-4807-be15-9888f1d62969` | `fix-1453-google-schedule-root` | #1476 |
+| `docs/coordination/wave2-prep/` | #1453 | routine | Sonnet 5 (`sonnet`) | merged | `Google schedule root #1453 r2` / `38411432-3b25-4807-be15-9888f1d62969` | `fix-1453-google-schedule-root` | #1476 |
 
 ## Dependency and collision map
 
@@ -192,6 +192,30 @@ None. A red check stops the lane.
   (GitHub automation on issue-close, no manual move needed). `merges_since_relay` = 1 (routine —
   relay trigger fires at 2). Next: fresh `gh pr checks` on PR #1473 (#1412), rebase if needed, QA,
   merge if green, then #1472 (#903) last per fixed order.
+- `coordinated-qa` on PR #1476 (#1453, routine) returned GREEN/MERGE-READY YES at HEAD
+  `425ff01ea` (CI green, `audit:preflight` EXIT=0, 0 blocking findings, live-path n/a —
+  test-only, no production code touched). Durable verdict:
+  https://github.com/motioneso/moss/pull/1476#issuecomment-5229936955. Session-lock
+  re-confirmed (`eb429292…`) before merge. Merged as `cbbcedbee6234c8fe3fd1c344e3d7cad2efbd16c`;
+  issue #1453 closed with a pointer comment; project item #1453 already read `Done` on the board.
+  `merges_since_relay` reached 2 — relay trigger fired, no deferral. **Relaying now before
+  touching #1412; do not do the #1412 rebase-nudge/QA/merge in this session.** Successor r6's
+  exact next steps: (1) re-confirm session-lock authority against this file's lock line,
+  (2) re-adopt all live panes by label+session — `Masthead #1412 r2` (`53a9e013…`), `Sports
+  tie-break #903 r3` (`19ca880c…`); the `Migration pin #1272 r2` (`bb663dc1…`) and `Google
+  schedule root #1453 r2` (`38411432…`) panes are now spent (their PRs merged) — confirm the
+  four-gate test before reaping either (both showed live sessions/panes still cwd'd there at last
+  check, ahead-count 2 on #1272's worktree which is fine per the squash-merge rule; do NOT reap
+  until all four gates clear), (3) message the `Masthead #1412 r2` lane that #1453 has landed on
+  `main` (`cbbcedb`) — it should rebase PR #1473 onto fresh `origin/main` and push, (4) run a fresh
+  `gh pr checks` on PR #1473 after the rebase lands — it was last seen red (`Verify foundation and
+  app` fail) on the pre-#1453 SHA, (5) once green, spawn `coordinated-qa` (routine tier, spec
+  `docs/superpowers/specs/2026-08-08-non-feature-wave-1.md`), merge if green, (6) then #1472
+  (#903) last — independent QA already GREEN and CI green at last check, just needs the
+  fixed-order gate cleared and a fresh rebase + re-QA on the integrated result before merging.
+  There is also a leftover stale `News alias #1448` codex pane (`019fe342-086e…`, `w1:p1S`) from
+  the already-merged #1448 lane, flagged by r5 and still unreaped — low priority cleanup, not
+  blocking. `merges_since_relay` reset to 0 below for the successor.
 
 ## Reaped sessions
 
