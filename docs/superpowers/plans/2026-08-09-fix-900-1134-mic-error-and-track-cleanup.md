@@ -58,17 +58,17 @@ applicable beyond noting it: N/A.
 ### 3.1 `apps/web/src/chat/composer.tsx` — new pure export
 
 ```ts
-export function classifyMicError(error: unknown, mediaDevicesAvailable: boolean): string
+export function classifyMicError(error: unknown, mediaDevicesAvailable: boolean): string;
 ```
 
 Exact returned strings (verbatim from #900's body):
 
-| Condition | Returned string |
-| --- | --- |
-| `mediaDevicesAvailable === false` | `"Voice input needs a secure connection (HTTPS). You're on an insecure origin."` |
-| `error instanceof DOMException && (error.name === "NotAllowedError" \|\| error.name === "SecurityError")` | `"Microphone permission was denied. Enable it in your browser settings."` |
-| `error instanceof DOMException && (error.name === "NotFoundError" \|\| error.name === "NotReadableError")` | `"No microphone found."` |
-| anything else | `"Microphone access was denied or unavailable."` (unchanged existing generic string — fallback, not a regression) |
+| Condition                                                                                                  | Returned string                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `mediaDevicesAvailable === false`                                                                          | `"Voice input needs a secure connection (HTTPS). You're on an insecure origin."`                                  |
+| `error instanceof DOMException && (error.name === "NotAllowedError" \|\| error.name === "SecurityError")`  | `"Microphone permission was denied. Enable it in your browser settings."`                                         |
+| `error instanceof DOMException && (error.name === "NotFoundError" \|\| error.name === "NotReadableError")` | `"No microphone found."`                                                                                          |
+| anything else                                                                                              | `"Microphone access was denied or unavailable."` (unchanged existing generic string — fallback, not a regression) |
 
 ### 3.2 `apps/web/src/chat/composer.tsx` — `startRecording` (composer.tsx:292-314)
 
