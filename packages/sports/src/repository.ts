@@ -26,7 +26,10 @@ export class SportsFollowsRepository {
     const rows = await scopedDb.db
       .selectFrom("app.sports_follows")
       .select(["id", "competition_key", "team_key", "created_at"])
+      // #903: ascending id breaks ties on equal created_at, matching selectPrimaryFollow's
+      // in-memory tie-break — same pattern as packages/briefings/src/repository.ts.
       .orderBy("created_at", "desc")
+      .orderBy("id")
       .execute();
     return rows.map(toDto);
   }
