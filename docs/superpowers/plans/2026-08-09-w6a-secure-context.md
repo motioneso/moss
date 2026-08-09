@@ -281,9 +281,18 @@ check above missed something and needs a fresh round before any further build.
   **Fable's security-tier review (this plan) required two mitigations, both applied above:**
   binding the API to `HOST=127.0.0.1` (Task 4/6) so only `tailscale serve` and same-host processes
   can reach the port at all, closing the immediate exposure without a code change; and filing a
-  GitHub issue (Task 7) for the narrower code-level fix, since prod's proxy reaches the container
-  over the docker bridge (not loopback), so `trustProxy: 'loopback'` is not a drop-in replacement
-  and needs its own design pass.
+  GitHub issue ([#1486](https://github.com/motioneso/moss/issues/1486), Task 7) for the narrower
+  code-level fix, since prod's proxy reaches the container over the docker bridge (not loopback),
+  so `trustProxy: 'loopback'` is not a drop-in replacement and needs its own design pass.
+- **Kill-gate finding, resolved in-lane per coordinator ruling**: `static-web.ts`'s SPA fallback
+  404s any request for `/` without an `Accept: text/html` header, which broke PWA service-worker
+  installation (`cache.addAll`'s implicit fetch for `/` sends no `Accept` header, so the batch
+  rejected and the SW registration was discarded). Fixed narrowly in
+  `apps/web/public/service-worker.js` (fetch `/` explicitly with the header, `cache.put` it, keep
+  `addAll` for the other shell URLs) — verified `installing` → `activated` via Playwright. The
+  broader `static-web.ts` brittleness (any non-browser-Accept same-origin fetcher hits the same
+  404) was left unchanged, out of this lane's scope, and filed as
+  [#1487](https://github.com/motioneso/moss/issues/1487).
 - **Deviation from spec's stated owned surface**: this plan touches no files under `infra/` or any
   compose file, contrary to the spec's Lane A "owned surface" listing `infra/, compose`. That
   listing was written assuming the nginx/containerized topology; the single-process topology needs
