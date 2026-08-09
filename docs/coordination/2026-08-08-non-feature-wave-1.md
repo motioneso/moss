@@ -3,7 +3,7 @@
 **Date:** 2026-08-08
 **Tracking epic:** #1470
 **Coordinator lock:** label `Coordinator`, stable anchor = Claude session id
-`eb429292-7635-428c-920c-13954801415e`.
+`f6461c25-9951-432c-9535-6fb497a92751`.
 **Approval state:** Approved by Ben on 2026-08-08.
 **Merge policy:** autonomous after verified QA for routine lanes; the live-path gate still applies.
 **merges_since_relay:** 0
@@ -216,6 +216,21 @@ None. A red check stops the lane.
   There is also a leftover stale `News alias #1448` codex pane (`019fe342-086e…`, `w1:p1S`) from
   the already-merged #1448 lane, flagged by r5 and still unreaped — low priority cleanup, not
   blocking. `merges_since_relay` reset to 0 below for the successor.
+- Successor coordinator `f6461c25-9951-432c-9535-6fb497a92751` claimed the sole `Coordinator`
+  lock (retiring session `eb429292-7635-428c-920c-13954801415e` closed by fresh label+session
+  resolution after this note landed) and re-adopted the two live Wave 1 panes by label+session:
+  `Masthead #1412 r2` (`53a9e013…`, Sonnet confirmed) and `Sports tie-break #903 r3`
+  (`19ca880c…`, Sonnet confirmed); both idle holding on Coordinator direction, no nudge needed.
+  Ran the four-gate test on all three spent lanes and reaped them: `Migration pin #1272 r2`
+  (`bb663dc1…`, PR #1474 confirmed merged, ahead-count 2 = squash-merge residue, no tracked
+  mods, pane closed, worktree removed), `Google schedule root #1453 r2` (`38411432…`, PR #1476
+  confirmed merged, same pattern, pane closed, worktree removed), and the stale `News alias
+  #1448` codex pane (`019fe342-086e…`, PR #1475 confirmed `MERGED` via `gh pr view`, pane closed,
+  worktree removed). Messaged `Masthead #1412 r2` to rebase PR #1473 onto fresh `origin/main`
+  (`cbbcedb` landed) and push; agent is working on it. Next: confirm rebase pushed, fresh
+  `gh pr checks` on PR #1473 (last seen red pre-#1453), spawn `coordinated-qa` (routine tier)
+  once green, merge if green, then #1472 (#903) last per fixed order #1272 → #1412 → #903 (first
+  two already merged).
 
 ## Reaped sessions
 
