@@ -53,3 +53,7 @@ None. A red check stops the lane.
 - `Google schedule root #1453` / `71e557a4-1ea4-40a8-9134-1137bdc5c2cf` — relayed at the
   context threshold after committing the approved one-file test edit as `28e85777a`; r2 confirmed
   driving the same worktree before the old pane was closed.
+- `PR1115 overdue indicator` / `544d62a0-6d70-428e-b1a3-9a96c9205bb7` — relayed after committing
+  plan+handoff doc fix as `e4c064cd2`; successor `pr1115-relay` (`39efc7c2-f3bc-4334-b0e3-55896a542a5c`,
+  w1:p2D) confirmed driving `coordinated-wrap-up` (gate running) before the old pane (w1:p2B) was
+  closed.
