@@ -29,7 +29,7 @@ no other lane claims it) and `apps/web/src/api/client.ts` (shared, edit is addit
   on the same import line (`:31`) stays, it's used at `:237`.
 - Exported pure-fn pattern to mirror: `recordsFromMessages`, `chat-drawer.tsx:638`, tested
   mount-free in `tests/unit/chat-drawer-activity.test.tsx:6,58` (`import { recordsFromMessages }
-  from "../../apps/web/src/chat/chat-drawer.js"` — note the `.js` extension on a `.tsx` source file,
+from "../../apps/web/src/chat/chat-drawer.js"` — note the `.js` extension on a `.tsx` source file,
   required by this repo's module resolution).
 - `useAssistantName` — `apps/web/src/api/use-assistant-name.ts:11-18` — already correct, reads
   `queryKeys.settings.persona` (`apps/web/src/api/query-keys.ts:23`) via `getPersonaSettings`
@@ -158,12 +158,14 @@ by whoever is driving the build (this session, escalate to coordinator if genuin
 ```bash
 pnpm test:unit tests/unit/chat-drawer-availability.test.ts tests/unit/chat-drawer-activity.test.tsx tests/unit/onboarding-chat-availability.test.ts > /tmp/w5d-vitest.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected `EXIT=0`. (`pnpm test:unit <files>` runs exactly those files, per `scripts/test-unit.ts` —
 no CLI args means the whole `tests/unit` glob, so the explicit file list is deliberate.)
 
 ```bash
 pnpm typecheck > /tmp/w5d-tsc.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected `EXIT=0` — catches the dropped imports (Task 1) and the new `app.tsx` query wiring (Task 2)
 type-checking clean (`typecheck` = root `tsc --noEmit` + `pnpm --filter @moss/web typecheck` +
 external-module tsc, per `package.json:26`).
@@ -174,5 +176,6 @@ project CLAUDE.md.
 ## Commits
 
 One commit per task (`git add` by explicit path only, per shared-checkout discipline):
+
 1. Task 1 — `chat-drawer.tsx` gate fix + new test file.
 2. Task 2 — `client.ts` timeout + `app.tsx` prefetch gate.

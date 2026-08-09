@@ -632,9 +632,7 @@ function sameTranscriptRecord(a: TranscriptRecord, b: TranscriptRecord): boolean
   return a.kind === b.kind && a.text === b.text;
 }
 
-export function chatAvailableFromRoute(
-  data: LookupAiCapabilityRouteResponse | undefined
-): boolean {
+export function chatAvailableFromRoute(data: LookupAiCapabilityRouteResponse | undefined): boolean {
   return data?.route?.available === true;
 }
 
