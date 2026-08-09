@@ -21,6 +21,7 @@
 | same | #1412 | routine | Sonnet 5 (`sonnet`) | awaiting-ci | `Masthead #1412 r2` / `53a9e013-bb50-4a31-b405-9f0c5ead88af` | `fix-1412-masthead-space` | #1473 |
 | same | #903 | routine | Sonnet 5 (`sonnet`) | qa-green-waiting-order | `Sports tie-break #903 r3` / `19ca880c-56d8-4f02-b798-48167d0fb897` | `fix-903-sports-tiebreak` | #1472 |
 | same | #1272 | routine | Sonnet 5 (`sonnet`) | awaiting-ci | `Migration pin #1272 r2` / `bb663dc1-87c2-433d-8d82-b96ad0b888a0` | `test-1272-structured-state-migrations` | #1474 |
+| `docs/coordination/wave2-prep/` | #1453 | routine | Sonnet 5 (`sonnet`) | awaiting-ci | `Google schedule root #1453 r2` / `38411432-3b25-4807-be15-9888f1d62969` | `fix-1453-google-schedule-root` | #1476 |
 
 ## Dependency and collision map
 
@@ -145,6 +146,12 @@ None. A red check stops the lane.
   `Push + open PR` and `Report to coordinator` still unchecked — but it is actively mid-turn
   (`coordinated-wrap-up`, high effort, pushing now), not stalled; no nudge needed. Merge nothing
   until CI is terminal-green on the relevant PR and independent QA confirms it.
+- #1453 unblocker opened PR #1476: focused test EXIT=0, repeated evidence = 5 independent process
+  runs (vitest has no `--repeat` flag; substituted 5 full separate invocations, fresh DB each),
+  falsifiability check done. Agent is at 70% context finishing its final coordinator report
+  (`herdr agent prompt coordinator-wave1-r3`) rather than relaying for one message. CI on #1476 is
+  running. Event-driven Monitors are watching PR #1474 and PR #1476 CI to terminal — no manual
+  polling. Still merge nothing: neither #1474 nor #1476 has terminal-green CI yet.
 
 ## Reaped sessions
 
