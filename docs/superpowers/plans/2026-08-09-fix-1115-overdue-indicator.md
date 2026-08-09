@@ -14,10 +14,10 @@
   whenever `due` is non-null; shows an `AlertCircle` + "Overdue" text when `due.tone === "overdue"`.
 - `apps/web/src/tasks/task-list-view.tsx:243-248` — drift pill (`jds-drift jds-drift--overdue`),
   renders whenever `due?.drift` is truthy; shows a dot + "Overdue" text when `due.drift ===
-  "overdue"`.
+"overdue"`.
 - **Confirmed bug:** for a non-done overdue task, `dueInfo` returns `tone: "overdue"` **and**
   `drift: "overdue"` simultaneously, so both blocks render — two "Overdue" indicators on one row.
-  For a *done* overdue task, `drift` is `null` (line `:82`, `done ? null : "overdue"`), so only the
+  For a _done_ overdue task, `drift` is `null` (line `:82`, `done ? null : "overdue"`), so only the
   icon/text badge renders — already a single indicator, must stay that way.
 - `tests/unit/web-day-classification-timezone.test.ts:1-6,68-80` — existing Tasks surface test,
   imports `dueInfo` from `apps/web/src/tasks/task-list-view.js` and asserts on `.label` / `.drift`.
@@ -70,6 +70,7 @@ untouched.
 ```bash
 pnpm --filter @moss/web exec vitest run ../../tests/unit/web-day-classification-timezone.test.ts > /tmp/1115-vitest.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`, all cases in the new `describe` block pass, and fail (non-zero, `showBadge`
 assertion mismatch) if `showBadge` is reverted or removed from `DueInfo`/`dueInfo`.
 
