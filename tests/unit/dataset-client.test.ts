@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { createDatasetClient, HostPinningViolationError } from "@moss/datasets";
+import {
+  createDatasetClient,
+  HostPinnedFetchError,
+  HostPinningViolationError
+} from "@moss/datasets";
 import type { DatasetLogger } from "@moss/datasets";
 import type {
   ExternalSourceAdapter,
@@ -125,7 +129,8 @@ describe("createDatasetClient", () => {
     });
   });
 
-  it("serve-stale-on-error dataset serves the stale cache entry on fetch failure after TTL expiry", async () => {
+  it("serve-stale-on-error dataset serves the stale cache entry on fetch failure after TTL expiry, logs outcome: stale-cache", async () => {
+    const { logger, warnings } = fakeLogger();
     let now = 0;
     let shouldFail = false;
     const client = createDatasetClient(
@@ -143,7 +148,7 @@ describe("createDatasetClient", () => {
         if (shouldFail) throw new Error("upstream down");
         return { n: 1 };
       }),
-      { now: () => new Date(now) }
+      { now: () => new Date(now), logger }
     );
     const fresh = await client.getDataset("widgets", {}, { fallback: null });
     expect(fresh).toMatchObject({ data: { n: 1 }, degraded: false });
@@ -152,6 +157,13 @@ describe("createDatasetClient", () => {
     shouldFail = true;
     const stale = await client.getDataset("widgets", {}, { fallback: null });
     expect(stale).toMatchObject({ data: { n: 1 }, degraded: true });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.[0]).toMatchObject({
+      sourceId: "fixture",
+      datasetKey: "widgets",
+      outcome: "stale-cache",
+      errorName: "Error"
+    });
   });
 
   it("serve-stale-on-error dataset falls back once past evictAt (staleRetentionMs elapsed)", async () => {
@@ -251,7 +263,7 @@ describe("createDatasetClient", () => {
     expect(warnings[0]?.[0]).toMatchObject({ sourceId: "fixture", host: "evil.example.com" });
   });
 
-  it("does not log ordinary (non-pinning) fetch errors — stays silent-degrade", async () => {
+  it("logs a sanitized warning for an ordinary (non-pinning) fetch failure, still returns degraded", async () => {
     const { logger, warnings } = fakeLogger();
     const client = createDatasetClient(
       source(),
@@ -262,7 +274,51 @@ describe("createDatasetClient", () => {
     );
     const envelope = await client.getDataset("widgets", {}, { fallback: { empty: true } });
     expect(envelope).toMatchObject({ data: { empty: true }, degraded: true });
-    expect(warnings).toHaveLength(0);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.[0]).toMatchObject({
+      sourceId: "fixture",
+      datasetKey: "widgets",
+      outcome: "empty-fallback",
+      errorName: "Error"
+    });
+  });
+
+  it("captures the HostPinnedFetchError code for a non-pinning host-fetch failure", async () => {
+    const { logger, warnings } = fakeLogger();
+    const client = createDatasetClient(
+      source(),
+      adapterFrom(async () => {
+        throw new HostPinnedFetchError("fetch_timeout");
+      }),
+      { logger }
+    );
+    await client.getDataset("widgets", {}, { fallback: { empty: true } });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.[0]).toMatchObject({
+      errorName: "HostPinnedFetchError",
+      errorCode: "fetch_timeout"
+    });
+  });
+
+  it("never logs the raw error message, response body, or fallback content", async () => {
+    const { logger, warnings } = fakeLogger();
+    const client = createDatasetClient(
+      source(),
+      adapterFrom(async () => {
+        throw new Error("upstream down: token=super-secret-value");
+      }),
+      { logger }
+    );
+    await client.getDataset(
+      "widgets",
+      {},
+      { fallback: { secretMarker: "fallback-marker-should-not-log" } }
+    );
+    expect(warnings).toHaveLength(1);
+    const serialized = JSON.stringify(warnings[0]);
+    expect(serialized).not.toContain("upstream down");
+    expect(serialized).not.toContain("super-secret-value");
+    expect(serialized).not.toContain("fallback-marker-should-not-log");
   });
 
   it("threads fetchTimeoutMs through to the underlying pinned fetch (#858)", async () => {
