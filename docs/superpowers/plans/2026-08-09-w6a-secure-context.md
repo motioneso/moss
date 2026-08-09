@@ -33,14 +33,14 @@ prod half").
    (`tailscale serve status`): `:3032 -> 127.0.0.1:3031`, `:8443 -> 127.0.0.1:8001`, both set up
    ad hoc outside this repo. `tailscale serve --help` confirms exact syntax:
    `tailscale serve --bg --https=<port> <target>`. Port `8444` is free (not in `tailscale serve
-   status`, not in `ss -ltnp` on this host).
+status`, not in `ss -ltnp` on this host).
 6. `gh issue view --json body` is broken for #1403 (`<<ccr:...>>` placeholder) — use
    `gh api repos/motioneso/moss/issues/1403 --jq .body` if the body needs re-reading.
 7. #1403 exit criteria (spec, "Exit criteria" section): voice input works from a second device on
    the tailnet over `https://`; sign-in succeeds from that origin (403 is the failure mode);
    service worker registers; health/readiness stay reachable; plain-HTTP `localhost` dev flow is
    unregressed. Spec Non-goals explicitly excludes install-to-home-screen verification — only
-   *registration* is in scope.
+   _registration_ is in scope.
 8. Host is shared — other sessions run live dev servers/DBs. Isolated dev instance required per
    `docs/operations/dev-environment.md`'s multi-agent recipe (lines 44-58): own Postgres DB
    (`jarv1s_w6a`), own ports. Confirmed free by `ss -ltnp`: API port `3098`.
@@ -136,6 +136,7 @@ exit criterion has a documented before/after rather than an assumption.
 docker exec jarv1s-postgres psql -U postgres -c 'CREATE DATABASE jarv1s_w6a;'
 JARVIS_PGDATABASE=jarv1s_w6a pnpm db:migrate
 ```
+
 Expected: `CREATE DATABASE` then migrate exits 0 with no hash-mismatch errors (per
 `gate-db-isolation-mandatory` / multi-agent recipe in `docs/operations/dev-environment.md:44-58`).
 
@@ -144,6 +145,7 @@ Expected: `CREATE DATABASE` then migrate exits 0 with no hash-mismatch errors (p
 ```bash
 pnpm build:web
 ```
+
 Expected exit 0; verify `test -f apps/web/dist/index.html && echo PRESENT`.
 
 ### Task 4 — Start the API in the single-process topology
@@ -166,6 +168,7 @@ JARVIS_AUTH_TRUSTED_ORIGINS="https://xbmx-1.tail284f31.ts.net:8444" \
 JARVIS_WEB_DIST_DIR="$(pwd)/apps/web/dist" \
 pnpm start:api
 ```
+
 Verify locally first (before wiring tailscale): `curl -s http://localhost:3098/health` → `200`;
 `curl -s http://localhost:3098/` → SPA `index.html` (not a 404 falling through to Fastify's
 default handler); confirm `curl -s http://100.64.98.99:3098/health` (the host's tailnet IP)
@@ -201,7 +204,7 @@ Add a new subsection to `docs/operations/dev-environment.md` immediately after "
 run" (after line 31), titled `### LAN dev run over tailnet HTTPS`. Exact prose (decision, not
 boilerplate — this is the deliverable):
 
-```markdown
+````markdown
 ### LAN dev run over tailnet HTTPS
 
 Plain HTTP unlocks LAN reachability but not the browser features gated behind a secure context
@@ -227,6 +230,7 @@ pnpm start:api
 
 tailscale serve --bg --https=<port> http://127.0.0.1:3098
 ```
+````
 
 `JARVIS_TRUST_PROXY=1` tells Fastify to trust `X-Forwarded-*` from `tailscale serve`; without it,
 HSTS is not emitted, Better Auth won't issue the `__Secure-`-prefixed session cookie, and the
@@ -243,7 +247,8 @@ its rate-limit identity and route around the HTTPS-only origin.
 certificate it issues is logged to public Certificate Transparency logs by the CA — this is
 inherent to how Tailscale's LAN-only HTTPS is issued, not new exposure introduced here, and every
 device that should reach the instance needs its own tailnet sign-in.
-```
+
+````
 
 - Test: `pnpm --filter @jarv1s/... ` — N/A, this task is a doc edit; its verification is a manual
   read-through against Task 4/5's actual executed commands (values must match exactly what was run
@@ -309,7 +314,7 @@ pnpm build:web > /tmp/w6a-build.log 2>&1; echo "EXIT=$?"                        
 pnpm format:check > /tmp/w6a-format.log 2>&1; echo "EXIT=$?"                               # expect 0
 pnpm lint > /tmp/w6a-lint.log 2>&1; echo "EXIT=$?"                                         # expect 0
 pnpm typecheck > /tmp/w6a-typecheck.log 2>&1; echo "EXIT=$?"                               # expect 0
-```
+````
 
 No `verify:foundation` run planned for this lane specifically beyond the standard wrap-up gate —
 per `coordinated-wrap-up`, using its own isolated gate DB recipe (not `jarv1s_w6a`, which is this
@@ -317,12 +322,12 @@ lane's manual-verification DB, kept separate from the gate's fresh-DB-per-run re
 
 ## Ledger — corrections to relay #2's grounding (`2026-08-09-w6a-secure-context-relay.md`)
 
-| Item | Relay #2 claimed | Re-verified this session |
-|---|---|---|
-| #13 | "containerized/nginx topology" (`apps/web/Dockerfile` + `infra/nginx/jarv1s-web.conf`) is a live, buildable prod-equivalent option | Stale artifact — not referenced by either compose file; explicitly slated for removal in `2026-06-25-two-container-deploy.md`. Do not build against it. |
-| #14 | Topology fork is between bare-process (a) and containerized/nginx (b); "(b) is more coherent" but undecided | Neither is correct. Actual prod topology is a **third, simpler** option: single process (API) serving the built SPA via `apps/api/src/static-web.ts`'s unconditional `registerStaticWeb` — confirmed live in `infra/docker-compose.prod.yml`'s `jarv1s` service and root `Dockerfile`. This plan targets that. |
-| #15 | `vite preview` proxy behavior unresolved, next session should test it | Moot — this topology uses neither `vite dev` nor `vite preview`. |
-| #16 | Named open risk re: `trustProxy` boolean coercion | Confirmed by Fable's security-tier review (this plan) as a real, actionable risk given the single-process topology's `0.0.0.0` bind — mitigated in-plan via `HOST=127.0.0.1` (Task 4/6) plus a required follow-up GitHub issue (Task 7) for the code-level fix. |
+| Item | Relay #2 claimed                                                                                                                   | Re-verified this session                                                                                                                                                                                                                                                                                       |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #13  | "containerized/nginx topology" (`apps/web/Dockerfile` + `infra/nginx/jarv1s-web.conf`) is a live, buildable prod-equivalent option | Stale artifact — not referenced by either compose file; explicitly slated for removal in `2026-06-25-two-container-deploy.md`. Do not build against it.                                                                                                                                                        |
+| #14  | Topology fork is between bare-process (a) and containerized/nginx (b); "(b) is more coherent" but undecided                        | Neither is correct. Actual prod topology is a **third, simpler** option: single process (API) serving the built SPA via `apps/api/src/static-web.ts`'s unconditional `registerStaticWeb` — confirmed live in `infra/docker-compose.prod.yml`'s `jarv1s` service and root `Dockerfile`. This plan targets that. |
+| #15  | `vite preview` proxy behavior unresolved, next session should test it                                                              | Moot — this topology uses neither `vite dev` nor `vite preview`.                                                                                                                                                                                                                                               |
+| #16  | Named open risk re: `trustProxy` boolean coercion                                                                                  | Confirmed by Fable's security-tier review (this plan) as a real, actionable risk given the single-process topology's `0.0.0.0` bind — mitigated in-plan via `HOST=127.0.0.1` (Task 4/6) plus a required follow-up GitHub issue (Task 7) for the code-level fix.                                                |
 
 All of items 1-9 above (trusted-origins is config-only, `JARVIS_TRUST_PROXY` behavior, health
 exemption, doc target, tailscale state, `gh` workaround, exit criteria, shared-host isolation,
