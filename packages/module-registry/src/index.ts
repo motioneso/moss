@@ -1572,13 +1572,23 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     manifest: weatherModuleManifest,
     sqlMigrationDirectories: [],
     queueDefinitions: [],
-    registerRoutes: (server, deps) =>
+    registerRoutes: (server, deps) => {
+      const preferencesRepository = new PreferencesRepository();
       registerWeatherRoutes(server, {
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext,
-        preferencesRepo: new PreferencesRepository(),
+        preferencesRepo: preferencesRepository,
+        logger: createModuleLogger(server.log, "weather"),
+        resolveRequestTimeZone: (request, accessContext) =>
+          resolveRequestTimeZoneForRoute(
+            request,
+            accessContext,
+            deps.dataContext,
+            preferencesRepository
+          ),
         fetchFn: deps.fetchFn
-      })
+      });
+    }
   },
   {
     // LOADER-SEAM(sports) 1: static import + registration object (manifest, sql dir, routes).

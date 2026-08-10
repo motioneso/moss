@@ -55,3 +55,7 @@ blocking	apps/web/src/auth/auth-screen.tsx	tests/uat/specs/moss-assistant-name.u
 blocking	packages/chat/src/routes.ts	tests/uat/specs/1311-install-grant.uat.spec.ts
 blocking	packages/ai/src/gateway/self-operation.ts	tests/uat/specs/1311-install-grant.uat.spec.ts
 blocking	packages/tasks/src/action-policy.ts	tests/uat/specs/1311-install-grant.uat.spec.ts
+# #1402 lane C stage 1: manual weather-location override in Settings -> Personal, and its
+# timezone-table fallback consumption in packages/weather.
+blocking	apps/web/src/settings/settings-personal-panes.tsx	tests/uat/specs/1402-weather-location-settings.uat.spec.ts
+blocking	packages/weather/**	tests/uat/specs/1402-weather-location-settings.uat.spec.ts
