@@ -69,15 +69,17 @@ const TASKS_FIRST_RUN_NOTICE =
   'Your assistant now asks before creating tasks. Enable "create without asking" in Task settings to auto-run task changes.';
 const OPERATOR_LOG_ERROR_MAX_LENGTH = 2_000;
 
-function redactHandlerError(error: unknown): string {
+function safeHandlerErrorMessage(error: unknown): string {
   try {
-    return redactSecrets(error instanceof Error ? error.message : String(error)).slice(
-      0,
-      OPERATOR_LOG_ERROR_MAX_LENGTH
-    );
+    const message = error instanceof Error ? error.message : error;
+    return typeof message === "string" ? message : "[unavailable error]";
   } catch {
     return "[unavailable error]";
   }
+}
+
+function redactHandlerError(error: unknown): string {
+  return redactSecrets(safeHandlerErrorMessage(error)).slice(0, OPERATOR_LOG_ERROR_MAX_LENGTH);
 }
 
 interface ExecutableTool {

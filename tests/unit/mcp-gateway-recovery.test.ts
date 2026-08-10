@@ -124,6 +124,7 @@ describe("operator log receives real errors from swallowed catches (#1251)", () 
 describe("logical action terminal results", () => {
   const createGateway = (input: {
     yolo: boolean;
+    risk?: "read" | "write";
     handlerError?: boolean;
     handlerErrorMessage?: string;
     handlerThrown?: unknown;
@@ -151,7 +152,7 @@ describe("logical action terminal results", () => {
               description: "Import a resume.",
               permissionId: "demo-module.resume.write",
               actionFamilyId: "resume_changes",
-              risk: "write",
+              risk: input.risk ?? "write",
               executionPolicy: "auto",
               execute: async (_db, _toolInput, ctx) => {
                 handlerRequestIds.push(ctx.requestId);
@@ -323,6 +324,94 @@ describe("logical action terminal results", () => {
     }
   });
 
+  it.each([
+    ["OAuth client secret", "?client_secret=clientSecretValue", ["clientSecretValue"]],
+    ["OAuth refresh token", "?refresh_token=refreshTokenValue", ["refreshTokenValue"]],
+    ["X-API-Key header", "X-API-Key: apiKeyValue", ["apiKeyValue"]],
+    [
+      "Basic authorization",
+      "Authorization: Basic dXNlcjpiYXNpY1NlY3JldA==",
+      ["dXNlcjpiYXNpY1NlY3JldA=="]
+    ],
+    ["JSON password", '{"password":"jsonPasswordValue"}', ["jsonPasswordValue"]],
+    ["JSON access token", '{"access_token":"jsonAccessTokenValue"}', ["jsonAccessTokenValue"]],
+    ["percent-encoded OAuth key", "?client%5Fsecret=encodedClientSecret", ["encodedClientSecret"]],
+    [
+      "folded Bearer authorization",
+      "Authorization: Bearer bearerHeadValue\r\n bearerTailValue",
+      ["bearerHeadValue", "bearerTailValue"]
+    ]
+  ])(
+    "redacts %s in both gateway error logs before truncation",
+    async (_label, message, secrets) => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      try {
+        const boundaryMessage = `${message} ${"x".repeat(5000)}`;
+        const { gateway: writeGateway, token } = createGateway({
+          yolo: true,
+          handlerError: true,
+          handlerErrorMessage: boundaryMessage
+        });
+        const { gateway: readGateway } = createGateway({
+          yolo: true,
+          risk: "read",
+          handlerError: true,
+          handlerErrorMessage: boundaryMessage
+        });
+
+        await expect(
+          writeGateway.callTool(token, "demo-module.resume.import", {})
+        ).resolves.toEqual({
+          ok: false,
+          error: "Tool demo-module.resume.import failed"
+        });
+        await expect(
+          readGateway.runReadToolForActor("u1", "demo-module.resume.import", {})
+        ).resolves.toEqual({ ok: false, error: "Tool demo-module.resume.import failed" });
+
+        expect(errorSpy).toHaveBeenCalledTimes(2);
+        for (const [logged] of errorSpy.mock.calls as [string][]) {
+          const payload = JSON.parse(logged);
+          expect(payload.error.length).toBeLessThanOrEqual(2000);
+          for (const secret of secrets) expect(payload.error).not.toContain(secret);
+        }
+      } finally {
+        errorSpy.mockRestore();
+      }
+    }
+  );
+
+  it.each(["write", "read"] as const)(
+    "redacts a JSON secret spanning the 2000-character cap before truncating (%s sink)",
+    async (risk) => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      try {
+        const prefix = "x".repeat(1980);
+        const secret = "boundaryPasswordSecret";
+        const message = `${prefix}{"password":"${secret}"}${"x".repeat(500)}`;
+        const { gateway, token } = createGateway({
+          yolo: true,
+          risk,
+          handlerError: true,
+          handlerErrorMessage: message
+        });
+        const result =
+          risk === "write"
+            ? await gateway.callTool(token, "demo-module.resume.import", {})
+            : await gateway.runReadToolForActor("u1", "demo-module.resume.import", {});
+
+        expect(result).toEqual({ ok: false, error: "Tool demo-module.resume.import failed" });
+        const [logged] = errorSpy.mock.calls[0] as [string];
+        const payload = JSON.parse(logged);
+        expect(payload.error.startsWith(`${prefix}{[redacted]`)).toBe(true);
+        expect(payload.error).not.toContain(secret);
+        expect(payload.error.length).toBe(2000);
+      } finally {
+        errorSpy.mockRestore();
+      }
+    }
+  );
+
   it("returns the sanitized failure when a handler throw cannot be stringified (#1251)", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
@@ -346,4 +435,30 @@ describe("logical action terminal results", () => {
       errorSpy.mockRestore();
     }
   });
+
+  it.each(["write", "read"] as const)(
+    "fails closed when a hostile Error.message is non-string (%s sink)",
+    async (risk) => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const replace = vi.fn(() => "secret introduced after redaction");
+      const hostile = new Error("ignored");
+      Object.defineProperty(hostile, "message", {
+        get: () => ({ replace, toString: () => "secret introduced after redaction" })
+      });
+      try {
+        const { gateway, token } = createGateway({ yolo: true, risk, handlerThrown: hostile });
+        const result =
+          risk === "write"
+            ? await gateway.callTool(token, "demo-module.resume.import", {})
+            : await gateway.runReadToolForActor("u1", "demo-module.resume.import", {});
+
+        expect(result).toEqual({ ok: false, error: "Tool demo-module.resume.import failed" });
+        expect(errorSpy).toHaveBeenCalledOnce();
+        expect(JSON.parse(errorSpy.mock.calls[0]?.[0] as string).error).toBe("[unavailable error]");
+        expect(replace).not.toHaveBeenCalled();
+      } finally {
+        errorSpy.mockRestore();
+      }
+    }
+  );
 });

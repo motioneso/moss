@@ -36,15 +36,47 @@ describe("redactSecrets", () => {
     expect(redactSecrets(clean)).toBe(clean);
   });
 
-  it.each(["key", "api_key", "api-key", "token", "access_token", "secret", "password"])(
-    "redacts a %s= query-param secret value",
-    (paramName) => {
-      const out = redactSecrets(`GET /oauth?${paramName}=abcd1234EFGH&other=1`);
-      expect(out).not.toContain("abcd1234EFGH");
-      expect(out).toContain("[redacted]");
-      expect(out).toContain("other=1");
-    }
-  );
+  it.each([
+    "key",
+    "api_key",
+    "api-key",
+    "token",
+    "access_token",
+    "client_secret",
+    "refresh_token",
+    "secret",
+    "password"
+  ])("redacts a %s= query-param secret value", (paramName) => {
+    const out = redactSecrets(`GET /oauth?${paramName}=abcd1234EFGH&other=1`);
+    expect(out).not.toContain("abcd1234EFGH");
+    expect(out).toContain("[redacted]");
+    expect(out).toContain("other=1");
+  });
+
+  it.each([
+    [
+      "percent-encoded OAuth query key",
+      "?client%5Fsecret=percentEncodedSecret",
+      "percentEncodedSecret"
+    ],
+    ["X-API-Key header", "X-API-Key: apiKeySecret", "apiKeySecret"],
+    [
+      "Basic authorization",
+      "Authorization: Basic dXNlcjpiYXNpY1NlY3JldA==",
+      "dXNlcjpiYXNpY1NlY3JldA=="
+    ],
+    ["JSON password", '{"password":"jsonPasswordSecret"}', "jsonPasswordSecret"],
+    ["JSON access token", '{"access_token":"jsonAccessTokenSecret"}', "jsonAccessTokenSecret"],
+    [
+      "folded Bearer authorization",
+      "Authorization: Bearer bearerHeadSecret\r\n bearerTailSecret",
+      "bearerTailSecret"
+    ]
+  ])("redacts %s", (_label, text, secret) => {
+    const out = redactSecrets(text);
+    expect(out).not.toContain(secret);
+    expect(out).toContain("[redacted]");
+  });
 
   it("redacts a bare sk- key with no Bearer prefix", () => {
     const out = redactSecrets("provider error using sk-liveTestKey1234567890 rejected");
