@@ -86,7 +86,7 @@ not because it's load-bearing.
   runner needed) — the new Group's markup will be asserted the same way.
 - UAT precedent for a settings-only, non-chat surface:
   `tests/uat/specs/1264-settings-self-operation.uat.spec.ts:1-60` (`uatLevel = { level: "solo-admin",
-  without: [] }`, `signIn()` helper). No existing UAT spec or `uat-trigger-map.tsv` row covers
+without: [] }`, `signIn()` helper). No existing UAT spec or `uat-trigger-map.tsv` row covers
   `settings-personal-panes.tsx` today — both are new.
 
 ## Design decisions (open questions from relay, settled)
@@ -129,12 +129,14 @@ weather-client file). `getWeatherLocationSettings()` / `putWeatherLocationSettin
 ### Phase 1 — server-side timezone fallback (closes "IP detection is dead on a LAN")
 
 **Task 1 — `packages/weather/src/timezone-city.ts` + unit test**
+
 - New file exporting `TIMEZONE_CITY_FALLBACK` and `lookupCityForTimeZone`.
 - Test: `tests/unit/weather-timezone-city.test.ts` — known zone returns its entry; unknown zone
   (e.g. `"Etc/Unknown"`) returns `null`; every table value has `lat` in `[-90, 90]`, `lon` in
   `[-180, 180]`, non-empty `label` (guards against a typo entry silently passing).
 
 **Task 2 — `WeatherService` timezone fallback**
+
 - `packages/weather/src/weather-service.ts`: add required `logger: FastifyBaseLogger` to
   `WeatherServiceDependencies`; add `timeZone: string` third param to `getWeatherForUser` and
   `resolveLocation`; after `geocodeIp` returns `null`/falls through, call
@@ -149,9 +151,10 @@ weather-client file). `getWeatherLocationSettings()` / `putWeatherLocationSettin
   guard).
 
 **Task 3 — routes + module-registry wiring**
+
 - `packages/weather/src/routes.ts`: add `logger: FastifyBaseLogger` (required) and
   `resolveRequestTimeZone?: (request: FastifyRequest, accessContext: AccessContext) => Promise<string>
-  | string` to `WeatherRoutesDependencies`; add local `resolveRouteTimeZone` helper mirroring
+| string` to `WeatherRoutesDependencies`; add local `resolveRouteTimeZone` helper mirroring
   `packages/wellness/src/routes.ts:506-511` exactly (`request.timeZone ?? "UTC"` fallback when DI
   hook absent); pass resolved tz into `service.getWeatherForUser`.
 - `packages/module-registry/src/index.ts`, weather registration block (~1571-1580): hoist a single
@@ -163,16 +166,19 @@ weather-client file). `getWeatherLocationSettings()` / `putWeatherLocationSettin
   test pass.
 
 **Phase 1 verification (unpiped, exit code recorded):**
+
 ```bash
 pnpm --filter @moss/weather test > /tmp/w6c1-weather-unit.log 2>&1; echo "EXIT=$?"
 pnpm vitest run tests/integration/weather.test.ts > /tmp/w6c1-weather-integration.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected exit code `0` for both (against a freshly created, migrated gate DB per `verify-gate`
 skill / `gate-db-isolation-mandatory` — never the live dev DB).
 
 ### Kill gate (after Phase 1, before Phase 2 is built)
 
 **Owner: Coordinator.** Stop and re-scope if either holds:
+
 - The Task 2 integration test shows the fallback resolving to a city materially misleading for the
   common case (e.g. a timezone spanning a whole continent maps to a coastal city while most users
   of that zone are inland enough that the weather reads as obviously wrong) — table entries need
@@ -181,21 +187,23 @@ skill / `gate-db-isolation-mandatory` — never the live dev DB).
   this issue is actually about (i.e., Ben's own dev-instance timezone isn't resolvable) — this
   would mean the whole fallback-tier approach needs a different shape before Phase 2 is worth
   building on top of it.
-If neither holds, proceed to Phase 2 in the same PR — the phases are independent halves of one
-issue, not separately shippable features, so no separate PR/kill-gate ping is needed unless one of
-the above triggers.
+  If neither holds, proceed to Phase 2 in the same PR — the phases are independent halves of one
+  issue, not separately shippable features, so no separate PR/kill-gate ping is needed unless one of
+  the above triggers.
 
 ### Phase 2 — settings UI for manual location override (closes "no location UI")
 
 **Task 4 — client fns**
+
 - `apps/web/src/api/weather-client.ts`: add `getWeatherLocationSettings(): Promise<GetWeatherLocationResponse>`
   (`GET /api/me/weather-location`) and `putWeatherLocationSettings(body: PutWeatherLocationRequest):
-  Promise<PutWeatherLocationResponse>` (`PUT /api/me/weather-location`), `requestJson` pattern
+Promise<PutWeatherLocationResponse>` (`PUT /api/me/weather-location`), `requestJson` pattern
   matching `getWeatherToday`.
 - Test: covered by Task 5's render/interaction test (no server involved, thin wrapper) — no
   standalone unit test for this task alone.
 
 **Task 5 — settings UI Group**
+
 - `apps/web/src/settings/settings-personal-panes.tsx`: new `Group title="Weather location"` after
   the existing `Group title="Location"` (timezone/region/date-format) block, before "Quiet hours".
   Fields: a manual override (lat/lon/label, or a single free-text label field submitted with
@@ -216,8 +224,9 @@ the above triggers.
   `quietHoursQuery`, checked at Task 5 build time).
 
 **Task 6 — UAT spec + trigger-map row**
+
 - New `tests/uat/specs/1402-weather-location-settings.uat.spec.ts`: `uatLevel = { level:
-  "solo-admin", without: [] }`, `signIn()` per the `1264-settings-self-operation` pattern; navigate
+"solo-admin", without: [] }`, `signIn()` per the `1264-settings-self-operation` pattern; navigate
   to Settings → Personal, set a manual weather location via the new Group, assert it persists across
   reload (re-fetch shows the saved value) and that `/today`'s weather section reflects the override
   (`header-weather.tsx` unchanged, just consumes `GetWeatherTodayResponse` sourced from the new
@@ -229,10 +238,12 @@ the above triggers.
   exercised implicitly by the "reflects on /today" assertion).
 
 **Phase 2 verification (unpiped, exit code recorded):**
+
 ```bash
 pnpm vitest run tests/unit/settings-personal-panes.test.tsx > /tmp/w6c1-settings-unit.log 2>&1; echo "EXIT=$?"
 pnpm exec tsx tests/uat/run-uat.ts tests/uat/specs/1402-weather-location-settings.uat.spec.ts > /tmp/w6c1-uat.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected exit code `0` for both. (Exact UAT runner invocation confirmed against
 `docs/DEVELOPMENT_STANDARDS.md` / existing CI job at build time if this differs.)
 
@@ -242,6 +253,7 @@ Expected exit code `0` for both. (Exact UAT runner invocation confirmed against
 pnpm format:check && pnpm lint && pnpm typecheck > /tmp/w6c1-pretrio.log 2>&1; echo "EXIT=$?"
 pnpm verify:foundation > /tmp/w6c1-verify-foundation.log 2>&1; echo "EXIT=$?"
 ```
+
 Run the second command only via the `verify-gate` skill (isolated gate DB — never the live dev DB,
 per `CLAUDE.md`). Expected exit code `0` for both. Rebase on `origin/main` before push.
 

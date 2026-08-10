@@ -11,7 +11,11 @@ export const TIMEZONE_CITY_FALLBACK: Readonly<Record<string, WeatherLocationDto>
   "America/Mexico_City": { lat: 19.4326, lon: -99.1332, label: "Mexico City, Mexico" },
   "America/Toronto": { lat: 43.6532, lon: -79.3832, label: "Toronto, Canada" },
   "America/Vancouver": { lat: 49.2827, lon: -123.1207, label: "Vancouver, Canada" },
-  "America/Argentina/Buenos_Aires": { lat: -34.6037, lon: -58.3816, label: "Buenos Aires, Argentina" },
+  "America/Argentina/Buenos_Aires": {
+    lat: -34.6037,
+    lon: -58.3816,
+    label: "Buenos Aires, Argentina"
+  },
   "America/Bogota": { lat: 4.711, lon: -74.0721, label: "Bogotá, Colombia" },
   "America/Lima": { lat: -12.0464, lon: -77.0428, label: "Lima, Peru" },
   "America/Santiago": { lat: -33.4489, lon: -70.6693, label: "Santiago, Chile" },

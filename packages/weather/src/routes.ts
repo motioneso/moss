@@ -21,7 +21,11 @@ async function resolveRouteTimeZone(
   request: FastifyRequest,
   accessContext: AccessContext
 ): Promise<string> {
-  return (await dependencies.resolveRequestTimeZone?.(request, accessContext)) ?? request.timeZone ?? "UTC";
+  return (
+    (await dependencies.resolveRequestTimeZone?.(request, accessContext)) ??
+    request.timeZone ??
+    "UTC"
+  );
 }
 
 export function registerWeatherRoutes(
