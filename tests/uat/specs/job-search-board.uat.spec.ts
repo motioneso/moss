@@ -642,19 +642,21 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
     await page.reload();
 
     const unscoredRow = page
-      .locator("table.jsm-board tbody tr")
+      .locator(".jsm-board-list .jsm-list > div.jsm-row-shell")
       .filter({ hasText: unscoredTitle })
       .first();
-    await expect(unscoredRow.getByText("Not read yet")).toBeVisible();
-    await unscoredRow.locator("td").first().locator("button").click();
+    await expect(unscoredRow.getByText("Not read yet", { exact: true })).toBeVisible();
+    await unscoredRow.locator(":scope > button.jsm-row").click();
 
-    const inspector = page.locator('aside[role="dialog"]');
-    await expect(inspector).toBeVisible();
-    await expect(inspector.getByRole("status")).toContainText(
-      "Not read yet — this posting is queued for scoring, not dropped. Fit and Want will appear here once it's been read."
-    );
+    const detail = page.getByRole("article", {
+      name: `Details for ${unscoredTitle}`,
+      exact: true
+    });
+    await expect(detail).toBeVisible();
+    await expect(detail.getByText("Not read yet", { exact: true })).toBeVisible();
+    await expect(detail.getByRole("status")).toContainText("queued for scoring, not dropped");
     await shot(page, "09-inspector-unscored-posting");
-    await inspector.getByRole("button", { name: "Close" }).click();
+    await detail.getByRole("button", { name: "Back to matches", exact: true }).click();
   });
 
   // --- Phase 10: outside-frame badge, direct-seeded, renders on both board row and Inspector ---
@@ -690,15 +692,20 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
     expect(seededTitle, "the seeded match must have a posting title").toBeTruthy();
 
     await page.reload();
-    const flaggedRow = page.locator("table.jsm-board tbody tr").filter({ hasText: seededTitle });
-    await expect(flaggedRow.getByText("Outside your stated frame")).toBeVisible();
+    const flaggedRow = page
+      .locator(".jsm-board-list .jsm-list > div.jsm-row-shell")
+      .filter({ hasText: seededTitle });
+    await expect(flaggedRow.getByText("Outside your stated frame", { exact: true })).toBeVisible();
     await shot(page, "10-outside-frame-board-row");
 
-    await flaggedRow.locator("td").first().locator("button").click();
-    const inspector = page.locator('aside[role="dialog"]');
-    await expect(inspector.getByText("Outside your stated frame")).toBeVisible();
+    await flaggedRow.locator(":scope > button.jsm-row").click();
+    const detail = page.getByRole("article", {
+      name: `Details for ${seededTitle}`,
+      exact: true
+    });
+    await expect(detail.getByText("Outside your stated frame", { exact: true })).toBeVisible();
     await shot(page, "11-outside-frame-inspector");
-    await inspector.getByRole("button", { name: "Close" }).click();
+    await detail.getByRole("button", { name: "Back to matches", exact: true }).click();
   });
 
   // --- Phase 11: core drawer scoping — spec §7 says opening the header chat control inside a
