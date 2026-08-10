@@ -533,6 +533,12 @@ export interface ModuleAssistantToolManifest {
   readonly execute?: ToolExecute;
   readonly summarize?: ToolSummarize;
   /**
+   * Optional human-authored label for the approval-card summary (e.g. "Update your job search
+   * criteria"), used when the tool declares no `summarize` function. Falls back to `description`
+   * when unset — see gateway.ts `summaryFor()`.
+   */
+  readonly actionLabel?: string;
+  /**
    * Optional per-call override of the run/confirm policy decision (see ToolRequiresConfirmation).
    * Forces "confirm" for calls where it returns true, regardless of actionFamilyId tier — the
    * write→trusted_auto auto-run path never applies to those calls.

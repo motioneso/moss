@@ -618,12 +618,11 @@ export class AssistantToolGateway {
     if (typeof tool.summarize === "function") {
       return tool.summarize(input, ctx);
     }
-    // A person reads this card, so the fallback is the tool's own human-readable description,
-    // not its wire identifier. A module tool can never supply `summarize` — its manifest is JSON
-    // and `summarize` is a function — so every module write landed here and showed the user
-    // something like "job-search.criteria.set (2 field(s))". The durable audit row still records
-    // the key names via `inputSummary`; this string is display only.
-    return tool.description;
+    // A person reads this card, so the fallback prefers the module's human-authored actionLabel
+    // over its raw description (e.g. "job-search.criteria.set (2 field(s))"). A module tool can
+    // never supply `summarize` — its manifest is JSON and `summarize` is a function. The durable
+    // audit row still records the key names via `inputSummary`; this string is display only.
+    return tool.actionLabel ?? tool.description ?? tool.name;
   }
 
   private async firstRunNotice(
