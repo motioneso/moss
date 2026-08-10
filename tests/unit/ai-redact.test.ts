@@ -35,6 +35,37 @@ describe("redactSecrets", () => {
     const clean = "tmux new-session failed (code 1): duplicate session name";
     expect(redactSecrets(clean)).toBe(clean);
   });
+
+  it.each(["key", "api_key", "api-key", "token", "access_token", "secret", "password"])(
+    "redacts a %s= query-param secret value",
+    (paramName) => {
+      const out = redactSecrets(`GET /oauth?${paramName}=abcd1234EFGH&other=1`);
+      expect(out).not.toContain("abcd1234EFGH");
+      expect(out).toContain("[redacted]");
+      expect(out).toContain("other=1");
+    }
+  );
+
+  it("redacts a bare sk- key with no Bearer prefix", () => {
+    const out = redactSecrets("provider error using sk-liveTestKey1234567890 rejected");
+    expect(out).not.toContain("sk-liveTestKey1234567890");
+    expect(out).toContain("[redacted]");
+    expect(out).toContain("provider error using");
+  });
+
+  it("redacts URL userinfo credentials (user:pass@host)", () => {
+    const out = redactSecrets("connect failed: postgres://user:hunter2@db.internal/app");
+    expect(out).not.toContain("user:hunter2@");
+    expect(out).not.toContain("hunter2");
+    expect(out).toContain("[redacted]");
+    expect(out).toContain("db.internal/app");
+  });
+
+  it("caps the output at 2000 characters as a backstop", () => {
+    const long = "x".repeat(5000);
+    const out = redactSecrets(long);
+    expect(out.length).toBeLessThanOrEqual(2000);
+  });
 });
 
 describe("redactExact (#342 Phase 3 login-contract §L.6.3)", () => {

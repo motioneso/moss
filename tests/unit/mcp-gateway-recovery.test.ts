@@ -66,8 +66,67 @@ describe("first-party Moss MCP transport", () => {
   });
 });
 
+describe("operator log receives real errors from swallowed catches (#1251)", () => {
+  it("logs the real error for a read-tool handler throw, returns the sanitized string", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const gateway = new AssistantToolGateway({
+        resolveActiveModules: async () => [
+          {
+            id: "demo-module",
+            name: "Demo Module",
+            version: "1.0.0",
+            publisher: "Jarv1s",
+            lifecycle: "optional",
+            compatibility: { jarv1s: "*" },
+            assistantTools: [
+              {
+                name: "demo-module.notes.search",
+                description: "Search notes.",
+                permissionId: "demo-module.notes.read",
+                risk: "read",
+                inputSchema: { type: "object", properties: {} },
+                execute: async () => {
+                  throw new Error("boom: db timeout");
+                }
+              }
+            ]
+          }
+        ],
+        repository: {} as never,
+        runner: {
+          withDataContext: async (_access: unknown, work: (db: unknown) => Promise<unknown>) =>
+            work({})
+        } as never,
+        tokens: new SessionTokenRegistry(),
+        confirmations: new ConfirmationRegistry(),
+        notifier: { emit: () => undefined },
+        confirmTimeoutMs: 5
+      });
+
+      const result = await gateway.runReadToolForActor("u1", "demo-module.notes.search", {});
+
+      expect(result).toEqual({ ok: false, error: "Tool demo-module.notes.search failed" });
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const [logged] = errorSpy.mock.calls[0] as [string];
+      const payload = JSON.parse(logged);
+      expect(payload.event).toBe("read_tool_handler_threw");
+      expect(payload.toolName).toBe("demo-module.notes.search");
+      expect(payload.actorUserId).toBe("u1");
+      expect(typeof payload.requestId).toBe("string");
+      expect(payload.error).toContain("boom: db timeout");
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+});
+
 describe("logical action terminal results", () => {
-  const createGateway = (input: { yolo: boolean; handlerError?: boolean }) => {
+  const createGateway = (input: {
+    yolo: boolean;
+    handlerError?: boolean;
+    handlerErrorMessage?: string;
+  }) => {
     const tokens = new SessionTokenRegistry();
     const emitted: Array<{
       kind: string;
@@ -95,7 +154,9 @@ describe("logical action terminal results", () => {
               executionPolicy: "auto",
               execute: async (_db, _toolInput, ctx) => {
                 handlerRequestIds.push(ctx.requestId);
-                if (input.handlerError) throw new Error("private handler detail");
+                if (input.handlerError) {
+                  throw new Error(input.handlerErrorMessage ?? "private handler detail");
+                }
                 return { data: { imported: true } };
               }
             }
@@ -188,5 +249,54 @@ describe("logical action terminal results", () => {
         reason: "Tool demo-module.resume.import failed"
       })
     ]);
+  });
+
+  it("logs the real error for a write-tool handler throw, returns the sanitized string (#1251)", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const { gateway, token, handlerRequestIds } = createGateway({
+        yolo: true,
+        handlerError: true,
+        handlerErrorMessage: "boom: handler internals"
+      });
+
+      const result = await gateway.callTool(token, "demo-module.resume.import", {});
+
+      expect(result).toEqual({ ok: false, error: "Tool demo-module.resume.import failed" });
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const [logged] = errorSpy.mock.calls[0] as [string];
+      const payload = JSON.parse(logged);
+      expect(payload.event).toBe("tool_handler_threw");
+      expect(payload.toolName).toBe("demo-module.resume.import");
+      expect(payload.actorUserId).toBe("u1");
+      expect(payload.requestId).toBe(handlerRequestIds[0]);
+      expect(payload.error).toContain("boom: handler internals");
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it("redacts a secret in the logged error while the returned string never carries it (#1251)", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const secretUrl = "postgres://user:hunter2@db.internal/app";
+      const { gateway, token } = createGateway({
+        yolo: true,
+        handlerError: true,
+        handlerErrorMessage: `connect failed: ${secretUrl}`
+      });
+
+      const result = await gateway.callTool(token, "demo-module.resume.import", {});
+
+      expect(result).toEqual({ ok: false, error: "Tool demo-module.resume.import failed" });
+      expect(JSON.stringify(result)).not.toContain("hunter2");
+      const [logged] = errorSpy.mock.calls[0] as [string];
+      const payload = JSON.parse(logged);
+      expect(payload.error).not.toContain("hunter2");
+      expect(payload.error).not.toContain("user:hunter2@");
+      expect(payload.error).toContain("[redacted]");
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 });

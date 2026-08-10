@@ -8,6 +8,10 @@
  * RLS-scoped, so this is hardening, not a known live leak).
  */
 const REDACTED = "[redacted]";
+// Backstop cap on the redacted output (#1251): a handler-throw error message can wrap an
+// arbitrary lower-level client's stack/body, which may carry a secret shape no pattern below
+// catches. Truncating what reaches the operator log bounds that unknown-unknown risk.
+const MAX_LENGTH = 2000;
 
 const PATTERNS: readonly RegExp[] = [
   // `JARVIS_MCP_TOKEN=<value>` env-var prefix on the launch line (Codex path).
@@ -15,7 +19,13 @@ const PATTERNS: readonly RegExp[] = [
   // `Authorization: Bearer <value>` / `Bearer <value>` header form.
   /Bearer\s+\S+/gi,
   // Bare session-token tokens (`jst_…`) anywhere they appear.
-  /jst_[A-Za-z0-9_-]+/g
+  /jst_[A-Za-z0-9_-]+/g,
+  // Query-param secrets (`?key=…`, `&api_key=…`, `token=`, `access_token=`, `secret=`, `password=`).
+  /[?&](?:key|api[_-]?key|token|access[_-]?token|secret|password)=[^&\s]+/gi,
+  // Bare provider API keys (`sk-…`) with no `Bearer` prefix.
+  /\bsk-[A-Za-z0-9_-]{8,}/g,
+  // URL userinfo credentials (`user:pass@host`).
+  /[A-Za-z0-9_.+-]+:[^\s@/]+@/g
 ];
 
 /** Replace any token-bearing substring with a fixed marker. Safe on undefined/empty input. */
@@ -25,7 +35,7 @@ export function redactSecrets(text: string | undefined): string {
   for (const pattern of PATTERNS) {
     out = out.replace(pattern, REDACTED);
   }
-  return out;
+  return out.length > MAX_LENGTH ? out.slice(0, MAX_LENGTH) : out;
 }
 
 /**

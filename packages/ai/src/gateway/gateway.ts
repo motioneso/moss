@@ -14,6 +14,7 @@ import type {
 import type { ActionAuditInputSummary, AiAssistantToolDto } from "@moss/shared";
 
 import { summarizeAssistantToolInput } from "../assistant-tools.js";
+import { redactSecrets } from "../adapters/redact.js";
 import type { AiRepository, InsertAuditLogInput } from "../repository.js";
 import { AutoRunRateLimiter } from "./auto-run-rate-limit.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
@@ -413,7 +414,16 @@ export class AssistantToolGateway {
           found.tool.externalContent ? found.tool.name : undefined
         )
       };
-    } catch {
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          event: "read_tool_handler_threw",
+          toolName: found.tool.name,
+          actorUserId,
+          requestId,
+          error: redactSecrets(error instanceof Error ? error.message : String(error))
+        })
+      );
       return { ok: false, error: `Tool ${found.tool.name} failed` };
     }
   }
@@ -503,8 +513,17 @@ export class AssistantToolGateway {
         // the engine's MCP stdio channel — never into logs, DB, or job payloads.
         ...(result.media ? { media: result.media } : {})
       };
-    } catch {
+    } catch (error) {
       // never leak internals/secrets from a handler throw
+      console.error(
+        JSON.stringify({
+          event: "tool_handler_threw",
+          toolName: found.dto.name,
+          actorUserId: ctx.actorUserId,
+          requestId: ctx.requestId,
+          error: redactSecrets(error instanceof Error ? error.message : String(error))
+        })
+      );
       return { ok: false, error: `Tool ${found.dto.name} failed` };
     }
   }
