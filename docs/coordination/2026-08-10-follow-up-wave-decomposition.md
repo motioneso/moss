@@ -113,24 +113,25 @@ single-purpose harness scenario per PR rather than one oversized combined UAT.
 | 1140-D terminal backpressure | CLI runner terminal host/connection seam | After C. `write() === false` pauses PTY delivery and `drain` resumes it without loss or unbounded queueing. |
 | 1140-E idempotent crash shutdown | API and worker crash handlers | Multiple crash signals share one shutdown/timer; both processes still exit on the first crash. |
 | 1140-F fixed auth error text | API auth-facing error mapper; sweep sibling route mappers only if the same helper owns them | Client receives code-keyed literals, never arbitrary `error.message`; existing status codes stay. Security tier because it touches auth errors. |
-| 1140-G strict evaluation budget | Job-search evaluation scheduling/budget seam | Concurrent run-now/sweep work cannot exceed the chosen per-user cap; focused concurrency test. |
 
-Unresolved Ben/Coordinator decision for G: enforce a strict cap (requiring serialization/CAS) or
-record the cap as best-effort and close with documentation. Do not let a builder choose this during
-implementation; ask `gpt-5.6-sol` high for a micro-spec only if strict enforcement is selected.
+Fable ruled finding #40 superseded: the old 25/day quota was deliberately deleted and current
+per-invocation caps are runaway guards, not a daily product quota. Do not file 1140-G or promise a
+runtime quota in documentation. A future paid-cost quota is a new product issue; its approved
+starting contract is 200 score-model calls per owner per UTC date using an atomic CAS ledger.
 
 ### #1339 — PR #1338 security-review follow-ups
 
 | Child | Owned surface | Dependency / acceptance |
 | --- | --- | --- |
-| 1339-A composed dispatch/heal proof | One DB-backed integration test using real `AssistantToolGateway` + production action policy | After #1246 and Wave 4/#1492. With no seeded row, `callTool` emits `action_result`, never `action_request`, and writes the actor-only canonical `trusted_auto` preference. This also closes findings 1, 5, and 6’s integration half. |
-| 1339-B external declaration rail | External manifest assistant-tool validation + tests | After W4-C3. External `selfOperationGrant`/`actionFamilyId` cannot pass validation into runtime. |
-| 1339-C heal availability fallback | `packages/tasks/src/action-policy.ts` only | A transient insert failure degrades closed to `ask_each_time` instead of 500; no trust escalation. |
+| 1339-A composed dispatch/heal proof | One DB-backed integration test using real `AssistantToolGateway` + production action policy | After #1246 and Wave 4/#1492. With no seeded row, `callTool` emits `action_result`, never `action_request`, and writes the actor-only canonical `trusted_auto` preference. This closes findings 1 and 5's composed integration gap. |
+| 1339-C heal availability fallback | `packages/tasks/src/action-policy.ts` only | After A. A transient insert failure degrades closed to `ask_each_time` instead of 500; no trust escalation. |
 
 Finding 4 (GET self-heal has a write side effect) remains an intentional recorded trade-off, not a
-speculative code child. Unresolved security-contract decision for B: reject or strip the two fields.
-Ben/Coordinator must settle that before filing B; use a short sol-high spec if compatibility evidence
-does not make the answer mechanical.
+speculative code child. Fable preserved the supported external `selfOperationGrant`/`actionFamilyId`
+ABI and ruled finding 2 superseded: positive validation is already local, shipped job-search tools
+depend on the fields, and silent stripping or rejection would break compatibility without improving
+closed behavior. Do not file 1339-B. If #1246 changes those fields before dispatch, re-rule rather
+than assuming preservation.
 
 ### #1427 — nine unregistered CSS files
 
