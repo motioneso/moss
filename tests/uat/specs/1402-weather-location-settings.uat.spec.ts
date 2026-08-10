@@ -52,6 +52,7 @@ async function gotoProfileSettings(page: Page) {
 }
 
 test.describe.serial("weather location manual override (#1402)", () => {
+  let capturedOriginalOverride = false;
   let hadOriginalOverride = false;
   let originalLabel = "";
   let originalLat = "";
@@ -69,6 +70,7 @@ test.describe.serial("weather location manual override (#1402)", () => {
     originalLat = await page.getByLabel("Weather location latitude").inputValue();
     originalLon = await page.getByLabel("Weather location longitude").inputValue();
     hadOriginalOverride = originalLabel !== "";
+    capturedOriginalOverride = true;
 
     if (hadOriginalOverride) {
       await page.getByRole("button", { name: "Clear override" }).click();
@@ -130,19 +132,24 @@ test.describe.serial("weather location manual override (#1402)", () => {
   });
 
   test.afterAll(async ({ browser }) => {
-    // Restore original override state so this spec leaves no residue on the shared UAT DB. The
-    // "clearing" test above already leaves the override cleared, which is correct when the seeded
-    // admin had none to begin with; only re-save when one was actually present.
-    if (!hadOriginalOverride) return;
+    // Restore original override state so this spec leaves no residue on the shared UAT DB, even
+    // when the first serial test fails and Playwright skips the clearing test.
+    if (!capturedOriginalOverride) return;
     const page = await browser.newPage();
     try {
       await signIn(page);
       await gotoProfileSettings(page);
-      await page.getByLabel("Weather location label").fill(originalLabel);
-      await page.getByLabel("Weather location latitude").fill(originalLat);
-      await page.getByLabel("Weather location longitude").fill(originalLon);
-      await page.getByRole("button", { name: "Save" }).click();
-      await expect(page.getByText(`Currently using ${originalLabel}.`)).toBeVisible();
+      if (hadOriginalOverride) {
+        await page.getByLabel("Weather location label").fill(originalLabel);
+        await page.getByLabel("Weather location latitude").fill(originalLat);
+        await page.getByLabel("Weather location longitude").fill(originalLon);
+        await page.getByRole("button", { name: "Save" }).click();
+        await expect(page.getByText(`Currently using ${originalLabel}.`)).toBeVisible();
+      } else {
+        const clearOverride = page.getByRole("button", { name: "Clear override" });
+        if (await clearOverride.isEnabled()) await clearOverride.click();
+        await expect(page.getByText("Using automatic timezone-based location.")).toBeVisible();
+      }
     } finally {
       await page.close();
     }
