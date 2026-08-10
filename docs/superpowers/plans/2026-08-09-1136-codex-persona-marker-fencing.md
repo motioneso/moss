@@ -223,3 +223,17 @@ receives are hardened against transcript-boundary spoofing.
 - `personaText` left unneutralized — decided because it is settings-authored by the same
   authenticated actor, not third-party text; spec's non-goals list no new trust-boundary widening
   is required here and this isn't one.
+- The decoration prefix matches ONE character per repetition (`(?:[>\-*#][ \t]*)*`), never
+  `[>\-*#]+` under an outer quantifier — added 2026-08-09 (relay 5) after adversarial QA found the
+  original form backtracked at ~2^n. A plain 30-dash markdown horizontal rule, which is ordinary
+  recalled content requiring no attacker, took 6792ms and blocks the API event loop synchronously;
+  `neutralizeSeedFraming` is the shared choke point for all four contributors, so the blast radius
+  was every engine. The one-character-per-repetition form accepts the same language with
+  byte-identical output but unambiguous partitioning. **Any future widening of this prefix must
+  keep the inner class unquantified** — regression test "does not backtrack catastrophically on a
+  long decoration run (ReDoS)" in `tests/unit/chat-recall-seed.test.ts` guards it.
+- Non-blocking QA findings (Unicode/homoglyph prefix bypasses, role words outside the alternation
+  including our own `Moss:` assistant name, the inaccurate comment at `prompt-safety.ts:38-40`,
+  over-match corrupting recalled code/config, and transitive-only evidence for the cross-tool
+  criterion) were deliberately kept out of this lane and carried to issue #1488, which needs a spec
+  ruling — widening the alternation trades directly against the over-match fidelity cost.
