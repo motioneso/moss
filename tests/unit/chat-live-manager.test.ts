@@ -369,9 +369,44 @@ describe("ChatSessionManager", () => {
 
     await manager.submitTurn("user-1", "Ben", "hello");
 
-    expect(writes["/tmp/jarvis-test/user-1/CLAUDE.md"]).toBe(
+    expect(writes["/tmp/jarvis-test/user-1:drawer/CLAUDE.md"]).toBe(
       "Base instructions.\n\nYour name is Friday.\n\nKeep Ben focused."
     );
+  });
+
+  // #1259 — the exact reported bug as a test: neutral dir and persona were keyed by actorUserId
+  // alone, so a drawer launch followed by a module-surface launch for the same user clobbered the
+  // drawer's context file with the module's (no-app-map) persona. Session-keying by (actor,
+  // surface) means each surface gets its own file; this asserts the drawer's file is untouched by
+  // the later module launch, not merely that both files happen to exist.
+  it("keeps the drawer's app-map persona intact after a later module-surface launch for the same user (#1259)", async () => {
+    const writes: Record<string, string> = {};
+    const personaFs: PersonaFs = {
+      async mkdir() {},
+      async writeFile(path, content) {
+        writes[path] = content;
+      }
+    };
+    const { manager } = makeManager({
+      persona: async (_actorUserId, _userName, surface) =>
+        surface === "drawer"
+          ? "Base instructions.\n\nBefore answering, call app.getMapSlice."
+          : "Base instructions.",
+      personaFs
+    });
+
+    await manager.submitTurn("user-1", "Ben", "hello from the drawer", undefined, "drawer");
+    const drawerPersonaAfterFirstLaunch = writes["/tmp/jarvis-test/user-1:drawer/CLAUDE.md"];
+    expect(drawerPersonaAfterFirstLaunch).toContain("app.getMapSlice");
+
+    await manager.submitTurn("user-1", "Ben", "hello from job search", undefined, "job-search");
+
+    // Fails against today's clobber: the drawer file would be missing (overwritten at the same
+    // path) or would have lost its app-map marker.
+    expect(writes["/tmp/jarvis-test/user-1:drawer/CLAUDE.md"]).toBe(drawerPersonaAfterFirstLaunch);
+    expect(writes["/tmp/jarvis-test/user-1:drawer/CLAUDE.md"]).toContain("app.getMapSlice");
+    expect(writes["/tmp/jarvis-test/user-1:job-search/CLAUDE.md"]).not.toContain("app.getMapSlice");
+    expect(Object.keys(writes)).toHaveLength(2);
   });
 
   it("emits records to subscribers, returns the reply, and persists the turn", async () => {

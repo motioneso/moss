@@ -62,8 +62,11 @@ async function openNewsSourceSettings(page: Page) {
 }
 
 async function ask(page: Page, text: string) {
-  await page.getByRole("button", { name: "Chat with Jarvis" }).click();
-  await page.getByRole("textbox", { name: "Message Jarvis" }).fill(text);
+  // Live label is `Chat with ${assistantName}` (apps/web/src/shell/app-shell.tsx), sourced from
+  // settings persona and defaulting to "Moss" (packages/shared/src/persona-api.ts) — not the
+  // pre-rename "Jarvis" literal.
+  await page.getByRole("button", { name: "Chat with Moss" }).click();
+  await page.getByRole("textbox", { name: "Message Moss" }).fill(text);
   await page.getByRole("button", { name: "Send" }).click();
 }
 

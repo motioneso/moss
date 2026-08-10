@@ -67,7 +67,9 @@ export interface ChatSessionManagerDeps {
   /** Base dir for renderPersona (per-user neutral dirs are created under it). */
   readonly neutralBase: string;
   /** Persona text (may contain a {{userName}} token). */
-  readonly persona: string | ((actorUserId: string, userName: string) => Promise<string>);
+  readonly persona:
+    | string
+    | ((actorUserId: string, userName: string, surface: ChatSurface) => Promise<string>);
   /** Delay between readNew polls (default 25ms; tests pass 0). */
   readonly pollMs?: number;
   /**
@@ -213,22 +215,22 @@ export class ChatSessionManager {
     opts: { readonly forceReplay?: boolean } | undefined,
     surface: ChatSurface
   ): Promise<UserSession> {
+    const sessionKey = surfaceSessionKey(actorUserId, surface);
     const { provider, model, executionMode } =
       await this.deps.persistence.resolveActiveProvider(actorUserId);
     const persona =
       typeof this.deps.persona === "string"
         ? this.deps.persona
-        : await this.deps.persona(actorUserId, userName);
+        : await this.deps.persona(actorUserId, userName, surface);
 
     const { neutralDir, personaPath } = await renderPersona(this.deps.personaFs, {
-      userId: actorUserId,
+      sessionKey,
       userName,
       provider,
       baseDir: this.deps.neutralBase,
       persona
     });
 
-    const sessionKey = surfaceSessionKey(actorUserId, surface);
     const engine = this.deps.engineFactory(provider, sessionKey, { executionMode });
 
     // Rebuild replay from live state for every launch; recall precedes conversation replay.

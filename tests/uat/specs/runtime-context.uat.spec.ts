@@ -46,10 +46,11 @@ async function signIn(page: Page) {
 }
 
 // Role-scoped to "button" so this never matches the drawer's own `role="dialog"
-// aria-label="Chat with Jarvis"` (apps/web/src/shell/app-shell.tsx:255 vs the drawer root) —
-// a different element that happens to share the same accessible name.
+// aria-label="Chat with ${assistantName}"` (apps/web/src/shell/app-shell.tsx) — a different
+// element that happens to share the same accessible name. Label is the live settings-persona
+// name, defaulting to "Moss" (packages/shared/src/persona-api.ts) — not the pre-rename "Jarvis".
 async function openChat(page: Page) {
-  await page.getByRole("button", { name: "Chat with Jarvis" }).click();
+  await page.getByRole("button", { name: "Chat with Moss" }).click();
 }
 
 test("ordinary chat turn sends no snapshot and performs no current-view pull", async ({ page }) => {
@@ -70,7 +71,7 @@ test("ordinary chat turn sends no snapshot and performs no current-view pull", a
   });
 
   await openChat(page);
-  await page.getByRole("textbox", { name: "Message Jarvis" }).fill("Say hello in three words.");
+  await page.getByRole("textbox", { name: "Message Moss" }).fill("Say hello in three words.");
   await page.getByRole("button", { name: "Send" }).click();
 
   // No chat-capable model is seeded (see file header), so the real server response is a 400
