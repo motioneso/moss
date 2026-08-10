@@ -16,10 +16,10 @@ field(s))"` instead of a human-authored label like `"Update your job search crit
 
 ## Design decision (confirmed by coordinator, relay 1 — do not re-litigate)
 
-New priority chain, additive, does not regress the existing description fallback:
+New priority chain:
 
 ```
-tool.summarize?.() ?? tool.actionLabel ?? tool.description ?? tool.name
+tool.summarize?.() ?? tool.actionLabel ?? tool.name
 ```
 
 ## Seams check (file:line, verified fresh on this branch before writing this plan)
@@ -38,10 +38,9 @@ tool.summarize?.() ?? tool.actionLabel ?? tool.description ?? tool.name
   `action-request-card.tsx`) — tracked in the coordinator's manifest collision map so Wave 4 lane C
   (#1274/#1275/#1279, security tier, not yet spawned) rebases on this change.
 - `packages/module-registry/src/external/validate.ts:630-661,967-969` — per-tool validation
-  requires `description` (line 653-654: `isNonEmptyString(tool.description)`) but the manifest
-  reshape at 967-969 casts `obj.assistantTools` **wholesale**, not field-by-field — there is no
-  per-tool allowlist that would need widening for `actionLabel` to survive. Confirmed no change
-  needed.
+  accepts `actionLabel` only as trim-nonempty plain text: at most 80 JavaScript UTF-16 code units
+  and no C0/DEL controls (`U+0000`-`U+001F`, `U+007F`). The manifest reshape at 967-969 casts
+  `obj.assistantTools` wholesale, so no separate allowlist change is needed.
 - `packages/ai/src/gateway/gateway.ts:613-627` — `summaryFor()`, the fallback site. Signature
   unchanged (`tool`, `input`, `ctx` → `string`).
 - `packages/ai/src/gateway/gateway.ts:512-611` — `confirmAndRun()` calls `this.summaryFor(...)` at
@@ -78,8 +77,8 @@ text` through unchanged (line 161). No change needed; the summary field is alrea
 readonly summarize?: ToolSummarize;
 /**
  * Optional human-authored label for the approval-card summary (e.g. "Update your job search
- * criteria"), used when the tool declares no `summarize` function. Falls back to `description`
- * when unset — see gateway.ts `summaryFor()`.
+ * criteria"), used when the tool declares no `summarize` function. Falls back to the tool's
+ * `name` when unset — see gateway.ts `summaryFor()`.
  */
 readonly actionLabel?: string;
 ```
@@ -113,17 +112,12 @@ private summaryFor(
   if (typeof tool.summarize === "function") {
     return tool.summarize(input, ctx);
   }
-  return tool.actionLabel ?? tool.description ?? tool.name;
+  return tool.actionLabel ?? tool.name;
 }
 ```
 
-**Observation (not a deviation — chain kept as coordinator-confirmed):** `description` is a
-required field on both `ModuleAssistantToolManifest` (index.ts:519) and
-`ExternalModuleAssistantToolDeclaration` (external-module.ts:181), and `validate.ts:653-654`
-enforces it's non-empty for external manifests too. So `?? tool.name` is currently unreachable
-through any validated manifest — it's a defensive last resort, not a new user-visible tier. No test
-case is written for it (see below); forcing one would require bypassing the type system and
-`validate.ts`, which doesn't reflect anything reachable in production.
+`description` remains required metadata, but it is not approval-card fallback copy. When neither
+`summarize` nor `actionLabel` exists, the runtime deliberately displays the tool's `name`.
 
 ## Test cases
 
@@ -135,9 +129,8 @@ case is written for it (see below); forcing one would require bypassing the type
    `actionLabel: "Send the calendar invite"`, `description: "calendar.write (2 field(s))"`, no
    `summarize`. Assert the emitted `action_request` record's `summary` is exactly `"Send the
 calendar invite"`. Fails against current code (returns the description string).
-2. **"falls back to description when actionLabel is undeclared"** — no `actionLabel` on the tool.
-   Assert `summary` equals `tool.description` verbatim. Proves no regression of today's only
-   existing behavior.
+2. **"falls back to tool name when actionLabel is undeclared"** — no `actionLabel` on the tool.
+   Assert `summary` equals `tool.name` verbatim.
 3. **"summarize still wins over actionLabel when both are declared"** — tool declares both
    `summarize: () => "computed summary"` and `actionLabel: "static label"`. Assert `summary` is
    `"computed summary"`. Proves the chain is additive, not a reordering.
@@ -164,6 +157,12 @@ calendar invite"`. Fails against current code (returns the description string).
 `tests/unit/action-request-card-preview.test.tsx` — run unchanged. Confirms the heading-never-
 leaks-tool-identifier assertion still passes (it targets a different string than `summary`).
 
+### `tests/unit/external-validate.test.ts` (existing manifest-validation seam)
+
+6. Accept an 80-code-unit `actionLabel` and reject 81 code units.
+7. Reject every C0/DEL control character in `actionLabel`; existing cases retain the
+   trim-nonempty and string-type checks.
+
 ## Why no new Playwright/e2e case
 
 No UI/UX surface changes — `action-request-card.tsx` is untouched, already renders
@@ -176,7 +175,7 @@ persisted/emitted record, never from a model turn — that invariant is unchange
 ## Verification
 
 ```bash
-pnpm vitest run tests/unit/gateway-summary-action-label.test.ts tests/unit/external-tool-manifests.test.ts tests/unit/action-request-card-preview.test.tsx > /tmp/1254-unit.log 2>&1; echo "EXIT=$?"
+pnpm vitest run tests/unit/gateway-summary-action-label.test.ts tests/unit/external-tool-manifests.test.ts tests/unit/action-request-card-preview.test.tsx tests/unit/external-validate.test.ts > /tmp/1254-unit.log 2>&1; echo "EXIT=$?"
 ```
 
 Expected: `EXIT=0` **and** a non-empty log containing a `Tests N passed` line — do not accept `EXIT=0`
@@ -203,8 +202,8 @@ Expected: `EXIT=0`.
 
 ## Kill gate
 
-Single phase — 4 files touched (2 type additions, 1 passthrough line, 1 fallback-chain
-replacement), 3 test files (1 new, 2 extended). If test case 5 (the integration wire-proof) cannot
+Single phase — the action-label contract, passthrough, runtime fallback, external validation, and
+their focused tests/docs. If test case 5 (the integration wire-proof) cannot
 be made to fail against current `main` before the fix and pass after, stop and escalate to
 `Coordinator` rather than ship an unverified wire — owner: this build agent. No phase 2 is planned;
 this is the whole fix.
@@ -214,4 +213,5 @@ this is the whole fix.
 - `tool-manifests.ts` ownership: **approved for Lane C this run**, per relay 3 boot brief.
 - `ai-types.ts` (`AiAssistantToolDto`/`AiAssistantActionDto`): **out of scope**, confirmed separate
   surface (see seams check above).
-- `validate.ts`: **no change needed**, confirmed wholesale per-tool cast.
+- `validate.ts`: actionLabel is now bounded plain text; the wholesale per-tool cast remains safe
+  because validation runs before the cast.

@@ -534,8 +534,8 @@ export interface ModuleAssistantToolManifest {
   readonly summarize?: ToolSummarize;
   /**
    * Optional human-authored label for the approval-card summary (e.g. "Update your job search
-   * criteria"), used when the tool declares no `summarize` function. Falls back to `description`
-   * when unset — see gateway.ts `summaryFor()`.
+   * criteria"), used when the tool declares no `summarize` function. Falls back to the tool's
+   * `name` when unset — see gateway.ts `summaryFor()`.
    */
   readonly actionLabel?: string;
   /**

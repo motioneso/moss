@@ -274,6 +274,60 @@ describe("validateExternalModuleManifest (#917)", () => {
     if (!result.ok) expect(result.errors.join(" ")).toContain("actionLabel");
   });
 
+  it("rejects every forbidden control character in a declared actionLabel", () => {
+    for (const codePoint of [...Array.from({ length: 32 }, (_, index) => index), 0x7f]) {
+      const result = validateExternalModuleManifest(
+        {
+          ...base,
+          runtime: { workerEntrypoint: "dist/worker.js", workerContractVersion: 1 },
+          assistantTools: [
+            {
+              name: "acme-widgets.lookup",
+              description: "Look up a widget",
+              actionLabel: `Look up${String.fromCharCode(codePoint)}now`,
+              permissionId: "acme-widgets.lookup",
+              risk: "read",
+              inputSchema: { type: "object" },
+              handler: "lookup"
+            }
+          ]
+        },
+        "acme-widgets",
+        "0.1.0"
+      );
+      expect(result.ok, `control U+${codePoint.toString(16).padStart(4, "0")}`).toBe(false);
+      if (!result.ok) expect(result.errors.join(" ")).toContain("actionLabel");
+    }
+  });
+
+  it("accepts 80 UTF-16 code units in actionLabel and rejects 81", () => {
+    const validateLabel = (actionLabel: string) =>
+      validateExternalModuleManifest(
+        {
+          ...base,
+          runtime: { workerEntrypoint: "dist/worker.js", workerContractVersion: 1 },
+          assistantTools: [
+            {
+              name: "acme-widgets.lookup",
+              description: "Look up a widget",
+              actionLabel,
+              permissionId: "acme-widgets.lookup",
+              risk: "read",
+              inputSchema: { type: "object" },
+              handler: "lookup"
+            }
+          ]
+        },
+        "acme-widgets",
+        "0.1.0"
+      );
+
+    expect(validateLabel("x".repeat(80)).ok).toBe(true);
+    const overLimit = validateLabel("x".repeat(81));
+    expect(overLimit.ok).toBe(false);
+    if (!overLimit.ok) expect(overLimit.errors.join(" ")).toContain("actionLabel");
+  });
+
   it("rejects tools without a compatible worker", () => {
     const result = validateExternalModuleManifest(
       {

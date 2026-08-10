@@ -652,8 +652,17 @@ export function validateExternalModuleManifest(
         } else permissions.push(tool.permissionId);
         if (!isNonEmptyString(tool.description))
           errors.push("assistant tool description is required");
-        if (tool.actionLabel !== undefined && !isNonEmptyString(tool.actionLabel))
-          errors.push("assistant tool actionLabel must be a non-empty string when present");
+        if (
+          tool.actionLabel !== undefined &&
+          (!isNonEmptyString(tool.actionLabel) ||
+            tool.actionLabel.length > 80 ||
+            // eslint-disable-next-line no-control-regex -- approval labels must be plain text.
+            /[\u0000-\u001F\u007F]/.test(tool.actionLabel))
+        ) {
+          errors.push(
+            "assistant tool actionLabel must be non-empty plain text (max 80 UTF-16 code units) when present"
+          );
+        }
         if (tool.risk !== "read" && tool.risk !== "write" && tool.risk !== "destructive") {
           errors.push('assistant tool risk must be "read", "write", or "destructive"');
         }
