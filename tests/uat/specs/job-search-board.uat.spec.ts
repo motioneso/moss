@@ -530,9 +530,13 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
   // --- Phase 6: board replaces chat once a profile is active ---
   await test.step("Phase 6: board screen replaces the onboarding chat", async () => {
     await page.reload();
-    await expect(page.locator('[role="tablist"][aria-label="Job search view"]')).toBeVisible();
-    await expect(page.getByRole("tab", { name: "Board" })).toBeVisible();
-    await expect(page.getByRole("tab", { name: "Settings" })).toBeVisible();
+    const viewNavigation = page.getByRole("navigation", { name: "Job search view" });
+    const matchesButton = viewNavigation.getByRole("button", { name: "Matches" });
+    await expect(matchesButton).toBeVisible();
+    await expect(viewNavigation.getByRole("button", { name: "Overview" })).toBeVisible();
+    await expect(viewNavigation.getByRole("button", { name: "Profile" })).toBeVisible();
+    await expect(viewNavigation.getByRole("button", { name: "Monitors" })).toBeVisible();
+    await expect(matchesButton).toHaveAttribute("aria-current", "page");
     await expect(page.getByText("Let's work out what this search is for.")).toHaveCount(0);
     await shot(page, "05-board-replaces-chat");
   });
