@@ -94,7 +94,7 @@ jobs:
   verify:
     name: Verify foundation and app
     runs-on: ubuntu-latest
-    timeout-minutes: 35 # stopgap: branch VF runs ~+75% vs main, no hang confirmed (see #1127)
+    timeout-minutes: 45 # #1534: phase deadlines preserve fast failure within this backstop
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
 
@@ -120,7 +120,13 @@ jobs:
         run: pnpm db:up
 
       - name: Verify foundation
-        run: pnpm verify:foundation
+        run: |
+          status=0
+          timeout --verbose --signal=TERM 30m pnpm verify:foundation || status=$?
+          if [ "$status" -eq 124 ]; then
+            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=verify-foundation budget=30m issue=#1534"
+          fi
+          exit "$status"
 
       - name: Verify release hardening
         run: pnpm test:release-hardening
@@ -135,7 +141,13 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Run Playwright smoke tests
-        run: pnpm test:e2e
+        run: |
+          status=0
+          timeout --verbose --signal=TERM 10m pnpm test:e2e || status=$?
+          if [ "$status" -eq 124 ]; then
+            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=playwright budget=10m issue=#1534"
+          fi
+          exit "$status"
 
       - name: Stop database
         if: always()
