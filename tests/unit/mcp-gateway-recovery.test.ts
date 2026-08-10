@@ -339,7 +339,9 @@ describe("logical action terminal results", () => {
         ok: false,
         error: "Tool demo-module.resume.import failed"
       });
-      expect(JSON.parse(errorSpy.mock.calls[0][0] as string).error).toBe("[unavailable error]");
+      expect(errorSpy).toHaveBeenCalledOnce();
+      const [logged] = errorSpy.mock.calls[0] as [string];
+      expect(JSON.parse(logged).error).toBe("[unavailable error]");
     } finally {
       errorSpy.mockRestore();
     }
