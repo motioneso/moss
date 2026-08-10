@@ -53,7 +53,7 @@ tool.summarize?.() ?? tool.actionLabel ?? tool.description ?? tool.name
   never leaks a raw tool identifier — that's a different string (the eyebrow label) than
   `props.summary` and is untouched by this chain. Run unchanged as a regression check.
 - `apps/web/src/chat/message-row.tsx:150-168` — `RecordRow()` already passes `record.summary ??
-  text` through unchanged (line 161). No change needed; the summary field is already wired
+text` through unchanged (line 161). No change needed; the summary field is already wired
   end-to-end from `ChatGatewayNotifier` (confirmed by `tests/unit/gateway-notifier.test.ts:31-53`,
   which asserts `record.summary` round-trips from `notifier.emit(...)`'s `summary` field).
 - `apps/web/src/chat/use-chat-stream.ts` — Lane A (#1449, concurrently building). **Not touched.**
@@ -128,12 +128,13 @@ case is written for it (see below); forcing one would require bypassing the type
 ## Test cases
 
 ### `tests/unit/gateway-summary-action-label.test.ts` (new file, harness copied from
+
 `tests/unit/gateway-action-preview.test.ts`'s `buildGateway` helper)
 
 1. **"uses actionLabel over description when the tool declares no summarize"** — module tool has
    `actionLabel: "Send the calendar invite"`, `description: "calendar.write (2 field(s))"`, no
    `summarize`. Assert the emitted `action_request` record's `summary` is exactly `"Send the
-   calendar invite"`. Fails against current code (returns the description string).
+calendar invite"`. Fails against current code (returns the description string).
 2. **"falls back to description when actionLabel is undeclared"** — no `actionLabel` on the tool.
    Assert `summary` equals `tool.description` verbatim. Proves no regression of today's only
    existing behavior.

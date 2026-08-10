@@ -111,4 +111,60 @@ describe("external module AssistantToolGateway", () => {
     }
     throw new Error("audit row not written");
   });
+
+  it("threads a declared actionLabel from the external manifest to the action_request summary", async () => {
+    const discovery: ExternalModuleDiscovery = {
+      id: "acme",
+      dir: "/unused",
+      manifest: {
+        schemaVersion: 1,
+        id: "acme",
+        name: "Acme",
+        version: "1.0.0",
+        publisher: "Acme",
+        lifecycle: "optional",
+        compatibility: { jarv1s: ">=0.0.0" },
+        runtime: { workerEntrypoint: "worker.js", workerContractVersion: 1 },
+        assistantTools: [
+          {
+            name: "acme.write",
+            description: "acme.write (1 field(s))",
+            actionLabel: "Send the write",
+            permissionId: "acme.write",
+            risk: "write",
+            handler: "write"
+          }
+        ]
+      },
+      manifestHash: "sha256:b",
+      packageHash: "sha256:b"
+    };
+    const manifests = createExternalToolManifests([discovery], async () => ({
+      data: { written: true }
+    }));
+    const tokens = new SessionTokenRegistry();
+    const confirmations = new ConfirmationRegistry();
+    const emitted: GatewaySessionRecord[] = [];
+    const gateway = new AssistantToolGateway({
+      resolveActiveModules: async () => manifests,
+      repository: new AiRepository(),
+      runner: new DataContextRunner(appDb),
+      tokens,
+      confirmations,
+      notifier: { emit: (_session, record) => emitted.push(record) },
+      confirmTimeoutMs: 5_000
+    });
+    const token = tokens.mint({
+      actorUserId: ids.userA,
+      chatSessionId: "external",
+      allowedToolNames: null
+    });
+    const pending = gateway.callTool(token, "acme.write", { value: 1 });
+    while (emitted.length === 0) await new Promise((resolve) => setTimeout(resolve, 5));
+    const request = emitted[0];
+    if (!request || request.kind !== "action_request") throw new Error("expected action request");
+    expect(request.summary).toBe("Send the write");
+    await gateway.resolveActionRequest(ids.userA, request.actionRequestId, "confirmed");
+    await pending;
+  });
 });
