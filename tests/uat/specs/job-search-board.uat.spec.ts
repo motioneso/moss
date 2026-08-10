@@ -36,6 +36,8 @@ import {
   type Request,
   type Response
 } from "@playwright/test";
+
+import { moduleChatSurface } from "../../../apps/web/src/shell/chat-surface-key.js";
 import { buildUatComposeArgs, restartUatStack } from "../provisioner.js";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 import { deterministicFixtureScore } from "../fixtures/job-search-fixture-server.js";
@@ -120,35 +122,6 @@ function execUatSql(projectName: string, sql: string): string {
     .split("\n")
     .filter((line) => !PSQL_COMMAND_TAG.test(line.trim()))
     .join("\n");
-}
-
-// Local mirror of apps/web/src/shell/chat-surface-key.ts's moduleChatSurface — KEEP IN SYNC. No
-// existing UAT spec imports browser-bundle source (it isn't built for node), and this is the only
-// way Phase 11 can compute the exact surface string useProfileThread's setSurfaceKey(surfaceKey)
-// binds, without which a direct-seeded chat_threads row would land on the wrong surface and never
-// be picked up by useChatStream's per-surface history fetch.
-const FNV_OFFSET_BASIS = 0x811c9dc5;
-const FNV_PRIME = 0x01000193;
-
-function fnv1a32(input: string): number {
-  let hash = FNV_OFFSET_BASIS;
-  for (let index = 0; index < input.length; index += 1) {
-    hash ^= input.charCodeAt(index);
-    hash = Math.imul(hash, FNV_PRIME);
-  }
-  return hash >>> 0;
-}
-
-function toHex8(value: number): string {
-  return value.toString(16).padStart(8, "0");
-}
-
-function moduleChatSurface(moduleId: string, key: string): string {
-  const input = `${moduleId}:${key}`;
-  const reversed = Array.from(input).reverse().join("");
-  const hi = toHex8(fnv1a32(input));
-  const lo = toHex8(fnv1a32(reversed));
-  return `m-${hi}${lo}`;
 }
 
 // Copied (not imported) from finance-feed.uat.spec.ts / real-chat-onboarding.uat.spec.ts — the
