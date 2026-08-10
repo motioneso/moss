@@ -23,12 +23,19 @@
 //     badge — NONE of them are about onboarding. Gating those on a real model too would mean this
 //     spec's only board/sort/banner/inspector coverage never runs on CI, which is what the
 //     original version of this file did (a `test.skip` mid-test that silently dropped the rest of
-//     the narrative). Instead, a "Setup" step direct-seeds one already-active profile (N40: a real
-//     production path — onboarding completion — writes exactly this row shape, so seeding it is
-//     skipping a slow dependency, not fabricating the thing under test), and Phases 5-12 run
-//     unconditionally against it, on every run.
+//     the narrative). Instead, a "Setup" step creates one unready profile, then supplies its
+//     criteria and portal inputs through the real fixture queues (N40/N45: skipping a slow
+//     dependency, not fabricating the thing under test), and Phases 5-12 run unconditionally
+//     against it, on every run.
 import { execFileSync } from "node:child_process";
-import { expect, test, type Locator, type Page, type Response } from "@playwright/test";
+import {
+  expect,
+  test,
+  type Locator,
+  type Page,
+  type Request,
+  type Response
+} from "@playwright/test";
 import { buildUatComposeArgs, restartUatStack } from "../provisioner.js";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 import { deterministicFixtureScore } from "../fixtures/job-search-fixture-server.js";
@@ -183,6 +190,61 @@ async function observedProfiles(response: Response): Promise<Array<{ state?: str
     : null;
 }
 
+interface ObservedProfile {
+  profileId?: string;
+  state?: string;
+  readyToCrawl?: boolean;
+}
+
+async function readObservedProfile(page: Page, profileId: string): Promise<ObservedProfile | null> {
+  const response = await page
+    .context()
+    .request.post(`${requireBaseURL()}/api/ai/assistant-tools/job-search.profile.list/invoke`, {
+      data: { input: {} }
+    });
+  if (!response.ok()) {
+    throw new Error(`profile.list fixture read failed (${response.status()})`);
+  }
+  const body = (await response.json()) as {
+    invocation?: { status?: string; result?: { profiles?: ObservedProfile[] } };
+  };
+  if (body.invocation?.status !== "succeeded") {
+    throw new Error(`profile.list fixture read returned ${body.invocation?.status ?? "no status"}`);
+  }
+  return (
+    body.invocation.result?.profiles?.find((profile) => profile.profileId === profileId) ?? null
+  );
+}
+
+async function enqueueJobSearchFixtureInput(
+  page: Page,
+  projectName: string,
+  queueName: string,
+  jobKind: string,
+  params: Record<string, unknown>
+): Promise<void> {
+  const response = await page
+    .context()
+    .request.post(`${requireBaseURL()}/api/modules/job-search/queues/${queueName}/run`, {
+      data: { jobKind, params }
+    });
+  expect(response.status(), `${queueName} must accept the fixture input`).toBe(202);
+  const body = (await response.json()) as { jobId?: string | null };
+  expect(body.jobId, `${queueName} must enqueue a distinct fixture job`).toEqual(
+    expect.any(String)
+  );
+  await expect
+    .poll(
+      () =>
+        execUatSql(
+          projectName,
+          `select state from pgboss.job where id = '${body.jobId ?? ""}';`
+        ).trim(),
+      { timeout: POLL_DEADLINE_MS }
+    )
+    .toBe("completed");
+}
+
 // use-profiles.ts's POLL_* constants cover only the empty->profile-exists transition (the hook
 // polls internally while pollArmed && status==="empty"). Once a profile exists, completedSteps and
 // match data are fetched once on mount with no live refresh — reload is how this spec observes
@@ -244,10 +306,24 @@ async function countWhenReady(rows: Locator): Promise<number> {
 
 // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructured fixtures arg
 test.afterEach(async ({}, testInfo) => {
+  const seededProfileId = testInfo.annotations.find(
+    (annotation) => annotation.type === "job-search-fixture-profile"
+  )?.description;
+  const projectName = process.env.JARVIS_UAT_PROJECT_NAME;
+  if (seededProfileId && projectName) {
+    const deletedId = execUatSql(
+      projectName,
+      `delete from app.job_search_profiles where id = '${seededProfileId}' returning id;`
+    ).trim();
+    expect(
+      deletedId,
+      "exact seeded profile must be removed with its resume and portal inputs"
+    ).toBe(seededProfileId);
+  }
+
   // finance-feed.uat.spec.ts's own pattern: only worth the docker round trips when the test
   // actually went the wrong way, and only when a stack project actually got provisioned.
   if (testInfo.status === testInfo.expectedStatus) return;
-  const projectName = process.env.JARVIS_UAT_PROJECT_NAME;
   if (!projectName) return;
 
   try {
@@ -389,6 +465,7 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
   // the subject under test here; see the header comment for why Phases 5-12 are NOT gated) ---
   let seededProfileId = "";
   let seededSurfaceKey = "";
+  let crawlRunObservation: Promise<Request> | null = null;
 
   if (REAL_CHAT_CONFIGURED) {
     // --- Phase 3: onboarding screen renders while state === "in_conversation" ---
@@ -457,13 +534,10 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
     );
   }
 
-  // --- Setup: direct-seed one already-active profile so Phases 5-12 need no real chat model
-  // (N45/N40). This is exactly the row shape onboarding completion itself writes — same table,
-  // same state, same criteria contract — so seeding it skips a slow dependency (a multi-turn
-  // conversation), not the board/sort/banner/inspector/badge behaviour those phases check. On a
-  // REAL_CHAT_CONFIGURED run this profile exists ALONGSIDE the one Phase 4 just onboarded; every
-  // phase below addresses this one specifically by id, so the two never interfere. ---
-  await test.step("Setup: direct-seed one active profile for Phases 5-12", async () => {
+  // --- Setup: seed one exact profile's supported inputs so Phases 5-12 need no real chat model.
+  // The profile starts unready; criteria.set and portal.set-enabled are the product writers that
+  // recompute readiness and activate it. The resume is independent Fit input, not a crawl gate. ---
+  await test.step("Setup: seed one crawl-ready profile's inputs for Phases 5-12", async () => {
     const projectName = requireProjectName();
     const criteria = {
       titles: ["Senior Backend Engineer"],
@@ -478,18 +552,112 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
       wantNarrative:
         "Backend engineering roles that touch developer tooling rather than pure product features."
     };
-    const criteriaJson = JSON.stringify(criteria).replace(/'/g, "''");
     const row = execUatSql(
       projectName,
-      `insert into app.job_search_profiles (owner_user_id, name, state, criteria) values ` +
-        `('${UAT_ADMIN_ID}', 'UAT direct-seed profile (#1306)', 'active', '${criteriaJson}'::jsonb) ` +
+      `insert into app.job_search_profiles (owner_user_id, name, state) values ` +
+        `('${UAT_ADMIN_ID}', 'UAT direct-seed profile (#1306)', 'in_conversation') ` +
         `returning id, surface_key;`
     ).trim();
     const [id, surfaceKey] = row.split("|");
+    seededProfileId = id ?? "";
+    seededSurfaceKey = surfaceKey ?? "";
+    if (seededProfileId) {
+      test.info().annotations.push({
+        type: "job-search-fixture-profile",
+        description: seededProfileId
+      });
+    }
     expect(id, "profile insert must return an id").toBeTruthy();
     expect(surfaceKey, "profile insert must return a surface_key").toBeTruthy();
-    seededProfileId = id!;
-    seededSurfaceKey = surfaceKey!;
+
+    const baseline = await readObservedProfile(page, seededProfileId);
+    expect(
+      baseline,
+      "exact seeded profile must be observable before inputs are added"
+    ).toMatchObject({
+      profileId: seededProfileId,
+      state: "in_conversation",
+      readyToCrawl: false
+    });
+    expect(
+      execUatSql(
+        projectName,
+        `select count(*) from app.job_search_resumes where profile_id = '${seededProfileId}';`
+      ).trim(),
+      "exact seeded profile must start without a resume"
+    ).toBe("0");
+    expect(
+      execUatSql(
+        projectName,
+        `select count(*) from app.job_search_portals where profile_id = '${seededProfileId}';`
+      ).trim(),
+      "exact seeded profile must start without portal state"
+    ).toBe("0");
+
+    const resumeId = execUatSql(
+      projectName,
+      `insert into app.job_search_resumes (owner_user_id, profile_id, version, content) values ` +
+        `('${UAT_ADMIN_ID}', '${seededProfileId}', 1, ` +
+        `'Senior backend engineer experienced in developer tooling and distributed systems.') ` +
+        `returning id;`
+    ).trim();
+    expect(resumeId, "current resume insert must return its exact id").toBeTruthy();
+
+    for (const sourceId of ["freehire", "linkedin"]) {
+      await enqueueJobSearchFixtureInput(
+        page,
+        projectName,
+        "job-search.portal-set-enabled",
+        "portal.set-enabled",
+        {
+          profileId: seededProfileId,
+          sourceId,
+          enabled: true
+        }
+      );
+      await expect
+        .poll(
+          () =>
+            execUatSql(
+              projectName,
+              `select enabled from app.job_search_portals where profile_id = '${seededProfileId}' and source_id = '${sourceId}';`
+            ).trim(),
+          { timeout: POLL_DEADLINE_MS }
+        )
+        .toBe("t");
+    }
+
+    // Arm this before the final readiness input lands. Phase 5 owns the assertion, but cannot miss
+    // the exact-profile request if the already-open module observes activation immediately.
+    crawlRunObservation = page.waitForRequest(
+      (request) => {
+        if (!request.url().includes("/api/modules/job-search/queues/job-search.crawl-run/run")) {
+          return false;
+        }
+        if (request.method() !== "POST") return false;
+        const body = request.postDataJSON() as { params?: { profileId?: string } } | null;
+        return body?.params?.profileId === seededProfileId;
+      },
+      { timeout: POLL_DEADLINE_MS }
+    );
+
+    await enqueueJobSearchFixtureInput(
+      page,
+      projectName,
+      "job-search.criteria-set",
+      "criteria.set",
+      {
+        profileId: seededProfileId,
+        criteriaJson: JSON.stringify(criteria)
+      }
+    );
+    await expect
+      .poll(() => readObservedProfile(page, seededProfileId), { timeout: POLL_DEADLINE_MS })
+      .toMatchObject({
+        profileId: seededProfileId,
+        state: "active",
+        readyToCrawl: true
+      });
 
     // Force-select the seeded profile via the same localStorage key use-profiles.ts's
     // selectedIdKey() reads — robust regardless of whether a REAL_CHAT_CONFIGURED run also has an
@@ -501,30 +669,25 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
 
   // --- Phase 5: an active profile auto-enqueues exactly the documented crawl request ---
   await test.step("Phase 5: profile going active auto-enqueues job-search.crawl-run", async () => {
-    // Filter on the seeded profile's own id inside the predicate itself, not only in a follow-up
-    // assertion — a REAL_CHAT_CONFIGURED run may have a second (onboarded) profile also crossing
-    // into "active" around now, and its own auto-enqueue must not satisfy this wait instead.
-    const waitForCrawlRun = page
-      .waitForRequest(
-        (request) => {
-          if (!request.url().includes("/api/modules/job-search/queues/job-search.crawl-run/run")) {
-            return false;
-          }
-          if (request.method() !== "POST") return false;
-          const body = request.postDataJSON() as { params?: { profileId?: string } } | null;
-          return body?.params?.profileId === seededProfileId;
-        },
-        { timeout: 15_000 }
-      )
-      .catch(() => null);
+    if (!crawlRunObservation) throw new Error("Setup did not arm the exact-profile crawl observer");
     await page.reload();
-    const request = await waitForCrawlRun;
-    if (request) {
-      const body = request.postDataJSON() as { jobKind?: string };
-      expect(body.jobKind).toBe("crawl.run");
+    let request: Request;
+    try {
+      request = await crawlRunObservation;
+    } catch (error) {
+      throw new Error(
+        `Phase 5 did not observe job-search.crawl-run for exact profile ${seededProfileId}`,
+        { cause: error }
+      );
     }
-    // If the latch had already fired before this step (a legitimate race, not a bug — see
-    // root.tsx's isLatched guard), the absence of a second request is correct, not a failure.
+    const body = request.postDataJSON() as {
+      jobKind?: string;
+      params?: { profileId?: string };
+    };
+    expect(body).toMatchObject({
+      jobKind: "crawl.run",
+      params: { profileId: seededProfileId }
+    });
   });
 
   // --- Phase 6: board replaces chat once a profile is active ---
@@ -676,11 +839,10 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
       // scored_at is set), then id, so the row chosen is the same one on every run — and ascending,
       // where Phase 9's unscore seed takes the last row, so the two never collide.
       //
-      // Keyed on `want`, not `fit`: Fit is only knowable against a résumé, and #1341 made the
-      // scoring stage write `fit = null` rather than a meaningless 0 when there is no résumé on
-      // file. This UAT profile has no résumé, so `fit is not null` now matches nothing and this
-      // seed silently updated zero rows. Want is scored either way and is the honest test of
-      // "a match that has been read".
+      // Keyed on `want`, not `fit`: #1341 permits a read match with no Fit when no résumé exists,
+      // while Want is always the stable proof that scoring read the row. This fixture now carries
+      // a résumé, but keeping the broader read-state predicate prevents this UI seed from becoming
+      // coupled to Fit's independent input contract again.
       `update app.job_search_matches set outside_frame = true where id = (select id from app.job_search_matches where profile_id = '${seededProfileId}' and want is not null order by scored_at, id limit 1) returning id, (select title from app.job_search_postings p where p.id = job_search_matches.posting_id);`
     );
     expect(
