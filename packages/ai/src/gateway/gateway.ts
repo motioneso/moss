@@ -69,6 +69,17 @@ const TASKS_FIRST_RUN_NOTICE =
   'Your assistant now asks before creating tasks. Enable "create without asking" in Task settings to auto-run task changes.';
 const OPERATOR_LOG_ERROR_MAX_LENGTH = 2_000;
 
+function redactHandlerError(error: unknown): string {
+  try {
+    return redactSecrets(error instanceof Error ? error.message : String(error)).slice(
+      0,
+      OPERATOR_LOG_ERROR_MAX_LENGTH
+    );
+  } catch {
+    return "[unavailable error]";
+  }
+}
+
 interface ExecutableTool {
   readonly tool: ModuleAssistantToolManifest;
   readonly execute: ToolExecute;
@@ -422,10 +433,7 @@ export class AssistantToolGateway {
           toolName: found.tool.name,
           actorUserId,
           requestId,
-          error: redactSecrets(error instanceof Error ? error.message : String(error)).slice(
-            0,
-            OPERATOR_LOG_ERROR_MAX_LENGTH
-          )
+          error: redactHandlerError(error)
         })
       );
       return { ok: false, error: `Tool ${found.tool.name} failed` };
@@ -525,10 +533,7 @@ export class AssistantToolGateway {
           toolName: found.dto.name,
           actorUserId: ctx.actorUserId,
           requestId: ctx.requestId,
-          error: redactSecrets(error instanceof Error ? error.message : String(error)).slice(
-            0,
-            OPERATOR_LOG_ERROR_MAX_LENGTH
-          )
+          error: redactHandlerError(error)
         })
       );
       return { ok: false, error: `Tool ${found.dto.name} failed` };

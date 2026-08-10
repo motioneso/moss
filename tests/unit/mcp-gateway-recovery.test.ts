@@ -126,6 +126,7 @@ describe("logical action terminal results", () => {
     yolo: boolean;
     handlerError?: boolean;
     handlerErrorMessage?: string;
+    handlerThrown?: unknown;
   }) => {
     const tokens = new SessionTokenRegistry();
     const emitted: Array<{
@@ -154,6 +155,7 @@ describe("logical action terminal results", () => {
               executionPolicy: "auto",
               execute: async (_db, _toolInput, ctx) => {
                 handlerRequestIds.push(ctx.requestId);
+                if (input.handlerThrown !== undefined) throw input.handlerThrown;
                 if (input.handlerError) {
                   throw new Error(input.handlerErrorMessage ?? "private handler detail");
                 }
@@ -316,6 +318,28 @@ describe("logical action terminal results", () => {
       const payload = JSON.parse(logged);
       expect(payload.error).not.toContain(code);
       expect(payload.error.length).toBeLessThanOrEqual(2000);
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it("returns the sanitized failure when a handler throw cannot be stringified (#1251)", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const { gateway, token } = createGateway({
+        yolo: true,
+        handlerThrown: {
+          toString: () => {
+            throw new Error("coercion failed");
+          }
+        }
+      });
+
+      await expect(gateway.callTool(token, "demo-module.resume.import", {})).resolves.toEqual({
+        ok: false,
+        error: "Tool demo-module.resume.import failed"
+      });
+      expect(JSON.parse(errorSpy.mock.calls[0][0] as string).error).toBe("[unavailable error]");
     } finally {
       errorSpy.mockRestore();
     }
