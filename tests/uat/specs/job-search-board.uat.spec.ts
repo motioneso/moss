@@ -41,6 +41,7 @@ import { moduleChatSurface } from "../../../apps/web/src/shell/chat-surface-key.
 import { buildUatComposeArgs, restartUatStack } from "../provisioner.js";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 import { deterministicFixtureScore } from "../fixtures/job-search-fixture-server.js";
+import { execUatSql } from "./job-search-board-sql.js";
 
 export const uatLevel = {
   level: "admin+data",
@@ -78,50 +79,6 @@ function requireProjectName(): string {
     throw new Error("JARVIS_UAT_PROJECT_NAME must be set by run-uat.ts");
   }
   return projectName;
-}
-
-// Shared direct-SQL-seed helper for the Setup/Phase 10/Phase 11 steps below (N40/N45): connects as
-// the container's bootstrap superuser, not one of the four named app roles
-// (infra/postgres/bootstrap/0000_roles.sql marks jarvis_migration_owner/app_runtime/worker_runtime/
-// auth_runtime all NOBYPASSRLS), so this bypasses the FORCE RLS policies the same way a real
-// migration/bootstrap connection does — there is no app-role path that could run these INSERTs.
-// `-t -A` gives unaligned, headerless output so a `RETURNING` clause parses with a plain `.trim()`
-// / `.split("|")` — but ONLY after the command tag is stripped. psql prints its tag ("INSERT 0 1",
-// "UPDATE 1") on the line *after* the RETURNING row even under -t -A, so a raw return glues the tag
-// onto the last column: a seeded uuid came back as "<uuid>\nINSERT 0 1" and Postgres rejected it as
-// invalid uuid syntax on the next statement. Stripped here rather than at each call site, because
-// every caller that adds a RETURNING clause would otherwise have to rediscover it.
-const PSQL_COMMAND_TAG = /^(?:INSERT \d+ \d+|UPDATE \d+|DELETE \d+|SELECT \d+|MERGE \d+)$/;
-
-function execUatSql(projectName: string, sql: string): string {
-  const raw = execFileSync(
-    "docker",
-    buildUatComposeArgs(projectName, [
-      "exec",
-      "-T",
-      "postgres",
-      "psql",
-      // The superuser, not a role named after the database. `infra/docker-compose.prod.yml` sets
-      // POSTGRES_USER: postgres and POSTGRES_DB: jarv1s, so there is no `jarv1s` ROLE at all —
-      // an earlier version of this helper assumed symmetry with the database name and every call
-      // died with `FATAL: role "jarv1s" does not exist`. Only a live run could catch that; both
-      // the compile and the whole unit/integration gate are blind to it.
-      "-U",
-      "postgres",
-      "-d",
-      "jarv1s",
-      "-t",
-      "-A",
-      "-c",
-      sql
-    ]),
-    { encoding: "utf8" }
-  );
-
-  return raw
-    .split("\n")
-    .filter((line) => !PSQL_COMMAND_TAG.test(line.trim()))
-    .join("\n");
 }
 
 // Copied (not imported) from finance-feed.uat.spec.ts / real-chat-onboarding.uat.spec.ts — the
@@ -195,7 +152,7 @@ async function enqueueJobSearchFixtureInput(
   queueName: string,
   jobKind: string,
   params: Record<string, unknown>
-): Promise<void> {
+): Promise<string> {
   const response = await page
     .context()
     .request.post(`${requireBaseURL()}/api/modules/job-search/queues/${queueName}/run`, {
@@ -203,19 +160,16 @@ async function enqueueJobSearchFixtureInput(
     });
   expect(response.status(), `${queueName} must accept the fixture input`).toBe(202);
   const body = (await response.json()) as { jobId?: string | null };
-  expect(body.jobId, `${queueName} must enqueue a distinct fixture job`).toEqual(
-    expect.any(String)
-  );
+  const jobId = body.jobId;
+  expect(jobId, `${queueName} must enqueue a distinct fixture job`).toEqual(expect.any(String));
+  if (typeof jobId !== "string") throw new Error(`${queueName} did not return an exact job id`);
   await expect
     .poll(
-      () =>
-        execUatSql(
-          projectName,
-          `select state from pgboss.job where id = '${body.jobId ?? ""}';`
-        ).trim(),
+      () => execUatSql(projectName, `select state from pgboss.job where id = '${jobId}';`).trim(),
       { timeout: POLL_DEADLINE_MS }
     )
     .toBe("completed");
+  return jobId;
 }
 
 // use-profiles.ts's POLL_* constants cover only the empty->profile-exists transition (the hook
@@ -587,7 +541,7 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
     ).trim();
     expect(resumeId, "current resume insert must return its exact id").toBeTruthy();
 
-    await enqueueJobSearchFixtureInput(
+    const freehireJobId: string = await enqueueJobSearchFixtureInput(
       page,
       projectName,
       "job-search.portal-set-enabled",
@@ -598,16 +552,44 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
         enabled: true
       }
     );
+    // The host dedupes this actor + queue in database-clock five-second buckets. Observe the first
+    // exact job's stored bucket opening before the second enqueue; never sleep, pad, or retry it.
     await expect
       .poll(
         () =>
           execUatSql(
             projectName,
-            `select enabled from app.job_search_portals where profile_id = '${seededProfileId}' and source_id = 'freehire';`
+            `select case when clock_timestamp() >= singleton_on + interval '5 seconds' ` +
+              `then 'open' else 'blocked' end from pgboss.job where id = '${freehireJobId}';`
           ).trim(),
         { timeout: POLL_DEADLINE_MS }
       )
-      .toBe("t");
+      .toBe("open");
+
+    const linkedinJobId: string = await enqueueJobSearchFixtureInput(
+      page,
+      projectName,
+      "job-search.portal-set-enabled",
+      "portal.set-enabled",
+      {
+        profileId: seededProfileId,
+        sourceId: "linkedin",
+        enabled: true
+      }
+    );
+    expect(linkedinJobId, "portal enablements must enqueue distinct exact jobs").not.toBe(
+      freehireJobId
+    );
+    expect(
+      execUatSql(
+        projectName,
+        `select p.state || ':' || string_agg(portal.source_id || '=' || portal.enabled, ',' ` +
+          `order by portal.source_id) from app.job_search_profiles p join app.job_search_portals ` +
+          `portal on portal.profile_id = p.id where p.id = '${seededProfileId}' and ` +
+          `portal.source_id in ('freehire', 'linkedin') group by p.state;`
+      ).trim(),
+      "both exact portal inputs must be enabled before criteria activation"
+    ).toBe("in_conversation:freehire=true,linkedin=true");
 
     // Arm this before the final readiness input lands. Phase 5 owns the assertion, but cannot miss
     // the exact-profile request if the already-open module observes activation immediately.
