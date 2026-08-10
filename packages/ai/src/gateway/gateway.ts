@@ -414,6 +414,14 @@ export class AssistantToolGateway {
         )
       };
     } catch {
+      console.error(
+        JSON.stringify({
+          event: "read_tool_handler_threw",
+          toolName: found.tool.name,
+          requestId,
+          errorClass: "handler_error"
+        })
+      );
       return { ok: false, error: `Tool ${found.tool.name} failed` };
     }
   }
@@ -505,6 +513,14 @@ export class AssistantToolGateway {
       };
     } catch {
       // never leak internals/secrets from a handler throw
+      console.error(
+        JSON.stringify({
+          event: "tool_handler_threw",
+          toolName: found.dto.name,
+          requestId: ctx.requestId,
+          errorClass: "handler_error"
+        })
+      );
       return { ok: false, error: `Tool ${found.dto.name} failed` };
     }
   }

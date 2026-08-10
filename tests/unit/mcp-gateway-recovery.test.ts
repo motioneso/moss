@@ -67,7 +67,11 @@ describe("first-party Moss MCP transport", () => {
 });
 
 describe("logical action terminal results", () => {
-  const createGateway = (input: { yolo: boolean; handlerError?: boolean }) => {
+  const createGateway = (input: {
+    yolo: boolean;
+    handlerError?: boolean;
+    handlerThrownValue?: unknown;
+  }) => {
     const tokens = new SessionTokenRegistry();
     const emitted: Array<{
       kind: string;
@@ -95,7 +99,9 @@ describe("logical action terminal results", () => {
               executionPolicy: "auto",
               execute: async (_db, _toolInput, ctx) => {
                 handlerRequestIds.push(ctx.requestId);
-                if (input.handlerError) throw new Error("private handler detail");
+                if (input.handlerError) {
+                  throw input.handlerThrownValue ?? new Error("private handler detail");
+                }
                 return { data: { imported: true } };
               }
             }
@@ -188,5 +194,110 @@ describe("logical action terminal results", () => {
         reason: "Tool demo-module.resume.import failed"
       })
     ]);
+  });
+
+  describe("handler throw logging (#1251)", () => {
+    it.each([
+      {
+        label: "read",
+        event: "read_tool_handler_threw",
+        toolName: "demo-module.notes.search",
+        invoke: async (thrown: unknown) => {
+          const gateway = new AssistantToolGateway({
+            resolveActiveModules: async () => [
+              {
+                id: "demo-module",
+                name: "Demo Module",
+                version: "1.0.0",
+                publisher: "Jarv1s",
+                lifecycle: "optional",
+                compatibility: { jarv1s: "*" },
+                assistantTools: [
+                  {
+                    name: "demo-module.notes.search",
+                    description: "Search notes.",
+                    permissionId: "demo-module.notes.read",
+                    risk: "read",
+                    inputSchema: { type: "object", properties: {} },
+                    execute: async () => {
+                      throw thrown;
+                    }
+                  }
+                ]
+              }
+            ],
+            repository: {} as never,
+            runner: {
+              withDataContext: async (_access: unknown, work: (db: unknown) => Promise<unknown>) =>
+                work({})
+            } as never,
+            tokens: new SessionTokenRegistry(),
+            confirmations: new ConfirmationRegistry(),
+            notifier: { emit: () => undefined },
+            confirmTimeoutMs: 5
+          });
+          return gateway.runReadToolForActor("u1", "demo-module.notes.search", {});
+        }
+      },
+      {
+        label: "write",
+        event: "tool_handler_threw",
+        toolName: "demo-module.resume.import",
+        invoke: async (thrown: unknown) => {
+          const { gateway, token } = createGateway({
+            yolo: true,
+            handlerError: true,
+            handlerThrownValue: thrown
+          });
+          return gateway.callTool(token, "demo-module.resume.import", {});
+        }
+      }
+    ])(
+      "fails closed without inspecting a hostile $label handler throw",
+      async ({ event, toolName, invoke }) => {
+        const sentinel = "handler-secret-sentinel";
+        let trapCalls = 0;
+        const thrown = new Proxy(
+          { sentinel },
+          {
+            get() {
+              trapCalls += 1;
+              throw new Error("handler throw was inspected");
+            },
+            getOwnPropertyDescriptor() {
+              trapCalls += 1;
+              throw new Error("handler throw was inspected");
+            },
+            getPrototypeOf() {
+              trapCalls += 1;
+              throw new Error("handler throw was inspected");
+            },
+            ownKeys() {
+              trapCalls += 1;
+              throw new Error("handler throw was inspected");
+            }
+          }
+        );
+        const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+        try {
+          const result = await invoke(thrown);
+
+          expect(result).toEqual({ ok: false, error: `Tool ${toolName} failed` });
+          expect(trapCalls).toBe(0);
+          expect(errorSpy).toHaveBeenCalledExactlyOnceWith(expect.any(String));
+          const payload = JSON.parse(errorSpy.mock.calls[0]![0] as string);
+          expect(payload).toEqual({
+            event,
+            toolName,
+            requestId: expect.any(String),
+            errorClass: "handler_error"
+          });
+          expect(JSON.stringify({ result, logged: errorSpy.mock.calls })).not.toContain(sentinel);
+        } finally {
+          errorSpy.mockRestore();
+        }
+      }
+    );
   });
 });
