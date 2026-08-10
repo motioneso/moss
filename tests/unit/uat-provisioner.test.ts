@@ -168,6 +168,17 @@ describe("bareSeedHook", () => {
   });
 });
 
+describe("composeSeedHook", () => {
+  it("emits the current Moss job-search AI fixture env name", () => {
+    const source = readFileSync(new URL("../uat/provisioner.ts", import.meta.url), "utf8");
+
+    expect(source).toContain('MOSS_UAT_JOB_SEARCH_AI_BASE_URL=${jobSearchAiProviderBaseUrl ?? ""}');
+    expect(source).not.toContain(
+      'JARVIS_UAT_JOB_SEARCH_AI_BASE_URL=${jobSearchAiProviderBaseUrl ?? ""}'
+    );
+  });
+});
+
 describe("buildUatComposeArgs", () => {
   it("scopes every invocation to the project name and prod-shaped compose file", () => {
     expect(buildUatComposeArgs("uat-abc", ["up", "-d"])).toEqual([
