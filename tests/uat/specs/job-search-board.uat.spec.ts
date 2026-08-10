@@ -703,12 +703,13 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
     ).toBeGreaterThan(0);
     await shot(page, "06-board-matches");
 
-    const titles: string[] = [];
+    const initialTitles: string[] = [];
     for (let i = 0; i < scoredCount; i++) {
-      titles.push((await scoredRows.nth(i).locator(":scope > button.jsm-row").innerText()).trim());
+      initialTitles.push((await scoredRows.nth(i).locator(".jds-card-title").innerText()).trim());
     }
-    const expectedOrder = [...titles].sort(
-      (a, b) => deterministicFixtureScore(b, "fit") - deterministicFixtureScore(a, "fit")
+    const initialFitScores = initialTitles.map((title) => deterministicFixtureScore(title, "fit"));
+    expect(initialFitScores, "board defaults to deterministic Fit descending").toEqual(
+      [...initialFitScores].sort((a, b) => b - a)
     );
 
     await page.getByRole("button", { name: /^Fit/ }).click();
@@ -716,13 +717,20 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
     const sortedRows = matchList.locator(":scope > div.jsm-row-shell").filter({
       hasNot: page.getByText("Not read yet")
     });
-    const actualOrder: string[] = [];
+    const ascendingTitles: string[] = [];
     for (let i = 0; i < scoredCount; i++) {
-      actualOrder.push(
-        (await sortedRows.nth(i).locator(":scope > button.jsm-row").innerText()).trim()
-      );
+      ascendingTitles.push((await sortedRows.nth(i).locator(".jds-card-title").innerText()).trim());
     }
-    expect(actualOrder).toEqual(expectedOrder);
+    expect(
+      [...ascendingTitles].sort(),
+      "Fit toggle must preserve the scored title multiset"
+    ).toEqual([...initialTitles].sort());
+    const ascendingFitScores = ascendingTitles.map((title) =>
+      deterministicFixtureScore(title, "fit")
+    );
+    expect(ascendingFitScores, "first Fit click toggles to deterministic Fit ascending").toEqual(
+      [...ascendingFitScores].sort((a, b) => a - b)
+    );
     await shot(page, "07-board-sorted-by-fit");
 
     // No cell ever blends fit/want into a single percentage (ledger L9: fit/want non-blending).
