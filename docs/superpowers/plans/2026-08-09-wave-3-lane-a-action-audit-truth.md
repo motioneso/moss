@@ -45,6 +45,7 @@ Task 1 needs no files outside the three listed under PR1 above).
 ## Grounding already done (verified against branch, cite-checked)
 
 ### #1256 — `/resolve` route bypasses the gateway
+
 - `packages/ai/src/routes.ts:533-553` — the `POST /api/ai/assistant-actions/:id/resolve` handler
   calls `repository.resolveAssistantAction(scopedDb, id, body)` directly. It does **not** go
   through `gateway.resolveActionRequest`, so it has neither the fail-closed no-live-waiter guard
@@ -72,10 +73,11 @@ Task 1 needs no files outside the three listed under PR1 above).
   during build.
 - **Open question for successor:** should `packages/ai`'s `/resolve` gain the same `"expired"` → 409
   status the chat route has (additive to the AI route's contract, which today only returns 404/200)?
-  The spec's drift-guard test requires identical *outcomes* for the same request id across both
+  The spec's drift-guard test requires identical _outcomes_ for the same request id across both
   routes, which implies yes — but confirm the exact status code / response body shape before coding.
 
 ### #1252 — `__moduleError` sentinel, resolved decision already settled by Ben (2026-08-09)
+
 - Reserved key: `__moduleError`. Shape: reuse the existing `MossError` type,
   `packages/module-sdk/src/errors.ts:10-16` — `{ code: string; class: MossErrorClass; remediationRef?: string }`,
   `MossErrorClass = "prerequisite" | "transient" | "validation" | "permission" | "bug"`. Already
@@ -99,12 +101,11 @@ Task 1 needs no files outside the three listed under PR1 above).
   `const result = await this.deps.runner.withDataContext(...)` (line 485-487), check
   `isPlainObject(result.data) && "__moduleError" in result.data`. If present and shaped like a
   `MossError` (has `code: string` and `class` in the `MossErrorClass` set — validate defensively,
-  don't trust the module blindly), return `{ ok: false, error: \`Tool ${found.dto.name} failed\`, errorClass: moduleError.class }`
-  — **do not** let the raw `__moduleError` payload reach `renderAndCap`/`structuredData` (strip it
-  from `result.data` before calling `sanitizeAssistantToolResult`/`renderAndCap`, don't rely solely
-  on output-schema allow-listing — a tool with no `outputSchema` skips schema projection entirely,
-  see `packages/ai/src/gateway/output-validation.ts:51-53`, and would leak the sentinel verbatim).
-  If the key is absent, current behavior (`ok: true`, full envelope) is unchanged — this is the
+  don't trust the module blindly), return `{ ok: false, error: \`Tool ${found.dto.name} failed\`, errorClass: moduleError.class }`— **do not** let the raw`\_\_moduleError`payload reach`renderAndCap`/`structuredData`(strip it
+from`result.data`before calling`sanitizeAssistantToolResult`/`renderAndCap`, don't rely solely
+on output-schema allow-listing — a tool with no `outputSchema`skips schema projection entirely,
+see`packages/ai/src/gateway/output-validation.ts:51-53`, and would leak the sentinel verbatim).
+If the key is absent, current behavior (`ok: true`, full envelope) is unchanged — this is the
   documented no-heuristic back-compat gap the spec calls for.
 - **Type change needed:** `GatewayToolResponse`'s `ok: false` variant
   (`packages/ai/src/gateway/types.ts:53-64`) currently has two shapes —
@@ -130,8 +131,10 @@ Task 1 needs no files outside the three listed under PR1 above).
   that throw."
 
 ### #1251 — bare catches that should reach the operator log
+
 Grepped every `catch {` in `packages/ai/src/gateway/gateway.ts` (line numbers below are current,
 NOT the spec's stale citations — the file has drifted since the spec was written):
+
 - **Line 416-418** (`runReadToolForActor`): `catch { return { ok: false, error: `Tool ${found.tool.name} failed` }; }`
   — swallows the real error. **Needs the #1251 fix**: `logger.error` (or equivalent — check what
   logger the gateway already has injected, `this.deps.logger`? not yet confirmed, successor's
@@ -156,6 +159,7 @@ NOT the spec's stale citations — the file has drifted since the spec was writt
 ## Resolved since last relay (2026-08-09, second pass)
 
 ### #1256 response-shape decision — FINAL
+
 - `resolveActionRequest`'s return type widens from `Promise<"resolved"|"expired"|"not_found">` to
   `Promise<{outcome:"resolved", action: AiAssistantActionRequestSafeRow} | {outcome:"expired"|"not_found"}>`.
   Only real call site needing an update: `packages/chat/src/routes.ts:346-382` (destructure
@@ -173,8 +177,7 @@ NOT the spec's stale citations — the file has drifted since the spec was writt
   silently stripped unless explicitly added to the schema (`fast-json-stringify-schema-strip.md`
   memory). Verify and update the schema in `packages/shared` as part of task #1256, don't assume.
 - **CORRECTION (third pass, coordinator takeover) — the "intended test change" above was wrong.**
-  Verified: `tests/integration/ai-tools.test.ts` calls `registerAiRoutes` directly (lines 507, 597,
-  661) and never constructs a `chat` module / `AssistantToolGateway` at all. Under the design below
+  Verified: `tests/integration/ai-tools.test.ts` calls `registerAiRoutes` directly (lines 507, 597, 661) and never constructs a `chat` module / `AssistantToolGateway` at all. Under the design below
   (gateway wired optionally, via a late-bound getter — mirrors the existing `connectTerminalRpc`
   "absent in tests/deployments that don't wire a cli-runner — degrades gracefully" precedent,
   `packages/ai/src/routes.ts:122-127`), `/resolve` **falls back to today's direct
@@ -200,6 +203,7 @@ first for each case, then the fix.
 
 **Scope — exactly 2 of the 7 `catch` blocks in this file** (the other 5 were reviewed and ruled
 out in "Grounding already done" above — don't touch them):
+
 - `runReadToolForActor`, gateway.ts:416-418 — currently `catch { return { ok: false, error: \`Tool ${found.tool.name} failed\` }; }`. In scope: `found.tool.name`, `actorUserId`, `requestId` (local var, line 398).
 - `runHandler`, gateway.ts:506-509 — currently `catch { return { ok: false, error: \`Tool ${found.dto.name} failed\` }; }`. In scope: `found.dto.name`, `ctx.actorUserId`, `ctx.requestId`.
 
@@ -224,6 +228,7 @@ URL) — the original `"Bearer sk-test-abc123"` example passes trivially against
 matcher and would not have caught this gap.
 
 Exact new code, both sites (event name differs per site):
+
 ```ts
 } catch (error) {
   console.error(
@@ -242,6 +247,7 @@ Exact new code, both sites (event name differs per site):
 **Test cases (exit criterion: "operator log receives the real error while the returned string
 stays exactly `Tool <name> failed`... negative assertion proves no secret or handler internal
 reaches the model-visible return value"):**
+
 1. `runReadToolForActor`: stub a read tool's `execute` to throw `new Error("boom: db timeout")`;
    spy `console.error`; assert the spy was called with a JSON payload containing `"boom: db timeout"`
    (or its redacted form) and `toolName`; assert the returned `GatewayToolResponse` is
@@ -252,8 +258,8 @@ reaches the model-visible return value"):**
    the original three `redactSecrets` patterns** — e.g. `"postgres://user:hunter2@db.internal/app"`
    or a bare `"sk-liveTestKey1234567890"` with no `Bearer` prefix (per Fable review note 1: the
    original `"Bearer sk-test-abc123"` example passes trivially against the un-hardened matcher and
-   proves nothing about the new generic patterns). Assert the *returned* string never contains it
-   (already true, since the return is a hardcoded template) **and** assert the *logged* payload has
+   proves nothing about the new generic patterns). Assert the _returned_ string never contains it
+   (already true, since the return is a hardcoded template) **and** assert the _logged_ payload has
    it redacted (not raw), proving the hardened `redactSecrets` is actually wired and actually catches
    this shape.
 
@@ -266,6 +272,7 @@ constructs it directly with stub deps — matches this task's needs exactly, per
 `packages/ai/src/gateway/output-validation.ts`, `tests/unit/mcp-gateway-recovery.test.ts`
 
 **Signature changes:**
+
 - `packages/ai/src/gateway/output-validation.ts`: export the existing `isPlainObject` (line 197) —
   add `export` to its declaration, no behavior change.
 - `packages/ai/src/gateway/types.ts`: `GatewayToolResponse`'s `{ ok: false, error }` variant
@@ -275,10 +282,17 @@ constructs it directly with stub deps — matches this task's needs exactly, per
 **Fix — `runHandler` (gateway.ts:477-510), inserted right after line 487
 (`const result = await this.deps.runner.withDataContext(...)`), before line 488
 (`sanitizeAssistantToolResult`):**
+
 ```ts
 if (isPlainObject(result.data) && "__moduleError" in result.data) {
   const moduleError = result.data.__moduleError;
-  const validClasses: readonly string[] = ["prerequisite", "transient", "validation", "permission", "bug"];
+  const validClasses: readonly string[] = [
+    "prerequisite",
+    "transient",
+    "validation",
+    "permission",
+    "bug"
+  ];
   const errorClass =
     isPlainObject(moduleError) &&
     typeof moduleError.code === "string" &&
@@ -289,6 +303,7 @@ if (isPlainObject(result.data) && "__moduleError" in result.data) {
   return { ok: false, error: `Tool ${found.dto.name} failed`, errorClass };
 }
 ```
+
 This is a hard early return — `result.data` (with the raw `__moduleError` payload) is never passed
 to `sanitizeAssistantToolResult`/`renderAndCap` in this branch, so it can't leak regardless of
 whether the tool declared an `outputSchema` (closes the gap noted at
@@ -317,9 +332,10 @@ resolve with `{ data: { __moduleError: { code: "no_account", class: "prerequisit
 `errorClass`-carrying, if the read-tool response shape supports it) and that the raw
 `__moduleError` object never appears anywhere in the returned payload.
 
-**Test cases (exit criterion: "__moduleError records non-success outcome + errorClass; existing
+**Test cases (exit criterion: "\_\_moduleError records non-success outcome + errorClass; existing
 envelope-derived path unchanged for throwing tools; a module that hasn't adopted the key behaves
 exactly as today"):**
+
 1. Stub a tool's `execute` to resolve with `{ data: { __moduleError: { code: "no_account", class: "prerequisite" } } }`; call `runHandler` (or drive it via `confirmAndRun`); assert
    `{ ok: false, error: "Tool <name> failed", errorClass: "prerequisite" }` and that `recordAudit`
    is called with `outcome: "failed"`, `errorClass: "prerequisite"`.
@@ -344,6 +360,7 @@ states `__moduleError` is "reserved and documented in the SDK," and that the bac
 module that hasn't adopted the key keeps behaving as it does today) is "documented in the SDK and
 stated on the issue when it closes." Today `__moduleError` appears nowhere in `packages/module-sdk`
 — no plan task touched this until this review caught it. Add:
+
 - A doc comment (or README section) next to `MossError`/`MossErrorClass` in
   `packages/module-sdk/src/errors.ts` explaining: a tool's `execute` may resolve (not throw) with
   `{ data: { __moduleError: { code, class, message? } } }` to report a structured failure without
@@ -361,6 +378,7 @@ stated on the issue when it closes." Today `__moduleError` appears nowhere in `p
 `packages/shared/src/ai-api.ts`, `tests/integration/ai-tools.test.ts`
 
 **3a. `gateway.ts:425-450` — widen `resolveActionRequest`'s return type:**
+
 ```ts
 async resolveActionRequest(
   actorUserId: string,
@@ -382,10 +400,12 @@ async resolveActionRequest(
   return { outcome: "resolved", action: resolved };
 }
 ```
+
 Import `AiAssistantActionRequestSafeRow` from `../repository.js` (already imported elsewhere in
 this file's package — confirm on write, it's a same-package type).
 
 **3b. `packages/chat/src/routes.ts:346-382` — update the one real call site:**
+
 ```ts
 const result = await wiring.gateway.resolveActionRequest(access.actorUserId, id, rawStatus);
 if (result.outcome === "expired") {
@@ -396,12 +416,14 @@ if (result.outcome === "not_found") {
 }
 return reply.code(204).send();
 ```
+
 `tests/integration/chat-mcp-transport.test.ts:67-88`'s `registerResolveRoute` test helper discards
 the return value already — no change needed there.
 
 **3c. Composition root — `packages/module-registry/src/index.ts` — new late-bound
 `getGateway`/`adoptGateway` pair, mirroring `rpcConnection`/`getRpcConnection`/
 `adoptChatRpcConnection` exactly (lines 2121-2122, 2259-2261):**
+
 - Near line 2121: `let gateway: Pick<AssistantToolGateway, "resolveActionRequest"> | undefined;`
   `const getGateway = () => gateway;`
 - In the `deps: BuiltInRouteDependencies` object literal (~2259-2266), alongside
@@ -423,12 +445,15 @@ the return value already — no change needed there.
 **3d. `packages/ai/src/routes.ts` — `AiRoutesDependencies` gains a field (mirrors
 `connectTerminalRpc?`, lines 122-127, same "absent in tests/deployments that don't wire it —
 degrade gracefully" precedent):**
+
 ```ts
 readonly getGateway?: () => Pick<AssistantToolGateway, "resolveActionRequest"> | undefined;
 ```
+
 Import `type { AssistantToolGateway }` from `./gateway/gateway.js` (same package, no new edge).
 
 **3e. `/resolve` handler (routes.ts:533-553) rewrite:**
+
 ```ts
 async (request, reply) => {
   try {
@@ -445,14 +470,23 @@ async (request, reply) => {
         // Fable review note 3: make a future wiring regression operator-visible instead of a
         // silent fail-open — this branch should be rare/expected only in narrow test configs.
         console.error(
-          JSON.stringify({ event: "resolve_confirmed_without_gateway", actionRequestId: request.params.id })
+          JSON.stringify({
+            event: "resolve_confirmed_without_gateway",
+            actionRequestId: request.params.id
+          })
         );
       }
       return { action: serializeAssistantAction(action), outcome: "resolved" as const };
     }
-    const result = await gateway.resolveActionRequest(accessContext.actorUserId, request.params.id, body.status);
+    const result = await gateway.resolveActionRequest(
+      accessContext.actorUserId,
+      request.params.id,
+      body.status
+    );
     if (result.outcome === "expired") {
-      return reply.code(409).send({ error: "This request expired — ask again.", outcome: "expired" as const });
+      return reply
+        .code(409)
+        .send({ error: "This request expired — ask again.", outcome: "expired" as const });
     }
     if (result.outcome === "not_found") {
       return reply.code(404).send({ error: "Assistant action request not found" });
@@ -461,11 +495,12 @@ async (request, reply) => {
   } catch (error) {
     return handleRouteError(error, reply);
   }
-}
+};
 ```
 
 **3f. `packages/shared/src/ai-api.ts` schema updates (fast-json-stringify strip trap — MUST do,
 per `additionalProperties: false` on both schemas, lines 620-627 and 841-850):**
+
 - `resolveAiAssistantActionResponseSchema` (line 620): add `outcome: { type: "string", const: "resolved" }` to `properties`, add `"outcome"` to `required`.
 - New `resolveAiAssistantActionExpiredResponseSchema`: `{ type: "object", additionalProperties: false, required: ["error", "outcome"], properties: { error: { type: "string" }, outcome: { type: "string", const: "expired" } } }`.
 - `resolveAiAssistantActionRouteSchema.response` (line 844-849): add `409: resolveAiAssistantActionExpiredResponseSchema`.
@@ -473,6 +508,7 @@ per `additionalProperties: false` on both schemas, lines 620-627 and 841-850):**
 **Test cases (exit criterion: "a focused test proves the /resolve route fails closed with no live
 waiter, unblocks a live waiter when one exists, and matches the chat route's outcome — including the
 expired case"):**
+
 1. **No gateway wired** (today's `ai-tools.test.ts` server setup, unchanged): existing test at
    line 300 stays green, unmodified — proves the fallback preserves current behavior.
 2. **New test, gateway wired, no live waiter:** construct an `AssistantToolGateway` with a real
@@ -497,8 +533,9 @@ tests (~line 280+).
 ## Kill gate
 
 Stop and escalate to Fable/coordinator (don't push through) if, during build:
+
 - Any test in `tests/integration/chat-mcp-transport.test.ts` or the existing
-  `tests/integration/ai-tools.test.ts` suite starts failing for a reason *other than* the specific
+  `tests/integration/ai-tools.test.ts` suite starts failing for a reason _other than_ the specific
   new assertions being added — that means a grounding fact above is stale.
 - The `ConfirmationRegistry` has no public method to register/inspect a waiter from a test (task 3,
   case 3) — that's a missing test seam, not a design problem to work around with a hack.
@@ -515,12 +552,14 @@ Stop and escalate to Fable/coordinator (don't push through) if, during build:
 pnpm --filter @moss/ai typecheck        # expect 0
 pnpm --filter @moss/ai test -- gateway  # expect 0 (task 1, 2 — unit tests, no DB needed)
 ```
+
 For task 3's integration tests, use the `verify-gate` skill (isolated DB) — never run
 `pnpm verify:foundation` or any DB-touching command unscoped. Full local gate only at
 `coordinated-wrap-up` time, per the skill.
 
 **Fable review note 5 — green unit+integration is not the finish line.** Per the spec's Exit
 Criteria (lane-wide), this PR additionally needs, before it's reportable as done:
+
 - An Opus adversarial QA verdict posted as a `gh pr comment` (spec, lane-wide).
 - Live-path proof: a real approve/deny through the real UI on a live dev instance, plus the
   resulting audit row (Lane A specifically, since #1256 is UI-adjacent) — owned by the
