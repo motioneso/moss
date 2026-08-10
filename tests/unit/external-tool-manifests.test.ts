@@ -94,6 +94,31 @@ it("filters external modules without changing built-in action metadata", async (
   expect(resolved[0]?.assistantTools).toBe(builtIn.assistantTools);
 });
 
+it("passes actionLabel through the field-by-field remap", async () => {
+  const labeledDiscovery: ExternalModuleDiscovery = {
+    ...discovery,
+    manifest: {
+      ...discovery.manifest,
+      assistantTools: [
+        {
+          name: "acme.write",
+          description: "acme.write (1 field(s))",
+          actionLabel: "Update your criteria",
+          permissionId: "acme.write",
+          risk: "write",
+          handler: "write"
+        }
+      ]
+    }
+  };
+  const invoke = vi.fn(async () => ({ data: { ok: true } }));
+  const [manifest] = createExternalToolManifests([labeledDiscovery], invoke);
+  expect(manifest?.assistantTools?.[0]).toMatchObject({
+    name: "acme.write",
+    actionLabel: "Update your criteria"
+  });
+});
+
 it("keeps the original resolver when there are no external tool manifests", async () => {
   const manifests: MossModuleManifest[] = [];
   const enabled = vi.fn(async () => manifests);

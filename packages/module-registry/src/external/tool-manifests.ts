@@ -50,6 +50,7 @@ export function createExternalToolManifests(
         return {
           name: tool.name,
           description: tool.description,
+          actionLabel: tool.actionLabel,
           permissionId: tool.permissionId,
           risk: tool.risk,
           actionFamilyId: tool.actionFamilyId,
