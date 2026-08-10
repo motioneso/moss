@@ -283,5 +283,62 @@ describe("weather integration", () => {
       expect(res.statusCode).toBe(401);
       await srv.close();
     });
+
+    it("falls back to the timezone table when no preference and IP-geo fails (loopback)", async () => {
+      // server.inject's request.ip is always 127.0.0.1, which geocodeIp short-circuits on
+      // without calling fetch (see ip-geocoder.ts) — so the only fetch call here is Open-Meteo.
+      const fakeFetch = vi.fn().mockResolvedValueOnce(makeOpenMeteoResponse(12, 10, 2));
+
+      const srv = createApiServer({
+        appDb,
+        boss,
+        logger: false,
+        fetchFn: fakeFetch as typeof fetch
+      });
+      await srv.ready();
+      const cookie = await signUp(srv, "TzUser", "tzuser@example.test");
+
+      const res = await srv.inject({
+        method: "GET",
+        url: "/api/weather/today",
+        headers: { cookie, "x-timezone": "Europe/London" }
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json<GetWeatherTodayResponse>();
+      const data = body.data as WeatherTodayDto;
+      expect(data).not.toBeNull();
+      expect(data.location).toBe("London, UK");
+
+      expect(fakeFetch).toHaveBeenCalledTimes(1);
+      const openMeteoUrl = String(fakeFetch.mock.calls[0]?.[0] ?? "");
+      expect(openMeteoUrl).toContain("latitude=51.5074");
+      expect(openMeteoUrl).toContain("longitude=-0.1278");
+
+      await srv.close();
+    });
+
+    it("returns null when timezone is unrecognized and IP-geo fails (regression guard)", async () => {
+      const fakeFetch = vi.fn();
+
+      const srv = createApiServer({
+        appDb,
+        boss,
+        logger: false,
+        fetchFn: fakeFetch as typeof fetch
+      });
+      await srv.ready();
+      const cookie = await signUp(srv, "TzUnknownUser", "tzunknown@example.test");
+
+      const res = await srv.inject({
+        method: "GET",
+        url: "/api/weather/today",
+        headers: { cookie, "x-timezone": "Etc/Unknown" }
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json<GetWeatherTodayResponse>().data).toBeNull();
+      expect(fakeFetch).not.toHaveBeenCalled();
+
+      await srv.close();
+    });
   });
 });
