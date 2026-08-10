@@ -36,7 +36,7 @@ export async function registerMockChatRoutes(page: Page, state: MockChatApiState
   // fall through to the SPA server and churn. Tests that exercise the drawer register
   // their own /api/chat/stream route afterwards, which takes precedence.
   let streamServed = false;
-  await page.route("**/api/chat/stream", async (route) => {
+  await page.route("**/api/chat/stream*", async (route) => {
     if (streamServed) {
       return; // hold the reconnect open (no replay, no churn)
     }

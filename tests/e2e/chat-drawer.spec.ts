@@ -43,7 +43,7 @@ test("opens the live chat drawer from the nav and renders the streamed records o
   // (empty body, never resolved) on reconnect — otherwise the events would replay
   // and the records would render twice.
   let streamServed = false;
-  await page.route("**/api/chat/stream", async (route) => {
+  await page.route("**/api/chat/stream*", async (route) => {
     if (streamServed) {
       // Hold the reconnect open with no data so events don't replay.
       return; // leave the route hanging; the page is about to assert and finish
@@ -124,7 +124,7 @@ test("private activation blocks send until the server confirms, then allows it",
   // The shared mock's SSE stream closes after one heartbeat, which fires EventSource.onerror
   // and would end the private session mid-test. Keep it pending — this test doesn't assert
   // on stream events.
-  await page.route("**/api/chat/stream", () => new Promise<void>(() => {}));
+  await page.route("**/api/chat/stream*", () => new Promise<void>(() => {}));
 
   await page.goto("/");
   await page.getByRole("button", { name: "Chat with Moss" }).click();
@@ -497,7 +497,7 @@ test("empty History explains that there are no past conversations", async ({ pag
  */
 async function streamReply(page: Page, replyText: string) {
   let streamServed = false;
-  await page.route("**/api/chat/stream", async (route) => {
+  await page.route("**/api/chat/stream*", async (route) => {
     if (streamServed) {
       return; // hold reconnect open; no replay
     }
@@ -622,7 +622,7 @@ test("#638: reopening the drawer scrolls to the newest message, not the top", as
     (_, i) => `data: ${JSON.stringify({ kind: "reply", text: `Message number ${i}` })}\n\n`
   ).join("");
   let streamServed = false;
-  await page.route("**/api/chat/stream", async (route) => {
+  await page.route("**/api/chat/stream*", async (route) => {
     if (streamServed) {
       return; // hold reconnect open; no replay
     }
@@ -666,7 +666,7 @@ test("#664: a sent message renders after the prior turn, not at the top", async 
   // Hold the SSE stream open WITHOUT delivering any records. This isolates the
   // POST-fallback path: props.records stays empty, so records rendered while waiting for
   // the stream come entirely from fallbackRecords + the optimistic pending bubble.
-  await page.route("**/api/chat/stream", (route) =>
+  await page.route("**/api/chat/stream*", (route) =>
     route.fulfill({
       status: 200,
       contentType: "text/event-stream",

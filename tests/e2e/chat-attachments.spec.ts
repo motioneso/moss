@@ -42,7 +42,7 @@ async function mockUpload(page: Page, uploads: CapturedUpload[]) {
 
 /** Hold the SSE stream open with no records so the fallback path renders everything. */
 async function holdStreamEmpty(page: Page) {
-  await page.route("**/api/chat/stream", (route) =>
+  await page.route("**/api/chat/stream*", (route) =>
     route.fulfill({
       status: 200,
       contentType: "text/event-stream",
@@ -220,7 +220,7 @@ test("private mode hides the attach affordance (#1133)", async ({ page }) => {
     // vault writes, so the whole affordance disappears (the server also rejects, 400).
     incognito: true
   });
-  await page.route("**/api/chat/stream", () => new Promise<void>(() => {}));
+  await page.route("**/api/chat/stream*", () => new Promise<void>(() => {}));
 
   const drawer = await openDrawer(page);
   await expect(drawer.getByRole("button", { name: "Start private chat" })).toHaveAttribute(

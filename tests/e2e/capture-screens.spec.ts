@@ -138,7 +138,7 @@ test("capture: today + chat drawer", async ({ page }) => {
   // the user+assistant events once on connect, then hold the reconnect open with no data
   // so events don't replay.
   let chatStreamServed = false;
-  await page.route("**/api/chat/stream", async (route) => {
+  await page.route("**/api/chat/stream*", async (route) => {
     if (chatStreamServed) {
       return;
     }

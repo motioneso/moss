@@ -67,7 +67,7 @@ async function setup(page: Page): Promise<MockApiState> {
     }
   ];
   let streamServed = false;
-  await page.route("**/api/chat/stream", async (route) => {
+  await page.route("**/api/chat/stream*", async (route) => {
     if (streamServed) return;
     streamServed = true;
     await route.fulfill({
