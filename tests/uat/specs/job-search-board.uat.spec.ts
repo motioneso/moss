@@ -284,14 +284,25 @@ test.afterEach(async ({}, testInfo) => {
   )?.description;
   const projectName = process.env.JARVIS_UAT_PROJECT_NAME;
   if (seededProfileId && projectName) {
-    const deletedId = execUatSql(
-      projectName,
-      `delete from app.job_search_profiles where id = '${seededProfileId}' returning id;`
-    ).trim();
-    expect(
-      deletedId,
-      "exact seeded profile must be removed with its resume and portal inputs"
-    ).toBe(seededProfileId);
+    const notificationPredicate =
+      `actor_user_id = '${UAT_ADMIN_ID}' and recipient_user_id = '${UAT_ADMIN_ID}' ` +
+      `and module_id = 'job-search' and event_key = 'new-matches:${seededProfileId}'`;
+    try {
+      execUatSql(projectName, `delete from app.notifications where ${notificationPredicate};`);
+      const remaining = execUatSql(
+        projectName,
+        `select count(*) from app.notifications where ${notificationPredicate};`
+      ).trim();
+      expect(remaining, "exact crawl notification must be absent after cleanup").toBe("0");
+      const deletedId = execUatSql(
+        projectName,
+        `delete from app.job_search_profiles where id = '${seededProfileId}' returning id;`
+      ).trim();
+      expect(deletedId, "exact seeded profile and inputs must be removed").toBe(seededProfileId);
+    } catch (error) {
+      if (testInfo.status === testInfo.expectedStatus) throw error;
+      console.error(`fixture cleanup failed after the test's original failure: ${error}`);
+    }
   }
 
   // finance-feed.uat.spec.ts's own pattern: only worth the docker round trips when the test
