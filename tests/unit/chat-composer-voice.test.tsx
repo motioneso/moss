@@ -14,6 +14,15 @@ import {
   mergeTranscriptIntoText
 } from "../../apps/web/src/chat/composer.js";
 
+// Only override transcribeAudio — every other export keeps its real implementation so the
+// existing tests in this file (which don't mock this module) are unaffected.
+vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../apps/web/src/api/client.js")>();
+  return { ...actual, transcribeAudio: vi.fn() };
+});
+
+import { transcribeAudio } from "../../apps/web/src/api/client.js";
+
 // #738 — Chat voice input capture and transcription: composer-side coverage.
 //
 // mergeTranscriptIntoText is the pure function the mic control uses to land a transcript in the
@@ -112,6 +121,7 @@ describe("classifyMicError (#900)", () => {
 describe("Composer mic lifecycle (#900 insecure origin, #1134 track cleanup)", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.mocked(transcribeAudio).mockClear();
   });
 
   it("shows the insecure-origin message and never calls getUserMedia when mediaDevices is absent", async () => {
@@ -165,6 +175,64 @@ describe("Composer mic lifecycle (#900 insecure origin, #1134 track cleanup)", (
     for (const track of tracks) {
       expect(track.stop).toHaveBeenCalledOnce();
     }
+  });
+
+  // PR #1485 QA finding: real Chromium auto-stops an active MediaRecorder when its last live
+  // track ends, firing ondataavailable+onstop *after* unmount. FakeMediaRecorder above stubs a
+  // plain `{ stop: vi.fn() }` track that does NOT reproduce that — this fake track's stop()
+  // invokes the recorder's own callbacks, the way the real browser does, so this test would have
+  // failed against the pre-fix composer.tsx (onstop still bound → blob built → transcribeAudio
+  // called post-unmount) and passes now that unmount detaches the callbacks first.
+  it("never uploads a partial recording when the browser auto-stops the recorder after unmount (#900/#1134 QA regression)", async () => {
+    const recorders: AutoStopFakeMediaRecorder[] = [];
+    class AutoStopFakeMediaRecorder extends FakeMediaRecorder {
+      constructor(stream: unknown) {
+        super(stream);
+        recorders.push(this);
+      }
+    }
+
+    // A real MediaStreamTrack.stop() is idempotent — it only fires its end-of-track effects once.
+    // Guard against a second invocation so this mirrors that instead of recursing forever: the
+    // pre-fix onstop handler itself calls track.stop() again on every track before uploading.
+    let trackStopped = false;
+    const track = {
+      stop: vi.fn(() => {
+        if (trackStopped) return;
+        trackStopped = true;
+        const recorder = recorders[0];
+        recorder?.ondataavailable?.({ data: { size: 5 } });
+        recorder?.onstop?.();
+      })
+    };
+    const stream = { getTracks: () => [track] };
+    const getUserMedia = vi.fn(async () => stream);
+    vi.stubGlobal("navigator", { mediaDevices: { getUserMedia } });
+    vi.stubGlobal("MediaRecorder", AutoStopFakeMediaRecorder);
+
+    const renderer = await renderInteractiveComposer((client) => {
+      client.setQueryData(queryKeys.ai.capability("transcription"), availableRoute());
+    });
+
+    const micButton = findMicButton(renderer);
+    await act(async () => {
+      micButton.props.onClick();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(micButton.props["aria-label"]).toBe("Stop recording");
+
+    await act(async () => {
+      renderer.unmount();
+      // Let the auto-stop-triggered onstop's async transcribeAndInsert microtasks settle.
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(transcribeAudio).not.toHaveBeenCalled();
+    expect(track.stop).toHaveBeenCalled();
   });
 
   it("does not throw on unmount when no recording was ever started", async () => {
