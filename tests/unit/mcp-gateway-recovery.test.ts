@@ -340,7 +340,22 @@ describe("logical action terminal results", () => {
       "folded Bearer authorization",
       "Authorization: Bearer bearerHeadValue\r\n bearerTailValue",
       ["bearerHeadValue", "bearerTailValue"]
-    ]
+    ],
+    ["Bearer credential after LF", "Authorization: Bearer\n bearerLfValue", ["bearerLfValue"]],
+    [
+      "Bearer credential after CRLF",
+      "Authorization: Bearer\r\n bearerCrlfValue",
+      ["bearerCrlfValue"]
+    ],
+    ["Basic credential after LF", "Authorization: Basic\n basicLfValue", ["basicLfValue"]],
+    ["Basic credential after CRLF", "Authorization: Basic\r\n basicCrlfValue", ["basicCrlfValue"]],
+    ["encoded OAuth key letters", "?client_%73ecret=encodedLetterValue", ["encodedLetterValue"]],
+    [
+      "mixed-case encoded OAuth key letters",
+      "?REFRESH_%74oKeN=mixedEncodedValue",
+      ["mixedEncodedValue"]
+    ],
+    ["malformed encoded query key", "?client_%ZZsecret=malformedKeyValue", ["malformedKeyValue"]]
   ])(
     "redacts %s in both gateway error logs before truncation",
     async (_label, message, secrets) => {

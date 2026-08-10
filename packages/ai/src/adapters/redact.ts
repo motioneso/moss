@@ -8,18 +8,27 @@
  * RLS-scoped, so this is hardening, not a known live leak).
  */
 const REDACTED = "[redacted]";
+const QUERY_SECRET_KEYS = new Set([
+  "key",
+  "api_key",
+  "api-key",
+  "code",
+  "token",
+  "access_token",
+  "client_secret",
+  "refresh_token",
+  "secret",
+  "password"
+]);
 const PATTERNS: readonly RegExp[] = [
   // `JARVIS_MCP_TOKEN=<value>` env-var prefix on the launch line (Codex path).
   /JARVIS_MCP_TOKEN=\S+/gi,
-  // `Authorization: Bearer <value>` header form, including RFC-style folded continuations.
-  /Bearer[ \t]+\S+(?:\r?\n[ \t]+\S+)*/gi,
+  // Bearer/Basic values, including RFC-style folded credentials on the next line.
+  /(?:Bearer|Basic)(?:[ \t]+|\r?\n[ \t]+)\S+(?:\r?\n[ \t]+\S+)*/gi,
   // Bare session-token tokens (`jst_…`) anywhere they appear.
   /jst_[A-Za-z0-9_-]+/g,
-  // Query-param secrets, including common OAuth credentials and encoded `_` separators.
-  /[?&](?:key|api(?:[_-]|%5[fF])?key|code|token|access(?:_|%5[fF])?token|client(?:_|%5[fF])?secret|refresh(?:_|%5[fF])?token|secret|password)=[^&\s]+/gi,
   // Sensitive header values not covered by Bearer (provider keys and HTTP Basic credentials).
   /X-API-Key\s*:\s*\S+/gi,
-  /Basic[ \t]+\S+/gi,
   // JSON error bodies commonly returned by OAuth/provider clients.
   /"(?:password|access_token|client_secret|refresh_token)"\s*:\s*"(?:\\.|[^"\\])*"/gi,
   // Bare provider API keys (`sk-…`) with no `Bearer` prefix.
@@ -28,6 +37,23 @@ const PATTERNS: readonly RegExp[] = [
   /[A-Za-z0-9_.+-]+:[^\s@/]+@/g
 ];
 
+function redactQuerySecrets(text: string): string {
+  return text.replace(
+    /([?&])([^=&\s]+)=[^&\s]*/g,
+    (match, delimiter: string, encodedKey: string) => {
+      try {
+        // Decode and compare only the key; values are never decoded or emitted.
+        return QUERY_SECRET_KEYS.has(decodeURIComponent(encodedKey).toLowerCase())
+          ? `${delimiter}${REDACTED}`
+          : match;
+      } catch {
+        // A malformed key cannot be classified safely, so remove its value fail-closed.
+        return `${delimiter}${REDACTED}`;
+      }
+    }
+  );
+}
+
 /** Replace any token-bearing substring with a fixed marker. Safe on undefined/empty input. */
 export function redactSecrets(text: string | undefined): string {
   if (!text) return "";
@@ -35,7 +61,7 @@ export function redactSecrets(text: string | undefined): string {
   for (const pattern of PATTERNS) {
     out = out.replace(pattern, REDACTED);
   }
-  return out;
+  return redactQuerySecrets(out);
 }
 
 /**

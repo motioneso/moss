@@ -71,7 +71,20 @@ describe("redactSecrets", () => {
       "folded Bearer authorization",
       "Authorization: Bearer bearerHeadSecret\r\n bearerTailSecret",
       "bearerTailSecret"
-    ]
+    ],
+    ["Bearer credential after LF", "Authorization: Bearer\n bearerLfSecret", "bearerLfSecret"],
+    [
+      "Basic credential after CRLF",
+      "Authorization: Basic\r\n dXNlcjpiYXNpY0NyTGZTZWNyZXQ=",
+      "dXNlcjpiYXNpY0NyTGZTZWNyZXQ="
+    ],
+    ["encoded OAuth key letters", "?client_%73ecret=encodedLetterSecret", "encodedLetterSecret"],
+    [
+      "mixed-case encoded OAuth key letters",
+      "?REFRESH_%74oKeN=mixedEncodedSecret",
+      "mixedEncodedSecret"
+    ],
+    ["malformed encoded query key", "?client_%ZZsecret=malformedKeySecret", "malformedKeySecret"]
   ])("redacts %s", (_label, text, secret) => {
     const out = redactSecrets(text);
     expect(out).not.toContain(secret);
