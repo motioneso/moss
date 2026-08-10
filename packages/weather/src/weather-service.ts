@@ -103,7 +103,7 @@ export class WeatherService {
       return { location: cityFallback, source: "timezone-fallback" };
     }
 
-    this.logger.info({ step: "unresolved" }, "weather location resolved");
+    this.logger.info({ step: "unresolved" }, "weather location unresolved");
     return null;
   }
 }

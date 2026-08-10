@@ -48,7 +48,13 @@ async function signIn(page: Page) {
 // app-map-grounding.uat.spec.ts).
 async function gotoProfileSettings(page: Page) {
   await page.goto(`${requireBaseURL()}/settings?section=profile`);
-  await expect(page.getByLabel("Weather location label")).toBeVisible();
+  const labelInput = page.getByLabel("Weather location label");
+  await expect(labelInput).toBeVisible();
+  // All three weather-location inputs share the same isLoading/isPending disabled condition
+  // (settings-personal-panes.tsx), so waiting on the label alone is sufficient: while the query is
+  // loading they're visible-but-disabled with placeholder values, which would race the original-
+  // value capture below and the afterAll restore-fill.
+  await expect(labelInput).toBeEnabled();
 }
 
 test.describe.serial("weather location manual override (#1402)", () => {
@@ -129,6 +135,25 @@ test.describe.serial("weather location manual override (#1402)", () => {
     await expect(cityChip).toBeVisible({ timeout: 15_000 });
     await expect(cityChip).not.toHaveText(OVERRIDE_LABEL);
     await page.screenshot({ path: test.info().outputPath("weather-timezone-fallback.png") });
+  });
+
+  test("throwing after diverging state still leaves afterAll to restore the original", async ({
+    page
+  }) => {
+    test.fail(true, "deliberately throws to prove afterAll's restore path runs on failure");
+
+    await signIn(page);
+    await gotoProfileSettings(page);
+
+    // Test 2 already cleared the override; re-diverge state from what test 1 captured as
+    // "original" so afterAll's restore is proven, not a no-op against already-matching state.
+    await page.getByLabel("Weather location label").fill(OVERRIDE_LABEL);
+    await page.getByLabel("Weather location latitude").fill(OVERRIDE_LAT);
+    await page.getByLabel("Weather location longitude").fill(OVERRIDE_LON);
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText(`Currently using ${OVERRIDE_LABEL}.`)).toBeVisible();
+
+    throw new Error("deliberate throw: afterAll must still restore the captured original state");
   });
 
   test.afterAll(async ({ browser }) => {
