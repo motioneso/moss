@@ -771,23 +771,75 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
     await shot(page, "13-drawer-outside-module-empty");
   });
 
-  // Phase 12 stays standalone so a fresh shell observes the notification produced by the crawl,
-  // then clears it through the same Notifications UI a user does.
+  // Phase 12 stays standalone and owns its unread fixture, so badge coverage never depends on
+  // whether the earlier crawl happened to produce a notification.
 });
 
 test("nav badge reflects unread matches and clears on mark-read (#1285)", async ({ page }) => {
+  const notificationId = "15440000-0000-4000-8000-000000000001";
+  const notificationTitle = "UAT Job Search badge fixture (#1544)";
+  const notificationsResponse = (response: Response) =>
+    response.url().endsWith("/api/notifications") &&
+    response.request().method() === "GET" &&
+    response.ok();
+
+  const baselineResponsePromise = page.waitForResponse(notificationsResponse);
   await signIn(page);
   const navLink = page
     .getByRole("navigation", { name: "Modules", exact: true })
     .getByRole("link", { name: "Job Search" });
-  await expect(navLink.locator(".jds-badge-count")).toBeVisible();
+  const badge = navLink.locator(".jds-badge-count");
+  const baseline = (await (await baselineResponsePromise).json()) as {
+    unreadByModule: Record<string, number>;
+  };
+  expect(baseline.unreadByModule["job-search"] ?? 0).toBe(0);
+  await expect(badge).toHaveCount(0);
 
-  await page.locator(".jds-usermenu__trigger").click();
-  await page.getByRole("button", { name: "Notifications" }).click();
-  const notice = page.getByText(/\d+ new job matches?/);
-  await expect(notice).toBeVisible();
-  const title = await notice.innerText();
-  await page.getByRole("button", { name: `Mark ${title} read` }).click();
+  execUatSql(
+    requireProjectName(),
+    `insert into app.notifications (id, actor_user_id, recipient_user_id, title, module_id) values ` +
+      `('${notificationId}', '${UAT_ADMIN_ID}', '${UAT_ADMIN_ID}', '${notificationTitle}', 'job-search');`
+  );
 
-  await expect(navLink.locator(".jds-badge-count")).toHaveCount(0);
+  try {
+    const seededResponsePromise = page.waitForResponse(notificationsResponse);
+    await page.reload();
+    const seeded = (await (await seededResponsePromise).json()) as {
+      notifications: Array<{ id: string }>;
+      unreadByModule: Record<string, number>;
+    };
+    expect(seeded.notifications.filter((notice) => notice.id === notificationId)).toHaveLength(1);
+    expect(seeded.unreadByModule["job-search"]).toBe(1);
+    await expect(badge).toHaveText("1");
+    expect(await badge.textContent()).toBe(String(seeded.unreadByModule["job-search"]));
+
+    await page.locator(".jds-usermenu__trigger").click();
+    await page.getByRole("button", { name: "Notifications" }).click();
+    const notice = page.locator("article.jds-task").filter({
+      has: page.getByText(notificationTitle, { exact: true })
+    });
+    await expect(notice).toBeVisible();
+
+    const readResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/api/notifications/${notificationId}/read`) &&
+        response.request().method() === "PATCH"
+    );
+    const clearedResponsePromise = page.waitForResponse(notificationsResponse);
+    await notice
+      .getByRole("button", { name: `Mark ${notificationTitle} read`, exact: true })
+      .click();
+    await expect((await readResponsePromise).ok()).toBe(true);
+    const cleared = (await (await clearedResponsePromise).json()) as {
+      unreadByModule: Record<string, number>;
+    };
+    expect(cleared.unreadByModule["job-search"] ?? 0).toBe(0);
+    await expect(badge).toHaveCount(0);
+  } finally {
+    const deletedId = execUatSql(
+      requireProjectName(),
+      `delete from app.notifications where id = '${notificationId}' returning id;`
+    ).trim();
+    expect(deletedId).toBe(notificationId);
+  }
 });
