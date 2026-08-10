@@ -36,7 +36,7 @@ const DEFAULT_RECORD_KINDS: ReadonlySet<ChatRecordKind> = new Set([
 
 export function AssistantSurface(props: AssistantSurfaceViewProps) {
   const { records, registerComposer } = useAssistantSurfaceHost(props.surface);
-  const assistantName = useAssistantName();
+  const assistantName = useAssistantName("");
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<readonly PendingAttachment[]>([]);
   const [attachError, setAttachError] = useState<string | null>(null);
@@ -140,7 +140,7 @@ export function AssistantSurface(props: AssistantSurfaceViewProps) {
   return (
     <section
       className={`assistant-surface${threadIsEmpty ? " assistant-surface--empty" : ""}`}
-      aria-label={`${assistantName} conversation`}
+      aria-label={assistantName ? `${assistantName} conversation` : "Conversation"}
     >
       <div className="assistant-surface__thread" aria-live="polite">
         {props.localRows?.map((row) => (
@@ -230,8 +230,11 @@ export function AssistantSurface(props: AssistantSurfaceViewProps) {
           ) : null}
           <textarea
             ref={inputRef}
-            aria-label={`Message ${assistantName}`}
-            placeholder={props.composer.placeholder ?? `Message ${assistantName}…`}
+            aria-label={assistantName ? `Message ${assistantName}` : "Message"}
+            placeholder={
+              props.composer.placeholder ??
+              (assistantName ? `Message ${assistantName}…` : "Message…")
+            }
             rows={1}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -259,13 +262,13 @@ export function AssistantSurface(props: AssistantSurfaceViewProps) {
 }
 
 function TypingRow() {
-  const assistantName = useAssistantName();
+  const assistantName = useAssistantName("");
   return (
     <div className="assistant-surface__row assistant-surface__row--assistant assistant-surface__typing-row">
       <MossIdentity />
       <div
         className="assistant-surface__typing"
-        aria-label={`${assistantName} is typing`}
+        aria-label={assistantName ? `${assistantName} is typing` : "Assistant is typing"}
         aria-live="polite"
       >
         <span className="jds-typing-dot" />
@@ -277,11 +280,11 @@ function TypingRow() {
 }
 
 function MossIdentity() {
-  const assistantName = useAssistantName();
+  const assistantName = useAssistantName("");
   return (
     <span className="assistant-surface__identity">
       <BrandMark size={14} />
-      <span>{assistantName}</span>
+      {assistantName ? <span>{assistantName}</span> : null}
     </span>
   );
 }
