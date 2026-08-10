@@ -5,9 +5,8 @@ import type { MossModuleManifest } from "@moss/module-sdk";
 
 /**
  * #1254 — approval-card summary priority chain: tool.summarize?.() ?? tool.actionLabel ??
- * tool.description ?? tool.name. A module tool can never supply `summarize` (JSON manifest),
- * so `actionLabel` is the human-authored label a module gets to show instead of its raw
- * `description` on the approval card.
+ * tool.name. A module tool can never supply `summarize` (JSON manifest), so `actionLabel` is
+ * the human-authored label a module gets to show instead of its raw tool name.
  */
 describe("gateway summaryFor() actionLabel priority", () => {
   const moduleWith = (
@@ -73,9 +72,9 @@ describe("gateway summaryFor() actionLabel priority", () => {
     expect(summary).toBe("Send the calendar invite");
   });
 
-  it("falls back to description when actionLabel is undeclared", async () => {
+  it("falls back to tool name when actionLabel is undeclared", async () => {
     const summary = await emitSummary(baseTool({}));
-    expect(summary).toBe("acme.write (1 field(s))");
+    expect(summary).toBe("acme.write");
   });
 
   it("summarize still wins over actionLabel when both are declared", async () => {

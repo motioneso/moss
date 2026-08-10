@@ -618,11 +618,7 @@ export class AssistantToolGateway {
     if (typeof tool.summarize === "function") {
       return tool.summarize(input, ctx);
     }
-    // A person reads this card, so the fallback prefers the module's human-authored actionLabel
-    // over its raw description (e.g. "job-search.criteria.set (2 field(s))"). A module tool can
-    // never supply `summarize` — its manifest is JSON and `summarize` is a function. The durable
-    // audit row still records the key names via `inputSummary`; this string is display only.
-    return tool.actionLabel ?? tool.description ?? tool.name;
+    return tool.actionLabel ?? tool.name;
   }
 
   private async firstRunNotice(

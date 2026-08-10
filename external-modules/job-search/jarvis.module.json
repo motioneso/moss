@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "job-search",
   "name": "Job Search",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "publisher": "Jarvis Project",
   "lifecycle": "optional",
   "compatibility": { "jarv1s": ">=0.1.0" },
