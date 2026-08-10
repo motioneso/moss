@@ -333,6 +333,10 @@ export function Composer(props: {
   };
 
   useEffect(() => {
+    // StrictMode double-invokes effects (setup → cleanup → setup) to verify cleanup safety —
+    // without this reset, the first cleanup permanently latches mountedRef.current to false and
+    // every mic start after the simulated remount is wrongly treated as post-unmount.
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       // Stopping the last track auto-stops an active MediaRecorder, which would otherwise still

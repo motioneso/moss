@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-import { createElement, type ReactElement } from "react";
+import { createElement, StrictMode, type ReactElement } from "react";
 import { renderToString } from "react-dom/server";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -270,6 +270,47 @@ describe("Composer mic lifecycle (#900 insecure origin, #1134 track cleanup)", (
     expect(track.stop).toHaveBeenCalled();
   });
 
+  // Fable REVISE finding (fresh #900/#1134 adjudication): StrictMode double-invokes the mount
+  // effect (setup → cleanup → setup) to verify cleanup safety. Without resetting
+  // mountedRef.current back to true on the second setup, the simulated remount permanently
+  // latches it to false and every mic start after that is wrongly treated as post-unmount —
+  // the just-acquired stream gets stopped immediately and recording never starts. This test
+  // would have failed against the pre-fix composer.tsx.
+  it("still starts recording after a StrictMode-simulated remount (mountedRef reset regression)", async () => {
+    const tracks = [{ stop: vi.fn() }];
+    const stream = { getTracks: () => tracks };
+    const getUserMedia = vi.fn(async () => stream);
+    vi.stubGlobal("navigator", { mediaDevices: { getUserMedia } });
+    vi.stubGlobal("MediaRecorder", FakeMediaRecorder);
+
+    const renderer = await renderInteractiveComposer(
+      (client) => {
+        client.setQueryData(queryKeys.ai.capability("transcription"), availableRoute());
+      },
+      { strictMode: true }
+    );
+
+    const micButton = findMicButton(renderer);
+    await act(async () => {
+      micButton.props.onClick();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(micButton.props["aria-label"]).toBe("Stop recording");
+    for (const track of tracks) {
+      expect(track.stop).not.toHaveBeenCalled();
+    }
+
+    act(() => {
+      renderer.unmount();
+    });
+
+    for (const track of tracks) {
+      expect(track.stop).toHaveBeenCalledOnce();
+    }
+  });
+
   it("does not throw on unmount when no recording was ever started", async () => {
     vi.stubGlobal("navigator", { mediaDevices: { getUserMedia: vi.fn() } });
 
@@ -306,28 +347,27 @@ function findMicButton(renderer: ReactTestRenderer) {
 
 async function renderInteractiveComposer(
   seed: (client: QueryClient) => void,
-  overrides: Partial<{ readOnly: boolean }> = {}
+  overrides: Partial<{ readOnly: boolean; strictMode: boolean }> = {}
 ): Promise<ReactTestRenderer> {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   seed(client);
+  const tree = createElement(
+    QueryClientProvider,
+    { client },
+    createElement(Composer, {
+      readOnly: overrides.readOnly ?? false,
+      isFounder: false,
+      isSending: false,
+      sendError: null,
+      needsProvider: false,
+      lockedModelUnavailable: false,
+      onSend: () => {},
+      onStop: () => {}
+    }) as ReactElement
+  );
   let renderer!: ReactTestRenderer;
   await act(async () => {
-    renderer = create(
-      createElement(
-        QueryClientProvider,
-        { client },
-        createElement(Composer, {
-          readOnly: overrides.readOnly ?? false,
-          isFounder: false,
-          isSending: false,
-          sendError: null,
-          needsProvider: false,
-          lockedModelUnavailable: false,
-          onSend: () => {},
-          onStop: () => {}
-        }) as ReactElement
-      )
-    );
+    renderer = create(overrides.strictMode ? createElement(StrictMode, null, tree) : tree);
   });
   return renderer;
 }
