@@ -158,7 +158,9 @@ export function App() {
     queryFn: getOnboardingStatus,
     retry: false // getOnboardingStatus is itself bounded by a 4s timeout (client.ts)
   });
-  const personaQuery = useQuery({
+  // Kept as a background prefetch only — useAssistantName (and other consumers) read this
+  // same cache entry and fall back gracefully while it's pending, so boot must not gate on it.
+  useQuery({
     queryKey: queryKeys.settings.persona,
     queryFn: getPersonaSettings,
     enabled: meQuery.isSuccess,
@@ -207,10 +209,6 @@ export function App() {
         onRetry={() => void queryClient.invalidateQueries({ queryKey: ["auth"] })}
       />
     );
-  }
-
-  if (personaQuery.isLoading) {
-    return <LoadingScreen />;
   }
 
   if (activeForOnboarding) {
