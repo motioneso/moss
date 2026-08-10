@@ -27,10 +27,21 @@ describe("ProfilePane merged Account & preferences", () => {
     expect(html).toContain("Account &amp; preferences");
     expect(html).toContain("Quiet hours");
     expect(html).toContain("Location");
+    expect(html).toContain("Weather location");
     expect(html).toContain(">Member<");
     expect(html).not.toContain(">Active<");
     expect(html).not.toContain(">Role<");
     expect(html).not.toContain("Auth provider configuration");
+  });
+
+  it("reflects a primed weather location override in the rendered inputs", async () => {
+    const html = await renderProfilePane({
+      location: { label: "Home", lat: 51.5072, lon: -0.1276 }
+    });
+    expect(html).toContain('value="Home"');
+    expect(html).toContain('value="51.5072"');
+    expect(html).toContain('value="-0.1276"');
+    expect(html).toContain("Currently using Home.");
   });
 
   it("renders every supported time zone and disables unsupported language controls", async () => {
@@ -52,7 +63,11 @@ describe("ProfilePane merged Account & preferences", () => {
   });
 });
 
-async function renderProfilePane(): Promise<string> {
+async function renderProfilePane(
+  weatherLocation: { location: { label: string; lat: number; lon: number } | null } = {
+    location: null
+  }
+): Promise<string> {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const { queryKeys } = await import("../../apps/web/src/api/query-keys.js");
   client.setQueryData(queryKeys.settings.locale, {
@@ -61,6 +76,7 @@ async function renderProfilePane(): Promise<string> {
   client.setQueryData(queryKeys.settings.quietHours, {
     quietHours: { enabled: false, start: "22:00", end: "07:00", timezone: null }
   });
+  client.setQueryData(queryKeys.weather.location, weatherLocation);
   const { FeedbackProvider } = await import("../../apps/web/src/settings/settings-feedback.js");
   const { ProfilePane } = await import("../../apps/web/src/settings/settings-personal-panes.js");
   return renderToString(

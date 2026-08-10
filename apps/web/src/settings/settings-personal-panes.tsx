@@ -1,5 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { LocaleSettingsDto, MeResponse, QuietHoursSettingsDto } from "@moss/shared";
+import type {
+  LocaleSettingsDto,
+  MeResponse,
+  PutWeatherLocationRequest,
+  QuietHoursSettingsDto,
+  WeatherLocationDto
+} from "@moss/shared";
+import { Button } from "@moss/ui";
 import { Check, LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -10,6 +17,7 @@ import {
   putQuietHoursSettings,
   updateMyProfile
 } from "../api/client";
+import { getWeatherLocationSettings, putWeatherLocationSettings } from "../api/weather-client";
 import { queryKeys } from "../api/query-keys";
 import { useAssistantName } from "../api/use-assistant-name";
 import { DeleteAccount } from "./delete-account";
@@ -35,6 +43,29 @@ const DEFAULT_QUIET_HOURS: QuietHoursSettingsDto = {
 
 export function isValidQuietHoursTime(value: string): boolean {
   return /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+}
+
+interface WeatherLocationFields {
+  readonly label: string;
+  readonly lat: string;
+  readonly lon: string;
+}
+
+const EMPTY_WEATHER_LOCATION_FIELDS: WeatherLocationFields = { label: "", lat: "", lon: "" };
+
+function toWeatherLocationFields(location: WeatherLocationDto | null): WeatherLocationFields {
+  return location
+    ? { label: location.label, lat: String(location.lat), lon: String(location.lon) }
+    : EMPTY_WEATHER_LOCATION_FIELDS;
+}
+
+function parseWeatherLocationFields(fields: WeatherLocationFields): WeatherLocationDto | null {
+  const label = fields.label.trim();
+  const lat = Number(fields.lat);
+  const lon = Number(fields.lon);
+  if (!label || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+  return { label, lat, lon };
 }
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
@@ -151,6 +182,37 @@ export function ProfilePane({ me }: PaneProps) {
     quietHoursMutation.mutate({ ...quietHours, ...patch });
   };
 
+  const weatherLocationQuery = useQuery({
+    queryKey: queryKeys.weather.location,
+    queryFn: getWeatherLocationSettings,
+    retry: false
+  });
+  const weatherLocation = weatherLocationQuery.data?.location ?? null;
+  const weatherLocationMutation = useMutation({
+    mutationFn: (next: PutWeatherLocationRequest) => putWeatherLocationSettings(next),
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.weather.location, data);
+    },
+    onError: (error) => toast(readError(error), { tone: "drift" })
+  });
+  const [weatherLocationFields, setWeatherLocationFields] = useState<WeatherLocationFields>(() =>
+    toWeatherLocationFields(weatherLocation)
+  );
+  const weatherLocationLoaded = useRef(weatherLocationQuery.data !== undefined);
+  useEffect(() => {
+    if (weatherLocationLoaded.current || weatherLocationQuery.data === undefined) return;
+    weatherLocationLoaded.current = true;
+    setWeatherLocationFields(toWeatherLocationFields(weatherLocation));
+  }, [weatherLocationQuery.data, weatherLocation]);
+  const weatherLocationParsed = parseWeatherLocationFields(weatherLocationFields);
+  const saveWeatherLocation = () => {
+    if (weatherLocationParsed) weatherLocationMutation.mutate(weatherLocationParsed);
+  };
+  const clearWeatherLocation = () => {
+    setWeatherLocationFields(EMPTY_WEATHER_LOCATION_FIELDS);
+    weatherLocationMutation.mutate(null);
+  };
+
   return (
     <>
       <PaneHead
@@ -255,6 +317,77 @@ export function ProfilePane({ me }: PaneProps) {
             </Select>
           </div>
         </div>
+      </Group>
+
+      <Group
+        title="Weather location"
+        desc="Override the timezone-based weather location with exact coordinates."
+      >
+        <Field label="Label" hint='A short name for this location, e.g. "Home".'>
+          <input
+            className="jds-input"
+            value={weatherLocationFields.label}
+            aria-label="Weather location label"
+            disabled={weatherLocationQuery.isLoading || weatherLocationMutation.isPending}
+            onChange={(event) =>
+              setWeatherLocationFields((fields) => ({ ...fields, label: event.currentTarget.value }))
+            }
+          />
+        </Field>
+        <div className="fld">
+          <div className="fld__lbl">Coordinates</div>
+          <div className="fld__row">
+            <input
+              className="jds-input"
+              type="number"
+              value={weatherLocationFields.lat}
+              aria-label="Weather location latitude"
+              disabled={weatherLocationQuery.isLoading || weatherLocationMutation.isPending}
+              onChange={(event) =>
+                setWeatherLocationFields((fields) => ({ ...fields, lat: event.currentTarget.value }))
+              }
+              style={{ flex: "0 0 130px", minWidth: 0 }}
+            />
+            <input
+              className="jds-input"
+              type="number"
+              value={weatherLocationFields.lon}
+              aria-label="Weather location longitude"
+              disabled={weatherLocationQuery.isLoading || weatherLocationMutation.isPending}
+              onChange={(event) =>
+                setWeatherLocationFields((fields) => ({ ...fields, lon: event.currentTarget.value }))
+              }
+              style={{ flex: "0 0 130px", minWidth: 0 }}
+            />
+          </div>
+        </div>
+        <Row
+          name="Manual override"
+          desc={
+            weatherLocation
+              ? `Currently using ${weatherLocation.label}.`
+              : "Using automatic timezone-based location."
+          }
+          control={
+            <div style={{ display: "flex", gap: 8 }}>
+              <Button
+                size="sm"
+                disabled={!weatherLocationParsed || weatherLocationMutation.isPending}
+                onClick={saveWeatherLocation}
+              >
+                Save
+              </Button>
+              <Button
+                variant="quiet"
+                size="sm"
+                disabled={!weatherLocation || weatherLocationMutation.isPending}
+                onClick={clearWeatherLocation}
+              >
+                Clear override
+              </Button>
+            </div>
+          }
+        />
       </Group>
 
       <Group
