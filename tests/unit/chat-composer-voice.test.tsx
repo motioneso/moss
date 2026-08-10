@@ -13,11 +13,12 @@ import {
   classifyMicError,
   mergeTranscriptIntoText
 } from "../../apps/web/src/chat/composer.js";
+import type * as ApiClientModule from "../../apps/web/src/api/client.js";
 
 // Only override transcribeAudio — every other export keeps its real implementation so the
 // existing tests in this file (which don't mock this module) are unaffected.
 vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../apps/web/src/api/client.js")>();
+  const actual = await importOriginal<typeof ApiClientModule>();
   return { ...actual, transcribeAudio: vi.fn() };
 });
 
