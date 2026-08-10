@@ -12,7 +12,7 @@
 //
 // Ruling N45 (rulings-ledger.md): "a UAT phase may seed its preconditions, but never the
 // behaviour it asserts." That splits this spec by SUBJECT, not by convenience:
-//   - Phases 1-2 (install/enable, unsent-draft handoff) need no model and always run.
+//   - Phases 1-2 (install/enable, automatic profile bootstrap) need no model and always run.
 //   - Phases 3-4 are ABOUT the real onboarding conversation itself — the chat turn IS the
 //     subject under test, so a fake/canned provider cannot stand in for it (it can't reliably
 //     decide which of six `job-search.*` tools to call over a multi-turn interview). These two
@@ -28,7 +28,7 @@
 //     skipping a slow dependency, not fabricating the thing under test), and Phases 5-12 run
 //     unconditionally against it, on every run.
 import { execFileSync } from "node:child_process";
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page, type Response } from "@playwright/test";
 import { buildUatComposeArgs, restartUatStack } from "../provisioner.js";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 import { deterministicFixtureScore } from "../fixtures/job-search-fixture-server.js";
@@ -167,6 +167,22 @@ async function openJobSearch(page: Page): Promise<void> {
   await page.locator('nav[aria-label="Modules"]').getByRole("link", { name: "Job Search" }).click();
 }
 
+async function observedProfiles(response: Response): Promise<Array<{ state?: string }> | null> {
+  if (
+    !response.url().endsWith("/api/ai/assistant-tools/job-search.profile.list/invoke") ||
+    response.request().method() !== "POST" ||
+    !response.ok()
+  ) {
+    return null;
+  }
+  const body = (await response.json()) as {
+    invocation?: { status?: string; result?: { profiles?: Array<{ state?: string }> } };
+  };
+  return body.invocation?.status === "succeeded" && Array.isArray(body.invocation.result?.profiles)
+    ? body.invocation.result.profiles
+    : null;
+}
+
 // use-profiles.ts's POLL_* constants cover only the empty->profile-exists transition (the hook
 // polls internally while pollArmed && status==="empty"). Once a profile exists, completedSteps and
 // match data are fetched once on mount with no live refresh — reload is how this spec observes
@@ -282,6 +298,8 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
   page
 }) => {
   test.setTimeout(900_000);
+  let chatTurnsPosted = 0;
+  let bootstrapTransition: Promise<void> | null = null;
 
   // --- Phase 1: install + enable + navigate (unconditional — no model required) ---
   await test.step("Phase 1: build, install, enable, and open the Job Search module", async () => {
@@ -311,41 +329,60 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
 
     await restartUatStack(projectName, baseURL);
     await page.reload();
+
+    await page.route("**/api/chat/turn", async (route) => {
+      chatTurnsPosted += 1;
+      await route.continue();
+    });
+
+    const emptyProfileList = page.waitForResponse(
+      async (response) => {
+        const profiles = await observedProfiles(response);
+        return profiles?.length === 0;
+      },
+      { timeout: POLL_DEADLINE_MS }
+    );
+    const bootstrapAccepted = page.waitForResponse(
+      (response) =>
+        response
+          .url()
+          .endsWith("/api/modules/job-search/queues/job-search.profile-bootstrap/run") &&
+        response.request().method() === "POST" &&
+        response.status() === 202,
+      { timeout: POLL_DEADLINE_MS }
+    );
+    const healthyProfileList = page.waitForResponse(
+      async (response) => {
+        const profiles = await observedProfiles(response);
+        return profiles?.some((profile) => profile.state === "in_conversation") === true;
+      },
+      { timeout: POLL_DEADLINE_MS }
+    );
+    bootstrapTransition = Promise.all([
+      emptyProfileList,
+      bootstrapAccepted,
+      healthyProfileList
+    ]).then(([emptyResponse, acceptedResponse, healthyResponse]) => {
+      expect(emptyResponse.request().timing().startTime).toBeLessThan(
+        acceptedResponse.request().timing().startTime
+      );
+      expect(acceptedResponse.request().timing().startTime).toBeLessThan(
+        healthyResponse.request().timing().startTime
+      );
+    });
+
     await openJobSearch(page);
     await shot(page, "01-module-opened");
   });
 
-  // --- Phase 2: bootstrap draft handoff (unconditional — no model required) ---
-  // #916's precedent (tests/e2e/external-modules.spec.ts): openAssistant drops an editable, UNSENT
-  // draft into the host composer. Root.tsx's header is explicit that this is the consent boundary
-  // (ledger H5) — the module never sends on the user's behalf. Spying on /api/chat/turn before the
-  // click, and asserting it was never called, is what actually proves that boundary rather than
-  // merely trusting the button's label.
-  let turnPosted = false;
-  await test.step("Phase 2: 'Start your job search' drops an unsent draft, never auto-sends", async () => {
-    await page.route("**/api/chat/turn", async (route) => {
-      turnPosted = true;
-      await route.continue();
-    });
-
-    await page.getByRole("button", { name: "Start your job search" }).click();
-
-    const dialog = page.locator('[role="dialog"], [role="complementary"]').filter({
-      hasText: "Let's set up my job search profile"
-    });
-    // The assistant surface may render as a drawer/dialog depending on host chrome; assert on the
-    // composer content instead of a specific container role, since root.tsx's own contract is only
-    // "an editable, unsent draft lands in the host composer" — not which chrome hosts it.
-    const composer = page.getByRole("textbox").filter({ hasText: "" }).first();
-    await expect(
-      page.getByText("Let's set up my job search profile", { exact: false })
-    ).toBeVisible();
-    expect(turnPosted, "openAssistant must never auto-send the starter prompt (ledger H5)").toBe(
-      false
-    );
-    await shot(page, "02-start-your-job-search-draft");
-    void dialog;
-    void composer;
+  // --- Phase 2: automatic profile bootstrap (unconditional — no model required) ---
+  // The whole empty -> accepted bootstrap -> in-conversation window is the consent boundary:
+  // creating the onboarding profile must never send a chat turn on the user's behalf.
+  await test.step("Phase 2: profile bootstrap reaches in_conversation with zero chat turns", async () => {
+    if (!bootstrapTransition) throw new Error("Phase 1 did not arm bootstrap observation");
+    await bootstrapTransition;
+    expect(chatTurnsPosted, "automatic bootstrap must not send a chat turn").toBe(0);
+    await shot(page, "02-profile-bootstrap-in-conversation");
   });
 
   // --- Phases 3-4: real onboarding conversation (N45 — gated because the chat turn itself is
