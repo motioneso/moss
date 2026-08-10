@@ -178,6 +178,40 @@ describe("Composer mic lifecycle (#900 insecure origin, #1134 track cleanup)", (
     }
   });
 
+  it("stops a stream that resolves after unmount without starting a recorder (#1485 QA regression)", async () => {
+    let resolveStream!: (stream: { getTracks: () => { stop: ReturnType<typeof vi.fn> }[] }) => void;
+    const getUserMedia = vi.fn(
+      () =>
+        new Promise<{ getTracks: () => { stop: ReturnType<typeof vi.fn> }[] }>((resolve) => {
+          resolveStream = resolve;
+        })
+    );
+    const track = { stop: vi.fn() };
+    const stream = { getTracks: () => [track] };
+    vi.stubGlobal("navigator", { mediaDevices: { getUserMedia } });
+    const recorder = vi.fn();
+    vi.stubGlobal("MediaRecorder", recorder);
+
+    const renderer = await renderInteractiveComposer((client) => {
+      client.setQueryData(queryKeys.ai.capability("transcription"), availableRoute());
+    });
+
+    await act(async () => {
+      findMicButton(renderer).props.onClick();
+    });
+    act(() => {
+      renderer.unmount();
+    });
+    await act(async () => {
+      resolveStream(stream);
+      await Promise.resolve();
+    });
+
+    expect(track.stop).toHaveBeenCalledOnce();
+    expect(recorder).not.toHaveBeenCalled();
+    expect(transcribeAudio).not.toHaveBeenCalled();
+  });
+
   // PR #1485 QA finding: real Chromium auto-stops an active MediaRecorder when its last live
   // track ends, firing ondataavailable+onstop *after* unmount. FakeMediaRecorder above stubs a
   // plain `{ stop: vi.fn() }` track that does NOT reproduce that — this fake track's stop()

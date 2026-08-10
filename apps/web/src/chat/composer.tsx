@@ -102,6 +102,7 @@ export function Composer(props: {
   const [micError, setMicError] = useState<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const mountedRef = useRef(true);
   const chunksRef = useRef<Blob[]>([]);
 
   // #1133 — files staged for the next turn. Uploads start immediately on pick/paste so the
@@ -299,6 +300,10 @@ export function Composer(props: {
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!mountedRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       const recorder = new MediaRecorder(stream);
       streamRef.current = stream;
       chunksRef.current = [];
@@ -317,7 +322,7 @@ export function Composer(props: {
       setRecording(true);
     } catch (error) {
       // Denied permission or no device — surfaced inline, never sent to the server.
-      setMicError(classifyMicError(error, true));
+      if (mountedRef.current) setMicError(classifyMicError(error, true));
     }
   };
 
@@ -329,6 +334,7 @@ export function Composer(props: {
 
   useEffect(() => {
     return () => {
+      mountedRef.current = false;
       // Stopping the last track auto-stops an active MediaRecorder, which would otherwise still
       // fire onstop/ondataavailable after unmount and upload a partial recording (#900/#1134 QA
       // finding) — detach the recorder's callbacks first so that can't happen.
