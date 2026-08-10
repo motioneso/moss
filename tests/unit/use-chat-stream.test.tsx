@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ChatMessageDto, ChatSurface, ChatThreadDto } from "@moss/shared";
+import type { AiAssistantActionDto, ChatMessageDto, ChatSurface, ChatThreadDto } from "@moss/shared";
 
 import {
   listChatThreadMessages,
@@ -52,6 +52,23 @@ function message(threadId: string, body: string): ChatMessageDto {
     tools: [],
     activity: [],
     createdAt: new Date(0).toISOString(),
+    updatedAt: new Date(0).toISOString()
+  };
+}
+
+function pendingAction(id: string, summaryText: string): AiAssistantActionDto {
+  return {
+    id,
+    ownerUserId: "user-1",
+    toolModuleId: "notes",
+    toolModuleName: "Notes",
+    toolName: "notes.write_note",
+    permissionId: "perm-1",
+    risk: "write",
+    status: "pending",
+    inputSummary: { text: summaryText },
+    requestedAt: new Date(0).toISOString(),
+    resolvedAt: null,
     updatedAt: new Date(0).toISOString()
   };
 }
@@ -191,5 +208,37 @@ describe("useChatStream", () => {
     const switched = JSON.stringify(renderer!.toJSON());
     expect(switched).toContain("Second transcript");
     expect(switched).not.toContain("First transcript");
+  });
+
+  it("#1449 — re-hydrates a pending action-request card from listPendingActionRequests on mount", async () => {
+    // The real regression seam: unlike app-shell-chat-surface.test.tsx (which mocks useChatStream
+    // itself and only asserts the surface argument is defined), this exercises the actual hook
+    // against a mocked client boundary. Deleting the listPendingActionRequests() call in
+    // use-chat-stream.ts's rehydration effect would leave this mock uncalled and the card unrendered
+    // — both assertions below would fail.
+    vi.stubGlobal(
+      "EventSource",
+      class {
+        onmessage = null;
+        onerror = null;
+        close() {}
+      }
+    );
+    const surface = "drawer" as ChatSurface;
+    vi.mocked(listChatThreads).mockResolvedValue({ threads: [thread("thread-1")] });
+    vi.mocked(listChatThreadMessages).mockResolvedValue({ messages: [] });
+    vi.mocked(listPendingActionRequests).mockResolvedValue({
+      actions: [pendingAction("action-1", "Approve this note?")]
+    });
+
+    let renderer: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(createElement(StreamProbe, { surface }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(listPendingActionRequests).toHaveBeenCalled();
+    expect(JSON.stringify(renderer!.toJSON())).toContain("Approve this note?");
   });
 });
