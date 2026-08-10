@@ -369,7 +369,7 @@ describe("ChatSessionManager", () => {
 
     await manager.submitTurn("user-1", "Ben", "hello");
 
-    expect(writes["/tmp/jarvis-test/user-1/CLAUDE.md"]).toBe(
+    expect(writes["/tmp/jarvis-test/user-1:drawer/CLAUDE.md"]).toBe(
       "Base instructions.\n\nYour name is Friday.\n\nKeep Ben focused."
     );
   });

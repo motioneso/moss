@@ -1,10 +1,11 @@
 /**
- * Per-user neutral-directory + persona context-file renderer.
+ * Per-(actor, surface) neutral-directory + persona context-file renderer.
  *
  * The chat CLI runs in a neutral working directory OUTSIDE the repo (so it can't
- * see the codebase). This module resolves that per-user directory and writes the
- * Jarvis persona into the provider-specific context filename so the CLI
- * auto-loads it on launch — and reloads it after `/clear`.
+ * see the codebase). This module resolves that directory — scoped by session key,
+ * not just actor (#1259: a second surface's launch must not clobber the first's
+ * persona file) — and writes the persona into the provider-specific context
+ * filename so the CLI auto-loads it on launch — and reloads it after `/clear`.
  *
  * Filesystem I/O is injected via the small `PersonaFs` seam so this is
  * unit-testable without touching the real disk.
@@ -16,6 +17,7 @@ import type { ProviderKind } from "@moss/ai";
 import { sanitizePersonaName } from "@moss/shared";
 
 import { resolveChatHome } from "./chat-home.js";
+import { sanitizeSessionKey } from "./cli-session-lifecycle.js";
 
 /** Minimal filesystem seam — injected so tests can avoid real disk writes. */
 export interface PersonaFs {
@@ -26,7 +28,8 @@ export interface PersonaFs {
 }
 
 export interface RenderPersonaInput {
-  readonly userId: string;
+  /** Surface-scoped session key (#1259) — the neutral dir is per (actorUserId, surface). */
+  readonly sessionKey: string;
   readonly userName: string;
   readonly provider: ProviderKind;
   /** Override the base dir; else JARVIS_CHAT_HOME or <homedir>/.jarvis/chat. */
@@ -66,7 +69,7 @@ export async function renderPersona(
   fs: PersonaFs,
   input: RenderPersonaInput
 ): Promise<{ neutralDir: string; personaPath: string }> {
-  const neutralDir = join(resolveChatHome(input.baseDir), input.userId);
+  const neutralDir = join(resolveChatHome(input.baseDir), sanitizeSessionKey(input.sessionKey));
   const personaPath = join(neutralDir, CONTEXT_FILENAME[input.provider]);
   const content = input.persona.replaceAll("{{userName}}", sanitizeUserName(input.userName));
 

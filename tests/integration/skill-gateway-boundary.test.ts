@@ -215,7 +215,7 @@ describe("skill-sourced turns at the gateway boundary (#760 Task 6)", () => {
     const { fs, writes, calls } = fakePersonaFs();
     const persona = "You are Jarvis, {{userName}}'s assistant.";
     const rendered = await renderPersona(fs, {
-      userId: ids.userA,
+      sessionKey: ids.userA,
       userName: "Ben",
       provider: "anthropic",
       baseDir: "/skill-persona-test",
@@ -249,7 +249,7 @@ describe("skill-sourced turns at the gateway boundary (#760 Task 6)", () => {
     // Re-rendering the same persona input is idempotent and byte-identical (prompt-cache
     // discipline: skill invocation must never cause persona-file rewrite/drift).
     const renderedAgain = await renderPersona(fs, {
-      userId: ids.userA,
+      sessionKey: ids.userA,
       userName: "Ben",
       provider: "anthropic",
       baseDir: "/skill-persona-test",
