@@ -889,6 +889,9 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
         `(gen_random_uuid(), '${threadId}', '${UAT_ADMIN_ID}', 'user', 'stored', '${MARKER_TEXT}');`
     );
 
+    // KNOWN STALE selector (#1532, Moss-rename residue): live label is `Chat with ${assistantName}`,
+    // not "Jarvis" — this phase tests #1284/#1332 thread-leakage scoping, a different feature from
+    // #1259's persona/app-map composition, so left untouched by #1259's corrected PR.
     await page.reload();
     // Name-agnostic: the accessible name is `Chat with ${assistantName}` (persona-driven, not a
     // fixed literal); .topbar-actions holds exactly one button, the chat toggle.
