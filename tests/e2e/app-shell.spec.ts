@@ -334,7 +334,7 @@ test.describe("Chat drawer — Approve/Reject card", () => {
       summary: "Write the value 'test'"
     });
     let streamServed = false;
-    await page.route("**/api/chat/stream", async (route) => {
+    await page.route("**/api/chat/stream*", async (route) => {
       if (streamServed) {
         return;
       }
@@ -395,7 +395,7 @@ test.describe("Chat drawer — Approve/Reject card", () => {
       summary: "Write 'y'"
     });
     let streamServed = false;
-    await page.route("**/api/chat/stream", async (route) => {
+    await page.route("**/api/chat/stream*", async (route) => {
       if (streamServed) {
         return;
       }
@@ -458,7 +458,7 @@ test.describe("Chat drawer — Approve/Reject card", () => {
       outcome: "executed"
     });
     let streamServed = false;
-    await page.route("**/api/chat/stream", async (route) => {
+    await page.route("**/api/chat/stream*", async (route) => {
       if (streamServed) {
         return;
       }
@@ -534,7 +534,7 @@ test.describe("Chat drawer — Approve/Reject card", () => {
       affectsQueryKeys: ["settings.themes"]
     });
     let streamServed = false;
-    await page.route("**/api/chat/stream", async (route) => {
+    await page.route("**/api/chat/stream*", async (route) => {
       if (streamServed) {
         return;
       }

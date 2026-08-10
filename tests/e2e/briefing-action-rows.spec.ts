@@ -161,7 +161,7 @@ test("morning and evening prose and action rows render accept dismiss view reply
   });
 
   let streamServed = false;
-  await page.route("**/api/chat/stream", async (route) => {
+  await page.route("**/api/chat/stream*", async (route) => {
     if (streamServed) return;
     await replyTurnReceived;
     streamServed = true;

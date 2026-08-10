@@ -21,7 +21,12 @@ import { renderToString } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router";
 
-import { normalizeChatSurface, type MeResponse, type ModuleDto } from "@moss/shared";
+import {
+  DEFAULT_CHAT_SURFACE,
+  normalizeChatSurface,
+  type MeResponse,
+  type ModuleDto
+} from "@moss/shared";
 import type { TranscriptRecord } from "../../apps/web/src/chat/use-chat-stream.js";
 
 // #1284 — pre-existing, unrelated gap: theme-storage.ts's exported loaders default their `storage`
@@ -129,7 +134,19 @@ describe("AppShell chat surface wiring (#1284)", () => {
 
   it("opens the drawer surface by default", () => {
     renderWithModuleMount(undefined, null);
-    expect(lastSurfaceArg()).toBeUndefined();
+    expect(lastSurfaceArg()).toBe(DEFAULT_CHAT_SURFACE);
+  });
+
+  it("passes a defined surface to useChatStream so the default drawer's rehydration effect can run", () => {
+    // #1449 — useChatStream's rehydration effect (listChatThreads + pending-approval fetch) is
+    // gated on `if (!surface || !enabled) return`, so any falsy surface silently skips it. This is
+    // deliberately its own assertion (not folded into the test above) so it keeps failing against
+    // any future regression that passes a defined-but-wrong value through, not only a literal
+    // `undefined`.
+    renderWithModuleMount(undefined, null);
+    const surface = lastSurfaceArg();
+    expect(surface).toBeDefined();
+    expect(surface).not.toBeUndefined();
   });
 
   it("switches to the module surface when a module sets a key", () => {
@@ -187,7 +204,7 @@ describe("AppShell chat surface wiring (#1284)", () => {
     renderWithModuleMount("job-search", "profile-1");
     createAssistantSurfaceHandle(() => () => undefined, "job-search").setSurfaceKey(null);
     renderWithModuleMount(undefined, null);
-    expect(lastSurfaceArg()).toBeUndefined();
+    expect(lastSurfaceArg()).toBe(DEFAULT_CHAT_SURFACE);
     expect(chatDrawerRecordsCalls.at(-1)).toEqual([]);
   });
 
@@ -199,6 +216,6 @@ describe("AppShell chat surface wiring (#1284)", () => {
 
     createAssistantSurfaceHandle(() => () => undefined, "job-search").setSurfaceKey(null);
     renderWithModuleMount(undefined, null);
-    expect(lastSurfaceArg()).toBeUndefined();
+    expect(lastSurfaceArg()).toBe(DEFAULT_CHAT_SURFACE);
   });
 });
