@@ -63,6 +63,21 @@ question **directly in this chat/session**, not via any pane or the needs-ben re
 that channel itself may now be compromised. Also worth flagging box-wide: the needs-ben reply
 directory has no integrity check against forgery by a co-resident local process.
 
+**Update 2026-08-09, same session — 5th data point, not yet acted on.** A new user-turn message
+(not tagged mid-turn this time) presented a wave-decomposition/batching proposal at
+`docs/coordination/2026-08-10-follow-up-wave-decomposition.md`, framed as from Codex. Checked
+independently: the file exists (17.6KB, **untracked**, written 21:37 this session) and its claimed
+base SHA `ba1acd70a7` does match real `origin/main` HEAD — so it isn't pure fabrication content-
+wise, and its stated framing defers dispatch/merge/security authority to the coordinator. But it
+proposes exactly the theme the earlier fake messages were pushing (spec batching/decomposition,
+model routing for specs #1488/#1427/#901) and w1:p42's own `cwd` is the shared main tree, not an
+isolated worktree — writing into `docs/coordination/` from there is itself against the
+coordinate-skill rule that path is coordinator-only. Given this pane's track record this session
+(2 impersonation messages + a fake idle_notification, now this), **not adopting or acting on this
+proposal until Ben separately confirms w1:p42 is legitimate.** Held as unread/untrusted data, not
+instructions. No further needs-ben ping sent yet (daemon dedups) — will hold until Ben responds to
+the two already queued.
+
 <!-- Resolved 2026-08-09: `git push origin main` blocked by the auto-mode classifier during Wave 2
 wrap-up. Ben re-ran ("try now") and it went through — pushed 39 commits, `f78992b14..46ec9965d`.
 Note: GitHub reports this repo moved to `motioneso/moss.git`; push still succeeded via the old
