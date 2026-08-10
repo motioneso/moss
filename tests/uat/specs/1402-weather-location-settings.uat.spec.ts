@@ -70,6 +70,16 @@ test.describe.serial("weather location manual override (#1402)", () => {
     originalLon = await page.getByLabel("Weather location longitude").inputValue();
     hadOriginalOverride = originalLabel !== "";
 
+    if (hadOriginalOverride) {
+      await page.getByRole("button", { name: "Clear override" }).click();
+      await expect(page.getByText("Using automatic timezone-based location.")).toBeVisible();
+    }
+
+    // Prime the client and server caches with the fallback. Saving below must invalidate both.
+    await page.goto(`${requireBaseURL()}/today`);
+    await expect(page.locator(".jds-weather-chip__city")).toBeVisible({ timeout: 15_000 });
+    await gotoProfileSettings(page);
+
     await page.getByLabel("Weather location label").fill(OVERRIDE_LABEL);
     await page.getByLabel("Weather location latitude").fill(OVERRIDE_LAT);
     await page.getByLabel("Weather location longitude").fill(OVERRIDE_LON);
@@ -77,22 +87,19 @@ test.describe.serial("weather location manual override (#1402)", () => {
 
     await expect(page.getByText(`Currently using ${OVERRIDE_LABEL}.`)).toBeVisible();
 
-    // Reload: confirm the fields still reflect the saved override (persistence, not just local
-    // React state).
+    // The cached fallback must not survive a save; this navigates immediately, before any reload.
+    await page.goto(`${requireBaseURL()}/today`);
+    await expect(page.locator(".jds-weather-chip__city")).toHaveText(OVERRIDE_LABEL, {
+      timeout: 15_000
+    });
+
+    // Reload: confirm persistence, not just local React state.
+    await gotoProfileSettings(page);
     await page.reload();
     await expect(page.getByLabel("Weather location label")).toHaveValue(OVERRIDE_LABEL);
     await expect(page.getByLabel("Weather location latitude")).toHaveValue(OVERRIDE_LAT);
     await expect(page.getByLabel("Weather location longitude")).toHaveValue(OVERRIDE_LON);
     await expect(page.getByText(`Currently using ${OVERRIDE_LABEL}.`)).toBeVisible();
-
-    // /today's shell header weather chip resolves via the same stored preference
-    // (packages/weather/src/weather-service.ts resolveLocation) — its city text should now read
-    // the override's label, proving the override actually feeds weather resolution and not just
-    // the settings form.
-    await page.goto(`${requireBaseURL()}/today`);
-    await expect(page.locator(".jds-weather-chip__city")).toHaveText(OVERRIDE_LABEL, {
-      timeout: 15_000
-    });
   });
 
   test("clearing the override reverts to fallback with no crash and no stale value", async ({
@@ -102,6 +109,11 @@ test.describe.serial("weather location manual override (#1402)", () => {
     await gotoProfileSettings(page);
 
     await expect(page.getByText(`Currently using ${OVERRIDE_LABEL}.`)).toBeVisible();
+    await page.goto(`${requireBaseURL()}/today`);
+    await expect(page.locator(".jds-weather-chip__city")).toHaveText(OVERRIDE_LABEL, {
+      timeout: 15_000
+    });
+    await gotoProfileSettings(page);
     await page.getByRole("button", { name: "Clear override" }).click();
 
     await expect(page.getByText("Using automatic timezone-based location.")).toBeVisible();
@@ -109,14 +121,12 @@ test.describe.serial("weather location manual override (#1402)", () => {
     await expect(page.getByLabel("Weather location latitude")).toHaveValue("");
     await expect(page.getByLabel("Weather location longitude")).toHaveValue("");
 
-    // /today must still render without crashing and without showing the cleared override's
-    // stale label.
+    // Clearing must immediately replace the cached override with a timezone fallback.
     await page.goto(`${requireBaseURL()}/today`);
-    await expect(page.locator(".jds-usermenu__trigger")).toBeVisible();
     const cityChip = page.locator(".jds-weather-chip__city");
-    if (await cityChip.isVisible()) {
-      await expect(cityChip).not.toHaveText(OVERRIDE_LABEL);
-    }
+    await expect(cityChip).toBeVisible({ timeout: 15_000 });
+    await expect(cityChip).not.toHaveText(OVERRIDE_LABEL);
+    await page.screenshot({ path: test.info().outputPath("weather-timezone-fallback.png") });
   });
 
   test.afterAll(async ({ browser }) => {

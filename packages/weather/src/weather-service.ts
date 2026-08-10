@@ -17,8 +17,13 @@ interface WeatherServiceDependencies {
   readonly fetchFn?: typeof fetch;
 }
 
+interface CachedWeather {
+  readonly location: WeatherLocationDto;
+  readonly data: WeatherTodayDto;
+}
+
 export class WeatherService {
-  private readonly weatherCache = new WeatherCache<WeatherTodayDto>();
+  private readonly weatherCache = new WeatherCache<CachedWeather>();
   private readonly geoCache = new WeatherCache<WeatherLocationDto | null>();
   private readonly preferencesRepo: PreferencesPort;
   private readonly dataContext: DataContextRunner;
@@ -38,11 +43,12 @@ export class WeatherService {
     timeZone: string
   ): Promise<WeatherTodayDto | null> {
     const userId = accessContext.actorUserId;
-    const cached = this.weatherCache.get(userId);
-    if (cached) return cached;
-
     const location = await this.resolveLocation(accessContext, requestIp, timeZone);
     if (!location) return null;
+
+    const cached = this.weatherCache.get(userId);
+    if (cached && sameLocation(cached.location, location)) return cached.data;
+    if (cached) this.weatherCache.delete(userId);
 
     const data = await fetchOpenMeteoForecast(
       location.lat,
@@ -51,7 +57,7 @@ export class WeatherService {
       location.label,
       this.fetchFn
     );
-    this.weatherCache.set(userId, data, WEATHER_CACHE_TTL_MS);
+    this.weatherCache.set(userId, { location, data }, WEATHER_CACHE_TTL_MS);
     return data;
   }
 
@@ -92,4 +98,8 @@ export class WeatherService {
     this.logger.info({ step: "unresolved" }, "weather location resolved");
     return null;
   }
+}
+
+function sameLocation(left: WeatherLocationDto, right: WeatherLocationDto): boolean {
+  return left.lat === right.lat && left.lon === right.lon && left.label === right.label;
 }

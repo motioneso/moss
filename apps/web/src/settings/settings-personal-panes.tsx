@@ -59,10 +59,12 @@ function toWeatherLocationFields(location: WeatherLocationDto | null): WeatherLo
     : EMPTY_WEATHER_LOCATION_FIELDS;
 }
 
-function parseWeatherLocationFields(fields: WeatherLocationFields): WeatherLocationDto | null {
+export function parseWeatherLocationFields(
+  fields: WeatherLocationFields
+): WeatherLocationDto | null {
   const label = fields.label.trim();
-  const lat = Number(fields.lat);
-  const lon = Number(fields.lon);
+  const lat = fields.lat.trim() === "" ? Number.NaN : Number(fields.lat);
+  const lon = fields.lon.trim() === "" ? Number.NaN : Number(fields.lon);
   if (!label || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
   return { label, lat, lon };
@@ -192,6 +194,8 @@ export function ProfilePane({ me }: PaneProps) {
     mutationFn: (next: PutWeatherLocationRequest) => putWeatherLocationSettings(next),
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.weather.location, data);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.weather.location });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.weather.today });
     },
     onError: (error) => toast(readError(error), { tone: "drift" })
   });
@@ -321,7 +325,7 @@ export function ProfilePane({ me }: PaneProps) {
 
       <Group
         title="Weather location"
-        desc="Override the timezone-based weather location with exact coordinates."
+        desc="Automatic timezone-based detection is approximate. Override it with exact coordinates."
       >
         <Field label="Label" hint='A short name for this location, e.g. "Home".'>
           <input

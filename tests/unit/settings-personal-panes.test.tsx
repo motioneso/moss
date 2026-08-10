@@ -22,12 +22,25 @@ const me: MeResponse = {
 };
 
 describe("ProfilePane merged Account & preferences", () => {
+  it("keeps blank coordinates invalid instead of coercing them to zero", async () => {
+    const { parseWeatherLocationFields } =
+      await import("../../apps/web/src/settings/settings-personal-panes.js");
+
+    expect(parseWeatherLocationFields({ label: "Home", lat: "", lon: "" })).toBeNull();
+    expect(parseWeatherLocationFields({ label: "Null Island", lat: "0", lon: "0" })).toEqual({
+      label: "Null Island",
+      lat: 0,
+      lon: 0
+    });
+  });
+
   it("renders locale and quiet hours alongside identity/account", async () => {
     const html = await renderProfilePane();
     expect(html).toContain("Account &amp; preferences");
     expect(html).toContain("Quiet hours");
     expect(html).toContain("Location");
     expect(html).toContain("Weather location");
+    expect(html).toContain("Automatic timezone-based detection is approximate.");
     expect(html).toContain(">Member<");
     expect(html).not.toContain(">Active<");
     expect(html).not.toContain(">Role<");

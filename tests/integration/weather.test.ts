@@ -225,6 +225,52 @@ describe("weather integration", () => {
       await srv.close();
     });
 
+    it("refreshes cached weather after a location is saved, changed, or cleared", async () => {
+      const fakeFetch = vi.fn().mockResolvedValue(makeOpenMeteoResponse(18, 15, 0));
+      const srv = createApiServer({
+        appDb,
+        boss,
+        logger: false,
+        fetchFn: fakeFetch as typeof fetch
+      });
+      await srv.ready();
+      const cookie = await signUp(srv, "CacheUser", "cache.user@example.test");
+
+      for (const location of [
+        { lat: 37.77, lon: -122.42, label: "San Francisco, US" },
+        { lat: 51.5074, lon: -0.1278, label: "London, UK" }
+      ]) {
+        await srv.inject({
+          method: "PUT",
+          url: "/api/me/weather-location",
+          headers: { cookie, "content-type": "application/json" },
+          payload: location
+        });
+        const res = await srv.inject({
+          method: "GET",
+          url: "/api/weather/today",
+          headers: { cookie }
+        });
+        expect(res.json<GetWeatherTodayResponse>().data?.location).toBe(location.label);
+      }
+
+      await srv.inject({
+        method: "PUT",
+        url: "/api/me/weather-location",
+        headers: { cookie, "content-type": "application/json" },
+        payload: "null"
+      });
+      const cleared = await srv.inject({
+        method: "GET",
+        url: "/api/weather/today",
+        headers: { cookie, "x-timezone": "Europe/London" }
+      });
+      expect(cleared.json<GetWeatherTodayResponse>().data?.location).toBe("London, UK");
+      expect(fakeFetch).toHaveBeenCalledTimes(3);
+
+      await srv.close();
+    });
+
     it("returns null when no location set and IP is loopback", async () => {
       const fakeFetch = vi.fn();
       const srv = createApiServer({
