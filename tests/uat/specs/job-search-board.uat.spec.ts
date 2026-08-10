@@ -771,28 +771,23 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
     await shot(page, "13-drawer-outside-module-empty");
   });
 
-  // Phase 12 (nav badge, #1285) moved out to a standalone test.fixme below: unlike Phase 11, this
-  // one asserts against a wire field (ModuleNavigationEntryDto.badge) that does not exist in the
-  // DTO at all today, not a routing bug over data that's already there — see that test's body for
-  // why that distinction is what puts it on the fixme side of the line.
+  // Phase 12 stays standalone so a fresh shell observes the notification produced by the crawl,
+  // then clears it through the same Notifications UI a user does.
 });
 
-test.fixme("nav badge reflects unread matches and clears on mark-read (#1285)", async () => {
-  // Blocked, not just unimplemented: app-shell.tsx's NavEntryWithBadge only ever renders a count
-  // when entry.badge?.source === "notifications", but ModuleNavigationEntryDto — the wire shape
-  // actually serialized to the browser — carries no `badge` field at all today, regardless of
-  // what jarvis.module.json declares. There is no seed lever or timing fix that makes this pass;
-  // the DTO itself needs the field before this body can be written for real. Tracked at #1285.
-  //
-  // Intended assertion, to lift in verbatim once #1285 lands:
-  //   await page.goto(requireBaseURL());
-  //   const navLink = page.locator('nav[aria-label="Modules"]').getByRole("link", { name: "Job Search" });
-  //   await expect(navLink.locator(".jds-badge-count")).toBeVisible();
-  //   await page.locator(".jds-usermenu__trigger").click();
-  //   await page.getByRole("button", { name: "Notifications" }).click();
-  //   const notice = page.getByText(/\d+ new job matches?/);
-  //   await expect(notice).toBeVisible();
-  //   const title = await notice.innerText();
-  //   await page.getByRole("button", { name: `Mark ${title} read` }).click();
-  //   await expect(navLink.locator(".jds-badge-count")).toHaveCount(0);
+test("nav badge reflects unread matches and clears on mark-read (#1285)", async ({ page }) => {
+  await signIn(page);
+  const navLink = page
+    .getByRole("navigation", { name: "Modules", exact: true })
+    .getByRole("link", { name: "Job Search" });
+  await expect(navLink.locator(".jds-badge-count")).toBeVisible();
+
+  await page.locator(".jds-usermenu__trigger").click();
+  await page.getByRole("button", { name: "Notifications" }).click();
+  const notice = page.getByText(/\d+ new job matches?/);
+  await expect(notice).toBeVisible();
+  const title = await notice.innerText();
+  await page.getByRole("button", { name: `Mark ${title} read` }).click();
+
+  await expect(navLink.locator(".jds-badge-count")).toHaveCount(0);
 });
