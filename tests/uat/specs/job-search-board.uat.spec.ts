@@ -392,12 +392,12 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
 
   if (REAL_CHAT_CONFIGURED) {
     // --- Phase 3: onboarding screen renders while state === "in_conversation" ---
-    await test.step("Phase 3: onboarding screen appears, no board table yet", async () => {
+    await test.step("Phase 3: onboarding screen appears, no board list yet", async () => {
       await page.reload();
       await expect(page.getByText("Let's work out what this search is for.")).toBeVisible({
         timeout: POLL_DEADLINE_MS
       });
-      await expect(page.locator("table.jsm-board")).toHaveCount(0);
+      await expect(page.locator(".jsm-board-list")).toHaveCount(0);
 
       // The five onboarding chips render as plain-text spans, not-done styled until completed.
       for (const step of ["role", "want", "where", "comp", "sources"]) {
@@ -545,7 +545,8 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
   await test.step("Phase 7: matches appear and Fit/Want sort matches the fixture's deterministic scores", async () => {
     // #1329: unscored rows render "—"/"—" and sort last, never interleaved — restrict the
     // sort-order assertion to scored rows, which is what sortMatches itself guarantees.
-    const scoredRows = page.locator("table.jsm-board tbody tr").filter({
+    const matchList = page.locator(".jsm-board-list .jsm-list");
+    const scoredRows = matchList.locator(":scope > div.jsm-row-shell").filter({
       hasNot: page.getByText("Not read yet")
     });
 
@@ -570,9 +571,7 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
 
     const titles: string[] = [];
     for (let i = 0; i < scoredCount; i++) {
-      titles.push(
-        (await scoredRows.nth(i).locator("td").first().locator("button").innerText()).trim()
-      );
+      titles.push((await scoredRows.nth(i).locator(":scope > button.jsm-row").innerText()).trim());
     }
     const expectedOrder = [...titles].sort(
       (a, b) => deterministicFixtureScore(b, "fit") - deterministicFixtureScore(a, "fit")
@@ -580,20 +579,20 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
 
     await page.getByRole("button", { name: /^Fit/ }).click();
 
-    const sortedRows = page.locator("table.jsm-board tbody tr").filter({
+    const sortedRows = matchList.locator(":scope > div.jsm-row-shell").filter({
       hasNot: page.getByText("Not read yet")
     });
     const actualOrder: string[] = [];
     for (let i = 0; i < scoredCount; i++) {
       actualOrder.push(
-        (await sortedRows.nth(i).locator("td").first().locator("button").innerText()).trim()
+        (await sortedRows.nth(i).locator(":scope > button.jsm-row").innerText()).trim()
       );
     }
     expect(actualOrder).toEqual(expectedOrder);
     await shot(page, "07-board-sorted-by-fit");
 
     // No cell ever blends fit/want into a single percentage (ledger L9: fit/want non-blending).
-    const boardText = await page.locator("table.jsm-board").innerText();
+    const boardText = await matchList.innerText();
     expect(boardText).not.toMatch(/\d{1,3}%\s*match/i);
   });
 
