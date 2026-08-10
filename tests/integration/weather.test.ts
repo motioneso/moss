@@ -185,7 +185,9 @@ describe("weather integration", () => {
 
   describe("GET /api/weather/today", () => {
     it("returns data from Open-Meteo when preference is set", async () => {
-      const fakeFetch = vi.fn(async () => makeOpenMeteoResponse(18, 15, 0));
+      const fakeFetch = vi.fn((_input: RequestInfo | URL) =>
+        Promise.resolve(makeOpenMeteoResponse(18, 15, 0))
+      );
       const srv = createApiServer({
         appDb,
         boss,
@@ -226,7 +228,9 @@ describe("weather integration", () => {
     });
 
     it("refreshes cached weather after a location is saved, changed, or cleared", async () => {
-      const fakeFetch = vi.fn(async () => makeOpenMeteoResponse(18, 15, 0));
+      const fakeFetch = vi.fn((_input: RequestInfo | URL) =>
+        Promise.resolve(makeOpenMeteoResponse(18, 15, 0))
+      );
       const srv = createApiServer({
         appDb,
         boss,

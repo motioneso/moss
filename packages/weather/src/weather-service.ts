@@ -18,8 +18,13 @@ interface WeatherServiceDependencies {
 }
 
 interface CachedWeather {
-  readonly location: WeatherLocationDto;
+  readonly resolvedLocation: ResolvedLocation;
   readonly data: WeatherTodayDto;
+}
+
+interface ResolvedLocation {
+  readonly location: WeatherLocationDto;
+  readonly source: "stored-preference" | "ip-geo" | "timezone-fallback";
 }
 
 export class WeatherService {
@@ -43,21 +48,21 @@ export class WeatherService {
     timeZone: string
   ): Promise<WeatherTodayDto | null> {
     const userId = accessContext.actorUserId;
-    const location = await this.resolveLocation(accessContext, requestIp, timeZone);
-    if (!location) return null;
+    const resolvedLocation = await this.resolveLocation(accessContext, requestIp, timeZone);
+    if (!resolvedLocation) return null;
 
     const cached = this.weatherCache.get(userId);
-    if (cached && sameLocation(cached.location, location)) return cached.data;
+    if (cached && sameLocation(cached.resolvedLocation, resolvedLocation)) return cached.data;
     if (cached) this.weatherCache.delete(userId);
 
     const data = await fetchOpenMeteoForecast(
-      location.lat,
-      location.lon,
+      resolvedLocation.location.lat,
+      resolvedLocation.location.lon,
       "metric",
-      location.label,
+      resolvedLocation.location.label,
       this.fetchFn
     );
-    this.weatherCache.set(userId, { location, data }, WEATHER_CACHE_TTL_MS);
+    this.weatherCache.set(userId, { resolvedLocation, data }, WEATHER_CACHE_TTL_MS);
     return data;
   }
 
@@ -65,7 +70,7 @@ export class WeatherService {
     accessContext: AccessContext,
     requestIp: string,
     timeZone: string
-  ): Promise<WeatherLocationDto | null> {
+  ): Promise<ResolvedLocation | null> {
     const raw = await this.dataContext.withDataContext(accessContext, (scopedDb) =>
       this.preferencesRepo.get(scopedDb, WEATHER_LOCATION_KEY)
     );
@@ -73,7 +78,10 @@ export class WeatherService {
       const r = raw as Record<string, unknown>;
       if (typeof r.lat === "number" && typeof r.lon === "number" && typeof r.label === "string") {
         this.logger.info({ step: "stored-preference" }, "weather location resolved");
-        return { lat: r.lat, lon: r.lon, label: r.label };
+        return {
+          location: { lat: r.lat, lon: r.lon, label: r.label },
+          source: "stored-preference"
+        };
       }
     }
 
@@ -85,14 +93,14 @@ export class WeatherService {
     }
     if (geo) {
       this.logger.info({ step: "ip-geo" }, "weather location resolved");
-      return geo;
+      return { location: geo, source: "ip-geo" };
     }
 
     // Fall back to a static timezone->city table (no new outbound egress)
     const cityFallback = lookupCityForTimeZone(timeZone);
     if (cityFallback) {
       this.logger.info({ step: "timezone-fallback" }, "weather location resolved");
-      return cityFallback;
+      return { location: cityFallback, source: "timezone-fallback" };
     }
 
     this.logger.info({ step: "unresolved" }, "weather location resolved");
@@ -100,6 +108,11 @@ export class WeatherService {
   }
 }
 
-function sameLocation(left: WeatherLocationDto, right: WeatherLocationDto): boolean {
-  return left.lat === right.lat && left.lon === right.lon && left.label === right.label;
+function sameLocation(left: ResolvedLocation, right: ResolvedLocation): boolean {
+  return (
+    left.source === right.source &&
+    left.location.lat === right.location.lat &&
+    left.location.lon === right.location.lon &&
+    left.location.label === right.location.label
+  );
 }
