@@ -14,7 +14,6 @@ import type {
 import type { ActionAuditInputSummary, AiAssistantToolDto } from "@moss/shared";
 
 import { summarizeAssistantToolInput } from "../assistant-tools.js";
-import { redactSecrets } from "../adapters/redact.js";
 import type { AiRepository, InsertAuditLogInput } from "../repository.js";
 import { AutoRunRateLimiter } from "./auto-run-rate-limit.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
@@ -67,20 +66,6 @@ const defaultPolicyLookup: ActionPolicyLookup = {
 const TASKS_FIRST_RUN_NOTICE_KEY = "tasks.agency_auto_execute.first_prompt_seen";
 const TASKS_FIRST_RUN_NOTICE =
   'Your assistant now asks before creating tasks. Enable "create without asking" in Task settings to auto-run task changes.';
-const OPERATOR_LOG_ERROR_MAX_LENGTH = 2_000;
-
-function safeHandlerErrorMessage(error: unknown): string {
-  try {
-    const message = error instanceof Error ? error.message : error;
-    return typeof message === "string" ? message : "[unavailable error]";
-  } catch {
-    return "[unavailable error]";
-  }
-}
-
-function redactHandlerError(error: unknown): string {
-  return redactSecrets(safeHandlerErrorMessage(error)).slice(0, OPERATOR_LOG_ERROR_MAX_LENGTH);
-}
 
 interface ExecutableTool {
   readonly tool: ModuleAssistantToolManifest;
@@ -428,14 +413,13 @@ export class AssistantToolGateway {
           found.tool.externalContent ? found.tool.name : undefined
         )
       };
-    } catch (error) {
+    } catch {
       console.error(
         JSON.stringify({
           event: "read_tool_handler_threw",
           toolName: found.tool.name,
-          actorUserId,
           requestId,
-          error: redactHandlerError(error)
+          errorClass: "handler_error"
         })
       );
       return { ok: false, error: `Tool ${found.tool.name} failed` };
@@ -527,15 +511,14 @@ export class AssistantToolGateway {
         // the engine's MCP stdio channel — never into logs, DB, or job payloads.
         ...(result.media ? { media: result.media } : {})
       };
-    } catch (error) {
+    } catch {
       // never leak internals/secrets from a handler throw
       console.error(
         JSON.stringify({
           event: "tool_handler_threw",
           toolName: found.dto.name,
-          actorUserId: ctx.actorUserId,
           requestId: ctx.requestId,
-          error: redactHandlerError(error)
+          errorClass: "handler_error"
         })
       );
       return { ok: false, error: `Tool ${found.dto.name} failed` };

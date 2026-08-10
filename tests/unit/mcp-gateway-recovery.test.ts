@@ -66,68 +66,11 @@ describe("first-party Moss MCP transport", () => {
   });
 });
 
-describe("operator log receives real errors from swallowed catches (#1251)", () => {
-  it("logs the real error for a read-tool handler throw, returns the sanitized string", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    try {
-      const gateway = new AssistantToolGateway({
-        resolveActiveModules: async () => [
-          {
-            id: "demo-module",
-            name: "Demo Module",
-            version: "1.0.0",
-            publisher: "Jarv1s",
-            lifecycle: "optional",
-            compatibility: { jarv1s: "*" },
-            assistantTools: [
-              {
-                name: "demo-module.notes.search",
-                description: "Search notes.",
-                permissionId: "demo-module.notes.read",
-                risk: "read",
-                inputSchema: { type: "object", properties: {} },
-                execute: async () => {
-                  throw new Error("boom: db timeout");
-                }
-              }
-            ]
-          }
-        ],
-        repository: {} as never,
-        runner: {
-          withDataContext: async (_access: unknown, work: (db: unknown) => Promise<unknown>) =>
-            work({})
-        } as never,
-        tokens: new SessionTokenRegistry(),
-        confirmations: new ConfirmationRegistry(),
-        notifier: { emit: () => undefined },
-        confirmTimeoutMs: 5
-      });
-
-      const result = await gateway.runReadToolForActor("u1", "demo-module.notes.search", {});
-
-      expect(result).toEqual({ ok: false, error: "Tool demo-module.notes.search failed" });
-      expect(errorSpy).toHaveBeenCalledTimes(1);
-      const [logged] = errorSpy.mock.calls[0] as [string];
-      const payload = JSON.parse(logged);
-      expect(payload.event).toBe("read_tool_handler_threw");
-      expect(payload.toolName).toBe("demo-module.notes.search");
-      expect(payload.actorUserId).toBe("u1");
-      expect(typeof payload.requestId).toBe("string");
-      expect(payload.error).toContain("boom: db timeout");
-    } finally {
-      errorSpy.mockRestore();
-    }
-  });
-});
-
 describe("logical action terminal results", () => {
   const createGateway = (input: {
     yolo: boolean;
-    risk?: "read" | "write";
     handlerError?: boolean;
-    handlerErrorMessage?: string;
-    handlerThrown?: unknown;
+    handlerThrownValue?: unknown;
   }) => {
     const tokens = new SessionTokenRegistry();
     const emitted: Array<{
@@ -152,13 +95,12 @@ describe("logical action terminal results", () => {
               description: "Import a resume.",
               permissionId: "demo-module.resume.write",
               actionFamilyId: "resume_changes",
-              risk: input.risk ?? "write",
+              risk: "write",
               executionPolicy: "auto",
               execute: async (_db, _toolInput, ctx) => {
                 handlerRequestIds.push(ctx.requestId);
-                if (input.handlerThrown !== undefined) throw input.handlerThrown;
                 if (input.handlerError) {
-                  throw new Error(input.handlerErrorMessage ?? "private handler detail");
+                  throw input.handlerThrownValue ?? new Error("private handler detail");
                 }
                 return { data: { imported: true } };
               }
@@ -254,226 +196,108 @@ describe("logical action terminal results", () => {
     ]);
   });
 
-  it("logs the real error for a write-tool handler throw, returns the sanitized string (#1251)", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    try {
-      const { gateway, token, handlerRequestIds } = createGateway({
-        yolo: true,
-        handlerError: true,
-        handlerErrorMessage: "boom: handler internals"
-      });
-
-      const result = await gateway.callTool(token, "demo-module.resume.import", {});
-
-      expect(result).toEqual({ ok: false, error: "Tool demo-module.resume.import failed" });
-      expect(errorSpy).toHaveBeenCalledTimes(1);
-      const [logged] = errorSpy.mock.calls[0] as [string];
-      const payload = JSON.parse(logged);
-      expect(payload.event).toBe("tool_handler_threw");
-      expect(payload.toolName).toBe("demo-module.resume.import");
-      expect(payload.actorUserId).toBe("u1");
-      expect(payload.requestId).toBe(handlerRequestIds[0]);
-      expect(payload.error).toContain("boom: handler internals");
-    } finally {
-      errorSpy.mockRestore();
-    }
-  });
-
-  it("redacts a secret in the logged error while the returned string never carries it (#1251)", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    try {
-      const secretUrl = "postgres://user:hunter2@db.internal/app";
-      const { gateway, token } = createGateway({
-        yolo: true,
-        handlerError: true,
-        handlerErrorMessage: `connect failed: ${secretUrl}`
-      });
-
-      const result = await gateway.callTool(token, "demo-module.resume.import", {});
-
-      expect(result).toEqual({ ok: false, error: "Tool demo-module.resume.import failed" });
-      expect(JSON.stringify(result)).not.toContain("hunter2");
-      const [logged] = errorSpy.mock.calls[0] as [string];
-      const payload = JSON.parse(logged);
-      expect(payload.error).not.toContain("hunter2");
-      expect(payload.error).not.toContain("user:hunter2@");
-      expect(payload.error).toContain("[redacted]");
-    } finally {
-      errorSpy.mockRestore();
-    }
-  });
-
-  it("redacts OAuth authorization codes and caps handler-error logs (#1251)", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    try {
-      const code = "AUTHCODE-9f8e7d6c5b4a";
-      const { gateway, token } = createGateway({
-        yolo: true,
-        handlerError: true,
-        handlerErrorMessage: `https://provider.test/callback?code=${code} ${"x".repeat(5000)}`
-      });
-
-      await gateway.callTool(token, "demo-module.resume.import", {});
-
-      const [logged] = errorSpy.mock.calls[0] as [string];
-      const payload = JSON.parse(logged);
-      expect(payload.error).not.toContain(code);
-      expect(payload.error.length).toBeLessThanOrEqual(2000);
-    } finally {
-      errorSpy.mockRestore();
-    }
-  });
-
-  it.each([
-    ["OAuth client secret", "?client_secret=clientSecretValue", ["clientSecretValue"]],
-    ["OAuth refresh token", "?refresh_token=refreshTokenValue", ["refreshTokenValue"]],
-    ["X-API-Key header", "X-API-Key: apiKeyValue", ["apiKeyValue"]],
-    [
-      "Basic authorization",
-      "Authorization: Basic dXNlcjpiYXNpY1NlY3JldA==",
-      ["dXNlcjpiYXNpY1NlY3JldA=="]
-    ],
-    ["JSON password", '{"password":"jsonPasswordValue"}', ["jsonPasswordValue"]],
-    ["JSON access token", '{"access_token":"jsonAccessTokenValue"}', ["jsonAccessTokenValue"]],
-    ["percent-encoded OAuth key", "?client%5Fsecret=encodedClientSecret", ["encodedClientSecret"]],
-    [
-      "folded Bearer authorization",
-      "Authorization: Bearer bearerHeadValue\r\n bearerTailValue",
-      ["bearerHeadValue", "bearerTailValue"]
-    ],
-    ["Bearer credential after LF", "Authorization: Bearer\n bearerLfValue", ["bearerLfValue"]],
-    [
-      "Bearer credential after CRLF",
-      "Authorization: Bearer\r\n bearerCrlfValue",
-      ["bearerCrlfValue"]
-    ],
-    ["Basic credential after LF", "Authorization: Basic\n basicLfValue", ["basicLfValue"]],
-    ["Basic credential after CRLF", "Authorization: Basic\r\n basicCrlfValue", ["basicCrlfValue"]],
-    ["encoded OAuth key letters", "?client_%73ecret=encodedLetterValue", ["encodedLetterValue"]],
-    [
-      "mixed-case encoded OAuth key letters",
-      "?REFRESH_%74oKeN=mixedEncodedValue",
-      ["mixedEncodedValue"]
-    ],
-    ["malformed encoded query key", "?client_%ZZsecret=malformedKeyValue", ["malformedKeyValue"]]
-  ])(
-    "redacts %s in both gateway error logs before truncation",
-    async (_label, message, secrets) => {
-      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-      try {
-        const boundaryMessage = `${message} ${"x".repeat(5000)}`;
-        const { gateway: writeGateway, token } = createGateway({
-          yolo: true,
-          handlerError: true,
-          handlerErrorMessage: boundaryMessage
-        });
-        const { gateway: readGateway } = createGateway({
-          yolo: true,
-          risk: "read",
-          handlerError: true,
-          handlerErrorMessage: boundaryMessage
-        });
-
-        await expect(
-          writeGateway.callTool(token, "demo-module.resume.import", {})
-        ).resolves.toEqual({
-          ok: false,
-          error: "Tool demo-module.resume.import failed"
-        });
-        await expect(
-          readGateway.runReadToolForActor("u1", "demo-module.resume.import", {})
-        ).resolves.toEqual({ ok: false, error: "Tool demo-module.resume.import failed" });
-
-        expect(errorSpy).toHaveBeenCalledTimes(2);
-        for (const [logged] of errorSpy.mock.calls as [string][]) {
-          const payload = JSON.parse(logged);
-          expect(payload.error.length).toBeLessThanOrEqual(2000);
-          for (const secret of secrets) expect(payload.error).not.toContain(secret);
+  describe("handler throw logging (#1251)", () => {
+    it.each([
+      {
+        label: "read",
+        event: "read_tool_handler_threw",
+        toolName: "demo-module.notes.search",
+        invoke: async (thrown: unknown) => {
+          const gateway = new AssistantToolGateway({
+            resolveActiveModules: async () => [
+              {
+                id: "demo-module",
+                name: "Demo Module",
+                version: "1.0.0",
+                publisher: "Jarv1s",
+                lifecycle: "optional",
+                compatibility: { jarv1s: "*" },
+                assistantTools: [
+                  {
+                    name: "demo-module.notes.search",
+                    description: "Search notes.",
+                    permissionId: "demo-module.notes.read",
+                    risk: "read",
+                    inputSchema: { type: "object", properties: {} },
+                    execute: async () => {
+                      throw thrown;
+                    }
+                  }
+                ]
+              }
+            ],
+            repository: {} as never,
+            runner: {
+              withDataContext: async (_access: unknown, work: (db: unknown) => Promise<unknown>) =>
+                work({})
+            } as never,
+            tokens: new SessionTokenRegistry(),
+            confirmations: new ConfirmationRegistry(),
+            notifier: { emit: () => undefined },
+            confirmTimeoutMs: 5
+          });
+          return gateway.runReadToolForActor("u1", "demo-module.notes.search", {});
         }
-      } finally {
-        errorSpy.mockRestore();
+      },
+      {
+        label: "write",
+        event: "tool_handler_threw",
+        toolName: "demo-module.resume.import",
+        invoke: async (thrown: unknown) => {
+          const { gateway, token } = createGateway({
+            yolo: true,
+            handlerError: true,
+            handlerThrownValue: thrown
+          });
+          return gateway.callTool(token, "demo-module.resume.import", {});
+        }
       }
-    }
-  );
-
-  it.each(["write", "read"] as const)(
-    "redacts a JSON secret spanning the 2000-character cap before truncating (%s sink)",
-    async (risk) => {
-      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-      try {
-        const prefix = "x".repeat(1980);
-        const secret = "boundaryPasswordSecret";
-        const message = `${prefix}{"password":"${secret}"}${"x".repeat(500)}`;
-        const { gateway, token } = createGateway({
-          yolo: true,
-          risk,
-          handlerError: true,
-          handlerErrorMessage: message
-        });
-        const result =
-          risk === "write"
-            ? await gateway.callTool(token, "demo-module.resume.import", {})
-            : await gateway.runReadToolForActor("u1", "demo-module.resume.import", {});
-
-        expect(result).toEqual({ ok: false, error: "Tool demo-module.resume.import failed" });
-        const [logged] = errorSpy.mock.calls[0] as [string];
-        const payload = JSON.parse(logged);
-        expect(payload.error.startsWith(`${prefix}{[redacted]`)).toBe(true);
-        expect(payload.error).not.toContain(secret);
-        expect(payload.error.length).toBe(2000);
-      } finally {
-        errorSpy.mockRestore();
-      }
-    }
-  );
-
-  it("returns the sanitized failure when a handler throw cannot be stringified (#1251)", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    try {
-      const { gateway, token } = createGateway({
-        yolo: true,
-        handlerThrown: {
-          toString: () => {
-            throw new Error("coercion failed");
+    ])(
+      "fails closed without inspecting a hostile $label handler throw",
+      async ({ event, toolName, invoke }) => {
+        const sentinel = "handler-secret-sentinel";
+        let trapCalls = 0;
+        const thrown = new Proxy(
+          { sentinel },
+          {
+            get() {
+              trapCalls += 1;
+              throw new Error("handler throw was inspected");
+            },
+            getOwnPropertyDescriptor() {
+              trapCalls += 1;
+              throw new Error("handler throw was inspected");
+            },
+            getPrototypeOf() {
+              trapCalls += 1;
+              throw new Error("handler throw was inspected");
+            },
+            ownKeys() {
+              trapCalls += 1;
+              throw new Error("handler throw was inspected");
+            }
           }
+        );
+        const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+        try {
+          const result = await invoke(thrown);
+
+          expect(result).toEqual({ ok: false, error: `Tool ${toolName} failed` });
+          expect(trapCalls).toBe(0);
+          expect(errorSpy).toHaveBeenCalledExactlyOnceWith(expect.any(String));
+          const payload = JSON.parse(errorSpy.mock.calls[0]![0] as string);
+          expect(payload).toEqual({
+            event,
+            toolName,
+            requestId: expect.any(String),
+            errorClass: "handler_error"
+          });
+          expect(JSON.stringify({ result, logged: errorSpy.mock.calls })).not.toContain(sentinel);
+        } finally {
+          errorSpy.mockRestore();
         }
-      });
-
-      await expect(gateway.callTool(token, "demo-module.resume.import", {})).resolves.toEqual({
-        ok: false,
-        error: "Tool demo-module.resume.import failed"
-      });
-      expect(errorSpy).toHaveBeenCalledOnce();
-      const [logged] = errorSpy.mock.calls[0] as [string];
-      expect(JSON.parse(logged).error).toBe("[unavailable error]");
-    } finally {
-      errorSpy.mockRestore();
-    }
-  });
-
-  it.each(["write", "read"] as const)(
-    "fails closed when a hostile Error.message is non-string (%s sink)",
-    async (risk) => {
-      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-      const replace = vi.fn(() => "secret introduced after redaction");
-      const hostile = new Error("ignored");
-      Object.defineProperty(hostile, "message", {
-        get: () => ({ replace, toString: () => "secret introduced after redaction" })
-      });
-      try {
-        const { gateway, token } = createGateway({ yolo: true, risk, handlerThrown: hostile });
-        const result =
-          risk === "write"
-            ? await gateway.callTool(token, "demo-module.resume.import", {})
-            : await gateway.runReadToolForActor("u1", "demo-module.resume.import", {});
-
-        expect(result).toEqual({ ok: false, error: "Tool demo-module.resume.import failed" });
-        expect(errorSpy).toHaveBeenCalledOnce();
-        expect(JSON.parse(errorSpy.mock.calls[0]?.[0] as string).error).toBe("[unavailable error]");
-        expect(replace).not.toHaveBeenCalled();
-      } finally {
-        errorSpy.mockRestore();
       }
-    }
-  );
+    );
+  });
 });
