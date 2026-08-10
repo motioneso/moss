@@ -329,9 +329,10 @@ export function ProfilePane({ me }: PaneProps) {
             value={weatherLocationFields.label}
             aria-label="Weather location label"
             disabled={weatherLocationQuery.isLoading || weatherLocationMutation.isPending}
-            onChange={(event) =>
-              setWeatherLocationFields((fields) => ({ ...fields, label: event.currentTarget.value }))
-            }
+            onChange={(event) => {
+              const value = event.currentTarget.value;
+              setWeatherLocationFields((fields) => ({ ...fields, label: value }));
+            }}
           />
         </Field>
         <div className="fld">
@@ -343,9 +344,10 @@ export function ProfilePane({ me }: PaneProps) {
               value={weatherLocationFields.lat}
               aria-label="Weather location latitude"
               disabled={weatherLocationQuery.isLoading || weatherLocationMutation.isPending}
-              onChange={(event) =>
-                setWeatherLocationFields((fields) => ({ ...fields, lat: event.currentTarget.value }))
-              }
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                setWeatherLocationFields((fields) => ({ ...fields, lat: value }));
+              }}
               style={{ flex: "0 0 130px", minWidth: 0 }}
             />
             <input
@@ -354,9 +356,10 @@ export function ProfilePane({ me }: PaneProps) {
               value={weatherLocationFields.lon}
               aria-label="Weather location longitude"
               disabled={weatherLocationQuery.isLoading || weatherLocationMutation.isPending}
-              onChange={(event) =>
-                setWeatherLocationFields((fields) => ({ ...fields, lon: event.currentTarget.value }))
-              }
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                setWeatherLocationFields((fields) => ({ ...fields, lon: value }));
+              }}
               style={{ flex: "0 0 130px", minWidth: 0 }}
             />
           </div>
