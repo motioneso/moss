@@ -652,6 +652,8 @@ export function validateExternalModuleManifest(
         } else permissions.push(tool.permissionId);
         if (!isNonEmptyString(tool.description))
           errors.push("assistant tool description is required");
+        if (tool.actionLabel !== undefined && !isNonEmptyString(tool.actionLabel))
+          errors.push("assistant tool actionLabel must be a non-empty string when present");
         if (tool.risk !== "read" && tool.risk !== "write" && tool.risk !== "destructive") {
           errors.push('assistant tool risk must be "read", "write", or "destructive"');
         }

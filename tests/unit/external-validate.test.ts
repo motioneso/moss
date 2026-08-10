@@ -203,6 +203,77 @@ describe("validateExternalModuleManifest (#917)", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("accepts a declared worker tool with a non-empty actionLabel", () => {
+    const result = validateExternalModuleManifest(
+      {
+        ...base,
+        runtime: { workerEntrypoint: "dist/worker.js", workerContractVersion: 1 },
+        assistantTools: [
+          {
+            name: "acme-widgets.lookup",
+            description: "Look up a widget",
+            actionLabel: "Look up a widget for you",
+            permissionId: "acme-widgets.lookup",
+            risk: "read",
+            inputSchema: { type: "object" },
+            handler: "lookup"
+          }
+        ]
+      },
+      "acme-widgets",
+      "0.1.0"
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("rejects a declared actionLabel that is an empty string", () => {
+    const result = validateExternalModuleManifest(
+      {
+        ...base,
+        runtime: { workerEntrypoint: "dist/worker.js", workerContractVersion: 1 },
+        assistantTools: [
+          {
+            name: "acme-widgets.lookup",
+            description: "Look up a widget",
+            actionLabel: "",
+            permissionId: "acme-widgets.lookup",
+            risk: "read",
+            inputSchema: { type: "object" },
+            handler: "lookup"
+          }
+        ]
+      },
+      "acme-widgets",
+      "0.1.0"
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.join(" ")).toContain("actionLabel");
+  });
+
+  it("rejects a declared actionLabel that is not a string", () => {
+    const result = validateExternalModuleManifest(
+      {
+        ...base,
+        runtime: { workerEntrypoint: "dist/worker.js", workerContractVersion: 1 },
+        assistantTools: [
+          {
+            name: "acme-widgets.lookup",
+            description: "Look up a widget",
+            actionLabel: 42,
+            permissionId: "acme-widgets.lookup",
+            risk: "read",
+            inputSchema: { type: "object" },
+            handler: "lookup"
+          }
+        ]
+      },
+      "acme-widgets",
+      "0.1.0"
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.join(" ")).toContain("actionLabel");
+  });
+
   it("rejects tools without a compatible worker", () => {
     const result = validateExternalModuleManifest(
       {
