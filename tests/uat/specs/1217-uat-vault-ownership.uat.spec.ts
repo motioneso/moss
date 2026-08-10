@@ -39,8 +39,11 @@ test("a seeded admin+data actor can upload a chat attachment into their vault (#
   const userMenu = page.locator(".jds-usermenu__trigger");
   await expect(userMenu).toBeVisible();
 
-  await page.getByRole("button", { name: "Chat with Jarvis" }).click();
-  const drawer = page.getByRole("dialog", { name: "Chat with Jarvis" });
+  // Name-agnostic: the accessible name is `Chat with ${assistantName}` (persona-driven, not a
+  // fixed literal), so these locate by stable DOM handles instead — .topbar-actions holds
+  // exactly one button (the chat toggle), and aside.chatd is the drawer element itself.
+  await page.locator(".topbar-actions button").click();
+  const drawer = page.locator("aside.chatd");
   await expect(drawer).toBeVisible();
 
   // Drive the visually-hidden real <input type=file> directly — the paperclip button only

@@ -709,13 +709,17 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
     );
 
     await page.reload();
-    await page.getByRole("button", { name: "Chat with Jarvis" }).click();
+    // Name-agnostic: the accessible name is `Chat with ${assistantName}` (persona-driven, not a
+    // fixed literal); .topbar-actions holds exactly one button, the chat toggle.
+    await page.locator(".topbar-actions button").click();
     await expect(page.getByText(MARKER_TEXT, { exact: false })).toBeVisible();
     await shot(page, "12-drawer-inside-profile");
     await page.keyboard.press("Escape");
 
     await page.goto(`${requireBaseURL()}/tasks`);
-    await page.getByRole("button", { name: "Chat with Jarvis" }).click();
+    // Name-agnostic: the accessible name is `Chat with ${assistantName}` (persona-driven, not a
+    // fixed literal); .topbar-actions holds exactly one button, the chat toggle.
+    await page.locator(".topbar-actions button").click();
     await expect(page.getByText(MARKER_TEXT, { exact: false })).toHaveCount(0);
     await shot(page, "13-drawer-outside-module-empty");
   });
