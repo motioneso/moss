@@ -412,7 +412,7 @@ export const composeSeedHook: SeedHook = async ({
       // N42/#57: empty string reads as absent in cli.ts (`|| undefined`) — same "always pass,
       // empty means off" shape as the other -e values here, rather than omitting the flag
       // entirely.
-      `JARVIS_UAT_JOB_SEARCH_AI_BASE_URL=${jobSearchAiProviderBaseUrl ?? ""}`,
+      `MOSS_UAT_JOB_SEARCH_AI_BASE_URL=${jobSearchAiProviderBaseUrl ?? ""}`,
       "-e",
       "JARVIS_UAT_SEED_CONFIRM=1",
       "seed"
