@@ -12,7 +12,7 @@
 //
 // Ruling N45 (rulings-ledger.md): "a UAT phase may seed its preconditions, but never the
 // behaviour it asserts." That splits this spec by SUBJECT, not by convenience:
-//   - Phases 1-2 (install/enable, unsent-draft handoff) need no model and always run.
+//   - Phases 1-2 (install/enable, automatic profile bootstrap) need no model and always run.
 //   - Phases 3-4 are ABOUT the real onboarding conversation itself — the chat turn IS the
 //     subject under test, so a fake/canned provider cannot stand in for it (it can't reliably
 //     decide which of six `job-search.*` tools to call over a multi-turn interview). These two
@@ -23,15 +23,25 @@
 //     badge — NONE of them are about onboarding. Gating those on a real model too would mean this
 //     spec's only board/sort/banner/inspector coverage never runs on CI, which is what the
 //     original version of this file did (a `test.skip` mid-test that silently dropped the rest of
-//     the narrative). Instead, a "Setup" step direct-seeds one already-active profile (N40: a real
-//     production path — onboarding completion — writes exactly this row shape, so seeding it is
-//     skipping a slow dependency, not fabricating the thing under test), and Phases 5-12 run
-//     unconditionally against it, on every run.
+//     the narrative). Instead, a "Setup" step creates one unready profile, then supplies its
+//     criteria and portal inputs through the real fixture queues (N40/N45: skipping a slow
+//     dependency, not fabricating the thing under test), and Phases 5-12 run unconditionally
+//     against it, on every run.
 import { execFileSync } from "node:child_process";
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import {
+  expect,
+  test,
+  type Locator,
+  type Page,
+  type Request,
+  type Response
+} from "@playwright/test";
+
+import { moduleChatSurface } from "../../../apps/web/src/shell/chat-surface-key.js";
 import { buildUatComposeArgs, restartUatStack } from "../provisioner.js";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 import { deterministicFixtureScore } from "../fixtures/job-search-fixture-server.js";
+import { execUatSql } from "./job-search-board-sql.js";
 
 export const uatLevel = {
   level: "admin+data",
@@ -71,79 +81,6 @@ function requireProjectName(): string {
   return projectName;
 }
 
-// Shared direct-SQL-seed helper for the Setup/Phase 10/Phase 11 steps below (N40/N45): connects as
-// the container's bootstrap superuser, not one of the four named app roles
-// (infra/postgres/bootstrap/0000_roles.sql marks jarvis_migration_owner/app_runtime/worker_runtime/
-// auth_runtime all NOBYPASSRLS), so this bypasses the FORCE RLS policies the same way a real
-// migration/bootstrap connection does — there is no app-role path that could run these INSERTs.
-// `-t -A` gives unaligned, headerless output so a `RETURNING` clause parses with a plain `.trim()`
-// / `.split("|")` — but ONLY after the command tag is stripped. psql prints its tag ("INSERT 0 1",
-// "UPDATE 1") on the line *after* the RETURNING row even under -t -A, so a raw return glues the tag
-// onto the last column: a seeded uuid came back as "<uuid>\nINSERT 0 1" and Postgres rejected it as
-// invalid uuid syntax on the next statement. Stripped here rather than at each call site, because
-// every caller that adds a RETURNING clause would otherwise have to rediscover it.
-const PSQL_COMMAND_TAG = /^(?:INSERT \d+ \d+|UPDATE \d+|DELETE \d+|SELECT \d+|MERGE \d+)$/;
-
-function execUatSql(projectName: string, sql: string): string {
-  const raw = execFileSync(
-    "docker",
-    buildUatComposeArgs(projectName, [
-      "exec",
-      "-T",
-      "postgres",
-      "psql",
-      // The superuser, not a role named after the database. `infra/docker-compose.prod.yml` sets
-      // POSTGRES_USER: postgres and POSTGRES_DB: jarv1s, so there is no `jarv1s` ROLE at all —
-      // an earlier version of this helper assumed symmetry with the database name and every call
-      // died with `FATAL: role "jarv1s" does not exist`. Only a live run could catch that; both
-      // the compile and the whole unit/integration gate are blind to it.
-      "-U",
-      "postgres",
-      "-d",
-      "jarv1s",
-      "-t",
-      "-A",
-      "-c",
-      sql
-    ]),
-    { encoding: "utf8" }
-  );
-
-  return raw
-    .split("\n")
-    .filter((line) => !PSQL_COMMAND_TAG.test(line.trim()))
-    .join("\n");
-}
-
-// Local mirror of apps/web/src/shell/chat-surface-key.ts's moduleChatSurface — KEEP IN SYNC. No
-// existing UAT spec imports browser-bundle source (it isn't built for node), and this is the only
-// way Phase 11 can compute the exact surface string useProfileThread's setSurfaceKey(surfaceKey)
-// binds, without which a direct-seeded chat_threads row would land on the wrong surface and never
-// be picked up by useChatStream's per-surface history fetch.
-const FNV_OFFSET_BASIS = 0x811c9dc5;
-const FNV_PRIME = 0x01000193;
-
-function fnv1a32(input: string): number {
-  let hash = FNV_OFFSET_BASIS;
-  for (let index = 0; index < input.length; index += 1) {
-    hash ^= input.charCodeAt(index);
-    hash = Math.imul(hash, FNV_PRIME);
-  }
-  return hash >>> 0;
-}
-
-function toHex8(value: number): string {
-  return value.toString(16).padStart(8, "0");
-}
-
-function moduleChatSurface(moduleId: string, key: string): string {
-  const input = `${moduleId}:${key}`;
-  const reversed = Array.from(input).reverse().join("");
-  const hi = toHex8(fnv1a32(input));
-  const lo = toHex8(fnv1a32(reversed));
-  return `m-${hi}${lo}`;
-}
-
 // Copied (not imported) from finance-feed.uat.spec.ts / real-chat-onboarding.uat.spec.ts — the
 // harness's established pattern for avoiding cross-file test() registration. admin+data lands
 // directly on AppShell (no first-run wizard), so no Skip-setup handling is needed here, unlike the
@@ -165,6 +102,74 @@ async function openInstanceModules(page: Page): Promise<void> {
 
 async function openJobSearch(page: Page): Promise<void> {
   await page.locator('nav[aria-label="Modules"]').getByRole("link", { name: "Job Search" }).click();
+}
+
+async function observedProfiles(response: Response): Promise<Array<{ state?: string }> | null> {
+  if (
+    !response.url().endsWith("/api/ai/assistant-tools/job-search.profile.list/invoke") ||
+    response.request().method() !== "POST" ||
+    !response.ok()
+  ) {
+    return null;
+  }
+  const body = (await response.json()) as {
+    invocation?: { status?: string; result?: { profiles?: Array<{ state?: string }> } };
+  };
+  return body.invocation?.status === "succeeded" && Array.isArray(body.invocation.result?.profiles)
+    ? body.invocation.result.profiles
+    : null;
+}
+
+interface ObservedProfile {
+  profileId?: string;
+  state?: string;
+  readyToCrawl?: boolean;
+}
+
+async function readObservedProfile(page: Page, profileId: string): Promise<ObservedProfile | null> {
+  const response = await page
+    .context()
+    .request.post(`${requireBaseURL()}/api/ai/assistant-tools/job-search.profile.list/invoke`, {
+      data: { input: {} }
+    });
+  if (!response.ok()) {
+    throw new Error(`profile.list fixture read failed (${response.status()})`);
+  }
+  const body = (await response.json()) as {
+    invocation?: { status?: string; result?: { profiles?: ObservedProfile[] } };
+  };
+  if (body.invocation?.status !== "succeeded") {
+    throw new Error(`profile.list fixture read returned ${body.invocation?.status ?? "no status"}`);
+  }
+  return (
+    body.invocation.result?.profiles?.find((profile) => profile.profileId === profileId) ?? null
+  );
+}
+
+async function enqueueJobSearchFixtureInput(
+  page: Page,
+  projectName: string,
+  queueName: string,
+  jobKind: string,
+  params: Record<string, unknown>
+): Promise<string> {
+  const response = await page
+    .context()
+    .request.post(`${requireBaseURL()}/api/modules/job-search/queues/${queueName}/run`, {
+      data: { jobKind, params }
+    });
+  expect(response.status(), `${queueName} must accept the fixture input`).toBe(202);
+  const body = (await response.json()) as { jobId?: string | null };
+  const jobId = body.jobId;
+  expect(jobId, `${queueName} must enqueue a distinct fixture job`).toEqual(expect.any(String));
+  if (typeof jobId !== "string") throw new Error(`${queueName} did not return an exact job id`);
+  await expect
+    .poll(
+      () => execUatSql(projectName, `select state from pgboss.job where id = '${jobId}';`).trim(),
+      { timeout: POLL_DEADLINE_MS }
+    )
+    .toBe("completed");
+  return jobId;
 }
 
 // use-profiles.ts's POLL_* constants cover only the empty->profile-exists transition (the hook
@@ -228,10 +233,35 @@ async function countWhenReady(rows: Locator): Promise<number> {
 
 // eslint-disable-next-line no-empty-pattern -- Playwright requires a destructured fixtures arg
 test.afterEach(async ({}, testInfo) => {
+  const seededProfileId = testInfo.annotations.find(
+    (annotation) => annotation.type === "job-search-fixture-profile"
+  )?.description;
+  const projectName = process.env.JARVIS_UAT_PROJECT_NAME;
+  if (seededProfileId && projectName) {
+    const notificationPredicate =
+      `actor_user_id = '${UAT_ADMIN_ID}' and recipient_user_id = '${UAT_ADMIN_ID}' ` +
+      `and module_id = 'job-search' and event_key = 'new-matches:${seededProfileId}'`;
+    try {
+      execUatSql(projectName, `delete from app.notifications where ${notificationPredicate};`);
+      const remaining = execUatSql(
+        projectName,
+        `select count(*) from app.notifications where ${notificationPredicate};`
+      ).trim();
+      expect(remaining, "exact crawl notification must be absent after cleanup").toBe("0");
+      const deletedId = execUatSql(
+        projectName,
+        `delete from app.job_search_profiles where id = '${seededProfileId}' returning id;`
+      ).trim();
+      expect(deletedId, "exact seeded profile and inputs must be removed").toBe(seededProfileId);
+    } catch (error) {
+      if (testInfo.status === testInfo.expectedStatus) throw error;
+      console.error(`fixture cleanup failed after the test's original failure: ${error}`);
+    }
+  }
+
   // finance-feed.uat.spec.ts's own pattern: only worth the docker round trips when the test
   // actually went the wrong way, and only when a stack project actually got provisioned.
   if (testInfo.status === testInfo.expectedStatus) return;
-  const projectName = process.env.JARVIS_UAT_PROJECT_NAME;
   if (!projectName) return;
 
   try {
@@ -282,6 +312,8 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
   page
 }) => {
   test.setTimeout(900_000);
+  let chatTurnsPosted = 0;
+  let bootstrapTransition: Promise<void> | null = null;
 
   // --- Phase 1: install + enable + navigate (unconditional — no model required) ---
   await test.step("Phase 1: build, install, enable, and open the Job Search module", async () => {
@@ -311,56 +343,76 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
 
     await restartUatStack(projectName, baseURL);
     await page.reload();
+
+    await page.route("**/api/chat/turn", async (route) => {
+      chatTurnsPosted += 1;
+      await route.continue();
+    });
+
+    const emptyProfileList = page.waitForResponse(
+      async (response) => {
+        const profiles = await observedProfiles(response);
+        return profiles?.length === 0;
+      },
+      { timeout: POLL_DEADLINE_MS }
+    );
+    const bootstrapAccepted = page.waitForResponse(
+      (response) =>
+        response
+          .url()
+          .endsWith("/api/modules/job-search/queues/job-search.profile-bootstrap/run") &&
+        response.request().method() === "POST" &&
+        response.status() === 202,
+      { timeout: POLL_DEADLINE_MS }
+    );
+    const healthyProfileList = page.waitForResponse(
+      async (response) => {
+        const profiles = await observedProfiles(response);
+        return profiles?.some((profile) => profile.state === "in_conversation") === true;
+      },
+      { timeout: POLL_DEADLINE_MS }
+    );
+    bootstrapTransition = Promise.all([
+      emptyProfileList,
+      bootstrapAccepted,
+      healthyProfileList
+    ]).then(([emptyResponse, acceptedResponse, healthyResponse]) => {
+      expect(emptyResponse.request().timing().startTime).toBeLessThan(
+        acceptedResponse.request().timing().startTime
+      );
+      expect(acceptedResponse.request().timing().startTime).toBeLessThan(
+        healthyResponse.request().timing().startTime
+      );
+    });
+
     await openJobSearch(page);
     await shot(page, "01-module-opened");
   });
 
-  // --- Phase 2: bootstrap draft handoff (unconditional — no model required) ---
-  // #916's precedent (tests/e2e/external-modules.spec.ts): openAssistant drops an editable, UNSENT
-  // draft into the host composer. Root.tsx's header is explicit that this is the consent boundary
-  // (ledger H5) — the module never sends on the user's behalf. Spying on /api/chat/turn before the
-  // click, and asserting it was never called, is what actually proves that boundary rather than
-  // merely trusting the button's label.
-  let turnPosted = false;
-  await test.step("Phase 2: 'Start your job search' drops an unsent draft, never auto-sends", async () => {
-    await page.route("**/api/chat/turn", async (route) => {
-      turnPosted = true;
-      await route.continue();
-    });
-
-    await page.getByRole("button", { name: "Start your job search" }).click();
-
-    const dialog = page.locator('[role="dialog"], [role="complementary"]').filter({
-      hasText: "Let's set up my job search profile"
-    });
-    // The assistant surface may render as a drawer/dialog depending on host chrome; assert on the
-    // composer content instead of a specific container role, since root.tsx's own contract is only
-    // "an editable, unsent draft lands in the host composer" — not which chrome hosts it.
-    const composer = page.getByRole("textbox").filter({ hasText: "" }).first();
-    await expect(
-      page.getByText("Let's set up my job search profile", { exact: false })
-    ).toBeVisible();
-    expect(turnPosted, "openAssistant must never auto-send the starter prompt (ledger H5)").toBe(
-      false
-    );
-    await shot(page, "02-start-your-job-search-draft");
-    void dialog;
-    void composer;
+  // --- Phase 2: automatic profile bootstrap (unconditional — no model required) ---
+  // The whole empty -> accepted bootstrap -> in-conversation window is the consent boundary:
+  // creating the onboarding profile must never send a chat turn on the user's behalf.
+  await test.step("Phase 2: profile bootstrap reaches in_conversation with zero chat turns", async () => {
+    if (!bootstrapTransition) throw new Error("Phase 1 did not arm bootstrap observation");
+    await bootstrapTransition;
+    expect(chatTurnsPosted, "automatic bootstrap must not send a chat turn").toBe(0);
+    await shot(page, "02-profile-bootstrap-in-conversation");
   });
 
   // --- Phases 3-4: real onboarding conversation (N45 — gated because the chat turn itself is
   // the subject under test here; see the header comment for why Phases 5-12 are NOT gated) ---
   let seededProfileId = "";
   let seededSurfaceKey = "";
+  let crawlRunObservation: Promise<Request> | null = null;
 
   if (REAL_CHAT_CONFIGURED) {
     // --- Phase 3: onboarding screen renders while state === "in_conversation" ---
-    await test.step("Phase 3: onboarding screen appears, no board table yet", async () => {
+    await test.step("Phase 3: onboarding screen appears, no board list yet", async () => {
       await page.reload();
       await expect(page.getByText("Let's work out what this search is for.")).toBeVisible({
         timeout: POLL_DEADLINE_MS
       });
-      await expect(page.locator("table.jsm-board")).toHaveCount(0);
+      await expect(page.locator(".jsm-board-list")).toHaveCount(0);
 
       // The five onboarding chips render as plain-text spans, not-done styled until completed.
       for (const step of ["role", "want", "where", "comp", "sources"]) {
@@ -420,13 +472,10 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
     );
   }
 
-  // --- Setup: direct-seed one already-active profile so Phases 5-12 need no real chat model
-  // (N45/N40). This is exactly the row shape onboarding completion itself writes — same table,
-  // same state, same criteria contract — so seeding it skips a slow dependency (a multi-turn
-  // conversation), not the board/sort/banner/inspector/badge behaviour those phases check. On a
-  // REAL_CHAT_CONFIGURED run this profile exists ALONGSIDE the one Phase 4 just onboarded; every
-  // phase below addresses this one specifically by id, so the two never interfere. ---
-  await test.step("Setup: direct-seed one active profile for Phases 5-12", async () => {
+  // --- Setup: seed one exact profile's supported inputs so Phases 5-12 need no real chat model.
+  // The profile starts unready; criteria.set and portal.set-enabled are the product writers that
+  // recompute readiness and activate it. The resume is independent Fit input, not a crawl gate. ---
+  await test.step("Setup: seed one crawl-ready profile's inputs for Phases 5-12", async () => {
     const projectName = requireProjectName();
     const criteria = {
       titles: ["Senior Backend Engineer"],
@@ -441,18 +490,138 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
       wantNarrative:
         "Backend engineering roles that touch developer tooling rather than pure product features."
     };
-    const criteriaJson = JSON.stringify(criteria).replace(/'/g, "''");
     const row = execUatSql(
       projectName,
-      `insert into app.job_search_profiles (owner_user_id, name, state, criteria) values ` +
-        `('${UAT_ADMIN_ID}', 'UAT direct-seed profile (#1306)', 'active', '${criteriaJson}'::jsonb) ` +
+      `insert into app.job_search_profiles (owner_user_id, name, state) values ` +
+        `('${UAT_ADMIN_ID}', 'UAT direct-seed profile (#1306)', 'in_conversation') ` +
         `returning id, surface_key;`
     ).trim();
     const [id, surfaceKey] = row.split("|");
+    seededProfileId = id ?? "";
+    seededSurfaceKey = surfaceKey ?? "";
+    if (seededProfileId) {
+      test.info().annotations.push({
+        type: "job-search-fixture-profile",
+        description: seededProfileId
+      });
+    }
     expect(id, "profile insert must return an id").toBeTruthy();
     expect(surfaceKey, "profile insert must return a surface_key").toBeTruthy();
-    seededProfileId = id!;
-    seededSurfaceKey = surfaceKey!;
+
+    const baseline = await readObservedProfile(page, seededProfileId);
+    expect(
+      baseline,
+      "exact seeded profile must be observable before inputs are added"
+    ).toMatchObject({
+      profileId: seededProfileId,
+      state: "in_conversation",
+      readyToCrawl: false
+    });
+    expect(
+      execUatSql(
+        projectName,
+        `select count(*) from app.job_search_resumes where profile_id = '${seededProfileId}';`
+      ).trim(),
+      "exact seeded profile must start without a resume"
+    ).toBe("0");
+    expect(
+      execUatSql(
+        projectName,
+        `select count(*) from app.job_search_portals where profile_id = '${seededProfileId}';`
+      ).trim(),
+      "exact seeded profile must start without portal state"
+    ).toBe("0");
+
+    const resumeId = execUatSql(
+      projectName,
+      `insert into app.job_search_resumes (owner_user_id, profile_id, version, content) values ` +
+        `('${UAT_ADMIN_ID}', '${seededProfileId}', 1, ` +
+        `'Senior backend engineer experienced in developer tooling and distributed systems.') ` +
+        `returning id;`
+    ).trim();
+    expect(resumeId, "current resume insert must return its exact id").toBeTruthy();
+
+    const freehireJobId: string = await enqueueJobSearchFixtureInput(
+      page,
+      projectName,
+      "job-search.portal-set-enabled",
+      "portal.set-enabled",
+      {
+        profileId: seededProfileId,
+        sourceId: "freehire",
+        enabled: true
+      }
+    );
+    // The host dedupes this actor + queue in database-clock five-second buckets. Observe the first
+    // exact job's stored bucket opening before the second enqueue; never sleep, pad, or retry it.
+    await expect
+      .poll(
+        () =>
+          execUatSql(
+            projectName,
+            `select case when clock_timestamp() >= singleton_on + interval '5 seconds' ` +
+              `then 'open' else 'blocked' end from pgboss.job where id = '${freehireJobId}';`
+          ).trim(),
+        { timeout: POLL_DEADLINE_MS }
+      )
+      .toBe("open");
+
+    const linkedinJobId: string = await enqueueJobSearchFixtureInput(
+      page,
+      projectName,
+      "job-search.portal-set-enabled",
+      "portal.set-enabled",
+      {
+        profileId: seededProfileId,
+        sourceId: "linkedin",
+        enabled: true
+      }
+    );
+    expect(linkedinJobId, "portal enablements must enqueue distinct exact jobs").not.toBe(
+      freehireJobId
+    );
+    expect(
+      execUatSql(
+        projectName,
+        `select p.state || ':' || string_agg(portal.source_id || '=' || portal.enabled, ',' ` +
+          `order by portal.source_id) from app.job_search_profiles p join app.job_search_portals ` +
+          `portal on portal.profile_id = p.id where p.id = '${seededProfileId}' and ` +
+          `portal.source_id in ('freehire', 'linkedin') group by p.state;`
+      ).trim(),
+      "both exact portal inputs must be enabled before criteria activation"
+    ).toBe("in_conversation:freehire=true,linkedin=true");
+
+    // Arm this before the final readiness input lands. Phase 5 owns the assertion, but cannot miss
+    // the exact-profile request if the already-open module observes activation immediately.
+    crawlRunObservation = page.waitForRequest(
+      (request) => {
+        if (!request.url().includes("/api/modules/job-search/queues/job-search.crawl-run/run")) {
+          return false;
+        }
+        if (request.method() !== "POST") return false;
+        const body = request.postDataJSON() as { params?: { profileId?: string } } | null;
+        return body?.params?.profileId === seededProfileId;
+      },
+      { timeout: POLL_DEADLINE_MS }
+    );
+
+    await enqueueJobSearchFixtureInput(
+      page,
+      projectName,
+      "job-search.criteria-set",
+      "criteria.set",
+      {
+        profileId: seededProfileId,
+        criteriaJson: JSON.stringify(criteria)
+      }
+    );
+    await expect
+      .poll(() => readObservedProfile(page, seededProfileId), { timeout: POLL_DEADLINE_MS })
+      .toMatchObject({
+        profileId: seededProfileId,
+        state: "active",
+        readyToCrawl: true
+      });
 
     // Force-select the seeded profile via the same localStorage key use-profiles.ts's
     // selectedIdKey() reads — robust regardless of whether a REAL_CHAT_CONFIGURED run also has an
@@ -464,38 +633,37 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
 
   // --- Phase 5: an active profile auto-enqueues exactly the documented crawl request ---
   await test.step("Phase 5: profile going active auto-enqueues job-search.crawl-run", async () => {
-    // Filter on the seeded profile's own id inside the predicate itself, not only in a follow-up
-    // assertion — a REAL_CHAT_CONFIGURED run may have a second (onboarded) profile also crossing
-    // into "active" around now, and its own auto-enqueue must not satisfy this wait instead.
-    const waitForCrawlRun = page
-      .waitForRequest(
-        (request) => {
-          if (!request.url().includes("/api/modules/job-search/queues/job-search.crawl-run/run")) {
-            return false;
-          }
-          if (request.method() !== "POST") return false;
-          const body = request.postDataJSON() as { params?: { profileId?: string } } | null;
-          return body?.params?.profileId === seededProfileId;
-        },
-        { timeout: 15_000 }
-      )
-      .catch(() => null);
+    if (!crawlRunObservation) throw new Error("Setup did not arm the exact-profile crawl observer");
     await page.reload();
-    const request = await waitForCrawlRun;
-    if (request) {
-      const body = request.postDataJSON() as { jobKind?: string };
-      expect(body.jobKind).toBe("crawl.run");
+    let request: Request;
+    try {
+      request = await crawlRunObservation;
+    } catch (error) {
+      throw new Error(
+        `Phase 5 did not observe job-search.crawl-run for exact profile ${seededProfileId}`,
+        { cause: error }
+      );
     }
-    // If the latch had already fired before this step (a legitimate race, not a bug — see
-    // root.tsx's isLatched guard), the absence of a second request is correct, not a failure.
+    const body = request.postDataJSON() as {
+      jobKind?: string;
+      params?: { profileId?: string };
+    };
+    expect(body).toMatchObject({
+      jobKind: "crawl.run",
+      params: { profileId: seededProfileId }
+    });
   });
 
   // --- Phase 6: board replaces chat once a profile is active ---
   await test.step("Phase 6: board screen replaces the onboarding chat", async () => {
     await page.reload();
-    await expect(page.locator('[role="tablist"][aria-label="Job search view"]')).toBeVisible();
-    await expect(page.getByRole("tab", { name: "Board" })).toBeVisible();
-    await expect(page.getByRole("tab", { name: "Settings" })).toBeVisible();
+    const viewNavigation = page.getByRole("navigation", { name: "Job search view" });
+    const matchesButton = viewNavigation.getByRole("button", { name: "Matches" });
+    await expect(matchesButton).toBeVisible();
+    await expect(viewNavigation.getByRole("button", { name: "Overview" })).toBeVisible();
+    await expect(viewNavigation.getByRole("button", { name: "Profile" })).toBeVisible();
+    await expect(viewNavigation.getByRole("button", { name: "Monitors" })).toBeVisible();
+    await expect(matchesButton).toHaveAttribute("aria-current", "page");
     await expect(page.getByText("Let's work out what this search is for.")).toHaveCount(0);
     await shot(page, "05-board-replaces-chat");
   });
@@ -504,7 +672,8 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
   await test.step("Phase 7: matches appear and Fit/Want sort matches the fixture's deterministic scores", async () => {
     // #1329: unscored rows render "—"/"—" and sort last, never interleaved — restrict the
     // sort-order assertion to scored rows, which is what sortMatches itself guarantees.
-    const scoredRows = page.locator("table.jsm-board tbody tr").filter({
+    const matchList = page.locator(".jsm-board-list .jsm-list");
+    const scoredRows = matchList.locator(":scope > div.jsm-row-shell").filter({
       hasNot: page.getByText("Not read yet")
     });
 
@@ -527,32 +696,38 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
     ).toBeGreaterThan(0);
     await shot(page, "06-board-matches");
 
-    const titles: string[] = [];
+    const initialTitles: string[] = [];
     for (let i = 0; i < scoredCount; i++) {
-      titles.push(
-        (await scoredRows.nth(i).locator("td").first().locator("button").innerText()).trim()
-      );
+      initialTitles.push((await scoredRows.nth(i).locator(".jds-card-title").innerText()).trim());
     }
-    const expectedOrder = [...titles].sort(
-      (a, b) => deterministicFixtureScore(b, "fit") - deterministicFixtureScore(a, "fit")
+    const initialFitScores = initialTitles.map((title) => deterministicFixtureScore(title, "fit"));
+    expect(initialFitScores, "board defaults to deterministic Fit descending").toEqual(
+      [...initialFitScores].sort((a, b) => b - a)
     );
 
     await page.getByRole("button", { name: /^Fit/ }).click();
 
-    const sortedRows = page.locator("table.jsm-board tbody tr").filter({
+    const sortedRows = matchList.locator(":scope > div.jsm-row-shell").filter({
       hasNot: page.getByText("Not read yet")
     });
-    const actualOrder: string[] = [];
+    const ascendingTitles: string[] = [];
     for (let i = 0; i < scoredCount; i++) {
-      actualOrder.push(
-        (await sortedRows.nth(i).locator("td").first().locator("button").innerText()).trim()
-      );
+      ascendingTitles.push((await sortedRows.nth(i).locator(".jds-card-title").innerText()).trim());
     }
-    expect(actualOrder).toEqual(expectedOrder);
+    expect(
+      [...ascendingTitles].sort(),
+      "Fit toggle must preserve the scored title multiset"
+    ).toEqual([...initialTitles].sort());
+    const ascendingFitScores = ascendingTitles.map((title) =>
+      deterministicFixtureScore(title, "fit")
+    );
+    expect(ascendingFitScores, "first Fit click toggles to deterministic Fit ascending").toEqual(
+      [...ascendingFitScores].sort((a, b) => a - b)
+    );
     await shot(page, "07-board-sorted-by-fit");
 
     // No cell ever blends fit/want into a single percentage (ledger L9: fit/want non-blending).
-    const boardText = await page.locator("table.jsm-board").innerText();
+    const boardText = await matchList.innerText();
     expect(boardText).not.toMatch(/\d{1,3}%\s*match/i);
   });
 
@@ -602,19 +777,21 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
     await page.reload();
 
     const unscoredRow = page
-      .locator("table.jsm-board tbody tr")
+      .locator(".jsm-board-list .jsm-list > div.jsm-row-shell")
       .filter({ hasText: unscoredTitle })
       .first();
-    await expect(unscoredRow.getByText("Not read yet")).toBeVisible();
-    await unscoredRow.locator("td").first().locator("button").click();
+    await expect(unscoredRow.getByText("Not read yet", { exact: true })).toBeVisible();
+    await unscoredRow.locator(":scope > button.jsm-row").click();
 
-    const inspector = page.locator('aside[role="dialog"]');
-    await expect(inspector).toBeVisible();
-    await expect(inspector.getByRole("status")).toContainText(
-      "Not read yet — this posting is queued for scoring, not dropped. Fit and Want will appear here once it's been read."
-    );
+    const detail = page.getByRole("article", {
+      name: `Details for ${unscoredTitle}`,
+      exact: true
+    });
+    await expect(detail).toBeVisible();
+    await expect(detail.getByText("Not read yet", { exact: true })).toBeVisible();
+    await expect(detail.getByRole("status")).toContainText("queued for scoring, not dropped");
     await shot(page, "09-inspector-unscored-posting");
-    await inspector.getByRole("button", { name: "Close" }).click();
+    await detail.getByRole("button", { name: "Back to matches", exact: true }).click();
   });
 
   // --- Phase 10: outside-frame badge, direct-seeded, renders on both board row and Inspector ---
@@ -634,11 +811,10 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
       // scored_at is set), then id, so the row chosen is the same one on every run — and ascending,
       // where Phase 9's unscore seed takes the last row, so the two never collide.
       //
-      // Keyed on `want`, not `fit`: Fit is only knowable against a résumé, and #1341 made the
-      // scoring stage write `fit = null` rather than a meaningless 0 when there is no résumé on
-      // file. This UAT profile has no résumé, so `fit is not null` now matches nothing and this
-      // seed silently updated zero rows. Want is scored either way and is the honest test of
-      // "a match that has been read".
+      // Keyed on `want`, not `fit`: #1341 permits a read match with no Fit when no résumé exists,
+      // while Want is always the stable proof that scoring read the row. This fixture now carries
+      // a résumé, but keeping the broader read-state predicate prevents this UI seed from becoming
+      // coupled to Fit's independent input contract again.
       `update app.job_search_matches set outside_frame = true where id = (select id from app.job_search_matches where profile_id = '${seededProfileId}' and want is not null order by scored_at, id limit 1) returning id, (select title from app.job_search_postings p where p.id = job_search_matches.posting_id);`
     );
     expect(
@@ -650,15 +826,20 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
     expect(seededTitle, "the seeded match must have a posting title").toBeTruthy();
 
     await page.reload();
-    const flaggedRow = page.locator("table.jsm-board tbody tr").filter({ hasText: seededTitle });
-    await expect(flaggedRow.getByText("Outside your stated frame")).toBeVisible();
+    const flaggedRow = page
+      .locator(".jsm-board-list .jsm-list > div.jsm-row-shell")
+      .filter({ hasText: seededTitle });
+    await expect(flaggedRow.getByText("Outside your stated frame", { exact: true })).toBeVisible();
     await shot(page, "10-outside-frame-board-row");
 
-    await flaggedRow.locator("td").first().locator("button").click();
-    const inspector = page.locator('aside[role="dialog"]');
-    await expect(inspector.getByText("Outside your stated frame")).toBeVisible();
+    await flaggedRow.locator(":scope > button.jsm-row").click();
+    const detail = page.getByRole("article", {
+      name: `Details for ${seededTitle}`,
+      exact: true
+    });
+    await expect(detail.getByText("Outside your stated frame", { exact: true })).toBeVisible();
     await shot(page, "11-outside-frame-inspector");
-    await inspector.getByRole("button", { name: "Close" }).click();
+    await detail.getByRole("button", { name: "Back to matches", exact: true }).click();
   });
 
   // --- Phase 11: core drawer scoping — spec §7 says opening the header chat control inside a
@@ -709,39 +890,90 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
     );
 
     await page.reload();
-    await page.getByRole("button", { name: "Chat with Jarvis" }).click();
+    // Name-agnostic: the accessible name is `Chat with ${assistantName}` (persona-driven, not a
+    // fixed literal); .topbar-actions holds exactly one button, the chat toggle.
+    await page.locator(".topbar-actions button").click();
     await expect(page.getByText(MARKER_TEXT, { exact: false })).toBeVisible();
     await shot(page, "12-drawer-inside-profile");
     await page.keyboard.press("Escape");
 
     await page.goto(`${requireBaseURL()}/tasks`);
-    await page.getByRole("button", { name: "Chat with Jarvis" }).click();
+    // Name-agnostic: the accessible name is `Chat with ${assistantName}` (persona-driven, not a
+    // fixed literal); .topbar-actions holds exactly one button, the chat toggle.
+    await page.locator(".topbar-actions button").click();
     await expect(page.getByText(MARKER_TEXT, { exact: false })).toHaveCount(0);
     await shot(page, "13-drawer-outside-module-empty");
   });
 
-  // Phase 12 (nav badge, #1285) moved out to a standalone test.fixme below: unlike Phase 11, this
-  // one asserts against a wire field (ModuleNavigationEntryDto.badge) that does not exist in the
-  // DTO at all today, not a routing bug over data that's already there — see that test's body for
-  // why that distinction is what puts it on the fixme side of the line.
+  // Phase 12 stays standalone and owns its unread fixture, so badge coverage never depends on
+  // whether the earlier crawl happened to produce a notification.
 });
 
-test.fixme("nav badge reflects unread matches and clears on mark-read (#1285)", async () => {
-  // Blocked, not just unimplemented: app-shell.tsx's NavEntryWithBadge only ever renders a count
-  // when entry.badge?.source === "notifications", but ModuleNavigationEntryDto — the wire shape
-  // actually serialized to the browser — carries no `badge` field at all today, regardless of
-  // what jarvis.module.json declares. There is no seed lever or timing fix that makes this pass;
-  // the DTO itself needs the field before this body can be written for real. Tracked at #1285.
-  //
-  // Intended assertion, to lift in verbatim once #1285 lands:
-  //   await page.goto(requireBaseURL());
-  //   const navLink = page.locator('nav[aria-label="Modules"]').getByRole("link", { name: "Job Search" });
-  //   await expect(navLink.locator(".jds-badge-count")).toBeVisible();
-  //   await page.locator(".jds-usermenu__trigger").click();
-  //   await page.getByRole("button", { name: "Notifications" }).click();
-  //   const notice = page.getByText(/\d+ new job matches?/);
-  //   await expect(notice).toBeVisible();
-  //   const title = await notice.innerText();
-  //   await page.getByRole("button", { name: `Mark ${title} read` }).click();
-  //   await expect(navLink.locator(".jds-badge-count")).toHaveCount(0);
+test("nav badge reflects unread matches and clears on mark-read (#1285)", async ({ page }) => {
+  const notificationId = "15440000-0000-4000-8000-000000000001";
+  const notificationTitle = "UAT Job Search badge fixture (#1544)";
+  const notificationsResponse = (response: Response) =>
+    response.url().endsWith("/api/notifications") &&
+    response.request().method() === "GET" &&
+    response.ok();
+
+  const baselineResponsePromise = page.waitForResponse(notificationsResponse);
+  await signIn(page);
+  const navLink = page
+    .getByRole("navigation", { name: "Modules", exact: true })
+    .getByRole("link", { name: "Job Search" });
+  const badge = navLink.locator(".jds-badge-count");
+  const baseline = (await (await baselineResponsePromise).json()) as {
+    unreadByModule: Record<string, number>;
+  };
+  expect(baseline.unreadByModule["job-search"] ?? 0).toBe(0);
+  await expect(badge).toHaveCount(0);
+
+  execUatSql(
+    requireProjectName(),
+    `insert into app.notifications (id, actor_user_id, recipient_user_id, title, module_id) values ` +
+      `('${notificationId}', '${UAT_ADMIN_ID}', '${UAT_ADMIN_ID}', '${notificationTitle}', 'job-search');`
+  );
+
+  try {
+    const seededResponsePromise = page.waitForResponse(notificationsResponse);
+    await page.reload();
+    const seeded = (await (await seededResponsePromise).json()) as {
+      notifications: Array<{ id: string }>;
+      unreadByModule: Record<string, number>;
+    };
+    expect(seeded.notifications.filter((notice) => notice.id === notificationId)).toHaveLength(1);
+    expect(seeded.unreadByModule["job-search"]).toBe(1);
+    await expect(badge).toHaveText("1");
+    expect(await badge.textContent()).toBe(String(seeded.unreadByModule["job-search"]));
+
+    await page.locator(".jds-usermenu__trigger").click();
+    await page.getByRole("button", { name: "Notifications" }).click();
+    const notice = page.locator("article.jds-task").filter({
+      has: page.getByText(notificationTitle, { exact: true })
+    });
+    await expect(notice).toBeVisible();
+
+    const readResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/api/notifications/${notificationId}/read`) &&
+        response.request().method() === "PATCH"
+    );
+    const clearedResponsePromise = page.waitForResponse(notificationsResponse);
+    await notice
+      .getByRole("button", { name: `Mark ${notificationTitle} read`, exact: true })
+      .click();
+    await expect((await readResponsePromise).ok()).toBe(true);
+    const cleared = (await (await clearedResponsePromise).json()) as {
+      unreadByModule: Record<string, number>;
+    };
+    expect(cleared.unreadByModule["job-search"] ?? 0).toBe(0);
+    await expect(badge).toHaveCount(0);
+  } finally {
+    const deletedId = execUatSql(
+      requireProjectName(),
+      `delete from app.notifications where id = '${notificationId}' returning id;`
+    ).trim();
+    expect(deletedId).toBe(notificationId);
+  }
 });

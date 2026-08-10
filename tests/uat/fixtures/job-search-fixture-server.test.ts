@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
+import { parseScoreResult } from "../../../external-modules/job-search/src/domain/score.js";
+
 import {
   buildChatCompletionsResponse,
   deterministicFixtureScore,
@@ -90,8 +92,8 @@ describe("startJobSearchFixtureServer", () => {
       expect(response.status).toBe(200);
       const payload = await response.json();
       expect(typeof payload.choices[0].message.content).toBe("string");
-      const scored = JSON.parse(payload.choices[0].message.content);
-      expect(Object.keys(scored).sort()).toEqual(["fit", "fitReason", "want", "wantReason"]);
+      const scored = parseScoreResult(JSON.parse(payload.choices[0].message.content));
+      expect(scored.fitDisposition).toBe("supported");
       expect(Number.isInteger(scored.fit)).toBe(true);
       expect(scored.fit).toBeGreaterThanOrEqual(0);
       expect(scored.fit).toBeLessThanOrEqual(100);
