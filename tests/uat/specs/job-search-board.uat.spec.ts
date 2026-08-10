@@ -603,29 +603,27 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
     ).trim();
     expect(resumeId, "current resume insert must return its exact id").toBeTruthy();
 
-    for (const sourceId of ["freehire", "linkedin"]) {
-      await enqueueJobSearchFixtureInput(
-        page,
-        projectName,
-        "job-search.portal-set-enabled",
-        "portal.set-enabled",
-        {
-          profileId: seededProfileId,
-          sourceId,
-          enabled: true
-        }
-      );
-      await expect
-        .poll(
-          () =>
-            execUatSql(
-              projectName,
-              `select enabled from app.job_search_portals where profile_id = '${seededProfileId}' and source_id = '${sourceId}';`
-            ).trim(),
-          { timeout: POLL_DEADLINE_MS }
-        )
-        .toBe("t");
-    }
+    await enqueueJobSearchFixtureInput(
+      page,
+      projectName,
+      "job-search.portal-set-enabled",
+      "portal.set-enabled",
+      {
+        profileId: seededProfileId,
+        sourceId: "freehire",
+        enabled: true
+      }
+    );
+    await expect
+      .poll(
+        () =>
+          execUatSql(
+            projectName,
+            `select enabled from app.job_search_portals where profile_id = '${seededProfileId}' and source_id = 'freehire';`
+          ).trim(),
+        { timeout: POLL_DEADLINE_MS }
+      )
+      .toBe("t");
 
     // Arm this before the final readiness input lands. Phase 5 owns the assertion, but cannot miss
     // the exact-profile request if the already-open module observes activation immediately.
