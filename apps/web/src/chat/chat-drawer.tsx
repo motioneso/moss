@@ -59,7 +59,7 @@ export function ChatDrawer(props: {
   readonly onActionRequestFocused?: () => void;
 }) {
   const queryClient = useQueryClient();
-  const assistantName = useAssistantName();
+  const assistantName = useAssistantName("");
   const [reviewThreadId, setReviewThreadId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [privateMode, setPrivateMode] = useState(false);
@@ -394,13 +394,17 @@ export function ChatDrawer(props: {
   };
 
   return (
-    <aside className="chatd" role="dialog" aria-label={`Chat with ${assistantName}`}>
+    <aside
+      className="chatd"
+      role="dialog"
+      aria-label={assistantName ? `Chat with ${assistantName}` : "Chat"}
+    >
       <div className="chatd__head">
         <span className="chatd__mark">
           <BrandMark size={16} />
         </span>
         <div className="chatd__id">
-          <div className="chatd__name">{assistantName}</div>
+          <div className="chatd__name">{assistantName || "Chat"}</div>
           <div className="chatd__status">Here when you need me</div>
         </div>
         <button
@@ -488,7 +492,7 @@ export function ChatDrawer(props: {
               focusActionRequestId={props.focusActionRequestId}
               onActionRequestFocused={props.onActionRequestFocused}
             />
-          ) : chatRouteQuery.isSuccess && !chatAvailable ? (
+          ) : chatRouteQuery.isSuccess && !chatAvailable && !lockedModelUnavailable ? (
             <ConnectProviderEmpty isFounder={props.isFounder} />
           ) : (
             <EmptyState
@@ -501,7 +505,7 @@ export function ChatDrawer(props: {
             <div
               className="chatd-loading"
               aria-live="polite"
-              aria-label={`${assistantName} is thinking`}
+              aria-label={assistantName ? `${assistantName} is thinking` : "Assistant is thinking"}
             >
               <span className="chatd-msg__av">
                 <BrandMark size={14} />
