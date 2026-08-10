@@ -226,7 +226,7 @@ describe("weather integration", () => {
     });
 
     it("refreshes cached weather after a location is saved, changed, or cleared", async () => {
-      const fakeFetch = vi.fn().mockResolvedValue(makeOpenMeteoResponse(18, 15, 0));
+      const fakeFetch = vi.fn(async () => makeOpenMeteoResponse(18, 15, 0));
       const srv = createApiServer({
         appDb,
         boss,
