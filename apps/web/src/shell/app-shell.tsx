@@ -138,12 +138,10 @@ export function AppShell(props: AppShellProps) {
   const activeModuleSurfaceBranded = activeModuleSurface as ChatSurface | null;
   const activeSurface = activeModuleSurfaceBranded ?? DEFAULT_CHAT_SURFACE;
   // Lifted to the shell so the SSE stream + transcript persist while the drawer is closed and as
-  // the user navigates between pages — the chat follows the user. `undefined` (no module surface
-  // claimed) keeps the "nothing active" case on the exact request shape it always had — no
-  // `?surface=` query param — so this is a strict widening of the pre-#1284 behaviour.
-  const { records, clearRecords, streamErrorCount } = useChatStream(
-    activeModuleSurfaceBranded ?? undefined
-  );
+  // the user navigates between pages — the chat follows the user. Always pass the defaulted
+  // `activeSurface`, never the raw `activeModuleSurfaceBranded ?? undefined` — the latter left
+  // useChatStream's rehydration effect permanently gated off for the default drawer (#1449).
+  const { records, clearRecords, streamErrorCount } = useChatStream(activeSurface);
   const assistantRecordListeners = useRef(
     new Set<(records: readonly AssistantRecordV1[]) => void>()
   );
