@@ -61,10 +61,18 @@ describe("redactSecrets", () => {
     expect(out).toContain("db.internal/app");
   });
 
-  it("caps the output at 2000 characters as a backstop", () => {
-    const long = "x".repeat(5000);
-    const out = redactSecrets(long);
-    expect(out.length).toBeLessThanOrEqual(2000);
+  it("redacts OAuth authorization codes carried in a URL query parameter", () => {
+    const code = "AUTHCODE-9f8e7d6c5b4a";
+    const out = redactSecrets(`provider rejected https://provider.test/callback?code=${code}`);
+    expect(out).not.toContain(code);
+    expect(out).toContain("[redacted]");
+  });
+
+  it("does not truncate before exact flow redaction can match across the 2000-character boundary", () => {
+    const code = "ZAUTHCODE-9f8e7d6c5b4a";
+    const out = redactExact(redactSecrets(`${"x".repeat(1999)}${code}`), code);
+    expect(out).not.toContain("Z");
+    expect(out).toContain("[redacted]");
   });
 });
 

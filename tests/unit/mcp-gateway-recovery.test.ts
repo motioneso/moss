@@ -299,4 +299,25 @@ describe("logical action terminal results", () => {
       errorSpy.mockRestore();
     }
   });
+
+  it("redacts OAuth authorization codes and caps handler-error logs (#1251)", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const code = "AUTHCODE-9f8e7d6c5b4a";
+      const { gateway, token } = createGateway({
+        yolo: true,
+        handlerError: true,
+        handlerErrorMessage: `https://provider.test/callback?code=${code} ${"x".repeat(5000)}`
+      });
+
+      await gateway.callTool(token, "demo-module.resume.import", {});
+
+      const [logged] = errorSpy.mock.calls[0] as [string];
+      const payload = JSON.parse(logged);
+      expect(payload.error).not.toContain(code);
+      expect(payload.error.length).toBeLessThanOrEqual(2000);
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
 });

@@ -67,6 +67,7 @@ const defaultPolicyLookup: ActionPolicyLookup = {
 const TASKS_FIRST_RUN_NOTICE_KEY = "tasks.agency_auto_execute.first_prompt_seen";
 const TASKS_FIRST_RUN_NOTICE =
   'Your assistant now asks before creating tasks. Enable "create without asking" in Task settings to auto-run task changes.';
+const OPERATOR_LOG_ERROR_MAX_LENGTH = 2_000;
 
 interface ExecutableTool {
   readonly tool: ModuleAssistantToolManifest;
@@ -421,7 +422,10 @@ export class AssistantToolGateway {
           toolName: found.tool.name,
           actorUserId,
           requestId,
-          error: redactSecrets(error instanceof Error ? error.message : String(error))
+          error: redactSecrets(error instanceof Error ? error.message : String(error)).slice(
+            0,
+            OPERATOR_LOG_ERROR_MAX_LENGTH
+          )
         })
       );
       return { ok: false, error: `Tool ${found.tool.name} failed` };
@@ -521,7 +525,10 @@ export class AssistantToolGateway {
           toolName: found.dto.name,
           actorUserId: ctx.actorUserId,
           requestId: ctx.requestId,
-          error: redactSecrets(error instanceof Error ? error.message : String(error))
+          error: redactSecrets(error instanceof Error ? error.message : String(error)).slice(
+            0,
+            OPERATOR_LOG_ERROR_MAX_LENGTH
+          )
         })
       );
       return { ok: false, error: `Tool ${found.dto.name} failed` };
