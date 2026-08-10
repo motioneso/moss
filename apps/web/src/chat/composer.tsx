@@ -329,6 +329,15 @@ export function Composer(props: {
 
   useEffect(() => {
     return () => {
+      // Stopping the last track auto-stops an active MediaRecorder, which would otherwise still
+      // fire onstop/ondataavailable after unmount and upload a partial recording (#900/#1134 QA
+      // finding) — detach the recorder's callbacks first so that can't happen.
+      const recorder = recorderRef.current;
+      if (recorder) {
+        recorder.onstop = null;
+        recorder.ondataavailable = null;
+        recorderRef.current = null;
+      }
       streamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
