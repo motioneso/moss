@@ -13,9 +13,10 @@ GitHub/project 2 is the source of truth. Detailed continuation evidence stays in
 
 | Spec | Issue | Tier | Status | Agent label | Branch | PR |
 | ---- | ----- | ---- | ------ | ----------- | ------ | -- |
-| `docs/superpowers/specs/2026-08-10-1554-persistent-provider-chat-runtime.md` | #1557 | sensitive | blocked on Fable UAT ruling | `Fable #1557 UAT ruling` | `1557-p1-persistent-adapter` | #1561 |
-| pending #1121 scriptable-UAT spec | #1121 | sensitive | spec-writing | collaboration agent `spec_1486_proxy` (redirected) | `docs/1121-scriptable-chat` | — |
+| `docs/superpowers/specs/2026-08-10-1554-persistent-provider-chat-runtime.md` | #1557 | sensitive | Fable ruling resolved; final-head rebuild/UAT pending | `Fable #1557 UAT ruling` | `1557-p1-persistent-adapter` | #1561 |
+| pending #1121 scriptable-UAT spec | #1121 | sensitive | spec-writing, independent follow-up | collaboration agent `spec_1486_proxy` (redirected) | `docs/1121-scriptable-chat` | — |
 | `docs/superpowers/specs/2026-08-10-1533-chat-surface-send-routing.md` | #1533 | sensitive | draft PR, docs CI + Fable approval pending | collaboration agent `spec_1533_adopt` | `docs/1533-chat-surface-routing` | #1563 |
+| Fable ruling comment + issue acceptance | #1564 | routine | building | `Issue #1564 trigger map` | `fix/1564-trigger-map` | — |
 
 ## Ready-after-current lanes
 
@@ -29,8 +30,9 @@ GitHub/project 2 is the source of truth. Detailed continuation evidence stays in
 
 ## Dependency / merge order
 
-- #1121 is the prerequisite for the attachments/runtime-context fixmes exposed by #1557's six-file UAT gate.
-- #1557 awaits Fable's ruling on the intentionally non-runnable #1089/#1090 UAT file, then prerequisite work and an exact-head gate.
+- Fable ruled #1557's gate is baseline-identical run-and-record, not zero-skip; #1121 is not a prerequisite.
+- #1564's separate trigger-map truth correction lands before #1557's final exact-head UAT run.
+- #1557 then rebuilds/pushes its coherent head, runs CI and all six specs once with credentialed real-chat onboarding, records exact pass/skip counts, and requests fresh Fable adjudication.
 - #1558/#1559 remain serialized after #1557.
 - #1533 is independent but shares chat-surface code with #1557; build only after current diff collision is checked against fresh `main`.
 - Routine #1560 may run independently once a build slot opens.
@@ -41,7 +43,7 @@ None.
 
 ## Outstanding escalations
 
-- [ ] Fable: binding interpretation of #1557's zero-skip gate versus pre-existing unconditional fixmes.
+- [x] Fable: #1557 gate ruling posted at issue comment 5249826990; baseline-identical skips permitted, credentialed real-chat required.
 - [ ] Fable: approve #1121 and #1533 specs before build.
 
 ## Reaped sessions
