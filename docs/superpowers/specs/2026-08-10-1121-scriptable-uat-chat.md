@@ -62,6 +62,12 @@ that can cross the same chat/process/MCP/tool/UI boundaries without an upstream 
 9. **No #1557 dependency:** this harness issue neither gates nor proves #1557. It does not change
    persistent runtime selection, provide #1557 live-path evidence, or redefine #1557's
    baseline-identical run-and-record gate.
+10. **Scripted transport is pinned:** every scripted run writes
+    `chat.persistent_runtime.enabled = false` for its ephemeral instance and accepts only the
+    bounded one-shot print launch. The fixture requires `-p` plus exactly one session flag; a
+    different engine shape fails immediately with `scripted UAT requires bounded one-shot print`,
+    not with a later empty-reply timeout. Supporting scripted persistent sessions is a separate
+    follow-up.
 
 ## Minimal implementation
 
@@ -107,9 +113,29 @@ passing when the real read/write failed.
 
 Add an executable Node script at `tests/uat/fixtures/scripted-provider/bin/claude`; the existing
 Docker build already copies the full repository, so no Dockerfile stage or dependency is needed.
-It accepts the existing `claude -p` launch, including `--session-id <id>` on the first turn,
-`--resume <id>` thereafter, `--mcp-config <path>`, and the final prompt argument. For each invocation
-it:
+It accepts the complete `ClaudePrintChatEngine.buildCommand` launch shape:
+
+- `-p` and exactly one of `--session-id <id>` on the first turn or `--resume <id>` thereafter;
+- `--permission-mode dontAsk`;
+- on the MCP path, `--mcp-config <path>`, `--settings <path>`, and
+  `--allowedTools <space-separated-patterns>`; or, on the no-MCP path, `--tools ""`;
+- `--append-system-prompt-file <path>` and `--strict-mcp-config`;
+- optional `--model <name>`; and
+- the prompt as the final positional argument.
+
+It validates and uses the mode, session, MCP config, allowed-tool patterns, and prompt. It accepts
+but otherwise ignores the permission mode, settings path, system-prompt path, strict-config flag,
+and optional model after validating their arity and fixed values. The no-MCP shape parses, then
+fails closed because a scripted turn cannot prove the real gateway without `--mcp-config`.
+
+The same binary may be reached through `buildStructuredCommand`, whose full distinguishing shape is
+`--print --input-format stream-json --output-format stream-json --include-partial-messages
+--verbose --no-session-persistence --permission-mode dontAsk --tools "" --strict-mcp-config
+--json-schema <json> --append-system-prompt-file <path>` plus optional `--model`. The fixture
+recognizes that shape only to reject it: any stream-JSON/structured invocation exits non-zero with
+the bounded-engine diagnostic and appends no transcript reply.
+
+For each valid bounded invocation it:
 
 1. loads that session's fixture cursor from a fixture-owned state file under the neutral working
    directory and rejects a missing/mismatched transition;
@@ -129,9 +155,18 @@ For a tool step, the executable:
 
 1. reads the runtime-generated MCP URL/bearer from `--mcp-config`;
 2. requires the URL to be the in-stack `/api/mcp` endpoint;
-3. calls `tools/list`, then `tools/call` with the fixture arguments;
-4. waits for the real call to finish (including browser approval when required);
-5. records tool-use metadata and the fixed assistant reply, then returns success.
+3. calls `tools/list` and requires the fixture-declared bare tool to appear;
+4. derives the same CLI-visible name as the production MCP transport (for example,
+   `calendar.listVisibleEvents` → `mcp__jarvis__calendar_listVisibleEvents`) and requires it to match
+   at least one command-line `--allowedTools` pattern;
+5. calls `tools/call` with the fixture arguments;
+6. waits for the real call to finish (including browser approval when required);
+7. records tool-use metadata and the fixed assistant reply, then returns success.
+
+The allowed-tool matcher supports the exact and trailing-`*` prefix forms emitted by the production
+launcher; it does not turn patterns into arbitrary regular expressions. Native vault patterns such
+as `Read(<root>/**)` cannot authorize an MCP call. An undeclared or out-of-pattern tool fails before
+`tools/call`, even if the MCP token itself would permit it.
 
 On failure it exits non-zero without appending a successful final reply. Stderr may identify only
 script id, turn index, and failure class—never prompt text, MCP config, token, tool
@@ -139,20 +174,30 @@ arguments/results, attachment content, captures, or reply content.
 
 ### 3. Harness and seed wiring
 
-Extend the existing `uatLevel` literal with one optional field:
+Extend `readUatLevel`'s existing single anchored regex—do not add a second parser—to accept one
+optional string-valued `chatScript: "<id>"` after the existing optional
+`withoutNewsJsonBinding` and `withJobSearchFixture` fields. The literal order accepted by the
+extended regex is:
 
 ```ts
 export const uatLevel = {
   level: "solo-admin",
   without: [],
+  withoutNewsJsonBinding: false,
+  withJobSearchFixture: false,
   chatScript: "runtime-context"
 } as const;
 ```
 
-Use one allowlist shared by `run-uat.ts` validation and the seed/provisioner tests. Do not accept an
-arbitrary path. When present:
+The parsed value threads through one typed path:
+`readUatLevel` →
+`provisionForUat(level, { excludeChunks, withoutNewsJsonBinding, withJobSearchFixture, chatScript })`
+→ optional `UatProvisionOptions.chatScript`. Use one allowlist shared by `run-uat.ts` validation and
+the seed/provisioner tests. Do not accept an arbitrary path. When present:
 
 - the provisioner writes the allowlisted id to the ephemeral run env;
+- the ephemeral seed/config explicitly writes `chat.persistent_runtime.enabled = false` rather than
+  inheriting a current or future default;
 - Compose maps the existing `JARVIS_CLI_TOOLS_PREFIX` to
   `/app/tests/uat/fixtures/scripted-provider` for that run only (the production default remains
   `/data/cli-tools`);
@@ -167,6 +212,9 @@ fixture, and the `seed` profile remains inert outside an explicit UAT run.
 
 No general `scripted` provider kind is added to shared API/DB types. The router sees a normal
 chat-capable configured model; only the executable found on this ephemeral run's PATH is synthetic.
+The first fixture invocation is also the live engine-shape assertion: it must contain `-p` and the
+session flag. Stream JSON or any other launch form fails immediately with the locked-boundary-10
+diagnostic, so an engine-selection change cannot silently degrade scripted coverage.
 
 ### 4. Keep real-provider proof separate
 
@@ -210,15 +258,23 @@ accounting. `real-chat-onboarding.uat.spec.ts`, `cli-terminal.uat.spec.ts`, and
 Smallest checks required before the prod-shaped UAT run:
 
 1. Fixture unit tests: three bounded invocations preserve one session cursor and append parseable
-   transcript records. Mismatch/unknown script/malformed fixture/tool error fail closed; capture
+   transcript records; every value-taking print flag is consumed correctly; structured stream JSON,
+   no-MCP mode, mismatch/unknown script/malformed fixture/tool error fail closed; capture
    substitution works; no secret or prompt reaches stderr.
 2. MCP fixture integration test: real `tools/list` + read call succeeds; confirmation-required write
-   remains pending until registry approval and does not mutate before approval.
+   remains pending until registry approval and does not mutate before approval. An undeclared tool
+   and a declared tool outside the parsed `--allowedTools` patterns both fail before `tools/call`.
 3. Seed tests: default seed still resolves no chat model; scripted seed resolves the neutral active
-   chat model; News JSON binding remains its existing separate model.
+   chat model and pins `chat.persistent_runtime.enabled` false; News JSON binding remains its
+   existing separate model.
 4. Harness/config tests: allowlisted id threads to the ephemeral env/PATH; arbitrary ids/paths fail;
-   normal compose/default run retains `/data/cli-tools` and no scripted model/setting.
-5. UAT result checks parse Playwright's result rather than trusting exit 0 alone. Each converted
+   the anchored `readUatLevel` regex accepts `chatScript` only in the declared order and threads it
+   through `UatProvisionOptions`; normal compose/default run retains `/data/cli-tools` and no
+   scripted model/setting.
+5. Engine-selection regression: the scripted provider tuple (`anthropic`, `non_interactive`,
+   persistent runtime off) selects the bounded one-shot `ClaudePrintChatEngine`, and the fixture's
+   launch-shape assertion reports a clear failure for any structured/persistent selection.
+6. UAT result checks parse Playwright's result rather than trusting exit 0 alone. Each converted
    #1121 case must be runnable and pass; unrelated intentional skips are neither removed nor counted
    as #1121 failures.
 
