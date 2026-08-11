@@ -17,7 +17,7 @@ GitHub/project 2 is the source of truth. Detailed continuation evidence stays in
 | `docs/superpowers/specs/2026-08-10-1121-scriptable-uat-chat.md` | #1121 | sensitive | spec merged as `7aa85f628`; implementation planning started | `Issue #1121 scriptable UAT`, session `dd6bb68a-60ee-4ea8-8a66-e56b7cf12066` | `build/1121-scriptable-chat` | #1565 merged |
 | `docs/superpowers/specs/2026-08-10-1533-chat-surface-send-routing.md` | #1533 | sensitive | Phase 1 committed; Phase 2 production preserved, tests next | `Issue #1533 chat surface (relay6)`, session `b0b3d2ea-1027-481c-abd2-accfe383d3d8` | `build/1533-chat-surface-routing` | #1563 spec merged as `abfe0478b1` |
 | Fable ruling comment + issue acceptance | #1564 | routine | merged/Closed/Project Done; wrapper reaped; needs-ben sent | — | `fix/1564-trigger-map` | #1566 merged as `0a57ef450` |
-| issue #1560 acceptance | #1560 | routine | PR #1567 QA-RED fixes pushed at `c15187b84`; re-QA/CI pending; persona cleanup awaits Ben | `Issue #1560 name flash (relay3)`, session `b2a0f924-3f1e-4848-8ded-acdae4fd3f34` | `fix/1560-assistant-name-flash` | #1567 |
+| issue #1560 acceptance | #1560 | routine | PR #1567 QA-RED fixes + relay checkpoint pushed at `2e63f8ac1`; re-QA/CI pending; persona cleanup awaits Ben | `Issue #1560 name flash (relay3)`, session `b2a0f924-3f1e-4848-8ded-acdae4fd3f34` | `fix/1560-assistant-name-flash` | #1567 |
 
 ## Ready-after-current lanes
 
