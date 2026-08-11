@@ -93,7 +93,7 @@ export type ChatEngineFactory = (
   provider: ProviderKind,
   sessionKey: string,
   opts?: { readonly executionMode?: AiProviderExecutionMode }
-) => CliChatEngine;
+) => CliChatEngine | Promise<CliChatEngine>;
 
 export interface PersonaPreferencesPort {
   get(scopedDb: DataContextDb, key: string): Promise<unknown>;
@@ -106,16 +106,28 @@ export interface PersonaPreferencesPort {
  * single-host behavior for tests and standalone embedders).
  */
 export function createRealEngineFactory(
-  opts: { mux?: Multiplexer; persistentRuntimeEnabled?: boolean } = {}
+  opts: {
+    mux?: Multiplexer;
+    // #1557 Finding 2: a plain boolean is a one-time snapshot (back-compat / cli-runner
+    // callers that already pin the value). Callers that need the flag re-read live on every
+    // new-session launch (spec's flag-off-without-restart contract) pass a getter instead —
+    // `chat-multiplexer.ts`'s `resolveChatEngineFactory` re-reads `chat.persistent_runtime.enabled`
+    // from the DB on every call, fail-closed to `false`.
+    persistentRuntimeEnabled?: boolean | (() => Promise<boolean>);
+  } = {}
 ): ChatEngineFactory {
   // Containerized deploys (deployable-stack §6) point this at the bind-mounted host
   // CLI-dir base (/host-home) so transcripts written by the host CLI are read back
   // correctly. Unset on a host install → the engine uses the OS home (unchanged).
   const homeBase = resolveMossEnv(process.env, "JARVIS_CLI_HOME_BASE");
-  return (provider, sessionKey, engineOpts) =>
+  return async (provider, sessionKey, engineOpts) => {
+    const persistentRuntimeEnabled =
+      typeof opts.persistentRuntimeEnabled === "function"
+        ? await opts.persistentRuntimeEnabled()
+        : (opts.persistentRuntimeEnabled ?? false);
     // #1350: selection lives in ONE shared helper so this root and the cli-runner's
     // EngineHost cannot drift apart on which engine a mode gets.
-    createChatEngine(provider, sessionKey, createRealTmuxIo(), {
+    return createChatEngine(provider, sessionKey, createRealTmuxIo(), {
       mux: opts.mux,
       homeBase,
       executionMode: engineOpts?.executionMode,
@@ -123,13 +135,14 @@ export function createRealEngineFactory(
       // (`chat-multiplexer.ts`'s `resolveChatEngineFactory`, the host-dev boot path). The
       // cli-runner RPC root (`engine-host.ts`) never reaches this factory — it calls
       // `createChatEngine` directly and pins this to `false` (#1350 two-roots guard).
-      persistentRuntimeEnabled: opts.persistentRuntimeEnabled,
+      persistentRuntimeEnabled,
       // #1157: surface silently-discarded composer input (char count only — never content).
       onDiagnostic: (event) =>
         console.warn(
           `[chat-runtime] ${sessionKey} diagnostic ${event.kind} paneChars=${event.paneChars}`
         )
     });
+  };
 }
 
 /**

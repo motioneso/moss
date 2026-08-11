@@ -28,6 +28,7 @@ import {
   type ChatEngineFactory,
   type RpcConnection
 } from "@moss/chat";
+import type { CliChatEngine } from "@moss/chat/live";
 
 export interface ChatMultiplexerAvailability {
   readonly tmux: boolean;
@@ -199,7 +200,7 @@ export function makeProviderConnectionCheckProbe(deps: {
     }
 
     let neutralDir: string | null = null;
-    let engine: ReturnType<ChatEngineFactory> | null = null;
+    let engine: CliChatEngine | null = null;
     try {
       neutralDir = await mkdtemp(join(tmpdir(), "jarv1s-provider-check-"));
       const personaPath = join(neutralDir, "persona.md");
@@ -219,7 +220,7 @@ export function makeProviderConnectionCheckProbe(deps: {
         return await checkGoogleProviderWithAgyAuthStatus(deps.commandIo ?? createRealTmuxIo());
       }
 
-      engine = deps.engineFactory(kind, `onboarding-check-${kind}`);
+      engine = await deps.engineFactory(kind, `onboarding-check-${kind}`);
       await withTimeout(engine.launch({ neutralDir, personaPath }), PROVIDER_CHECK_TIMEOUT_MS);
       await acknowledgeProviderPromptIfNeeded(engine, kind);
       await waitForProviderTranscriptIfNeeded(engine, kind, PROVIDER_CHECK_TIMEOUT_MS);
@@ -284,7 +285,7 @@ async function checkGoogleProviderWithAgyAuthStatus(
 }
 
 async function acknowledgeProviderPromptIfNeeded(
-  engine: ReturnType<ChatEngineFactory>,
+  engine: CliChatEngine,
   kind: OnboardingProviderKind
 ): Promise<void> {
   if (kind === "anthropic" || kind === "google") return;
@@ -293,7 +294,7 @@ async function acknowledgeProviderPromptIfNeeded(
 }
 
 async function waitForProviderTranscriptIfNeeded(
-  engine: ReturnType<ChatEngineFactory>,
+  engine: CliChatEngine,
   kind: OnboardingProviderKind,
   timeoutMs: number
 ): Promise<void> {
@@ -311,7 +312,7 @@ async function waitForProviderTranscriptIfNeeded(
 }
 
 async function waitForProviderReply(
-  engine: ReturnType<ChatEngineFactory>,
+  engine: CliChatEngine,
   kind: OnboardingProviderKind,
   timeoutMs: number
 ): Promise<boolean> {
@@ -416,6 +417,30 @@ async function readPersistentRuntimeEnabled(appDb: Kysely<MossDatabase>): Promis
 }
 
 /**
+ * #1557 Finding 2: `chat.persistent_runtime.enabled` must be able to flip off (drain to
+ * bounded-fallback) without an API restart, so the engine factory must re-read it on every
+ * new-session launch rather than close over a boot-time snapshot. Same fail-closed-to-`false`
+ * posture as the one-time boot read above — a transient read failure degrades to the
+ * unchanged bounded-fallback engine, never crashes the turn.
+ */
+function createPersistentRuntimeEnabledLiveReader(
+  appDb: Kysely<MossDatabase>,
+  log?: (msg: string) => void
+): () => Promise<boolean> {
+  return async () => {
+    try {
+      return await readPersistentRuntimeEnabled(appDb);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      log?.(
+        `[chat] could not read chat.persistent_runtime.enabled setting (${reason}) — defaulting to off`
+      );
+      return false;
+    }
+  };
+}
+
+/**
  * Resolve the production chat engine factory at boot: env override > admin setting >
  * auto-detect. On success returns a factory bound to the one shared Multiplexer; if
  * no multiplexer is installed, returns a factory that throws CliChatUnavailableError
@@ -476,5 +501,8 @@ export async function resolveChatEngineFactory(deps: {
   if (persistentRuntimeEnabled) {
     deps.log?.("[chat] persistent provider-runtime adapter: ON (chat.persistent_runtime.enabled)");
   }
-  return createRealEngineFactory({ mux: resolution.mux, persistentRuntimeEnabled });
+  return createRealEngineFactory({
+    mux: resolution.mux,
+    persistentRuntimeEnabled: createPersistentRuntimeEnabledLiveReader(deps.appDb, deps.log)
+  });
 }

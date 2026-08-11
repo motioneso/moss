@@ -59,7 +59,7 @@ export interface ChatSessionManagerDeps {
     provider: ProviderKind,
     sessionKey: string,
     opts?: { readonly executionMode?: AiProviderExecutionMode }
-  ) => CliChatEngine;
+  ) => CliChatEngine | Promise<CliChatEngine>;
   readonly persistence: ChatPersistencePort;
   readonly personaFs: PersonaFs;
   readonly clock: Clock;
@@ -231,7 +231,7 @@ export class ChatSessionManager {
       persona
     });
 
-    const engine = this.deps.engineFactory(provider, sessionKey, { executionMode });
+    const engine = await this.deps.engineFactory(provider, sessionKey, { executionMode });
 
     // Rebuild replay from live state for every launch; recall precedes conversation replay.
     const recallResult = this.deps.recall ? await this.deps.recall.recall(actorUserId) : null;
