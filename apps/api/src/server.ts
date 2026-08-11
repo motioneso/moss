@@ -389,7 +389,8 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       resolveAccessContext: authRuntime.resolveAccessContext,
       isModuleActive: async (access, moduleId) =>
         (await getActiveExternalModules(access)).some((module) => module.id === moduleId),
-      rateLimitKey: authPrincipalRateLimitKey
+      rateLimitKey: authPrincipalRateLimitKey,
+      rootDb: appDb
     });
 
     registerClientErrorsRoute(server, {
