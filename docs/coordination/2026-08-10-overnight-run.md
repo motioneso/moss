@@ -5,7 +5,7 @@
 **Delegated authority:** Ben explicitly delegated overnight product/design decisions to Fable and confirmed that Fable's green security review counts as his security-tier merge sign-off. Existing repository rule still applies: #1557 never merges without fresh Fable approval. Every delegated security sign-off must be durable on the exact-head PR.
 **Merge policy:** routine/sensitive only after verified QA and live-path proof where applicable; security only after adversarial Fable QA and delegated sign-off.
 **Merge notification:** after every merge, run `needs-ben coordinator "<issue/PR — one-line description of what landed>"` and retain the normal GitHub/project bookkeeping.
-**merges_since_relay:** 0
+**merges_since_relay:** 1
 
 GitHub/project 2 is the source of truth. Detailed continuation evidence stays in `/tmp/jarv1s-monitor-state.md`.
 
@@ -15,7 +15,7 @@ GitHub/project 2 is the source of truth. Detailed continuation evidence stays in
 | ---- | ----- | ---- | ------ | ----------- | ------ | -- |
 | `docs/superpowers/specs/2026-08-10-1554-persistent-provider-chat-runtime.md` | #1557 | sensitive | Fable ruling resolved; final-head rebuild/UAT pending | `Fable #1557 UAT ruling` | `1557-p1-persistent-adapter` | #1561 |
 | `docs/superpowers/specs/2026-08-10-1121-scriptable-uat-chat.md` | #1121 | sensitive | draft PR, docs CI + Fable approval pending | collaboration agent `spec_1486_proxy` (redirected) | `docs/1121-scriptable-chat` | #1565 |
-| `docs/superpowers/specs/2026-08-10-1533-chat-surface-send-routing.md` | #1533 | sensitive | Fable approve-on-fix applied at head `97a9520b1`; docs CI pending | collaboration agent `spec_1533_adopt` | `docs/1533-chat-surface-routing` | #1563 |
+| `docs/superpowers/specs/2026-08-10-1533-chat-surface-send-routing.md` | #1533 | sensitive | spec merged; implementation queued after collision check | — | implementation branch pending | #1563 merged as `abfe0478b1` |
 | Fable ruling comment + issue acceptance | #1564 | routine | wrap-up successor pushing/opening PR | `Issue #1564 wrap` | `fix/1564-trigger-map` | — |
 | issue #1560 acceptance | #1560 | routine | planning/building | `Issue #1560 name flash` | `fix/1560-assistant-name-flash` | — |
 
