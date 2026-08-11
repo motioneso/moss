@@ -627,7 +627,8 @@ export function ChatDrawer(props: {
           <ChatModelPill
             disabled={privateEnded || isSending || historyActivationPending}
             privateMode={privateMode}
-            onCrossProviderSwitch={() => switchToNewModelChat(props.surface)}
+            surface={props.surface}
+            onCrossProviderSwitch={switchToNewModelChat}
           />
         }
         readOnly={privateEnded || historyActivationPending}

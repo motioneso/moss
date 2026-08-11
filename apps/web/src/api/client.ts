@@ -1158,8 +1158,9 @@ export async function putChatModelOverride(
   });
 }
 
-export async function switchChatProvider(): Promise<void> {
-  await requestJson<{ ok: true }>("/api/chat/switch", { method: "POST" });
+export async function switchChatProvider(surface?: ChatSurface): Promise<void> {
+  const query = surface ? `?surface=${encodeURIComponent(surface)}` : "";
+  await requestJson<{ ok: true }>(`/api/chat/switch${query}`, { method: "POST" });
 }
 
 export async function putAdminChatModelOverrideEnabled(
