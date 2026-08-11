@@ -1,11 +1,11 @@
 # Coordination Run — 2026-08-10 overnight
 
 **Date:** 2026-08-10
-**Coordinator lock:** label `Coordinator`, stable anchor = Claude session id `b64206f2-e4f7-41d4-a3ae-137a601ff368` (pane `w1:p7F`, resolve fresh by label+session, never a written pane number). Exactly one pane with this label and session holds merge authority.
+**Coordinator lock:** label `Coordinator`, stable anchor = Claude session id `1ba2be2d-0b27-4930-b74e-5a181f52f7da` (pane `w1:p7G`, tab `w1:t6`, resolve fresh by label+session, never a written pane number). Exactly one pane with this label and session holds merge authority.
 **Delegated authority:** Ben explicitly delegated overnight product/design decisions to Fable and confirmed that Fable's green security review counts as his security-tier merge sign-off. Existing repository rule still applies: #1557 never merges without fresh Fable approval. Every delegated security sign-off must be durable on the exact-head PR.
 **Merge policy:** routine/sensitive only after verified QA and live-path proof where applicable; security only after adversarial Fable QA and delegated sign-off.
 **Merge notification:** after every merge, run `needs-ben coordinator "<issue/PR — one-line description of what landed>"` and retain the normal GitHub/project bookkeeping.
-**merges_since_relay:** 0 — reset by successor after adopting the after-#1568 checkpoint.
+**merges_since_relay:** 1 — PR #1567 merged this leg.
 
 GitHub/project 2 is the source of truth. Detailed continuation evidence stays in `/tmp/jarv1s-monitor-state.md`.
 
@@ -13,11 +13,11 @@ GitHub/project 2 is the source of truth. Detailed continuation evidence stays in
 
 | Spec | Issue | Tier | Status | Agent label | Branch | PR |
 | ---- | ----- | ---- | ------ | ----------- | ------ | -- |
-| `docs/superpowers/specs/2026-08-10-1554-persistent-provider-chat-runtime.md` | #1557 | sensitive | clean rebuild verified locally; formatting fix, live-path, six-spec gate, push, Fable adjudication pending | `Issue #1557 exact-head gate (relay1)`, session `bec82be7-07c6-42f9-bf91-1620a348ef1b` | `1557-clean-rebuild` | #1561 |
+| `docs/superpowers/specs/2026-08-10-1554-persistent-provider-chat-runtime.md` | #1557 | sensitive | duplicate `uat-six-specs-1557` fork confirmed fully stopped (verified via ListAgents, this leg); six-spec UAT run + live-path e2e-P1 re-evidence (`e2e-p1-live-path-1557` subagent, ~19min in) in progress; still owes push+CI, PR #1561 evidence comment, fresh Fable adjudication — **never merge without it** | `Issue #1557 exact-head gate (relay1)`, session `bec82be7-07c6-42f9-bf91-1620a348ef1b` | `1557-p1-persistent-adapter` | #1561 |
 | `docs/superpowers/specs/2026-08-10-1121-scriptable-uat-chat.md` | #1121 | sensitive | plan REVISE sent + revised + approved; Tasks 1-4 building now, Tasks 5/6 gated on #1557 landing to `main` | `Issue #1121 scriptable UAT (relay3)`, session `5d633249-f321-45ea-a177-0afaea767cd1` | `build/1121-scriptable-chat` | #1565 merged |
 | `docs/superpowers/specs/2026-08-10-1533-chat-surface-send-routing.md` | #1533 | sensitive | Phase 2 complete; Phase 3 production committed; unrun tests + wrap-up next | `Issue #1533 chat surface (relay8)`, session `f3a156a2-06b1-4c69-9fa0-f499fca71df9` | `build/1533-chat-surface-routing` | #1563 spec merged as `abfe0478b1` |
 | Fable ruling comment + issue acceptance | #1564 | routine | merged/Closed/Project Done; wrapper reaped; needs-ben sent | — | `fix/1564-trigger-map` | #1566 merged as `0a57ef450` |
-| issue #1560 acceptance | #1560 | routine | post-#1568 main CI confirmed green at `31473972720`; rebasing `2e63f8ac1` onto fresh main + fresh integrated QA in progress; persona cleanup awaits Ben | `Issue #1560 name flash (relay3)`, session `b2a0f924-3f1e-4848-8ded-acdae4fd3f34` | `fix/1560-assistant-name-flash` | #1567 |
+| issue #1560 acceptance | #1560 | routine | **MERGED + REAPED.** Merged as `fbf6c89f2503246e1c2ef91632bc9e88232665b8`; needs-ben sent (`1786441178516952339.msg`); persona cleanup (`assistantName='Nova'`) still awaits Ben in AWAITING-BEN.md (untouched, correctly). Teardown all 3 GREEN: dev API PIDs 483729/483819/483820/484035/484710 confirmed dead; stale evidence PNG (`docs/evidence/1412-masthead-space/...png`, unrelated pre-existing file from PR #1473/#1412) discarded via checkout; seeded row `app.briefing_definitions` id `d1372db6-...` confirmed deleted, 0 rows remain. Pane `w1:p71` closed, worktree + local branch removed. | (reaped) | (deleted) | #1567 merged |
 
 ## Ready-after-current lanes
 
@@ -53,6 +53,7 @@ None.
 
 ## Reaped sessions
 
+- #1560 lane session `b2a0f924-3f1e-4848-8ded-acdae4fd3f34` reaped after PR #1567 merged and all 3 teardown checks (dev-API PIDs, evidence-file discard, seeded-row deletion) confirmed GREEN.
 - Old Coordinator session `019fe9e2-7fc6-7243-9894-d258562db9a6` closed after successor drive was confirmed.
 - #1564 build session `ddf1eb71-08b3-4cd3-ab5e-1cf53d4c4bd1` reaped after wrap successor `5d0306dd-5acb-48f9-b079-d28013bac037` visibly began in the same worktree.
 - #1564 wrapper session `5d0306dd-5acb-48f9-b079-d28013bac037` reaped after #1566 merged and #1564 reached Closed/Done.
@@ -90,6 +91,17 @@ None.
 - #1560 / PR #1567 (`Issue #1560 name flash (relay3)`, session `b2a0f924-...`): unchanged — exact head `2e63f8ac1`, QA-RED fixed, idle-waiting on Coordinator. Told it to hold for post-#1568 CI green; then rebase + fresh integrated QA + merge if green. `AWAITING-BEN.md` persona entry (`assistantName='Nova'`) is still open — do not guess, do not resolve without Ben.
 - Any Monitors/background tasks from this session (gate watch, fleet liveness) die with it — re-arm equivalents after adopting; don't assume they carry over.
 - Mid-doing at relay: send #1121's REVISE message, confirm post-#1568 CI terminal, then drive #1557/#1560/#1533 to their next checkpoints. `needs-ben` after every merge (none yet this leg).
+
+## Relay continuation — after #1567 merge (context-meter relay #3)
+
+- Outgoing Coordinator authority: label `Coordinator`, session `1ba2be2d-0b27-4930-b74e-5a181f52f7da`, pane `w1:p7G`, tab `w1:t6`. Successor must claim the sole label, replace the lock line at the top of this file with its own immutable session id, verify uniqueness, then resolve/reap this outgoing session by label + session id. `merges_since_relay` reset to 0 by successor after adopting.
+- This leg's work: outgoing coordinator (session `b64206f2-...`, pane `w1:p7F`) was already gone from the pane list at boot — nothing to reap there, claimed the label fresh on this pane. **Merged PR #1567 (#1560)** after fresh re-verification (CI green, head SHA matched, QA GREEN + live-path proof both present on PR) as `fbf6c89f2503246e1c2ef91632bc9e88232665b8`; `needs-ben` sent (`1786441178516952339.msg`). Drove full teardown (dev-API PIDs killed, stale evidence PNG discarded, seeded DB row deletion confirmed) and reaped the #1560 worktree/branch/pane. Corrected a stale manifest claim: #1533 had **not** actually relayed (no successor pane/handoff doc existed) — same session still driving. Confirmed via `ListAgents` that #1557's duplicate `uat-six-specs-1557` fork is fully stopped. Nudged #1533 and #1121 out of a genuine frozen-mid-turn stall (identical elapsed-time timer across two reads minutes apart) — both resumed (`working`) after `continue`.
+- **#1567/#1560: MERGED + REAPED, fully closed out.** Nothing further needed except normal GitHub bookkeeping if not already done (check issue #1560 closed / board moved to Done — not yet verified this leg, do that first).
+- #1121 (`Issue #1121 scriptable UAT (relay3)`, session `5d633249-...`, pane `w1:p7D`, tab `w1:tH`): building Tasks 1-4 (Task 3 in progress: fixture executable MCP call + transcript append), Tasks 5/6 correctly gated on #1557 landing to `main`. **Its own context meter read 72% used this leg — likely due/overdue for its own self-relay; watch for a relay escalation from it and don't be surprised by a new successor pane.**
+- #1557 (`Issue #1557 exact-head gate (relay1)`, session `bec82be7-...`, pane `w1:p7A`, tab `w1:tJ`, branch `1557-p1-persistent-adapter`, PR #1561): duplicate fork stopped (confirmed). Live-path e2e-P1 re-evidence (`e2e-p1-live-path-1557` subagent) was actively progressing at leg end (~21min elapsed, task line advancing). Still owes: six-spec Fable-gate UAT completion, push+CI, evidence comment to PR #1561, **fresh Fable adjudication — never merge without it** regardless of Fable's general delegated authority this run. `agent_status` flaps working/done as it waits on its own background subagent — this is normal, not a stall; only intervene if the pane's own last line is a genuine wait-declaration with nothing backing it running.
+- #1533 (`Issue #1533 chat surface (relay8)`, session `f3a156a2-...`, pane `w1:p7C`, tab `w1:tH`): Phase 4 (full gate + live-path proof + sensitive-tier invariant check + draft PR) in progress after the nudge. No PR yet.
+- Any Monitors/background tasks from this leg die with this session — re-arm equivalents after adopting (persistent liveness Monitor over panes `w1:p7A`/`w1:p7C`/`w1:p7D`, excluding own pane to avoid self-noise from terminal-title flapping).
+- Mid-doing at relay: verify #1560/#1564-style GitHub bookkeeping is complete for #1560 (issue closed, board Done), then resume supervising #1121/#1533/#1557 toward their next checkpoints (#1557's Fable adjudication is the next real gate; #1121 Tasks 5/6 wait on #1557 landing).
 
 ## Relay continuation — after #1121 REVISE sent + CI confirmed green (context-meter relay #2, no merge occurred)
 
