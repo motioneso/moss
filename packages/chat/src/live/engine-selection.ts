@@ -40,12 +40,16 @@ export interface ChatEngineSelectionOpts {
 }
 
 /**
- * True when this provider/mode pair runs one-shot (`claude -p` / `agy` exec) rather than
- * driving a persistent REPL inside a multiplexer pane. Exported so callers that need to
- * know whether a mux session will exist (the runner's orphan reaping, tests) can ask
- * without reconstructing the rule.
+ * True when this provider/mode pair runs bounded-fallback (`claude -p` / `agy` exec, one
+ * process per turn) rather than driving a persistent REPL inside a multiplexer pane.
+ * Exported so callers that need to know whether a mux session will exist (the runner's
+ * orphan reaping, tests) can ask without reconstructing the rule.
+ *
+ * Named for the *shape* of the engine (one-shot process per turn), not the persistent
+ * provider-runtime adapter (#1557) — that adapter is a third shape, selected in front of
+ * this check, not a replacement for it.
  */
-export function isOneShotEngine(
+export function isBoundedFallbackEngine(
   provider: ProviderKind,
   executionMode: AiProviderExecutionMode | undefined
 ): boolean {
@@ -54,7 +58,7 @@ export function isOneShotEngine(
 }
 
 /**
- * Build the engine for a session. `non_interactive` anthropic/google get the one-shot
+ * Build the engine for a session. `non_interactive` anthropic/google get the bounded-fallback
  * print engines (no multiplexer session is ever created); everything else — including any
  * provider explicitly configured `interactive` — gets the tmux-backed REPL engine.
  */
@@ -64,7 +68,7 @@ export function createChatEngine(
   io: TmuxIo,
   opts: ChatEngineSelectionOpts = {}
 ): CliChatEngine {
-  if (isOneShotEngine(provider, opts.executionMode)) {
+  if (isBoundedFallbackEngine(provider, opts.executionMode)) {
     if (provider === "anthropic") {
       return new ClaudePrintChatEngine(sessionKey, io, {
         mux: opts.mux,
