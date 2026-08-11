@@ -18,12 +18,9 @@ approval) are both resolved and were removed on main — the live-path gate was 
 hard invariant in `CLAUDE.md`, and the voice/STT spec turned out to be already approved and built
 (#874), only its status line was stale.
 
-## #1560 live-path persona cleanup
-
-The #1560 live-path proof temporarily set `ben@ben.com`'s `assistantName` to `Nova`, but the lane
-did not record the prior value and `persona.bundle` has no audit history. The temporary briefing row
-was deleted and verified absent. Please choose the value to restore, or approve leaving `Nova`.
-Recommendation: provide the intended name rather than guessing or clearing personal data.
+<!-- Resolved 2026-08-11: #1560 live-path persona cleanup. Ben ruled: "nova is fine for testing,
+yep" — approved leaving `ben@ben.com`'s `assistantName='Nova'` as-is, no restore needed. Ruling
+recorded on issue #1560 (https://github.com/motioneso/moss/issues/1560#issuecomment-5255044578). -->
 
 <!-- Resolved 2026-08-09: `git push origin main` blocked by the auto-mode classifier during Wave 2
 wrap-up. Ben re-ran ("try now") and it went through — pushed 39 commits, `f78992b14..46ec9965d`.
