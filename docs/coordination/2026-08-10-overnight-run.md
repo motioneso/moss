@@ -308,3 +308,26 @@ and a live 70%-checkpoint hook (declined per override). No successor spawned or 
   this session (0 conflicts, 74 files, commit `d93addd6f`) — the classifier block did not apply
   here. #1533's agent picked the landed merge back up on its own and resumed Phase 4 without a
   ping. #1547 relay2 still mid-gate on Task 7 (~31min), steady progress, no stall.
+- **#1547 relay2 reported DONE, PR #1573 opened** (`build/1547-manual-run-job-idempotency` →
+  `main`). Self-report: VF_EXIT=0 (full isolated gate, gate DB `jarvis_gate_build_1547_manual_run_job_idempotency`,
+  dropped after run), race test 6/6 green, no unit-test regressions, live-path n/a (backend-only,
+  spec's own routine-tier framing). Commits: `f7d6758eb`, `928e5c7d8`, `f0011142d`, `633134351`.
+  Did **not** trust self-report — dispatched independent `coordinated-qa` (routine tier, Sonnet,
+  worktree-isolated) against PR #1573.
+- **QA VERDICT: RED** (posted to PR: `https://github.com/motioneso/moss/pull/1573#issuecomment-5257532611`).
+  BLOCKING: PR edits `tests/integration/external-modules-routes.test.ts`, which the spec's
+  "Exclusive owned surface" section explicitly forbids touching (two compliant placements were
+  named instead: `job-search-worker-surface.test.ts` or a new dedicated file) — no disclosed
+  deviation/amendment found. Non-blocking: (1) PR body doesn't record the red run (spec criterion
+  7 wants both red+green on the PR, only in internal handoff doc `82cc0f083`); (2) first-request
+  pre-boundary placement uses a 150ms margin-based dispatch rather than an explicit DB-side hold —
+  a softer form of the client-margin technique the spec calls insufficient "on its own," undisclosed.
+  Live-path exemption independently verified legitimate (diff touches only jobs/api plumbing + the
+  one test file, no route-contract/migration/UI change). Invariants ok (no RLS/secrets/module-isolation
+  issue). CI was not yet fully green at verdict time either (Verify foundation and app still IN_PROGRESS;
+  Compose/Prod-compose smoke + change-scope detection passed). **MERGE-READY: NO.**
+- Relayed the RED verdict + required fixes to job1547-relay2 (`w1:p7X`) via `herdr pane run`,
+  confirmed landed and picked up. Will re-dispatch QA once it reports the fix pushed — not merging
+  on the next self-report either. #1533 (`w1:p7C`) still mid-Phase-4, two background forks
+  (`gate-1533-postmerge`, `livepath-1533-attempt3`) running, no stall, "don't relay" rule holding
+  per its own pane text.
