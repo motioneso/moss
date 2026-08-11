@@ -86,7 +86,9 @@ describe("selectEngineFactory — boot-time fork (§3.5)", () => {
       }
     });
 
-    const engine = await factory("anthropic", "persona-preview", { executionMode: "non_interactive" });
+    const engine = await factory("anthropic", "persona-preview", {
+      executionMode: "non_interactive"
+    });
     expect(engine).toBeInstanceOf(ChatEngineRpcClient);
     expect(engine.provider).toBe("anthropic");
   });
