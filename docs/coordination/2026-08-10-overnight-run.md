@@ -5,7 +5,8 @@
 **Delegated authority:** Ben explicitly delegated overnight product/design decisions to Fable and confirmed that Fable's green security review counts as his security-tier merge sign-off. Existing repository rule still applies: #1557 never merges without fresh Fable approval. Every delegated security sign-off must be durable on the exact-head PR.
 **Merge policy:** routine/sensitive only after verified QA and live-path proof where applicable; security only after adversarial Fable QA and delegated sign-off.
 **Merge notification:** after every merge, run `needs-ben coordinator "<issue/PR — one-line description of what landed>"` and retain the normal GitHub/project bookkeeping.
-**merges_since_relay:** 0 — reset by successor session `0bb9f516-c026-454f-bc97-dc9faf43bd20` (relay #9 successor) after adopting; relay #9 leg did stall-triage only, no merge occurred.
+**merges_since_relay:** 1 — #1121/PR #1570 merged this leg (session `0bb9f516-c026-454f-bc97-dc9faf43bd20`, still resident, no relay taken per Ben's standing override below).
+**Standing override (Ben, binding for the rest of this run):** "lets stop relaying, just auto compact coordinator" — this session does NOT spawn a successor at context checkpoints, including the 70%-meter warning or merge-count triggers. It stays resident through auto-compaction. Confirmed live against a real 70% checkpoint hook firing this leg; declined per this override.
 
 GitHub/project 2 is the source of truth. Detailed continuation evidence stays in `/tmp/jarv1s-monitor-state.md`.
 
@@ -204,4 +205,51 @@ new session is driving, then retire this branch/worktree the same reap-safe way 
 - **Top priority for successor — #1121 (`Issue #1121 scriptable UAT (relay3)`, session `5d633249-...`, pane `w1:p7D`, tab `w1:tH`):** `agent_status` flipped `working`→`done` (stable x2 on the liveness Monitor) but a bounded pane read shows this is a **stall on a genuine blocker, not completion** — see the updated Queue row above. Read the OPEN QUESTION in `docs/superpowers/handoffs/2026-08-11-1121-scriptable-uat-chat-build-relay4.md`, resolve or escalate it, then spawn a fresh build-agent session **in the same worktree** (`build/1121-scriptable-chat`) continuing from that handoff — do not create a new worktree. Reap this pane's current session only after the successor is confirmed driving there.
 - #1533 (`Issue #1533 chat surface (relay8)`, session `f3a156a2-...`, pane `w1:p7C`): also flipped `agent_status`→`done` this leg, but a bounded pane read confirms it is correctly parked ("Not polling. Waiting for your ping when #1121 lands or a runner becomes available.") — a stale/false-positive status flip, **not** new work. Leave untouched until #1121 Tasks 5/6 actually land, per the dependency rule.
 - The liveness Monitor from this leg (task `b14xz3pxj`, watching `w1:p7C`/`w1:p7D`) dies with this session — re-arm fresh in the successor's own scratchpad per the coordinate skill, and remember both current flips were false positives worth a longer debounce or a "confirm via pane read before acting" note to self.
+
+## Current state, session `0bb9f516-c026-454f-bc97-dc9faf43bd20` resident (no relay, per Ben's standing override — see top of file)
+
+This session adopted the run at relay #9 and has stayed resident since, through one auto-compaction
+and a live 70%-checkpoint hook (declined per override). No successor spawned or planned.
+
+- **#1121 DONE (Phase 1) — merged.** PR #1570 squash-merged to `main` at `8b2a4b357` after independent
+  sensitive-tier QA (`coordinated-qa`, worktree-isolated) returned GREEN/MERGE-READY with evidence
+  posted to the PR. Session-id authority re-confirmed before merge. Lane fully reaped: build agent
+  notified, confirmed idle, pane `w1:p7T` closed, worktree `build/1121-scriptable-chat` removed,
+  local+remote branch deleted (remote delete hit the `motioneso/Jarv1s`→`motioneso/moss` redirect,
+  succeeded anyway — remote URL still stale, out of scope). **Issue #1121 deliberately left OPEN**
+  — PR body had no closing keyword, and the merged plan doc's own Phase1/Phase2 split gates Phase 2
+  (converting 7 UAT specs + live-path evidence) on this coordinator's review per plan-build rule 6;
+  closing it would have silently skipped that gate. Comment posted:
+  `https://github.com/motioneso/moss/issues/1121#issuecomment-5257017460`.
+- **#1533 unblocked, self-driving.** #1121 Phase 1 included Tasks 5/6 (the engine-selection/registry
+  work #1533's live-path proof was blocked on), so the dependency chain clears with this merge. A
+  fresh bounded read of pane `w1:p7C` (session `f3a156a2-...`) shows it already past the parked state
+  and into Phase 4 (3/4 tasks done, full gate + live-path proof + sensitive check + draft PR in
+  progress) — no ping needed, it's already moving. Watch for its PR.
+- **#1547 plan approved, build RED-confirmed-correctly, now self-relaying.** Plan
+  (`docs/superpowers/plans/2026-08-11-manual-run-job-idempotency.md`) reviewed directly (pg_advisory_xact_lock
+  + time-bounded `hasRecentJob()` wrapping `boss.send()`, `rootDb` as an optional trailing param,
+  zero existing-test changes) — approved in-scope of the spec's locked decisions, no Opus escalation
+  needed (residual risk flagged in the plan at lines 240-252 is test-harness timing precision, not a
+  production-correctness gap). Reply sent via `herdr-pane-message`. Agent then wrote the race test,
+  confirmed it RED for the right reason pre-fix (second concurrent manual-run call got a real jobId
+  instead of null — dedupe bypassed, matching the documented bug), fixed a build-artifact blocker
+  itself (missing `dist/app-map.json`, gitignored, needs full `verify:foundation` not bare
+  `test:integration` — no repo change), committed plan+test at `82cc0f083`. **Now relaying at the
+  70%-context trigger before writing production code (tasks #4-6)** — spawning a successor in the
+  same worktree (`build/1547-manual-run-job-idempotency`). This is the *build agent's own* relay
+  (normal, expected, distinct from the coordinator's no-relay override) — watch for the successor
+  pane, confirm it's driving, reap `w1:p7W`'s current session once confirmed.
+- **merges_since_relay = 1**, tracked per the coordinate skill's counter but not acted on as a relay
+  trigger (Ben's override supersedes it for this session).
+- **Ben's board-cleanup request, in progress (not yet executed):** "can we move completed ones to
+  done please?" — 26 CLOSED issues sitting in the "In progress" column on project 2 identified via
+  paginated GraphQL scrape (`board_items.jsonl`/`to_move.jsonl` in this session's scratchpad):
+  845, 1281-1303 (Job Search Task N series), 1309, 1331. GraphQL mutations
+  (`updateProjectV2ItemFieldValue`, project `PVT_kwHOADqkaM4BarLA`, field
+  `PVTSSF_lAHOADqkaM4BarLAzhVhA6I`, target option `98236657`=Done) not yet run — next action.
+- Mid-doing: run the 26 board-move mutations, then check #1547's successor spawn, then resume the
+  earlier-identified (pre-compaction, not re-verified this leg) smaller board cleanup — 4 Backlog-moves
+  and 3 verify-then-move items (#1135/#1327/#1554) and #1246/#1248/#1252/#1256→Backlog — re-verify
+  before acting, time has passed since those were identified.
 - Mid-doing: nothing else in flight. Successor's first real action is the #1121 handoff triage above.
