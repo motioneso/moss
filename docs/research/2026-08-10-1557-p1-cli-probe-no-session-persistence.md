@@ -25,14 +25,14 @@ project directory inspected for any resumable transcript.
 
 ## Result: CONFIRMED — coexists cleanly
 
-| Check | Result |
-| --- | --- |
-| Same PID for all 3 turns | **PASS** — pid `1740938` throughout |
-| 3 terminal `result` events on that one process | **PASS** — count 3 |
-| Same `session_id` across all 3 turns (in-memory only) | **PASS** — `17be6b27-8f79-4458-a050-621c853d179b` |
-| `system/init` events | 3 (one per turn — matches the Phase-0 spike's known stream-framing finding, not a lifecycle signal) |
-| Graceful exit on stdin close | **PASS** — exit 0, no `SIGTERM`/`SIGKILL` needed |
-| Resumable transcript on disk after close | **NONE** — `~/.claude/projects/<sanitized-cwd>/` contains only an empty `memory/` dir, no session `.jsonl`; `grep -rl <session_id> ~/.claude/projects` finds no CLI-written transcript file for this session anywhere |
+| Check                                                 | Result                                                                                                                                                                                                                |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Same PID for all 3 turns                              | **PASS** — pid `1740938` throughout                                                                                                                                                                                   |
+| 3 terminal `result` events on that one process        | **PASS** — count 3                                                                                                                                                                                                    |
+| Same `session_id` across all 3 turns (in-memory only) | **PASS** — `17be6b27-8f79-4458-a050-621c853d179b`                                                                                                                                                                     |
+| `system/init` events                                  | 3 (one per turn — matches the Phase-0 spike's known stream-framing finding, not a lifecycle signal)                                                                                                                   |
+| Graceful exit on stdin close                          | **PASS** — exit 0, no `SIGTERM`/`SIGKILL` needed                                                                                                                                                                      |
+| Resumable transcript on disk after close              | **NONE** — `~/.claude/projects/<sanitized-cwd>/` contains only an empty `memory/` dir, no session `.jsonl`; `grep -rl <session_id> ~/.claude/projects` finds no CLI-written transcript file for this session anywhere |
 
 ## Decision
 

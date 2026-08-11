@@ -84,7 +84,9 @@ function emitAssistantReply(child: FakeChild, text: string): void {
       message: { role: "assistant", stop_reason: "end_turn", content: [{ type: "text", text }] }
     })}\n`
   );
-  child.stdout.write(`${JSON.stringify({ type: "result", subtype: "success", is_error: false })}\n`);
+  child.stdout.write(
+    `${JSON.stringify({ type: "result", subtype: "success", is_error: false })}\n`
+  );
 }
 
 describe("ClaudePersistentRuntime", () => {
@@ -128,7 +130,9 @@ describe("ClaudePersistentRuntime", () => {
     const runtime = new ClaudePersistentRuntime({ io, spawnChild });
 
     await expect(
-      runtime.launch(launchOpts({ mcpReadiness: async () => Promise.reject(new Error("not ready")) }))
+      runtime.launch(
+        launchOpts({ mcpReadiness: async () => Promise.reject(new Error("not ready")) })
+      )
     ).rejects.toThrow(NEUTRAL_ADMISSION_FAILURE);
 
     expect(fake.kills).toContain("SIGTERM");
@@ -136,7 +140,11 @@ describe("ClaudePersistentRuntime", () => {
   });
 
   it("keeps neutral surfaces vendor-neutral", () => {
-    for (const message of [NEUTRAL_ADMISSION_FAILURE, NEUTRAL_LAUNCH_FAILURE, NEUTRAL_CRASH_FAILURE]) {
+    for (const message of [
+      NEUTRAL_ADMISSION_FAILURE,
+      NEUTRAL_LAUNCH_FAILURE,
+      NEUTRAL_CRASH_FAILURE
+    ]) {
       expect(message.toLowerCase()).not.toContain("claude");
       expect(message.toLowerCase()).not.toContain("anthropic");
     }
@@ -192,28 +200,42 @@ describe("ClaudePersistentRuntime", () => {
 
 describe("createMcpReadinessProbe", () => {
   it("resolves when initialize and tools/list both return 200 with no error", async () => {
-    const fetchImpl = vi.fn(async () =>
-      new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: {} }), { status: 200 })
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: {} }), { status: 200 })
     );
-    const probe = createMcpReadinessProbe("http://localhost/api/mcp", "tok", fetchImpl as unknown as typeof fetch);
+    const probe = createMcpReadinessProbe(
+      "http://localhost/api/mcp",
+      "tok",
+      fetchImpl as unknown as typeof fetch
+    );
     await expect(probe()).resolves.toBeUndefined();
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
   it("rejects on a non-2xx response", async () => {
     const fetchImpl = vi.fn(async () => new Response("", { status: 503 }));
-    const probe = createMcpReadinessProbe("http://localhost/api/mcp", "tok", fetchImpl as unknown as typeof fetch);
+    const probe = createMcpReadinessProbe(
+      "http://localhost/api/mcp",
+      "tok",
+      fetchImpl as unknown as typeof fetch
+    );
     await expect(probe()).rejects.toThrow(NEUTRAL_ADMISSION_FAILURE);
   });
 
   it("rejects when the body carries a JSON-RPC error even at HTTP 200", async () => {
-    const fetchImpl = vi.fn(async () =>
-      new Response(
-        JSON.stringify({ jsonrpc: "2.0", id: 1, error: { code: -32000, message: "no session" } }),
-        { status: 200 }
-      )
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ jsonrpc: "2.0", id: 1, error: { code: -32000, message: "no session" } }),
+          { status: 200 }
+        )
     );
-    const probe = createMcpReadinessProbe("http://localhost/api/mcp", "tok", fetchImpl as unknown as typeof fetch);
+    const probe = createMcpReadinessProbe(
+      "http://localhost/api/mcp",
+      "tok",
+      fetchImpl as unknown as typeof fetch
+    );
     await expect(probe()).rejects.toThrow(NEUTRAL_ADMISSION_FAILURE);
   });
 });

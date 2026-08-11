@@ -37,7 +37,10 @@ describe("PersistentStreamDecoder", () => {
     const decoder = new PersistentStreamDecoder({ killChild: (reason) => killed.push(reason) });
     decoder.beginTurn("turn-1");
     decoder.write(
-      assistantLine({ stopReason: "end_turn", content: [{ type: "text", text: "Here is the answer" }] }) + "\n"
+      assistantLine({
+        stopReason: "end_turn",
+        content: [{ type: "text", text: "Here is the answer" }]
+      }) + "\n"
     );
     decoder.write(RESULT_LINE + "\n");
     decoder.end();
@@ -59,7 +62,8 @@ describe("PersistentStreamDecoder", () => {
       const turnId = `turn-${i}`;
       decoder.beginTurn(turnId);
       decoder.write(
-        assistantLine({ stopReason: "end_turn", content: [{ type: "text", text: `reply ${i}` }] }) + "\n"
+        assistantLine({ stopReason: "end_turn", content: [{ type: "text", text: `reply ${i}` }] }) +
+          "\n"
       );
       decoder.write(RESULT_LINE + "\n");
     }
@@ -78,7 +82,8 @@ describe("PersistentStreamDecoder", () => {
     decoder.beginTurn("turn-1");
     decoder.write("not json at all\n");
     decoder.write(
-      assistantLine({ stopReason: "end_turn", content: [{ type: "text", text: "still works" }] }) + "\n"
+      assistantLine({ stopReason: "end_turn", content: [{ type: "text", text: "still works" }] }) +
+        "\n"
     );
     decoder.write(RESULT_LINE + "\n");
     decoder.end();
@@ -104,7 +109,8 @@ describe("PersistentStreamDecoder", () => {
     expect(killed).toHaveLength(1);
     expect(events).toHaveLength(1);
     const failure = events[0];
-    if (failure === undefined || failure.kind !== "turn-failed") throw new Error("expected turn-failed");
+    if (failure === undefined || failure.kind !== "turn-failed")
+      throw new Error("expected turn-failed");
     expect(failure).toMatchObject({ kind: "turn-failed", turnId: "turn-1" });
     expect(failure.outcome.kind).toBe("neutral-failure");
     if (failure.outcome.kind !== "neutral-failure") throw new Error("expected neutral-failure");
@@ -122,7 +128,10 @@ describe("PersistentStreamDecoder", () => {
     // many small, well-formed, in-bound frames that the consumer never drains
     for (let i = 0; i < 20; i++) {
       decoder.write(
-        assistantLine({ stopReason: "tool_use", content: [{ type: "thinking", thinking: `step ${i}` }] }) + "\n"
+        assistantLine({
+          stopReason: "tool_use",
+          content: [{ type: "thinking", thinking: `step ${i}` }]
+        }) + "\n"
       );
     }
     expect(killed).toHaveLength(1);
@@ -149,7 +158,10 @@ describe("PersistentStreamDecoder", () => {
     const decoder = new PersistentStreamDecoder({ killChild: (reason) => killed.push(reason) });
     decoder.beginTurn("turn-1");
     decoder.write(
-      assistantLine({ stopReason: "tool_use", content: [{ type: "thinking", thinking: "still working" }] }) + "\n"
+      assistantLine({
+        stopReason: "tool_use",
+        content: [{ type: "thinking", thinking: "still working" }]
+      }) + "\n"
     );
     decoder.end(); // child died mid-turn, no `result` frame ever arrived
 
@@ -180,7 +192,10 @@ describe("PersistentStreamDecoder", () => {
     const decoder = new PersistentStreamDecoder({ killChild: () => undefined });
     decoder.beginTurn("turn-1");
     decoder.write(
-      assistantLine({ stopReason: "tool_use", content: [{ type: "thinking", thinking: "let me check" }] }) + "\n"
+      assistantLine({
+        stopReason: "tool_use",
+        content: [{ type: "thinking", thinking: "let me check" }]
+      }) + "\n"
     );
     decoder.write(
       assistantLine({
@@ -188,7 +203,10 @@ describe("PersistentStreamDecoder", () => {
         content: [{ type: "tool_use", name: "vault_read", input: {} }]
       }) + "\n"
     );
-    decoder.write(assistantLine({ stopReason: "end_turn", content: [{ type: "text", text: "found it" }] }) + "\n");
+    decoder.write(
+      assistantLine({ stopReason: "end_turn", content: [{ type: "text", text: "found it" }] }) +
+        "\n"
+    );
     decoder.write(RESULT_LINE + "\n");
     decoder.end();
 

@@ -12,23 +12,23 @@
 
 ## Seams check (verified `file:line`, current tree)
 
-| Seam | Citation | What it gives the plan |
-|---|---|---|
-| Engine selection (THE fork point) | `packages/chat/src/live/engine-selection.ts:48-54` (`isOneShotEngine`), `:61-89` (`createChatEngine(provider, sessionKey, io, opts)`), `:27-40` (`ChatEngineSelectionOpts`: mux, homeBase, executionMode, credentialFile, ownsDrain, onDiagnostic) | Persistent-vs-fallback decision threads through here; header documents the #1350 two-composition-roots trap (in-process `runtime.ts` factory vs cli-runner `EngineHost`; RPC root active whenever `JARVIS_CLI_RUNNER_SOCKET` is set) |
-| cli-runner root | `packages/cli-runner/src/engine-host.ts:162,176,181` (`launchOnce`) | Pool must live HERE when the socket is set (PID-owning process, per spec) |
-| One-shot structured transport (fallback keeps it; persistent must NOT inherit it) | `packages/chat/src/live/claude-print-chat-engine.ts:74-78` (detached, `stdio:"ignore"` spawn), `:84-110` (`launchStructured`, unbounded `structuredOutput += chunk` accumulation at `:99-101`), `:112-124` (`submitStructured` user-frame shape), `:126-141` (`readStructured` full-buffer re-slice) | The exact patterns the spec forbids reusing: persistent transport is piped stdio + consuming bounded decoder, no offset re-slicing |
-| Existing engine contract | `packages/chat/src/live/types.ts:81-112` (`CliChatEngine`: launch/submit/interrupt/readNew/isAlive/kill/purgeTranscripts?/resetActivityDeadline?) | The fallback already conforms; the new neutral lifecycle contract sits beside it, and an adapter maps it onto `CliChatEngine` so `chat-session-manager` needs no rewrite in phase 1 |
-| Approval wait (native) | `packages/ai/src/gateway/gateway.ts:332-335` (`confirmations.awaitResolution(action.id, confirmTimeoutMs)`) | Block-in-tool-call already exists server-side |
-| Approval wait (module tools) + late-Approve execution point | `gateway.ts:564` (`await pendingResolution`), `:566-591` (denied/timeout/cancelled path), `:593` (`runHandler` runs ONLY after `"confirmed"`) | Cancel-terminally-resolves work targets the registry, not the gateway |
-| Confirmation registry | `packages/ai/src/gateway/confirmation-registry.ts:15-30` (`awaitResolution` fail-closed timeout), `:38-43` (`resolve(id, status): boolean`, false when no live waiter) | `resolve(id, "cancelled")` is the terminal-resolution primitive; the false return is what makes "late Approve cannot execute" checkable |
-| Hook timeout ladder | `packages/chat/src/live/claude-permission-hook.ts:17-19` (`NATIVE_CONFIRM_TIMEOUT_MS=150_000` < `HOOK_INTERNAL_DEADLINE_S=170` < `HOOK_TIMEOUT_SECONDS=180`, #1158 ordering) | Persistent child keeps the same hook + ladder; `awaiting-approval` state duration is bounded by this ladder |
-| Incognito purge guard | `packages/chat/src/live/chat-session-manager.ts:246-251` (throws `CliChatUnavailableError` when incognito and `!engine.purgeTranscripts`) | Stays as-is; persistent adapter must satisfy it under whichever phase-1 posture wins |
-| Delivery-unknown semantics | `chat-session-manager.ts:434-440` (`CliChatDeliveryUnknownError` ⇒ evict + revoke token, NEVER resubmit), `:441-448` (`CliChatUnavailableError` ⇒ heal + resubmit ONCE) | The provably-pre-acceptance rule maps onto these two existing error classes — no new manager semantics |
-| Replay seam (#1553/#1556 owns internals) | `chat-session-manager.ts:242-257` (assembles memory seed + summary + `listPriorTurns` into `replayBatch`), `packages/chat/src/live/persistence.ts:157` (`listPriorTurns`) | Persistent launch consumes `replayBatch` exactly like today's launch; no coupling to #1556 beyond the existing string |
-| MCP token lifecycle | `chat-session-manager.ts:252` (`mintMcpToken` at launch), `:438` (`revokeMcpToken` on evict), wired at `packages/chat/src/live/runtime.ts:385-386` (`mcpTokenLifecycle.mint/revoke`) | Reap-revokes-token is already the pattern; pool reap must call the same seam |
-| Server-side MCP session + TTL | `packages/chat/src/mcp-transport.ts:72-77` (per-request bearer verify), `:84` (initialize), `:120` (`gateway.callTool(token, …)`); `packages/ai/src/gateway/session-tokens.ts:26-35` (`DEFAULT_TOKEN_TTL_MS = 60min` backstop, touch-on-activity, `revokeBySessionId` at reap) | Spec's "MCP session TTL ≥ idle-reap + margin" is ALREADY satisfied: 60-min touch-refreshed backstop > 30-min reap. Decision: no TTL change; cite in code comment only if a reviewer asks |
-| Admin settings pattern | `packages/settings/src/instance-settings-keys.ts` (`INSTANCE_SETTINGS_REGISTRY`; precedent `chat.multiplexer`; secret-key guards), `packages/settings/src/runtime-config-keys.ts` (`RUNTIME_CONFIG_REGISTRY`, typed entries incl. `int`, admin PATCH validation via runtime-config-routes) | Flag + pool cap + idle-reap land here, admin-only by construction |
-| Env carve-out (#1443) | `packages/db/src/env.ts:5-29` (`resolveMossEnv`: MOSS_-first, JARVIS_ fallback; `CARVE_OUT` list is for shell/compose-consumed names only), `packages/cli-runner/src/sanitized-env.ts:14-28` (`ALLOWED_KEYS` allowlist for spawned children) | New knobs are settings-first; anything env-shaped is `MOSS_*`-only (no JARVIS_ history). Pool/reap values reach cli-runner via RPC params, NOT env ⇒ no sanitized-env change |
+| Seam                                                                              | Citation                                                                                                                                                                                                                                                                                             | What it gives the plan                                                                                                                                                                                                               |
+| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Engine selection (THE fork point)                                                 | `packages/chat/src/live/engine-selection.ts:48-54` (`isOneShotEngine`), `:61-89` (`createChatEngine(provider, sessionKey, io, opts)`), `:27-40` (`ChatEngineSelectionOpts`: mux, homeBase, executionMode, credentialFile, ownsDrain, onDiagnostic)                                                   | Persistent-vs-fallback decision threads through here; header documents the #1350 two-composition-roots trap (in-process `runtime.ts` factory vs cli-runner `EngineHost`; RPC root active whenever `JARVIS_CLI_RUNNER_SOCKET` is set) |
+| cli-runner root                                                                   | `packages/cli-runner/src/engine-host.ts:162,176,181` (`launchOnce`)                                                                                                                                                                                                                                  | Pool must live HERE when the socket is set (PID-owning process, per spec)                                                                                                                                                            |
+| One-shot structured transport (fallback keeps it; persistent must NOT inherit it) | `packages/chat/src/live/claude-print-chat-engine.ts:74-78` (detached, `stdio:"ignore"` spawn), `:84-110` (`launchStructured`, unbounded `structuredOutput += chunk` accumulation at `:99-101`), `:112-124` (`submitStructured` user-frame shape), `:126-141` (`readStructured` full-buffer re-slice) | The exact patterns the spec forbids reusing: persistent transport is piped stdio + consuming bounded decoder, no offset re-slicing                                                                                                   |
+| Existing engine contract                                                          | `packages/chat/src/live/types.ts:81-112` (`CliChatEngine`: launch/submit/interrupt/readNew/isAlive/kill/purgeTranscripts?/resetActivityDeadline?)                                                                                                                                                    | The fallback already conforms; the new neutral lifecycle contract sits beside it, and an adapter maps it onto `CliChatEngine` so `chat-session-manager` needs no rewrite in phase 1                                                  |
+| Approval wait (native)                                                            | `packages/ai/src/gateway/gateway.ts:332-335` (`confirmations.awaitResolution(action.id, confirmTimeoutMs)`)                                                                                                                                                                                          | Block-in-tool-call already exists server-side                                                                                                                                                                                        |
+| Approval wait (module tools) + late-Approve execution point                       | `gateway.ts:564` (`await pendingResolution`), `:566-591` (denied/timeout/cancelled path), `:593` (`runHandler` runs ONLY after `"confirmed"`)                                                                                                                                                        | Cancel-terminally-resolves work targets the registry, not the gateway                                                                                                                                                                |
+| Confirmation registry                                                             | `packages/ai/src/gateway/confirmation-registry.ts:15-30` (`awaitResolution` fail-closed timeout), `:38-43` (`resolve(id, status): boolean`, false when no live waiter)                                                                                                                               | `resolve(id, "cancelled")` is the terminal-resolution primitive; the false return is what makes "late Approve cannot execute" checkable                                                                                              |
+| Hook timeout ladder                                                               | `packages/chat/src/live/claude-permission-hook.ts:17-19` (`NATIVE_CONFIRM_TIMEOUT_MS=150_000` < `HOOK_INTERNAL_DEADLINE_S=170` < `HOOK_TIMEOUT_SECONDS=180`, #1158 ordering)                                                                                                                         | Persistent child keeps the same hook + ladder; `awaiting-approval` state duration is bounded by this ladder                                                                                                                          |
+| Incognito purge guard                                                             | `packages/chat/src/live/chat-session-manager.ts:246-251` (throws `CliChatUnavailableError` when incognito and `!engine.purgeTranscripts`)                                                                                                                                                            | Stays as-is; persistent adapter must satisfy it under whichever phase-1 posture wins                                                                                                                                                 |
+| Delivery-unknown semantics                                                        | `chat-session-manager.ts:434-440` (`CliChatDeliveryUnknownError` ⇒ evict + revoke token, NEVER resubmit), `:441-448` (`CliChatUnavailableError` ⇒ heal + resubmit ONCE)                                                                                                                              | The provably-pre-acceptance rule maps onto these two existing error classes — no new manager semantics                                                                                                                               |
+| Replay seam (#1553/#1556 owns internals)                                          | `chat-session-manager.ts:242-257` (assembles memory seed + summary + `listPriorTurns` into `replayBatch`), `packages/chat/src/live/persistence.ts:157` (`listPriorTurns`)                                                                                                                            | Persistent launch consumes `replayBatch` exactly like today's launch; no coupling to #1556 beyond the existing string                                                                                                                |
+| MCP token lifecycle                                                               | `chat-session-manager.ts:252` (`mintMcpToken` at launch), `:438` (`revokeMcpToken` on evict), wired at `packages/chat/src/live/runtime.ts:385-386` (`mcpTokenLifecycle.mint/revoke`)                                                                                                                 | Reap-revokes-token is already the pattern; pool reap must call the same seam                                                                                                                                                         |
+| Server-side MCP session + TTL                                                     | `packages/chat/src/mcp-transport.ts:72-77` (per-request bearer verify), `:84` (initialize), `:120` (`gateway.callTool(token, …)`); `packages/ai/src/gateway/session-tokens.ts:26-35` (`DEFAULT_TOKEN_TTL_MS = 60min` backstop, touch-on-activity, `revokeBySessionId` at reap)                       | Spec's "MCP session TTL ≥ idle-reap + margin" is ALREADY satisfied: 60-min touch-refreshed backstop > 30-min reap. Decision: no TTL change; cite in code comment only if a reviewer asks                                             |
+| Admin settings pattern                                                            | `packages/settings/src/instance-settings-keys.ts` (`INSTANCE_SETTINGS_REGISTRY`; precedent `chat.multiplexer`; secret-key guards), `packages/settings/src/runtime-config-keys.ts` (`RUNTIME_CONFIG_REGISTRY`, typed entries incl. `int`, admin PATCH validation via runtime-config-routes)           | Flag + pool cap + idle-reap land here, admin-only by construction                                                                                                                                                                    |
+| Env carve-out (#1443)                                                             | `packages/db/src/env.ts:5-29` (`resolveMossEnv`: MOSS*-first, JARVIS* fallback; `CARVE_OUT` list is for shell/compose-consumed names only), `packages/cli-runner/src/sanitized-env.ts:14-28` (`ALLOWED_KEYS` allowlist for spawned children)                                                         | New knobs are settings-first; anything env-shaped is `MOSS_*`-only (no JARVIS\_ history). Pool/reap values reach cli-runner via RPC params, NOT env ⇒ no sanitized-env change                                                        |
 
 **Could not cite (by design → phase-1 verification item):** whether CLI 2.1.227
 `--no-session-persistence` coexists with `--input-format stream-json` persistent stdin (multiple
@@ -62,20 +62,30 @@ consumer outside `live/` appears — default: not exported from the package):
 ```ts
 export type ProviderRuntimeKind = "persistent" | "bounded-fallback";
 export type ChildState =
-  | "launching" | "ready" | "in-turn" | "awaiting-approval" | "idle" | "reaping";
+  | "launching"
+  | "ready"
+  | "in-turn"
+  | "awaiting-approval"
+  | "idle"
+  | "reaping";
 export type ReapReason =
-  | "idle-timeout" | "lru-evict" | "flag-drain" | "token-rotation" | "incognito-end"
-  | "crash-cleanup" | "shutdown";
+  | "idle-timeout"
+  | "lru-evict"
+  | "flag-drain"
+  | "token-rotation"
+  | "incognito-end"
+  | "crash-cleanup"
+  | "shutdown";
 export type CancelOutcome = { readonly approvalsResolved: number };
 export type RecoveryOutcome =
-  | { readonly kind: "resubmitted" }        // provably-pre-acceptance only
+  | { readonly kind: "resubmitted" } // provably-pre-acceptance only
   | { readonly kind: "neutral-failure"; readonly reason: string }; // server-composed, no model prose
 
 export interface RuntimeHealth {
   readonly alive: boolean;
   readonly state: ChildState;
   readonly turnsCompleted: number;
-  readonly lastResultAt: number | null;     // from terminal result frames ONLY (ruling 8)
+  readonly lastResultAt: number | null; // from terminal result frames ONLY (ruling 8)
 }
 
 export interface ProviderChatRuntime {
@@ -131,7 +141,7 @@ composition root only; RPC root explicitly selects fallback in phase 1 (one-line
 
 1. **P1.0 — Bounded verification item (FIRST, timeboxed ≤ half a day):** on the dev box, drive
    CLI 2.1.227 by hand: `--print --input-format stream-json --output-format stream-json
-   --include-partial-messages --verbose --no-session-persistence` + piped stdin; send ≥3 user
+--include-partial-messages --verbose --no-session-persistence` + piped stdin; send ≥3 user
    frames sequentially, confirm ≥3 terminal results on ONE process and then inspect
    `~/.claude/projects/` for any resumable transcript. Record the transcript of the probe in
    `docs/research/` (counts/flags only, no chat content).
@@ -164,22 +174,22 @@ composition root only; RPC root explicitly selects fallback in phase 1 (one-line
 
 ### Test cases (behaviour + why it fails against a broken build)
 
-- *Three frames, one process:* decoder/adapter unit test drives 3 turns against a scripted
+- _Three frames, one process:_ decoder/adapter unit test drives 3 turns against a scripted
   fake child; asserts 3 terminal results, `turnsCompleted === 3`, same child PID. Fails if the
   adapter silently respawns per turn (the one-shot habit this whole task exists to remove).
-- *Decoder bound:* feed a frame exceeding max size ⇒ child killed + neutral failure surfaced;
+- _Decoder bound:_ feed a frame exceeding max size ⇒ child killed + neutral failure surfaced;
   fails against a port of the `structuredOutput +=` unbounded accumulator (`:99-101`).
-- *EOF mid-turn:* close scripted stdout before a terminal result ⇒ neutral failure, no retry;
+- _EOF mid-turn:_ close scripted stdout before a terminal result ⇒ neutral failure, no retry;
   fails if EOF is treated as turn completion (empty reply reaches the thread).
-- *Admission fail-closed:* MCP probe returns unreachable ⇒ `submitTurn` never called, launch
+- _Admission fail-closed:_ MCP probe returns unreachable ⇒ `submitTurn` never called, launch
   rejects with neutral error; fails if the adapter trusts `--strict-mcp-config` and writes the
   frame anyway (spike showed the child launches fine with MCP down).
-- *Incognito posture:* per P1.0 branch — either assert no provider transcript exists after 2
+- _Incognito posture:_ per P1.0 branch — either assert no provider transcript exists after 2
   turns + reap, or assert `purgeTranscripts` ran on every `ReapReason`; fails if any
   termination path leaks a resumable transcript.
-- *No init-count assertions:* meta-test/lint of new tests for `system/init` count or
+- _No init-count assertions:_ meta-test/lint of new tests for `system/init` count or
   `init.mcp_servers` matching (ruling 8) — protects against the spike's known-stale signals.
-- *Vendor-neutral surfaces:* neutral error strings + settings labels contain no provider names;
+- _Vendor-neutral surfaces:_ neutral error strings + settings labels contain no provider names;
   fails if adapter internals leak into user-facing text (hard invariant).
 
 ### Verification (unpiped, expected exit codes)
@@ -237,6 +247,7 @@ neutral failure. Cancel/reap terminally resolves ALL pending action requests
 never reaped/evicted (bounded by the hook ladder, `claude-permission-hook.ts:17-19`). Token
 rotation restarts the child.
 Named e2es (live dev, each recorded on the PR):
+
 - **e2e-P3a "gateway restart, same child":** restart api/MCP mid-session ⇒ the SAME child
   (unchanged PID) completes the next turn.
 - **e2e-P3b "MCP down at launch":** MCP unreachable ⇒ no frame sent, neutral launch error
@@ -290,7 +301,7 @@ all-busy/no-adapter posture; remove dead vocabulary in the same pass (no stale
       down at launch), P3c (late Approve), P3d (no-prose relaunch); the other criteria land in
       P1/P2/P4 e2es
 - [x] Determinism boundary restated (ruling 6) and enforced by e2e-P3d
-- [x] Env/settings follow #1443 carve-out rules (MOSS_-only new vars; values via RPC params,
+- [x] Env/settings follow #1443 carve-out rules (MOSS\_-only new vars; values via RPC params,
       sanitized-env untouched) and the existing admin-settings registries — cited
 - [x] Provider-agnostic invariant: neutral contract + vendor-free surfaces (ruling 7, tested)
 - [x] No migration; no `AccessContext` changes; metadata-only logs/instrumentation
