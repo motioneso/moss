@@ -205,10 +205,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
           event: "chat.replay.injected",
           threadId: thread.id,
           messageCount: recent.length,
-          tokenCount: recent.reduce(
-            (sum, m) => sum + estimateTokens(`${m.role}: ${m.content}`),
-            0
-          ),
+          tokenCount: recent.reduce((sum, m) => sum + estimateTokens(`${m.role}: ${m.content}`), 0),
           summaryTokens: oldSummary ? estimateTokens(oldSummary) : 0,
           trigger
         })

@@ -5,7 +5,7 @@
 **Status:** Draft, revised 2026-08-10 after Codex adversarial review
 (`docs/coordination/2026-08-10-1553-1554-codex-review.md`) — pending Ben sign-off
 
-**Parent issues:** #1553 (continuity); the retrieval half resolves the *passive retrieval gap*
+**Parent issues:** #1553 (continuity); the retrieval half resolves the _passive retrieval gap_
 diagnosed in #1248's 2026-08-10 comment. Internal-vault ingestion stays on #1248 — see Non-goals.
 
 **Grounded on:** `origin/main` = `128a5bed6`; issue #1553; issue #1248 body + 2026-08-10 comment;
@@ -16,14 +16,14 @@ replay contract and must not redefine it.
 
 ## Decision summary
 
-Two fixes to *what the model knows when it answers*, shipped together because they share the
+Two fixes to _what the model knows when it answers_, shipped together because they share the
 context-assembly seam:
 
 1. **Replay on relaunch stops defaulting to zero.** Whenever a live engine is (re)launched under a
    thread that has persisted history, Moss re-feeds a bounded window of that history: the **last
    40 persisted messages (~20 exchanges), capped at ~8,000 tokens**, dropping oldest whole
    messages past either bound. On by default. If a stored `conversation_summary` exists it is
-   prepended read-only; *generating* summaries stays out of scope — and because current code
+   prepended read-only; _generating_ summaries stays out of scope — and because current code
    couples summary generation to the same knob, decoupling is an explicit part of the contract.
 2. **Notes become the default reflex, not an option.** The persona gains a standing
    **search-before-asking** rule — when a question touches the user's stored information, the
@@ -42,7 +42,7 @@ assistant prose. Incognito threads get **neither** replay nor notes injection.
   only applies on `forceReplay`.
 - `launchSession()` (`packages/chat/src/live/chat-session-manager.ts:212-295`) already calls
   `listPriorTurns()` at `:246`; the plumbing exists and is starved by the zero default.
-- **Coupling trap:** `getReplayK()` also gates the summary *write* path — `persistence.ts:240-260`
+- **Coupling trap:** `getReplayK()` also gates the summary _write_ path — `persistence.ts:240-260`
   writes `conversation_summary` whenever `k > 0`, and `:183-185` synthesizes
   `buildRollingSummary(...)` at read time when none is stored. Raising the default without
   severing this coupling silently turns on summary generation.
@@ -62,7 +62,7 @@ assistant prose. Incognito threads get **neither** replay nor notes injection.
 ## Goals
 
 - A relaunched engine under a persisted thread continues the conversation; the user cannot tell
-  from *content* that a relaunch happened.
+  from _content_ that a relaunch happened.
 - A question whose answer sits in the user's notes gets answered from the notes — asking the user
   becomes the fallback, not the first move.
 - Both behaviors bounded and deterministic: fixed turn/token windows, fixed snippet budget,
@@ -71,7 +71,7 @@ assistant prose. Incognito threads get **neither** replay nor notes injection.
 
 ## Non-goals
 
-- Summary *generation* or refresh (consume `conversation_summary` if present; never write it).
+- Summary _generation_ or refresh (consume `conversation_summary` if present; never write it).
 - Internal-vault ingestion (`IngestionService.ingestVault` still has no production caller) —
   attachments/people-notes/exports remain unsearchable until #1248's ingestion work; this spec
   must not grow to include it.
@@ -97,7 +97,7 @@ assistant prose. Incognito threads get **neither** replay nor notes injection.
   order. Normative example: 50 messages of ~300 estimated tokens each → the 40-message window
   token-trims to the newest 26 → messages 25–50 replay in chronological order.
 - **Summary (read-only, decoupled):** if a stored `conversation_summary` is non-empty it is
-  prepended *outside* the 8k window with its own 1,000-token cap (truncate tail). Absent →
+  prepended _outside_ the 8k window with its own 1,000-token cap (truncate tail). Absent →
   skipped, nothing synthesized. Overlap with the replay window is acceptable — the summary is
   advisory preamble, not accounting. **Decoupling is part of this contract:** the current
   `k > 0`-gated summary write and read-time `buildRollingSummary` synthesis
@@ -110,7 +110,7 @@ assistant prose. Incognito threads get **neither** replay nor notes injection.
   sanitized structured-history contract (schema, redaction, retention) is explicitly out of scope.
 - **Defaults and knobs:** default ON. `JARVIS_CHAT_REPLAY_K` (with its MOSS-era alias per the
   #1443 carve-out rules) remains the operator override; `0` remains a valid explicit opt-out.
-  The *default-when-unset* changes from 0 → 40 messages. Token cap gets a sibling env override.
+  The _default-when-unset_ changes from 0 → 40 messages. Token cap gets a sibling env override.
 - **Incognito:** threads with `incognito = true` replay nothing. If the engine relaunches, the
   conversation is gone — that is the feature.
 - **Visibility:** relaunch + replay emit structured log events (thread id, turn count, token
@@ -156,7 +156,7 @@ assistant prose. Incognito threads get **neither** replay nor notes injection.
   - **Incognito:** skipped entirely (see gating).
 - **Search quality is a plan-phase research step, not a spec decision:** index search vs. direct
   file reads, ranking, freshness weighting get a small timeboxed investigation in the
-  implementation plan; the spec fixes only the *bounds* above.
+  implementation plan; the spec fixes only the _bounds_ above.
 
 ## Acceptance criteria
 
@@ -176,13 +176,13 @@ assistant prose. Incognito threads get **neither** replay nor notes injection.
    relaunch, ask about earlier content — the reply demonstrates retained context. This is
    live-path evidence; the falsifiers for the contract are the fake-engine tests above.
 4. **Notes-default live proof (live-path gate):** seed a note (via the real UI/tools) recording a
-   fact, then in a later session ask a question whose answer is that fact *without naming the
-   note* — the assistant answers from the note. Evidence recorded on the PR.
+   fact, then in a later session ask a question whose answer is that fact _without naming the
+   note_ — the assistant answers from the note. Evidence recorded on the PR.
 5. **No-prose check:** forced relaunch mid-thread produces log events and zero thread-visible
    system/recovery text.
 
 ## Rollout
 
-Default-on behavior change, no migration, no new tables. Ships behind nothing: the fix *is* the
+Default-on behavior change, no migration, no new tables. Ships behind nothing: the fix _is_ the
 new default. Operator opt-out remains (`JARVIS_CHAT_REPLAY_K=0`, injection disabled via config).
 Live-proof on the dev instance before merge per the live-path gate.

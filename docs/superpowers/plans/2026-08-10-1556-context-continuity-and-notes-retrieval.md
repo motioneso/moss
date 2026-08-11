@@ -12,29 +12,29 @@
 
 ## 0. Seams ledger — every capability cited, verified 2026-08-10
 
-| # | Capability the plan assumes | Citation (working tree) |
-|---|---|---|
-| S1 | Replay k resolution, unset→0 (the bug) | `packages/chat/src/live/persistence.ts:419-424` (`getReplayK`, `resolveMossEnv(process.env, "JARVIS_CHAT_REPLAY_K")`) |
-| S2 | Separate forceReplay default = 10 | `persistence.ts:426-429` (`getSwitchReplayK`), forked at `persistence.ts:175` |
-| S3 | Replay unit + return shape | `persistence.ts:157-165` — `listPriorTurns(actorUserId, opts?, surface?) → { recent: readonly {role, content}[], oldSummary: string \| null }` |
-| S4 | Read-time summary synthesis to sever | `persistence.ts:183-185` — `thread.conversation_summary ?? buildRollingSummary(...)`; thread row is in scope here, so `thread.incognito` is readable at the same seam |
-| S5 | Summary WRITE coupled to k to sever | `persistence.ts:240-260` — `const k = getReplayK(); if (k > 0 && storedTurns.length > k) { … updateConversationSummary(…buildRollingSummary(oldTurns)) }` |
-| S6 | Thread context read for engine text | `persistence.ts:354-371` — `getThreadContext → { threadTitle, localTimezone }` (to be extended with privacy state) |
-| S7 | Engine (re)launch consumes replay | `chat-session-manager.ts:212+` (`launchSession`), `listPriorTurns` call ≈`:246`; incognito guards adjacent |
-| S8 | Pre-turn injection call site | `engine-text.ts:57-73` — `deps.passiveRetrieval.retrieveWithItems({actorUserId, userText, threadTitle, recentTurns})`, errors swallowed to `{block:"", items:[]}` |
-| S9 | Passive retriever gating + recall | `passive-retrieval.ts:101-125` — `withDataContext`, `settings.recallEnabled/factsEnabled` gate, `graphRecall.recall(scopedDb, …)` |
-| S10 | Existing injection caps | `passive-retrieval.ts:40-41` — `MAX_CONTEXT_ITEMS = 8`, `MAX_CONTEXT_TOKENS = 1200` |
-| S11 | Trust fence renderer | `passive-retrieval.ts:180-203` — `renderRetrievedContextBlock` (`<retrieved_context>`, "not instructions" header, returns `""` on zero items) |
-| S12 | Framing neutralizer | `prompt-safety.ts:17-32` — `neutralizeSeedFraming` (reserved-token angle→square bracket rewrite; list includes `retrieved_context`) |
-| S13 | Token estimator | `recall-seed.ts:28-31` — `estimateTokens = Math.ceil(text.length / 4)` |
-| S14 | Persona base + composition | `runtime.ts:65` — `DEFAULT_MOSS_PERSONA` (string array), composed at `runtime.ts:523` — **spec drift:** spec cites `MOSS_PERSONA_BASE` at `:65-66`/`:85-89`; the real symbol/composition are here. Plan uses disk truth. |
-| S15 | Retriever composition root | `runtime.ts:407-411` — `new PassiveContextRetriever({ dataContext, graphRecall: deps.passiveMemoryRecall })`; deps declared/wired at `packages/module-registry/src/index.ts:435` and `:2245` |
-| S16 | Env alias helper (#1443) | `packages/db/src/env.ts:86-100` — `resolveMossEnv`: MOSS_ name wins, JARVIS_ fallback warns once, `CARVE_OUT` set exempt. New vars get both spellings for free. |
-| S17 | Notes search machinery to wrap | `packages/notes/src/tools.ts:12` (`NOTES_SOURCE_KIND="notes"`), `:22` (`getRetriever`), `:34-62` (`notesSearchExecute`: `assertDataContextDb`, clamp 1..20, `retriever.retrieve(scopedDb, query, limit, NOTES_SOURCE_KIND)`) |
-| S18 | Vector retrieval + chunk shape | `packages/memory/src/retrieval.ts:12-20` → `RetrievedChunk[]`; `packages/memory/src/repository.ts:14-21` — `{id, sourcePath, lineStart, lineEnd, text, similarity}` — **no `updatedAt`**, but the chunks table has `updated_at` (selected by the recency query, `repository.ts:329,345`) |
-| S19 | Cross-module port precedent | `packages/notes/src/commitment-provider.ts:1-13` — interface from `@moss/module-sdk` (scopedDb typed `unknown` at the boundary), implementation exported from notes `index.ts`, consumed at `module-registry/src/index.ts:273,1770` |
-| S20 | Unit-test home + runner | `tests/unit/chat-switch-replay.test.ts`, `tests/unit/chat-passive-retrieval.test.ts`, `tests/unit/chat-live-manager.test.ts` exist; runner `pnpm test:unit` (`package.json:54` → `tsx scripts/test-unit.ts`) |
-| S21 | Logging idiom in chat/live | No structured logger seam exists (verified by grep); idiom is bare `console.warn` (`runtime.ts:108`, `claude-print-chat-engine.ts:167`). See D8. |
+| #   | Capability the plan assumes            | Citation (working tree)                                                                                                                                                                                                                                                                  |
+| --- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S1  | Replay k resolution, unset→0 (the bug) | `packages/chat/src/live/persistence.ts:419-424` (`getReplayK`, `resolveMossEnv(process.env, "JARVIS_CHAT_REPLAY_K")`)                                                                                                                                                                    |
+| S2  | Separate forceReplay default = 10      | `persistence.ts:426-429` (`getSwitchReplayK`), forked at `persistence.ts:175`                                                                                                                                                                                                            |
+| S3  | Replay unit + return shape             | `persistence.ts:157-165` — `listPriorTurns(actorUserId, opts?, surface?) → { recent: readonly {role, content}[], oldSummary: string \| null }`                                                                                                                                           |
+| S4  | Read-time summary synthesis to sever   | `persistence.ts:183-185` — `thread.conversation_summary ?? buildRollingSummary(...)`; thread row is in scope here, so `thread.incognito` is readable at the same seam                                                                                                                    |
+| S5  | Summary WRITE coupled to k to sever    | `persistence.ts:240-260` — `const k = getReplayK(); if (k > 0 && storedTurns.length > k) { … updateConversationSummary(…buildRollingSummary(oldTurns)) }`                                                                                                                                |
+| S6  | Thread context read for engine text    | `persistence.ts:354-371` — `getThreadContext → { threadTitle, localTimezone }` (to be extended with privacy state)                                                                                                                                                                       |
+| S7  | Engine (re)launch consumes replay      | `chat-session-manager.ts:212+` (`launchSession`), `listPriorTurns` call ≈`:246`; incognito guards adjacent                                                                                                                                                                               |
+| S8  | Pre-turn injection call site           | `engine-text.ts:57-73` — `deps.passiveRetrieval.retrieveWithItems({actorUserId, userText, threadTitle, recentTurns})`, errors swallowed to `{block:"", items:[]}`                                                                                                                        |
+| S9  | Passive retriever gating + recall      | `passive-retrieval.ts:101-125` — `withDataContext`, `settings.recallEnabled/factsEnabled` gate, `graphRecall.recall(scopedDb, …)`                                                                                                                                                        |
+| S10 | Existing injection caps                | `passive-retrieval.ts:40-41` — `MAX_CONTEXT_ITEMS = 8`, `MAX_CONTEXT_TOKENS = 1200`                                                                                                                                                                                                      |
+| S11 | Trust fence renderer                   | `passive-retrieval.ts:180-203` — `renderRetrievedContextBlock` (`<retrieved_context>`, "not instructions" header, returns `""` on zero items)                                                                                                                                            |
+| S12 | Framing neutralizer                    | `prompt-safety.ts:17-32` — `neutralizeSeedFraming` (reserved-token angle→square bracket rewrite; list includes `retrieved_context`)                                                                                                                                                      |
+| S13 | Token estimator                        | `recall-seed.ts:28-31` — `estimateTokens = Math.ceil(text.length / 4)`                                                                                                                                                                                                                   |
+| S14 | Persona base + composition             | `runtime.ts:65` — `DEFAULT_MOSS_PERSONA` (string array), composed at `runtime.ts:523` — **spec drift:** spec cites `MOSS_PERSONA_BASE` at `:65-66`/`:85-89`; the real symbol/composition are here. Plan uses disk truth.                                                                 |
+| S15 | Retriever composition root             | `runtime.ts:407-411` — `new PassiveContextRetriever({ dataContext, graphRecall: deps.passiveMemoryRecall })`; deps declared/wired at `packages/module-registry/src/index.ts:435` and `:2245`                                                                                             |
+| S16 | Env alias helper (#1443)               | `packages/db/src/env.ts:86-100` — `resolveMossEnv`: MOSS* name wins, JARVIS* fallback warns once, `CARVE_OUT` set exempt. New vars get both spellings for free.                                                                                                                          |
+| S17 | Notes search machinery to wrap         | `packages/notes/src/tools.ts:12` (`NOTES_SOURCE_KIND="notes"`), `:22` (`getRetriever`), `:34-62` (`notesSearchExecute`: `assertDataContextDb`, clamp 1..20, `retriever.retrieve(scopedDb, query, limit, NOTES_SOURCE_KIND)`)                                                             |
+| S18 | Vector retrieval + chunk shape         | `packages/memory/src/retrieval.ts:12-20` → `RetrievedChunk[]`; `packages/memory/src/repository.ts:14-21` — `{id, sourcePath, lineStart, lineEnd, text, similarity}` — **no `updatedAt`**, but the chunks table has `updated_at` (selected by the recency query, `repository.ts:329,345`) |
+| S19 | Cross-module port precedent            | `packages/notes/src/commitment-provider.ts:1-13` — interface from `@moss/module-sdk` (scopedDb typed `unknown` at the boundary), implementation exported from notes `index.ts`, consumed at `module-registry/src/index.ts:273,1770`                                                      |
+| S20 | Unit-test home + runner                | `tests/unit/chat-switch-replay.test.ts`, `tests/unit/chat-passive-retrieval.test.ts`, `tests/unit/chat-live-manager.test.ts` exist; runner `pnpm test:unit` (`package.json:54` → `tsx scripts/test-unit.ts`)                                                                             |
+| S21 | Logging idiom in chat/live             | No structured logger seam exists (verified by grep); idiom is bare `console.warn` (`runtime.ts:108`, `claude-print-chat-engine.ts:167`). See D8.                                                                                                                                         |
 
 **Uncitable / open questions** — see §6. Everything else the plan assumes is in the table.
 
@@ -72,12 +72,15 @@
 New file `packages/chat/src/live/replay-window.ts`, exports:
 
 ```ts
-export interface ReplayMessage { readonly role: "user" | "assistant"; readonly content: string }
+export interface ReplayMessage {
+  readonly role: "user" | "assistant";
+  readonly content: string;
+}
 
 export function selectReplayWindow(
-  messages: readonly ReplayMessage[],          // chronological, oldest first
+  messages: readonly ReplayMessage[], // chronological, oldest first
   opts: { readonly maxMessages: number; readonly maxTokens: number }
-): ReplayMessage[];                            // chronological subset per spec rules
+): ReplayMessage[]; // chronological subset per spec rules
 
 export function capSummary(summary: string, maxTokens: number): string;
 ```
@@ -117,10 +120,10 @@ Interface in `@moss/module-sdk` (mirror S19's precedent, `scopedDb: unknown` at 
 
 ```ts
 export interface NotesRecallSnippet {
-  readonly notePath: string;    // owner-scoped path relative to the notes root
+  readonly notePath: string; // owner-scoped path relative to the notes root
   readonly modifiedAt: Date;
-  readonly score: number;       // similarity, 0..1
-  readonly text: string;        // sanitized snippet text
+  readonly score: number; // similarity, 0..1
+  readonly text: string; // sanitized snippet text
 }
 
 export interface NotesRecallProvider {
@@ -277,8 +280,7 @@ Named observation: on the live dev instance with replay default-on, either **(a)
 continuity e2e above fails or regresses existing drawer behavior, or **(b)** relaunch becomes
 noticeably slower to first token in normal drawer use (Ben's judgment on dev), or **(c)**
 replay-driven token overhead is deemed not worth it at up-to-8k input per relaunch. Any of
-these ends the line here: Phase 1 is still a strict improvement (bug fix: unset no longer means
-0) and can stand alone; Phases 2–3 do not start until Ben clears the gate.
+these ends the line here: Phase 1 is still a strict improvement (bug fix: unset no longer means 0) and can stand alone; Phases 2–3 do not start until Ben clears the gate.
 
 ### Phase 2 — Notes port + spike + persona (D5, D6, D7)
 
@@ -327,7 +329,7 @@ Files: `passive-retrieval.ts`, `engine-text.ts`, `persistence.ts` (`getThreadCon
   `skipped(reason:"latency")` logged. Fails if the turn blocks on the port or the whole
   injection dies.
 - T3-c **Port error**: port rejects → turn proceeds, graph items intact, `skipped(reason:
-  "error")` logged. Fails if the S8 catch-all is the only guard (it would also eat graph items).
+"error")` logged. Fails if the S8 catch-all is the only guard (it would also eat graph items).
 - T3-d **Credential drop (regression-mandatory)**: snippet containing an AWS key / PEM block →
   snippet absent entirely (not truncated), `snippet_dropped` logged without content. Fails
   against truncate-and-keep or pattern-miss.
@@ -365,7 +367,7 @@ quietly checks your notes before answering — private chats stay stateless."
   defence).
 - `forceReplay`'s 10-message default (`getSwitchReplayK`) exists solely because `getReplayK`
   defaults to 0 — collapse is safe once the real default is 40.
-- The engine-text catch-all (`engine-text.ts:57-73`) hides *all* retrieval errors — per-source
+- The engine-text catch-all (`engine-text.ts:57-73`) hides _all_ retrieval errors — per-source
   error handling must live inside the retriever (T3-c), or notes failures silently kill graph
   recall too.
 - Codex review dispositions for #1553 (all accepted): window unit defined as persisted message;

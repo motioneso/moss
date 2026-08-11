@@ -116,7 +116,7 @@ describe("getReplayK", () => {
     expect(getReplayK()).toBe(DEFAULT_REPLAY_MESSAGES);
   });
 
-  it("T1-e: explicit \"0\" -> 0 (valid opt-out, no replay)", () => {
+  it('T1-e: explicit "0" -> 0 (valid opt-out, no replay)', () => {
     process.env.JARVIS_CHAT_REPLAY_K = "0";
     expect(getReplayK()).toBe(0);
   });

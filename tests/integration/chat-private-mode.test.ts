@@ -103,7 +103,10 @@ describe("private chat persistence", () => {
     // (bypassing the repository) into a thread created incognito from the
     // start, then confirm listPriorTurns still returns nothing.
     const thread = await dataContext.withDataContext(userAContext(), (scopedDb) =>
-      repository.openNewThread(scopedDb, { title: "private bookkeeping with rows", incognito: true })
+      repository.openNewThread(scopedDb, {
+        title: "private bookkeeping with rows",
+        incognito: true
+      })
     );
     await dataContext.withDataContext(userAContext(), async (scopedDb) => {
       const now = new Date();
