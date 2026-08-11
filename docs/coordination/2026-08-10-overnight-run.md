@@ -353,3 +353,12 @@ and a live 70%-checkpoint hook (declined per override). No successor spawned or 
   2 unilaterally (needs Ben's live dev session per prior memory: "Ben's dev login here").
   **Everything else in Phase 4 is done — this is the only open item.** Now waiting event-driven
   (not polling) for Ben's reply. Coordinator will keep watching #1533's pane for the unblock.
+- **#1533 decision made (coordinator, not Ben — Ben delegated "you pick the best option").**
+  Checked reachability first: no live jarv1s/moss dev instance up (only prod on host :1533,
+  off-limits per policy; other listening ports belong to unrelated services/other worktrees'
+  dev servers), and `JARVIS_UAT_REAL_CHAT_TOKEN_FILE` not found on disk. Options 1 and 2 both
+  need infra/credentials that aren't available right now, so **going with option 3**: instructed
+  `issue-1533-relay8` to open #1533 as a draft PR, code-complete, live-path proof explicitly
+  outstanding and blocking merge (not marking Done), with the missing-token root cause noted in
+  the PR description so a future runner doesn't re-waste reruns. Sent via `herdr agent prompt`,
+  delivery confirmed. Awaiting the draft PR link back.
