@@ -22,6 +22,7 @@ import { AgyPrintChatEngine } from "./agy-print-chat-engine.js";
 import { ClaudePrintChatEngine } from "./claude-print-chat-engine.js";
 import { CliChatEngineImpl } from "./cli-chat-engine.js";
 import type { CliChatEngineDiagnostic } from "./cli-chat-engine-opts.js";
+import { ClaudePersistentRuntimeEngine } from "./persistent-runtime-engine.js";
 import type { CliChatEngine } from "./types.js";
 
 export interface ChatEngineSelectionOpts {
@@ -37,6 +38,15 @@ export interface ChatEngineSelectionOpts {
   readonly ownsDrain?: boolean;
   /** #1157 diagnostic sink; must never throw into the submit path. */
   readonly onDiagnostic?: (event: CliChatEngineDiagnostic) => void;
+  /**
+   * #1557 Phase 1 rollout flag (`chat.persistent_runtime.enabled`). When true AND the provider
+   * is anthropic (the only adapter Phase 1 ships), selects the persistent provider-runtime
+   * engine ahead of the bounded-fallback/tmux fork below — a third engine shape, not a
+   * replacement for either. The cli-runner RPC root (`engine-host.ts`) pins this to `false` for
+   * the whole of Phase 1 (the #1350 two-composition-roots guard: the pool must exist before the
+   * RPC root can safely select persistent children).
+   */
+  readonly persistentRuntimeEnabled?: boolean;
 }
 
 /**
@@ -68,6 +78,15 @@ export function createChatEngine(
   io: TmuxIo,
   opts: ChatEngineSelectionOpts = {}
 ): CliChatEngine {
+  // #1557 Phase 1: the persistent adapter is a third engine shape, checked ahead of the
+  // bounded-fallback/tmux fork below (ruling 2 — flag on + provider match wins outright,
+  // independent of `executionMode`). Phase 1 ships Claude only.
+  if (opts.persistentRuntimeEnabled && provider === "anthropic") {
+    return new ClaudePersistentRuntimeEngine(sessionKey, io, {
+      credentialFile: opts.credentialFile
+    });
+  }
+
   if (isBoundedFallbackEngine(provider, opts.executionMode)) {
     if (provider === "anthropic") {
       return new ClaudePrintChatEngine(sessionKey, io, {

@@ -17,6 +17,11 @@ export const INSTANCE_SETTINGS_REGISTRY: readonly InstanceSettingKeyEntry[] = [
   { key: "chat.multiplexer" },
   { key: "onboarding.state" },
   { key: "ai.chat_model_override.enabled" },
+  // #1557 Phase 1 rollout flag: boolean-string, default absent = off. Selects the persistent
+  // provider-chat-runtime adapter (warm child, `engine-selection.ts`) over the one-shot
+  // bounded-fallback engine for anthropic sessions. Read pre-auth at boot the same way as
+  // `chat.multiplexer` (`module-registry/src/chat-multiplexer.ts`).
+  { key: "chat.persistent_runtime.enabled" },
   ...RUNTIME_CONFIG_REGISTRY.map((entry) => ({ key: entry.key, secret: entry.secret })),
   // Brave Search API key — written/read only via the dedicated encrypted web-search routes,
   // which store an AES-256-GCM EncryptedSecret envelope in `value` (never the plaintext key,

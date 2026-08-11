@@ -105,7 +105,9 @@ export interface PersonaPreferencesPort {
  * one stateless backend. With no mux it defaults to tmux (preserves legacy
  * single-host behavior for tests and standalone embedders).
  */
-export function createRealEngineFactory(opts: { mux?: Multiplexer } = {}): ChatEngineFactory {
+export function createRealEngineFactory(
+  opts: { mux?: Multiplexer; persistentRuntimeEnabled?: boolean } = {}
+): ChatEngineFactory {
   // Containerized deploys (deployable-stack §6) point this at the bind-mounted host
   // CLI-dir base (/host-home) so transcripts written by the host CLI are read back
   // correctly. Unset on a host install → the engine uses the OS home (unchanged).
@@ -117,6 +119,11 @@ export function createRealEngineFactory(opts: { mux?: Multiplexer } = {}): ChatE
       mux: opts.mux,
       homeBase,
       executionMode: engineOpts?.executionMode,
+      // #1557 Phase 1: read from `chat.persistent_runtime.enabled` by the caller
+      // (`chat-multiplexer.ts`'s `resolveChatEngineFactory`, the host-dev boot path). The
+      // cli-runner RPC root (`engine-host.ts`) never reaches this factory — it calls
+      // `createChatEngine` directly and pins this to `false` (#1350 two-roots guard).
+      persistentRuntimeEnabled: opts.persistentRuntimeEnabled,
       // #1157: surface silently-discarded composer input (char count only — never content).
       onDiagnostic: (event) =>
         console.warn(
@@ -184,6 +191,9 @@ export function selectEngineFactory(
     readonly onReconcile?: (driver: RpcReconcileDriver) => Promise<void>;
     readonly logger?: RpcClientLogger;
     readonly env?: NodeJS.ProcessEnv;
+    /** #1557 Phase 1: forwarded only to the in-process factory below. The socket/RPC branch
+     *  ignores it — the cli-runner root selects for itself and pins `false` (#1350 guard). */
+    readonly persistentRuntimeEnabled?: boolean;
   } = {}
 ): { factory: ChatEngineFactory; connection?: RpcConnection } {
   const env = opts.env ?? process.env;
@@ -207,7 +217,12 @@ export function selectEngineFactory(
     });
     return { factory, connection };
   }
-  return { factory: createRealEngineFactory({ mux: opts.mux }) };
+  return {
+    factory: createRealEngineFactory({
+      mux: opts.mux,
+      persistentRuntimeEnabled: opts.persistentRuntimeEnabled
+    })
+  };
 }
 
 /** A factory that refuses to launch: used when the host has no multiplexer installed. */
@@ -279,6 +294,9 @@ export interface CreateChatSessionRuntimeDeps {
     readonly env?: NodeJS.ProcessEnv;
     /** Start the §5.5 idle reaper at boot (default true). The returned `shutdown()` stops it. */
     readonly startIdleReaper?: boolean;
+    /** #1557 Phase 1 (`chat.persistent_runtime.enabled`) — forwarded to `selectEngineFactory`,
+     *  which forwards it only to the in-process branch. The socket/RPC branch ignores it. */
+    readonly persistentRuntimeEnabled?: boolean;
   };
   /** Optional gateway for cross-tool pre-turn context fan-out. Structural — real AssistantToolGateway satisfies this. */
   readonly crossToolGateway?: {
@@ -375,6 +393,7 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
       mux: deps.engineSelection.mux,
       logger: deps.engineSelection.logger,
       env: deps.engineSelection.env,
+      persistentRuntimeEnabled: deps.engineSelection.persistentRuntimeEnabled,
       onReconcile
     });
     engineFactory = selected.factory;

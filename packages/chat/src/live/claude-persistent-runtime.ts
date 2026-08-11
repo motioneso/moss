@@ -24,7 +24,8 @@ import type {
   ProviderRuntimeKind,
   ReapReason,
   RecoveryOutcome,
-  RuntimeHealth
+  RuntimeHealth,
+  RuntimeTurnEvent
 } from "./provider-runtime.js";
 import type { EngineLaunchOpts } from "./types.js";
 import { vaultReadOnlyToolPatterns } from "./vault-allowlist.js";
@@ -143,7 +144,7 @@ export class ClaudePersistentRuntime implements ProviderChatRuntime {
     this.frameAcceptedForTurn = true;
   }
 
-  async *streamEvents(): AsyncIterable<import("./provider-runtime.js").RuntimeTurnEvent> {
+  async *streamEvents(): AsyncIterable<RuntimeTurnEvent> {
     if (this.decoder === null) return;
     for await (const event of this.decoder.events()) {
       if (event.kind === "record" && event.record.kind === "tool") {
