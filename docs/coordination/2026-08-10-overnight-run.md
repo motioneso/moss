@@ -239,6 +239,13 @@ and a live 70%-checkpoint hook (declined per override). No successor spawned or 
   doesn't reach a real rendered card in a browser (vs. headless-only). Handoff:
   `docs/superpowers/handoffs/2026-08-11-1533-chat-surface-build-relay12.md`. No action needed —
   pure FYI, self-driving.
+  **Update:** hit a permission-classifier block merging `origin/main` (needed to bring in #1121)
+  into its own worktree — correctly did not force it, paged Ben directly via needs-ben
+  (`~/.needs-ben/sent/1786472945669485123.msg`, sent 11:29:14, clean/0-conflict per `merge-tree`).
+  Waiting non-polling for Ben's reply per box-wide protocol; will notify Coordinator when it lands.
+  No coordinator action needed unless Ben's reply doesn't arrive in a reasonable window.
+- **70%-context checkpoint fired again this leg — declined per Ben's standing override** (top of
+  file). Staying resident, no successor spawned.
 - **#1547 plan approved, build RED-confirmed-correctly, now self-relaying.** Plan
   (`docs/superpowers/plans/2026-08-11-manual-run-job-idempotency.md`) reviewed directly (pg_advisory_xact_lock
   + time-bounded `hasRecentJob()` wrapping `boss.send()`, `rootDb` as an optional trailing param,
