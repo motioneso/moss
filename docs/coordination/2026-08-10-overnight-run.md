@@ -1,11 +1,11 @@
 # Coordination Run — 2026-08-10 overnight
 
 **Date:** 2026-08-10
-**Coordinator lock:** label `Coordinator`, stable anchor = Claude session id `eb3ffb0e-49f0-4154-8b14-193a7a93eaef` (pane `w1:p7H`, tab `w1:t6`, resolve fresh by label+session, never a written pane number). Exactly one pane with this label and session holds merge authority.
+**Coordinator lock:** label `Coordinator`, stable anchor = Claude session id `fae372ee-0c2d-4c85-9189-7464f94d11bc` (pane `w1:p7J`, tab `w1:t6`, resolve fresh by label+session, never a written pane number). Exactly one pane with this label and session holds merge authority.
 **Delegated authority:** Ben explicitly delegated overnight product/design decisions to Fable and confirmed that Fable's green security review counts as his security-tier merge sign-off. Existing repository rule still applies: #1557 never merges without fresh Fable approval. Every delegated security sign-off must be durable on the exact-head PR.
 **Merge policy:** routine/sensitive only after verified QA and live-path proof where applicable; security only after adversarial Fable QA and delegated sign-off.
 **Merge notification:** after every merge, run `needs-ben coordinator "<issue/PR — one-line description of what landed>"` and retain the normal GitHub/project bookkeeping.
-**merges_since_relay:** 0 — reset by successor session `eb3ffb0e-49f0-4154-8b14-193a7a93eaef` after adopting (relay #3 continuation).
+**merges_since_relay:** 0 — reset by successor session `fae372ee-0c2d-4c85-9189-7464f94d11bc` after adopting (relay #4 continuation).
 
 GitHub/project 2 is the source of truth. Detailed continuation evidence stays in `/tmp/jarv1s-monitor-state.md`.
 
@@ -103,6 +103,12 @@ None.
 - AWAITING-BEN.md: one open entry (#1560 persona/Nova rename cleanup) — confirmed not a mergeability blocker, correctly left untouched.
 - Any Monitors/background tasks from this leg die with this session — re-arm equivalents after adopting (**debounced** persistent liveness Monitor over panes `w1:p7A`/`w1:p7C`/`w1:p7D`, excluding own pane).
 - Mid-doing at relay: nothing blocking, pure supervision mode. Next real gate is #1557's CI run finishing → PR #1561 evidence comment → fresh Fable adjudication → merge (session-id check first). #1121 continues Tasks 1-4. #1533 stays parked pending #1121.
+
+## Relay continuation — adopted from relay #4 (context-meter relay #5, no merge yet)
+
+- Adopted from outgoing coordinator session `eb3ffb0e-49f0-4154-8b14-193a7a93eaef` (pane `w1:p7H`, tab `w1:t6`) — confirmed idle/flushed with no in-flight work (final pane line was its own "confirm successor reaped my pane" note), pane renamed off the `Coordinator` label and closed. New lock: session `fae372ee-0c2d-4c85-9189-7464f94d11bc`, pane `w1:p7J`, tab `w1:t6`. Verified exactly one `Coordinator`-labelled pane via `herdr pane list`. `merges_since_relay` stays 0 (no merge occurred last leg either).
+- Re-read AWAITING-BEN.md in full: only the #1560 persona/Nova entry remains, confirmed not a mergeability blocker — left untouched.
+- Next actions this leg: re-arm the debounced liveness Monitor (dies with each relay, must be re-armed every leg) over `w1:p7A` (#1557) / `w1:p7C` (#1533) / `w1:p7D` (#1121); check CI run `31485070513` for #1557/PR #1561 terminal state; confirm #1557 still owes its PR #1561 evidence comment + fresh Fable adjudication before any merge; sanity-check #1121 and #1533 haven't changed state (both should be steady per relay #4's read — #1121 building Tasks 1-4, #1533 correctly parked on #1121).
 
 ## Relay continuation — after #1567 merge (context-meter relay #3)
 
