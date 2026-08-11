@@ -63,6 +63,8 @@ None.
 - #1557 exact-head-gate session `1714639f-b321-419d-ae52-06d01212713d` (`w1:p7A`) reaped after PR #1561 merged + confirmed on `origin/main`; pane was idle ("stand by for QA verdict") with no in-flight work.
 - QA-verify session for PR #1561 (worktree `agent-a1cf7fbb112db6161`, branch `qa-1561-verify`) reaped after confirming its HEAD matched the already-landed #1557 tip.
 - Old Coordinator session `52c5ef3d-153d-4bd5-8f71-babd342a4d07` (`w1:p7M`) closed after successor (`3c9536bb-eceb-4288-88b7-dd61ba32a281`) confirmed driving.
+- Old Coordinator session `3c9536bb-eceb-4288-88b7-dd61ba32a281` (`w1:p7N`) — pane was already gone (not found) by the time relay #9 successor adopted; no action needed, label reclaimed cleanly by session `0bb9f516-c026-454f-bc97-dc9faf43bd20`.
+- #1121 relay3/4 stalled session `5d633249-f321-45ea-a177-0afaea767cd1` (`w1:p7D`) reaped after fresh relay5 build session `0e700d78-512a-43c0-91d0-e4e87cc596cd` (`w1:p7Q`, same worktree `build/1121-scriptable-chat`) was confirmed driving (revision counter climbing, active tool calls past the brief-read step).
 
 ## Relay continuation — after #1557/PR #1561 merge (context-meter relay #8)
 
