@@ -45,6 +45,8 @@ The spec deliberately **does not choose the fix**. Reproduction comes first: the
 - `tests/integration/job-search-worker-surface.test.ts` — the new deterministic race case is an **additional** `it()`; test 6 is not replaced
 - A new dedicated integration test file under `tests/integration/` **instead of** the line above, at the implementer's discretion, if the boundary-forcing harness is heavy enough to deserve its own `describe`
 
+No new SQL migration file and no new table. See the Locked fix contract's "Must not introduce" bound.
+
 Do **not** touch `tests/integration/external-modules-routes.test.ts`. Do not widen into unrelated queue, worker, or module-registry files; any such need is a spec amendment, not opportunistic cleanup.
 
 ## Locked reproduction contract
@@ -59,11 +61,15 @@ The implementation PR must land a test that fails on the pre-fix tree **every ru
 6. **No hiding.** No arbitrary sleeps, retries, tolerance bands or widened timing thresholds may be used to make the post-fix assertion pass. This constraint governs the _assertion_; see the note below on how the harness is allowed to schedule its two requests.
 7. **Red then green in one PR.** The new test lands failing-by-construction against the unfixed behaviour and is flipped green by the fix in the same PR. The PR must show both states — the recorded red run against the pre-fix tree and the green run after — not merely a green final gate. Do not ship the test disabled, skipped, or `todo`.
 
-### Proposed boundary-forcing technique (open engineering question)
+### Boundary-forcing technique (locked requirement)
 
-Compute the next boundary as `floor(Date.now() / 5000) * 5000 + 5000`, then schedule request A to be issued a small margin before it and request B the same margin after it, deriving the margin from a round-trip sample measured in the test itself rather than hard-coding a constant. Await both together so they are genuinely in flight concurrently.
+Wall-clock scheduling alone does **not** satisfy criterion 3 and is not an acceptable implementation of this requirement on its own: computing the next boundary as `floor(Date.now() / 5000) * 5000 + 5000` and issuing request A a margin before it and request B the same margin after narrows the odds but does not guarantee which side of the real `singleton_on` boundary either database insert actually lands on — margin, scheduler jitter, and DB round-trip variance can still put both inserts on the same side.
 
-This is a _computed wait for a real periodic anchor_, not the "arbitrary sleep" the acceptance criteria forbid — that criterion is about not masking the race after the fix, not about how the pre-fix harness aligns its two requests. **This technique is the one open question in this spec.** The implementer may substitute any mechanism that is genuinely deterministic (for example, controlling the database clock the inserts observe, or asserting on the observed `singleton_on` values and failing the test if the two inserts did not in fact straddle a boundary). What is not negotiable is criterion 3: the reproduction may not depend on luck. If no deterministic mechanism proves reachable, stop and escalate rather than shipping a probabilistic test.
+The harness must instead force the outcome at the database, not merely aim for it client-side. Required: a **controlled DB-side barrier or clock mechanism** that pins each insert to its intended bucket deterministically — for example, holding the first request's insert open inside an explicit transaction (or behind a `pg_advisory_lock` keyed to the test) until a moment on the far side of a real boundary tick, then releasing the second request's insert immediately after, so bucket placement is enforced by the database's own transaction ordering rather than by client-side timing. Any mechanism is acceptable provided it is genuinely deterministic — the wall-clock scheduling above may still be used to _get close_, but something at the DB layer must make the final placement certain, not probable.
+
+**Not an acceptable substitute:** asserting after the fact on the observed `singleton_on` values and failing the test if the two inserts did not in fact straddle a boundary. That detects a broken harness on a given run; it does not make the reproduction deterministic, because a harness that merely usually straddles the boundary will still intermittently pass its own precondition check and then silently fail to exercise the race it claims to prove.
+
+If no such controlled mechanism proves reachable at implementation time, the implementer must stop and escalate rather than ship a probabilistic test — do not weaken criterion 3 to ship something green.
 
 ## Locked fix contract
 
@@ -77,11 +83,13 @@ The fix is **not** selected by this spec. It is selected during implementation, 
 
 **Must be fixed at the shared idempotency boundary** — the place where the manual-run send decides that two calls are the same run. Not by retrying in the route handler, not by widening a timing threshold, not by loosening the new test's assertions.
 
+**Must not introduce:** a new idempotency table, migration, or durable timestamp ledger. This issue does not authorise persistent idempotency storage — coordination must be built on pg-boss's own existing state (its `pgboss.job`/queue tables and native locking primitives, e.g. a `pg_advisory_xact_lock` scoped to the singleton key, or a verified native pg-boss option) rather than a new owned table. Any direction that would require a new migration or a new persisted record is an architecture fork out of this spec's bound and needs a spec amendment — and very likely a Fable design decision — before it may be built.
+
 **Candidate directions, none selected:**
 
-- **(a) App-level idempotency ahead of `boss.send`,** scoped by the same singleton key, using a real database constraint or advisory lock instead of pg-boss's epoch-bucketed `singletonSeconds`. Narrowest in behaviour, but adds an owned surface in `packages/jobs`.
-- **(b) A pg-boss option or version offering a sliding-window singleton,** if one exists on `pg-boss@^12.18.2`. **Unverified** — `node_modules` was not readable in the authoring session. Checking this is a required first step at implementation time, because if it exists it is almost certainly the smallest fix.
-- **(c) A debounce keyed off the previous call's recorded timestamp** rather than a fixed epoch grid, so the window slides from the last accepted run.
+- **(a) App-level idempotency ahead of `boss.send`,** scoped by the same singleton key, implemented as a single conditional check against pg-boss's own existing job state (e.g. `hasInFlightJob` in `packages/jobs/src/pg-boss.ts`, already reading `pgboss.job`) or a `pg_advisory_xact_lock` held across the send — not a new table or column. Narrowest in behaviour, but adds an owned surface in `packages/jobs`.
+- **(b) A pg-boss option or version offering a sliding-window singleton,** if one exists on `pg-boss@^12.18.2`. **Unverified** — `node_modules` was not readable in the authoring session. Checking this is a required first step at implementation time, because if it exists it is almost certainly the smallest fix and needs no new storage at all.
+- **(c) A narrower native pg-boss coordination scoped to the same singleton key** — e.g. an advisory lock or `SELECT ... FOR UPDATE`-style serialization held across the `boss.send` call — rather than any new durable, timestamp-based bookkeeping table recording the "previous call."
 
 Pick the narrowest direction the red test's evidence actually supports. If the evidence contradicts this spec's account of pg-boss's bucketing, that is a finding worth reporting, not worth routing around.
 
