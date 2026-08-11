@@ -15,7 +15,7 @@ GitHub/project 2 is the source of truth. Detailed continuation evidence stays in
 | ---- | ----- | ---- | ------ | ----------- | ------ | -- |
 | `docs/superpowers/specs/2026-08-10-1554-persistent-provider-chat-runtime.md` | #1557 | sensitive | Fable ruling resolved; final-head rebuild/UAT pending | `Fable #1557 UAT ruling` | `1557-p1-persistent-adapter` | #1561 |
 | `docs/superpowers/specs/2026-08-10-1121-scriptable-uat-chat.md` | #1121 | sensitive | draft PR, docs CI + Fable approval pending | collaboration agent `spec_1486_proxy` (redirected) | `docs/1121-scriptable-chat` | #1565 |
-| `docs/superpowers/specs/2026-08-10-1533-chat-surface-send-routing.md` | #1533 | sensitive | spec merged; implementation queued after collision check | — | implementation branch pending | #1563 merged as `abfe0478b1` |
+| `docs/superpowers/specs/2026-08-10-1533-chat-surface-send-routing.md` | #1533 | sensitive | implementation planning/building | `Issue #1533 chat surface` | `build/1533-chat-surface-routing` | #1563 spec merged as `abfe0478b1` |
 | Fable ruling comment + issue acceptance | #1564 | routine | wrap-up successor pushing/opening PR | `Issue #1564 wrap` | `fix/1564-trigger-map` | — |
 | issue #1560 acceptance | #1560 | routine | planning/building | `Issue #1560 name flash` | `fix/1560-assistant-name-flash` | — |
 
