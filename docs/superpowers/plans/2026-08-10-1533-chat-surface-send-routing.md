@@ -6,7 +6,7 @@ comment on PR #1563).
 **Boundary:** 9-file allowlist from the spec's "One-session implementation boundary" — no other
 file is touched.
 **Determinism boundary:** N/A in the strict model-output sense — this build has no model call. The
-equivalent invariant here is: no drawer state update may be driven by which surface *used to be*
+equivalent invariant here is: no drawer state update may be driven by which surface _used to be_
 active. Every render reflects `props.surface` only; stale async completions are guarded (Phase 2).
 
 ## Seams already confirmed (do not re-derive)
@@ -39,7 +39,7 @@ drift ±1 from the relay doc but content matches):
   (`sendChatTurn(trimmed, attachments?.map(...))`, invalidates `.threads()`), `startNewChat`
   L329-343 (`clearChat()`, invalidates `.threads()`), `switchToNewModelChat` L345-347 (currently
   just calls `startNewChat()`), `startPrivateChat` L349-375 async IIFE (`clearChat({incognito:
-  true})`), `closePrivateChat` L377-383 (`endPrivateChat()`), `stopSending` L387-394
+true})`), `closePrivateChat` L377-383 (`endPrivateChat()`), `stopSending` L387-394
   (`cancelChatTurn()`). "Start private chat" button L419-428 currently unconditional — no
   surrounding gate. `<ChatModelPill>` usage L576-580 passes `disabled`, `privateMode`,
   `onCrossProviderSwitch` — no `surface`.
@@ -83,7 +83,7 @@ reset/stale-completion guard (Phase 2) or `ChatModelPill` (Phase 3) — Phase 1 
     client fn takes one: call `listChatThreadMessages(reviewThreadId ?? "", props.surface)` and
     key `queryKeys.chat.messages(reviewThreadId ?? "", props.surface)`.
   - `sendMessage`: `sendChatTurn(trimmed, attachments?.map((a) => a.id), undefined,
-    props.surface)`; invalidate `queryKeys.chat.threads(props.surface)`.
+props.surface)`; invalidate `queryKeys.chat.threads(props.surface)`.
   - `startNewChat`: `clearChat({ surface: props.surface })`; invalidate
     `queryKeys.chat.threads(props.surface)`.
   - `startPrivateChat`: `clearChat({ incognito: true, surface: props.surface })`; invalidate
@@ -105,15 +105,15 @@ reset/stale-completion guard (Phase 2) or `ChatModelPill` (Phase 3) — Phase 1 
      `chatDrawerSurfaceCalls.at(-1) === moduleChatSurface("job-search", "profile-1")` **and**
      `=== lastSurfaceArg()`.
   3. After `setSurfaceKey(null)` → both back to `DEFAULT_CHAT_SURFACE`.
-  These fail today because the mock never captures a `surface` prop — `ChatDrawer` doesn't receive
-  one.
+     These fail today because the mock never captures a `surface` prop — `ChatDrawer` doesn't receive
+     one.
 - New `tests/unit/chat-drawer-surface.test.tsx` (routing half only in this phase — the
   surface-flip assertions in this same file belong to Phase 2's guard mechanism, but the file is
   authored once, so this phase writes the file and Phase 2 adds the flip cases to it):
   - Render with `surface={moduleSurface}` (a `moduleChatSurface("job-search", "profile-1")`
     value), invoke the composer's real `onSend`, assert
     `expect(sendChatTurn).toHaveBeenCalledExactlyOnceWith("Remote only", undefined, undefined,
-    moduleSurface)`. Fails today: `sendChatTurn` is called with 2 args, no surface.
+moduleSurface)`. Fails today: `sendChatTurn` is called with 2 args, no surface.
   - Invoke Stop, assert `cancelChatTurn` called with `moduleSurface`. Fails today: called with 0
     args.
   - Invoke New Chat, assert `clearChat` called with `{ surface: moduleSurface }`. Fails today:
@@ -130,6 +130,7 @@ reset/stale-completion guard (Phase 2) or `ChatModelPill` (Phase 3) — Phase 1 
 ```bash
 pnpm vitest run tests/unit/app-shell-chat-surface.test.tsx tests/unit/chat-drawer-surface.test.tsx > /tmp/1533-phase1.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected `EXIT=0`.
 
 ### Kill gate (owner: whoever is driving this build lane — self)
@@ -150,7 +151,7 @@ hardening.
 
 - Add `const surfaceRef = useRef(props.surface); surfaceRef.current = props.surface;` — updated
   synchronously in the render body (not an effect), so any closure created during this render can
-  read the *current* value even after a later render changes `props.surface` before the closure
+  read the _current_ value even after a later render changes `props.surface` before the closure
   runs.
 - Add one `useEffect(() => { ...resets... }, [props.surface])` that on every surface change sets:
   `fallbackRecords` → `[]`, `pendingUser` → `null`, `privateMode` → `false`, `privateEnded` →
@@ -163,7 +164,7 @@ hardening.
   in a local `const initiatingSurface = props.surface` (or receives it as a mutation variable —
   see `resumeMutation` below) **before** the await, and guards every post-await local-state
   mutation / `props.clearRecords()` call with `if (surfaceRef.current !== initiatingSurface)
-  return;` (or an equivalent per-branch check). Query invalidation using the captured
+return;` (or an equivalent per-branch check). Query invalidation using the captured
   `initiatingSurface` still runs even when stale — only local state and `clearRecords()` are
   guarded. Applies to:
   - `sendMessage`'s async IIFE (L189-254): capture `initiatingSurface` before
@@ -171,7 +172,7 @@ hardening.
     `setNeedsProvider` calls in the `then`/`catch`. The `finally` clearing `isSending` is also
     guarded (a stale completion must not touch the new surface's `isSending`).
   - `resumeMutation`: change `mutationFn` to `(vars: { threadId: string; surface: ChatSurface })
-    => resumeChat(vars.threadId, vars.surface)`; call site becomes
+=> resumeChat(vars.threadId, vars.surface)`; call site becomes
     `resumeMutation.mutate({ threadId, surface: props.surface })`; `onSuccess`/`onError` receive
     `(_data, vars)` and guard `props.clearRecords()`/`setShowHistory`/`setPrivateMode`/
     `setPrivateEnded`/`setReviewThreadId` behind `vars.surface === surfaceRef.current`; the
@@ -221,6 +222,7 @@ surface-flip cases (spec lines 248-260), using the same mounted drawer instance 
 pnpm vitest run tests/unit/chat-drawer-surface.test.tsx > /tmp/1533-phase2.log 2>&1; echo "EXIT=$?"
 pnpm exec tsc --noEmit > /tmp/1533-phase2-tsc.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected `EXIT=0` for both (the `tsc` run is the type-safety note from the relay — `.tsx` files
 aren't per-file typechecked (#1335) but this phase also touches no `.ts` production file, so this
 run is a repo-wide sanity check before Phase 3 adds one).
@@ -243,7 +245,7 @@ workaround outside the ref/effect mechanism above.
   - Import `type ChatSurface` from `@moss/shared`.
   - Add `readonly surface: ChatSurface;` to props (L24-28).
   - Change `mutation`'s `mutationFn` to `async (vars: { choice: ModelChoice; surface: ChatSurface
-    }) => {...}` using `vars.choice`/`vars.surface` in place of the current bare `choice` param;
+}) => {...}` using `vars.choice`/`vars.surface` in place of the current bare `choice` param;
     same-provider branch calls `switchChatProvider(vars.surface)`; cross-provider branch calls
     `props.onCrossProviderSwitch(vars.surface)`; invalidation becomes
     `queryKeys.chat.threads(vars.surface)` (chatModelOverride invalidation is surface-agnostic,
@@ -270,7 +272,7 @@ workaround outside the ref/effect mechanism above.
   Leave `tests/unit/chat-model-pill.test.ts` unchanged (spec explicit).
 - Extend `tests/unit/chat-api-client.test.ts`: one new assertion —
   `switchChatProvider(moduleSurface)` posts to
-  `` /api/chat/switch?surface=<encodeURIComponent(moduleSurface)> ``; retain the existing
+  `/api/chat/switch?surface=<encodeURIComponent(moduleSurface)>`; retain the existing
   unsurfaced-call assertion against bare `/api/chat/switch`. Fails today: `switchChatProvider`
   takes no argument, so the surfaced call can't be expressed.
 
@@ -280,6 +282,7 @@ workaround outside the ref/effect mechanism above.
 pnpm exec tsc --noEmit > /tmp/1533-phase3-tsc.log 2>&1; echo "EXIT=$?"
 pnpm vitest run tests/unit/app-shell-chat-surface.test.tsx tests/unit/chat-drawer-surface.test.tsx tests/unit/chat-model-pill-surface.test.tsx tests/unit/chat-api-client.test.ts > /tmp/1533-phase3.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected `EXIT=0` for both. Run `tsc` first per the relay's type-safety note — `client.ts` is a
 production `.ts` file this phase edits, and `vitest`'s transform alone won't catch
 `noUncheckedIndexedAccess`/`TS2352`-class errors in it.

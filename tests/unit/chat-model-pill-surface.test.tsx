@@ -144,7 +144,12 @@ async function renderPill(
   let renderer!: ReactTestRenderer;
   await act(async () => {
     renderer = create(
-      buildPillElement(client, { disabled: false, privateMode: false, surface, onCrossProviderSwitch })
+      buildPillElement(client, {
+        disabled: false,
+        privateMode: false,
+        surface,
+        onCrossProviderSwitch
+      })
     );
   });
   // getChatModelOverrideSettings resolves through react-query's internal promise chain — a

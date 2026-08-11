@@ -29,7 +29,10 @@ it("switches chat provider with a bare URL when no surface is given", async () =
   );
   vi.stubGlobal("fetch", fetchMock);
   await switchChatProvider();
-  expect(fetchMock).toHaveBeenCalledWith("/api/chat/switch", expect.objectContaining({ method: "POST" }));
+  expect(fetchMock).toHaveBeenCalledWith(
+    "/api/chat/switch",
+    expect.objectContaining({ method: "POST" })
+  );
 });
 
 it("switches chat provider scoped to the given surface", async () => {
