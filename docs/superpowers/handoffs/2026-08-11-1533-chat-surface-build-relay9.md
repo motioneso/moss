@@ -1,55 +1,59 @@
-# #1533 chat surface build — relay9 handoff
+# #1533 chat-surface-build — relay 9 handoff
 
-Supersedes relay8. Same worktree/branch: `build/1533-chat-surface-routing`.
+Branch `build/1533-chat-surface-routing`, worktree `~/Jarv1s/.claude/worktrees/1533-chat-surface-build`.
+Governing instruction: don't relay — continue in-session where possible. Context hit 72%+, so
+checkpointing per box-wide context-diet rule instead of pushing further in this window.
 
-## State
+## State (verified, not recalled)
 
-- Phase 3 (surface-scoped `switchChatProvider` + `ChatModelPill` routing + tests): DONE.
-  Commits `fc301f113` (tests), `b680da8ea` (lint fix on top).
-- Phase 4 (full gate + live-path proof + sensitive-tier check + draft PR): IN PROGRESS.
+- Phase 4 code/gate/sensitive-tier work: DONE (prior windows).
+- Live-path proof: BLOCKED by design, not a code bug. Root cause and full evidence trail in
+  memory `mem_msp60ah8_d269e844328f` and `docs/coordination/AWAITING-BEN.md` (#1533 entry,
+  committed `885a2b414`). One-line summary: this session's env has no
+  `JARVIS_UAT_REAL_CHAT_TOKEN_FILE` / `CLAUDE_CODE_OAUTH_TOKEN`, and per #1121 design a build
+  session must never hold that token — the real-token UAT run happens outside the build session.
+- **Coordinator ruled** (genuine cross-session message, not Ben): open #1533 as a **draft PR now**,
+  code-complete, live-path proof explicitly outstanding and blocking merge. Do not mark issue Done.
+  Note the missing-token root cause in the PR body. Report back once open; Coordinator updates the
+  manifest. The AWAITING-BEN.md entry stays open until Ben/someone with token+dev-instance access
+  closes the live-path gap.
+- Full detail on this ruling and the investigation that found the root cause: memory
+  `mem_mspaedv5_421c27c17f77` (this window's checkpoint memory — read this first).
 
-## What relay8 left broken, now fixed
+## Tree state at handoff
 
-Full `pnpm verify:foundation` gate failed at the **lint** step (first chain link, before
-typecheck/test/db) with 3 `@typescript-eslint/consistent-type-imports` "`import()` type
-annotations are forbidden" errors:
-- `tests/unit/chat-drawer-surface.test.tsx:26:42` (pre-existing on this branch, not relay8's edit)
-- `tests/unit/chat-model-pill-surface.test.tsx:26:42` and `:57:33` (new file from relay7)
+`git status --porcelain` showed only:
+```
+tests/uat/specs/1533-chat-surface-drawer-regression.uat.spec.ts   (NOT mine — see below)
+```
+(`docs/coordination/AWAITING-BEN.md` already committed at `885a2b414`.)
 
-Fixed in `b680da8ea` by replacing inline `importOriginal<typeof import("...")>()` with a
-top-level `import type * as XModule from "..."` + `importOriginal<typeof XModule>()`. Verified:
-`pnpm eslint` on both files EXIT=0, `pnpm typecheck` EXIT=0, focused vitest (27/27) EXIT=0.
+The drawer-regression spec has an uncommitted one-line diff (`withoutNewsJsonBinding: true`) that
+I did not make — another session's in-flight shared-checkout edit. **Do not commit or revert it.**
+Re-check `git status --porcelain` fresh at pickup; don't assume this is still the only stray file.
 
-**Lesson (saved to memory):** `tsc --noEmit` and `vitest run` going green does NOT mean lint is
-clean — `pnpm lint` is a separate, earlier gate step. Always include it before claiming "gate-ready".
+## Next steps — executing `coordinated-wrap-up` skill (already loaded/understood, re-invoke if needed)
 
-## Right now
+1. `scripts/run-gate.sh start` → `wait` → `status` on a fresh gate DB (never hand-rolled, never
+   piped, never trust wrapper `echo $?` — read the `### FINAL` sentinel).
+2. `pnpm format:check && pnpm lint && pnpm typecheck`.
+3. `git fetch origin main && git rebase origin/main`.
+4. `git push -u origin build/1533-chat-surface-routing`.
+5. `gh pr create --draft --base main --head build/1533-chat-surface-routing` — body must cover:
+   what's done/verified (gate + sensitive-tier, cite exit codes), live-path proof missing + why
+   (missing-token root cause, so no one wastes a rerun rediscovering it), link the
+   AWAITING-BEN.md #1533 entry, state explicitly this is a draft not mergeable until live-path
+   evidence is attached per the spec's "Live-path proof: action request without reload" section
+   (`docs/superpowers/specs/2026-08-10-1533-chat-surface-send-routing.md`), and note the
+   open-draft-now decision came from the overnight Coordinator, not Ben.
+6. Report to Coordinator via `herdr-pane-message` — terse, result-first: PR link, gate exit codes,
+   live-path status ("NOT MET — code-complete, unverified, reason: missing token by design"),
+   teardown state (no dev instances/seed rows started this window → "none started"), worktree
+   reapable. Then STOP — don't move board/close issue/merge.
+7. Update the AWAITING-BEN.md #1533 entry to reference the new PR number (entry stays open, isn't
+   removed — the live-path gap itself is still unresolved).
 
-Full gate relaunched: `scripts/run-gate.sh start --gate verify:foundation`, DB
-`jarvis_gate_1533_chat_surface_build`, log `/tmp/jarv1s-gate/1533_chat_surface_build-20260811-013809.log`.
-Being watched via a non-polling background Monitor loop (`scripts/run-gate.sh wait`). If you're
-picking this up cold, run `scripts/run-gate.sh status` first — don't assume relay8's failed run is
-still current.
+## Tasks (TaskList, current)
 
-## Next (Phase 4, per plan lines 292-313 and spec lines 296-319)
-
-1. Gate → EXIT 0. If it fails again, read the log tail, fix, recommit (shared-checkout discipline:
-   explicit paths, diff review, `git show --name-only HEAD`), rerun via `run-gate.sh` (never bare
-   `pnpm verify:foundation` — see `verify-gate` skill + `run-gate.sh` usage comments).
-2. Live-path proof: spec doc lines 296-319, 7-step procedure through job-search's "Change in
-   chat" action. No dev instance is up for this worktree yet — pick a free port (3000/5173/5197/
-   5299 already taken by other worktrees per earlier `ss -ltnp` check; 1533 is prod, never touch).
-   See `dev-preview-recipe` memory for the standing setup steps (flagged stale, verify against
-   current `package.json` scripts before trusting exact commands).
-3. Sensitive-tier check: `git diff --stat` across full branch diff vs `main`, confirm no
-   AccessContext/RLS/persistence/gateway-contract files touched.
-4. `coordinated-wrap-up` skill → draft PR (not merge), citing live-path evidence explicitly.
-
-## Standing instructions (from boot brief, still governing)
-
-- Coordinator: re-resolve fresh via `herdr pane list`/`herdr agent list` before messaging, never
-  trust a name/session id from a doc.
-- Relay again at the next 70% context warning or immediately on any compaction summary — do not
-  wait for a felt %, never end turn mid-procedure.
-- Read this repo's `run-gate.sh`, not the verify-gate skill's literal manual DROP/CREATE text,
-  for gate runs — the script supersedes it.
+#1–#3 completed (Phase 3). #4 in_progress (Phase 4 overall). #5 completed (tree clean, own path
+only). #6–#8 pending: gate run, push+PR, report+AWAITING-BEN update — exactly steps 1–7 above.
