@@ -34,6 +34,8 @@ describe("docker-compose.prod.yml JARVIS_CLI_TOOLS_PREFIX resolution", () => {
     const config = resolveConfig({
       JARVIS_CLI_TOOLS_PREFIX: "/app/tests/uat/fixtures/scripted-provider"
     });
-    expect(config).toMatch(/JARVIS_CLI_TOOLS_PREFIX: \/app\/tests\/uat\/fixtures\/scripted-provider/);
+    expect(config).toMatch(
+      /JARVIS_CLI_TOOLS_PREFIX: \/app\/tests\/uat\/fixtures\/scripted-provider/
+    );
   });
 });

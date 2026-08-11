@@ -55,9 +55,7 @@ describe("loadChatScriptFixture", () => {
   it("throws distinctly when turns is empty", () => {
     ids.push("__test-empty-turns");
     writeFixture("__test-empty-turns", { version: 1, turns: [] });
-    expect(() => loadChatScriptFixture("__test-empty-turns" as never)).toThrow(
-      /non-empty array/
-    );
+    expect(() => loadChatScriptFixture("__test-empty-turns" as never)).toThrow(/non-empty array/);
   });
 
   it("throws distinctly on an unknown top-level key", () => {
@@ -67,7 +65,9 @@ describe("loadChatScriptFixture", () => {
       turns: [{ expectIncludes: [], calls: [], reply: "x" }],
       extra: true
     });
-    expect(() => loadChatScriptFixture("__test-unknown-key" as never)).toThrow(/unknown key "extra"/);
+    expect(() => loadChatScriptFixture("__test-unknown-key" as never)).toThrow(
+      /unknown key "extra"/
+    );
   });
 
   it("throws distinctly on a reference to an undeclared capture", () => {
@@ -103,10 +103,7 @@ describe("extractCapture", () => {
 describe("resolveCaptures", () => {
   it("substitutes a known capture recursively inside nested arguments", () => {
     const captures = new Map<string, unknown>([["attachmentId", "att-1"]]);
-    const resolved = resolveCaptures(
-      { outer: { list: ["${attachmentId}", "literal"] } },
-      captures
-    );
+    const resolved = resolveCaptures({ outer: { list: ["${attachmentId}", "literal"] } }, captures);
     expect(resolved).toEqual({ outer: { list: ["att-1", "literal"] } });
   });
 

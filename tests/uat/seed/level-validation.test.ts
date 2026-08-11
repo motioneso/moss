@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseUatChatScript, parseUatExcludeChunks, parseUatSeedLevel } from "./level-validation.js";
+import {
+  parseUatChatScript,
+  parseUatExcludeChunks,
+  parseUatSeedLevel
+} from "./level-validation.js";
 
 // #1087 finding 5: prove the parsers fail closed on typo'd env values instead
 // of silently falling through to a default that seeds max data (exit 0).

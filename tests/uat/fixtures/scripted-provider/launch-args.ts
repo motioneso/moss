@@ -78,14 +78,19 @@ export function parseClaudeLaunchArgs(argv: readonly string[]): ParsedLaunch {
   const allowedToolsRaw = takeFlagValue("--allowedTools");
   const bareTools = takeFlagValue("--tools");
 
-  const hasMcpTrio = configPath !== undefined && settingsPath !== undefined && allowedToolsRaw !== undefined;
-  const hasMcpPartial = (configPath !== undefined || settingsPath !== undefined || allowedToolsRaw !== undefined) && !hasMcpTrio;
+  const hasMcpTrio =
+    configPath !== undefined && settingsPath !== undefined && allowedToolsRaw !== undefined;
+  const hasMcpPartial =
+    (configPath !== undefined || settingsPath !== undefined || allowedToolsRaw !== undefined) &&
+    !hasMcpTrio;
   if (hasMcpPartial) return rejected("partial --mcp-config/--settings/--allowedTools combination");
   if (hasMcpTrio && bareTools !== undefined) {
     return rejected("both the MCP flag trio and bare --tools present");
   }
   if (!hasMcpTrio && bareTools !== "") {
-    return rejected('unrecognized tool flag combination — expected --mcp-config trio or bare --tools ""');
+    return rejected(
+      'unrecognized tool flag combination — expected --mcp-config trio or bare --tools ""'
+    );
   }
 
   const appendSystemPromptFile = takeFlagValue("--append-system-prompt-file");

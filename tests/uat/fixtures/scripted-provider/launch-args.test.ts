@@ -84,7 +84,14 @@ describe("parseClaudeLaunchArgs", () => {
   });
 
   it("rejects when a session flag is missing", () => {
-    const result = parseClaudeLaunchArgs(["-p", "--permission-mode", "dontAsk", ...MCP_TRIO, ...TAIL, "hi"]);
+    const result = parseClaudeLaunchArgs([
+      "-p",
+      "--permission-mode",
+      "dontAsk",
+      ...MCP_TRIO,
+      ...TAIL,
+      "hi"
+    ]);
     expect(result.kind).toBe("rejected");
   });
 

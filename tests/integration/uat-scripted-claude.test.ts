@@ -124,7 +124,10 @@ describe("scripted claude fixture executable (#1121 Task 3)", () => {
     vi.mocked(loadChatScriptFixture).mockReset();
   });
 
-  function writeMcpConfig(allowedTools: readonly string[]): { configPath: string; sessionId: string } {
+  function writeMcpConfig(allowedTools: readonly string[]): {
+    configPath: string;
+    sessionId: string;
+  } {
     const dir = mkdtempSync(join(tmpdir(), "uat-scripted-claude-mcp-"));
     const sessionId = randomUUID();
     const token = tokens.mint({
@@ -203,10 +206,19 @@ describe("scripted claude fixture executable (#1121 Task 3)", () => {
     expect(exitSpy).toHaveBeenCalledWith(0);
     expect(stderrSpy).not.toHaveBeenCalled();
     expect(exampleToolCalls).toHaveLength(1);
-    expect(exampleToolCalls[0]).toMatchObject({ name: "example.read", input: { value: "hello-a" } });
+    expect(exampleToolCalls[0]).toMatchObject({
+      name: "example.read",
+      input: { value: "hello-a" }
+    });
 
-    const transcriptPath = join(transcriptGlobDir("anthropic", cwd, homeBase), `${sessionId}.jsonl`);
-    const lines = readFileSync(transcriptPath, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+    const transcriptPath = join(
+      transcriptGlobDir("anthropic", cwd, homeBase),
+      `${sessionId}.jsonl`
+    );
+    const lines = readFileSync(transcriptPath, "utf8")
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l));
     expect(lines).toHaveLength(2);
     expect(lines[0].message.content[0]).toMatchObject({ type: "tool_use", name: READ_MCP_NAME });
     expect(lines[1].message).toMatchObject({
@@ -244,7 +256,10 @@ describe("scripted claude fixture executable (#1121 Task 3)", () => {
     await expect(runScriptedClaude()).rejects.toThrow(/tool-not-allowed/);
     expect(exampleToolCalls).toHaveLength(0);
 
-    const transcriptPath = join(transcriptGlobDir("anthropic", cwd, homeBase), `${sessionId}.jsonl`);
+    const transcriptPath = join(
+      transcriptGlobDir("anthropic", cwd, homeBase),
+      `${sessionId}.jsonl`
+    );
     expect(existsSync(transcriptPath)).toBe(false);
   });
 
@@ -280,15 +295,24 @@ describe("scripted claude fixture executable (#1121 Task 3)", () => {
 
     // Unmutated while pending: handler hasn't run and no transcript exists yet.
     expect(exampleToolCalls).toHaveLength(0);
-    const transcriptPath = join(transcriptGlobDir("anthropic", cwd, homeBase), `${sessionId}.jsonl`);
+    const transcriptPath = join(
+      transcriptGlobDir("anthropic", cwd, homeBase),
+      `${sessionId}.jsonl`
+    );
     expect(existsSync(transcriptPath)).toBe(false);
 
     await gateway.resolveActionRequest(ids.userA, req.actionRequestId, "confirmed");
     await pending;
 
     expect(exampleToolCalls).toHaveLength(1);
-    expect(exampleToolCalls[0]).toMatchObject({ name: "example.write", input: { value: "confirm-me-c" } });
-    const lines = readFileSync(transcriptPath, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+    expect(exampleToolCalls[0]).toMatchObject({
+      name: "example.write",
+      input: { value: "confirm-me-c" }
+    });
+    const lines = readFileSync(transcriptPath, "utf8")
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l));
     expect(lines[0].message.content[0]).toMatchObject({ type: "tool_use", name: WRITE_MCP_NAME });
   });
 

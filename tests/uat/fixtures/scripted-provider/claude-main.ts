@@ -23,7 +23,12 @@ import { join } from "node:path";
 import { transcriptGlobDir } from "@moss/ai";
 import { parseClaudeLaunchArgs } from "./launch-args.js";
 import { readCursor, writeCursor, type ScriptCursor } from "./session-state.js";
-import { loadChatScriptFixture, resolveCaptures, extractCapture, type ChatScriptCall } from "./script-schema.js";
+import {
+  loadChatScriptFixture,
+  resolveCaptures,
+  extractCapture,
+  type ChatScriptCall
+} from "./script-schema.js";
 import { UAT_CHAT_SCRIPTS, type UatChatScript } from "../../seed/types.js";
 
 const TOOLS_CALL_TIMEOUT_MS = 170_000; // 20s margin over NATIVE_CONFIRM_TIMEOUT_MS=150_000
@@ -41,7 +46,11 @@ class ScriptedClaudeFailure extends Error {
   }
 }
 
-function fail(scriptId: string | undefined, turnIndex: number | undefined, failureClass: string): never {
+function fail(
+  scriptId: string | undefined,
+  turnIndex: number | undefined,
+  failureClass: string
+): never {
   throw new ScriptedClaudeFailure(scriptId, turnIndex, failureClass);
 }
 
@@ -76,7 +85,11 @@ function readMcpEndpoint(configPath: string): McpEndpoint {
   const jarvis = (parsed as { mcpServers?: { jarvis?: unknown } }).mcpServers?.jarvis as
     | { url?: unknown; headers?: { Authorization?: unknown } }
     | undefined;
-  if (!jarvis || typeof jarvis.url !== "string" || typeof jarvis.headers?.Authorization !== "string") {
+  if (
+    !jarvis ||
+    typeof jarvis.url !== "string" ||
+    typeof jarvis.headers?.Authorization !== "string"
+  ) {
     fail(undefined, undefined, "mcp-config-malformed");
   }
   return { url: jarvis.url, authorization: jarvis.headers.Authorization };
@@ -121,7 +134,8 @@ export async function runScriptedClaude(): Promise<void> {
   if (mcp === undefined) fail(undefined, undefined, "mcp-config-absent");
 
   const rawScriptId = process.env.JARVIS_UAT_SEED_CHAT_SCRIPT ?? "";
-  if (!isUatChatScript(rawScriptId)) fail(rawScriptId || undefined, undefined, "missing-or-unknown-script-id");
+  if (!isUatChatScript(rawScriptId))
+    fail(rawScriptId || undefined, undefined, "missing-or-unknown-script-id");
   const scriptId = rawScriptId;
 
   const stateDir = join(process.cwd(), ".uat-chat-script-state");
@@ -133,19 +147,22 @@ export async function runScriptedClaude(): Promise<void> {
     effectiveTurnIndex = 0;
   } else {
     if (priorCursor === undefined) fail(scriptId, undefined, "resume-without-prior-cursor");
-    if (priorCursor.scriptId !== scriptId) fail(scriptId, priorCursor.turnIndex, "cursor-script-id-mismatch");
+    if (priorCursor.scriptId !== scriptId)
+      fail(scriptId, priorCursor.turnIndex, "cursor-script-id-mismatch");
     effectiveTurnIndex = priorCursor.turnIndex + 1;
   }
 
   const fixture = loadChatScriptFixture(scriptId);
-  if (effectiveTurnIndex >= fixture.turns.length) fail(scriptId, effectiveTurnIndex, "turn-index-out-of-range");
+  if (effectiveTurnIndex >= fixture.turns.length)
+    fail(scriptId, effectiveTurnIndex, "turn-index-out-of-range");
 
   const eligible = fixture.turns
     .map((turn, index) => ({ turn, index }))
     .filter(({ turn }) => turn.expectIncludes.every((s) => promptText.includes(s)));
   if (eligible.length !== 1) fail(scriptId, effectiveTurnIndex, "ambiguous-or-zero-eligible-turns");
   const eligibleTurn = eligible[0] as { turn: (typeof fixture.turns)[number]; index: number };
-  if (eligibleTurn.index !== effectiveTurnIndex) fail(scriptId, effectiveTurnIndex, "eligible-turn-out-of-order");
+  if (eligibleTurn.index !== effectiveTurnIndex)
+    fail(scriptId, effectiveTurnIndex, "eligible-turn-out-of-order");
   const turn = eligibleTurn.turn;
 
   const endpoint = readMcpEndpoint(mcp.configPath);
@@ -171,7 +188,8 @@ export async function runScriptedClaude(): Promise<void> {
   for (const call of turn.calls as readonly ChatScriptCall[]) {
     if (!listedNames.has(call.tool)) fail(scriptId, effectiveTurnIndex, "tool-not-listed");
     const mcpName = `mcp__jarvis__${call.tool.replace(/\./g, "_")}`;
-    if (!isToolAllowed(mcpName, mcp.allowedTools)) fail(scriptId, effectiveTurnIndex, "tool-not-allowed");
+    if (!isToolAllowed(mcpName, mcp.allowedTools))
+      fail(scriptId, effectiveTurnIndex, "tool-not-allowed");
 
     let resolvedArgs: Record<string, unknown>;
     try {
@@ -204,7 +222,10 @@ export async function runScriptedClaude(): Promise<void> {
     toolActivityRecords.push(
       JSON.stringify({
         type: "assistant",
-        message: { stop_reason: "tool_use", content: [{ type: "tool_use", name: mcpName, input: resolvedArgs }] }
+        message: {
+          stop_reason: "tool_use",
+          content: [{ type: "tool_use", name: mcpName, input: resolvedArgs }]
+        }
       })
     );
   }
@@ -214,12 +235,24 @@ export async function runScriptedClaude(): Promise<void> {
     message: { stop_reason: "end_turn", content: [{ type: "text", text: turn.reply }] }
   });
 
-  const transcriptDir = transcriptGlobDir("anthropic", process.cwd(), process.env.JARVIS_CLI_HOME_BASE);
+  const transcriptDir = transcriptGlobDir(
+    "anthropic",
+    process.cwd(),
+    process.env.JARVIS_CLI_HOME_BASE
+  );
   mkdirSync(transcriptDir, { recursive: true });
   const transcriptPath = join(transcriptDir, `${sessionFlag.id}.jsonl`);
-  appendFileSync(transcriptPath, [...toolActivityRecords, finalRecord].map((line) => `${line}\n`).join(""), "utf8");
+  appendFileSync(
+    transcriptPath,
+    [...toolActivityRecords, finalRecord].map((line) => `${line}\n`).join(""),
+    "utf8"
+  );
 
-  const cursor: ScriptCursor = { scriptId, turnIndex: effectiveTurnIndex, captures: Object.fromEntries(captures) };
+  const cursor: ScriptCursor = {
+    scriptId,
+    turnIndex: effectiveTurnIndex,
+    captures: Object.fromEntries(captures)
+  };
   writeCursor(stateDir, sessionFlag.id, cursor);
 }
 
@@ -228,7 +261,9 @@ export function main(): void {
     () => process.exit(0),
     (error: unknown) => {
       const failure =
-        error instanceof ScriptedClaudeFailure ? error : new ScriptedClaudeFailure(undefined, undefined, "unhandled-exception");
+        error instanceof ScriptedClaudeFailure
+          ? error
+          : new ScriptedClaudeFailure(undefined, undefined, "unhandled-exception");
       process.stderr.write(`${failure.message}\n`);
       process.exit(1);
     }

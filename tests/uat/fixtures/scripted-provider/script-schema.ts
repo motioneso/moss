@@ -46,7 +46,12 @@ function fail(id: string, reason: string): never {
   throw new Error(`[chat-script:${id}] invalid fixture: ${reason}`);
 }
 
-function assertNoUnknownKeys(id: string, obj: object, known: ReadonlySet<string>, where: string): void {
+function assertNoUnknownKeys(
+  id: string,
+  obj: object,
+  known: ReadonlySet<string>,
+  where: string
+): void {
   for (const key of Object.keys(obj)) {
     if (!known.has(key)) fail(id, `unknown key "${key}" in ${where}`);
   }
@@ -62,7 +67,11 @@ function collectDeclaredCaptureNames(fixture: ChatScriptFixture): Set<string> {
   return names;
 }
 
-function assertCaptureTokensDeclared(id: string, value: unknown, declared: ReadonlySet<string>): void {
+function assertCaptureTokensDeclared(
+  id: string,
+  value: unknown,
+  declared: ReadonlySet<string>
+): void {
   if (typeof value === "string") {
     const match = CAPTURE_TOKEN.exec(value);
     if (match) {
@@ -153,7 +162,9 @@ function resolveJsonPointer(root: unknown, pointer: string): unknown {
     if (current === null || typeof current !== "object") {
       throw new Error(`JSON pointer "${pointer}" does not resolve: hit non-object at "${part}"`);
     }
-    current = Array.isArray(current) ? current[Number(part)] : (current as Record<string, unknown>)[part];
+    current = Array.isArray(current)
+      ? current[Number(part)]
+      : (current as Record<string, unknown>)[part];
     if (current === undefined) {
       throw new Error(`JSON pointer "${pointer}" does not resolve: no "${part}"`);
     }
@@ -181,7 +192,9 @@ export function resolveCaptures(value: unknown, captures: ReadonlyMap<string, un
     if (!match) return value;
     const name = match[1] as string; // regex has exactly one capturing group, always set on match
     if (!captures.has(name)) {
-      throw new Error(`unknown capture "\${${name}}" — not yet captured at this point in the script`);
+      throw new Error(
+        `unknown capture "\${${name}}" — not yet captured at this point in the script`
+      );
     }
     return captures.get(name);
   }

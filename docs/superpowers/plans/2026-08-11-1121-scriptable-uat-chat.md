@@ -39,7 +39,7 @@ New this session (not in relay1/relay2, needed for exact signatures):
   of `{key, secret?}`; `chat.multiplexer` (line 16) is the closest non-secret `chat.*` precedent for
   the new `chat.persistent_runtime.enabled` entry.
 - `packages/settings/src/repository.ts:29-38` `UpsertInstanceSettingInput` (`key`, `value:
-  Record<string, unknown>`, `updatedByUserId`, `requestId`, optional `action`/`metadata`);
+Record<string, unknown>`, `updatedByUserId`, `requestId`, optional `action`/`metadata`);
   `:353-373` `SettingsRepository.upsertInstanceSetting`; `:520-527` `setRegistrationSettings` shows
   the boolean-value convention: `value: { value: <boolean> }`.
 - **On `main` @ `7aa85f628`** (this branch's base): `packages/chat/src/live/engine-selection.ts:44-53`
@@ -51,11 +51,11 @@ New this session (not in relay1/relay2, needed for exact signatures):
   `isBoundedFallbackEngine(provider, executionMode)` (`engine-selection.ts:62-68`, same signature,
   same tuple-only logic — a pure rename), and `createChatEngine` (`:75-90`) gains a real consumer:
   `opts.persistentRuntimeEnabled` (boolean, resolved from `chat.persistent_runtime.enabled` by
-  `runtime.ts:114-138`) checked *before* the bounded-fallback branch — `true` + `provider ===
-  "anthropic"` now routes to `ClaudePersistentRuntimeEngine` instead of `ClaudePrintChatEngine`.
+  `runtime.ts:114-138`) checked _before_ the bounded-fallback branch — `true` + `provider ===
+"anthropic"` now routes to `ClaudePersistentRuntimeEngine` instead of `ClaudePrintChatEngine`.
   **Merge-order collision, Coordinator-flagged:** Task 6's regression test must target the
   post-#1557 name/shape, and Task 5's seed-written `chat.persistent_runtime.enabled = { value: false
-  }` is what keeps scripted UAT on the bounded-fallback engine once #1557 lands (this pin is now
+}` is what keeps scripted UAT on the bounded-fallback engine once #1557 lands (this pin is now
   load-bearing, not inert — see Dependency/merge order below).
   Automated check 5 stays a **regression test of existing selection behavior**, not new logic; Phase
   1 registers + pins the key, it does not build #1557's persistent-runtime engine itself (still
@@ -105,6 +105,7 @@ injection; #1557's persistent-runtime selection or live-path evidence.
 ### Task 1 — chat-script allowlist + fixture contract types
 
 **Files:**
+
 - `tests/uat/seed/types.ts` — add `export type UatChatScript = "runtime-context" | ...` (start with
   only the id(s) Task 6's own tests back with real fixture JSON; each Phase-2 task appends its id
   when it adds that id's fixture JSON — mirrors `UAT_SEED_LEVELS`/`UAT_SEED_CHUNKS`) and
@@ -126,10 +127,7 @@ injection; #1557's persistent-runtime selection or live-path evidence.
     readonly turns: readonly ChatScriptTurn[];
   }
   export function loadChatScriptFixture(id: UatChatScript): ChatScriptFixture;
-  export function resolveCaptures(
-    value: unknown,
-    captures: ReadonlyMap<string, unknown>
-  ): unknown;
+  export function resolveCaptures(value: unknown, captures: ReadonlyMap<string, unknown>): unknown;
   ```
   `loadChatScriptFixture` reads `tests/uat/fixtures/chat-scripts/<id>.json`, validates shape (version
   === 1, turns is a non-empty array, no unknown keys, `${name}` tokens only reference declared
@@ -138,6 +136,7 @@ injection; #1557's persistent-runtime selection or live-path evidence.
   a prior MCP result; throws on unknown capture name or invalid pointer.
 
 **Test cases (behavior, not bodies):**
+
 - Valid minimal fixture loads and round-trips.
 - Missing file, malformed JSON, `version !== 1`, empty `turns`, unknown top-level key, or a
   `${unknownCapture}` reference each throw with a distinguishing message.
@@ -150,15 +149,21 @@ injection; #1557's persistent-runtime selection or live-path evidence.
 
 Exports (for unit testing without spawning a process) from a co-located
 `tests/uat/fixtures/scripted-provider/launch-args.ts`:
+
 ```ts
 export type ParsedLaunch =
-  | { readonly kind: "bounded"; readonly sessionFlag: { mode: "new" | "resume"; id: string };
+  | {
+      readonly kind: "bounded";
+      readonly sessionFlag: { mode: "new" | "resume"; id: string };
       readonly mcp?: { configPath: string; allowedTools: readonly string[] };
-      readonly promptText: string; readonly model?: string }
+      readonly promptText: string;
+      readonly model?: string;
+    }
   | { readonly kind: "no-mcp"; readonly promptText: string }
   | { readonly kind: "rejected"; readonly reason: string };
 export function parseClaudeLaunchArgs(argv: readonly string[]): ParsedLaunch;
 ```
+
 Recognizes exactly the flag set in spec §2 (`-p`, `--session-id`/`--resume`, `--permission-mode
 dontAsk`, `--mcp-config`/`--settings`/`--allowedTools` or `--tools ""`, `--append-system-prompt-file`,
 `--strict-mcp-config`, optional `--model`, trailing prompt) plus the `buildStructuredCommand` shape
@@ -168,6 +173,7 @@ dontAsk`, `--mcp-config`/`--settings`/`--allowedTools` or `--tools ""`, `--appen
 without `--mcp-config`").
 
 State cursor: `tests/uat/fixtures/scripted-provider/session-state.ts`:
+
 ```ts
 export interface ScriptCursor {
   readonly scriptId: string;
@@ -177,9 +183,11 @@ export interface ScriptCursor {
 export function readCursor(stateDir: string, sessionId: string): ScriptCursor | undefined;
 export function writeCursor(stateDir: string, sessionId: string, cursor: ScriptCursor): void; // mode 0600
 ```
+
 Never stores prompt text, MCP config, bearer, tool results, or attachment content (spec §2 point 2).
 
 **Test cases:**
+
 - Each documented flag combination parses to the expected `ParsedLaunch`; missing `-p`, missing a
   session flag, both session flags, or an unrecognized flag → `"rejected"`.
 - The full `buildStructuredCommand` shape → `"rejected"` with the bounded-engine diagnostic reason.
@@ -191,6 +199,7 @@ Never stores prompt text, MCP config, bearer, tool results, or attachment conten
 ### Task 3 — fixture executable: MCP call + transcript append (main entrypoint)
 
 **File:** `tests/uat/fixtures/scripted-provider/bin/claude` main body wires Tasks 1+2 to:
+
 1. read `--mcp-config`, extract `url`/`headers.Authorization` bearer from the
    `{mcpServers:{jarvis:{type:"http",url,headers:{Authorization:"Bearer <token>"},timeout}}}` shape
    (`claude-print-chat-engine.ts:312-330` `writeClaudeMcpConfig` is the writer to match);
@@ -210,6 +219,7 @@ Never stores prompt text, MCP config, bearer, tool results, or attachment conten
    stderr only script id / turn index / failure class.
 
 **Test cases (integration, real DB + real MCP, no browser):**
+
 - Valid bounded invocation against a seeded read-only tool: `tools/list` succeeds, `tools/call`
   succeeds, transcript record appended, exit 0.
 - Undeclared tool and a declared-but-out-of-`--allowedTools`-pattern tool both fail before
@@ -222,6 +232,7 @@ Never stores prompt text, MCP config, bearer, tool results, or attachment conten
 ### Task 4 — harness wiring: `chatScript` threading + compose fix
 
 **Files:**
+
 - `tests/uat/run-uat.ts` — extend the `readUatLevel` regex (currently
   `.../export\s+const\s+uatLevel\s*=\s*\{...\}\s+as const/` at lines 45-46) with one more optional
   trailing group `(?:,\s*chatScript:\s*["']([a-zA-Z0-9_-]+)["'])?` after `withJobSearchFixture`;
@@ -230,11 +241,11 @@ Never stores prompt text, MCP config, bearer, tool results, or attachment conten
   thread into `provisionForUat`'s second argument as `chatScript`.
 - `tests/uat/provisioner.ts` — add `readonly chatScript?: UatChatScript` to `UatProvisionOptions`
   (608-618); thread through `buildSeedHookInput` into `SeedHook`'s ctx (368-376) as `chatScript?:
-  string`; `composeSeedHook` (391-421) adds `-e JARVIS_UAT_SEED_CHAT_SCRIPT=${chatScript ?? ""}`
+string`; `composeSeedHook` (391-421) adds `-e JARVIS_UAT_SEED_CHAT_SCRIPT=${chatScript ?? ""}`
   alongside the existing `-e` entries. In `provisionForUat`, immediately before the
   `createUatProvisionPlan` step that runs `up -d jarv1s --wait` (currently line 469), when
   `opts?.chatScript` is set: `process.env.JARVIS_CLI_TOOLS_PREFIX =
-  "/app/tests/uat/fixtures/scripted-provider"`; restore/delete the override in the function's
+"/app/tests/uat/fixtures/scripted-provider"`; restore/delete the override in the function's
   existing `finally`/teardown path so it never leaks into a later provisioning attempt in the same
   process (mirrors the `process.env[REAL_CHAT_ENV_FILE_RESULT_ENV]` precedent at line 362).
 - `infra/docker-compose.prod.yml:152` — change `JARVIS_CLI_TOOLS_PREFIX: /data/cli-tools` to
@@ -243,6 +254,7 @@ Never stores prompt text, MCP config, bearer, tool results, or attachment conten
   as above.
 
 **Test cases:**
+
 - `readUatLevel` (via `run-uat.test.ts`, existing file) parses a spec with `chatScript: "..."` present
   and absent; an unknown id throws.
 - `buildSeedHookInput`/`composeSeedHook` arg-building test (new, in `provisioner`'s existing test
@@ -261,6 +273,7 @@ test are written once against the real post-merge registry/engine-selection stat
 guess.
 
 **Files:**
+
 - `packages/settings/src/instance-settings-keys.ts` — **#1557 adds this same key first** (its own
   Phase 1 registers `chat.persistent_runtime.enabled` for its rollout flag). Once #1557 is on
   `main`, confirm the entry already exists in `INSTANCE_SETTINGS_REGISTRY` (14-23) — if so, this
@@ -279,10 +292,10 @@ guess.
   `executionMode: "non_interactive"`, `displayName: "UAT Scripted Provider"`, encrypted credential
   `cipher.encryptJson({ cli: true })` (never a real credential); (b) creates a model via
   `createModel` with `providerModelId: "uat-scripted-chat-model"`, `displayName: "UAT Scripted Chat
-  Model"`, `capabilities: ["chat"]`, no service binding (so it wins the instance-default fallback
+Model"`, `capabilities: ["chat"]`, no service binding (so it wins the instance-default fallback
   `selectModelForCapability` uses); (c) calls `new SettingsRepository().upsertInstanceSetting(
-  scopedDb, { key: "chat.persistent_runtime.enabled", value: { value: false }, updatedByUserId:
-  actorUserId, requestId: "uat-seed-chat-script" })`.
+scopedDb, { key: "chat.persistent_runtime.enabled", value: { value: false }, updatedByUserId:
+actorUserId, requestId: "uat-seed-chat-script" })`.
 - `tests/uat/seed/levels.ts` — between the first `try/finally`'s close (current line 73) and the
   `if (options.level === "solo-admin") return;` (75-77), insert:
   ```ts
@@ -304,10 +317,11 @@ guess.
   Empty string → `undefined` (absent, same convention as job-search's base-url var); non-empty and
   not in `UAT_CHAT_SCRIPTS` → throws fail-closed.
 - `tests/uat/seed/cli.ts` — read `JARVIS_UAT_SEED_CHAT_SCRIPT` (`resolveMossEnv(process.env,
-  "JARVIS_UAT_SEED_CHAT_SCRIPT") ?? ""`) via `parseUatChatScript`, thread into the `seedLevel({...})`
+"JARVIS_UAT_SEED_CHAT_SCRIPT") ?? ""`) via `parseUatChatScript`, thread into the `seedLevel({...})`
   call at line 83 as `chatScript`.
 
 **Test cases:**
+
 - `seedScriptedChatProviderChunk` (real DB, existing seed-test harness pattern per `chunks/ai.test.ts`)
   creates exactly one active `anthropic`/`non_interactive` provider + one `chat`-capable model with
   the neutral display names, and one `chat.persistent_runtime.enabled = { value: false }` instance
@@ -381,20 +395,24 @@ scenario ids/test names/exit codes.
 ```bash
 pnpm exec vitest run tests/uat > /tmp/1121-uat-unit.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`, all new Task 1/2/4/5/6 test files passing, no existing UAT unit test regressed.
 
 ```bash
 pnpm exec vitest run packages/chat/src/live > /tmp/1121-engine-selection.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`, Task 6's regression test passing.
 
 ```bash
 docker compose -f infra/docker-compose.prod.yml config --quiet > /tmp/1121-compose.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0` both with and without `JARVIS_CLI_TOOLS_PREFIX` exported (run twice).
 
 Full gate (Task 3's integration test needs a real DB — run only via the `verify-gate` skill, never
 bare):
+
 ```
 verify-gate skill invocation → pnpm verify:foundation, expected EXIT=0
 ```

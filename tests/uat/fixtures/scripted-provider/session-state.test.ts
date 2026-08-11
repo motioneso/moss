@@ -17,7 +17,11 @@ afterEach(() => {
 
 describe("session-state", () => {
   it("round-trips a written cursor", () => {
-    const cursor = { scriptId: "phase1-smoke", turnIndex: 2, captures: { firstAttachmentId: "att-1" } };
+    const cursor = {
+      scriptId: "phase1-smoke",
+      turnIndex: 2,
+      captures: { firstAttachmentId: "att-1" }
+    };
     writeCursor(stateDir, "session-a", cursor);
     expect(readCursor(stateDir, "session-a")).toEqual(cursor);
   });
@@ -29,7 +33,11 @@ describe("session-state", () => {
   it("reports a malformed prior cursor as undefined", () => {
     writeCursor(stateDir, "session-b", { scriptId: "x", turnIndex: 0, captures: {} });
     // overwrite with a shape mismatch a caller could plausibly write by mistake
-    writeCursor(stateDir, "session-b", { scriptId: 5 as unknown as string, turnIndex: 0, captures: {} });
+    writeCursor(stateDir, "session-b", {
+      scriptId: 5 as unknown as string,
+      turnIndex: 0,
+      captures: {}
+    });
     expect(readCursor(stateDir, "session-b")).toBeUndefined();
   });
 
