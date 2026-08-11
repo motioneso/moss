@@ -40,6 +40,14 @@ export const UAT_SEED_CHUNKS: readonly UatSeedChunk[] = [
 // rulings-ledger.md#n33 for the full reasoning. If a later spec genuinely needs seeded job-search
 // data, add a real chunk with real content, deliberately — do not resurrect this as a no-op.
 
+// #1121: one id per fixture JSON at tests/uat/fixtures/chat-scripts/<id>.json. "phase1-smoke" is
+// the only Phase 1 entry — backs Task 3's own end-to-end integration test, not a converted UAT
+// spec. Each Phase 2 task appends its own id here when it adds that id's fixture JSON, same
+// additive-registry pattern as UAT_SEED_LEVELS/UAT_SEED_CHUNKS above.
+export type UatChatScript = "phase1-smoke";
+
+export const UAT_CHAT_SCRIPTS: readonly UatChatScript[] = ["phase1-smoke"];
+
 export interface SeedOptions {
   readonly level: UatSeedLevel;
   /** #1025: e.g. omit a chunk to prove the absent-module UI path. */
@@ -53,4 +61,11 @@ export interface SeedOptions {
    * ADMIN_DATA_CHUNKS entry — see ./chunks/job-search-ai.ts's header and N33.
    */
   readonly jobSearchAiProviderBaseUrl?: string;
+  /**
+   * #1121: when set, seeds a neutral scripted AI provider/model (see
+   * ./chunks/chat-script.ts) and points JARVIS_CLI_TOOLS_PREFIX at the scripted-provider fixture
+   * binary — the deterministic UAT chat path. Absent by default; default seed behavior is
+   * byte-for-byte unchanged.
+   */
+  readonly chatScript?: UatChatScript;
 }
