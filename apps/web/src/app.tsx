@@ -10,7 +10,8 @@ import {
   getMe,
   getModules,
   getMyModules,
-  getOnboardingStatus
+  getOnboardingStatus,
+  getPersonaSettings
 } from "./api/client";
 import { webRoutePath } from "./app-route-metadata";
 import { queryKeys } from "./api/query-keys";
@@ -156,6 +157,14 @@ export function App() {
     queryKey: queryKeys.onboarding.status,
     queryFn: getOnboardingStatus,
     retry: false // getOnboardingStatus is itself bounded by a 4s timeout (client.ts)
+  });
+  // Kept as a background prefetch only — useAssistantName (and other consumers) read this
+  // same cache entry and fall back gracefully while it's pending, so boot must not gate on it.
+  useQuery({
+    queryKey: queryKeys.settings.persona,
+    queryFn: getPersonaSettings,
+    enabled: meQuery.isSuccess,
+    retry: false // getPersonaSettings is itself bounded by a 4s timeout (client.ts)
   });
 
   const handleAuthenticated = async () => {

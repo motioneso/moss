@@ -38,4 +38,12 @@ describe("ConnectProviderEmpty (rendered)", () => {
     expect(html).toContain("/settings?section=assistant");
     expect(html.toLowerCase()).toContain("connect");
   });
+
+  it("shows neutral copy, not the product name, while the persona fetch is still pending (#1482)", () => {
+    // render() above never primes the persona query cache, so this renders mid-fetch — the exact
+    // window that used to flash "Moss" before the configured assistant name resolved.
+    const html = render({ isFounder: true });
+    expect(html).not.toContain("Moss");
+    expect(html).toContain("Connect one to start chatting.");
+  });
 });

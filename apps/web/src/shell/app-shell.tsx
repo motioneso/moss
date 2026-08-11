@@ -92,7 +92,9 @@ const iconMap: Record<string, ComponentType<{ readonly size?: number }>> = {
 
 export function AppShell(props: AppShellProps) {
   usePageContextSync();
-  const assistantName = useAssistantName();
+  // Keep this usable while the cosmetic persona query is pending, without briefly naming a
+  // custom assistant "Moss". All other shell content continues to render immediately.
+  const assistantName = useAssistantName("");
   const queryClient = useQueryClient();
   const location = useLocation();
   const navigate = useNavigate();
@@ -379,10 +381,10 @@ export function AppShell(props: AppShellProps) {
 
           <div className="topbar-actions">
             <button
-              aria-label={`Chat with ${assistantName}`}
+              aria-label={assistantName ? `Chat with ${assistantName}` : "Open chat"}
               aria-pressed={chatOpen}
               className={`icon-button ${chatOpen ? "active" : ""}`}
-              title={`Ask ${assistantName}`}
+              title={assistantName ? `Ask ${assistantName}` : "Open chat"}
               type="button"
               onClick={() => setChatOpen((open) => !open)}
             >

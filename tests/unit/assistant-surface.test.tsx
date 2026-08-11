@@ -21,6 +21,17 @@ function withPersonaQueryClient(child: ReactNode) {
   return createElement(QueryClientProvider, { client }, child);
 }
 
+// Persona query left in-flight and never resolved, to render this surface during the exact window
+// that used to flash the product name "Moss" before the configured assistant name loaded (#1482).
+function withPendingPersonaQueryClient(child: ReactNode) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  void client.fetchQuery({
+    queryKey: queryKeys.settings.persona,
+    queryFn: () => new Promise(() => {})
+  });
+  return createElement(QueryClientProvider, { client }, child);
+}
+
 const records: readonly TranscriptRecord[] = [
   { kind: "thinking", text: "hidden thought" },
   { kind: "user", text: "Streamed user" },
@@ -69,6 +80,31 @@ describe("AssistantSurface", () => {
     expect(html).toContain('aria-label="Alfred is typing"');
     expect(html.indexOf("Scripted intro")).toBeLessThan(html.indexOf("Streamed user"));
     expect(html.indexOf("Streamed user")).toBeLessThan(html.indexOf("Choose sources"));
+  });
+
+  it("shows neutral copy, not the product name, while the persona fetch is still pending (#1482)", () => {
+    const html = renderToString(
+      withPendingPersonaQueryClient(
+        createElement(
+          AssistantSurfaceHostProvider,
+          {
+            value: {
+              records,
+              registerComposer: () => () => undefined,
+              subscribeRecords: () => () => undefined
+            }
+          },
+          createElement(AssistantSurface, {
+            localRows: [],
+            activeControl: null,
+            typing: true
+          })
+        )
+      )
+    );
+
+    expect(html).not.toContain("Moss");
+    expect(html).toContain('aria-label="Assistant is typing"');
   });
 
   it("honors an explicit record-kind filter", () => {

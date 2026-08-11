@@ -16,7 +16,7 @@ export const CONNECT_PROVIDER_HREF = "/settings?section=assistant";
  * link to Settings → Assistant & AI, which is the connect surface available after onboarding.
  */
 export function ConnectProviderEmpty(props: { readonly isFounder: boolean }) {
-  const assistantName = useAssistantName();
+  const assistantName = useAssistantName("");
   return (
     <div className="chatd-empty chatd-empty--connect">
       <span className="chatd-empty__mark">
@@ -25,7 +25,9 @@ export function ConnectProviderEmpty(props: { readonly isFounder: boolean }) {
       <div className="chatd-empty__title">Connect a provider to start chatting</div>
       <div className="chatd-empty__sub">
         {props.isFounder
-          ? `No AI provider is connected yet. Connect one to bring ${assistantName} online.`
+          ? assistantName
+            ? `No AI provider is connected yet. Connect one to bring ${assistantName} online.`
+            : "No AI provider is connected yet. Connect one to start chatting."
           : "Chat isn't available until an AI provider is connected for this instance."}
       </div>
       <Link className="primary-button chatd-empty__cta" to={CONNECT_PROVIDER_HREF}>

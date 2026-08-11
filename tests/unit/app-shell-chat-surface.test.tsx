@@ -149,6 +149,13 @@ describe("AppShell chat surface wiring (#1284)", () => {
     expect(surface).not.toBeUndefined();
   });
 
+  it("keeps the chat control neutral while the persona name is pending (#1451/#1482)", () => {
+    const html = renderWithModuleMount(undefined, null);
+
+    expect(html).toContain('aria-label="Open chat"');
+    expect(html).not.toContain("Chat with Moss");
+  });
+
   it("switches to the module surface when a module sets a key", () => {
     renderWithModuleMount("job-search", "profile-1");
     expect(lastSurfaceArg()).toBe(moduleChatSurface("job-search", "profile-1"));
