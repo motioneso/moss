@@ -67,6 +67,7 @@ None.
 - #1121 relay3/4 stalled session `5d633249-f321-45ea-a177-0afaea767cd1` (`w1:p7D`) reaped after fresh relay5 build session `0e700d78-512a-43c0-91d0-e4e87cc596cd` (`w1:p7Q`, same worktree `build/1121-scriptable-chat`) was confirmed driving (revision counter climbing, active tool calls past the brief-read step).
 - #1121 relay5 session `0e700d78-512a-43c0-91d0-e4e87cc596cd` (`w1:p7Q`) self-relayed at 70% ctx after pre-code verification only (no Task 5/6 code written) — reaped after relay6 successor `ca202ff2-2fea-458e-a008-8884a1884a93` (`w1:p7R`, same worktree/branch) confirmed actively driving (reading source files, no prompt stall).
 - #1121 relay6 session `ca202ff2-2fea-458e-a008-8884a1884a93` (`w1:p7R`) self-relayed at 70% ctx after starting Task 5 code (`seedScripted`/`ChatProviderChunk` wiring in progress) — reaped after relay7 successor `7db8906e-cc9a-4626-a089-ebf36e4eacf9` (`w1:p7S`, same worktree/branch) confirmed actively driving Task 5.
+- #1121 relay7 session `7db8906e-cc9a-4626-a089-ebf36e4eacf9` (`w1:p7S`) self-relayed after finishing Task 5 (`61b0a6e4e`) and Task 6 (`90ca495c4`), handing wrap-up (pre-push trio, rebase, full gate, coordinated-wrap-up, PR) to relay8 — reaped after relay8 successor `74d1b16b-66aa-4c83-b01e-1ce43d293c0a` (`w1:p7T`, same worktree/branch) confirmed actively driving.
 
 ## Relay continuation — after #1557/PR #1561 merge (context-meter relay #8)
 
