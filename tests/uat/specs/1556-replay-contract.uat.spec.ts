@@ -87,6 +87,16 @@ test("forced relaunch replays prior context and answers a continuity question (#
 
   await signIn(page);
 
+  const installBody = (await readJson(
+    await page.request.post("/api/onboarding/provider-install", {
+      data: { providerKind: "anthropic" }
+    })
+  )) as { installState?: string };
+  expect(
+    installBody.installState,
+    `provider install did not settle to installed (got "${installBody.installState}") — #1556`
+  ).toBe("installed");
+
   const beginBody = (await readJson(
     await page.request.post("/api/onboarding/provider-login/begin", {
       data: { providerKind: "anthropic" }
