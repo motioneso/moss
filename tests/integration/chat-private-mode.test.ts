@@ -92,6 +92,45 @@ describe("private chat persistence", () => {
       expect(messages).toHaveLength(0);
     });
   });
+
+  it("T2-c: listPriorTurns returns nothing for an incognito thread, even with stored history", async () => {
+    // The repository-level no-op above stops a *new* incognito thread from ever
+    // accumulating messages. This test proves the persistence-level guard (D4)
+    // holds independently: seed 50 messages while the thread is not yet
+    // incognito, then flip the flag directly and confirm listPriorTurns still
+    // returns nothing — defense-in-depth, not reliant on the launch-time guard.
+    const thread = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.openNewThread(scopedDb, { title: "will become private" })
+    );
+    for (let i = 1; i <= 25; i++) {
+      await dataContext.withDataContext(userAContext(), (scopedDb) =>
+        repository.recordCompletedTurn(scopedDb, thread.id, `q${i}`, `a${i}`, {
+          provider: "anthropic",
+          model: "claude-economy"
+        })
+      );
+    }
+    await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      scopedDb.db
+        .updateTable("app.chat_threads")
+        .set({ incognito: true })
+        .where("id", "=", thread.id)
+        .execute()
+    );
+
+    const persistence = new DataContextChatPersistence({
+      dataContext,
+      chatRepository: repository,
+      aiRepository,
+      boss: {
+        send: async () => "job-id"
+      } as DataContextChatPersistenceDeps["boss"]
+    });
+
+    const result = await persistence.listPriorTurns(ids.userA);
+    expect(result.recent).toEqual([]);
+    expect(result.oldSummary).toBeNull();
+  });
 });
 
 function userAContext(): AccessContext {
