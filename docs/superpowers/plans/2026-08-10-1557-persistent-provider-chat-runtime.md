@@ -206,7 +206,8 @@ sentinel); expect EXIT=0. Untracked scratch files red the gate — clean before 
 
 **e2e-P1 "warm child, real tools":** flag ON for Ben's dev instance, drawer surface: ≥3
 consecutive turns land on one child (assert same PID via `ps`, and server-side initialize
-count for the session's token == 1 in api logs); one read tool and one browser-approved write
+count for the session's token constant across turns — 2/launch, app readiness probe + CLI
+handshake, no re-launch — in api logs); one read tool and one browser-approved write
 tool complete within those turns; flag OFF ⇒ next turn selects fallback without an api restart.
 Evidence: URL for Ben + PID/initialize-count observations. No transcript content in evidence.
 
@@ -216,7 +217,8 @@ Exit: e2e-P1 green; **P1.0 decision point recorded in the PR body** (which postu
 the probe evidence path); all unit behaviours above green; gate green via verify-gate.
 
 **KILL GATE — owner: Ben.** Named observation: on the live dev canary, phase 1 must show
-(a) ≥3-turn same-process sessions with initialize count 1, (b) perceptibly better first-token
+(a) ≥3-turn same-process sessions with initialize count constant across turns (2/launch: app
+readiness probe + CLI handshake; no re-launch), (b) perceptibly better first-token
 latency than one-shot on turns ≥2, and (c) zero model-generated lifecycle prose in any thread
 across at least one forced child kill. If (a)–(c) don't hold, or the P1.0 probe forces the
 purge fallback AND the purge posture leaves any resumable provider transcript on any
