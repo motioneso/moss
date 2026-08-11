@@ -21,7 +21,7 @@ GitHub/project 2 is the source of truth. Detailed continuation evidence stays in
 
 ## Ready-after-current lanes
 
-- #1547 — Job Search manual-run idempotency race (sensitive): draft spec PR #1568 is green at `15881b449`; Fable REVISE at review `4904316952` requires tighter deterministic boundary forcing + no-persistent-idempotency constraints. Author lane `Issue #1547 idempotency spec`, session `a46b5a63-3ea8-4d1d-a5c5-bdc83128f5b6`, branch `spec/1547-job-idempotency-race`.
+- #1547 — Job Search manual-run idempotency race (sensitive): Fable revisions pushed and green at `ba922c368`; exact-head confirmation review in progress. Author lane `Issue #1547 idempotency spec`, session `a46b5a63-3ea8-4d1d-a5c5-bdc83128f5b6`, branch `spec/1547-job-idempotency-race`, PR #1568.
 - #1434 — page-context throttle/rate-limit behavior (security by mechanical tier rule): no spec; grounded two-file `useRef` fix; Fable must approve log-only/no-retry.
 - #1555 — AI capability-selection timeout investigation (sensitive): no spec; bounded model-discovery fetch + existing fallback is ready without Fable.
 - #1352 — CLI-runner liveness accounting (sensitive): blocked behind #1557 collision and frozen-contract Fable ruling.
