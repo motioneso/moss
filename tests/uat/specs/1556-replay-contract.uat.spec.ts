@@ -137,7 +137,9 @@ test("forced relaunch replays prior context and answers a continuity question (#
       }
     })
   )) as { reply?: string };
-  expect(typeof turn1Body.reply, "turn 1 returned no string reply").toBe("string");
+  expect(turn1Body.reply?.trim().toLowerCase(), "turn 1 did not acknowledge the fact").toBe(
+    "noted"
+  );
 
   // Turns 2..45: filler, pushing the thread past the replay write-gate threshold.
   for (let turnNumber = 2; turnNumber <= SEED_TURN_COUNT; turnNumber++) {
@@ -146,7 +148,9 @@ test("forced relaunch replays prior context and answers a continuity question (#
         data: { text: `Turn ${turnNumber}: reply with only the single word "ok".` }
       })
     )) as { reply?: string };
-    expect(typeof fillerBody.reply, `turn ${turnNumber} returned no string reply`).toBe("string");
+    expect(fillerBody.reply?.trim().toLowerCase(), `turn ${turnNumber} did not reply ok`).toBe(
+      "ok"
+    );
   }
 
   // Resolve the seeded thread and its pre-relaunch message count (AC-5 no-prose baseline).
