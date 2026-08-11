@@ -259,14 +259,16 @@ Add surface-flip assertions using the same mounted drawer instance:
 4. Flip module A → module B and default → module, not only module → default; all six bound state
    fields reset regardless of direction.
 
-### Model switching: `tests/unit/chat-model-pill.test.ts`
+### Model switching: new `tests/unit/chat-model-pill-surface.test.tsx`
 
-Extend the existing suite with the repository's React/query-client pattern. Render
-`ChatModelPill` with `surface={moduleSurface}`, choose a same-provider model, and assert
-`switchChatProvider(moduleSurface)` plus invalidation of
-`queryKeys.chat.threads(moduleSurface)`. Assert `ChatDrawer` passes its exact surface into the pill
-and that the cross-provider callback clears the same captured surface. Resolve a model mutation
-after a prop flip and assert that its continuation does not clear the newly rendered surface.
+Leave the existing pure-function `chat-model-pill.test.ts` suite unchanged. In the new React/query-
+client suite, render `ChatModelPill` with `surface={moduleSurface}`, choose a same-provider model,
+and assert at runtime that `switchChatProvider` receives `moduleSurface` and invalidation receives
+`queryKeys.chat.threads(moduleSurface)`. Also assert at runtime that `ChatDrawer` passes its exact
+surface into the pill prop, and that the cross-provider callback clears the same captured surface.
+These must be call-argument assertions rather than facts inferred from prop types because `.tsx`
+tests are not typechecked in this repository (#1335). Resolve a model mutation after a prop flip and
+assert that its continuation does not clear the newly rendered surface.
 
 ### Client URL: `tests/unit/chat-api-client.test.ts`
 
@@ -285,7 +287,7 @@ Run the focused files first, then the repository gate using the coordinator's ex
 slot and isolated database procedure:
 
 ```bash
-pnpm vitest run tests/unit/app-shell-chat-surface.test.tsx tests/unit/chat-drawer-surface.test.tsx tests/unit/chat-model-pill.test.ts tests/unit/chat-api-client.test.ts
+pnpm vitest run tests/unit/app-shell-chat-surface.test.tsx tests/unit/chat-drawer-surface.test.tsx tests/unit/chat-model-pill-surface.test.tsx tests/unit/chat-api-client.test.ts
 pnpm verify:foundation
 ```
 
@@ -341,7 +343,7 @@ The implementation is bounded to one worktree and one session from current `orig
 - `apps/web/src/api/query-keys.ts`
 - `tests/unit/app-shell-chat-surface.test.tsx`
 - `tests/unit/chat-drawer-surface.test.tsx` (new)
-- `tests/unit/chat-model-pill.test.ts`
+- `tests/unit/chat-model-pill-surface.test.tsx` (new)
 - `tests/unit/chat-api-client.test.ts`
 
 Expected production change: one required prop plus reuse of existing optional surface parameters and
