@@ -5,7 +5,7 @@
 **Delegated authority:** Ben explicitly delegated overnight product/design decisions to Fable and confirmed that Fable's green security review counts as his security-tier merge sign-off. Existing repository rule still applies: #1557 never merges without fresh Fable approval. Every delegated security sign-off must be durable on the exact-head PR.
 **Merge policy:** routine/sensitive only after verified QA and live-path proof where applicable; security only after adversarial Fable QA and delegated sign-off.
 **Merge notification:** after every merge, run `needs-ben coordinator "<issue/PR — one-line description of what landed>"` and retain the normal GitHub/project bookkeeping.
-**merges_since_relay:** 1 — PR #1565 merged after the post-#1566 relay.
+**merges_since_relay:** 2 — PRs #1565 and #1568 merged; relay triggered after #1568. Successor resets to 0 after adopting this checkpoint.
 
 GitHub/project 2 is the source of truth. Detailed continuation evidence stays in `/tmp/jarv1s-monitor-state.md`.
 
@@ -21,7 +21,7 @@ GitHub/project 2 is the source of truth. Detailed continuation evidence stays in
 
 ## Ready-after-current lanes
 
-- #1547 — Job Search manual-run idempotency race (sensitive): Fable revisions pushed and green at `ba922c368`; exact-head confirmation review in progress. Author lane `Issue #1547 idempotency spec`, session `a46b5a63-3ea8-4d1d-a5c5-bdc83128f5b6`, branch `spec/1547-job-idempotency-race`, PR #1568.
+- #1547 — Job Search manual-run idempotency race (sensitive): Fable APPROVED at comment `5250874417`; spec PR #1568 merged as `3c5845a44`. Plan/implementation is next after post-merge main green. The spent author pane is closed; its clean worktree is retained because the squash-merged branch remains 3 commits ahead.
 - #1434 — page-context throttle/rate-limit behavior (security by mechanical tier rule): no spec; grounded two-file `useRef` fix; Fable must approve log-only/no-retry.
 - #1555 — AI capability-selection timeout investigation (sensitive): no spec; bounded model-discovery fetch + existing fallback is ready without Fable.
 - #1352 — CLI-runner liveness accounting (sensitive): blocked behind #1557 collision and frozen-contract Fable ruling.
@@ -67,3 +67,14 @@ None.
 - Next new lane: #1547 spec; use the grounded pg-boss boundary findings in `/tmp/jarv1s-monitor-state.md`. Keep #1434 and #1555 behind it unless a quadrant frees.
 - #1557: #1564 prerequisite is now landed. Rebuild onto fresh main, remove residue, run exact-head live proof + six-file Fable gate with credentialed real-chat onboarding, then request fresh Fable adjudication. Never merge without it.
 - Agents tab `w1:tH` currently has #1533 and #1560 successors; rebuild to a 2x2 quadrant grid as #1121/#1547 panes are added.
+
+## Relay continuation — after #1568 merge
+
+- Outgoing Coordinator authority: label `Coordinator`, session `019fefbd-5852-71d2-b0b1-4da3cdbbf1d1`. Successor must claim the sole label, replace the lock line above with its immutable session id, reset `merges_since_relay` to 0, verify uniqueness, then resolve/reap this outgoing session by label + session id.
+- PR #1565 (#1121 approved spec) merged as `7aa85f628`; `needs-ben` message `1786435512690488097.msg` queued. PR #1568 (#1547 approved spec) merged as `3c5845a44`; `needs-ben` message `1786437402606201881.msg` queued. #1121 and #1547 issues remain Open/In progress for implementation.
+- A fresh main CI run from #1568 may be pending. Do not spawn a #1547 implementation/plan lane or merge until post-#1568 main is terminal green.
+- #1121: `Issue #1121 scriptable UAT (relay3)`, session `5d633249-f321-45ea-a177-0afaea767cd1`, is writing the coordinator-approval plan. Premises/seams are already grounded; explicit plan gaps are prod-compose CLI-prefix override, missing persistent-runtime flag, and solo-admin seed early return. No code before plan approval.
+- #1533: `Issue #1533 chat surface (relay8)`, session `f3a156a2-06b1-4c69-9fa0-f499fca71df9`, has Phase 3 tests green/committed at `fc301f113`; Phase 4 full gate, live-path proof, sensitive invariant check, and draft PR remain.
+- #1557: `Issue #1557 exact-head gate (relay1)`, session `bec82be7-07c6-42f9-bf91-1620a348ef1b`, branch `1557-clean-rebuild`, owns the formatting correction, unpushed clean history, final-head live-path re-evidence, six-file exact-head gate, push/CI, and fresh Fable adjudication. Never merge without Fable approval.
+- #1560 / PR #1567: exact head `2e63f8ac1` has QA-RED fixes, live-path proof, foundation + both compose smokes green; image publish was still running at relay. Once terminal green, rebase onto post-#1568 `origin/main`, obtain fresh integrated CI + QA, then merge if green. The UAT briefing row was deleted; `assistantName='Nova'` cleanup is still a Ben-only decision tracked in `AWAITING-BEN.md` and notified as `1786434538703938265.msg`. Keep its done pane/worktree until that answer; do not guess the prior value.
+- Mid-doing: wait for post-#1568 main and #1567 terminal CI, approve #1121's plan when its pointer arrives, and keep the live fleet moving. Fable owns delegated design decisions; send `needs-ben` after every merge.
