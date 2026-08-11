@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Kysely } from "kysely";
 
@@ -94,29 +95,50 @@ describe("private chat persistence", () => {
   });
 
   it("T2-c: listPriorTurns returns nothing for an incognito thread, even with stored history", async () => {
-    // The repository-level no-op above stops a *new* incognito thread from ever
-    // accumulating messages. This test proves the persistence-level guard (D4)
-    // holds independently: seed 50 messages while the thread is not yet
-    // incognito, then flip the flag directly and confirm listPriorTurns still
-    // returns nothing — defense-in-depth, not reliant on the launch-time guard.
+    // `incognito` is immutable after creation (DB trigger), and
+    // recordCompletedTurn no-ops for incognito threads at the repository
+    // level, so there is no public-API path to an incognito thread with
+    // stored rows. To prove the persistence-level guard (D4) holds
+    // independently of that write-time no-op, insert message rows directly
+    // (bypassing the repository) into a thread created incognito from the
+    // start, then confirm listPriorTurns still returns nothing.
     const thread = await dataContext.withDataContext(userAContext(), (scopedDb) =>
-      repository.openNewThread(scopedDb, { title: "will become private" })
+      repository.openNewThread(scopedDb, { title: "private bookkeeping with rows", incognito: true })
     );
-    for (let i = 1; i <= 25; i++) {
-      await dataContext.withDataContext(userAContext(), (scopedDb) =>
-        repository.recordCompletedTurn(scopedDb, thread.id, `q${i}`, `a${i}`, {
-          provider: "anthropic",
-          model: "claude-economy"
-        })
-      );
-    }
-    await dataContext.withDataContext(userAContext(), (scopedDb) =>
-      scopedDb.db
-        .updateTable("app.chat_threads")
-        .set({ incognito: true })
-        .where("id", "=", thread.id)
-        .execute()
-    );
+    await dataContext.withDataContext(userAContext(), async (scopedDb) => {
+      const now = new Date();
+      for (let i = 1; i <= 25; i++) {
+        await scopedDb.db
+          .insertInto("app.chat_messages")
+          .values([
+            {
+              id: randomUUID(),
+              thread_id: thread.id,
+              owner_user_id: ids.userA,
+              role: "user",
+              status: "stored",
+              body: `q${i}`,
+              model_metadata: {},
+              tool_metadata: {},
+              created_at: now,
+              updated_at: now
+            },
+            {
+              id: randomUUID(),
+              thread_id: thread.id,
+              owner_user_id: ids.userA,
+              role: "assistant",
+              status: "stored",
+              body: `a${i}`,
+              model_metadata: {},
+              tool_metadata: {},
+              created_at: now,
+              updated_at: now
+            }
+          ])
+          .execute();
+      }
+    });
 
     const persistence = new DataContextChatPersistence({
       dataContext,
