@@ -14,9 +14,10 @@ GitHub/project 2 is the source of truth. Detailed continuation evidence stays in
 | Spec | Issue | Tier | Status | Agent label | Branch | PR |
 | ---- | ----- | ---- | ------ | ----------- | ------ | -- |
 | `docs/superpowers/specs/2026-08-10-1554-persistent-provider-chat-runtime.md` | #1557 | sensitive | Fable ruling resolved; final-head rebuild/UAT pending | `Fable #1557 UAT ruling` | `1557-p1-persistent-adapter` | #1561 |
-| pending #1121 scriptable-UAT spec | #1121 | sensitive | spec-writing, independent follow-up | collaboration agent `spec_1486_proxy` (redirected) | `docs/1121-scriptable-chat` | — |
-| `docs/superpowers/specs/2026-08-10-1533-chat-surface-send-routing.md` | #1533 | sensitive | draft PR, docs CI + Fable approval pending | collaboration agent `spec_1533_adopt` | `docs/1533-chat-surface-routing` | #1563 |
-| Fable ruling comment + issue acceptance | #1564 | routine | building | `Issue #1564 trigger map` | `fix/1564-trigger-map` | — |
+| `docs/superpowers/specs/2026-08-10-1121-scriptable-uat-chat.md` | #1121 | sensitive | draft PR, docs CI + Fable approval pending | collaboration agent `spec_1486_proxy` (redirected) | `docs/1121-scriptable-chat` | #1565 |
+| `docs/superpowers/specs/2026-08-10-1533-chat-surface-send-routing.md` | #1533 | sensitive | Fable approve-on-fix applied at head `97a9520b1`; docs CI pending | collaboration agent `spec_1533_adopt` | `docs/1533-chat-surface-routing` | #1563 |
+| Fable ruling comment + issue acceptance | #1564 | routine | wrap-up successor pushing/opening PR | `Issue #1564 wrap` | `fix/1564-trigger-map` | — |
+| issue #1560 acceptance | #1560 | routine | planning/building | `Issue #1560 name flash` | `fix/1560-assistant-name-flash` | — |
 
 ## Ready-after-current lanes
 
@@ -35,7 +36,7 @@ GitHub/project 2 is the source of truth. Detailed continuation evidence stays in
 - #1557 then rebuilds/pushes its coherent head, runs CI and all six specs once with credentialed real-chat onboarding, records exact pass/skip counts, and requests fresh Fable adjudication.
 - #1558/#1559 remain serialized after #1557.
 - #1533 is independent but shares chat-surface code with #1557; build only after current diff collision is checked against fresh `main`.
-- Routine #1560 may run independently once a build slot opens.
+- Routine #1560 runs independently in its own worktree.
 
 ## CI waivers
 
@@ -49,3 +50,4 @@ None.
 ## Reaped sessions
 
 - Old Coordinator session `019fe9e2-7fc6-7243-9894-d258562db9a6` closed after successor drive was confirmed.
+- #1564 build session `ddf1eb71-08b3-4cd3-ab5e-1cf53d4c4bd1` reaped after wrap successor `5d0306dd-5acb-48f9-b079-d28013bac037` visibly began in the same worktree.
