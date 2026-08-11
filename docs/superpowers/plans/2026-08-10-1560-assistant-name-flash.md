@@ -32,14 +32,14 @@ handoff — no separate design spec).
 - Established neutral-fallback idiom already shipped for the same hook, same shape, elsewhere:
   `apps/web/src/chat/chat-drawer.tsx:62,400,407` — `useAssistantName("")` +
   `assistantName ? \`Chat with ${assistantName}\` : "Chat"`.
-  `apps/web/src/shell/app-shell.tsx:97,384` — same ternary shape for `aria-label`.
-  `apps/web/src/chat/composer.tsx:78,449` — same ternary shape for `aria-label`/placeholder.
+`apps/web/src/shell/app-shell.tsx:97,384`— same ternary shape for`aria-label`.
+`apps/web/src/chat/composer.tsx:78,449`— same ternary shape for`aria-label`/placeholder.
   This fix reuses that idiom; no new pattern.
 - Regression-test precedent for the exact same bug class:
   `tests/unit/app-shell-chat-surface.test.tsx:156` —
   `expect(html).not.toContain("Chat with Moss")`, written for #1451/#1482.
 - Test harness already in place: `tests/unit/today-evening-mode.test.tsx`'s `renderToday()`
-  helper (lines 188-239) seeds every query the page needs *except*
+  helper (lines 188-239) seeds every query the page needs _except_
   `queryKeys.settings.persona` — so the persona `useQuery` inside `useAssistantName` stays
   `isLoading: true` through the synchronous `renderToString()` call. That is already the
   "persona loading pending" state the issue asks to regression-test; no fixture/mock changes
@@ -53,6 +53,7 @@ Edit only `apps/web/src/today/evening-mode.tsx`, `EveningPrepCard` (lines 211, 2
 - const assistantName = useAssistantName();
 + const assistantName = useAssistantName("");
 ```
+
 ```
 -         Chat with {assistantName}
 +         {assistantName ? `Chat with ${assistantName}` : "Chat"}
@@ -68,7 +69,7 @@ existing `renderToday`/`briefingDefinition`/`briefingRun` helpers already in the
 
 1. **"keeps the prep-card CTA neutral while the persona name is pending (#1560)"**
    Render with `definitions: [briefingDefinition({ targetTime: "19:00", timezone:
-   locale.timezone })]`, `runs: []`, `tasks: []`, `events: []`,
+locale.timezone })]`, `runs: []`, `tasks: []`, `events: []`,
    `now: new Date("2026-06-30T02:30:00.000Z")` (same evening-mode `now` as the existing
    "leads with the readable evening review" test, so `todayMode === "evening"` and
    `EveningPrepCard` renders). Do **not** seed `queryKeys.settings.persona` — persona query
@@ -81,7 +82,7 @@ existing `renderToday`/`briefingDefinition`/`briefingRun` helpers already in the
    against current `main`.
 2. **"still shows the configured assistant name once persona resolves (#1560)"** — same render
    inputs, but additionally `client.setQueryData(queryKeys.settings.persona, { persona: {
-   assistantName: "Jarvis", personaText: "" } })` before rendering. Assert
+assistantName: "Jarvis", personaText: "" } })` before rendering. Assert
    `expect(html).toContain("Chat with Jarvis")`. Guards against the fix regressing the resolved
    case (empty-string fallback must not suppress a loaded name).
 
@@ -90,12 +91,14 @@ existing `renderToday`/`briefingDefinition`/`briefingRun` helpers already in the
 ```bash
 pnpm vitest run tests/unit/today-evening-mode.test.tsx > /tmp/1560-vitest.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`, both new tests passing (confirm test 1 fails against pre-fix code first —
 TDD red/green, not just green-after).
 
 ```bash
 pnpm format:check && pnpm lint && pnpm typecheck > /tmp/1560-checks.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`.
 
 ## Live-path proof
