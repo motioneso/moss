@@ -442,6 +442,7 @@ export function AppShell(props: AppShellProps) {
         initialText={moduleDraft}
         focusActionRequestId={focusActionRequestId}
         onActionRequestFocused={() => setFocusActionRequestId(null)}
+        surface={activeSurface}
       />
     </div>
   );

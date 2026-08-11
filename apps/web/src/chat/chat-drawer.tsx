@@ -20,11 +20,13 @@ import {
 } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { useAssistantName } from "../api/use-assistant-name";
-import type {
-  ChatAttachmentDto,
-  ChatMessageDto,
-  LocaleSettingsDto,
-  LookupAiCapabilityRouteResponse
+import {
+  DEFAULT_CHAT_SURFACE,
+  type ChatAttachmentDto,
+  type ChatMessageDto,
+  type ChatSurface,
+  type LocaleSettingsDto,
+  type LookupAiCapabilityRouteResponse
 } from "@moss/shared";
 import { formatDate, useUserLocale } from "../locale/locale-format";
 import { ChatModelPill } from "./chat-model-pill";
@@ -57,6 +59,7 @@ export function ChatDrawer(props: {
   readonly initialText?: string;
   readonly focusActionRequestId?: string | null;
   readonly onActionRequestFocused?: () => void;
+  readonly surface: ChatSurface;
 }) {
   const queryClient = useQueryClient();
   const assistantName = useAssistantName("");
@@ -68,8 +71,8 @@ export function ChatDrawer(props: {
   const [privateActivationError, setPrivateActivationError] = useState<string | null>(null);
 
   const privacyStateQuery = useQuery({
-    queryKey: queryKeys.chat.privacy,
-    queryFn: () => getChatPrivacyState(),
+    queryKey: queryKeys.chat.privacy(props.surface),
+    queryFn: () => getChatPrivacyState(props.surface),
     enabled: props.open
   });
 
@@ -101,7 +104,7 @@ export function ChatDrawer(props: {
   }, [scrollToLatest]);
 
   const resumeMutation = useMutation({
-    mutationFn: (threadId: string) => resumeChat(threadId),
+    mutationFn: (threadId: string) => resumeChat(threadId, props.surface),
     onSuccess: () => {
       props.clearRecords();
       setShowHistory(false);
@@ -109,8 +112,8 @@ export function ChatDrawer(props: {
       // `incognito = false`) — clear the stale privateMode/privateEnded flags to match server truth.
       setPrivateMode(false);
       setPrivateEnded(false);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.chat.threads() });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.chat.privacy });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.chat.threads(props.surface) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.chat.privacy(props.surface) });
     },
     onError: () => {
       setReviewThreadId(null);
@@ -169,13 +172,13 @@ export function ChatDrawer(props: {
   const lockedModelUnavailable = chatRouteQuery.data?.route?.reason === "admin-pin-unavailable";
   const chatAvailable = chatAvailableFromRoute(chatRouteQuery.data);
   const threadsQuery = useQuery({
-    queryKey: queryKeys.chat.threads(),
-    queryFn: () => listChatThreads(),
+    queryKey: queryKeys.chat.threads(props.surface),
+    queryFn: () => listChatThreads(props.surface),
     enabled: props.open
   });
   const messagesQuery = useQuery({
-    queryKey: queryKeys.chat.messages(reviewThreadId ?? ""),
-    queryFn: () => listChatThreadMessages(reviewThreadId ?? ""),
+    queryKey: queryKeys.chat.messages(reviewThreadId ?? "", props.surface),
+    queryFn: () => listChatThreadMessages(reviewThreadId ?? "", props.surface),
     enabled: props.open && reviewThreadId !== null
   });
   const historyActivationPending =
@@ -211,7 +214,9 @@ export function ChatDrawer(props: {
         try {
           const result = await sendChatTurn(
             trimmed,
-            attachments?.map((attachment) => attachment.id)
+            attachments?.map((attachment) => attachment.id),
+            undefined,
+            props.surface
           );
           setPendingUser(null);
           const postResponseRecords: readonly TranscriptRecord[] = [
@@ -228,7 +233,7 @@ export function ChatDrawer(props: {
               (fallback) => !props.records.some((record) => sameTranscriptRecord(record, fallback))
             )
           );
-          void queryClient.invalidateQueries({ queryKey: queryKeys.chat.threads() });
+          void queryClient.invalidateQueries({ queryKey: queryKeys.chat.threads(props.surface) });
         } catch (caught) {
           setPendingUser(null);
           if (isNoActiveChatModelError(caught)) {
@@ -337,9 +342,9 @@ export function ChatDrawer(props: {
     setFallbackRecords([]);
     setPrivateMode(false);
     setPrivateEnded(false);
-    void clearChat();
+    void clearChat({ surface: props.surface });
     props.clearRecords();
-    void queryClient.invalidateQueries({ queryKey: queryKeys.chat.threads() });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.chat.threads(props.surface) });
   };
 
   const switchToNewModelChat = () => {
@@ -359,11 +364,11 @@ export function ChatDrawer(props: {
     setActivatingPrivate(true);
     void (async () => {
       try {
-        await clearChat({ incognito: true });
+        await clearChat({ incognito: true, surface: props.surface });
         setFallbackRecords([]);
         props.clearRecords();
         setPrivateMode(true);
-        void queryClient.invalidateQueries({ queryKey: queryKeys.chat.threads() });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.chat.threads(props.surface) });
       } catch (caught) {
         setPrivateActivationError(
           caught instanceof Error ? caught.message : "Could not start a private chat"
@@ -379,7 +384,7 @@ export function ChatDrawer(props: {
     setPrivateEnded(false);
     props.clearRecords();
     setFallbackRecords([]);
-    void endPrivateChat();
+    void endPrivateChat(props.surface);
   };
 
   /** #456 — stop the in-flight turn. The backend kills the engine + emits 'Stopped by user.' over
@@ -388,7 +393,7 @@ export function ChatDrawer(props: {
     if (queuedText !== null) {
       setDrainAfterStopText(queuedText);
     }
-    void cancelChatTurn().catch(() => {
+    void cancelChatTurn(props.surface).catch(() => {
       // best-effort: the turn ends server-side regardless; a network error here just clears isSending.
     });
   };
@@ -416,16 +421,18 @@ export function ChatDrawer(props: {
         >
           <SquarePen size={16} aria-hidden="true" />
         </button>
-        <button
-          aria-label="Start private chat"
-          aria-pressed={privateMode}
-          className={`chatd__hbtn${privateMode ? " is-on" : ""}`}
-          title="Private chat"
-          type="button"
-          onClick={startPrivateChat}
-        >
-          <ShieldOff size={16} aria-hidden="true" />
-        </button>
+        {props.surface === DEFAULT_CHAT_SURFACE && (
+          <button
+            aria-label="Start private chat"
+            aria-pressed={privateMode}
+            className={`chatd__hbtn${privateMode ? " is-on" : ""}`}
+            title="Private chat"
+            type="button"
+            onClick={startPrivateChat}
+          >
+            <ShieldOff size={16} aria-hidden="true" />
+          </button>
+        )}
         <button
           aria-label={showHistory ? "Hide chat history" : "Show chat history"}
           aria-pressed={showHistory}

@@ -56,9 +56,11 @@ vi.mock("../../apps/web/src/chat/use-chat-stream.js", () => ({
 // actually handed. A minimal stand-in that just records its props is enough to observe
 // recordsForSurface's drawer-isolation behaviour (test 6) without a DOM.
 const chatDrawerRecordsCalls: (readonly TranscriptRecord[])[] = [];
+const chatDrawerSurfaceCalls: string[] = [];
 vi.mock("../../apps/web/src/chat/chat-drawer.js", () => ({
-  ChatDrawer: (props: { records: readonly TranscriptRecord[] }) => {
+  ChatDrawer: (props: { records: readonly TranscriptRecord[]; surface: string }) => {
     chatDrawerRecordsCalls.push(props.records);
+    chatDrawerSurfaceCalls.push(props.surface);
     return null;
   }
 }));
