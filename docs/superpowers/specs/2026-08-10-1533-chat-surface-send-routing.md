@@ -2,11 +2,11 @@
 
 **Date:** 2026-08-10
 
-**Status:** Fable-reviewed — binding findings folded; no second review required
+**Status:** Fable-reviewed, re-grounded after all predecessors landed, and implementation-ready
 
 **Issue:** [#1533](https://github.com/motioneso/moss/issues/1533)
 
-**Grounded on:** `origin/main` = `97feaffc5`
+**Grounded on:** `origin/main` = `71149d36e`
 
 **Implementation tier:** Sensitive — this changes routing for chat commands and approval events,
 but not authorization, persistence policy, or the gateway contract.
@@ -15,9 +15,8 @@ but not authorization, persistence policy, or the gateway contract.
 
 The shell already knows which chat surface is active. A mounted external module publishes an opaque
 module surface such as `m-3abde0ba43fbd3aa`; on current `origin/main`, `AppShell` passes that value
-to `useChatStream` (and passes `undefined` only for the default drawer). PR #1494 changes the
-default case to pass explicit `DEFAULT_CHAT_SURFACE`. In both baselines the shell renders the
-subscribed records in `ChatDrawer`, but the drawer does not receive the surface, so its
+to `useChatStream` and passes explicit `DEFAULT_CHAT_SURFACE` for the default drawer. The shell
+renders the subscribed records in `ChatDrawer`, but the drawer does not receive the surface, so its
 `sendMessage` calls `sendChatTurn` without one. The server normalizes that omission to `drawer`.
 
 The submitted turn therefore launches under `<actor>:drawer`, and its MCP token carries that
@@ -57,9 +56,8 @@ The only defaulting point is `AppShell`: no active module means the explicit
 1. An external module calls `assistantSurface.setSurfaceKey(key)`.
 2. `createAssistantSurfaceHandle` combines the host-bound module id and opaque key through
    `moduleChatSurface`, then publishes the resulting validated `ChatSurface`.
-3. `AppShell` reads it with `useSyncExternalStore`, falling back to `DEFAULT_CHAT_SURFACE`. Current
-   `origin/main` passes a module value or `undefined` to `useChatStream`; mandatory predecessor PR
-   #1494 passes the explicit fallback too. #1533 implements on the post-#1494 form.
+3. `AppShell` reads it with `useSyncExternalStore`, falls back to `DEFAULT_CHAT_SURFACE`, and passes
+   that explicit `activeSurface` to `useChatStream`. #1533 reuses the same value for `ChatDrawer`.
 4. `ChatDrawer.sendMessage` currently calls `sendChatTurn(text, attachmentIds)` and loses the value.
 5. `sendChatTurn` already supports a fourth `surface` argument and serializes it into
    `POST /api/chat/turn`.
@@ -151,13 +149,21 @@ the prior surface:
 Also clear transient send/drain/error flags needed to prevent the old surface from blocking the new
 one. Do not wait for the new privacy/history queries to settle before clearing old state.
 
-An effect alone is insufficient because an old-surface `sendChatTurn` promise can settle after the
-flip and repopulate `fallbackRecords` or `pendingUser`. Keep the latest surface in a ref updated on
-render; `sendMessage` captures `sendSurface = props.surface`, sends with that value, and every
-post-await success/error/finally mutation first verifies the latest surface still equals
-`sendSurface`. A stale completion may settle its network promise, but it must not append records,
-set provider/send errors, invalidate the new surface's queries, or change new-surface sending
-state. Do not cancel or redirect the already-submitted old-surface turn.
+An effect alone is insufficient because an old-surface promise can settle after the flip and mutate
+the new surface. Keep the latest surface in a ref updated on render. Every async drawer operation
+captures its initiating surface, uses that value for the request and query invalidation, and checks
+the ref before any post-await local-state mutation or `props.clearRecords()` call. This applies to
+send, resume, private activation, and the cross-provider New Chat continuation. A stale completion
+may settle its old-surface request and invalidate only old-surface query keys, but it must not append
+records, restore optimistic/private/history state, surface an old error, clear the new live stream,
+or change new-surface sending/activation state. Do not cancel or redirect an already-submitted
+old-surface request.
+
+Store a queued Stop drain with the surface that produced it and discard it when that surface no
+longer matches `props.surface`; clearing the queue in the reset effect alone is insufficient because
+the pre-reset drain effect can run from the same render. Pass the captured surface through
+`ChatModelPill`'s mutation variables and cross-provider callback so a late model-switch continuation
+can clear its old server session without clearing the newly rendered drawer.
 
 ### 5. Leave backend routing alone
 
@@ -248,16 +254,21 @@ Add surface-flip assertions using the same mounted drawer instance:
 2. Resolve and reject deferred old-surface sends after the flip. Neither completion may append an
    old reply, restore the optimistic row, surface an old error, invalidate the new surface's
    queries, or block a new-surface send.
-3. Flip module A → module B and default → module, not only module → default; all six bound state
+3. Resolve deferred resume and private-activation requests after a flip and drain a queued Stop
+   from the old surface. None may clear, repopulate, or submit through the new surface.
+4. Flip module A → module B and default → module, not only module → default; all six bound state
    fields reset regardless of direction.
 
-### Model switching: `tests/unit/chat-model-pill.test.ts`
+### Model switching: new `tests/unit/chat-model-pill-surface.test.tsx`
 
-Extend the existing suite with the repository's React/query-client pattern. Render
-`ChatModelPill` with `surface={moduleSurface}`, choose a same-provider model, and assert
-`switchChatProvider(moduleSurface)` plus invalidation of
-`queryKeys.chat.threads(moduleSurface)`. Assert `ChatDrawer` passes its exact surface into the pill
-and that the cross-provider callback clears the same surface.
+Leave the existing pure-function `chat-model-pill.test.ts` suite unchanged. In the new React/query-
+client suite, render `ChatModelPill` with `surface={moduleSurface}`, choose a same-provider model,
+and assert at runtime that `switchChatProvider` receives `moduleSurface` and invalidation receives
+`queryKeys.chat.threads(moduleSurface)`. Also assert at runtime that `ChatDrawer` passes its exact
+surface into the pill prop, and that the cross-provider callback clears the same captured surface.
+These must be call-argument assertions rather than facts inferred from prop types because `.tsx`
+tests are not typechecked in this repository (#1335). Resolve a model mutation after a prop flip and
+assert that its continuation does not clear the newly rendered surface.
 
 ### Client URL: `tests/unit/chat-api-client.test.ts`
 
@@ -276,7 +287,7 @@ Run the focused files first, then the repository gate using the coordinator's ex
 slot and isolated database procedure:
 
 ```bash
-pnpm vitest run tests/unit/app-shell-chat-surface.test.tsx tests/unit/chat-drawer-surface.test.tsx tests/unit/chat-model-pill.test.ts tests/unit/chat-api-client.test.ts
+pnpm vitest run tests/unit/app-shell-chat-surface.test.tsx tests/unit/chat-drawer-surface.test.tsx tests/unit/chat-model-pill-surface.test.tsx tests/unit/chat-api-client.test.ts
 pnpm verify:foundation
 ```
 
@@ -309,23 +320,21 @@ reload is not acceptable proof for #1533.
 
 ## Dependencies and collision order
 
-Implement only after the four current Wave 5 PRs settle, then rebase once onto current
-`origin/main`:
+All four Wave 5 predecessors are now on `origin/main`. Implement from `71149d36e` or later; do not
+reintroduce their superseded shell, drawer, persona, or action-label behavior:
 
-| PR    | Relationship to #1533                                                                                                                                                                                                                          |
-| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| #1494 | Mandatory predecessor and direct collision: edits `app-shell.tsx`, `app-shell-chat-surface.test.tsx`, and `use-chat-stream` expectations to make the default surface explicit. Preserve that behavior and add send/drawer pairing on top.      |
-| #1482 | Mandatory predecessor and direct collision: edits `chat-drawer.tsx` and adds the route-based availability regression. Reapply the surface prop/calls to its final drawer, without undoing availability or persona-prefetch work.               |
-| #1493 | No planned file collision. It changes `ChatSessionManager` persona/neutral-dir behavior on the same `(actor, surface)` session key. Treat its composite-key behavior as an invariant; do not edit backend files.                               |
-| #1492 | No planned file collision. It changes the approval request's human-readable label and provides the job-search confirmation path used for live proof. Routing must be independent of label text; run proof on the merged behavior if available. |
+| PR    | Relationship to #1533                                                                                                                                                                                                          |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| #1494 | Landed as `b79b323cf`. It edits `app-shell.tsx`, `app-shell-chat-surface.test.tsx`, and `use-chat-stream` expectations to make the default surface explicit. Preserve that behavior and add send/drawer pairing on top.        |
+| #1482 | Landed as `71149d36e`. It edits `chat-drawer.tsx` and adds the route-based availability regression. Apply the surface prop/calls to this final drawer without undoing availability or persona-prefetch work.                   |
+| #1493 | Landed as `128a5bed6`. It changes `ChatSessionManager` persona/neutral-dir behavior on the same `(actor, surface)` session key. Treat its composite-key behavior as an invariant; do not edit backend files.                   |
+| #1492 | Landed as `9883555d5`. It changes the approval request's human-readable label and provides the job-search confirmation path used for live proof. Routing remains independent of label text; run proof on this merged behavior. |
 
-Do not stack #1533 onto an open PR branch. If any predecessor changes the shell-to-drawer surface
-interface materially, stop and return the spec to review rather than layering a second surface
-source.
+Do not stack #1533 onto another PR branch or introduce a second surface source.
 
 ## One-session implementation boundary
 
-The implementation is bounded to one worktree and one session after the predecessors merge:
+The implementation is bounded to one worktree and one session from current `origin/main`:
 
 - `apps/web/src/shell/app-shell.tsx`
 - `apps/web/src/chat/chat-drawer.tsx`
@@ -334,7 +343,7 @@ The implementation is bounded to one worktree and one session after the predeces
 - `apps/web/src/api/query-keys.ts`
 - `tests/unit/app-shell-chat-surface.test.tsx`
 - `tests/unit/chat-drawer-surface.test.tsx` (new)
-- `tests/unit/chat-model-pill.test.ts`
+- `tests/unit/chat-model-pill-surface.test.tsx` (new)
 - `tests/unit/chat-api-client.test.ts`
 
 Expected production change: one required prop plus reuse of existing optional surface parameters and
