@@ -1,8 +1,9 @@
 import type { PgBoss, SendOptions } from "pg-boss";
+import { sql, type Kysely } from "kysely";
 
-import type { AccessContext } from "@moss/db";
+import type { AccessContext, MossDatabase } from "@moss/db";
 import { matchesModuleParamsSchema, type ExternalModuleQueueDeclaration } from "@moss/module-sdk";
-import { PLATFORM_MODULE_CONTROL_QUEUE } from "./pg-boss.js";
+import { hasRecentJob, PLATFORM_MODULE_CONTROL_QUEUE } from "./pg-boss.js";
 
 export interface ExternalModuleJobPayload {
   readonly actorUserId: string;
@@ -96,7 +97,8 @@ export async function sendModuleJob(
   module: { readonly id: string; readonly manifestHash: string },
   queue: ExternalModuleQueueDeclaration,
   command: { readonly jobKind: string; readonly params?: Readonly<Record<string, unknown>> },
-  options?: Pick<SendOptions, "singletonKey" | "singletonSeconds">
+  options?: Pick<SendOptions, "singletonKey" | "singletonSeconds">,
+  rootDb?: Kysely<MossDatabase>
 ): Promise<string | null> {
   const payload: ExternalModuleJobPayload = {
     actorUserId: access.actorUserId,
@@ -106,5 +108,17 @@ export async function sendModuleJob(
     ...(command.params === undefined ? {} : { params: command.params })
   };
   assertModuleJobPayload(queue, payload);
+
+  if (rootDb && options?.singletonKey && options?.singletonSeconds) {
+    const singletonKey = options.singletonKey;
+    const singletonSeconds = options.singletonSeconds;
+    return rootDb.transaction().execute(async (trx) => {
+      await sql`select pg_advisory_xact_lock(hashtextextended(${singletonKey}, 0))`.execute(trx);
+      const recent = await hasRecentJob(trx, queue.name, singletonKey, singletonSeconds);
+      if (recent) return null;
+      return boss.send(queue.name, payload, options);
+    });
+  }
+
   return boss.send(queue.name, payload, options);
 }
