@@ -13,7 +13,7 @@ GitHub/project 2 is the source of truth. Detailed continuation evidence stays in
 
 | Spec | Issue | Tier | Status | Agent label | Branch | PR |
 | ---- | ----- | ---- | ------ | ----------- | ------ | -- |
-| `docs/superpowers/specs/2026-08-10-1554-persistent-provider-chat-runtime.md` | #1557 | sensitive | final-head rebuild/UAT + fresh Fable adjudication in progress | `Issue #1557 exact-head gate`, session `14043925-6021-4360-956d-951b71d2e94d` | `1557-p1-persistent-adapter` | #1561 |
+| `docs/superpowers/specs/2026-08-10-1554-persistent-provider-chat-runtime.md` | #1557 | sensitive | clean rebuild verified locally; formatting fix, live-path, six-spec gate, push, Fable adjudication pending | `Issue #1557 exact-head gate (relay1)`, session `bec82be7-07c6-42f9-bf91-1620a348ef1b` | `1557-clean-rebuild` | #1561 |
 | `docs/superpowers/specs/2026-08-10-1121-scriptable-uat-chat.md` | #1121 | sensitive | spec merged as `7aa85f628`; implementation planning started | `Issue #1121 scriptable UAT`, session `dd6bb68a-60ee-4ea8-8a66-e56b7cf12066` | `build/1121-scriptable-chat` | #1565 merged |
 | `docs/superpowers/specs/2026-08-10-1533-chat-surface-send-routing.md` | #1533 | sensitive | Phase 2 complete; Phase 3 production committed; tests + wrap-up next | `Issue #1533 chat surface (relay7)`, session `79498f4b-4e75-414d-b7dc-9eec683d8d68` | `build/1533-chat-surface-routing` | #1563 spec merged as `abfe0478b1` |
 | Fable ruling comment + issue acceptance | #1564 | routine | merged/Closed/Project Done; wrapper reaped; needs-ben sent | — | `fix/1564-trigger-map` | #1566 merged as `0a57ef450` |
