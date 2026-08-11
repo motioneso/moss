@@ -17,7 +17,7 @@ GitHub/project 2 is the source of truth. Detailed continuation evidence stays in
 | `docs/superpowers/specs/2026-08-10-1121-scriptable-uat-chat.md` | #1121 | sensitive | plan REVISE sent + revised + approved; Tasks 1-4 building now, Tasks 5/6 gated on #1557 landing to `main` | `Issue #1121 scriptable UAT (relay3)`, session `5d633249-f321-45ea-a177-0afaea767cd1` | `build/1121-scriptable-chat` | #1565 merged |
 | `docs/superpowers/specs/2026-08-10-1533-chat-surface-send-routing.md` | #1533 | sensitive | Phase 2 complete; Phase 3 production committed; unrun tests + wrap-up next | `Issue #1533 chat surface (relay8)`, session `f3a156a2-06b1-4c69-9fa0-f499fca71df9` | `build/1533-chat-surface-routing` | #1563 spec merged as `abfe0478b1` |
 | Fable ruling comment + issue acceptance | #1564 | routine | merged/Closed/Project Done; wrapper reaped; needs-ben sent | — | `fix/1564-trigger-map` | #1566 merged as `0a57ef450` |
-| issue #1560 acceptance | #1560 | routine | PR #1567 QA-RED fixes + relay checkpoint pushed at `2e63f8ac1`; re-QA/CI pending; persona cleanup awaits Ben | `Issue #1560 name flash (relay3)`, session `b2a0f924-3f1e-4848-8ded-acdae4fd3f34` | `fix/1560-assistant-name-flash` | #1567 |
+| issue #1560 acceptance | #1560 | routine | post-#1568 main CI confirmed green at `31473972720`; rebasing `2e63f8ac1` onto fresh main + fresh integrated QA in progress; persona cleanup awaits Ben | `Issue #1560 name flash (relay3)`, session `b2a0f924-3f1e-4848-8ded-acdae4fd3f34` | `fix/1560-assistant-name-flash` | #1567 |
 
 ## Ready-after-current lanes
 
