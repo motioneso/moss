@@ -88,9 +88,22 @@ test("masthead title and accent are separated by a real space", async ({ page })
   const accentEl = titleEl.locator(".jds-masthead__accent");
   await expect(accentEl).toHaveCount(1);
 
-  const topText = (await titleEl.locator("> span").first().innerText()).trim();
-  const accentText = (await accentEl.innerText()).trim();
-  const fullText = (await titleEl.innerText()).trim();
+  // Read all three strings from a single DOM snapshot via one evaluate() round-trip, not three
+  // separate awaited Playwright calls. The headline text is live (needsYou/eventsLeft counts
+  // resolve async), so three sequential reads can straddle a re-render — e.g. topText captured
+  // pre-resolve ("ALL CLEAR") while accentText/fullText are captured post-resolve ("NEED YOU" /
+  // "EIGHT NEED YOU"), failing on a state race that has nothing to do with the #1412 whitespace
+  // bug this test guards. A single evaluate() reads top/accent/full from the same frame, so the
+  // comparison always reflects one consistent render.
+  const { topText, accentText, fullText } = await titleEl.evaluate((titleNode) => {
+    const topSpan = titleNode.querySelector(":scope > span:not(.jds-masthead__accent)");
+    const accentSpan = titleNode.querySelector(":scope > span.jds-masthead__accent");
+    return {
+      topText: (topSpan?.textContent ?? "").trim(),
+      accentText: (accentSpan?.textContent ?? "").trim(),
+      fullText: (titleNode.textContent ?? "").trim()
+    };
+  });
 
   await page.screenshot({ path: join(EVIDENCE_DIR, "masthead-title-accent-space.png") });
 

@@ -15,9 +15,9 @@ prior transcript — this doc is the full state. Predecessor doc (superseded):
   - API on `:3097`, web on `:5196` (both background processes started this session — verify
     still running with `curl -s -o /dev/null -w "%{http_code}\n" http://localhost:5196/` before
     trusting; if dead, re-source env and restart both).
-  - Env vars saved at
-    `/tmp/claude-1000/-home-ben-Jarv1s--claude-worktrees-1560-assistant-name-flash/fbac9626-7c06-4065-84a1-25a3fd232d8e/scratchpad/dev-env.sh`
-    — `source` it before restarting either process if needed.
+  - Env vars saved at `scratchpad/dev-env.sh` in that session's Claude scratchpad directory
+    (rooted at `~/Jarv1s/.claude/worktrees/1560-assistant-name-flash`) — `source` it before
+    restarting either process if needed.
 - Signed in as `ben@ben.com` against this instance. Session cookie jar at `/tmp/1560-cookies.txt`
   (valid for `http://localhost:3097`) — reuse with `curl -b /tmp/1560-cookies.txt ...` for any
   further API calls, or use it to seed a Playwright browser context's cookies for the UI proof.
