@@ -32,15 +32,17 @@ export function selectReplayWindow(
   let total = windowed.reduce((sum, m) => sum + messageTokens(m), 0);
 
   while (windowed.length > 1 && total > opts.maxTokens) {
-    total -= messageTokens(windowed[0]);
-    windowed = windowed.slice(1);
+    const [first, ...rest] = windowed;
+    if (!first) break;
+    total -= messageTokens(first);
+    windowed = rest;
   }
 
-  if (windowed.length === 1 && messageTokens(windowed[0]) > opts.maxTokens) {
-    const [message] = windowed;
-    const prefixLen = message.role.length + 2; // "role: "
+  const [onlyMessage] = windowed;
+  if (windowed.length === 1 && onlyMessage && messageTokens(onlyMessage) > opts.maxTokens) {
+    const prefixLen = onlyMessage.role.length + 2; // "role: "
     const maxContentLen = Math.max(0, opts.maxTokens * 4 - prefixLen);
-    windowed = [{ role: message.role, content: message.content.slice(-maxContentLen) }];
+    windowed = [{ role: onlyMessage.role, content: onlyMessage.content.slice(-maxContentLen) }];
   }
 
   return [...windowed];

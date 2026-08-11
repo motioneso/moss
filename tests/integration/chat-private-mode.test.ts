@@ -146,7 +146,7 @@ describe("private chat persistence", () => {
       aiRepository,
       boss: {
         send: async () => "job-id"
-      } as DataContextChatPersistenceDeps["boss"]
+      } as unknown as DataContextChatPersistenceDeps["boss"]
     });
 
     const result = await persistence.listPriorTurns(ids.userA);

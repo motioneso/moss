@@ -71,9 +71,9 @@ describe("selectReplayWindow", () => {
     const window = selectReplayWindow(messages, { maxMessages: 40, maxTokens: 8000 });
 
     expect(window).toHaveLength(1);
-    expect(window[0].content).not.toContain("HEAD_MARKER_UNIQUE");
-    expect(window[0].content).toContain("TAIL_MARKER_UNIQUE");
-    expect(estimateTokens(`${window[0].role}: ${window[0].content}`)).toBeLessThanOrEqual(8000);
+    expect(window[0]!.content).not.toContain("HEAD_MARKER_UNIQUE");
+    expect(window[0]!.content).toContain("TAIL_MARKER_UNIQUE");
+    expect(estimateTokens(`${window[0]!.role}: ${window[0]!.content}`)).toBeLessThanOrEqual(8000);
   });
 
   it("T1-d: unpaired newest user turn (no trailing assistant reply) is included as-is", () => {
