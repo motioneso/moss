@@ -193,14 +193,38 @@ of the shared `afterEach`. Saved as memory `mem_msoi5w7l_5bee131ce581` (type `bu
 `jarvis`) — any future suite here that does `vi.spyOn` on a Node global (`process.exit`,
 `process.stderr.write`, etc.) must restore it in `afterEach` or risk the same cross-test leak.
 
-## Then — Task 4 (not started)
+## DONE — Task 4 is fully complete and verified, committed `7afa4838c`
 
-`tests/uat/run-uat.ts` regex extension, `tests/uat/provisioner.ts` `chatScript` env-injection
-threading (before `up -d jarv1s --wait`), `infra/docker-compose.prod.yml:152` fix
-(`JARVIS_CLI_TOOLS_PREFIX: ${JARVIS_CLI_TOOLS_PREFIX:-/data/cli-tools}`), `tests/uat/seed/cli.ts`
-wiring. **Re-check against the plan doc directly when you reach this** — some seed-side wiring
-(the solo-admin AI-provider-chunk gap, see relay 2's doc in this directory) may belong to the
-blocked Task 5 instead; don't duplicate it into Task 4.
+`run-uat.ts`'s `readUatLevel` regex extended with an optional trailing `chatScript: "id"` group,
+validated against `UAT_CHAT_SCRIPTS`, threaded into `provisionForUat`'s options. `provisioner.ts`:
+`UatProvisionOptions.chatScript` → `buildSeedHookInput` → `SeedHook` ctx → `composeSeedHook`'s
+`-e JARVIS_UAT_SEED_CHAT_SCRIPT=${chatScript ?? ""}` (always-pass-empty-means-off, same convention
+as the job-search fixture var). `provisionForUat` sets `JARVIS_CLI_TOOLS_PREFIX` to the
+scripted-provider fixture path for the call's duration when `chatScript` is set, restored in all 3
+terminal exit paths (success teardown, terminal-catch throw, exhausted-loop throw) — not in the
+port-bind retry-continue path, since the override must persist across retries within one call.
+`infra/docker-compose.prod.yml:152` now reads `JARVIS_CLI_TOOLS_PREFIX:
+${JARVIS_CLI_TOOLS_PREFIX:-/data/cli-tools}`.
+
+All three plan-required test cases written and passing:
+- `run-uat.test.ts`: chatScript threads through when valid; unknown id throws clearly. (Also fixed
+  a pre-existing broken assertion in the "derives provisioning" test that predated this task —
+  its `provisionForUat` expectation was missing 2 keys added by earlier #1306 Task 22 work.)
+- `tests/uat/provisioner.test.ts` (new): `buildSeedHookInput`/`composeSeedHook` arg-building,
+  `spawn` mocked, no Docker.
+- `tests/unit/prod-compose-cli-tools-prefix.test.ts` (new): real `docker compose -f
+  infra/docker-compose.prod.yml config` invocation (not a text grep) proving
+  `JARVIS_CLI_TOOLS_PREFIX` resolves to `/data/cli-tools` by default and to an exported override
+  value when set.
+
+Verified: all 3 test files green via scoped `vitest run`; repo-wide `pnpm exec tsc --noEmit`
+EXIT=0; scoped `pnpm exec eslint` on all 5 touched/new source+test files EXIT=0. Committed as
+`7afa4838c` (6 files) via `shared-checkout` skill — `herdr pane list` confirmed no other session at
+this worktree's cwd before committing.
+
+Task 5's seed-side wiring (`tests/uat/seed/cli.ts` consuming `JARVIS_UAT_SEED_CHAT_SCRIPT`, the
+solo-admin AI-provider-chunk gap) was confirmed out of Task 4's scope by re-reading the plan doc
+directly — it stays with the blocked Task 5 below, nothing was duplicated into Task 4.
 
 ## Still blocked — do not start
 
