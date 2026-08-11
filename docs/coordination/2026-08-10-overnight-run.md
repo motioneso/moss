@@ -15,7 +15,7 @@ GitHub/project 2 is the source of truth. Detailed continuation evidence stays in
 | ---- | ----- | ---- | ------ | ----------- | ------ | -- |
 | `docs/superpowers/specs/2026-08-10-1554-persistent-provider-chat-runtime.md` | #1557 | sensitive | Fable ruling resolved; final-head rebuild/UAT pending | `Fable #1557 UAT ruling` | `1557-p1-persistent-adapter` | #1561 |
 | `docs/superpowers/specs/2026-08-10-1121-scriptable-uat-chat.md` | #1121 | sensitive | Fable APPROVED at comment 5250004655; PR checks green; merge after post-#1566 main is green | no build agent yet | `docs/1121-scriptable-chat` | #1565 |
-| `docs/superpowers/specs/2026-08-10-1533-chat-surface-send-routing.md` | #1533 | sensitive | Phase 1 production/tests committed; Phase 2 next | `Issue #1533 chat surface (relay4)`, session `0ba62bdf-d339-4947-9045-6298006ff563` | `build/1533-chat-surface-routing` | #1563 spec merged as `abfe0478b1` |
+| `docs/superpowers/specs/2026-08-10-1533-chat-surface-send-routing.md` | #1533 | sensitive | Phase 1 committed; Phase 2 production preserved, tests next | `Issue #1533 chat surface (relay6)`, session `b0b3d2ea-1027-481c-abd2-accfe383d3d8` | `build/1533-chat-surface-routing` | #1563 spec merged as `abfe0478b1` |
 | Fable ruling comment + issue acceptance | #1564 | routine | merged/Closed/Project Done; wrapper reaped; needs-ben sent | — | `fix/1564-trigger-map` | #1566 merged as `0a57ef450` |
 | issue #1560 acceptance | #1560 | routine | fix/tests committed; live proof + gate + wrap-up in progress | `Issue #1560 name flash (relay3)`, session `b2a0f924-3f1e-4848-8ded-acdae4fd3f34` | `fix/1560-assistant-name-flash` | pending |
 
