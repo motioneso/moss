@@ -44,9 +44,9 @@ export const UAT_SEED_CHUNKS: readonly UatSeedChunk[] = [
 // the only Phase 1 entry — backs Task 3's own end-to-end integration test, not a converted UAT
 // spec. Each Phase 2 task appends its own id here when it adds that id's fixture JSON, same
 // additive-registry pattern as UAT_SEED_LEVELS/UAT_SEED_CHUNKS above.
-export type UatChatScript = "phase1-smoke";
+export type UatChatScript = "phase1-smoke" | "1533-surface-probe";
 
-export const UAT_CHAT_SCRIPTS: readonly UatChatScript[] = ["phase1-smoke"];
+export const UAT_CHAT_SCRIPTS: readonly UatChatScript[] = ["phase1-smoke", "1533-surface-probe"];
 
 export interface SeedOptions {
   readonly level: UatSeedLevel;
