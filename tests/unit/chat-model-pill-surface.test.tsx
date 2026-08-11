@@ -21,9 +21,11 @@ vi.stubGlobal("document", { addEventListener: vi.fn(), removeEventListener: vi.f
 
 import { DEFAULT_CHAT_SURFACE, type AiConfiguredModelDto, type ChatSurface } from "@moss/shared";
 import { moduleChatSurface } from "../../apps/web/src/shell/chat-surface-key.js";
+import type * as ApiClientModule from "../../apps/web/src/api/client.js";
+import type * as ChatModelPillModule from "../../apps/web/src/chat/chat-model-pill.js";
 
 vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => ({
-  ApiError: (await importOriginal<typeof import("../../apps/web/src/api/client.js")>()).ApiError,
+  ApiError: (await importOriginal<typeof ApiClientModule>()).ApiError,
   sendChatTurn: vi.fn(async () => ({
     userMessageId: "user-1",
     assistantMessageId: "assistant-1",
@@ -53,8 +55,7 @@ vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => ({
 }));
 
 vi.mock("../../apps/web/src/chat/chat-model-pill.js", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("../../apps/web/src/chat/chat-model-pill.js")>();
+  const actual = await importOriginal<typeof ChatModelPillModule>();
   return { ...actual, ChatModelPill: vi.fn(actual.ChatModelPill) };
 });
 

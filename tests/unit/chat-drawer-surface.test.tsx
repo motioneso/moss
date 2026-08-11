@@ -21,9 +21,10 @@ vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn(
 
 import { DEFAULT_CHAT_SURFACE, type ChatSurface } from "@moss/shared";
 import { moduleChatSurface } from "../../apps/web/src/shell/chat-surface-key.js";
+import type * as ApiClientModule from "../../apps/web/src/api/client.js";
 
 vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => ({
-  ApiError: (await importOriginal<typeof import("../../apps/web/src/api/client.js")>()).ApiError,
+  ApiError: (await importOriginal<typeof ApiClientModule>()).ApiError,
   sendChatTurn: vi.fn(async () => ({
     userMessageId: "user-1",
     assistantMessageId: "assistant-1",
