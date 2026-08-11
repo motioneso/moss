@@ -1,0 +1,12 @@
+#!/usr/bin/env -S node --import tsx/esm
+// tests/uat/fixtures/scripted-provider/bin/claude
+//
+// #1121: extensionless entrypoint kept deliberately tiny — tsc/eslint only walk `**/*.ts`
+// (tsconfig.json's "include"), so anything with real logic here would get zero compiler
+// coverage. All behavior lives in ../claude-main.ts, which is a normal checked/linted .ts
+// file; this shim just runs it. tsx resolves at container runtime because the Dockerfile
+// deliberately ships a non-pruned node_modules — see claude-main.ts's header for the fuller
+// citation trail.
+import { main } from "../claude-main.js";
+
+main();

@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "turns": [
+    {
+      "expectIncludes": ["goals"],
+      "calls": [{ "tool": "goals.list", "arguments": {} }],
+      "reply": "Here are your goals."
+    }
+  ]
+}
