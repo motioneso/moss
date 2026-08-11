@@ -61,6 +61,21 @@ None.
 - #1533 exhausted sessions through `53494db8-f7e5-446e-91b8-588247bf762a` were reaped only after their successors were visibly driving.
 - #1560 exhausted sessions through `fbac9626-7c06-4065-84a1-25a3fd232d8e` were reaped only after their successors were visibly driving.
 
+## Relay continuation — after #1557/PR #1561 merge (context-meter relay #8)
+
+- **Coordinator lock (unchanged pointer, see top of file):** outgoing session `52c5ef3d-153d-4bd5-8f71-babd342a4d07`, pane `w1:p7M`, tab `w1:t6`. Successor must claim the sole `Coordinator` label, replace the lock line at the top of this file with its own immutable session id, verify uniqueness, then resolve/reap this outgoing session by label + session id.
+- **This leg's work:** adopted from relay #7 (`c3d42ad2...`), reaped it cleanly. Re-armed debounced liveness Monitor (task `bt01bksar` in this session — **dies with this relay, must be re-armed**, 2-poll-stable ~45s debounce) over `w1:p7A`/`w1:p7C`/`w1:p7D`. #1121's "check if #1557 is merged yet" input-box text confirmed a stale display artifact (Enter had no effect) — genuinely idle/parked, correctly left alone. #1557 R1 landed (evidence `issuecomment-5255376227`); dispatched independent worktree-isolated `coordinated-qa` (sensitive tier) — verdict GREEN/MERGE-READY (`issuecomment-5255499267`). Session-id authority re-confirmed before merge. **Merged PR #1561 → `main` at `02951d46b6f026b41699d002c925f070cdc67f92`.** Closed issue #1557 with full evidence trail in the closing comment. Repo note: `gh` resolves this remote to `motioneso/moss` canonically but sometimes *displays* `motioneso/Jarv1s` (old pre-rename name) in command output — same known auto-redirect artifact as memory `repo-renamed-to-moss.md`; not a new problem, operations land on the correct repo (verified issue #1557 CLOSED via explicit `--repo motioneso/moss`).
+- **merges_since_relay: 1** (this #1557 merge). Context-meter warning fired at 70% immediately after — relaying now per protocol, before completing remaining Phase 3/4 bookkeeping for this merge.
+- **NOT YET DONE for the #1557 merge — successor's first job:**
+  1. Move #1557's GitHub project-2 board item to Done (issue itself is closed).
+  2. Send the per-merge digest: `needs-ben coordinator "PR #1561 (#1557 persistent provider chat runtime P1) merged to main at 02951d46b6f — sensitive tier, Fable security sign-off pre-granted, independent QA GREEN"`.
+  3. Reap #1557's build-agent worktree `.claude/worktrees/1557-p1-persistent-adapter` (branch `1557-p1-persistent-adapter`) — run the **four-gate test** (rev-list ahead-count is not proof, it's squash-merged so treat as landed since commit `02951d46b` is confirmed on `origin/main`; check no tracked mods, no process cwd'd there, no herdr pane cwd'd there) before `git worktree remove`. Close/reap pane `w1:p7A` (label "Issue #1557 exact-head gate (relay1)", last known session `1714639f-b321-419d-ae52-06d01212713d` — resolve fresh) only after confirming no in-flight work.
+  4. Also reap the QA agent's isolated worktree `.claude/worktrees/agent-a1cf7fbb112db6161` (branch `worktree-agent-a1cf7fbb112db6161`) — same four-gate test; QA agents don't land commits to main themselves so confirm it's genuinely empty/stale before removing.
+  5. **Unblock #1121 (pane `w1:p7D`):** #1557 is now merged — #1121 Tasks 5/6 (regression test + settings-registry entry targeting #1557's post-merge symbol names `isBoundedFallbackEngine` / `chat.persistent_runtime.enabled` registry state) can now start. Nudge/message the #1121 agent that #1557 has landed on `main` at `02951d46b6f` and it's clear to proceed with Tasks 5/6. Resolve pane fresh by label `Issue #1121 scriptable UAT (relay3)` (last known session `5d633249-...`, may have changed).
+  6. **#1533 (pane `w1:p7C`)** stays blocked until #1121 Tasks 5/6 land — do not touch yet.
+  7. Re-arm the liveness Monitor (dies with this relay).
+- Reminder standing from the boot brief: never rerun a second identical CI/gate failure — stop the line instead.
+
 ## Relay continuation — after #1566 merge
 
 - Outgoing Coordinator authority: label `Coordinator`, session `019fef6b-8f40-7453-a6f9-4c3e245dce52`. Successor must claim the sole label, replace the lock line above with its own immutable session id, verify uniqueness, then resolve/reap this outgoing session by label + session id.
