@@ -56,13 +56,18 @@ beforeAll(async () => {
             name: "acme-widgets.manual",
             handler: "manual",
             allowManualRun: true
+          },
+          {
+            name: "acme-widgets.manual-race",
+            handler: "manual",
+            allowManualRun: true
           }
         ]
       }
     })
   );
 
-  appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
+  appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 2 });
   server = createApiServer({
     appDb,
     logger: false,
@@ -180,6 +185,58 @@ describe("external-module admin routes (#917)", () => {
     });
   });
 
+  it("#1547 dedupes two genuinely concurrent manual-run calls that straddle a singleton bucket boundary", async () => {
+    const migrationBoss = createPgBossClient(connectionStrings.migration);
+    await migrationBoss.start();
+    await migrationBoss.createQueue("acme-widgets.manual-race");
+    await migrationBoss.stop({ graceful: false });
+
+    const client = new Client({ connectionString: connectionStrings.bootstrap });
+    await client.connect();
+    try {
+      const singletonSeconds = 5;
+      const { boundaryEpoch, bucketStart } = await waitForBoundaryApproach(
+        client,
+        singletonSeconds,
+        500,
+        150
+      );
+
+      const first = server.inject({
+        method: "POST",
+        url: "/api/modules/acme-widgets/queues/acme-widgets.manual-race/run",
+        headers: { cookie: adminCookie, "content-type": "application/json" },
+        payload: { jobKind: "manual" }
+      });
+      const crossedEpoch = await waitForDbEpochAtLeast(client, boundaryEpoch, 8000);
+      const second = server.inject({
+        method: "POST",
+        url: "/api/modules/acme-widgets/queues/acme-widgets.manual-race/run",
+        headers: { cookie: adminCookie, "content-type": "application/json" },
+        payload: { jobKind: "manual" }
+      });
+      const [firstRes, secondRes] = await Promise.all([first, second]);
+
+      // Self-check: prove the harness actually forced a bucket increment, not luck.
+      expect(crossedEpoch).toBeGreaterThanOrEqual(boundaryEpoch);
+      expect(Math.floor(crossedEpoch / singletonSeconds)).toBeGreaterThan(
+        Math.floor(bucketStart / singletonSeconds)
+      );
+
+      expect(firstRes.statusCode).toBe(202);
+      expect(firstRes.json()).toEqual({ jobId: expect.any(String) });
+      expect(secondRes.statusCode).toBe(202);
+      expect(secondRes.json()).toEqual({ jobId: null });
+
+      const rows = await client.query<{ n: string }>(
+        `SELECT count(*)::int AS n FROM pgboss.job_common WHERE name = 'acme-widgets.manual-race'`
+      );
+      expect(Number(rows.rows[0]?.n)).toBe(1);
+    } finally {
+      await client.end();
+    }
+  });
+
   it("returns 404 for POST to an unknown external module id", async () => {
     const res = await server.inject({
       method: "POST",
@@ -251,6 +308,54 @@ async function signUp(
     cookie: cookieHeader(res.headers),
     userId: res.json<{ user: { id: string } }>().user.id
   };
+}
+
+async function readDbEpoch(client: Client): Promise<number> {
+  const res = await client.query<{ now_epoch: string }>(
+    `SELECT extract(epoch from now())::float8 AS now_epoch`
+  );
+  return Number(res.rows[0]?.now_epoch);
+}
+
+// #1547: forces the two manual-run inserts below onto opposite sides of pg-boss's fixed
+// singleton_on epoch bucket by grounding dispatch timing in Postgres's own clock (never
+// Date.now(), which would only estimate the boundary and cannot deterministically place it).
+async function waitForBoundaryApproach(
+  client: Client,
+  singletonSeconds: number,
+  leadMs: number,
+  minMarginMs: number
+): Promise<{ boundaryEpoch: number; bucketStart: number }> {
+  for (;;) {
+    const nowEpoch = await readDbEpoch(client);
+    const bucketStart = Math.floor(nowEpoch / singletonSeconds) * singletonSeconds;
+    const boundaryEpoch = bucketStart + singletonSeconds;
+    const marginMs = (boundaryEpoch - nowEpoch) * 1000;
+    if (marginMs <= leadMs && marginMs >= minMarginMs) {
+      return { boundaryEpoch, bucketStart };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
+
+async function waitForDbEpochAtLeast(
+  client: Client,
+  targetEpoch: number,
+  timeoutMs: number
+): Promise<number> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const nowEpoch = await readDbEpoch(client);
+    if (nowEpoch >= targetEpoch) {
+      return nowEpoch;
+    }
+    if (Date.now() > deadline) {
+      throw new Error(
+        `waitForDbEpochAtLeast: db clock never reached ${targetEpoch} within ${timeoutMs}ms`
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, 15));
+  }
 }
 
 function cookieHeader(headers: OutgoingHttpHeaders): string {
