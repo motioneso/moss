@@ -208,7 +208,7 @@ export function EveningPrepCard(props: {
 }) {
   // Button opens the evening interview chat, so it's labelled by the assistant
   // (Ben: "Chat with {assistantName}") rather than the generic "Prep for tomorrow".
-  const assistantName = useAssistantName();
+  const assistantName = useAssistantName("");
   return (
     <Card title="Prep for tomorrow" padding="sm">
       <p className="cmd-empty">Close out today and set up tomorrow in a quick chat.</p>
@@ -219,7 +219,7 @@ export function EveningPrepCard(props: {
         onClick={props.onPrep}
       >
         <MessageSquareText size={14} aria-hidden="true" />
-        Chat with {assistantName}
+        {assistantName ? `Chat with ${assistantName}` : "Chat"}
       </button>
     </Card>
   );
