@@ -53,6 +53,13 @@ confirm merged-and-superseded before deleting, never delete anything with unmerg
 confirm no orphaned dev-API/log-tail PIDs remain from reaped lanes, and reconcile the manifest's
 "Reaped sessions" section against reality. Not yet started — waiting on both lanes to land.
 
+**Also (Ben, clarified 2026-08-11):** get the coordinator itself off this `coord/overnight-20260810`
+worktree/branch — it's dated for the prior day's run, and it's now the next day. Once #1121 and
+#1547 land, stand up a fresh coordinator worktree/branch for whatever continues past this run
+(new dated branch, e.g. `coord/2026-08-11...`), migrate/rewrite the manifest there, confirm the
+new session is driving, then retire this branch/worktree the same reap-safe way as any other lane
+(never delete without confirming nothing unmerged is unique to it).
+
 ## Outstanding escalations
 
 - [x] Fable: #1557 gate ruling posted at issue comment 5249826990; baseline-identical skips permitted, credentialed real-chat required.
