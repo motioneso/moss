@@ -15,10 +15,15 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+// No jsdom in this environment; ChatDrawer's private-mode effect registers a real
+// `beforeunload` listener once privateMode goes true, which only this file's tests drive.
+vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+
 import { DEFAULT_CHAT_SURFACE, type ChatSurface } from "@moss/shared";
 import { moduleChatSurface } from "../../apps/web/src/shell/chat-surface-key.js";
 
-vi.mock("../../apps/web/src/api/client.js", () => ({
+vi.mock("../../apps/web/src/api/client.js", async (importOriginal) => ({
+  ApiError: (await importOriginal<typeof import("../../apps/web/src/api/client.js")>()).ApiError,
   sendChatTurn: vi.fn(async () => ({
     userMessageId: "user-1",
     assistantMessageId: "assistant-1",
@@ -59,11 +64,14 @@ import {
   clearChat,
   getChatPrivacyState,
   listChatThreads,
+  resumeChat,
   sendChatTurn
 } from "../../apps/web/src/api/client.js";
+import { queryKeys } from "../../apps/web/src/api/query-keys.js";
 import { ChatDrawer } from "../../apps/web/src/chat/chat-drawer.js";
 
 const moduleSurface = moduleChatSurface("job-search", "profile-1") as ChatSurface;
+const moduleSurfaceB = moduleChatSurface("job-search", "profile-2") as ChatSurface;
 
 async function renderDrawer(surface: ChatSurface): Promise<ReactTestRenderer> {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -96,12 +104,64 @@ async function renderDrawer(surface: ChatSurface): Promise<ReactTestRenderer> {
 }
 
 function findByClassName(renderer: ReactTestRenderer, className: string) {
-  return renderer.root.find((node) => node.props.className === className);
+  const matches = renderer.root.findAll((node) => node.props.className === className);
+  return matches.length > 0 ? matches[0] : null;
 }
 
 function findByAriaLabel(renderer: ReactTestRenderer, label: string) {
   const matches = renderer.root.findAll((node) => node.props["aria-label"] === label);
   return matches.length > 0 ? matches[0] : null;
+}
+
+function buildElement(
+  client: QueryClient,
+  surface: ChatSurface,
+  clearRecords: () => void
+): ReactElement {
+  return createElement(
+    QueryClientProvider,
+    { client },
+    createElement(
+      MemoryRouter,
+      null,
+      createElement(ChatDrawer, {
+        open: true,
+        onClose: () => undefined,
+        records: [],
+        clearRecords,
+        streamErrorCount: 0,
+        isFounder: false,
+        surface
+      }) as ReactElement
+    )
+  );
+}
+
+async function mountWithClient(
+  client: QueryClient,
+  surface: ChatSurface,
+  clearRecords: () => void
+): Promise<ReactTestRenderer> {
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(buildElement(client, surface, clearRecords));
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  return renderer;
+}
+
+async function flipSurface(
+  renderer: ReactTestRenderer,
+  client: QueryClient,
+  surface: ChatSurface,
+  clearRecords: () => void
+): Promise<void> {
+  await act(async () => {
+    renderer.update(buildElement(client, surface, clearRecords));
+    await Promise.resolve();
+    await Promise.resolve();
+  });
 }
 
 async function typeAndSend(renderer: ReactTestRenderer, text: string): Promise<void> {
@@ -123,6 +183,7 @@ describe("ChatDrawer surface routing (#1533)", () => {
     vi.mocked(clearChat).mockClear();
     vi.mocked(getChatPrivacyState).mockClear();
     vi.mocked(listChatThreads).mockClear();
+    vi.mocked(resumeChat).mockClear();
   });
 
   it("reads privacy state and thread history for the module surface, not the drawer's", async () => {
@@ -212,5 +273,259 @@ describe("ChatDrawer surface routing (#1533)", () => {
       undefined,
       DEFAULT_CHAT_SURFACE
     );
+  });
+
+  it("clears local surface state on a surface flip", async () => {
+    vi.mocked(listChatThreads).mockResolvedValueOnce({
+      threads: [{ id: "t1", title: "Old thread", updatedAt: "2026-01-01T00:00:00Z" }]
+    });
+    let resolveSend!: (value: {
+      userMessageId: string;
+      assistantMessageId: string;
+      reply: string;
+      sourceFreshness: null;
+    }) => void;
+    vi.mocked(sendChatTurn).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSend = resolve;
+        })
+    );
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const clearRecords = vi.fn();
+    const renderer = await mountWithClient(client, DEFAULT_CHAT_SURFACE, clearRecords);
+
+    const textarea = renderer.root.findByType("textarea");
+    await act(async () => {
+      textarea.props.onChange({ target: { value: "Remote only" } });
+    });
+    await act(async () => {
+      findByClassName(renderer, "chatd-send").props.onClick();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      findByAriaLabel(renderer, "Show chat history")?.props.onClick();
+    });
+    const row = findByClassName(renderer, "chatd-sess__row");
+    await act(async () => {
+      row.props.onClick();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await flipSurface(renderer, client, moduleSurface, clearRecords);
+
+    expect(findByClassName(renderer, "chatd-empty")).not.toBeNull();
+    expect(findByClassName(renderer, "chatd-send")?.props["aria-label"]).toBe("Send");
+    expect(findByAriaLabel(renderer, "Hide chat history")).toBeNull();
+
+    await act(async () => {
+      resolveSend({
+        userMessageId: "user-1",
+        assistantMessageId: "assistant-1",
+        reply: "ok",
+        sourceFreshness: null
+      });
+    });
+  });
+
+  it("guards a stale sendChatTurn resolution — invalidates the surface it started on", async () => {
+    let resolveSend!: (value: {
+      userMessageId: string;
+      assistantMessageId: string;
+      reply: string;
+      sourceFreshness: null;
+    }) => void;
+    vi.mocked(sendChatTurn).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSend = resolve;
+        })
+    );
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(client, "invalidateQueries");
+    const clearRecords = vi.fn();
+    const renderer = await mountWithClient(client, moduleSurface, clearRecords);
+
+    const textarea = renderer.root.findByType("textarea");
+    await act(async () => {
+      textarea.props.onChange({ target: { value: "Remote only" } });
+    });
+    await act(async () => {
+      findByClassName(renderer, "chatd-send").props.onClick();
+      await Promise.resolve();
+    });
+
+    await flipSurface(renderer, client, moduleSurfaceB, clearRecords);
+
+    await act(async () => {
+      resolveSend({
+        userMessageId: "user-1",
+        assistantMessageId: "assistant-1",
+        reply: "ok",
+        sourceFreshness: null
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.chat.threads(moduleSurface) });
+    expect(findByClassName(renderer, "chatd-empty")).not.toBeNull();
+    expect(findByClassName(renderer, "chatd-send")?.props["aria-label"]).toBe("Send");
+  });
+
+  it("guards stale resumeChat/startPrivateChat and discards a queued Stop after a flip", async () => {
+    let resolvePrivate!: (value: undefined) => void;
+    vi.mocked(clearChat).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolvePrivate = resolve;
+        })
+    );
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const clearRecords = vi.fn();
+    const renderer = await mountWithClient(client, DEFAULT_CHAT_SURFACE, clearRecords);
+
+    // Stage 1: start private chat on the default surface, flip before it resolves. Prime the
+    // moduleSurface thread-list response now too — its query fires as soon as we flip below, so
+    // this must be queued before that flip, not at the start of stage 2.
+    vi.mocked(listChatThreads).mockResolvedValueOnce({
+      threads: [{ id: "t1", title: "Job thread", updatedAt: "2026-01-02T00:00:00Z" }]
+    });
+    await act(async () => {
+      findByAriaLabel(renderer, "Start private chat")?.props.onClick();
+    });
+    await flipSurface(renderer, client, moduleSurface, clearRecords);
+    await act(async () => {
+      resolvePrivate(undefined);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(clearRecords).not.toHaveBeenCalled();
+
+    // Stage 2: resume that thread on moduleSurface, flip before it resolves. Still on
+    // moduleSurface from stage 1's flip — no re-flip needed (a same-value flip wouldn't
+    // re-trigger the already-fetched thread-list query anyway).
+    let resolveResume!: (value: object) => void;
+    vi.mocked(resumeChat).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveResume = resolve;
+        })
+    );
+    await act(async () => {
+      findByAriaLabel(renderer, "Show chat history")?.props.onClick();
+    });
+    const row = findByClassName(renderer, "chatd-sess__row");
+    await act(async () => {
+      row.props.onClick();
+    });
+    await flipSurface(renderer, client, moduleSurfaceB, clearRecords);
+    await act(async () => {
+      resolveResume({});
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(clearRecords).not.toHaveBeenCalled();
+
+    // Stage 3: queue a Stop-drained message on moduleSurfaceB, flip before it can drain.
+    let resolveSend!: (value: {
+      userMessageId: string;
+      assistantMessageId: string;
+      reply: string;
+      sourceFreshness: null;
+    }) => void;
+    vi.mocked(sendChatTurn).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSend = resolve;
+        })
+    );
+    const textarea = renderer.root.findByType("textarea");
+    await act(async () => {
+      textarea.props.onChange({ target: { value: "first" } });
+    });
+    await act(async () => {
+      findByClassName(renderer, "chatd-send").props.onClick();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      textarea.props.onChange({ target: { value: "queued" } });
+    });
+    await act(async () => {
+      textarea.props.onKeyDown({
+        key: "Enter",
+        shiftKey: false,
+        preventDefault: () => undefined
+      });
+    });
+    await act(async () => {
+      findByClassName(renderer, "chatd-send").props.onClick();
+    });
+
+    const callsBefore = vi.mocked(sendChatTurn).mock.calls.length;
+    await flipSurface(renderer, client, DEFAULT_CHAT_SURFACE, clearRecords);
+    expect(vi.mocked(sendChatTurn).mock.calls.length).toBe(callsBefore);
+
+    await act(async () => {
+      resolveSend({
+        userMessageId: "user-1",
+        assistantMessageId: "assistant-1",
+        reply: "ok",
+        sourceFreshness: null
+      });
+    });
+  });
+
+  it("resets state on a flip in both directions", async () => {
+    // moduleSurface -> moduleSurfaceB: showHistory + sendError reset.
+    const clientA = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const clearRecordsA = vi.fn();
+    const rendererA = await mountWithClient(clientA, moduleSurface, clearRecordsA);
+
+    await act(async () => {
+      findByAriaLabel(rendererA, "Show chat history")?.props.onClick();
+    });
+
+    vi.mocked(sendChatTurn).mockRejectedValueOnce(new Error("boom"));
+    const textarea = rendererA.root.findByType("textarea");
+    await act(async () => {
+      textarea.props.onChange({ target: { value: "fails" } });
+    });
+    await act(async () => {
+      findByClassName(rendererA, "chatd-send").props.onClick();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(findByClassName(rendererA, "form-error")).not.toBeNull();
+
+    await flipSurface(rendererA, clientA, moduleSurfaceB, clearRecordsA);
+
+    expect(findByClassName(rendererA, "form-error")).toBeNull();
+    expect(findByAriaLabel(rendererA, "Hide chat history")).toBeNull();
+
+    // DEFAULT_CHAT_SURFACE -> moduleSurface: privateMode + showHistory reset.
+    const clientB = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const clearRecordsB = vi.fn();
+    const rendererB = await mountWithClient(clientB, DEFAULT_CHAT_SURFACE, clearRecordsB);
+
+    await act(async () => {
+      findByAriaLabel(rendererB, "Start private chat")?.props.onClick();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      findByAriaLabel(rendererB, "Show chat history")?.props.onClick();
+    });
+    expect(findByAriaLabel(rendererB, "Start private chat")?.props["aria-pressed"]).toBe(true);
+
+    await flipSurface(rendererB, clientB, moduleSurface, clearRecordsB);
+
+    expect(findByAriaLabel(rendererB, "Start private chat")).toBeNull();
+    expect(findByAriaLabel(rendererB, "Hide chat history")).toBeNull();
   });
 });
