@@ -15,7 +15,7 @@ GitHub/project 2 is the source of truth. Detailed continuation evidence stays in
 | ---- | ----- | ---- | ------ | ----------- | ------ | -- |
 | `docs/superpowers/specs/2026-08-10-1554-persistent-provider-chat-runtime.md` | #1557 | sensitive | blocked on Fable UAT ruling | `Fable #1557 UAT ruling` | `1557-p1-persistent-adapter` | #1561 |
 | pending #1121 scriptable-UAT spec | #1121 | sensitive | spec-writing | collaboration agent `spec_1486_proxy` (redirected) | `docs/1121-scriptable-chat` | — |
-| `docs/superpowers/specs/2026-08-10-1533-chat-surface-send-routing.md` | #1533 | sensitive | spec-ready, package for approval | collaboration agent `spec_1533_adopt` | `docs/1533-chat-surface-routing` | — |
+| `docs/superpowers/specs/2026-08-10-1533-chat-surface-send-routing.md` | #1533 | sensitive | draft PR, docs CI + Fable approval pending | collaboration agent `spec_1533_adopt` | `docs/1533-chat-surface-routing` | #1563 |
 
 ## Ready-after-current lanes
 
