@@ -221,11 +221,15 @@ and a live 70%-checkpoint hook (declined per override). No successor spawned or 
   (converting 7 UAT specs + live-path evidence) on this coordinator's review per plan-build rule 6;
   closing it would have silently skipped that gate. Comment posted:
   `https://github.com/motioneso/moss/issues/1121#issuecomment-5257017460`.
-- **#1533 unblocked, self-driving.** #1121 Phase 1 included Tasks 5/6 (the engine-selection/registry
-  work #1533's live-path proof was blocked on), so the dependency chain clears with this merge. A
-  fresh bounded read of pane `w1:p7C` (session `f3a156a2-...`) shows it already past the parked state
-  and into Phase 4 (3/4 tasks done, full gate + live-path proof + sensitive check + draft PR in
-  progress) — no ping needed, it's already moving. Watch for its PR.
+- **#1533 correction — it was still genuinely parked, not "already moving.**" An earlier bounded
+  read this leg was misjudged (task-list showed Phase 4 "in progress" and was read as active); a
+  follow-up read on a liveness-Monitor idle-flip found byte-identical pane content to the earlier
+  check — it never advanced. The pane's own text: "Not polling. Waiting for your ping when #1121
+  lands or a runner becomes available." Its real blocker is a host-dev chat-model runner for
+  live-path proof, not the Task 5/6 symbol rename. **Pinged it** (`herdr agent prompt w1:p7C`,
+  confirmed submitted) that #1121's scriptable UAT chat engine merged at `8b2a4b357` and should
+  give it a deterministic runner — told to proceed with Phase 4 if that covers the need, or flag
+  back what's still missing. Awaiting its reply.
 - **#1547 plan approved, build RED-confirmed-correctly, now self-relaying.** Plan
   (`docs/superpowers/plans/2026-08-11-manual-run-job-idempotency.md`) reviewed directly (pg_advisory_xact_lock
   + time-bounded `hasRecentJob()` wrapping `boss.send()`, `rootDb` as an optional trailing param,
