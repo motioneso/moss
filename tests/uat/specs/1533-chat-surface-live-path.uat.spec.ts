@@ -213,10 +213,14 @@ test("chat surface routing: action request renders and settles without reload (#
       .locator('nav[aria-label="Job search profile"]')
       .getByRole("button", { name: PROFILE_NAME })
       .click();
-    await page.locator('nav[aria-label="Job search view"]').getByRole("button", { name: "Profile" }).click();
+    await page
+      .locator('nav[aria-label="Job search view"]')
+      .getByRole("button", { name: "Profile" })
+      .click();
 
     turnResponsePromise = page.waitForResponse(
-      (response) => response.url().includes("/api/chat/turn") && response.request().method() === "POST",
+      (response) =>
+        response.url().includes("/api/chat/turn") && response.request().method() === "POST",
       { timeout: 60_000 }
     );
 
@@ -234,16 +238,23 @@ test("chat surface routing: action request renders and settles without reload (#
 
   await test.step("Phase 3: EventSource and the turn POST share one module surface", async () => {
     await expect
-      .poll(() => streamRequestUrls.length > 0, { timeout: 10_000, message: "no /api/chat/stream request observed" })
+      .poll(() => streamRequestUrls.length > 0, {
+        timeout: 10_000,
+        message: "no /api/chat/stream request observed"
+      })
       .toBe(true);
     await expect
-      .poll(() => turnRequestSurfaces.length > 0, { timeout: 10_000, message: "no /api/chat/turn POST observed" })
+      .poll(() => turnRequestSurfaces.length > 0, {
+        timeout: 10_000,
+        message: "no /api/chat/turn POST observed"
+      })
       .toBe(true);
 
     const streamUrl = new URL(streamRequestUrls[streamRequestUrls.length - 1]!, requireBaseURL());
-    expect(streamUrl.searchParams.get("surface"), "EventSource must carry this module's surface").toBe(
-      expectedSurface
-    );
+    expect(
+      streamUrl.searchParams.get("surface"),
+      "EventSource must carry this module's surface"
+    ).toBe(expectedSurface);
     expect(
       turnRequestSurfaces[turnRequestSurfaces.length - 1],
       "turn POST body must carry the same module surface"
@@ -259,7 +270,9 @@ test("chat surface routing: action request renders and settles without reload (#
     actionRequestId = await card.getAttribute("data-action-request-id");
     expect(actionRequestId, "card must carry an action request id").toEqual(expect.any(String));
     if (actionRequestId) {
-      test.info().annotations.push({ type: "1533-action-request-id", description: actionRequestId });
+      test
+        .info()
+        .annotations.push({ type: "1533-action-request-id", description: actionRequestId });
     }
     await shot(page, "03-approval-card-visible-pending");
 
@@ -274,7 +287,9 @@ test("chat surface routing: action request renders and settles without reload (#
 
     if (!turnResponsePromise) throw new Error("Phase 2 did not arm the turn-response wait");
     const turnResponse = await turnResponsePromise;
-    expect(turnResponse.ok(), "the original /api/chat/turn POST must settle after Reject").toBe(true);
+    expect(turnResponse.ok(), "the original /api/chat/turn POST must settle after Reject").toBe(
+      true
+    );
 
     await shot(page, "04-card-rejected-turn-settled");
   });

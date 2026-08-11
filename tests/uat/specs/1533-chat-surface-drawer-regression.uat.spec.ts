@@ -11,6 +11,7 @@ import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 export const uatLevel = {
   level: "admin+data",
   without: [],
+  withoutNewsJsonBinding: true,
   chatScript: "phase1-smoke"
 } as const;
 
@@ -28,7 +29,9 @@ async function signIn(page: Page): Promise<void> {
   await expect(page.locator(".jds-usermenu__trigger")).toBeVisible();
 }
 
-test("chat surface routing: drawer-only regression, no module mounted (#1533)", async ({ page }) => {
+test("chat surface routing: drawer-only regression, no module mounted (#1533)", async ({
+  page
+}) => {
   test.setTimeout(300_000);
 
   const streamRequestUrls: string[] = [];
@@ -64,18 +67,25 @@ test("chat surface routing: drawer-only regression, no module mounted (#1533)", 
     await expect(page.locator('[role="region"][aria-label="Action request"]')).toHaveCount(0);
 
     await expect
-      .poll(() => streamRequestUrls.length > 0, { timeout: 10_000, message: "no /api/chat/stream request observed" })
+      .poll(() => streamRequestUrls.length > 0, {
+        timeout: 10_000,
+        message: "no /api/chat/stream request observed"
+      })
       .toBe(true);
     const streamUrl = new URL(streamRequestUrls[streamRequestUrls.length - 1]!, requireBaseURL());
     // Absent (default drawer) or the literal "drawer" — both mean the default surface, never a
     // module hash.
     const surfaceParam = streamUrl.searchParams.get("surface");
-    expect(surfaceParam === null || surfaceParam === "drawer", "stream must stay on the default drawer surface").toBe(
-      true
-    );
+    expect(
+      surfaceParam === null || surfaceParam === "drawer",
+      "stream must stay on the default drawer surface"
+    ).toBe(true);
 
     await expect
-      .poll(() => turnRequestSurfaces.length > 0, { timeout: 10_000, message: "no /api/chat/turn POST observed" })
+      .poll(() => turnRequestSurfaces.length > 0, {
+        timeout: 10_000,
+        message: "no /api/chat/turn POST observed"
+      })
       .toBe(true);
     const lastTurnSurface = turnRequestSurfaces[turnRequestSurfaces.length - 1];
     expect(
