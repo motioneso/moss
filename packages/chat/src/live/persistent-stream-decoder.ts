@@ -33,6 +33,8 @@ const FRAME_TOO_LARGE_REASON =
 const TOTAL_BUFFERED_EXCEEDED_REASON =
   "The assistant process produced more output than this runtime buffers and was stopped.";
 const EOF_WITHOUT_TERMINAL_REASON = "The assistant process ended before completing this turn.";
+const PROVIDER_ERROR_RESULT_REASON =
+  "The assistant process reported an error completing this turn.";
 
 export interface PersistentStreamDecoderOpts {
   /** Invoked at most once, when a bound is exceeded. The decoder only decides when to kill —
@@ -158,6 +160,15 @@ export class PersistentStreamDecoder {
     if (record["type"] === "result") {
       this.sawTerminalForTurn = true;
       if (!this.sawReplyForTurn) {
+        const isUsableResult = record["is_error"] !== true && record["subtype"] === "success";
+        if (!isUsableResult) {
+          this.emit({
+            kind: "turn-failed",
+            turnId,
+            outcome: { kind: "neutral-failure", reason: PROVIDER_ERROR_RESULT_REASON }
+          });
+          return;
+        }
         const result = record["result"];
         if (typeof result === "string" && result.length > 0) {
           this.sawReplyForTurn = true;

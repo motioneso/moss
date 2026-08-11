@@ -42,6 +42,15 @@ function resultLine(resultText: string): string {
   });
 }
 
+function errorResultLine(opts: { readonly subtype: string; readonly resultText?: string }): string {
+  return JSON.stringify({
+    type: "result",
+    subtype: opts.subtype,
+    is_error: true,
+    result: opts.resultText
+  });
+}
+
 async function drain(events: AsyncIterable<RuntimeTurnEvent>): Promise<RuntimeTurnEvent[]> {
   const out: RuntimeTurnEvent[] = [];
   for await (const event of events) out.push(event);
@@ -304,5 +313,54 @@ describe("PersistentStreamDecoder", () => {
 
     const events = await drain(decoder.events());
     expect(events).toEqual([{ kind: "turn-complete", turnId: "turn-result-3" }]);
+  });
+
+  it("fails the turn neutrally instead of persisting provider error prose from an is_error result", async () => {
+    const decoder = new PersistentStreamDecoder({ killChild: () => undefined });
+    decoder.beginTurn("turn-result-4");
+    decoder.write(
+      assistantLine({
+        stopReason: "tool_use",
+        content: [{ type: "tool_use", name: "some_tool", input: {} }]
+      }) + "\n"
+    );
+    decoder.write(
+      errorResultLine({
+        subtype: "error_during_execution",
+        resultText: "Provider blew up: rate limited"
+      }) + "\n"
+    );
+    decoder.end();
+
+    const events = await drain(decoder.events());
+    const last = events.at(-1);
+    expect(last).toMatchObject({ kind: "turn-failed", turnId: "turn-result-4" });
+    if (last === undefined || last.kind !== "turn-failed") throw new Error("expected turn-failed");
+    expect(last.outcome.kind).toBe("neutral-failure");
+    if (last.outcome.kind !== "neutral-failure") throw new Error("expected neutral-failure");
+    expect(last.outcome.reason).not.toContain("Provider blew up");
+    expect(events.some((e) => e.kind === "record" && e.record.kind === "reply")).toBe(false);
+  });
+
+  it("fails the turn neutrally on a non-success subtype even when is_error is not explicitly true", async () => {
+    const decoder = new PersistentStreamDecoder({ killChild: () => undefined });
+    decoder.beginTurn("turn-result-5");
+    decoder.write(
+      JSON.stringify({
+        type: "result",
+        subtype: "error_max_turns",
+        result: "hit max turns"
+      }) + "\n"
+    );
+    decoder.end();
+
+    const events = await drain(decoder.events());
+    expect(events).toEqual([
+      {
+        kind: "turn-failed",
+        turnId: "turn-result-5",
+        outcome: { kind: "neutral-failure", reason: expect.any(String) }
+      }
+    ]);
   });
 });
