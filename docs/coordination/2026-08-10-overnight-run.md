@@ -331,3 +331,25 @@ and a live 70%-checkpoint hook (declined per override). No successor spawned or 
   on the next self-report either. #1533 (`w1:p7C`) still mid-Phase-4, two background forks
   (`gate-1533-postmerge`, `livepath-1533-attempt3`) running, no stall, "don't relay" rule holding
   per its own pane text.
+- **Coordinator context checkpoint (70%, this leg): staying resident, no relay** — per Ben's
+  standing override ("stop relaying, just auto compact coordinator"). Session id
+  `0bb9f516-c026-454f-bc97-dc9faf43bd20`, pane `w1:p7P`, unchanged.
+- **Disk pressure RESOLVED this leg**: host hit 97% (15G free), caused a live ~15-20min ENOSPC
+  blackout of the coordinator's own Bash tool. Root cause: `docker` build cache (92.89GB,
+  90.77GB reclaimable) — not images/volumes/worktrees. `docker builder prune -f` (Ben's call, ran
+  by coordinator) recovered 90G: 14G→104G free (97%→74%). AWAITING-BEN entry resolved/removed.
+- **#1533 (relay8, `w1:p7C`) genuinely blocked on Ben — live-path proof needs credentials I don't
+  have either.** Root cause of the repeated drawer-regression UAT failures (run3 through run7)
+  found: **not a code bug** — `JARVIS_UAT_REAL_CHAT_TOKEN_FILE` is absent from env, so the
+  real-chat UAT harness can't authenticate at all; every real-chat UAT spec fails identically
+  regardless of #1533's own correctness. Build agent filed 3 options in **its own worktree's**
+  `docs/coordination/AWAITING-BEN.md`
+  (`.claude/worktrees/1533-chat-surface-build/docs/coordination/AWAITING-BEN.md` — NOT the
+  canonical coordinator copy, so Ben may not find it from the usual location) and pinged
+  needs-ben (`1786483243535565600.msg`). Its recommendation: (2) manual live-path walkthrough on
+  a live dev instance with real CLI login already in place (fastest, matches spec literally) else
+  (1) someone with `JARVIS_UAT_REAL_CHAT_TOKEN_FILE` runs the two UAT specs directly. Confirmed
+  coordinator's own env also lacks that token — cannot self-serve option 1. Not attempting option
+  2 unilaterally (needs Ben's live dev session per prior memory: "Ben's dev login here").
+  **Everything else in Phase 4 is done — this is the only open item.** Now waiting event-driven
+  (not polling) for Ben's reply. Coordinator will keep watching #1533's pane for the unblock.
