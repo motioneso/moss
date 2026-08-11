@@ -34,7 +34,12 @@ function assistantLine(opts: {
 const RESULT_LINE = JSON.stringify({ type: "result", subtype: "success", is_error: false });
 
 function resultLine(resultText: string): string {
-  return JSON.stringify({ type: "result", subtype: "success", is_error: false, result: resultText });
+  return JSON.stringify({
+    type: "result",
+    subtype: "success",
+    is_error: false,
+    result: resultText
+  });
 }
 
 async function drain(events: AsyncIterable<RuntimeTurnEvent>): Promise<RuntimeTurnEvent[]> {
@@ -259,7 +264,11 @@ describe("PersistentStreamDecoder", () => {
         turnId: "turn-result-1",
         record: { kind: "tool", text: "some_tool", toolName: "some_tool" }
       },
-      { kind: "record", turnId: "turn-result-1", record: { kind: "reply", text: "the final answer" } },
+      {
+        kind: "record",
+        turnId: "turn-result-1",
+        record: { kind: "reply", text: "the final answer" }
+      },
       { kind: "turn-complete", turnId: "turn-result-1" }
     ]);
   });
