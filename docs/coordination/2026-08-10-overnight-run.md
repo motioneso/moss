@@ -1,11 +1,11 @@
 # Coordination Run — 2026-08-10 overnight
 
 **Date:** 2026-08-10
-**Coordinator lock:** label `Coordinator`, stable anchor = Claude session id `3c9536bb-eceb-4288-88b7-dd61ba32a281` (pane `w1:p7N`, tab `w1:t6`, resolve fresh by label+session, never a written pane number). Exactly one pane with this label and session holds merge authority.
+**Coordinator lock:** label `Coordinator`, stable anchor = Claude session id `0bb9f516-c026-454f-bc97-dc9faf43bd20` (pane `w1:p7P`, tab `w1:t6`, resolve fresh by label+session, never a written pane number). Exactly one pane with this label and session holds merge authority.
 **Delegated authority:** Ben explicitly delegated overnight product/design decisions to Fable and confirmed that Fable's green security review counts as his security-tier merge sign-off. Existing repository rule still applies: #1557 never merges without fresh Fable approval. Every delegated security sign-off must be durable on the exact-head PR.
 **Merge policy:** routine/sensitive only after verified QA and live-path proof where applicable; security only after adversarial Fable QA and delegated sign-off.
 **Merge notification:** after every merge, run `needs-ben coordinator "<issue/PR — one-line description of what landed>"` and retain the normal GitHub/project bookkeeping.
-**merges_since_relay:** 0 — reset by successor session `3c9536bb-eceb-4288-88b7-dd61ba32a281` after adopting and completing relay #8's outstanding Phase 3/4 bookkeeping (see relay #8 continuation below).
+**merges_since_relay:** 0 — reset by successor session `0bb9f516-c026-454f-bc97-dc9faf43bd20` (relay #9 successor) after adopting; relay #9 leg did stall-triage only, no merge occurred.
 
 GitHub/project 2 is the source of truth. Detailed continuation evidence stays in `/tmp/jarv1s-monitor-state.md`.
 
