@@ -13,6 +13,7 @@
 // only bootstraps when the profile list comes back empty) and the board/crawl machinery that
 // spec exercises stays entirely out of scope here.
 import { execFileSync } from "node:child_process";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { expect, test, type Page, type Response } from "@playwright/test";
 
 import { moduleChatSurface } from "../../../apps/web/src/shell/chat-surface-key.js";
@@ -110,6 +111,15 @@ test.afterEach(async ({}, testInfo) => {
       buildUatComposeArgs(projectName2, ["logs", "--tail", "5000", "jarv1s"]),
       { encoding: "utf8" }
     );
+    // Written to disk unconditionally, before teardown, regardless of whether Phase 4 ever
+    // recorded an action-request id — relay16 found the bounded-only console.log below is
+    // useless on a failure that happens before Phase 4 (nothing to filter on), and by the time a
+    // human/agent investigates, the stack (and its logs) is already torn down.
+    mkdirSync(SCREENSHOT_DIR, { recursive: true });
+    const fullLogPath = `${SCREENSHOT_DIR}/container-logs.txt`;
+    writeFileSync(fullLogPath, logs, "utf8");
+    await test.info().attach("container-logs", { path: fullLogPath, contentType: "text/plain" });
+
     const actionRequestId = testInfo.annotations.find(
       (annotation) => annotation.type === "1533-action-request-id"
     )?.description;
