@@ -1,11 +1,11 @@
 # Coordination Run — 2026-08-10 overnight
 
 **Date:** 2026-08-10
-**Coordinator lock:** label `Coordinator`, stable anchor = Claude session id `c3d42ad2-3344-473c-bd91-de2a1288fcf9` (pane `w1:p7K`, tab `w1:t6`, resolve fresh by label+session, never a written pane number). Exactly one pane with this label and session holds merge authority.
+**Coordinator lock:** label `Coordinator`, stable anchor = Claude session id `52c5ef3d-153d-4bd5-8f71-babd342a4d07` (pane `w1:p7M`, tab `w1:t6`, resolve fresh by label+session, never a written pane number). Exactly one pane with this label and session holds merge authority.
 **Delegated authority:** Ben explicitly delegated overnight product/design decisions to Fable and confirmed that Fable's green security review counts as his security-tier merge sign-off. Existing repository rule still applies: #1557 never merges without fresh Fable approval. Every delegated security sign-off must be durable on the exact-head PR.
 **Merge policy:** routine/sensitive only after verified QA and live-path proof where applicable; security only after adversarial Fable QA and delegated sign-off.
 **Merge notification:** after every merge, run `needs-ben coordinator "<issue/PR — one-line description of what landed>"` and retain the normal GitHub/project bookkeeping.
-**merges_since_relay:** 0 — reset by successor session `c3d42ad2-3344-473c-bd91-de2a1288fcf9` after adopting (relay #6 continuation).
+**merges_since_relay:** 0 — reset by successor session `52c5ef3d-153d-4bd5-8f71-babd342a4d07` after adopting (relay #7 continuation).
 
 GitHub/project 2 is the source of truth. Detailed continuation evidence stays in `/tmp/jarv1s-monitor-state.md`.
 
@@ -125,6 +125,7 @@ None.
 - **Next real gate, in order (unchanged from relay #6):** #1557 R1 finishes → standard sensitive-tier QA on the integrated PR (session-id authority check first, Phase 3 step 0) → merge (security sign-off already granted — normal sensitive-tier merge + digest, not a fresh Ben pause) → #1121 Tasks 5/6 unblock → #1533 unblocks for live-path proof.
 - AWAITING-BEN.md: now empty of open entries (only historical `<!-- Resolved ... -->` comments) — confirmed clean this leg.
 - Reminder standing from the boot brief: never rerun a second identical CI/gate failure — stop the line instead.
+- **Adopted this leg (relay #8):** outgoing session `c3d42ad2-3344-473c-bd91-de2a1288fcf9` (pane `w1:p7K`) confirmed idle/no in-flight work (bounded read: last content was its own answer to Ben's ad hoc "what was deployed overnight?" question, todo list stale/idle, `agent_status: idle`) — renamed off the `Coordinator` label to `Coordinator (outgoing, reap pending)`, to be closed once fleet re-adoption below is confirmed stable. New lock: session `52c5ef3d-153d-4bd5-8f71-babd342a4d07`, pane `w1:p7M`, tab `w1:t6`. Verified exactly one `Coordinator`-labelled pane via `herdr pane list`. `merges_since_relay` reset to 0 (already 0).
 
 ## Relay continuation — adopted from relay #4 (context-meter relay #5, no merge yet)
 
