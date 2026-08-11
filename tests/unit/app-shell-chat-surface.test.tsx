@@ -137,6 +137,9 @@ describe("AppShell chat surface wiring (#1284)", () => {
   it("opens the drawer surface by default", () => {
     renderWithModuleMount(undefined, null);
     expect(lastSurfaceArg()).toBe(DEFAULT_CHAT_SURFACE);
+    // #1533 — ChatDrawer itself must be handed the same surface, not just useChatStream.
+    expect(chatDrawerSurfaceCalls.at(-1)).toBe(DEFAULT_CHAT_SURFACE);
+    expect(chatDrawerSurfaceCalls.at(-1)).toBe(lastSurfaceArg());
   });
 
   it("passes a defined surface to useChatStream so the default drawer's rehydration effect can run", () => {
@@ -161,6 +164,9 @@ describe("AppShell chat surface wiring (#1284)", () => {
   it("switches to the module surface when a module sets a key", () => {
     renderWithModuleMount("job-search", "profile-1");
     expect(lastSurfaceArg()).toBe(moduleChatSurface("job-search", "profile-1"));
+    // #1533 — ChatDrawer itself must be handed the same surface, not just useChatStream.
+    expect(chatDrawerSurfaceCalls.at(-1)).toBe(moduleChatSurface("job-search", "profile-1"));
+    expect(chatDrawerSurfaceCalls.at(-1)).toBe(lastSurfaceArg());
   });
 
   it("derives a surface the server will actually accept", () => {
@@ -226,5 +232,7 @@ describe("AppShell chat surface wiring (#1284)", () => {
     createAssistantSurfaceHandle(() => () => undefined, "job-search").setSurfaceKey(null);
     renderWithModuleMount(undefined, null);
     expect(lastSurfaceArg()).toBe(DEFAULT_CHAT_SURFACE);
+    // #1533 — ChatDrawer follows the shell back to the default surface too.
+    expect(chatDrawerSurfaceCalls.at(-1)).toBe(DEFAULT_CHAT_SURFACE);
   });
 });
