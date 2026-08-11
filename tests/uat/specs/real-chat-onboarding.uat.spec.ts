@@ -83,6 +83,22 @@ test("real Anthropic login yields a chat-capable model that answers a turn (#112
 
   await signIn(page);
 
+  // The CLI binary is NOT present on a fresh cli-tools volume even though the seed step
+  // (tests/uat/seed/cli.ts maybePersistRealChatToken) already persisted the OAuth token —
+  // token persistence and binary install are separate steps (uat-real-chat-onboarding-cli-
+  // tools-missing). Drive the same admin-gated install route the real onboarding UI calls
+  // (packages/settings/src/onboarding-routes.ts §A.5.1) BEFORE provider-login/begin, or begin
+  // sees no binary and returns "awaiting_token" regardless of the pre-seeded token (#1121).
+  const installBody = (await readJson(
+    await page.request.post("/api/onboarding/provider-install", {
+      data: { providerKind: "anthropic" }
+    })
+  )) as { installState?: string };
+  expect(
+    installBody.installState,
+    `provider-install did not settle to installed (got "${installBody.installState}") (#1121)`
+  ).toBe("installed");
+
   // Admin-gated onboarding login (packages/settings/src/onboarding-routes.ts:697-728). page.request
   // reuses the browser context's session cookie set by signIn, so this is authenticated. The CLI is
   // already authenticated by the pre-persisted OAuth token in the cli-auth volume (tests/uat/seed/

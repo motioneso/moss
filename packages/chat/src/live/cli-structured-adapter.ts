@@ -113,7 +113,7 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
     }
 
     let neutralDir: string | undefined;
-    let engine: ReturnType<ChatEngineFactory> | undefined;
+    let engine: CliChatEngine | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let abort: (() => void) | undefined;
     let timedOut = false;
@@ -122,7 +122,7 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
       neutralDir = await mkdtemp(join(tmpdir(), "jarv1s-structured-"));
       const personaPath = join(neutralDir, "persona.md");
       await writeFile(personaPath, "You produce structured JSON only.\n", { mode: 0o600 });
-      const activeEngine = this.engineFactory(this.provider, `structured-${randomUUID()}`, {
+      const activeEngine = await this.engineFactory(this.provider, `structured-${randomUUID()}`, {
         executionMode: "non_interactive"
       });
       engine = activeEngine;
@@ -198,7 +198,7 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
       release = await acquireCliStructuredSlot(priority, input.signal);
       session = this.scopedSessions.get(key);
       if (!session) {
-        const engine = this.engineFactory(this.provider, `structured-${randomUUID()}`, {
+        const engine = await this.engineFactory(this.provider, `structured-${randomUUID()}`, {
           executionMode: "non_interactive"
         });
         if (!isCliStructuredEngine(engine)) {
@@ -316,7 +316,7 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
   }
 
   private async run(
-    engine: ReturnType<ChatEngineFactory>,
+    engine: CliChatEngine,
     neutralDir: string,
     personaPath: string,
     input: GenerateStructuredProviderInput

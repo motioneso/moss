@@ -59,7 +59,7 @@ function fakeMux(): Multiplexer & { opened: string[]; killed: MuxHandle[] } {
 }
 
 describe("selectEngineFactory — boot-time fork (§3.5)", () => {
-  it("selects the RPC client when the socket + secret are configured", () => {
+  it("selects the RPC client when the socket + secret are configured", async () => {
     const { factory, connection } = selectEngineFactory({
       env: {
         JARVIS_CLI_RUNNER_SOCKET: SOCKET,
@@ -67,7 +67,7 @@ describe("selectEngineFactory — boot-time fork (§3.5)", () => {
       } as NodeJS.ProcessEnv
     });
     try {
-      const engine = factory("anthropic", "user-a");
+      const engine = await factory("anthropic", "user-a");
       expect(engine).toBeInstanceOf(ChatEngineRpcClient);
       expect(engine.provider).toBe("anthropic");
       expect(connection).toBeDefined();
@@ -76,7 +76,7 @@ describe("selectEngineFactory — boot-time fork (§3.5)", () => {
     }
   });
 
-  it("uses the adopted RPC connection for structured preview engines", () => {
+  it("uses the adopted RPC connection for structured preview engines", async () => {
     const connection = {} as RpcConnection;
     const factory = createStructuredChatEngineFactory({
       socketConfigured: true,
@@ -86,30 +86,32 @@ describe("selectEngineFactory — boot-time fork (§3.5)", () => {
       }
     });
 
-    const engine = factory("anthropic", "persona-preview", { executionMode: "non_interactive" });
+    const engine = await factory("anthropic", "persona-preview", {
+      executionMode: "non_interactive"
+    });
     expect(engine).toBeInstanceOf(ChatEngineRpcClient);
     expect(engine.provider).toBe("anthropic");
   });
 
-  it("falls back to the in-process engine when the socket env is absent", () => {
+  it("falls back to the in-process engine when the socket env is absent", async () => {
     const { factory, connection } = selectEngineFactory({ env: {} as NodeJS.ProcessEnv });
-    const engine = factory("anthropic", "user-a");
+    const engine = await factory("anthropic", "user-a");
     expect(engine).not.toBeInstanceOf(ChatEngineRpcClient);
     expect(connection).toBeUndefined();
   });
 });
 
 describe("createRealEngineFactory — provider execution mode", () => {
-  it("routes Anthropic non_interactive to the Claude print engine", () => {
-    const engine = createRealEngineFactory({ mux: fakeMux() })("anthropic", "user-a", {
+  it("routes Anthropic non_interactive to the Claude print engine", async () => {
+    const engine = await createRealEngineFactory({ mux: fakeMux() })("anthropic", "user-a", {
       executionMode: "non_interactive"
     });
 
     expect(engine).toBeInstanceOf(ClaudePrintChatEngine);
   });
 
-  it("keeps Anthropic interactive on the existing CLI engine", () => {
-    const engine = createRealEngineFactory({ mux: fakeMux() })("anthropic", "user-a", {
+  it("keeps Anthropic interactive on the existing CLI engine", async () => {
+    const engine = await createRealEngineFactory({ mux: fakeMux() })("anthropic", "user-a", {
       executionMode: "interactive"
     });
 

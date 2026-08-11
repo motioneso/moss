@@ -239,17 +239,17 @@ describe("AgyPrintChatEngine", () => {
 });
 
 describe("AgyPrintChatEngine Runtime Routing", () => {
-  it("routes google non_interactive to AgyPrintChatEngine", () => {
+  it("routes google non_interactive to AgyPrintChatEngine", async () => {
     const mux = fakeMux();
     const factory = createRealEngineFactory({ mux });
-    const engine = factory("google", "user-1", { executionMode: "non_interactive" });
+    const engine = await factory("google", "user-1", { executionMode: "non_interactive" });
     expect(engine.constructor.name).toBe("AgyPrintChatEngine");
   });
 
-  it("preserves interactive routing to persistent engine", () => {
+  it("preserves interactive routing to persistent engine", async () => {
     const mux = fakeMux();
     const factory = createRealEngineFactory({ mux });
-    const engine = factory("google", "user-1", { executionMode: "interactive" });
+    const engine = await factory("google", "user-1", { executionMode: "interactive" });
     expect(engine.constructor.name).toBe("CliChatEngineImpl");
   });
 });
