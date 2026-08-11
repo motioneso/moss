@@ -51,3 +51,31 @@ Another agent's earlier `docker system prune` had cleaned images/containers but 
 Ben ruled: run `docker builder prune -f`. Result: 14G → 104G free (97% → 74% used). Resolved, no
 further action needed. -->
 
+## OPEN 2026-08-11: #1533 live-path proof blocked — missing real-chat UAT credential
+
+Repeated drawer-regression UAT reruns (run3 through run7) on #1533 kept failing identically. Root
+cause is **not a code defect**: `JARVIS_UAT_REAL_CHAT_TOKEN_FILE` is absent from env, so the
+real-chat UAT harness can't authenticate to the live LLM chat endpoint at all — every real-chat
+UAT spec fails this way regardless of #1533's own correctness. Coordinator confirmed it also
+lacks this token (`env | grep -i JARVIS_UAT_REAL_CHAT_TOKEN` → 0 matches), so cannot self-serve.
+
+Full entry with details lives in the **build agent's own worktree copy** of this file (a
+different file — tracked paths aren't shared across worktrees):
+`.claude/worktrees/1533-chat-surface-build/docs/coordination/AWAITING-BEN.md`. Mirrored here so
+Ben finds it from the canonical run location too.
+
+**Options** (build agent's framing):
+1. Ben or a coordinator session with `JARVIS_UAT_REAL_CHAT_TOKEN_FILE` configured runs the two
+   UAT specs (`1533-chat-surface-drawer-regression.uat.spec.ts`,
+   `1533-chat-surface-live-path.uat.spec.ts`) and hands back the evidence.
+2. Manual live-path proof on a live dev instance with real CLI login already in place — browser
+   walkthrough per the spec (Job Search → Profile → "Change in chat" → screenshot approval card →
+   deny → capture network evidence). Doesn't need the UAT harness at all.
+3. Open #1533 as a draft PR now, code-complete, live-path proof outstanding and blocking merge —
+   not marked Done, per the live-path-gate invariant.
+
+**Build agent's recommendation:** option 2 if a live dev instance is reachable now (fastest,
+matches the spec literally); otherwise option 1. Pinged via `needs-ben` (see
+`~/.needs-ben/sent/1786483243535565600.msg`). Everything else in #1533 Phase 4 is done — this is
+the only open item. Build agent is waiting event-driven, not polling; coordinator likewise.
+
