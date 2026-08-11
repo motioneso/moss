@@ -5,7 +5,7 @@
 **Delegated authority:** Ben explicitly delegated overnight product/design decisions to Fable and confirmed that Fable's green security review counts as his security-tier merge sign-off. Existing repository rule still applies: #1557 never merges without fresh Fable approval. Every delegated security sign-off must be durable on the exact-head PR.
 **Merge policy:** routine/sensitive only after verified QA and live-path proof where applicable; security only after adversarial Fable QA and delegated sign-off.
 **Merge notification:** after every merge, run `needs-ben coordinator "<issue/PR — one-line description of what landed>"` and retain the normal GitHub/project bookkeeping.
-**merges_since_relay:** 0 — successor adopted the post-#1566 checkpoint.
+**merges_since_relay:** 1 — PR #1565 merged after the post-#1566 relay.
 
 GitHub/project 2 is the source of truth. Detailed continuation evidence stays in `/tmp/jarv1s-monitor-state.md`.
 
@@ -13,15 +13,15 @@ GitHub/project 2 is the source of truth. Detailed continuation evidence stays in
 
 | Spec | Issue | Tier | Status | Agent label | Branch | PR |
 | ---- | ----- | ---- | ------ | ----------- | ------ | -- |
-| `docs/superpowers/specs/2026-08-10-1554-persistent-provider-chat-runtime.md` | #1557 | sensitive | Fable ruling resolved; final-head rebuild/UAT pending | `Fable #1557 UAT ruling` | `1557-p1-persistent-adapter` | #1561 |
-| `docs/superpowers/specs/2026-08-10-1121-scriptable-uat-chat.md` | #1121 | sensitive | Fable APPROVED at comment 5250004655; PR checks green; merge after post-#1566 main is green | no build agent yet | `docs/1121-scriptable-chat` | #1565 |
+| `docs/superpowers/specs/2026-08-10-1554-persistent-provider-chat-runtime.md` | #1557 | sensitive | final-head rebuild/UAT + fresh Fable adjudication in progress | `Issue #1557 exact-head gate`, session `14043925-6021-4360-956d-951b71d2e94d` | `1557-p1-persistent-adapter` | #1561 |
+| `docs/superpowers/specs/2026-08-10-1121-scriptable-uat-chat.md` | #1121 | sensitive | spec merged as `7aa85f628`; implementation planning started | `Issue #1121 scriptable UAT`, session `dd6bb68a-60ee-4ea8-8a66-e56b7cf12066` | `build/1121-scriptable-chat` | #1565 merged |
 | `docs/superpowers/specs/2026-08-10-1533-chat-surface-send-routing.md` | #1533 | sensitive | Phase 1 committed; Phase 2 production preserved, tests next | `Issue #1533 chat surface (relay6)`, session `b0b3d2ea-1027-481c-abd2-accfe383d3d8` | `build/1533-chat-surface-routing` | #1563 spec merged as `abfe0478b1` |
 | Fable ruling comment + issue acceptance | #1564 | routine | merged/Closed/Project Done; wrapper reaped; needs-ben sent | — | `fix/1564-trigger-map` | #1566 merged as `0a57ef450` |
-| issue #1560 acceptance | #1560 | routine | fix/tests committed; live proof + gate + wrap-up in progress | `Issue #1560 name flash (relay3)`, session `b2a0f924-3f1e-4848-8ded-acdae4fd3f34` | `fix/1560-assistant-name-flash` | pending |
+| issue #1560 acceptance | #1560 | routine | PR #1567 QA-RED fixes pushed at `c15187b84`; re-QA/CI pending; persona cleanup awaits Ben | `Issue #1560 name flash (relay3)`, session `b2a0f924-3f1e-4848-8ded-acdae4fd3f34` | `fix/1560-assistant-name-flash` | #1567 |
 
 ## Ready-after-current lanes
 
-- #1547 — Job Search manual-run idempotency race (sensitive): no spec; deterministic pg-boss bucket-boundary root cause grounded; start spec lane when main is green.
+- #1547 — Job Search manual-run idempotency race (sensitive): spec authoring active in `Issue #1547 idempotency spec`, session `a46b5a63-3ea8-4d1d-a5c5-bdc83128f5b6`, branch `spec/1547-job-idempotency-race`.
 - #1434 — page-context throttle/rate-limit behavior (security by mechanical tier rule): no spec; grounded two-file `useRef` fix; Fable must approve log-only/no-retry.
 - #1555 — AI capability-selection timeout investigation (sensitive): no spec; bounded model-discovery fetch + existing fallback is ready without Fable.
 - #1352 — CLI-runner liveness accounting (sensitive): blocked behind #1557 collision and frozen-contract Fable ruling.
