@@ -44,30 +44,10 @@ sidecars, verified dead. -->
 <!-- Resolved 2026-08-05: Codex grinder lanes (#1246 / #1327) — Ben ruled kill both; sessions
 stopped, ruling recorded on issue #1246 and PR #1379. -->
 
-## OPEN 2026-08-11: host disk at 97% (15G free), caused a live ENOSPC failure
+<!-- Resolved 2026-08-11: host disk at 97% (15G free), caused a live ~15-20min ENOSPC blackout of
+the coordinator's Bash tool. Root cause found: `docker system df` showed Build Cache at 92.89GB
+total / 90.77GB reclaimable — not images, volumes, or the 52 worktrees (only 8.1G combined).
+Another agent's earlier `docker system prune` had cleaned images/containers but not build cache.
+Ben ruled: run `docker builder prune -f`. Result: 14G → 104G free (97% → 74% used). Resolved, no
+further action needed. -->
 
-Coordinator's own Bash tool went fully non-functional for ~15-20 min this evening — every
-invocation failed with `ENOSPC` on the session's `/tmp` task-output filesystem (0MB free). It
-recovered on its own (host must have freed some space, or another session's cleanup landed), but
-`df -h /` still reads 413G size / 377G used / **15G avail / 97% use**. `git worktree list` shows
-**52 worktrees** under `.claude/worktrees/`, several 200MB-1.5GB each (largest:
-`1533-chat-surface-build` 1.5G, `w5b-chat-surface` 722M). This is a host-wide resource problem,
-not scoped to one session — it can recur and take down any lane's Bash tool mid-run, not just
-mine.
-
-**What's blocked:** nothing right now (Bash recovered), but this is a live risk to the rest of
-tonight's run, not a hypothetical.
-
-**Options:**
-(a) Ben frees disk directly (host-level: old Docker images/volumes, other reap-eligible
-worktrees, log rotation) — fastest, no agent risk.
-(b) Coordinator runs a careful reap sweep of clearly-stale/merged-PR worktrees only (the same
-4-gate reap-safety check already used for #1547/#1121 this run: idle pane, no orphan processes,
-clean git status, PR already merged) — slower, and I'd need to cross-reference all 52 against
-live lanes in the manifest before touching any, since most are other sessions' in-flight work.
-(c) Do nothing until it recurs — not recommended, this already caused one ~15-20min blackout of
-the coordinator's own tooling tonight.
-
-**Recommendation:** (a) if Ben's available now (fastest, zero risk to in-flight lanes); otherwise
-(b) once the run reaches its next natural stopping point (currently waiting on #1533 to land,
-which triggers a full cleanup sweep already planned for other reasons).
