@@ -261,4 +261,7 @@ and a live 70%-checkpoint hook (declined per override). No successor spawned or 
   cleanup — 4 Backlog-moves and 3 verify-then-move items (#1135/#1327/#1554) and
   #1246/#1248/#1252/#1256→Backlog — re-verify before acting, time has passed since those were
   identified. Continue supervising #1533 (Phase 4, self-driving) and #1547 relay2 to PR.
+- Liveness Monitor re-armed (task `b9y0uwcfl`) over `w1:p7C`/`w1:p7X` only — the prior one
+  (`bevy1xipv`, watching `w1:p7C`/`w1:p7T`/`w1:p7W`) correctly fired MISSING on `w1:p7W` (closed
+  intentionally this leg) and was stopped/replaced rather than left generating stale alerts.
 - Mid-doing: nothing else in flight. Successor's first real action is the #1121 handoff triage above.
