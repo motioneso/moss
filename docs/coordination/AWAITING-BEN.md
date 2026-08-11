@@ -18,7 +18,42 @@ approval) are both resolved and were removed on main — the live-path gate was 
 hard invariant in `CLAUDE.md`, and the voice/STT spec turned out to be already approved and built
 (#874), only its status line was stale.
 
-_No decisions are currently waiting on Ben._
+## #1533 chat-surface-build (build/1533-chat-surface-routing): Phase 4 live-path proof blocked on real-chat token
+
+Everything else in Phase 4 is done: full gate green, sensitive-tier invariant check clean, code
+complete. Only the live-path proof (spec's "Live-path proof: action request without reload"
+section, `docs/superpowers/specs/2026-08-10-1533-chat-surface-send-routing.md`) remains, and it
+cannot be produced from this session.
+
+**What's blocked:** `tests/uat/specs/1533-chat-surface-drawer-regression.uat.spec.ts` and
+`tests/uat/specs/1533-chat-surface-live-path.uat.spec.ts:116` both fail — not from a bug in the
+#1533 surface-routing code, but because the ephemeral UAT container has no real chat credential.
+Live instrumentation (`docker exec cat` on the transcript mid-run) proved the `claude -p` CLI
+invocation returns a synthetic `{"error":"authentication_failed","message":{"content":[{"text":
+"Not logged in · Please run /login"}]}}` record almost instantly — the transcript-path/RPC
+mechanism is working correctly, it's the credential that's missing. Per the #1121 design
+(`docs/superpowers/handoffs/2026-07-20-1121-uat-chat-relay-4.md`), real-chat UAT runs are opt-in
+via `JARVIS_UAT_REAL_CHAT_TOKEN_FILE` (a GPG-encrypted OAuth token), and a coding session must
+*never* touch/view that token — the mandatory real-token run is explicitly meant to happen outside
+the build session, run by Ben or a Coordinator. This session's environment has no such token set
+(confirmed: absent from `env`), so every real-chat UAT spec will show this same auth failure
+regardless of #1533's own code correctness.
+
+**Options:**
+1. Ben or a Coordinator session with `JARVIS_UAT_REAL_CHAT_TOKEN_FILE` configured runs
+   `pnpm test:uat tests/uat/specs/1533-chat-surface-drawer-regression.uat.spec.ts` and
+   `tests/uat/specs/1533-chat-surface-live-path.uat.spec.ts`, captures the network/screenshot
+   evidence per the spec's 7-step procedure, and hands the artifacts back for the PR.
+2. Do the live-path proof manually against a live dev instance (not the ephemeral UAT stack) where
+   real CLI login already exists — per the spec, this is a browser walkthrough (Job Search →
+   Profile → "Change in chat", submit, screenshot the approval card within 5s, deny, record
+   network evidence) that doesn't strictly require the UAT harness at all.
+3. Rule that #1533 can open as a draft PR now, code-complete, with live-path proof explicitly
+   marked outstanding and blocking merge — not marking Done per the live-path-gate invariant.
+
+**My recommendation:** option 2 if a live dev instance with working chat is available and reachable
+now (fastest, and matches what the spec literally asks for); otherwise option 1, since option 3
+still needs someone to eventually do 1 or 2 before merge.
 
 <!-- Resolved 2026-08-09: `git push origin main` blocked by the auto-mode classifier during Wave 2
 wrap-up. Ben re-ran ("try now") and it went through — pushed 39 commits, `f78992b14..46ec9965d`.
