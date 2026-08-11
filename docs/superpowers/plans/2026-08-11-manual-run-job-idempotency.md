@@ -34,7 +34,7 @@ Risk tier: routine (backend-only, no UI surface, no live-path UAT required per s
 - `tests/integration/external-modules-routes.test.ts:1-90` — existing harness: temp-dir module
   fixture (`acme-widgets`, queue `acme-widgets.manual`, `allowManualRun:true`), real
   `createApiServer({appDb, ...})`, `appDb = createDatabase({connectionString: connectionStrings.app,
-  maxConnections: 1})`. Lines 110-181 already contain a **sequential** two-call dedupe test
+maxConnections: 1})`. Lines 110-181 already contain a **sequential** two-call dedupe test
   (202/`{jobId:string}` then 202/`{jobId:null}`) — must stay green and unmodified in intent (spec's
   "Existing manual-run API/worker surface tests remain green").
 - `tests/integration/job-search-worker-surface.test.ts` Test 6 (sequential dedupe) — separate
@@ -55,7 +55,7 @@ export async function hasRecentJob(
   queueName: string,
   singletonKey: string,
   singletonSeconds: number
-): Promise<boolean>
+): Promise<boolean>;
 ```
 
 SQL (mirrors `hasInFlightJob`'s tagged-template style):
@@ -87,7 +87,7 @@ export async function sendModuleJob(
   command: { readonly jobKind: string; readonly params?: Readonly<Record<string, unknown>> },
   options?: Pick<SendOptions, "singletonKey" | "singletonSeconds">,
   rootDb?: Kysely<MossDatabase>
-): Promise<string | null>
+): Promise<string | null>;
 ```
 
 `rootDb` is appended, not inserted — preserves every existing positional call site. Gate: the new
@@ -183,16 +183,16 @@ hook — the relay's prior grounding already rejected pg-boss's undocumented `op
 unreachable/unsafe), and given that Postgres fixes `now()` at the point each INSERT's implicit
 transaction begins executing (not at lock-acquisition or commit time — this is why a
 trigger-holds-a-lock approach was ruled out during design), the only lever available to place each
-real insert on a chosen side of the boundary is *when* each `server.inject()` call is dispatched.
+real insert on a chosen side of the boundary is _when_ each `server.inject()` call is dispatched.
 The mechanism below makes that placement DB-anchored rather than client-clock-estimated: every
 timing decision reads Postgres's own `now()` directly, never `Date.now()`, eliminating client/DB
-clock skew as a variance source and gating dispatch on an *observed* condition rather than an
-*estimated* delay.
+clock skew as a variance source and gating dispatch on an _observed_ condition rather than an
+_estimated_ delay.
 
 Three helpers, added directly in the new test file (test-only, no production code):
 
 ```ts
-async function readDbEpoch(client: Client): Promise<number>
+async function readDbEpoch(client: Client): Promise<number>;
 // SELECT extract(epoch from now())::float8 AS now_epoch  -- returns now_epoch
 
 async function waitForBoundaryApproach(
@@ -200,7 +200,7 @@ async function waitForBoundaryApproach(
   singletonSeconds: number,
   leadMs: number,
   minMarginMs: number
-): Promise<{ boundaryEpoch: number; bucketStart: number }>
+): Promise<{ boundaryEpoch: number; bucketStart: number }>;
 // Polls readDbEpoch every ~20ms. bucketStart = floor(now_epoch / singletonSeconds) * singletonSeconds;
 // boundaryEpoch = bucketStart + singletonSeconds. Exits when
 // minMarginMs <= (boundaryEpoch - now_epoch) * 1000 <= leadMs. Bounded to at most one
@@ -210,7 +210,7 @@ async function waitForDbEpochAtLeast(
   client: Client,
   targetEpoch: number,
   timeoutMs: number
-): Promise<number>
+): Promise<number>;
 // Polls readDbEpoch every ~15ms until now_epoch >= targetEpoch; returns the observed now_epoch.
 // Throws if timeoutMs (safety net, e.g. 8000) elapses first -- should never trip given
 // singletonSeconds=5 and a sub-second polling interval.
@@ -224,11 +224,19 @@ produces" — while their relative DB-insert timing is forced by the polling gat
 const client = new Client({ connectionString: connectionStrings.bootstrap });
 await client.connect();
 const { boundaryEpoch, bucketStart } = await waitForBoundaryApproach(client, 5, 500, 150);
-const first = server.inject({ method: "POST", url: ".../acme-widgets.manual-race/run",
-  headers: { cookie: adminCookie }, payload: { jobKind: "manual" } });
+const first = server.inject({
+  method: "POST",
+  url: ".../acme-widgets.manual-race/run",
+  headers: { cookie: adminCookie },
+  payload: { jobKind: "manual" }
+});
 const crossedEpoch = await waitForDbEpochAtLeast(client, boundaryEpoch, 8000);
-const second = server.inject({ method: "POST", url: ".../acme-widgets.manual-race/run",
-  headers: { cookie: adminCookie }, payload: { jobKind: "manual" } });
+const second = server.inject({
+  method: "POST",
+  url: ".../acme-widgets.manual-race/run",
+  headers: { cookie: adminCookie },
+  payload: { jobKind: "manual" }
+});
 const [firstRes, secondRes] = await Promise.all([first, second]);
 ```
 
@@ -317,7 +325,7 @@ Pure backend control-flow around an existing enqueue path.
 ## Kill gate
 
 After the red test is committed and confirmed failing for the stated reason (both calls return a
-distinct non-null `jobId`, 2 rows), STOP before writing the fix if the red run does *not* fail that
+distinct non-null `jobId`, 2 rows), STOP before writing the fix if the red run does _not_ fail that
 way (e.g. if it fails on setup/fixture issues, or the harness's own self-check assertion fails) —
 that means the boundary-forcing mechanism itself is broken, not that the race is unreproducible;
 escalate to the Coordinator rather than adjusting margins or looping.
@@ -371,7 +379,7 @@ pnpm vitest run tests/integration/job-search-worker-surface.test.ts > /tmp/1547-
   once the fix's `created_on`-bounded recency check exists. New queue `acme-widgets.manual-race`
   used instead.
 - A DB-lock-held-across-the-boundary mechanism (as illustrated in the spec's own example text) was
-  considered and rejected as *not actually achieving* boundary placement, independent of
+  considered and rejected as _not actually achieving_ boundary placement, independent of
   feasibility: Postgres fixes `now()` at transaction/statement start, before any lock-wait can
   occur, so holding a lock only controls commit/visibility order, not which bucket an insert's
   `now()` lands in. The DB-clock-polling mechanism above was adopted instead, with its residual risk
