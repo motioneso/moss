@@ -1,7 +1,7 @@
 # Coordination Run — 2026-08-10 overnight
 
 **Date:** 2026-08-10
-**Coordinator lock:** label `Coordinator`, stable anchor = Claude session id `baa8c061-8e25-4402-9a0a-4366f348d2d8`. Exactly one pane with this label and session holds merge authority.
+**Coordinator lock:** label `Coordinator`, stable anchor = Claude session id `b64206f2-e4f7-41d4-a3ae-137a601ff368` (pane `w1:p7F`, resolve fresh by label+session, never a written pane number). Exactly one pane with this label and session holds merge authority.
 **Delegated authority:** Ben explicitly delegated overnight product/design decisions to Fable and confirmed that Fable's green security review counts as his security-tier merge sign-off. Existing repository rule still applies: #1557 never merges without fresh Fable approval. Every delegated security sign-off must be durable on the exact-head PR.
 **Merge policy:** routine/sensitive only after verified QA and live-path proof where applicable; security only after adversarial Fable QA and delegated sign-off.
 **Merge notification:** after every merge, run `needs-ben coordinator "<issue/PR — one-line description of what landed>"` and retain the normal GitHub/project bookkeeping.
