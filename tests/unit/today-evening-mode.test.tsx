@@ -183,6 +183,32 @@ describe("TodayPage evening mode", () => {
     expect(html).toContain(`${"A".repeat(217)}...`);
     expect(html).not.toContain("tail that should be clipped");
   });
+
+  it("keeps the prep-card CTA neutral while the persona name is pending (#1560)", () => {
+    const html = renderToday({
+      now: new Date("2026-06-30T02:30:00.000Z"),
+      definitions: [briefingDefinition({ targetTime: "19:00", timezone: locale.timezone })],
+      runs: [],
+      tasks: [],
+      events: []
+    });
+
+    expect(html).toContain(">Chat<");
+    expect(html).not.toContain("Chat with Moss");
+  });
+
+  it("still shows the configured assistant name once persona resolves (#1560)", () => {
+    const html = renderToday({
+      now: new Date("2026-06-30T02:30:00.000Z"),
+      definitions: [briefingDefinition({ targetTime: "19:00", timezone: locale.timezone })],
+      runs: [],
+      tasks: [],
+      events: [],
+      assistantName: "Jarvis"
+    });
+
+    expect(html).toContain("Chat with Jarvis");
+  });
 });
 
 function renderToday(input: {
@@ -191,6 +217,7 @@ function renderToday(input: {
   readonly runs: readonly BriefingRunDto[];
   readonly tasks: readonly TaskDto[];
   readonly events: readonly CalendarEventDto[];
+  readonly assistantName?: string;
 }): string {
   const previousDocument = globalThis.document;
   const previousDateNow = Date.now;
@@ -213,6 +240,11 @@ function renderToday(input: {
       });
     }
     client.setQueryData(queryKeys.goals.list, { items: [] });
+    if (input.assistantName !== undefined) {
+      client.setQueryData(queryKeys.settings.persona, {
+        persona: { assistantName: input.assistantName, personaText: "" }
+      });
+    }
 
     return renderToString(
       createElement(
