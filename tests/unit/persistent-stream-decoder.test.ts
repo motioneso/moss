@@ -1,6 +1,14 @@
 /**
  * Unit tests for PersistentStreamDecoder — the bounded, push-based line splitter over a
  * persistent Claude child's `--output-format stream-json` stdout (#1557 Phase 1, P1.2).
+ *
+ * Includes a regression suite for #1557 P1: the terminal `{"type":"result"}` frame carries the
+ * CLI's own final-answer text in `record["result"]`, but `mapRecord()` used to discard it — only
+ * flipping a bookkeeping flag before emitting `turn-complete`. When a turn's only `assistant`
+ * frame had a `stop_reason` other than `end_turn` (e.g. purely `tool_use`, then the CLI settles
+ * the turn via the terminal `result` event alone), no `reply` record was ever emitted and
+ * `chat-session-manager.ts` persisted an empty-string reply — violating Postgres'
+ * `chat_messages_body_check` constraint on a real live turn.
  */
 import { describe, expect, it } from "vitest";
 
@@ -24,6 +32,10 @@ function assistantLine(opts: {
 }
 
 const RESULT_LINE = JSON.stringify({ type: "result", subtype: "success", is_error: false });
+
+function resultLine(resultText: string): string {
+  return JSON.stringify({ type: "result", subtype: "success", is_error: false, result: resultText });
+}
 
 async function drain(events: AsyncIterable<RuntimeTurnEvent>): Promise<RuntimeTurnEvent[]> {
   const out: RuntimeTurnEvent[] = [];
@@ -226,5 +238,62 @@ describe("PersistentStreamDecoder", () => {
   it("exports rationale-bearing default bounds sized for real stream-json traffic", () => {
     expect(MAX_FRAME_BYTES).toBeGreaterThan(0);
     expect(MAX_TOTAL_BUFFERED_BYTES).toBeGreaterThan(MAX_FRAME_BYTES);
+  });
+
+  it("emits a reply record from the terminal result event's text when no end_turn reply was seen", async () => {
+    const decoder = new PersistentStreamDecoder({ killChild: () => undefined });
+    decoder.beginTurn("turn-result-1");
+    decoder.write(
+      assistantLine({
+        stopReason: "tool_use",
+        content: [{ type: "tool_use", name: "some_tool", input: {} }]
+      }) + "\n"
+    );
+    decoder.write(resultLine("the final answer") + "\n");
+    decoder.end();
+
+    const events = await drain(decoder.events());
+    expect(events).toEqual([
+      {
+        kind: "record",
+        turnId: "turn-result-1",
+        record: { kind: "tool", text: "some_tool", toolName: "some_tool" }
+      },
+      { kind: "record", turnId: "turn-result-1", record: { kind: "reply", text: "the final answer" } },
+      { kind: "turn-complete", turnId: "turn-result-1" }
+    ]);
+  });
+
+  it("does not double-emit a reply when an end_turn reply was already captured", async () => {
+    const decoder = new PersistentStreamDecoder({ killChild: () => undefined });
+    decoder.beginTurn("turn-result-2");
+    decoder.write(
+      assistantLine({
+        stopReason: "end_turn",
+        content: [{ type: "text", text: "already got a reply" }]
+      }) + "\n"
+    );
+    decoder.write(resultLine("the final answer") + "\n");
+    decoder.end();
+
+    const events = await drain(decoder.events());
+    expect(events).toEqual([
+      {
+        kind: "record",
+        turnId: "turn-result-2",
+        record: { kind: "reply", text: "already got a reply" }
+      },
+      { kind: "turn-complete", turnId: "turn-result-2" }
+    ]);
+  });
+
+  it("emits only turn-complete when the terminal result has no usable text", async () => {
+    const decoder = new PersistentStreamDecoder({ killChild: () => undefined });
+    decoder.beginTurn("turn-result-3");
+    decoder.write(resultLine("") + "\n");
+    decoder.end();
+
+    const events = await drain(decoder.events());
+    expect(events).toEqual([{ kind: "turn-complete", turnId: "turn-result-3" }]);
   });
 });

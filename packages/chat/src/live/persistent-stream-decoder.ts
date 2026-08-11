@@ -54,6 +54,7 @@ export class PersistentStreamDecoder {
   private buffer = "";
   private currentTurnId: string | null = null;
   private sawTerminalForTurn = false;
+  private sawReplyForTurn = false;
   private killed = false;
   private ended = false;
 
@@ -72,6 +73,7 @@ export class PersistentStreamDecoder {
   beginTurn(turnId: string): void {
     this.currentTurnId = turnId;
     this.sawTerminalForTurn = false;
+    this.sawReplyForTurn = false;
   }
 
   /** Feed raw stdout text as it arrives. */
@@ -155,6 +157,13 @@ export class PersistentStreamDecoder {
 
     if (record["type"] === "result") {
       this.sawTerminalForTurn = true;
+      if (!this.sawReplyForTurn) {
+        const result = record["result"];
+        if (typeof result === "string" && result.length > 0) {
+          this.sawReplyForTurn = true;
+          this.emit({ kind: "record", turnId, record: { kind: "reply", text: result } });
+        }
+      }
       this.emit({ kind: "turn-complete", turnId });
       return;
     }
@@ -174,6 +183,7 @@ export class PersistentStreamDecoder {
         .map((item) => item.text)
         .join("\n");
       if (text.length > 0) {
+        this.sawReplyForTurn = true;
         this.emit({ kind: "record", turnId, record: { kind: "reply", text } });
       }
       return;
