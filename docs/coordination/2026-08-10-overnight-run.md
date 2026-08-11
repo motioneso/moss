@@ -44,6 +44,15 @@ GitHub/project 2 is the source of truth. Detailed continuation evidence stays in
 
 None.
 
+## Pending: stopping-point cleanup (Ben, 2026-08-11)
+
+Once the current in-flight lanes (#1121 PR #1570, #1547) both merge, do a full sweep before
+declaring this leg of the run at a stopping point: `git worktree list` vs actually-live lanes,
+delete stale/reaped worktrees and their local+origin branches (mirror the #1260 cleanup pattern —
+confirm merged-and-superseded before deleting, never delete anything with unmerged unique work),
+confirm no orphaned dev-API/log-tail PIDs remain from reaped lanes, and reconcile the manifest's
+"Reaped sessions" section against reality. Not yet started — waiting on both lanes to land.
+
 ## Outstanding escalations
 
 - [x] Fable: #1557 gate ruling posted at issue comment 5249826990; baseline-identical skips permitted, credentialed real-chat required.
