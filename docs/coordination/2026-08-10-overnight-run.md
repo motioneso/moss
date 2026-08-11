@@ -229,7 +229,16 @@ and a live 70%-checkpoint hook (declined per override). No successor spawned or 
   live-path proof, not the Task 5/6 symbol rename. **Pinged it** (`herdr agent prompt w1:p7C`,
   confirmed submitted) that #1121's scriptable UAT chat engine merged at `8b2a4b357` and should
   give it a deterministic runner — told to proceed with Phase 4 if that covers the need, or flag
-  back what's still missing. Awaiting its reply.
+  back what's still missing. **Reply received: confirmed by direct recon that #1121 covers the
+  need** — `tests/uat/seed/chunks/chat-script.ts` seeds a real provider through the normal
+  `AiRepository` chain (not a chat-surface bypass) via `JARVIS_UAT_SEED_CHAT_SCRIPT`, unused by any
+  existing UAT spec yet. Phase 4 gate DONE green (`80f01f537`), sensitive-tier check DONE clean
+  (21-file diff vs `origin/main`, no AccessContext/RLS/persistence/gateway-contract touched).
+  Now authoring a throwaway chat-script targeting `job-search.criteria.set` to drive a real
+  Playwright UAT run for the spec's 7-step live-path evidence — will flag back if the mechanism
+  doesn't reach a real rendered card in a browser (vs. headless-only). Handoff:
+  `docs/superpowers/handoffs/2026-08-11-1533-chat-surface-build-relay12.md`. No action needed —
+  pure FYI, self-driving.
 - **#1547 plan approved, build RED-confirmed-correctly, now self-relaying.** Plan
   (`docs/superpowers/plans/2026-08-11-manual-run-job-idempotency.md`) reviewed directly (pg_advisory_xact_lock
   + time-bounded `hasRecentJob()` wrapping `boss.send()`, `rootDb` as an optional trailing param,
