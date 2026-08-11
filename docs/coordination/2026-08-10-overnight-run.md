@@ -284,4 +284,14 @@ and a live 70%-checkpoint hook (declined per override). No successor spawned or 
 - Liveness Monitor re-armed (task `b9y0uwcfl`) over `w1:p7C`/`w1:p7X` only — the prior one
   (`bevy1xipv`, watching `w1:p7C`/`w1:p7T`/`w1:p7W`) correctly fired MISSING on `w1:p7W` (closed
   intentionally this leg) and was stopped/replaced rather than left generating stale alerts.
+- **Post-compaction checkpoint (this leg).** Resident session unchanged (`0bb9f516-...`, still
+  matches the lock line). Re-armed a fresh liveness Monitor (task `bwfoary88`, old `b9y0uwcfl` did
+  not survive compaction) over `w1:p7C`/`w1:p7X`. Bounded reads confirm: **#1533** (relay8, session
+  `f3a156a2-...`) still genuinely waiting non-polling on Ben's needs-ben reply for the
+  `origin/main`-merge approval (`~/.needs-ben/sent/1786472945669485123.msg`, sent 11:29:14) — no
+  reply routed yet, no coordinator action needed. **#1547 relay2** (session `58c83a3d-...`)
+  progressed: Tasks 4-6 (production code — `hasRecentJob`, `sendModuleJob` `rootDb` param, route
+  wiring) all done; now mid-Task 7 (pre-push checks/rebase/wrap-up), running the isolated full gate
+  in background. Watching for PR-ready escalation. No action taken this checkpoint beyond
+  re-arming the monitor — pure supervision.
 - Mid-doing: nothing else in flight. Successor's first real action is the #1121 handoff triage above.
