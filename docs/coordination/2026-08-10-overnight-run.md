@@ -248,8 +248,17 @@ and a live 70%-checkpoint hook (declined per override). No successor spawned or 
   845, 1281-1303 (Job Search Task N series), 1309, 1331. GraphQL mutations
   (`updateProjectV2ItemFieldValue`, project `PVT_kwHOADqkaM4BarLA`, field
   `PVTSSF_lAHOADqkaM4BarLAzhVhA6I`, target option `98236657`=Done) not yet run — next action.
-- Mid-doing: run the 26 board-move mutations, then check #1547's successor spawn, then resume the
-  earlier-identified (pre-compaction, not re-verified this leg) smaller board cleanup — 4 Backlog-moves
-  and 3 verify-then-move items (#1135/#1327/#1554) and #1246/#1248/#1252/#1256→Backlog — re-verify
-  before acting, time has passed since those were identified.
+- **Board-cleanup DONE for the 26-item batch.** All 26 `updateProjectV2ItemFieldValue` mutations
+  ran clean (0 failures) — #845, #1281-1303, #1309, #1331 all moved to Done. Ben's "can we move
+  completed ones to done please?" request is satisfied for this batch.
+- **#1547 relay #2 reaped.** Predecessor (session `125a0436-...`, pane `w1:p7W`) relayed to
+  successor `job1547-relay2` (session `58c83a3d-381c-47ac-867a-483afc7a5a71`, pane `w1:p7X`,
+  labelled `Issue #1547 job idempotency (relay2)`) after committing plan+RED test at `82cc0f083`
+  but before writing tasks #4-6 (production code: `hasRecentJob`, `sendModuleJob` `rootDb` param,
+  route wiring) and #7 (wrap-up). Successor confirmed driving fresh (7% context, following its
+  relay task brief) before the predecessor pane was closed.
+- Mid-doing: resume the earlier-identified (pre-compaction, not re-verified this leg) smaller board
+  cleanup — 4 Backlog-moves and 3 verify-then-move items (#1135/#1327/#1554) and
+  #1246/#1248/#1252/#1256→Backlog — re-verify before acting, time has passed since those were
+  identified. Continue supervising #1533 (Phase 4, self-driving) and #1547 relay2 to PR.
 - Mid-doing: nothing else in flight. Successor's first real action is the #1121 handoff triage above.
