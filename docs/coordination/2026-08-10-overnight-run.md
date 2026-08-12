@@ -1862,3 +1862,23 @@ context-meter hook (fired at 70%) — same as every prior firing this run.
 
 Next: watch #1429 (`w1:p8E`, 5/6 tasks, gate running) to genuine completion; continue monitoring
 #1554; #1452 still held on Ben (not chased).
+
+## 2026-08-12 (cont.): #1554 real escalation — stale coordinator name, PR conflicts
+
+Ground-truthed the next Monitor tick rather than trusting `agent_status`: `w1:p8E` was the usual
+false positive (unchanged — 5/6 tasks, gate still running). `w1:p8B` was genuine: it had tried to
+reach a stale/nonexistent name `coord-overnight-20260810-e7` via SendMessage and failed, leaving
+"Coordinator unreachable... not merged, closed, or board-touched — review needed" stuck with a
+queued follow-up.
+
+Checked ground truth via `gh`: PR #1593 (`1554-persistent-provider-chat-runtime`, opened
+2026-08-12T22:07Z) has **no CI runs at all** (only a queued `claude` check-suite) and
+`mergeStateStatus: DIRTY` — real conflicts against `origin/main` (main moved under it: #1256/PR
+#1587 landed since its branch point). Confirmed my own session id (`0bb9f516...`) against the
+manifest lock line before messaging. Sent it: correct routing (`Coordinator` label, this session
+id, re-resolve pane fresh), the CI/conflict finding, and direction to rebase + push + report back
+with green CI before requesting QA — with an explicit stop-and-ask instruction if the conflicts
+touch shared code it didn't author. Confirmed the message landed and the pane is now `working`.
+
+Next: watch `w1:p8B` for the rebase to land and CI to go green before dispatching QA; continue
+watching #1429 (`w1:p8E`); #1452 still held on Ben (not chased).
