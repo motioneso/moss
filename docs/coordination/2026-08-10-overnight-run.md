@@ -1213,3 +1213,27 @@ QA-flag carried forward for the eventual Opus review: `resolveActionRequestFn` i
 `packages/module-registry/src/index.ts` is a module-level `let`, so if multiple `createApiServer`
 calls ever share one Node process, the last `adoptChatGateway` call wins for all of them — benign
 for the current one-server-per-test-process suite, flagged explicitly for security-tier scrutiny.
+
+## PR #1562 / #1556 — CI investigation closed out (informational only, no merge action pending)
+
+Resolved the carried-forward CI thread on PR #1562 (`1556-p1-replay-contract`, run `31622993650`):
+
+- **Attempt 1** "Verify foundation and app" failed on exactly one test:
+  `tests/unit/chat-drawer-surface.test.tsx` (#1533 surface-routing case, "resets state on a flip in
+  both directions"), 4401/4404 tests otherwise passing. Cross-checked against PR #1562's changed
+  files (`gh pr view --json files`) — zero import/module relation to this test file. Isolated
+  pre-existing flakiness, not a regression caused by this PR.
+- **Attempt 2** of the same job: green (confirmed via Monitor). Consistent with flakiness, not a
+  fix — no code changed between attempts.
+- **Separately, independently: "Build and publish images" failed** on attempt 2 (a different job,
+  not part of the original fail/rerun thread) — Docker `linux/arm64` build, `onnxruntime-node`
+  postinstall hit `ECONNRESET` during `pnpm install --frozen-lockfile` inside `Dockerfile:25-29`'s
+  toolchain RUN layer. Transient Docker-build network flakiness, not a code issue. Note: this is a
+  case of gate-green-but-build-separately-red — the inverse of the documented "red gate skips image
+  build" pattern, worth distinguishing from it.
+
+**Scoping conclusion — no merge action pending regardless:** PR #1562 is a dormant, draft PR (per
+this manifest's earlier #1556 entries) with no live agent currently driving it, and is gated on
+Ben's one-time `claude setup-token` OAuth click per `docs/coordination/AWAITING-BEN.md` (#1556
+entry, still open as of this check) — unrelated to CI state entirely. This investigation closes out
+informationally; it does not unblock or motivate any merge decision on my part.
