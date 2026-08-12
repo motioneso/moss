@@ -373,6 +373,9 @@ export type SeedHook = (ctx: {
   /** N42/#57: the job-search fixture's docker-reachable base URL — see provisionForUat's
    *  jobSearchFixtureBaseUrl computation. Absent unless withJobSearchFixture is set. */
   readonly jobSearchAiProviderBaseUrl?: string;
+  /** #1121 Task 4: an id from UAT_CHAT_SCRIPTS. Consumed by Task 5's seed/cli.ts wiring
+   *  (blocked on #1557) — until then this reaches the seed service but nothing reads it. */
+  readonly chatScript?: string;
 }) => Promise<void>;
 
 // #1024/#1000: Phase 1 ships zero seed data by design (spec §8.1 acceptance = bare level only).
@@ -393,7 +396,8 @@ export const composeSeedHook: SeedHook = async ({
   level,
   excludeChunks,
   withoutNewsJsonBinding,
-  jobSearchAiProviderBaseUrl
+  jobSearchAiProviderBaseUrl,
+  chatScript
 }) => {
   await runCommand(
     "docker",
@@ -413,6 +417,10 @@ export const composeSeedHook: SeedHook = async ({
       // empty means off" shape as the other -e values here, rather than omitting the flag
       // entirely.
       `MOSS_UAT_JOB_SEARCH_AI_BASE_URL=${jobSearchAiProviderBaseUrl ?? ""}`,
+      "-e",
+      // #1121 Task 4: same "always pass, empty means off" shape. Nothing reads this yet —
+      // Task 5 (blocked on #1557) adds the cli.ts consumer.
+      `JARVIS_UAT_SEED_CHAT_SCRIPT=${chatScript ?? ""}`,
       "-e",
       "JARVIS_UAT_SEED_CONFIRM=1",
       "seed"
@@ -615,6 +623,10 @@ export interface UatProvisionOptions {
   // `openai-compatible` AI provider seeded for scoring (same base URL, threaded into
   // composeSeedHook below) — both point at the one fixture origin this starts.
   readonly withJobSearchFixture?: boolean;
+  /** #1121 Task 4: an id from UAT_CHAT_SCRIPTS (tests/uat/seed/types.ts). Threads to
+   *  composeSeedHook's chatScript ctx field, and (when set) points JARVIS_CLI_TOOLS_PREFIX at the
+   *  scripted-provider fixture binary for the duration of provisioning. */
+  readonly chatScript?: string;
 }
 
 export function buildSeedHookInput(
@@ -632,13 +644,15 @@ export function buildSeedHookInput(
   excludeChunks?: readonly string[];
   withoutNewsJsonBinding?: boolean;
   jobSearchAiProviderBaseUrl?: string;
+  chatScript?: string;
 } {
   return {
     projectName,
     level,
     excludeChunks: opts?.excludeChunks,
     withoutNewsJsonBinding: opts?.withoutNewsJsonBinding,
-    jobSearchAiProviderBaseUrl
+    jobSearchAiProviderBaseUrl,
+    chatScript: opts?.chatScript
   };
 }
 
@@ -682,6 +696,23 @@ export async function provisionForUat(
   // credential-free run. Held for the whole function: the success path hands cleanup to the returned
   // teardown; terminal failures clean up below.
   const realChatEnvFile = await writeUatRealChatEnvFile();
+
+  // #1121 Task 4: same whole-function-scoped override shape as realChatEnvFile above — set once
+  // before the retry loop (a port-bind retry reuses it across attempts within this call), restored
+  // in every exit path below so it never leaks into a later provisionForUat call in the same
+  // process (mirrors the REAL_CHAT_ENV_FILE_RESULT_ENV precedent).
+  const previousCliToolsPrefix = process.env.JARVIS_CLI_TOOLS_PREFIX;
+  if (opts?.chatScript) {
+    process.env.JARVIS_CLI_TOOLS_PREFIX = "/app/tests/uat/fixtures/scripted-provider";
+  }
+  const restoreCliToolsPrefix = () => {
+    if (!opts?.chatScript) return;
+    if (previousCliToolsPrefix === undefined) {
+      delete process.env.JARVIS_CLI_TOOLS_PREFIX;
+    } else {
+      process.env.JARVIS_CLI_TOOLS_PREFIX = previousCliToolsPrefix;
+    }
+  };
 
   while (remainingCandidates.length > 0) {
     const { projectName } = generateUatRunId();
@@ -759,6 +790,7 @@ export async function provisionForUat(
           await assertNoLeakedResources(projectName);
           envFile.cleanup();
           realChatEnvFile?.cleanup();
+          restoreCliToolsPrefix();
         }
       };
     } catch (error) {
@@ -779,10 +811,12 @@ export async function provisionForUat(
       // #1121: terminal (non-retry) failure — realChatEnvFile is created once before the loop, so
       // clean it here rather than in the retry path above (which reuses the exported env var).
       realChatEnvFile?.cleanup();
+      restoreCliToolsPrefix();
       throw error;
     }
   }
   realChatEnvFile?.cleanup();
+  restoreCliToolsPrefix();
   throw new Error(
     `exhausted all ${UAT_PORT_RANGE_SIZE} reserved UAT ports (${UAT_PORT_RANGE_START}-${
       UAT_PORT_RANGE_START + UAT_PORT_RANGE_SIZE - 1

@@ -22,6 +22,7 @@ import { AgyPrintChatEngine } from "./agy-print-chat-engine.js";
 import { ClaudePrintChatEngine } from "./claude-print-chat-engine.js";
 import { CliChatEngineImpl } from "./cli-chat-engine.js";
 import type { CliChatEngineDiagnostic } from "./cli-chat-engine-opts.js";
+import { ClaudePersistentRuntimeEngine } from "./persistent-runtime-engine.js";
 import type { CliChatEngine } from "./types.js";
 
 export interface ChatEngineSelectionOpts {
@@ -37,15 +38,28 @@ export interface ChatEngineSelectionOpts {
   readonly ownsDrain?: boolean;
   /** #1157 diagnostic sink; must never throw into the submit path. */
   readonly onDiagnostic?: (event: CliChatEngineDiagnostic) => void;
+  /**
+   * #1557 Phase 1 rollout flag (`chat.persistent_runtime.enabled`). When true AND the provider
+   * is anthropic (the only adapter Phase 1 ships), selects the persistent provider-runtime
+   * engine ahead of the bounded-fallback/tmux fork below — a third engine shape, not a
+   * replacement for either. The cli-runner RPC root (`engine-host.ts`) pins this to `false` for
+   * the whole of Phase 1 (the #1350 two-composition-roots guard: the pool must exist before the
+   * RPC root can safely select persistent children).
+   */
+  readonly persistentRuntimeEnabled?: boolean;
 }
 
 /**
- * True when this provider/mode pair runs one-shot (`claude -p` / `agy` exec) rather than
- * driving a persistent REPL inside a multiplexer pane. Exported so callers that need to
- * know whether a mux session will exist (the runner's orphan reaping, tests) can ask
- * without reconstructing the rule.
+ * True when this provider/mode pair runs bounded-fallback (`claude -p` / `agy` exec, one
+ * process per turn) rather than driving a persistent REPL inside a multiplexer pane.
+ * Exported so callers that need to know whether a mux session will exist (the runner's
+ * orphan reaping, tests) can ask without reconstructing the rule.
+ *
+ * Named for the *shape* of the engine (one-shot process per turn), not the persistent
+ * provider-runtime adapter (#1557) — that adapter is a third shape, selected in front of
+ * this check, not a replacement for it.
  */
-export function isOneShotEngine(
+export function isBoundedFallbackEngine(
   provider: ProviderKind,
   executionMode: AiProviderExecutionMode | undefined
 ): boolean {
@@ -54,7 +68,7 @@ export function isOneShotEngine(
 }
 
 /**
- * Build the engine for a session. `non_interactive` anthropic/google get the one-shot
+ * Build the engine for a session. `non_interactive` anthropic/google get the bounded-fallback
  * print engines (no multiplexer session is ever created); everything else — including any
  * provider explicitly configured `interactive` — gets the tmux-backed REPL engine.
  */
@@ -64,7 +78,16 @@ export function createChatEngine(
   io: TmuxIo,
   opts: ChatEngineSelectionOpts = {}
 ): CliChatEngine {
-  if (isOneShotEngine(provider, opts.executionMode)) {
+  // #1557 Phase 1: the persistent adapter is a third engine shape, checked ahead of the
+  // bounded-fallback/tmux fork below (ruling 2 — flag on + provider match wins outright,
+  // independent of `executionMode`). Phase 1 ships Claude only.
+  if (opts.persistentRuntimeEnabled && provider === "anthropic") {
+    return new ClaudePersistentRuntimeEngine(sessionKey, io, {
+      credentialFile: opts.credentialFile
+    });
+  }
+
+  if (isBoundedFallbackEngine(provider, opts.executionMode)) {
     if (provider === "anthropic") {
       return new ClaudePrintChatEngine(sessionKey, io, {
         mux: opts.mux,

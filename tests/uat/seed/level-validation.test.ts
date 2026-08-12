@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseUatExcludeChunks, parseUatSeedLevel } from "./level-validation.js";
+import {
+  parseUatChatScript,
+  parseUatExcludeChunks,
+  parseUatSeedLevel
+} from "./level-validation.js";
 
 // #1087 finding 5: prove the parsers fail closed on typo'd env values instead
 // of silently falling through to a default that seeds max data (exit 0).
@@ -27,6 +31,22 @@ describe("parseUatExcludeChunks", () => {
   it("fails closed on a typo'd chunk name instead of silently no-op'ing", () => {
     expect(() => parseUatExcludeChunks("news,jobsearch")).toThrow(
       /unknown UAT seed excludeChunks entry "jobsearch"/
+    );
+  });
+});
+
+describe("parseUatChatScript", () => {
+  it("returns undefined for an empty string", () => {
+    expect(parseUatChatScript("")).toBeUndefined();
+  });
+
+  it("passes through a known chat script id", () => {
+    expect(parseUatChatScript("phase1-smoke")).toBe("phase1-smoke");
+  });
+
+  it("fails closed on an unknown chat script id", () => {
+    expect(() => parseUatChatScript("bogus-script")).toThrow(
+      /unknown UAT chat script "bogus-script"/
     );
   });
 });

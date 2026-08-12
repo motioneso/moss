@@ -22,6 +22,10 @@ hard invariant in `CLAUDE.md`, and the voice/STT spec turned out to be already a
 yep" — approved leaving `ben@ben.com`'s `assistantName='Nova'` as-is, no restore needed. Ruling
 recorded on issue #1560 (https://github.com/motioneso/moss/issues/1560#issuecomment-5255044578). -->
 
+<!-- Resolved 2026-08-12: #1533 chat-surface-build Phase 4 live-path proof blocker. PR #1574
+("feat(chat): thread surface through send routing (#1533)") merged 2026-08-12T03:11:37Z — the
+real-chat-token gap this entry described is moot now that the PR landed. -->
+
 <!-- Resolved 2026-08-09: `git push origin main` blocked by the auto-mode classifier during Wave 2
 wrap-up. Ben re-ran ("try now") and it went through — pushed 39 commits, `f78992b14..46ec9965d`.
 Note: GitHub reports this repo moved to `motioneso/moss.git`; push still succeeded via the old

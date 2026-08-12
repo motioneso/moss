@@ -245,6 +245,12 @@ export class CliChatEngineHost {
       homeBase: this.deps.homeBase,
       ownsDrain: true,
       executionMode: params.executionMode,
+      // #1557 Phase 1 / #1350 two-composition-roots guard: the RPC root never selects the
+      // persistent adapter this phase, regardless of the `chat.persistent_runtime.enabled`
+      // setting — only the in-process host-dev root (`chat-multiplexer.ts`'s
+      // `resolveChatEngineFactory`) reads that flag. Lifting this pin is a later-phase change,
+      // not an oversight.
+      persistentRuntimeEnabled: false,
       // #363: the 0600 token file the claude launch reads CLAUDE_CODE_OAUTH_TOKEN from at
       // runtime (claude-scoped; only used by buildClaudeCommand, only if the file exists).
       credentialFile: this.deps.homeBase

@@ -162,6 +162,31 @@ export async function hasInFlightJob(
   return result.rows[0]?.in_flight ?? false;
 }
 
+/**
+ * Return whether a job in the named queue with the given singleton key was created within the
+ * last `singletonSeconds` seconds. Time-bounded on `created_on`, scoped by the real
+ * `singleton_key` column (backing unique index `job_i4`) rather than reconstructing the composite
+ * key from `data->>` — independent of which `singleton_on` epoch bucket the row landed in (#1547).
+ */
+export async function hasRecentJob(
+  db: Kysely<MossDatabase>,
+  queueName: string,
+  singletonKey: string,
+  singletonSeconds: number
+): Promise<boolean> {
+  const result = await sql<{ recent: boolean }>`
+    select exists (
+      select 1
+      from pgboss.job
+      where name = ${queueName}
+        and singleton_key = ${singletonKey}
+        and state <> 'cancelled'
+        and created_on >= now() - (${singletonSeconds} || ' seconds')::interval
+    ) as recent
+  `.execute(db);
+  return result.rows[0]?.recent ?? false;
+}
+
 export interface PgBossClientHooks {
   /**
    * Invoked for pg-boss internal `error` events. Defaults to structured stderr logging.

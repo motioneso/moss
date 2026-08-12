@@ -199,11 +199,15 @@ test("stages next message while response is running and sends it after stop", as
     });
   });
 
-  await page.route("**/api/chat/turn/cancel", async (route) => {
-    cancelRequests += 1;
-    releaseFirstTurn?.();
-    await route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
-  });
+  // Match by pathname, not the full URL — a ?surface=drawer query string is now appended.
+  await page.route(
+    (url) => url.pathname.endsWith("/api/chat/turn/cancel"),
+    async (route) => {
+      cancelRequests += 1;
+      releaseFirstTurn?.();
+      await route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
+    }
+  );
 
   await page.route("**/api/chat/clear", (route) => route.fulfill({ status: 204, body: "" }));
 
@@ -298,21 +302,29 @@ test("selecting a History row both opens and activates it — no separate resume
       })
     });
   });
-  await page.route("**/api/chat/threads/thread-old/messages", async (route) => {
-    await messagesGate;
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ messages: [storedMessage] })
-    });
-    messagesFinished = true;
-  });
-  await page.route("**/api/chat/threads/thread-old/resume", async (route) => {
-    resumeCalledWith = "thread-old";
-    await resumeGate;
-    await route.fulfill({ status: 204, body: "" });
-    resumeFinished = true;
-  });
+  // Match by pathname, not the full URL — a ?surface=drawer query string is now appended.
+  await page.route(
+    (url) => url.pathname.endsWith("/api/chat/threads/thread-old/messages"),
+    async (route) => {
+      await messagesGate;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ messages: [storedMessage] })
+      });
+      messagesFinished = true;
+    }
+  );
+  // Match by pathname, not the full URL — a ?surface=drawer query string is now appended.
+  await page.route(
+    (url) => url.pathname.endsWith("/api/chat/threads/thread-old/resume"),
+    async (route) => {
+      resumeCalledWith = "thread-old";
+      await resumeGate;
+      await route.fulfill({ status: 204, body: "" });
+      resumeFinished = true;
+    }
+  );
   await page.route("**/api/chat/turn", async (route) => {
     await route.fulfill({
       status: 200,
@@ -378,8 +390,10 @@ test("resuming a History thread while private clears the stale privateMode flag"
     // Server truth on mount: a private session is already active (mirrors reload-while-private).
     incognito: true
   });
-  await page.route("**/api/chat/threads/thread-old/resume", (route) =>
-    route.fulfill({ status: 204, body: "" })
+  // Match by pathname, not the full URL — a ?surface=drawer query string is now appended.
+  await page.route(
+    (url) => url.pathname.endsWith("/api/chat/threads/thread-old/resume"),
+    (route) => route.fulfill({ status: 204, body: "" })
   );
   await page.route("**/api/chat/turn", (route) =>
     route.fulfill({
@@ -425,13 +439,17 @@ test("resume failure clears selection and reopens History", async ({ page }) => 
     notifications: [],
     tasks: []
   });
-  await page.route("**/api/chat/threads/thread-old/resume", async (route) => {
-    await route.fulfill({
-      status: 404,
-      contentType: "application/json",
-      body: JSON.stringify({ error: "Chat thread not found" })
-    });
-  });
+  // Match by pathname, not the full URL — a ?surface=drawer query string is now appended.
+  await page.route(
+    (url) => url.pathname.endsWith("/api/chat/threads/thread-old/resume"),
+    async (route) => {
+      await route.fulfill({
+        status: 404,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Chat thread not found" })
+      });
+    }
+  );
 
   await page.goto("/");
   await page.getByRole("button", { name: "Chat with Moss" }).click();
