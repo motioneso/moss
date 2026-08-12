@@ -1439,3 +1439,13 @@ PR #1377). Two open gaps stalled it, both pre-existing and unfixed:
 Replied to Ben with root cause + offer to unblock #1429 (CSS fix + fresh live-path proof) paired
 with #1452 (solve safe-seed gap). Awaiting his direction — no build without his go-ahead per
 CLAUDE.md spec-before-build gate (issues exist, no spec/plan yet for the fix itself).
+
+## 2026-08-12: PR #1584 and PR #1562 merged
+
+- **PR #1584** (fix: stale UAT turnBody assertions, #1583) — routine tier, all checks green,
+  squash-merged `d2dba187a`, branch deleted. Issue #1583 auto-closed.
+- **PR #1562** (#1556 phase 1: bounded chat-context replay contract) — sensitive tier, CI green,
+  live-path UAT already proven by codex-1556 (1 passed / 8.0m, see AWAITING-BEN.md resolved entry),
+  mergeStateStatus CLEAN — squash-merged `fd93546fc`, branch deleted. Issue #1556 stays OPEN on
+  purpose: its scope also covers notes-default retrieval, which PR #1562 didn't build (phase 1 was
+  replay only) — phase 2 still to come.
