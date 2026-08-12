@@ -68,7 +68,11 @@ export class ClaudePrintChatEngine implements CliChatEngine {
     }
 
     const promptPath = join(this.launchOpts.neutralDir, PROMPT_FILENAME);
-    await this.io.writeFile(promptPath, sanitizeInput(text));
+    const prompt =
+      !this.hasSubmitted && this.launchOpts.replayBatch
+        ? `${this.launchOpts.replayBatch}\n\n${text}`
+        : text;
+    await this.io.writeFile(promptPath, sanitizeInput(prompt));
     const launchLine = await this.buildCommand(this.launchOpts, promptPath);
 
     this.currentProcess = spawn("bash", ["-lc", launchLine], {

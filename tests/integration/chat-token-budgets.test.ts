@@ -315,10 +315,9 @@ describe("DataContextChatPersistence.recordTurn rolling summary", () => {
       const thread = await dataContext.withDataContext(ctx, (db) =>
         chatRepo.openNewThread(db, { title: "summary-store test" })
       );
-      // Each recordTurn call stores 2 messages (user + assistant); the gate
-      // fires once stored messages exceed 40, i.e. on the 21st turn.
-      for (let i = 1; i <= 21; i++) {
-        await persistence.recordTurn(ids.userA, `u${i}`, `bot${i}`, {
+      // Drive past the summary's character cap as well as the 40-message write gate.
+      for (let i = 1; i <= 45; i++) {
+        await persistence.recordTurn(ids.userA, `u${i}-${"x".repeat(50)}`, `bot${i}`, {
           provider: "anthropic",
           model: "x"
         });
@@ -328,6 +327,7 @@ describe("DataContextChatPersistence.recordTurn rolling summary", () => {
         chatRepo.getThreadById(db, thread.id)
       );
       expect(updated?.conversation_summary).not.toBeNull();
+      expect(updated?.conversation_summary).toMatch(/user: u1-/);
       expect(updated?.conversation_summary).toMatch(/bot1\b/);
     } finally {
       if (origK === undefined) {

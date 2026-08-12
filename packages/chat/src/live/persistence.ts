@@ -490,12 +490,11 @@ function deriveChatTitle(userText: string): string {
 function buildRollingSummary(
   oldTurns: readonly { role: "user" | "assistant"; content: string }[]
 ): string {
-  const assistantContent = oldTurns
-    .filter((m) => m.role === "assistant")
-    .map((m) => m.content.trim())
+  const priorContent = oldTurns
+    .map((m) => `${m.role}: ${m.content.trim()}`)
     .filter(Boolean)
     .join(" ");
-  const raw = `As of turn ${oldTurns.length}: ${assistantContent}`;
-  // Cap to 2000 chars so the column stays bounded on very long conversations.
-  return raw.length > 2000 ? `...${raw.slice(-2000)}` : raw;
+  const raw = `As of turn ${oldTurns.length}: ${priorContent}`;
+  // Cap to 2000 chars so the column stays bounded while retaining the oldest summarized facts.
+  return raw.length > 2000 ? `${raw.slice(0, 1997)}...` : raw;
 }

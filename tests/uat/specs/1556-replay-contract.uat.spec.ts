@@ -151,6 +151,7 @@ test("forced relaunch replays prior context and answers a continuity question (#
     expect(fillerBody.reply?.trim().toLowerCase(), `turn ${turnNumber} did not reply ok`).toBe(
       "ok"
     );
+    await page.waitForTimeout(3_200);
   }
 
   // Resolve the seeded thread and its pre-relaunch message count (AC-5 no-prose baseline).
