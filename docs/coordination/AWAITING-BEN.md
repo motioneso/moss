@@ -53,6 +53,11 @@ further action needed. -->
 
 ## OPEN 2026-08-11: #1533 live-path proof blocked — missing real-chat UAT credential
 
+**Draft PR open: https://github.com/motioneso/moss/pull/1574** — code-complete, gate green,
+sensitive-tier check done, verified via `gh pr view 1574` (draft, correct branch). Build lane is
+finished and its worktree is ready for reap. **Only the live-path proof is outstanding —
+do not merge, do not mark #1533 Done until it's supplied.**
+
 Repeated drawer-regression UAT reruns (run3 through run7) on #1533 kept failing identically. Root
 cause is **not a code defect**: `JARVIS_UAT_REAL_CHAT_TOKEN_FILE` is absent from env, so the
 real-chat UAT harness can't authenticate to the live LLM chat endpoint at all — every real-chat
