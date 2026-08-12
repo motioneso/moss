@@ -36,6 +36,8 @@ import {
   SESSION_PREFIX,
   VerifiedSubmitError
 } from "../../packages/chat/src/live/cli-chat-engine.js";
+import { ClaudePersistentRuntimeEngine } from "../../packages/chat/src/live/persistent-runtime-engine.js";
+import { createChatEngine } from "../../packages/chat/src/live/engine-selection.js";
 import {
   decodeFrame,
   encodeFrame,
@@ -203,6 +205,20 @@ const launchParams = (provider: "anthropic" = "anthropic") => ({
 });
 
 describe("§4.1.0a single-active-user gate", () => {
+  it("counts a persistent-runtime engine with no mux session as live", async () => {
+    const { io } = makeFakeIo();
+    const host = makeHost(io);
+    const persistent = createChatEngine("anthropic", "alice", io, {
+      persistentRuntimeEnabled: true
+    });
+    expect(persistent).toBeInstanceOf(ClaudePersistentRuntimeEngine);
+    (host as unknown as { engines: Map<string, unknown> }).engines.set("alice", persistent);
+
+    await expect(host.launch("bob", launchParams())).rejects.toBeInstanceOf(
+      CliChatUnavailableError
+    );
+  });
+
   it("rejects a 2nd launch for a DIFFERENT sessionKey while one is live; succeeds after kill", async () => {
     const { io } = makeFakeIo();
     const host = makeHost(io);
@@ -259,6 +275,24 @@ describe("§4.1.0a single-active-user gate", () => {
 });
 
 describe("§4.5 kill-by-mux-name + §4.6 listLiveSessions", () => {
+  it("does not reap a registry-only engine as a mux orphan", async () => {
+    const { io, live, run } = makeFakeIo();
+    const host = makeHost(io);
+    const persistent = createChatEngine("anthropic", "persistent", io, {
+      persistentRuntimeEnabled: true
+    });
+    expect(persistent).toBeInstanceOf(ClaudePersistentRuntimeEngine);
+    (host as unknown as { engines: Map<string, unknown> }).engines.set("persistent", persistent);
+
+    await host.startupSweep();
+
+    expect(live).not.toContain(SESSION_PREFIX + "persistent");
+    expect(run).not.toHaveBeenCalledWith(
+      "tmux",
+      expect.arrayContaining(["kill-session", "-t", "=" + SESSION_PREFIX + "persistent"])
+    );
+  });
+
   it("listLiveSessions enumerates by mux (not the engine Map)", async () => {
     const { io, live } = makeFakeIo();
     const host = makeHost(io);
