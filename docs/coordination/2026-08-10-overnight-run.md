@@ -1828,3 +1828,27 @@ result before merging.
 Next: on Fable GRANT → merge #1587, `needs-ben coordinator` digest, close #1256. On Fable
 WITHHOLD → treat as a real blocker, escalate findings to Ben directly (delegation doesn't cover a
 withheld sign-off). Also still watching #1429 build + #1554; #1452 held on Ben.
+
+## 2026-08-12 (cont.): #1256/PR #1587 MERGED
+
+Fable sign-off GRANTED (independently re-verified sole-callers, FORCE RLS, fail-closed ordering,
+prod wiring — corrected NEW-1's status-code direction: it's 404-on-confirm disclosing existence,
+not 409; severity unchanged, non-blocking) —
+https://github.com/motioneso/moss/pull/1587#issuecomment-5273332714
+
+Session-id authority re-confirmed at merge time (`0bb9f516-c026-...`, pane w1:p7P). Merged
+`squash --delete-branch` → `2c00c3ace`. #1256 closed with links to both verdicts. Filed the 2
+non-blocking follow-ups as proper task issues (not left to rot as comments): #1591 (gateway.ts:445
+ownership-before-liveness reorder) and #1592 (chat/routes.ts:217 scope the 503-on-unwired-gateway
+path off reject/cancel).
+
+`w1:p8E` (#1429 build) showed `done` again post-merge — ground-truthed: 5/6 tasks complete, gate
+running with the lane's own Monitor watching it. False positive, left alone.
+
+merges_since_relay: 1 (security-tier — relay rule requires a relay after every security-tier merge
+unconditionally; flush+relay is due next turn per the coordinate skill's own instruction, but I'm
+continuing per Ben's standing override to never spawn a successor — noting the counter for
+visibility instead).
+
+Next: send `needs-ben coordinator` merge digest; continue watching #1429 (near done) + #1554;
+#1452 still held on Ben.
