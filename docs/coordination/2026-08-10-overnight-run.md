@@ -915,3 +915,25 @@ asserts each blocks a different-key launch via `currentLiveKeys()` and is not mu
 
 Dispatched `qa-1352-v2` (agent `a2ed4e610ab7f4a32`) to re-verify just the remediated gap plus CI
 green on the new HEAD, not the whole PR from scratch. Awaiting verdict.
+
+## 2026-08-12 08:1x — #1486 QA GREEN, still merge-held; needs-ben ping gap fixed
+
+**#1486 (trust-proxy-fix, security tier) — QA GREEN on code, MERGE-READY: NO (process/Ben-hold
+only).** Opus adversarial QA on PR #1577 (verdict posted
+https://github.com/motioneso/moss/pull/1577#issuecomment-5264103198): 0 blocking code findings.
+Adversarial probes confirmed empirically: gateway-spoof rejected (pinned-IP peer works, injected
+XFF from an untrusted peer does not override `req.ip`), `loopback` keyword intact for #1403's
+host-dev tier, 35 fuzzed legacy/malformed trust values (including `linklocal`/`uniquelocal`
+range-keyword holes) all correctly fail loud. 4 non-blocking notes (no SET-mode regression test,
+IPv6 zone-id cosmetic strip, one long doc line, Caddy IP-pinning correctly deferred to #901).
+Also caught a real CI flake unrelated to our PG-contention pattern (`chat-model-pill-surface.test.tsx`
+failed independently on `main` too) — one re-run per policy cleared it to green.
+
+QA flagged one process gap: no `needs-ben` ping had ever been sent for the #1486 merge hold (only
+an `AWAITING-BEN.md` entry). Fixed — sent `needs-ben` msg `1786522369455563282` and updated the
+canonical `AWAITING-BEN.md` entry with the QA-GREEN status (commit `ebfe4fadb`). **Still not
+merging** — hold is unconditional on Ben's prod `JARVIS_TRUST_PROXY` env migration confirmation,
+independent of QA outcome.
+
+**Status:** #1555 merged. #1352 remediated (`87c0a03de`), re-QA (`qa-1352-v2`) in flight. #1486 QA
+GREEN, held for Ben. #1434 QA still running. #1556 still blocked on Ben's OAuth click.
