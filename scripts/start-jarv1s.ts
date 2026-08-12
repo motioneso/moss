@@ -86,13 +86,13 @@ export function buildChildEnv(
     }
   }
 
-  next.PATH = env.PATH ?? "/usr/local/bin:/usr/bin:/bin";
+  next.JARVIS_CLI_TOOLS_PREFIX = env.JARVIS_CLI_TOOLS_PREFIX ?? "/data/cli-tools";
+  next.PATH = `${next.JARVIS_CLI_TOOLS_PREFIX}/bin:${env.PATH ?? "/usr/local/bin:/usr/bin:/bin"}`;
   next.HOME = resolveMossEnv(env, "JARVIS_CLI_HOME") ?? "/data/cli-auth";
   next.JARVIS_CLI_HOME = next.HOME;
   next.JARVIS_CLI_HOME_BASE = resolveMossEnv(env, "JARVIS_CLI_HOME_BASE") ?? next.HOME;
   next.JARVIS_CLI_NEUTRAL_BASE =
     resolveMossEnv(env, "JARVIS_CLI_NEUTRAL_BASE") ?? "/data/cli-auth/chat";
-  next.JARVIS_CLI_TOOLS_PREFIX = env.JARVIS_CLI_TOOLS_PREFIX ?? "/data/cli-tools";
   next.NPM_CONFIG_PREFIX = env.NPM_CONFIG_PREFIX ?? next.JARVIS_CLI_TOOLS_PREFIX;
   next.JARVIS_CLI_RUNNER_SOCKET = env.JARVIS_CLI_RUNNER_SOCKET ?? "/run/jarv1s/cli-runner.sock";
   next.JARVIS_CLI_RUNNER_RPC_SECRET = env.JARVIS_CLI_RUNNER_RPC_SECRET;

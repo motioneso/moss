@@ -111,8 +111,21 @@ describe("start-jarv1s startup plan", () => {
     const cliRunnerServerEnv = buildChildEnv("cli-runner", source);
 
     for (const [key, value] of Object.entries(expectedForCli)) {
+      if (key === "PATH") {
+        expect(cliRunnerServerEnv.PATH).toBe(`/data/cli-tools/bin:${value}`);
+        continue;
+      }
       expect(cliRunnerServerEnv[key]).toBe(value);
     }
+  });
+
+  it("puts installed provider tools on the cli-runner PATH", () => {
+    const env = buildChildEnv("cli-runner", {
+      PATH: "/usr/bin:/bin",
+      JARVIS_CLI_TOOLS_PREFIX: "/custom/cli-tools"
+    });
+
+    expect(env.PATH).toBe("/custom/cli-tools/bin:/usr/bin:/bin");
   });
 
   it.each<ChildRole>(["api", "worker"])("%s keeps app runtime env", (role) => {
