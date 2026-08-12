@@ -460,3 +460,17 @@ passed/1 unrelated pre-existing flake (`briefing-action-rows.spec.ts`, passes in
 Pushed to `build/1533-chat-surface-routing` at `d4870e39f`. New CI run `31556757357` in progress.
 Reaped the fix agent's isolated worktree. Watching for CI completion; live-path proof remains
 separately outstanding (AWAITING-BEN.md) regardless of gate outcome.
+
+**Main CI (image build+publish) finished: success.** New image published to rolling `:edge`
+(prod's configured tag per `prod-edge-repoint-watchtower-posture` memory), includes #1575's
+`container_name: moss` compose change and everything else already on `main`. Two separate things
+for "prod on the latest," per standing prod-deploy memory:
+1. **General freshness** — Watchtower is unscoped and polls `:edge` daily ~4am; will auto-pull
+   this image with no action needed, or Ben can force it sooner via a manual Portainer pull.
+2. **The `container_name: moss` change specifically** — Watchtower only swaps the image on the
+   existing container config; it does NOT re-apply compose-file-level changes like a new
+   `container_name`. That needs an actual `docker compose up` recreate against
+   `/home/ben/JarvisProd/docker-compose.prod.yml` (env file `/home/ben/JarvisProd/env.production.local`
+   per that file's own compose labels) — which is Ben's call/action per "Ben owns prod, never
+   CLI docker compose up" policy. Coordinator has no prod secrets to do this itself.
+Reported both to Ben with the exact command for (2). Still watching PR #1574's CI separately.
