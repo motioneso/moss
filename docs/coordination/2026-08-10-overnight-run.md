@@ -751,3 +751,19 @@ pane `w1:p7P`, label `Coordinator`, unchanged.
 tier (#1434/#1486 security-tier → Opus adversarial + `gh pr comment` verdict; #1352/#1555
 sensitive-tier → standard QA); #1486 merge stays held regardless of QA outcome; auto-merge
 routine/sensitive after green (none are `routine` this batch); keep `AWAITING-BEN.md` current.
+
+## Supervision note (2026-08-12, resident, no relay)
+
+- **#1434**: targeted tests + format/lint/typecheck green. 1st isolated full-gate run failed
+  typecheck only (temp React-renderer test lacked root React typings, unrelated to the sync-
+  throttle diff) — build agent fixed by swapping in the factory shared-clock seam, amended commit
+  `52430f54c`, restarted `scripts/run-gate.sh`. 2nd run is hanging several minutes on DB-
+  provisioning/runner-lock — this is the same cross-lane Postgres-contention pattern already seen
+  in #1486/#1555 this run (4 isolated gate DBs still share the underlying cluster/roles). Not a
+  defect in #1434's diff. Instructed the agent: keep waiting event-driven up to ~10min total, no
+  second concurrent gate, no unbounded retry loop; past that, stop, report targeted-green +
+  full-gate-inconclusive-due-to-contention in the PR, and proceed to wrap-up rather than block on
+  a clean full-gate run. Confirmed queued in pane `w1:p81` (busy at the time).
+- All 4 lanes (`w1:p70`/#1352, `w1:p81`/#1434, `w1:p82`/#1486, `w1:p83`/#1555) reconfirmed
+  `working` via fresh `herdr pane list` at this checkpoint. Monitor task `br805svl1` still running.
+- No PR-open reports yet from any lane as of this checkpoint.
