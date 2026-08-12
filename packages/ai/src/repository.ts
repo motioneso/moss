@@ -1720,6 +1720,14 @@ export class AiRepository {
     return this.safeAssistantActionQuery(scopedDb).execute();
   }
 
+  async getAssistantAction(
+    scopedDb: DataContextDb,
+    actionId: string
+  ): Promise<AiAssistantActionRequestSafeRow | undefined> {
+    assertDataContextDb(scopedDb);
+    return this.safeAssistantActionQuery(scopedDb).where("id", "=", actionId).executeTakeFirst();
+  }
+
   async createPendingAssistantAction(
     scopedDb: DataContextDb,
     input: CreateAiAssistantActionInput
