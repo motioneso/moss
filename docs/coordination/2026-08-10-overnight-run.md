@@ -1160,3 +1160,32 @@ Also this segment: stray pane `w1:p84` reaped (dead, no session). #1256 lane re-
 `run_attempt: 2` re-run by actor `motioneso`, not a stale read — attempt 1's failure log still
 inaccessible until the run fully concludes; background Monitor `bplfd0480` watching. Will not treat
 a green attempt 2 as resolution without also seeing attempt 1's actual failure reason.
+
+## 2026-08-12: #1554 lane — redundant-plan catch, approved continuation under #1557's plan
+
+`prov-chat-1554` relayed at 72% with zero code written, but flagged a high-value finding first:
+this exact spec was already built in phases under task issue **#1557** ("Build persistent provider
+chat runtime (spec for #1554)"), now CLOSED, with Phase 1 (neutral `ProviderRuntime` contract,
+Claude persistent adapter, bounded stream decoder, fail-closed MCP admission, engine-selection flag
+wiring) MERGED via PR #1561 (2026-08-11, adjudicated REVISE then fixed) — and a full phased plan
+already approved at `docs/superpowers/plans/2026-08-10-1557-persistent-provider-chat-runtime.md`
+covering Phases 2-5.
+
+**Independently verified before approving** (not taken on the agent's word): issue #1557 state
+CLOSED via `gh issue view`; PR #1561 `state: MERGED`, `mergedAt: 2026-08-11T15:51:52Z` via
+`gh pr view`; all 4 Phase 1 files present on `origin/main` at `packages/chat/src/live/`
+(`provider-runtime.ts`, `persistent-runtime-engine.ts`, `claude-persistent-runtime.ts`,
+`persistent-stream-decoder.ts`) via `git ls-tree`; `chat.persistent_runtime.enabled` wired in
+`engine-selection.ts`/`runtime.ts`; plan file present on `main`; `runtime-config-keys.ts` confirmed
+still missing pool-cap/idle-reap-minutes keys (matches the claimed Phase-2-not-started scope).
+
+**Approved:** continue under the existing #1557 plan starting at Phase 2 (pool/LRU/reap/admin
+settings), tracking issue switched to #1554 (do not reopen #1557). Successor still required to run
+plan-build's seams check for code drift since 2026-08-10 before writing anything. This avoided a
+wasted from-scratch plan-build on a spec that was ~1/5 already shipped — the spawn handoff I wrote
+didn't know about #1557 (that issue/PR pairing wasn't surfaced during Phase 0 for this mid-run
+addition); worth remembering that a spec's own issue number isn't guaranteed to be the only/first
+issue that built against it.
+
+Watching for the successor to spawn and confirm driving before reaping `prov-chat-1554`'s pane
+(`w1:p88`, session `7c0b9ff8-86f4-4586-a742-0781f4cd15b3`).
