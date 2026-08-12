@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { isIP } from "node:net";
 
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
@@ -138,6 +139,22 @@ export interface ApiServerConfig {
   readonly externalModulesDir: string;
 }
 
+const TRUST_PROXY_ERROR =
+  'JARVIS_TRUST_PROXY must be unset, "loopback", or a comma-separated list of exact IP addresses';
+
+export function resolveTrustProxy(value: string | undefined): false | string | string[] {
+  const normalized = value?.trim() ?? "";
+  if (!normalized) return false;
+  if (normalized.toLowerCase() === "loopback") return "loopback";
+
+  const addresses = normalized.split(",").map((address) => address.trim());
+  if (addresses.some((address) => !address || isIP(address) === 0)) {
+    throw new Error(TRUST_PROXY_ERROR);
+  }
+
+  return addresses.length === 1 ? addresses[0]! : addresses;
+}
+
 export function hasAuthMaterial(request: FastifyRequest): boolean {
   const authorization = request.headers.authorization;
   const cookie = request.headers.cookie;
@@ -193,6 +210,7 @@ export function discoverExternalModules(
 }
 
 export function createApiServer(options: CreateApiServerOptions = {}) {
+  const trustProxy = resolveTrustProxy(resolveMossEnv(process.env, "JARVIS_TRUST_PROXY"));
   const apiServerConfig = options.apiServerConfig ?? resolveApiServerConfig();
   const appDb =
     options.appDb ??
@@ -218,7 +236,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     logger: options.logger ?? true,
     // Honor XFF only when an explicit opt-in confirms a trusted reverse proxy is in
     // front. Without this, XFF is attacker-controlled and must not key the rate limiter.
-    trustProxy: !!resolveMossEnv(process.env, "JARVIS_TRUST_PROXY")
+    trustProxy
   });
   const authRuntime =
     options.authRuntime ??
@@ -255,12 +273,13 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     referrerPolicy: { policy: "no-referrer" },
     // Only activate HSTS when we know TLS is in use. Without TLS the header is
     // not just useless — it can lock users out of plain-HTTP LAN access.
-    hsts: resolveMossEnv(process.env, "JARVIS_TRUST_PROXY")
-      ? {
-          maxAge: 31536000,
-          includeSubDomains: true
-        }
-      : false
+    hsts:
+      trustProxy !== false
+        ? {
+            maxAge: 31536000,
+            includeSubDomains: true
+          }
+        : false
   });
 
   // Register rate-limit first, then register all routes inside server.after() so the
