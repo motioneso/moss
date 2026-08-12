@@ -9,7 +9,7 @@ import {
 } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
 import { useDismissableMenu } from "../shared/use-dismissable-menu.js";
-import type { AiConfiguredModelDto, ChatModelOverrideSettingsDto } from "@moss/shared";
+import type { AiConfiguredModelDto, ChatModelOverrideSettingsDto, ChatSurface } from "@moss/shared";
 import "./chat-model-pill.css";
 
 type ModelChoice = {
@@ -24,7 +24,8 @@ type ModelChoice = {
 export function ChatModelPill(props: {
   readonly disabled: boolean;
   readonly privateMode: boolean;
-  readonly onCrossProviderSwitch: () => void;
+  readonly surface: ChatSurface;
+  readonly onCrossProviderSwitch: (surface: ChatSurface) => void;
 }) {
   const queryClient = useQueryClient();
   const settingsQuery = useQuery({
@@ -47,17 +48,17 @@ export function ChatModelPill(props: {
     onClose: closeMenu
   });
   const mutation = useMutation({
-    mutationFn: async (choice: ModelChoice) => {
-      const result = await putChatModelOverride({ modelId: choice.modelId });
+    mutationFn: async (vars: { readonly choice: ModelChoice; readonly surface: ChatSurface }) => {
+      const result = await putChatModelOverride({ modelId: vars.choice.modelId });
       queryClient.setQueryData(queryKeys.ai.chatModelOverride, result);
-      if (choice.relation === "same-provider") {
-        await switchChatProvider();
+      if (vars.choice.relation === "same-provider") {
+        await switchChatProvider(vars.surface);
       } else {
-        props.onCrossProviderSwitch();
+        props.onCrossProviderSwitch(vars.surface);
       }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.ai.chatModelOverride }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.chat.threads() })
+        queryClient.invalidateQueries({ queryKey: queryKeys.chat.threads(vars.surface) })
       ]);
     }
   });
@@ -93,7 +94,7 @@ export function ChatModelPill(props: {
       );
       if (!ok) return;
     }
-    mutation.mutate(choice);
+    mutation.mutate({ choice, surface: props.surface });
   };
 
   return (
