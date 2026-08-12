@@ -26,38 +26,10 @@ recorded on issue #1560 (https://github.com/motioneso/moss/issues/1560#issuecomm
 ("feat(chat): thread surface through send routing (#1533)") merged 2026-08-12T03:11:37Z — the
 real-chat-token gap this entry described is moot now that the PR landed. -->
 
-## #1486 trustProxy fix will reject prod's current env value — DO NOT MERGE/DEPLOY without you
-
-**2026-08-12, non-blocking tonight.** Fable ruled (delegated authority,
-https://github.com/motioneso/moss/issues/1486#issuecomment-5263217119): pin the exact static Caddy
-IP for `trustProxy`, and **fail loud at boot** on legacy/unparseable values instead of silently
-trusting all. Prod currently runs `JARVIS_TRUST_PROXY=1` — a legacy boolean the new code will
-reject on startup. Prod auto-pulls from `:edge` ~4am (`prod-edge-repoint-watchtower-posture.md`).
-
-**Not acting on this myself** — deploy/prod env is your domain (Portainer only, never CLI). Build
-lane for #1486 will proceed (PR only), but I will hold it un-merged until you confirm the env var
-migration timing, so an auto-pull can't hit prod with a boot-time crash. No `needs-ben` ping sent —
-doesn't block anything tonight, flagging for when you're back.
-
-**Update 2026-08-12, Ben (mid-sign-off): "you can do whatever is needed for 1486 (is that still
-true? we've updated a bit since that was created)"** — checked before he went fully offline:
-nothing has landed since this entry was written that changes the premise. `apps/api/src/server.ts:221`
-still does the naive `!!JARVIS_TRUST_PROXY` boolean coercion the ruling replaces; no PR has touched
-it or prod's env. I have no visibility into prod's *actual live* env value from here (no Portainer
-access), so I can't fully confirm-or-deny "still true" — only that nothing in the repo contradicts
-it. Given that uncertainty and that Ben signed off before I could report back, holding the
-conservative course: build/PR proceeds, **merge still held** for his explicit confirmation on
-return, rather than risk the ~4am `:edge` auto-pull hitting an unmigrated prod env unattended.
-
-**Update 2026-08-12 08:xx: PR #1577 is now code-approved + security-tier QA GREEN**
-(https://github.com/motioneso/moss/pull/1577#issuecomment-5264103198) — adversarial Opus QA found
-0 blocking code findings, verified the fail-loud/exact-IP behavior empirically (gateway-spoof
-rejected, `loopback` intact, 35 fuzzed legacy/malformed values all correctly rejected). **Still not
-merging** — the only open item is this prod env migration confirmation. Ping sent this update
-(`needs-ben` msg `1786522369455563282`) since the earlier "no ping, doesn't block tonight" call
-turned out to leave the protocol's ping requirement unmet once the PR was actually ready — QA
-independently flagged the gap. Nothing else is blocked on this tonight; flagging so it's the first
-thing you see.
+<!-- Resolved 2026-08-12: #1486 trustProxy fix. Ben confirmed "you can do whatever is needed for
+1486" after reviewing the premise. Merged PR #1577 squash 33f57b1fa5451193424bc76f0489dfe09d49434c
+— exact Caddy IP trust + fail-loud on legacy/unparseable values. Issue #1486 closed. Worktree
+reaped. -->
 
 ## #1556 UAT blocked on a one-time interactive `claude setup-token` OAuth step — STILL OPEN
 
