@@ -1085,3 +1085,20 @@ pane `w1:p87`) confirmed actively working, not stalled. Predecessor (`w1:p86`) r
 item, not yet an intervention:** two relays with no task code landed — if a third relay lands with
 still-zero code, TaskStop and take over per the "wait-declaration vs frozen" stall playbook rather
 than approving a fourth spawn.
+
+## 2026-08-12: #1556 PR #1562 reported live-path verified — CI not actually green yet
+
+Codex lane (`codex-1556`, pane `w1:p7Y`) reports PR #1562 (`1556-p1-replay-contract` →
+`main`, head `90c34cd7d`) live-path verified: UAT spec `1556-replay-contract.uat.spec.ts` passed
+(8.0m, 45 real Claude seed turns, forced-relaunch continuity proven via a planted marker string,
+isolated containers/volumes/network torn down). Two real bugs found+fixed during the live run:
+rolling summary omitted/truncated early user facts; non-interactive Claude ignored `replayBatch`
+on relaunch. Focused suites green (Claude print 11/11, token-budget 18/18); full foundation gate
+green except one pre-existing environmental UAT-seed/shared-DB isolation issue (not this PR's
+code). **Independently verified PR state directly** (`gh pr view`): head sha, ready/mergeable/open
+all match the report exactly. **But `gh pr checks` shows CI still `pending`** on this exact head
+(new push triggered a fresh run) — "ready for final review" is accurate for the work, not yet for
+mergeability. Not treating self-report as proof; background Monitor watching for CI to resolve.
+Tier: **sensitive** (CLI runner, per the tier table) — once CI is green, spawn Sonnet
+`coordinated-qa` before merge; sensitive tier auto-merges after green QA + per-merge digest to Ben,
+no explicit sign-off gate (that's security-tier only). No merge yet.
