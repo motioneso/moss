@@ -450,3 +450,13 @@ a fix agent (worktree-isolated) to push the corrected matchers directly to `buil
 which will re-trigger PR #1574's CI. Watching for that agent's completion, then will re-check CI
 before bringing back to Ben for merge (live-path proof still separately outstanding per
 AWAITING-BEN.md — this fix does not resolve that blocker, only the red gate).
+
+**#1574 fix pushed, new CI running.** Fix agent found 2 additional related breakages beyond the
+original 4 (a 4th route mock at `chat-drawer.spec.ts:305`, and two `turnBody` equality assertions
+in `chat-attachments.spec.ts` missing the new `surface: "drawer"` field) — same root cause
+(#1533's `?surface=drawer`/body field addition), different manifestation, both test-only. Verified
+locally: `tsc`/`eslint`/`prettier` clean, 18/18 relevant e2e tests pass, full e2e suite 90
+passed/1 unrelated pre-existing flake (`briefing-action-rows.spec.ts`, passes in isolation).
+Pushed to `build/1533-chat-surface-routing` at `d4870e39f`. New CI run `31556757357` in progress.
+Reaped the fix agent's isolated worktree. Watching for CI completion; live-path proof remains
+separately outstanding (AWAITING-BEN.md) regardless of gate outcome.
