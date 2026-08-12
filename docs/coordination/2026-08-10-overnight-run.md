@@ -1726,3 +1726,15 @@ assuming main-CI-green was the only blocker.
 
 main-CI run `31631303939`: confirmed complete via Monitor `bcdxyobvp` ("completed success");
 independent `gh run view` re-check not yet re-run this tick but not blocking — main is unblocked.
+
+## 2026-08-12: #1429 spawned
+
+- Agent `fix-1429-briefing-css`, pane `w1:p8C` (labeled "PR1429 briefing action-row CSS"), session
+  `eabebeb7-7b44-4a99-a382-2cf474221271`, worktree `.claude/worktrees/fix-1429-briefing-css`,
+  branch `fix-1429-briefing-css` off `origin/main`. Tier: routine. Handoff:
+  `docs/coordination/handoff-1429-briefing-css.md`. Booted on `--model sonnet`, confirmed working.
+- #1452 held — asked Ben in chat to pick a direction on the 3-way safe-seed design fork (UAT-spec-
+  triggered generation / dedicated non-shared instance / insert-by-recorded-id fixtures), or
+  delegate the choice to the build agent's plan for coordinator review. Awaiting his reply.
+- `w1:p8A` (#1256) and `w1:p8B` (#1554): both showed `agent_status: done` this tick but bounded
+  reads confirmed genuinely active (own monitors running) — known stale-status trap, left alone.
