@@ -804,3 +804,32 @@ routine/sensitive after green (none are `routine` this batch); keep `AWAITING-BE
   "fix"), spec §4.1.0a text actually amended in-diff, clean rebase against #1557's landed shape.
 - Waiting on: `qa-1352` verdict notification. Auto-merge eligible after green (sensitive tier, no
   Ben sign-off required) — per-merge digest to Ben still owed.
+
+## #1434 PR open, QA dispatched (2026-08-12)
+
+- **PR #1579** (https://github.com/motioneso/moss/pull/1579), branch `1434-sync-throttle`,
+  rebased on `origin/main` at `9adfb4854`. Worktree clean, reapable after QA/merge resolve.
+  Targeted unit 4/4, format/lint/typecheck green. Full gate: INCONCLUSIVE (stopped ~10min into
+  shared-DB-provisioning/runner-lock stall per prior guidance — 4th independent lane tonight to
+  hit the cross-lane PG-contention signature, alongside #1352/#1486/#1555). No code failure
+  observed before stopping. Live-path: n/a (internal throttle behavior, no new UI surface).
+- **Security tier — Opus adversarial QA dispatched** (`Agent` subagent `coordinated-qa`, isolation
+  worktree, model opus, name `qa-1434`). Briefed to adversarially probe: whether `lastUploadAt` is
+  set unconditionally before every upload attempt (incl. early-return/throw paths), whether the
+  useRef genuinely persists across route remounts (not just re-renders), whether any
+  wrapper/caller could retry underneath the no-retry logic, and that the diff touches only the two
+  named files (no `CHAT_MUTATION_MAX`/limiter changes). Mandatory `gh pr comment` verdict required.
+- Merge: security tier — needs Ben-or-delegated-Fable sign-off even after green QA (design
+  question itself already Fable-ruled; this sign-off is specifically the merge gate).
+- Waiting on: `qa-1434` verdict notification.
+
+## Cross-lane PG-contention: now 4/4 lanes confirmed (2026-08-12)
+
+Every one of tonight's 4 lanes (#1352, #1434, #1486, #1555) hit the same
+tuple-concurrently-updated / DB-provisioning-stall signature on its isolated full-gate run despite
+separate `JARVIS_PGDATABASE` names — confirms this is a shared-cluster/role contention effect from
+running 4 concurrent full gates, not any lane's diff. Saved to agentmemory
+(`mem_msprnsjv_fed501f388e1`) as a standing fact for future runs: **stagger concurrent full-gate
+DB provisioning** rather than batch-spawning N lanes that all reach `run-gate.sh` around the same
+time. This run proceeded anyway (batch already spawned) — targeted-suite-green + full-gate
+contention-noted is being treated as sufficient evidence per-lane, consistent across all 4.
