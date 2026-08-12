@@ -68,7 +68,8 @@ import {
   type RpcReadNewParams,
   type RpcReadNewResult,
   type RpcSubmitParams,
-  type RpcSubmitResult
+  type RpcSubmitResult,
+  type ReapReason
 } from "./rpc-contract.js";
 import type { CliChatEngine, EngineKillOpts, EngineLaunchOpts, TranscriptRecord } from "./types.js";
 
@@ -147,6 +148,13 @@ export interface RpcConnectionOpts {
    * same connection without self-deadlocking.
    */
   readonly onReconcile?: (driver: RpcReconcileDriver) => Promise<void>;
+  /**
+   * #1554 Decision 2 — fired on an unsolicited `sessionReaped` push (RPC topology's cli-runner-
+   * resident persistent runtime pool reaped a session server-side). The manager wires this to
+   * `ChatSessionManager.handleRemoteReap`. Absent on the in-process/host path (no separate
+   * cli-runner ever sends this push there).
+   */
+  readonly onSessionReaped?: (sessionKey: string, reason: ReapReason) => void;
   /** {method,id,sessionKey,bytes}-only logger (§6.4). Defaults to a no-op. */
   readonly logger?: RpcClientLogger;
   readonly reconnectMinMs?: number;
@@ -194,6 +202,7 @@ export class RpcConnection {
   private readonly socketPath: string;
   private readonly rpcSecret: string;
   private readonly onReconcile?: (driver: RpcReconcileDriver) => Promise<void>;
+  private readonly onSessionReaped?: (sessionKey: string, reason: ReapReason) => void;
   private readonly log: RpcClientLogger;
   private readonly reconnectMinMs: number;
   private readonly reconnectMaxMs: number;
@@ -220,6 +229,7 @@ export class RpcConnection {
     this.socketPath = opts.socketPath;
     this.rpcSecret = opts.rpcSecret;
     this.onReconcile = opts.onReconcile;
+    this.onSessionReaped = opts.onSessionReaped;
     this.log = opts.logger ?? NOOP_LOGGER;
     this.reconnectMinMs = opts.reconnectMinMs ?? RECONNECT_MIN_MS;
     this.reconnectMaxMs = opts.reconnectMaxMs ?? RECONNECT_MAX_MS;
@@ -627,6 +637,17 @@ export class RpcConnection {
   }
 
   private routeFrame(frame: RpcFrame): void {
+    // #1554 Decision 2: unsolicited server-initiated push, not a request/response. Terminal pushes
+    // (`terminalData`/`terminalExit`) ride `TerminalRpcClient`'s own separate connection (this
+    // connection never sees them, per that file's header comment) — the only push channel this
+    // connection routes is `sessionReaped`. No `id` to settle and no bootId-driven reconciliation
+    // implication, so this returns before the ok/err-only check below.
+    if (frame.t === "push") {
+      if (frame.channel === "sessionReaped") {
+        this.onSessionReaped?.(frame.sessionKey, frame.reapReason);
+      }
+      return;
+    }
     if (frame.t !== "ok" && frame.t !== "err") {
       // §3.7: an unexpected discriminant on the response stream is a malformed frame — close.
       this.log.warn("cli-runner sent an unexpected frame discriminant; closing");

@@ -183,4 +183,26 @@ describe("PersistentRuntimePool.release / sweepIdle", () => {
     expect(freshReap).not.toHaveBeenCalled();
     expect(pool.size()).toBe(1);
   });
+
+  // #1554 Decision 2, test case 1: the in-process topology wires `revokeMcpToken` straight into
+  // the pool as `onReap` (no RPC hop — `runtime.ts`'s composition root, task #5). This is the
+  // pool-level half of that contract: `onReap` must fire synchronously off a real idle reap, with
+  // the reaped sessionKey. Fails against an impl that reaps (`runtime.reap()`) without ever
+  // calling `onReap` (i.e. the token would never get revoked in-process).
+  it("sweepIdle's onReap fires synchronously with the reaped sessionKey (in-process revoke wiring)", async () => {
+    const { runtime } = fakeRuntime(idleHealth(0));
+    const revokeMcpToken = vi.fn();
+    const pool = new PersistentRuntimePool({
+      cap: 1,
+      createRuntime: () => runtime,
+      clock: { now: () => 10_000 },
+      onReap: revokeMcpToken
+    });
+
+    await pool.admit("stale", NOOP_OPTS);
+    await pool.sweepIdle(5_000);
+
+    expect(revokeMcpToken).toHaveBeenCalledTimes(1);
+    expect(revokeMcpToken).toHaveBeenCalledWith("stale", "idle-timeout");
+  });
 });

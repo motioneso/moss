@@ -53,6 +53,7 @@ import { ChatSessionManager } from "./chat-session-manager.js";
 import { createRealPersonaFs } from "./persona.js";
 import { DataContextChatPersistence } from "./persistence.js";
 import type { CliChatEngine, EngineKillOpts } from "./types.js";
+import type { ReapReason } from "./provider-runtime.js";
 import { ChatRepository } from "../repository.js";
 
 // Re-exported so the live route and integration tests can reference the
@@ -163,19 +164,24 @@ export interface RpcEngineFactory {
  * reconciliation runs before the first user turn.
  *
  * `onReconcile` is the manager's `reconcileLiveSessions`-driven hook (Lane D); it fires on every
- * (re)connect AND on a `bootId` change (§5.6). `logger` is the {method,id,sessionKey,bytes}-only
- * debug logger (§6.4) — it MUST NOT log frame bodies.
+ * (re)connect AND on a `bootId` change (§5.6). `onSessionReaped` is #1554 Decision 2's counterpart —
+ * fires on an unsolicited `sessionReaped` push (the cli-runner-resident persistent runtime pool
+ * reaped a session server-side); the composition root wires it to `manager.handleRemoteReap`.
+ * `logger` is the {method,id,sessionKey,bytes}-only debug logger (§6.4) — it MUST NOT log frame
+ * bodies.
  */
 function createRpcEngineFactory(opts: {
   readonly socketPath: string;
   readonly rpcSecret: string;
   readonly onReconcile?: (driver: RpcReconcileDriver) => Promise<void>;
+  readonly onSessionReaped?: (sessionKey: string, reason: ReapReason) => void;
   readonly logger?: RpcClientLogger;
 }): RpcEngineFactory {
   const connection = new RpcConnection({
     socketPath: opts.socketPath,
     rpcSecret: opts.rpcSecret,
     onReconcile: opts.onReconcile,
+    onSessionReaped: opts.onSessionReaped,
     logger: opts.logger
   });
   const factory: ChatEngineFactory = (provider, sessionKey, engineOpts) =>
@@ -202,6 +208,9 @@ export function selectEngineFactory(
   opts: {
     readonly mux?: Multiplexer;
     readonly onReconcile?: (driver: RpcReconcileDriver) => Promise<void>;
+    /** #1554 Decision 2 — forwarded to `createRpcEngineFactory`/`RpcConnection`. Ignored on the
+     *  in-process branch below (no separate cli-runner ever sends this push there). */
+    readonly onSessionReaped?: (sessionKey: string, reason: ReapReason) => void;
     readonly logger?: RpcClientLogger;
     readonly env?: NodeJS.ProcessEnv;
     /** #1557 Phase 1: forwarded only to the in-process factory below. The socket/RPC branch
@@ -226,6 +235,7 @@ export function selectEngineFactory(
       socketPath,
       rpcSecret,
       onReconcile: opts.onReconcile,
+      onSessionReaped: opts.onSessionReaped,
       logger: opts.logger
     });
     return { factory, connection };
@@ -393,6 +403,14 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     }
   };
 
+  // #1554 Decision 2: the RPC topology's api-side counterpart to the cli-runner's `sessionReaped`
+  // push — the pool already killed the child server-side; this only needs to catch the api's own
+  // bookkeeping (`sessions` map + MCP token) up to that fact. Same late-bound-`manager` trick as
+  // `onReconcile` above (this closure is captured before `manager` is assigned).
+  const onSessionReaped = (sessionKey: string, reason: ReapReason): void => {
+    void manager.handleRemoteReap(sessionKey, reason);
+  };
+
   // Engine factory + (when the socket is configured) the shared RPC connection. An explicit
   // engineFactory always wins (tests/embedders) and takes the in-process/no-reconcile path. When
   // `engineSelection` is supplied and no explicit factory is given, select via the boot-time fork:
@@ -407,7 +425,8 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
       logger: deps.engineSelection.logger,
       env: deps.engineSelection.env,
       persistentRuntimeEnabled: deps.engineSelection.persistentRuntimeEnabled,
-      onReconcile
+      onReconcile,
+      onSessionReaped
     });
     engineFactory = selected.factory;
     connection = selected.connection;

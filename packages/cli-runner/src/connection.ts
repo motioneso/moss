@@ -118,6 +118,21 @@ export function serveConnection(channel: ByteChannel, deps: ConnectionDeps): voi
       })
   };
 
+  // #1554 Decision 2 — the persistent runtime pool's `onReap` fires host-side (the pool is
+  // process-wide, like the host itself), not connection-side like TerminalHost's PTY output, so
+  // it can't reuse `pushSink`. Every connection registers its own listener on connect and
+  // unregisters on close, symmetric with `ownedTerminalId`/`close()` below, so a reap fans out
+  // as a `sessionReaped` push to every connected client.
+  const unregisterReap = deps.host.addSessionReapedListener((sessionKey, reapReason) => {
+    safeWrite(channel, {
+      t: "push",
+      bootId: deps.bootId,
+      channel: "sessionReaped",
+      sessionKey,
+      reapReason
+    });
+  });
+
   const close = (): void => {
     if (closed) return;
     closed = true;
@@ -129,6 +144,9 @@ export function serveConnection(channel: ByteChannel, deps: ConnectionDeps): voi
     // id is a safe no-op (TerminalHost.clear checks `session.id === id`), so this is correct even
     // if a later connection's `openTerminal` already evicted this connection's terminal.
     if (ownedTerminalId) deps.terminalHost.kill({ terminalId: ownedTerminalId });
+    // #1554 Decision 2 — deregister this connection's reap listener so a closed/dropped
+    // connection doesn't keep accumulating dead listeners on the process-wide host.
+    unregisterReap();
     try {
       channel.end();
     } catch {

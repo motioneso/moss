@@ -40,7 +40,8 @@ import {
   type RpcReadNewResult,
   type RpcCancelSubmitParams,
   type RpcSubmitParams,
-  type RpcSubmitLoginTokenResult
+  type RpcSubmitLoginTokenResult,
+  type ReapReason
 } from "@moss/chat/live";
 import type { Multiplexer, ProviderKind, TmuxIo } from "@moss/ai";
 
@@ -116,6 +117,13 @@ interface ReplayLaunchAttempt {
   readonly promise: Promise<RpcLaunchResult>;
 }
 
+// #1554 Decision 2: fired when the (process-wide) persistent runtime pool reaps a session, so
+// every connected RPC client can be told via a `sessionReaped` push. Registered per-connection
+// by `connection.ts`'s `serveConnection`, not per-terminal like `TerminalHost`'s `pushSink` —
+// the pool's `onReap` fires host-side, not connection-side, and this host is the one
+// process-wide instance shared across all accepted connections.
+export type SessionReapedListener = (sessionKey: string, reason: ReapReason) => void;
+
 export class CliChatEngineHost {
   // #1350: widened from CliChatEngineImpl — a `non_interactive` session is now backed by a
   // one-shot print engine, which implements CliChatEngine but has no multiplexer pane and so
@@ -131,10 +139,23 @@ export class CliChatEngineHost {
   private readonly verifiedSubmitTimeoutMs: number;
   private readonly submitAttempts = new Map<string, Map<string, SubmitAttempt>>();
   private readonly replayLaunches = new Map<string, Map<string, ReplayLaunchAttempt>>();
+  /** #1554 Decision 2: one listener per connected RPC connection; see `SessionReapedListener`. */
+  private readonly reapListeners = new Set<SessionReapedListener>();
 
   constructor(private readonly deps: EngineHostDeps) {
     this.launchTimeoutMs = deps.launchTimeoutMs ?? DEFAULT_LAUNCH_TIMEOUT_MS;
     this.verifiedSubmitTimeoutMs = deps.verifiedSubmitTimeoutMs ?? VERIFIED_SUBMIT_DEADLINE_MS;
+  }
+
+  /** Registers a listener for session-reaped events; returns an unregister function. */
+  addSessionReapedListener(listener: SessionReapedListener): () => void {
+    this.reapListeners.add(listener);
+    return () => this.reapListeners.delete(listener);
+  }
+
+  /** Called by the pool's `onReap` (wired in task #5, main.ts) — fans out to every connection. */
+  notifySessionReaped(sessionKey: string, reason: ReapReason): void {
+    for (const listener of this.reapListeners) listener(sessionKey, reason);
   }
 
   // ─── per-sessionKey serialization (§4.0) ──────────────────────────────────────
