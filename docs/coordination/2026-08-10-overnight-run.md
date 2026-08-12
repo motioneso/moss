@@ -2151,3 +2151,19 @@ State is current as of this entry:
 
 Next: await #1554 QA verdict (async notification) → merge if GREEN, applying the new per-merge
 rule. Continue watching #1429 to genuine completion and #1452 relay5's Tasks 1+2 build.
+
+## 2026-08-12 (cont.): #1429 reports done, PR #1594 — CI still finishing, QA held
+
+`fix-1429-relay2` (`w1:p8E`) reports done: full local gate rc=0 (isolated DB
+`jarvis_gate_fix_1429_briefing_css`, auto-cleaned), pre-push trio clean, rebased+pushed, jds-class
+audit clean (one pre-existing unrelated artifact outside this branch's files), live-path proof
+posted (`1112-today-masthead-oneline` UAT trigger 2 passed + reworked
+`tests/e2e/briefing-action-rows.spec.ts` 1 passed, both real live dev instance, self-torn-down).
+
+Ground-truthed via `gh pr view 1594` rather than trusting the self-report alone: `mergeStateStatus:
+UNSTABLE`, and CI's `Verify foundation and app` job is still `IN_PROGRESS` — the agent's rc=0 was
+its own local gate run, not CI. **Holding QA dispatch until CI actually completes** (QA is
+instructed to trust `gh pr checks`, which needs a finished run to be trustworthy).
+
+Next: recheck `gh pr checks 1594` next tick; dispatch `coordinated-qa` (tier `routine`) the moment
+CI is green. Continue watching #1554 QA verdict (async) and #1452 relay5.
