@@ -2190,3 +2190,61 @@ CI is green. Continue watching #1554 QA verdict (async) and #1452 relay5.
 
 No action needed this tick. Next: recheck `gh pr checks 1594` for CI completion; watch for #1554
 QA verdict notification; watch #1452 for PR open.
+
+## 2026-08-12 70% checkpoint (resident, no successor per Ben override)
+
+**Ben's directive this segment:** "finish work, then make sure we prioritize the in progress
+stuff" — finish #1554/#1429/#1452 first, then triage the board-wide "In progress" audit below.
+
+**#1554 (PR #1593):** QA verdict RED (agent a03fc6b2ddced4cd0, posted
+https://github.com/motioneso/moss/pull/1593#issuecomment-5274075256). 1 BLOCKING:
+`packages/cli-runner/src/main.ts:47-63,104-109,215-243` reads persistent-runtime flags from
+boot-time env vars (snapshotted once), contradicting the plan's decision that values reach
+cli-runner via RPC launch params — breaks "flip flag, no deploy" rollout guarantee. 2 non-blocking
+(dead pool/timer fields in runtime.ts; createChatEngine union-type smell). Relayed full finding to
+`build-1554-p2` (pane w1:p8B) — confirmed landed, agent now "Brewing... thinking with high effort".
+**Next: wait for push, then re-dispatch coordinated-qa on updated PR #1593 head.**
+
+**#1429 (PR #1594):** last checked mergeStateStatus UNSTABLE, "Verify foundation and app" still
+IN_PROGRESS. Not re-checked since. Pane w1:p8E (agent `briefing-css-2`) shows agent_status done but
+was actively spinning ("Crunched for 4m 25s") at last read — false-done flag, treat as still
+working, do not nudge unless a future read shows an unchanging timer. **Next: `gh pr checks 1594`;
+dispatch routine-tier QA the moment it's green.**
+
+**#1452 (relay5, pane w1:p8K, agent `fix1452-relay5`):** no PR yet. Confirmed real progress via
+`git log -1 --format=%ci` in its worktree (not a display freeze) as of ~16:32. **Next: check for
+PR open; if pane looks frozen again, re-verify via git log timestamp before nudging, not via the
+pane spinner text alone.**
+
+### Board-wide "In progress" audit (11 items on project 2)
+
+Legit/accurate: #1429, #1452, #1554 (mine), #1556 (active build under a different coordinator —
+not in ListAgents but has 12 comments + CI run yesterday, treat as live), #1440, #1470 (epics,
+recently commented).
+
+Findings needing correction — **not yet applied, do this after #1554/#1429/#1452 land**:
+- **#1246** "Install-time permission grants" — spec exists and looks complete
+  (`docs/superpowers/specs/2026-07-24-install-time-permission-grants.md`, 9.7KB, last touched Aug
+  10). Last issue comment (2026-08-05) is Ben's ruling **stopping** a week-long Codex build (279MB
+  transcript, 26.5h, no PR). Board still reads "In progress" for a build that no longer exists.
+  → Move to **Ready** (spec is done, just needs a fresh build attempt) with a comment noting the
+  correction and pointing at the stopped-session ruling.
+- **#1252** "Tool-failure visibility" — spec `2026-07-25-...tool-failure-visibility.md` still
+  **DRAFT, awaiting Ben's approval** per its own last comment (18 days stale, no spec file found
+  yet under that name in `docs/superpowers/specs/` — re-verify path before commenting). Never
+  started building. → Move to **Backlog**.
+- **#1553** "Chat continuity: engine relaunch..." — zero comments in 2 days as "In progress"; its
+  actual build is tracked under #1556 (title: "...spec for #1553"). → Move to **Done** (spec
+  scope complete, build tracked separately at #1556) with a comment linking #1556.
+- **#1135** "Private chat locks on first SSE error" — **re-investigated this segment, NOT
+  abandoned as first suspected.** PR #1437 (MERGED, "Batch 1 — Chat & Approvals") explicitly
+  states "Addresses #1135 (not closing — no live-path proof; needs compose+CLI)". So the fix is
+  code-complete and merged; #1135 is correctly open per the live-path gate (CLAUDE.md), just
+  mis-titled by "In progress" since nobody is actively building — it's actually *blocked on
+  live-path proof*, not being worked. → Leave open, but consider moving to **Ready** (queued for
+  someone to do the live-path verification pass) rather than "In progress" — or ask Ben which he
+  prefers before changing, since this one is a judgment call not a clear error like the other
+  three.
+
+**Do not action the board corrections until #1554/#1429/#1452 are handled** — Ben's ordering was
+explicit: finish the active work first.
