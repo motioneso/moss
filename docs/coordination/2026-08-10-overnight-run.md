@@ -767,3 +767,23 @@ routine/sensitive after green (none are `routine` this batch); keep `AWAITING-BE
 - All 4 lanes (`w1:p70`/#1352, `w1:p81`/#1434, `w1:p82`/#1486, `w1:p83`/#1555) reconfirmed
   `working` via fresh `herdr pane list` at this checkpoint. Monitor task `br805svl1` still running.
 - No PR-open reports yet from any lane as of this checkpoint.
+
+## #1486 PR open, QA dispatched (2026-08-12)
+
+- **PR #1577** (https://github.com/motioneso/moss/pull/1577), branch `1486-trust-proxy-fix`,
+  rebased on `origin/main` at `8c26839af5a1e8b2c8906b186c560eed5dde0c24`. Worktree
+  `.claude/worktrees/1486-trust-proxy-fix` clean, reapable after QA/merge resolve.
+  Focused tests 10/10, format/lint/typecheck exit 0. Isolated full gate: VF_EXIT=1, but the one
+  failure is the documented cross-lane tuple-concurrently-updated contention (chat-mcp DB reset) —
+  same signature independently seen in #1555 this run; 1876/1877 tests otherwise passed.
+  Live-path: n/a (boot-time server config, no UI surface).
+- **Security tier — Opus adversarial QA dispatched** (`Agent` subagent `coordinated-qa`, isolation
+  worktree, model opus, name `qa-1486`). Briefed to adversarially probe: bridge-gateway-IP spoof
+  rejection, fail-loud-at-boot coverage across all legacy/unparseable values (not just `1`/`true`),
+  `loopback` keyword correctness for #1403 host-dev tier, and that the merge hold is stated
+  explicitly in the PR body itself. Mandatory `gh pr comment` verdict required.
+- **⛔ MERGE HOLD STANDS regardless of QA verdict** — prod runs `JARVIS_TRUST_PROXY=1` (legacy
+  value the new code rejects at boot); do not merge even after green QA. Per
+  `docs/coordination/AWAITING-BEN.md`, needs Ben's explicit confirmation on the prod env migration
+  timing before merge. QA verdict alone does not clear this lane to merge.
+- Waiting on: `qa-1486` verdict notification.
