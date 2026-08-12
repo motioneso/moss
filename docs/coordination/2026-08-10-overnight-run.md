@@ -856,3 +856,22 @@ contention-noted is being treated as sufficient evidence per-lane, consistent ac
   digest to Ben. #1434/#1486 (security) need green Opus QA **plus** Ben-or-delegated-Fable merge
   sign-off; #1486 additionally stays merge-held regardless of QA outcome (prod env migration, see
   `AWAITING-BEN.md`) — #1486's QA verdict alone never clears it to merge.
+
+## qa-1555 GREEN, holding for CI before merge (2026-08-12)
+
+- **qa-1555 verdict: MERGE-READY: YES**, GREEN, 0 blocking/non-blocking findings. Verified
+  read-count-only coalescing (no `withDataContext`/RLS/precedence change), regression coverage via
+  unmodified `ai-admin-pin.test.ts`/`ai-capability-routes.test.ts` through the HTTP surface, no
+  capability dropped, provider-agnostic preserved. Posted:
+  https://github.com/motioneso/moss/pull/1580#issuecomment-5263803414
+  (Note: first launch of this QA agent stopped without posting anything after a background-wait —
+  resumed once via SendMessage with an explicit "finish and post" nudge; second run completed
+  properly. No repeat of this needed unless another QA agent shows the same stall pattern.)
+- **Not merging yet** — `gh pr checks 1580` showed `Verify foundation and app` still `pending` at
+  QA time. Sensitive tier is auto-merge-eligible after green QA, but only once CI itself is
+  actually green, not just QA. Armed a bounded event-driven `Monitor` (task `b2ksht3s4`, ~15min
+  cap) polling `gh pr checks 1580` every 20s until settled; will merge on that signal if green.
+- Still waiting on: `qa-1352`, `qa-1434`, `qa-1486` verdicts.
+- **Standing instruction reconfirmed at 70% context checkpoint:** remain resident, no successor
+  spawn (Ben: "let's stop relaying, just auto compact coordinator"). Manifest verified current;
+  continuing same session.
