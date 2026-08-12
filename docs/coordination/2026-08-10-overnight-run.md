@@ -904,3 +904,14 @@ follow-up push just needs its own CI run confirmed before re-QA.
 **Status after this checkpoint:** #1555 merged. #1352 sent back for 1 test, awaiting. #1434 and
 #1486 QA still running (security tier, Opus). #1486 stays merge-held regardless of QA outcome per
 `AWAITING-BEN.md`. #1556 still blocked on Ben's one-time OAuth click, unanswered.
+
+## 2026-08-12 08:0x — #1352 remediated, re-QA dispatched
+
+Build lane (`w1:p70`) pushed `87c0a03deefddecc5aeff6a16512af59ab40a1ce` to `1352-admission-liveness`:
+one parameterized EngineHost-seam regression in `tests/unit/cli-runner-server.test.ts` covering
+both bounded-fallback variants (`ClaudePrintChatEngine`/anthropic, `AgyPrintChatEngine`/google) —
+asserts each blocks a different-key launch via `currentLiveKeys()` and is not mux-orphan-killed by
+`startupSweep`. Focused suite reported 24/24 green, format/lint clean locally.
+
+Dispatched `qa-1352-v2` (agent `a2ed4e610ab7f4a32`) to re-verify just the remediated gap plus CI
+green on the new HEAD, not the whole PR from scratch. Awaiting verdict.
