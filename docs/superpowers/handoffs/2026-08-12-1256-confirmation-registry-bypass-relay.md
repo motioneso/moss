@@ -19,13 +19,13 @@ only in the coordinator's worktree, uncommitted:
   short) before doing anything else — it has the exact task breakdown, signatures, and two
   build-time decisions you must resolve (Task 4: adopt-callback vs return-value; lazy-fallback
   outcome vocab).
-- **Escalation: sent, awaiting reply.** Messaged the `Coordinator` pane
-  (`herdr agent prompt`) with the plan summary and relay notice. **Do not start Task 3+ (code)
-  until you see the coordinator's approval or a fork instruction.** Check for a reply first —
-  `herdr pane read <coordinator-pane> --source recent --lines 40` (resolve pane fresh by label).
-  If no reply yet, it may still be processing (it showed `agent_status: done` / idle when
-  messaged, so a reply should come soon) — do not re-send, just wait/check once more before
-  proceeding.
+- **Escalation: APPROVED.** Coordinator approved the plan directly: (a) Task 4 adopt-mechanism —
+  use the callback form (matches `adoptChatRpcConnection` exactly, no deviation). (b) Task 4
+  lazy-fallback outcome — must not silently read as a real `not_found`; either throw and let
+  `handleRouteError` map to 503, or extend the outcome union — implementer's call, whichever keeps
+  ai/chat outcome vocab identical for Task 5's parity test. Both were ruled "implementation detail
+  inside the issue's own fix description, not a fork" — no further Ben/coordinator escalation
+  needed for these two. **Proceed straight to Task 1 build.**
 - **No code has been written yet.** Zero files touched under `packages/`. This relay is plan +
   escalation only, per the context-meter 70% trigger (fired during step ½ research, before any
   code).
