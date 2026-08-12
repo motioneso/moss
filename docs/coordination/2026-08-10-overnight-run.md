@@ -2248,3 +2248,13 @@ Findings needing correction — **not yet applied, do this after #1554/#1429/#14
 
 **Do not action the board corrections until #1554/#1429/#1452 are handled** — Ben's ordering was
 explicit: finish the active work first.
+
+## Ben's directive: hold all board "Ready" moves until every in-progress item is done
+
+Ben: "let's not move things to ready until we have all in progress finished." Applies to the whole
+"In progress" column, not just #1554/#1429/#1452 — also #1556, #1440, #1470. Revises the prior
+board-correction plan: #1246 and #1135 (candidates for **Ready**) are held, not applied, until
+every currently in-progress item is actually done. #1252→Backlog and #1553→Done are demotions/
+closures, not new-work-availability moves — safe to apply on their own merits whenever, but
+grouping the whole correction batch together for one pass after everything clears is simpler and
+matches the spirit of the instruction, so holding all four together.
