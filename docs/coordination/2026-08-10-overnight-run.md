@@ -1738,3 +1738,48 @@ independent `gh run view` re-check not yet re-run this tick but not blocking —
   delegate the choice to the build agent's plan for coordinator review. Awaiting his reply.
 - `w1:p8A` (#1256) and `w1:p8B` (#1554): both showed `agent_status: done` this tick but bounded
   reads confirmed genuinely active (own monitors running) — known stale-status trap, left alone.
+
+## 2026-08-12: #1589 investigation closed out, root-fix issue filed; #1256 re-QA dispatched; #1429 relay reaped
+
+**#1589 (prod DB-connection incident):** `fix-1589-prod-db` (opus, previously dispatched with
+Ben's authorization) completed and posted its findings as the sole comment on #1589 — root-caused
+to `notes.sync` embedding Obsidian-vault markdown in-process on the worker's main thread (no
+`worker_threads` in the codebase), saturating ~7.5 CPU cores and blocking the event loop long
+enough that the pg pool's own `connectionTimeoutMillis` timer (also on that loop) fires late and
+kills already-negotiated sockets — explains the indiscriminate `Connection terminated due to
+connection timeout` across `news.refresh`/`job-search.crawl-sweep`/`connectors.*`/`chat.embed-turn`.
+DB/network/deploy/OOM all explicitly ruled out with evidence. Agent correctly declined to hotfix
+prod (fix is a code change) despite having restart/config authorization.
+- Filed **#1590** (task) capturing the root fix (worker_thread/child-process isolation for local
+  embedding, dedicated queue for `notes.sync`, ingest chunk cap, `news_refresh_state` stuck-at-
+  `queued` guard) — spec-before-build gate applies, needs a short spec before a build lane starts.
+- Posted a closing comment on #1589 declining to apply the interim mitigation (raise
+  `JARVIS_DB_CONNECT_TIMEOUT_MS`, needs container recreate) myself — Ben's authorization was given
+  to the investigating agent for diagnostics, not a general mandate to touch prod outside his
+  normal deploy path; flagged as available if he wants it applied before #1590 lands. Not
+  chasing him for a reply — this is informational, not a blocker.
+- `fix-1589-prod-db` no longer appears in `ListAgents`/`herdr pane list` — its task (investigate +
+  report) is complete, nothing to reap.
+
+**#1256 / PR #1587:** lane (`confirmation-relay5`, `w1:p8A`) reported wrap-up complete — CI green
+on final commit `f2cf7fa95` (one transient `Compose deployment smoke` infra flake on first
+attempt, root-caused as unrelated to this branch's diff, passed on rerun), 4/4 blocking UAT specs
+PASS. Independently re-verified CI green via `gh pr checks 1587`. Dispatched fresh security-tier
+Opus `coordinated-qa` re-QA (agent `qa-1256-repush`, background) scoped to verify the RED verdict's
+B1/B2/N1/N2 findings are actually fixed by `ecb267b82`, not cosmetic — verdict required as a
+`gh pr comment` on #1587 per security-tier rule. Awaiting result.
+
+**#1429:** successor `fix-1429-relay2` (session `7ab560ac-fa4a-49f6-b4bf-33d0cc78fd6d`, pane
+`w1:p8D`) confirmed actively reading the committed handoff
+`docs/superpowers/handoffs/2026-08-12-1429-briefing-css-relay.md` in the same worktree/branch.
+Reaped the spent predecessor pane `w1:p8C` (session `eabebeb7-...`) via `herdr pane close`. No
+code written yet by either session — investigation + plan only, saved to
+`memory_save id mem_msqm24px_be083d037e7a`.
+
+**#1554** (`w1:p8B`): `agent_status: done` again this tick (false positive, consistent with the
+established pattern) — `/tmp/gate-1554p2-run2.log` mtime confirmed current (actively growing),
+pane shows its own Monitor watching the same log for a completion sentinel. Left alone.
+
+Next: watch for `qa-1256-repush`'s verdict (merge per session-id authority check + security
+sign-off from Ben if GREEN); watch #1429/`fix-1429-relay2` for a plan-ready escalation; continue
+monitoring #1554; #1452 still held on Ben's reply (not chased).
