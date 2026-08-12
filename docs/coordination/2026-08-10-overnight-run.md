@@ -1102,3 +1102,35 @@ mergeability. Not treating self-report as proof; background Monitor watching for
 Tier: **sensitive** (CLI runner, per the tier table) — once CI is green, spawn Sonnet
 `coordinated-qa` before merge; sensitive tier auto-merges after green QA + per-merge digest to Ben,
 no explicit sign-off gate (that's security-tier only). No merge yet.
+
+## 2026-08-12: policy change — Fable reviews specs/plans; CI attempt-2 discovered; housekeeping
+
+**Ben: "have fable review specs and plans, ill defer to it."** Standing policy from here forward:
+spec approval (Phase 0 step 2) and plan-ready escalations (Phase 2) route to a one-shot Fable-model
+agent (`Agent(model:"fable", ...)`, same pointer-style pattern as Opus escalations) instead of the
+coordinator approving directly; Ben defers to Fable's verdict. Applied immediately to the one open
+item waiting on Ben's personal sign-off: **#1554 spec dispatched to Fable for review** (async,
+in progress) — result pending, will report + act on verdict when it lands. #1256's plan (already
+approved pre-policy) is not being retroactively re-reviewed.
+
+**#1256 lane re-checked, healthy.** `confirmation-relay2` (pane `w1:p87`, session
+`4d54949a-3535-47ba-b7dd-1a7f2c6f12cd`) confirmed `agent_status: working` via fresh `herdr pane
+list` — no third relay yet, no intervention needed.
+
+**Stray pane `w1:p84` closed.** Confirmed dead (blank label, `agent_status: unknown`, no
+`agent_session`, cwd pointing at the already-removed misplaced worktree from the earlier
+worktree-nesting bug fix) — closed, no data at risk.
+
+**#1556 PR #1562 CI: resolved the fail/in-progress contradiction — it's a manual re-run, not a
+flaky read.** `gh api .../runs/31622993650/jobs` shows "Verify foundation and app" is now
+`run_attempt: 2`, started 17:38:40, triggered by actor `motioneso` (the run's `run_attempt` field
+confirms it, `triggering_actor: motioneso`). **Attempt 1 failed** (the `fail`/7m8s reading from
+earlier this run); something/someone re-ran just the failed job, which is why `gh run view --json`
+briefly showed `in_progress`/empty-conclusion again. Attempt 1's log is still inaccessible
+(`--log-failed` refuses until the parent run fully concludes) — so the root cause of the original
+failure is NOT YET KNOWN. Per "never rerun an identical CI/gate failure twice, never merge on
+self-report alone": **do not treat a green attempt 2 as resolution** — if attempt 2 passes, still
+need to understand why attempt 1 failed (flaky vs real, and whether attempt 2 is genuinely
+re-verifying the same code or something changed) before merge. Background Monitor
+(`bplfd0480`) watching attempt 2 to completion; will pull attempt 1's log once the run fully
+concludes regardless of attempt 2's outcome.
