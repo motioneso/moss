@@ -92,9 +92,9 @@ test("throwaway signup drives a real briefing generation to a rendered Today car
       return { status: response.status, json: await response.json() };
     }, definitionId);
     expect(polled.status).toBe(200);
-    matchedRun = (polled.json.runs as Array<{ id: string; status: string; summaryText: string }>).find(
-      (run) => run.id === runId
-    );
+    matchedRun = (
+      polled.json.runs as Array<{ id: string; status: string; summaryText: string }>
+    ).find((run) => run.id === runId);
     if (!matchedRun) {
       await page.waitForTimeout(2_000);
     }
