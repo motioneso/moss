@@ -875,3 +875,32 @@ contention-noted is being treated as sufficient evidence per-lane, consistent ac
 - **Standing instruction reconfirmed at 70% context checkpoint:** remain resident, no successor
   spawn (Ben: "let's stop relaying, just auto compact coordinator"). Manifest verified current;
   continuing same session.
+
+## 2026-08-12 08:01 — #1555 MERGED; #1352 QA RED, sent back for one test
+
+**#1555 (capability-timeout, sensitive tier) — MERGED.** `gh pr checks 1580` settled green
+(`Verify foundation and app` PASS 25m12s; `Build and publish images` still pending — that's the
+post-merge image job, not the mechanical gate, per qa-1555's and qa-1352's own notes). QA verdict
+was GREEN/MERGE-READY (posted https://github.com/motioneso/moss/pull/1580#issuecomment-5263803414).
+Session-id authority reconfirmed (`0bb9f516-c026-454f-bc97-dc9faf43bd20`, pane `w1:p7P`) before
+merging. Squash-merged as `83bbedb5be9`, branch deleted. `merges_since_relay` +1.
+
+**#1352 (admission-liveness, sensitive tier) — QA RED, NOT merged.** Verdict on PR #1578: 4/5
+named ruling points MET (engine-kind-agnostic counting, mux-scoped reaping preserved, `beginLogin`
+gate coupling tested, spec §4.1.0a text amended). **1 blocking gap:** the PR's new tests only cover
+the persistent-runtime engine kind (#1557); no test at the EngineHost seam covers the
+bounded-fallback kind (`ClaudePrintChatEngine`/`AgyPrintChatEngine`, non_interactive) being counted
+live / excluded from mux reaping — that's the literal original #1352 bug scenario, and both the
+issue's Acceptance Criteria and the ruling's binding modification #6 name it explicitly. QA notes
+the fix itself (`currentLiveKeys()` unconditionally unions `this.engines.keys()`) already
+mechanically covers bounded-fallback by inspection — this is a missing-test gap, not a logic bug.
+1 non-blocking nit (doc-comment line length).
+
+Relayed to the build lane (`w1:p70`, "1352 admission-liveness (luna)") via `herdr pane run`:
+add one unit test at the EngineHost seam per the gap above, push, report back. Will re-dispatch QA
+once it reports done — do not re-run the full gate, CI already proved green on `70238d10d`; a
+follow-up push just needs its own CI run confirmed before re-QA.
+
+**Status after this checkpoint:** #1555 merged. #1352 sent back for 1 test, awaiting. #1434 and
+#1486 QA still running (security tier, Opus). #1486 stays merge-held regardless of QA outcome per
+`AWAITING-BEN.md`. #1556 still blocked on Ben's one-time OAuth click, unanswered.
