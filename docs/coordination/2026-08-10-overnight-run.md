@@ -1882,3 +1882,30 @@ touch shared code it didn't author. Confirmed the message landed and the pane is
 
 Next: watch `w1:p8B` for the rebase to land and CI to go green before dispatching QA; continue
 watching #1429 (`w1:p8E`); #1452 still held on Ben (not chased).
+
+## 2026-08-12 (cont.): #1452 + #1589 mitigation resolved with Ben, #1452 spawned
+
+Asked Ben directly (both were genuinely his to decide, not chaseable defaults):
+
+- **#1452** (safe-seed 3-way fork): chose **UAT-spec-triggered generation** (real generation for a
+  throwaway account, waits for the row, cleans up after itself) over dedicated-instance or
+  fixture-insert. Posted as durable comment:
+  https://github.com/motioneso/moss/issues/1452#issuecomment-5273554969
+- **#1589 interim mitigation** (raise `JARVIS_DB_CONNECT_TIMEOUT_MS`, needs prod container
+  recreate): Ben chose to **wait for #1590's real fix** rather than apply it. Posted:
+  https://github.com/motioneso/moss/issues/1589#issuecomment-5273555179
+
+Spawned #1452 per Phase 1: verified main CI (all gate jobs green on `2c00c3ace`, only the
+image-build/publish job still running — not a gate blocker) → worktree
+`.claude/worktrees/fix-1452-safe-seed` off fresh `origin/main` → handoff doc
+`docs/coordination/handoff-1452-safe-seed.md` (committed `b8f850ef0`) encoding Ben's chosen
+direction as the locked design decision → agent `fix-1452-safe-seed`, pane `w1:p8F` (labeled
+"PR1452 safe-seed UAT"), session `88338271-25a5-40ff-bba2-3b56c4807639`, `--model sonnet`
+confirmed in spawn argv, tier `routine`. Flagged the #1429 file-collision risk (same
+`briefing-action-rows.tsx`) in the handoff — told it not to hard-block on #1429's exact CSS class
+names if #1429 hasn't merged yet.
+
+Monitor still only watches `w1:p8B`/`w1:p8E` — add `w1:p8F` next tick.
+
+Next: rearm Monitor to include `w1:p8F`; continue watching #1429 gate, #1554 CI, and the new #1452
+lane's plan-ready escalation.
