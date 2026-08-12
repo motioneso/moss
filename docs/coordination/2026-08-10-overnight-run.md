@@ -2105,3 +2105,25 @@ now a well-established pattern this run):
 Next: watch all three for real signal (p8B direct reply, p8E resuming past the freeze, p8K's
 wrap-up/PR). No merges pending right now, so the new per-merge rule hasn't been exercised yet this
 leg — apply it on #1452's merge when it lands.
+
+## 2026-08-12 (cont.): #1554 QA dispatched on PR #1593
+
+`build-1554-p2` (`w1:p8B`) finally gave a direct reply (its raw input box had swallowed my earlier
+question unsubmitted — resent via `herdr agent prompt`, that worked): **PR #1593 open,
+code-complete, CI green, no blocker.** Ground-truthed live rather than trusting the self-report:
+`gh pr view 1593` confirms all checks SUCCESS/SKIPPED, `mergeStateStatus: CLEAN` — the earlier
+DIRTY/conflict state is resolved (it rebased per the prior instruction).
+
+Dispatched ephemeral QA (`coordinated-qa`, worktree-isolated, agent `a03fc6b2ddced4cd0`) on PR
+#1593, tier `sensitive` — standard QA + invariant check (pg-boss/chat runtime pooling touches
+metadata-only-payload and module-isolation invariants) + matched e2e-UAT/live-path proof. Told to
+trust `gh pr checks` (already green) rather than re-run the gate, and to post its verdict via `gh
+pr comment` before returning. Awaiting verdict.
+
+`w1:p8E` (#1429) and `w1:p8K` (#1452 relay5) both showed brief "done" flickers this tick but
+bounded reads confirm both genuinely mid-task (shell/monitor still running) — no action needed,
+same established false-positive pattern.
+
+Next: await #1554 QA verdict → if GREEN, merge per the new mandatory per-merge rule (issue comment
++ board update, `.claude/skills/coordinate/SKILL.md` Phase 3 step 5); continue watching #1429 and
+#1452 relay5.
