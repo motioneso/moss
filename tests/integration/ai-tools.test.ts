@@ -297,7 +297,11 @@ describe("AI read-only assistant tool execution foundation", () => {
     expect(jobsAfter).toBe(jobsBefore);
   });
 
-  it("resolves pending assistant action confirmations as audit state only", async () => {
+  it("rejects confirming an assistant-tools/invoke action with no live waiter (#1256)", async () => {
+    // #1256: assistant-tools/invoke never creates a live confirmation waiter for the pending row it
+    // audits — it always blocks writes and returns immediately. Confirming that row must now fail
+    // closed (409) through the same live-waiter gate chat's resolve route uses, the same as any other
+    // stale/waiterless pending row. It can still be rejected or cancelled (terminal, no waiter needed).
     const jobsBefore = await countPgBossJobs();
     const writeResponse = await server.inject({
       method: "POST",
@@ -322,21 +326,13 @@ describe("AI read-only assistant tool execution foundation", () => {
         status: "confirmed"
       }
     });
-    const resolved = resolveResponse.json<AssistantActionResponse>().action;
     const task = await dataContext.withDataContext(userBContext(), (scopedDb) =>
       tasksRepository.getById(scopedDb, taskIds.bWorkspace)
     );
     const jobsAfter = await countPgBossJobs();
 
     expect(writeResponse.statusCode).toBe(403);
-    expect(resolveResponse.statusCode).toBe(200);
-    expect(resolved).toMatchObject({
-      id: actionRequestId,
-      toolName: "tasks.updateStatus",
-      risk: "write",
-      status: "confirmed"
-    });
-    expect(resolved.resolvedAt).toBeTruthy();
+    expect(resolveResponse.statusCode).toBe(409);
     expect(task?.status).toBe("todo");
     expect(jobsAfter).toBe(jobsBefore);
   });
