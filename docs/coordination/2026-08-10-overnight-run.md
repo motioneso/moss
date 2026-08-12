@@ -1664,6 +1664,22 @@ re-running blind, dispatch a fresh fork to actually read the compose-smoke job s
 than assume flakiness again. Still watching for `fix-1589-prod-db`'s completion, `w1:p8A` (third
 stall = takeover), `w1:p8B`.
 
+## 2026-08-12: main-CI rerun #2 GREEN — `compose-smoke` passed, confirms flakiness not a #1562 regression
+
+`gh run view 31631303939`: `Compose deployment smoke` SUCCESS, `Verify foundation and app`
+SUCCESS, `Detect change scope` SUCCESS, `Prod compose deployment smoke` SUCCESS. Only `Build and
+publish images` still in progress (downstream of the gate, only starts once it's green). Confirms
+the `ci-1562-diag` fork's conclusion — two different failure signatures across two reruns on the
+same job is CI-runner flakiness, not a code regression. **Main is unblocked.**
+
+`w1:p8B` nudged this tick (static "Churned for 2h 28m 48s" across two reads = stalled after its
+background shell finished, not still waiting) — now processing again. `w1:p8A` progressing
+normally.
+
+Watching for the image-build job to finish (Monitor `bcdxyobvp`), then spawning #1429/#1452 per
+Phase 1 — worktree + handoff doc + herdr spawn on Sonnet. Still waiting on `fix-1589-prod-db`
+(#1589 live fix) and watching `w1:p8A`/`w1:p8B`.
+
 ## 2026-08-12: Ben authorized prod access for #1589; fix agent dispatched; relay checkpoint (context 70%)
 
 Ben replied to the #1589 ping (`~/.needs-ben/replies/1786568549905-coord-relay9.md`): "You do have
