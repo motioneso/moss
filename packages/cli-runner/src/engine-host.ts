@@ -3,9 +3,8 @@
  * cli-runner. It hosts a `Map<sessionKey, CliChatEngineImpl>`, serializes operations
  * per sessionKey (§4.0), and enforces the §4.1.0a SINGLE-ACTIVE-USER GATE.
  *
- * Liveness is measured on the MUX (`listLiveMuxSessions`, §4.6) UNION a server-side
- * in-flight-launch RESERVATION set — NEVER the engine Map, NEVER the api's `launching`
- * map (which is invisible here). Admission runs in ONE global async-critical-section
+ * Liveness is measured on the MUX (`listLiveMuxSessions`, §4.6) UNION the server-side
+ * in-flight-launch RESERVATION set UNION the engine registry — never the engine Map alone, never the api-side `launching` map (which is invisible here). Admission runs in ONE global async-critical-section
  * (a server-wide mutex, NOT the per-sessionKey queue). See `launch` for the full TOCTOU
  * argument.
  */
@@ -336,11 +335,12 @@ export class CliChatEngineHost {
     }
   }
 
-  /** §4.1.0a: liveKeys = listLiveSessions-by-mux (§4.6) ∪ the reservation set. */
+  /** §4.1.0a: liveKeys = MUX enumeration ∪ reservations ∪ engine-registry keys. */
   private async currentLiveKeys(): Promise<Set<string>> {
     const byMux = await listLiveMuxSessions(this.deps.io, this.deps.homeBase);
     const set = new Set<string>(byMux);
     for (const r of this.reservations) set.add(r);
+    for (const key of this.engines.keys()) set.add(key);
     return set;
   }
 
