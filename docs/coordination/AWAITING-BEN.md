@@ -20,6 +20,11 @@ hard invariant in `CLAUDE.md`, and the voice/STT spec turned out to be already a
 
 ## #1533 chat-surface-build (build/1533-chat-surface-routing): Phase 4 live-path proof blocked on real-chat token
 
+**Draft PR open: https://github.com/motioneso/moss/pull/1574** — code-complete, gate green
+(`VF_EXIT=0`, full `pnpm verify:foundation` suite incl. `test:uat-seed` 29/29), sensitive-tier
+check clean, branch rebased on `origin/main`. Not mergeable — live-path proof below is still
+outstanding and blocks merge; entry stays open until that's resolved.
+
 Everything else in Phase 4 is done: full gate green, sensitive-tier invariant check clean, code
 complete. Only the live-path proof (spec's "Live-path proof: action request without reload"
 section, `docs/superpowers/specs/2026-08-10-1533-chat-surface-send-routing.md`) remains, and it
