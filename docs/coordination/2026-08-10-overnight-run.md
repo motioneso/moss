@@ -698,3 +698,56 @@ Monitor over `w1:p70/p81/p82/p83/p7Y`; (2) supervise the 4 new lanes to plan-rea
 build → PR, same as any build lane; (3) #1486 stays merge-held regardless of QA outcome; (4) keep
 `AWAITING-BEN.md` current; (5) continue driving the rest of the queue per Ben's standing
 instruction — no new task, no further live Ben interaction expected until he returns.
+
+## Supervision checkpoint (2026-08-12, still resident, no relay per Ben's standing override)
+
+All 4 plans reviewed and approved against their rulings/handoff docs (read plan files directly,
+grep-bounded, not full pastes into context):
+- **#1352** — approved; correctly reads engine-kind-agnostic constraint as "don't gate the
+  admission predicate on `isBoundedFallbackEngine`", not a naming deviation. Hit a real stall
+  mid-build: repeated identical `git apply` heredoc failures — its own auto-approval helper
+  correctly refused a 3rd identical retry (box-wide "two identical failures, stop" rule working as
+  intended). Unblocked by telling it to write files directly instead of heredoc patching. Now past
+  commit (55/55 focused tests green) and into full-gate/wrap-up.
+- **#1434** — approved; matches ruling exactly (useRef-hoisted throttle, `lastUploadAt` pre-upload,
+  log-only no-retry). Now past commit, into full-gate/wrap-up.
+- **#1486** — approved; exact-IP/array parsing (CIDR rejected), `loopback` kept, fail-loud legacy
+  handling, #901 correction, merge hold stated in plan. Full gate: **1876/1877 integration tests
+  green**, 1 failure (`chat-mcp` reset, "tuple concurrently updated") — documented concurrent-gate
+  DB contention, not a regression (see below). Now rebasing/pre-push, about to open PR.
+- **#1555** — build agent itself caught a scope error in the handoff doc (real issue is a DB-query
+  timeout in `AiRepository.resolveModelForCapability`, not "model-discovery fetch" as classified);
+  confirmed re-scope to the actual issue body. Plan approved (coalesces admin-pin + service-binding
+  reads to 2 queries, preserves RLS/precedence/fallback semantics, uses existing integration test
+  as regression seam). Targeted suites green (20/20 + 11/11 + 5/5). **Full `test:integration` hung
+  589s with zero log output past a `rc=3` timeout** after `chat-live.test.ts` — diagnosed as the
+  same concurrent-gate contention (chat-live.test.ts's own awaits are 5ms mocked timers, no live
+  network dependency) rather than a regression; told to do one bounded retry, and if it hangs again
+  at the same point, stop retrying and report targeted-green + full-gate-inconclusive rather than
+  claim false green.
+
+**Cross-lane pattern confirmed, worth flagging for future runs:** running 4 build lanes' isolated
+gate-DB runs concurrently on this box produces real Postgres contention (tuple-concurrently-updated
+errors, apparent hangs) even though each lane uses a distinct `JARVIS_PGDATABASE` — the underlying
+Postgres cluster/roles are shared. Not a correctness bug in any lane; each lane's build agent is
+being told to document it rather than either hide it or block on it. Matches existing
+`multi-agent-pg-contention.md` guidance ("stagger concurrent runs") — this run chose not to stagger
+(4 lanes spawned together per the batch), so some contention noise is expected and is being handled
+per-lane rather than by re-running the whole batch serially.
+
+**#1556** — status still flips `agent_status: done` intermittently; confirmed via bounded pane read
+this remains the known false-completion pattern, genuinely still blocked on Ben's one-time OAuth
+click (already logged, already pinged). No new action taken.
+
+Liveness Monitor (task `br805svl1`) remains armed over `w1:p70/p81/p82/p83/p7Y`, event-driven,
+firing correctly on status changes. No PRs opened yet as of this checkpoint — none of the 4 lanes
+has finished `coordinated-wrap-up`.
+
+**merges_since_relay: 0.** **No relay taken** — context-meter warned at 70% again; per Ben's
+standing override this session remains resident. Session id `0bb9f516-c026-454f-bc97-dc9faf43bd20`,
+pane `w1:p7P`, label `Coordinator`, unchanged.
+
+**Next steps, same resident session:** watch for PR-open reports from all 4 lanes; dispatch QA per
+tier (#1434/#1486 security-tier → Opus adversarial + `gh pr comment` verdict; #1352/#1555
+sensitive-tier → standard QA); #1486 merge stays held regardless of QA outcome; auto-merge
+routine/sensitive after green (none are `routine` this batch); keep `AWAITING-BEN.md` current.
