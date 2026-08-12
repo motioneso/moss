@@ -1314,3 +1314,31 @@ Binding findings:
 Relayed verbatim to `build-1554-p2` (pane `w1:p8B`, session `9e98e0e0-...`, delivery confirmed via
 session-id match). Told to revise the plan doc and re-flag for a quick recheck, not a full second
 Fable pass, unless the revision changes the core design.
+
+## 2026-08-12: PR #1562 QA verdict — RED (blocking, but not #1562's fault); follow-up filed as #1583
+
+Sensitive-tier QA (agent `a4d8dd7d7f78be56b`) posted its full verdict as a durable PR comment:
+https://github.com/motioneso/moss/pull/1562#issuecomment-5271150605
+
+Gate/live-path/review/invariants/exit-criteria all clean. Blocking e2e-UAT: `module-install` pass,
+but `1133-chat-attachments` and `runtime-context` both fail on `expect(turnBody).toEqual(...)` —
+actual body carries an extra `"surface":"drawer"` field. QA root-caused via `git log`: sending
+`surface` on every turn started with commit `33b722a0f` (#1533/#1574, "thread surface through send
+routing"), which landed on `origin/main` strictly **after** #1562's merge-base. #1562's diff
+touches zero files under `apps/web/`. **Confirmed pre-existing/PR-independent staleness, not a
+regression from #1562.**
+
+Per #1027's locked policy, a blocking-mode e2e-UAT failure is never waived regardless of cause —
+so verdict stands as **MERGE-READY: NO** even though #1562's own diff is clean. Filed the fix as
+follow-up issue **#1583** (update the two specs' expected `turnBody` shape to include
+`surface: "drawer"` — mechanical, no production code change). Once #1583 lands and both specs are
+green, #1562 needs no further changes and can merge as-is.
+
+**Status: #1562 blocked on #1583, not on any defect in #1562 itself.** Not spawning a build lane
+for #1583 yet — small enough to hand to the next available build agent or take directly; queued as
+next action.
+
+**Non-blocking QA note (informational only):** `chat-token-budgets.test.ts` covers the
+assistant-only-summary-drops-user-turns bug but no test asserts the truncation-*direction* fix
+(head-keeping `slice(0,1997)` vs old tail-keeping `slice(-2000)`) — worth a follow-up unit test,
+not blocking.
