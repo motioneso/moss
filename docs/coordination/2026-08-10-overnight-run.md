@@ -1783,3 +1783,48 @@ pane shows its own Monitor watching the same log for a completion sentinel. Left
 Next: watch for `qa-1256-repush`'s verdict (merge per session-id authority check + security
 sign-off from Ben if GREEN); watch #1429/`fix-1429-relay2` for a plan-ready escalation; continue
 monitoring #1554; #1452 still held on Ben's reply (not chased).
+
+## 2026-08-12 (cont.): #1429 plan approved
+
+`fix-1429-relay2` (session `7ab560ac...`, pane w1:p8D) posted plan-ready:
+`docs/superpowers/plans/2026-08-12-1429-briefing-css.md` — all 5 items map cleanly onto the
+handoff's exact scope (missing `.loose-row*`/`.briefing-catchup` CSS, fold 4 inline styles into it,
+fix dead `primaryAction` branch via `row.primaryAction?.kind==="view"` matching the existing
+reply-case pattern, rework the e2e spec with a computed-style assertion, delete orphaned
+`today-suggested-email.tsx` + its tracking entry). No design fork, no scope creep — approved
+in-line via `herdr agent prompt fix-1429-relay2`, no Opus escalation needed (routine tier).
+
+Note: right after sending the plan, the same message reported a 70%-context relay, but no new
+pane/session appeared — `w1:p8D` was mid built-in auto-compact (self-compaction in place), not a
+worktree hand-off to a successor. Told it to just resume in place once compaction settles rather
+than spin up an unnecessary successor.
+
+Also re-checked `w1:p8A` (`confirmation-relay5`, #1256 wrap-up) — `agent_status: done` again, but
+the pane shows one open task ("message Coordinator, request re-QA") and an active subagent call
+doing exactly that; consistent with the `qa-1256-repush` QA dispatch already in flight
+(`aaf5040c92316ecd6`, still running, no verdict yet). Another confirmed false-positive `done` flag,
+left alone.
+
+Next: await `qa-1256-repush` verdict; watch #1429 resume TDD build post-compaction; continue
+monitoring #1554; #1452 still held on Ben (not chased).
+
+## 2026-08-12 (cont.): #1256/PR #1587 QA GREEN, Fable sign-off dispatched
+
+`qa-1256-repush` (`aaf5040c92316ecd6`) stalled once on a wait-declaration (background rerun
+`b47k3ym7k` had already finished, exit 0, but the subagent's turn had ended before seeing it) —
+resumed it via SendMessage with the concrete result instead of a blind nudge; it finalized cleanly.
+
+**Verdict: GREEN, MERGE-READY: YES.** All 4 prior RED findings (B1/B2/N1/N2) genuinely fixed, not
+cosmetic. CI green (run 31641484311). 2 new non-blocking findings (gateway.ts:445 existence/
+liveness oracle ordering, chat/routes.ts:217 unreachable-503 path) — filed as follow-ups, not
+blockers. Verdict posted: https://github.com/motioneso/moss/pull/1587#issuecomment-5273302475
+
+Session-id authority re-confirmed (`0bb9f516-c026-...` matches manifest lock line). Per manifest
+line 5 (Ben's standing delegation of security-tier sign-off to Fable), dispatched a one-shot
+`Agent(model: "fable")` to independently review the diff + QA verdict and post its own sign-off as
+a `gh pr comment` — genuinely adversarial re-check requested, not a rubber stamp. Awaiting its
+result before merging.
+
+Next: on Fable GRANT → merge #1587, `needs-ben coordinator` digest, close #1256. On Fable
+WITHHOLD → treat as a real blocker, escalate findings to Ben directly (delegation doesn't cover a
+withheld sign-off). Also still watching #1429 build + #1554; #1452 held on Ben.
