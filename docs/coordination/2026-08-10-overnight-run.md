@@ -1557,3 +1557,36 @@ re-checking the gate log). `w1:p8B` (#1554, relay3) showed `agent_status: workin
 
 Next: await both forks' results before any further action; do not spawn #1429/#1452 or any new
 lane until main CI is confirmed green again.
+
+## 2026-08-12 (later tick): PR #1587 flake re-run, lane unstuck, #1585 fork overturned its own hypothesis into a live prod incident
+
+**PR #1587 CI:** "Prod compose deployment smoke" was red — pulled the job log, it's a transient
+`ECONNRESET` mid-`pnpm install` inside the Docker build (onnxruntime-node postinstall download),
+unrelated to #1256's code and unrelated to the #1562 main regression (that job is a *different*
+job than the one broken on main — "Compose deployment smoke" on this PR is green). Flaky-shaped;
+re-enqueued via `gh run rerun 31636525883 --failed`.
+
+**`w1:p8A` (#1256/PR #1587) stalled twice** on the same wait-declaration pattern — turn ends with
+a stated next action sitting unsubmitted in the input box, no progress between checks (context %
+flat). First nudge (`herdr agent prompt ... "continue"`) advanced it one step then it stalled
+again identically. Second nudge gave it the actual CI state directly (so it wasn't stuck waiting
+on stale info) and told it explicitly to execute, not declare — that got it back to `busy`.
+Watch this lane closer than usual; a third recurrence should mean TaskStop + take over per the
+coordinate skill's stall guidance, not a third nudge.
+
+**#1585 fork (`aaf7cc227c9315b82`) completed — and overturned its own premise.** Posted evidence to
+https://github.com/motioneso/moss/issues/1585#issuecomment-5272734221. The "kept_last_good never
+recovers" symptom is real, but the cause isn't a failing external publisher — it's every pgboss job
+type (`news.refresh`, `job-search.crawl-sweep`, `connectors.google-sync`,
+`connectors.email-monitor`, `chat.embed-turn`) failing to *acquire a Postgres connection* since the
+prod app container's last restart (2026-08-12 ~18:22 UTC). Postgres itself is healthy (8 days up,
+16/100 connections). This is a **live, ongoing production incident** wider than the news bug it was
+found investigating — connectors and embeddings are likely silently degraded too, with no
+staleness indicator the way news has. Filed **issue #1589** capturing this separately (it needs its
+own tracking — #1585's scope undersells it) and pinged Ben directly (`needs-ben`,
+`~/.needs-ben/sent/1786568450845521192.msg`) since this is prod, outside coordinator authority to
+fix (no restart/pool-config access, and CLAUDE.md is explicit that Ben owns prod). No action taken
+beyond evidence-gathering and escalation — correctly so.
+
+Next: watch for Ben's reply on #1589; keep nudging/monitoring `w1:p8A` and `w1:p8B`; still waiting
+on the `ci-1562-diag` fork (main-CI regression root cause) before #1429/#1452 can spawn.
