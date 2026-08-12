@@ -43,6 +43,8 @@ import { createChatEngine } from "./engine-selection.js";
 import { CliChatUnavailableError } from "./errors.js";
 import { purgePrivateTranscripts } from "./private-transcript-cleanup.js";
 import { startIdleReapTimer, type SweepIdlePool } from "./idle-reap-timer.js";
+import { ClaudePersistentRuntime } from "./claude-persistent-runtime.js";
+import { PersistentRuntimePool } from "./persistent-runtime-pool.js";
 export { CliChatUnavailableError } from "./errors.js";
 export { ChatEngineRpcClient, RpcConnection } from "./chat-engine-rpc-client.js";
 export type {
@@ -116,12 +118,59 @@ export function createRealEngineFactory(
     // `chat-multiplexer.ts`'s `resolveChatEngineFactory` re-reads `chat.persistent_runtime.enabled`
     // from the DB on every call, fail-closed to `false`.
     persistentRuntimeEnabled?: boolean | (() => Promise<boolean>);
+    /**
+     * #1554 task #5 — `chat.persistent_pool_cap`, read ONCE at factory-build time (Decision 1:
+     * cap is a pool-construction-time value, not re-read per turn). Omitted ⇒ no pool is
+     * constructed and `persistentRuntimeEnabled: true` falls back to the pre-task-5 unconditional
+     * construct (only real for tests / callers that opt out of the pool deliberately).
+     */
+    persistentPoolCap?: number;
+    /** Live read of `chat.persistent_idle_reap_minutes`; re-read fresh on every timer tick. Only
+     *  takes effect when `persistentPoolCap` is also set (a timer needs a pool to sweep). */
+    readIdleReapMinutes?: () => Promise<number>;
+    /** Override the pool idle-reap timer's tick cadence (tests / explicit tuning). */
+    idleReapTimerIntervalMs?: number;
+    /**
+     * #1554 Decision 2 (in-process topology) — fires after the pool reaps a child
+     * (idle-timeout | lru-evict). The composition root wires this to
+     * `deps.mcpTokenLifecycle?.revoke` where that dependency is reachable (see
+     * `chat-session-manager.ts`'s equivalent `mintMcpToken`/`revokeMcpToken` wiring in
+     * `createChatSessionRuntime` below); optional so callers without a token registry can omit it.
+     */
+    onPersistentReap?: (sessionKey: string, reason: ReapReason) => void;
   } = {}
 ): ChatEngineFactory {
   // Containerized deploys (deployable-stack §6) point this at the bind-mounted host
   // CLI-dir base (/host-home) so transcripts written by the host CLI are read back
   // correctly. Unset on a host install → the engine uses the OS home (unchanged).
   const homeBase = resolveMossEnv(process.env, "JARVIS_CLI_HOME_BASE");
+
+  // #1554 task #5 — construct the warm pool ONCE, at factory-build time, when a cap is supplied.
+  // `createRuntime` mirrors the exact `createChatEngine`/`ClaudePersistentRuntime` construction
+  // this factory already did unconditionally pre-task-5: `createRealTmuxIo()` fresh per call (it
+  // was never cached here either — see the closure below), no `credentialFile` (unchanged: this
+  // factory never computed one for the in-process topology).
+  const persistentPool =
+    opts.persistentPoolCap !== undefined
+      ? new PersistentRuntimePool({
+          cap: opts.persistentPoolCap,
+          createRuntime: () => new ClaudePersistentRuntime({ io: createRealTmuxIo() }),
+          onReap: opts.onPersistentReap,
+          clock: { now: () => Date.now() }
+        })
+      : undefined;
+
+  // No teardown hook is exposed from this factory (matches the module-level `realEngineFactory`
+  // singleton below, which has never had a stop path either) — the process the factory lives in
+  // is long-lived for the lifetime of this timer, same accepted-gap posture as that singleton.
+  if (persistentPool && opts.readIdleReapMinutes) {
+    startIdleReapTimer({
+      pool: persistentPool,
+      readIdleReapMinutes: opts.readIdleReapMinutes,
+      intervalMs: opts.idleReapTimerIntervalMs
+    });
+  }
+
   return async (provider, sessionKey, engineOpts) => {
     const persistentRuntimeEnabled =
       typeof opts.persistentRuntimeEnabled === "function"
@@ -136,8 +185,12 @@ export function createRealEngineFactory(
       // #1557 Phase 1: read from `chat.persistent_runtime.enabled` by the caller
       // (`chat-multiplexer.ts`'s `resolveChatEngineFactory`, the host-dev boot path). The
       // cli-runner RPC root (`engine-host.ts`) never reaches this factory — it calls
-      // `createChatEngine` directly and pins this to `false` (#1350 two-roots guard).
+      // `createChatEngine` directly with its OWN pool (#1350 two-roots guard: each root wires its
+      // own pool instance; they never share one).
       persistentRuntimeEnabled,
+      // #1554 task #5 — consulted only when persistentRuntimeEnabled resolves true AND the
+      // provider is anthropic (engine-selection.ts's fork). Undefined when no cap was supplied.
+      persistentPool,
       // #1157: surface silently-discarded composer input (char count only — never content).
       onDiagnostic: (event) =>
         console.warn(
