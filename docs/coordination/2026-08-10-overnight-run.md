@@ -1342,3 +1342,26 @@ next action.
 assistant-only-summary-drops-user-turns bug but no test asserts the truncation-*direction* fix
 (head-keeping `slice(0,1997)` vs old tail-keeping `slice(-2000)`) — worth a follow-up unit test,
 not blocking.
+
+## 2026-08-12: #1554 Phase 2 plan — Fable recheck APPROVE, sent to build
+
+Fable recheck (one-shot Opus agent) on the revised plan: **APPROVE.** Both binding findings
+genuinely closed, not restated:
+- Finding A: resolved via in-process Vitest tests spying on the real `SessionTokenRegistry`
+  instance (no new introspection route — correctly avoided adding a sensitive read path over live
+  session-token state); e2e-P2 narrowed to process-observable facts only (`ps`-observed child
+  lifetime, slot reclamation), token assertion dropped rather than faked.
+- Finding B: plan now states plainly that Phase 2 edits `routes.ts`; the #1256 collision was
+  re-verified by the recheck agent itself (diffed the sibling `1256-confirmation-registry-bypass`
+  worktree directly, confirmed both insertions match); 5-step conflict protocol is workable.
+
+One mechanical correction flagged (not a design reopen): the plan's e2e-P2 verification command at
+line 362 (`pnpm --filter @moss/chat test:e2e -- --grep "reap is real"`) doesn't exist —
+`packages/chat` has no test runner/`*.test.ts` files. Relayed to `build-1554-p2` (agent name,
+pane `w1:p8B`, session `9e98e0e0-...`, delivery confirmed via `herdr agent prompt` + bounded
+pane read showing it picked up the message) with instruction: fix the command to point at root
+`tests/integration/`, then proceed straight to build — no further Fable pass needed.
+
+Also filed **#1583** (mechanical UAT test fix for the `surface`-field staleness found on PR
+#1562's QA) and dispatched a small isolated-worktree agent (`fix-1583-surface-field`) to build it
+— routine tier, no production code change, will report PR number back.
