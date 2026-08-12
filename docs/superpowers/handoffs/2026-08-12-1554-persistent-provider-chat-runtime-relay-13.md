@@ -78,10 +78,13 @@ Resolved fresh via `herdr pane list` (not trusted from any stale doc): coordinat
 `working`, cwd `coord-overnight-20260810`. Reporting to that id directly after this doc is
 committed.
 
-Earlier in this relay, `SendMessage` to `"Coordinator"` and to that same id both failed
-("No agent named ... is reachable"); no working `ListAgents` tool was present in this session's
-toolset. Retried the same id after a fresh `herdr pane list` confirmed it live — see next message
-in this thread for outcome.
+**Outcome: could not reach the coordinator via `SendMessage`.** Retried both `to:
+"0bb9f516-c026-454f-bc97-dc9faf43bd20"` (freshly re-confirmed live via `herdr pane list`
+immediately beforehand) and `to: "Coordinator"` (its pane label). Both failed identically: "No
+agent named ... is reachable." Same failure every prior relay hit — no working `ListAgents` tool
+in this session's toolset, and `SendMessage` can't address a peer `herdr` pane by id or label here.
+Per box-wide rule ("two identical failures → stop and rethink"), not retrying further. This doc is
+the durable record of the full outcome for whoever reads it next.
 
 ## Task tracking
 
