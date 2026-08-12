@@ -1462,3 +1462,21 @@ topologies. Dispatched Opus adversarial QA (agent a8a67e849) to verify that clai
 plus confirm the gateway re-point genuinely inherits the fail-closed timeout + owner-match guards.
 No UI caller exists (module API only) — no UAT required, code-review is the full bar.
 **Security tier: mandatory Ben merge sign-off once QA posts verdict — do not auto-merge.**
+
+## 2026-08-12: #1256 PR #1587 — Opus QA verdict RED, fixes relayed
+
+Verdict: https://github.com/motioneso/moss/pull/1587#issuecomment-5271703526 — **MERGE-READY: NO**.
+Build agent's "CI green" claim was false: `docs/superpowers/plans/2026-08-12-1256-confirmation-registry-bypass.md`
+was added BY this PR (not pre-existing drift as claimed), fails `prettier --check`, and killed the
+gate at step 2/15 — typecheck/test:unit/test:integration never ran in CI.
+
+Blocking: B1 (format fix, mechanical), B2 (`packages/ai/src/manifest.ts:127-133` permission
+description says "without executing them" — now false, resolve genuinely executes post-fix).
+Should-fix: N1 (build agent's shared-process justification for the module-level
+`resolveActionRequestFn` was factually wrong — 20+ integration files run 2-9 servers/process;
+real cross-wiring risk), N2 (no cross-user authz test on either resolve route).
+Invariants held: RLS owner-only + FORCE RLS verified, fail-closed timeout + owner-match guards
+genuinely inherited (QA verified by inspection, not just presence).
+
+Relayed full findings to confirmation-relay5 (w1:p8A) — fixing now, will re-push and re-request
+QA. **Security tier — no auto-merge regardless of next verdict; needs Ben's explicit sign-off.**
