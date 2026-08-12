@@ -33,7 +33,7 @@ function actionRow(
     primaryAction:
       category === "needs_reply"
         ? { kind: "reply", cacheMessageId: `opaque-cache-message-${taskId.at(-1)}` }
-        : null,
+        : { kind: "view", href: `https://example.test/source/${taskId}` },
     source: category === "needs_action" ? "calendar" : "email",
     sourceLabel: category === "needs_action" ? "Calendar" : "Gmail",
     sourceRef: category === "needs_reply" ? "subject:launch-decision" : `source:${taskId}`,
@@ -220,6 +220,11 @@ test("morning and evening prose and action rows render accept dismiss view reply
     ).toHaveText(row.title);
   }
   await expect(needsYou.getByRole("link", { name: "View" })).toHaveCount(2);
+
+  // A missing/broken stylesheet leaves the .loose-row* classes present but unstyled — assert the
+  // computed layout, not just the class attribute, so #1429 (undefined CSS classes) can't recur.
+  await expect(needsYou.locator(".loose-row").first()).toHaveCSS("display", "flex");
+  await expect(needsYou.locator(".loose-row").nth(1)).toHaveCSS("border-top-width", "1px");
 
   const actionEntry = needsYou.locator(".loose-row").filter({ hasText: morningRows[0]!.title });
   const [sourcePage] = await Promise.all([
