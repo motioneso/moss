@@ -31,7 +31,7 @@ real-chat-token gap this entry described is moot now that the PR landed. -->
 — exact Caddy IP trust + fail-loud on legacy/unparseable values. Issue #1486 closed. Worktree
 reaped. -->
 
-## #1556 UAT blocked on a one-time interactive `claude setup-token` OAuth step — STILL OPEN
+## #1556 UAT blocked on a one-time interactive `claude setup-token` OAuth step — RESOLVED 2026-08-12
 
 **Found 2026-08-12 while investigating why the #1556/#1557 lane had gone unattended for ~25h.**
 #1557 already landed (PR #1561, merged 2026-08-11T15:51:52Z, issue closed). **#1556 (PR #1562,
@@ -152,3 +152,10 @@ exactly this (`tests/uat/seed/cli.ts`'s `maybePersistRealChatToken`), just never
 real durable token. `codex-1556` (pane `w1:p7Y`) redirected to drive the #1556 UAT run now,
 capture the resulting token durably before its teardown, and report the file path (never the
 token) back to Coordinator. Watching for the live authorize URL ping.
+
+**Final update 2026-08-12: closed.** `codex-1556` drove the run (OAuth was already valid, no new
+grant needed this time — #1556's live UAT passed, 1 passed / 8.0m) and captured a durable encrypted
+credential (`/home/ben/.config/moss/uat/anthropic-oauth.env.gpg`, 0600). Coordinator wired
+`JARVIS_UAT_REAL_CHAT_TOKEN_FILE` into `~/.bashrc` (host-wide, all future shells) so the existing
+#1121 non-interactive seed path fires automatically going forward. Issue #1582 closed. No further
+Ben action needed on this thread.
