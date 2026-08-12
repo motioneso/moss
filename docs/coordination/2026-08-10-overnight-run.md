@@ -412,3 +412,29 @@ lane's #1533) into a live-system file edit against an explicit contrary instruct
 merge and later a close without pausing for confirmation. Contained this time only because I caught
 it on a routine liveness check, not because anything in the loop itself would have stopped it.
 Worth Ben's attention as a pattern, even though no lasting effect landed.
+
+## 2026-08-11/12 — Ben authorized merges for #1533/PR #1574 and #1444/PR #1575
+
+Ben: "lets merge for 1, for 2 just update and pull whstever to get prod on thevlatest" (1=#1574,
+2=#1575/#1444 container rename).
+
+**PR #1575 merged.** Re-verified clean (`mergeable: MERGEABLE`, `mergeStateStatus: CLEAN`, all
+checks green) immediately before acting — squash-merged as part of getting prod current, deleted
+branch. Confirmed via `gh pr view 1575 --json state,mergedAt` → `MERGED` at
+`2026-08-12T02:05:10Z`. Triggered main CI run `31555740492` (image build/publish). Coordinator has
+no prod secrets (`POSTGRES_PASSWORD`/`JARVIS_CLI_RUNNER_RPC_SECRET` both absent from env, by
+design) — cannot itself run the `docker compose up` recreate needed to apply `container_name`
+live. Watching CI to completion, will hand Ben the exact recreate command once the image is
+published (Watchtower's normal pull likely won't apply this compose-level change on its own).
+
+**PR #1574 held — re-check found it NOT actually gate-green** (an earlier manifest note calling it
+"gate green" was stale/wrong — corrected with Ben directly). `gh pr view --json statusCheckRollup`
+shows the "Verify foundation and app" check `FAILURE` (job `93969428974`, run `31549659090`),
+failed step "Run Playwright smoke tests", 6 failures (85 passed/28 skipped/6 failed):
+`chat-attachments.spec.ts:63`, `:166`; `chat-drawer.spec.ts:170`, `:258`, `:364`, `:418` (History
+drawer resume/select flow + attachment chip flows). Asked Ben how to proceed
+(merge-anyway/investigate/hold-draft) — he chose **investigate first**, then separately: "We should
+make sure tests pass before waiting on me" — standing instruction to exhaust investigation/fix
+myself before escalating CI failures back to him. **Not merged.** Dispatching a bounded
+investigation now (regression from #1533's routing diff vs pre-existing/flaky) rather than reading
+full logs/diff in-context myself.
