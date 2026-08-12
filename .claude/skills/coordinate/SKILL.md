@@ -336,9 +336,20 @@ When an agent reports **done** (PR open + its own green evidence — which you d
    ```bash
    gh pr merge <PR> --squash --delete-branch
    ```
-   Then GitHub bookkeeping (source of truth): close the issue, check epic exit-criteria, move the
-   board item to Done, close the milestone if complete (field IDs: `start` skill's GitHub
-   reference). Add the merge to Ben's standing digest.
+   Then GitHub bookkeeping (source of truth) — **mandatory on every merge, every tier, no
+   exceptions:**
+   - `gh issue comment <issue> --body "…"` — PR link, what merged, tier, verified exit codes. This
+     is not optional and not folded into "digest to Ben only for sensitive+" — every merge gets its
+     own issue comment regardless of tier.
+   - Move the board item to the correct status (`Done` if the issue's work is complete, otherwise
+     the accurate in-progress state) — **do this at merge time, not left stale from Phase 1's
+     spawn.** Close the issue, check epic exit-criteria, close the milestone if complete (field IDs:
+     `start` skill's GitHub reference).
+   - Add the merge to Ben's standing digest.
+   Board drift (issue sitting on a stale status while its PR is live/merged) is the recurring
+   failure mode here — verify with `gh issue view <issue> --json comments,state` and `gh project
+   item-list 2 --owner motioneso --format json --limit 2000` (pagination truncates below ~2000,
+   see `gh-project-item-list-truncates`) rather than trusting the manifest's narrative.
 
 6. **Reap — but prove the work landed first.** Before removing anything, confirm the lane's commits
    are actually on `main` (`git log origin/main --oneline | grep <sha>`, or the merged PR). Only
