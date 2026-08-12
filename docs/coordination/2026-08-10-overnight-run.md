@@ -474,3 +474,10 @@ for "prod on the latest," per standing prod-deploy memory:
    per that file's own compose labels) — which is Ben's call/action per "Ben owns prod, never
    CLI docker compose up" policy. Coordinator has no prod secrets to do this itself.
 Reported both to Ben with the exact command for (2). Still watching PR #1574's CI separately.
+
+**PR #1574 CI: green.** New run `31556757357` at `d4870e39f` — all jobs `success`, `mergeStateStatus:
+CLEAN`, `mergeable: MERGEABLE`. The 6 e2e failures are resolved. **Still not merge-ready**: PR
+remains a draft and the live-path proof is unresolved — separate, pre-existing blocker per the
+`## OPEN 2026-08-11: #1533 live-path proof blocked` entry in AWAITING-BEN.md
+(`JARVIS_UAT_REAL_CHAT_TOKEN_FILE` missing from env, not something CI or this fix touches). No
+merge action taken; reporting gate-green to Ben, live-path proof remains the open item.
