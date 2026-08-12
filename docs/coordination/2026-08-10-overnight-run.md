@@ -1412,5 +1412,6 @@ did not fix the underlying fetch. Secondary risk: if Ben's view is backed by
 at all regardless.
 **Needs prod-side check I can't do from here:** (1) prod API logs since 2026-08-09 for "dataset
 fetch failed" scoped to the news source — identifies which publisher host is failing; (2) prod
-`pgboss.job` table for `news.refresh` job history (failing vs. not running). Reported to Ben with
-this ask.
+`pgboss.job` table for `news.refresh` job history (failing vs. not running). Filed as
+https://github.com/motioneso/moss/issues/1585 with full write-up. Reported to Ben with this ask —
+needs prod log/DB access, not something buildable blind.
