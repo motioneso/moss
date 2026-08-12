@@ -1189,3 +1189,27 @@ issue that built against it.
 
 Watching for the successor to spawn and confirm driving before reaping `prov-chat-1554`'s pane
 (`w1:p88`, session `7c0b9ff8-86f4-4586-a742-0781f4cd15b3`).
+
+## 2026-08-12: #1554 relay + #1256 wrap-up successor spawned
+
+**#1554**: `prov-chat-1554` relayed to successor `1554-relay2` (pane `w1:p89`, session
+`51806b74-acbf-4fcb-accc-a1cd86afd623`), same worktree/branch, continuing Phase 2 of the reused
+#1557 plan. Confirmed successor driving (session id + cwd match, `agent_status: working`) before
+reaping the old pane `w1:p88`.
+
+**#1256**: lane reached relay-4 with real progress (not a stall) — all 5 build tasks done and
+committed (`repository.getAssistantAction` getter, ai routes handler + schema, module-registry
+`adoptChatGateway` wiring, regression test), pre-push trio green, full `test:ai` suite 50/50. The
+relay-4 session ended its turn on a wait-declaration ("the next relay should verify the gate, push,
+coordinate wrap-up...") without spawning its own successor — treated as the "wait declaration, not
+frozen" stall case per the coordinate skill: took over the finish line myself rather than nudging.
+Spawned `confirmation-relay5` (pane `w1:p8A`, session `519d52a4-9ade-45b8-a5a1-4edeb58bb8fc`) in the
+same existing worktree with a bounded wrap-up-only brief: `verify-gate` skill → push → open PR →
+escalate to me for security-tier Opus QA (do not request QA or merge itself). Old pane `w1:p87`
+(session `4d54949a-3535-47ba-b7dd-1a7f2c6f12cd`) left in place for now, not yet reaped — will reap
+once `confirmation-relay5` is confirmed producing (PR opened), consistent with "confirm before reap".
+
+QA-flag carried forward for the eventual Opus review: `resolveActionRequestFn` in
+`packages/module-registry/src/index.ts` is a module-level `let`, so if multiple `createApiServer`
+calls ever share one Node process, the last `adoptChatGateway` call wins for all of them — benign
+for the current one-server-per-test-process suite, flagged explicitly for security-tier scrutiny.
