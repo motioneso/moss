@@ -1449,3 +1449,16 @@ CLAUDE.md spec-before-build gate (issues exist, no spec/plan yet for the fix its
   mergeStateStatus CLEAN — squash-merged `fd93546fc`, branch deleted. Issue #1556 stays OPEN on
   purpose: its scope also covers notes-default retrieval, which PR #1562 didn't build (phase 1 was
   replay only) — phase 2 still to come.
+
+## 2026-08-12: #1256 PR #1587 open, security-tier — Opus QA dispatched
+
+PR: https://github.com/motioneso/moss/pull/1587. Gate green (verify:foundation isolated DB,
+test:integration 190 files/1885 tests, 0 failed; one pre-existing unrelated format:check warning
+noted as known drift). Build agent flagged for a second set of eyes: `resolveActionRequestFn` is a
+module-level `let` in `packages/module-registry/src/index.ts` (TS scope constraint from
+`BUILT_IN_MODULES`) — last `adoptChatGateway` call wins if >1 `createApiServer` shares a process;
+claimed benign (one server per integration test process) but unverified for real deployment
+topologies. Dispatched Opus adversarial QA (agent a8a67e849) to verify that claim independently
+plus confirm the gateway re-point genuinely inherits the fail-closed timeout + owner-match guards.
+No UI caller exists (module API only) — no UAT required, code-review is the full bar.
+**Security tier: mandatory Ben merge sign-off once QA posts verdict — do not auto-merge.**
