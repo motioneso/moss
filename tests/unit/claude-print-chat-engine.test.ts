@@ -163,6 +163,28 @@ describe("ClaudePrintChatEngine", () => {
     expect(launchLineAt(1)).toContain("--resume 00000000-0000-4000-8000-000000000001");
   });
 
+  it("prepends relaunch replay to only the first one-shot prompt", async () => {
+    const io = fakeIo();
+    const engine = new ClaudePrintChatEngine("user-1", io, {
+      mux: fakeMux(),
+      homeBase: "/home/test",
+      sessionId: "00000000-0000-4000-8000-000000000001"
+    });
+
+    await engine.launch({
+      neutralDir: "/tmp/jarvis-neutral",
+      personaPath: "/tmp/jarvis-neutral/persona.md",
+      replayBatch: "prior fact: Zippledorf-7734"
+    });
+    await engine.submit("What was the fact?");
+    expect(io.writes["/tmp/jarvis-neutral/.jarvis-claude-print-prompt.txt"]).toBe(
+      "prior fact: Zippledorf-7734\n\nWhat was the fact?"
+    );
+
+    await engine.submit("next turn");
+    expect(io.writes["/tmp/jarvis-neutral/.jarvis-claude-print-prompt.txt"]).toBe("next turn");
+  });
+
   it("does not finish teardown until the detached CLI process exits", async () => {
     let exit!: () => void;
     const child = fakeChild();

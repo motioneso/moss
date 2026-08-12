@@ -84,7 +84,7 @@ test("ordinary chat turn sends no snapshot and performs no current-view pull", a
   // pre-existing app behavior, not something this test introduces.
   await expect(page.getByText("Connect a provider to start chatting").first()).toBeVisible();
 
-  expect(turnBody).toEqual({ text: "Say hello in three words." });
+  expect(turnBody).toEqual({ text: "Say hello in three words.", surface: "drawer" });
   expect(pageContextPushCount).toBe(0);
 });
 

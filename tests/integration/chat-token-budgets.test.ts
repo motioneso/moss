@@ -14,6 +14,7 @@ import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
 import { AiRepository } from "@moss/ai";
 import { ChatRepository } from "@moss/chat";
 import { DataContextChatPersistence } from "../../packages/chat/src/live/persistence.js";
+import { DEFAULT_REPLAY_MESSAGES } from "../../packages/chat/src/live/replay-window.js";
 import {
   estimateTokens,
   trimToTokenBudget,
@@ -163,7 +164,7 @@ describe("DataContextChatPersistence.listPriorTurns bounded replay", () => {
     );
   });
 
-  it("returns no replay turns by default", async () => {
+  it("returns all turns by default when under the replay window (unset K -> DEFAULT_REPLAY_MESSAGES)", async () => {
     const ctx = { actorUserId: ids.userB, requestId: "t" };
     const thread = await dataContext.withDataContext(ctx, (db) =>
       chatRepo.getCurrentThread(db, ids.userB)
@@ -183,10 +184,11 @@ describe("DataContextChatPersistence.listPriorTurns bounded replay", () => {
 
     const result = await persistence.listPriorTurns(ids.userB);
     expect(result.oldSummary).toBeNull();
-    expect(result.recent).toHaveLength(0);
+    expect(result.recent.length).toBeGreaterThanOrEqual(4);
+    expect(result.recent.some((t) => t.content === "q1")).toBe(true);
   });
 
-  it("returns prior turns when replay is explicitly enabled", async () => {
+  it("returns prior turns when replay K is explicitly overridden", async () => {
     const origK = process.env.JARVIS_CHAT_REPLAY_K;
     process.env.JARVIS_CHAT_REPLAY_K = "10";
     try {
@@ -203,7 +205,7 @@ describe("DataContextChatPersistence.listPriorTurns bounded replay", () => {
     }
   });
 
-  it("splits into recent + summary when turn count > K", async () => {
+  it("read path: recent is capped by K, oldSummary comes only from the stored column (D3)", async () => {
     // Fresh thread for userA so this test's turns are isolated.
     const origK = process.env.JARVIS_CHAT_REPLAY_K;
     process.env.JARVIS_CHAT_REPLAY_K = "2";
@@ -221,12 +223,17 @@ describe("DataContextChatPersistence.listPriorTurns bounded replay", () => {
           })
         );
       }
+      // D3: oldSummary is read only from the stored `conversation_summary`
+      // column, never synthesized lazily at read time — write it directly
+      // (the write path itself is covered by the "rolling summary" describe
+      // block below).
+      await dataContext.withDataContext(ctx, (db) =>
+        chatRepo.updateConversationSummary(db, thread.id, "As of turn 1: a1 happened.")
+      );
 
       const result = await persistence.listPriorTurns(ids.userA);
       expect(result.recent).toHaveLength(2);
-      expect(result.oldSummary).not.toBeNull();
-      // The summary must mention the old assistant turns.
-      expect(result.oldSummary).toContain("a1");
+      expect(result.oldSummary).toBe("As of turn 1: a1 happened.");
     } finally {
       if (origK === undefined) {
         delete process.env.JARVIS_CHAT_REPLAY_K;
@@ -234,6 +241,50 @@ describe("DataContextChatPersistence.listPriorTurns bounded replay", () => {
         process.env.JARVIS_CHAT_REPLAY_K = origK;
       }
     }
+  });
+
+  it("T2-b: read path never synthesizes a summary, even with plenty of old turns beyond the window", async () => {
+    const ctx = { actorUserId: ids.userA, requestId: "t" };
+    const thread = await dataContext.withDataContext(ctx, (db) =>
+      chatRepo.openNewThread(db, { title: "no-synthesis test" })
+    );
+    // Seed well past DEFAULT_REPLAY_MESSAGES via the repository directly (not
+    // persistence.recordTurn), so the conversation_summary column stays null —
+    // there is plenty of "old" history a read-time synthesizer could summarize.
+    for (let i = 1; i <= 25; i++) {
+      await dataContext.withDataContext(ctx, (db) =>
+        chatRepo.recordCompletedTurn(db, thread.id, `q${i}`, `a${i}`, {
+          provider: "anthropic",
+          model: "x"
+        })
+      );
+    }
+
+    const result = await persistence.listPriorTurns(ids.userA);
+    expect(result.oldSummary).toBeNull();
+  });
+
+  it("T2-d: unset K -> forceReplay and plain launch select identical windows (both cap at 40)", async () => {
+    const ctx = { actorUserId: ids.userA, requestId: "t" };
+    const thread = await dataContext.withDataContext(ctx, (db) =>
+      chatRepo.openNewThread(db, { title: "forceReplay collapse test" })
+    );
+    // 25 turns = 50 stored messages, well past DEFAULT_REPLAY_MESSAGES (40).
+    for (let i = 1; i <= 25; i++) {
+      await dataContext.withDataContext(ctx, (db) =>
+        chatRepo.recordCompletedTurn(db, thread.id, `q${i}`, `a${i}`, {
+          provider: "anthropic",
+          model: "x"
+        })
+      );
+    }
+
+    const plain = await persistence.listPriorTurns(ids.userA);
+    const relaunch = await persistence.listPriorTurns(ids.userA, { forceReplay: true });
+
+    expect(plain.recent).toHaveLength(DEFAULT_REPLAY_MESSAGES);
+    expect(relaunch.recent).toHaveLength(DEFAULT_REPLAY_MESSAGES);
+    expect(relaunch.recent).toEqual(plain.recent);
   });
 });
 
@@ -254,31 +305,74 @@ describe("DataContextChatPersistence.recordTurn rolling summary", () => {
     });
   });
 
-  it("stores conversation_summary on thread after turns exceed K", async () => {
+  it("stores conversation_summary on thread after stored turns exceed DEFAULT_REPLAY_MESSAGES (D3 write gate)", async () => {
+    // D3: the write gate is the DEFAULT_REPLAY_MESSAGES constant (40 messages),
+    // not K — set K to something unrelated to prove the write path ignores it.
     const origK = process.env.JARVIS_CHAT_REPLAY_K;
     process.env.JARVIS_CHAT_REPLAY_K = "2";
     try {
-      // recordTurn needs resolveActiveProvider to have been called first (it selects model).
-      // We can't use persistence.recordTurn without an active model, so we call
-      // chatRepo.recordCompletedTurn directly and check updateConversationSummary logic
-      // by calling listPriorTurns (which builds the summary lazily if column is null).
       const ctx = { actorUserId: ids.userA, requestId: "t" };
       const thread = await dataContext.withDataContext(ctx, (db) =>
         chatRepo.openNewThread(db, { title: "summary-store test" })
       );
-      for (let i = 1; i <= 3; i++) {
-        await dataContext.withDataContext(ctx, (db) =>
-          chatRepo.recordCompletedTurn(db, thread.id, `u${i}`, `bot${i}`, {
-            provider: "anthropic",
-            model: "x"
-          })
-        );
+      // Drive past the summary's character cap as well as the 40-message write gate.
+      for (let i = 1; i <= 45; i++) {
+        await persistence.recordTurn(ids.userA, `u${i}-${"x".repeat(50)}`, `bot${i}`, {
+          provider: "anthropic",
+          model: "x"
+        });
       }
 
-      // listPriorTurns builds the summary in-memory from old turns (column is null).
-      const result = await persistence.listPriorTurns(ids.userA);
-      expect(result.oldSummary).not.toBeNull();
-      expect(result.oldSummary).toMatch(/bot1/);
+      const updated = await dataContext.withDataContext(ctx, (db) =>
+        chatRepo.getThreadById(db, thread.id)
+      );
+      expect(updated?.conversation_summary).not.toBeNull();
+      expect(updated?.conversation_summary).toMatch(/user: u1-/);
+      expect(updated?.conversation_summary).toMatch(/bot1\b/);
+    } finally {
+      if (origK === undefined) {
+        delete process.env.JARVIS_CHAT_REPLAY_K;
+      } else {
+        process.env.JARVIS_CHAT_REPLAY_K = origK;
+      }
+    }
+  });
+
+  it("T2-a: write gate ignores replay opt-out (K=0) — fires past 40 stored messages, not before", async () => {
+    // D3: the write gate is DEFAULT_REPLAY_MESSAGES, independent of K. Prove it
+    // with the most aggressive opt-out (K=0, meaning "no replay at all") —
+    // summaries must still accrue for long threads regardless.
+    const origK = process.env.JARVIS_CHAT_REPLAY_K;
+    process.env.JARVIS_CHAT_REPLAY_K = "0";
+    try {
+      const ctx = { actorUserId: ids.userA, requestId: "t" };
+      const thread = await dataContext.withDataContext(ctx, (db) =>
+        chatRepo.openNewThread(db, { title: "k-zero write-gate test" })
+      );
+
+      // 15 turns = 30 stored messages: under the 40-message threshold, no write yet.
+      for (let i = 1; i <= 15; i++) {
+        await persistence.recordTurn(ids.userA, `u${i}`, `bot${i}`, {
+          provider: "anthropic",
+          model: "x"
+        });
+      }
+      const beforeGate = await dataContext.withDataContext(ctx, (db) =>
+        chatRepo.getThreadById(db, thread.id)
+      );
+      expect(beforeGate?.conversation_summary).toBeNull();
+
+      // 6 more turns brings stored messages to 42 (> 40): the gate now fires.
+      for (let i = 16; i <= 21; i++) {
+        await persistence.recordTurn(ids.userA, `u${i}`, `bot${i}`, {
+          provider: "anthropic",
+          model: "x"
+        });
+      }
+      const afterGate = await dataContext.withDataContext(ctx, (db) =>
+        chatRepo.getThreadById(db, thread.id)
+      );
+      expect(afterGate?.conversation_summary).not.toBeNull();
     } finally {
       if (origK === undefined) {
         delete process.env.JARVIS_CHAT_REPLAY_K;
