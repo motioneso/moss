@@ -112,12 +112,14 @@ test("attaching a file shows a ready chip and sends its id with the turn (#1133)
   await composerInput.fill("Look at this file");
   await composerInput.press("Enter");
 
-  // The turn carries the server-issued attachment id, not the bytes.
+  // The turn carries the server-issued attachment id, not the bytes. ChatDrawer now always
+  // threads its surface through send routing (#1533), so the turn body carries `surface`.
   await expect
     .poll(() => turnBody)
     .toEqual({
       text: "Look at this file",
-      attachmentIds: [UPLOAD_ID]
+      attachmentIds: [UPLOAD_ID],
+      surface: "drawer"
     });
 
   // Pending chips clear on send; the sent bubble re-renders the attachment as a sent chip.
@@ -205,7 +207,8 @@ test("a failed upload marks the chip and keeps it out of the send (#1133)", asyn
   const composerInput = drawer.getByLabel("Message Moss");
   await composerInput.fill("just text");
   await composerInput.press("Enter");
-  await expect.poll(() => turnBody).toEqual({ text: "just text" });
+  // ChatDrawer now always threads its surface through send routing (#1533).
+  await expect.poll(() => turnBody).toEqual({ text: "just text", surface: "drawer" });
 });
 
 test("private mode hides the attach affordance (#1133)", async ({ page }) => {

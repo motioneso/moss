@@ -22,13 +22,20 @@ export interface MockChatApiState {
 }
 
 export async function registerMockChatRoutes(page: Page, state: MockChatApiState): Promise<void> {
-  await page.route(/\/api\/chat\/threads\/[^/]+\/messages$/, (route) =>
-    handleChatMessagesRoute(route, state)
+  // Match by pathname (not the full URL) so a trailing `?surface=...` query string — added
+  // by ChatDrawer's surface-threaded calls (#1533) — doesn't fall these mocks through
+  // unmatched to the real network.
+  await page.route(
+    (url) => /\/api\/chat\/threads\/[^/]+\/messages$/.test(url.pathname),
+    (route) => handleChatMessagesRoute(route, state)
   );
   await page.route(/\/api\/chat\/threads\/[^/]+$/, (route) =>
     handleChatThreadDetailRoute(route, state)
   );
-  await page.route("**/api/chat/threads", (route) => handleChatThreadsRoute(route, state));
+  await page.route(
+    (url) => url.pathname.endsWith("/api/chat/threads"),
+    (route) => handleChatThreadsRoute(route, state)
+  );
 
   // The live-chat drawer is global (mounted in the app shell), so its SSE stream opens
   // on every authenticated page. Stub it with a single empty event-stream (one SSE
