@@ -1134,3 +1134,29 @@ need to understand why attempt 1 failed (flaky vs real, and whether attempt 2 is
 re-verifying the same code or something changed) before merge. Background Monitor
 (`bplfd0480`) watching attempt 2 to completion; will pull attempt 1's log once the run fully
 concludes regardless of attempt 2's outcome.
+
+## 2026-08-12: #1554 spawned — Fable APPROVE, sensitive tier
+
+Fable reviewed the spec (`docs/superpowers/specs/2026-08-10-1554-persistent-provider-chat-runtime.md`)
+standing in for Ben's sign-off per the new policy: **APPROVE**, no blockers. All 11 findings from
+the earlier Codex adversarial review round are confirmed folded into the spec text and verified
+against citations at grounding commit `128a5bed6`. Non-blocking notes (relayed into the handoff,
+no spec change): verify real reply records for the live-path proof (not just HTTP 200 — the
+182.6s-latency lesson); `--no-session-persistence` interaction is a bounded phase-1 check with both
+branches already specified, not an open fork; all-4-children-busy one-shot fallback is a deliberate
+trade-off.
+
+Spawned: worktree `.claude/worktrees/1554-persistent-provider-chat-runtime`, branch
+`1554-persistent-provider-chat-runtime` off `origin/main` @ `33f57b1fa` (confirmed CI-green on
+`main` before spawn). Agent `prov-chat-1554` (session `7c0b9ff8-86f4-4586-a742-0781f4cd15b3`), pane
+`w1:p88`, `--model sonnet` explicit, confirmed actively reading its brief. Handoff:
+`docs/superpowers/handoffs/2026-08-12-1554-persistent-provider-chat-runtime.md`. Tier: **sensitive**
+(CLI runner + session/process lifecycle — explicit sensitive trigger). Light collision note filed
+in the handoff: shares `packages/chat/src/routes.ts` / `packages/module-registry/src/index.ts`
+with #1256's in-flight adopt-seam edits — flagged to rebase before PR, not a hard block.
+
+Also this segment: stray pane `w1:p84` reaped (dead, no session). #1256 lane re-confirmed healthy
+(no third relay). #1556/PR #1562 CI: confirmed the fail/in-progress contradiction was a manual
+`run_attempt: 2` re-run by actor `motioneso`, not a stale read — attempt 1's failure log still
+inaccessible until the run fully concludes; background Monitor `bplfd0480` watching. Will not treat
+a green attempt 2 as resolution without also seeing attempt 1's actual failure reason.
