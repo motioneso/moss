@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ProviderChatRuntime, ReapReason, RuntimeHealth } from "./provider-runtime.js";
+import type {
+  ProviderChatRuntime,
+  ReapReason,
+  RecoveryOutcome,
+  RuntimeHealth
+} from "./provider-runtime.js";
 import type { EngineLaunchOpts } from "./types.js";
 import { PersistentRuntimePool } from "./persistent-runtime-pool.js";
 
@@ -15,7 +20,7 @@ function fakeRuntime(health: RuntimeHealth) {
     cancel: vi.fn(async () => ({ approvalsResolved: 0 })),
     health: healthMock,
     reap: reapMock,
-    recover: vi.fn(async () => ({ kind: "neutral-failure", reason: "n/a" }))
+    recover: vi.fn(async (): Promise<RecoveryOutcome> => ({ kind: "neutral-failure", reason: "n/a" }))
   };
   return { runtime, healthMock, reapMock };
 }
@@ -127,7 +132,7 @@ describe("PersistentRuntimePool.admit", () => {
       cancel: vi.fn(async () => ({ approvalsResolved: 0 })),
       health: healthMock,
       reap: reapMock,
-      recover: vi.fn(async () => ({ kind: "neutral-failure", reason: "n/a" }))
+      recover: vi.fn(async (): Promise<RecoveryOutcome> => ({ kind: "neutral-failure", reason: "n/a" }))
     };
 
     const pool = new PersistentRuntimePool({

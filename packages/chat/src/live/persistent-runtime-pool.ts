@@ -111,13 +111,14 @@ export class PersistentRuntimePool {
     let victim: TrackedChild | null = null;
     let victimLastResultAt = Infinity;
     for (let i = 0; i < candidates.length; i += 1) {
+      const candidate = candidates[i];
       const health = healths[i];
-      if (health.state !== "idle") {
+      if (!candidate || !health || health.state !== "idle") {
         continue;
       }
       const lastResultAt = health.lastResultAt ?? -Infinity;
       if (lastResultAt < victimLastResultAt) {
-        victim = candidates[i];
+        victim = candidate;
         victimLastResultAt = lastResultAt;
       }
     }
