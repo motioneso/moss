@@ -305,6 +305,15 @@ When an agent reports **done** (PR open + its own green evidence — which you d
    and coordinated-qa step-4 e2e-UAT gate for sensitive). `security` = Opus adversarial QA — must
    `gh pr comment` its verdict before you act. Consume the compact verdict only — never the body.
 
+   **Reap the QA worktree the moment you've consumed its verdict** — do not wait for Phase 3
+   step 6 or defer it. QA worktrees are disposable by construction: `isolation: "worktree"`'s
+   "auto-remove if unchanged" almost never fires for them, because the QA agent's own screenshots
+   and `test-results/` output count as a change. That gap is exactly how the 2026-08-10 run
+   accumulated ~20 stray `qa-*`/`agent-a*` worktrees under `.claude/worktrees/` and `/tmp` by the
+   next morning. A QA worktree holds no work of its own (it never edits source, only reviews) —
+   `git worktree remove --force <qa-wt>` and delete its branch (if any) unconditionally, no
+   four-gate check needed; that check is for build-agent worktrees which *do* carry unlanded work.
+
 2. **CI waiver protocol (red checks are stop-the-line).** A PR with any red required check does
    NOT merge. Waivable **only** if: (a) proven failing on `origin/main` at the same SHA, (b)
    recorded in the manifest `ci_waivers` (check + SHA + proof), and (c) Ben-approved. A check that
@@ -357,6 +366,16 @@ When an agent reports **done** (PR open + its own green evidence — which you d
    have stopped any dev instance it started (**by explicit PID, never a name pattern**) and deleted
    any rows it seeded (by recorded id, verifying the row count). Ask for that confirmation — a lane
    that reports "CI green" has usually left a listener on `:3000` and a worktree behind.
+
+   **Do this reap in the same pass as the merge — never "later."** A build agent's own report
+   already tells you it's reapable (`coordinated-wrap-up` ends every report with "worktree
+   reapable"); once step 6's four gates are clear, remove it right then, not on some future sweep.
+   "Later" is how 48 worktrees piled up across one overnight run: relays and successors each
+   inherited the queue but not the backlog of already-mergeable-but-unreaped trees, because nothing
+   forced the reap to happen inside the merge step itself. If a relay is imminent (Context
+   discipline), the manifest continuation note must explicitly list any worktree that passed its
+   four-gate check but wasn't yet removed — an unreaped-but-safe worktree is state, and state that
+   isn't in the manifest doesn't survive the handoff.
 
 7. **Relay check (non-negotiable).** Increment `merges_since_relay`, then evaluate the **relay
    triggers** (Context discipline): meter warning, security merge, 2 routine/sensitive merges, or
