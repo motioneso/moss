@@ -481,3 +481,35 @@ remains a draft and the live-path proof is unresolved — separate, pre-existing
 `## OPEN 2026-08-11: #1533 live-path proof blocked` entry in AWAITING-BEN.md
 (`JARVIS_UAT_REAL_CHAT_TOKEN_FILE` missing from env, not something CI or this fix touches). No
 merge action taken; reporting gate-green to Ben, live-path proof remains the open item.
+
+## 2026-08-12 — PR #1574/#1533 merged on Ben's explicit waiver of pre-merge live-path proof
+
+Ben: "just merge this, tell me how to test there" — explicit instruction to merge #1574 now and do
+the live-path verification himself post-merge, rather than continuing to block on the missing
+`JARVIS_UAT_REAL_CHAT_TOKEN_FILE`. This is Ben exercising his own authority over the live-path
+gate (which he set), not a violation of it — noted here so it doesn't read as a missed gate later.
+
+Re-verified fresh immediately before acting: `d4870e39f`, all checks SUCCESS, `mergeStateStatus:
+CLEAN`. Session-id authority confirmed against this file's lock line. Marked ready-for-review
+(`gh pr ready`) then squash-merged + branch deleted. Merge commit `33b722a0f`, merged
+`2026-08-12T03:11:37Z`.
+
+**Bug being fixed (#1533):** in a module-scoped tab (e.g. Job Search), `ChatDrawer`'s `sendMessage`
+didn't carry the active surface, so the turn used the default drawer surface. Action SSE events
+(routed by surface embedded in `chatSessionId`) landed in the wrong subscriber bucket, so a
+pending action card (e.g. a `criteria.set` request) didn't render until a page reload forced REST
+rehydration — a 150s+ apparent delay that was actually the confirmation timeout, not latency.
+
+**How Ben can test it live:** open a live dev instance, log in, go to Job Search, use a
+chat-driven action there (e.g. "Change in chat" on search criteria/profile) from the module tab
+(not the default chat drawer) — confirm the approval/action card renders immediately in that same
+tab's chat surface, without needing a reload. Try both approve and deny. This is the exact
+regression scenario from the issue.
+
+Pending follow-up (next actions, not yet done): close issue #1533 with this PR reference, move
+board card to Done pending Ben's live confirmation (or leave In Review until he confirms — GitHub
+is source of truth, don't mark Done on code-complete alone per live-path-gate norms even when
+merged), remove/resolve the `## OPEN 2026-08-11: #1533 live-path proof blocked` entry in
+AWAITING-BEN.md (superseded — Ben chose to verify post-merge himself), reap #1533's worktree/pane
+(`w1:p7C`, `.claude/worktrees/1533-chat-surface-build`) once confirmed idle/stopped (already
+observed idle this session).
