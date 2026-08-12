@@ -2167,3 +2167,26 @@ instructed to trust `gh pr checks`, which needs a finished run to be trustworthy
 
 Next: recheck `gh pr checks 1594` next tick; dispatch `coordinated-qa` (tier `routine`) the moment
 CI is green. Continue watching #1554 QA verdict (async) and #1452 relay5.
+
+## 2026-08-12 (cont.): fleet check — all three lanes alive, nothing to act on yet
+
+- **#1554 (p8B):** confirmed via direct ask — PR #1593 open, code-complete, CI green, no blocker.
+  Stray unsubmitted `❯ dispatch QA on #1593` input line is harmless (QA already dispatched, that's
+  the coordinator's job not build-lane's). QA agent `a03fc6b2ddced4cd0` confirmed genuinely
+  active (mid-tool-use, checking `sanitized-env.ts` diff + a UAT run log) — not stalled.
+- **#1429 (p8E, unlabeled pane):** `agent_status: done` but pane shows a live spinner ("Crunched
+  for 4m 25s", 9% until auto-compact) — false-done flag again, lane is actually still working.
+  Consistent with CI's `Verify foundation and app` still `IN_PROGRESS` on PR #1594. Left alone,
+  not nudged (spinner is advancing, not frozen).
+- **#1452 (p8K, relay5):** pane display looked frozen ("Brewed for 1m 29s" unchanged) but verified
+  via `git log -1 --format=%ci` in its worktree: last commit 16:20:31, only ~11min old at check
+  time — genuine recent progress (prettier formatting passes following the UAT spec commit), not
+  a freeze. No PR yet. Left alone.
+  **Note:** in the course of that check I accidentally `cd`'d into and committed a manifest edit
+  onto the fix-1452-safe-seed branch itself (wrong worktree). Caught immediately — commit was
+  still the unpushed tip, reverted clean via `git reset --hard HEAD^` before relay5 could commit
+  again, confirmed `git status --short` empty after. No impact to relay5's branch. Lesson: always
+  `pwd`/confirm branch before `git commit` in this run, even for a "quick check" cd.
+
+No action needed this tick. Next: recheck `gh pr checks 1594` for CI completion; watch for #1554
+QA verdict notification; watch #1452 for PR open.
