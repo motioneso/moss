@@ -1515,3 +1515,45 @@ phone (`~/.needs-ben/sent/1786562823210030209.msg`, "🔴 --help needs Ben:") �
 `--help`; any two-arg invocation sends for real. No undo available. Recorded so it isn't repeated.
 
 No new work started; nothing else required this tick. Re-arming autonomous loop.
+
+## 2026-08-12: Ben ruled on the 3-item ping; found + dispatched fix for a self-introduced main-CI regression
+
+Ben replied to the consolidated needs-ben ping (`~/.needs-ben/replies/1786567695028-coord-relay9.md`):
+1) in-app growing changelog — approved. 2) #1429/#1452 briefing-regression lane — approved. 3)
+#1585 prod-log pull — approved ("you can grab the logs that's fine").
+
+**Item 1 (changelog):** filed issue #1588 capturing the decision. Spec-before-build gate applies —
+not yet scoped beyond the decision; no build started.
+
+**Item 2 (#1429/#1452 lane):** about to spawn per the coordinate skill's Phase 1 when the mandatory
+main-CI-green precheck (`gh run list --branch main --limit 1`) caught that **main is red** —
+correctly blocked the spawn. Root cause: this coordinator's own earlier merge of PR #1562
+("bounded chat-context replay contract", headSha `fd93546fccf822b93b430379567e9a55c84d5bd8`) broke
+the `compose-smoke` CI job (full `docker compose up` full-stack smoke test) — `infra-api-1` goes
+unhealthy ~49s after start. Confirmed genuine regression, not flaky: the immediately-prior main run
+(PR #1583) was green on the same job. The isolated `verify:foundation` gate — what build agents
+self-report as "gate green" — **passed** on this same commit; only the full-stack compose smoke
+test catches it. **New pattern worth remembering: isolated gate green ≠ full-stack compose-smoke
+green — they're different coverage, and a PR's self-reported "gate green" only proves the former.**
+CI's own log has no root cause (no `docker compose logs` dump step on failure — only compose's own
+orchestration output, no app-level stdout/stderr). No prod/live exposure: image build was skipped
+per the existing red-gate-skips-image-build pattern, so the broken commit was never built into a
+deployable image. Dispatched a fork (`aedd60ec525fd9469`) to reproduce locally
+(`pnpm smoke:compose -- --api-port 3099` in a scratch worktree off origin/main), capture the real
+API crash log before teardown, cross-reference against #1562's diff, and report root cause +
+whether it's a safe mechanical fix — investigation only, no push. **Item 2 lane spawn stays blocked
+until main is green again.**
+
+**Item 3 (#1585 prod logs):** dispatched a fork (`aaf7cc227c9315b82`) to pull prod API logs since
+2026-08-09 for news-fetch failures plus pgboss `news.refresh` job history, and post findings as a
+`gh issue comment` on #1585 — evidence-gathering only, no fix. Independent of the main-CI-red state.
+
+**Lane health:** `w1:p8A` (#1256/PR #1587) showed `agent_status: done` while its pane content
+showed unsent input sitting in the box ("push the merge and run the remaining UAT specs") plus a
+still-live background Monitor waiting on the local post-merge gate — another confirmed instance of
+`agent_status` alone being unreliable. `herdr pane send-keys Enter` didn't clear the stale box;
+`herdr agent prompt confirmation-relay5 "continue"` did, and the agent resumed (moved on to
+re-checking the gate log). `w1:p8B` (#1554, relay3) showed `agent_status: working` — left alone.
+
+Next: await both forks' results before any further action; do not spawn #1429/#1452 or any new
+lane until main CI is confirmed green again.
