@@ -36,6 +36,8 @@ import {
   SESSION_PREFIX,
   VerifiedSubmitError
 } from "../../packages/chat/src/live/cli-chat-engine.js";
+import { AgyPrintChatEngine } from "../../packages/chat/src/live/agy-print-chat-engine.js";
+import { ClaudePrintChatEngine } from "../../packages/chat/src/live/claude-print-chat-engine.js";
 import { ClaudePersistentRuntimeEngine } from "../../packages/chat/src/live/persistent-runtime-engine.js";
 import { createChatEngine } from "../../packages/chat/src/live/engine-selection.js";
 import {
@@ -218,6 +220,33 @@ describe("§4.1.0a single-active-user gate", () => {
       CliChatUnavailableError
     );
   });
+
+  it.each([
+    ["anthropic", ClaudePrintChatEngine],
+    ["google", AgyPrintChatEngine]
+  ] as const)(
+    "counts a %s bounded-fallback engine as live and does not reap it",
+    async (provider, Engine) => {
+      const { io, live, run } = makeFakeIo();
+      const host = makeHost(io);
+      const bounded = createChatEngine(provider, "bounded", io, {
+        executionMode: "non_interactive"
+      });
+      expect(bounded).toBeInstanceOf(Engine);
+      (host as unknown as { engines: Map<string, unknown> }).engines.set("bounded", bounded);
+
+      await expect(host.launch("other", launchParams())).rejects.toBeInstanceOf(
+        CliChatUnavailableError
+      );
+      await host.startupSweep();
+
+      expect(live).not.toContain(SESSION_PREFIX + "bounded");
+      expect(run).not.toHaveBeenCalledWith(
+        "tmux",
+        expect.arrayContaining(["kill-session", "-t", "=" + SESSION_PREFIX + "bounded"])
+      );
+    }
+  );
 
   it("rejects a 2nd launch for a DIFFERENT sessionKey while one is live; succeeds after kill", async () => {
     const { io } = makeFakeIo();
