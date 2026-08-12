@@ -38,6 +38,7 @@ import {
   ModelDiscoveryService,
   registerAiMaintenanceWorkers,
   registerAiRoutes,
+  type AssistantToolGateway,
   type ProviderKind,
   type TerminalRpcConnectOptions,
   type TerminalRpcHandle
@@ -159,7 +160,7 @@ import {
   registerDataContextWorker,
   type QueueDefinition
 } from "@moss/jobs";
-import { createModuleLogger } from "@moss/module-sdk";
+import { createModuleLogger, HttpError } from "@moss/module-sdk";
 import type {
   MossModuleManifest,
   JsonMossModuleManifest,
@@ -459,6 +460,25 @@ export interface BuiltInRouteDependencies {
    * a binary-changing reinstall.
    */
   readonly adoptDropSessionsForProvider?: ChatRoutesDependencies["adoptDropSessionsForProvider"];
+  /**
+   * #1256 — same late-bound "adopt" seam as {@link adoptChatRpcConnection}, but publishing the
+   * chat module's live `AssistantToolGateway` so the ai module's assistant-action resolve route
+   * can be wired to `gateway.resolveActionRequest` instead of persisting a decision with no check
+   * that a waiter is actually pending on it.
+   */
+  readonly adoptChatGateway?: ChatRoutesDependencies["adoptChatGateway"];
+  /**
+   * #1256 — per-server getter over the value {@link adoptChatGateway} publishes. Built fresh inside
+   * `registerBuiltInApiRoutes` for each call (mirrors `getRpcConnection`/`getDropSessionsForProvider`
+   * above), so the ai module's resolve route reads the gateway wired for THIS server, not whichever
+   * server registered chat routes most recently. Do not replace with a module-level binding shared
+   * across servers — several integration test files construct multiple `createApiServer` instances
+   * in one process, and a shared binding would let the wrong server's gateway (wrong runner/appDb/
+   * ConfirmationRegistry) answer another server's resolve calls.
+   */
+  readonly getResolveActionRequestFn?: () =>
+    | AssistantToolGateway["resolveActionRequest"]
+    | undefined;
   readonly resolveEveningInterviewSeed?: ChatRoutesDependencies["resolveEveningInterviewSeed"];
   readonly revokeUserSessions?: (userId: string) => Promise<number>;
   /** Auth-owned current-user session list/revoke service (#237). */
@@ -1345,7 +1365,17 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         // deps.connectTerminalRpc is the TEST-ONLY override (see BuiltInRouteDependencies) —
         // absent in production, where the real TerminalRpcClient.connect is always used.
         connectTerminalRpc:
-          deps.connectTerminalRpc ?? ((options) => TerminalRpcClient.connect(options))
+          deps.connectTerminalRpc ?? ((options) => TerminalRpcClient.connect(options)),
+        // #1256 — late-bound: the chat module's live gateway is adopted below (chat registers
+        // after ai on this pass), so this closure defers the lookup to call time, through the
+        // per-server getter in `deps` (see getResolveActionRequestFn), instead of capturing a
+        // module-level binding that every server sharing this process would contend over.
+        resolveActionRequest: (actorUserId, id, status) => {
+          const fn = deps.getResolveActionRequestFn?.();
+          return fn
+            ? fn(actorUserId, id, status)
+            : Promise.reject(new HttpError(503, "Assistant action resolution is not available"));
+        }
       });
     },
     registerWorkers: (boss, deps) => registerAiMaintenanceWorkers(boss, deps.rootDb)
@@ -1370,6 +1400,9 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         // #1081 H2: same late-bound "adopt" seam as adoptChatRpcConnection above, publishing
         // the manager's dropSessionsForProvider back to the composition root.
         adoptDropSessionsForProvider: deps.adoptDropSessionsForProvider,
+        // #1256 — same late-bound "adopt" seam, publishing the chat module's live
+        // AssistantToolGateway so the ai module's resolve route can reach it.
+        adoptChatGateway: deps.adoptChatGateway,
         resolveActiveModules: deps.resolveActiveModules,
         mcpServerUrl: deps.mcpServerUrl,
         boss: deps.boss,
@@ -2141,6 +2174,16 @@ export function registerBuiltInApiRoutes(
   const getDropSessionsForProvider = (): ((provider: ProviderKind) => Promise<void>) | undefined =>
     dropSessionsForProvider;
 
+  // #1256: same per-server late-bound-ref pattern as rpcConnection/dropSessionsForProvider above.
+  // The chat module's live AssistantToolGateway is adopted below (via adoptChatGateway, built
+  // inside registerChatRoutes strictly after this function assembles the ai module's dependencies),
+  // so the ai module's resolve route dereferences THIS server's binding at call time through
+  // getResolveActionRequestFn — never a module-level binding shared across every server that
+  // happens to share this Node process (several integration test files construct 2-9 servers each).
+  let resolveActionRequestFn: AssistantToolGateway["resolveActionRequest"] | undefined;
+  const getResolveActionRequestFn = (): AssistantToolGateway["resolveActionRequest"] | undefined =>
+    resolveActionRequestFn;
+
   // Onboarding probes: built synchronously (no boot-time probing) and forwarded to the settings
   // module. Each function probes lazily, per request, bounded by a short timeout. On the RPC path they
   // route through the cli-runner over the socket (§4.8) instead of spawning CLIs in-process; the
@@ -2275,6 +2318,13 @@ export function registerBuiltInApiRoutes(
     adoptDropSessionsForProvider: (fn: (provider: ProviderKind) => Promise<void>) => {
       dropSessionsForProvider = fn;
     },
+    // #1256 — mirrors adoptChatRpcConnection above — publishes the chat module's live
+    // AssistantToolGateway into THIS server's per-server binding, which the ai module's
+    // resolveActionRequest closure reads back out through getResolveActionRequestFn below.
+    adoptChatGateway: (gateway: AssistantToolGateway) => {
+      resolveActionRequestFn = gateway.resolveActionRequest.bind(gateway);
+    },
+    getResolveActionRequestFn,
     resolveEveningInterviewSeed: async (actorUserId: string, briefingRunId?: string) => {
       const repository = new BriefingsRepository();
       const run = await dependencies.dataContext.withDataContext(
