@@ -1021,3 +1021,44 @@ Real remaining in-progress items (excluding #1556, handled separately): #1135, #
 dispatch per fork triage (not yet independently re-verified beyond spot checks): #1256, #1553,
 #1554, fresh #1246 attempt, #1440 Tier D (downtime-window DB/volume/network cutover). #1135/#1248/
 #1252 need scoping passes first. Presented to Ben for prioritization before spawning lanes.
+
+## 2026-08-12: Ben said "yes" to all four — independent verification caught 3 blockers before spawn
+
+Ben approved spawning lanes for #1256, #1553, #1554, #1246. Per Phase 0's "never spawn on an
+unapproved spec" gate, verified each before spawning rather than treating the "yes" as blanket
+license. Only **#1256** was actually clean:
+
+- **#1553 — no spec file exists at all.** Referenced as a dependency by #1554's spec but was
+  apparently never written (`find docs/superpowers/specs -iname "*1553*"` → nothing). Needs a
+  scoping/spec-writing pass, not a build lane. **Not spawned.**
+- **#1554 — spec exists but is explicitly `Draft... pending Ben sign-off`**
+  (`docs/superpowers/specs/2026-08-10-1554-persistent-provider-chat-runtime.md`, revised after
+  Codex adversarial review). Ben's general "yes" isn't the same decision as signing off on this
+  spec's content. **Not spawned — needs Ben to read and approve the spec itself.**
+- **#1246 — the described remaining work (Tasks 3-5 of the install-time-permission-grants plan)
+  appears already shipped on `main` under unrelated-looking commits**, never closed. Verified by
+  reading current source directly: `validate.ts` (Task 3, `assistantActionFamilies` promoted out
+  of `FORBIDDEN_FIELDS`), `policy.ts` (Task 4, `executionPolicy`/`familyId` machinery),
+  `tool-manifests.ts` (Task 4, `confirmWhen`/`confirmWhenKeys` synthesis), and
+  `external-modules/job-search/jarvis.module.json` (Task 5, 10/10 tools carry `actionFamilyId`)
+  all show the work present, though not via the specific commits named in the 2026-07-29 handoff.
+  Working theory: folded into an unlabeled PR (job-search module work is one candidate). **Not
+  100% certain — no exact landing PR found (`gh pr list --search` came back empty) — but strongly
+  evidenced.** Recommend a quick confirming check + close with an explanatory comment (6th instance
+  of the "shipped but not closed" pattern this run, after #1555/#1121/#1327/#1560's staleness),
+  not a rebuild. **Not spawned.**
+- **#1256 — checked out clean.** Bug confirmed still live in `packages/ai/src/routes.ts:532-551`
+  (resolve handler bypasses `ConfirmationRegistry`/`gateway.resolveActionRequest`, can persist a
+  false `confirmed` state or strand a live waiter). Its cross-referenced spec file
+  (`2026-07-25-1250-1253-approval-request-lifecycle.md`) doesn't exist either, but the issue body
+  itself is a complete, actionable spec. No existing worktree/branch/session already on it.
+
+**Spawned #1256 as a live build lane:** worktree `.claude/worktrees/1256-confirmation-registry-bypass`
+(branch of the same name, off `origin/main` @ `33f57b1fa`), handoff doc committed
+(`docs/superpowers/handoffs/2026-08-12-1256-confirmation-registry-bypass.md`), agent
+`conf-registry-1256` (pane `w1:p85`, label "1256 confirmation-registry bypass"), `--model sonnet`.
+**Tier: security** (confirmation/authorization-control bypass) — Opus adversarial QA + Ben's
+explicit merge sign-off required, no auto-merge.
+
+Findings on #1553/#1554/#1246 reported back to Ben directly (chat), since his "yes" was given
+without knowing about these three blockers.
