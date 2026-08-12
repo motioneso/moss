@@ -1944,3 +1944,35 @@ Monitor `bdwkist6g` needs re-arming: drop `w1:p8F` (reaped), add `w1:p8G`.
 Next: watch for `w1:p8G`'s (#1452) first plan-ready escalation; watch for `w1:p8B`'s relay
 (#1554); continue watching #1429 (`w1:p8E`, unchanged, gate still running); fix
 `handoff-1452-safe-seed.md`'s worktree path.
+
+## 2026-08-12 (cont.): #1452 second relay (planning-stage), judgment call answered
+
+`w1:p8G` (session `19922ee3-f7b7-484b-bcef-0048eb51d431`, relay2) hit 70% during planning research
+(no code written) and relayed to a third session in the same worktree via the relay skill. Research
+findings it confirmed before relaying: UAT harness (`tests/uat/provisioner.ts:454-501`) is fully
+self-isolating (own ephemeral Compose project, `down -v` + leak-check teardown — never touches
+shared dev DB); real trigger path is `POST /api/briefings/definitions` →
+`POST .../definitions/:id/run` (`packages/briefings/src/routes.ts`) → `BRIEFINGS_RUN_QUEUE` →
+`registerBriefingsJobWorkers` (`jobs.ts:130`) — genuine worker path, not a fixture insert;
+`fallback.ts:9-50` guarantees non-empty `summaryText` even with no chat-capable model seeded, so
+the Today page briefing card will render real content without needing #1121 closed first; #1429
+(briefing-action-rows CSS) is confirmed NOT merged into this branch yet, so the eventual UAT spec
+must use durable role/text selectors, not `.loose-row`/`.briefing-catchup` classes.
+
+**Judgment call, answered directly (not a design fork, no Ben escalation needed):** whether to
+create the throwaway briefing definition via the Settings UI click-through (blocked on
+`selectedToolNames` needing a non-empty read-tool list, which requires unrelated onboarding-module
+setup) or via an authenticated `page.evaluate(fetch(...))` call against the real API routes.
+**Approved the fetch approach** — it still exercises the real route → repository → pg-boss →
+worker path (satisfies the exit criteria's "actual worker path, not fixture insert"), and the
+UI-creation route would balloon scope for no benefit to what #1452 is proving. The live UI walk of
+the Today page (screenshot, rendered card, zero old-name occurrences) is unchanged — still required
+through the real UI; only the definition-creation *setup* step skips the UI. Sent via
+`herdr-pane-message`, confirmed queued (agent was busy relaying).
+
+No plan-ready escalation yet — still pre-plan; watch for the successor's first plan submission next.
+
+Next: watch for #1452's successor to appear in `herdr pane list` (currently only `w1:p8G` shows,
+still finishing its own relay write-up) and confirm it's driving before reaping `w1:p8G`; watch for
+its subsequent plan-ready escalation; continue watching `w1:p8B` (#1554 relay, in progress) and
+`w1:p8E` (#1429, unchanged).
