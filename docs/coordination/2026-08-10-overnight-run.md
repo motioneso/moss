@@ -1590,3 +1590,30 @@ beyond evidence-gathering and escalation — correctly so.
 
 Next: watch for Ben's reply on #1589; keep nudging/monitoring `w1:p8A` and `w1:p8B`; still waiting
 on the `ci-1562-diag` fork (main-CI regression root cause) before #1429/#1452 can spawn.
+
+## 2026-08-12: Ben authorized prod access for #1589; fix agent dispatched; relay checkpoint (context 70%)
+
+Ben replied to the #1589 ping (`~/.needs-ben/replies/1786568549905-coord-relay9.md`): "You do have
+prod restart / config access, it's the running Moss container. Do whatever you need to do."
+
+**Lead found in memory before dispatching:** this coordinator's own 2026-08-11 prod deploy (moving
+the running image via `docker compose -p jarv1s-prod -f docker-compose.prod.yml -f
+docker-compose.notes.yml --env-file env.production.local up -d` from `/home/ben/JarvisProd`,
+matching the existing project name so no network collision) had a side effect discovered only
+afterward: it reset the app container's Docker name from the manually-set `Moss` back to the
+compose-default `jarv1s-prod-jarv1s-1` (no `container_name:` override in these compose files). That
+recreation is a plausible root cause of the #1589 connection-acquire failures (stale name reference,
+network reattachment) and is timing-adjacent to the ~18:22 UTC restart #1589 describes — not yet
+confirmed, flagged as the primary lead.
+
+Dispatched agent **`fix-1589-prod-db`** (opus, full authorization relayed, self-contained brief
+including the above lead + general connection-timeout diagnostic angles + known prod traps) to
+diagnose, fix if safely possible, verify via a real completed pgboss job + `news_refresh_state`
+progress, and post findings to #1589 (+ #1585 if fixed). Not yet returned as of this checkpoint.
+
+Relaying here at ~70% context per box-wide context-diet rule rather than continuing in this window.
+Successor: check `fix-1589-prod-db` agent status/report first (`ListAgents` / `SendMessage`) before
+doing anything else prod-related — do not duplicate. Other open threads unchanged from above: #1256
+PR #1587 lanes `w1:p8A`/`w1:p8B` need continued nudging; `ci-1562-diag` fork (main-CI
+`compose-smoke` regression from PR #1562, agent `aedd60ec525fd9469`) still running, blocks
+#1429/#1452 spawn; #1583/#1584/#1562/#1584 all merged and closed out.
