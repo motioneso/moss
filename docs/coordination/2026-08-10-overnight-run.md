@@ -1074,3 +1074,14 @@ detail, no Ben escalation needed. Agent hit its own 70% context-meter trigger �
 pane resolved fresh, currently `w1:p86`) confirmed driving in the same worktree/branch (bounded
 pane read: actively working Task 1, not just status-flagged). Predecessor pane closed
 (session `21350f25-0a6d-45a8-9345-6e0982fc8976`). Lane continues uninterrupted.
+
+**#1256 second relay, no code landed yet.** `relay-1256b` hit its own 70% checkpoint after ~10min
+with zero task code committed — turn spent pinning exact edit sites and resolving the plan's two
+flagged build-time decisions (adopt-callback shape confirmed; lazy-fallback throws `HttpError(503)`
+rather than a fake `not_found`), recorded in
+`docs/superpowers/handoffs/2026-08-12-1256-confirmation-registry-bypass-relay-2.md` (`7dd1ef0bd`
+on the build branch). Successor `confirmation-relay2` (session `4d54949a-3535-47ba-b7dd-1a7f2c6f12cd`,
+pane `w1:p87`) confirmed actively working, not stalled. Predecessor (`w1:p86`) reaped. **Watch
+item, not yet an intervention:** two relays with no task code landed — if a third relay lands with
+still-zero code, TaskStop and take over per the "wait-declaration vs frozen" stall playbook rather
+than approving a fourth spawn.
