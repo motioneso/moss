@@ -1069,3 +1069,8 @@ regression test). Both build-time decisions in the plan (adopt via callback not 
 lazy-fallback must not silently read as real `not_found`) approved as in-scope implementation
 detail, no Ben escalation needed. Agent hit its own 70% context-meter trigger — approved its relay
 (successor spawns in same worktree/branch); watching for successor to confirm driving before reap.
+
+**#1256 relay confirmed and reaped.** Successor `relay-1256b` (session `3f0fc86a-caef-4d23-ad28-2738b6b92c89`,
+pane resolved fresh, currently `w1:p86`) confirmed driving in the same worktree/branch (bounded
+pane read: actively working Task 1, not just status-flagged). Predecessor pane closed
+(session `21350f25-0a6d-45a8-9345-6e0982fc8976`). Lane continues uninterrupted.
