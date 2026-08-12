@@ -581,3 +581,26 @@ reap belongs to whoever can *see* the merge, which is the coordinator. Two chang
   worktree that's already merge-verified-safe but not yet removed, so it isn't lost across the
   handoff. That "later never comes" gap is how the other ~28 piled up.
 Intent: this ~50-worktree backlog should not recur.
+
+## Branch landed on main (2026-08-12)
+
+Ben: "get whatever work needs to be committed and merged there pkease." Discovered this
+coordinator branch (`coord/overnight-20260810`) had **never been merged to `origin/main`** — 88+
+commits of this entire run's manifest history, `AWAITING-BEN.md` edits, and the worktree-cleanup
+commit above, all sitting only on the branch. Confirmed via `git rev-list --count origin/main..HEAD`,
+`gh pr list --head coord/overnight-20260810` (empty), and `git show origin/main:<manifest path>`
+(fatal: not found).
+
+- `git diff origin/main...HEAD --stat` showed only 3 `.md` files differ from `origin/main`
+  (`coordinate/SKILL.md`, this manifest, `AWAITING-BEN.md`) — docs-only, no gate run needed.
+- `git merge origin/main --no-edit` conflicted in `AWAITING-BEN.md`: `origin/main` had
+  independently gained an open "#1533 chat-surface-build... Phase 4 live-path proof blocked on
+  real-chat token" entry (PR #1574) between this branch's base and `origin/main`'s tip. Checked
+  PR #1574's live state directly (`gh pr view 1574`) rather than trusting either side of the
+  conflict — it had since **merged** (`519ce6e30`'s predecessor, 2026-08-12T03:11:37Z,
+  "feat(chat): thread surface through send routing (#1533)"). Resolved by keeping both entries as
+  **Resolved** comments (matching the file's existing convention) instead of assuming either side
+  was authoritative.
+- Merge commit `64907e1d0`, pushed, PR #1576 opened and merged directly (`gh pr merge --merge`) —
+  docs-only coordinator bookkeeping, no live-path surface, no code review gate applicable.
+  Merged as `519ce6e30`. `origin/main` now has the full run history.
