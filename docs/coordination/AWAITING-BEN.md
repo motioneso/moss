@@ -26,6 +26,19 @@ recorded on issue #1560 (https://github.com/motioneso/moss/issues/1560#issuecomm
 ("feat(chat): thread surface through send routing (#1533)") merged 2026-08-12T03:11:37Z — the
 real-chat-token gap this entry described is moot now that the PR landed. -->
 
+## #1486 trustProxy fix will reject prod's current env value — DO NOT MERGE/DEPLOY without you
+
+**2026-08-12, non-blocking tonight.** Fable ruled (delegated authority,
+https://github.com/motioneso/moss/issues/1486#issuecomment-5263217119): pin the exact static Caddy
+IP for `trustProxy`, and **fail loud at boot** on legacy/unparseable values instead of silently
+trusting all. Prod currently runs `JARVIS_TRUST_PROXY=1` — a legacy boolean the new code will
+reject on startup. Prod auto-pulls from `:edge` ~4am (`prod-edge-repoint-watchtower-posture.md`).
+
+**Not acting on this myself** — deploy/prod env is your domain (Portainer only, never CLI). Build
+lane for #1486 will proceed (PR only), but I will hold it un-merged until you confirm the env var
+migration timing, so an auto-pull can't hit prod with a boot-time crash. No `needs-ben` ping sent —
+doesn't block anything tonight, flagging for when you're back.
+
 ## #1556 UAT blocked on a one-time interactive `claude setup-token` OAuth step — STILL OPEN
 
 **Found 2026-08-12 while investigating why the #1556/#1557 lane had gone unattended for ~25h.**
