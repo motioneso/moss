@@ -2002,3 +2002,45 @@ Monitor re-armed (`b5xvnjri5`) on `w1:p8B`/`w1:p8E`/`w1:p8H`.
 Next: watch for relay3's plan submission (and confirm it reflects the fetch-approach decision);
 watch `w1:p8B` for its actual completion report (PR + evidence, not the `agent_status` flag); watch
 `w1:p8E` (#1429, unchanged, still in verification/gate/wrap-up per its own pane).
+
+## 2026-08-12 (cont.): #1452 plan approved, relay3→relay4; board sync; #1554 status check
+
+Read `docs/superpowers/plans/2026-08-12-fix-1452-safe-seed.md` (172 lines) in full. Stays inside
+the locked design decision + coordinator-approved fetch-trigger approach; the definition-creation
+fork is resolved independently and correctly (`selectedToolNames: ["vault"]` bypasses the
+module-manifest check via `VIRTUAL_SOURCES`, no module-enable step needed at all — stronger than
+either originally-framed option). Cleanup satisfied by construction via the UAT harness's own
+`down -v` teardown (seam #1 in the plan). **Approved**, sent to `w1:p8H` (relay3).
+
+Before the reply could be confirmed queued, relay3 itself relayed at its own 70% mark (plan-stage
+only, no build code) to **`fix1452-relay4`** (pane `w1:p8J`, session
+`9d4c12ce-0837-4d10-a710-a0bfbf6c9c4a`) — confirmed driving (bounded read, active spinner, 8s
+thought). Reaped `w1:p8H`. Successor will check for the approval reply before writing code per
+`coordinated-build` step 1 — the approval was sent before relay3 handed off, so it should be
+waiting for relay4 to read it; watch relay4's first status for confirmation it saw it, re-send
+directly to `w1:p8J` if its first report doesn't reflect approval.
+
+**Board sync (Ben asked directly whether the board + issue comments were fully up to date — they
+were not for two active lanes):** checked GitHub directly (not the manifest) for #1429/#1452/#1554/
+#1556/#1547/#1557. #1547 and #1557 fully correct (Done, closed, full merge/QA/live-path comment
+trail). #1429 and #1452 were both sitting in **Backlog** on project 2 despite having active build
+lanes (`w1:p8E` for #1429 most of this run; #1452 build just starting) — stale. Fixed both to **In
+progress** via `gh project item-edit` and posted a status comment on each issue
+(`#1429#issuecomment-5273791766`, `#1452#issuecomment-5273791869`) since neither had any
+coordinator-side comment. No other board drift found in the spot-check.
+
+`w1:p8B` (#1554): `agent_status: done` again (now the third time this pattern has shown for this
+lane). Bounded read showed session id unchanged (`9e98e0e0`, still "relay3" by herdr's own
+label/session mapping) but pane content referencing "relay-16 successor's status report" and a
+Monitor loop watching PR #1593 CI, both already resolved routine/green — genuinely idle at a
+prompt, not mid-turn this time, and not matching the manifest's last-known state (this lane has
+self-nested far more relays internally than the coordinator manifest has tracked link-by-link).
+Sent Enter (no-op, nothing was actually queued) then a direct status-report request via `pane run`
+asking for PR link/CI state/what's actually running vs. waiting-on. Reply pending.
+
+Monitor re-armed (`botekc7mq`) on `w1:p8B`/`w1:p8E`/`w1:p8J`, replacing the closed-pane set.
+
+Next: read relay4's first report for #1452 approval confirmation; read `w1:p8B`'s status-report
+reply once it lands (expect a PR number for #1554 — likely #1593 per the pane's own CI-check
+references); `w1:p8E` (#1429) unchanged, still to be checked for actual state vs. board (now synced
+to In progress, but genuine build status not re-verified this leg beyond the board fix).
