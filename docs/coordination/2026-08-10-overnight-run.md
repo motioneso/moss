@@ -2059,3 +2059,21 @@ nudge, it'll resume and spawn relay5 on its own). Waiting for the real successor
 
 Next: watch for relay5's pane to appear post-compact, confirm driving, reap `w1:p8J`, update
 manifest + re-arm Monitor with the new pane id.
+
+## 2026-08-12 (cont.): #1452 relay4→relay5 confirmed+reaped; coordinator's own 70% checkpoint
+
+`fix1452-relay4` finished its auto-compact and relayed for real: 70% mark, research-only session
+(zero code, Task 1 research complete and durable in
+`docs/superpowers/handoffs/2026-08-12-1452-safe-seed-relay4.md` @ `496ff81b1`), confirmed the
+UI-vs-API decision already matched the plan. Spawned **`fix1452-relay5`** (pane `w1:p8K`, session
+`262a317c-6a5b-4f13-8db5-efc4f3d70191`) — confirmed driving (bounded read, active spinner, high
+effort). Reaped `w1:p8J`. Monitor re-armed (`bl4my7p1l`) on `w1:p8B`/`w1:p8E`/`w1:p8K`.
+
+**Coordinator's own context-meter hit 70% this same leg.** Per Ben's standing override (binding
+for this entire run): remain the same resident session, no successor spawn, no relay-skill
+handoff — just flush state here and continue. State is current: manifest is up to date as of this
+entry; #1452 on relay5 (research done, Tasks 1+2 build next); #1554 (`w1:p8B`) status-report
+request from the previous leg still hasn't surfaced a direct reply — pane is churning through its
+own internal CI-watch monitor loop, not obviously stalled, watch for the reply; #1429 (`w1:p8E`)
+unchanged all run, still needs a genuine status check beyond the board-label fix. No other open
+threads.
