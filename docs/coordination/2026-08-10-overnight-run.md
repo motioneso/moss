@@ -1706,3 +1706,23 @@ doing anything else prod-related — do not duplicate. Other open threads unchan
 PR #1587 lanes `w1:p8A`/`w1:p8B` need continued nudging; `ci-1562-diag` fork (main-CI
 `compose-smoke` regression from PR #1562, agent `aedd60ec525fd9469`) still running, blocks
 #1429/#1452 spawn; #1583/#1584/#1562/#1584 all merged and closed out.
+
+## 2026-08-12: #1429/#1452 spawn held — spec-before-build gate re-checked, one open fork found
+
+Before spawning per the "will go once CI/image-build finish" framing given to Ben, re-verified
+the spec-before-build gate (CLAUDE.md Process Gates + coordinate skill Phase 0 step 2) rather than
+assuming main-CI-green was the only blocker.
+
+- **#1429** (6 undefined CSS classes, `briefing-action-rows.tsx:154-206`): within #1327's already-
+  approved spec (`docs/superpowers/specs/2026-07-29-1327-briefing-action-rows.md`); the defect was
+  found in QA on the already-approved feature, not a new design. Treating this as clear to spawn
+  via normal `coordinated-build` (agent writes its plan via `plan-build`, I approve before build) —
+  no new spec doc needed.
+- **#1452** (safe-seed content gap for live-path proof on Today): issue body lists three unweighed
+  options (UAT spec triggering real generation / dedicated non-shared instance / insert-by-recorded-
+  id fixtures) with no decision made. This is exactly the "fuzzy/missing spec, help Ben author it"
+  case in Phase 0 step 2 — held, not spawned. Asked Ben in chat to pick a direction (or explicitly
+  delegate the choice to the build agent's plan, which I'd review as if it were the spec).
+
+main-CI run `31631303939`: confirmed complete via Monitor `bcdxyobvp` ("completed success");
+independent `gh run view` re-check not yet re-run this tick but not blocking — main is unblocked.
