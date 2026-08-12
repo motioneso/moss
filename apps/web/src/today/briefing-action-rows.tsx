@@ -224,11 +224,11 @@ function PrimaryControl(props: {
     case "needs_action":
     case "time_sensitive_info": {
       // Only the host-supplied href is ever used as a URL — never row text.
-      if (!row.sourceHref) return null;
+      if (row.primaryAction?.kind !== "view") return null;
       return (
         <a
           className="jds-btn jds-btn--sm jds-btn--quiet"
-          href={row.sourceHref}
+          href={row.primaryAction.href}
           target="_blank"
           rel="noopener noreferrer"
         >
