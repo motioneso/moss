@@ -100,4 +100,35 @@ describe("resolveChatEngineFactory — persistent-pool settings wiring (#1554 ta
     expect(opts.persistentPoolCap).toBe(4);
     await expect(opts.readIdleReapMinutes()).resolves.toBe(30);
   });
+
+  // #1554 task #6 — closes task #5's documented KNOWN GAP: `onPersistentReap` must now be
+  // forwarded straight through to `createRealEngineFactory`, unmodified, so the composition
+  // root's (module-registry/src/index.ts) late-bound revoke callback actually reaches the pool.
+  it("forwards onPersistentReap straight through to createRealEngineFactory", async () => {
+    createRealEngineFactoryMock.mockReturnValue(vi.fn());
+    const path = await pathWithFakeTmux();
+    const onPersistentReap = vi.fn();
+
+    await resolveChatEngineFactory({
+      appDb: fakeAppDb({}),
+      env: { PATH: path },
+      log: vi.fn(),
+      onPersistentReap
+    });
+
+    expect(createRealEngineFactoryMock).toHaveBeenCalledTimes(1);
+    const opts = createRealEngineFactoryMock.mock.calls[0]![0];
+    expect(opts.onPersistentReap).toBe(onPersistentReap);
+  });
+
+  it("passes onPersistentReap through as undefined when the caller omits it (no crash)", async () => {
+    createRealEngineFactoryMock.mockReturnValue(vi.fn());
+    const path = await pathWithFakeTmux();
+
+    await resolveChatEngineFactory({ appDb: fakeAppDb({}), env: { PATH: path }, log: vi.fn() });
+
+    expect(createRealEngineFactoryMock).toHaveBeenCalledTimes(1);
+    const opts = createRealEngineFactoryMock.mock.calls[0]![0];
+    expect(opts.onPersistentReap).toBeUndefined();
+  });
 });

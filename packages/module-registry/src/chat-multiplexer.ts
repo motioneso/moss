@@ -28,7 +28,7 @@ import {
   type ChatEngineFactory,
   type RpcConnection
 } from "@moss/chat";
-import type { CliChatEngine } from "@moss/chat/live";
+import type { CliChatEngine, ReapReason } from "@moss/chat/live";
 import {
   CHAT_PERSISTENT_IDLE_REAP_MINUTES_CONFIG_KEY,
   CHAT_PERSISTENT_POOL_CAP_CONFIG_KEY,
@@ -528,6 +528,15 @@ export async function resolveChatEngineFactory(deps: {
   appDb: Kysely<MossDatabase>;
   env?: NodeJS.ProcessEnv;
   log?: (msg: string) => void;
+  /**
+   * #1554 task #6 — closes task #5's documented KNOWN GAP below: the composition root
+   * (`module-registry/src/index.ts`) threads its `SessionTokenRegistry.revokeBySessionId` (built
+   * inside `registerChatRoutes`'s `wiring` closure, reachable here only via index.ts's late-bound
+   * "adopt" seam — `routes.ts`'s `adoptMcpTokenRevoke`) through as this callback, so the pool's
+   * idle-reap/LRU-evict sweep revokes the reaped session's MCP token instead of leaving it live
+   * with no engine behind it.
+   */
+  onPersistentReap?: (sessionKey: string, reason: ReapReason) => void;
 }): Promise<ChatEngineFactory> {
   const env = deps.env ?? process.env;
   const io = createRealTmuxIo();
@@ -593,19 +602,13 @@ export async function resolveChatEngineFactory(deps: {
     mux: resolution.mux,
     persistentRuntimeEnabled: createPersistentRuntimeEnabledLiveReader(deps.appDb, deps.log),
     persistentPoolCap,
-    readIdleReapMinutes: createIdleReapMinutesLiveReader(deps.appDb, deps.log)
-    // #1554 task #5 — KNOWN GAP, not an oversight: `onPersistentReap` is intentionally left
-    // unwired here. The plan's Decision 2 text says the in-process root wires `onReap` straight to
-    // `deps.mcpTokenLifecycle?.revoke`, but `mcpTokenLifecycle`/`SessionTokenRegistry` is
-    // constructed inside `routes.ts`'s `wiring` closure (task #6 territory) and is NOT reachable
-    // from this function's `{appDb, env?, log?}` deps — threading it here would mean adding a new
-    // dependency to `resolveChatEngineFactory` sourced from `module-registry/src/index.ts`, a file
-    // task #5 is explicitly barred from touching (Finding B, lane #1256 conflict). The pool itself
-    // (admission/cap/LRU-evict/idle-reap sweep) IS fully real and load-bearing here; only the
-    // "revoke the MCP token when the pool silently reaps a runtime" side-effect is deferred. See
-    // the task #5 handoff doc for the follow-up this needs (a small `resolveChatEngineFactory`
-    // deps addition, threaded from `index.ts`). The equivalent wiring for the (currently
-    // non-production-reachable) `createChatSessionRuntime` composition root IS real — see
-    // `runtime.ts`'s own `mcpTokenLifecycle` handling — this gap is specific to this one call site.
+    readIdleReapMinutes: createIdleReapMinutesLiveReader(deps.appDb, deps.log),
+    // #1554 task #6 — closes task #5's KNOWN GAP (see git history / relay-10 handoff for the prior
+    // state): forwarded straight from this function's own `onPersistentReap` dep, which
+    // `module-registry/src/index.ts` populates via `routes.ts`'s `adoptMcpTokenRevoke` late-bound
+    // "adopt" seam (same pattern as `adoptChatRpcConnection`/`adoptDropSessionsForProvider`). The
+    // pool's idle-reap/LRU-evict sweep now revokes the reaped session's MCP token, not just the
+    // pool slot.
+    onPersistentReap: deps.onPersistentReap
   });
 }

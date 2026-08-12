@@ -479,6 +479,15 @@ export interface BuiltInRouteDependencies {
   readonly getResolveActionRequestFn?: () =>
     | AssistantToolGateway["resolveActionRequest"]
     | undefined;
+  /**
+   * #1554 task #6 — set by `registerBuiltInApiRoutes` and consumed inside `registerChatRoutes`:
+   * same late-bound "adopt" seam as {@link adoptChatRpcConnection}/
+   * {@link adoptDropSessionsForProvider}, publishing the wiring closure's
+   * `SessionTokenRegistry.revokeBySessionId` back to the composition root so the in-process boot
+   * path's `resolveChatEngineFactory` call can thread it into the persistent-runtime pool's
+   * `onPersistentReap` (closes task #5's documented gap — see `chat-multiplexer.ts`).
+   */
+  readonly adoptMcpTokenRevoke?: ChatRoutesDependencies["adoptMcpTokenRevoke"];
   readonly resolveEveningInterviewSeed?: ChatRoutesDependencies["resolveEveningInterviewSeed"];
   readonly revokeUserSessions?: (userId: string) => Promise<number>;
   /** Auth-owned current-user session list/revoke service (#237). */
@@ -1403,6 +1412,10 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         // #1256 — same late-bound "adopt" seam, publishing the chat module's live
         // AssistantToolGateway so the ai module's resolve route can reach it.
         adoptChatGateway: deps.adoptChatGateway,
+        // #1554 task #6: same late-bound "adopt" seam, publishing the wiring closure's
+        // SessionTokenRegistry.revokeBySessionId so onReady's resolveChatEngineFactory call
+        // below can thread it into the persistent-runtime pool's onPersistentReap.
+        adoptMcpTokenRevoke: deps.adoptMcpTokenRevoke,
         resolveActiveModules: deps.resolveActiveModules,
         mcpServerUrl: deps.mcpServerUrl,
         boss: deps.boss,
@@ -2183,6 +2196,12 @@ export function registerBuiltInApiRoutes(
   let resolveActionRequestFn: AssistantToolGateway["resolveActionRequest"] | undefined;
   const getResolveActionRequestFn = (): AssistantToolGateway["resolveActionRequest"] | undefined =>
     resolveActionRequestFn;
+  // #1554 task #6: the persistent-runtime pool's onPersistentReap needs
+  // SessionTokenRegistry.revokeBySessionId, which is likewise built INSIDE registerChatRoutes's
+  // `wiring` closure — same late-bound "adopt" seam as dropSessionsForProvider above. Populated
+  // synchronously during the BUILT_IN_MODULES registerRoutes pass below, strictly before the
+  // onReady hook further down that calls resolveChatEngineFactory (the only reader).
+  let revokeMcpTokenBySessionId: ((chatSessionId: string) => void) | undefined;
 
   // Onboarding probes: built synchronously (no boot-time probing) and forwarded to the settings
   // module. Each function probes lazily, per request, bounded by a short timeout. On the RPC path they
@@ -2325,6 +2344,13 @@ export function registerBuiltInApiRoutes(
       resolveActionRequestFn = gateway.resolveActionRequest.bind(gateway);
     },
     getResolveActionRequestFn,
+    // #1554 task #6: mirrors adoptDropSessionsForProvider immediately above — publishes the chat
+    // wiring closure's SessionTokenRegistry.revokeBySessionId into this per-server binding, which
+    // the onReady hook below reads through onPersistentReap when it resolves the real engine
+    // factory.
+    adoptMcpTokenRevoke: (fn: (chatSessionId: string) => void) => {
+      revokeMcpTokenBySessionId = fn;
+    },
     resolveEveningInterviewSeed: async (actorUserId: string, briefingRunId?: string) => {
       const repository = new BriefingsRepository();
       const run = await dependencies.dataContext.withDataContext(
@@ -2346,7 +2372,14 @@ export function registerBuiltInApiRoutes(
       resolvedChatFactory = await resolveChatEngineFactory({
         appDb: dependencies.rootDb,
         env,
-        log: (msg) => server.log.info(msg)
+        log: (msg) => server.log.info(msg),
+        // #1554 task #6: threads the wiring closure's SessionTokenRegistry.revokeBySessionId
+        // (adopted above via adoptMcpTokenRevoke, populated synchronously during the
+        // BUILT_IN_MODULES pass above — strictly before this onReady hook fires) into the
+        // persistent-runtime pool's onPersistentReap, closing task #5's documented gap.
+        onPersistentReap: (sessionKey) => {
+          revokeMcpTokenBySessionId?.(sessionKey);
+        }
       });
     });
   }
