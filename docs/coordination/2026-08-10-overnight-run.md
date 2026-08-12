@@ -2127,3 +2127,27 @@ same established false-positive pattern.
 Next: await #1554 QA verdict → if GREEN, merge per the new mandatory per-merge rule (issue comment
 + board update, `.claude/skills/coordinate/SKILL.md` Phase 3 step 5); continue watching #1429 and
 #1452 relay5.
+
+## 2026-08-12 (cont.): coordinator 70% checkpoint (resident, no successor per Ben override)
+
+Context meter hit 70%. Per Ben's standing override (binding for this entire run): remain the same
+resident session, no successor spawn, no relay-skill handoff — flush state here and continue.
+
+State is current as of this entry:
+- **#1554** (`w1:p8B`, PR #1593): QA dispatched (agent `a03fc6b2ddced4cd0`, worktree-isolated,
+  sensitive tier) — awaiting async verdict notification. `w1:p8B`'s pane still shows a stale
+  unsubmitted `❯ dispatch QA on #1593` line in its own input box; harmless now since QA dispatch is
+  the coordinator's job (done) not the build agent's — not chasing it further.
+- **#1429** (`w1:p8E`): resumed after the nudge, genuinely working (task list progressing). Status
+  beyond that still unverified this run — watch for its own completion signal (PR).
+- **#1452** (`w1:p8K`, relay5): genuinely working (gate + wrap-up in progress at last check).
+- Ben's new standing rule — comment + board update on every merge, every tier — is codified in
+  `.claude/skills/coordinate/SKILL.md` (`abe5ea10d`) and in memory (agentmemory `jarv1s` +
+  auto-memory `feedback-merge-comment-and-board-update.md`); apply it the moment #1554 (or any
+  lane) merges.
+- Monitor `bl4my7p1l` still armed on `w1:p8B`/`w1:p8E`/`w1:p8K`, still firing occasional false
+  "done" flickers on p8B/p8K — established pattern, verify by bounded read before acting, never
+  trust the flag alone.
+
+Next: await #1554 QA verdict (async notification) → merge if GREEN, applying the new per-merge
+rule. Continue watching #1429 to genuine completion and #1452 relay5's Tasks 1+2 build.
