@@ -1243,3 +1243,24 @@ Phase-2 seams verification/plan-build prep) spawned `build-1554-p2` (pane `w1:p8
 `9e98e0e0-d906-4284-ad3b-d7935063eaf3`) in the same worktree/branch, continuation doc committed
 `c60e9f47f`. Confirmed successor driving (session id + cwd match, `agent_status: working`) before
 reaping `w1:p89`.
+
+## Pane cleanup (Ben request) + #1556 OAuth persistence root-caused
+
+Ben: "There are a lot of panes open, can we clear out any idle ones?" Closed 5 confirmed-stale
+panes: `w1:p70`/`w1:p82`/`w1:p81`/`w1:p83` (codex "(luna)" panes whose worktrees — #1352, #1486,
+#1434, #1555 — were already deleted, cwd literally showed "(deleted)", nothing live to lose), and
+`w1:p87` (old #1256 relay-4, already fully superseded by `confirmation-relay5`/`w1:p8A`, which is
+confirmed genuinely mid-gate — found+fixed a file-size violation, running tests — left alone
+despite its idle-looking title). Left non-run panes (`w2:*` open-apollo, `w3:p2` ai-job-search,
+`w4:p1` buzz) untouched — unrelated projects, not this run's to manage.
+
+Separately, Ben pushed back on the #1556 OAuth-blocker framing ("I've done that like 10 times")
+— traced actual root cause: `tests/uat/provisioner.ts` runs `docker compose down -v` after every
+UAT run and its own `assertNoLeakedResources` check asserts `jarv1s-cli-auth` (the token volume)
+is wiped every time — the token-store code's "~1yr persistent" comment was never true across UAT
+runs. Filed https://github.com/motioneso/moss/issues/1582 with the fix (capture token to a durable
+host path before teardown, wire `JARVIS_UAT_REAL_CHAT_TOKEN_FILE` — the non-interactive seed path
+already exists in `tests/uat/seed/cli.ts`, just never populated). Ben ruled: do the OAuth once
+more, then fix it for good. Redirected `codex-1556` (w1:p7Y) to drive the #1556 UAT run, capture
+the resulting token durably before its teardown, and report the file path (never the token) back.
+Watching for the live authorize URL.
