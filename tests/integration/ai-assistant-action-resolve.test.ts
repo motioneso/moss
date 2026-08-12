@@ -116,6 +116,39 @@ describe("assistant action resolve parity", () => {
     );
     expect(row?.status).toBe("rejected");
   });
+
+  // #1256 N2: gateway.ts's resolveActionRequest only unblocks the live waiter when the repository
+  // update actually matched a row (owner + still pending) — a guessed id belonging to another user
+  // must not resolve on either route, and the row must stay untouched.
+  it("both routes reject another user's action id (404, row stays pending)", async () => {
+    const aiActionId = await seedPendingAction();
+    const chatActionId = await seedPendingAction();
+
+    const aiRes = await server.inject({
+      method: "POST",
+      url: `/api/ai/assistant-actions/${aiActionId}/resolve`,
+      headers: { authorization: `Bearer ${ids.sessionB}` },
+      payload: { status: "rejected" }
+    });
+    const chatRes = await server.inject({
+      method: "POST",
+      url: `/api/chat/action-requests/${chatActionId}/resolve`,
+      headers: { authorization: `Bearer ${ids.sessionB}` },
+      payload: { status: "rejected" }
+    });
+
+    expect(aiRes.statusCode).toBe(404);
+    expect(chatRes.statusCode).toBe(404);
+
+    const [aiRow, chatRow] = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      Promise.all([
+        repository.getAssistantAction(scopedDb, aiActionId),
+        repository.getAssistantAction(scopedDb, chatActionId)
+      ])
+    );
+    expect(aiRow?.status).toBe("pending");
+    expect(chatRow?.status).toBe("pending");
+  });
 });
 
 function userAContext(): AccessContext {
