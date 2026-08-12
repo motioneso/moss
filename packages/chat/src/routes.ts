@@ -147,6 +147,10 @@ export interface ChatRoutesDependencies {
   readonly adoptDropSessionsForProvider?: (
     dropSessionsForProvider: (provider: ProviderKind) => Promise<void>
   ) => void;
+  // #1256 — publishes the wiring's live AssistantToolGateway back to the composition root so the
+  // ai module's assistant-action resolve route can go through the same confirmation-registry gate
+  // as this module's own action-requests resolve path, instead of two divergent implementations.
+  readonly adoptChatGateway?: (gateway: AssistantToolGateway) => void;
   readonly resolveEveningInterviewSeed?: (
     actorUserId: string,
     briefingRunId?: string
@@ -247,6 +251,8 @@ export function registerChatRoutes(
           return { tokens, gateway, mcpServerUrl, aiRepository };
         })()
       : null;
+
+  if (wiring) dependencies.adoptChatGateway?.(wiring.gateway);
 
   const runtime = createChatSessionRuntime({
     rootDb: dependencies.rootDb,

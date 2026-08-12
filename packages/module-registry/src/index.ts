@@ -38,6 +38,7 @@ import {
   ModelDiscoveryService,
   registerAiMaintenanceWorkers,
   registerAiRoutes,
+  type AssistantToolGateway,
   type ProviderKind,
   type TerminalRpcConnectOptions,
   type TerminalRpcHandle
@@ -159,7 +160,7 @@ import {
   registerDataContextWorker,
   type QueueDefinition
 } from "@moss/jobs";
-import { createModuleLogger } from "@moss/module-sdk";
+import { createModuleLogger, HttpError } from "@moss/module-sdk";
 import type {
   MossModuleManifest,
   JsonMossModuleManifest,
@@ -459,6 +460,13 @@ export interface BuiltInRouteDependencies {
    * a binary-changing reinstall.
    */
   readonly adoptDropSessionsForProvider?: ChatRoutesDependencies["adoptDropSessionsForProvider"];
+  /**
+   * #1256 — same late-bound "adopt" seam as {@link adoptChatRpcConnection}, but publishing the
+   * chat module's live `AssistantToolGateway` so the ai module's assistant-action resolve route
+   * can be wired to `gateway.resolveActionRequest` instead of persisting a decision with no check
+   * that a waiter is actually pending on it.
+   */
+  readonly adoptChatGateway?: ChatRoutesDependencies["adoptChatGateway"];
   readonly resolveEveningInterviewSeed?: ChatRoutesDependencies["resolveEveningInterviewSeed"];
   readonly revokeUserSessions?: (userId: string) => Promise<number>;
   /** Auth-owned current-user session list/revoke service (#237). */
@@ -1069,6 +1077,12 @@ export function resolveGrantSelfOperationForModule(
       : (genericGrant?.(scopedDb, manifest) ?? Promise.resolve());
 }
 
+// #1256 — module-level (not inside registerBuiltInApiRoutes): the ai module's registerRoutes
+// closure below and the adoptChatGateway setter built inside registerBuiltInApiRoutes are two
+// different function scopes (this array is built once at module load; registerBuiltInApiRoutes
+// runs per server). A module-level binding is the only scope both can close over.
+let resolveActionRequestFn: AssistantToolGateway["resolveActionRequest"] | undefined;
+
 const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
   {
     manifest: settingsModuleManifest,
@@ -1345,7 +1359,14 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         // deps.connectTerminalRpc is the TEST-ONLY override (see BuiltInRouteDependencies) —
         // absent in production, where the real TerminalRpcClient.connect is always used.
         connectTerminalRpc:
-          deps.connectTerminalRpc ?? ((options) => TerminalRpcClient.connect(options))
+          deps.connectTerminalRpc ?? ((options) => TerminalRpcClient.connect(options)),
+        // #1256 — late-bound: the chat module's live gateway is adopted below (chat registers
+        // after ai on this pass), so this closure defers the lookup to call time instead of
+        // capturing `resolveActionRequestFn` at wiring time.
+        resolveActionRequest: (actorUserId, id, status) =>
+          resolveActionRequestFn
+            ? resolveActionRequestFn(actorUserId, id, status)
+            : Promise.reject(new HttpError(503, "Assistant action resolution is not available"))
       });
     },
     registerWorkers: (boss, deps) => registerAiMaintenanceWorkers(boss, deps.rootDb)
@@ -1370,6 +1391,9 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         // #1081 H2: same late-bound "adopt" seam as adoptChatRpcConnection above, publishing
         // the manager's dropSessionsForProvider back to the composition root.
         adoptDropSessionsForProvider: deps.adoptDropSessionsForProvider,
+        // #1256 — same late-bound "adopt" seam, publishing the chat module's live
+        // AssistantToolGateway so the ai module's resolve route can reach it.
+        adoptChatGateway: deps.adoptChatGateway,
         resolveActiveModules: deps.resolveActiveModules,
         mcpServerUrl: deps.mcpServerUrl,
         boss: deps.boss,
@@ -2274,6 +2298,12 @@ export function registerBuiltInApiRoutes(
     // function, over getDropSessionsForProvider) can reach it once it exists.
     adoptDropSessionsForProvider: (fn: (provider: ProviderKind) => Promise<void>) => {
       dropSessionsForProvider = fn;
+    },
+    // #1256 — mirrors adoptChatRpcConnection above — publishes the chat module's live
+    // AssistantToolGateway so the ai module's resolveActionRequest closure (registered earlier
+    // in this pass, over resolveActionRequestFn) can reach it once it exists.
+    adoptChatGateway: (gateway: AssistantToolGateway) => {
+      resolveActionRequestFn = gateway.resolveActionRequest.bind(gateway);
     },
     resolveEveningInterviewSeed: async (actorUserId: string, briefingRunId?: string) => {
       const repository = new BriefingsRepository();
