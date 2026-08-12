@@ -1909,3 +1909,38 @@ Monitor still only watches `w1:p8B`/`w1:p8E` — add `w1:p8F` next tick.
 
 Next: rearm Monitor to include `w1:p8F`; continue watching #1429 gate, #1554 CI, and the new #1452
 lane's plan-ready escalation.
+
+## 2026-08-12 (cont.): #1452 worktree-path correction + first relay; #1554 relay-now nudge
+
+**#1452 worktree bug, self-corrected by the agent, now reaped.** The `git worktree add` for
+`fix-1452-safe-seed` was run with a relative path from inside this coordinator's own worktree cwd,
+so it registered nested at
+`/home/ben/Jarv1s/.claude/worktrees/coord-overnight-20260810/.claude/worktrees/fix-1452-safe-seed`
+instead of the sibling-level path every other lane uses. My subsequent boot-file write to the
+intended sibling path created a **decoy plain directory** there (not a git worktree) — that's what
+`--cwd` originally pointed at. The agent (session `88338271-25a5-40ff-bba2-3b56c4807639`, pane
+`w1:p8F`) discovered this itself via `git worktree list`, used `EnterWorktree` to correct into the
+real nested location, ran `pnpm install` there cleanly (zero commits), then relayed: successor
+**`fix-1452-safe-seed-relay2`** (session `19922ee3-f7b7-484b-bcef-0048eb51d431`, pane `w1:p8G`,
+label "PR1452 safe-seed UAT (relay2)") confirmed driving in the correct nested worktree, reading a
+committed continuation doc `docs/superpowers/handoffs/2026-08-12-1452-safe-seed-relay.md`.
+Verified via `git worktree list | grep -i 1452` (only one registered worktree, the nested one) and
+`herdr pane list` (both sessions present, relay2 `working`). Reaped `w1:p8F` (`herdr pane close`)
+after confirming the session id matched. **`handoff-1452-safe-seed.md`'s `Worktree:` field is still
+wrong (states the sibling-level decoy path) — fix next tick; treat the nested path as authoritative
+since relay2 is already live there with zero cost to relocating later if needed.** No coordinator
+plan approval given yet — #1452 is still pre-plan.
+
+**#1554 (`w1:p8B`) at 72% context, past its own 70% relay threshold, had NOT relayed** — it was
+waiting on the non-blocking "Build and publish images" job before messaging me, which is exactly
+the kind of deferral the coordinate skill's relay-trigger rule forbids ("no deferral... remaining
+bookkeeping goes in the manifest continuation note"). Instructed it via `herdr-pane-message` to
+flush and relay now regardless of that non-gate check, noting PR #1593's gate-blocking checks are
+already green. Confirmed the message landed (had to follow with `send-keys Enter` — first
+`pane run` left it queued in the input box unsubmitted). Awaiting its relay.
+
+Monitor `bdwkist6g` needs re-arming: drop `w1:p8F` (reaped), add `w1:p8G`.
+
+Next: watch for `w1:p8G`'s (#1452) first plan-ready escalation; watch for `w1:p8B`'s relay
+(#1554); continue watching #1429 (`w1:p8E`, unchanged, gate still running); fix
+`handoff-1452-safe-seed.md`'s worktree path.
