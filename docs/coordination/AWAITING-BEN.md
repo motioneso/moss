@@ -51,7 +51,12 @@ Another agent's earlier `docker system prune` had cleaned images/containers but 
 Ben ruled: run `docker builder prune -f`. Result: 14G → 104G free (97% → 74% used). Resolved, no
 further action needed. -->
 
-## OPEN 2026-08-11: #1533 live-path proof blocked — missing real-chat UAT credential
+<!-- Resolved 2026-08-12: Ben ruled "just merge this, tell me how to test there" — merged PR #1574
+as 33b722a0f rather than continuing to block on the missing JARVIS_UAT_REAL_CHAT_TOKEN_FILE. Ben
+will do the live-path verification himself post-merge; test steps given in the manifest and in
+chat. Entry below kept for the historical record, no longer blocking. -->
+
+## RESOLVED 2026-08-11: #1533 live-path proof blocked — missing real-chat UAT credential
 
 **Draft PR open: https://github.com/motioneso/moss/pull/1574** — code-complete, gate green,
 sensitive-tier check done, verified via `gh pr view 1574` (draft, correct branch). Build lane is
