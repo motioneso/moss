@@ -49,6 +49,16 @@ it. Given that uncertainty and that Ben signed off before I could report back, h
 conservative course: build/PR proceeds, **merge still held** for his explicit confirmation on
 return, rather than risk the ~4am `:edge` auto-pull hitting an unmigrated prod env unattended.
 
+**Update 2026-08-12 08:xx: PR #1577 is now code-approved + security-tier QA GREEN**
+(https://github.com/motioneso/moss/pull/1577#issuecomment-5264103198) — adversarial Opus QA found
+0 blocking code findings, verified the fail-loud/exact-IP behavior empirically (gateway-spoof
+rejected, `loopback` intact, 35 fuzzed legacy/malformed values all correctly rejected). **Still not
+merging** — the only open item is this prod env migration confirmation. Ping sent this update
+(`needs-ben` msg `1786522369455563282`) since the earlier "no ping, doesn't block tonight" call
+turned out to leave the protocol's ping requirement unmet once the PR was actually ready — QA
+independently flagged the gap. Nothing else is blocked on this tonight; flagging so it's the first
+thing you see.
+
 ## #1556 UAT blocked on a one-time interactive `claude setup-token` OAuth step — STILL OPEN
 
 **Found 2026-08-12 while investigating why the #1556/#1557 lane had gone unattended for ~25h.**
