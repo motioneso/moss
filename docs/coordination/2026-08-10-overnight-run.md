@@ -604,3 +604,46 @@ commit above, all sitting only on the branch. Confirmed via `git rev-list --coun
 - Merge commit `64907e1d0`, pushed, PR #1576 opened and merged directly (`gh pr merge --merge`) —
   docs-only coordinator bookkeeping, no live-path surface, no code review gate applicable.
   Merged as `519ce6e30`. `origin/main` now has the full run history.
+
+## Branch/tree cleanliness sweep (2026-08-12)
+
+Ben: "lets make sure all branches and trees are clean." Repo-wide audit, not scoped to this
+coordinator's own worktree.
+
+**Worktrees** — `git worktree list --porcelain` audited against `gh pr list --head <branch>` for
+every branch-backed entry. Only 4 legitimate trees remain: `main`, this coordinator's own tree, and
+the two #1556/#1557-lane trees (`1556-p1-replay-contract`, `build-coord-1556-1557`) — kept because
+`1556-p1-replay-contract`'s PR #1562 is still OPEN. No stray/orphaned worktrees found this pass —
+the prior sweep already cleared ~50.
+
+**Local branches** — 22 → 7. Deleted 15 via `git branch -D`, all independently verified safe first:
+- 11 `worktree-agent-a*` refs, confirmed `git branch --merged origin/main` (orphan refs from the
+  ~48 worktrees removed in the earlier cleanup).
+- 3 duplicate-named branches (`fix-1448-news-vitest-alias`, `fix-1453-google-schedule-root`,
+  `test-1272-structured-state-migrations`) whose content was already merged under different
+  branch names as PRs #1475/#1476/#1474.
+- `pr1535-review` — looked risky at first (`git diff origin/main` full-repo showed 184 files /
+  16505 deletions), but that's staleness noise, not unlanded work: found the squash-merge commit
+  `15294ecdc` (PR #1535) by searching `origin/main` commit messages, then confirmed with a
+  **scoped** diff (`-- apps/web/src/weather`, the actual subject) which came back empty. Deleted.
+
+**Remote-tracking refs** — `git remote prune origin` removed 9 stale `origin/*` refs for branches
+GitHub had already deleted server-side (post-merge auto-delete): `build/1533-chat-surface-routing`,
+`build/1547-manual-run-job-idempotency`, `fix-1453-google-schedule-root`,
+`fix/1560-assistant-name-flash`, `pr-1538-uat-selectors`, `qa-pr1531`,
+`test-1272-structured-state-migrations`, `w5d-chat-surface`, `worktree-1575-moss-container-name`.
+Purely local cleanup, zero risk — GitHub's copies were already gone.
+
+**Remaining 7 local branches — deliberately untouched:**
+`main`, `coord/overnight-20260810` (mine), `1556-p1-replay-contract` (worktree, PR #1562 OPEN),
+`build-coord-1556-1557` (worktree, no PR), plus 3 loose branches tied to the same lane
+(`1556-p1-replay-contract-unsanitized`, `1557-clean-rebuild`,
+`backup/1557-p1-before-cleanup-2c81e8cb0`) — left for that lane's owner to judge, not a cleanup
+sweep's call to make.
+
+**Open finding:** `herdr pane list` shows **no live pane** anywhere under `build-coord-1556-1557`
+or `1556-p1-replay-contract` — the #1556/#1557 build-sub-coordinator has no active session right
+now, despite PR #1562 still being open. #1557's own P1 already landed (PR #1561, merged
+2026-08-11T15:51:52Z), so this isn't a fully-stalled lane, but #1556/#1557 P2+ status is unknown
+and unattended. Flagged for next supervision pass — not yet nudged or investigated further this
+segment.
