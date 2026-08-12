@@ -787,3 +787,20 @@ routine/sensitive after green (none are `routine` this batch); keep `AWAITING-BE
   `docs/coordination/AWAITING-BEN.md`, needs Ben's explicit confirmation on the prod env migration
   timing before merge. QA verdict alone does not clear this lane to merge.
 - Waiting on: `qa-1486` verdict notification.
+
+## #1352 PR open, QA dispatched (2026-08-12)
+
+- **PR #1578** (https://github.com/motioneso/moss/pull/1578), branch `1352-admission-liveness`,
+  commit `70238d10d51b3c3d7499fabd218e0148d42473ce`, rebased on `origin/main` at `519ce6e...`.
+  Worktree clean, reapable after QA/merge resolve. Focused 55/55, format/lint/typecheck green.
+  Full gate: VF_EXIT=1, single failure is the same documented cross-lane PG-contention signature
+  (tuple-concurrently-updated during concurrent migration reset, `notes-write-tools.test.ts`) — 3rd
+  independent lane to hit this tonight (#1486, and this). 188/189 integration files, 1881 tests
+  passed, 2 skipped. Live-path: n/a (backend liveness-counting only, no UI surface).
+- **Sensitive tier — Sonnet QA dispatched** (`Agent` subagent `coordinated-qa`, isolation
+  worktree, name `qa-1352`). Briefed to verify: engine-kind-agnostic counting incl.
+  `ClaudePersistentRuntimeEngine` without the `persistentRuntimeEnabled:false` crutch, orphan
+  reaping stays mux-scoped-only w/ regression test, `beginLogin` coupling test (intentional, not a
+  "fix"), spec §4.1.0a text actually amended in-diff, clean rebase against #1557's landed shape.
+- Waiting on: `qa-1352` verdict notification. Auto-merge eligible after green (sensitive tier, no
+  Ben sign-off required) — per-merge digest to Ben still owed.
