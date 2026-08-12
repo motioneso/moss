@@ -1591,6 +1591,79 @@ beyond evidence-gathering and escalation — correctly so.
 Next: watch for Ben's reply on #1589; keep nudging/monitoring `w1:p8A` and `w1:p8B`; still waiting
 on the `ci-1562-diag` fork (main-CI regression root cause) before #1429/#1452 can spawn.
 
+## 2026-08-12 (later tick): #1585 fork's incident escalated, prod fix authorized + dispatched; ci-1562-diag found no reproducible regression
+
+Ben replied to both needs-ben pings:
+- On the earlier 3-item ping: "1) Yes, in app change log that grows is good  2) yes  3) you can
+  grab the logs that's fine." — already actioned last tick (issue #1588, #1585 log-pull).
+- On the #1589 prod incident: **"You do have prod restart / config access, it's the running Moss
+  container. Do whatever you need to do."** — explicit authorization for live prod action. Ben
+  separately reinforced by chat: "we need to find root cause of rhis please" (sent while the fork
+  below was already spinning up).
+
+Dispatched fork **`prod-dbconn-fix`** (agentId `ab200a32f34a72ac4`) with a scoped brief: find root
+cause of the box-wide pgboss `acquireConnection` timeouts on the live `Moss` prod container; fix
+live only if it's config/network on the container itself; stop and report if it needs a code
+change instead; verify with a real job succeeding + `news_refresh_state` moving off `queued`
+before declaring success; don't leave prod in a worse state than found. Result not in yet —
+watching for its completion notification.
+
+**`ci-1562-diag` fork completed** — could NOT reproduce the main-CI `compose-smoke` failure
+locally across two clean runs (30s and 92s API boot, both under the 120s `start_period` in
+`infra/docker-compose.yml:104-108`), and found no plausible code-path link between #1562's diff
+(chat-turn-time logic only) and API boot. Conclusion: likely CI-runner timing pressure against a
+thin healthcheck margin (the `api` service does a full `apt-get`/`pnpm install` with native
+compiles on every cold boot, zero build cache — `infra/docker-compose.yml:96`), not a real
+regression. Recommended: re-run before considering a revert. Acted on it —
+`gh run rerun 31631303939 --repo motioneso/moss --failed`, still watching for result.
+
+Also handled the **PR #1587 "Prod compose deployment smoke" failure** separately — confirmed via
+job log (`94248156329`) it was a transient `ECONNRESET` inside `onnxruntime-node` postinstall
+during `pnpm install --frozen-lockfile`, unrelated to #1256's diff or the main-CI issue above.
+Re-ran via `gh run rerun 31636525883 --repo motioneso/moss --failed`.
+
+`w1:p8A` (#1256, `confirmation-relay5`) stalled twice this tick on wait-declarations (`agent_status:
+done` with unsent input / restated intent, no execution). Both times unstuck via `herdr agent
+prompt confirmation-relay5 "continue"` with fresh state fed in on the second nudge. Per the
+coordinate skill: a third recurrence gets `TaskStop` + coordinator takeover, not a third nudge.
+
+Housekeeping: the `ci-1562-diag` fork's scratch worktree
+(`.claude/worktrees/diag-1562-smoke`) is already cleanly deregistered from git (`git worktree
+remove --force` confirms "not a working tree"), but a root-owned leftover file
+(`dist/app-map.json`, written by a bind-mounted container process) blocks plain `rm -rf` of the
+directory. No passwordless sudo in this environment (`sudo -n` fails) — deferring to Ben for a
+`sudo rm -rf .claude/worktrees/diag-1562-smoke` at his convenience. Not urgent, pure disk hygiene.
+
+Next: await `prod-dbconn-fix` completion (root cause + live-fix verification of #1589); await main
+CI rerun result on `31631303939` — green unblocks #1429/#1452 to spawn; keep watching `w1:p8A`
+(third stall = takeover) and `w1:p8B`.
+
+## 2026-08-12 (later still): prod-dbconn-fix relayed with a strong lead; main-CI rerun #1 hit a
+## different (network) failure, not a repeat — rerun #2 in flight
+
+**`prod-dbconn-fix` fork relayed itself** (its own context hit ~70%) rather than finishing inline.
+Its finding before relaying: a strong lead surfaced from memory — a 2026-08-11 prod deploy
+(`docker compose -p jarv1s-prod ... up -d`) silently renamed the app container from `Moss` back to
+compose-default `jarv1s-prod-jarv1s-1`, timing-adjacent to the ~18:22 UTC restart #1589 describes.
+Plausible cause of the connection-acquire failures (e.g. anything addressing the container by its
+old name). It dispatched a follow-on agent **`fix-1589-prod-db`** (opus) with the lead plus
+diagnose/fix/verify/report instructions, and handed off before that agent returned. Not in
+`ListAgents` (nested under the fork, not a top-level peer) — waiting on its task-notification.
+
+**Main-CI rerun #1 on `31631303939` completed — failed again, but NOT the same failure.** This
+time `Compose deployment smoke` failed with the same `ECONNRESET` signature seen on PR #1587's
+"Prod compose deployment smoke" job (`onnxruntime-node` postinstall network hiccup during
+`pnpm install --frozen-lockfile` inside the Docker build) — not the healthcheck-timeout pattern
+`ci-1562-diag` investigated. Two different failure modes on the same job across two runs is
+consistent with CI-runner network flakiness, not a code regression from #1562 — reinforces rather
+than overturns the fork's conclusion. Triggered rerun #2 (`gh run rerun 31631303939 --failed`);
+watching via a background Monitor (task `b1bitfx84`) rather than polling in-context.
+
+Next: on rerun #2 green → spawn #1429/#1452 per Phase 1. On a third distinct failure → stop
+re-running blind, dispatch a fresh fork to actually read the compose-smoke job step-by-step rather
+than assume flakiness again. Still watching for `fix-1589-prod-db`'s completion, `w1:p8A` (third
+stall = takeover), `w1:p8B`.
+
 ## 2026-08-12: Ben authorized prod access for #1589; fix agent dispatched; relay checkpoint (context 70%)
 
 Ben replied to the #1589 ping (`~/.needs-ben/replies/1786568549905-coord-relay9.md`): "You do have
