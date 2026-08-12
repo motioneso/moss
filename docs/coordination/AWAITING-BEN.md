@@ -139,3 +139,16 @@ matches the spec literally); otherwise option 1. Pinged via `needs-ben` (see
 `~/.needs-ben/sent/1786483243535565600.msg`). Everything else in #1533 Phase 4 is done — this is
 the only open item. Build agent is waiting event-driven, not polling; coordinator likewise.
 
+
+**Update 2026-08-12: Ben ruled "I'm ok with doing oauth again, but let's make it persistent
+please."** Root cause found: `tests/uat/provisioner.ts` tears down every UAT run with
+`docker compose down -v`, and `jarv1s-cli-auth` is one of the volumes its own
+`assertNoLeakedResources` check asserts got wiped — so the persisted token is destroyed at the
+end of every single run by design, unrelated to the token-store code's own ~1yr-persistence
+assumption. Filed as https://github.com/motioneso/moss/issues/1582 with the fix: capture the
+token this run before teardown, write it to a durable host path outside any per-run volume, wire
+`JARVIS_UAT_REAL_CHAT_TOKEN_FILE` to it — the repo already has a non-interactive seed path for
+exactly this (`tests/uat/seed/cli.ts`'s `maybePersistRealChatToken`), just never populated with a
+real durable token. `codex-1556` (pane `w1:p7Y`) redirected to drive the #1556 UAT run now,
+capture the resulting token durably before its teardown, and report the file path (never the
+token) back to Coordinator. Watching for the live authorize URL ping.
