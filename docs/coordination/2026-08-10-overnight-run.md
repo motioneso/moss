@@ -647,3 +647,54 @@ now, despite PR #1562 still being open. #1557's own P1 already landed (PR #1561,
 2026-08-11T15:51:52Z), so this isn't a fully-stalled lane, but #1556/#1557 P2+ status is unknown
 and unattended. Flagged for next supervision pass — not yet nudged or investigated further this
 segment.
+
+## Four new build lanes spawned (2026-08-12, Ben signed off for the night)
+
+Per Ben's active instruction ("keep working through the list... use codex agents (luna high) to
+build as well. Any approval can be done by a fable agent instead of me"): three design questions
+resolved via one-shot `Agent(model:"fable")` delegated rulings, all posted durably to their issues.
+
+- **#1434** (sync-throttle) — Fable APPROVED, log-only/no-retry (comment
+  #1434#issuecomment-5263202454). Tier `security`.
+- **#1486** (trust-proxy-fix) — Fable APPROVED, exact-Caddy-IP pin + fail-loud on legacy values,
+  supersedes #901 (comment #1486#issuecomment-5263217119). Tier `security`. **MERGE HELD** — prod
+  runs legacy `JARVIS_TRUST_PROXY=1`, auto-pulls `:edge` ~4am; see `AWAITING-BEN.md`. Ben mid-sign-off
+  asked "is that still true?" and said do whatever's needed — verified nothing in the repo/PRs has
+  changed since; holding the merge conservatively rather than risk an unattended prod boot-crash.
+- **#1352** (admission-liveness) — Fable APPROVED WITH MODIFICATIONS, fail-closed union widening
+  (mux ∪ reservations ∪ engine-registry), amends spec §4.1.0a in-PR (comment
+  #1352#issuecomment-5263238761). Tier `sensitive`.
+- **#1555** (capability-timeout) — no Fable ruling needed, already classified ready-without-Fable.
+  Tier `sensitive` (build agent to confirm/escalate from the issue body).
+
+Handoff docs written (`docs/superpowers/handoffs/2026-08-12-{1352,1434,1486,1555}-*-build.md`),
+committed `726a27ef6`, pushed. **Fixed a self-inflicted worktree-nesting bug**: all four were
+first created nested under this coordinator's own worktree (cwd trap) instead of as siblings under
+`/home/ben/Jarv1s/.claude/worktrees/` — relocated via `git worktree move` before spawning anything,
+confirmed clean via `git worktree list`.
+
+Spawned all four as **Codex "luna high"** (`gpt-5.6-luna`, `model_reasoning_effort=high`) build
+agents in a fresh shared `agents` tab (`w1:tP`, 2x2 grid):
+- `build-1352` — pane `w1:p70`, label "1352 admission-liveness (luna)"
+- `build-1434` — pane `w1:p81`, label "1434 sync-throttle (luna)"
+- `build-1486` — pane `w1:p82`, label "1486 trust-proxy (luna)"
+- `build-1555` — pane `w1:p83`, label "1555 capability-timeout (luna)"
+
+All 4 confirmed booted on `gpt-5.6-luna high` (checked `w1:p70`'s footer) and `working` within
+seconds of boot. Boot briefs at `/tmp/claude-1000/.../scratchpad/briefs/boot-*.txt` point each
+agent at its handoff doc by absolute path in this coordinator's checkout (their own worktrees are
+on branches off `origin/main`, pre-dating these docs). None have reported plan-ready or done yet —
+next supervision pass should bounded-read all 4 panes and arm a liveness Monitor over them plus
+existing `w1:p7Y` (#1556).
+
+**merges_since_relay: 0** (no merge this leg — 4 new lanes spawned, no PRs opened yet).
+**No relay taken** — context-meter warned at 70%; per Ben's standing override this session remains
+resident through auto-compaction rather than spawning a successor. This entry is the durable
+checkpoint: session id `0bb9f516-c026-454f-bc97-dc9faf43bd20`, pane `w1:p7P`, label `Coordinator`,
+unchanged and still sole lock holder (re-verified via `herdr pane list` before this checkpoint).
+
+**Next steps for this same resident session, post-compaction:** (1) re-arm/confirm liveness
+Monitor over `w1:p70/p81/p82/p83/p7Y`; (2) supervise the 4 new lanes to plan-ready → approve →
+build → PR, same as any build lane; (3) #1486 stays merge-held regardless of QA outcome; (4) keep
+`AWAITING-BEN.md` current; (5) continue driving the rest of the queue per Ben's standing
+instruction — no new task, no further live Ben interaction expected until he returns.
