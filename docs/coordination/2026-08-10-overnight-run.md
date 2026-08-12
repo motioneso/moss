@@ -1852,3 +1852,13 @@ visibility instead).
 
 Next: send `needs-ben coordinator` merge digest; continue watching #1429 (near done) + #1554;
 #1452 still held on Ben.
+
+Digest sent. `w1:p8A`/`confirmation-relay5` (session `519d52a4...`) reaped after confirming its
+only open task ("message coordinator, request re-QA") was moot post-merge — session id verified
+before close. Monitor swapped to track only `w1:p8B`/`w1:p8E`.
+
+Also reaffirmed Ben's standing no-successor override again this tick against the generic
+context-meter hook (fired at 70%) — same as every prior firing this run.
+
+Next: watch #1429 (`w1:p8E`, 5/6 tasks, gate running) to genuine completion; continue monitoring
+#1554; #1452 still held on Ben (not chased).
