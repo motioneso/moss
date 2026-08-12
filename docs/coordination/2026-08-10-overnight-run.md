@@ -937,3 +937,36 @@ independent of QA outcome.
 
 **Status:** #1555 merged. #1352 remediated (`87c0a03de`), re-QA (`qa-1352-v2`) in flight. #1486 QA
 GREEN, held for Ben. #1434 QA still running. #1556 still blocked on Ben's OAuth click.
+
+## #1434 MERGED — Fable sign-off, conditional UAT waiver, follow-up filed
+
+**2026-08-12.** PR #1579 (#1434, security tier, sync-throttle fix) merged squash `c1da06956`,
+branch deleted, issue closed. qa-1434 (Opus adversarial) returned RED — 0 blocking code findings
+(all 4 binding ruling constraints independently verified against actual wiring), but 2 blocking
+UAT specs failed (`runtime-context.uat.spec.ts`, `1133-chat-attachments.uat.spec.ts`).
+
+Independently verified before routing to Fable (not taking QA's causation narrative on faith,
+per verification-discipline): `git diff origin/main...HEAD --name-only` for this PR touches only
+the sync-throttle hook + its unit test + a plan doc — cannot touch chat-turn body serialization.
+`git merge-base --is-ancestor 128a5bed6 519ce6e30` → **true** — `128a5bed6` (the #1493 commit that
+added the `surface` field both failing specs assert without) is an ancestor of `519ce6e30` (this
+branch's fork point off `main`). The UAT reds are proven pre-existing on `main`, unrelated to this
+diff.
+
+Dispatched one-shot Fable review (this run's delegated security-sign-off authority, line 5) rather
+than proceeding on the general delegation alone, since #1579 needed both (a) merge sign-off and
+(b) a UAT-waiver ruling, and Fable's earlier #1434 ruling only covered design. Fable **APPROVED
+with a conditional this-merge-only waiver**
+(https://github.com/motioneso/moss/pull/1579#issuecomment-5264152467), pinned to HEAD `9adfb485421`
+— re-verified the same ancestor proof independently, confirmed QA's 4-constraint check against
+actual wiring. Conditions: file a follow-up issue for the 2 stale specs (done — **#1581**, folds
+in QA's non-blocking mount-position-survival note) and treat the waiver as this-merge-only, not
+standing.
+
+Session-id authority reconfirmed against the lock line (unchanged, still `0bb9f516-...`) before
+merge. `merges_since_relay` → 3 (security-tier merge; relay trigger fires unconditionally per the
+coordinate skill, but per Ben's standing override this session logs + pings rather than spawning a
+successor).
+
+**qa-1555 (a180ed30317d4447b) re-read this leg: stale/already-actioned** — its MERGE-READY:YES
+verdict was for PR #1580 (#1555), already merged earlier this run (`83bbedb5be9`). No new action.
