@@ -3,7 +3,11 @@
 **GitHub issue:** #1452 — briefing content strings have no live-path proof (#1441/PR #1450 walked
 only the empty frame: `Today page headings: ["ALL CLEARTODAY"]`). Part of #1440.
 **Risk tier:** `routine` (test-infra only — a UAT spec addition, no product code path change).
-**Worktree:** /home/ben/Jarv1s/.claude/worktrees/fix-1452-safe-seed
+**Worktree:** /home/ben/Jarv1s/.claude/worktrees/coord-overnight-20260810/.claude/worktrees/fix-1452-safe-seed
+(corrected 2026-08-12 — originally created nested by a coordinator path error; the sibling-level
+path `/home/ben/Jarv1s/.claude/worktrees/fix-1452-safe-seed` this doc used to state is a plain,
+non-worktree decoy directory, not this lane. Successor `fix-1452-safe-seed-relay2` is already
+driving in the nested path above — treat it as authoritative, do not relocate.)
 **Branch:** fix-1452-safe-seed (off origin/main, includes #1256's merged confirmation-registry fix)
 **Build skill path (absolute):** /home/ben/Jarv1s/.claude/worktrees/coord-overnight-20260810/.claude/skills/coordinated-build/SKILL.md
 **Coordinator label:** `Coordinator` — escalate via `herdr-pane-message`; verify `herdr pane list`
