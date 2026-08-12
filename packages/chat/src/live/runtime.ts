@@ -42,6 +42,7 @@ import {
 import { createChatEngine } from "./engine-selection.js";
 import { CliChatUnavailableError } from "./errors.js";
 import { purgePrivateTranscripts } from "./private-transcript-cleanup.js";
+import { startIdleReapTimer, type SweepIdlePool } from "./idle-reap-timer.js";
 export { CliChatUnavailableError } from "./errors.js";
 export { ChatEngineRpcClient, RpcConnection } from "./chat-engine-rpc-client.js";
 export type {
@@ -333,6 +334,19 @@ export interface CreateChatSessionRuntimeDeps {
     scopedDb: DataContextDb,
     kind: "email" | "calendar"
   ) => Promise<Date | null>;
+  /**
+   * #1554 Decision 3 — the in-process topology's warm persistent-runtime pool + a live reader of
+   * `chat.persistent_idle_reap_minutes`. Both OPTIONAL and unset today: task #5 (a later, separate
+   * task) constructs the real `PersistentRuntimePool` and wires a live settings reader here. Absent
+   * either ⇒ no timer starts (unchanged behavior). When both are present, a second, DISTINCT timer
+   * starts alongside the §5.5 session-level idle reaper below (that one reaps whole `CliChatEngine`
+   * sessions on `idleMs`; this one sweeps warm `PersistentRuntimePool` children on the live
+   * `chat.persistent_idle_reap_minutes` setting) and is folded into `shutdown()`.
+   */
+  readonly persistentPool?: SweepIdlePool;
+  readonly readIdleReapMinutes?: () => Promise<number>;
+  /** Override the pool idle-reap timer's tick cadence (tests / explicit tuning). */
+  readonly idleReapTimerIntervalMs?: number;
 }
 
 export interface ChatSessionRuntime {
@@ -500,11 +514,25 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     stopReaper = manager.startIdleReaper();
   }
 
+  // #1554 Decision 3 — the persistent-pool idle-reap timer (in-process topology; this function is
+  // the composition root the plan names for it). Distinct from the §5.5 session-level reaper above
+  // — see the doc comment on `CreateChatSessionRuntimeDeps.persistentPool`. No-ops (stays undefined)
+  // until task #5 supplies both `persistentPool` and `readIdleReapMinutes`.
+  let stopPoolIdleReap: (() => void) | undefined;
+  if (deps.persistentPool && deps.readIdleReapMinutes) {
+    stopPoolIdleReap = startIdleReapTimer({
+      pool: deps.persistentPool,
+      readIdleReapMinutes: deps.readIdleReapMinutes,
+      intervalMs: deps.idleReapTimerIntervalMs
+    });
+  }
+
   let shutDown = false;
   const shutdown = (): void => {
     if (shutDown) return;
     shutDown = true;
     stopReaper?.();
+    stopPoolIdleReap?.();
     connection?.close();
   };
 

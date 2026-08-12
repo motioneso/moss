@@ -36,3 +36,7 @@ export * from "./install-contract.js";
 export * from "./errors.js";
 export * from "./private-transcript-cleanup.js";
 export * from "./terminal-rpc-client.js";
+// #1554 Decision 3 — the composition-root-owned idle-reap timer that drives
+// `PersistentRuntimePool.sweepIdle`. cli-runner's `engine-host.ts` needs it; `persistent-runtime-pool.js`
+// itself is intentionally NOT exported here (no cli-runner caller constructs a pool yet — task #5).
+export * from "./idle-reap-timer.js";

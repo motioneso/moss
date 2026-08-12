@@ -41,7 +41,9 @@ import {
   type RpcCancelSubmitParams,
   type RpcSubmitParams,
   type RpcSubmitLoginTokenResult,
-  type ReapReason
+  type ReapReason,
+  type SweepIdlePool,
+  startIdleReapTimer as startPoolIdleReapTimer
 } from "@moss/chat/live";
 import type { Multiplexer, ProviderKind, TmuxIo } from "@moss/ai";
 
@@ -101,6 +103,18 @@ export interface EngineHostDeps {
    * volume-disjoint and lock-only). Absent ⇒ the login verbs report unavailable on this build.
    */
   readonly loginService?: LoginService;
+  /**
+   * #1554 Decision 3 — the RPC topology's warm persistent-runtime pool + a live reader of
+   * `chat.persistent_idle_reap_minutes`. Both are OPTIONAL and unset today: task #5 (a later,
+   * separate task) constructs the real `PersistentRuntimePool` and wires a live settings reader
+   * here (and calls `startIdleReapTimer()` from `main.ts`). Absent either ⇒
+   * {@link CliChatEngineHost.startIdleReapTimer} is a no-op — safe to call unconditionally once
+   * task #5 lands. `persistentPool` is typed structurally ({@link SweepIdlePool}, only
+   * `sweepIdle` is used) so tests can pass a fake without constructing a real pool.
+   */
+  readonly persistentPool?: SweepIdlePool;
+  /** Live read of `chat.persistent_idle_reap_minutes`, re-read fresh on every timer tick. */
+  readonly readIdleReapMinutes?: () => Promise<number>;
 }
 
 const DEFAULT_LAUNCH_TIMEOUT_MS = 70_000;
@@ -141,6 +155,8 @@ export class CliChatEngineHost {
   private readonly replayLaunches = new Map<string, Map<string, ReplayLaunchAttempt>>();
   /** #1554 Decision 2: one listener per connected RPC connection; see `SessionReapedListener`. */
   private readonly reapListeners = new Set<SessionReapedListener>();
+  /** #1554 Decision 3: the armed idle-reap timer's stop fn, or null when not (yet) started. */
+  private idleReapStop: (() => void) | null = null;
 
   constructor(private readonly deps: EngineHostDeps) {
     this.launchTimeoutMs = deps.launchTimeoutMs ?? DEFAULT_LAUNCH_TIMEOUT_MS;
@@ -156,6 +172,38 @@ export class CliChatEngineHost {
   /** Called by the pool's `onReap` (wired in task #5, main.ts) — fans out to every connection. */
   notifySessionReaped(sessionKey: string, reason: ReapReason): void {
     for (const listener of this.reapListeners) listener(sessionKey, reason);
+  }
+
+  /**
+   * #1554 Decision 3: arm the persistent-pool idle-reap timer (this host is the RPC topology's
+   * composition root per the plan). No-ops (returns a no-op stop fn) when `persistentPool`/
+   * `readIdleReapMinutes` are not wired — true today; task #5 wires them and calls this from
+   * `main.ts`. Double-start-safe: clears any prior timer first, mirroring `CliRunnerServer`'s
+   * login-reaper guard (`server.ts`). `intervalMs` overrides the derived tick cadence (tests).
+   */
+  startIdleReapTimer(intervalMs?: number): () => void {
+    this.idleReapStop?.();
+    this.idleReapStop = null;
+    const { persistentPool, readIdleReapMinutes } = this.deps;
+    if (!persistentPool || !readIdleReapMinutes) {
+      return () => {};
+    }
+    const stop = startPoolIdleReapTimer({
+      pool: persistentPool,
+      readIdleReapMinutes,
+      intervalMs
+    });
+    this.idleReapStop = stop;
+    return () => {
+      stop();
+      if (this.idleReapStop === stop) this.idleReapStop = null;
+    };
+  }
+
+  /** Stops the idle-reap timer if armed (server shutdown). Idempotent. */
+  stopIdleReapTimer(): void {
+    this.idleReapStop?.();
+    this.idleReapStop = null;
   }
 
   // ─── per-sessionKey serialization (§4.0) ──────────────────────────────────────
