@@ -21,6 +21,15 @@ export type AdmitResult =
   | { readonly kind: "admitted"; readonly runtime: ProviderChatRuntime }
   | { readonly kind: "denied" }; // caller falls back to bounded engine, ruling 5
 
+/**
+ * #1554 task #5 — structural admission seam, mirroring `idle-reap-timer.ts`'s `SweepIdlePool`
+ * pattern: callers/tests depend on this shape, not the concrete `PersistentRuntimePool` class.
+ * The real class below already satisfies it (its `admit` method matches exactly).
+ */
+export interface AdmitCapablePool {
+  admit(sessionKey: string, opts: EngineLaunchOpts): Promise<AdmitResult>;
+}
+
 interface TrackedChild {
   readonly sessionKey: string;
   readonly runtime: ProviderChatRuntime;

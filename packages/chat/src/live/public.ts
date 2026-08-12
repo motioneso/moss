@@ -37,6 +37,12 @@ export * from "./errors.js";
 export * from "./private-transcript-cleanup.js";
 export * from "./terminal-rpc-client.js";
 // #1554 Decision 3 — the composition-root-owned idle-reap timer that drives
-// `PersistentRuntimePool.sweepIdle`. cli-runner's `engine-host.ts` needs it; `persistent-runtime-pool.js`
-// itself is intentionally NOT exported here (no cli-runner caller constructs a pool yet — task #5).
+// `PersistentRuntimePool.sweepIdle`. cli-runner's `engine-host.ts` needs it.
 export * from "./idle-reap-timer.js";
+// #1554 task #5 — the RPC topology's composition root (`main.ts`) constructs the real pool, so
+// cli-runner needs the class + its structural interfaces (`AdmitCapablePool`, `AdmitResult`).
+export * from "./persistent-runtime-pool.js";
+// #1554 task #5 — `main.ts` constructs the pool's `createRuntime` callback itself (the same
+// per-call-fresh-io pattern `createRealEngineFactory` in `runtime.ts` uses), so cli-runner needs
+// the concrete runtime class, not just the pool that wraps it.
+export * from "./claude-persistent-runtime.js";

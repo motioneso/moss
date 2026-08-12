@@ -23,7 +23,19 @@ import { ClaudePrintChatEngine } from "./claude-print-chat-engine.js";
 import { CliChatEngineImpl } from "./cli-chat-engine.js";
 import type { CliChatEngineDiagnostic } from "./cli-chat-engine-opts.js";
 import { ClaudePersistentRuntimeEngine } from "./persistent-runtime-engine.js";
-import type { CliChatEngine } from "./types.js";
+import type { AdmitCapablePool } from "./persistent-runtime-pool.js";
+import type { CliChatEngine, EngineLaunchOpts } from "./types.js";
+
+/**
+ * #1554 task #5 — `PersistentRuntimePool.admit()` needs an `EngineLaunchOpts`, but admission
+ * (cap-check / LRU-evict / construct) happens BEFORE the real per-turn launch opts exist (those
+ * are assembled later by `ChatSessionManager.launchSession` and passed to `engine.launch()`).
+ * `PersistentRuntimePool.construct()` only forwards `opts` to `createRuntime`, and
+ * `ClaudePersistentRuntime`'s constructor (the pool's `createRuntime` implementation) reads none
+ * of `EngineLaunchOpts`'s fields — so an empty stand-in is safe here, mirroring the same
+ * `NOOP_OPTS` precedent already used in `persistent-runtime-pool.test.ts`.
+ */
+const ADMIT_PROBE_OPTS = {} as EngineLaunchOpts;
 
 export interface ChatEngineSelectionOpts {
   /** Multiplexer backend for the interactive engine; ignored by the one-shot engines. */
@@ -47,6 +59,16 @@ export interface ChatEngineSelectionOpts {
    * RPC root can safely select persistent children).
    */
   readonly persistentRuntimeEnabled?: boolean;
+  /**
+   * #1554 task #5 — the warm-pool admission seam. When `persistentRuntimeEnabled` selects the
+   * persistent adapter AND a pool is supplied, admission is consulted (`pool.admit`) instead of
+   * unconditionally constructing a fresh `ClaudePersistentRuntime`: `{kind:"admitted"}` hands the
+   * already-constructed runtime to a new `ClaudePersistentRuntimeEngine`; `{kind:"denied"}` (at
+   * cap, no idle victim to evict) falls back to the SAME bounded-fallback/tmux fork used when the
+   * flag is off (ruling 5). Absent ⇒ unchanged pre-task-5 behavior: an unconditional, ungated
+   * construct (only real for tests / callers that don't yet wire a pool).
+   */
+  readonly persistentPool?: AdmitCapablePool;
 }
 
 /**
@@ -68,25 +90,16 @@ export function isBoundedFallbackEngine(
 }
 
 /**
- * Build the engine for a session. `non_interactive` anthropic/google get the bounded-fallback
- * print engines (no multiplexer session is ever created); everything else — including any
- * provider explicitly configured `interactive` — gets the tmux-backed REPL engine.
+ * The bounded-fallback/tmux fork, unchanged from before task #5 — extracted so both the
+ * unconditional persistent-adapter path and the pool-denied path can reach it without
+ * duplicating the fork logic.
  */
-export function createChatEngine(
+function buildFallbackEngine(
   provider: ProviderKind,
   sessionKey: string,
   io: TmuxIo,
-  opts: ChatEngineSelectionOpts = {}
+  opts: ChatEngineSelectionOpts
 ): CliChatEngine {
-  // #1557 Phase 1: the persistent adapter is a third engine shape, checked ahead of the
-  // bounded-fallback/tmux fork below (ruling 2 — flag on + provider match wins outright,
-  // independent of `executionMode`). Phase 1 ships Claude only.
-  if (opts.persistentRuntimeEnabled && provider === "anthropic") {
-    return new ClaudePersistentRuntimeEngine(sessionKey, io, {
-      credentialFile: opts.credentialFile
-    });
-  }
-
   if (isBoundedFallbackEngine(provider, opts.executionMode)) {
     if (provider === "anthropic") {
       return new ClaudePrintChatEngine(sessionKey, io, {
@@ -109,4 +122,56 @@ export function createChatEngine(
     executionMode: opts.executionMode,
     onDiagnostic: opts.onDiagnostic
   });
+}
+
+/**
+ * #1554 task #5 — the pool-consulting branch of the persistent-adapter fork. Admission is
+ * fail-closed (ruling 5): a `"denied"` result falls all the way back to the bounded-fallback/tmux
+ * fork, the SAME engine the flag-off path would have built.
+ */
+async function admitPersistentOrFallback(
+  pool: AdmitCapablePool,
+  provider: ProviderKind,
+  sessionKey: string,
+  io: TmuxIo,
+  opts: ChatEngineSelectionOpts
+): Promise<CliChatEngine> {
+  const result = await pool.admit(sessionKey, ADMIT_PROBE_OPTS);
+  if (result.kind === "admitted") {
+    return new ClaudePersistentRuntimeEngine(sessionKey, io, {
+      credentialFile: opts.credentialFile,
+      runtime: result.runtime
+    });
+  }
+  return buildFallbackEngine(provider, sessionKey, io, opts);
+}
+
+/**
+ * Build the engine for a session. `non_interactive` anthropic/google get the bounded-fallback
+ * print engines (no multiplexer session is ever created); everything else — including any
+ * provider explicitly configured `interactive` — gets the tmux-backed REPL engine.
+ *
+ * Synchronous for every call site that predates task #5 (no `persistentPool` supplied) — only
+ * becomes a `Promise` when a real pool is wired in, i.e. only for the two composition roots task
+ * #5 connects (`engine-host.ts`, `runtime.ts`'s `createRealEngineFactory`).
+ */
+export function createChatEngine(
+  provider: ProviderKind,
+  sessionKey: string,
+  io: TmuxIo,
+  opts: ChatEngineSelectionOpts = {}
+): CliChatEngine | Promise<CliChatEngine> {
+  // #1557 Phase 1: the persistent adapter is a third engine shape, checked ahead of the
+  // bounded-fallback/tmux fork below (ruling 2 — flag on + provider match wins outright,
+  // independent of `executionMode`). Phase 1 ships Claude only.
+  if (opts.persistentRuntimeEnabled && provider === "anthropic") {
+    if (opts.persistentPool) {
+      return admitPersistentOrFallback(opts.persistentPool, provider, sessionKey, io, opts);
+    }
+    return new ClaudePersistentRuntimeEngine(sessionKey, io, {
+      credentialFile: opts.credentialFile
+    });
+  }
+
+  return buildFallbackEngine(provider, sessionKey, io, opts);
 }
