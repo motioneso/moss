@@ -1365,3 +1365,16 @@ pane read showing it picked up the message) with instruction: fix the command to
 Also filed **#1583** (mechanical UAT test fix for the `surface`-field staleness found on PR
 #1562's QA) and dispatched a small isolated-worktree agent (`fix-1583-surface-field`) to build it
 — routine tier, no production code change, will report PR number back.
+
+## 2026-08-12: PR #1584 opened — fixes #1583 (stale UAT surface-field assertions)
+
+`fix-1583-surface-field` agent opened https://github.com/motioneso/moss/pull/1584 — test-only,
+adds `surface: "drawer"` to the two stale `toEqual(turnBody)` assertions
+(`1133-chat-attachments.uat.spec.ts:113`, `runtime-context.uat.spec.ts:87`). Confirmed root cause
+matches PR #1562's QA verdict: both specs open the top-level chat drawer outside any module
+surface context, so `activeSurface` is `DEFAULT_CHAT_SURFACE = "drawer"`. No production code
+touched. Typecheck + lint clean on changed files. CI running at report time.
+
+Routine tier (pure test-assertion fix) — auto-merge after CI green per standing tiering policy.
+Watching CI via Monitor, not polling. On green: merge, then #1562 needs no further changes and
+can proceed through its own merge path.
