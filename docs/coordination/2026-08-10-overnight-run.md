@@ -513,3 +513,21 @@ merged), remove/resolve the `## OPEN 2026-08-11: #1533 live-path proof blocked` 
 AWAITING-BEN.md (superseded — Ben chose to verify post-merge himself), reap #1533's worktree/pane
 (`w1:p7C`, `.claude/worktrees/1533-chat-surface-build`) once confirmed idle/stopped (already
 observed idle this session).
+
+## #1533/PR #1574 — bookkeeping complete (2026-08-12, post-merge)
+
+Sent Ben the merge confirmation + live test steps directly in chat (commit `d23d2297f` content,
+relayed verbatim). Follow-up bookkeeping now done:
+
+- `gh issue comment 1533` — https://github.com/motioneso/moss/issues/1533#issuecomment-5261834548,
+  documents merge commit, waived live-path proof, points back to this manifest.
+- Board (project 2): #1533 moved `In progress` → **`In review`** (not `Done` — pending Ben's own
+  live confirmation per the live-path-gate norm). Field/option IDs used:
+  `PVTSSF_lAHOADqkaM4BarLAzhVhA6I` / `df73e18b`.
+- Reaped: pane `w1:p7C` (idle, confirmed clean) closed; worktree
+  `.claude/worktrees/1533-chat-surface-build` removed; local branch
+  `build/1533-chat-surface-routing` deleted. Left `spec-1533-chat-surface-routing` and
+  `specs-1533-1534-approved` worktrees alone (shared/multi-issue spec trees, not this lane's).
+
+**Remaining for #1533:** none on the coordinator side. Waiting on Ben's live test; issue stays open
+until he confirms, then close for real (board → Done) at that point — do not do it preemptively.
