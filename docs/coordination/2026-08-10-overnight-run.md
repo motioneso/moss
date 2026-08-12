@@ -1062,3 +1062,10 @@ explicit merge sign-off required, no auto-merge.
 
 Findings on #1553/#1554/#1246 reported back to Ben directly (chat), since his "yes" was given
 without knowing about these three blockers.
+
+**#1256 plan approved 2026-08-12** (`docs/superpowers/plans/2026-08-12-1256-confirmation-registry-bypass.md`,
+late-bound adopt seam mirroring `adoptChatRpcConnection`, 5 tasks incl. ai/chat resolve parity
+regression test). Both build-time decisions in the plan (adopt via callback not return-value;
+lazy-fallback must not silently read as real `not_found`) approved as in-scope implementation
+detail, no Ben escalation needed. Agent hit its own 70% context-meter trigger — approved its relay
+(successor spawns in same worktree/branch); watching for successor to confirm driving before reap.
