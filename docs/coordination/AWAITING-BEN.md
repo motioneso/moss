@@ -39,6 +39,16 @@ lane for #1486 will proceed (PR only), but I will hold it un-merged until you co
 migration timing, so an auto-pull can't hit prod with a boot-time crash. No `needs-ben` ping sent —
 doesn't block anything tonight, flagging for when you're back.
 
+**Update 2026-08-12, Ben (mid-sign-off): "you can do whatever is needed for 1486 (is that still
+true? we've updated a bit since that was created)"** — checked before he went fully offline:
+nothing has landed since this entry was written that changes the premise. `apps/api/src/server.ts:221`
+still does the naive `!!JARVIS_TRUST_PROXY` boolean coercion the ruling replaces; no PR has touched
+it or prod's env. I have no visibility into prod's *actual live* env value from here (no Portainer
+access), so I can't fully confirm-or-deny "still true" — only that nothing in the repo contradicts
+it. Given that uncertainty and that Ben signed off before I could report back, holding the
+conservative course: build/PR proceeds, **merge still held** for his explicit confirmation on
+return, rather than risk the ~4am `:edge` auto-pull hitting an unmigrated prod env unattended.
+
 ## #1556 UAT blocked on a one-time interactive `claude setup-token` OAuth step — STILL OPEN
 
 **Found 2026-08-12 while investigating why the #1556/#1557 lane had gone unattended for ~25h.**
