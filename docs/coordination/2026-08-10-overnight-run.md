@@ -362,3 +362,9 @@ and a live 70%-checkpoint hook (declined per override). No successor spawned or 
   outstanding and blocking merge (not marking Done), with the missing-token root cause noted in
   the PR description so a future runner doesn't re-waste reruns. Sent via `herdr agent prompt`,
   delivery confirmed. Awaiting the draft PR link back.
+- **#1533 draft PR open: https://github.com/motioneso/moss/pull/1574** (`feat(chat): thread
+  surface through send routing`, branch `build/1533-chat-surface-routing`, verified via `gh pr
+  view` — draft, correct branch). Code-complete, gate green, sensitive-tier check done. Live-path
+  proof still outstanding/blocking merge (missing `JARVIS_UAT_REAL_CHAT_TOKEN_FILE` — see
+  AWAITING-BEN.md). **Lane done from the build agent's side** — it reported worktree clean and
+  ready for reaping. Do NOT merge, do NOT mark #1533 Done until the live-path proof lands.
