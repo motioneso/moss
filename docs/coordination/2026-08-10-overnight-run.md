@@ -833,3 +833,26 @@ running 4 concurrent full gates, not any lane's diff. Saved to agentmemory
 DB provisioning** rather than batch-spawning N lanes that all reach `run-gate.sh` around the same
 time. This run proceeded anyway (batch already spawned) — targeted-suite-green + full-gate
 contention-noted is being treated as sufficient evidence per-lane, consistent across all 4.
+
+## #1555 PR open, QA dispatched — all 4 lanes now PR-open (2026-08-12)
+
+- **PR #1580** (https://github.com/motioneso/moss/pull/1580), branch `1555-capability-timeout`,
+  rebased on `origin/main` at `faee1eb69`. Worktree clean, reapable after QA/merge resolve.
+  Targeted evidence green (ai.test.ts 20/20, ai-capability-routes 11/11, ai-admin-pin 5/5,
+  format/lint/typecheck exit 0). Full gate: INCONCLUSIVE twice (589s then 540s stalls, no writes
+  past initial reconciliation) — 4th confirmation of the cross-lane PG-contention signature
+  tonight, all 4 lanes now hit it. Live-path: n/a (internal query-path optimization).
+- **Sensitive tier — Sonnet QA dispatched** (`Agent` subagent `coordinated-qa`, isolation
+  worktree, name `qa-1555`). Briefed to verify: query coalescing is read-count-only (no
+  `withDataContext`/RLS/precedence/fallback change), regression test in `ai.test.ts` actually
+  exercises the coalesced path incl. precedence ordering, resolver still correct across all
+  capability/model combos, no hardcoded provider/model introduced (provider-agnostic-AI
+  invariant).
+- **All 4 lanes now PR-open, QA in flight:** #1352→qa-1352 (Sonnet), #1434→qa-1434 (Opus,
+  security), #1486→qa-1486 (Opus, security), #1555→qa-1555 (Sonnet). Liveness monitor
+  `br805svl1` stopped — build phase complete for all 4, no further pane-status watching needed;
+  now waiting on the 4 QA agent completion notifications instead.
+- **Merge plan once verdicts land:** #1352/#1555 (sensitive) auto-merge after green QA + per-merge
+  digest to Ben. #1434/#1486 (security) need green Opus QA **plus** Ben-or-delegated-Fable merge
+  sign-off; #1486 additionally stays merge-held regardless of QA outcome (prod env migration, see
+  `AWAITING-BEN.md`) — #1486's QA verdict alone never clears it to merge.
