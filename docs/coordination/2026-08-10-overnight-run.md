@@ -1237,3 +1237,9 @@ this manifest's earlier #1556 entries) with no live agent currently driving it, 
 Ben's one-time `claude setup-token` OAuth click per `docs/coordination/AWAITING-BEN.md` (#1556
 entry, still open as of this check) — unrelated to CI state entirely. This investigation closes out
 informationally; it does not unblock or motivate any merge decision on my part.
+
+**#1554**: relayed again at context-meter 70% — `1554-relay2` (no code written yet, still in
+Phase-2 seams verification/plan-build prep) spawned `build-1554-p2` (pane `w1:p8B`, session
+`9e98e0e0-d906-4284-ad3b-d7935063eaf3`) in the same worktree/branch, continuation doc committed
+`c60e9f47f`. Confirmed successor driving (session id + cwd match, `agent_status: working`) before
+reaping `w1:p89`.
