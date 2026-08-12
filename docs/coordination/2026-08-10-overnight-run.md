@@ -1976,3 +1976,29 @@ Next: watch for #1452's successor to appear in `herdr pane list` (currently only
 still finishing its own relay write-up) and confirm it's driving before reaping `w1:p8G`; watch for
 its subsequent plan-ready escalation; continue watching `w1:p8B` (#1554 relay, in progress) and
 `w1:p8E` (#1429, unchanged).
+
+## 2026-08-12 (cont.): #1452 third relay (relay3); #1554 auto-compact, not a coordinator relay
+
+`w1:p8G` (relay2, session `19922ee3`) relayed to **`fix1452-relay3`** (pane `w1:p8H`, session
+`7b43d332-a1c1-4e9e-900f-af355586a9f6`) — confirmed driving (bounded read, active spinner, climbing
+token count). Continuation doc committed at
+`docs/superpowers/handoffs/2026-08-12-1452-safe-seed-relay2.md` (commit `0a23294c2`). Reaped
+`w1:p8G`. Relay2's message said the continuation doc still listed the UI-vs-API trigger question as
+open (my earlier approval may not have landed before it relayed), so re-sent the same decision
+(fetch-based trigger, approved) directly to `w1:p8H` as a belt-and-suspenders re-flag — cheap,
+idempotent, avoids relay3 re-litigating a already-closed question. Message sent via `pane run`; no
+queued-text confirmation visible on a bounded read while the agent was mid-tool-call, but the same
+delivery path has confirmed-landed every other time this run — treating as delivered, will
+re-verify if relay3's next report doesn't reflect it.
+
+`w1:p8B` (#1554) showed `agent_status: done` — verified false-positive again (established pattern):
+pane content shows it still mid-turn (context dropped 72%→58%, consistent with the harness's own
+**auto-compact**, not a coordinator-level relay to a new successor session — same session id
+`9e98e0e0` throughout). CI already confirmed green by the agent; it's finishing up, not stalled. No
+action needed.
+
+Monitor re-armed (`b5xvnjri5`) on `w1:p8B`/`w1:p8E`/`w1:p8H`.
+
+Next: watch for relay3's plan submission (and confirm it reflects the fetch-approach decision);
+watch `w1:p8B` for its actual completion report (PR + evidence, not the `agent_status` flag); watch
+`w1:p8E` (#1429, unchanged, still in verification/gate/wrap-up per its own pane).
