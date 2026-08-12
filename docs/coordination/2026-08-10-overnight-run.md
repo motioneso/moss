@@ -1415,3 +1415,12 @@ fetch failed" scoped to the news source — identifies which publisher host is f
 `pgboss.job` table for `news.refresh` job history (failing vs. not running). Filed as
 https://github.com/motioneso/moss/issues/1585 with full write-up. Reported to Ben with this ask —
 needs prod log/DB access, not something buildable blind.
+
+Ben separately relayed what Moss itself tried while diagnosing this live (`news_topHeadlinesToday`,
+`web_search`, `app_getMapSlice` x2, `ai_explainRecentErrors` — all either confirmed staleness or
+returned nothing) and asked for a follow-up issue: Moss has no tooling to see fetch logs, inspect
+cache, trigger a manual refresh, see per-source fetch status, or query item fetch/publish metadata.
+Filed as https://github.com/motioneso/moss/issues/1586 (enhancement, needs its own spec per
+CLAUDE.md process gates — scope note in the issue covers read-only vs. mutating capabilities and
+whether this is news-specific or a general module-tooling pattern). Not started — spec/build not
+yet queued.
