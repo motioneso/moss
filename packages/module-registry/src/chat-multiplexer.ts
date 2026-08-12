@@ -594,7 +594,9 @@ export async function resolveChatEngineFactory(deps: {
   // `persistentRuntimeEnabled` above.
   const persistentPoolCap = await readPersistentPoolCap(deps.appDb).catch((err) => {
     const reason = err instanceof Error ? err.message : String(err);
-    deps.log?.(`[chat] could not read chat.persistent_pool_cap setting (${reason}) — defaulting to 4`);
+    deps.log?.(
+      `[chat] could not read chat.persistent_pool_cap setting (${reason}) — defaulting to 4`
+    );
     return 4;
   });
 

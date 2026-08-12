@@ -211,7 +211,7 @@ export function createCliRunner(
   // constructor dep) to exist first — a forward-reference box breaks the cycle: `onReap` closes
   // over `hostRef`, which is assigned once `host` is constructed below, before `server.start()`
   // (and therefore before any session can be admitted/reaped) ever runs.
-  let hostRef: CliChatEngineHost | undefined;
+  const hostRef: { current: CliChatEngineHost | undefined } = { current: undefined };
   const persistentPool = config.persistentRuntimeEnabled
     ? new PersistentRuntimePool({
         cap: config.persistentPoolCap,
@@ -220,7 +220,7 @@ export function createCliRunner(
         // per-session sanitized io is a known, accepted gap for pool-admitted runtimes (that
         // isolation mode is default OFF; revisit if it's ever turned on alongside the pool).
         createRuntime: () => new ClaudePersistentRuntime({ io }),
-        onReap: (sessionKey, reason) => hostRef?.notifySessionReaped(sessionKey, reason),
+        onReap: (sessionKey, reason) => hostRef.current?.notifySessionReaped(sessionKey, reason),
         clock: { now: () => Date.now() }
       })
     : undefined;
@@ -240,11 +240,9 @@ export function createCliRunner(
     // see `EngineHostDeps`'s doc comments for why they're two separate fields.
     persistentPool,
     persistentRuntimePool: persistentPool,
-    readIdleReapMinutes: persistentPool
-      ? async () => config.persistentIdleReapMinutes
-      : undefined
+    readIdleReapMinutes: persistentPool ? async () => config.persistentIdleReapMinutes : undefined
   });
-  hostRef = host;
+  hostRef.current = host;
 
   // #1059 — one TerminalHost per process (NOT per connection): the owner-terminal security
   // model is "at most one live PTY for the whole cli-runner", so it lives at server-construction

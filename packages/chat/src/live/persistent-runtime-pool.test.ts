@@ -20,7 +20,9 @@ function fakeRuntime(health: RuntimeHealth) {
     cancel: vi.fn(async () => ({ approvalsResolved: 0 })),
     health: healthMock,
     reap: reapMock,
-    recover: vi.fn(async (): Promise<RecoveryOutcome> => ({ kind: "neutral-failure", reason: "n/a" }))
+    recover: vi.fn(
+      async (): Promise<RecoveryOutcome> => ({ kind: "neutral-failure", reason: "n/a" })
+    )
   };
   return { runtime, healthMock, reapMock };
 }
@@ -132,7 +134,9 @@ describe("PersistentRuntimePool.admit", () => {
       cancel: vi.fn(async () => ({ approvalsResolved: 0 })),
       health: healthMock,
       reap: reapMock,
-      recover: vi.fn(async (): Promise<RecoveryOutcome> => ({ kind: "neutral-failure", reason: "n/a" }))
+      recover: vi.fn(
+        async (): Promise<RecoveryOutcome> => ({ kind: "neutral-failure", reason: "n/a" })
+      )
     };
 
     const pool = new PersistentRuntimePool({

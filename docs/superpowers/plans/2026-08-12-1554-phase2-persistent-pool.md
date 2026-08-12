@@ -58,7 +58,7 @@ only, per `plan-build`.
   on a spontaneous cli-runner-side reap event, which is the gap this plan closes (see Decision 2).
 - RPC push envelope (server→client, unsolicited, already exists for one use case):
   `packages/chat/src/live/rpc-contract.ts:221-228` (`RpcPush { t: "push"; bootId; channel:
-  "terminalData" | "terminalExit"; terminalId; dataB64?; exitCode? }`), `:231`
+"terminalData" | "terminalExit"; terminalId; dataB64?; exitCode? }`), `:231`
   (`RpcFrame = RpcRequest | RpcOk | RpcErr | RpcPush`). Consumed today only by
   `packages/chat/src/live/terminal-rpc-client.ts:178-181` (`frame.channel === "terminalData"`/
   `"terminalExit"` branches, `onTerminalData`/`onTerminalExit` callback registration ~122-127).
@@ -105,6 +105,7 @@ export class PersistentRuntimePool {
 ```
 
 Admission algorithm (stated as behavior, not code):
+
 1. Under the pool's single lock: if current pool size `< cap`, construct via `createRuntime`,
    track it, return `admitted`.
 2. Else, scan tracked runtimes' `health()` for any in `idle` state (never `in-turn` or
@@ -116,6 +117,7 @@ Admission algorithm (stated as behavior, not code):
    the new runtime, return `admitted`.
 
 **Test cases (behavior, not implementation):**
+
 - Admit N ≤ cap sessions concurrently → all `admitted`, pool size == N, no reap calls.
 - Admit cap+1 sessions where all existing are `in-turn` → `denied` for the (cap+1)th, zero reap
   calls (busy children never evicted). Fails against a broken impl that evicts a busy child.
@@ -193,6 +195,7 @@ in the same process as `SessionTokenRegistry` and takes `revokeMcpToken` as a di
 `deps.mcpTokenLifecycle?.revoke` straight into the pool it constructs).
 
 **Test cases:**
+
 - In-process pool: `sweepIdle` reaps a child past threshold → `onReap` fires synchronously →
   injected `revokeMcpToken` spy called once with the reaped `sessionKey`. Fails against an impl
   that reaps without revoking.
@@ -219,6 +222,7 @@ on an interval (recommend `min(idleThresholdMs / 6, 5 minutes)`, so a 30-min def
 `createPersistentRuntimeEnabledLiveReader`, not a boot-snapshot).
 
 **Test cases:**
+
 - `sweepIdle(30 min)` with one child idle for 31 min → reaped (`reap("idle-timeout")`, `onReap`
   fires with reason `"idle-timeout"`, distinguishable from `"lru-evict"` in the push/callback
   payload).
@@ -254,6 +258,7 @@ the existing `Number.isInteger` check, if `entry.minValue !== undefined && n < e
 plan's Settings & Flags section), never child env — no change needed to sanitized-env handling.
 
 **Test cases:**
+
 - PATCH `chat.persistent_pool_cap` to `"0"` → rejected (below `minValue: 1`), existing value
   unchanged. Fails against an impl that only checks `Number.isInteger`.
 - PATCH to `"8"` → accepted, `resolveInt` reads back `8`.
@@ -272,6 +277,7 @@ today at `:272-299`) and a new field passed into `createChatSessionRuntime({...}
 (`git -C .claude/worktrees/1256-confirmation-registry-bypass diff origin/main --
 packages/chat/src/routes.ts`; branch not pushed to `origin`, not fetchable by ref name — diff the
 worktree directly). #1256 inserts:
+
 - a new `adoptChatGateway?: (gateway: AssistantToolGateway) => void;` field into the
   `ChatRoutesDependencies` interface, current main line ~147-150.
 - a call `if (wiring) dependencies.adoptChatGateway?.(wiring.gateway);` immediately before the
@@ -283,6 +289,7 @@ also needs. Both lanes add a new dependencies-interface field and a new statemen
 region. This is a literal-adjacency collision, not a coincidental same-file touch.
 
 **Conflict protocol (binding, apply at build time, not now):**
+
 1. Before starting the `routes.ts` task, re-check #1256's state: has it merged to `origin/main`
    yet? (`git fetch origin main && git log origin/main --oneline --grep=1256` or check the issue/PR
    directly — state may have changed since this plan was written.)
@@ -347,6 +354,7 @@ correct and sufficient e2e for a backend-only lifecycle feature.
 Vitest integration test (not Playwright — no UI surface, see Finding A above) against a running
 API process with `chat.persistent_runtime.enabled=true`, `chat.persistent_pool_cap=2`,
 `chat.persistent_idle_reap_minutes` set low (e.g. `1` via runtime-config PATCH for the test):
+
 1. Start 3 concurrent chat sessions (3 distinct actors) → assert via `ps` (not logs) that exactly
    2 persistent child processes exist (matching the Claude CLI process pattern used elsewhere in
    this codebase for prod-worker identification) and the 3rd session's engine is the bounded

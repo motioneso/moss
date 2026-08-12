@@ -336,7 +336,9 @@ export function registerChatRoutes(
   // persistent-runtime pool's `onPersistentReap` (see `adoptMcpTokenRevoke`'s doc comment).
   // No-op when no gateway is wired (`wiring === null`).
   if (wiring) {
-    dependencies.adoptMcpTokenRevoke?.((chatSessionId) => wiring.tokens.revokeBySessionId(chatSessionId));
+    dependencies.adoptMcpTokenRevoke?.((chatSessionId) =>
+      wiring.tokens.revokeBySessionId(chatSessionId)
+    );
   }
 
   // Wire real notifier now that manager is available.

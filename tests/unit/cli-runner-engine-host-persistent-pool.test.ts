@@ -12,11 +12,12 @@
  * it, without needing to drive a real tmux/provider launch.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type * as MossChatLiveModule from "@moss/chat/live";
 
 const { createChatEngineMock } = vi.hoisted(() => ({ createChatEngineMock: vi.fn() }));
 
 vi.mock("@moss/chat/live", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@moss/chat/live")>();
+  const actual = await importOriginal<typeof MossChatLiveModule>();
   return { ...actual, createChatEngine: createChatEngineMock };
 });
 

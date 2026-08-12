@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { RecoveryOutcome, ReapReason, ProviderChatRuntime, RuntimeHealth } from "./provider-runtime.js";
+import type {
+  RecoveryOutcome,
+  ReapReason,
+  ProviderChatRuntime,
+  RuntimeHealth
+} from "./provider-runtime.js";
 import type { EngineLaunchOpts } from "./types.js";
 import { PersistentRuntimePool } from "./persistent-runtime-pool.js";
 import { computeIdleReapIntervalMs, startIdleReapTimer } from "./idle-reap-timer.js";
@@ -16,7 +21,9 @@ function fakeRuntime(health: RuntimeHealth) {
     cancel: vi.fn(async () => ({ approvalsResolved: 0 })),
     health: healthMock,
     reap: reapMock,
-    recover: vi.fn(async (): Promise<RecoveryOutcome> => ({ kind: "neutral-failure", reason: "n/a" }))
+    recover: vi.fn(
+      async (): Promise<RecoveryOutcome> => ({ kind: "neutral-failure", reason: "n/a" })
+    )
   };
   return { runtime, healthMock, reapMock };
 }

@@ -15,7 +15,12 @@ rl.on("line", (line) => {
   let text = "ok";
   try {
     const frame = JSON.parse(line);
-    if (frame && frame.type === "user" && frame.message && typeof frame.message.content === "string") {
+    if (
+      frame &&
+      frame.type === "user" &&
+      frame.message &&
+      typeof frame.message.content === "string"
+    ) {
       text = frame.message.content;
     }
   } catch {
@@ -32,7 +37,9 @@ rl.on("line", (line) => {
       }
     })}\n`
   );
-  process.stdout.write(`${JSON.stringify({ type: "result", subtype: "success", is_error: false })}\n`);
+  process.stdout.write(
+    `${JSON.stringify({ type: "result", subtype: "success", is_error: false })}\n`
+  );
 });
 
 // Real persistent CLI processes never exit on their own between turns — only stdin closing or a

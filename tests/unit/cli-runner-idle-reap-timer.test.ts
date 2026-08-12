@@ -18,7 +18,12 @@ const NEUTRAL_BASE = "/tmp/jarvis-1554-decision3-neutral";
 // startIdleReapTimer never touches `io` — a minimal never-invoked stub satisfies the type.
 const io = {} as TmuxIo;
 
-function makeHost(deps: { persistentPool?: { sweepIdle(ms: number): Promise<void> }; readIdleReapMinutes?: () => Promise<number> } = {}): CliChatEngineHost {
+function makeHost(
+  deps: {
+    persistentPool?: { sweepIdle(ms: number): Promise<void> };
+    readIdleReapMinutes?: () => Promise<number>;
+  } = {}
+): CliChatEngineHost {
   return new CliChatEngineHost({
     io,
     neutralBase: NEUTRAL_BASE,

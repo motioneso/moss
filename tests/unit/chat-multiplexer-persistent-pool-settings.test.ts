@@ -23,13 +23,14 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Kysely } from "kysely";
 import type { MossDatabase } from "@moss/db";
+import type * as MossChatModule from "@moss/chat";
 
 const { createRealEngineFactoryMock } = vi.hoisted(() => ({
   createRealEngineFactoryMock: vi.fn()
 }));
 
 vi.mock("@moss/chat", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@moss/chat")>();
+  const actual = await importOriginal<typeof MossChatModule>();
   return { ...actual, createRealEngineFactory: createRealEngineFactoryMock };
 });
 
@@ -50,8 +51,7 @@ function fakeAppDb(rows: Record<string, string>): Kysely<MossDatabase> {
     selectFrom: () => ({
       select: () => ({
         where: (_col: string, _op: string, key: string) => ({
-          executeTakeFirst: async () =>
-            key in rows ? { value: { value: rows[key] } } : undefined
+          executeTakeFirst: async () => (key in rows ? { value: { value: rows[key] } } : undefined)
         })
       })
     })

@@ -12,13 +12,13 @@
  * process is ever touched.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type * as ClaudePersistentRuntimeModule from "../../packages/chat/src/live/claude-persistent-runtime.js";
 
 const reapMock = vi.fn(async () => {});
 let fakeState: "idle" | "in-turn" = "idle";
 
 vi.mock("../../packages/chat/src/live/claude-persistent-runtime.js", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("../../packages/chat/src/live/claude-persistent-runtime.js")>();
+  const actual = await importOriginal<typeof ClaudePersistentRuntimeModule>();
   return {
     ...actual,
     ClaudePersistentRuntime: vi.fn().mockImplementation(function FakeClaudePersistentRuntime() {

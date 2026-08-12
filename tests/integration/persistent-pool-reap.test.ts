@@ -29,8 +29,14 @@ import { PersistentRuntimePool } from "../../packages/chat/src/live/persistent-r
 import { ClaudePersistentRuntime } from "../../packages/chat/src/live/claude-persistent-runtime.js";
 import { ClaudePersistentRuntimeEngine } from "../../packages/chat/src/live/persistent-runtime-engine.js";
 import { ClaudePrintChatEngine } from "../../packages/chat/src/live/claude-print-chat-engine.js";
-import { createChatEngine, isBoundedFallbackEngine } from "../../packages/chat/src/live/engine-selection.js";
-import type { ReapReason, RuntimeTurnEvent } from "../../packages/chat/src/live/provider-runtime.js";
+import {
+  createChatEngine,
+  isBoundedFallbackEngine
+} from "../../packages/chat/src/live/engine-selection.js";
+import type {
+  ReapReason,
+  RuntimeTurnEvent
+} from "../../packages/chat/src/live/provider-runtime.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FAKE_CLI_PATH = join(__dirname, "fixtures", "persistent-pool-fake-cli.mjs");
@@ -103,7 +109,10 @@ describe("persistent pool reap is real (#1554 e2e-P2)", () => {
     const iterator = runtime.streamEvents()[Symbol.asyncIterator]();
     const drain = (async (): Promise<void> => {
       for (;;) {
-        const { value, done } = (await iterator.next()) as { value: RuntimeTurnEvent; done: boolean };
+        const { value, done } = (await iterator.next()) as {
+          value: RuntimeTurnEvent;
+          done: boolean;
+        };
         if (done) return;
         if (value.kind === "turn-complete") return;
       }
@@ -112,11 +121,10 @@ describe("persistent pool reap is real (#1554 e2e-P2)", () => {
     await drain;
   }
 
-  let pool: PersistentRuntimePool;
   let fakeNow = Date.now();
   const reapEvents: { sessionKey: string; reason: ReapReason }[] = [];
 
-  pool = new PersistentRuntimePool({
+  const pool: PersistentRuntimePool = new PersistentRuntimePool({
     cap: 2,
     createRuntime: (sessionKey) => {
       const runtime = new ClaudePersistentRuntime({ io, spawnChild: makeSpawnChild(sessionKey) });

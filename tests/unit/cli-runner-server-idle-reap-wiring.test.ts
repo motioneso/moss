@@ -28,7 +28,10 @@ afterEach(async () => {
   await rm(socketDir, { recursive: true, force: true }).catch(() => undefined);
 });
 
-function stubHost(startIdleReapTimer: () => void, stopIdleReapTimer: () => void): CliChatEngineHost {
+function stubHost(
+  startIdleReapTimer: () => void,
+  stopIdleReapTimer: () => void
+): CliChatEngineHost {
   return {
     startupSweep: async () => undefined,
     startIdleReapTimer,

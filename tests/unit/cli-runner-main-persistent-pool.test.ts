@@ -9,6 +9,7 @@
  * (already covered by `packages/chat/src/live/persistent-runtime-pool.test.ts`).
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type * as MossChatLiveModule from "@moss/chat/live";
 
 const { persistentRuntimePoolMock, claudePersistentRuntimeMock } = vi.hoisted(() => ({
   persistentRuntimePoolMock: vi.fn(),
@@ -16,7 +17,7 @@ const { persistentRuntimePoolMock, claudePersistentRuntimeMock } = vi.hoisted(()
 }));
 
 vi.mock("@moss/chat/live", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@moss/chat/live")>();
+  const actual = await importOriginal<typeof MossChatLiveModule>();
   return {
     ...actual,
     PersistentRuntimePool: vi.fn().mockImplementation(function FakePersistentRuntimePool(
