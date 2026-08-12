@@ -2044,3 +2044,18 @@ Next: read relay4's first report for #1452 approval confirmation; read `w1:p8B`'
 reply once it lands (expect a PR number for #1554 — likely #1593 per the pane's own CI-check
 references); `w1:p8E` (#1429) unchanged, still to be checked for actual state vs. board (now synced
 to In progress, but genuine build status not re-verified this leg beyond the board fix).
+
+## 2026-08-12 (cont.): #1452 relay4→relay5 in progress; false-positive `done` on relay4 itself
+
+`fix1452-relay4` message: relayed at 70%, zero code written (research-only overrun on Task 1,
+captured for relay5 in a continuation doc), confirmed the earlier coordinator approval was received
+and matches the plan as-is — no re-approval needed. Says it's spawning relay5 now.
+
+Checked `w1:p8J` (relay4): `agent_status` already flipped to `done`, but no relay5 pane exists yet
+in `herdr pane list`. Bounded read shows it's mid **harness auto-compact** ("Compacting
+conversation… 4m17s, 4%"), not actually finished or genuinely stalled — same false-positive
+pattern already seen twice on the #1554 lane. Not reaping, not nudging (auto-compact needs no
+nudge, it'll resume and spawn relay5 on its own). Waiting for the real successor pane to appear.
+
+Next: watch for relay5's pane to appear post-compact, confirm driving, reap `w1:p8J`, update
+manifest + re-arm Monitor with the new pane id.
