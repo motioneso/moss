@@ -1398,7 +1398,19 @@ instead of external GH Pages), or build a genuinely different persistent in-app 
 **Awaiting Ben's answer — no spec, no issue, no build yet** (process gate: spec + task issue
 required before any build lane starts).
 
-**(b) Stale prod news ("seeing 5 day old stories").** Ben flagged live prod issue. Dispatched
-background investigation agent `a44628d8e06071ad3` (read-only, no prod access, code+issue+memory
-based diagnosis only) to find the news-refresh job/crawler and root-cause the staleness — result
-pending, will update this row when it reports.
+**(b) Stale prod news ("seeing 5 day old stories") — DIAGNOSED, needs prod-side confirm.**
+Investigation agent `a44628d8e06071ad3` root-caused via static analysis (no prod access):
+`compilePersonalizedNews` (`packages/news/src/compilation/compile.ts:90-92`) returns
+`kept_last_good` and never updates `compiledAt` when a dataset fetch collects 0 candidates with
+failures — combined with the 7-day hard-expiry (`SNAPSHOT_LIFETIME_MS`), a persistently-failing
+RSS/dataset fetch silently freezes the served snapshot. No cron refreshes news content; refresh is
+only reactively triggered on page load via `/api/news/overview`, and even that keeps failing
+identically if the same source keeps 403/timing out. Same failure class as #1431/#1433 (ESPN
+pinned-fetch 403s) — #1433's fix (PR #1477, merged 08-09) only added `logger.warn` observability,
+did not fix the underlying fetch. Secondary risk: if Ben's view is backed by
+`getTopHeadlinesForToday()` rather than `/api/news/overview`, that path never triggers a refresh
+at all regardless.
+**Needs prod-side check I can't do from here:** (1) prod API logs since 2026-08-09 for "dataset
+fetch failed" scoped to the news source — identifies which publisher host is failing; (2) prod
+`pgboss.job` table for `news.refresh` job history (failing vs. not running). Reported to Ben with
+this ask.
