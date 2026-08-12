@@ -970,3 +970,36 @@ successor).
 
 **qa-1555 (a180ed30317d4447b) re-read this leg: stale/already-actioned** — its MERGE-READY:YES
 verdict was for PR #1580 (#1555), already merged earlier this run (`83bbedb5be9`). No new action.
+
+## #1352 MERGED — qa-1352-v2 GREEN on remediated HEAD
+
+**2026-08-12.** PR #1578 (#1352, sensitive tier, admission-liveness) merged squash `765d95682`,
+branch deleted, issue closed. qa-1352-v2 (Sonnet) verified GREEN on remediated HEAD `87c0a03de` —
+parameterized EngineHost-seam test covers both `ClaudePrintChatEngine`/anthropic and
+`AgyPrintChatEngine`/google bounded-fallback cases against the real `CliChatEngineHost` + fake-tmux
+seam; verified non-tautological (reverted the fix locally, both new cases failed as expected).
+`cli-terminal.uat.spec.ts` carried over — `engine-host.ts` byte-identical to the previously
+live-tested commit, only the test file changed. Invariants clean, exit criteria met. Sensitive
+tier, no Ben sign-off required, auto-merged after green QA + green CI (`gh pr checks 1578` —
+Verify foundation and app PASS 24m55s).
+
+`qa-1352-v2` had ended its own turn on a wait-declaration stall (waiting on its own background CI
+monitor which never woke it) — nudged it once CI was independently confirmed green rather than
+TaskStop+take-over, since re-doing its review would have wasted the completed work.
+
+Worktrees reaped this leg: `1434-sync-throttle`, `1555-capability-timeout`,
+`agent-a180ed30317d4447b` (qa-1555), `agent-a41df265febc203fc` (qa-1352 v1, force-removed — had an
+unexplained staged revert of its own test file in a QA-only worktree with no Edit/Write tools;
+disposable/already-superseded, authoritative content lives on the actual build branch untouched),
+`agent-a7cb819d916e47820` (qa-1486), `agent-ab23612e587448cca` (qa-1434).
+
+**merges_since_relay → 4** (2 sensitive: #1434 security-tier already counted above at 3, #1352
+sensitive-tier makes 4). Per Ben's standing override this session stays resident through the 70%
+context-meter checkpoint that fired mid-merge — no successor spawned, state flushed here instead.
+
+**Run status as of this checkpoint:** #1555 MERGED (`83bbedb5be9`). #1352 MERGED (`765d95682`).
+#1434 MERGED (`c1da06956`). #1486 — PR #1577, QA GREEN, **merge-held on Ben** (env migration
+confirm, `AWAITING-BEN.md`, ping `1786522369455563282` sent). #1556 — PR #1562, draft, CI green,
+**blocked on Ben's one-time OAuth click** (Codex pane `w1:p7Y` driving, watching for its
+`needs-ben` ping). No other lanes active. Nothing currently requires coordinator action beyond
+watching for #1486/#1556 resolution — both correctly logged in `AWAITING-BEN.md`, no silent wait.
