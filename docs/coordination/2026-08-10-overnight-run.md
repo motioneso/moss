@@ -1292,3 +1292,25 @@ Also dispatched: one-shot Fable review (agent `a481c5f2da8a680af`) on `build-155
 plan (`docs/superpowers/plans/2026-08-12-1554-phase2-persistent-pool.md`, lifecycle policy —
 pool cap/LRU/idle-reap, new `sessionReaped` RpcPush channel, 2 new runtime-config entries).
 Standing policy: plan sign-off routes through Fable this run, not direct coordinator approval.
+
+## 2026-08-12: #1554 Phase 2 plan — Fable REVISE, 2 binding findings, relayed
+
+Fable verdict (agent `a481c5f2da8a680af`) on `docs/superpowers/plans/2026-08-12-1554-phase2-persistent-pool.md`:
+**REVISE.** Core design APPROVED — the new `sessionReaped` RpcPush channel is justified (not scope
+creep): reconciliation only fires on reconnect/bootId-change, an API-owned timer can't substitute
+for spontaneous cli-runner-side LRU eviction, so the unbounded token-live gap is real. Defaults
+(pool cap 4, idle-reap 30min) and minValue/maxValue bounds are fine.
+
+Binding findings:
+- **A)** e2e-P2's kill-gate assertion relies on a `listSessionIds()`/introspection call that's
+  wired in-process only (`routes.ts:297`) — no external endpoint a Playwright test could hit. Plan
+  must pick: in-process integration harness, or an explicitly-planned owner-only introspection
+  route with its security posture stated.
+- **B)** #1256 collision is unaddressed in the actual plan text (verified zero mention, despite
+  the build agent's paraphrase) — and `packages/chat/src/routes.ts` IS being edited on branch
+  `1256-confirmation-registry-bypass` right now. Plan must state whether Phase 2 touches
+  `routes.ts` and bind a concrete conflict protocol.
+
+Relayed verbatim to `build-1554-p2` (pane `w1:p8B`, session `9e98e0e0-...`, delivery confirmed via
+session-id match). Told to revise the plan doc and re-flag for a quick recheck, not a full second
+Fable pass, unless the revision changes the core design.
