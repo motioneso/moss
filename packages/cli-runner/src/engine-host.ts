@@ -43,6 +43,7 @@ import {
   type RpcSubmitLoginTokenResult,
   type ReapReason,
   type SweepIdlePool,
+  type AdmitCapablePool,
   startIdleReapTimer as startPoolIdleReapTimer
 } from "@moss/chat/live";
 import type { Multiplexer, ProviderKind, TmuxIo } from "@moss/ai";
@@ -105,16 +106,26 @@ export interface EngineHostDeps {
   readonly loginService?: LoginService;
   /**
    * #1554 Decision 3 — the RPC topology's warm persistent-runtime pool + a live reader of
-   * `chat.persistent_idle_reap_minutes`. Both are OPTIONAL and unset today: task #5 (a later,
-   * separate task) constructs the real `PersistentRuntimePool` and wires a live settings reader
-   * here (and calls `startIdleReapTimer()` from `main.ts`). Absent either ⇒
-   * {@link CliChatEngineHost.startIdleReapTimer} is a no-op — safe to call unconditionally once
-   * task #5 lands. `persistentPool` is typed structurally ({@link SweepIdlePool}, only
-   * `sweepIdle` is used) so tests can pass a fake without constructing a real pool.
+   * `chat.persistent_idle_reap_minutes`, consulted ONLY by {@link CliChatEngineHost.startIdleReapTimer}
+   * (`sweepIdle`). Absent either ⇒ that timer is a no-op. Typed structurally
+   * ({@link SweepIdlePool}, only `sweepIdle` used) so tests can pass a fake without constructing a
+   * real pool — kept separate from {@link persistentRuntimePool} below (admission) so the existing
+   * `sweepIdle`-only fakes in `tests/unit/cli-runner-idle-reap-timer.test.ts` don't also need an
+   * `admit` method.
    */
   readonly persistentPool?: SweepIdlePool;
   /** Live read of `chat.persistent_idle_reap_minutes`, re-read fresh on every timer tick. */
   readonly readIdleReapMinutes?: () => Promise<number>;
+  /**
+   * #1554 task #5 — the RPC topology's warm-pool ADMISSION seam (`admit`), consulted by
+   * `launchOnce` when building the engine (`createChatEngine`'s `persistentPool` opt). In
+   * production this is the SAME `PersistentRuntimePool` instance as {@link persistentPool} above
+   * (one pool serves both sweeping and admission); split into two deps only for the narrower
+   * structural typing each call site needs. Presence of this dep is what lifts the
+   * `persistentRuntimeEnabled: false` pin in `launchOnce` — absent ⇒ unchanged pre-task-5
+   * behavior (always the bounded-fallback/tmux fork, #1350 two-composition-roots guard).
+   */
+  readonly persistentRuntimePool?: AdmitCapablePool;
 }
 
 const DEFAULT_LAUNCH_TIMEOUT_MS = 70_000;
@@ -169,7 +180,8 @@ export class CliChatEngineHost {
     return () => this.reapListeners.delete(listener);
   }
 
-  /** Called by the pool's `onReap` (wired in task #5, main.ts) — fans out to every connection. */
+  /** Called by the pool's `onReap` (wired in `main.ts`'s `createCliRunner`) — fans out to every
+   *  connected RPC connection's `sessionReaped` push (`connection.ts`). */
   notifySessionReaped(sessionKey: string, reason: ReapReason): void {
     for (const listener of this.reapListeners) listener(sessionKey, reason);
   }
@@ -308,17 +320,18 @@ export class CliChatEngineHost {
     // does in the in-process factory. Before this the runner ALWAYS built the tmux REPL
     // engine, which made #1239's flip a no-op on every containerized deploy and took prod
     // chat down completely.
-    const engine = createChatEngine(params.provider as ProviderKind, key, sessionIo, {
+    const engine = await createChatEngine(params.provider as ProviderKind, key, sessionIo, {
       mux: this.deps.mux,
       homeBase: this.deps.homeBase,
       ownsDrain: true,
       executionMode: params.executionMode,
-      // #1557 Phase 1 / #1350 two-composition-roots guard: the RPC root never selects the
-      // persistent adapter this phase, regardless of the `chat.persistent_runtime.enabled`
-      // setting — only the in-process host-dev root (`chat-multiplexer.ts`'s
-      // `resolveChatEngineFactory`) reads that flag. Lifting this pin is a later-phase change,
-      // not an oversight.
-      persistentRuntimeEnabled: false,
+      // #1554 task #5: the pin is lifted — the RPC root now selects the persistent adapter
+      // exactly when a real pool was wired in at composition time (`main.ts`'s
+      // `createCliRunner`). Pool presence (not the `chat.persistent_runtime.enabled` setting
+      // directly — cli-runner has no DB/live-config access, see `main.ts`) is what gates this;
+      // absent `persistentRuntimePool` ⇒ unchanged pre-task-5 behavior (always bounded/tmux).
+      persistentRuntimeEnabled: this.deps.persistentRuntimePool !== undefined,
+      persistentPool: this.deps.persistentRuntimePool,
       // #363: the 0600 token file the claude launch reads CLAUDE_CODE_OAUTH_TOKEN from at
       // runtime (claude-scoped; only used by buildClaudeCommand, only if the file exists).
       credentialFile: this.deps.homeBase

@@ -32,7 +32,13 @@ afterEach(async () => {
 function stubHost(reap: () => Promise<void>): CliChatEngineHost {
   return {
     startupSweep: async () => undefined,
-    reapStaleLogins: reap
+    reapStaleLogins: reap,
+    // #1554 task #5 — server.ts's start()/stop() now unconditionally call these two host
+    // methods (mirroring the login reaper this suite exercises). No-op stubs: this suite is
+    // about the login-reaper interval, not the idle-reap timer (see
+    // cli-runner-server-idle-reap-wiring.test.ts for that).
+    startIdleReapTimer: () => undefined,
+    stopIdleReapTimer: () => undefined
   } as unknown as CliChatEngineHost;
 }
 

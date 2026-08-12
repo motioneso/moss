@@ -14,7 +14,12 @@ import { dirname } from "node:path";
 
 import { cliAvailable, tmuxAvailable, type ProviderKind } from "@moss/ai";
 
-import { probeProvider, type RpcProviderKind } from "@moss/chat/live";
+import {
+  ClaudePersistentRuntime,
+  PersistentRuntimePool,
+  probeProvider,
+  type RpcProviderKind
+} from "@moss/chat/live";
 
 import { resolveMossEnv } from "@moss/db";
 
@@ -39,12 +44,40 @@ export interface CliRunnerConfig {
   readonly homeBase: string;
   /** Tools-volume prefix the installer stages/promotes into (`NPM_CONFIG_PREFIX`, §7.1). */
   readonly toolsPrefix: string;
+  /**
+   * #1554 task #5 — `chat.persistent_runtime.enabled`'s RPC-topology equivalent
+   * (`MOSS_CHAT_PERSISTENT_RUNTIME_ENABLED`). Unlike the in-process root
+   * (`chat-multiplexer.ts`), cli-runner has no DB/live-config access, so this is a
+   * boot-time snapshot, not a live-reloadable setting — a deliberate, documented deviation
+   * from Decision 4's live-reload semantics for this one topology. Default OFF, matching
+   * the pre-task-5 pinned-false behavior until an operator opts in.
+   */
+  readonly persistentRuntimeEnabled: boolean;
+  /** `chat.persistent_pool_cap`'s boot-time snapshot (`MOSS_CHAT_PERSISTENT_POOL_CAP`); same
+   *  fail-closed default (4) as the registry entry (`@moss/settings`), duplicated here rather
+   *  than imported since cli-runner does not depend on `@moss/settings`. */
+  readonly persistentPoolCap: number;
+  /** `chat.persistent_idle_reap_minutes`'s boot-time snapshot
+   *  (`MOSS_CHAT_PERSISTENT_IDLE_REAP_MINUTES`); re-read on every timer tick from this SAME
+   *  boot-time value (no live reload here — see {@link persistentRuntimeEnabled}'s doc). */
+  readonly persistentIdleReapMinutes: number;
 }
 
 const DEFAULT_SOCKET = "/run/jarv1s/cli-runner.sock";
 const DEFAULT_NEUTRAL_BASE = "/data/cli-auth/chat";
 const DEFAULT_HOME = "/data/cli-auth";
 const DEFAULT_TOOLS_PREFIX = "/data/cli-tools";
+// #1554 task #5 — mirror the `@moss/settings` registry defaults (`chat.persistent_pool_cap` /
+// `chat.persistent_idle_reap_minutes`) without taking a dependency on that package.
+const DEFAULT_PERSISTENT_POOL_CAP = 4;
+const DEFAULT_PERSISTENT_IDLE_REAP_MINUTES = 30;
+
+/** Parse a positive-integer env var, falling back (fail-closed, never 0) on absence/garbage. */
+function readPositiveIntEnv(value: string | undefined, fallback: number): number {
+  if (value === undefined) return fallback;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 1 ? parsed : fallback;
+}
 
 /** Read the cli-runner config from the (server) env, applying §7 defaults. */
 export function readConfig(env: NodeJS.ProcessEnv = process.env): CliRunnerConfig {
@@ -66,7 +99,17 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): CliRunnerConfi
     perUserUid: env.JARVIS_CLI_PER_USER_UID === "1",
     neutralBase: resolveMossEnv(env, "JARVIS_CLI_NEUTRAL_BASE") ?? DEFAULT_NEUTRAL_BASE,
     homeBase,
-    toolsPrefix: env.JARVIS_CLI_TOOLS_PREFIX ?? env.NPM_CONFIG_PREFIX ?? DEFAULT_TOOLS_PREFIX
+    toolsPrefix: env.JARVIS_CLI_TOOLS_PREFIX ?? env.NPM_CONFIG_PREFIX ?? DEFAULT_TOOLS_PREFIX,
+    // #1554 task #5 — see CliRunnerConfig's doc comments: boot-time snapshots, not live config.
+    persistentRuntimeEnabled: env.MOSS_CHAT_PERSISTENT_RUNTIME_ENABLED === "1",
+    persistentPoolCap: readPositiveIntEnv(
+      env.MOSS_CHAT_PERSISTENT_POOL_CAP,
+      DEFAULT_PERSISTENT_POOL_CAP
+    ),
+    persistentIdleReapMinutes: readPositiveIntEnv(
+      env.MOSS_CHAT_PERSISTENT_IDLE_REAP_MINUTES,
+      DEFAULT_PERSISTENT_IDLE_REAP_MINUTES
+    )
   };
 }
 
@@ -163,6 +206,25 @@ export function createCliRunner(
       })
   });
 
+  // #1554 task #5 — the RPC topology's composition root for the warm pool. `PersistentRuntimePool`
+  // needs `onReap` wired to `host.notifySessionReaped`, but `host` needs the pool (as a
+  // constructor dep) to exist first — a forward-reference box breaks the cycle: `onReap` closes
+  // over `hostRef`, which is assigned once `host` is constructed below, before `server.start()`
+  // (and therefore before any session can be admitted/reaped) ever runs.
+  let hostRef: CliChatEngineHost | undefined;
+  const persistentPool = config.persistentRuntimeEnabled
+    ? new PersistentRuntimePool({
+        cap: config.persistentPoolCap,
+        // Mirrors the default (non-perUserUid) `sessionIo` in `engine-host.ts`'s `launchOnce`:
+        // the SAME shared sanitized `io`, not a fresh one per session. `perUserUid`'s
+        // per-session sanitized io is a known, accepted gap for pool-admitted runtimes (that
+        // isolation mode is default OFF; revisit if it's ever turned on alongside the pool).
+        createRuntime: () => new ClaudePersistentRuntime({ io }),
+        onReap: (sessionKey, reason) => hostRef?.notifySessionReaped(sessionKey, reason),
+        clock: { now: () => Date.now() }
+      })
+    : undefined;
+
   const host = new CliChatEngineHost({
     io,
     neutralBase: config.neutralBase,
@@ -173,8 +235,16 @@ export function createCliRunner(
     loginService,
     // Presence-only PATH probe INSIDE cli-runner (the tools volume is on PATH, §7.1).
     cliPresent: (provider: ProviderKind) => cliAvailable(provider),
-    multiplexerUsable: () => tmuxAvailable()
+    multiplexerUsable: () => tmuxAvailable(),
+    // #1554 task #5 — same concrete pool instance for both structural roles (sweep + admit);
+    // see `EngineHostDeps`'s doc comments for why they're two separate fields.
+    persistentPool,
+    persistentRuntimePool: persistentPool,
+    readIdleReapMinutes: persistentPool
+      ? async () => config.persistentIdleReapMinutes
+      : undefined
   });
+  hostRef = host;
 
   // #1059 — one TerminalHost per process (NOT per connection): the owner-terminal security
   // model is "at most one live PTY for the whole cli-runner", so it lives at server-construction
