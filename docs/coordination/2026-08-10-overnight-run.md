@@ -1480,3 +1480,38 @@ genuinely inherited (QA verified by inspection, not just presence).
 
 Relayed full findings to confirmation-relay5 (w1:p8A) — fixing now, will re-push and re-request
 QA. **Security tier — no auto-merge regardless of next verdict; needs Ben's explicit sign-off.**
+
+## 2026-08-12: coordinator autonomous-loop tick — w6a incident closed, 3 Ben decisions re-pinged
+
+**Lane health check (no intervention needed):** #1256/PR #1587 (`w1:p8A`, confirmation-relay5) —
+B1+B2 fixed, N1 (module-level `resolveActionRequestFn` → per-server `getResolveActionRequestFn`
+seam mirroring `adoptChatRpcConnection`) in progress, N2 (cross-user authz test) not started yet.
+Agent itself mid-auto-compact. #1554 (`w1:p8B`, relay3) — Decision 2 committed
+(`3508dee8c`/`330881348`, 159/159 tests), Decision 3 (idle-reap timer ownership) building via
+background subagent. Both genuinely active; `agent_status` on the #1554 pane read "done" while the
+pane content showed real in-progress work — reconfirms that flag is not trustworthy alone.
+
+**Closed a dangling incident:** the 2026-08-11 w6a-secure-context pkill accident
+(logged in the main tree's `AWAITING-BEN.md`) had an unanswered Ben follow-up ("What all is needed
+from me?"). Investigated: the w6a-secure-context worktree is already fully reaped and
+`git log --all` shows the lane was independently resolved by the separate "waves-3-6" coordination
+track ("w6a security hold" handled there). Found 2 leftover zombie processes (vite PID 612358,
+esbuild PID 612371) whose cwd pointed at the now-deleted worktree path — killed by exact PID only
+(not `pkill -f`, per the lesson the original incident itself recorded). Pinged Ben via needs-ben
+confirming nothing further needed from him on this thread (`~/.needs-ben/sent/1786562951839173438.msg`).
+
+**Protocol gap found and partially closed:** three Ben-decision threads (release-notes direction,
+briefing-regression #1429/#1452 go-ahead, #1585 news prod-log request) had been reported to Ben
+only in chat, never filed to `AWAITING-BEN.md` nor phone-pinged — so an overnight Ben could easily
+have missed all three. Sent a consolidated needs-ben ping covering all three
+(`~/.needs-ben/sent/1786562983640723368.msg`). **Could not complete the other protocol half** (adding
+entries to the canonical `AWAITING-BEN.md` at `/home/ben/Jarv1s/docs/coordination/AWAITING-BEN.md`)
+because that file has an unrelated large uncommitted edit in progress by another live session
+(a prompt-injection incident-log cleanup) — confirmed still mid-edit as of this check
+(`git status --short` still shows `M`). Re-check before attempting again; do not edit while modified.
+
+**Operational note:** an accidental `needs-ben --help` invocation sent a real garbage ping to Ben's
+phone (`~/.needs-ben/sent/1786562823210030209.msg`, "🔴 --help needs Ben:") — the tool has no
+`--help`; any two-arg invocation sends for real. No undo available. Recorded so it isn't repeated.
+
+No new work started; nothing else required this tick. Re-arming autonomous loop.
