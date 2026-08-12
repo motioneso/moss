@@ -1378,3 +1378,27 @@ touched. Typecheck + lint clean on changed files. CI running at report time.
 Routine tier (pure test-assertion fix) — auto-merge after CI green per standing tiering policy.
 Watching CI via Monitor, not polling. On green: merge, then #1562 needs no further changes and
 can proceed through its own merge path.
+
+## 2026-08-12: two new live asks from Ben — release notes page, stale prod news
+
+**(a) Release notes / "rolling wiki".** Ben: "We need to add a release notes page... a rolling
+wiki or whatever so I can see what new features we've added." Investigated prior art before
+replying (no build started): closest existing thing is the **weekly release report** (spec
+`docs/superpowers/specs/2026-07-17-weekly-release-report.md`, PR #1129 merged) — generates
+`docs/releases/<date>-weekly/` from merged-PR data every Friday, deploys via GitHub Pages, linked
+from the app command palette as "Weekly releases ↗" (`apps/web/src/shell/command-palette.tsx:374`).
+Two problems found: only 2 reports exist since approval (`2026-07-17-weekly`,
+`2026-08-07-weekly`) — a 3-week gap where the Friday scheduler should have fired 3-4x, so it's not
+running reliably; and it's a raw merged-PR ledger, not curated "what's new" copy. The older
+#543/#609/#614/#615/#620 chain (all CLOSED) is unrelated — a one-off upgrade-available alert into
+the Notifications feed, not a browsable page.
+Replied to Ben with this finding and one clarifying question per standing design-conversation
+preference: fix/repoint the existing weekly-report mechanism (scheduler + maybe pull it in-app
+instead of external GH Pages), or build a genuinely different persistent in-app changelog page.
+**Awaiting Ben's answer — no spec, no issue, no build yet** (process gate: spec + task issue
+required before any build lane starts).
+
+**(b) Stale prod news ("seeing 5 day old stories").** Ben flagged live prod issue. Dispatched
+background investigation agent `a44628d8e06071ad3` (read-only, no prod access, code+issue+memory
+based diagnosis only) to find the news-refresh job/crawler and root-cause the staleness — result
+pending, will update this row when it reports.
