@@ -26,6 +26,38 @@ recorded on issue #1560 (https://github.com/motioneso/moss/issues/1560#issuecomm
 ("feat(chat): thread surface through send routing (#1533)") merged 2026-08-12T03:11:37Z — the
 real-chat-token gap this entry described is moot now that the PR landed. -->
 
+## #1556 UAT blocked on a one-time interactive `claude setup-token` OAuth step — STILL OPEN
+
+**Found 2026-08-12 while investigating why the #1556/#1557 lane had gone unattended for ~25h.**
+#1557 already landed (PR #1561, merged 2026-08-11T15:51:52Z, issue closed). **#1556 (PR #1562,
+draft, CI green) is stuck** — not abandoned by neglect, but on a real infra gap the build-coord
+session (worktree `build-coord-1556-1557`) root-caused and pinged you about on 2026-08-10
+(`needs-ben` msg `1786420470481436926`), and you replied "I don't know how to do that."
+
+**What's actually needed, in plain terms:** the #1556 UAT harness drives `claude setup-token`
+itself (`packages/cli-runner/src/login-adapters.ts:105-157`) to mint a long-lived OAuth credential
+for the login flow under test. That command prints an authorization URL and then blocks
+(`awaiting_token`) until a human visits it and completes the browser OAuth grant — that's the one
+step nothing can automate. Once granted, the harness auto-captures the printed `sk-ant-oat…` token
+and persists it 0600 for reuse (per `provider-token-store.ts` comments: ~1yr-lived, one-time, not
+needed every run).
+
+**Concrete ask:** next time the #1556 UAT spec (`tests/uat/specs/1556-replay-contract.uat.spec.ts`)
+runs and its pane prints a `claude.com/.../authorize` URL, open it and complete the login/consent
+once. No token needs to be pasted into chat or anywhere — the harness captures it automatically on
+success.
+
+**Separately:** you also told `build-coord-1556-1557` (reply `1786420148981`) to stand down the
+Claude coordinator for this lane and let Codex run it, since you'd asked Codex to monitor. That
+was followed — the Claude build-coordinator pane is gone — but **no live Codex session is actually
+working #1556/#1557 right now**; the one active Codex pane (`w1:p7Y`) is idle-then-doing unrelated
+screenshot cleanup in the shared main tree. The lane has had no active driver since ~2026-08-11
+05:00 UTC.
+
+**Recommendation:** do the one-time OAuth step above (or say who should), and confirm whether you
+still want Codex driving #1556/#1557 specifically or want me to spin a fresh Claude build session
+for it now that #1557's half is done.
+
 <!-- Resolved 2026-08-09: `git push origin main` blocked by the auto-mode classifier during Wave 2
 wrap-up. Ben re-ran ("try now") and it went through — pushed 39 commits, `f78992b14..46ec9965d`.
 Note: GitHub reports this repo moved to `motioneso/moss.git`; push still succeeded via the old
