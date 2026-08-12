@@ -29,11 +29,11 @@ import type {
   TranscriptRecord
 } from "./types.js";
 import type { ReapReason } from "./provider-runtime.js";
+import { applyRemoteReap, countSubscribersFor, delay } from "./session-runtime-helpers.js";
 import type { PriorityModelPreferenceV1 } from "@moss/priority";
 import {
   DEFAULT_CHAT_SURFACE,
   normalizeChatSurface,
-  parseSurfaceSessionKey,
   surfaceSessionKey,
   type ChatSurface
 } from "./chat-surface.js";
@@ -861,24 +861,11 @@ export class ChatSessionManager {
     });
   }
 
-  /**
-   * #1554 Decision 2 — single-key counterpart to {@link reconcileLiveSessions}, driven by an
-   * unsolicited cli-runner push (RPC contract's `sessionReaped` push channel) rather than a full
-   * reconnect/bootId-change reconciliation pass. The RPC topology's cli-runner-resident persistent
-   * runtime pool already killed the child and can't call `revokeMcpToken` itself (API-process-only,
-   * §L.3/§342 seam) — this is the api-side half of that reap: same effect as one iteration of
-   * `reconcileLiveSessions`'s not-in-liveKeys branch for exactly this key, MINUS the engine kill
-   * (the pool already tore the child down; calling `killSession`/`engine.kill()` again here would
-   * be a redundant/racy no-op at best). Deletes `sessionKey` from `sessions` if cached and revokes
-   * its MCP token. No-op if the key isn't cached (already reconciled another way, or was never a
-   * persistent session) — guards against a double-revoke on a late/duplicate push.
-   */
+  /** #1554 Decision 2 — api-side half of a `sessionReaped` push; see `applyRemoteReap`. */
   async handleRemoteReap(sessionKey: string, _reason: ReapReason): Promise<void> {
-    await this.withMaintenanceLock(async () => {
-      if (!this.sessions.has(sessionKey)) return;
-      this.sessions.delete(sessionKey);
-      this.deps.revokeMcpToken?.(sessionKey);
-    });
+    await this.withMaintenanceLock(async () =>
+      applyRemoteReap(this.sessions, this.deps.revokeMcpToken, sessionKey)
+    );
   }
 
   /** Wire the production idle reaper. Returns a stop handle that clears the interval. */
@@ -916,17 +903,7 @@ export class ChatSessionManager {
   }
 
   private countSubscribers(actorUserId: string): number {
-    let count = 0;
-    for (const [sessionKey, subscribers] of this.subscribers) {
-      try {
-        if (parseSurfaceSessionKey(sessionKey).actorUserId === actorUserId) {
-          count += subscribers.size;
-        }
-      } catch {
-        // A malformed external reconciliation key cannot belong to this actor.
-      }
-    }
-    return count;
+    return countSubscribersFor(this.subscribers, actorUserId);
   }
 
   private schedulePrivateEnd(actorUserId: string, surface: ChatSurface): void {
@@ -1012,8 +989,4 @@ export class ChatSessionManager {
     }
     return offset;
   }
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
