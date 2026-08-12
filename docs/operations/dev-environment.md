@@ -48,7 +48,7 @@ pnpm build:web
 
 PORT=3099 \
 HOST=127.0.0.1 \
-JARVIS_TRUST_PROXY=1 \
+JARVIS_TRUST_PROXY=loopback \
 JARVIS_AUTH_TRUSTED_ORIGINS="https://<machine>.<tailnet>.ts.net:<port>" \
 JARVIS_WEB_DIST_DIR="$(pwd)/apps/web/dist" \
 pnpm start:api
@@ -56,18 +56,13 @@ pnpm start:api
 tailscale serve --bg --https=<port> http://127.0.0.1:3099
 ```
 
-`JARVIS_TRUST_PROXY=1` tells Fastify to trust `X-Forwarded-*` from `tailscale serve`; without it,
-HSTS is not emitted, Better Auth won't issue the `__Secure-`-prefixed session cookie, and the
-rate limiter keys on the proxy's IP instead of the real client. `JARVIS_WEB_DIST_DIR` must be an
+`JARVIS_TRUST_PROXY=loopback` tells Fastify to trust `X-Forwarded-*` from the host-dev `tailscale serve` proxy; without it,
+HSTS is not emitted, Better Auth will not issue the `__Secure-`-prefixed session cookie, and the
+rate limiter keys on the proxy IP instead of the real client. `JARVIS_WEB_DIST_DIR` must be an
 absolute path — `pnpm --filter @moss/api start` runs with its cwd inside `apps/api`, so the
 default (`process.cwd()/apps/web/dist`) resolves to the wrong directory.
 
-**`JARVIS_TRUST_PROXY=1` trusts `X-Forwarded-*` from any peer that can reach the port** — it does
-not verify the peer is actually `tailscale serve`. Always pair it with `HOST=127.0.0.1`; never
-combine it with `HOST=0.0.0.0`, or any LAN/tailnet peer that can reach the port directly can spoof
-its rate-limit identity and route around the HTTPS-only origin. The boolean coercion behind this
-is tracked in [#1486](https://github.com/motioneso/moss/issues/1486) — a narrower `trustProxy`
-value is a follow-up, not done here.
+**`JARVIS_TRUST_PROXY=loopback` is valid only for the host-dev topology and must stay paired with `HOST=127.0.0.1`; it does not verify arbitrary peers. For the bundled production proxy, set `JARVIS_TRUST_PROXY` to the exact static Caddy IPv4 address, never the Compose bridge CIDR or gateway. Unset it for plain HTTP. Legacy boolean values (`1`, `true`, `yes`, `on`) and malformed values fail at boot with an actionable error.**
 
 `tailscale serve` only publishes within the tailnet (never the public internet), but the
 certificate it issues is logged to public Certificate Transparency logs by the CA — this is

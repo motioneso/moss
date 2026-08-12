@@ -9,7 +9,48 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { resolveApiServerConfig } from "../../apps/api/src/server.js";
+import {
+  createApiServer,
+  resolveApiServerConfig,
+  resolveTrustProxy
+} from "../../apps/api/src/server.js";
+
+describe("resolveTrustProxy", () => {
+  it("disables proxy trust when unset or empty", () => {
+    expect(resolveTrustProxy(undefined)).toBe(false);
+    expect(resolveTrustProxy("   ")).toBe(false);
+  });
+
+  it("keeps loopback as the host-dev proxy keyword", () => {
+    expect(resolveTrustProxy("LOOPBACK")).toBe("loopback");
+  });
+
+  it("accepts exact IPv4 and IPv6 proxy addresses, including lists", () => {
+    expect(resolveTrustProxy("10.251.0.2")).toBe("10.251.0.2");
+    expect(resolveTrustProxy("10.251.0.2, 2001:db8::2")).toEqual(["10.251.0.2", "2001:db8::2"]);
+  });
+
+  it("rejects legacy booleans, CIDRs, and malformed values", () => {
+    for (const value of ["1", "true", "YES", "on", "10.251.0.0/24", "proxy.example"]) {
+      expect(() => resolveTrustProxy(value)).toThrow(
+        'JARVIS_TRUST_PROXY must be unset, "loopback", or a comma-separated list of exact IP addresses'
+      );
+    }
+  });
+
+  it("rejects invalid configuration before creating database clients", () => {
+    const previous = process.env.JARVIS_TRUST_PROXY;
+    process.env.JARVIS_TRUST_PROXY = "true";
+    try {
+      expect(() => createApiServer({ logger: false })).toThrow(
+        'JARVIS_TRUST_PROXY must be unset, "loopback", or a comma-separated list of exact IP addresses'
+      );
+    } finally {
+      if (previous === undefined) delete process.env.JARVIS_TRUST_PROXY;
+      else process.env.JARVIS_TRUST_PROXY = previous;
+    }
+  });
+});
 
 describe("resolveApiServerConfig MCP server URL", () => {
   it("honors JARVIS_MCP_SERVER_URL when set (container deploy), ignoring PORT", () => {
