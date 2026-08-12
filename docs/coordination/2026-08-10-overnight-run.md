@@ -1279,3 +1279,16 @@ export block to `~/.bashrc` (host-wide, all future shells) — `docs/coordinatio
 had this queued as Ben's approved fix ("I'm ok with doing oauth again, but let's make it persistent
 please"). Closing issue #1582 as resolved. Next UAT run on this box (any lane, any pane) should
 seed the token automatically and never print an authorize URL.
+
+## 2026-08-12: PR #1562 CI fully green (incl. previously-flaky "Build and publish images") — QA dispatched
+
+All checks SUCCESS, not draft, mergeable. Live-path e2e-UAT proof already in hand (codex-1556's
+run, see above). Dispatched sensitive-tier `coordinated-qa` (agent `a4d8dd7d7f78be56b`, isolated
+worktree) — standard QA + explicit invariant check (secret/token handling in cli-runner touch) +
+confirm the e2e-UAT evidence is real, not self-reported. On APPROVE: auto-merge per sensitive-tier
+policy, digest to Ben. On REVISE/REJECT: relay to `codex-1556`.
+
+Also dispatched: one-shot Fable review (agent `a481c5f2da8a680af`) on `build-1554-p2`'s Phase 2
+plan (`docs/superpowers/plans/2026-08-12-1554-phase2-persistent-pool.md`, lifecycle policy —
+pool cap/LRU/idle-reap, new `sessionReaped` RpcPush channel, 2 new runtime-config entries).
+Standing policy: plan sign-off routes through Fable this run, not direct coordinator approval.
