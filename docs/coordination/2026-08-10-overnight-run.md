@@ -531,3 +531,53 @@ relayed verbatim). Follow-up bookkeeping now done:
 
 **Remaining for #1533:** none on the coordinator side. Waiting on Ben's live test; issue stays open
 until he confirms, then close for real (board → Done) at that point — do not do it preemptively.
+
+## Worktree/branch cleanup (2026-08-12)
+
+Ben: "we have nothing in progress then, correct?" → confirmed, no active build lanes — but flagged
+~50 leftover worktrees as cleanup debt. Ben: "lets clean them up, but the lets update our skills so
+sessions clean up after themselves." Two parts, both now done:
+
+**(a) Cleanup executed.** Classified every entry in `git worktree list` by real signal, not
+inference: named branches checked via `gh pr list --head <branch> --state all`; detached QA trees
+checked either by `git merge-base --is-ancestor <HEAD> origin/main` or, when that's structurally
+unreliable (a squash-merge is never an ancestor of the pre-merge commit a QA agent reviewed), by
+identifying the PR number from the worktree's name/content and confirming `gh pr view <n>` MERGED.
+Two content-only checks (spec docs) confirmed identical file content already on `origin/main` under
+a different commit hash before treating them as safe.
+
+Removed 48 worktrees (`git worktree remove --force`) + their local branches (`git branch -D`),
+plus 4 orphan backup branches with no worktree (`w6a-secure-context-sanitized`,
+`w6b-secure-context-preraebase-backup`, `w6b-pre-rebase-backup`, `pr1491-sanitize-backup` — all
+backups of already-merged PRs #1491/#1485). Two locked worktrees (`1575-moss-container-name`,
+`security-1383-credential-guard`) were unlocked first — both PRs were already merged; the lock was
+an artifact of the Agent tool's `isolation: "worktree"` option, not a protection signal.
+
+**Left alone, deliberately:**
+- `.claude/worktrees/1556-p1-replay-contract` (branch `1556-p1-replay-contract`) — real open draft
+  PR #1562, part of open issue #1556. Dormant (no agent currently driving it), not abandoned.
+- `.claude/worktrees/build-coord-1556-1557` (branch `build-coord-1556-1557`) — 75 commits ahead of
+  `origin/main`, NOT an ancestor of `1556-p1-replay-contract` or related to it by content. Tail
+  commits read "first commit", "Add platform alpha scaffold and handoff docs", "Add M7 operations
+  verification plan" — look unrelated to this repo, possibly a mistaken/orphan branch. **Needs a
+  human look before any action** — flagged to Ben, not deleted, not merged. Also saved to
+  agentmemory (`jarv1s`, fact) so a future session doesn't rediscover this from scratch.
+- Their matching backup branches (`1556-p1-replay-contract-unsanitized`,
+  `backup/1557-p1-before-cleanup-2c81e8cb0`) — same reasoning, left alone.
+
+Result: `git worktree list` now shows exactly 4 entries — `main`, this coordinator's own worktree,
+and the two flagged #1556/#1557 trees.
+
+**(b) `coordinate/SKILL.md` updated** for self-cleanup (same commit as this manifest entry) —
+deliberately **not** `coordinated-wrap-up`: a build agent's own skill run ends before its PR is
+merged, so it can never safely self-delete its worktree (QA/fixups may still need the tree). The
+reap belongs to whoever can *see* the merge, which is the coordinator. Two changes to Phase 3:
+- QA worktrees (`isolation: "worktree"`) get reaped **immediately after their verdict is
+  consumed**, unconditionally — they never carry unlanded work, and their own screenshots/
+  `test-results/` output defeats the tool's auto-remove-if-unchanged, which is the actual mechanism
+  that let ~20 stray `qa-*`/`agent-a*` trees pile up this run.
+- Build-agent worktrees get reaped **in the same pass as the merge**, not deferred to a later
+  sweep — and if a relay is imminent before that reap happens, the continuation note must name any
+  worktree that's already merge-verified-safe but not yet removed, so it isn't lost across the
+  handoff. That "later never comes" gap is how the other ~28 piled up.
+Intent: this ~50-worktree backlog should not recur.
