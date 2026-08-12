@@ -2077,3 +2077,31 @@ request from the previous leg still hasn't surfaced a direct reply — pane is c
 own internal CI-watch monitor loop, not obviously stalled, watch for the reply; #1429 (`w1:p8E`)
 unchanged all run, still needs a genuine status check beyond the board-label fix. No other open
 threads.
+
+## 2026-08-12 (cont.): Ben's per-merge rule codified; p8B/p8E false-done nudged
+
+Ben: "add to your instructions that after every merge the issue will be commented and updated."
+Codified as a mandatory Phase 3 step 5 sub-step in `.claude/skills/coordinate/SKILL.md`
+(`abe5ea10d`) — every merge, every tier (not just sensitive+), gets its own `gh issue comment`
+plus a board-status move at merge time. Also saved as agentmemory (`jarv1s`, type `pattern`) and
+as an auto-memory feedback file (`feedback-merge-comment-and-board-update.md`) so it survives
+across sessions, not just this run.
+
+Fleet check (Monitor `bl4my7p1l` fired on p8B/p8E/p8K "done" flips, all three false positives —
+now a well-established pattern this run):
+
+- **`w1:p8B` (#1554, `build-1554-p2`)**: my earlier status-report request was still sitting
+  unsubmitted in its raw input box (`❯ check if 1554-relay-16 replied yet`) — a `send-keys Enter`
+  didn't clear it, so re-sent via `herdr agent prompt build-1554-p2` with a direct, explicit ask.
+  Watching for a real reply.
+- **`w1:p8E` (#1429, `briefing-css-2`)**: "Cooked for 38m 13s" timer identical across two reads
+  minutes apart — genuine frozen-mid-turn (not a wait-declaration), so nudged with
+  `herdr agent prompt briefing-css-2 "continue"` per the coordinate skill's stall diagnosis.
+  Watching for it to resume; its actual build status is still otherwise unverified this run beyond
+  the earlier board-label fix.
+- **`w1:p8K`** (#1452 relay5): genuinely working — "Running gate and preparing wrap-up… high
+  effort" at time of check. No action needed.
+
+Next: watch all three for real signal (p8B direct reply, p8E resuming past the freeze, p8K's
+wrap-up/PR). No merges pending right now, so the new per-merge rule hasn't been exercised yet this
+leg — apply it on #1452's merge when it lands.
