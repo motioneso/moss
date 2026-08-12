@@ -58,6 +58,15 @@ screenshot cleanup in the shared main tree. The lane has had no active driver si
 still want Codex driving #1556/#1557 specifically or want me to spin a fresh Claude build session
 for it now that #1557's half is done.
 
+**Update 2026-08-12: Ben ruled "let's have Codex work on 1556."** Dispatched — pane `w1:p7Y`
+(renamed "1556 replay-contract UAT") briefed to cd into the existing worktree
+`.claude/worktrees/1556-p1-replay-contract` (PR #1562, draft, CI-green, mergeable) and drive the
+UAT spec. It's instructed: the moment the authorize URL prints, ping you live via
+`needs-ben codex-1556 "<url>"` with the real URL (session-specific, expires — must be captured
+live), and meanwhile get PR #1562 otherwise merge-ready. **Still need: the one-time OAuth click
+itself** — watch for a `needs-ben` ping from `codex-1556` and open/approve that URL when it comes
+in. Codex was told not to merge; report comes back to the Coordinator.
+
 <!-- Resolved 2026-08-09: `git push origin main` blocked by the auto-mode classifier during Wave 2
 wrap-up. Ben re-ran ("try now") and it went through — pushed 39 commits, `f78992b14..46ec9965d`.
 Note: GitHub reports this repo moved to `motioneso/moss.git`; push still succeeded via the old
