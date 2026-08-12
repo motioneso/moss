@@ -1424,3 +1424,18 @@ Filed as https://github.com/motioneso/moss/issues/1586 (enhancement, needs its o
 CLAUDE.md process gates — scope note in the issue covers read-only vs. mutating capabilities and
 whether this is news-specific or a general module-tooling pattern). Not started — spec/build not
 yet queued.
+
+## 2026-08-12: briefing email-insights/prose regression, investigated (Ben asked "seemed to disappear")
+
+Not removed — #1327 epic shipped (#1371/#1372/#1376/#1379, merged late Jul-Aug 6; email rows via
+PR #1377). Two open gaps stalled it, both pre-existing and unfixed:
+- **#1429**: 6 undefined CSS classes in `briefing-action-rows.tsx:154-206` — rows render unstyled.
+  Ben's own 2026-08-05 ruling was "split, log only, no build yet" (deliberate defer, never
+  followed up).
+- **#1452**: Moss-rename PR #1450's live walk of Today only saw the empty frame ("ALL CLEARTODAY"
+  headings) — no briefing card ever proven live post-rename; safe-seed-on-shared-dev-DB problem
+  never solved.
+
+Replied to Ben with root cause + offer to unblock #1429 (CSS fix + fresh live-path proof) paired
+with #1452 (solve safe-seed gap). Awaiting his direction — no build without his go-ahead per
+CLAUDE.md spec-before-build gate (issues exist, no spec/plan yet for the fix itself).
