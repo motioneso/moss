@@ -1264,3 +1264,18 @@ already exists in `tests/uat/seed/cli.ts`, just never populated). Ben ruled: do 
 more, then fix it for good. Redirected `codex-1556` (w1:p7Y) to drive the #1556 UAT run, capture
 the resulting token durably before its teardown, and report the file path (never the token) back.
 Watching for the live authorize URL.
+
+## #1556 UAT OAuth persistence — RESOLVED (issue #1582 closed)
+
+`codex-1556` reports: OAuth was already valid when it drove the run (no new interactive grant
+needed this time), #1556's live UAT passed (1 passed, 8.0m). It captured a durable encrypted
+credential at `/home/ben/.config/moss/uat/anthropic-oauth.env.gpg` (0600, confirmed by coordinator
+`stat`), queued the path (never the token) back to this pane.
+
+Coordinator wired the fix from issue #1582: confirmed `tests/uat/provisioner.ts`'s
+`writeUatRealChatEnvFile` (built under #1121, already existed, no code change needed) expects
+exactly `JARVIS_UAT_REAL_CHAT_TOKEN_FILE` pointing at that GPG file. Added a labeled, removable
+export block to `~/.bashrc` (host-wide, all future shells) — `docs/coordination/AWAITING-BEN.md`
+had this queued as Ben's approved fix ("I'm ok with doing oauth again, but let's make it persistent
+please"). Closing issue #1582 as resolved. Next UAT run on this box (any lane, any pane) should
+seed the token automatically and never print an authorize URL.
