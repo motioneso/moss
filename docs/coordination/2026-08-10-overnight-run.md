@@ -438,3 +438,15 @@ make sure tests pass before waiting on me" — standing instruction to exhaust i
 myself before escalating CI failures back to him. **Not merged.** Dispatching a bounded
 investigation now (regression from #1533's routing diff vs pre-existing/flaky) rather than reading
 full logs/diff in-context myself.
+
+**#1574 investigation result: confirmed regression, root cause found, fix dispatched.** Bounded
+investigation agent (worktree-isolated, no edit tools) confirmed: #1533's `?surface=drawer` query
+param addition (correct, intended product change) broke 4 e2e mock route matchers in
+`tests/e2e/mock-chat-api.ts` / `chat-drawer.spec.ts` that match on exact URL glob/regex — Playwright
+matches those against the full URL incl. query string, so the mocks stopped matching once the
+param appeared. Same pathname-based-matching pattern already works for `/api/chat/clear` and
+`/api/chat/privacy` elsewhere in the same file. Not a product bug — test-mock-only fix. Dispatched
+a fix agent (worktree-isolated) to push the corrected matchers directly to `build/1533-chat-surface-routing`,
+which will re-trigger PR #1574's CI. Watching for that agent's completion, then will re-check CI
+before bringing back to Ben for merge (live-path proof still separately outstanding per
+AWAITING-BEN.md — this fix does not resolve that blocker, only the red gate).
