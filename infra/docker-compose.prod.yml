@@ -130,6 +130,7 @@ services:
       - jarv1s
 
   jarv1s:
+    container_name: moss
     image: ghcr.io/motioneso/moss:${JARVIS_IMAGE_TAG:?set JARVIS_IMAGE_TAG to a published version tag}
     build:
       context: ..
