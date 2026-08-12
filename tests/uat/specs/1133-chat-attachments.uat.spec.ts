@@ -109,7 +109,8 @@ test("attaching a file really uploads to the vault and the turn carries its id (
     .poll(() => turnBody)
     .toEqual({
       text: "Please read this file.",
-      attachmentIds: [attachment.id]
+      attachmentIds: [attachment.id],
+      surface: "drawer"
     });
 
   // No chat-capable model is seeded (see file header), so the deterministic terminal state is
