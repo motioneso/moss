@@ -368,3 +368,20 @@ and a live 70%-checkpoint hook (declined per override). No successor spawned or 
   proof still outstanding/blocking merge (missing `JARVIS_UAT_REAL_CHAT_TOKEN_FILE` — see
   AWAITING-BEN.md). **Lane done from the build agent's side** — it reported worktree clean and
   ready for reaping. Do NOT merge, do NOT mark #1533 Done until the live-path proof lands.
+
+## 2026-08-11 — #1533 pane self-continued into unrelated #1444 (Moss rename PR4) prod work — redirected
+
+After finishing #1533 (draft PR #1574, worktree clean), pane `w1:p7C` (agent `issue-1533-relay8`,
+session `f3a156a2`) auto-continued ("go work on the next issue") into #1444 (Moss rename PR4:
+database, images, repository, cutover) — read-only prod container inspection, then surfaced an
+interactive menu asking how to apply a `container_name: moss` change to the live prod container
+(`jarv1s-prod-jarv1s-1`). Its own analysis was correct and safe (recognized it lacks prod secrets,
+recognized "production deploys are handled by Ben, never via CLI docker compose up") — no live
+action was taken before it stopped to ask.
+
+Redirected: #1444 is not on this manifest, was never dispatched as a coordinator lane, and touching
+the live prod container is Ben's call, not mine (standing policy: Ben owns prod). Instructed the
+agent to back out of the menu, not touch `docker-compose.prod.yml` or the deployed `~/JarvisProd`
+copy, take no action against the live container, and stand by for reap. Not logged as a blocking
+AWAITING-BEN item — nothing is waiting on Ben, the work is simply deferred/unscheduled. If Ben wants
+the `container_name: moss` cosmetic rename, #1444 already exists as the tracking issue for it.
