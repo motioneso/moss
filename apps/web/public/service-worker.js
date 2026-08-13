@@ -6,9 +6,8 @@ self.addEventListener("install", (event) => {
     caches
       .open(CACHE_NAME)
       .then(async (cache) => {
-        // "/" needs an explicit Accept: text/html — the server's SPA fallback
-        // 404s requests for "/" that don't ask for HTML, and cache.addAll's
-        // implicit fetch sends no Accept header at all.
+        // Explicit Accept: text/html for clarity of intent; the server's SPA
+        // fallback also serves "/" without one (see #1487).
         const shellResponse = await fetch("/", { headers: { Accept: "text/html" } });
         if (!shellResponse.ok) {
           throw new Error(`Failed to fetch app shell: ${shellResponse.status}`);
