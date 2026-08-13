@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { Client } from "pg";
+import { sql } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Kysely } from "kysely";
 
@@ -11,6 +12,7 @@ import {
   ensureModuleRoles,
   generateModuleTableRlsSql,
   ModuleQueryError,
+  moduleRuntimeRoleName,
   type MossDatabase
 } from "@moss/db";
 import {
@@ -108,6 +110,18 @@ describe("createModuleStorageRpc", () => {
       const rpc = createModuleStorageRpc(scopedDb, moduleId);
       const result = await rpc.query("SELECT label FROM app.storage_rpc_fixture_items");
       expect(result.rows).toEqual([]); // RLS hides the other actor's row
+    });
+  });
+
+  it("binds the runtime role during the call and resets it after", async () => {
+    const owner = randomUUID();
+    await dataContext.withDataContext({ actorUserId: owner }, async (scopedDb) => {
+      const rpc = createModuleStorageRpc(scopedDb, moduleId);
+      const bound = await rpc.query<{ current_user: string }>("SELECT current_user");
+      expect(bound.rows[0]?.current_user).toBe(moduleRuntimeRoleName(moduleId));
+
+      const after = await sql<{ current_user: string }>`select current_user`.execute(scopedDb.db);
+      expect(after.rows[0]?.current_user).toBe("jarvis_app_runtime");
     });
   });
 
