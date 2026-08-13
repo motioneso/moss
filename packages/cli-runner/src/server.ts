@@ -112,6 +112,11 @@ export class CliRunnerServer {
       }, interval);
       if (typeof this.loginReaperTimer.unref === "function") this.loginReaperTimer.unref();
     }
+
+    // (7) #1554 task #5: arm the persistent-pool idle-reap timer (Decision 3). Mirrors step (6)'s
+    // shape; `host.startIdleReapTimer()` itself no-ops when no pool was wired at composition time
+    // (`main.ts`'s `createCliRunner`), so this call is unconditional and harmless either way.
+    this.deps.host.startIdleReapTimer();
   }
 
   private onConnection(socket: Socket): void {
@@ -168,6 +173,8 @@ export class CliRunnerServer {
       this.loginReaperTimer = null;
     }
     this.loginReapInFlight = false;
+    // #1554 task #5: mirror the login reaper's teardown for the idle-reap timer.
+    this.deps.host.stopIdleReapTimer();
     const server = this.server;
     this.server = null;
     if (!server) return;

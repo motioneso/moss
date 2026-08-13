@@ -40,7 +40,11 @@ import {
   type RpcReadNewResult,
   type RpcCancelSubmitParams,
   type RpcSubmitParams,
-  type RpcSubmitLoginTokenResult
+  type RpcSubmitLoginTokenResult,
+  type ReapReason,
+  type SweepIdlePool,
+  type AdmitCapablePool,
+  startIdleReapTimer as startPoolIdleReapTimer
 } from "@moss/chat/live";
 import type { Multiplexer, ProviderKind, TmuxIo } from "@moss/ai";
 
@@ -100,6 +104,57 @@ export interface EngineHostDeps {
    * volume-disjoint and lock-only). Absent ⇒ the login verbs report unavailable on this build.
    */
   readonly loginService?: LoginService;
+  /**
+   * #1554 Decision 3 — the RPC topology's warm persistent-runtime pool + a live reader of
+   * `chat.persistent_idle_reap_minutes`, consulted ONLY by {@link CliChatEngineHost.startIdleReapTimer}
+   * (`sweepIdle`). Absent either ⇒ that timer is a no-op. Typed structurally
+   * ({@link SweepIdlePool}, only `sweepIdle` used) so tests can pass a fake without constructing a
+   * real pool — kept separate from {@link persistentRuntimePool} below (admission) so the existing
+   * `sweepIdle`-only fakes in `tests/unit/cli-runner-idle-reap-timer.test.ts` don't also need an
+   * `admit` method.
+   */
+  readonly persistentPool?: SweepIdlePool;
+  /** Live read of `chat.persistent_idle_reap_minutes`, re-read fresh on every timer tick. */
+  readonly readIdleReapMinutes?: () => Promise<number>;
+  /**
+   * #1554 task #5 — the RPC topology's warm-pool ADMISSION seam (`admit`), consulted by
+   * `launchOnce` when building the engine (`createChatEngine`'s `persistentPool` opt). In
+   * production this is the SAME `PersistentRuntimePool` instance as {@link persistentPool} above
+   * (one pool serves both sweeping and admission); split into two deps only for the narrower
+   * structural typing each call site needs. Presence of this dep is what lifts the
+   * `persistentRuntimeEnabled: false` pin in `launchOnce` — absent ⇒ unchanged pre-task-5
+   * behavior (always the bounded-fallback/tmux fork, #1350 two-composition-roots guard).
+   */
+  readonly persistentRuntimePool?: AdmitCapablePool;
+  /**
+   * #1554 — the MUTABLE live view of the three persistent-runtime settings, shared by reference
+   * with `main.ts`'s composition root (the pool's `cap` getter and `readIdleReapMinutes` read the
+   * same object). {@link CliChatEngineHost.applyPersistentRuntimeParams} refreshes it from every
+   * launch's {@link RpcLaunchParams}, which is the plan's live-reload channel for this topology.
+   * Absent ⇒ pre-#1554 behavior (pool presence alone gates persistent selection).
+   */
+  readonly persistentLiveConfig?: PersistentRuntimeLiveConfig;
+}
+
+/**
+ * #1554 — the cli-runner's current view of `chat.persistent_runtime.enabled`,
+ * `chat.persistent_pool_cap` and `chat.persistent_idle_reap_minutes`. Seeded from boot env as a
+ * bootstrap default (the very first launch may arrive before the api reads settings), then kept
+ * current by each launch's params. Mutable and shared by reference — never copied, or the pool and
+ * the idle-reap timer would drift from the host.
+ */
+export interface PersistentRuntimeLiveConfig {
+  enabled: boolean;
+  poolCap: number;
+  idleReapMinutes: number;
+}
+
+/** A cap or idle window of 0 denies every admission / reaps every warm child on the next tick, so
+ *  a non-positive or non-finite value from the wire keeps the last known good value instead. */
+function positiveIntOr(value: unknown, lastKnown: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 1
+    ? Math.floor(value)
+    : lastKnown;
 }
 
 const DEFAULT_LAUNCH_TIMEOUT_MS = 70_000;
@@ -116,6 +171,13 @@ interface ReplayLaunchAttempt {
   readonly promise: Promise<RpcLaunchResult>;
 }
 
+// #1554 Decision 2: fired when the (process-wide) persistent runtime pool reaps a session, so
+// every connected RPC client can be told via a `sessionReaped` push. Registered per-connection
+// by `connection.ts`'s `serveConnection`, not per-terminal like `TerminalHost`'s `pushSink` —
+// the pool's `onReap` fires host-side, not connection-side, and this host is the one
+// process-wide instance shared across all accepted connections.
+export type SessionReapedListener = (sessionKey: string, reason: ReapReason) => void;
+
 export class CliChatEngineHost {
   // #1350: widened from CliChatEngineImpl — a `non_interactive` session is now backed by a
   // one-shot print engine, which implements CliChatEngine but has no multiplexer pane and so
@@ -131,10 +193,58 @@ export class CliChatEngineHost {
   private readonly verifiedSubmitTimeoutMs: number;
   private readonly submitAttempts = new Map<string, Map<string, SubmitAttempt>>();
   private readonly replayLaunches = new Map<string, Map<string, ReplayLaunchAttempt>>();
+  /** #1554 Decision 2: one listener per connected RPC connection; see `SessionReapedListener`. */
+  private readonly reapListeners = new Set<SessionReapedListener>();
+  /** #1554 Decision 3: the armed idle-reap timer's stop fn, or null when not (yet) started. */
+  private idleReapStop: (() => void) | null = null;
 
   constructor(private readonly deps: EngineHostDeps) {
     this.launchTimeoutMs = deps.launchTimeoutMs ?? DEFAULT_LAUNCH_TIMEOUT_MS;
     this.verifiedSubmitTimeoutMs = deps.verifiedSubmitTimeoutMs ?? VERIFIED_SUBMIT_DEADLINE_MS;
+  }
+
+  /** Registers a listener for session-reaped events; returns an unregister function. */
+  addSessionReapedListener(listener: SessionReapedListener): () => void {
+    this.reapListeners.add(listener);
+    return () => this.reapListeners.delete(listener);
+  }
+
+  /** Called by the pool's `onReap` (wired in `main.ts`'s `createCliRunner`) — fans out to every
+   *  connected RPC connection's `sessionReaped` push (`connection.ts`). */
+  notifySessionReaped(sessionKey: string, reason: ReapReason): void {
+    for (const listener of this.reapListeners) listener(sessionKey, reason);
+  }
+
+  /**
+   * #1554 Decision 3: arm the persistent-pool idle-reap timer (this host is the RPC topology's
+   * composition root per the plan). No-ops (returns a no-op stop fn) when `persistentPool`/
+   * `readIdleReapMinutes` are not wired — true today; task #5 wires them and calls this from
+   * `main.ts`. Double-start-safe: clears any prior timer first, mirroring `CliRunnerServer`'s
+   * login-reaper guard (`server.ts`). `intervalMs` overrides the derived tick cadence (tests).
+   */
+  startIdleReapTimer(intervalMs?: number): () => void {
+    this.idleReapStop?.();
+    this.idleReapStop = null;
+    const { persistentPool, readIdleReapMinutes } = this.deps;
+    if (!persistentPool || !readIdleReapMinutes) {
+      return () => {};
+    }
+    const stop = startPoolIdleReapTimer({
+      pool: persistentPool,
+      readIdleReapMinutes,
+      intervalMs
+    });
+    this.idleReapStop = stop;
+    return () => {
+      stop();
+      if (this.idleReapStop === stop) this.idleReapStop = null;
+    };
+  }
+
+  /** Stops the idle-reap timer if armed (server shutdown). Idempotent. */
+  stopIdleReapTimer(): void {
+    this.idleReapStop?.();
+    this.idleReapStop = null;
   }
 
   // ─── per-sessionKey serialization (§4.0) ──────────────────────────────────────
@@ -177,7 +287,25 @@ export class CliChatEngineHost {
     return promise;
   }
 
+  /**
+   * #1554 — refresh the shared live-config holder from a launch's params. This is the ONLY way the
+   * api's DB-backed persistent-runtime settings reach the cli-runner (it has no DB access and the
+   * sanitized child env deliberately carries no app config), so an operator flipping
+   * `chat.persistent_runtime.enabled` / the cap / the idle window takes effect on the next launch
+   * with no redeploy. Absent fields are sticky: they mean "the api didn't say", not "off/zero".
+   */
+  applyPersistentRuntimeParams(params: RpcLaunchParams): void {
+    const live = this.deps.persistentLiveConfig;
+    if (!live) return;
+    if (typeof params.persistentRuntimeEnabled === "boolean") {
+      live.enabled = params.persistentRuntimeEnabled;
+    }
+    live.poolCap = positiveIntOr(params.persistentPoolCap, live.poolCap);
+    live.idleReapMinutes = positiveIntOr(params.persistentIdleReapMinutes, live.idleReapMinutes);
+  }
+
   private async launchOnce(sessionKey: string, params: RpcLaunchParams): Promise<RpcLaunchResult> {
+    this.applyPersistentRuntimeParams(params);
     const key = sanitizeSessionKey(sessionKey);
 
     // (1) ADMISSION under the server-wide mutex. Compute liveKeys = mux ∪ reservations
@@ -239,17 +367,20 @@ export class CliChatEngineHost {
     // does in the in-process factory. Before this the runner ALWAYS built the tmux REPL
     // engine, which made #1239's flip a no-op on every containerized deploy and took prod
     // chat down completely.
-    const engine = createChatEngine(params.provider as ProviderKind, key, sessionIo, {
+    const engine = await createChatEngine(params.provider as ProviderKind, key, sessionIo, {
       mux: this.deps.mux,
       homeBase: this.deps.homeBase,
       ownsDrain: true,
       executionMode: params.executionMode,
-      // #1557 Phase 1 / #1350 two-composition-roots guard: the RPC root never selects the
-      // persistent adapter this phase, regardless of the `chat.persistent_runtime.enabled`
-      // setting — only the in-process host-dev root (`chat-multiplexer.ts`'s
-      // `resolveChatEngineFactory`) reads that flag. Lifting this pin is a later-phase change,
-      // not an oversight.
-      persistentRuntimeEnabled: false,
+      // #1554: the pin is lifted — the RPC root selects the persistent adapter when a pool was
+      // wired in AND `chat.persistent_runtime.enabled` is currently on. The flag arrives per
+      // launch in the RPC params (the plan's live-reload channel for this topology), so flipping
+      // it drains to the bounded-fallback engine on the next launch without a redeploy. With no
+      // live-config holder wired, pool presence alone gates it (pre-#1554 behavior).
+      persistentRuntimeEnabled:
+        this.deps.persistentRuntimePool !== undefined &&
+        (this.deps.persistentLiveConfig?.enabled ?? true),
+      persistentPool: this.deps.persistentRuntimePool,
       // #363: the 0600 token file the claude launch reads CLAUDE_CODE_OAUTH_TOKEN from at
       // runtime (claude-scoped; only used by buildClaudeCommand, only if the file exists).
       credentialFile: this.deps.homeBase

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   BRAVE_API_KEY_CONFIG_KEY,
+  CHAT_PERSISTENT_IDLE_REAP_MINUTES_CONFIG_KEY,
+  CHAT_PERSISTENT_POOL_CAP_CONFIG_KEY,
   EMBED_MODEL_CONFIG_KEY,
   EMBED_PROVIDER_CONFIG_KEY,
   RUNTIME_CONFIG_REGISTRY,
@@ -44,6 +46,29 @@ describe("runtime config registry", () => {
       moduleOwner: "ai"
     });
     expect(SECRET_INSTANCE_SETTING_KEYS.has(BRAVE_API_KEY_CONFIG_KEY)).toBe(true);
-    expect(RUNTIME_CONFIG_REGISTRY).toHaveLength(3);
+    expect(RUNTIME_CONFIG_REGISTRY).toHaveLength(5);
+  });
+
+  it("registers persistent-pool keys with minValue bounds (#1554)", () => {
+    expect(getRuntimeConfigEntry(CHAT_PERSISTENT_POOL_CAP_CONFIG_KEY)).toMatchObject({
+      key: "chat.persistent_pool_cap",
+      type: "int",
+      defaultValue: "4",
+      envVar: "MOSS_CHAT_PERSISTENT_POOL_CAP",
+      minValue: 1,
+      moduleOwner: "chat"
+    });
+    expect(getRuntimeConfigEntry(CHAT_PERSISTENT_IDLE_REAP_MINUTES_CONFIG_KEY)).toMatchObject({
+      key: "chat.persistent_idle_reap_minutes",
+      type: "int",
+      defaultValue: "30",
+      envVar: "MOSS_CHAT_PERSISTENT_IDLE_REAP_MINUTES",
+      minValue: 1,
+      moduleOwner: "chat"
+    });
+    expect(KNOWN_INSTANCE_SETTING_KEYS.has(CHAT_PERSISTENT_POOL_CAP_CONFIG_KEY)).toBe(true);
+    expect(KNOWN_INSTANCE_SETTING_KEYS.has(CHAT_PERSISTENT_IDLE_REAP_MINUTES_CONFIG_KEY)).toBe(
+      true
+    );
   });
 });

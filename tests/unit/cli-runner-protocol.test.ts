@@ -371,6 +371,66 @@ describe("serveConnection (§3.4/§3.7)", () => {
   });
 });
 
+// ─── #1554 Decision 2 — sessionReaped push (RPC topology's server → client reap notice) ──────────
+describe("serveConnection sessionReaped push (#1554 Decision 2)", () => {
+  function deps(host: CliChatEngineHost): ConnectionDeps {
+    return {
+      host,
+      bootId: BOOT,
+      secret: SECRET,
+      terminalHost: new TerminalHost({ homeBase: "/tmp", toolsBinDir: "/usr/bin" })
+    };
+  }
+
+  // Plan test case 2 (RPC topology): the pool's `onReap` fires host-side via
+  // `host.notifySessionReaped` (task #5 wires the pool itself; here we simulate that call
+  // directly, mirroring the registry's own contract) — asserts an
+  // `RpcPush{channel:"sessionReaped"}` frame was written to a live connection. Fails against an
+  // impl that reaps locally in cli-runner without ever notifying the API side.
+  it("a connected client receives a sessionReaped push when the host notifies a reap", async () => {
+    const host = fakeHost();
+    const channel = new FakeChannel();
+    serveConnection(channel, deps(host));
+    authenticate(channel);
+
+    host.notifySessionReaped("sess-1", "idle-timeout");
+
+    const push = channel
+      .decodeAll()
+      .find((f) => (f as { t?: string; channel?: string }).channel === "sessionReaped") as {
+      t: string;
+      bootId: string;
+      channel: string;
+      sessionKey: string;
+      reapReason: string;
+    };
+    expect(push).toBeDefined();
+    expect(push.t).toBe("push");
+    expect(push.bootId).toBe(BOOT);
+    expect(push.sessionKey).toBe("sess-1");
+    expect(push.reapReason).toBe("idle-timeout");
+  });
+
+  it("a closed connection's reap listener is unregistered — a later notify writes nothing to it", async () => {
+    const host = fakeHost();
+    const channel = new FakeChannel();
+    serveConnection(channel, deps(host));
+    authenticate(channel);
+    const framesBeforeClose = channel.written.length;
+
+    channel.triggerClose();
+    host.notifySessionReaped("sess-2", "shutdown");
+
+    // No NEW sessionReaped push should have been written after close — the listener was
+    // deregistered symmetrically with `ownedTerminalId`'s close-time teardown.
+    const pushesAfter = channel
+      .decodeAll()
+      .slice(framesBeforeClose)
+      .filter((f) => (f as { channel?: string }).channel === "sessionReaped");
+    expect(pushesAfter.length).toBe(0);
+  });
+});
+
 // ─── #1059 [N2] — connection-scoped terminal kill on close ────────────────────────
 //
 // TerminalHost is a process-wide singleton shared across every connection (constructed once

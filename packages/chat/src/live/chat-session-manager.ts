@@ -28,11 +28,12 @@ import type {
   EngineKillOpts,
   TranscriptRecord
 } from "./types.js";
+import type { ReapReason } from "./provider-runtime.js";
+import { applyRemoteReap, countSubscribersFor, delay } from "./session-runtime-helpers.js";
 import type { PriorityModelPreferenceV1 } from "@moss/priority";
 import {
   DEFAULT_CHAT_SURFACE,
   normalizeChatSurface,
-  parseSurfaceSessionKey,
   surfaceSessionKey,
   type ChatSurface
 } from "./chat-surface.js";
@@ -860,6 +861,13 @@ export class ChatSessionManager {
     });
   }
 
+  /** #1554 Decision 2 — api-side half of a `sessionReaped` push; see `applyRemoteReap`. */
+  async handleRemoteReap(sessionKey: string, _reason: ReapReason): Promise<void> {
+    await this.withMaintenanceLock(async () =>
+      applyRemoteReap(this.sessions, this.deps.revokeMcpToken, sessionKey)
+    );
+  }
+
   /** Wire the production idle reaper. Returns a stop handle that clears the interval. */
   startIdleReaper(intervalMs: number = this.deps.idleMs): () => void {
     const handle = setInterval(() => {
@@ -895,17 +903,7 @@ export class ChatSessionManager {
   }
 
   private countSubscribers(actorUserId: string): number {
-    let count = 0;
-    for (const [sessionKey, subscribers] of this.subscribers) {
-      try {
-        if (parseSurfaceSessionKey(sessionKey).actorUserId === actorUserId) {
-          count += subscribers.size;
-        }
-      } catch {
-        // A malformed external reconciliation key cannot belong to this actor.
-      }
-    }
-    return count;
+    return countSubscribersFor(this.subscribers, actorUserId);
   }
 
   private schedulePrivateEnd(actorUserId: string, surface: ChatSurface): void {
@@ -991,8 +989,4 @@ export class ChatSessionManager {
     }
     return offset;
   }
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

@@ -151,6 +151,18 @@ export interface ChatRoutesDependencies {
   // ai module's assistant-action resolve route can go through the same confirmation-registry gate
   // as this module's own action-requests resolve path, instead of two divergent implementations.
   readonly adoptChatGateway?: (gateway: AssistantToolGateway) => void;
+  /**
+   * #1554 task #6 — same late-bound "adopt" seam as {@link adoptChatRpcConnection}/
+   * {@link adoptDropSessionsForProvider}, publishing the wiring closure's
+   * `SessionTokenRegistry.revokeBySessionId` (built inside this function, when `wiring` is
+   * constructed) back to the composition root. `module-registry/src/index.ts` forwards it into
+   * `chat-multiplexer.ts`'s `resolveChatEngineFactory` as `onPersistentReap`'s target, so the
+   * persistent-runtime pool's idle-reap/LRU-evict sweep revokes the reaped session's MCP token —
+   * closing task #5's documented gap (that pool is constructed in `runtime.ts`, one layer below
+   * this file, via `resolveChatEngineFactory` → `createRealEngineFactory`). No-op when no gateway
+   * is wired (`wiring === null`, i.e. no `resolveActiveModules`/`mcpServerUrl` supplied).
+   */
+  readonly adoptMcpTokenRevoke?: (revoke: (chatSessionId: string) => void) => void;
   readonly resolveEveningInterviewSeed?: (
     actorUserId: string,
     briefingRunId?: string
@@ -318,6 +330,16 @@ export function registerChatRoutes(
   dependencies.adoptDropSessionsForProvider?.((provider) =>
     runtime.manager.dropSessionsForProvider(provider)
   );
+
+  // #1554 task #6: same late-bound "adopt" seam as above, publishing the wiring closure's
+  // `SessionTokenRegistry.revokeBySessionId` so the composition root can thread it into the
+  // persistent-runtime pool's `onPersistentReap` (see `adoptMcpTokenRevoke`'s doc comment).
+  // No-op when no gateway is wired (`wiring === null`).
+  if (wiring) {
+    dependencies.adoptMcpTokenRevoke?.((chatSessionId) =>
+      wiring.tokens.revokeBySessionId(chatSessionId)
+    );
+  }
 
   // Wire real notifier now that manager is available.
   realNotifier = new ChatGatewayNotifier(runtime.manager);

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { dataContextBrand, type DataContextDb } from "../../packages/db/src/index.js";
 import {
   BRAVE_API_KEY_CONFIG_KEY,
+  CHAT_PERSISTENT_POOL_CAP_CONFIG_KEY,
   EMBED_MODEL_CONFIG_KEY,
   EMBED_PROVIDER_CONFIG_KEY
 } from "../../packages/settings/src/runtime-config-keys.js";
@@ -72,6 +73,12 @@ describe("RuntimeConfigResolver", () => {
     const status = await resolver.getStatus(BRAVE_API_KEY_CONFIG_KEY);
     expect(status.value).toBeNull();
     expect(status.source).toBe("instance");
+  });
+
+  it("resolveInt parses an int-typed instance value (#1554)", async () => {
+    const resolver = new RuntimeConfigResolver(scopedDbWithSetting({ value: "8" }), {});
+
+    await expect(resolver.resolveInt(CHAT_PERSISTENT_POOL_CAP_CONFIG_KEY)).resolves.toBe(8);
   });
 
   it("per-actor resolution returns the correct instance's config", async () => {

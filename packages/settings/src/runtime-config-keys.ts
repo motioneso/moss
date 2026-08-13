@@ -10,11 +10,15 @@ export interface RuntimeConfigKeyEntry {
   readonly enumValues?: readonly string[];
   readonly secret?: boolean;
   readonly moduleOwner: string;
+  readonly minValue?: number;
+  readonly maxValue?: number;
 }
 
 export const EMBED_PROVIDER_CONFIG_KEY = "ai.embed_provider";
 export const EMBED_MODEL_CONFIG_KEY = "ai.embed_model";
 export const BRAVE_API_KEY_CONFIG_KEY = "ai.brave_api_key";
+export const CHAT_PERSISTENT_POOL_CAP_CONFIG_KEY = "chat.persistent_pool_cap";
+export const CHAT_PERSISTENT_IDLE_REAP_MINUTES_CONFIG_KEY = "chat.persistent_idle_reap_minutes";
 
 export const RUNTIME_CONFIG_REGISTRY: readonly RuntimeConfigKeyEntry[] = [
   {
@@ -54,6 +58,26 @@ export const RUNTIME_CONFIG_REGISTRY: readonly RuntimeConfigKeyEntry[] = [
     envVar: "JARVIS_BRAVE_API_KEY",
     secret: true,
     moduleOwner: "ai"
+  },
+  {
+    key: CHAT_PERSISTENT_POOL_CAP_CONFIG_KEY,
+    label: "Persistent chat pool cap",
+    type: "int",
+    description: "Max warm persistent-provider child processes held at once.",
+    defaultValue: "4",
+    envVar: "MOSS_CHAT_PERSISTENT_POOL_CAP",
+    minValue: 1,
+    moduleOwner: "chat"
+  },
+  {
+    key: CHAT_PERSISTENT_IDLE_REAP_MINUTES_CONFIG_KEY,
+    label: "Persistent chat idle reap minutes",
+    type: "int",
+    description: "Minutes an idle persistent child may sit before being reaped.",
+    defaultValue: "30",
+    envVar: "MOSS_CHAT_PERSISTENT_IDLE_REAP_MINUTES",
+    minValue: 1,
+    moduleOwner: "chat"
   }
 ] as const;
 
