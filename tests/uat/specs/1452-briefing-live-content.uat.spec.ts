@@ -64,7 +64,8 @@ test("throwaway signup drives a real briefing generation to a rendered Today car
     return { status: response.status, json: await response.json() };
   });
   expect(created.status).toBe(201);
-  const definitionId = created.json.id as string;
+  // POST /api/briefings/definitions wraps the row: { definition: { id, ... } }.
+  const definitionId = created.json.definition.id as string;
   expect(definitionId).toBeTruthy();
 
   // MorningBriefingSection only mounts once an *enabled* morning definition exists (see
