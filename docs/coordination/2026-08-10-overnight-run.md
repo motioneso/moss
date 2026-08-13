@@ -3336,3 +3336,14 @@ Successor confirmed driving on Sonnet (bounded pane read showed it had read the 
 credential picker (relay 4)" to match. Remaining work: live-path UAT proof, then PR comment, then
 join the security-tier Ben sign-off queue (do NOT merge/close/board — predecessor's instruction
 carried forward).
+
+## #1248 relay-6 genuine frozen stall, nudged clear (2026-08-13)
+
+`w1:p9D` showed `done` status stuck at rev 3078-3079 across two ticks (unlike its prior transient
+false-done flips, which always self-resolved within one tick) with terminal_title flipping to
+`🔔 Claude Code needs your attention` — the confirmed frozen-mid-turn signature (same as #1467
+earlier). `send-keys Enter` did not clear it (not a simple trust dialog); `herdr pane run w1:p9D
+"continue"` did — next tick showed `working`, rev 3079->3104. Same successful remedy as #1467.
+Still no substantive status report from this lane in this segment — the pre-committed hard-
+takeover criterion (next report shows zero real §3 implementation commits) has not yet been
+evaluated since no report has arrived; watching for one now that it's unstuck.
