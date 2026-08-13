@@ -3485,3 +3485,17 @@ a hint not proof, both had just been told to proceed to wrap-up.
 
 Monitor `b4lgnsoa2` (PR #1602 CI watch) still running, no fire yet. Staying resident, no relay
 (standing override).
+
+## 2026-08-13 ~00:XX — #1487 relay 1->2 handled
+
+Predecessor (`w1:p9J`, session `68dbe83d-4d7b-4e94-ba42-7a105d433a73`) relayed at 70% context
+warning. Committed work in worktree `1487-spa-fallback-accept-header` (all confirmed via its own
+report, not re-verified in my context): tests+fix `180b784c1`/`d4bd49315`, service-worker comment
+fast-follow `39ad3b82b`, full gate green on isolated DB (one pre-existing chat-drawer-surface flake
+noted, not caused by this branch). Continuation doc: `docs/superpowers/handoffs/2026-08-13-1487-spa-
+fallback-accept-header-relay.md` (commit `6b13ec187`). Left: live-path curl proof, pre-push
+trio+rebase, push+PR+`gh pr comment`, `coordinated-wrap-up`.
+
+Successor `spa1487-successor` (pane `w1:p9Q`, session `9986716b-4fd8-4a7b-aedc-bb3c312c1497`)
+confirmed genuinely driving (rev climbed 60->134 across two checks) before reaping predecessor.
+Reaped `w1:p9J`; renamed successor pane to `1487-spa-fallback-relay2` both ways.
