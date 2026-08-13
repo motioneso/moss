@@ -3586,3 +3586,26 @@ run's established practice (QA trusts CI, only spawn once CI is actually green).
 
 Reaped `w1:p9R` (943-role-reset-relay5) after its "safe to reap" confirmation — PR #1604 open,
 gate DB dropped, worktree clean. #943 lane now fully idle pending QA/sign-off.
+
+## 2026-08-13 — PR #1602 (#1325) Opus QA verdict: RED, 1 blocking
+
+Opus adversarial QA (`qa-1325`) posted: https://github.com/motioneso/moss/pull/1602#issuecomment-5278169796
+
+**BLOCKING:** `tests/uat/specs/1270-provider-signin.uat.spec.ts` is non-hermetic — failed 1 of 2
+runs on the same SHA (`fce56ac95`), timing out on the Remove-Mistral locator after 10s (pass 6.0s /
+fail 14.4s). Root cause: `POST /api/ai/providers` runs `discoverAndPersistModels` inline
+(`packages/ai/src/routes.ts:199-214`); the try/catch soft-fails errors but doesn't bound the wait —
+`packages/ai/src/model-discovery.ts` has no timeout/AbortSignal, so create blocks on a live
+outbound call. This is the PR's sole live-path proof spec and is `blocking` in the #1027 lookup —
+will intermittently red the fleet gate. Feature logic itself judged sound; this is a
+test-determinism fix, not a design flaw.
+
+5 non-blocking notes also posted (pre-existing invariant gap on update-path credential clearing,
+missing coverage on the fail-closed guard, incomplete placeholder-text cleanup, stray `shot()`
+calls violating the no-screenshot gate rule, minor picker-close hygiene) — flagged for a future
+pass, not blocking this PR.
+
+Routed the blocking fix to `w1:p9M` (1325-relay4, already at 57% context per its own status line)
+with a pointer-style message (verdict URL + root cause + fix direction, told explicitly not to
+touch the 5 non-blocking notes). Confirming the message landed via a bounded background watcher
+rather than polling in-context.
