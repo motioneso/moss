@@ -16,6 +16,19 @@ the fix itself are needed**, only wrap-up hygiene.
 
 ## The 3 blocking QA findings — status of each
 
+### 1. RESOLVED (relay 4) — pre-existing flake, waived with evidence, not a regression
+Found **issue #1607** ("Flaky/pre-existing: chat-drawer-surface.test.tsx 'resets state on a flip
+in both directions' fails full-suite-only"), filed 2026-08-13 09:57 against an unrelated PR
+(#1606, vault-ingestion) — exact same assertion/line/failure, independently confirmed there as a
+pre-existing full-suite-only timing race in the already-merged #1533 chat-drawer code, with zero
+diff overlap. Combined with #1601's own diff-scope exclusion (never touches chat-drawer files),
+this is conclusively a pre-existing repo-wide flake, not caused by this PR. Posted as a PR comment
+with full evidence: https://github.com/motioneso/moss/pull/1601#issuecomment-5287343919 (links
+#1607, does not re-litigate root cause there). Compose deployment smoke already confirmed flake
+(passed on rerun). **No further action on item 1 — move to item 2.**
+
+<details><summary>Original investigation checklist (for reference, now resolved)</summary>
+
 ### 1. CI foundation job failed TWICE IDENTICALLY — do not rerun a third time, investigate for real
 Two jobs failed on the original push (run `31678621320`). `gh run rerun 31678621320 --failed` was
 triggered once already. Results as of 2026-08-13 (end of relay 3):
@@ -54,6 +67,8 @@ triggered once already. Results as of 2026-08-13 (end of relay 3):
   scope for #1141, would need its own commit/PR unless trivial and clearly safe to bundle).
 3. Either way, this must be resolved (with evidence, not assumption) before re-requesting QA —
    QA explicitly declined to call it for us.
+
+</details>
 
 ### 2. Blocking UAT specs never run — this is real, own PR body claim was wrong
 Confirmed via the actual trigger lookup (not the QA agent's word):
