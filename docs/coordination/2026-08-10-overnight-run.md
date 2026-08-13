@@ -3320,3 +3320,19 @@ posted and spot-checked: https://github.com/motioneso/moss/pull/1599#issuecommen
 **Security-tier sign-off queue for Ben, updated:** #1599 (#1489, QA GREEN, MERGE-READY) — #1600
 (#1495, QA PASS) — both awaiting Ben's explicit per-PR sign-off per the standing (b) ruling in
 AWAITING-BEN.md. #1601 (#1141) remains excluded (QA RED, back to building).
+
+## #1325 relay 3 -> relay 4 handled (2026-08-13)
+
+Relay-3 (`w1:p9E`, session `948dadcb-2c78-480c-b59b-3256219a1319`) reported: gate green
+(191 files / 1893 tests, rc=0), **PR #1602 open** ("[SECURITY] #1325 Provider picker collects
+credential before create") citing Fable-verified security points + a non-blocking Ollama
+fast-follow note; remaining work is live-path UAT proof + PR comment. Hit the 70% relay trigger
+before running it — wrote `docs/superpowers/handoffs/2026-08-13-1325-provider-credential-picker-
+relay-3.md` (committed `37edfa209`) and spawned successor in the same worktree/branch.
+
+Successor confirmed driving on Sonnet (bounded pane read showed it had read the relay doc, worked
+26s, self-renamed `1325-relay4` in-pane) before reap. Predecessor `w1:p9E` closed; successor
+`w1:p9M` (session `6bab3a64-e5bf-4aac-b467-783ac3eecdde`) renamed externally to "1325 provider
+credential picker (relay 4)" to match. Remaining work: live-path UAT proof, then PR comment, then
+join the security-tier Ben sign-off queue (do NOT merge/close/board — predecessor's instruction
+carried forward).
