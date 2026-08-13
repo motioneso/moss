@@ -3525,3 +3525,22 @@ is still the relay-3 continuation doc, working tree clean, no uncommitted change
 from relay4 yet despite ~150 revisions of churn. This is plausible (mid-implementation of Task 4,
 not yet at a commit boundary) but worth one more direct check if it recurs without a commit
 landing — will re-run this same git-log check rather than trust the pane status.
+
+## 2026-08-13 ~00:XX — #943 relay 4->5 handled; #1591-relay4 4th freeze, status-only probe
+
+**#943 relay 4->5**: predecessor (`w1:p9K`, "943 role reset (relay 4)") reported safe to reap —
+successor `role-reset-943-relay5` (pane `w1:p9R`, session `540ba19b-6c9c-434d-9a7e-7a7f15bdc8e8`)
+already has the relay-5 handoff doc (`docs/superpowers/handoffs/2026-08-13-943-role-reset-storage-
+rpc-relay-5.md`, commit `dbc7adffc`) with the wrap-up decision pre-captured — resuming
+coordinated-wrap-up from step 3 (pre-push trio, push, `[SECURITY]` PR, drop gate DB, report). Confirmed
+successor driving (rev climbing 39->62) before reaping `w1:p9K`; renamed successor both ways.
+
+**#1591-relay4 4th freeze**: bell + flat rev (159), zero commits/zero working-tree changes in the
+worktree across ~60 revisions of churn since the last direct check — a genuine concern, not just
+slow implementation. Sent a status-only probe (no "continue" appended, so it couldn't silently
+clear without answering) asking for git status / current attempt / repeated blocker, explicitly
+withholding permission to continue until I'd read the reply. It cleared (rev 159->170, bell gone)
+but the pane's 2-row viewport means `herdr pane read` returns empty for this pane every time (known
+quirk, not unique to this check) — could not read its actual answer. Since the freeze cleared
+cleanly and no bell recurred, sent a plain "continue" to keep it moving; will re-run the direct
+git-log check on its next done/bell flip rather than assume the probe was answered honestly.
