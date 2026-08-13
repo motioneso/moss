@@ -2850,13 +2850,28 @@ confirmed `agent_status: working` post-spawn, named both ways (pane label + in-p
 | #1141 | security | `w1:p8X` | `929044a6-c849-49c1-823e-5d6b56e14502` | `1141-credential-env-isolation` | plan → Fable review required before code |
 | #1591 | security | `w1:p8Y` | `5f6dd50b-f85d-4101-b6ea-2d565e3bbe95` | `1591-owner-scope-reorder` | plan → Fable review required; #1592 queued behind this landing |
 | #1248 | sensitive | `w1:p8Z` | `79c826c0-769d-4ebd-ba12-914c52cbd19b` | `1248-vault-ingestion` | plan pre-approved (Fable) — build starts directly on Phase 1; Phase 3 blocked on #1556 |
+| #1325 | security | `w1:p80` (tab `w1:tQ` "agents 2") | `415b4523-56d8-4e8a-955f-ea9ece32cb44` | `1325-provider-credential-picker` | plan → Fable review required; scope = Fable's Option-3 ruling above |
 
 Fable's `spec-1248` pane (`w1:p8R`, session `53bf3e3a-9ad1-48db-b682-4dbb290e7ea3`) kept resident as
-the plan-review channel for tonight's 4 security-tier lanes — not reaped.
+the plan-review channel for tonight's 5 security-tier lanes — not reaped.
+
+Agents tab `w1:tH` hit 8 panes at #1325's spawn — opened overflow tab **`w1:tQ`, labelled
+"agents 2"**, per the 4+ panes rule. New lanes go there until it also fills.
 
 **Still queued, not yet spawned:** #1274, #1467 (needs live-path proof), #1487 (weakest candidate,
 escalate to Fable if a dependent caller turns up) — next batch once agents-tab capacity allows.
-#1275/#1592 wait on their predecessors.
+#1275/#1592 wait on their predecessors. **#1495**: spec+plan now pushed by Fable
+(`ffa203ff7` on `spec-1248` branch) — docs PR to land it on `main`, then worktree/handoff/spawn,
+straight to build (no plan-review wait, same as #1248).
+
+**In-flight plan reviews routed to Fable:** #943's plan (`docs/superpowers/plans/2026-08-13-943-role-reset-storage-rpc.md`,
+no fork — RESET ROLE fix + regression test, mirrors existing `statement_timeout` reset pattern) —
+pointer sent, awaiting her verdict.
+
+**#1489 note:** build-1489 proceeded without a handoff doc (none was written for it) since the fix
+is self-contained/low-risk — owner-filter gap in `packages/tasks/src/breakdown.ts` parent lookup,
+same defect class as #1055/#1483, mirrors the existing `owner_user_id` filter pattern from
+`repository.ts`. No action needed; noted here for the record.
 
 ## Design-fork rulings — #1325, #1495 (Fable, cross-session, 2026-08-13)
 
