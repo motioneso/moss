@@ -40,6 +40,7 @@ import {
 
 export {
   combineHiddenContextBlocks,
+  renderNotesContextBlock,
   renderReplayBlock,
   renderSummaryBlock
 } from "./chat-context-blocks.js";
