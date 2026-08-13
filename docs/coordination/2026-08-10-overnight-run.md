@@ -2590,3 +2590,12 @@ docs-only PR (`docs/coordination/2026-08-12-open-issue-order.md`, +189/-0, no co
 audited 147 open issues → 139 remain, closed 7 stale, relabeled 26, added an ordered backlog doc.
 No coordinator action needed — docs-only, no tiering/QA gate applies. Backlog doc may be useful
 for future queue planning.
+
+## #1556-P2 stalled mid-turn, nudged, cleared (2026-08-12 ~21:00)
+
+`w1:p8S` (agent `notes-1556-relay2`, session `d68b2cc4...`) sat frozen for >90min: identical
+"Worked for 6m 51s" text across multiple bounded reads, no new commit since `d3045c17a`
+(19:24:51). Diagnosed as frozen-mid-turn (spinner not advancing, no wait-declaration prose), not
+a wait-declaration — correct response per coordinate skill is nudge, not respawn/TaskStop.
+`herdr agent prompt notes-1556-relay2 "continue"` cleared it — now actively thinking/working
+again. No code lost, same worktree/session. Watching for real progress (new commit) next.
