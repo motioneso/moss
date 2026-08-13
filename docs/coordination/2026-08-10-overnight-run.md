@@ -3431,3 +3431,27 @@ integration files (also pass standalone) — consistent with the documented
 `multi-agent-pg-contention` trap given tonight's concurrent lane count. Not a regression on this
 branch. Relaying at 70% checkpoint; successor will retry the gate (ideally when the box quiets) and
 proceed to wrap-up/PR. Awaiting the "safe to reap" handoff-complete message before acting.
+
+## #943 relay-4 gate-contention escalation, decided (2026-08-13)
+
+Lane escalated per CLAUDE.md "two identical failures -> stop and rethink": full-gate attempt 3 red
+on confirmed-flaky chat-drawer-surface.test.tsx; attempt 4 red with the SAME
+"tuple concurrently updated" DDL-contention signature as attempt 1, in notes.test.ts (2/2 identical
+signature). Branch's own tests (`module-storage-rpc.test.ts`) passed every attempt. Corroborated
+independently by #1591 relay-3's report minutes earlier — same signature, same night, different
+lane/files. **Decision: proceed to wrap-up** — CI (isolated env) is the authoritative gate per
+model policy, not a contended local box; instructed the lane to open the PR citing the 4 gate-
+attempt logs + clean isolated `module-storage-rpc.test.ts` pass, note the contention explicitly in
+the PR body so QA doesn't misread it as a regression, and tear down its gate DB. No further retries
+requested.
+
+## #1591 relay 3->4 handled (2026-08-13)
+
+Predecessor (`w1:p97`, session `fe7998fd-...`) relayed at 70% checkpoint: Task 3 done (test
+`78775299f`, format fix `885883191`, relay doc `542f05df4`), gate flake diagnosed as box-wide
+PG-contention (same signature as #943, not a regression — branch's own suite green every attempt).
+Successor `owner-scope-1591-relay4` (`w1:p9P`, session `0a6ce4a3-...`) confirmed driving (rev
+climbing 31->76+) before reaping. Reaped `w1:p97`, renamed successor both ways to
+`1591-owner-scope-relay4`. Remaining work: retry gate once box quiets, coordinated-wrap-up, PR
+tagged `[SECURITY]` (404-vs-409 behavioral delta noted per Fable's approval). Security tier — Ben's
+sign-off still required at merge.
