@@ -3395,3 +3395,15 @@ itself, `exact: true`, commit `fce56ac95`, no production code touched). Verified
 to Ben. CI on #1602 is still `pending` (foundation/app verify + compose smoke tests not yet
 finished) — holding QA spawn until CI resolves green; will not add to Ben's sign-off queue until
 then. Backgrounding a wait for CI completion instead of polling in-context.
+
+## #1248 relay-6 fourth freeze this segment (2026-08-13)
+
+`done` status + bell title, rev frozen 3757->3758 across a tick. No PR exists yet for
+`1248-vault-ingestion` (checked `gh pr list`), so this was not a real completion — same frozen-
+mid-turn pattern as the prior three. Single `"continue"` did NOT clear it this time either; needed
+the escalated `send-keys Enter` + `"continue"` remedy (now the reliable one for this lane). Cleared:
+`working`, rev 3772, title back to normal. Freeze count for this lane this segment: 4, all cleared,
+still no report of a PR opening. Watching next report closely — if commits have stalled alongside
+rising freeze frequency, that would trip the hard-takeover criterion; last direct git-log check
+(prior entry) still showed genuine progress, worth re-checking if this repeats again without a PR
+materializing soon.
