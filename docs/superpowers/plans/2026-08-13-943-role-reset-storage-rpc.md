@@ -7,8 +7,8 @@ behind current `origin/main` @ `513672aa5`; unrelated docs commit, rebase before
 ## Seams check (file:line, verified on this branch)
 
 - Bug site: `packages/db/src/module-storage-rpc.ts:89` — `await sql.raw(\`SET LOCAL ROLE
-${role}\`).execute(scopedDb.db)` runs unconditionally at the top of every `query()` call, inside
-  the caller's `withDataContext` transaction (`packages/db/src/data-context.ts:63-71`,
+  ${role}\`).execute(scopedDb.db)`runs unconditionally at the top of every`query()`call, inside
+  the caller's`withDataContext` transaction (`packages/db/src/data-context.ts:63-71`,
   `rootDb.transaction().execute(...)`). Nothing in the function ever runs `RESET ROLE`. The
   existing `finally` block (`:99-108`) resets `statement_timeout` but not the role — confirmed by
   reading the full 124-line file; no other reset path exists.
@@ -35,7 +35,7 @@ ${role}\`).execute(scopedDb.db)` runs unconditionally at the top of every `query
 - Role identity: `moduleRuntimeRoleName` (`packages/db/src/module-role-broker.ts:31-33`) returns
   `jarvis_mod_<slug>_runtime`, a `NOLOGIN ... NOINHERIT` role granted `WITH INHERIT FALSE` to
   `jarvis_app_runtime`/`jarvis_worker_runtime` (`:74-77`) — i.e. a caller must explicitly `SET
-  [LOCAL] ROLE` to assume it; it is a privilege *restriction* relative to the parent runtime roles,
+[LOCAL] ROLE` to assume it; it is a privilege _restriction_ relative to the parent runtime roles,
   not an escalation. `RESET ROLE` (no target role) is the standard Postgres idiom to drop back to
   the session/transaction's prior role and is what the fix uses.
 - Failure-path precedent already in the file: the existing `statement_timeout` reset
@@ -52,9 +52,7 @@ ${role}\`).execute(scopedDb.db)` runs unconditionally at the top of every `query
   (`createDatabase({ connectionString: connectionStrings.app, ... })`, `:51`) — the exact role the
   runtime role is granted to, so `SET LOCAL ROLE` inside a test transaction will succeed without
   new fixture work. `DataContextRunner.withDataContext` (`packages/db/src/data-context.ts:54-72`)
-  wraps `scopedDb.db` as a `Transaction<MossDatabase>`, so a raw `sql\`select current_user\`.execute(scopedDb.db)`
-  call is a valid Kysely `Transaction` receiver — same pattern the file's other tests use through
-  `rpc.query(...)`.
+  wraps `scopedDb.db` as a `Transaction<MossDatabase>`, so a raw `sql\`select current_user\`.execute(scopedDb.db)`call is a valid Kysely`Transaction`receiver — same pattern the file's other tests use through`rpc.query(...)`.
 
 ## Task 1 — fix: reset the role in `finally`
 
@@ -117,9 +115,11 @@ Verification (confirmed command — root `package.json:56`, `"test:integration":
 scripts/test-integration.ts"`, which provisions the isolated DB `test-database.ts`'s
 `assertIsolatedTestDatabase` guard requires; run under `verify-gate` for DB isolation per
 CLAUDE.md):
+
 ```bash
 pnpm test:integration tests/integration/module-storage-rpc.test.ts > /tmp/943-test.log 2>&1; echo "EXIT=$?"
 ```
+
 Expect `EXIT=0`.
 
 ## Kill gate
