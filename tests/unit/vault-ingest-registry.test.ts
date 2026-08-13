@@ -47,6 +47,18 @@ describe("vault-ingest-registry", () => {
     expect(isPathIngestable("people-notes/alice.MD", ["people-notes"])).toBe(false);
   });
 
+  it("collapses .. segments in both the root and the candidate path instead of treating them as literal prefix characters", () => {
+    // A naive string-prefix match on "people/../" would let this path in, since the raw
+    // relPath literally starts with "people/../attachments/". Resolved, it points into a
+    // hard-excluded prefix and must never be ingestable.
+    expect(isPathIngestable("people/../attachments/x.md", ["people/.."])).toBe(false);
+    // Same escape attempted against a legitimate, non-hard-excluded root.
+    expect(isPathIngestable("people/../attachments/x.md", ["people"])).toBe(false);
+    // A root that fully collapses to nothing (or escapes above the vault) matches no path.
+    expect(isPathIngestable("anything.md", ["people/.."])).toBe(false);
+    expect(isPathIngestable("anything.md", ["../outside"])).toBe(false);
+  });
+
   it("registers and lists providers in registration order", () => {
     const providerA = { moduleId: "people", resolveRoots: async () => ["people-notes"] };
     const providerB = { moduleId: "structured-state", resolveRoots: async () => [] };
