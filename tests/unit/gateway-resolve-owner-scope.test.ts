@@ -47,11 +47,12 @@ function createGateway(row: FixtureRow) {
 
 describe("resolveActionRequest owner scope (#1591)", () => {
   it("non-owner confirm is identical whether or not a live waiter exists", async () => {
-    const { gateway, confirmations, getAssistantAction, resolveAssistantAction, row } = createGateway({
-      id: "action-1",
-      ownerUserId: "owner-1",
-      status: "pending"
-    });
+    const { gateway, confirmations, getAssistantAction, resolveAssistantAction, row } =
+      createGateway({
+        id: "action-1",
+        ownerUserId: "owner-1",
+        status: "pending"
+      });
     const resolveSpy = vi.spyOn(confirmations, "resolve");
 
     // (a) no waiter registered for this action at all.

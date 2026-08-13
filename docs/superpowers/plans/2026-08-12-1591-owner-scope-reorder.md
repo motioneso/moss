@@ -13,12 +13,12 @@ security QA + Fable sign-off). **Risk tier:** security. **Branch:** `1591-owner-
   fall through to the owner-scoped `repository.resolveAssistantAction` (line 450-451), which
   returns `"not_found"` on owner mismatch. Net effect: a non-owner's confirm attempt returns
   `"expired"` (409) when no live waiter exists anywhere, but `"not_found"` (404) when a live waiter
-  exists for that id under a *different* owner — leaking one bit of "does a live waiter exist for
+  exists for that id under a _different_ owner — leaking one bit of "does a live waiter exist for
   this id" to a non-owner via response code, confirmed present today.
 - `packages/ai/src/gateway/confirmation-registry.ts:12-49` — `ConfirmationRegistry` is an in-memory
   `Map<actionRequestId, Waiter>`, no actor scoping anywhere in the class. `isAwaiting` (line 46) is
   a pure existence check on that map. Confirms the check is structurally unscoped — the fix must
-  keep it that way (it can't be, DB doesn't track live-waiter state) and instead gate *when* it runs.
+  keep it that way (it can't be, DB doesn't track live-waiter state) and instead gate _when_ it runs.
 - `packages/ai/src/repository.ts:1723-1729` — `getAssistantAction(scopedDb, actionId)`: existing
   RLS-scoped SELECT, no status filter, already used elsewhere in the codebase (e.g. the parity test
   below). Reusable as the owner-scoped pre-check — no new repository method needed.
@@ -79,7 +79,7 @@ New body shape (decision, not implementation):
 
 1. Build `access: AccessContext` once, as today.
 2. For `status === "confirmed"`: run `this.deps.runner.withDataContext(access, scopedDb =>
-   this.deps.repository.getAssistantAction(scopedDb, actionRequestId))` first. If the result is
+this.deps.repository.getAssistantAction(scopedDb, actionRequestId))` first. If the result is
    `undefined` or its `status !== "pending"`, return `"not_found"` — do not call `isAwaiting` or
    `resolveAssistantAction`.
 3. Still for `status === "confirmed"`, past that gate: keep the existing liveness check — if
@@ -119,7 +119,7 @@ Test cases:
 
 Why this would fail against the current (broken) code: case (b) above hits `isAwaiting` before any
 ownership check and gets a live waiter → `true` → falls through to `resolveAssistantAction`, which
-the current code *does* call (returns undefined on owner mismatch, but the call graph differs from
+the current code _does_ call (returns undefined on owner mismatch, but the call graph differs from
 case (a), which returns `"expired"` without calling it at all). The new test's call-graph assertion
 fails on unpatched code; passes once Task 1 lands.
 
@@ -142,10 +142,13 @@ File: `tests/integration/ai-assistant-action-resolve.test.ts`.
 ## Task 4 — gate
 
 `verify-gate` skill, isolated gate DB, full local gate green:
+
 ```bash
 pnpm verify:foundation > /tmp/1591-gate.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected `EXIT=0`. Pre-push trio before any push, per `coordinated-build` step 3b:
+
 ```bash
 pnpm format:check && pnpm lint && pnpm typecheck
 git fetch origin main && git rebase origin/main
