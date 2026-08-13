@@ -4196,3 +4196,24 @@ Ben directly (`needs-ben` per CLAUDE.md box-wide rule) the first time an actual 
 defaulting to any specific model silently. Until resolved, this run's existing delegation chain
 (`fable-signoff-delegation-waves-3-6` memory: Fable OR Opus-5 one-shot agent, fully authoritative,
 digest only) remains the fallback for security-tier sign-off.
+
+## 2026-08-13 — successor adoption: #1585 building; #1590 fresh QA dispatched
+
+- **Coordinator authority:** Codex session `019ffd3f-3098-73c0-bab8-31f491615168` now uniquely
+  owns label `Coordinator`; predecessor Claude session `caef4e32-df22-4310-a42d-866771a0ba6c` was
+  messaged and its pane closed after handoff.
+- **#1585:** handoff committed (`4e4765c79`), worktree/branch cut from green `origin/main`
+  `0c1856190`, build lane `build-1585-news-stale` / session `019ffd41-932f-75f2-9120-4ca92e0ad529`
+  is active in `w1:tH`; Ben notified via `needs-ben` (`1786660402237296752.msg`).
+- **#1590 / PR #1609:** CI's foundation/app check is green; a fresh sensitive QA fallback is
+  active in QA worktree `qa-1609-sensitive-rerun`, pane label `QA PR1609 sensitive rerun`, session
+  `35e2ae47-3056-4438-9e57-fd81fa438e38`. Do not resume the stopped QA session.
+- **#1275 / PR #1608:** existing Opus re-QA agent `aa546f32525ab4f40` was not re-spawned; no new
+  verdict was available in the successor's accessible task output or PR comments at adoption time.
+  PR CI was still in progress; re-check the existing agent/result before acting.
+- **#1467 / PR #1610:** bounded reads confirmed relay6 is actively driving in `w1:p9Z`; old relay4
+  pane `w1:p9X` remains done. Unlabeled `w1:p9Y` and `w1:p90` are shells running the #1591 gate,
+  not orphaned agents; leave them alone.
+- **Open Ben decisions:** #895 branch-protection change and #1429 board mistrack remain
+  unresolved; do not guess. Fable-type decisions must first go through `needs-ben` to identify
+  Ben's intended "Sol high" authority; until then use the existing Opus/Fable chain as applicable.
