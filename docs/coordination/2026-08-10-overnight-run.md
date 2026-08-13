@@ -3838,3 +3838,21 @@ Spawned Opus re-verify QA (`qa-1602`, agent `a9c003073becf2727`), scoped narrowl
 BLOCKING-1 `AbortSignal.timeout(5_000)` fix in `model-discovery.ts`'s `doFetch()`, with the same
 maximally-explicit mandatory-`gh pr comment` instruction that worked for `qa-1605`. Other 5
 non-blocking notes explicitly out of scope for this pass. Awaiting its verdict.
+
+## 2026-08-13 — #1602 QA GREEN, MERGE-READY, verdict posted and independently verified
+
+`qa-1602` returned VERDICT GREEN — BLOCKING-1 confirmed closed: `doFetch` has exactly one
+call-site, all 3 provider branches carry the signal, abort lands in the existing try/catch (no
+unhandled rejection), and the same signal instance bounds `response.json()` too — a slow-drip
+body can't escape the 5s budget. 3 new non-blocking notes (worth a future pass, not blocking):
+(A) the new timeout guard itself has zero test coverage, (B) `http-api.ts` `generateChat` has the
+identical unbounded-hang shape as the original bug — pre-existing, not this PR, (C) body size is
+unbounded within the 5s window. Blocking e2e-UAT (`1270-provider-signin.uat.spec.ts`) 4/4 green
+across two runs. Verdict posted: https://github.com/motioneso/moss/pull/1602#issuecomment-5278932393
+— **independently verified** via `gh api repos/motioneso/moss/issues/1602/comments`, author
+`motioneso`, id matches exactly. PR is 1 commit behind `main` (401611e62, SPA fallback fix — zero
+path overlap, non-material), still MERGEABLE.
+
+**#1602 (#1325) now in Ben's sign-off queue.** Sign-off queue is now: #1599 (#1489), #1600
+(#1495), #1604 (#943), #1605 (#1274), #1602 (#1325). Five PRs awaiting Ben's explicit merge OK.
+#1606 (#1248) still blocked on Fable's policy ruling (pre-existing gate failure, issue #1607).
