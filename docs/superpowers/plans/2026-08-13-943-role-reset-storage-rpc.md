@@ -12,14 +12,26 @@ ${role}\`).execute(scopedDb.db)` runs unconditionally at the top of every `query
   `rootDb.transaction().execute(...)`). Nothing in the function ever runs `RESET ROLE`. The
   existing `finally` block (`:99-108`) resets `statement_timeout` but not the role — confirmed by
   reading the full 124-line file; no other reset path exists.
-- Why it's a hazard, not (yet) an exploit: `SET LOCAL ROLE` persists for the remainder of the
-  **transaction**, not just the statement. Nothing in this codebase currently calls
-  `createModuleStorageRpc(...).query()` and then continues doing other work in the same
-  `withDataContext` transaction afterward (confirmed: only caller pattern in
-  `tests/integration/module-storage-rpc.test.ts` is one `rpc.query()` call per
-  `withDataContext` block) — hence "unwired, no runtime blast radius today" per the handoff. The
-  footgun: the first caller who chains a second repository call after a module RPC call in the same
-  transaction inherits the module's restricted role instead of the caller's real one, silently.
+- Why it's a hazard, not (yet) an exploit — **corrected caller inventory** (Fable review,
+  2026-08-13; the earlier claim that "nothing calls `query()` then continues in the same
+  transaction / only caller is the test" was false, verified below on this branch):
+  - `packages/module-registry/src/external/worker-rpc-host.ts:314-322` — live production caller.
+    `createModuleStorageRpc(scopedDb, ...)` then `return await storageRpc.query(...)` inside the
+    `try`. Safe **today** only because the callback returns immediately after `query()` — no
+    further reads share that `withDataContext` transaction.
+  - `packages/settings/src/data-export.ts:190-206` `readExternalModuleExportRows` — loops
+    **multiple modules and multiple owned tables in one shared transaction**, calling
+    `createModuleStorageRpc(...).query()` per table without ever restoring the caller's role
+    between iterations. Confirmed **zero callers** of this exported function anywhere else in the
+    tree today (grep, this branch) — unwired, no runtime blast radius yet — but it is exactly the
+    future caller this fix protects: once wired, a leaked role from table N's module would poison
+    every subsequent table read (module N+1 onward) in the same export transaction, each silently
+    scoped to the wrong module's RLS grant instead of the caller's.
+  - `SET LOCAL ROLE` persists for the remainder of the **transaction**, not just the statement —
+    that's the mechanism both sites above rely on being currently harmless (site 1: no second read)
+    or not yet exercised (site 2: not yet wired). The footgun the fix closes: any caller — present
+    or future — that chains a second repository read after a module RPC call in the same
+    transaction silently inherits the module's restricted role instead of its own.
 - Role identity: `moduleRuntimeRoleName` (`packages/db/src/module-role-broker.ts:31-33`) returns
   `jarvis_mod_<slug>_runtime`, a `NOLOGIN ... NOINHERIT` role granted `WITH INHERIT FALSE` to
   `jarvis_app_runtime`/`jarvis_worker_runtime` (`:74-77`) — i.e. a caller must explicitly `SET
