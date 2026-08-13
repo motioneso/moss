@@ -3064,3 +3064,19 @@ Coordinator takeover, not another relay.**
 **Context checkpoint (70%, second checkpoint this segment)** — per Ben's standing override ("lets
 stop relaying, just auto compact coordinator"), no coordinator relay spawned. State flushed here
 and to a `memory_save` instead.
+
+## Supervision update — 2026-08-13, #1248 relay-6 also produced zero §3 code — HOLD directive sent
+
+**Relay-6 hit its own 70% meter after research only** — committed one real fix
+(`ALLOWED_PAYLOAD_KEYS` missing `"op"`, `bf9f51ded`) but again wrote no §3 implementation, and
+announced it was relaying to a relay-7. That makes **4 of the last 5 hops with zero §3 code**
+(relay-2, relay-3, relay-5, relay-6 — only relay-4 landed commits, and those were §1/§2 not §3).
+This is past the escalation threshold already flagged twice. Rather than let a 7th relay start the
+same research cycle, sent `w1:p9D` a **HOLD directive**: do not spawn another relay; if not already
+mid-relay, write §3 directly now using relay-5's pre-gathered signatures
+(`docs/superpowers/handoffs/2026-08-13-1248-vault-ingestion-relay5.md`) and commit per function; if
+already spawning a successor, forward the same instruction to it as its first directive. Pane still
+`working`, revision climbing (190→244) after the directive landed — **outcome not yet confirmed,
+next report from this lane needs close scrutiny.** If relay-7 (or relay-6 itself) reports again with
+no §3 commit, the next action is a hard takeover: spawn a fresh non-relay agent with the design doc
+and signatures inlined into its boot brief, explicitly barred from a research turn.
