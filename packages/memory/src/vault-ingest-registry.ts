@@ -1,10 +1,7 @@
 import type { DataContextDb } from "@moss/db";
+import type { VaultIngestRootProvider } from "@moss/module-sdk";
 
-export interface VaultIngestRootProvider {
-  readonly moduleId: string;
-  /** Owner's ingestable vault-relative root prefixes; empty = nothing for this owner. */
-  resolveRoots(scopedDb: DataContextDb, ownerUserId: string): Promise<readonly string[]>;
-}
+export type { VaultIngestRootProvider } from "@moss/module-sdk";
 
 /**
  * Fail-closed regardless of what any provider resolves — a root under one of these can never

@@ -810,6 +810,9 @@ importers:
 
   packages/module-sdk:
     dependencies:
+      '@moss/db':
+        specifier: workspace:*
+        version: link:../db
       fastify:
         specifier: ^5.6.2
         version: 5.8.5
@@ -935,6 +938,9 @@ importers:
       '@moss/jobs':
         specifier: workspace:*
         version: link:../jobs
+      '@moss/memory':
+        specifier: workspace:*
+        version: link:../memory
       '@moss/module-sdk':
         specifier: workspace:*
         version: link:../module-sdk

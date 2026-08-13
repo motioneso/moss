@@ -1,5 +1,5 @@
 import type { DataContextDb } from "@moss/db";
-import type { VaultIngestRootProvider } from "@moss/memory";
+import type { VaultIngestRootProvider } from "@moss/module-sdk";
 
 import { EntitiesRepository } from "./entities-repository.js";
 import { STRUCTURED_STATE_MODULE_ID } from "./manifest.js";

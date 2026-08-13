@@ -1,5 +1,5 @@
 import type { DataContextDb } from "@moss/db";
-import type { VaultIngestRootProvider } from "@moss/memory";
+import type { VaultIngestRootProvider } from "@moss/module-sdk";
 import { PreferencesRepository } from "@moss/structured-state";
 
 import { PEOPLE_MODULE_ID } from "./manifest.js";
