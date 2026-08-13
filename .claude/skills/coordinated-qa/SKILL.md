@@ -87,7 +87,8 @@ git fetch origin main && git diff --stat origin/main...HEAD
 First ask a question the map cannot answer: **does this PR add or change a user-facing feature,
 module, or UI surface?** If yes, CI-green plus `/code-review` is not merge-ready. The PR must
 carry a `gh pr comment` with a live end-to-end proof — the feature exercised **through the real UI
-on a live dev instance**, with the UAT run and screenshots.
+on a live dev instance**, with the UAT run, exit code, and assertions or bounded DOM/network/log
+evidence for the exercised path.
 
 ```bash
 gh pr view <PR> --comments        # is the live-path proof actually there?
