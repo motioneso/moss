@@ -3879,3 +3879,15 @@ alone) before closing:
 - `w1:p9H` (1467 permission boundary shell-quote) — no PR opened yet; was mid-build/stall-recovery.
 
 Remaining active fleet: 5 panes (`w1:p9D`, `w1:p8R`, `w1:p9P`, `w1:p99`, `w1:p9H`) plus Coordinator.
+
+## 2026-08-13 — merge-policy correction: sign-off queue routes to Fable, not Ben
+
+Ben (live, morning check-in): "prs shouldn't be waiting for my sign off... fable does those."
+Corrected — this run's sign-off authority (routine/sensitive/security alike) is delegated to
+Fable, same as the 2026-08-09 waves-3-6 run (see agentmemory
+`fable-signoff-delegation-waves-3-6`). Routed the full queue to `w1:p8R` (spec-1248/Fable) via
+`herdr pane run`: #1599 (#1489), #1600 (#1495), #1602 (#1325, `[SECURITY]`), #1604 (#943,
+`[SECURITY]`), #1605 (#1274, `[SECURITY]`) — plus the still-outstanding #1606 policy ruling.
+Her sign-off (`gh pr comment`) is authoritative; coordinator merges directly on it, Ben gets a
+standing digest afterward, no per-PR ping. Confirmed delivered (pane read, `w1:p8R` shows
+"Pontificating…").
