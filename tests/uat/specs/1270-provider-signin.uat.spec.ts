@@ -251,8 +251,11 @@ test("Settings collects an API key before creating a picker provider (#1325)", a
 
   await addProviderFromPicker(page, "Mistral");
 
-  // Still just the form: no provider has been created yet.
-  const apiKeyField = page.getByLabel("API key");
+  // Still just the form: no provider has been created yet. `exact: true` is required: the same
+  // Admin / Setup settings page also mounts the voice and web-search groups' own "...API key"
+  // fields (settings-voice-config-group.tsx, settings-web-search-key-group.tsx), and getByLabel's
+  // default substring match would otherwise catch those too (strict-mode violation).
+  const apiKeyField = page.getByLabel("API key", { exact: true });
   await expect(apiKeyField).toBeVisible();
   const addButton = page.getByRole("button", { name: "Add", exact: true });
   await expect(addButton).toBeDisabled();
