@@ -3239,3 +3239,38 @@ QA still running) and #1600 (#1495, PASS, verdict posted).
 
 **Security-tier merge queue for Ben (growing, none merged yet):** #1599 (#1489, QA pending),
 #1600 (#1495, QA PASS), #1601 (#1141, QA dispatched). All await his explicit OK — none delegated.
+
+## Supervision update — 2026-08-13, QA-1141 RED — pulled from Ben sign-off queue, routed back to build lane
+
+**#943 relay-4 handled:** predecessor `credenv`... wait, `role-reset-rpc` relay-3 (`w1:p98`, session
+`ad4654bb-0d8c-4648-b077-f4d700af217b`) reported clean relay — pre-push trio green, rebase clean,
+gate attempt 1 red on 4 unrelated tests (concurrent-gate contention, none touch
+module-storage-rpc), gate attempt 2 hung mid-`DROP DATABASE` and was killed cleanly. Successor
+`role-reset-rpc-943` spawned same worktree/branch, pane `w1:p9K`, session
+`c20d4240-0e2f-43a7-9443-a19259ae37c8`, confirmed driving. Predecessor reaped, both pane names
+set. Successor will retry the gate and escalate on 2/2 identical failures per CLAUDE.md rather
+than retry blind. (Successor briefly showed `agent_status: done` at rev 50 with empty bounded
+read and no 🔔 title — same anomaly pattern as #943's earlier false-done, deprioritized rather
+than acted on, consistent with that lane self-resolving last time.)
+
+**QA-1141 (Opus, agent `a35f1eb7ff20f8ee6`) verdict: RED, not the PASS I was tracking toward.**
+Posted to PR #1601 (spot-checked via `gh pr view --json comments`, confirmed 1 comment present —
+did land this time). Three BLOCKING findings:
+1. **CI is actually red**, contradicting the build agent's "CI is green" claim —
+   `tests/unit/chat-drawer-surface.test.tsx:525` failed (1/4474) + Compose deployment smoke
+   failed (infra-api-1 unhealthy). Not reproduced locally; merge-base `198928da4` is green, so a
+   flake is plausible but unconfirmed — build lane's call to investigate/waive.
+2. **3 blocking e2e-UAT specs never run** (1133-chat-attachments, cli-terminal, runtime-context)
+   + 1 advisory (1089-1090-chat-drawer-private) — the PR's "no UAT spec needed" claim is wrong
+   under the locked #1027 policy.
+3. **Security claim overstated** — neither patched call site was ever reachable by ambient HOME
+   (both already composed from sanitized env); the fix is correct defence-in-depth but the
+   PR/release-note framing as "closing a live credential leak" needs rewording. QA also surfaced
+   the genuinely-reachable twin of this bug class as a non-blocking follow-up:
+   `packages/module-registry/src/chat-multiplexer.ts:256-259` (host-dev onboarding, full
+   `process.env` via `createRealTmuxIo()`) and a latent one at `engine-host.ts:348`.
+
+Routed the full verdict to the #1141 lane (`w1:p99`, `credential env isolation (relay 3)`, showing
+`agent_status: done` at rev 2615 — will need to pick this back up). **#1601 removed from the Ben
+sign-off queue** — not ready. **Security-tier merge queue for Ben now: #1599 (#1489, QA pending),
+#1600 (#1495, QA PASS)** — #1601 back to `building` pending fixes + re-QA.
