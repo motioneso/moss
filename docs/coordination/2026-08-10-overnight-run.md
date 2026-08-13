@@ -3385,3 +3385,13 @@ climbing 6->48+, predecessor idle) before reaping. Reaped `w1:p9F`, renamed succ
 `1274-trust-lint-relay1`. Remaining work per predecessor's report: full isolated gate re-run,
 rebase onto origin/main, push, open `[SECURITY]`-tagged PR, report back. #1274 is security tier —
 Ben's explicit merge sign-off still required once it reaches PR.
+
+## #1325 relay-3 (final) reported done, PR #1602, CI pending (2026-08-13)
+
+Build complete: live-path UAT proof posted to PR #1602 as a comment (`pnpm test:uat
+1270-provider-signin`, 3/3 pass incl. target spec; fixed a strict-mode locator bug in the spec
+itself, `exact: true`, commit `fce56ac95`, no production code touched). Verified the comment landed
+(author `motioneso`, content matches). Security tier — did not merge/board/close, correctly deferred
+to Ben. CI on #1602 is still `pending` (foundation/app verify + compose smoke tests not yet
+finished) — holding QA spawn until CI resolves green; will not add to Ben's sign-off queue until
+then. Backgrounding a wait for CI completion instead of polling in-context.
