@@ -2673,3 +2673,10 @@ input; not treated as a coordinator blocker (still his direct conversation with 
 spawn until he/Fable trigger it). issue-audit (`w1:p7Y`) idle, no action needed — its work
 already merged. No other lanes active. `merges_since_relay` carries forward at 0 (no merge this
 leg yet). Resuming supervision (Phase 2).
+
+**Correction:** the "yes, write it" text in `w1:p8R`'s input box was placeholder UI chrome, not
+a genuinely unsent message — Ben confirmed he already responded/approved a while back through
+his own real conversation with Fable. The `send-keys Enter` attempts and the `needs-ben` ping
+about it were a false alarm on the coordinator's part; no actual blocker there. #1248 remains
+Ben↔Fable's own channel — watching for Fable to message the `Coordinator` label once the spec
+lands, per the original brief; no further action here.
