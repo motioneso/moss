@@ -100,4 +100,29 @@ describe("registerStaticWeb", () => {
 
     expect(res.statusCode).toBe(404);
   });
+
+  it("falls back to index.html for a bare GET / with no Accept header", async () => {
+    const app = Fastify({ logger: false });
+    registerStaticWeb(app, { distDir: makeDist() });
+
+    const res = await app.inject({ method: "GET", url: "/" });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toContain("text/html");
+    expect(res.body).toContain('<div id="root"></div>');
+  });
+
+  it("does not turn missing routes into the SPA for an explicit Accept: application/json", async () => {
+    const app = Fastify({ logger: false });
+    registerStaticWeb(app, { distDir: makeDist() });
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/settings",
+      headers: { accept: "application/json" }
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.body).not.toContain('<div id="root"></div>');
+  });
 });
