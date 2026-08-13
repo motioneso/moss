@@ -3508,3 +3508,20 @@ plain `"continue"` again (not yet escalating to the Enter+continue combo since p
 worked both times, just needed twice back-to-back); cleared, rev climbing again (124->128+).
 Flagging for the same treatment as #1248 if it recurs a third time: switch to an explicit
 status-request message instead of a bare nudge. Still no PR for #1591 as of this entry.
+
+## 2026-08-13 ~00:XX — PR #1602 CI green, Opus adversarial QA spawned
+
+`gh pr checks 1602` all terminal: Build and publish images / Compose deployment smoke / Prod
+compose deployment smoke / Verify foundation and app / Detect change scope all `pass`; Verify docs
+`skipping`. Spawned Opus adversarial QA (agent `qa-1325`) per model policy (security tier) — will
+post its verdict as a `gh pr comment` on #1602 and report back. Holding sign-off queue addition
+until verdict lands.
+
+**#1591-relay4 third freeze this segment**: same bell-title-flat-revision pattern (rev 140->141
+over a full tick). Switched to an explicit status-request message ("report current wrap-up step /
+PR status / blocker, then continue") instead of a bare nudge, per the plan logged last entry —
+cleared. Sanity-checked the worktree directly (`git log -15`, `git status --short`): latest commit
+is still the relay-3 continuation doc, working tree clean, no uncommitted changes, no new commits
+from relay4 yet despite ~150 revisions of churn. This is plausible (mid-implementation of Task 4,
+not yet at a commit boundary) but worth one more direct check if it recurs without a commit
+landing — will re-run this same git-log check rather than trust the pane status.
