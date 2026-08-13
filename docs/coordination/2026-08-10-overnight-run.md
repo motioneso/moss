@@ -2442,3 +2442,36 @@ and pushed: `2852a12c3` on `origin/main`. Touched: `docs/DEVELOPMENT_STANDARDS.m
 assertions/bounded DOM/network/log evidence — no screenshot. Posted a clarifying comment on PR
 #1595 noting its late stale RED QA verdict (screenshot-gap only) predates this fix and should be
 disregarded — PR was already merged GREEN.
+
+## PR #1594 (#1429) — CI fully green, routine QA re-dispatched, 2026-08-12 (resident tick)
+
+CI rerun 31656365955 completed: all 6 checks pass, including "Build and publish images" (16m17s)
+and the previously-flaked "Compose deployment smoke" (2m49s, confirms flake diagnosis). Dispatched
+a fresh `coordinated-qa` (routine tier) to re-verify and post a verdict on PR #1594 — prior verdict
+was RED solely for missing live-path evidence, which relay3 has since posted. Watching for its
+verdict.
+
+## Board re-audit: 6 in-progress items remain (down from 9), #1248 flagged to Ben, #1556-P2 spawned
+
+`gh project item-list 2 --owner motioneso --limit 2000` (the `--limit 2000` form avoids the
+known truncation trap) shows only 6 "In progress" items now: #1246 (held, no agent), #1248
+(P0, unowned, no spec), #1429 (PR #1594, QA in flight — see above), #1440/#1470 (epics, resolve
+passively), #1556 (phase 1 merged as PR #1562; phase 2 — notes-default retrieval — had no active
+builder; the Codex pane previously on #1556 pivoted to unrelated board-audit work after phase 1
+landed).
+
+- **#1248**: no AWAITING-BEN entry or `needs-ben` ping had ever been sent for this, despite the
+  manifest flagging it as needing a priority ruling — a protocol gap. Filed now
+  (`docs/coordination/AWAITING-BEN.md`, commit `a1e363c3f`) + pinged (`needs-ben` msg
+  `1786585961848595131`). Waiting on Ben: still P0 this run, or defer?
+- **#1556 phase 2**: approved spec already covers it
+  (`docs/superpowers/specs/2026-08-10-1553-context-continuity-and-notes-retrieval.md`), so no
+  spec gate blocker. Spawned build lane `1556-notes-retrieval` (worktree
+  `.claude/worktrees/1556-notes-retrieval`, branch off `origin/main`, handoff doc committed
+  `7994d3d7a`), agent `notes-retrieval-1556` (pane `w1:p8P`), confirmed on Sonnet, tier
+  `sensitive` (notes-recall port + credential filtering + incognito/recallEnabled gating).
+
+Once #1429 clears and either #1248 gets a ruling or #1556-P2 lands, re-check whether the
+"hold Ready moves" condition (Ben's rule: no board Ready moves until every in-progress item is
+finished) can finally be lifted for #1246/#1135-class candidates — #1440/#1470 resolve passively
+as their children (including this #1556-P2 lane) land.
