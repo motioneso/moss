@@ -2475,3 +2475,15 @@ Once #1429 clears and either #1248 gets a ruling or #1556-P2 lands, re-check whe
 "hold Ready moves" condition (Ben's rule: no board Ready moves until every in-progress item is
 finished) can finally be lifted for #1246/#1135-class candidates — #1440/#1470 resolve passively
 as their children (including this #1556-P2 lane) land.
+
+## #1556-P2 lane relayed (context-meter 70%), pre-plan — successor confirmed driving
+
+Build agent `notes-retrieval-1556` (pane `w1:p8P`) relayed at context-meter 70% warning, no code
+written yet (still in seams-check stage, before `plan-build`). Committed continuation doc
+`docs/superpowers/handoffs/2026-08-12-1556-notes-retrieval-relay.md` (`d185be15a`) with verified
+branch state and one resolved open question (notes modified-time: `memory_chunks.updated_at`
+already exists, `vectorSearch` just needs to select it — no schema change required). Spawned
+successor `notes-1556-relay` in the same worktree/branch, pane `w1:p8Q`, session
+`35e19bbe-8838-4e94-90f0-f13015915229`. Coordinator confirmed successor driving on Sonnet 5,
+correct branch/cwd, task list showing plan-build in progress. Reaped old pane `w1:p8P`. Renamed
+`w1:p8Q` to `1556-P2 notes-default retrieval`.
