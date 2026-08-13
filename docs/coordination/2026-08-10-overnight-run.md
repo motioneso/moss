@@ -2599,3 +2599,54 @@ for future queue planning.
 a wait-declaration — correct response per coordinate skill is nudge, not respawn/TaskStop.
 `herdr agent prompt notes-1556-relay2 "continue"` cleared it — now actively thinking/working
 again. No code lost, same worktree/session. Watching for real progress (new commit) next.
+
+## COORDINATOR RELAY — Ben requested handoff to new coordinator (2026-08-12/13, context-meter 70%)
+
+Ben explicitly said "hey lets handoff to a new coordinator" — this SUPERSEDES the earlier
+standing no-successor override for this one relay. Follow the `relay` skill's coordinator
+bootstrap exactly. Spawning successor now.
+
+### Fleet state at handoff (verified via `herdr pane list` + session-id check just before this note)
+
+- **Coordinator (outgoing):** `w1:p7P`, session `0bb9f516-c026-454f-bc97-dc9faf43bd20`. Safe to
+  reap once successor confirmed driving.
+- **#1429/PR #1594 — DONE, closed out.** Merged (`f6096da9331759149aa7465eb14b8e35b39f603e`),
+  issue #1429 closed, board item `Done`. No further action ever needed on this.
+- **#1556-P2 (notes-default retrieval)** — `w1:p8S`, agent name `notes-1556-relay2`, session
+  `d68b2cc4-79a6-4feb-8a62-40ece4f19e7b`, worktree `.claude/worktrees/1556-notes-retrieval`,
+  branch `1556-notes-retrieval`. Tier **sensitive**. Plan approved (already inside locked Phase 2
+  design from `docs/coordination/handoff-1556-notes-retrieval.md`) —
+  `docs/superpowers/plans/2026-08-12-1556-notes-retrieval.md` (was UNCOMMITTED as of last check,
+  along with relay-3/relay-4 handoff docs in `docs/superpowers/handoffs/` — build agent's own
+  bookkeeping gap, not blocking). One real commit landed: `d3045c17a` (expose `updated_at` on
+  `vectorSearch`/`listRecentChunks`). **Stalled frozen mid-turn once already** (90+ min, no
+  spinner advance, no new commit) — cleared with `herdr agent prompt notes-1556-relay2
+  "continue"`. Currently `agent_status: working`. **Watch for another stall** — if it recurs,
+  nudge again before considering TaskStop/respawn. This is the only genuine in-flight *build* —
+  the "hold Ready moves until all in-progress finished" directive stays active until this lands.
+- **#1248 (vault-ingestion spec)** — `w1:p8R`, agent `spec-1248-fable`, session
+  `53bf3e3a-9ad1-48db-b682-4dbb290e7ea3`, model `claude-fable-5`, worktree
+  `.claude/worktrees/spec-1248`, branch `spec-1248`. This is a **direct Ben↔Fable conversation**
+  (Ben's explicit ruling) — not a coordinator escalation channel. Design settled: Option A
+  (structural RLS owner-scoped vault ingestion, pg-boss reconcile sweep + write-nudge, blended
+  notes.search, sequenced after #1556 lands). Ben replied "yes, write it" to approve — **but as of
+  the last pane read, that text was still sitting unsent in the input box** (`❯ yes, write it`,
+  agent_status flipped to `done` without visible output past the proposal). Successor should
+  re-check this pane fresh — if still unsent, it may need `herdr pane send-keys w1:p8R Enter`, or
+  Ben may handle it directly (it's his conversation). Once the spec is written and approved, the
+  Fable session is briefed to message the `Coordinator` label itself to request a build-lane spawn
+  — do not spawn preemptively.
+- **`issue-audit`** — `w1:p7Y`, Codex, session `019ff27b-9f49-7d03-9fab-a45c41536cc9`. Independent
+  board-hygiene auditor, not coordinator-spawned. Merged PR #1596 (docs-only, issue backlog
+  ordering) already. No action needed; leave it alone.
+- **#1246, #1440, #1470** — passive/held per earlier audit, no agent, no action.
+- Two other panes (`w2:p1`, `w3:p2`) are unrelated pre-existing sessions (job-search work) — not
+  part of this run, do not touch.
+- **AWAITING-BEN.md**: #1248 entry already marked RESOLVED (direct Fable conversation) — will need
+  a follow-up entry once/if the spec is approved and a build lane is needed, but that's the Fable
+  session's job to trigger via message to Coordinator, not something to chase now.
+
+### Continuation note
+
+Nothing else queued. Next real decisions: (1) #1556-P2 finishing Phase 1/2 and needing QA +
+merge, (2) #1248 spec landing and needing a build-lane spawn once Ben approves it.
