@@ -3080,3 +3080,35 @@ already spawning a successor, forward the same instruction to it as its first di
 next report from this lane needs close scrutiny.** If relay-7 (or relay-6 itself) reports again with
 no §3 commit, the next action is a hard takeover: spawn a fresh non-relay agent with the design doc
 and signatures inlined into its boot brief, explicitly barred from a research turn.
+
+## Supervision update — 2026-08-13, Phase 1 spawn: #1274, #1467; #1487 routed to Fable
+
+**Spawned two of the three queued Phase-0-cleared lanes** (parallel-safe per the collision map):
+
+- **#1274** external-module trust lint — `security` tier. Pane `w1:p9F`, session
+  `80bf48ba-42ad-4517-a514-df2105e49373`, branch `1274-external-module-trust-lint`, tab `w1:tQ`.
+  Labelled `1274 external-module trust lint` / in-pane `trust-lint-1274`. Handoff doc
+  `docs/coordination/handoffs/2026-08-13-1274-external-module-trust-lint.md`, commit `1d5ceedc0`.
+  Status `building`. Collision note: #1275 serializes after this lane on the same file
+  (`compilePattern`/pattern cache) — do not let #1275 start until this PR lands.
+- **#1467** permission boundary shell-quote — `security` tier. Pane `w1:p9G`, session
+  `1954ef8e-eaa1-4d19-874f-d39ed74e635d`, branch `1467-permission-boundary-shell-quote`, tab
+  `w1:tQ`. Labelled `1467 permission boundary shell-quote` / in-pane `perm-shellquote-1467`.
+  Handoff doc `docs/coordination/handoffs/2026-08-13-1467-permission-boundary-shell-quote.md`,
+  commit `1d5ceedc0`. Status `building`. Requires live-path proof on the PR (real notes through the
+  UI on live dev, screenshot) per the collision map's note on this issue.
+
+Both confirmed `--model sonnet` via `agent start` argv; both renames (FleetView label + in-pane
+`/rename`) confirmed landed via bounded pane read before this update.
+
+**#1487 not spawned blind** — the Phase-0 collision map flagged it as the weakest-specified
+candidate ("issue asks for a dependent-caller investigation first; escalate to Fable if one turns
+up"). Rather than dispatch an investigation subagent myself, routed it directly to `spec-1248
+(Fable)` (idle, available) as a pointer-style question: does #1487 need a dependent-caller
+investigation before it can get a handoff doc, and if so what's the scope. Awaiting her verdict
+before this lane spawns.
+
+**#1489 / PR #1599**: QA agent `qa-1489` (`a0efef4e7fa4a00d6`) still running in background,
+last check-in mid-review (`task-details-dialog.tsx` breakdownTask usage). No verdict yet — do not
+merge #1599 until it reports, and even on pass this is `security` tier: queued for Ben's explicit
+merge sign-off, not unilateral.
