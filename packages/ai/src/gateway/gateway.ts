@@ -181,7 +181,9 @@ export class AssistantToolGateway {
 
     let input: Record<string, unknown>;
     try {
-      input = validateToolInput(found.tool.inputSchema, rawInput);
+      input = await validateToolInput(found.tool.inputSchema, rawInput, {
+        external: found.tool.isExternal === true
+      });
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : "Invalid input" };
     }
@@ -417,7 +419,9 @@ export class AssistantToolGateway {
 
     let input: Record<string, unknown>;
     try {
-      input = validateToolInput(found.tool.inputSchema, rawInput);
+      input = await validateToolInput(found.tool.inputSchema, rawInput, {
+        external: found.tool.isExternal === true
+      });
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : "Invalid input" };
     }

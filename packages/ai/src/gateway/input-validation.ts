@@ -1,4 +1,5 @@
 import type { JsonSchema, ToolInput } from "@moss/module-sdk";
+import { Worker } from "node:worker_threads";
 
 export class ToolInputValidationError extends Error {
   constructor(message: string) {
@@ -30,14 +31,73 @@ interface SchemaNode {
  *  instead of once per tool call. For BUILT-IN modules this is not a new trust boundary: the
  *  pattern is trusted code, same as everything else in the manifest.
  *
- *  For EXTERNAL (third-party) modules it is a real, currently-accepted asymmetry: a module's
- *  `execute` runs Worker-sandboxed and wall-clock capped (worker-runtime.ts's 30s
- *  `invocationTimeoutMs`), but its declared `pattern` compiles and matches here, on the host API
- *  event loop, unconfined and untimed. A catastrophic-backtracking pattern from an installed
- *  external module is not caught by the Worker sandbox that bounds `execute`. Tracked in #1275,
- *  where the confinement/remediation work belongs — not fixed here. */
+ *  For EXTERNAL (third-party) modules, matching runs in a short-lived Worker with a hard timeout
+ *  and resource limits. Built-in modules keep the synchronous compiled-RegExp path below. */
 const PATTERN_INVALID = Symbol("pattern-invalid");
 const patternCache = new Map<string, RegExp | typeof PATTERN_INVALID>();
+const PATTERN_WORKER_TIMEOUT_MS = 100;
+const MAX_PATTERN_WORKERS = 8;
+const patternWorkerWaiters: Array<() => void> = [];
+let activePatternWorkers = 0;
+
+async function acquirePatternWorker(): Promise<() => void> {
+  if (activePatternWorkers >= MAX_PATTERN_WORKERS) {
+    await new Promise<void>((resolve) => patternWorkerWaiters.push(resolve));
+  }
+  activePatternWorkers += 1;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    activePatternWorkers -= 1;
+    patternWorkerWaiters.shift()?.();
+  };
+}
+
+async function matchExternalPattern(pattern: string, value: string): Promise<boolean> {
+  const release = await acquirePatternWorker();
+  let worker: Worker | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    worker = new Worker(new URL("./pattern-worker.mjs", import.meta.url), {
+      workerData: { pattern, value },
+      resourceLimits: {
+        maxOldGenerationSizeMb: 16,
+        maxYoungGenerationSizeMb: 4,
+        codeRangeSizeMb: 8,
+        stackSizeMb: 1
+      }
+    });
+    const result = await new Promise<unknown>((resolve, reject) => {
+      const onMessage = (message: unknown) => resolve(message);
+      const onError = () => reject(new Error("pattern worker failed"));
+      const onExit = (code: number) => {
+        if (code !== 0) reject(new Error("pattern worker exited"));
+      };
+      worker!.once("message", onMessage);
+      worker!.once("error", onError);
+      worker!.once("exit", onExit);
+      timer = setTimeout(
+        () => reject(new Error("pattern worker timed out")),
+        PATTERN_WORKER_TIMEOUT_MS
+      );
+    });
+    if (typeof result !== "boolean")
+      throw new Error("pattern worker returned a non-boolean result");
+    return result;
+  } catch {
+    throw new ToolInputValidationError("Pattern matching failed and was rejected");
+  } finally {
+    if (timer) clearTimeout(timer);
+    if (worker) {
+      worker.removeAllListeners("message");
+      worker.removeAllListeners("error");
+      worker.removeAllListeners("exit");
+      await worker.terminate();
+    }
+    release();
+  }
+}
 
 /**
  * Compiles a manifest `pattern` for whole-string matching, or throws. Fails CLOSED (#1265
@@ -90,7 +150,12 @@ export function compilePattern(pattern: string): RegExp {
  *  as a real safety belt — the sports follow tools bound their catalog keys so a model-supplied
  *  key cannot be arbitrary before it reaches a persisted row and, later, an outbound URL. A
  *  declared bound that nothing enforces is worse than no bound: it reads as protection in review. */
-function validateStringBounds(schema: SchemaNode, value: string, path: string): void {
+async function validateStringBounds(
+  schema: SchemaNode,
+  value: string,
+  path: string,
+  external: boolean
+): Promise<void> {
   if (typeof schema.minLength === "number" && value.length < schema.minLength) {
     throw new ToolInputValidationError(
       `Field ${path} must be at least ${schema.minLength} characters`
@@ -102,15 +167,20 @@ function validateStringBounds(schema: SchemaNode, value: string, path: string): 
     );
   }
   if (typeof schema.pattern === "string") {
-    let compiled: RegExp;
-    try {
-      compiled = compilePattern(schema.pattern);
-    } catch {
-      // compilePattern already fails closed and caches the rejection; re-thrown here with the
-      // field path so the caller sees which field was rejected, not just that some pattern was.
-      throw new ToolInputValidationError(`Field ${path} has an unusable pattern and was rejected`);
-    }
-    if (!compiled.test(value)) {
+    const matches = external
+      ? await matchExternalPattern(schema.pattern, value)
+      : (() => {
+          let compiled: RegExp;
+          try {
+            compiled = compilePattern(schema.pattern);
+          } catch {
+            throw new ToolInputValidationError(
+              `Field ${path} has an unusable pattern and was rejected`
+            );
+          }
+          return compiled.test(value);
+        })();
+    if (!matches) {
       throw new ToolInputValidationError(`Field ${path} has an invalid format`);
     }
   }
@@ -120,7 +190,12 @@ function joinPath(base: string, key: string): string {
   return base === "" ? key : `${base}.${key}`;
 }
 
-function validateObject(schema: SchemaNode, value: ToolInput, basePath: string): void {
+async function validateObject(
+  schema: SchemaNode,
+  value: ToolInput,
+  basePath: string,
+  external: boolean
+): Promise<void> {
   const required = Array.isArray(schema.required) ? schema.required : [];
   for (const key of required) {
     if (!(key in value)) {
@@ -133,11 +208,16 @@ function validateObject(schema: SchemaNode, value: ToolInput, basePath: string):
     if (!(key in value)) {
       continue;
     }
-    validateValue(declared, value[key], joinPath(basePath, key));
+    await validateValue(declared, value[key], joinPath(basePath, key), external);
   }
 }
 
-function validateValue(schema: SchemaNode, value: unknown, path: string): void {
+async function validateValue(
+  schema: SchemaNode,
+  value: unknown,
+  path: string,
+  external: boolean
+): Promise<void> {
   if (Array.isArray(schema.enum) && !schema.enum.some((option) => option === value)) {
     const allowed = schema.enum.map((option) => JSON.stringify(option)).join(", ");
     throw new ToolInputValidationError(`Field ${path} must be one of: ${allowed}`);
@@ -151,17 +231,17 @@ function validateValue(schema: SchemaNode, value: unknown, path: string): void {
   }
 
   if (typeof value === "string") {
-    validateStringBounds(schema, value, path);
+    await validateStringBounds(schema, value, path, external);
   }
 
   if (schema.type === "object" && schema.properties) {
-    validateObject(schema, value as ToolInput, path);
+    await validateObject(schema, value as ToolInput, path, external);
   }
 
   if (schema.type === "array" && schema.items && Array.isArray(value)) {
-    value.forEach((item, index) =>
-      validateValue(schema.items as SchemaNode, item, `${path}[${index}]`)
-    );
+    for (const [index, item] of value.entries()) {
+      await validateValue(schema.items as SchemaNode, item, `${path}[${index}]`, external);
+    }
   }
 }
 
@@ -204,7 +284,11 @@ function validateValue(schema: SchemaNode, value: unknown, path: string): void {
  * every call to that tool rather than being skipped and silently admitting unvalidated input. See
  * {@link compilePattern}.
  */
-export function validateToolInput(schema: JsonSchema | undefined, input: unknown): ToolInput {
+export async function validateToolInput(
+  schema: JsonSchema | undefined,
+  input: unknown,
+  options: { readonly external: boolean }
+): Promise<ToolInput> {
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
     throw new ToolInputValidationError("Tool input must be an object");
   }
@@ -213,7 +297,7 @@ export function validateToolInput(schema: JsonSchema | undefined, input: unknown
     return value;
   }
 
-  validateObject(schema as SchemaNode, value, "");
+  await validateObject(schema as SchemaNode, value, "", options.external);
 
   return value;
 }

@@ -529,6 +529,8 @@ export interface ModuleAssistantToolManifest {
    */
   readonly selfOperationGrant?: ModuleAssistantToolSelfOperationGrant;
   readonly inputSchema?: JsonSchema;
+  /** Set only by the external-module adapter; never accepted from a module manifest. */
+  readonly isExternal?: boolean;
   readonly outputSchema?: JsonSchema;
   readonly featureFlagId?: string;
   readonly execute?: ToolExecute;

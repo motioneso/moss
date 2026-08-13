@@ -710,7 +710,9 @@ export function registerAiRoutes(
 
         // Validate caller-supplied input before execution.
         // Invariant: validateToolInput gates every caller-supplied-input execute call on REST paths.
-        const validatedInput = validateToolInput(manifestTool.inputSchema, body.input ?? {});
+        const validatedInput = await validateToolInput(manifestTool.inputSchema, body.input ?? {}, {
+          external: manifestTool.isExternal === true
+        });
         // Read-only services (no write-capable entries) are passed here so read tools can access
         // informational services like featureGrants. The write→confirm floor remains structurally
         // un-bypassable: this path only reaches execute() for read tools (every write/destructive
