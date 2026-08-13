@@ -2680,3 +2680,16 @@ his own real conversation with Fable. The `send-keys Enter` attempts and the `ne
 about it were a false alarm on the coordinator's part; no actual blocker there. #1248 remains
 Ben↔Fable's own channel — watching for Fable to message the `Coordinator` label once the spec
 lands, per the original brief; no further action here.
+
+**Handoff deferred (Ben, 2026-08-12):** context-meter 71% warning fired, but this was the
+harness's own auto-compaction (not a growing risk of losing state) — Ben confirmed the
+coordinator can defer a manual self-handoff (spawn successor + reap self) when auto-compact has
+already reclaimed the context budget. No successor spawned; same session (`caef4e32...`, pane
+`w1:p8T`) continues driving. Re-adopted fleet fresh post-compaction: still sole `Coordinator`
+pane; #1556-P2 (`d68b2cc4...`, `w1:p8S`) confirmed still genuinely building — same 3 task
+commits (through `c14ef0d1e`), tasks 4-7 open, pane shows "1% until auto-compact" and is about
+to self-relay per its own skill (expected, not a stall); its `agent_status: done` +
+"needs attention" pane title was another status flicker, not a real completion — no action
+taken. #1248 (`53bf3e3a...`, `w1:p8R`) unchanged, revision still 326, no new commits — consistent
+with nothing pending there. issue-audit idle, no action. `merges_since_relay` unchanged at 0.
+Resuming Phase 2 supervision.
