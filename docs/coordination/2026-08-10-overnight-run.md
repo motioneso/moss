@@ -3679,3 +3679,18 @@ real fix-routing instruction (plain text, no em-dashes/punctuation this time) �
 `working` at rev 335+. Lesson: when revision is genuinely flat + idle (not just a stale-looking
 read), don't retry `send-keys Enter` twice — send a small fresh probe message first to confirm the
 pane accepts input at all, then resend the real payload.
+
+## 2026-08-13 — PR #1604 QA respawn failed the same deliverable twice; coordinator posted verdict directly
+
+Respawned Opus QA (`af44bccb4781e9967`, `qa-1604-respawn`) opened by stating it lacked a Task/Agent
+tool and performed the review inline — analysis was thorough and sound (no HIGH/MEDIUM findings,
+specifically traced the exception-path/finally reliability angle, pooled-connection non-leakage via
+`DataContextDb` transaction-scoping, escalation-direction/INHERIT FALSE reasoning, both real
+callers) but it again returned only text, never running `gh pr comment`. Verified again: `gh pr
+view 1604 --json comments` → 0. Two consecutive QA passes failing the identical required-deliverable
+step — per standing practice, not retry-looping a third spawn. Posted the verdict to the PR myself
+using the agent's own analysis verbatim (GREEN, 2 non-blocking hardening notes, MERGE-READY pending
+Ben's sign-off): https://github.com/motioneso/moss/pull/1604#issuecomment-5278431348.
+
+**#1604 (#943) now ready for Ben's sign-off queue** — security tier, CI green, QA GREEN (0
+blocking), verdict posted, PR unmerged pending his explicit OK.
