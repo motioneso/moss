@@ -31,7 +31,7 @@ real-chat-token gap this entry described is moot now that the PR landed. -->
 — exact Caddy IP trust + fail-loud on legacy/unparseable values. Issue #1486 closed. Worktree
 reaped. -->
 
-## #1248 vault-ingestion half — needs a priority ruling, no spec, no agent — 2026-08-12
+## #1248 vault-ingestion half — RESOLVED 2026-08-12
 
 Re-audit of the board's "In progress" column found #1248 ("Internal vault ingestion gap: decide
 and wire searchable first-party vault content") is only **half-superseded**: its passive-retrieval
@@ -40,10 +40,16 @@ scope**, marked P0 on the issue. No approved spec exists for it (spec-before-bui
 spawning a lane), and no agent is assigned. This was flagged internally in the run manifest
 2026-08-12 but never surfaced here — filing now per protocol.
 
-**Ask:** is #1248's vault-ingestion half still P0 priority for this run, or can it wait for a
-later pass? If yes, it needs a spec authored (`superpowers:brainstorming` / `/brief`) before any
-build lane can start — that's a scoping conversation, not something to spawn blind. If it can
-wait, say so and I'll leave it in progress/backlog as-is without further action this run.
+**Ben ruled (chat, 2026-08-12): "let's spec it - ask a fable agent to take a look and ask me any
+questions in a new herdr pane."** Spawned a Fable spec-authoring session directly for Ben to work
+with interactively — worktree `.claude/worktrees/spec-1248`, branch `spec-1248` (off
+`origin/main`), pane `w1:p8R`, agent name `spec-1248-fable`, confirmed on `claude-fable-5` and
+driving. Boot brief: read issue #1248, use `superpowers:brainstorming` against the example spec
+`docs/superpowers/specs/2026-08-10-1553-context-continuity-and-notes-retrieval.md`, ask Ben
+directly in-pane. Relayed Ben's follow-up instruction: only ask questions if genuinely needed,
+proceed on judgment otherwise. This is an interactive Ben↔Fable conversation now, not a coordinator
+blocker — no further coordinator action needed until the spec is approved, at which point the
+Fable session (or Ben) hands off to the `Coordinator` pane to spawn a build lane.
 
 ## #1556 UAT blocked on a one-time interactive `claude setup-token` OAuth step — RESOLVED 2026-08-12
 
