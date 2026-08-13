@@ -126,6 +126,35 @@ export interface EngineHostDeps {
    * behavior (always the bounded-fallback/tmux fork, #1350 two-composition-roots guard).
    */
   readonly persistentRuntimePool?: AdmitCapablePool;
+  /**
+   * #1554 — the MUTABLE live view of the three persistent-runtime settings, shared by reference
+   * with `main.ts`'s composition root (the pool's `cap` getter and `readIdleReapMinutes` read the
+   * same object). {@link CliChatEngineHost.applyPersistentRuntimeParams} refreshes it from every
+   * launch's {@link RpcLaunchParams}, which is the plan's live-reload channel for this topology.
+   * Absent ⇒ pre-#1554 behavior (pool presence alone gates persistent selection).
+   */
+  readonly persistentLiveConfig?: PersistentRuntimeLiveConfig;
+}
+
+/**
+ * #1554 — the cli-runner's current view of `chat.persistent_runtime.enabled`,
+ * `chat.persistent_pool_cap` and `chat.persistent_idle_reap_minutes`. Seeded from boot env as a
+ * bootstrap default (the very first launch may arrive before the api reads settings), then kept
+ * current by each launch's params. Mutable and shared by reference — never copied, or the pool and
+ * the idle-reap timer would drift from the host.
+ */
+export interface PersistentRuntimeLiveConfig {
+  enabled: boolean;
+  poolCap: number;
+  idleReapMinutes: number;
+}
+
+/** A cap or idle window of 0 denies every admission / reaps every warm child on the next tick, so
+ *  a non-positive or non-finite value from the wire keeps the last known good value instead. */
+function positiveIntOr(value: unknown, lastKnown: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 1
+    ? Math.floor(value)
+    : lastKnown;
 }
 
 const DEFAULT_LAUNCH_TIMEOUT_MS = 70_000;
@@ -258,7 +287,25 @@ export class CliChatEngineHost {
     return promise;
   }
 
+  /**
+   * #1554 — refresh the shared live-config holder from a launch's params. This is the ONLY way the
+   * api's DB-backed persistent-runtime settings reach the cli-runner (it has no DB access and the
+   * sanitized child env deliberately carries no app config), so an operator flipping
+   * `chat.persistent_runtime.enabled` / the cap / the idle window takes effect on the next launch
+   * with no redeploy. Absent fields are sticky: they mean "the api didn't say", not "off/zero".
+   */
+  applyPersistentRuntimeParams(params: RpcLaunchParams): void {
+    const live = this.deps.persistentLiveConfig;
+    if (!live) return;
+    if (typeof params.persistentRuntimeEnabled === "boolean") {
+      live.enabled = params.persistentRuntimeEnabled;
+    }
+    live.poolCap = positiveIntOr(params.persistentPoolCap, live.poolCap);
+    live.idleReapMinutes = positiveIntOr(params.persistentIdleReapMinutes, live.idleReapMinutes);
+  }
+
   private async launchOnce(sessionKey: string, params: RpcLaunchParams): Promise<RpcLaunchResult> {
+    this.applyPersistentRuntimeParams(params);
     const key = sanitizeSessionKey(sessionKey);
 
     // (1) ADMISSION under the server-wide mutex. Compute liveKeys = mux ∪ reservations
@@ -325,12 +372,14 @@ export class CliChatEngineHost {
       homeBase: this.deps.homeBase,
       ownsDrain: true,
       executionMode: params.executionMode,
-      // #1554 task #5: the pin is lifted — the RPC root now selects the persistent adapter
-      // exactly when a real pool was wired in at composition time (`main.ts`'s
-      // `createCliRunner`). Pool presence (not the `chat.persistent_runtime.enabled` setting
-      // directly — cli-runner has no DB/live-config access, see `main.ts`) is what gates this;
-      // absent `persistentRuntimePool` ⇒ unchanged pre-task-5 behavior (always bounded/tmux).
-      persistentRuntimeEnabled: this.deps.persistentRuntimePool !== undefined,
+      // #1554: the pin is lifted — the RPC root selects the persistent adapter when a pool was
+      // wired in AND `chat.persistent_runtime.enabled` is currently on. The flag arrives per
+      // launch in the RPC params (the plan's live-reload channel for this topology), so flipping
+      // it drains to the bounded-fallback engine on the next launch without a redeploy. With no
+      // live-config holder wired, pool presence alone gates it (pre-#1554 behavior).
+      persistentRuntimeEnabled:
+        this.deps.persistentRuntimePool !== undefined &&
+        (this.deps.persistentLiveConfig?.enabled ?? true),
       persistentPool: this.deps.persistentRuntimePool,
       // #363: the 0600 token file the claude launch reads CLAUDE_CODE_OAUTH_TOKEN from at
       // runtime (claude-scoped; only used by buildClaudeCommand, only if the file exists).

@@ -1,5 +1,5 @@
 /**
- * #1554 task #5 — `main.ts`'s `readConfig()` (new `MOSS_CHAT_PERSISTENT_*` boot-time env vars)
+ * #1554 — `main.ts`'s `readConfig()` (the `MOSS_CHAT_PERSISTENT_*` bootstrap env vars)
  * and `createCliRunner()`'s persistent-pool composition (the forward-reference `hostRef` box
  * that resolves the pool ↔ host circular construction dependency, and the `persistentPool`/
  * `persistentRuntimePool`/`readIdleReapMinutes` deps it threads into `CliChatEngineHost`).
@@ -85,10 +85,10 @@ describe("createCliRunner — persistent-pool composition (#1554 task #5)", () =
     vi.restoreAllMocks();
   });
 
-  it("constructs no pool, and passes no persistentPool/persistentRuntimePool/readIdleReapMinutes to the host, when persistentRuntimeEnabled is false", () => {
+  it("constructs the pool even when the boot env flag is off — enable/disable is a live per-launch routing decision, not a boot-time existence one (#1554)", () => {
     const config = readConfig({ ...BASE_ENV });
     createCliRunner(config);
-    expect(persistentRuntimePoolMock).not.toHaveBeenCalled();
+    expect(persistentRuntimePoolMock).toHaveBeenCalledTimes(1);
   });
 
   it("constructs the pool with the configured cap when persistentRuntimeEnabled is true, and the host's readIdleReapMinutes resolves to the configured value", async () => {
@@ -102,11 +102,13 @@ describe("createCliRunner — persistent-pool composition (#1554 task #5)", () =
 
     expect(persistentRuntimePoolMock).toHaveBeenCalledTimes(1);
     const poolOpts = persistentRuntimePoolMock.mock.calls[0]![0] as {
-      cap: number;
+      cap: () => number;
       createRuntime: () => unknown;
       onReap: (sessionKey: string, reason: string) => void;
     };
-    expect(poolOpts.cap).toBe(6);
+    // #1554: `cap` is a getter over the live-config holder, not a frozen number — boot env only
+    // seeds it (see cli-runner-persistent-live-config.test.ts for the launch-param update path).
+    expect(poolOpts.cap()).toBe(6);
 
     // createRuntime is the pool's factory for a fresh child — proves it delegates to the real
     // ClaudePersistentRuntime constructor rather than something ad hoc.

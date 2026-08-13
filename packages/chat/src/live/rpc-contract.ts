@@ -292,6 +292,31 @@ export interface RpcLaunchParams {
    * it passes `--model <id>`; absent ⇒ also omit.
    */
   readonly model?: string;
+  /**
+   * #1554 — `chat.persistent_runtime.enabled`, read LIVE by the api on every launch and carried
+   * here. This is the plan's live-reload mechanism for the RPC/containerized topology ("Settings &
+   * flags": values reach the cli-runner root inside RPC launch params, never via child env), so an
+   * operator flipping the rollout flag drains to the bounded-fallback engine without a deploy.
+   * Absent ⇒ cli-runner keeps its last known value (boot env bootstrap on the first launch).
+   */
+  readonly persistentRuntimeEnabled?: boolean;
+  /** #1554 — `chat.persistent_pool_cap`, same live-read-per-launch contract as
+   *  {@link persistentRuntimeEnabled}. Non-positive/garbage values are ignored server-side. */
+  readonly persistentPoolCap?: number;
+  /** #1554 — `chat.persistent_idle_reap_minutes`, same live-read-per-launch contract; the
+   *  cli-runner's idle-reap timer re-reads it on every tick. */
+  readonly persistentIdleReapMinutes?: number;
+}
+
+/**
+ * #1554 — the three persistent-runtime settings the api reads live (from `app.instance_settings`)
+ * and ships to the cli-runner inside {@link RpcLaunchParams}. The api owns the DB; the cli-runner
+ * has no DB access, so this launch-param channel is the ONLY way these settings reach it.
+ */
+export interface PersistentRuntimeLaunchConfig {
+  readonly enabled: boolean;
+  readonly poolCap: number;
+  readonly idleReapMinutes: number;
 }
 
 /**

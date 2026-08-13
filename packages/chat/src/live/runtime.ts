@@ -39,6 +39,7 @@ import {
   type RpcClientLogger,
   type RpcReconcileDriver
 } from "./chat-engine-rpc-client.js";
+import type { PersistentRuntimeLaunchConfig } from "./rpc-contract.js";
 import { createChatEngine } from "./engine-selection.js";
 import { CliChatUnavailableError } from "./errors.js";
 import { purgePrivateTranscripts } from "./private-transcript-cleanup.js";
@@ -230,6 +231,7 @@ function createRpcEngineFactory(opts: {
   readonly onReconcile?: (driver: RpcReconcileDriver) => Promise<void>;
   readonly onSessionReaped?: (sessionKey: string, reason: ReapReason) => void;
   readonly logger?: RpcClientLogger;
+  readonly readPersistentRuntimeConfig?: () => Promise<PersistentRuntimeLaunchConfig>;
 }): RpcEngineFactory {
   const connection = new RpcConnection({
     socketPath: opts.socketPath,
@@ -239,7 +241,13 @@ function createRpcEngineFactory(opts: {
     logger: opts.logger
   });
   const factory: ChatEngineFactory = (provider, sessionKey, engineOpts) =>
-    new ChatEngineRpcClient(provider, sessionKey, connection, engineOpts?.executionMode);
+    new ChatEngineRpcClient(
+      provider,
+      sessionKey,
+      connection,
+      engineOpts?.executionMode,
+      opts.readPersistentRuntimeConfig
+    );
   return { factory, connection };
 }
 
@@ -267,9 +275,13 @@ export function selectEngineFactory(
     readonly onSessionReaped?: (sessionKey: string, reason: ReapReason) => void;
     readonly logger?: RpcClientLogger;
     readonly env?: NodeJS.ProcessEnv;
-    /** #1557 Phase 1: forwarded only to the in-process factory below. The socket/RPC branch
-     *  ignores it — the cli-runner root selects for itself and pins `false` (#1350 guard). */
+    /** #1557 Phase 1: forwarded only to the in-process factory below. The socket/RPC branch has
+     *  its own channel — {@link readPersistentRuntimeConfig} — since it must carry the values
+     *  across the socket rather than close over them. */
     readonly persistentRuntimeEnabled?: boolean;
+    /** #1554 — the RPC branch's counterpart: a LIVE read of all three persistent-runtime settings,
+     *  called per launch and shipped in `RpcLaunchParams` (the cli-runner has no DB access). */
+    readonly readPersistentRuntimeConfig?: () => Promise<PersistentRuntimeLaunchConfig>;
   } = {}
 ): { factory: ChatEngineFactory; connection?: RpcConnection } {
   const env = opts.env ?? process.env;
@@ -290,7 +302,8 @@ export function selectEngineFactory(
       rpcSecret,
       onReconcile: opts.onReconcile,
       onSessionReaped: opts.onSessionReaped,
-      logger: opts.logger
+      logger: opts.logger,
+      readPersistentRuntimeConfig: opts.readPersistentRuntimeConfig
     });
     return { factory, connection };
   }
@@ -372,8 +385,10 @@ export interface CreateChatSessionRuntimeDeps {
     /** Start the §5.5 idle reaper at boot (default true). The returned `shutdown()` stops it. */
     readonly startIdleReaper?: boolean;
     /** #1557 Phase 1 (`chat.persistent_runtime.enabled`) — forwarded to `selectEngineFactory`,
-     *  which forwards it only to the in-process branch. The socket/RPC branch ignores it. */
+     *  which forwards it only to the in-process branch. */
     readonly persistentRuntimeEnabled?: boolean;
+    /** #1554 — the socket/RPC branch's live settings read, shipped per launch in the RPC params. */
+    readonly readPersistentRuntimeConfig?: () => Promise<PersistentRuntimeLaunchConfig>;
   };
   /** Optional gateway for cross-tool pre-turn context fan-out. Structural — real AssistantToolGateway satisfies this. */
   readonly crossToolGateway?: {
@@ -492,6 +507,7 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
       logger: deps.engineSelection.logger,
       env: deps.engineSelection.env,
       persistentRuntimeEnabled: deps.engineSelection.persistentRuntimeEnabled,
+      readPersistentRuntimeConfig: deps.engineSelection.readPersistentRuntimeConfig,
       onReconcile,
       onSessionReaped
     });

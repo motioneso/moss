@@ -9,7 +9,12 @@ import type { ReapReason, ProviderChatRuntime } from "./provider-runtime.js";
 import type { EngineLaunchOpts } from "./types.js";
 
 export interface PersistentRuntimePoolDeps {
-  readonly cap: number; // chat.persistent_pool_cap, read once at pool construction
+  /**
+   * `chat.persistent_pool_cap`. A getter re-reads it on every admission, which is how the
+   * cli-runner root lets an operator widen or narrow the pool without restarting the process
+   * (#1554); a plain number pins it at construction, which is all the in-process root needs.
+   */
+  readonly cap: number | (() => number);
   readonly createRuntime: (sessionKey: string, opts: EngineLaunchOpts) => ProviderChatRuntime;
   // Fires AFTER a runtime.reap() this pool initiated (idle-timeout | lru-evict), not on
   // caller-driven kill (release()).
@@ -54,7 +59,8 @@ export class PersistentRuntimePool {
    */
   admit(sessionKey: string, opts: EngineLaunchOpts): Promise<AdmitResult> {
     return this.withLock(async () => {
-      if (this.children.size < this.deps.cap) {
+      const cap = typeof this.deps.cap === "function" ? this.deps.cap() : this.deps.cap;
+      if (this.children.size < cap) {
         return this.construct(sessionKey, opts);
       }
 

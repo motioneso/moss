@@ -308,6 +308,7 @@ import {
   makeChatMultiplexerStatusProbe,
   makeProviderConnectionCheckProbe,
   resolveChatEngineFactory,
+  createPersistentRuntimeConfigLiveReader,
   type LiveChatMultiplexerStatus
 } from "./chat-multiplexer.js";
 import { buildOnboardingInstall } from "./onboarding-install.js";
@@ -2313,7 +2314,18 @@ export function registerBuiltInApiRoutes(
     // hook, and starts the §5.5 idle reaper. The {method,id,sessionKey,bytes}-only debug logger (§6.4)
     // is intentionally omitted (no frame-body logging). Tests that inject an explicit chatEngineFactory
     // bypass this entirely (no socket selection). Undefined on the in-process / host-dev path.
-    chatEngineSelection: socketConfigured && !dependencies.chatEngineFactory ? { env } : undefined,
+    // #1554: the RPC branch also carries a live read of the persistent-runtime settings, since the
+    // cli-runner has no DB access — it learns `chat.persistent_runtime.*` only from launch params.
+    chatEngineSelection:
+      socketConfigured && !dependencies.chatEngineFactory
+        ? {
+            env,
+            readPersistentRuntimeConfig: createPersistentRuntimeConfigLiveReader(
+              dependencies.rootDb,
+              (msg) => server.log.info(msg)
+            )
+          }
+        : undefined,
     passiveMemoryRecall: {
       async recall(scopedDb, ownerUserId, query, options) {
         const provider = await createRuntimeEmbeddingProvider(scopedDb);

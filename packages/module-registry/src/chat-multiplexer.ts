@@ -28,7 +28,7 @@ import {
   type ChatEngineFactory,
   type RpcConnection
 } from "@moss/chat";
-import type { CliChatEngine, ReapReason } from "@moss/chat/live";
+import type { CliChatEngine, PersistentRuntimeLaunchConfig, ReapReason } from "@moss/chat/live";
 import {
   CHAT_PERSISTENT_IDLE_REAP_MINUTES_CONFIG_KEY,
   CHAT_PERSISTENT_POOL_CAP_CONFIG_KEY,
@@ -450,9 +450,10 @@ function createPersistentRuntimeEnabledLiveReader(
 }
 
 /**
- * #1554 task #5 — one-time read of `chat.persistent_pool_cap` (Decision 1: the cap is a
- * pool-CONSTRUCTION-time value, read once, unlike `persistentRuntimeEnabled`/
- * `readIdleReapMinutes` which are re-read live). Same bounded pre-auth exception as
+ * #1554 — read of `chat.persistent_pool_cap`. The in-process root reads it once at pool
+ * construction (Decision 1); the RPC root re-reads it per launch via
+ * {@link createPersistentRuntimeConfigLiveReader}, since its pool outlives any single deploy.
+ * Same bounded pre-auth exception as
  * {@link readMultiplexerChoice}. Fail-closed to the registry default (never 0 — a 0 cap would
  * permanently deny every admission) on a missing row, an unparseable value, or a read error.
  */
@@ -514,6 +515,35 @@ function createIdleReapMinutesLiveReader(
       );
       return 30;
     }
+  };
+}
+
+/**
+ * #1554 — the RPC/containerized topology's live-reload channel. The cli-runner root has no DB
+ * access, so the api reads all three persistent-runtime settings here on EVERY launch and ships
+ * them inside `RpcLaunchParams` (plan, "Settings & flags": "Values reach the cli-runner root
+ * inside RPC launch params (never via child env)"). Each field keeps the same fail-closed posture
+ * as its in-process counterpart: enabled → `false`, cap → 4, idle-reap → 30, never 0.
+ */
+export function createPersistentRuntimeConfigLiveReader(
+  appDb: Kysely<MossDatabase>,
+  log?: (msg: string) => void
+): () => Promise<PersistentRuntimeLaunchConfig> {
+  const readEnabled = createPersistentRuntimeEnabledLiveReader(appDb, log);
+  const readIdleReap = createIdleReapMinutesLiveReader(appDb, log);
+  return async () => {
+    const [enabled, poolCap, idleReapMinutes] = await Promise.all([
+      readEnabled(),
+      readPersistentPoolCap(appDb).catch((err) => {
+        const reason = err instanceof Error ? err.message : String(err);
+        log?.(
+          `[chat] could not read chat.persistent_pool_cap setting (${reason}) — defaulting to 4`
+        );
+        return 4;
+      }),
+      readIdleReap()
+    ]);
+    return { enabled, poolCap, idleReapMinutes };
   };
 }
 

@@ -24,7 +24,7 @@ import {
 import { resolveMossEnv } from "@moss/db";
 
 import { PROVIDER_CATALOG } from "./catalog.js";
-import { CliChatEngineHost } from "./engine-host.js";
+import { CliChatEngineHost, type PersistentRuntimeLiveConfig } from "./engine-host.js";
 import { InstallService } from "./install-service.js";
 import { LOGIN_ADAPTERS } from "./login-adapters.js";
 import { readProviderCredentialEnv } from "./provider-token-store.js";
@@ -45,21 +45,21 @@ export interface CliRunnerConfig {
   /** Tools-volume prefix the installer stages/promotes into (`NPM_CONFIG_PREFIX`, §7.1). */
   readonly toolsPrefix: string;
   /**
-   * #1554 task #5 — `chat.persistent_runtime.enabled`'s RPC-topology equivalent
-   * (`MOSS_CHAT_PERSISTENT_RUNTIME_ENABLED`). Unlike the in-process root
-   * (`chat-multiplexer.ts`), cli-runner has no DB/live-config access, so this is a
-   * boot-time snapshot, not a live-reloadable setting — a deliberate, documented deviation
-   * from Decision 4's live-reload semantics for this one topology. Default OFF, matching
-   * the pre-task-5 pinned-false behavior until an operator opts in.
+   * #1554 — `chat.persistent_runtime.enabled`'s BOOTSTRAP value
+   * (`MOSS_CHAT_PERSISTENT_RUNTIME_ENABLED`), used only until the first RPC launch arrives.
+   * cli-runner has no DB access, so the api reads the live setting and ships it in every
+   * launch's params (plan, "Settings & flags"); `CliChatEngineHost.applyPersistentRuntimeParams`
+   * then keeps the shared live-config holder current. Default OFF.
    */
   readonly persistentRuntimeEnabled: boolean;
-  /** `chat.persistent_pool_cap`'s boot-time snapshot (`MOSS_CHAT_PERSISTENT_POOL_CAP`); same
+  /** `chat.persistent_pool_cap`'s bootstrap value (`MOSS_CHAT_PERSISTENT_POOL_CAP`); same
    *  fail-closed default (4) as the registry entry (`@moss/settings`), duplicated here rather
-   *  than imported since cli-runner does not depend on `@moss/settings`. */
+   *  than imported since cli-runner does not depend on `@moss/settings`. Live launch params
+   *  override it — see {@link persistentRuntimeEnabled}. */
   readonly persistentPoolCap: number;
-  /** `chat.persistent_idle_reap_minutes`'s boot-time snapshot
-   *  (`MOSS_CHAT_PERSISTENT_IDLE_REAP_MINUTES`); re-read on every timer tick from this SAME
-   *  boot-time value (no live reload here — see {@link persistentRuntimeEnabled}'s doc). */
+  /** `chat.persistent_idle_reap_minutes`'s bootstrap value
+   *  (`MOSS_CHAT_PERSISTENT_IDLE_REAP_MINUTES`); the idle-reap timer re-reads the live holder on
+   *  every tick, so a launch-param update takes effect on the next sweep. */
   readonly persistentIdleReapMinutes: number;
 }
 
@@ -100,7 +100,8 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): CliRunnerConfi
     neutralBase: resolveMossEnv(env, "JARVIS_CLI_NEUTRAL_BASE") ?? DEFAULT_NEUTRAL_BASE,
     homeBase,
     toolsPrefix: env.JARVIS_CLI_TOOLS_PREFIX ?? env.NPM_CONFIG_PREFIX ?? DEFAULT_TOOLS_PREFIX,
-    // #1554 task #5 — see CliRunnerConfig's doc comments: boot-time snapshots, not live config.
+    // #1554 — see CliRunnerConfig's doc comments: bootstrap values only; RPC launch params carry
+    // the live settings from the api on every launch.
     persistentRuntimeEnabled: env.MOSS_CHAT_PERSISTENT_RUNTIME_ENABLED === "1",
     persistentPoolCap: readPositiveIntEnv(
       env.MOSS_CHAT_PERSISTENT_POOL_CAP,
@@ -212,18 +213,27 @@ export function createCliRunner(
   // over `hostRef`, which is assigned once `host` is constructed below, before `server.start()`
   // (and therefore before any session can be admitted/reaped) ever runs.
   const hostRef: { current: CliChatEngineHost | undefined } = { current: undefined };
-  const persistentPool = config.persistentRuntimeEnabled
-    ? new PersistentRuntimePool({
-        cap: config.persistentPoolCap,
-        // Mirrors the default (non-perUserUid) `sessionIo` in `engine-host.ts`'s `launchOnce`:
-        // the SAME shared sanitized `io`, not a fresh one per session. `perUserUid`'s
-        // per-session sanitized io is a known, accepted gap for pool-admitted runtimes (that
-        // isolation mode is default OFF; revisit if it's ever turned on alongside the pool).
-        createRuntime: () => new ClaudePersistentRuntime({ io }),
-        onReap: (sessionKey, reason) => hostRef.current?.notifySessionReaped(sessionKey, reason),
-        clock: { now: () => Date.now() }
-      })
-    : undefined;
+  // #1554 — the process-wide live view of the three persistent-runtime settings. Boot env only
+  // seeds it; every launch refreshes it from the api's RPC params, and the pool + idle-reap timer
+  // read THIS object (never a copy), so `chat.persistent_runtime.*` changes take effect without a
+  // redeploy — the plan's "flip the flag, no deploy" guarantee for the containerized topology.
+  const persistentLiveConfig: PersistentRuntimeLiveConfig = {
+    enabled: config.persistentRuntimeEnabled,
+    poolCap: config.persistentPoolCap,
+    idleReapMinutes: config.persistentIdleReapMinutes
+  };
+  // Constructed unconditionally: enable/disable is a live per-launch routing decision inside
+  // `engine-host.ts`, not a boot-time existence decision. An unused pool holds no children.
+  const persistentPool = new PersistentRuntimePool({
+    cap: () => persistentLiveConfig.poolCap,
+    // Mirrors the default (non-perUserUid) `sessionIo` in `engine-host.ts`'s `launchOnce`:
+    // the SAME shared sanitized `io`, not a fresh one per session. `perUserUid`'s
+    // per-session sanitized io is a known, accepted gap for pool-admitted runtimes (that
+    // isolation mode is default OFF; revisit if it's ever turned on alongside the pool).
+    createRuntime: () => new ClaudePersistentRuntime({ io }),
+    onReap: (sessionKey, reason) => hostRef.current?.notifySessionReaped(sessionKey, reason),
+    clock: { now: () => Date.now() }
+  });
 
   const host = new CliChatEngineHost({
     io,
@@ -236,11 +246,12 @@ export function createCliRunner(
     // Presence-only PATH probe INSIDE cli-runner (the tools volume is on PATH, §7.1).
     cliPresent: (provider: ProviderKind) => cliAvailable(provider),
     multiplexerUsable: () => tmuxAvailable(),
-    // #1554 task #5 — same concrete pool instance for both structural roles (sweep + admit);
+    // #1554 — same concrete pool instance for both structural roles (sweep + admit);
     // see `EngineHostDeps`'s doc comments for why they're two separate fields.
     persistentPool,
     persistentRuntimePool: persistentPool,
-    readIdleReapMinutes: persistentPool ? async () => config.persistentIdleReapMinutes : undefined
+    persistentLiveConfig,
+    readIdleReapMinutes: async () => persistentLiveConfig.idleReapMinutes
   });
   hostRef.current = host;
 

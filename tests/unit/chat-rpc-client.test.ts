@@ -172,6 +172,58 @@ describe("verified-submit RPC client", () => {
       })
     );
   });
+
+  // #1554 — the api half of the live-reload channel: the cli-runner has no DB access, so every
+  // launch must carry a FRESH read of the three persistent-runtime settings (plan, "Settings &
+  // flags"). A settings read that throws must degrade the launch to persistent-off, never fail it.
+  it("carries a fresh read of the persistent-runtime settings on every launch", async () => {
+    const launch = vi.fn().mockResolvedValue({ offset: 0 });
+    let enabled = true;
+    const client = new ChatEngineRpcClient(
+      "anthropic",
+      "u1",
+      { launch } as unknown as RpcConnection,
+      "interactive",
+      async () => ({ enabled, poolCap: 6, idleReapMinutes: 15 })
+    );
+
+    await client.launch({ neutralDir: "/unused", personaPath: "/unused/p.md", personaText: "p" });
+    expect(launch).toHaveBeenLastCalledWith(
+      "u1",
+      expect.objectContaining({
+        persistentRuntimeEnabled: true,
+        persistentPoolCap: 6,
+        persistentIdleReapMinutes: 15
+      })
+    );
+
+    enabled = false; // operator flips the setting off — no restart
+    await client.launch({ neutralDir: "/unused", personaPath: "/unused/p.md", personaText: "p" });
+    expect(launch).toHaveBeenLastCalledWith(
+      "u1",
+      expect.objectContaining({ persistentRuntimeEnabled: false })
+    );
+  });
+
+  it("falls back to persistent-off when the settings read throws", async () => {
+    const launch = vi.fn().mockResolvedValue({ offset: 0 });
+    const client = new ChatEngineRpcClient(
+      "anthropic",
+      "u1",
+      { launch } as unknown as RpcConnection,
+      "interactive",
+      async () => {
+        throw new Error("db down");
+      }
+    );
+
+    await client.launch({ neutralDir: "/unused", personaPath: "/unused/p.md", personaText: "p" });
+
+    expect(launch).toHaveBeenLastCalledWith(
+      "u1",
+      expect.objectContaining({ persistentRuntimeEnabled: false })
+    );
+  });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────

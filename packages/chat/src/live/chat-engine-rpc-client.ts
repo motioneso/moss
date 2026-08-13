@@ -62,6 +62,7 @@ import {
   type RpcListLiveSessionsResult,
   type RpcMethod,
   type RpcOk,
+  type PersistentRuntimeLaunchConfig,
   type RpcProbeProviderParams,
   type RpcProbeProviderResult,
   type RpcPurgeTranscriptsResult,
@@ -759,7 +760,13 @@ export class ChatEngineRpcClient implements CliChatEngine {
     private readonly conn: RpcConnection,
     // Defensive-only default (the value is always threaded from the NOT NULL DB column in prod);
     // the one-shot-by-default flip lives at the DB + repository write-path layer (#1238/#1239).
-    private readonly executionMode: AiProviderExecutionMode = "interactive"
+    private readonly executionMode: AiProviderExecutionMode = "interactive",
+    /**
+     * #1554 — live read of the three persistent-runtime settings, called on EVERY launch so the
+     * cli-runner root gets current values (the plan's live-reload channel for this topology).
+     * Absent ⇒ the launch carries no persistent fields and the runner keeps its boot bootstrap.
+     */
+    private readonly readPersistentConfig?: () => Promise<PersistentRuntimeLaunchConfig>
   ) {}
 
   /**
@@ -768,6 +775,17 @@ export class ChatEngineRpcClient implements CliChatEngine {
    * meaningless cross-container). Returns the post-drain offset (§4.1.2).
    */
   async launch(opts: EngineLaunchOpts): Promise<{ offset: number }> {
+    // #1554: fail-closed — a settings read that throws degrades this launch to the bounded-fallback
+    // engine (persistent OFF), never fails the turn. Same posture as the in-process root's readers.
+    const persistent = this.readPersistentConfig
+      ? await this.readPersistentConfig().catch(
+          (): PersistentRuntimeLaunchConfig => ({
+            enabled: false,
+            poolCap: 4,
+            idleReapMinutes: 30
+          })
+        )
+      : undefined;
     const params: RpcLaunchParams = {
       provider: this.provider,
       executionMode: this.executionMode,
@@ -776,7 +794,14 @@ export class ChatEngineRpcClient implements CliChatEngine {
       ...(opts.mcpServerUrl !== undefined ? { mcpServerUrl: opts.mcpServerUrl } : {}),
       ...(opts.replayBatch !== undefined ? { replayBatch: opts.replayBatch } : {}),
       ...(opts.replayBatch ? { replayAttemptId: opts.replayAttemptId ?? randomUUID() } : {}),
-      ...(opts.model !== undefined ? { model: opts.model } : {})
+      ...(opts.model !== undefined ? { model: opts.model } : {}),
+      ...(persistent
+        ? {
+            persistentRuntimeEnabled: persistent.enabled,
+            persistentPoolCap: persistent.poolCap,
+            persistentIdleReapMinutes: persistent.idleReapMinutes
+          }
+        : {})
     };
     const result = await this.conn.launch(this.sessionKey, params);
     return { offset: result.offset };
