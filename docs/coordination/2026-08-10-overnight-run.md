@@ -2412,3 +2412,19 @@ instruction to actually run `gh pr comment` and confirm the comment exists befor
 **Next:** watch for `qa-1452-b`'s verdict comment on PR #1595; act on GREEN (merge, routine-tier
 auto-merge-after-green) or RED (fix directly — no build agent currently assigned to #1452 since the
 coordinator finished its build-side work directly last segment).
+
+## #1452 — QA GREEN, merged, 2026-08-12 (autonomous tick)
+
+`qa-1452-b` posted a GREEN/MERGE-READY verdict on PR #1595
+(https://github.com/motioneso/moss/pull/1595#issuecomment-5274857211): CI green, live-path proof
+confirmed (real `pnpm test:uat` run, 1 passed, teardown verified via `assertNoLeakedResources`), 0
+blocking findings. Merged (`83271b95a`, squash, branch deleted). Issue comment posted
+(https://github.com/motioneso/moss/issues/1452#issuecomment-5274862304); board auto-moved to Done
+and issue auto-closed via the linked-PR automation — verified directly against GitHub, not assumed.
+
+Ben asked why #1429's relay3 used a screenshot for live-path proof, believing that requirement had
+been dropped. Checked `docs/DEVELOPMENT_STANDARDS.md` Live-Path Gate section directly — still
+requires "a `gh pr comment` linking the e2e UAT run and screenshots" verbatim, no recent commit
+changed it. No record found of a decision to drop it. Flagged back to Ben; awaiting clarification —
+if he confirms a new standard, update `DEVELOPMENT_STANDARDS.md` + the coordinate skill so future
+relays don't guess.
