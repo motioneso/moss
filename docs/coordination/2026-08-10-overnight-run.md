@@ -3347,3 +3347,14 @@ earlier). `send-keys Enter` did not clear it (not a simple trust dialog); `herdr
 Still no substantive status report from this lane in this segment — the pre-committed hard-
 takeover criterion (next report shows zero real §3 implementation commits) has not yet been
 evaluated since no report has arrived; watching for one now that it's unstuck.
+
+## #1248 relay-6 froze a SECOND time, first nudge failed to clear it (2026-08-13)
+
+Same bell-title freeze recurred minutes after the first nudge cleared it (rev stuck at 3137/3138
+across 3 ticks). First `herdr pane run w1:p9D "continue"` attempt did NOT clear it this time (state
+unchanged after one full monitor tick — unlike the first freeze, which cleared immediately).
+Followed with `send-keys Enter` + a short pause + re-check: that cleared it, `working` rev 3145,
+title back to normal `◑` glyph. Two freezes in one segment, one of which needed a second attempt,
+is new behavior for this lane — flagging as a data point toward the pre-committed hard-takeover
+criterion. Still watching for a real §3-implementation status report from this lane; none received
+yet this segment despite ~600+ revisions of activity.
