@@ -16,31 +16,44 @@ the fix itself are needed**, only wrap-up hygiene.
 
 ## The 3 blocking QA findings — status of each
 
-### 1. CI was red — rerun in flight, check it first
-Two jobs failed on the original push (run `31678621320`):
-- `Verify foundation and app`: `tests/unit/chat-drawer-surface.test.tsx:525` failed 1/4474
-  (`resets state on a flip in both directions` — aria-pressed race, timing-fragile test unrelated
-  to this PR's diff). **Confirmed unrelated:** `git diff --stat origin/main...HEAD` touches only
-  `provider-probe.ts`, `provider-probe.test.ts`, `main.ts`, `engine-host.ts` — never
-  `chat-drawer-surface.test.tsx` or anything it depends on. Ran it 3x locally, passed 3/3.
-- `Compose deployment smoke`: `infra-api-1` unhealthy, no app-level logs surfaced in the job log.
-  Diff doesn't touch API/compose/docker files. Checked last 8 runs on `main` — all green, so this
-  isn't a persistently broken pipeline.
-- Merge-base `198928da4` is green per QA. Conclusion: **plausible flake, not a real regression** —
-  but this is a judgement call QA explicitly declined to make for us, so don't skip re-checking.
+### 1. CI foundation job failed TWICE IDENTICALLY — do not rerun a third time, investigate for real
+Two jobs failed on the original push (run `31678621320`). `gh run rerun 31678621320 --failed` was
+triggered once already. Results as of 2026-08-13 (end of relay 3):
+- **`Compose deployment smoke`: now PASS (3m22s) on rerun.** Treat as confirmed flake — no further
+  action needed on this one.
+- **`Verify foundation and app`: FAILED AGAIN, same exact test, same line, same assertion**, on the
+  rerun (7m15s — a real full run, not a short-circuit):
+  `tests/unit/chat-drawer-surface.test.tsx:525:85`, test `"resets state on a flip in both
+  directions"`, `AssertionError: expected false to be true` on
+  `findByAriaLabel(rendererB, "Start private chat")?.props["aria-pressed"]`. Full log:
+  `gh run view 31678621320 --job 94618331912 --log-failed`.
+  **This is now two identical failures in CI — per the box-wide CLAUDE.md rule ("Two identical
+  failures → stop and rethink. Never retry-loop a failing command or patch."), do NOT run
+  `gh run rerun --failed` a third time.** It reproduces consistently in CI despite passing 3/3
+  locally, which points at a real CI-only condition (scheduling/timing under CI's CPU/memory
+  contention, a `act()`/microtask race that only loses under load, or something about run order/
+  parallelism in CI's vitest invocation) — not random flakiness. Diff-scope exclusion still holds
+  (this PR never touches that file or its dependencies — confirmed via `git diff --stat
+  origin/main...HEAD` = `provider-probe.ts`, `provider-probe.test.ts`, `main.ts`,
+  `engine-host.ts` only), so this is very likely a **pre-existing flaky/timing-fragile test that
+  the PR happens to be unlucky enough to keep tripping**, not something this PR's diff caused.
 
-**Action taken:** `gh run rerun 31678621320 --failed` — kicked off. As of the last check
-(2026-08-13, mid relay-3): `Compose deployment smoke` → **pass (3m22s)**. `Verify foundation and
-app` → still `pending`. **Next step: `gh pr checks 1601` again to get the foundation job's final
-result** (it contains the `chat-drawer-surface.test.tsx` flake candidate).
-- If both go green: done, move to item 2.
-- If either fails again with the *same* assertion/error: it's real, not a flake — stop and debug
-  it properly (`systematic-debugging`), don't just rerun again blindly (two identical failures →
-  stop and rethink, per box-wide CLAUDE.md rule).
-- If `Compose deployment smoke` fails again: pull the API container's actual runtime logs (not
-  just the compose orchestration log this job log showed) — e.g. `docker compose -f
-  infra/... logs api` inside the job, or add `docker logs infra-api-1` before the job tears down —
-  to see *why* it was unhealthy before concluding flake again.
+**Next step — actually investigate, don't just rerun again:**
+1. Check whether `chat-drawer-surface.test.tsx:525` (or that whole suite) has failed on *other*
+   recent PRs/CI runs unrelated to #1141 — `gh run list` across recent runs on other branches, or
+   check if there's an existing tracked flaky-test issue for it. If it's already known-flaky
+   elsewhere, that's real evidence this isn't diff-caused, and the path is to **waive**: note it
+   explicitly in the PR body/comment as a documented pre-existing flake with a link to evidence
+   (not just asserted), and consider filing/linking a separate flaky-test issue if none exists —
+   do not silently ignore it.
+2. If it's never failed elsewhere, dig into *why* CI reproduces it and local doesn't — likely a
+   timing assumption in the test (`act()` + `await Promise.resolve()` double-microtask wait around
+   line ~510-525) that's marginal under CI's slower/contended scheduler. Read the test (`tests/unit
+  /chat-drawer-surface.test.tsx` lines ~470-530) and the component logic it's asserting against; if
+  there's a real race, that's `systematic-debugging` territory (a separate, unrelated fix — not in
+  scope for #1141, would need its own commit/PR unless trivial and clearly safe to bundle).
+3. Either way, this must be resolved (with evidence, not assumption) before re-requesting QA —
+   QA explicitly declined to call it for us.
 
 ### 2. Blocking UAT specs never run — this is real, own PR body claim was wrong
 Confirmed via the actual trigger lookup (not the QA agent's word):
