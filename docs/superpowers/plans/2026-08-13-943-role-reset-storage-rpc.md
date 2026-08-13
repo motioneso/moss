@@ -8,9 +8,9 @@ behind current `origin/main` @ `513672aa5`; unrelated docs commit, rebase before
 
 - Bug site: `packages/db/src/module-storage-rpc.ts:89` — `await sql.raw(\`SET LOCAL ROLE
   ${role}\`).execute(scopedDb.db)`runs unconditionally at the top of every`query()`call, inside
-  the caller's`withDataContext` transaction (`packages/db/src/data-context.ts:63-71`,
-  `rootDb.transaction().execute(...)`). Nothing in the function ever runs `RESET ROLE`. The
-  existing `finally` block (`:99-108`) resets `statement_timeout` but not the role — confirmed by
+the caller's`withDataContext` transaction (`packages/db/src/data-context.ts:63-71`,
+`rootDb.transaction().execute(...)`). Nothing in the function ever runs `RESET ROLE`. The
+existing `finally` block (`:99-108`) resets `statement_timeout` but not the role — confirmed by
   reading the full 124-line file; no other reset path exists.
 - Why it's a hazard, not (yet) an exploit — **corrected caller inventory** (Fable review,
   2026-08-13; the earlier claim that "nothing calls `query()` then continues in the same
