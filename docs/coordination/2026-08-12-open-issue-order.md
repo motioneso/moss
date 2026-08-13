@@ -11,7 +11,8 @@ board order, not a second status tracker.
   #1481, #1569, and #1581.
 - Corrected the remaining scope of #899, #1084, #1105, #1248, and #1556.
 - Added missing type, security, and `needs-spec` labels to 26 unlabeled issues.
-- Ordered the 140 remaining issues below and applied the same P0/P1/P2 order to Project 2.
+- PR #1594 merged during this pass and closed #1429 after its live-path repair landed.
+- Ordered the 139 remaining issues below and applied the same P0/P1/P2 order to Project 2.
 
 Audit meanings:
 
@@ -41,43 +42,42 @@ Audit meanings:
 
 ## P1 — confirmed defects and hardening
 
-1. #1429 — action-row CSS/live-path repair; PR #1594 is in review.
-2. #1556 — notes-default retrieval phase from the approved #1553 spec; bounded replay is already
+1. #1556 — notes-default retrieval phase from the approved #1553 spec; bounded replay is already
    merged.
-3. #1592 — keep reject/cancel working when the AI gateway is unwired.
-4. #1585 — recover stale News snapshots after the worker-runtime incident is fixed.
-5. #1454 — alert when a skipped image publish prevents production from updating.
-6. #1108 — auto-select and validate non-overlapping UAT Docker subnets.
-7. #1013 — serialize cluster-global migration DDL across parallel verification lanes.
-8. #1325 — make API-key provider creation truthful and usable from Settings.
-9. #1495 — require a surface key before seed/submit can fall through to the drawer.
-10. #1487 — make SPA fallback handling correct without relying on `Accept: text/html`.
-11. #1467 — pass non-empty notes roots to permission hooks in containers.
-12. #1223 — prevent foreign-owned `.prev-*` backups from wedging module update/remove.
-13. #1222 — exclude `.prev-*` backup directories from module discovery.
-14. #1057 — honor exact module pins even when another version is already on disk.
-15. #1042 — replace the module-install compose instruction that can silently no-op.
-16. #1029 — repair or retire the obsolete Gemini interactive transcript reader as part of the
+2. #1592 — keep reject/cancel working when the AI gateway is unwired.
+3. #1585 — recover stale News snapshots after the worker-runtime incident is fixed.
+4. #1454 — alert when a skipped image publish prevents production from updating.
+5. #1108 — auto-select and validate non-overlapping UAT Docker subnets.
+6. #1013 — serialize cluster-global migration DDL across parallel verification lanes.
+7. #1325 — make API-key provider creation truthful and usable from Settings.
+8. #1495 — require a surface key before seed/submit can fall through to the drawer.
+9. #1487 — make SPA fallback handling correct without relying on `Accept: text/html`.
+10. #1467 — pass non-empty notes roots to permission hooks in containers.
+11. #1223 — prevent foreign-owned `.prev-*` backups from wedging module update/remove.
+12. #1222 — exclude `.prev-*` backup directories from module discovery.
+13. #1057 — honor exact module pins even when another version is already on disk.
+14. #1042 — replace the module-install compose instruction that can silently no-op.
+15. #1029 — repair or retire the obsolete Gemini interactive transcript reader as part of the
     persistent Gemini direction.
-17. #927 — re-triage the old parent-task save failure with a current reproduction before code.
-18. #1191 — diagnose and repair Assistant persona preview.
-19. #1219 — make module onboarding useful when no chat model is configured.
-20. #1258 — add the safe persistent-dev doctor/provisioning path.
-21. #1468 — extend target-identity guards to the remaining destructive scripts.
-22. #1279 — pin module tools to the shared gateway validator and name rejected tools.
-23. #946 — complete native host-fetch SSRF parity and control tests.
-24. #1490 — add the manage-share cross-owner regression test.
-25. #1037 — prove foreign-thread resume is RLS-denied.
-26. #1038 — prove two-user isolation across chat privacy/history endpoints.
-27. #1039 — distinguish force-replay from private-history purge in tests.
-28. #1246 — re-slice the approved install-time permission-grant plan; the prior long-running build
+16. #927 — re-triage the old parent-task save failure with a current reproduction before code.
+17. #1191 — diagnose and repair Assistant persona preview.
+18. #1219 — make module onboarding useful when no chat model is configured.
+19. #1258 — add the safe persistent-dev doctor/provisioning path.
+20. #1468 — extend target-identity guards to the remaining destructive scripts.
+21. #1279 — pin module tools to the shared gateway validator and name rejected tools.
+22. #946 — complete native host-fetch SSRF parity and control tests.
+23. #1490 — add the manage-share cross-owner regression test.
+24. #1037 — prove foreign-thread resume is RLS-denied.
+25. #1038 — prove two-user isolation across chat privacy/history endpoints.
+26. #1039 — distinguish force-replay from private-history purge in tests.
+27. #1246 — re-slice the approved install-time permission-grant plan; the prior long-running build
     was stopped and nothing is currently in progress.
-29. #1249 — add the explicit outbound action class after #1246's base contract.
-30. #1266 — add the user-facing always-confirm override after the install-grant model.
-31. #1339 — security/self-heal umbrella; execute only its remaining slices:
+28. #1249 — add the explicit outbound action class after #1246's base contract.
+29. #1266 — add the user-facing always-confirm override after the install-grant model.
+30. #1339 — security/self-heal umbrella; execute only its remaining slices:
     1. #1529 — prove composed dispatch and task self-heal.
     2. #1530 — degrade a failed task heal closed.
-32. #1137 — robustness umbrella; execute only its slices:
+31. #1137 — robustness umbrella; execute only its slices:
     1. #1511 — validate share targets before writes.
     2. #1512 — recheck note paths immediately before filesystem I/O.
     3. #1513 — serialize concurrent note edits per path.
@@ -85,34 +85,34 @@ Audit meanings:
     5. #1515 — warn safely on extraction failure.
     6. #1516 — validate commitment tool/status boundaries.
     7. #1517 — escape evidence excerpts as plain text.
-33. #1138 — weather and upgrade-check outbound HTTP hardening.
-34. #1140 — backend-low umbrella; execute only its slices:
+32. #1138 — weather and upgrade-check outbound HTTP hardening.
+33. #1140 — backend-low umbrella; execute only its slices:
     1. #1523 — expire News previews.
     2. #1524 — make whole-league sports follows unique.
     3. #1525 — bound cancel-only submit tombstones.
     4. #1526 — propagate terminal backpressure to the PTY.
     5. #1527 — make crash shutdown single-flight.
     6. #1528 — return fixed account-state error text.
-35. #1139 — web chat/export umbrella; execute only its slices:
+34. #1139 — web chat/export umbrella; execute only its slices:
     1. #1518 — make action resolution single-flight and unmount-safe.
     2. #1519 — preserve identical fallbacks until their own SSE records arrive.
     3. #1520 — stabilize queued-chat draining during SSE updates.
     4. #1521 — keep private chat closed during focus refetch.
     5. #1522 — resume export progress after Settings remount.
-36. #1335 — typecheck repo-root `.tsx` tests.
-37. #1336 — validate the job-search match-list wire shape at runtime.
-38. #1418 — remove the Finance `ReactNodeLike = unknown` type shim.
-39. #1416 — collapse the duplicate Settings/UI Select implementation.
-40. #1120 — make the module-SDK barrel browser-safe.
-41. #1106 — live UAT for undeclared-module trust warning and credentials.
-42. #1107 — deterministic herdr-install failure injection for UAT.
-43. #1105 — deterministic credential-free chat/thread seed and timing controls.
-44. #899 — mocked `/news` overview e2e only; screenshots are explicitly out of scope.
-45. #948 — disabled/hash-drift/impersonation coverage for `openAssistant`.
-46. #951 — auditable cross-owner purge of module KV on uninstall.
-47. #1508 — implement the approved Unicode-safe vocabulary and composed-renderer contracts after
+35. #1335 — typecheck repo-root `.tsx` tests.
+36. #1336 — validate the job-search match-list wire shape at runtime.
+37. #1418 — remove the Finance `ReactNodeLike = unknown` type shim.
+38. #1416 — collapse the duplicate Settings/UI Select implementation.
+39. #1120 — make the module-SDK barrel browser-safe.
+40. #1106 — live UAT for undeclared-module trust warning and credentials.
+41. #1107 — deterministic herdr-install failure injection for UAT.
+42. #1105 — deterministic credential-free chat/thread seed and timing controls.
+43. #899 — mocked `/news` overview e2e only; screenshots are explicitly out of scope.
+44. #948 — disabled/hash-drift/impersonation coverage for `openAssistant`.
+45. #951 — auditable cross-owner purge of module KV on uninstall.
+46. #1508 — implement the approved Unicode-safe vocabulary and composed-renderer contracts after
     #1488.
-48. #1319 — sign and verify the module distribution index after its security spec is approved.
+47. #1319 — sign and verify the module distribution index after its security spec is approved.
 
 ## P2 — planned product and architecture work
 
