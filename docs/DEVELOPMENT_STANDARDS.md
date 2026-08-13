@@ -33,6 +33,9 @@ pnpm typecheck
 
 ## Live-Path Gate (CI-green is not done)
 
+Do not request, capture, attach, or review screenshots for this gate. Use executable assertions and
+bounded textual evidence instead.
+
 A PR that adds or changes a **user-facing feature, module, or UI surface** does not merge, and its
 issue is not marked Done, on unit/integration/CI-green plus code review alone. Those verify the
 parts in isolation, and parts have repeatedly passed in isolation while the assembled feature was
@@ -41,8 +44,9 @@ broken.
 Such a PR merges **only** with a live end-to-end proof recorded on the PR: the feature was installed
 and exercised **through the real UI on a live dev instance** — owner signup → the real
 Settings/module path → the feature actually runs — evidenced by a `gh pr comment` linking the e2e
-UAT run and screenshots. A manual live-path walk with screenshots is acceptable evidence. A passing
-headless test alone is not, because it does not prove the assembled path is reachable by a person.
+UAT run, its exit code, and assertions or bounded DOM/network/log evidence for the exercised path.
+A passing headless test alone is insufficient unless its recorded assertions prove the assembled
+path is reachable through the real UI.
 
 No artifact means you may not merge and may not mark the issue or epic Done. The correct status is
 **code-complete, unverified** — say that plainly rather than reporting the work as finished.

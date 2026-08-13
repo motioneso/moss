@@ -100,7 +100,8 @@ fine" downgrade. In doubt between two tiers, take the higher.
 **⛔ LIVE-PATH GATE — overrides every tier's "auto-merge after green."** If the PR touches a
 user-facing feature, module, or UI surface, CI-green + `/code-review` is **not** merge-ready. It
 needs a live end-to-end proof on the PR: the feature installed and exercised **through the real UI
-on a live dev instance**, posted as a `gh pr comment` with the UAT run + screenshots. No artifact →
+on a live dev instance**, posted as a `gh pr comment` with the UAT run, exit code, and assertions or
+bounded DOM/network/log evidence. No artifact →
 do not merge, do not mark the issue or epic Done; report it as *code-complete, unverified*. This
 binds at `routine` tier too — `routine` is exactly where it has been skipped. Full rule:
 `docs/DEVELOPMENT_STANDARDS.md` → **Live-Path Gate**.
@@ -457,7 +458,7 @@ Fired by the relay triggers (Context discipline / Phase 3 step 7):
 | Session-id authority (pre-merge) | manifest lock line ↔ your `agent_session.value` (never a pane number) |
 | CI gate (don't re-run) | `gh pr checks <PR>` |
 | Merge + close | `gh pr merge <PR> --squash --delete-branch` · issue close · board move |
-| Live-path gate (any UI-facing PR, any tier) | live-UI proof `gh pr comment` (UAT run + screenshots) present, else do NOT merge |
+| Live-path gate (any UI-facing PR, any tier) | live-UI proof `gh pr comment` (UAT run + assertions/evidence) present, else do NOT merge |
 | Security-tier merge | Opus QA → `gh pr comment` verdict → Ben sign-off → merge |
 | Relay triggers | meter 70% warning · security merge · 2 routine/sensitive merges · compaction summary (→ merge nothing) |
 | Escalate to Opus | `Agent(model: "opus", prompt: "<pointers: PR #, paths, manifest section>")` |
