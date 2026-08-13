@@ -2561,3 +2561,24 @@ after receiving approval, so expect another relay very soon; watch for it.
   relay.
 - Once #1429 merges and #1248/#1556 clarify further, re-check whether the "hold Ready moves"
   condition can be lifted.
+
+## PR #1594 MERGED, issue #1429 CLOSED, board Done — confirmed, not just script-trusted (2026-08-12/13)
+
+Background script (`pid 1932254`) completed once GraphQL headroom returned (4961 remaining).
+Independently verified all three effects rather than trusting the log:
+- `gh pr view 1594`: `state: MERGED`, merge commit `f6096da9331759149aa7465eb14b8e35b39f603e`,
+  merged `2026-08-13T02:31:45Z`.
+- `gh issue view 1429`: `state: CLOSED`, `stateReason: COMPLETED`.
+- Board item `PVTI_lAHOADqkaM4BarLAzg1cobI` (queried directly via GraphQL node lookup —
+  `item-list` truncated and missed it, known trap): `Status: Done`.
+
+Reaped `w1:p8N` (`PR1594 live-path proof (relay3)`) — confirmed session id
+`fa4f3b4d-3859-4c5d-894d-cb71db511743` and cwd matched the `fix-1429-briefing-css` worktree before
+closing. `merges_since_relay` +1 (routine tier). Per Ben's standing no-successor override, this
+does not trigger a coordinator relay — noted only for the record.
+
+**"Hold Ready moves" re-check:** #1429 is now fully done. Remaining in-progress board items:
+#1246 (held, no agent, no action), #1248 (Fable spec conversation, not a build — no coordinator
+action pending), #1440/#1470 (epics, resolve passively), #1556 (actively building Phase 1, real
+commits landing). The only genuine in-flight *build* left is #1556 — condition stays: do not move
+anything to Ready until #1556 lands.
