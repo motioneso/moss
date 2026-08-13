@@ -180,6 +180,183 @@ describe("Claude PreToolUse permission hook", () => {
     expect(hookEntry?.command).toContain(`JARVIS_PERM_DEADLINE_S=${HOOK_INTERNAL_DEADLINE_S}`);
   });
 
+  it("injects a shell-quoted JARVIS_NOTES_ROOTS into the persistent hook command when a root is configured (#1467)", async () => {
+    process.env.JARVIS_NOTES_ROOTS = "/vault";
+    const io = fakeIo();
+
+    const settingsPath = await writeClaudePermissionHook(io, {
+      neutralDir: "/tmp/session",
+      mcpToken: "jst_secret",
+      mcpServerUrl: "http://api:3000/api/mcp"
+    });
+
+    const settings = JSON.parse(io.writes.get(settingsPath) ?? "{}") as {
+      hooks: { PreToolUse: Array<{ hooks: Array<{ command: string }> }> };
+    };
+    expect(settings.hooks.PreToolUse[0]?.hooks[0]?.command).toContain(
+      "JARVIS_NOTES_ROOTS='/vault'"
+    );
+  });
+
+  it("omits JARVIS_NOTES_ROOTS from the persistent hook command when no root is configured (#1467)", async () => {
+    delete process.env.JARVIS_NOTES_ROOTS;
+    const io = fakeIo();
+
+    const settingsPath = await writeClaudePermissionHook(io, {
+      neutralDir: "/tmp/session",
+      mcpToken: "jst_secret",
+      mcpServerUrl: "http://api:3000/api/mcp"
+    });
+
+    const settings = JSON.parse(io.writes.get(settingsPath) ?? "{}") as {
+      hooks: { PreToolUse: Array<{ hooks: Array<{ command: string }> }> };
+    };
+    expect(settings.hooks.PreToolUse[0]?.hooks[0]?.command).not.toContain("JARVIS_NOTES_ROOTS");
+  });
+
+  it("drops an invalid/injection root before it reaches the persistent hook command line (#1467)", async () => {
+    process.env.JARVIS_NOTES_ROOTS = "/vault) Bash(*,/ok";
+    const io = fakeIo();
+
+    const settingsPath = await writeClaudePermissionHook(io, {
+      neutralDir: "/tmp/session",
+      mcpToken: "jst_secret",
+      mcpServerUrl: "http://api:3000/api/mcp"
+    });
+
+    const settings = JSON.parse(io.writes.get(settingsPath) ?? "{}") as {
+      hooks: { PreToolUse: Array<{ hooks: Array<{ command: string }> }> };
+    };
+    const command = settings.hooks.PreToolUse[0]?.hooks[0]?.command ?? "";
+    expect(command).toContain("JARVIS_NOTES_ROOTS='/ok'");
+    expect(command).not.toContain("Bash(");
+    expect(command).not.toContain(")");
+  });
+
+  it("injects a shell-quoted JARVIS_NOTES_ROOTS into the one-shot hook command when a root is configured (#1467)", async () => {
+    process.env.JARVIS_NOTES_ROOTS = "/vault";
+    const io = fakeIo();
+
+    const settingsPath = await writeClaudeOneShotPermissionHook(io, {
+      neutralDir: "/tmp/session"
+    });
+
+    const settings = JSON.parse(io.writes.get(settingsPath) ?? "{}") as {
+      hooks: { PreToolUse: Array<{ hooks: Array<{ command: string }> }> };
+    };
+    expect(settings.hooks.PreToolUse[0]?.hooks[0]?.command).toContain(
+      "JARVIS_NOTES_ROOTS='/vault'"
+    );
+  });
+
+  it("omits JARVIS_NOTES_ROOTS from the one-shot hook command when no root is configured (#1467)", async () => {
+    delete process.env.JARVIS_NOTES_ROOTS;
+    const io = fakeIo();
+
+    const settingsPath = await writeClaudeOneShotPermissionHook(io, {
+      neutralDir: "/tmp/session"
+    });
+
+    const settings = JSON.parse(io.writes.get(settingsPath) ?? "{}") as {
+      hooks: { PreToolUse: Array<{ hooks: Array<{ command: string }> }> };
+    };
+    expect(settings.hooks.PreToolUse[0]?.hooks[0]?.command).not.toContain("JARVIS_NOTES_ROOTS");
+  });
+
+  it("drops an invalid/injection root before it reaches the one-shot hook command line (#1467)", async () => {
+    process.env.JARVIS_NOTES_ROOTS = "/vault) Bash(*,/ok";
+    const io = fakeIo();
+
+    const settingsPath = await writeClaudeOneShotPermissionHook(io, {
+      neutralDir: "/tmp/session"
+    });
+
+    const settings = JSON.parse(io.writes.get(settingsPath) ?? "{}") as {
+      hooks: { PreToolUse: Array<{ hooks: Array<{ command: string }> }> };
+    };
+    const command = settings.hooks.PreToolUse[0]?.hooks[0]?.command ?? "";
+    expect(command).toContain("JARVIS_NOTES_ROOTS='/ok'");
+    expect(command).not.toContain("Bash(");
+    expect(command).not.toContain(")");
+  });
+
+  it("end-to-end: persistent hook honors JARVIS_NOTES_ROOTS reaching it only via the generated command line, never a pre-set env (#1467)", async () => {
+    process.env.JARVIS_NOTES_ROOTS = "/vault";
+    const dir = await mkdtemp(join(tmpdir(), "jarvis-hook-e2e-"));
+    try {
+      const io = fakeIo();
+      const settingsPath = await writeClaudePermissionHook(io, {
+        neutralDir: dir,
+        mcpToken: "jst_secret",
+        mcpServerUrl: "http://api:3000/api/mcp"
+      });
+      for (const [path, content] of io.writes) {
+        await writeFile(path, content);
+      }
+      const settings = JSON.parse(io.writes.get(settingsPath) ?? "{}") as {
+        hooks: { PreToolUse: Array<{ hooks: Array<{ command: string }> }> };
+      };
+      const command = settings.hooks.PreToolUse[0]?.hooks[0]?.command ?? "";
+
+      // Strip JARVIS_NOTES_ROOTS from the spawned shell's own env — if this test only passed
+      // because the child inherited it from the parent, it would prove nothing about the
+      // command-line injection this fix adds.
+      const { JARVIS_NOTES_ROOTS: _dropped, ...envWithoutRoots } = process.env;
+      const child = spawn("sh", ["-c", command], {
+        env: envWithoutRoots,
+        stdio: ["pipe", "pipe", "pipe"]
+      });
+      child.stdin.end(
+        JSON.stringify({ tool_name: "Read", tool_input: { file_path: "/vault/a.md" } })
+      );
+      let stdout = "";
+      child.stdout.on("data", (chunk) => {
+        stdout += String(chunk);
+      });
+      const code = await new Promise<number | null>((resolve) => child.on("close", resolve));
+      expect(code).toBe(0);
+      expect(JSON.parse(stdout).hookSpecificOutput.permissionDecision).toBe("allow");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("end-to-end: one-shot hook honors JARVIS_NOTES_ROOTS reaching it only via the generated command line, never a pre-set env (#1467)", async () => {
+    process.env.JARVIS_NOTES_ROOTS = "/vault";
+    const dir = await mkdtemp(join(tmpdir(), "jarvis-hook-e2e-"));
+    try {
+      const io = fakeIo();
+      const settingsPath = await writeClaudeOneShotPermissionHook(io, {
+        neutralDir: dir
+      });
+      for (const [path, content] of io.writes) {
+        await writeFile(path, content);
+      }
+      const settings = JSON.parse(io.writes.get(settingsPath) ?? "{}") as {
+        hooks: { PreToolUse: Array<{ hooks: Array<{ command: string }> }> };
+      };
+      const command = settings.hooks.PreToolUse[0]?.hooks[0]?.command ?? "";
+
+      const { JARVIS_NOTES_ROOTS: _dropped, ...envWithoutRoots } = process.env;
+      const child = spawn("sh", ["-c", command], {
+        env: envWithoutRoots,
+        stdio: ["pipe", "pipe", "pipe"]
+      });
+      child.stdin.end(
+        JSON.stringify({ tool_name: "Read", tool_input: { file_path: "/vault/a.md" } })
+      );
+      let stdout = "";
+      child.stdout.on("data", (chunk) => {
+        stdout += String(chunk);
+      });
+      const code = await new Promise<number | null>((resolve) => child.on("close", resolve));
+      expect(code).toBe(0);
+      expect(JSON.parse(stdout).hookSpecificOutput.permissionDecision).toBe("allow");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("allows configured vault reads without calling the gateway", async () => {
     const result = await runHook(
       { tool_name: "Read", tool_input: { file_path: "/vault/a.md" } },

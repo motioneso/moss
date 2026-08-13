@@ -2,6 +2,8 @@ import { join } from "node:path";
 
 import type { TmuxIo } from "@moss/ai";
 
+import { resolveVaultRoots } from "./vault-allowlist.js";
+
 export const CLAUDE_PERMISSION_SETTINGS_FILENAME = ".jarvis-claude-settings.json";
 export const CLAUDE_PERMISSION_HOOK_FILENAME = ".jarvis-claude-permission-hook.mjs";
 export const CLAUDE_PERMISSION_TOKEN_FILENAME = ".jarvis-claude-permission-token";
@@ -47,6 +49,7 @@ export async function writeClaudePermissionHook(
     `JARVIS_PERM_DEADLINE_S=${HOOK_INTERNAL_DEADLINE_S}`,
     `JARVIS_PERM_URL=${shellQuote(permissionUrl)}`,
     `JARVIS_PERM_TOKEN_FILE=${shellQuote(tokenPath)}`,
+    ...vaultRootsEnvEntry(),
     "node",
     shellQuote(hookPath)
   ].join(" ");
@@ -85,6 +88,13 @@ export async function writeClaudePermissionHook(
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/** #1467: carry the app-validated vault roots to the spawned hook via its command line. */
+function vaultRootsEnvEntry(): string[] {
+  const roots = resolveVaultRoots();
+  if (roots.length === 0) return [];
+  return [`JARVIS_NOTES_ROOTS=${shellQuote(roots.join(","))}`];
 }
 
 export const CLAUDE_PERMISSION_HOOK_SOURCE = `import fs from "node:fs";
@@ -263,6 +273,7 @@ export async function writeClaudeOneShotPermissionHook(
   const hookPath = join(opts.neutralDir, CLAUDE_PERMISSION_HOOK_FILENAME);
   const command = [
     "JARVIS_SESSION_ROOT=" + shellQuote(opts.neutralDir),
+    ...vaultRootsEnvEntry(),
     "node",
     shellQuote(hookPath)
   ].join(" ");
