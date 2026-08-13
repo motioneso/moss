@@ -41,8 +41,10 @@ broken.
 Such a PR merges **only** with a live end-to-end proof recorded on the PR: the feature was installed
 and exercised **through the real UI on a live dev instance** — owner signup → the real
 Settings/module path → the feature actually runs — evidenced by a `gh pr comment` linking the e2e
-UAT run and screenshots. A manual live-path walk with screenshots is acceptable evidence. A passing
-headless test alone is not, because it does not prove the assembled path is reachable by a person.
+UAT run, its real exit code, and concrete assertions or bounded DOM, network, application-log, or
+database evidence. Screenshots are not required and should not be generated, captured, attached,
+or preserved for this gate. A passing headless test alone is not, because it does not prove the
+assembled path is reachable by a person.
 
 No artifact means you may not merge and may not mark the issue or epic Done. The correct status is
 **code-complete, unverified** — say that plainly rather than reporting the work as finished.

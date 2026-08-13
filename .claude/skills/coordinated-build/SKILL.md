@@ -126,7 +126,9 @@ PR + verified evidence to the coordinator. Then stop. The coordinator owns QA, m
 **⛔ Live-path gate — part of YOUR finish line, not QA's.** If your work adds or changes a
 user-facing feature, module, or UI surface, "green gate + PR open" is not done. The PR needs a
 `gh pr comment` carrying a live end-to-end proof: the feature exercised **through the real UI on a
-live dev instance** (UAT run output + screenshots). Without it the coordinator must refuse the
+live dev instance** (UAT run output, real exit code, and concrete assertions or bounded
+DOM/network/log/database evidence). Screenshots are not required and should not be generated,
+captured, attached, or preserved. Without it the coordinator must refuse the
 merge and send the lane back — so produce it yourself. If you genuinely cannot (no live instance
 reachable, a step that needs Ben in person), say so plainly in the PR body and report the honest
 status: **code-complete, unverified**. Full rule: `docs/DEVELOPMENT_STANDARDS.md` → Live-Path Gate.

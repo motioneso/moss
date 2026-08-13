@@ -102,11 +102,11 @@ coordinator must refuse the merge — so produce it here, not after a rejection.
 gh pr diff <PR> --name-only | .claude/skills/coordinate/resolve-uat-triggers.sh
 ( pnpm test:uat -- "<spec>" > /tmp/cb-uat.log 2>&1; echo "### FINAL test:uat rc=$?" >> /tmp/cb-uat.log ) &
 
-gh pr comment <PR> --body "Live-path proof: <UAT run + rc, screenshots, what was clicked through>"
+gh pr comment <PR> --body "Live-path proof: <UAT run + rc, assertions/evidence, what was clicked through>"
 ```
 The proof must show the feature **exercised through the real UI on a live dev instance** — owner
-signup → the real Settings/module path → the feature actually running. Screenshots land under
-`test-results/…` (UAT config sets no `screenshot` option, so specs capture frames explicitly).
+signup → the real Settings/module path → the feature actually running. Screenshots are not required
+and should not be generated, captured, attached, or preserved.
 
 **A passing headless test alone is not the artifact** — it doesn't prove a person can reach the
 path. If you can't produce the proof (no live instance, or a step that needs Ben in person), say
@@ -177,7 +177,7 @@ or tell the coordinator so it's captured. Don't store secrets.
 | Second gate | `scripts/run-gate.sh start --gate audit:release-hardening` (its own log) |
 | Pre-push trio + rebase | `pnpm format:check && pnpm lint && pnpm typecheck` · `git fetch origin main && git rebase origin/main` |
 | Push + PR | `git push -u origin <b>` · `gh pr create --base main` |
-| Live-path proof (UI-facing) | `resolve-uat-triggers.sh` → `pnpm test:uat -- <spec>` → `gh pr comment` with run + screenshots |
+| Live-path proof (UI-facing) | `resolve-uat-triggers.sh` → `pnpm test:uat -- <spec>` → `gh pr comment` with run + exit code + bounded assertions/evidence |
 | Report done | `herdr-pane-message` → coordinator label (PR link + exit codes + live-path status) |
 
 See also: `wrap-up` (the stock skill this scopes down), `coordinated-build`, `relay`.
