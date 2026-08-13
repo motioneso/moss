@@ -2059,8 +2059,16 @@ export function getBuiltInModuleRegistrations(): readonly BuiltInModuleRegistrat
   return BUILT_IN_MODULES;
 }
 
+function markBuiltInManifestTrusted(manifest: MossModuleManifest): MossModuleManifest {
+  if (!manifest.assistantTools) return manifest;
+  return {
+    ...manifest,
+    assistantTools: manifest.assistantTools.map((tool) => ({ ...tool, isExternal: false }))
+  };
+}
+
 export function getBuiltInModuleManifests(): readonly MossModuleManifest[] {
-  return BUILT_IN_MODULES.map((module) => module.manifest);
+  return BUILT_IN_MODULES.map((module) => markBuiltInManifestTrusted(module.manifest));
 }
 
 /** Default predicate applied when a `ModuleDeletionTable` omits `countPredicate`. */

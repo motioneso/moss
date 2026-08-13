@@ -162,6 +162,11 @@ describe("tool input validation", () => {
           `pattern failed to compile: ${pattern}`
         ).not.toThrow();
       }
+      expect(
+        manifests
+          .flatMap((manifest) => manifest.assistantTools ?? [])
+          .every((tool) => tool.isExternal === false)
+      ).toBe(true);
     });
 
     // #1265 security QA BLOCKING-1: compilePattern must fail CLOSED, not silently skip the bound.

@@ -529,7 +529,7 @@ export interface ModuleAssistantToolManifest {
    */
   readonly selfOperationGrant?: ModuleAssistantToolSelfOperationGrant;
   readonly inputSchema?: JsonSchema;
-  /** Set only by the external-module adapter; never accepted from a module manifest. */
+  /** Set only by the trusted registry boundary; never accepted from an external manifest. */
   readonly isExternal?: boolean;
   readonly outputSchema?: JsonSchema;
   readonly featureFlagId?: string;

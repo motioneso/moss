@@ -182,7 +182,9 @@ export class AssistantToolGateway {
     let input: Record<string, unknown>;
     try {
       input = await validateToolInput(found.tool.inputSchema, rawInput, {
-        external: found.tool.isExternal === true
+        // Missing provenance is untrusted: only the registry's explicit false marker gets the
+        // built-in synchronous path.
+        external: found.tool.isExternal !== false
       });
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : "Invalid input" };
@@ -420,7 +422,9 @@ export class AssistantToolGateway {
     let input: Record<string, unknown>;
     try {
       input = await validateToolInput(found.tool.inputSchema, rawInput, {
-        external: found.tool.isExternal === true
+        // Missing provenance is untrusted: only the registry's explicit false marker gets the
+        // built-in synchronous path.
+        external: found.tool.isExternal !== false
       });
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : "Invalid input" };
