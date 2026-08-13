@@ -15,6 +15,7 @@ import { queryKeys } from "../../apps/web/src/api/query-keys.js";
 afterEach(() => {
   createAssistantSurfaceHandle(() => () => undefined, "cleanup").setSurfaceKey(null);
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe("createAssistantSurfaceHandle", () => {
@@ -142,10 +143,9 @@ describe("createAssistantSurfaceHandle", () => {
     expect(secondSurface).not.toBe(firstSurface);
   });
 
-  it("releases its surface claim on setSurfaceKey(null)", async () => {
-    // #1284 — this is the "reset to drawer" half of the contract: a module that had claimed a
-    // surface and then releases it must fall back to the handle's unscoped (no-surface) behaviour,
-    // exactly as if setSurfaceKey had never been called.
+  it("returns to the unclaimed (rejecting) state on setSurfaceKey(null), not the drawer", async () => {
+    // #1495 — release must not restore the pre-#1495 drawer-fallback behaviour: a module that
+    // releases its claim goes back to unclaimed, which now rejects, exactly as before any claim.
     const fetchMock = vi.fn(async () => Response.json({ reply: "ok" }));
     vi.stubGlobal("fetch", fetchMock);
     const subscribeRecords = vi.fn(() => vi.fn());
@@ -153,11 +153,52 @@ describe("createAssistantSurfaceHandle", () => {
 
     handle.setSurfaceKey("profile-1");
     handle.setSurfaceKey(null);
-    await handle.submitTurn({ text: "hello" });
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/chat/turn",
-      expect.objectContaining({ body: JSON.stringify({ text: "hello" }) })
-    );
+    await expect(handle.submitTurn({ text: "hello" })).rejects.toThrow(/demo-module/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects seedContext and submitTurn on a module-bound handle before any surface claim", async () => {
+    // #1495 — the pre-claim ordering gap: seed/turn must fail loud with no network call, never
+    // fall through to the drawer.
+    const fetchMock = vi.fn(async () => Response.json({ reply: "ok" }));
+    vi.stubGlobal("fetch", fetchMock);
+    const subscribeRecords = vi.fn(() => vi.fn());
+    const handle = createAssistantSurfaceHandle(subscribeRecords, "demo-module");
+
+    await expect(handle.seedContext("seed text", "idem-1")).rejects.toThrow(/demo-module/);
+    await expect(handle.submitTurn({ text: "hello" })).rejects.toThrow(/demo-module/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("no-ops subscribeRecords on a module-bound handle before any surface claim", () => {
+    // #1495 — the read-side twin: no records delivered, host subscription never reached with the
+    // drawer surface, and the gap is logged rather than silent.
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const subscribeRecords = vi.fn(() => vi.fn());
+    const handle = createAssistantSurfaceHandle(subscribeRecords, "demo-module");
+    const listener = vi.fn();
+
+    const unsubscribe = handle.subscribeRecords(listener);
+    unsubscribe();
+
+    expect(subscribeRecords).not.toHaveBeenCalled();
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("demo-module"));
+  });
+
+  it("leaves drawer-bound handles (no moduleId) unaffected by claim enforcement", async () => {
+    // #1495 — enforcement is module-bound only; a handle with no moduleId can never derive a
+    // surface (setSurfaceKey fails closed on it), so its operations must keep working unclaimed.
+    const fetchMock = vi.fn(async () => Response.json({ reply: "ok" }));
+    vi.stubGlobal("fetch", fetchMock);
+    const subscribeRecords = vi.fn(() => vi.fn());
+    const handle = createAssistantSurfaceHandle(subscribeRecords);
+
+    await handle.seedContext("seed text", "idem-1");
+    await handle.submitTurn({ text: "hello" });
+    handle.subscribeRecords(vi.fn());
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(subscribeRecords).toHaveBeenCalledTimes(1);
   });
 });

@@ -18,6 +18,21 @@ import { AssistantSurface } from "./surface";
 let activeModuleSurface: string | null = null;
 const activeModuleSurfaceListeners = new Set<(surface: string | null) => void>();
 
+/**
+ * #1495 — module-bound handles must claim a surface via `setSurfaceKey` before seed/turn/
+ * subscribe; unclaimed use previously fell through to the user's drawer thread (write) or its
+ * records (read). One shared no-op unsubscribe for the read-side no-op below — a stable reference
+ * rather than a new closure per call.
+ */
+function unclaimedSurfaceMessage(moduleId: string, operation: string): string {
+  return (
+    `${moduleId} called ${operation} on its assistant surface before claiming one via ` +
+    "setSurfaceKey (see assistant-surface/contracts.ts claim-before-use ordering)"
+  );
+}
+
+function noopUnsubscribe(): void {}
+
 function publishActiveModuleSurface(surface: string | null): void {
   if (surface === activeModuleSurface) return;
   activeModuleSurface = surface;
@@ -80,9 +95,15 @@ export function createAssistantSurfaceHandle(
       publishActiveModuleSurface(next ?? null);
     },
     async seedContext(seed, idempotencyKey) {
+      if (moduleId && currentSurface === undefined) {
+        throw new Error(unclaimedSurfaceMessage(moduleId, "seedContext"));
+      }
       await seedChat(seed, idempotencyKey, currentSurface);
     },
     async submitTurn(input) {
+      if (moduleId && currentSurface === undefined) {
+        throw new Error(unclaimedSurfaceMessage(moduleId, "submitTurn"));
+      }
       await sendChatTurn(input.text, input.attachmentIds, input.controlContext, currentSurface);
     },
     async uploadAttachment(file) {
@@ -99,8 +120,13 @@ export function createAssistantSurfaceHandle(
     // compare it (this is also the ORIGINAL pre-#1284 pattern, just re-keyed on moduleId instead
     // of the old static `surface` param).
     subscribeRecords: moduleId
-      ? (listener) =>
-          currentSurface ? subscribeRecords(listener, currentSurface) : subscribeRecords(listener)
+      ? (listener) => {
+          if (currentSurface === undefined) {
+            console.error(unclaimedSurfaceMessage(moduleId, "subscribeRecords"));
+            return noopUnsubscribe;
+          }
+          return subscribeRecords(listener, currentSurface);
+        }
       : subscribeRecords
   };
 }
