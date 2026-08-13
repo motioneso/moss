@@ -3499,3 +3499,12 @@ trio+rebase, push+PR+`gh pr comment`, `coordinated-wrap-up`.
 Successor `spa1487-successor` (pane `w1:p9Q`, session `9986716b-4fd8-4a7b-aedc-bb3c312c1497`)
 confirmed genuinely driving (rev climbed 60->134 across two checks) before reaping predecessor.
 Reaped `w1:p9J`; renamed successor pane to `1487-spa-fallback-relay2` both ways.
+
+## 2026-08-13 ~00:XX — #1591-relay4 refroze immediately after clearing, second nudge
+
+`w1:p9P` cleared its first freeze (rev 95) then froze again almost immediately (bell title, rev
+124->125 flat) — same short-freeze-after-clear pattern #1248 has shown repeatedly this run. Applied
+plain `"continue"` again (not yet escalating to the Enter+continue combo since plain continue has
+worked both times, just needed twice back-to-back); cleared, rev climbing again (124->128+).
+Flagging for the same treatment as #1248 if it recurs a third time: switch to an explicit
+status-request message instead of a bare nudge. Still no PR for #1591 as of this entry.
