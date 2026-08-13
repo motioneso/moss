@@ -1,7 +1,7 @@
 # Coordination Run — 2026-08-10 overnight
 
 **Date:** 2026-08-10
-**Coordinator lock:** label `Coordinator`, stable anchor = Claude session id `0bb9f516-c026-454f-bc97-dc9faf43bd20` (pane `w1:p7P`, tab `w1:t6`, resolve fresh by label+session, never a written pane number). Exactly one pane with this label and session holds merge authority.
+**Coordinator lock:** label `Coordinator`, stable anchor = Claude session id `caef4e32-df22-4310-a42d-866771a0ba6c` (pane `w1:p8T`, tab `w1:t6`, resolve fresh by label+session, never a written pane number). Exactly one pane with this label and session holds merge authority. (Previous anchor `0bb9f516-c026-454f-bc97-dc9faf43bd20` / pane `w1:p7P` reaped 2026-08-12 per Ben-requested handoff — see COORDINATOR RELAY section near end of file.)
 **Delegated authority:** Ben explicitly delegated overnight product/design decisions to Fable and confirmed that Fable's green security review counts as his security-tier merge sign-off. Existing repository rule still applies: #1557 never merges without fresh Fable approval. Every delegated security sign-off must be durable on the exact-head PR.
 **Merge policy:** routine/sensitive only after verified QA and live-path proof where applicable; security only after adversarial Fable QA and delegated sign-off.
 **Merge notification:** after every merge, run `needs-ben coordinator "<issue/PR — one-line description of what landed>"` and retain the normal GitHub/project bookkeeping.
@@ -2650,3 +2650,11 @@ bootstrap exactly. Spawning successor now.
 
 Nothing else queued. Next real decisions: (1) #1556-P2 finishing Phase 1/2 and needing QA +
 merge, (2) #1248 spec landing and needing a build-lane spawn once Ben approves it.
+
+### Successor confirmed driving (2026-08-12/13)
+
+New coordinator claimed the lock: pane `w1:p8T`, session `caef4e32-df22-4310-a42d-866771a0ba6c`,
+label `Coordinator` (verified sole other `Coordinator` pane was the outgoing `w1:p7P` /
+`0bb9f516-c026-454f-bc97-dc9faf43bd20`, matching this file's prior lock line). Lock line above
+updated. AWAITING-BEN.md re-read in full — no open entries, all resolved. Proceeding to
+re-adopt the live fleet fresh and reap the outgoing coordinator pane.
