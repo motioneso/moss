@@ -1,7 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { isAbsolute } from "node:path";
 
+import type { PgBoss } from "pg-boss";
+
 import type { DataContextDb } from "@moss/db";
+import { scheduleVaultIngestNudge } from "@moss/memory";
 import { PreferencesRepository } from "@moss/structured-state";
 import {
   listVaultFilesRecursive,
@@ -53,6 +56,7 @@ function translateVaultOperationError(error: unknown): never {
 export interface PeopleNotesServiceDeps {
   readonly preferencesRepository?: PreferencesRepository;
   readonly peopleRepository?: PeopleRepository;
+  readonly boss?: PgBoss;
 }
 
 export interface CreatePersonNoteInput {
@@ -118,10 +122,12 @@ function managedSummary(input: {
 export class PeopleNotesService {
   private readonly preferencesRepository: PreferencesRepository;
   private readonly peopleRepository: PeopleRepository;
+  private readonly boss?: PgBoss;
 
   constructor(deps: PeopleNotesServiceDeps = {}) {
     this.preferencesRepository = deps.preferencesRepository ?? new PreferencesRepository();
     this.peopleRepository = deps.peopleRepository ?? new PeopleRepository();
+    this.boss = deps.boss;
   }
 
   async getSettings(scopedDb: DataContextDb, _ownerUserId: string): Promise<PeopleNotesSettings> {
@@ -226,6 +232,13 @@ export class PeopleNotesService {
       body
     });
     await writeVaultFile(vaultCtx, notePath, content);
+    if (this.boss) {
+      await scheduleVaultIngestNudge(this.boss, {
+        actorUserId: ownerUserId,
+        sourcePath: notePath,
+        op: "upsert"
+      });
+    }
     const person = await this.projectNote(scopedDb, ownerUserId, {
       path: notePath,
       content,
@@ -262,6 +275,13 @@ export class PeopleNotesService {
     const content = formatPeopleNote({ frontmatter, body });
 
     await writeVaultFile(vaultCtx, note.path, content);
+    if (this.boss) {
+      await scheduleVaultIngestNudge(this.boss, {
+        actorUserId: ownerUserId,
+        sourcePath: note.path,
+        op: "upsert"
+      });
+    }
     const person = await this.projectNote(scopedDb, ownerUserId, {
       path: note.path,
       content,
