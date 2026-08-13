@@ -104,7 +104,10 @@ class EmbeddingWorkerClient {
 }
 
 const workerClients = new Map<string, EmbeddingWorkerClient>();
-const DEFAULT_EMBEDDING_WORKER_URL = new URL("./local-embedding-worker.js", import.meta.url);
+const DEFAULT_EMBEDDING_WORKER_URL = new URL(
+  import.meta.url.endsWith(".ts") ? "./local-embedding-worker.ts" : "./local-embedding-worker.js",
+  import.meta.url
+);
 
 function getEmbeddingWorkerClient(modelId: string, workerUrl: URL): EmbeddingWorkerClient {
   const key = `${workerUrl.href}:${modelId}`;
