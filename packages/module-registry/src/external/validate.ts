@@ -26,6 +26,7 @@ import {
   MAX_INVOCATION_MS
 } from "@moss/module-sdk";
 import { satisfiesCoreVersion } from "@moss/module-sdk/core-version";
+import { lintAssistantToolInputSchema } from "./input-schema-lint.js";
 
 export type ExternalModuleValidation =
   | { readonly ok: true; readonly manifest: JsonMossModuleManifest }
@@ -669,6 +670,7 @@ export function validateExternalModuleManifest(
         validateAssistantToolPolicy(tool, assistantActionFamilies, errors);
         if (!isNonEmptyString(tool.handler)) errors.push("assistant tool handler is required");
         else handlers.push(tool.handler);
+        if (tool.inputSchema !== undefined) lintAssistantToolInputSchema(tool, errors);
       }
       if (new Set(names).size !== names.length) errors.push("assistant tool names must be unique");
       if (new Set(permissions).size !== permissions.length) {
