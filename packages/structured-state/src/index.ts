@@ -13,6 +13,7 @@ export {
   PreferencesRepository
 } from "./preferences-repository.js";
 export { VaultWriteBackService } from "./write-back.js";
+export { createStructuredStateVaultIngestProvider } from "./vault-ingest-provider.js";
 export {
   structuredStateModuleManifest,
   structuredStateSqlMigrationDirectory,
