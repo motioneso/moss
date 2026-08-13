@@ -67,15 +67,16 @@ races, `-U postgres` not `jarv1s` for psql, seeded resets that break real signup
    teardown by PID only, never by name pattern; prod's worker looks like a dev orphan in `ps`).
 2. Run: `pnpm test:uat -- "1133-chat-attachments|cli-terminal|runtime-context"` (or one at a time)
    with `JARVIS_UAT_BASE_URL` set per `run-uat.ts`'s expectations. Capture a real `### FINAL rc=N`.
-3. **Coordinator update (received mid-relay-3, binding):** screenshots are no longer useful for
-   this run. Do NOT generate, capture, attach, or preserve screenshot artifacts for UAT/live-path
-   proof — if any spec run produces `test-results/**` screenshot files, delete them before commit
-   (never let stray generated artifacts land in a commit). This does **not** weaken the live-path
-   assertion itself — still exercise the real UI on a live dev instance end-to-end, just prove it
-   with: exit codes (`### FINAL rc=N`), plus bounded DOM assertions/selectors that passed, bounded
-   network call evidence (e.g. captured request/response for the relevant endpoint), bounded
-   server/API log excerpts, and bounded DB query results confirming the expected state change —
-   all pasted directly into the PR comment, not as attached files.
+3. **Permanent policy (confirmed via coordinator mid-relay-3, applies beyond this PR too):**
+   screenshots are removed from live-path proof entirely. Do NOT generate, capture, attach, or
+   preserve screenshots for UAT/live-path proof — if any spec run produces `test-results/**`
+   screenshot files, delete them before commit (never let stray generated artifacts land in a
+   commit). This does **not** weaken the live-path assertion itself — still exercise the real UI
+   on a live dev instance end-to-end, just prove it with: the UAT command + exit code
+   (`### FINAL rc=N`), plus bounded DOM assertions/selectors that passed, bounded network call
+   evidence (e.g. captured request/response for the relevant endpoint), bounded server/API log
+   excerpts, and bounded DB query results confirming the expected state change — all pasted
+   directly into the PR comment, not as attached files.
 4. Post the live-path proof as a PR comment (`gh pr comment 1601 --body "..."`) — actual run output
    + rc + the bounded DOM/network/log/DB evidence above, not just "ran clean" and not screenshots.
 5. Stop the dev instance, delete any seeded rows, confirm teardown before moving on.
