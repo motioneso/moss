@@ -18,6 +18,7 @@ export interface RetrievedChunk {
   readonly lineEnd: number;
   readonly text: string;
   readonly similarity: number;
+  readonly updatedAt: Date;
 }
 
 export interface VaultFileChunk {
@@ -130,8 +131,9 @@ export class MemoryRepository {
       line_end: number;
       text: string;
       similarity: number;
+      updated_at: Date;
     }>`
-      SELECT id, source_path, line_start, line_end, text,
+      SELECT id, source_path, line_start, line_end, text, updated_at,
              1 - (embedding <=> ${vectorLiteral}::vector) AS similarity
       FROM app.memory_chunks
       WHERE embedding IS NOT NULL
@@ -147,7 +149,8 @@ export class MemoryRepository {
       lineStart: r.line_start,
       lineEnd: r.line_end,
       text: r.text,
-      similarity: r.similarity
+      similarity: r.similarity,
+      updatedAt: r.updated_at
     }));
   }
 
@@ -168,8 +171,9 @@ export class MemoryRepository {
       line_start: number;
       line_end: number;
       text: string;
+      updated_at: Date;
     }>`
-      SELECT c.id, c.source_path, c.line_start, c.line_end, c.text
+      SELECT c.id, c.source_path, c.line_start, c.line_end, c.text, c.updated_at
       FROM app.memory_chunks c
       JOIN app.memory_file_index fi
         ON fi.owner_user_id = c.owner_user_id
@@ -187,7 +191,8 @@ export class MemoryRepository {
       lineStart: r.line_start,
       lineEnd: r.line_end,
       text: r.text,
-      similarity: 0
+      similarity: 0,
+      updatedAt: r.updated_at
     }));
   }
 
