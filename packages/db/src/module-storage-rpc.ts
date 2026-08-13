@@ -97,6 +97,12 @@ export function createModuleStorageRpc(
       } catch (error) {
         throw redactedQueryError(error);
       } finally {
+        try {
+          await sql.raw("RESET ROLE").execute(scopedDb.db);
+        } catch {
+          // Same reasoning as the statement_timeout reset below: an aborted
+          // transaction takes the role with it on rollback.
+        }
         if (timeoutMs !== null) {
           try {
             await sql.raw("SET LOCAL statement_timeout TO DEFAULT").execute(scopedDb.db);
