@@ -180,10 +180,7 @@ export class CpuIsolatedEmbeddingProvider implements EmbeddingProvider {
   readonly modelVersion = "1.5";
   private readonly client: EmbeddingWorkerClient;
 
-  constructor(
-    modelId: string = DEFAULT_MODEL_ID,
-    workerUrl: URL = DEFAULT_EMBEDDING_WORKER_URL
-  ) {
+  constructor(modelId: string = DEFAULT_MODEL_ID, workerUrl: URL = DEFAULT_EMBEDDING_WORKER_URL) {
     this.modelName = modelId;
     this.client = getEmbeddingWorkerClient(modelId, workerUrl);
   }

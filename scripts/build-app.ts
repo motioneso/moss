@@ -113,7 +113,10 @@ async function buildTarget(target: Target): Promise<void> {
 
   await buildBundle(entry, outfile);
   if (target === "worker") {
-    await buildBundle("packages/memory/src/local-embedding-worker.ts", "dist/local-embedding-worker.js");
+    await buildBundle(
+      "packages/memory/src/local-embedding-worker.ts",
+      "dist/local-embedding-worker.js"
+    );
   }
   if (target === "api") {
     const workerSource = resolve(
