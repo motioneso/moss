@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-12
 
-**Status:** Draft — pending Ben sign-off
+**Status:** Approved by Ben 2026-08-12 (this session)
 
 **Parent issue:** #1248 (vault-ingestion half). The passive-retrieval half of #1248 was split off
 2026-08-10 and is owned by the approved #1553 spec
