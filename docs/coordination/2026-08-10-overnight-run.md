@@ -2712,3 +2712,15 @@ ready). No coordinator action.
 **Standing instruction (Ben, 2026-08-12, heading to bed):** on #1248, **Fable has final say** —
 coordinator does not intervene, override, or second-guess Fable's call on the spec/build
 decision; purely wait for Fable to message `Coordinator` if/when a build lane is warranted.
+
+**Standing instruction (Ben, 2026-08-12, same exchange): clear "In progress," don't grow it.**
+I asked whether we needed more queued for the night; Ben's answer: no — priority is emptying
+the board's "In progress" column, not adding to it. Fresh `gh project item-list 2` read: only
+`#1470` (epic) and `#1440` (epic) show as "In progress" — both resolve passively as their
+children land, no direct action. `#1556` shows in **Ready** (stale relative to the real
+`1556-notes-retrieval` build actively running — board hasn't been moved to reflect it; worth a
+board-sync pass once the lane lands, not urgent tonight) and `#1248` shows in **Backlog** (same
+staleness, Fable actively writing/committing its spec right now). **No new build lanes spawned
+tonight.** Standing posture: finish #1556-P2, let #1248 land wherever Fable takes it, let
+#1440/#1470 close passively via their children — do not casually pull new Backlog/Ready items
+into build lanes just because capacity is free.
