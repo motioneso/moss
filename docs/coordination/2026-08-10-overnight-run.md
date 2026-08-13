@@ -2701,3 +2701,10 @@ did land (matches his correction that he'd already responded); the earlier "stuc
 but the underlying flatline was real until just now. No action needed — passive watch continues
 per the original brief (wait for Fable to message `Coordinator` once the spec file lands in
 `docs/superpowers/specs/`).
+
+**#1248 spec written, committing (2026-08-12, later still):** file exists —
+`docs/superpowers/specs/2026-08-12-1248-internal-vault-ingestion.md` — and Fable's pane shows it
+mid-`git commit` on branch `spec-1248` ("docs(specs): #1248 internal-vault ingestion spec —
+allowlisted vault notes become searchable"). Still no message to `Coordinator` label yet — per
+the brief, wait for that rather than acting preemptively (no build lane spawn until Fable signals
+ready). No coordinator action.
