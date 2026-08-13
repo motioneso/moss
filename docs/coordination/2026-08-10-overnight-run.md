@@ -2832,3 +2832,28 @@ Opened docs-only PR #1597 (`spec-1248` → `main`) to land the spec+plan on `mai
 clean build worktree — matches the #1533 precedent (spec merges first via its own PR, build branches
 off `main` after). Routine tier (docs only, `Detect change scope` correctly skipped the DB-touching
 gate). Merging on green, then spawning the build lane fresh off `main`.
+
+**PR #1597 merged** `2026-08-13T06:29:56Z` (squash, `Verify docs` green after Fable's Prettier fix
+`e9d472048`). `main` now at `513672aa5`.
+
+## Phase 1 — 5 build lanes spawned (2026-08-13, ~23:30 PT)
+
+Handoff docs: `docs/coordination/handoffs/2026-08-13-{1489-owner-scope-breakdown,943-role-reset-storage-rpc,
+1141-credential-env-isolation,1591-owner-scope-reorder,1248-vault-ingestion}.md` — commit `0736e2d37`.
+All 5: worktree fresh off `origin/main`, `--model sonnet --permission-mode bypassPermissions`,
+confirmed `agent_status: working` post-spawn, named both ways (pane label + in-pane `/rename`).
+
+| Issue | Tier | Pane | Session id | Branch | Notes |
+| --- | --- | --- | --- | --- | --- |
+| #1489 | security | `w1:p8V` | `7892ac1f-6e87-4d0e-be00-511397316fbc` | `1489-owner-scope-breakdown` | plan → Fable review required before code |
+| #943 | security | `w1:p8W` | `84faa471-1f2a-4800-ae53-8e1703b1a7d3` | `943-role-reset-storage-rpc` | plan → Fable review required before code |
+| #1141 | security | `w1:p8X` | `929044a6-c849-49c1-823e-5d6b56e14502` | `1141-credential-env-isolation` | plan → Fable review required before code |
+| #1591 | security | `w1:p8Y` | `5f6dd50b-f85d-4101-b6ea-2d565e3bbe95` | `1591-owner-scope-reorder` | plan → Fable review required; #1592 queued behind this landing |
+| #1248 | sensitive | `w1:p8Z` | `79c826c0-769d-4ebd-ba12-914c52cbd19b` | `1248-vault-ingestion` | plan pre-approved (Fable) — build starts directly on Phase 1; Phase 3 blocked on #1556 |
+
+Fable's `spec-1248` pane (`w1:p8R`, session `53bf3e3a-9ad1-48db-b682-4dbb290e7ea3`) kept resident as
+the plan-review channel for tonight's 4 security-tier lanes — not reaped.
+
+**Still queued, not yet spawned:** #1274, #1467 (needs live-path proof), #1487 (weakest candidate,
+escalate to Fable if a dependent caller turns up) — next batch once agents-tab capacity allows.
+#1275/#1592 wait on their predecessors. #1325/#1495 wait on Fable design-fork rulings.
