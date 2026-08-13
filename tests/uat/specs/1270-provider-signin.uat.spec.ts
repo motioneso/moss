@@ -109,25 +109,14 @@ test("first-run wizard offers Claude, Codex and Antigravity — not Claude alone
 });
 
 // #1270's Settings half:
-//   f5b44c52 — the picker's authMethod passthrough. Asserted only on its CLI branch; see the
-//     API-key note below.
+//   f5b44c52 — the picker's authMethod passthrough. Asserted here on its CLI branch; the api_key
+//     branch is covered separately below by the #1325 test, since the two shipped in different
+//     issues.
 //   d05fca6c — a CLI provider added post-onboarding gets a REAL sign-in path. On `main` the CLI
 //     block's button was a no-op that fired a "Re-authenticated with the … CLI" toast and did
 //     nothing at all.
 //   8ca91c82 — the in-app terminal's selected text is copyable (Ben: "I also can't copy from the
 //     terminal in jarvis btw").
-//
-// DELIBERATELY NOT COVERED: adding an API-key provider (Mistral / Local (Ollama) /
-// OpenAI-compatible / Custom). The first version of this spec asserted it and the live walk proved
-// it is broken end to end — `POST /api/ai/providers` rejects the picker's payload with
-// `400 credentialPayload is required for api_key auth method` (packages/ai/src/routes.ts:736), so
-// the picker just shows an error toast and adds nothing. That is issue #1325, filed with the three
-// candidate fixes; it is not #1270's scope (CLI provider *sign-in*), and it is equally unusable on
-// `main`, which merely failed silently instead — main hardcoded authMethod "cli" for every catalog
-// entry, so the same click produced a bogus "Mistral CLI" with no way to enter a key. Because the
-// api_key branch is excluded, this spec does NOT prove f5b44c52's passthrough end to end; the CLI
-// assertion below passes on `main` too. Restore the API-key half as the regression test when #1325
-// is fixed.
 test("Settings offers CLI sign-in per provider and copies terminal text (#1270)", async ({
   page
 }) => {
@@ -246,4 +235,39 @@ test("Settings offers CLI sign-in per provider and copies terminal text (#1270)"
 
   await terminal.getByRole("button", { name: "Close" }).click();
   await expect(terminal).not.toBeAttached();
+});
+
+// #1325: an api_key catalog entry (Mistral here) used to fire createAiProvider immediately with no
+// credentialPayload, and the server's fail-closed guard (packages/ai/src/routes.ts:759) 400'd every
+// attempt — the picker showed an error toast and added nothing. settings-ai-admin-pane.tsx now
+// branches the picker's onClick on authMethod: api_key opens an inline credential form and only
+// creates once a key is entered. Fable-verified: the create route soft-fails discovery (routes.ts
+// ~199-214, try/catch), so a fake key still yields a created, rendered provider card even though it
+// can never really authenticate — this is expected on a UAT stack with no live Mistral credential.
+test("Settings collects an API key before creating a picker provider (#1325)", async ({ page }) => {
+  await signIn(page);
+  await skipOnboarding(page);
+  await openAssistantAndAiSettings(page);
+
+  await addProviderFromPicker(page, "Mistral");
+
+  // Still just the form: no provider has been created yet. `exact: true` is required: the same
+  // Admin / Setup settings page also mounts the voice and web-search groups' own "...API key"
+  // fields (settings-voice-config-group.tsx, settings-web-search-key-group.tsx), and getByLabel's
+  // default substring match would otherwise catch those too (strict-mode violation).
+  const apiKeyField = page.getByLabel("API key", { exact: true });
+  await expect(apiKeyField).toBeVisible();
+  const addButton = page.getByRole("button", { name: "Add", exact: true });
+  await expect(addButton).toBeDisabled();
+  await shot(page, "05-picker-api-key-credential-form");
+
+  await apiKeyField.fill("sk-uat-fake-key-1325");
+  await expect(addButton).toBeEnabled();
+  await addButton.click();
+
+  const mistral = providerCard(page, "Mistral");
+  await expect(mistral).toBeVisible();
+  // hasCredential is NOT NULL on a non-cli provider — no "No credential" branch to fall into.
+  await expect(mistral.locator(".prov__auth")).toContainText("API key stored");
+  await shot(page, "06-picker-api-key-provider-created");
 });
