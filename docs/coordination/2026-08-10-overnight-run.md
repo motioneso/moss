@@ -581,33 +581,3 @@ reap belongs to whoever can *see* the merge, which is the coordinator. Two chang
   worktree that's already merge-verified-safe but not yet removed, so it isn't lost across the
   handoff. That "later never comes" gap is how the other ~28 piled up.
 Intent: this ~50-worktree backlog should not recur.
-
-## #1452 — coordinator took over the finish line, 2026-08-12 (autonomous tick)
-
-Build lane (`fix1452-relay5`/relay6) stalled twice at the same point (worktree clean at relay6
-handoff, "push+PR next", no further commits) — second stall after an earlier nudge, matching the
-coordinate skill's "wait-declaration, nudge makes it worse" pattern. Verified via git state
-directly (not `agent_status`, which read `done` misleadingly): gate green, UAT green with 2 real
-bugs found/fixed, screenshot captured — only the mechanical push/PR/comment steps were left.
-
-Took over: rebased `fix-1452-safe-seed` onto `origin/main` (1 commit behind, #1554's
-`b748df754` — clean rebase, no conflicts, diff now shows only the 9 intended files), pushed, opened
-**PR #1595**, posted live-path proof comment
-(https://github.com/motioneso/moss/pull/1595#issuecomment-5274628584 — UAT run result + teardown
-confirmation; screenshot binary not attachable via `gh pr comment`, described instead per the
-handoff doc's own noted fallback). Build pane `w1:p8K` (session `262a317c...`) still live but
-idle-stalled — leaving it for now, will reap once QA clears the PR.
-
-**Next:** dispatch routine-tier QA on PR #1595.
-
-## #1429 — relay confirmed, old pane reaped, 2026-08-12 (autonomous tick)
-
-`fix-1429-briefing-css` relayed (context-meter/compaction trigger) mid-execution of the routed-back
-live-path-proof ask. Successor `fix1429-relay2` (pane `w1:p8M`, session `12db1927...`) confirmed
-driving in the same worktree, reading the relay handoff doc
-(`docs/superpowers/handoffs/2026-08-12-fix-1429-briefing-css-relay.md`) which covers: CI flake
-already root-caused/resolved, and the investigated plan for live-path proof (seed one `app.tasks`
-row via the `rowsFromSuggestedTasks` fallback, throwaway dev instance on non-conflicting ports,
-screenshot, teardown, PR comment on #1594). Old pane `w1:p8E` (session `20373c1d...`, agent_status
-`done`) closed — same worktree, no worktree/branch cleanup needed. Watching `fix1429-relay2` via
-the fleet Monitor for the live-path proof comment.
