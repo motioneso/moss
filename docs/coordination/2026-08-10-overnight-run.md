@@ -3112,3 +3112,24 @@ before this lane spawns.
 last check-in mid-review (`task-details-dialog.tsx` breakdownTask usage). No verdict yet — do not
 merge #1599 until it reports, and even on pass this is `security` tier: queued for Ben's explicit
 merge sign-off, not unilateral.
+
+## Supervision update — 2026-08-13, #1495 DONE, PR #1600, QA spawned
+
+**#1495 assistant-surface claim-before-use ordering reported done.** PR
+https://github.com/motioneso/moss/pull/1600. Fail-closed guard: module-bound
+`AssistantSurfaceHandleV1` handles reject on `seedContext`/`submitTurn` and no-op+`console.error`
+on `subscribeRecords` until `setSurfaceKey` claims a surface; `setSurfaceKey(null)` release returns
+to the same rejecting/unclaimed state, not the drawer. Drawer-bound handles untouched. Zero blast
+radius per spec — no live-path/UAT proof required (stated in PR body, matches the approved plan).
+Author's evidence: 4 new/updated unit tests TDD red→green (7/7), pre-push trio clean, `@moss/web`
+typecheck clean, full `verify:foundation` green on isolated `jarvis_gate_1495` (dropped after,
+FINAL rc=0). Commits `858163e30`, `09fbfff4b`.
+
+Not trusted on the author's word alone — **security tier** (ordering half of #1284's leakage rule).
+Spawned Opus adversarial QA (`coordinated-qa`, `isolation: worktree`, agent `qa-1495`,
+`ac4f8617642d021c5`) targeting the release-to-unclaimed transition and `today-page.tsx` ordering
+specifically. Verdict pending — do not merge until it posts, and even on pass this needs **Ben's
+explicit merge sign-off** before merging (security tier).
+
+**Security-tier merge queue awaiting Ben, so far:** PR #1599 (#1489, QA `qa-1489` in flight), PR
+#1600 (#1495, QA `qa-1495` in flight).
