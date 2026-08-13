@@ -237,11 +237,7 @@ function ProviderCard(props: {
             ) : (
               <KeyRound size={12} aria-hidden="true" />
             )}
-            {provider.authMethod === "cli"
-              ? `${provider.displayName} CLI`
-              : provider.hasCredential
-                ? "API key stored"
-                : "No credential"}
+            {provider.authMethod === "cli" ? `${provider.displayName} CLI` : "API key stored"}
           </div>
         </div>
         <div className="prov__acts">
