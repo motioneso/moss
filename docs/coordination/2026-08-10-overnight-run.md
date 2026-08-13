@@ -3040,3 +3040,27 @@ within one tool call. Given 3/3 clean recoveries with the same low-cost nudge, t
 recurring but reliably-recoverable quirk on this lane (plausibly a repeated git push/rebase
 confirmation prompt), not an escalating stall — no takeover warranted unless a future occurrence
 fails to clear on nudge.
+
+## Supervision update — 2026-08-13, #1248 relay-6 direct intervention, #943 4th recovery
+
+**#943's stuck-confirmation-dialog recurred a 4th time** (rev frozen at 345, 🔔 title), cleared by
+the same directive nudge again (title cleared, rev advanced to 354). 4/4 clean recoveries now —
+still treating as a recoverable quirk, not a stall, per the prior note's threshold.
+
+**#1248 relay-5 also relayed with zero implementation commits** (mid-research for §3, though it
+did pre-gather every §3 call signature and confirmed a new real bug: `ALLOWED_PAYLOAD_KEYS` in
+`packages/jobs/src/pg-boss.ts` is missing `"op"`). Continuation doc
+`docs/superpowers/handoffs/2026-08-13-1248-vault-ingestion-relay5.md` (`0818feb41`). That makes
+**3 of the last 4 relay hops with no landed code** (relay-2, relay-3, relay-5; only relay-4 landed
+commits). This crossed the threshold flagged two updates ago — **intervened directly** rather than
+nodding it through: sent successor `vault-ingest-1248-relay6` (pane `w1:p9D`, session
+`b282c337-9f87-41b3-a1ed-e061ebe7b1a7`) an explicit coordinator directive to write the §3
+implementation this hop rather than re-verify, committing per section rather than saving it all
+for the end. Predecessor (`vault1248-relay5`, pane `w1:p9C`, session
+`cdffa90a-6043-49e9-a003-931bf710ad20`) reaped. **Watch relay-6's next report closely — if it
+relays again without a real commit despite the directive, this lane needs a `TaskStop` +
+Coordinator takeover, not another relay.**
+
+**Context checkpoint (70%, second checkpoint this segment)** — per Ben's standing override ("lets
+stop relaying, just auto compact coordinator"), no coordinator relay spawned. State flushed here
+and to a `memory_save` instead.
