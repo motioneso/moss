@@ -3785,3 +3785,28 @@ https://github.com/motioneso/moss/pull/1605#issuecomment-5278566789 exactly.
 **#1605 (#1274) now in Ben's sign-off queue** — security tier, CI green, QA GREEN, unmerged
 pending his explicit OK. Sign-off queue is now: #1599 (#1489), #1600 (#1495), #1604 (#943),
 #1605 (#1274). #1606 (#1248) and #1602 (#1325 re-verify) still pending CI/QA.
+
+## 2026-08-13 — checkpoint at 70% context (2nd), PR #1606 gate genuinely red, routed to lane
+
+`gh run rerun --failed` on #1606 reproduced the identical failure
+(`chat-drawer-surface.test.tsx`, same assertion, same line) — confirmed NOT a flake. File is
+outside #1606's diff. Rather than investigate further myself, routed back to `w1:p9D` (relay6,
+the owning lane) to determine pre-existing-on-main vs. caused-by-their-changes and fix/report.
+Not yet resolved.
+
+**Standing override remains in force** — staying resident through this second 70% checkpoint,
+no relay spawned. Current state:
+
+- **Sign-off queue for Ben (unmerged, ready):** #1599 (#1489), #1600 (#1495), #1604 (#943),
+  #1605 (#1274).
+- **#1602 (#1325):** BLOCKING-1 fix pushed, CI pending, watcher `byc4s329i` armed; re-verify QA
+  not yet spawned.
+- **#1606 (#1248):** gate red on an unrelated test file, reproduced twice, routed to `w1:p9D` for
+  investigation. Not QA'd yet — blocked on this.
+- **`w1:p9M` (1325-relay4):** idle, holding per ack, awaiting CI/QA on #1602.
+- **`w1:p9D` (#1248 relay6):** just received the gate-failure investigation ask; watch for its
+  reply.
+- **#1591-relay4, #1141:** unchanged, no new signal this segment.
+- Active watchers: `byc4s329i` (#1602 CI), fleet-liveness Monitor `bbbsxhrmu`. #1605/#1606-rerun
+  watchers already resolved and are done.
+- Coordinator lock unchanged: session `caef4e32-df22-4310-a42d-866771a0ba6c`, pane `w1:p8T`.
