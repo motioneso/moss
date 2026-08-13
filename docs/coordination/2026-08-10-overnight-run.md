@@ -2658,3 +2658,18 @@ label `Coordinator` (verified sole other `Coordinator` pane was the outgoing `w1
 `0bb9f516-c026-454f-bc97-dc9faf43bd20`, matching this file's prior lock line). Lock line above
 updated. AWAITING-BEN.md re-read in full — no open entries, all resolved. Proceeding to
 re-adopt the live fleet fresh and reap the outgoing coordinator pane.
+
+Outgoing coordinator `w1:p7P` / `0bb9f516-c026-454f-bc97-dc9faf43bd20` reaped (session id
+verified match before close, status `done`, no in-flight work). Fleet re-adopted: #1556-P2
+(`w1:p8S`) confirmed genuinely working (not just a status flicker) — two new real commits landed
+since last check, `c93b6d563` (Task 2) and `afc7c68b1` (Task 3), plan+relay docs still
+uncommitted (known bookkeeping gap, non-blocking); pane showed an active spinner mid-turn, own
+context meter at 71% (near its own relay threshold — its concern, not mine to act on unless it
+stalls). #1248 (`w1:p8R`) — Ben's "yes, write it" approval was still sitting unsent in the input
+box exactly as flagged; sent `herdr pane send-keys w1:p8R Enter` twice, neither took effect
+(pane revision unchanged both times). Per box-wide "two identical failures → stop", did not
+retry further — pinged Ben directly via `needs-ben` since only he can unstick his own pane
+input; not treated as a coordinator blocker (still his direct conversation with Fable, no lane
+spawn until he/Fable trigger it). issue-audit (`w1:p7Y`) idle, no action needed — its work
+already merged. No other lanes active. `merges_since_relay` carries forward at 0 (no merge this
+leg yet). Resuming supervision (Phase 2).
