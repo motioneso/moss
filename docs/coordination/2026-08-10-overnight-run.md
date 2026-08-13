@@ -2956,3 +2956,21 @@ yet, only #1325's plan is still outstanding from her queue.
 
 **All 3 build lanes unblocked to proceed to build** — no pending plan-review holds remain except
 #1325 (still drafting its plan).
+
+## Relay churn note — #1248 (2026-08-13) and routine relay-3 hops
+
+**#1248 now on relay-3 for Phase 1** — worth flagging, not alarming: relay-2 (`b044829c...`,
+reaped) spent its entire context budget on design verification against the live branch (queue
+architecture, handler logic, provider implementations, module-registry wiring, test cases) and
+self-flagged writing zero code. That full design is now resolved and committed
+(`f0d0537e4`, `docs/superpowers/handoffs/2026-08-12-1248-vault-ingestion-relay2.md`). Successor
+`vault-ingest-1248-r3` (pane `w1:p96`, session `f6703343-36f8-4728-bb20-8815fcc1cf45`) confirmed
+driving, same worktree/branch, Phase 1 scope unchanged. Predecessor reaped. Watching for whether
+relay-3 converts the resolved design into actual commits — if it also relays without landing code,
+that's a real stall pattern worth intervening on rather than just another routine hop.
+
+**#1591 now on relay-3**, routine hop: relay-2 landed Tasks 1-2 (commit `42b9bd053`, oracle-tested)
+and relayed cleanly. Successor `owner-scope-relay3` (pane `w1:p97`, session
+`fe7998fd-c43f-4e04-98ca-e68b2c331953`) confirmed driving on Task 3 (integration test + 404 parity
+test), continuation doc `docs/superpowers/handoffs/2026-08-12-1591-owner-scope-reorder-relay2.md`.
+Predecessor reaped.
