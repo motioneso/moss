@@ -871,6 +871,29 @@ describe("Tasks module M1", () => {
     expect(reloaded?.status).toBe("done");
   });
 
+  it("breakdown rejects a view-shared task from another owner as a parent (#1489)", async () => {
+    const breakdown = new TaskBreakdownRepository();
+
+    const ownedByA = await dataContext.withDataContext(userAContext(), (db) =>
+      repository.create(db, { title: "A's task" })
+    );
+    await dataContext.withDataContext(userAContext(), (db) =>
+      sharesRepository.grant(db, {
+        resourceType: "task",
+        resourceId: ownedByA.id,
+        ownerUserId: ids.userA,
+        granteeUserId: ids.userB,
+        level: "view"
+      })
+    );
+
+    await expect(
+      dataContext.withDataContext(userBContext(), (db) =>
+        breakdown.breakDown(db, ownedByA.id, ["should not be created"])
+      )
+    ).rejects.toThrow(/not found or not accessible/);
+  });
+
   it("lists: get-or-create Personal is idempotent; tags are list-scoped", async () => {
     const listsRepo = new TaskListsRepository();
 
