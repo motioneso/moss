@@ -2258,3 +2258,47 @@ every currently in-progress item is actually done. #1252→Backlog and #1553→D
 closures, not new-work-availability moves — safe to apply on their own merits whenever, but
 grouping the whole correction batch together for one pass after everything clears is simpler and
 matches the spirit of the instruction, so holding all four together.
+
+## APPLIED — #1553→Done, #1252→Backlog (2026-08-12)
+
+Both are demotions/closures, not Ready moves, so they don't violate the hold. Applied via
+`gh project item-edit` (item ids `PVTI_lAHOADqkaM4BarLAzg2A7es` / `PVTI_lAHOADqkaM4BarLAzg0CpAE`,
+Status field `PVTSSF_lAHOADqkaM4BarLAzhVhA6I`, options `Done=98236657` / `Backlog=f75ad846`).
+Comments posted explaining both (issue #1553, #1252). #1246 and #1135 remain held per Ben's rule.
+
+## Re-audit found an 11th (now 9th) in-progress item: #1248
+
+Prior audits missed #1248 ("Audit: is the vault actually feeding Jarvis's context/retrieval?").
+Read its full comment history (`gh api repos/motioneso/moss/issues/1248/comments` — `gh issue view
+--json body,comments` returned unreadable `<<ccr:...>>` placeholder tokens for this issue, and
+`--comments` errored outright with a Projects-classic GraphQL deprecation error; the REST `gh api
+.../comments` endpoint is the reliable path going forward). Verdict: **partially superseded, not
+fully** (unlike #1553) — its passive-retrieval half is covered by #1553's build (#1556), but its
+**vault-ingestion half is real, separate, unowned scope**, still P0. No agent assigned. Needs a
+priority decision / spec-build dispatch, but can't open a new lane while the in-progress column
+isn't clear per Ben's hold-Ready rule.
+
+## Ben asked for a priority ranking of the 11 (now 9) in-progress items — delivered 2026-08-12
+
+1. **#1554** (PR #1593) — QA-RED finding fixed & pushed (`d95f0b3ff`), CI running, closest to
+   merge. Watching CI (background wait + Monitor `bxutlt0hm`), will re-dispatch `coordinated-qa`
+   on green.
+2. **#1429** (PR #1594) — CI genuinely **failing** ("Verify foundation and app", job
+   94293184988). Build agent `briefing-css-2` (pane w1:p8E) falsely claimed a green gate —
+   corrected in-pane with the real job pointer, now back to `working`.
+3. **#1452** — active relay agent (`fix1452-relay5`, pane w1:p8K), no PR yet, on its last leg
+   (UAT run → push → PR → live-path proof).
+4. **#1556** — active build (Codex pane `w1:p7Y`, different coordinator), covers #1553's
+   superseded scope.
+5. **#1248** — P0, real unowned scope (ingestion half). No agent; blocked on the in-progress
+   column clearing before a new lane can open.
+6. **#1246** — spec-ready, no build agent. Held per Ben's rule.
+7. **#1135** — no agent. Held per Ben's rule.
+8–9. **#1440, #1470** (epics) — resolve passively as children land.
+
+## Monitor hygiene
+
+Old Monitor `bl4my7p1l` (pre-compaction, parsed `herdr pane list` output with `herdr agent list`'s
+schema — silently broken, never fired a real event) was superseded by corrected Monitor
+`b5q3m7ouw` earlier and has now been `TaskStop`'d as a duplicate. `b5q3m7ouw` is the sole fleet
+liveness watch going forward.
