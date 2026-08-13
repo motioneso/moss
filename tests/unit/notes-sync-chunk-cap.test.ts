@@ -74,7 +74,7 @@ describe("notes.sync chunk cap (#1590)", () => {
       embedDocument: vi.fn(),
       embedQuery: vi.fn()
     };
-    const preferences = { get: vi.fn(async () => root) };
+    const preferences = { get: vi.fn(async () => root) } as never;
     const dataContext = {
       withDataContext: async (_access: unknown, work: (db: unknown) => Promise<unknown>) => work({})
     } as never;
