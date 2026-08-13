@@ -38,7 +38,7 @@ one route guard left untouched, no architectural fork left open.
 - `apps/web/src/settings/settings-ai-admin-pane.tsx:331-366` — the Edit pane's non-CLI branch is
   the field pattern to reuse verbatim: `Field label="Base URL"` + `input.jds-input` (optional,
   placeholder `https://api.anthropic.com`), `Field label="API key"` + `input.jds-input
-  type="password"` (placeholder `sk-…`), a `Button variant="secondary"` gated
+type="password"` (placeholder `sk-…`), a `Button variant="secondary"` gated
   `disabled={!apiKey.trim() && !baseUrl.trim()}`. The picker's new form reuses `Field`/`Segmented`-
   adjacent primitives already imported at `:38` — no new `@moss/ui` component, no new CSS
   primitive.
@@ -51,7 +51,7 @@ one route guard left untouched, no architectural fork left open.
   same staleness — left as a fast-follow note (ledger below), not fixed here, to keep the diff to
   what the issue and ruling actually name.
 - `packages/shared/src/ai-types.ts:200-208` (`CreateAiProviderConfigRequest`) — `baseUrl?: string |
-  null`, `credentialPayload?: Record<string, unknown>`, both already optional and already used by
+null`, `credentialPayload?: Record<string, unknown>`, both already optional and already used by
   the Edit-pane `onUpdate` path (`:732-741`) — no shared-type change needed.
 - `tests/uat/specs/1270-provider-signin.uat.spec.ts:120-130` — comment block placed by the #1270
   author names this exact gap and says explicitly: "Restore the API-key half as the regression test
@@ -60,7 +60,7 @@ one route guard left untouched, no architectural fork left open.
 - `tests/unit/settings-ai-admin-pane.test.tsx` (27 lines today) — only a static `renderToString`
   smoke test, no interaction. `tests/unit/settings-ai-pane.test.tsx:1-15` establishes the
   interactive pattern this repo uses for a React-Query mutation form: `// @vitest-environment
-  jsdom` + `react-test-renderer`'s `act`/`create`, `vi.mock("../../apps/web/src/api/client.js", ...)`
+jsdom` + `react-test-renderer`'s `act`/`create`, `vi.mock("../../apps/web/src/api/client.js", ...)`
   providing every export the pane imports, `renderer.root.findByProps({ "aria-label": ... })` to
   drive real `onChange`/`onClick` handlers, a `flush()` helper awaiting one microtask tick under
   `act`. This plan's Task 3 follows that pattern in `settings-ai-admin-pane.test.tsx`.
@@ -85,14 +85,14 @@ pane's existing credential field already crosses. No chat turn, no model-authore
 File: `apps/web/src/settings/settings-ai-admin-pane.tsx`.
 
 - Add local state: `const [credentialFor, setCredentialFor] = useState<(typeof
-  PROVIDER_CATALOG)[number] | null>(null)`, `const [pickBaseUrl, setPickBaseUrl] =
-  useState("")`, `const [pickApiKey, setPickApiKey] = useState("")`.
+PROVIDER_CATALOG)[number] | null>(null)`, `const [pickBaseUrl, setPickBaseUrl] =
+useState("")`, `const [pickApiKey, setPickApiKey] = useState("")`.
 - Change `createMutation`'s `mutationFn` signature from `(option: (typeof
-  PROVIDER_CATALOG)[number])` to `(input: { option: (typeof PROVIDER_CATALOG)[number]; baseUrl:
-  string; apiKey: string })`. Body:
+PROVIDER_CATALOG)[number])` to `(input: { option: (typeof PROVIDER_CATALOG)[number]; baseUrl:
+string; apiKey: string })`. Body:
   `createAiProvider({ providerKind: input.option.kind, displayName: input.option.label, authMethod:
-  input.option.authMethod, baseUrl: input.baseUrl.trim() || undefined, ...(input.option.authMethod
-  === "cli" ? {} : { credentialPayload: { apiKey: input.apiKey.trim() } }) })`. `onSuccess` also
+input.option.authMethod, baseUrl: input.baseUrl.trim() || undefined, ...(input.option.authMethod
+=== "cli" ? {} : { credentialPayload: { apiKey: input.apiKey.trim() } }) })`. `onSuccess` also
   resets `setCredentialFor(null)`, `setPickBaseUrl("")`, `setPickApiKey("")` alongside the existing
   `setPick(false)` / `invalidate()` / toast (toast still reads `input.option.label`, update the
   destructured param name accordingly).
@@ -103,10 +103,10 @@ File: `apps/web/src/settings/settings-ai-admin-pane.tsx`.
 - Below the grid, when `credentialFor` is non-null, render an inline form reusing the exact field
   pattern from `:333-365` (`Field label="Base URL"` + `.jds-input`, `Field label="API key"` +
   `.jds-input type="password"`), plus two buttons: `Button variant="secondary"` "Add", `disabled={!
-  pickApiKey.trim()}` (client-side empty-key block, per handoff step 5), `onClick={() =>
-  createMutation.mutate({ option: credentialFor, baseUrl: pickBaseUrl, apiKey: pickApiKey })}`; and
+pickApiKey.trim()}` (client-side empty-key block, per handoff step 5), `onClick={() =>
+createMutation.mutate({ option: credentialFor, baseUrl: pickBaseUrl, apiKey: pickApiKey })}`; and
   `Button variant="quiet"` "Cancel", `onClick={() => { setCredentialFor(null); setPickBaseUrl("");
-  setPickApiKey(""); }}`. Heading text: `Add ${credentialFor.label}`.
+setPickApiKey(""); }}`. Heading text: `Add ${credentialFor.label}`.
 - No new CSS class needed — `Field`, `.jds-input`, `Button` are all already-imported primitives: a
   `<div className="provpick__cred">` wrapper reusing `.provcfg` spacing rules
   (`apps/web/src/styles/settings-panes.css`) is the only new class, and it's layout-only (flex
@@ -122,13 +122,13 @@ Cases, each stated as behavior that would fail against today's `main`:
 
 1. Clicking "Mistral" in the picker does **not** call `createAiProvider` immediately (today's bug:
    it does, and the server 400s) — it opens the inline form instead. Assert via `findByProps({
-   "aria-label": "API key" })` becoming findable only after the click.
+"aria-label": "API key" })` becoming findable only after the click.
 2. With the Mistral form open and API key left empty, the "Add" button
    (`findByProps({ children: "Add" })` or an `aria-label` if one is added) is `disabled`. Fails
    against a naive "send `{}`" implementation, which would enable it unconditionally.
 3. Filling API key `"sk-test-123"` and clicking "Add" calls `createAiProvider` with
    `providerKind: "openai-compatible"`, `authMethod: "api_key"`, `credentialPayload: { apiKey:
-   "sk-test-123" }`. This is the regression assertion for #1325's `400` — fails against `main`,
+"sk-test-123" }`. This is the regression assertion for #1325's `400` — fails against `main`,
    which never sends `credentialPayload` at all.
 4. Clicking "Anthropic" (a `cli` catalog entry) still calls `createAiProvider` immediately with no
    `credentialPayload` key present at all (not even `credentialPayload: undefined` — omitted) —
@@ -151,7 +151,9 @@ File: `apps/web/src/settings/settings-ai-admin-pane.tsx:240-244`.
 Change:
 
 ```tsx
-{provider.authMethod === "cli" ? `${provider.displayName} CLI` : "API key stored"}
+{
+  provider.authMethod === "cli" ? `${provider.displayName} CLI` : "API key stored";
+}
 ```
 
 (Drops the `provider.hasCredential` ternary — always true for a non-cli provider per the `NOT
@@ -181,10 +183,10 @@ File: `tests/uat/specs/1270-provider-signin.uat.spec.ts`.
   assert the inline credential form is visible (`getByLabel("API key")`) → assert the "Add" button
   is disabled with the API key field empty → fill a fake key (e.g. `"sk-uat-test-not-real"`, no
   real provider call happens for `openai-compatible` model discovery against a fake key — a failed
-  discovery fetch is fine, this UAT proves *provider creation*, not real API connectivity) → click
+  discovery fetch is fine, this UAT proves _provider creation_, not real API connectivity) → click
   "Add" → assert `providerCard(page, "Mistral")` becomes visible and its `.prov__auth` text reads
   "API key stored" (not an error toast, not "No credential") → assert `page.getByText("Add a
-  provider")` (or the form) is gone (picker closed on success, matching `onSuccess`'s
+provider")` (or the form) is gone (picker closed on success, matching `onSuccess`'s
   `setPick(false)`).
 - This is the assertion that fails on `main` today: `main` shows an error toast and adds nothing
   (per the issue body and the comment block being replaced).
