@@ -3019,3 +3019,24 @@ driving, revision climbing normally (39→99+) immediately after spawn. Predeces
 action if relay-4 also relays without a real implementation commit: stop nodding this through —
 `TaskStop` + take over the lane directly**, per the skill's wait-declaration-stall protocol; three
 verify-only relays in a row on a fully-resolved design is not routine churn.
+
+## Supervision update — 2026-08-13, #1248 relay-5 and #943 recurring stuck-dialog
+
+**#1248 relay-4 broke the stall pattern** — landed real commits before relaying: §1
+`listVaultOwnerIds` in `vault-ops.ts` (`23b7b3cbc`) and §2 memory package.json deps
+(`@moss/jobs`, `pg-boss`, `a76c0d4dd`). Relayed at 70% meter warning before starting §3, research
+for §3 captured in its continuation doc (`ed17918a2`). Successor `vault1248-relay5` (pane
+`w1:p9C`, session `cdffa90a-6043-49e9-a003-931bf710ad20`) confirmed driving. Predecessor
+(`vault-ingest-relay4`, pane `w1:p9A`, session `801d46ac-6ad0-463b-b952-e835d4b65a86`) reaped.
+**Note:** this is the lane's 5th relay hop total (relay-2 through relay-5) — real progress is
+landing now, but the hop count itself is worth watching; if relay-5 also needs a relay before
+finishing §3-§8, consider whether the remaining scope should be split into a fresh lane rather
+than continuing to relay the same one indefinitely.
+
+**#943 relay-3's stuck-confirmation-dialog recurred twice more** (3 total occurrences this
+segment: revision frozen + 🔔 "needs your attention" title at rev 199, rev 321, rev 336) — same
+directive `herdr pane run` nudge (not a bare Enter) cleared it each time, status back to `working`
+within one tool call. Given 3/3 clean recoveries with the same low-cost nudge, this reads as a
+recurring but reliably-recoverable quirk on this lane (plausibly a repeated git push/rebase
+confirmation prompt), not an escalating stall — no takeover warranted unless a future occurrence
+fails to clear on nudge.
