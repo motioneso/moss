@@ -3179,3 +3179,22 @@ won't actually prove the command-line-injection fix. She verified every citation
 against the branch directly and confirmed the `NOTES_ROOTS`-in-`ALLOWED_KEYS` alternative is dead
 (passthrough filter, not a resolver; `.mjs` only reads the `JARVIS_` spelling). Next in her queue:
 #1274 trust-lint review.
+
+## Supervision update — 2026-08-13, #1274 APPROVED with corrections
+
+**#1274 plan APPROVED by Fable**, 1 required wording fix + 1 supplied command, relayed to
+`trust-lint-1274` (`w1:p9F`), now building. Fix: Task 3 case 2's plan justification had the
+compile behavior backwards — the bare (unwrapped) probe throws `Unmatched ')'` and is exactly what
+catches the anchor-escape pattern (matches `compilePattern`'s own doc comment); the test's rejection
+expectation was already correct, only the written justification was wrong. Supplied: Task 3's test
+command needs to run from repo root with no `--filter` (root-level `tests/unit/*.test.ts` placement,
+same fact re-confirmed on tonight's #1467 review). Fable also ran a cycle check the plan hadn't
+stated: `module-registry` already depends on `@moss/ai`, `@moss/ai` has no import back
+(grep empty) — the new import adds no dependency edge, safe. 3 non-blocking notes passed through
+for the build agent's awareness (walker stricter than runtime — correct direction; depth-12 bail
+documented as an acceptable gap; `node:crypto` drift confirmed pre-existing/out of scope).
+
+**Both #1274 and #1467 are now building with Fable's corrections applied — both plans cleared, no
+open plan-review items remain in the queue.** Fable's queue is clear on her side; she remains
+available for #1487's dependent-caller question (still open, see prior update) or any new
+escalation.
