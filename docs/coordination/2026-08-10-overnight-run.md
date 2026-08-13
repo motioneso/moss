@@ -3856,3 +3856,26 @@ path overlap, non-material), still MERGEABLE.
 **#1602 (#1325) now in Ben's sign-off queue.** Sign-off queue is now: #1599 (#1489), #1600
 (#1495), #1604 (#943), #1605 (#1274), #1602 (#1325). Five PRs awaiting Ben's explicit merge OK.
 #1606 (#1248) still blocked on Fable's policy ruling (pre-existing gate failure, issue #1607).
+
+## 2026-08-13 — reaped 5 finished build-lane panes
+
+Per Ben's instruction, verified each candidate pane's deliverable against GitHub (not idle status
+alone) before closing:
+
+- `w1:p8S` (1556-P2 notes-default retrieval) — PR #1562 **MERGED**. Reaped.
+- `w1:p8V` (1489 owner-scope breakdown) — PR #1599 open, QA GREEN, in sign-off queue; build work
+  done, nothing further expected from the pane. Reaped.
+- `w1:p9M` (1325 provider credential picker relay4) — PR #1602 open, QA GREEN, in sign-off queue,
+  already acked to stand down. Reaped.
+- `w1:p9N` (1274-trust-lint-relay1) — PR #1605 open, QA GREEN, in sign-off queue. Reaped.
+- `w1:p94` (1495 assistant-surface ordering) — PR #1600 open, QA PASS, in sign-off queue. Reaped.
+
+**NOT reaped (verified still in-flight, do not close):**
+- `w1:p9D` (1248 vault ingestion P1 relay6) — blocked on Fable's #1606 policy ruling.
+- `w1:p8R` (1248 vault-ingestion spec, Fable) — still owed a reply on that ruling.
+- `w1:p9P` (1591-owner-scope-relay4) — no PR opened yet.
+- `w1:p99` (1141 credential env isolation relay3) — PR #1601 open but QA came back RED; lane is
+  mid-rework, not finished.
+- `w1:p9H` (1467 permission boundary shell-quote) — no PR opened yet; was mid-build/stall-recovery.
+
+Remaining active fleet: 5 panes (`w1:p9D`, `w1:p8R`, `w1:p9P`, `w1:p99`, `w1:p9H`) plus Coordinator.
