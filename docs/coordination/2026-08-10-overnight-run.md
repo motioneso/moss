@@ -2752,3 +2752,34 @@ process is a plan (Fable authors/reviews, not the build agent, per Ben's standin
 any build lane spawns. Asking Fable (already in-context in `spec-1248`) to author the plan now.
 The port-blend sequencing constraint (#1553 port touch waits for #1556) is a build-time
 constraint for whoever's plan/build, not a reason to hold the lane spawn itself.
+
+**Scope confirmed (Ben, 2026-08-12, later still): spawn the whole Ready column.** Asked Ben to
+scope "new work can start" — answer: full Phase 0 (collision/dependency map, tiering) across
+every Ready-column item, spawn everything that clears it, capacity-limited by the agents tab.
+Fresh `gh project item-list 2` Ready column at time of ask: #1589, #895, #1489, #1591, #1141,
+#943, #1275, #1274, #1592, #1454, #1108, #1013, #1325, #1495, #1487, #1467 (plus #1556, already
+building — excluded). Dispatching a one-shot Opus subagent for the Phase-0 collision/dependency
+map + tiering across all 16 per the coordinate skill's model policy; will spawn build lanes off
+its output up to agents-tab capacity, queue the rest. #1556-P2 confirmed still genuinely
+building at this point (its `done` `agent_status` flip was a status flicker — pane shows
+"Build per approved plan… (4m 0s)" mid-turn, high effort, Task 4 commit `9039ba223` landed,
+untracked relay-6 handoff doc present but not yet committed — no action, real progress).
+
+**Ben logging off for the night (2026-08-12, final exchange):** "keep working through the p0
+issues, if you get stuck park that one and move on. use your fleet to build, if there are
+questions ask fable." Reads as confirming the Ready-column batch (no literal P0 label found on
+any of the 16 — `bug`/`task`/`security` only; treating "p0" as shorthand for that Ready-column
+list already discussed). **Standing posture for the rest of the night:**
+- Per-item stalls: park it (leave `blocked` in the manifest, move on), don't burn the night
+  stuck on one lane.
+- **Escalation path changes: Fable is now the design-authority proxy, not Ben** — route
+  questions/forks to Fable's pane instead of waiting on Ben. Still no coordinator override of
+  Fable's calls (standing #1248 rule generalizes to tonight's whole batch).
+- Bug/task items (13 of 16: not `security`-labelled) are being treated as build-ready off their
+  GitHub issue directly, no separate spec doc required — they're scoped fixes, not new
+  features/modules, consistent with how issue-audit's #1596 landed.
+- **Security-tier items (#943, #1275, #1274) may build + open PRs + get Opus QA tonight, but do
+  NOT merge without Ben's explicit sign-off** per the security-tier gate — queue those PRs for
+  his morning review regardless of how green they are.
+- Dispatching Phase-0 collision/dependency map + tiering (one-shot Opus subagent) across all 16
+  now; will spawn build lanes off its output, capacity-limited by the agents tab, rest queued.
