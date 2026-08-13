@@ -3810,3 +3810,23 @@ no relay spawned. Current state:
 - Active watchers: `byc4s329i` (#1602 CI), fleet-liveness Monitor `bbbsxhrmu`. #1605/#1606-rerun
   watchers already resolved and are done.
 - Coordinator lock unchanged: session `caef4e32-df22-4310-a42d-866771a0ba6c`, pane `w1:p8T`.
+
+## 2026-08-13 — #1606 root cause confirmed pre-existing/unrelated; policy call routed to Fable
+
+`w1:p9D` reported back (pane's scrollback unreadable via herdr pane read — 2-row viewport — so it
+was relayed via `herdr pane run` instead of pane read): the `chat-drawer-surface.test.tsx` failure
+is a **pre-existing timing race** in already-merged #1533 code (`chat-drawer.tsx`'s
+`startPrivateChat` vs. `privacyStateQuery` effect ordering, racing a hardcoded double-microtask
+flush in the test), full-suite-only, **not caused by #1606**. Evidence: zero diff overlap, #1606's
+branch is byte-identical to `main` on that file, `main`'s own CI passed on the identical code at
+06:29/06:40 UTC — hours before #1606's 09:27 UTC run failed on it; reproduced identically twice.
+All of #1606's other CI jobs are green.
+
+Filed tracking issue **#1607** for the flake (not blocking #1248 directly). Since this is a
+merge-policy call (accept a documented pre-existing/unrelated gate failure vs. hold #1606 for an
+unrelated fix) rather than a technical question, routed it to **Fable** (`w1:p8R`) per standing
+offline-hours delegation — asked: proceed to QA/merge treating this as a documented exception, one
+more CI rerun first, or hold regardless. Awaiting Fable's ruling. `w1:p9D` acked, standing by, no
+further action on its end.
+
+**#1606 remains un-QA'd, blocked on Fable's policy ruling — do not spawn QA or merge until then.**
