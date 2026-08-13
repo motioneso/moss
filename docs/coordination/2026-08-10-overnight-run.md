@@ -3565,3 +3565,21 @@ for an extended window, not on bell-title alone. Noting this as a general lesson
 necessary but not sufficient signal — a lane legitimately waiting on its own background Monitor
 also shows it, so a quick transcript pull (bounded tail, not pane read) is worth doing before the
 Nth nudge on a lane that keeps re-freezing right after clearing.
+
+## 2026-08-13 — #943 role-reset-storage-rpc PR opened (relay5 wrap-up)
+
+PR #1604 open: "[SECURITY] fix(db): #943 reset module RPC role after query()". Pre-push trio green
+on `dbc7adffc`; no rebase needed (already atop `origin/main`). `module-storage-rpc.test.ts` passed
+clean on all 4 gate attempts tonight; the 4 attempts themselves hit box-wide DDL contention
+("tuple concurrently updated", attempts 1+4 — also seen independently on #1591 same night, so
+environmental not this lane's regression), one unrelated `act()` flake (attempt 3, non-repro
+isolated), one hang (attempt 2). No single clean full-gate run, but per-attempt evidence + isolated
+target-test pass logged in the PR body; coordinator proceed-to-PR call cited there too. Backend-only
+RPC role fix, no live-path proof needed. Teardown clean (gate DB dropped, no dev instance spun up,
+worktree reapable). Tier: **security** — NOT merged, board untouched, issue not closed; needs
+adversarial Opus QA + Ben's explicit sign-off. Confirmed to the agent I'm driving; awaiting its
+"safe to reap" once it finishes wind-down.
+
+CI on #1604 was still running "Verify foundation and app" at report time (rest green/skipping) —
+armed a background watcher (`bc7upvv9i`) for that job's terminal state before spawning QA, per this
+run's established practice (QA trusts CI, only spawn once CI is actually green).
