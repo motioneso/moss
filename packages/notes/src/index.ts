@@ -7,6 +7,11 @@ export {
 } from "./manifest.js";
 export { NotesPathError, assertWithinRoot } from "./path-guard.js";
 export {
+  createNotesRecallPort,
+  type NotesRecallPort,
+  type NotesRecallSnippet
+} from "./recall.js";
+export {
   NOTES_QUEUE_DEFINITIONS,
   handleNotesSyncJob,
   handleNotesSyncJobWithDataContext,
