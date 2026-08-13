@@ -4207,15 +4207,21 @@ digest only) remains the fallback for security-tier sign-off.
   is active in `w1:tH`; Ben notified via `needs-ben` (`1786660402237296752.msg`). Plan
   `2026-08-13-news-ai-ranking-fallback.md` approved with the constraint to reuse deterministic
   ordering/validation/CAS and bounded category/count-only logging.
-- **#1590 / PR #1609:** CI's foundation/app check is green; a fresh sensitive QA fallback is
-  active in QA worktree `qa-1609-sensitive-rerun`, pane label `QA PR1609 sensitive rerun`, session
-  `35e2ae47-3056-4438-9e57-fd81fa438e38`. Do not resume the stopped QA session.
+- **#1590 / PR #1609:** fresh sensitive QA is **RED** (`issuecomment-5287245850`); CI foundation/
+  app is green and the image publish check is non-required/pending. Blocking finding: continuation
+  `sendJob` reuses the active parent singleton key `notes-sync:${actorUserId}`, so pg-boss exclusive
+  policy can silently drop >100-chunk continuations; current UAT proof ingested 0 files and did not
+  exercise the path. Findings relayed to the owner pane `w1:p9S`; do not merge; require real
+  register/sendJob coverage, a corrected dispatch identity/dedup path, oversized-ingest proof, and
+  fresh sensitive QA. Prior QA pane/session `35e2ae47-3056-4438-9e57-fd81fa438e38` is done.
 - **#1275 / PR #1608:** existing Opus re-QA agent `aa546f32525ab4f40` was not re-spawned; no new
   verdict was available in the successor's accessible task output or PR comments at adoption time.
   PR CI was still in progress; re-check the existing agent/result before acting.
-- **#1467 / PR #1610:** bounded reads confirmed relay6 is actively driving in `w1:p9Z`; old relay4
-  pane `w1:p9X` remains done. Unlabeled `w1:p9Y` and `w1:p90` are shells running the #1591 gate,
-  not orphaned agents; leave them alone.
+- **#1467 / PR #1610:** relay6 handoff `4eb19b346` is committed/pushed; relay7 is now active from
+  that existing worktree under label `1467 permission boundary shell-quote (relay7)`, session
+  `5de202ff-8dbc-4430-9f5d-f3c8fda28e6c`. It owns the replacement real-chat-onboarding UAT proof;
+  relay6 pane was closed only after relay7 visibly started. Old relay4 `w1:p9X` remains done.
+  Unlabeled `w1:p9Y`/gate-shell panes remain unrelated #1591 shells; leave them alone.
 - **Open Ben decisions:** #895 branch-protection change and #1429 board mistrack remain
   unresolved; do not guess. Fable-type decisions must first go through `needs-ben` to identify
   Ben's intended "Sol high" authority; until then use the existing Opus/Fable chain as applicable.
