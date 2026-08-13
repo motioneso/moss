@@ -3654,3 +3654,28 @@ clean). Pre-push trio green, rebased clean on `origin/main`. Pane read twice ret
 after the report but `herdr pane list` showed it settled at `idle` (rev 2409, no further climb) —
 reaped `w1:p9Q`. Tier: routine (Fable's ruling — single file + tests, not security); spawning
 standard Sonnet QA, auto-merge after green per tier policy.
+
+## 2026-08-13 — PR #1603 (#1487) QA GREEN, MERGED
+
+QA verdict GREEN, 0 blocking/0 non-blocking, MERGE-READY:
+https://github.com/motioneso/moss/pull/1603#issuecomment-5278413597. Session-id authority check
+passed (`caef4e32-df22-4310-a42d-866771a0ba6c` matches lock line). Squash-merged with
+`--delete-branch`, confirmed `state: MERGED`. Issue #1487 auto-closed on merge; board already
+showed Status: Done via workflow automation. Posted merge summary comment on the issue. **#1487
+DONE — merges_since_relay: track for the standing merge-counter relay trigger (this run has not
+relayed on the merge counter yet this segment).**
+
+## 2026-08-13 — `w1:p9M` (1325-relay4) message-send failure diagnosed and recovered
+
+Following up on the earlier fix-routing message: `herdr pane list` showed the pane stuck at flat
+`revision: 292`, `agent_status: idle`, with `terminal_title_stripped` showing the sent message text
+concatenated onto the session name ("Session renamed to: 1325-relay4QA verdict..."). A bounded
+`herdr pane read` confirmed the same garbled text sitting in the input box behind a trailing `──`
+divider — genuinely stuck (unlike the earlier #1602-era false-alarm pattern of busy-glyph +
+climbing revision that turned out fine). `send-keys Enter` did not clear it (revision still 292
+after). A fresh `herdr pane run w1:p9M "status"` did land — revision jumped to 303, status flipped
+to `working`, confirming the pane was accepting new input, just not the earlier one. Resent the
+real fix-routing instruction (plain text, no em-dashes/punctuation this time) — landed, pane now
+`working` at rev 335+. Lesson: when revision is genuinely flat + idle (not just a stale-looking
+read), don't retry `send-keys Enter` twice — send a small fresh probe message first to confirm the
+pane accepts input at all, then resend the real payload.
