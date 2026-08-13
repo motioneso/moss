@@ -3694,3 +3694,30 @@ Ben's sign-off): https://github.com/motioneso/moss/pull/1604#issuecomment-527843
 
 **#1604 (#943) now ready for Ben's sign-off queue** — security tier, CI green, QA GREEN (0
 blocking), verdict posted, PR unmerged pending his explicit OK.
+
+## 2026-08-13 — checkpoint at 70% context, staying resident per standing override
+
+**Standing override remains in force**: no relay spawned; staying resident through auto-compaction.
+State as of this checkpoint:
+
+- **Sign-off queue for Ben (unmerged, ready):** #1599 (#1489, QA GREEN), #1600 (#1495, QA PASS),
+  #1604 (#943, QA GREEN, verdict at
+  https://github.com/motioneso/moss/pull/1604#issuecomment-5278431348). #1602 (#1325) explicitly
+  NOT in queue — RED verdict, fix in progress on `w1:p9M`.
+- **Merged this run so far (routine):** PR #1603 (#1487) — squash-merged, issue closed, board Done.
+- **PR #1605 (#1274):** CI green ("Verify foundation and app" 26m2s). Opus QA just spawned
+  (`a4280827456cbb9c9`, `qa-1605`) with explicit instruction that `gh pr comment` is mandatory —
+  the last two QA passes on #1604 skipped that step and the coordinator had to post the verdict
+  itself both times; watch this one closely for the same failure.
+- **`w1:p9M` (1325-relay4):** actively working the #1602 BLOCKING-1 fix (bound
+  `discoverAndPersistModels` with timeout/AbortSignal), self-armed its own Monitor for a
+  determinism test run, 1 of 3 subtasks done. Correctly NOT nudged — legitimate wait, not a stall.
+- **`w1:p9D` (#1248 vault-ingestion relay6):** still climbing steadily (rev ~7749+), no PR yet,
+  passive supervision only.
+- **#1591-relay4:** no PR yet as of last check; corrected supervision approach in force — do not
+  nudge on bell-title/flat-revision alone.
+- **#1487 lane:** DONE, reaped, merged — no longer tracked.
+- **Open background watchers:** none currently armed (both #1604 and #1605 CI watchers have
+  fired and resolved). Fleet liveness Monitor `bbbsxhrmu` still running.
+- **Coordinator lock unchanged:** session `caef4e32-df22-4310-a42d-866771a0ba6c`, pane `w1:p8T`,
+  tab `w1:t6` (see top-of-file lock line — not touched this checkpoint, still authoritative).
