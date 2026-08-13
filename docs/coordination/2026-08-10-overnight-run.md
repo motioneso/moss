@@ -2487,3 +2487,45 @@ successor `notes-1556-relay` in the same worktree/branch, pane `w1:p8Q`, session
 `35e19bbe-8838-4e94-90f0-f13015915229`. Coordinator confirmed successor driving on Sonnet 5,
 correct branch/cwd, task list showing plan-build in progress. Reaped old pane `w1:p8P`. Renamed
 `w1:p8Q` to `1556-P2 notes-default retrieval`.
+
+## Ben ruled on #1248: spec it via Fable, interactive pane
+
+Ben (chat): "let's spec it - ask a fable agent to take a look and ask me any questions in a new
+herdr pane." Spawned worktree `.claude/worktrees/spec-1248` (branch `spec-1248`, off
+`origin/main`), pane `w1:p8R`, agent `spec-1248-fable`, confirmed on `claude-fable-5` and driving
+— reading issue #1248 + codebase, using `superpowers:brainstorming` against the
+`docs/superpowers/specs/2026-08-10-1553-context-continuity-and-notes-retrieval.md` example. Relayed
+Ben's follow-up: only ask questions if genuinely needed. This is a direct Ben↔Fable conversation
+now — AWAITING-BEN.md entry marked resolved, no coordinator action pending until spec approval,
+at which point it (or Ben) hands off to Coordinator to spawn a build lane.
+
+## #1556-P2 relayed a second time (context-meter 70% again, still pre-plan)
+
+Successor `notes-1556-relay` (pane `w1:p8Q`, session `35e19bbe...`) hit the 70% warning again
+quickly and relayed to `notes-1556-relay2` (pane `w1:p8S`, session `d68b2cc4-79a6-4feb-8a62-
+40ece4f19e7b`) — still pre-plan (seams check complete, about to write the plan via `plan-build`
+then message Coordinator for approval before any code). Handoff doc
+`docs/superpowers/handoffs/2026-08-12-1556-notes-retrieval-relay-2.md` (commit `9ccad9cd7`) in the
+lane's own worktree. Coordinator confirmed successor driving, reaped `w1:p8Q`, renamed `w1:p8S` to
+`1556-P2 notes-default retrieval`.
+
+## Coordinator context-meter 70% — staying resident per Ben's standing override
+
+Per Ben's binding instruction for this run, the coordinator does NOT spawn a successor at this
+checkpoint — remains the same resident session (`0bb9f516-c026-454f-bc97-dc9faf43bd20`, pane
+`w1:p7P`, label `Coordinator`) through compaction. State as of this checkpoint:
+
+- **PR #1594/#1429**: QA GREEN, merge-ready. Background script `pid` (see
+  `/tmp/claude-1000/.../scratchpad/merge-1429.sh`) waiting out GitHub's GraphQL rate-limit
+  exhaustion (0/5000, resets `2026-08-13T02:31:10Z`), then will squash-merge, comment on #1429,
+  and flip the board item (`PVTI_lAHOADqkaM4BarLAzg1cobI`) to Done, logging to
+  `/tmp/merge_1429_result.log`. Monitor `b0h1v216k` armed on that log — do not poll in-context;
+  wait for its notification.
+- **#1246**: held, no agent — unchanged, no action needed this run per "hold Ready" rule.
+- **#1248**: resolved to a Fable spec session, see above — watch only if it escalates.
+- **#1429**: merging per above.
+- **#1440/#1470**: epics, resolve passively as children land — no direct action.
+- **#1556**: phase 2 build lane now on its 2nd relay (`w1:p8S`), pre-plan, will message
+  Coordinator (this session) for plan approval next — watch for that escalation.
+- Once #1429 merges and #1248/#1556 clarify further, re-check whether the "hold Ready moves"
+  condition can be lifted.
