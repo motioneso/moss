@@ -66,6 +66,16 @@ describe("tool input validation", () => {
       ).resolves.toEqual({ key: "eng.1" });
     });
 
+    it("accepts a valid external-module pattern", async () => {
+      await expect(
+        validateToolInput(
+          { type: "object", properties: { value: { type: "string", pattern: "[a-z]+" } } },
+          { value: "safe" },
+          { external: true }
+        )
+      ).resolves.toEqual({ value: "safe" });
+    });
+
     it("confines external-module ReDoS matching and keeps the host loop responsive", async () => {
       const started = performance.now();
       let loopTurned = false;

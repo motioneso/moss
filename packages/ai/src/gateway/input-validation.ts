@@ -60,6 +60,9 @@ async function matchExternalPattern(pattern: string, value: string): Promise<boo
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     worker = new Worker(new URL("./pattern-worker.mjs", import.meta.url), {
+      // Do not inherit the host's --require/--import hooks. In tsx-launched dev processes those
+      // hooks can consume the worker's bounded heap before the pattern runs.
+      execArgv: [],
       workerData: { pattern, value },
       resourceLimits: {
         maxOldGenerationSizeMb: 16,
