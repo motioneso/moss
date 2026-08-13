@@ -3622,3 +3622,13 @@ rebased on `origin/main` @ `198928da4`. Teardown clean, worktree reapable. Tier:
 merged, board untouched. CI still pending at report time; armed watcher `bidws7gto` for terminal
 state before spawning QA. #1275 stays parked until #1605 *merges* (not just opens) per the
 SERIALIZE-AFTER collision note.
+
+## 2026-08-13 — PR #1604 (#943) CI green, Opus QA spawned
+
+`gh pr checks 1604`: "Verify foundation and app" passed (21m34s), rest pass/skipping (Build and
+publish images was still pending — irrelevant to QA gating). Spawned Opus adversarial QA
+(agent `a6e1aac6a5a65f451`, `qa-943`) with pointer prompt covering: box-wide DDL-contention context
+(environmental, corroborated independently by #1591 same night, not this PR's regression), CI-green
+confirmation, live-path N/A (backend-only), and the specific adversarial angle (RPC role reset on
+error/exception paths, not just happy path). Will post verdict via `gh pr comment`, report back
+compact verdict.
