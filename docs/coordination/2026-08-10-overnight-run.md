@@ -2330,3 +2330,15 @@ successor coordinator session — remain the same resident session through all c
 checkpoints/compactions"), the coordinate skill's merge-count/context-meter relay triggers are
 superseded for this session specifically. Merges are still logged here for the record; no relay is
 spawned on them.
+
+## QA RED — #1429 (PR #1594), routine tier — 2026-08-12
+
+CI genuinely green after re-run (`31650367397`); code review clean (0 blocking, diff matches
+plan). **Not merge-ready**: live-path proof posted on the PR is two headless-test transcripts (a
+UAT spec run + an e2e spec against the mock-API `:4173` config), not a live-instance walk with
+screenshots — explicitly disqualified by `docs/DEVELOPMENT_STANDARDS.md` → Live-Path Gate. PR body
+promised screenshots never posted. QA verdict:
+https://github.com/motioneso/moss/pull/1594#issuecomment-5274577717. Routed back to
+`briefing-css-2` (pane w1:p8E) with the specific ask: live dev instance, manual walk of the
+`.loose-row`/briefing-action-rows surface, screenshot(s) posted as a new PR comment. Not blocked on
+anything else — pure evidence gap.
