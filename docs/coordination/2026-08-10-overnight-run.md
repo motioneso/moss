@@ -4103,3 +4103,26 @@ a one-shot `Agent(model: "opus")` reviewing the Opus adversarial QA verdict + di
 delegation (see agentmemory `fable-signoff-delegation-waves-3-6`). Either one clears a security-tier
 PR to merge directly — no pause/ping to Ben, standing digest only. Applies going forward to this
 run's queue (e.g. #1608/#1275 once Luna's QA-RED fixes land and re-QA is green).
+
+## 2026-08-13 — next coordinator relay: hand off to gpt-5.6-luna high (not auto-compact)
+
+Ben: "For the next context marker, let's hand off to a gpt-5.6-luna high agent please. Tell it to
+use Sol high for any Fable type decisions, and luna high to do the building."
+
+This is a one-time reversal of the standing "lets stop relaying, just auto compact coordinator"
+override — **only for the coordinator's next relay trigger** (context-meter 70% / merge-counter /
+compaction tripwire, whichever fires first). At that point: spawn a coordinator successor that is
+a **Codex `gpt-5.6-luna`, reasoning effort `high`** agent (not the usual Sonnet Claude relay
+successor, and not a bare auto-compact this one time). The successor uses **luna high** for the
+actual coordinating/building work, and routes **Fable-type decisions** (plan review, security-tier
+sign-off — see agentmemory `fable-signoff-delegation-waves-3-6`) to an entity Ben calls **"Sol"**
+at **high** effort, in place of Fable.
+
+**Open question, not yet resolved:** "Sol" has not appeared anywhere else in this run — identity/
+access path unconfirmed. Whoever executes this handoff should confirm with Ben what/who Sol is
+(a specific agent config? a Fable variant name?) before relying on it for a real security-tier
+sign-off, rather than guessing.
+
+**After this one relay:** default coordinator-relay policy reverts to unstated — ask Ben again
+rather than assuming either the auto-compact override or the Luna-successor pattern carries
+forward past this one handoff.
