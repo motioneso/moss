@@ -2724,3 +2724,23 @@ staleness, Fable actively writing/committing its spec right now). **No new build
 tonight.** Standing posture: finish #1556-P2, let #1248 land wherever Fable takes it, let
 #1440/#1470 close passively via their children — do not casually pull new Backlog/Ready items
 into build lanes just because capacity is free.
+
+**#1248 spec approved, escalation received (2026-08-12, later still):** Fable messaged the
+`Coordinator` label directly: spec APPROVED by Ben, ready for a build lane through the normal
+process. Spec: `docs/superpowers/specs/2026-08-12-1248-internal-vault-ingestion.md`, branch
+`spec-1248` (worktree `.claude/worktrees/spec-1248`), commits `3657e5489` + `fe39cbe01`. Key
+rulings baked in: surfacing blends internal-vault chunks into `notes.search` + the #1553
+notes-recall port (Ben's choice over a separate tool) — **the port blend is sequenced AFTER
+#1556 lands; no lane may touch that port mid-build.** Fail-closed allowlist (people-notes +
+structured-state roots only; `attachments/`/`exports/` hard-excluded). Reconcile sweep +
+metadata-only nudge job. No migration needed (RLS/`source_kind` already in place). Build still
+needs a plan (plan-build skill; Fable authors/reviews per Ben's standing rule) — not yet
+written. Fable authored the spec only, no build, no board changes, per its brief.
+
+**Decision: queued, no lane spawned tonight.** Two independent reasons converge: (1) Ben's
+standing "clear In progress, don't grow it" instruction — no new build lanes tonight regardless
+of capacity; (2) the spec's own sequencing rule requires #1556 to land first anyway (port-blend
+dependency), so a #1248 lane couldn't safely start yet even absent instruction 1. Replied to
+`spec-1248-fable` via `herdr-pane-message`: acknowledged, confirmed queued behind #1556-P2
+landing, no action needed from Fable now. #1248 stays in Backlog on the board (accurate given
+no lane running); revisit once #1556-P2's PR lands.
