@@ -91,7 +91,8 @@ async function serveStaticOrSpa(
   }
 
   const accept = request.headers.accept ?? "";
-  if (url.includes(".") || !accept.includes("text/html")) {
+  const acceptsHtml = accept === "" || accept.includes("text/html") || accept.includes("*/*");
+  if (url.includes(".") || !acceptsHtml) {
     await reply.callNotFound();
     return;
   }
