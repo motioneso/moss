@@ -4144,14 +4144,12 @@ build lane's first task. Posted in full to the issue: https://github.com/motione
 
 | Spec | Issue | Tier | Status | Agent label | Branch | PR |
 | ---- | ----- | ---- | ------ | ----------- | ------ | -- |
-| (none — build off issue text + this diagnosis) | #1585 | sensitive (AI/personalization pipeline, prod user-facing bug; re-evaluate to security if `rank.js` fix touches the AI gateway/capability-router auth path) | not yet spawned | — | — | — |
+| (none — build off issue text + this diagnosis) | #1585 | sensitive (AI/personalization pipeline, prod user-facing bug; re-evaluate to security if `rank.js` fix touches the AI gateway/capability-router auth path) | **BUILDING** — handoff committed as `4e4765c79`; worktree cut from green `origin/main` `0c1856190`; active session `019ffd41-932f-75f2-9120-4ca92e0ad529` (resolve pane fresh by label) | `1585 news stale AI ranking (Luna)` | `1585-news-stale-ai-ranking-failure` | — |
 
-Not yet spawned this session — handoff doc not yet written. **Next coordinator (see relay below)
-must**: write `docs/coordination/handoffs/2026-08-13-1585-news-stale-ai-ranking-failure-build.md`
-(pattern-match the #1275/#1590 handoff docs), cut worktree `1585-news-stale-ai-ranking-failure` off
-`origin/main`, spawn build lane (Codex `gpt-5.6-luna` high per this run's model directive), then
-report to Ben that #1585 is queued/building (he asked for this explicitly and expects confirmation
-— "I want that moved up").
+Build lane is queued/building in the shared agents tab. Handoff doc is committed at
+`docs/coordination/handoffs/2026-08-13-1585-news-stale-ai-ranking-failure-build.md`; boot brief is
+outside the worktree at `/tmp/boot-1585-news-stale-ai-ranking-failure.txt`. Reported to Ben via
+`needs-ben` after the Codex `gpt-5.6-luna` high agent visibly started.
 
 **Fleet status at this checkpoint (all independently confirmed, no action needed unless noted):**
 - PR #1608 (#1275, security): Opus re-QA agent `aa546f32525ab4f40` still running (background,
