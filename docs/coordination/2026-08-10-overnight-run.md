@@ -4204,7 +4204,9 @@ digest only) remains the fallback for security-tier sign-off.
   messaged and its pane closed after handoff.
 - **#1585:** handoff committed (`4e4765c79`), worktree/branch cut from green `origin/main`
   `0c1856190`, build lane `build-1585-news-stale` / session `019ffd41-932f-75f2-9120-4ca92e0ad529`
-  is active in `w1:tH`; Ben notified via `needs-ben` (`1786660402237296752.msg`).
+  is active in `w1:tH`; Ben notified via `needs-ben` (`1786660402237296752.msg`). Plan
+  `2026-08-13-news-ai-ranking-fallback.md` approved with the constraint to reuse deterministic
+  ordering/validation/CAS and bounded category/count-only logging.
 - **#1590 / PR #1609:** CI's foundation/app check is green; a fresh sensitive QA fallback is
   active in QA worktree `qa-1609-sensitive-rerun`, pane label `QA PR1609 sensitive rerun`, session
   `35e2ae47-3056-4438-9e57-fd81fa438e38`. Do not resume the stopped QA session.
