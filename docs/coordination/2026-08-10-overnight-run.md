@@ -3466,3 +3466,22 @@ relay-4 (`w1:p9K`) done, proceeding to wrap-up per gate-contention decision abov
 for Ben unchanged: #1599 (#1489) + #1600 (#1495) awaiting; #1602 (#1325) UAT-proven, CI was pending
 (Monitor task `b4lgnsoa2` still watching for terminal state); #1274/#1591 not yet at PR. #1601
 (#1141) still unconfirmed reworking RED verdict, no report this segment — worth a status check.
+
+## 2026-08-13 ~00:XX — #943/#1591-relay4 done-flip check, two freezes cleared
+
+Post-checkpoint resume: `gh pr list` for both `943-role-reset-storage-rpc` and
+`1591-owner-scope-reorder` returned `[]` right after each pane flipped `done` — expected, `done` is
+a hint not proof, both had just been told to proceed to wrap-up.
+
+- **#943 (`w1:p9K`)**: on recheck showed bell-title freeze (rev flat at 337 while other lanes
+  climbed hundreds in the same window). Nudged with plain `"continue"` — cleared within ~15s, back
+  to `working`, rev climbing (337→350+), visible output confirms it's mid-`coordinated-wrap-up`
+  citing the PG-contention decision from last segment.
+- **#1591-relay4 (`w1:p9P`)**: was still progressing (rev 94→95) when first checked — left alone.
+  On the next check it had also frozen (bell title, rev stuck at 95). Nudged with plain
+  `"continue"` — cleared, rev climbing (95→104+), status `working`.
+- Neither lane has a PR yet as of this entry; both mid-wrap-up. Will re-check `gh pr list` once
+  status next flips to `done` with a settled revision.
+
+Monitor `b4lgnsoa2` (PR #1602 CI watch) still running, no fire yet. Staying resident, no relay
+(standing override).
