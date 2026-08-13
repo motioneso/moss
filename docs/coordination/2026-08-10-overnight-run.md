@@ -2302,3 +2302,12 @@ Old Monitor `bl4my7p1l` (pre-compaction, parsed `herdr pane list` output with `h
 schema — silently broken, never fired a real event) was superseded by corrected Monitor
 `b5q3m7ouw` earlier and has now been `TaskStop`'d as a duplicate. `b5q3m7ouw` is the sole fleet
 liveness watch going forward.
+
+## Ben's Telegram feedback on `needs-ben` ping format — resolved 2026-08-12
+
+Ben replied to the #1256 merge-complete FYI ping (which was already a misuse — pure status, no
+decision needed) with: too much detail, and it shouldn't have been flagged "needs Ben" at all.
+Fix applied to convention (memory `needs-ben-telegram-notifier` updated): reserve `needs-ben`
+strictly for genuine open decisions, format as issue number + one short line; route merge-complete
+info through the standing per-merge digest instead. No board/PR action needed — #1256 is already
+merged and closed.
