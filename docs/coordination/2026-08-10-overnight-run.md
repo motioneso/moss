@@ -3942,3 +3942,41 @@ once it re-QAs clean. #1248 board status unchanged (Backlog, mistracked — see 
 correct alongside #1606's eventual merge).
 
 QA agent's gate DB `jarvis_gate_qa1606` left behind (no psql on its PATH) — reaping from here.
+
+## 2026-08-13 — checkpoint: Luna (Codex gpt-5.6-luna) agents dispatched, #1590/#1275
+
+**Standing override re-confirmed live:** hit another 70%-context relay-trigger hook this leg;
+re-verified `docs/coordination/2026-08-10-overnight-run.md:10` still carries Ben's standing
+override ("lets stop relaying, just auto compact coordinator") — stayed resident, no relay,
+per the same rule applied earlier this run. Session id unchanged: `caef4e32-df22-4310-a42d-866771a0ba6c`
+(pane `w1:p8T`).
+
+**Luna clarified:** Ben confirmed "Luna" = Codex model `gpt-5.6-luna` (not a persona/config file),
+run at `model_reasoning_effort=high`. Per "keep the list moving, use Luna high codex agents to
+build these":
+
+- **#1590** (notes-sync worker isolation, spec-approved, tier `sensitive`) — handoff doc
+  `docs/coordination/handoffs/2026-08-13-1590-notes-sync-worker-isolation-build.md` committed
+  `a01bc4889`. Worktree `.claude/worktrees/1590-notes-sync-worker-isolation`. Agent
+  `notes-sync-1590-luna`, pane `w1:p9S`, `codex -m gpt-5.6-luna -c model_reasoning_effort=high
+  --dangerously-bypass-approvals-and-sandbox`, confirmed booted ("gpt-5.6-luna high" in footer),
+  status `working`. `needs-spec` label removed from #1590, comment posted linking spec + handoff.
+- **#1275** (external-module `inputSchema.pattern` ReDoS confinement, tier `security`, no
+  separate spec — scoped off issue text) — handoff doc
+  `docs/coordination/handoffs/2026-08-13-1275-external-module-pattern-timeout-build.md`, same
+  commit. Worktree `.claude/worktrees/1275-external-module-pattern-timeout`. Agent
+  `ext-module-1275-luna`, pane `w1:p9V`, same Luna invocation, confirmed booted, status `working`.
+  Security tier — will need Opus adversarial QA + Fable sign-off (delegate, see
+  `fable-signoff-delegation-waves-3-6`) before merge, not Ben directly.
+
+**#895 excluded from this Luna batch** — it's a GitHub branch-protection/repo-settings change, not
+a code build; out of scope for a Codex build-agent spawn. Reported to Ben as a separate follow-up
+rather than silently dropped from "the list."
+
+**#1248 (vault ingestion, PR #1606) self-relayed twice more, unprompted, self-reported each time:**
+relay6 (`w1:p9D`) → relay7 (`w1:p9T`, session `8195fc05-...`, handoff
+`docs/superpowers/handoffs/2026-08-13-1248-vault-ingestion-relay7.md` @ `efd2ebda8`) → relay8
+(same pane `w1:p9T`, working the 4 blocking RED-QA findings: rebase onto `origin/main`,
+integration-level non-allowlisted-path assertion, `normalizeRoot()` `..`-collapse fix, live UAT
+proof). relay6 pane `w1:p9D` reaped (status `done`, tree clean, successor confirmed driving).
+No coordinator action needed — still in progress, will re-QA once it reports green.
