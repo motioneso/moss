@@ -3373,3 +3373,15 @@ stop landing.
 
 Context checkpoint at 70% hit again — per standing override ("stop relaying, just auto compact
 coordinator") NOT spawning a successor; staying resident through auto-compaction as before.
+
+## #1274 relay 1->2 handled (2026-08-13)
+
+Predecessor (`w1:p9F`, session `80bf48ba-...`) hit its own 70% context-meter warning, relayed in
+worktree per protocol: 5 commits pushed to local branch (latest `169aa36eb`, file-size gate +
+TS2835 fixes, format/lint/typecheck/file-size/unit-tests all green this segment), continuation doc
+committed at `docs/superpowers/handoffs/2026-08-13-1274-external-module-trust-lint-relay.md`.
+Successor `relay-1274-trust-lint` (`w1:p9N`, session `7e594acd-...`) confirmed driving (revision
+climbing 6->48+, predecessor idle) before reaping. Reaped `w1:p9F`, renamed successor both ways to
+`1274-trust-lint-relay1`. Remaining work per predecessor's report: full isolated gate re-run,
+rebase onto origin/main, push, open `[SECURITY]`-tagged PR, report back. #1274 is security tier —
+Ben's explicit merge sign-off still required once it reaches PR.
