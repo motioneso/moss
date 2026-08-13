@@ -2744,3 +2744,11 @@ dependency), so a #1248 lane couldn't safely start yet even absent instruction 1
 `spec-1248-fable` via `herdr-pane-message`: acknowledged, confirmed queued behind #1556-P2
 landing, no action needed from Fable now. #1248 stays in Backlog on the board (accurate given
 no lane running); revisit once #1556-P2's PR lands.
+
+**Reversed (Ben, 2026-08-12, later still): new work can start.** Ben's explicit correction —
+"no no, new work can definitely start" — walks back the "clear In progress, don't grow it / no
+new lanes tonight" instruction above. Proceeding with #1248: spec is approved, next step per
+process is a plan (Fable authors/reviews, not the build agent, per Ben's standing rule) before
+any build lane spawns. Asking Fable (already in-context in `spec-1248`) to author the plan now.
+The port-blend sequencing constraint (#1553 port touch waits for #1556) is a build-time
+constraint for whoever's plan/build, not a reason to hold the lane spawn itself.
