@@ -28,12 +28,12 @@ specifies the fix; build off the issue text.
   explicit `HOME: opts.homeBase` layered over a sanitized base, never inferred from ambient env.
 - `packages/cli-runner/src/main.ts:201-207` — `LoginService`'s `probe` callback calls
   `probeProvider(provider, { io, cliPresent, multiplexerUsable, credentialEnv: await
-  readProviderCredentialEnv(config.homeBase, provider) })`. `config.homeBase` (always a string,
+readProviderCredentialEnv(config.homeBase, provider) })`. `config.homeBase` (always a string,
   `main.ts:84-88`) is in scope here but not currently threaded through.
 - `packages/cli-runner/src/engine-host.ts:634-645` — `CliChatEngineHost.probeProvider` calls
   `probeProvider(provider, { io: this.deps.io, cliPresent, multiplexerUsable, credentialEnv:
-  this.deps.homeBase ? await readProviderCredentialEnv(this.deps.homeBase, provider) : undefined
-  })`. `this.deps.homeBase` (`string | undefined`, `engine-host.ts:66`) is in scope but not
+this.deps.homeBase ? await readProviderCredentialEnv(this.deps.homeBase, provider) : undefined
+})`. `this.deps.homeBase` (`string | undefined`, `engine-host.ts:66`) is in scope but not
   threaded through.
 - No existing test file for `provider-probe.ts` (`find packages/chat -iname '*provider-probe*'`
   returns only the source file) — this is new coverage, not a regression risk to existing tests.
@@ -79,12 +79,12 @@ Files: `packages/chat/src/live/provider-probe.ts`, `packages/chat/src/live/provi
 
 - Implement the `provider-probe.ts` change per Decisions above.
 - New test file `provider-probe.test.ts`, exercising only the public `probeProvider("anthropic",
-  deps)` entry point with a fake `io.run` that records `opts`:
+deps)` entry point with a fake `io.run` that records `opts`:
   1. **Regression proof (primary exit criterion)** — a fake `io.run` that mimics
      `createRealTmuxIo`'s exact merge (`{...process.env, ...opts.env}`), with `process.env.HOME`
      stubbed to a sentinel ambient value (`vi.stubEnv("HOME", "/ambient/leak-sentinel")`,
      restored via `vi.unstubAllEnvs()` in `afterEach`). Call `probeProvider("anthropic", { io,
-     cliPresent: async () => true, credentialEnv: {}, homeBase: "/isolated/identity" })`. Assert
+cliPresent: async () => true, credentialEnv: {}, homeBase: "/isolated/identity" })`. Assert
      the env actually delivered to the simulated child process has `HOME === "/isolated/identity"`
      — i.e. it would fail against the pre-fix code (`credentialEnv={}` is truthy, so pre-fix passes
      `{env: {}}`, whose merge falls through to the ambient sentinel).
@@ -95,7 +95,7 @@ Files: `packages/chat/src/live/provider-probe.ts`, `packages/chat/src/live/provi
      future/test caller) — assert `io.run` is called with `opts === undefined` (no behavior change
      from pre-fix for a caller that never passes either).
   4. Existing status-parsing behavior is unaffected — `io.run` resolving `{code: 0, stdout:
-     '{"loggedIn":true}'}` still yields `{status: "ready"}` with the new env plumbing in place.
+'{"loggedIn":true}'}` still yields `{status: "ready"}` with the new env plumbing in place.
 - Wire `main.ts` and `engine-host.ts` per Decisions; grep after editing
   (`rg -n "probeProvider\(" packages/cli-runner/src/main.ts packages/cli-runner/src/engine-host.ts`)
   to confirm both call sites now pass `homeBase`.
