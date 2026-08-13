@@ -2856,4 +2856,29 @@ the plan-review channel for tonight's 4 security-tier lanes — not reaped.
 
 **Still queued, not yet spawned:** #1274, #1467 (needs live-path proof), #1487 (weakest candidate,
 escalate to Fable if a dependent caller turns up) — next batch once agents-tab capacity allows.
-#1275/#1592 wait on their predecessors. #1325/#1495 wait on Fable design-fork rulings.
+#1275/#1592 wait on their predecessors.
+
+## Design-fork rulings — #1325, #1495 (Fable, cross-session, 2026-08-13)
+
+**#1325 (API-key provider 400):** Option 3 — collect the credential in the picker before create;
+picker gathers what the catalog entry's auth method needs (API key / base URL / both) and sends
+`credentialPayload`. Server-side 400 guard at `packages/ai/src/routes.ts:759` STAYS (correct
+fail-closed validation; frontend was the wrong half). Option 1 (send empty `{}`) rejected — false
+"API key stored" status. Option 2 (migration + nullable credential) rejected — buys an honest
+no-credential state at the cost of a migration + contract change, to enable a worse create-then-
+edit flow; revisit only if a future flow needs key-less `api_key` providers. Side effect: the
+dead "No credential" branch and the always-true `hasCredential` question both go moot under
+Option 3 — tidy in the same pass. **Status: spawning now as a normal security lane** (agent
+drafts plan → routes to Fable for review, same process as the other 4 tonight).
+
+**#1495 (seed/submit before setSurfaceKey):** Fail closed — throw. When the handle is
+module-bound (`moduleId` set) and `currentSurface` is still undefined, `seedContext`/`submitTurn`
+reject with an error naming the contract ("claim a surface via setSurfaceKey before
+seeding/submitting"). Not a silent no-op — that hides the bug from the module author. Drawer-bound
+handles (no `moduleId`) unchanged. Blast radius small: only `apps/web/src/today/today-page.tsx`
+calls seed/submit outside the handle today (job-search's caller is gone with that cancellation) —
+verify its ordering, then flip the pinning test in `tests/unit/assistant-surface-handle.test.tsx`
+to assert the throw. This is the ordering half of #1284's leakage rule — module content landing in
+the user's main drawer thread is a privacy hole; doc-note-only rejected. **Issue needs a spec
+(process gate) — Fable is authoring the short spec+plan herself** (accepted her offer, matches the
+plan-authorship rule); lane spawns straight to build once pushed, same pattern as #1248.
