@@ -13,7 +13,7 @@ import { stableIdForUrl } from "../source/rss-source.js";
 
 import { collectCandidates } from "./candidates.js";
 import { applyDeterministicFilters } from "./filters.js";
-import { rankCandidates } from "./rank.js";
+import { orderRanked, rankCandidates, type RankingFailure, type RankedCandidate } from "./rank.js";
 
 const SNAPSHOT_LIFETIME_MS = 7 * 24 * 60 * 60 * 1_000;
 
@@ -30,10 +30,16 @@ export type NewsCompilationLogFields =
       readonly outcome: "replaced" | "kept_last_good" | "stale";
       readonly articleCount: number;
       readonly durationMs: number;
+    }
+  | {
+      readonly event: "news_compile_ai_fallback";
+      readonly aiError: RankingFailure;
+      readonly candidateCount: number;
     };
 
 export interface MetadataLogger {
   info(fields: NewsCompilationLogFields): void;
+  warn?(fields: NewsCompilationLogFields): void;
 }
 
 export type CompilationRepository = Pick<
@@ -111,10 +117,26 @@ export async function compilePersonalizedNews(
               topics: topics.map((topic) => ({ label: topic.label, guidance: topic.guidance }))
             }
           );
-    if (!ranking.ok) return { outcome: "kept_last_good", failureKind: "ai" };
+    let ranked: RankedCandidate[];
+    if (ranking.ok) {
+      ranked = ranking.ranked;
+    } else {
+      deps.logger.warn?.({
+        event: "news_compile_ai_fallback",
+        aiError: ranking.error,
+        candidateCount: filtered.length
+      });
+      ranked = orderRanked(
+        filtered.map((candidate) => ({
+          ...candidate,
+          relevance: 0,
+          preferredBoost: candidate.origin !== "topic_search"
+        }))
+      );
+    }
 
     const payload: NewsSnapshotPayload = {
-      articles: ranking.ranked.slice(0, NEWS_SNAPSHOT_MAX_ARTICLES).map((candidate, index) => ({
+      articles: ranked.slice(0, NEWS_SNAPSHOT_MAX_ARTICLES).map((candidate, index) => ({
         id: stableIdForUrl(candidate.url),
         publisher: candidate.publisher,
         canonicalDomain: candidate.canonicalDomain,

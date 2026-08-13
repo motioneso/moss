@@ -127,7 +127,8 @@ describe("news refresh jobs", () => {
     });
   });
 
-  it("records an AI failure without replacing the last good snapshot", async () => {
+  it("publishes a deterministic snapshot and records an AI fallback warning", async () => {
+    const warnings: Record<string, unknown>[] = [];
     await asActor(async (db) => {
       await repository.bumpRefreshRequest(db);
       const generation = await repository.beginRefreshRun(db);
@@ -169,15 +170,28 @@ describe("news refresh jobs", () => {
         fingerprint: async () => "fp",
         generateJson: async () => ({ ok: false, error: "provider_error" })
       },
-      logger: { info: () => undefined }
+      logger: {
+        info: () => undefined,
+        warn: (fields) => warnings.push(fields)
+      }
     });
     await waitForIdle();
     await expect(asActor((db) => repository.readRefreshState(db))).resolves.toMatchObject({
-      state: "failed",
-      failureKind: "ai"
+      state: "idle"
     });
     await expect(asActor((db) => repository.readLatestSnapshot(db))).resolves.toMatchObject({
-      payload: { articles: [{ id: "last-good" }] }
+      payload: {
+        articles: expect.arrayContaining([
+          expect.objectContaining({ headline: expect.stringContaining("Current story") })
+        ])
+      }
     });
+    expect(warnings).toEqual([
+      {
+        event: "news_compile_ai_fallback",
+        aiError: "provider_error",
+        candidateCount: expect.any(Number)
+      }
+    ]);
   });
 });

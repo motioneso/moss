@@ -5,6 +5,13 @@ import { sanitizeFeedText } from "../source/sanitize.js";
 
 import type { NewsCandidate } from "./candidates.js";
 
+export type RankingFailure =
+  | "needs_config"
+  | "validation_failed"
+  | "provider_error"
+  | "aborted"
+  | "malformed_output";
+
 const MAX_PROMPT_CHARS = 50_000;
 
 const rankingSchema = {
@@ -81,7 +88,7 @@ export async function rankCandidates(
     candidates: readonly NewsCandidate[];
     topics: readonly { label: string; guidance: string | null }[];
   }
-): Promise<{ ok: true; ranked: RankedCandidate[] } | { ok: false }> {
+): Promise<{ ok: true; ranked: RankedCandidate[] } | { ok: false; error: RankingFailure }> {
   const { prompt: candidateData, included } = promptCandidates(input.candidates);
   const topicData = input.topics.map((topic) => ({
     label: sanitizeFeedText(topic.label, 80),
@@ -96,9 +103,9 @@ export async function rankCandidates(
       `UNTRUSTED CANDIDATE DATA:\n${candidateData}`,
     maxOutputTokens: 4_000
   });
-  if (!generated.ok) return { ok: false };
+  if (!generated.ok) return { ok: false, error: generated.error };
   const rankings = parseRankings(generated.object);
-  if (!rankings) return { ok: false };
+  if (!rankings) return { ok: false, error: "malformed_output" };
 
   const seen = new Set<string>();
   const ranked: RankedCandidate[] = [];
