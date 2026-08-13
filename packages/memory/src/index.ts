@@ -28,6 +28,22 @@ export {
   resolveIngestRoots
 } from "./vault-ingest-registry.js";
 export type { VaultIngestRootProvider } from "./vault-ingest-registry.js";
+export {
+  VAULT_INGEST_SWEEP_QUEUE,
+  VAULT_INGEST_NUDGE_QUEUE,
+  VAULT_INGEST_TICK_QUEUE,
+  VAULT_INGEST_QUEUE_DEFINITIONS,
+  runVaultIngestSweep,
+  applyVaultIngestNudge,
+  scheduleVaultIngestNudge,
+  registerVaultIngestWorkers
+} from "./vault-ingest-jobs.js";
+export type {
+  VaultIngestSweepPayload,
+  VaultIngestNudgePayload,
+  VaultIngestSweepStats,
+  VaultIngestWorkerDeps
+} from "./vault-ingest-jobs.js";
 export { memoryModuleManifest, memorySqlMigrationDirectory, MEMORY_MODULE_ID } from "./manifest.js";
 export type {
   MemoryCandidateAction,
