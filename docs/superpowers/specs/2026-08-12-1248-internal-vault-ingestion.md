@@ -98,7 +98,7 @@ What actually writes markdown into the internal vault:
 ## Non-goals
 
 - **Passive-retrieval behavior** (what gets injected pre-turn, budgets, gating) — owned by
-  #1553/#1556. This spec only makes vault chunks *available* to that machinery.
+  #1553/#1556. This spec only makes vault chunks _available_ to that machinery.
 - **Attachment content extraction** (text from uploaded blobs) — a real future feature, separate
   spec; `attachments/` is not allowlisted.
 - **Export ingestion** — exports are derived duplicates of DB content; ingesting them adds no
@@ -147,7 +147,7 @@ What actually writes markdown into the internal vault:
   modified time. The result-shape change is additive; the tool description is updated so the
   model knows internal notes are covered (the manifest schema is the model's only view).
 - **#1553 notes-recall port:** once #1556 lands, the port's implementation adds the vault kind to
-  its query; the port *contract* (owner-scoped path, modified time, score, sanitized snippet)
+  its query; the port _contract_ (owner-scoped path, modified time, score, sanitized snippet)
   already fits and does not change. Sequencing is explicit: this work must not touch the port
   while #1556 is mid-build.
 - **All #1553 gates apply unchanged and are not re-specified here:** incognito, `recallEnabled`,

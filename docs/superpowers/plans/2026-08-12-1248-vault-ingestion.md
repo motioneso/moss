@@ -6,20 +6,20 @@
 
 ## Seams check (all cited from the current tree)
 
-| Capability the plan assumes | Evidence |
-| --- | --- |
-| Vault→index ingester exists, `.md`-only, per-file txn, purge on full run | `packages/memory/src/ingestion-service.ts:26-70` |
-| Pipeline hash-skips, owner-stamps from `vaultCtx.actorUserId`, writes `source_kind='vault'` | `packages/memory/src/ingest.ts:12,40-87` |
-| `memory_chunks`/`memory_file_index` RLS owner-only; worker policies; CHECK already allows `'vault'` | `packages/memory/sql/0030_memory_index.sql:44-47`, `0054_worker_memory_rls.sql`, `0106_memory_notes_source_kind.sql:8` |
-| `notes.search` retrieves notes-kind only via `MemoryRetriever` | `packages/notes/src/tools.ts:51` |
-| Briefings compose already queries vault chunks (capped); deps report `getLatestIngestedAt(scopedDb,"vault")` | `packages/briefings/src/compose.ts:203-205`; `packages/module-registry/src/index.ts:1500-1508` |
-| Action-row relevance already queries vault chunks | `packages/module-registry/src/index.ts:1057` |
-| pg-boss worker pattern deriving RLS principal from `job.data.actorUserId` | `packages/jobs/src/pg-boss.ts:340`; example `packages/chat/src/jobs.ts:315` |
-| Scheduled-sweep precedent (15-min notes-sync, stale-tick guards) | `packages/notes/src/jobs.ts:33-49,435-458` |
-| Per-actor vault access via `vaultRunner.withVaultContext(ac, cb)` | `packages/vault/src/vault-context.ts:34`; usage `packages/people/src/routes.ts:193` |
-| Per-user vault directory layout (owner enumeration is directory enumeration) | `packages/vault/src/vault-ops.ts:205` (`deleteUserVaultDir(vaultsBaseDir, userId)`) |
-| Live writer: people-notes at `<folder>/<slug>.md`; folder is a per-user preference | `packages/people/src/notes-service.ts:411-421,228,264` |
-| Dormant writer: structured-state write-back to `entity.vault_note_path`; nothing sets it in prod | `packages/structured-state/src/write-back.ts:33-44`; only reader `packages/settings/src/data-export-queries.ts:610` |
+| Capability the plan assumes                                                                                  | Evidence                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| Vault→index ingester exists, `.md`-only, per-file txn, purge on full run                                     | `packages/memory/src/ingestion-service.ts:26-70`                                                                       |
+| Pipeline hash-skips, owner-stamps from `vaultCtx.actorUserId`, writes `source_kind='vault'`                  | `packages/memory/src/ingest.ts:12,40-87`                                                                               |
+| `memory_chunks`/`memory_file_index` RLS owner-only; worker policies; CHECK already allows `'vault'`          | `packages/memory/sql/0030_memory_index.sql:44-47`, `0054_worker_memory_rls.sql`, `0106_memory_notes_source_kind.sql:8` |
+| `notes.search` retrieves notes-kind only via `MemoryRetriever`                                               | `packages/notes/src/tools.ts:51`                                                                                       |
+| Briefings compose already queries vault chunks (capped); deps report `getLatestIngestedAt(scopedDb,"vault")` | `packages/briefings/src/compose.ts:203-205`; `packages/module-registry/src/index.ts:1500-1508`                         |
+| Action-row relevance already queries vault chunks                                                            | `packages/module-registry/src/index.ts:1057`                                                                           |
+| pg-boss worker pattern deriving RLS principal from `job.data.actorUserId`                                    | `packages/jobs/src/pg-boss.ts:340`; example `packages/chat/src/jobs.ts:315`                                            |
+| Scheduled-sweep precedent (15-min notes-sync, stale-tick guards)                                             | `packages/notes/src/jobs.ts:33-49,435-458`                                                                             |
+| Per-actor vault access via `vaultRunner.withVaultContext(ac, cb)`                                            | `packages/vault/src/vault-context.ts:34`; usage `packages/people/src/routes.ts:193`                                    |
+| Per-user vault directory layout (owner enumeration is directory enumeration)                                 | `packages/vault/src/vault-ops.ts:205` (`deleteUserVaultDir(vaultsBaseDir, userId)`)                                    |
+| Live writer: people-notes at `<folder>/<slug>.md`; folder is a per-user preference                           | `packages/people/src/notes-service.ts:411-421,228,264`                                                                 |
+| Dormant writer: structured-state write-back to `entity.vault_note_path`; nothing sets it in prod             | `packages/structured-state/src/write-back.ts:33-44`; only reader `packages/settings/src/data-export-queries.ts:610`    |
 
 **Open questions (owner: build agent, resolve in Task 1 before coding onward):**
 
@@ -57,6 +57,7 @@ export const HARD_EXCLUDED_PREFIXES: readonly string[]; // ["attachments/", "exp
 Resolved roots under a hard-excluded prefix throw at resolve time (spec's belt-and-braces rule).
 
 Tests (behaviour + why they fail against a broken implementation):
+
 - unregistered path never ingestable — catches a default-open predicate;
 - `attachments/x.md`, `exports/x.md` not ingestable even if a provider resolves them, and the
   resolve-time throw fires — catches allowlist-only enforcement without the hard guard;
@@ -65,16 +66,22 @@ Tests (behaviour + why they fail against a broken implementation):
 **Task 2: sweep + nudge jobs.** New `packages/memory/src/vault-ingest-jobs.ts`:
 
 ```ts
-export const VAULT_INGEST_SWEEP_QUEUE = "memory.vault-ingest-sweep";   // payload: { actorUserId }
+export const VAULT_INGEST_SWEEP_QUEUE = "memory.vault-ingest-sweep"; // payload: { actorUserId }
 export const VAULT_INGEST_NUDGE_QUEUE = "memory.vault-ingest-nudge";
 export interface VaultIngestNudgePayload {
   readonly actorUserId: string;
-  readonly sourcePath: string;          // vault-relative; metadata only, never content
+  readonly sourcePath: string; // vault-relative; metadata only, never content
   readonly op: "upsert" | "delete";
 }
-export function registerVaultIngestWorkers(boss: PgBoss, deps: VaultIngestWorkerDeps): Promise<void>;
+export function registerVaultIngestWorkers(
+  boss: PgBoss,
+  deps: VaultIngestWorkerDeps
+): Promise<void>;
 /** Public API writers call after a successful allowlisted write/delete. Best-effort. */
-export function scheduleVaultIngestNudge(boss: PgBoss, payload: VaultIngestNudgePayload): Promise<void>;
+export function scheduleVaultIngestNudge(
+  boss: PgBoss,
+  payload: VaultIngestNudgePayload
+): Promise<void>;
 ```
 
 - Scheduler tick (15-min default, env-overridable) enumerates owner dirs under the vaults base
@@ -89,6 +96,7 @@ export function scheduleVaultIngestNudge(boss: PgBoss, payload: VaultIngestNudge
   no live producer — registration only.
 
 Tests:
+
 - allowlisted write → sweep produces `source_kind='vault'` chunks with the right owner — catches
   wiring that never reaches the pipeline;
 - second sweep on unchanged vault ingests 0 (hash-skip observed in stats) — catches force-reingest;
@@ -116,13 +124,18 @@ already capped). Phase 2 is not planned in finer detail until this call is made.
 **Task 3:** `packages/notes/src/tools.ts` — query both kinds, merge by score. Result rows gain:
 
 ```ts
-{ source: "notes" | "vault"; sourcePath: string; modifiedAt: string | null; /* existing fields */ }
+{
+  source: "notes" | "vault";
+  sourcePath: string;
+  modifiedAt: string | null; /* existing fields */
+}
 ```
 
 `modifiedAt` comes from the file index; tool description updated (≤ 60 words). The result-shape
 change is additive (memory: `manifest-routes-are-public-api` — additive only, no field renames).
 
 Tests:
+
 - blended result set correctly labeled per kind, score-ordered — catches single-kind regression
   and mislabeling;
 - owner isolation through the tool (user B never sees A's vault chunks) — catches retriever
@@ -139,7 +152,7 @@ briefings consumer proof (spec AC 5) from this instance.
 ## Phase 3 — #1553 notes-recall port blend (**BUILD-TIME SEQUENCING CONSTRAINT**)
 
 **Blocked until #1556's retrieval phase is merged to `main`. Do not touch the port while #1556 is
-mid-build.** Then: the port implementation adds the vault kind to its query; the port *contract*
+mid-build.** Then: the port implementation adds the vault kind to its query; the port _contract_
 (path, modified time, score, sanitized snippet) is unchanged, and the existing #1553 gates
 (incognito, `recallEnabled`, credential screen, fencing) must pass their existing tests unchanged
 with vault chunks flowing through. New test: vault-kind snippet passes the credential screen and
