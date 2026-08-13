@@ -2897,3 +2897,62 @@ to assert the throw. This is the ordering half of #1284's leakage rule — modul
 the user's main drawer thread is a privacy hole; doc-note-only rejected. **Issue needs a spec
 (process gate) — Fable is authoring the short spec+plan herself** (accepted her offer, matches the
 plan-authorship rule); lane spawns straight to build once pushed, same pattern as #1248.
+
+## Supervision update — post-compaction resume (2026-08-13, still resident, no relay per standing override)
+
+**#1495 spawned:** pane `w1:p94` / tab `w1:tQ` ("agents 2") / session `5fc1eb31-f09a-449a-8257-5c9bd062b249`
+/ branch `1495-assistant-surface-ordering` (off `origin/main` @ `198928da4`, post docs-PR #1598
+merge). Named both ways (`1495 assistant-surface ordering` / `build-1495-surface-ordering`).
+Confirmed Sonnet. Building per its handoff — task list showing throw + doc-comment + unit tests +
+verify-gate steps in progress.
+
+**Relay successor session-ids corrected** (all confirmed driving, predecessors reaped):
+- #943 → `build-943-r2`, pane `w1:p91`, session `a550e526-a1f4-411a-b13b-8a3a7ce09958`.
+- #1141 → `credenv-relay2`, pane `w1:p92`, session `b6945c59-4e79-44a5-90e7-c163836a6758`.
+- #1591 → `owner-scope-relay2`, pane `w1:p93`, session `5e71c633-4646-4b35-875d-5cb3185c7bdf`.
+- #1248 → `vault-ingest-1248-relay2`, pane `w1:p95`, session `b044829c-271d-4c98-9b6a-77a6473dc205`
+  (continuation doc `docs/superpowers/handoffs/2026-08-12-1248-vault-ingestion-relay.md` @ `29e63754f`).
+  Predecessor pane `w1:p8Z` reaped after confirming `done` status held steady.
+
+**#1248 Phase 1 Task 1 done** (predecessor, before its relay): commit `517a41072` —
+`packages/memory/src/vault-ingest-registry.ts` + test, 9/9 passing, exported from
+`packages/memory/src/index.ts`. Non-blocking design nuance noted by the agent; pre-existing
+(non-regression) TS6059 typecheck issue flagged for wrap-up follow-up — not caused by this lane.
+Tasks 2/3 continue on relay2.
+
+**#1489 status:** fix committed `45d595871` (owner-scope breakdown.ts parent lookup, mirrors
+#1055/#1483 pattern), regression test added, 29/29 passing on isolated gate DB (now dropped).
+Agent chose to continue in-session post its own compaction rather than relay again (small
+remaining work: pre-push trio, rebase, push, PR, wrap-up) — no coordinator action needed, will
+report PR link.
+
+**Fleet check:** all 8 active build panes (`w1:p80` #1325, `w1:p8R` Fable/#1248-spec, `w1:p8V`
+#1489, `w1:p91` #943-r2, `w1:p92` #1141-relay2, `w1:p93` #1591-relay2, `w1:p94` #1495, `w1:p95`
+#1248-relay2) confirmed `working` via fresh `herdr pane list` — the transient `done` flickers in
+the Monitor stream were turn boundaries, not stalls. No action taken.
+
+**Still awaiting Fable's reply** on #943's and #1141's plans (routed earlier); #1591's plan-ready
+escalation still pending too. No merges this leg.
+
+## Fable delivered all three pending plan verdicts directly to the build agents (2026-08-13)
+
+Confirmed via a bounded read of her pane (`w1:p8R`, "Checkpoint done — all three verdicts saved
+to agent memory... waiting on #1325 lane plan") and her own memory_save record: Fable messaged
+the successor panes directly (session ids verified at send) rather than routing back through the
+Coordinator — no relay action needed from this session.
+
+- **#943** (`build-943-r2`): APPROVED with a required correction — the plan's claim "only caller
+  is the test" was wrong; real inventory includes a live caller at `worker-rpc-host.ts:314`
+  (confirmed safe). Agent must fix the plan doc's inventory before proceeding, not re-litigate.
+- **#1141** (`credenv-relay2`): APPROVED, no fork. Two minor notes: verify the root-level vitest
+  invocation resolves; record the pre-fix red run in the PR.
+- **#1591** (`owner-scope-relay2`): verdict delivered (partial text seen: an invariant + unit-test
+  call-graph note — an owner confirming an already-resolved row shifts 409-expired → 404-not_found).
+  Full text not re-read from the truncated pane view; agent has it directly.
+
+Fable's own context is at ~72% — she flagged that if many more security-tier plans queue up
+tonight, a fresh Fable review session should be spawned. Noting for next spawn decision; no action
+yet, only #1325's plan is still outstanding from her queue.
+
+**All 3 build lanes unblocked to proceed to build** — no pending plan-review holds remain except
+#1325 (still drafting its plan).
