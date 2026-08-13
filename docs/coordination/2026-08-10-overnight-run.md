@@ -3419,3 +3419,15 @@ git-log verification (last one, a few freezes ago, showed genuine §3 commits la
 next freeze also clears with no report/PR, will re-check the worktree directly rather than assume
 progress continues, and will send an explicit status-request message instead of a bare "continue"
 next time to try to get a real update out of this lane.
+
+## #1591 relay-3 status: Task 3+prettier fix committed, gate flaking on unrelated files (2026-08-13)
+
+Task 3 committed (`78775299f`, integration test for confirmed+unknown-id 404 parity, passes in
+isolation) plus a prettier fix (`885883191`) for 2 pre-existing unrelated gate-format-check
+failures. Task 4 gate: branch's own tests green every run (4/4, isolation + full); full-suite
+failed 4/4 on different unrelated files each time — a known-flaky #1533 chat-drawer React test
+(passes standalone) and Postgres "tuple concurrently updated" contention on two unrelated
+integration files (also pass standalone) — consistent with the documented
+`multi-agent-pg-contention` trap given tonight's concurrent lane count. Not a regression on this
+branch. Relaying at 70% checkpoint; successor will retry the gate (ideally when the box quiets) and
+proceed to wrap-up/PR. Awaiting the "safe to reap" handoff-complete message before acting.
