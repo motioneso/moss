@@ -3632,3 +3632,25 @@ publish images was still pending — irrelevant to QA gating). Spawned Opus adve
 confirmation, live-path N/A (backend-only), and the specific adversarial angle (RPC role reset on
 error/exception paths, not just happy path). Will post verdict via `gh pr comment`, report back
 compact verdict.
+
+## 2026-08-13 — PR #1604 QA verdict verified NOT posted; QA respawned
+
+Agent `a6e1aac6a5a65f451` returned a clean review (no HIGH/MEDIUM findings) but its return text
+lacked the explicit "Verdict comment: <URL>" confirmation the #1602 QA included. Verified directly:
+`gh pr view 1604 --json comments` → 0 comments. The agent had already exited (not in `ListAgents`),
+so not resumable — respawning a fresh Opus `coordinated-qa` pass on PR #1604 from scratch, prompt
+now states the `gh pr comment` post is a required deliverable, not optional. #1604 stays out of
+Ben's sign-off queue until a verdict comment is confirmed present on the PR.
+
+## 2026-08-13 — #1487 lane final report; reaped; QA spawned on PR #1603
+
+`1487-spa-fallback-relay2` (`w1:p9Q`) sent an update superseding its earlier relay announcement:
+its own background gate finished green right after that message, no successor was needed, work is
+fully done. PR #1603 confirmed OPEN/MERGEABLE. VF_EXIT=0 full suite on isolated gate DB
+`jarvis_gate_1487_spa_fallback_accept_header` (dropped after use). Live-path proof already posted:
+https://github.com/motioneso/moss/pull/1603#issuecomment-5278064051 (200 no-Accept `GET /`, 404
+`Accept: application/json` on a missing path, against a live API instance — port/PID torn down
+clean). Pre-push trio green, rebased clean on `origin/main`. Pane read twice returned empty output
+after the report but `herdr pane list` showed it settled at `idle` (rev 2409, no further climb) —
+reaped `w1:p9Q`. Tier: routine (Fable's ruling — single file + tests, not security); spawning
+standard Sonnet QA, auto-merge after green per tier policy.
