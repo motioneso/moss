@@ -199,16 +199,35 @@ describe("vault ingest sweep/nudge", () => {
     });
 
     await vaultRunner.withVaultContext(accessContext(ownerA), (vaultCtx) =>
-      applyVaultIngestNudge(accessContext(ownerA), vaultCtx, dataContext, pipeline, freshPath, "upsert")
+      applyVaultIngestNudge(
+        accessContext(ownerA),
+        vaultCtx,
+        dataContext,
+        pipeline,
+        freshPath,
+        "upsert"
+      )
     );
 
     await dataContext.withDataContext(accessContext(ownerA), async (scopedDb) => {
-      const results = await retriever.retrieve(scopedDb, "Just written, not yet swept", 10, "vault");
+      const results = await retriever.retrieve(
+        scopedDb,
+        "Just written, not yet swept",
+        10,
+        "vault"
+      );
       expect(results.some((r) => r.sourcePath === freshPath)).toBe(true);
     });
 
     await vaultRunner.withVaultContext(accessContext(ownerA), (vaultCtx) =>
-      applyVaultIngestNudge(accessContext(ownerA), vaultCtx, dataContext, pipeline, freshPath, "delete")
+      applyVaultIngestNudge(
+        accessContext(ownerA),
+        vaultCtx,
+        dataContext,
+        pipeline,
+        freshPath,
+        "delete"
+      )
     );
 
     await dataContext.withDataContext(accessContext(ownerA), async (scopedDb) => {
