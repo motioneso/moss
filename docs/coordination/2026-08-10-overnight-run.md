@@ -2428,3 +2428,17 @@ requires "a `gh pr comment` linking the e2e UAT run and screenshots" verbatim, n
 changed it. No record found of a decision to drop it. Flagged back to Ben; awaiting clarification —
 if he confirms a new standard, update `DEVELOPMENT_STANDARDS.md` + the coordinate skill so future
 relays don't guess.
+
+## Screenshot requirement dropped from Live-Path Gate, 2026-08-12
+
+Ben's audit found screenshot evidence changed verification outcomes ~3% of the time — not worth
+the capture/review cost. Found the fix already drafted but sitting uncommitted in the main checkout
+(`/home/ben/Jarv1s`, `main`), never pushed — explains why #1429's relay3 and one of #1452's two QA
+passes still required a screenshot (stale doc). Committed `341e466c3` in that checkout, then
+cherry-picked onto fresh `origin/main` in a scratch worktree (local `main` there was stale/behind)
+and pushed: `2852a12c3` on `origin/main`. Touched: `docs/DEVELOPMENT_STANDARDS.md`,
+`.claude/skills/coordinate/SKILL.md`, `.claude/skills/coordinated-qa/SKILL.md`; removed obsolete
+`tests/e2e/capture-screens{,-dark}.spec.ts`. Live-Path Gate now requires UAT run + exit code +
+assertions/bounded DOM/network/log evidence — no screenshot. Posted a clarifying comment on PR
+#1595 noting its late stale RED QA verdict (screenshot-gap only) predates this fix and should be
+disregarded — PR was already merged GREEN.
