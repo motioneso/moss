@@ -3198,3 +3198,44 @@ documented as an acceptable gap; `node:crypto` drift confirmed pre-existing/out 
 open plan-review items remain in the queue.** Fable's queue is clear on her side; she remains
 available for #1487's dependent-caller question (still open, see prior update) or any new
 escalation.
+
+## Supervision update — 2026-08-13, #1487 spawned (Fable pre-cleared, no plan review); #1141 done → PR #1601, Opus QA spawned
+
+**#1487 (spa-fallback-accept-header):** Fable's earlier verdict on the SPA-fallback 404 question
+finally landed (it had gone out as pane text before my compaction changeover and never reached
+me — resent in full on request). Investigation complete, no escalation: no caller in the tree
+depends on the strict no-Accept 404 (`service-worker.js:9-12`'s `Accept: text/html` is a
+workaround for the fallback, not a dependent; both healthchecks and nginx routing bypass the
+fallback path entirely; no unit test pins the old behavior). Ruling: `routine` tier, not
+security — single file + tests. Fix: serve the SPA when `!accept ||
+accept.includes('text/html') || accept.includes('*/*')` in `apps/api/src/static-web.ts`, so bare
+curl/PWA/no-Accept clients get the app while `Accept: application/json` still 404s. Wrote handoff
+doc directly from her verdict (no plan-review step, same pattern as #1495) — commit `6c3dbac25`.
+Worktree `.claude/worktrees/1487-spa-fallback-accept-header`, branch same, off `origin/main` @
+`198928da4`. Spawned `build-1487`, pane `w1:p9J`, session `68dbe83d-4d7b-4e94-ba42-7a105d433a73`,
+tab `w1:tQ`, confirmed Sonnet + working. Both pane names set. Live-path proof required (bounded
+curl against live dev, posted as `gh pr comment`) despite routine tier — still a live-serving path.
+
+**Task #6 (spawn #1274/#1467/#1487) — all three now spawned and building. Marking complete.**
+
+**#1467 stall note:** hit the known 🔔-title frozen-mid-turn pattern twice this window (idle @
+rev 420, then again @ rev 493 after a nudge produced 48 revisions of real progress). First nudge
+(`continue`) cleared it and drove real work; second idle showed spinner text ("Sautéed for 59s"),
+not a wait-declaration — read as likely still-settling rather than a genuine second freeze,
+watching via Monitor rather than re-nudging immediately.
+
+**#1141 (credential-env-isolation) reported DONE:** PR https://github.com/motioneso/moss/pull/1601
+(repo redirected motioneso/Jarv1s → motioneso/moss on push, consistent with other lanes tonight).
+VF_EXIT=0, full `pnpm verify:foundation` on isolated gate DB `jarvis_gate_1141_...`. Pre-push trio
+green, re-verified after rebase onto latest `origin/main` (`455e756af`, plan approved at
+`33f4b4832`). Live-path: n/a per build agent — purely internal security-boundary fix (HOME
+isolation in the Claude provider-auth probe), no new UI surface, carve-out applies per plan +
+Fable's approval, no UAT spec needed — **QA instructed to verify this claim against the diff, not
+accept it**. Security tier → spawned Opus `coordinated-qa` (agent `a35f1eb7ff20f8ee6`, isolated
+worktree, `jarvis_qa_1141`), instructed to post its verdict to PR #1601 itself. Per the qa-1495
+lesson, will spot-check `gh pr view 1601 --json comments` once it reports rather than trust the
+self-report. On PASS: third security-tier PR queued for Ben's sign-off, alongside #1599 (#1489,
+QA still running) and #1600 (#1495, PASS, verdict posted).
+
+**Security-tier merge queue for Ben (growing, none merged yet):** #1599 (#1489, QA pending),
+#1600 (#1495, QA PASS), #1601 (#1141, QA dispatched). All await his explicit OK — none delegated.
