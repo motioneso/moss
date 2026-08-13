@@ -3721,3 +3721,42 @@ State as of this checkpoint:
   fired and resolved). Fleet liveness Monitor `bbbsxhrmu` still running.
 - **Coordinator lock unchanged:** session `caef4e32-df22-4310-a42d-866771a0ba6c`, pane `w1:p8T`,
   tab `w1:t6` (see top-of-file lock line — not touched this checkpoint, still authoritative).
+
+## 2026-08-13 — PR #1606 opened (#1248 vault-ingestion Phase 1)
+
+`w1:p9D` (relay6) reported Phase 1 DONE: PR https://github.com/motioneso/moss/pull/1606, sensitive
+tier, pre-push trio green, gate run twice on isolated DB — final run 192/193 files green, the one
+failure (`release-hardening.test.ts`) is the known `tuple concurrently updated` DB-contention
+signature (not a code bug, per coordinated-wrap-up guidance on that exact error), flagged in the
+PR body for CI to confirm clean rather than retry-looped locally. Phase 1 is backend-only, no
+live-path proof required (n/a per plan). Stopped per HOLD directive — not starting Phase 2, not
+touching board/issue. Worktree reapable once QA'd.
+
+CI was still running at report time (`Verify foundation and app` pending) — background watcher
+armed (corrected version `b3xl4lyv0`, see below) rather than spawning QA against an unsettled gate.
+Will spawn sensitive-tier QA (Sonnet, standard QA + invariant check + matched e2e-UAT per tier
+table) once CI confirms green.
+
+Correction: first watcher (`b9e5gfi6h`) used `$? -ne 0` as its stop condition and exited
+immediately — `gh pr checks` exits non-zero on ANY non-pass state including merely-pending, so
+that condition falsely read "still pending" as "done" (same trap documented earlier this run for
+PR #1605's exit-8). Re-armed as `b3xl4lyv0`, which only checks for the literal string "pending" in
+the output, ignoring exit code. Lesson: never use `gh pr checks`'s exit code as a completion
+signal — grep the per-job text only.
+
+## 2026-08-13 — PR #1602 (#1325) BLOCKING-1 fix pushed, CI pending
+
+`w1:p9M` (relay4) fixed the RED verdict's blocking finding: unbounded `fetch()` in
+`model-discovery.ts`'s `doFetch()` for all three provider kinds, now bounded with
+`AbortSignal.timeout(5_000)` (commit `58c78fb40`), matching existing codebase timeout convention.
+tsc/format/lint clean; 2x consecutive live UAT runs (`1270-provider-signin`) both 3/3 pass,
+previously-flaky test now 2.6-2.8s (was 10-14.4s on failure). Full `verify:foundation` not
+re-run locally (already green pre-fix per relay-3 doc; narrow mechanical fix, covered by
+tsc+lint+format+2x live UAT) — flagged for optional full re-run before re-QA. Evidence posted:
+https://github.com/motioneso/moss/pull/1602#issuecomment-5278529519. 5 non-blocking notes from
+the original verdict deliberately left untouched (future pass). Security tier — no merge/board
+action taken by the lane, correctly held for Ben's sign-off.
+
+CI gate job pending at report time — watcher armed (`byc4s329i`). Will spawn Opus re-verify QA
+(security tier) focused on the BLOCKING-1 fix once CI confirms green. Lane acknowledged, told to
+hold.
