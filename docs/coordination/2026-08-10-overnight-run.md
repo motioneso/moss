@@ -3455,3 +3455,14 @@ climbing 31->76+) before reaping. Reaped `w1:p97`, renamed successor both ways t
 `1591-owner-scope-relay4`. Remaining work: retry gate once box quiets, coordinated-wrap-up, PR
 tagged `[SECURITY]` (404-vs-409 behavioral delta noted per Fable's approval). Security tier — Ben's
 sign-off still required at merge.
+
+## Context checkpoint at 70%, staying resident (2026-08-13)
+
+Per standing override ("stop relaying, just auto compact coordinator") — NOT spawning a successor.
+Roster at this checkpoint: #1591 relay-4 (`w1:p9P`) building post-handoff; #1248 relay-6 (`w1:p9D`)
+working, 5 freezes this segment all cleared, real progress last confirmed via git log, no PR yet;
+#1274 relay-1 (`w1:p9N`) working post-handoff; #1487 (`w1:p9J`) working, one freeze cleared; #943
+relay-4 (`w1:p9K`) done, proceeding to wrap-up per gate-contention decision above. Sign-off queue
+for Ben unchanged: #1599 (#1489) + #1600 (#1495) awaiting; #1602 (#1325) UAT-proven, CI was pending
+(Monitor task `b4lgnsoa2` still watching for terminal state); #1274/#1591 not yet at PR. #1601
+(#1141) still unconfirmed reworking RED verdict, no report this segment — worth a status check.
