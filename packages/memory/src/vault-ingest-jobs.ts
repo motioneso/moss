@@ -8,8 +8,8 @@ import {
   sendJob,
   toAccessContext
 } from "@moss/jobs";
-import { listVaultFilesRecursive, listVaultOwnerIds, VaultContextRunner } from "@moss/vault";
-import type { VaultContext } from "@moss/vault";
+import { listVaultFilesRecursive, listVaultOwnerIds } from "@moss/vault";
+import type { VaultContext, VaultContextRunner } from "@moss/vault";
 
 import type { EmbeddingProvider } from "./embedding-provider.js";
 import { MemoryIngestPipeline } from "./ingest.js";
@@ -39,7 +39,7 @@ export const VAULT_INGEST_QUEUE_DEFINITIONS: readonly QueueDefinition[] = [
   { name: VAULT_INGEST_TICK_QUEUE }
 ];
 
-export interface VaultIngestSweepPayload extends ActorScopedJobPayload {}
+export type VaultIngestSweepPayload = ActorScopedJobPayload;
 
 export interface VaultIngestNudgePayload extends ActorScopedJobPayload {
   readonly sourcePath: string;
