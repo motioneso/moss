@@ -3274,3 +3274,34 @@ Routed the full verdict to the #1141 lane (`w1:p99`, `credential env isolation (
 `agent_status: done` at rev 2615 — will need to pick this back up). **#1601 removed from the Ben
 sign-off queue** — not ready. **Security-tier merge queue for Ben now: #1599 (#1489, QA pending),
 #1600 (#1495, QA PASS)** — #1601 back to `building` pending fixes + re-QA.
+
+## Coordinator state checkpoint — 2026-08-13, ~00:52, context 70% (staying resident, no relay per standing override)
+
+Per Ben's standing instruction ("let's stop relaying, just auto compact coordinator"), NOT
+spawning a coordinator successor at this checkpoint — riding out auto-compaction in place.
+
+**Active build lanes (all `working`/self-resolving status-flicker, none genuinely stalled):**
+`w1:p97` 1591-owner-scope-reorder (relay 3), `w1:p9D` 1248-vault-ingestion P1 (relay 6, rev
+~2597 — still the long-running HOLD-directive lane, outcome still unconfirmed by an actual status
+report, only revision climbs; next report must show real §3 commits or takeover per the
+pre-committed plan), `w1:p9E` 1325-provider-credential-picker (relay 3), `w1:p9F`
+1274-external-module-trust-lint (building post-Fable-approval), `w1:p9J`
+1487-spa-fallback-accept-header (building, no plan review needed), `w1:p9K`
+943-role-reset-storage-rpc (relay 4, gate retry in progress), `w1:p99` 1141-credential-env
+(relay 3, RED QA routed back — needs to pick up CI fix + 3 UAT specs + reword security claim).
+
+**QA outstanding:** `qa-1489` (agent `a0efef4e7fa4a00d6`, background, PR #1599) — still running,
+no notification yet.
+
+**Security-tier Ben sign-off queue (current, none merged):** #1599 (#1489, QA pending), #1600
+(#1495, QA PASS, verdict posted). **#1601 (#1141) removed** — QA RED, back to building.
+
+**Fable (`w1:p8R`, `spec-1248 (Fable)`):** delivered #1487's verdict (routed, lane spawned) and
+had earlier delivered #1467/#1274 approvals; last seen `done` status, likely relaying/idle —
+queue was clear as of her last message. No outstanding question owed to her right now.
+
+**Not yet done (carried forward):** confirm #1248 relay-6's actual implementation progress next
+real status report (not just revision count); watch for qa-1489 completion → spot-check PR-post
+claim before trusting, security tier → Ben queue; consider whether `docs/coordination/
+AWAITING-BEN.md` needs entries for the growing sign-off queue per box-wide CLAUDE.md rule (not yet
+done — worth doing next lull).
