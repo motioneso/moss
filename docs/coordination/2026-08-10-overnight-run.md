@@ -3154,3 +3154,28 @@ permission-hook command line writers, same pattern as the existing `JARVIS_PERM_
 the same worktree/branch, pane `w1:p9H` (was `w1:p9G`), session `9742352d-ffcd-4543-8bb5-4cb1cb0611b9`,
 tab `w1:tQ`. Confirmed driving via bounded read before reaping predecessor. Renamed both ways
 (`1467 permission boundary shell-quote` / in-pane `perm-shellquote-1467-relay2`).
+
+## Supervision update — 2026-08-13, QA-1495 PASS, #1467 APPROVED with corrections
+
+**QA-1495 verdict: PASS, no HIGH/MEDIUM findings.** Behavior-narrowing diff only (adds
+pre-condition guards + read-side no-op, removes the module→drawer fall-through, adds no new one).
+Release-transition (`setSurfaceKey(null)` → `undefined`, same as never-claimed) and the
+synchronous-read-before-first-`await` race check both verified sound. One below-threshold note:
+guards key on `moduleId &&` truthiness, so `moduleId === ""` would bypass — unreachable today
+(host-controlled route registration; `setSurfaceKey` fails closed on the same check), not required
+to fix. **QA agent's own post-to-PR step silently failed to land (0 comments found on #1600 after
+completion)** — posted the verdict myself as
+https://github.com/motioneso/moss/pull/1600#issuecomment-5277425404 so it's durable evidence.
+**PR #1600 is now green + QA-passed, queued for Ben's explicit security-tier merge sign-off.**
+
+**#1467 plan APPROVED by Fable**, with 2 required mechanical corrections (relayed to `relay-1467`,
+`w1:p9H`, now building): (1) verification command's `pnpm --filter @moss/chat exec vitest` runs
+with the wrong cwd for repo-root `tests/unit/` paths — replaced with a root-level `pnpm exec
+vitest run` invocation; (2) drop stale "screenshot on the PR" live-path wording (banned post-
+`2852a12c3`) — proof goes in a `gh pr comment` (UAT run + exit code + assertions) instead. Fable
+also flagged a build note: test case 5 must build the full command string via
+`writeClaude*PermissionHook` and exec through a shell (not pass env directly to `spawn`), or it
+won't actually prove the command-line-injection fix. She verified every citation in the plan
+against the branch directly and confirmed the `NOTES_ROOTS`-in-`ALLOWED_KEYS` alternative is dead
+(passthrough filter, not a resolver; `.mjs` only reads the `JARVIS_` spelling). Next in her queue:
+#1274 trust-lint review.
