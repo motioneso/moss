@@ -68,7 +68,7 @@ class EmbeddingWorkerClient {
     private readonly modelId: string,
     workerUrl: URL
   ) {
-    this.worker = new Worker(workerUrl, { type: "module" });
+    this.worker = new Worker(workerUrl);
     this.worker.unref();
     this.worker.on("message", (response: WorkerResponse) => {
       const request = this.pending.get(response.id);
@@ -96,8 +96,9 @@ class EmbeddingWorkerClient {
     void this.worker.terminate();
   }
 
-  private rejectPending(error: Error): void {
-    for (const request of this.pending.values()) request.reject(error);
+  private rejectPending(error: unknown): void {
+    const failure = error instanceof Error ? error : new Error(String(error));
+    for (const request of this.pending.values()) request.reject(failure);
     this.pending.clear();
   }
 }

@@ -5,7 +5,12 @@ import { join } from "node:path";
 import type { Job, PgBoss } from "pg-boss";
 
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
-import { type ActorScopedJobPayload, type QueueDefinition, toAccessContext } from "@moss/jobs";
+import {
+  type ActorScopedJobPayload,
+  type QueueDefinition,
+  sendJob,
+  toAccessContext
+} from "@moss/jobs";
 import type { EmbeddingProvider } from "@moss/memory";
 import {
   createEmbeddingProvider,
@@ -28,6 +33,7 @@ import { assertWithinRoot, NotesPathError } from "./path-guard.js";
 import { NOTES_SYNC_QUEUE } from "./manifest.js";
 
 const NOTES_SOURCE_KIND = "notes";
+export const NOTES_SYNC_MAX_CHUNKS_PER_RUN = 100;
 
 export interface NotesSyncJobPayload extends ActorScopedJobPayload {
   /**
@@ -37,6 +43,9 @@ export interface NotesSyncJobPayload extends ActorScopedJobPayload {
    * the next tick without rewriting the schedule row).
    */
   readonly sourcePath?: string;
+  readonly filePath?: string;
+  readonly chunkOffset?: number;
+  readonly fileHash?: string;
 }
 
 export interface NotesSyncJobResult {
@@ -50,6 +59,13 @@ export interface NotesSyncJobResult {
    * stray schedule tick overwrites a real run's stats with zeros.
    */
   readonly noOp?: boolean;
+  readonly deferred?: boolean;
+  readonly continuation?: {
+    readonly sourcePath: string;
+    readonly filePath: string;
+    readonly chunkOffset: number;
+    readonly fileHash: string;
+  };
 }
 
 export interface NotesLastSync {
@@ -68,6 +84,11 @@ export interface NotesAfterSyncInput {
 export type NotesAfterSyncHook = (input: NotesAfterSyncInput) => Promise<void>;
 
 type NotesFileIngestStatus = "ingested" | "skipped";
+interface NotesFileIngestResult {
+  readonly status: NotesFileIngestStatus;
+  readonly chunksProcessed: number;
+  readonly continuation?: { readonly chunkOffset: number; readonly fileHash: string };
+}
 export type EmbeddingProviderFactory = (scopedDb: DataContextDb) => Promise<EmbeddingProvider>;
 
 export const NOTES_QUEUE_DEFINITIONS: readonly QueueDefinition[] = [
@@ -124,10 +145,14 @@ async function ingestResolvedMarkdownFile(
   actorUserId: string,
   resolvedFile: string,
   repository: MemoryRepository,
-  embeddingProvider: EmbeddingProvider
-): Promise<NotesFileIngestStatus> {
+  embeddingProvider: EmbeddingProvider,
+  chunkOffset = 0,
+  chunkLimit = NOTES_SYNC_MAX_CHUNKS_PER_RUN,
+  expectedFileHash?: string
+): Promise<NotesFileIngestResult> {
   const content = await readFile(resolvedFile, "utf-8");
   const fileHash = createHash("sha256").update(content).digest("hex");
+  const effectiveChunkOffset = expectedFileHash === fileHash ? chunkOffset : 0;
 
   const existing = await repository.getFileIndex(
     scopedDb,
@@ -137,16 +162,22 @@ async function ingestResolvedMarkdownFile(
   );
 
   if (
+    effectiveChunkOffset === 0 &&
     existing &&
     existing.fileHash === fileHash &&
     existing.embedModelName === embeddingProvider.modelName
   ) {
-    return "skipped";
+    return { status: "skipped", chunksProcessed: 0 };
   }
 
   const { chunks, wikilinks } = parseDocument(content);
+  const chunkEnd = Math.min(effectiveChunkOffset + chunkLimit, chunks.length);
 
-  const newChunks: NewChunkData[] = await embedChunks(embeddingProvider, chunks, resolvedFile);
+  const newChunks: NewChunkData[] = await embedChunks(
+    embeddingProvider,
+    chunks.slice(effectiveChunkOffset, chunkEnd),
+    resolvedFile
+  );
 
   await repository.upsertFileChunks(
     scopedDb,
@@ -155,8 +186,17 @@ async function ingestResolvedMarkdownFile(
     newChunks,
     embeddingProvider.modelName,
     embeddingProvider.modelVersion,
-    NOTES_SOURCE_KIND
+    NOTES_SOURCE_KIND,
+    effectiveChunkOffset === 0
   );
+
+  if (chunkEnd < chunks.length) {
+    return {
+      status: "ingested",
+      chunksProcessed: newChunks.length,
+      continuation: { chunkOffset: chunkEnd, fileHash }
+    };
+  }
 
   await repository.replaceFileLinks(scopedDb, actorUserId, resolvedFile, wikilinks);
 
@@ -171,7 +211,7 @@ async function ingestResolvedMarkdownFile(
     embeddingProvider.modelVersion
   );
 
-  return "ingested";
+  return { status: "ingested", chunksProcessed: newChunks.length };
 }
 
 async function resolveAndValidateNoteFile(
@@ -189,7 +229,7 @@ export async function handleNotesSyncJob(
   embeddingProvider: EmbeddingProvider,
   preferencesRepository: PreferencesRepository
 ): Promise<NotesSyncJobResult> {
-  const { actorUserId, sourcePath } = job.data;
+  const { actorUserId, sourcePath, filePath, chunkOffset = 0, fileHash } = job.data;
 
   const sourcePathToUse = await resolveSourcePath(scopedDb, sourcePath, preferencesRepository);
 
@@ -234,7 +274,25 @@ export async function handleNotesSyncJob(
   // stays a success. Partial success (some ingested) likewise stays a success.
   let lastErrorMessage: string | undefined;
 
-  for (const absolutePath of mdFiles) {
+  let chunkBudget = NOTES_SYNC_MAX_CHUNKS_PER_RUN;
+  const requestedFileIndex = filePath ? mdFiles.indexOf(filePath) : 0;
+  const startFileIndex = Math.max(0, requestedFileIndex);
+  for (let fileIndex = startFileIndex; fileIndex < mdFiles.length; fileIndex += 1) {
+    if (chunkBudget === 0) {
+      return {
+        ingested,
+        skipped,
+        errors,
+        deferred: true,
+        continuation: {
+          sourcePath: sourcePathToUse,
+          filePath: mdFiles[fileIndex]!,
+          chunkOffset: 0,
+          fileHash: ""
+        }
+      };
+    }
+    const absolutePath = mdFiles[fileIndex]!;
     try {
       let resolvedFile: string;
       try {
@@ -261,15 +319,48 @@ export async function handleNotesSyncJob(
         actorUserId,
         resolvedFile,
         repository,
-        embeddingProvider
+        embeddingProvider,
+        fileIndex === startFileIndex ? chunkOffset : 0,
+        chunkBudget,
+        fileIndex === startFileIndex ? fileHash : undefined
       );
+      chunkBudget -= status.chunksProcessed;
 
-      if (status === "skipped") {
+      if (status.continuation) {
+        return {
+          ingested,
+          skipped,
+          errors,
+          deferred: true,
+          continuation: {
+            sourcePath: sourcePathToUse,
+            filePath: resolvedFile,
+            chunkOffset: status.continuation.chunkOffset,
+            fileHash: status.continuation.fileHash
+          }
+        };
+      }
+
+      if (status.status === "skipped") {
         skipped += 1;
         continue;
       }
 
       ingested += 1;
+      if (chunkBudget === 0 && fileIndex + 1 < mdFiles.length) {
+        return {
+          ingested,
+          skipped,
+          errors,
+          deferred: true,
+          continuation: {
+            sourcePath: sourcePathToUse,
+            filePath: mdFiles[fileIndex + 1]!,
+            chunkOffset: 0,
+            fileHash: ""
+          }
+        };
+      }
     } catch (err) {
       errors += 1;
       lastErrorMessage = err instanceof Error ? err.message : String(err);
@@ -296,7 +387,7 @@ export async function handleNotesSyncJobWithDataContext(
   preferencesRepository: PreferencesRepository
 ): Promise<NotesSyncJobResult> {
   const accessContext = toAccessContext(job);
-  const { actorUserId, sourcePath } = job.data;
+  const { actorUserId, sourcePath, filePath, chunkOffset = 0, fileHash } = job.data;
 
   const [sourcePathToUse, embeddingProvider] = await dataContextRunner.withDataContext(
     accessContext,
@@ -337,7 +428,25 @@ export async function handleNotesSyncJobWithDataContext(
   let errors = 0;
   let lastErrorMessage: string | undefined;
 
-  for (const absolutePath of mdFiles) {
+  let chunkBudget = NOTES_SYNC_MAX_CHUNKS_PER_RUN;
+  const requestedFileIndex = filePath ? mdFiles.indexOf(filePath) : 0;
+  const startFileIndex = Math.max(0, requestedFileIndex);
+  for (let fileIndex = startFileIndex; fileIndex < mdFiles.length; fileIndex += 1) {
+    if (chunkBudget === 0) {
+      return {
+        ingested,
+        skipped,
+        errors,
+        deferred: true,
+        continuation: {
+          sourcePath: sourcePathToUse,
+          filePath: mdFiles[fileIndex]!,
+          chunkOffset: 0,
+          fileHash: ""
+        }
+      };
+    }
+    const absolutePath = mdFiles[fileIndex]!;
     let resolvedFile: string;
     try {
       resolvedFile = await resolveAndValidateNoteFile(resolvedRoot, absolutePath);
@@ -354,12 +463,45 @@ export async function handleNotesSyncJobWithDataContext(
           actorUserId,
           resolvedFile,
           repository,
-          embeddingProvider
+          embeddingProvider,
+          fileIndex === startFileIndex ? chunkOffset : 0,
+          chunkBudget,
+          fileIndex === startFileIndex ? fileHash : undefined
         )
       );
+      chunkBudget -= status.chunksProcessed;
 
-      if (status === "ingested") ingested += 1;
+      if (status.continuation) {
+        return {
+          ingested,
+          skipped,
+          errors,
+          deferred: true,
+          continuation: {
+            sourcePath: sourcePathToUse,
+            filePath: resolvedFile,
+            chunkOffset: status.continuation.chunkOffset,
+            fileHash: status.continuation.fileHash
+          }
+        };
+      }
+
+      if (status.status === "ingested") ingested += 1;
       else skipped += 1;
+      if (chunkBudget === 0 && fileIndex + 1 < mdFiles.length) {
+        return {
+          ingested,
+          skipped,
+          errors,
+          deferred: true,
+          continuation: {
+            sourcePath: sourcePathToUse,
+            filePath: mdFiles[fileIndex + 1]!,
+            chunkOffset: 0,
+            fileHash: ""
+          }
+        };
+      }
     } catch (err) {
       errors += 1;
       lastErrorMessage = err instanceof Error ? err.message : String(err);
@@ -457,10 +599,19 @@ export async function registerNotesJobWorkers(
           options.embeddingProviderFactory ?? defaultEmbeddingProviderFactory,
           options.preferencesRepository
         );
+        if (result.continuation) {
+          await sendJob(
+            boss,
+            NOTES_SYNC_QUEUE,
+            { ...job.data, ...result.continuation },
+            { singletonKey: `notes-sync:${accessContext.actorUserId}` }
+          );
+          return result;
+        }
         // Fix 6 (#449): a no-op run (no source configured — stale schedule tick
         // after unlink) must NOT write a last-sync row, otherwise it clobbers a
         // real run's stats with zeros.
-        if (!result.noOp) {
+        if (!result.noOp && !result.deferred) {
           await runNotesAfterSyncHook(result, options.afterSync, {
             actorUserId: accessContext.actorUserId,
             sourcePath: job.data.sourcePath ?? null
