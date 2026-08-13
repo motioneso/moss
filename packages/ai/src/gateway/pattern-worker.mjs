@@ -1,6 +1,6 @@
 import { parentPort, workerData } from "node:worker_threads";
 
-let result = false;
+let result;
 try {
   // The pattern and value are data, never source. The host terminates this worker
   // if V8 spends too long in RegExp.test().
