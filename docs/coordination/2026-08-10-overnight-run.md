@@ -4059,3 +4059,38 @@ it's present in `herdr pane list` output. It's a busy-work counter, not a status
 `getBuiltInModuleManifests` explicitly stamps built-ins `isExternal:false` to preserve their sync
 path. 27/27 external-manifest/validation tests pass. Flag for Opus QA to specifically verify this
 default-deny behavior (a core claim of the security-tier fix) once PR opens.
+
+## 2026-08-13 — #1275 QA RED, fixes dispatched; #1590 done+proof, QA spawned; #1467 relay4
+
+- **#1275 (PR #1608, security) — QA VERDICT: RED, DO NOT MERGE.** Opus adversarial QA
+  (agentId a7dd30b15b5fc8f17) found 2 blocking: (1) `input-validation.ts:62` Worker() inherits
+  `process.execArgv`; under tsx-launched dev API this OOMs the worker and rejects EVERY external
+  pattern regardless of validity — fix `execArgv: []`. (2) no positive-control test anywhere (only
+  rejection asserted) — would have caught (1). Live-path proof also incomplete: 400 error string
+  doesn't discriminate timeout-preemption from other worker failures, no proof a valid pattern
+  still returns 200. Local-rc=1/CI-green discrepancy reconciled: CI authoritative, local failure
+  not attributable to this change (stale/dirty isolated gate DB or Postgres contention, inferential
+  — failure list wasn't preserved). Default-deny (fail-closed `isExternal`) CONFIRMED correct
+  against source. Verdict posted: PR #1608 comment 5286995396. Relayed fix brief to agent
+  (w1:p9V) — Luna is on it now, will re-request QA.
+- **#1590 (PR #1609, sensitive) — build agent reports DONE**, live concurrent-ingest proof
+  delivered (1,849-file notes.sync ran while unrelated news.refresh completed normally, zero
+  app/Postgres restarts) — satisfies the pushback on the spec's locked live-proof acceptance item.
+  Sensitive-tier QA spawned (agentId a3a28ff3817bbba50), checking the 8-item acceptance checklist
+  plus a caveat the build agent self-flagged (an earlier immediate news.refresh hit a
+  connection-acquire timeout before a retry succeeded — judging whether that undermines the
+  isolation claim).
+- **#1467 relayed to a 4th session** (pane w1:p9X, renamed "1467 permission boundary shell-quote
+  (relay4)"), successor confirmed driving, old pane w1:p9H reaped.
+- **#1248 (PR #1606) relay8 NOT stalled** — confirmed via bounded pane read: deliberately queued
+  behind other lanes' gate-DB slots (shared Postgres staggering discipline) before running its own
+  gate. The CI FAILURE showing on the PR is from a stale push (09:24Z, one unrelated
+  `chat-drawer-surface.test.tsx` failure already green on current `main`); relay8's plan includes a
+  rebase before its next push. 2 items left: gate + rebase/push, then 2 live UAT specs + re-QA.
+- **Tab reorg done** per Ben's request: `w1:tH` now holds 4 panes (#1248 relay8, #1591, #1141,
+  #1467 relay4) in a quadrant-ish grid (2 full-width rows + split bottom row); `w1:tQ` holds the
+  remaining 2 (#1275, #1590). Reaped 4 dead panes total this session (issue-audit, 1248-relay6,
+  1248-spec-Fable, 1467-relay-old).
+- Still open, unanswered by Ben: #895 (branch-protection change — apply via `gh api` or leave for
+  Ben?), #1429 (board mistracks "In review" despite merge+close).
+- Standing override still in force: no relay, stay resident, flush state to this manifest instead.
