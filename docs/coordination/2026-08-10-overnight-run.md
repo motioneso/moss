@@ -3609,3 +3609,16 @@ Routed the blocking fix to `w1:p9M` (1325-relay4, already at 57% context per its
 with a pointer-style message (verdict URL + root cause + fix direction, told explicitly not to
 touch the 5 non-blocking notes). Confirming the message landed via a bounded background watcher
 rather than polling in-context.
+
+## 2026-08-13 — #1274-trust-lint-relay1 DONE, PR #1605
+
+PR #1605 open, tagged `[SECURITY]`. Gate: VF rc=0 on isolated DB `jarvis_gate_1274trustlint` — full
+verify:foundation, test:unit 555/555, db:migrate clean, test:uat-seed 12/12 files 29/29 tests,
+test:integration 191/191 files 1893 tests (e2e excluded per verify-gate skill, CI runs separately).
+One unrelated flake (`chat-drawer-surface.test.tsx`, known #1533/#1574, untouched by this diff,
+confirmed unrelated + non-recurring on rerun). Live-path gate N/A — pure backend/install-time
+module-manifest validation, no UI surface (per plan's scope note, stated in PR body). Already
+rebased on `origin/main` @ `198928da4`. Teardown clean, worktree reapable. Tier: security — not
+merged, board untouched. CI still pending at report time; armed watcher `bidws7gto` for terminal
+state before spawning QA. #1275 stays parked until #1605 *merges* (not just opens) per the
+SERIALIZE-AFTER collision note.
