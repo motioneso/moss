@@ -2375,3 +2375,40 @@ row via the `rowsFromSuggestedTasks` fallback, throwaway dev instance on non-con
 screenshot, teardown, PR comment on #1594). Old pane `w1:p8E` (session `20373c1d...`, agent_status
 `done`) closed — same worktree, no worktree/branch cleanup needed. Watching `fix1429-relay2` via
 the fleet Monitor for the live-path proof comment.
+
+## #1429 — relay3 posted live-path proof, CI flake diagnosed + rerun, 2026-08-12 (autonomous tick)
+
+`fix1429-relay3` (successor to relay2) posted live-path proof on PR #1594:
+https://github.com/motioneso/moss/pull/1594#issuecomment-5274703313 — seeded bootstrap-owner user +
+task_lists/tasks row (needs_action, non-null sourceHref), drove real UI via Playwright against a
+throwaway dev instance (:3099/:5199), confirmed `.loose-row` rendered with View/Accept/Dismiss,
+fixtures torn down, ports freed. Verified independently (comment exists, correct timestamp) rather
+than trusting the report at face value.
+
+Triggered CI run `31656365955` failed on exactly one job: **Compose deployment smoke** —
+`infra-api-1` unhealthy, 60s dependency-wait timeout. Diagnosed before acting (per the autonomous-
+loop instruction): compared against the immediately-prior commit on the same branch (`8d5dc4fc5`),
+whose diff to the failing commit (`1ed015d96`) is a **docs-only file** (0 code changes), and whose
+own CI run showed **Compose deployment smoke: pass**. Confirmed flake, not a regression — re-ran via
+`gh run rerun 31656365955 --failed`. Watching completion via background poll +
+`/tmp/pr1594_recheck_ci.log`. Mechanical gate ("Verify foundation and app") already passed at
+25m19s on the original run and doesn't need re-running.
+
+**Next:** once the rerun is green, dispatch routine-tier QA re-verification on PR #1594 (prior
+verdict was RED solely for missing live-path evidence, now posted).
+
+## #1452 — QA stalled twice without posting a verdict, fresh QA dispatched, 2026-08-12 (autonomous tick)
+
+QA agent `qa-1452` (dispatched on PR #1595 last segment) completed twice — once initially, once
+after a `SendMessage` resume with an explicit correction — without ever posting a verdict comment
+(`gh pr view 1595 --json comments` confirmed only my own live-path-proof comment exists both times).
+Per the "two identical failures → stop and rethink" rule, did not resume it a third time.
+
+Independently confirmed CI on #1595 is green: Verify foundation and app PASS (24m28s), Compose
+deployment smoke PASS, Prod compose deployment smoke PASS; only "Build and publish images" still
+in_progress (non-blocking artifact step). Dispatched a fresh QA agent (`qa-1452-b`) with an explicit
+instruction to actually run `gh pr comment` and confirm the comment exists before ending its turn.
+
+**Next:** watch for `qa-1452-b`'s verdict comment on PR #1595; act on GREEN (merge, routine-tier
+auto-merge-after-green) or RED (fix directly — no build agent currently assigned to #1452 since the
+coordinator finished its build-side work directly last segment).
