@@ -2974,3 +2974,48 @@ and relayed cleanly. Successor `owner-scope-relay3` (pane `w1:p97`, session
 `fe7998fd-c43f-4e04-98ca-e68b2c331953`) confirmed driving on Task 3 (integration test + 404 parity
 test), continuation doc `docs/superpowers/handoffs/2026-08-12-1591-owner-scope-reorder-relay2.md`.
 Predecessor reaped.
+
+## Supervision update — 2026-08-13, relay cycle #4 and #943 stuck-pane recovery
+
+**#943 relay-2→relay-3 reaped earlier this segment** (predecessor pane `w1:p91` closed once
+successor `build-943-relay3`, pane `w1:p98`, session `ad4654bb-0d8c-4648-b077-f4d700af217b`,
+continuation commit `3c6279ee6`, confirmed driving). Recording the manifest entry now (was pending
+from prior segment).
+
+**#943 relay-3 got stuck at a "needs your attention" dialog** — `agent_status` read `done`,
+`terminal_title` showed the 🔔 attention marker, revision frozen at 199 across several Monitor
+ticks after having climbed steadily from 115. A plain `herdr pane send-keys w1:p98 Enter` did not
+clear it; a directive `herdr pane run` message ("if waiting on a prompt, respond and continue; if
+finished, report status") did — status flipped to `working`, revision resumed climbing (206+),
+title cleared. Treat this as a third stall variant beyond the two in the skill (frozen-mid-turn /
+wait-declaration): a **stuck confirmation dialog**, diagnosable by the 🔔 title marker + frozen
+revision, recoverable with a directive nudge (not a bare Enter, not a full takeover).
+
+**#1141 relay-2→relay-3**: predecessor `credenv-relay2` (pane `w1:p92`, session
+`b6945c59-4e79-44a5-90e7-c163836a6758`) relayed at Phase 1 complete, commit `e180b4030`,
+continuation doc `docs/superpowers/handoffs/2026-08-13-1141-credential-env-isolation-relay2.md`.
+Successor `credenv-relay3` (pane `w1:p99`, session `e9f818cd-ae63-41f1-91fd-f939fc62d32c`)
+confirmed driving, resuming wrap-up (gate/push/PR). Predecessor reaped.
+
+**#1325 relay-1→relay-2**: original build agent (pane `w1:p80`, session
+`415b4523-56d8-4e8a-955f-ea9ece32cb44`) relayed at 70% context after landing TDD-red (commit
+`0ea78c56e`, 2/5 tests failing for the intended reason — `createAiProvider` fires immediately for
+`api_key` entries with no `credentialPayload` sent; 3/5 already pass unmodified). Continuation doc
+`docs/superpowers/handoffs/2026-08-13-1325-provider-credential-picker-relay.md`. Successor
+`picker-1325-relay` (pane `w1:p9B`) confirmed driving, same worktree/branch, Sonnet + bypass
+permissions confirmed. Predecessor reaped.
+
+**#1248 relay-3→relay-4 — stall pattern CONFIRMED, now watching closely.** Relay-3 (`vault-ingest-1248-r3`,
+pane `w1:p96`, session `f6703343-36f8-4728-bb20-8815fcc1cf45`) also wrote **zero code** this hop —
+same as relay-2. Its entire turn was spent verifying every open point relay-2's design had flagged
+(notes-service ctor shape, structured-state hook optionality, notes/jobs.ts pure/wrapper split —
+all confirmed correct as designed) plus surfacing one new open item (verify
+`ALLOWED_PAYLOAD_KEYS` in `packages/jobs/src/pg-boss.ts` includes `sourcePath`/`op` before wiring
+the nudge path). Continuation doc `docs/superpowers/handoffs/2026-08-12-1248-vault-ingestion-relay3.md`,
+commit `911d88ab6` (doc only). This is now **two consecutive relays with no implementation
+commits** on a lane whose design has been fully resolved since relay-2. Successor
+`vault-ingest-relay4` (pane `w1:p9A`, session `801d46ac-6ad0-463b-b952-e835d4b65a86`) confirmed
+driving, revision climbing normally (39→99+) immediately after spawn. Predecessor reaped. **Next
+action if relay-4 also relays without a real implementation commit: stop nodding this through —
+`TaskStop` + take over the lane directly**, per the skill's wait-declaration-stall protocol; three
+verify-only relays in a row on a fully-resolved design is not routine churn.
