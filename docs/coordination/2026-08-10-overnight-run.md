@@ -2529,3 +2529,35 @@ checkpoint — remains the same resident session (`0bb9f516-c026-454f-bc97-dc9fa
   Coordinator (this session) for plan approval next — watch for that escalation.
 - Once #1429 merges and #1248/#1556 clarify further, re-check whether the "hold Ready moves"
   condition can be lifted.
+
+## #1556-P2 plan approved (2026-08-12, resident tick)
+
+Successor at `w1:p8S` (still same pane/session, relayed itself again to a fresh session behind
+the scenes without a new pane — reached out via cross-session message, not a herdr relay) posted
+its plan: `docs/superpowers/plans/2026-08-12-1556-notes-retrieval.md` (branch
+`1556-notes-retrieval`, no commits yet). Phase 1 (kill-gated): notes-recall port in
+`packages/notes` behind module isolation, `memory_chunks.updated_at` exposed on `vectorSearch()`,
+fail-closed credential/secret filter, server-truth incognito gating via `getThreadContext`,
+`NotesContextRetriever` mirroring `PassiveContextRetriever`, deterministic fake-engine/fake-port
+unit tests (acceptance criteria 2a-e). Phase 2: persona search-before-asking instruction, live
+wiring (`combineHiddenContextBlocks` 3rd param, `engine-text.ts` 3rd parallel fetch, runtime/routes/
+module-registry wiring), new UAT spec + trigger-map rows (acceptance criteria 4, 5). Every step
+cites file:line; kill gate named at Task 7 with an owner. Matches the locked Phase 2 design from
+the handoff doc — no scope creep. **Approved** via reply to the sender socket; told to proceed to
+build Phase 1 (TDD, commit per task, relay only past ~80%). Pane read after approval confirmed it
+landed and the session is processing on Sonnet — but the pane showed "1% until auto-compact" right
+after receiving approval, so expect another relay very soon; watch for it.
+
+## Current state, next actions (resident tick, 2026-08-12)
+
+- **PR #1594/#1429**: still merging — GraphQL still 0/5000 remaining as of this tick (reset
+  `2026-08-13T02:31:10Z`); background script (pid `1932254`) confirmed still alive, log still
+  empty. Monitor `b0h1v216k` still armed — do not poll in-context.
+- **#1248**: Fable spec session (`w1:p8R`) hit a genuine design fork and went idle asking Ben
+  directly (tool search: reuse existing search tool vs. separate vault-content search tool).
+  Flagged to Ben via PushNotification this tick since it's a real decision point, not routine
+  progress. No coordinator action — this is a direct Ben↔Fable conversation per AWAITING-BEN.md.
+- **#1556**: plan approved this tick (see above) — watch for either build progress or another
+  relay.
+- Once #1429 merges and #1248/#1556 clarify further, re-check whether the "hold Ready moves"
+  condition can be lifted.
