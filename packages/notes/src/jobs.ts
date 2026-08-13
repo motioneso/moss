@@ -604,7 +604,9 @@ export async function registerNotesJobWorkers(
             boss,
             NOTES_SYNC_QUEUE,
             { ...job.data, ...result.continuation },
-            { singletonKey: `notes-sync:${accessContext.actorUserId}` }
+            {
+              singletonKey: `notes-sync:${accessContext.actorUserId}:${result.continuation.filePath}:${result.continuation.chunkOffset}`
+            }
           );
           return result;
         }
