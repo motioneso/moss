@@ -4053,3 +4053,9 @@ it's present in `herdr pane list` output. It's a busy-work counter, not a status
   `herdr pane list`.
 - Still open, unanswered by Ben: #895 branch-protection change (apply via `gh api` or leave for
   Ben?); #1429 board mistrack (issue closed + PR #1594 merged, board still reads "In review").
+
+**#1275 note (2026-08-13):** agent found + fixed a fail-open bug during implementation — missing
+`isExternal` previously defaulted to unconfined; now defaults to confined, and
+`getBuiltInModuleManifests` explicitly stamps built-ins `isExternal:false` to preserve their sync
+path. 27/27 external-manifest/validation tests pass. Flag for Opus QA to specifically verify this
+default-deny behavior (a core claim of the security-tier fix) once PR opens.
