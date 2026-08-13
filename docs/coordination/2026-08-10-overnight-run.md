@@ -2708,3 +2708,7 @@ mid-`git commit` on branch `spec-1248` ("docs(specs): #1248 internal-vault inges
 allowlisted vault notes become searchable"). Still no message to `Coordinator` label yet — per
 the brief, wait for that rather than acting preemptively (no build lane spawn until Fable signals
 ready). No coordinator action.
+
+**Standing instruction (Ben, 2026-08-12, heading to bed):** on #1248, **Fable has final say** —
+coordinator does not intervene, override, or second-guess Fable's call on the spec/build
+decision; purely wait for Fable to message `Coordinator` if/when a build lane is warranted.
