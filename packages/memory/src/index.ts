@@ -20,6 +20,14 @@ export {
 } from "./embedding-provider-config.js";
 export { MemoryIngestPipeline } from "./ingest.js";
 export type { IngestFileOptions, IngestFileResult, IngestStatus } from "./ingest.js";
+export {
+  HARD_EXCLUDED_PREFIXES,
+  isPathIngestable,
+  listVaultIngestRootProviders,
+  registerVaultIngestRootProvider,
+  resolveIngestRoots
+} from "./vault-ingest-registry.js";
+export type { VaultIngestRootProvider } from "./vault-ingest-registry.js";
 export { memoryModuleManifest, memorySqlMigrationDirectory, MEMORY_MODULE_ID } from "./manifest.js";
 export type {
   MemoryCandidateAction,
