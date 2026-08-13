@@ -4126,3 +4126,75 @@ sign-off, rather than guessing.
 **After this one relay:** default coordinator-relay policy reverts to unstated — ask Ben again
 rather than assuming either the auto-compact override or the Luna-successor pattern carries
 forward past this one handoff.
+
+## 2026-08-13 — #1585 (news stuck stale) root-caused and queued; coordinator relay to gpt-5.6-luna-high executing now
+
+**#1585 diagnosis (read-only prod Postgres, no app/worker logs reachable from this box):**
+`app.news_refresh_state`: `state='failed'`, `failure_kind='ai'` (NOT `'fetch'` as the issue text
+assumed), `requested_generation=193` vs `compiled_generation=149` (44 unlanded refresh attempts,
+most recent `2026-08-13 22:16:29 UTC`). `app.news_compilation_snapshots.compiled_at` frozen at
+`2026-08-08 01:19:36 UTC` (~5.5 days stale; `SNAPSHOT_LIFETIME_MS` hard expiry is 7 days — ~1.5
+days of runway left). Code path: `packages/news/src/compilation/compile.ts` line 113-114 returns
+`failureKind:"ai"` when `rankCandidates()` (`packages/news/src/compilation/rank.js`) returns
+`{ok:false}` — i.e. `deps.ai.generateJson(...)` itself failing or its output failing schema/parse
+validation. Not yet narrowed further (provider/gateway error vs malformed-output) — that's the
+build lane's first task. Posted in full to the issue: https://github.com/motioneso/moss/issues/1585#issuecomment-5287107352
+
+**Queue addition:**
+
+| Spec | Issue | Tier | Status | Agent label | Branch | PR |
+| ---- | ----- | ---- | ------ | ----------- | ------ | -- |
+| (none — build off issue text + this diagnosis) | #1585 | sensitive (AI/personalization pipeline, prod user-facing bug; re-evaluate to security if `rank.js` fix touches the AI gateway/capability-router auth path) | not yet spawned | — | — | — |
+
+Not yet spawned this session — handoff doc not yet written. **Next coordinator (see relay below)
+must**: write `docs/coordination/handoffs/2026-08-13-1585-news-stale-ai-ranking-failure-build.md`
+(pattern-match the #1275/#1590 handoff docs), cut worktree `1585-news-stale-ai-ranking-failure` off
+`origin/main`, spawn build lane (Codex `gpt-5.6-luna` high per this run's model directive), then
+report to Ben that #1585 is queued/building (he asked for this explicitly and expects confirmation
+— "I want that moved up").
+
+**Fleet status at this checkpoint (all independently confirmed, no action needed unless noted):**
+- PR #1608 (#1275, security): Opus re-QA agent `aa546f32525ab4f40` still running (background,
+  worktree-isolated) — **next coordinator must collect its verdict** (SendMessage or TaskOutput,
+  do not re-spawn).
+- PR #1609 (#1590, sensitive): CI "Verify foundation and app" now **passed** (confirmed via Monitor
+  `b6bhb8pi0`, now completed) — the sensitive-tier QA verdict itself was never finished (previous
+  QA subagent `a3a28ff3817bbba50` was `TaskStop`'d after stalling twice on a wait-declaration
+  pattern; do not resume it). **Next coordinator must dispatch a fresh sensitive-tier QA pass** (CI
+  is green now, so no more waiting needed).
+- PR #1610 (#1467, relay4): agent reports done — branch `1467-permission-boundary-shell-quote`,
+  rebased clean, pre-push trio + 51/51 unit tests green, handoff doc committed at `018ea3975`. It
+  hit its own 70% context warning and tried to spawn a relay5 via `herdr agent start`, which was
+  denied twice by the local permission classifier (tooling block, not a build issue) — per the
+  two-identical-failures rule it stopped retrying and is continuing the remaining work (live-path
+  proof, verify-gate, QA, sign-off routing, wrap-up) itself in the same session rather than
+  stalling. Pane `w1:p9X` now reads `done` in the fleet-liveness Monitor. **Next coordinator should
+  check on it** (bounded pane read) rather than assume relay5 exists — none was confirmed spawned.
+- New unlabeled panes `w1:p9Y` (near #1248/1591 relay8's worktree) and `w1:p9Z` (near #1467's
+  worktree) appeared this checkpoint with `agent_status:"unknown"` — never independently
+  investigated this session (bounded pane reads not done). Likely shells, not agents (per fleet
+  Monitor, #1248 relay8 itself separately flipped done→idle, i.e. resolved on its own; #1467 also
+  resolved on its own per above) — but **next coordinator should confirm with a bounded pane read**
+  before assuming either is benign.
+- Still open from before this segment, unresolved, carried forward again: issue **#895**
+  (branch-protection/repo-settings change — apply via `gh api` or leave for Ben?) and **#1429**
+  (board mistrack — issue closed + PR merged but board still reads "In review").
+
+## 2026-08-13 — coordinator relay: gpt-5.6-luna-high (Ben's directive), not auto-compact
+
+Context-meter hit the 70% warning (the standing relay trigger). Per Ben's explicit instruction
+earlier this run — *"For the next context marker, let's hand off to a gpt-5.6-luna high agent
+please. Tell it to use Sol high for any Fable type decisions, and luna high to do the building."*
+— this is a **one-time reversal** of this run's standing "stop relaying, just auto-compact
+coordinator" override, scoped to exactly this relay trigger. Executing now: spawning a Codex
+`gpt-5.6-luna`, `model_reasoning_effort=high` agent as the coordinator successor (not another
+Sonnet Claude coordinator).
+
+**Open question, unresolved, flagged to the successor and to Ben:** who/what "Sol high" refers to
+is not confirmed — no prior reference to a "Sol" model/persona/config exists anywhere in this
+run's history or agentmemory. Do not guess-implement a "Sol" identity. The successor should ask
+Ben directly (`needs-ben` per CLAUDE.md box-wide rule) the first time an actual Fable-type decision
+(security-tier QA verdict, design-fork adjudication, merge sign-off) comes up, rather than
+defaulting to any specific model silently. Until resolved, this run's existing delegation chain
+(`fable-signoff-delegation-waves-3-6` memory: Fable OR Opus-5 one-shot agent, fully authoritative,
+digest only) remains the fallback for security-tier sign-off.
