@@ -3407,3 +3407,15 @@ still no report of a PR opening. Watching next report closely — if commits hav
 rising freeze frequency, that would trip the hard-takeover criterion; last direct git-log check
 (prior entry) still showed genuine progress, worth re-checking if this repeats again without a PR
 materializing soon.
+
+## #1248 relay-6 fifth freeze this segment (2026-08-13)
+
+Same bell-title pattern, rev frozen 3772->3773. Cleared via the escalated Enter+continue remedy
+(now applied directly rather than trying plain "continue" first, since that stopped reliably
+working after the second freeze). Rev climbed to 3786 after clearing. Freeze count this segment: 5,
+all cleared, still zero status report from this lane and no PR yet despite ~1000+ revisions of
+churn since the last direct progress check. Frequency is rising notably. Not yet re-running the
+git-log verification (last one, a few freezes ago, showed genuine §3 commits landing) — but if the
+next freeze also clears with no report/PR, will re-check the worktree directly rather than assume
+progress continues, and will send an explicit status-request message instead of a bare "continue"
+next time to try to get a real update out of this lane.
