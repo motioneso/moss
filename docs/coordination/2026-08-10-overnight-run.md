@@ -4094,3 +4094,12 @@ default-deny behavior (a core claim of the security-tier fix) once PR opens.
 - Still open, unanswered by Ben: #895 (branch-protection change — apply via `gh api` or leave for
   Ben?), #1429 (board mistracks "In review" despite merge+close).
 - Standing override still in force: no relay, stay resident, flush state to this manifest instead.
+
+## 2026-08-13 — merge sign-off delegation extended: Opus 5 also authoritative
+
+Ben: "my merge sign off for these can be done by Opus 5" — for this run's security-tier PR queue,
+a one-shot `Agent(model: "opus")` reviewing the Opus adversarial QA verdict + diff and posting a
+`gh pr comment` sign-off is now an ADDITIONAL authoritative source, alongside the existing Fable
+delegation (see agentmemory `fable-signoff-delegation-waves-3-6`). Either one clears a security-tier
+PR to merge directly — no pause/ping to Ben, standing digest only. Applies going forward to this
+run's queue (e.g. #1608/#1275 once Luna's QA-RED fixes land and re-QA is green).
