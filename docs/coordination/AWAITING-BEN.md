@@ -195,3 +195,14 @@ wait for you.
 **Recommendation:** (b), per Fable's own read and the box-wide default of not assuming carry-
 forward authority. Proceeding on (b) unless you rule otherwise — PRs will be green, QA'd, and
 sitting ready, not blocking any other work.
+
+## "Sol high" authority identity — OPEN 2026-08-13
+
+Ben's one-time coordinator-relay directive says to use "Sol high" for Fable-type decisions, but
+no prior run record, agent configuration, or agentmemory observation identifies what/who "Sol" is.
+This must be resolved before using it for a security-tier QA verdict, design-fork adjudication, or
+merge sign-off.
+
+**Question:** What exact agent/persona/configuration does "Sol high" refer to? Until Ben answers,
+the coordinator will not invent an identity and will use the existing authoritative Opus-5/Fable
+fallback chain, with security PRs held unless the applicable sign-off authority is explicit.
