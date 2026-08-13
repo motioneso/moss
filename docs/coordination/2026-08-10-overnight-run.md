@@ -2582,3 +2582,11 @@ does not trigger a coordinator relay — noted only for the record.
 action pending), #1440/#1470 (epics, resolve passively), #1556 (actively building Phase 1, real
 commits landing). The only genuine in-flight *build* left is #1556 — condition stays: do not move
 anything to Ready until #1556 lands.
+
+## Note: independent issue-audit pane (Codex, `w1:p7Y`) merged PR #1596 (2026-08-12/13)
+
+Not a coordinator-spawned build lane — pre-existing board-hygiene auditor. Merged its own
+docs-only PR (`docs/coordination/2026-08-12-open-issue-order.md`, +189/-0, no code) directly:
+audited 147 open issues → 139 remain, closed 7 stale, relabeled 26, added an ordered backlog doc.
+No coordinator action needed — docs-only, no tiering/QA gate applies. Backlog doc may be useful
+for future queue planning.
