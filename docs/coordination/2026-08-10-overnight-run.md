@@ -2693,3 +2693,11 @@ to self-relay per its own skill (expected, not a stall); its `agent_status: done
 taken. #1248 (`53bf3e3a...`, `w1:p8R`) unchanged, revision still 326, no new commits — consistent
 with nothing pending there. issue-audit idle, no action. `merges_since_relay` unchanged at 0.
 Resuming Phase 2 supervision.
+
+**#1248 now genuinely active (2026-08-12, later):** pane `w1:p8R` moved off its dead revision
+326 for the first time all session — now rev 333, `agent_status: working`, pane shows "Simmering…
+high effort" mid-turn generating the spec after "yes, write it" was accepted. So Ben's approval
+did land (matches his correction that he'd already responded); the earlier "stuck" read was wrong
+but the underlying flatline was real until just now. No action needed — passive watch continues
+per the original brief (wait for Fable to message `Coordinator` once the spec file lands in
+`docs/superpowers/specs/`).
