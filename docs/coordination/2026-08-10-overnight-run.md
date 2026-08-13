@@ -3830,3 +3830,11 @@ more CI rerun first, or hold regardless. Awaiting Fable's ruling. `w1:p9D` acked
 further action on its end.
 
 **#1606 remains un-QA'd, blocked on Fable's policy ruling — do not spawn QA or merge until then.**
+
+## 2026-08-13 — #1602 CI green, re-verify QA spawned
+
+Watcher `byc4s329i` timed out; checked manually — `Verify foundation and app` passed (24m50s).
+Spawned Opus re-verify QA (`qa-1602`, agent `a9c003073becf2727`), scoped narrowly to the
+BLOCKING-1 `AbortSignal.timeout(5_000)` fix in `model-discovery.ts`'s `doFetch()`, with the same
+maximally-explicit mandatory-`gh pr comment` instruction that worked for `qa-1605`. Other 5
+non-blocking notes explicitly out of scope for this pass. Awaiting its verdict.
