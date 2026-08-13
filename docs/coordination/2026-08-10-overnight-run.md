@@ -2783,3 +2783,51 @@ list already discussed). **Standing posture for the rest of the night:**
   his morning review regardless of how green they are.
 - Dispatching Phase-0 collision/dependency map + tiering (one-shot Opus subagent) across all 16
   now; will spawn build lanes off its output, capacity-limited by the agents tab, rest queued.
+
+## Phase 0 — Ready-column collision/dependency map (Opus subagent `a793c86b824d77649`, complete)
+
+**Correction to earlier tiering assumption:** every buildable item in the 16-issue Ready batch is
+security-tier **by content**, regardless of `bug`/`task` label — RLS/owner-scope gaps, credential-env
+leakage, permission boundaries, network-exposed surfaces, external-module trust boundaries. Only
+#943/#1275/#1274 carried the literal `security` label; the subagent found 1489/1141/1591/1592/1274/
+1467/1487 also trip a security trigger on inspection. Per the coordinate skill's tier table this
+means: Opus adversarial QA, mandatory `gh pr comment` verdict, **Ben's explicit merge sign-off** —
+plan for these to land as green, verified, **unmerged** PRs by morning, not auto-merges.
+
+**PARALLEL-SAFE (spawn now — zero collisions among themselves or with #1556/#1248):**
+- #1489 — RLS/owner-scope: `packages/tasks/src/breakdown.ts` parent-task lookup missing owner filter.
+- #943 — role-scope hazard: `packages/db/src/module-storage-rpc.ts:89` `SET LOCAL ROLE` never reset. Unwired path, low urgency.
+- #1141 — credential-env isolation: `packages/chat/src/live/provider-probe.ts:44-49` empty env falls through to ambient `process.env`.
+- #1591 — info disclosure: `packages/ai/src/gateway/gateway.ts:445` reorder owner-scoped UPDATE before unscoped liveness check.
+- #1274 — external-module trust boundary: `packages/module-registry/src/external/validate.ts` + `packages/ai/src/gateway/input-validation.ts` install-time schema lint.
+- #1467 — permission boundary + shell-quoting: `packages/chat/src/live/claude-permission-hook.ts` + `vault-allowlist.ts`. **Needs live-path proof** (real notes read through UI on live dev).
+- #1487 — network-exposed surface: `apps/api/src/static-web.ts:93-94` SPA fallback 404 logic. Weakest candidate — issue asks for a dependent-caller investigation first; escalate to Fable if one turns up.
+
+**SERIALIZE-AFTER:** #1275 after #1274 (same file, `compilePattern`/pattern cache). #1592 after #1591 (shared confirm-route integration tests; consider folding into one lane).
+
+**PARK — DON'T SPAWN** (reasons, not silently dropped):
+- #1589 — needs live prod access; issue says it's Ben's call.
+- #895 — GitHub repo-settings change (branch protection), not code; needs Ben's admin rights.
+- #1454 — acceptance requires merging a deliberately red branch to `main` to prove the alarm fires; never unattended. Also collides with the still-disabled build-publish job from 08-08.
+- #1108 — acceptance needs two concurrent `test:uat` runs picking docker subnets adjacent to **prod's 10.252/24**; not an unattended shape, plus known dev-box disk pressure.
+- #1013 — touches the gate/reset infra every other lane depends on; proof requires two concurrent gates, which would fight the very lanes spawned tonight. Run solo, awake. Flagged risk: running 7 lanes' `verify:foundation` concurrently on one cluster needs staggering per `multi-agent-pg-contention` memory.
+- #1325 — open 3-way design fork the issue says needs a ruling (one option needs a new migration). Escalate to Fable; spawn only after a ruling.
+- #1495 — issue states outright it needs a design spec; fork includes "downgrade to doc note instead of code fix"; also adjacent to #1556's session-context work. Escalate to Fable; don't build blind.
+
+**Decision:** spawning #1248 (Fable's plan ready, see below) + the 7 parallel-safe items now, capacity-
+limited by the agents tab; #1275/#1592 queue behind their predecessors; park list left untouched with
+reasons recorded above (not silently dropped); #1325/#1495 queued as Fable escalations, not spawned.
+
+## #1248 — plan ready, build lane spawning
+
+Fable (session `53bf3e3a-9ad1-48db-b682-4dbb290e7ea3`, pane `w1:p8R`): plan authored per plan-build
+skill at `docs/superpowers/plans/2026-08-12-1248-vault-ingestion.md`, spec at
+`docs/superpowers/specs/2026-08-12-1248-internal-vault-ingestion.md`, both on branch `spec-1248`
+(commit `8255beefb`, pushed). 3 phases; kill gate after Phase 1 (owner Ben, evaluated after a day on
+dev); Phase 3 blocked until #1556's retrieval phase merges to `main` and must not touch the port
+while #1556 is mid-build; Phases 1-2 independent of #1556.
+
+Opened docs-only PR #1597 (`spec-1248` → `main`) to land the spec+plan on `main` before forking a
+clean build worktree — matches the #1533 precedent (spec merges first via its own PR, build branches
+off `main` after). Routine tier (docs only, `Detect change scope` correctly skipped the DB-touching
+gate). Merging on green, then spawning the build lane fresh off `main`.
