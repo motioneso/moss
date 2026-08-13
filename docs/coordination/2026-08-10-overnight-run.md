@@ -3583,3 +3583,6 @@ adversarial Opus QA + Ben's explicit sign-off. Confirmed to the agent I'm drivin
 CI on #1604 was still running "Verify foundation and app" at report time (rest green/skipping) —
 armed a background watcher (`bc7upvv9i`) for that job's terminal state before spawning QA, per this
 run's established practice (QA trusts CI, only spawn once CI is actually green).
+
+Reaped `w1:p9R` (943-role-reset-relay5) after its "safe to reap" confirmation — PR #1604 open,
+gate DB dropped, worktree clean. #943 lane now fully idle pending QA/sign-off.
