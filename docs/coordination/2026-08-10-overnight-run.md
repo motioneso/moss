@@ -3919,3 +3919,26 @@ correct it to Done alongside #1606's merge rather than a separate pass.
 Still active, unchanged: `w1:p9D` (1248 build, standing by), `w1:p9P` (1591, no PR yet), `w1:p99`
 (1141/#1601, QA RED rework), `w1:p9H` (1467, no PR yet). `w1:p8R` (Fable) now shows `done` —
 queue delivered, nothing further pending from her right now.
+
+## 2026-08-13 — PR #1606 QA verdict: RED, routed for rework
+
+QA verdict (Opus, Fable's #1607 CI-exception context applied): **RED**, not merge-ready.
+Full verdict: https://github.com/motioneso/moss/pull/1606#issuecomment-5284804690
+
+Blocking (4): (1) gate never completed even honoring the CI exception — `test:unit` sits mid-chain
+in `verify:foundation`'s `&&` chain, so release-hardening audit + Playwright e2e never ran;
+(2) PR is 5 commits behind `origin/main`, including 3 `[SECURITY]` merges (#1602/#1604/#1605)
+touching `packages/module-registry/src/index.ts`, which #1606 also edits — untested against them;
+(3) spec AC 1(b) ("non-allowlisted path never read/ingested, asserted at the ingester") unmet —
+only a pure-function unit test exists; (4) `vault-ingest-registry.ts`'s `normalizeRoot()` never
+collapses `..`, so `isPathIngestable('people/../attachments/x.md', ['people/..'])` returns `true`
+— currently non-exploitable (upstream `notes-service.ts:97` blocks `..`) but the defense-in-depth
+layer is silently dead. 2 blocking e2e-uat specs also not run (no live dev instance up).
+8 non-blocking notes recorded in the PR comment.
+
+Routed rework instructions to `w1:p9D` (relay6, session `b282c337-...`). Notified Fable (`w1:p8R`)
+for awareness — not a merge-sign-off ask yet, this is a rework loop; will bring #1606 back to her
+once it re-QAs clean. #1248 board status unchanged (Backlog, mistracked — see prior note; will
+correct alongside #1606's eventual merge).
+
+QA agent's gate DB `jarvis_gate_qa1606` left behind (no psql on its PATH) — reaping from here.
