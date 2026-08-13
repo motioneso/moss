@@ -29,7 +29,7 @@ issue text; this is not a new feature/module, so the spec-before-build gate does
 File: `packages/chat/src/live/vault-allowlist.ts`
 
 ```ts
-export function resolveVaultRoots(): string[]
+export function resolveVaultRoots(): string[];
 ```
 
 - Moves the existing `resolveMossEnv(...).split(",").map(trim).filter(nonEmpty).filter(isValidVaultRoot)`
@@ -40,6 +40,7 @@ export function resolveVaultRoots(): string[]
 - No change to `isValidVaultRoot` or `VAULT_ROOT_CHARSET` — reused as-is (defense-in-depth stays).
 
 **Test (`tests/unit/vault-allowlist.test.ts`):**
+
 - New case: `resolveVaultRoots()` returns `["/data/external-notes"]` for a clean root, and `[]` for
   each of the existing DENY fixtures (`) Bash(*` injection, `..`, relative, double-slash,
   whitespace, bare `/`) — same fixtures already in the file, called directly against the new export
@@ -56,13 +57,14 @@ File: `packages/chat/src/live/claude-permission-hook.ts`
 - Add a private helper (co-located with `shellQuote`):
 
 ```ts
-function vaultRootsEnvEntry(): string[]
+function vaultRootsEnvEntry(): string[];
 ```
 
-  Returns `[]` when `resolveVaultRoots()` is empty; otherwise a single-element array
-  `` [`JARVIS_NOTES_ROOTS=${shellQuote(resolveVaultRoots().join(","))}`] ``. Omitting the entry
-  entirely when there are no configured roots keeps `roots()`/`vaultRoots()` inside the generated
-  `.mjs` behaving exactly as they do today for an unconfigured vault (empty string → `[]`).
+Returns `[]` when `resolveVaultRoots()` is empty; otherwise a single-element array
+``[`JARVIS_NOTES_ROOTS=${shellQuote(resolveVaultRoots().join(","))}`]``. Omitting the entry
+entirely when there are no configured roots keeps `roots()`/`vaultRoots()` inside the generated
+`.mjs` behaving exactly as they do today for an unconfigured vault (empty string → `[]`).
+
 - `writeClaudePermissionHook`: splice `...vaultRootsEnvEntry()` into the `command` array between
   `JARVIS_PERM_TOKEN_FILE=...` and `"node"` (line ~49-50).
 - `writeClaudeOneShotPermissionHook`: splice `...vaultRootsEnvEntry()` into its `command` array
@@ -75,6 +77,7 @@ function vaultRootsEnvEntry(): string[]
   instruction).
 
 **Tests (`tests/unit/claude-permission-hook.test.ts`):**
+
 1. "injects a shell-quoted JARVIS_NOTES_ROOTS into the persistent hook command when a root is
    configured" — set `process.env.JARVIS_NOTES_ROOTS = "/vault"` before calling
    `writeClaudePermissionHook`; assert the generated `command` string contains
@@ -123,6 +126,7 @@ touching anything else; that would mean the root cause is wrong, not that the fi
 ```bash
 pnpm exec vitest run tests/unit/claude-permission-hook.test.ts tests/unit/vault-allowlist.test.ts > /tmp/1467-unit.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`, all new + existing cases passing.
 
 ```bash
@@ -130,6 +134,7 @@ pnpm format:check > /tmp/1467-format.log 2>&1; echo "EXIT=$?"
 pnpm lint > /tmp/1467-lint.log 2>&1; echo "EXIT=$?"
 pnpm typecheck > /tmp/1467-typecheck.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0` for each.
 
 Full gate at wrap-up per `verify-gate` skill (isolated gate DB), plus the live-path proof from the
