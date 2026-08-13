@@ -3891,3 +3891,31 @@ Fable, same as the 2026-08-09 waves-3-6 run (see agentmemory
 Her sign-off (`gh pr comment`) is authoritative; coordinator merges directly on it, Ben gets a
 standing digest afterward, no per-PR ping. Confirmed delivered (pane read, `w1:p8R` shows
 "Pontificating…").
+
+## 2026-08-13 — Fable sign-off queue COMPLETE, all 5 merged
+
+Fable posted APPROVED `gh pr comment` sign-offs on all 5 (independently verified via
+`gh api .../comments`, author `motioneso`, ids/timestamps match) plus a #1606 policy ruling
+(comment 5284093469): **PROCEED** treating `chat-drawer-surface.test.tsx` as a documented
+exception scoped exactly to that flip/aria-label assertion (any other red = fresh hold) — but
+#1606 still needs its own normal QA pass and her merge sign-off; the ruling only covers the CI
+exception, not merge-readiness.
+
+All 5 confirmed CLEAN/MERGEABLE, merged (squash, branch deleted), issue commented (release-note
+language), board → Done (`gh project item-edit`, field `PVTSSF_lAHOADqkaM4BarLAzhVhA6I`, option
+`Done=98236657`), all independently verified post-merge:
+
+- **#1599 → #1489** owner-scope breakdown parent lookup. `17:30:18Z`.
+- **#1600 → #1495** assistant-surface claim-before-use. `17:31:51Z`.
+- **#1602 → #1325** `[SECURITY]` provider picker credential timing (Option 3). `17:32:06Z`.
+- **#1604 → #943** `[SECURITY]` module RPC role reset after query(). `17:32:23Z`.
+- **#1605 → #1274** `[SECURITY]` external-module trust-lint at install. `17:32:38Z`.
+
+**Next:** spawn QA on #1606 (tag: treat the named test as Fable's documented exception, any other
+red = hold), then route her merge sign-off, then merge + comment + board. Note: board item for
+#1248 currently reads **Backlog** despite #1606 being an open, actively-reviewed PR — mistracked;
+correct it to Done alongside #1606's merge rather than a separate pass.
+
+Still active, unchanged: `w1:p9D` (1248 build, standing by), `w1:p9P` (1591, no PR yet), `w1:p99`
+(1141/#1601, QA RED rework), `w1:p9H` (1467, no PR yet). `w1:p8R` (Fable) now shows `done` —
+queue delivered, nothing further pending from her right now.
