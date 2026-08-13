@@ -9,6 +9,7 @@ import { type ActorScopedJobPayload, type QueueDefinition, toAccessContext } fro
 import type { EmbeddingProvider } from "@moss/memory";
 import {
   createEmbeddingProvider,
+  CpuIsolatedEmbeddingProvider,
   embedChunks,
   getEmbeddingProviderConfig,
   MemoryRepository,
@@ -417,9 +418,10 @@ export interface RegisterNotesJobWorkersOptions {
 async function defaultEmbeddingProviderFactory(
   scopedDb: DataContextDb
 ): Promise<EmbeddingProvider> {
-  return createEmbeddingProvider(
-    await getEmbeddingProviderConfig(new RuntimeConfigResolver(scopedDb))
-  );
+  const config = await getEmbeddingProviderConfig(new RuntimeConfigResolver(scopedDb));
+  return config.kind === "local"
+    ? new CpuIsolatedEmbeddingProvider(config.modelId)
+    : createEmbeddingProvider(config);
 }
 
 export async function runNotesAfterSyncHook(

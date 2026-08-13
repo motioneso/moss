@@ -22,7 +22,7 @@ describe("notes.sync embedding CPU isolation (#1590)", () => {
   it("keeps the event loop responsive during representative inference", async () => {
     const provider = new CpuIsolatedEmbeddingProvider(
       "test-model",
-      new URL("../fixtures/embedding-cpu-worker.ts", import.meta.url)
+      new URL("../fixtures/embedding-cpu-worker.mjs", import.meta.url)
     );
 
     const maxDelay = await measureMaxEventLoopDelay(() =>
