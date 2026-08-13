@@ -31,15 +31,19 @@ export class TaskBreakdownRepository {
       return [];
     }
 
-    // Look up the parent to inherit list_id. RLS ensures the caller can see it.
+    // Look up the parent to inherit list_id. app.tasks RLS is owner-or-share, so a plain
+    // visibility check would let a view-shared task from another owner become a breakdown
+    // parent. Require owner_user_id = current_actor_user_id() explicitly (same guard as
+    // TasksRepository.create()/update() for parentTaskId).
     const parent = await db.db
       .selectFrom("app.tasks")
       .select(["id", "list_id"])
       .where("id", "=", parentId)
+      .where("owner_user_id", "=", sql<string>`app.current_actor_user_id()`)
       .executeTakeFirst();
 
     if (!parent) {
-      throw new Error(`Parent task ${parentId} not found or not visible`);
+      throw new Error(`Parent task ${parentId} not found or not accessible`);
     }
 
     const now = new Date();
