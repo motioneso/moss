@@ -3133,3 +3133,24 @@ explicit merge sign-off** before merging (security tier).
 
 **Security-tier merge queue awaiting Ben, so far:** PR #1599 (#1489, QA `qa-1489` in flight), PR
 #1600 (#1495, QA `qa-1495` in flight).
+
+## Supervision update — 2026-08-13, #1274/#1467 plans routed to Fable; #1467 clean relay
+
+**Both #1274 and #1467 hit plan-ready** and were routed to Fable per the plan-authorship rule
+(not self-approved) — she's reviewing in order: #1487 scoping question, then #1467's plan, then
+#1274's plan. #1274's plan (docs/superpowers/plans/2026-08-13-1274-external-module-trust-lint.md,
+committed) reuses `compilePattern` via a new `@moss/ai/gateway/input-validation` subpath export,
+mirroring the existing `@moss/host-fetch/policy` precedent; flags one pre-existing non-blocker
+(`packages/module-registry/src/index.ts` importing `node:crypto`/`node:fs` despite `node.ts`'s
+"browser-safe" comment — not touched by this plan). #1467's plan
+(docs/superpowers/plans/2026-08-13-1467-permission-boundary-shell-quote.md, `03437bf0f`) confirmed
+root cause against the branch: `JARVIS_NOTES_ROOTS`/`MOSS_NOTES_ROOTS` aren't in cli-runner's
+sanitized-env `ALLOWED_KEYS`, so the permission hook's roots always strip and reads fall through to
+deny; fix resolves roots app-side and shellQuote-injects `JARVIS_NOTES_ROOTS` onto both
+permission-hook command line writers, same pattern as the existing `JARVIS_PERM_*`/
+`JARVIS_SESSION_ROOT` entries. Both build agents told to wait for explicit approval before coding.
+
+**#1467 relayed cleanly while waiting** (zero code, 70% meter) — successor `relay-1467` spawned in
+the same worktree/branch, pane `w1:p9H` (was `w1:p9G`), session `9742352d-ffcd-4543-8bb5-4cb1cb0611b9`,
+tab `w1:tQ`. Confirmed driving via bounded read before reaping predecessor. Renamed both ways
+(`1467 permission boundary shell-quote` / in-pane `perm-shellquote-1467-relay2`).
