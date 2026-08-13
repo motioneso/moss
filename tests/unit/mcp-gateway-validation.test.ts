@@ -56,6 +56,22 @@ describe("tool input validation", () => {
       expect(validateToolInput(bounded, { key: "eng.1" })).toEqual({ key: "eng.1" });
     });
 
+    it("reproduces the external-module ReDoS host-loop stall", () => {
+      const started = performance.now();
+      expect(() =>
+        validateToolInput(
+          {
+            type: "object",
+            properties: { value: { type: "string", pattern: "(a+)+$" } }
+          },
+          { value: `${"a".repeat(28)}!` }
+        )
+      ).toThrow(ToolInputValidationError);
+      // This is deliberately a wide safety margin around the ~1.5s V8 stall on the
+      // current host. The fixed path must move this work off the API event loop.
+      expect(performance.now() - started).toBeLessThan(500);
+    });
+
     it("rejects a value over maxLength", () => {
       expect(() => validateToolInput(bounded, { key: "abcdefghij" })).toThrow(
         ToolInputValidationError
