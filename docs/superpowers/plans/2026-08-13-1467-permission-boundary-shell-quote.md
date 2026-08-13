@@ -121,7 +121,7 @@ touching anything else; that would mean the root cause is wrong, not that the fi
 ## Verification
 
 ```bash
-pnpm --filter @moss/chat exec vitest run tests/unit/claude-permission-hook.test.ts tests/unit/vault-allowlist.test.ts > /tmp/1467-unit.log 2>&1; echo "EXIT=$?"
+pnpm exec vitest run tests/unit/claude-permission-hook.test.ts tests/unit/vault-allowlist.test.ts > /tmp/1467-unit.log 2>&1; echo "EXIT=$?"
 ```
 Expected: `EXIT=0`, all new + existing cases passing.
 
@@ -134,7 +134,9 @@ Expected: `EXIT=0` for each.
 
 Full gate at wrap-up per `verify-gate` skill (isolated gate DB), plus the live-path proof from the
 handoff's exit criteria (a real notes read through the UI on live dev, pre-approved with no
-permission card, vs. today's card/deny — screenshot on the PR).
+permission card, vs. today's card/deny). Record proof as a `gh pr comment`: UAT run on live dev +
+exit code + assertions — no screenshot (DEVELOPMENT_STANDARDS.md post-`2852a12c3` bans screenshots
+for the gate).
 
 ## Open questions
 
