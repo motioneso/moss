@@ -4004,3 +4004,21 @@ built-in path untouched.
    built-ins — don't let external results leak in; never log the input pattern value.
 
 Relayed verbatim to `w1:p9V`, confirmed received. Agent proceeding on this basis.
+
+## 2026-08-13 — fleet-liveness Monitor noise fix
+
+The resident fleet-liveness Monitor (per this skill's Phase 2 "prefer a persistent Monitor over
+polling" guidance — emit *only changed lines*, an `agent_status` flip or pane death) had drifted
+from that spec: it snapshotted `herdr pane list` and diffed the *whole* line per pane, so any
+`revision` counter tick (which increments continuously on every keystroke/tool-call a working
+agent makes) also counted as a "changed line" — #1248/relay7 alone fired ~10 near-identical
+notifications in a row, all `working rev=N -> working rev=N+1`, zero new information.
+
+**Fix:** replaced it (old task `bbbsxhrmu` stopped) with a version that strips `revision` from the
+per-pane snapshot line before diffing, so it only emits when `agent_status` itself changes (or a
+pane appears/disappears) — new task `bwnkghmwl`. Same 45s poll cadence, coordinator pane
+(`w1:p8T`) still excluded.
+
+**For future coordinator sessions:** when building the liveness Monitor, snapshot-and-diff on
+`{pane_id, label, agent_status}` only — never include `revision` in the diffed line, even though
+it's present in `herdr pane list` output. It's a busy-work counter, not a status signal.
