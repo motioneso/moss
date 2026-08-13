@@ -4022,3 +4022,34 @@ pane appears/disappears) — new task `bwnkghmwl`. Same 45s poll cadence, coordi
 **For future coordinator sessions:** when building the liveness Monitor, snapshot-and-diff on
 `{pane_id, label, agent_status}` only — never include `revision` in the diffed line, even though
 it's present in `herdr pane list` output. It's a busy-work counter, not a status signal.
+
+## 2026-08-13 — coordinator checkpoint (context ~72%, no relay per standing override)
+
+- **#1275** (ext-module pattern timeout, Luna, `w1:p9V`): implementation green on focused
+  tests/typecheck/lint/format/prod-API-build at `b0744cc0f`. Relayed exact isolated-gate command
+  (`GATEDB=jarvis_gate_1275`, DROP+CREATE+export+background run to `/tmp/vf_1275.log` with FINAL
+  sentinel, DROP when done) plus Live-Path Gate ask (install pathological pattern on live dev,
+  screenshot/log on PR). No other gate was running at relay time (checked `herdr pane list`
+  first). Awaiting its gate rc + live-path proof.
+- **#1590** (notes-sync worker isolation, Luna, `w1:p9S`): still `working`, no new escalation
+  since last check.
+- **#1248 vault ingestion (PR #1606):** relay7→relay8 self-relay completed. relay7 finished
+  findings 1-3 of the RED QA verdict (rebase clean, `normalizeRoot()` `..`-collapse fix
+  `59603a762`, integration test `b27199a42`), root-caused a `pnpm --filter <pkg> typecheck`
+  false-red (TS6059 repo-wide even on untouched packages — root `pnpm typecheck` is the real
+  signal, green) — **note this for future coordinators: don't trust `--filter` typecheck reds,
+  confirm against root `pnpm typecheck`.** relay7's isolated gate run (`jarvis_gate_1248vault`)
+  was left in-progress in the background at relay time. Successor `vault1248relay8` (session
+  `3a66118b-8814-4da2-9482-8b6ffbaafffc`, pane `w1:p9W`) verified driving, continuation doc
+  committed `82d877225`. relay7 reaped (session-id-confirmed match before close). Remaining:
+  finding #4 (2 UAT specs on live dev + PR proof comment), confirm/rerun the gate, then re-QA
+  request. Checked in with relay8 to confirm it's proceeding — it responded `working` after being
+  briefly `done` (agent_status flip, not yet independently confirmed against a new commit).
+- Fleet-liveness Monitor (`bwnkghmwl`) continues to correctly report only real status
+  transitions, no `revision`-tick noise, since the fix — validates the earlier fix.
+- **Standing override still in force:** no relay successor spawned; flushing state here per
+  Ben's "lets stop relaying, just auto compact coordinator." Coordinator session id unchanged:
+  `caef4e32-df22-4310-a42d-866771a0ba6c`, label `Coordinator`, pane resolve fresh via
+  `herdr pane list`.
+- Still open, unanswered by Ben: #895 branch-protection change (apply via `gh api` or leave for
+  Ben?); #1429 board mistrack (issue closed + PR #1594 merged, board still reads "In review").
