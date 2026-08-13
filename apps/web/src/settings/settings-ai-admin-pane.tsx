@@ -849,8 +849,8 @@ export function AiProvidersPane() {
                   })}
                 </div>
                 <div className="provpick__foot">
-                  {assistantName} reads the available models from the provider automatically when
-                  it connects.
+                  {assistantName} reads the available models from the provider automatically when it
+                  connects.
                 </div>
               </>
             )}
