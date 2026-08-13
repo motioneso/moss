@@ -6,7 +6,8 @@ import {
   registerDataContextWorker,
   sendJob,
   type ActorScopedJobPayload,
-  type QueueDefinition
+  type QueueDefinition,
+  toAccessContext
 } from "@moss/jobs";
 import type { NotificationsRepository } from "@moss/notifications";
 
@@ -114,26 +115,39 @@ export async function registerNewsJobWorkers(
     dataContext,
     async (job, scopedDb) => {
       assertMetadataOnlyPayload(job.data);
+      const accessContext = toAccessContext(job);
       for (;;) {
         const generation = await repository.beginRefreshRun(scopedDb);
-        const result = await compilePersonalizedNews(
-          scopedDb,
-          {
-            fetch: deps.fetch,
-            search: deps.search,
-            ai: deps.ai,
-            repo: repository,
-            prefs,
-            catalog: NEWS_CATALOG,
-            logger: deps.logger
-          },
-          { now: new Date(), generation }
-        );
+        let result;
+        try {
+          result = await compilePersonalizedNews(
+            scopedDb,
+            {
+              fetch: deps.fetch,
+              search: deps.search,
+              ai: deps.ai,
+              repo: repository,
+              prefs,
+              catalog: NEWS_CATALOG,
+              logger: deps.logger
+            },
+            { now: new Date(), generation }
+          );
+        } catch (error) {
+          await repository.failRefreshRunIfCurrent(
+            dataContext,
+            accessContext,
+            generation,
+            "internal"
+          );
+          throw error;
+        }
         if (result.outcome === "stale") continue;
         const finished =
           result.outcome === "replaced" ||
           (await repository.failRefreshRunIfCurrent(
-            scopedDb,
+            dataContext,
+            accessContext,
             generation,
             result.failureKind ?? "internal"
           ));

@@ -6,7 +6,12 @@
 // them behind its validation pipeline; Slice 1 only reads/exports what exists.
 import { sql } from "kysely";
 
-import { assertDataContextDb, type DataContextDb } from "@moss/db";
+import {
+  assertDataContextDb,
+  type AccessContext,
+  type DataContextDb,
+  type DataContextRunner
+} from "@moss/db";
 import type {
   NewsCustomSourceDto,
   NewsCustomTopicDto,
@@ -563,22 +568,25 @@ export class NewsPersonalizationRepository {
   }
 
   async failRefreshRunIfCurrent(
-    scopedDb: DataContextDb,
+    dataContext: DataContextRunner,
+    accessContext: AccessContext,
     generation: number,
     failureKind: "fetch" | "ai" | "internal"
   ): Promise<boolean> {
-    assertDataContextDb(scopedDb);
-    const result = await sql<{ failed: boolean }>`
-      WITH changed AS (
-        UPDATE app.news_refresh_state
-           SET state = 'failed', failure_kind = ${failureKind}, updated_at = now()
-         WHERE owner_user_id = app.current_actor_user_id()
-           AND requested_generation = ${generation}
-        RETURNING 1
-      )
-      SELECT EXISTS(SELECT 1 FROM changed) AS failed
-    `.execute(scopedDb.db);
-    return result.rows[0]?.failed ?? false;
+    return dataContext.withDataContext(accessContext, async (freshDb) => {
+      assertDataContextDb(freshDb);
+      const result = await sql<{ failed: boolean }>`
+        WITH changed AS (
+          UPDATE app.news_refresh_state
+             SET state = 'failed', failure_kind = ${failureKind}, updated_at = now()
+           WHERE owner_user_id = app.current_actor_user_id()
+             AND requested_generation = ${generation}
+          RETURNING 1
+        )
+        SELECT EXISTS(SELECT 1 FROM changed) AS failed
+      `.execute(freshDb.db);
+      return result.rows[0]?.failed ?? false;
+    });
   }
 
   async pruneSnapshotDomain(scopedDb: DataContextDb, canonicalDomain: string): Promise<void> {
