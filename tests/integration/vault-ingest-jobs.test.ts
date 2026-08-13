@@ -189,6 +189,35 @@ describe("vault ingest sweep/nudge", () => {
     });
   });
 
+  it("never reads or ingests a file outside every registered root, even sitting alongside allowlisted files (integration, not just the isPathIngestable predicate)", async () => {
+    const pipeline = new MemoryIngestPipeline(provider, repository);
+    const outsidePath = "outside-any-root/secret.md";
+
+    await vaultRunner.withVaultContext(accessContext(ownerA), async (vaultCtx) => {
+      await writeVaultFile(vaultCtx, outsidePath, "# Secret\n\nNever allowlisted.\n");
+      await writeVaultFile(
+        vaultCtx,
+        `${INGEST_ROOT}alongside.md`,
+        "# Alongside\n\nAllowlisted sibling.\n"
+      );
+    });
+
+    const stats = await vaultRunner.withVaultContext(accessContext(ownerA), (vaultCtx) =>
+      runVaultIngestSweep(accessContext(ownerA), vaultCtx, dataContext, pipeline, repository)
+    );
+
+    // The allowlisted sibling is the only file the real sweep — walk + isPathIngestable filter +
+    // pipeline.ingestFile — actually processed; the non-allowlisted file was never even attempted.
+    expect(stats.processed).toBe(1);
+    expect(stats.failed).toEqual([]);
+
+    await dataContext.withDataContext(accessContext(ownerA), async (scopedDb) => {
+      const paths = await repository.listIndexedPaths(scopedDb, ownerA, "vault");
+      expect(paths).not.toContain(outsidePath);
+      expect(paths).toContain(`${INGEST_ROOT}alongside.md`);
+    });
+  });
+
   it("makes a nudged write retrievable without waiting for a sweep", async () => {
     const pipeline = new MemoryIngestPipeline(provider, repository);
     const retriever = new MemoryRetriever(provider, repository);
