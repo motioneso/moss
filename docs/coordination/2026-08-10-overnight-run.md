@@ -3544,3 +3544,24 @@ but the pane's 2-row viewport means `herdr pane read` returns empty for this pan
 quirk, not unique to this check) — could not read its actual answer. Since the freeze cleared
 cleanly and no bell recurred, sent a plain "continue" to keep it moving; will re-run the direct
 git-log check on its next done/bell flip rather than assume the probe was answered honestly.
+
+## 2026-08-13 ~00:XX — #1591-relay4 "freeze" pattern corrected: legitimate gate run, not a stall
+
+Pulled the actual transcript (session `0a6ce4a3-d384-4393-88dc-a599db2adf37`, bounded `tail -n 40`
+on its JSONL, since `herdr pane read` is empty for this pane's 2-row viewport every time) after the
+5th bell flip. Ground truth: it's running `pnpm verify:foundation` on an isolated gate DB for #1591
+— confirmed via live `ps`/`pstree` output showing real node worker processes, `test:integration`
+running since 01:40:35. It correctly re-arms its own `Monitor` (600s timeout) each time that
+Monitor's wait window lapses, writes a one-line "waiting for gate" note, and ends its turn — which
+trips the bell title even though nothing is actually stuck. Zero commits since relay-3's
+continuation doc is consistent with this: Task 4 isn't committed pending this gate result, not
+because it's stuck.
+
+**Correction to this segment's practice:** the bell-title+flat-revision heuristic gave 5 false
+positives in a row on this lane. Stopping the nudge-on-every-bell reflex for #1591-relay4
+specifically — its own Monitor will fire when the gate finishes. Will only intervene again if a
+direct transcript/git-log check shows genuinely no activity (no live process, no re-armed Monitor)
+for an extended window, not on bell-title alone. Noting this as a general lesson: bell title is a
+necessary but not sufficient signal — a lane legitimately waiting on its own background Monitor
+also shows it, so a quick transcript pull (bounded tail, not pane read) is worth doing before the
+Nth nudge on a lane that keeps re-freezing right after clearing.
