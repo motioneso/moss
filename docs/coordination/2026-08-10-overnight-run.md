@@ -3358,3 +3358,18 @@ title back to normal `◑` glyph. Two freezes in one segment, one of which neede
 is new behavior for this lane — flagging as a data point toward the pre-committed hard-takeover
 criterion. Still watching for a real §3-implementation status report from this lane; none received
 yet this segment despite ~600+ revisions of activity.
+
+## #1248 relay-6 progress confirmed real (2026-08-13) — third freeze this segment, but genuine work
+
+Checked worktree git log directly (`.claude/worktrees/1248-vault-ingestion`) rather than wait
+longer on unreliable pane self-reports: real §3 implementation commits ARE landing —
+vault-ingest-jobs sweep/nudge/tick handlers, root providers for people-notes and entity-linked
+notes, module-registry wiring, Phase-1 e2e test, lint/format fixes, ALLOWED_PAYLOAD_KEYS fix.
+**Pre-committed hard-takeover criterion (zero §3 commits) is NOT met — no takeover warranted.**
+Third bell-freeze this segment also nudged clear (Enter + "continue", same remedy). Freeze
+frequency is rising but each has cleared and real progress continues underneath — treating as a
+known-quirky-but-productive lane, not escalating further unless a freeze fails to clear or commits
+stop landing.
+
+Context checkpoint at 70% hit again — per standing override ("stop relaying, just auto compact
+coordinator") NOT spawning a successor; staying resident through auto-compaction as before.
