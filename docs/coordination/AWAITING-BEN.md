@@ -31,6 +31,20 @@ real-chat-token gap this entry described is moot now that the PR landed. -->
 — exact Caddy IP trust + fail-loud on legacy/unparseable values. Issue #1486 closed. Worktree
 reaped. -->
 
+## #1248 vault-ingestion half — needs a priority ruling, no spec, no agent — 2026-08-12
+
+Re-audit of the board's "In progress" column found #1248 ("Internal vault ingestion gap: decide
+and wire searchable first-party vault content") is only **half-superseded**: its passive-retrieval
+half is covered by #1556/#1553's build, but its **vault-ingestion half is real, separate, unowned
+scope**, marked P0 on the issue. No approved spec exists for it (spec-before-build gate blocks
+spawning a lane), and no agent is assigned. This was flagged internally in the run manifest
+2026-08-12 but never surfaced here — filing now per protocol.
+
+**Ask:** is #1248's vault-ingestion half still P0 priority for this run, or can it wait for a
+later pass? If yes, it needs a spec authored (`superpowers:brainstorming` / `/brief`) before any
+build lane can start — that's a scoping conversation, not something to spawn blind. If it can
+wait, say so and I'll leave it in progress/backlog as-is without further action this run.
+
 ## #1556 UAT blocked on a one-time interactive `claude setup-token` OAuth step — RESOLVED 2026-08-12
 
 **Found 2026-08-12 while investigating why the #1556/#1557 lane had gone unattended for ~25h.**
