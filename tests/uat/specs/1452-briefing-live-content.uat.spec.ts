@@ -50,10 +50,6 @@ test("throwaway signup drives a real briefing generation to a rendered Today car
 
   await signUp(page);
 
-  // Pre-generation: the placeholder is visible, no briefing run exists yet for this brand-new
-  // account.
-  await expect(page.getByText("Your morning briefing is not ready yet.")).toBeVisible();
-
   const created = await page.evaluate(async () => {
     const response = await fetch("/api/briefings/definitions", {
       method: "POST",
@@ -70,6 +66,14 @@ test("throwaway signup drives a real briefing generation to a rendered Today car
   expect(created.status).toBe(201);
   const definitionId = created.json.id as string;
   expect(definitionId).toBeTruthy();
+
+  // MorningBriefingSection only mounts once an *enabled* morning definition exists (see
+  // today-page.tsx) -- a brand-new zero-definition account hides the section entirely rather than
+  // showing an empty-state placeholder. The definition was created via a raw fetch, bypassing the
+  // client's React Query cache, so reload before the section (and its "not ready yet" placeholder,
+  // since no run exists yet) can appear.
+  await page.reload();
+  await expect(page.getByText("Your morning briefing is not ready yet.")).toBeVisible();
 
   const triggered = await page.evaluate(async (id: string) => {
     const response = await fetch(`/api/briefings/definitions/${id}/run`, {
