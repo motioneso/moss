@@ -3760,3 +3760,28 @@ action taken by the lane, correctly held for Ben's sign-off.
 CI gate job pending at report time — watcher armed (`byc4s329i`). Will spawn Opus re-verify QA
 (security tier) focused on the BLOCKING-1 fix once CI confirms green. Lane acknowledged, told to
 hold.
+
+## 2026-08-13 — PR #1606 gate failed, unrelated test — rerun to check flakiness
+
+`Verify foundation and app` failed on PR #1606's first CI run, but the single failure was
+`tests/unit/chat-drawer-surface.test.tsx > ChatDrawer surface routing (#1533) > resets state on a
+flip in both directions` (`expected false to be true`) — a file entirely outside #1606's diff
+(`gh pr diff --name-only` confirms no chat/drawer files touched; scope is memory/vault-ingest/
+module-sdk/people/structured-state only). Not the DB-contention signature the lane pre-flagged
+(`release-hardening.test.ts`) either. Triggered `gh run rerun 31686643223 --failed` to test for
+flakiness before treating it as a real regression. Watcher `bqu7vnv5v` armed for the rerun result.
+
+## 2026-08-13 — PR #1605 QA GREEN, verdict posted successfully this time
+
+`qa-1605` (Opus, `a4280827456cbb9c9`) returned VERDICT GREEN — 0 blocking, 5 non-blocking (worst:
+rejected-manifest patterns still write the process-global, never-evicted `patternCache`, a memory-
+pin DoS vector; folded into #1275's scope, not blocking here). Grounded on HEAD `b656d72f5`,
+`audit:preflight` clean, CI green (26m2s), blocking e2e-UAT (`module-install.uat.spec.ts`) passed
+live against a real containerised stack. MERGE-READY: YES. **This time the agent posted the
+verdict itself** (learned from #1604's two prior failures on this exact step) —
+independently verified via `gh pr view 1605 --json comments`: 1 comment, URL matches
+https://github.com/motioneso/moss/pull/1605#issuecomment-5278566789 exactly.
+
+**#1605 (#1274) now in Ben's sign-off queue** — security tier, CI green, QA GREEN, unmerged
+pending his explicit OK. Sign-off queue is now: #1599 (#1489), #1600 (#1495), #1604 (#943),
+#1605 (#1274). #1606 (#1248) and #1602 (#1325 re-verify) still pending CI/QA.
