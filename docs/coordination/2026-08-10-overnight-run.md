@@ -3980,3 +3980,27 @@ relay6 (`w1:p9D`) → relay7 (`w1:p9T`, session `8195fc05-...`, handoff
 integration-level non-allowlisted-path assertion, `normalizeRoot()` `..`-collapse fix, live UAT
 proof). relay6 pane `w1:p9D` reaped (status `done`, tree clean, successor confirmed driving).
 No coordinator action needed — still in progress, will re-QA once it reports green.
+
+## 2026-08-13 — #1275 design fork adjudicated (Opus)
+
+`ext-module-1275-luna` (`w1:p9V`) escalated a design fork: routing pattern validation through the
+existing `worker-runtime.ts` requires a new protocol (it's `child_process` + `module.invoke`
+JSON-RPC on a declared handler, not usable for regex validation as-is) — proposed instead an
+async, external-only `node:worker_threads` worker with a hard `terminate()` kill timeout,
+built-in path untouched.
+
+**Opus verdict: approve with conditions** (binding, security tier):
+1. Prove `terminate()` actually preempts a live catastrophic match (V8 regexp interrupts, Node 22)
+   — unproven = false protection, escalate not ship.
+2. Preemption ≠ isolation — same process/fs/env/privileges; pattern passed as data only, never
+   interpolated/eval'd; set `resourceLimits`.
+3. Fail closed (timeout/spawn-fail/exit/non-boolean) → `ToolInputValidationError`, no truthy
+   coercion (per #1265 BLOCKING-1 precedent).
+4. External-vs-built-in signal must not fail open — no existing marker at `gateway.ts:157/393` or
+   `routes.ts:713` (`externalContent` unrelated); make it required or default-confined.
+5. One worker per validation + global concurrency cap (else ReDoS → thread-exhaustion DoS); await
+   termination, clear timers/listeners.
+6. Cache compiled regexes only, never match verdicts; `patternCache` is global/shared with
+   built-ins — don't let external results leak in; never log the input pattern value.
+
+Relayed verbatim to `w1:p9V`, confirmed received. Agent proceeding on this basis.
