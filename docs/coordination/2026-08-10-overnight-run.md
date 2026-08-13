@@ -2311,3 +2311,22 @@ Fix applied to convention (memory `needs-ben-telegram-notifier` updated): reserv
 strictly for genuine open decisions, format as issue number + one short line; route merge-complete
 info through the standing per-merge digest instead. No board/PR action needed — #1256 is already
 merged and closed.
+
+## MERGED — #1554 (PR #1593), sensitive tier — 2026-08-12
+
+QA GREEN (verdict: https://github.com/motioneso/moss/pull/1593#issuecomment-5274517701) — RED
+finding (env-frozen persistent-runtime settings on the RPC/cli-runner topology, contradicting the
+plan's "values reach cli-runner via RPC launch params, never child env") fixed via mutable
+live-config holder + regression test proving live-reload without restart. Squash-merged to `main`
+at `b748df754`, branch deleted. Issue commented + board → Done
+(`gh project item-edit ... PVTI_lAHOADqkaM4BarLAzg2BRHA ... Done=98236657`). Build pane
+`build-1554-p2` (w1:p8B) reaped; both its worktree and an orphaned duplicate
+(`agent-a03fc6b2ddced4cd0`, leftover isolated-worktree from an earlier QA dispatch) removed.
+
+In-progress column now 8: #1135, #1246, #1248, #1429, #1440, #1452, #1470, #1556.
+
+**Merge-counter relay trigger note:** per Ben's standing override for this run ("never spawn a
+successor coordinator session — remain the same resident session through all context-meter
+checkpoints/compactions"), the coordinate skill's merge-count/context-meter relay triggers are
+superseded for this session specifically. Merges are still logged here for the record; no relay is
+spawned on them.
