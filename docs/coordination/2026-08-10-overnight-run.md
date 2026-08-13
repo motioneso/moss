@@ -3305,3 +3305,18 @@ real status report (not just revision count); watch for qa-1489 completion → s
 claim before trusting, security tier → Ben queue; consider whether `docs/coordination/
 AWAITING-BEN.md` needs entries for the growing sign-off queue per box-wide CLAUDE.md rule (not yet
 done — worth doing next lull).
+
+## QA-1489 GREEN — PR #1599 merge-ready, queued for Ben sign-off (2026-08-13)
+
+QA agent `a0efef4e7fa4a00d6` returned GREEN for #1489-owner-scope-breakdown (security tier).
+CI green (24m56s), audit:preflight EXIT=0, live-path n/a (no new user surface, existing test
+covers owner path), 0 blocking findings, 3 non-blocking (plain `Error`->500 inconsistency,
+missing owner_user_id DB-level guard on hierarchy trigger, and an out-of-scope activity-spoofing
+defect class — same pattern as #1055/#1483, filed as follow-up not blocking). Exit criteria met:
+mirrors the established repository.ts:268/341 guard, added test fails without the fix. Verdict
+posted and spot-checked: https://github.com/motioneso/moss/pull/1599#issuecomment-5277630456
+(1 comment confirmed via `gh pr view --json comments`).
+
+**Security-tier sign-off queue for Ben, updated:** #1599 (#1489, QA GREEN, MERGE-READY) — #1600
+(#1495, QA PASS) — both awaiting Ben's explicit per-PR sign-off per the standing (b) ruling in
+AWAITING-BEN.md. #1601 (#1141) remains excluded (QA RED, back to building).
