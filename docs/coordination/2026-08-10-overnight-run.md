@@ -1,12 +1,12 @@
 # Coordination Run — 2026-08-10 overnight
 
 **Date:** 2026-08-10
-**Coordinator lock:** label `Coordinator`, stable anchor = Codex session id `019ffd3f-3098-73c0-bab8-31f491615168` (pane `w1:pA1`, tab `w1:t6`, resolve fresh by label+session, never a written pane number). Exactly one pane with this label and session holds merge authority. Previous Claude anchor `caef4e32-df22-4310-a42d-866771a0ba6c` was closed after this successor confirmed adoption on 2026-08-13.
+**Coordinator lock:** label `Coordinator`, stable anchor = Codex session id `019ffe6c-9e0f-7c11-8dd3-1b74aab43b23` (current pane resolves fresh by label+session; pane numbers are ephemeral). Exactly one pane with this label and session holds merge authority. Superseded Codex anchor `019ffd3f-3098-73c0-bab8-31f491615168` was closed after this successor confirmed adoption on 2026-08-14.
 **Delegated authority:** Ben explicitly delegated overnight product/design decisions to Fable. Existing repository rule still applies: #1557 never merges without fresh Fable approval.
 **CORRECTED 2026-08-13 (Fable, cross-session, unprompted):** the "Fable's green security review counts as merge sign-off" line above was a carry-forward assumption from the 2026-08-09 waves-3-6 run (`fable-signoff-delegation-waves-3-6` memory) — Fable states that delegation was explicitly scoped to that run only and does NOT carry forward. Default policy for tonight's batch: **security-tier PRs need Ben's explicit sign-off, full stop.** Fable is doing first-pass reviews overnight to keep his morning queue short, but those verdicts are review, not merge authority. Security-tier PRs land green + verified + **unmerged**; queued via AWAITING-BEN for his morning ruling, not silently held.
 **Merge policy:** routine/sensitive only after verified QA and live-path proof where applicable; security tier builds + PRs + QA proceed overnight but hold at "code-complete, unverified" for merge — Ben's explicit sign-off only, no delegation assumed.
 **Merge notification:** after every merge, run `needs-ben coordinator "<issue/PR — one-line description of what landed>"` and retain the normal GitHub/project bookkeeping.
-**merges_since_relay:** 2 — #1121/PR #1570 and #1547/PR #1573 merged this leg (session `0bb9f516-c026-454f-bc97-dc9faf43bd20`, still resident, no relay taken per Ben's standing override below). 2-routine/sensitive-merge relay trigger technically fires here; not actioned per the standing override — noted, not relayed.
+**merges_since_relay:** 0 — reset after the mandatory security-tier relay; no merge has occurred under the current coordinator authority.
 **Standing override (Ben, binding for the rest of this run):** "lets stop relaying, just auto compact coordinator" — this session does NOT spawn a successor at context checkpoints, including the 70%-meter warning or merge-count triggers. It stays resident through auto-compaction. Confirmed live against a real 70% checkpoint hook firing this leg; declined per this override.
 
 GitHub/project 2 is the source of truth. Detailed continuation evidence stays in `/tmp/jarv1s-monitor-state.md`.
@@ -4316,3 +4316,22 @@ digest only) remains the fallback for security-tier sign-off.
   re-QA, then continue #1467. `merges_since_relay=0` after this mandatory relay trigger.
 - **Coordinator authority:** current Codex session
   `019ffd3f-3098-73c0-bab8-31f491615168`, label `Coordinator`, pane resolve fresh by label/session.
+
+## 2026-08-14 — successor re-adoption: remaining lanes #1248, #1585, #1467
+
+- **Coordinator authority:** Codex session `019ffe6c-9e0f-7c11-8dd3-1b74aab43b23`, sole
+  `Coordinator` label. The superseded pane/session `w1:pA1` / `019ffd3f-3098-73c0-bab8-31f491615168`
+  was resolved by exact label + session match and closed. Current pane is resolved fresh by label;
+  do not trust the written pane number.
+- **#1248 / PR #1606:** integrated sensitive QA is active in `w1:pAK` (`QA 1248 integrated`);
+  collect its verdict before any merge. Live proof remains recorded; no screenshots.
+- **#1585 / PR #1611:** owner rerun pane `w1:pAJ` (`1585 UAT rerun`) is done/awaiting report
+  after the two shared Docker network-pool contention failures. Fresh sensitive QA is dispatched
+  in isolated pane `w1:pAN` (`QA 1585 sensitive rerun`, session
+  `76730253-b1b5-46b5-ab44-86948754f8be`) against HEAD `411c1614c`; require its verdict before
+  merge.
+- **#1467 / PR #1610:** pane `w1:pA8` (`1467 permission boundary shell-quote (relay7)`) was
+  reactivated for the bounded live real-chat onboarding proof after the `CLI_ENV_KEYS` fix. Do not
+  merge without durable live-path evidence.
+- **No screenshots:** coordinator instruction remains active for all three lanes.
+- **merges_since_relay:** 0.
