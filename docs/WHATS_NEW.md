@@ -54,7 +54,7 @@
 - **Easier module setup.** Settings now shows credential controls for registry-installed modules,
   making required connections visible where you manage the module. [PR #1178](https://github.com/motioneso/Jarv1s/pull/1178)
 - **Cleaner Evening review.** The Sources freshness list has been removed from the Evening review
-  so it no longer appends data-staleness details most people skip. [PR #595](https://github.com/motioneso/Jarv1s/pull/595) · [PR #586](https://github.com/motioneso/Jarv1s/pull/586)
+  so it no longer appends data-staleness details most people skip. [PR #595](https://github.com/motioneso/Jarv1s/pull/595) · [#586](https://github.com/motioneso/Jarv1s/issues/586)
 - **Briefings list their actual sources.** Briefings settings now names the email accounts,
   calendars, and note folders feeding each briefing instead of showing only a count. [PR #594](https://github.com/motioneso/Jarv1s/pull/594) · [#506](https://github.com/motioneso/Jarv1s/issues/506)
 - **Paste a Coolors palette to stage it immediately.** Pasting a Coolors URL or colour list in
