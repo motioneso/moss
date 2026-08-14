@@ -8,19 +8,19 @@ a then-current rebase of `main`.
 
 ## Seams check (file:line, verified on this branch at `be7edf725`)
 
-| Assumed capability | Evidence |
-|---|---|
-| Bootstrap superuser URL available everywhere the lock is needed | `getMossDatabaseUrls().bootstrap` — `packages/db/src/urls.ts:46` |
-| Maintenance-DB derivation prior art (swap URL database segment to `postgres`) | `scripts/test-integration.ts:45-51` |
-| Advisory-lock key idiom `hashtext('…')` already in tree | `packages/db/src/migrations/sql-runner.ts:199` |
-| `runSqlFiles(connectionString, directory)` is the bootstrap executor to wrap | `packages/db/src/migrations/sql-runner.ts:114`; callers `scripts/migrate.ts:23`, `tests/integration/test-database.ts:71` |
-| `applyRolePasswords` owns the ALTER ROLE…PASSWORD writes | `packages/db/src/role-bootstrap.ts:97-110` |
-| Module role DDL confined to three broker functions | `packages/db/src/module-role-broker.ts:49-136` |
-| Teardown DROP ROLE site | `tests/integration/test-database.ts:201-214` |
-| Env resolution channel for the override var | `resolveMossEnv` — exported from `@moss/db`, used at `tests/integration/test-database.ts:23-27` |
-| `@moss/db` public surface to extend | `packages/db/src/index.ts` (exports `runSqlFiles`, `runSqlMigrations`, `resolveMossEnv` today) |
-| No role DDL hides in migrations or module SQL | grep `CREATE ROLE|ALTER ROLE|DROP ROLE` over `infra/postgres/migrations/`, `packages/*/sql/` — zero hits |
-| DROP/CREATE DATABASE already serialized at gate start | `scripts/run-gate.sh:162-173` (`flock`) — unchanged by this plan |
+| Assumed capability                                                            | Evidence                                                                                                                 |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------- | -------------------------------------------------------------------------- |
+| Bootstrap superuser URL available everywhere the lock is needed               | `getMossDatabaseUrls().bootstrap` — `packages/db/src/urls.ts:46`                                                         |
+| Maintenance-DB derivation prior art (swap URL database segment to `postgres`) | `scripts/test-integration.ts:45-51`                                                                                      |
+| Advisory-lock key idiom `hashtext('…')` already in tree                       | `packages/db/src/migrations/sql-runner.ts:199`                                                                           |
+| `runSqlFiles(connectionString, directory)` is the bootstrap executor to wrap  | `packages/db/src/migrations/sql-runner.ts:114`; callers `scripts/migrate.ts:23`, `tests/integration/test-database.ts:71` |
+| `applyRolePasswords` owns the ALTER ROLE…PASSWORD writes                      | `packages/db/src/role-bootstrap.ts:97-110`                                                                               |
+| Module role DDL confined to three broker functions                            | `packages/db/src/module-role-broker.ts:49-136`                                                                           |
+| Teardown DROP ROLE site                                                       | `tests/integration/test-database.ts:201-214`                                                                             |
+| Env resolution channel for the override var                                   | `resolveMossEnv` — exported from `@moss/db`, used at `tests/integration/test-database.ts:23-27`                          |
+| `@moss/db` public surface to extend                                           | `packages/db/src/index.ts` (exports `runSqlFiles`, `runSqlMigrations`, `resolveMossEnv` today)                           |
+| No role DDL hides in migrations or module SQL                                 | grep `CREATE ROLE                                                                                                        | ALTER ROLE | DROP ROLE`over`infra/postgres/migrations/`, `packages/\*/sql/` — zero hits |
+| DROP/CREATE DATABASE already serialized at gate start                         | `scripts/run-gate.sh:162-173` (`flock`) — unchanged by this plan                                                         |
 
 Open questions: none.
 
