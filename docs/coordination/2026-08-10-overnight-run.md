@@ -4275,3 +4275,13 @@ digest only) remains the fallback for security-tier sign-off.
   publish, and both compose smokes; no waiver is needed. Existing 3-spec UAT proof and
   defence-in-depth PR wording were verified unchanged. Fresh security QA is running in isolated
   worktree `.claude/worktrees/qa-1141-security`, pane `w1:pAG`, agent `qa1141-security` (Opus).
+
+## 2026-08-14 — QA findings routed; #1248 rebase and #1585 UAT rerun active
+
+- **#1248 / PR #1606:** sensitive QA GREEN, but integrated verification observed the branch one
+  commit behind current `origin/main` (the #1590 merge). The author worktree is active in pane
+  `w1:pAH` (`rebase1248`) to rebase and force-with-lease push; fresh QA is required afterward.
+- **#1585 / PR #1611:** sensitive QA found no code/invariant issue and confirmed the news UAT, but
+  two blocking changed-path specs (`app-map-grounding`, `module-install`) hit identical shared
+  Docker network-pool contention twice. Owner rerun is active in pane `w1:pAJ` (`uat1585-rerun`);
+  no waiver or merge until both pass and QA is refreshed.
