@@ -5055,3 +5055,16 @@ digest only) remains the fallback for security-tier sign-off.
   green. Fresh QA GREEN is `issuecomment-5292291191`; prior patch-identical blocking module-install
   UAT remains applicable; live path N/A. Security merge is now waiting only for Ben's explicit exact-
   head approval, tracked in `AWAITING-BEN.md`; no merge/issue/board action yet.
+
+## 2026-08-14 — #1275 infrastructure-red gate; #1013 solo diagnostic released
+
+- **#1275 / PR #1608:** exact local head `8f82423b6` remains on current main `f648b8da0`. Frozen
+  install repaired workspace links; typecheck, focused 26/26, Prettier and lint pass. The single
+  authorized exclusive gate exited 1 after 917.58 seconds: 181 integration files passed, while 12
+  files/15 tests failed only after PostgreSQL `:55433` shut down (`ECONNREFUSED` / database shutting
+  down); no lane assertion was implicated. No retry. Retained gate DB was explicitly dropped and
+  teardown is clean. Push is authorized with truthful durable RED-infrastructure evidence; exact-head
+  GitHub CI replaces the local final check. Fresh QA only after CI green; any red CI stops the lane.
+- **#1013:** #1275's DB window is terminal and clean. Exactly one prepared instrumented locked-harness
+  run is now authorized under a fresh non-blocking gate-lock probe. #1556 remains held. No retry or
+  other DB suite; report bounded backend/phase/native-pg evidence and cleanup before any push.
