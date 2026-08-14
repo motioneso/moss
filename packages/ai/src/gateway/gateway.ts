@@ -435,6 +435,23 @@ export class AssistantToolGateway {
     actionRequestId: string,
     status: "confirmed" | "rejected" | "cancelled"
   ): Promise<"resolved" | "expired" | "not_found"> {
+    const access: AccessContext = { actorUserId, requestId: `mcp_${randomUUID()}` };
+
+    // #1591: ownership before liveness. isAwaiting is a process-local, unscoped map keyed only by
+    // actionRequestId — it can't tell "not mine" from "mine but expired", so checking it first let a
+    // guessed/foreign ID's response (expired vs not_found) leak which state another user's row was
+    // in. Confirm the row is owned-and-pending via the owner-scoped repository read first; only a
+    // legitimate owner reaches the liveness check below, so both outcomes fold into "not_found" for
+    // everyone else.
+    if (status === "confirmed") {
+      const action = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
+        this.deps.repository.getAssistantAction(scopedDb, actionRequestId)
+      );
+      if (!action || action.status !== "pending") {
+        return "not_found";
+      }
+    }
+
     // Confirm-after-timeout guard (fail-closed): a "confirmed" only means anything while the
     // blocked call is still awaiting. After the confirm timeout the waiter is gone, the call
     // already returned "timed out", and the tool can NEVER execute — so persisting 'confirmed'
@@ -446,7 +463,6 @@ export class AssistantToolGateway {
       return "expired";
     }
 
-    const access: AccessContext = { actorUserId, requestId: `mcp_${randomUUID()}` };
     const resolved = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
       this.deps.repository.resolveAssistantAction(scopedDb, actionRequestId, { status })
     );

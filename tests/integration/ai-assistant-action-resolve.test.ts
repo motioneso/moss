@@ -76,9 +76,9 @@ describe("assistant action resolve parity", () => {
   });
 
   it("both routes 404 an unknown action id", async () => {
-    // "confirmed" short-circuits to 409 (expired) before an existence check ever runs — reject/
-    // cancel skip the live-waiter gate entirely, so they're the only statuses that can reach the
-    // not-found path.
+    // #1591 fixed the "confirmed" short-circuit to 409 (expired) before an existence check ever
+    // ran; reject/cancel remain the simplest case to assert here since they never touched the
+    // live-waiter gate in the first place.
     const unknownId = "62000000-0000-4000-8000-0000000000ff";
 
     const aiRes = await server.inject({
@@ -92,6 +92,29 @@ describe("assistant action resolve parity", () => {
       url: `/api/chat/action-requests/${unknownId}/resolve`,
       headers: { authorization: `Bearer ${ids.sessionA}` },
       payload: { status: "rejected" }
+    });
+
+    expect(aiRes.statusCode).toBe(404);
+    expect(chatRes.statusCode).toBe(404);
+  });
+
+  it("both routes now 404 an unknown action id with status=confirmed too (#1591)", async () => {
+    // Previously unreachable: "confirmed" short-circuited to 409 (expired) before an existence
+    // check ever ran. #1591 added an owner-scoped existence pre-check, so confirmed + no such row
+    // now takes the same not-found path as reject/cancel.
+    const unknownId = "62000000-0000-4000-8000-0000000000ff";
+
+    const aiRes = await server.inject({
+      method: "POST",
+      url: `/api/ai/assistant-actions/${unknownId}/resolve`,
+      headers: { authorization: `Bearer ${ids.sessionA}` },
+      payload: { status: "confirmed" }
+    });
+    const chatRes = await server.inject({
+      method: "POST",
+      url: `/api/chat/action-requests/${unknownId}/resolve`,
+      headers: { authorization: `Bearer ${ids.sessionA}` },
+      payload: { status: "confirmed" }
     });
 
     expect(aiRes.statusCode).toBe(404);
