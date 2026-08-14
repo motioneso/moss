@@ -14,8 +14,7 @@ const PEM_PRIVATE_KEY = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/;
 const PASSWORD_ASSIGNMENT = /\bpassword\s*[:=]\s*\S{3,}/i;
 const BEARER_TOKEN = /\bBearer\s+\S{8,}/i;
 const AUTHORIZATION_HEADER = /\bAuthorization\s*:\s*\S+/i;
-const LONG_TOKEN_NEAR_KEYWORD =
-  /\b(?:api[_-]?key|secret)\b[^\n]{0,20}[A-Za-z0-9+/_-]{20,}={0,2}/i;
+const LONG_TOKEN_NEAR_KEYWORD = /\b(?:api[_-]?key|secret)\b[^\n]{0,20}[A-Za-z0-9+/_-]{20,}={0,2}/i;
 const ENV_SECRET_ASSIGNMENT = /\b[A-Z][A-Z0-9_]*(?:KEY|SECRET|TOKEN|PASSWORD)[A-Z0-9_]*\s*=\s*\S+/;
 
 const CREDENTIAL_PATTERNS: readonly RegExp[] = [

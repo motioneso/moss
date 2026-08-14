@@ -89,9 +89,7 @@ export class NotesContextRetriever {
           return true;
         });
 
-        const items = capItems(
-          [...safe].sort((a, b) => b.score - a.score)
-        );
+        const items = capItems([...safe].sort((a, b) => b.score - a.score));
         const block = renderNotesContextBlock(items);
         return { block, items };
       }

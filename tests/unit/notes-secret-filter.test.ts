@@ -18,7 +18,10 @@ const CREDENTIAL_SHAPED: readonly [string, string][] = [
     "env-var assignment with SECRET_KEY in the name",
     "STRIPE_SECRET_KEY=definitely-not-a-real-secret"
   ],
-  ["api_key keyword adjacent to a long hex run", "api_key: 4f3c2b1a9e8d7c6b5a4938271605f4e3d2c1b0a"],
+  [
+    "api_key keyword adjacent to a long hex run",
+    "api_key: 4f3c2b1a9e8d7c6b5a4938271605f4e3d2c1b0a"
+  ],
   [
     "secret keyword adjacent to a long base64 run",
     "secret=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo1Njc4"

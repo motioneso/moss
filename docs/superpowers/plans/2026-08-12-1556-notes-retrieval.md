@@ -62,10 +62,10 @@ a new data path).
 
 ```ts
 export interface NotesRecallSnippet {
-  readonly sourcePath: string;   // owner-scoped relative note path
-  readonly updatedAt: Date;      // modified time, from memory_chunks.updated_at
-  readonly score: number;        // vectorSearch() similarity
-  readonly text: string;         // sanitized snippet text (pre-secret-filter; filter runs in chat)
+  readonly sourcePath: string; // owner-scoped relative note path
+  readonly updatedAt: Date; // modified time, from memory_chunks.updated_at
+  readonly score: number; // vectorSearch() similarity
+  readonly text: string; // sanitized snippet text (pre-secret-filter; filter runs in chat)
 }
 
 export interface NotesRecallPort {
@@ -102,7 +102,7 @@ never allowed to inject it.
 export function isCredentialShaped(text: string): boolean;
 ```
 
-Pattern set (plan decision, spec only fixes the fail-closed *disposition*): private-key/PEM block
+Pattern set (plan decision, spec only fixes the fail-closed _disposition_): private-key/PEM block
 headers (`-----BEGIN ... PRIVATE KEY-----`), `password[:=]`-shaped lines with a non-trivial value,
 common token shapes (`Bearer `, `Authorization:`, `api[_-]?key`, `secret`, long
 base64/hex-looking runs adjacent to those keywords), env-var-assignment lines whose key name
@@ -131,7 +131,7 @@ Files: `packages/chat/src/live/persistence.ts`, `packages/chat/src/live/chat-ses
   to the returned object. Same pattern already used at `getCurrentThreadState`
   (`persistence.ts:346-355`) and `persistence.ts:353`.
 - `EngineTextDeps.persistence` (`engine-text.ts:23`) stays `Pick<ChatPersistencePort,
-  "listPriorTurns" | "getThreadContext">` — no change needed there, the `Pick` already carries
+"listPriorTurns" | "getThreadContext">` — no change needed there, the `Pick` already carries
   whatever `getThreadContext` returns. `buildEngineText`'s `threadCtx` destructuring
   (`engine-text.ts:41,49,52,62,69,81,101`) gains access to `threadCtx.incognito`.
 
@@ -150,7 +150,7 @@ New class in a new file `packages/chat/src/live/notes-retrieval.ts`, mirroring
 ```ts
 export interface NotesContextRetrieverDeps {
   readonly dataContext: Pick<DataContextRunner, "withDataContext">;
-  readonly notesRecall: NotesRecallPort;               // from @moss/notes (Task 2)
+  readonly notesRecall: NotesRecallPort; // from @moss/notes (Task 2)
   readonly settingsRepo?: {
     getOrCreate(scopedDb: DataContextDb, userId: string): Promise<UserMemorySettings>;
   };
@@ -297,11 +297,13 @@ Composition root, mirroring `passiveMemoryRecall`/`PassiveContextRetriever` exac
 
 1. **`packages/chat/src/live/runtime.ts`** — deps type (near line 340) gains
    `readonly notesRecall?: NotesRecallPort;`. Construction (near lines 555-560) gains:
+
    ```ts
    notesRetrieval: deps.notesRecall
      ? new NotesContextRetriever({ dataContext: deps.dataContext, notesRecall: deps.notesRecall })
      : undefined,
    ```
+
    passed alongside `passiveRetrieval` into whatever constructs `EngineTextDeps` downstream (same
    call site that assembles `passiveRetrieval`/`crossToolRead`/`priorityModel` today).
 

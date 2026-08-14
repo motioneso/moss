@@ -120,7 +120,11 @@ describe("renderNotesContextBlock", () => {
 
   it("renders each snippet tagged with source path and modified date", () => {
     const block = renderNotesContextBlock([
-      { sourcePath: "notes/kitchen.md", updatedAt: new Date("2026-06-01T00:00:00Z"), text: "paint swatches picked" }
+      {
+        sourcePath: "notes/kitchen.md",
+        updatedAt: new Date("2026-06-01T00:00:00Z"),
+        text: "paint swatches picked"
+      }
     ]);
     expect(block).toContain("<retrieved_context>");
     expect(block).toContain("[notes/kitchen.md modified=2026-06-01]");

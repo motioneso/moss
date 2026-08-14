@@ -61,9 +61,11 @@ describe("NotesContextRetriever", () => {
     vi.useFakeTimers();
     try {
       const notesRecall = {
-        recall: vi.fn().mockImplementation(
-          () => new Promise((resolve) => setTimeout(() => resolve({ snippets: [] }), 1000))
-        )
+        recall: vi
+          .fn()
+          .mockImplementation(
+            () => new Promise((resolve) => setTimeout(() => resolve({ snippets: [] }), 1000))
+          )
       };
       const retriever = new NotesContextRetriever({
         dataContext,
