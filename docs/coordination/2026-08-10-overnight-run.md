@@ -5094,3 +5094,11 @@ digest only) remains the fallback for security-tier sign-off.
   `issuecomment-5292734564` retains both the unexplained locked RED and sole instrumented 30/0 GREEN
   plus the missing-success-trace limitation; no causal claim or retry. Fresh exact-head security QA
   `/root/qa_1013_pr1624_r2` is running and must independently judge that evidence; CI green required.
+- **#1556 direct provider probe:** solo window released cleanly. One provisioned stack produced a
+  GREEN cold `CpuIsolatedEmbeddingProvider` call (12.485s inner/14.104s outer) and one permitted GREEN
+  warm repeat (1.188s/2.241s); both suppressed values/messages/paths and awaited close. Single outer
+  teardown left zero containers, networks, volumes, DB processes or host processes. No notes UAT,
+  production edit, commit, push or probe retry. This falsifies a simply broken local model/provider
+  boundary. Owner is mapping runtime provider/process/cache topology read-only, with concurrent first-
+  use population of the shared empty model cache as the leading falsifiable distinction. No new run
+  yet; retained test-only diagnostic remains untracked.
