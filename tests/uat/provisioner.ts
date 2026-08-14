@@ -14,7 +14,7 @@ import { JOB_SEARCH_FIXTURE_CONTAINER_PORT } from "./fixtures/job-search-fixture
 import { parseUatSeedLevel } from "./seed/level-validation.js";
 import {
   UAT_SUBNET_CANDIDATES,
-  cidrsOverlap,
+  findSkippedUatNetworks,
   listLiveDockerSubnets,
   selectUatSubnet
 } from "./subnet-selection.js";
@@ -694,7 +694,11 @@ export async function restartUatStack(projectName: string, baseURL: string): Pro
 
 export async function provisionForUat(
   level: UatSeedLevel,
-  opts?: UatProvisionOptions
+  opts?: UatProvisionOptions,
+  dependencies: {
+    readonly listLiveSubnets?: typeof listLiveDockerSubnets;
+    readonly writeRealChatEnvFile?: typeof writeUatRealChatEnvFile;
+  } = {}
 ): Promise<{ baseURL: string; projectName: string; teardown: () => Promise<void> }> {
   const overallStart = Date.now();
   // #1024/#1000: bounded by the reserved range itself (100 candidates) — never an unbounded
@@ -714,7 +718,8 @@ export async function provisionForUat(
   // token file throws here and aborts the run loudly rather than silently degrading to a
   // credential-free run. Held for the whole function: the success path hands cleanup to the returned
   // teardown; terminal failures clean up below.
-  const realChatEnvFile = await writeUatRealChatEnvFile();
+  const previousRealChatEnvFile = process.env[REAL_CHAT_ENV_FILE_RESULT_ENV];
+  const realChatEnvFile = await (dependencies.writeRealChatEnvFile ?? writeUatRealChatEnvFile)();
 
   // #1121 Task 4: same whole-function-scoped override shape as realChatEnvFile above — set once
   // before the retry loop (a port-bind retry reuses it across attempts within this call), restored
@@ -732,22 +737,38 @@ export async function provisionForUat(
       process.env.JARVIS_CLI_TOOLS_PREFIX = previousCliToolsPrefix;
     }
   };
+  let runStateCleaned = false;
+  const cleanupRunScopedState = () => {
+    if (runStateCleaned) return;
+    runStateCleaned = true;
+    realChatEnvFile?.cleanup();
+    if (previousRealChatEnvFile === undefined) {
+      delete process.env[REAL_CHAT_ENV_FILE_RESULT_ENV];
+    } else {
+      process.env[REAL_CHAT_ENV_FILE_RESULT_ENV] = previousRealChatEnvFile;
+    }
+    restoreCliToolsPrefix();
+  };
 
   while (remainingCandidates.length > 0) {
     const { projectName } = generateUatRunId();
-    const webPort = await findAvailablePort(remainingCandidates);
-    const liveSubnets = await listLiveDockerSubnets();
-    const subnet = selectUatSubnet({
-      requested: process.env.UAT_DOCKER_SUBNET,
-      live: liveSubnets,
-      candidates: remainingSubnetCandidates
-    });
+    let webPort: number;
+    let liveSubnets: Awaited<ReturnType<typeof listLiveDockerSubnets>>;
+    let subnet: ReturnType<typeof selectUatSubnet>;
+    try {
+      webPort = await findAvailablePort(remainingCandidates);
+      liveSubnets = await (dependencies.listLiveSubnets ?? listLiveDockerSubnets)();
+      subnet = selectUatSubnet({
+        requested: process.env.UAT_DOCKER_SUBNET,
+        live: liveSubnets,
+        candidates: remainingSubnetCandidates
+      });
+    } catch (error) {
+      cleanupRunScopedState();
+      throw error;
+    }
     if (subnet.source === "auto") {
-      for (const network of liveSubnets.filter(
-        (entry) =>
-          entry.networkName.startsWith("uat-") &&
-          remainingSubnetCandidates.some((candidate) => cidrsOverlap(candidate, entry.subnet))
-      )) {
+      for (const network of findSkippedUatNetworks(liveSubnets, remainingSubnetCandidates)) {
         console.warn(
           `[uat] skipping subnet ${network.subnet} held by existing UAT network ${network.networkName}`
         );
@@ -838,8 +859,7 @@ export async function provisionForUat(
           await teardownCompose();
           await assertNoLeakedResources(projectName);
           envFile.cleanup();
-          realChatEnvFile?.cleanup();
-          restoreCliToolsPrefix();
+          cleanupRunScopedState();
         }
       };
     } catch (error) {
@@ -866,15 +886,11 @@ export async function provisionForUat(
         );
         continue;
       }
-      // #1121: terminal (non-retry) failure — realChatEnvFile is created once before the loop, so
-      // clean it here rather than in the retry path above (which reuses the exported env var).
-      realChatEnvFile?.cleanup();
-      restoreCliToolsPrefix();
+      cleanupRunScopedState();
       throw error;
     }
   }
-  realChatEnvFile?.cleanup();
-  restoreCliToolsPrefix();
+  cleanupRunScopedState();
   throw new Error(
     `exhausted all ${UAT_PORT_RANGE_SIZE} reserved UAT ports (${UAT_PORT_RANGE_START}-${
       UAT_PORT_RANGE_START + UAT_PORT_RANGE_SIZE - 1

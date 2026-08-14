@@ -48,6 +48,25 @@ export function cidrsOverlap(a: string, b: string): boolean {
   return (parsedA.base & mask) >>> 0 === (parsedB.base & mask) >>> 0;
 }
 
+export function findSkippedUatNetworks(
+  live: ReadonlyArray<{
+    readonly networkName: string;
+    readonly subnet: string;
+    readonly composeProject?: string;
+  }>,
+  candidates: readonly string[]
+): ReadonlyArray<{
+  readonly networkName: string;
+  readonly subnet: string;
+  readonly composeProject?: string;
+}> {
+  return live.filter(
+    (network) =>
+      network.composeProject?.startsWith("uat-") === true &&
+      candidates.some((candidate) => cidrsOverlap(candidate, network.subnet))
+  );
+}
+
 type Capture = (command: string, args: readonly string[]) => Promise<string>;
 const execFileAsync = promisify(execFile);
 
@@ -69,9 +88,13 @@ function isIpv6Cidr(cidr: string): boolean {
 }
 
 /** Read-only enumeration of live Docker IPv4 subnets. */
-export async function listLiveDockerSubnets(
-  capture: Capture = captureCommand
-): Promise<ReadonlyArray<{ readonly networkName: string; readonly subnet: string }>> {
+export async function listLiveDockerSubnets(capture: Capture = captureCommand): Promise<
+  ReadonlyArray<{
+    readonly networkName: string;
+    readonly subnet: string;
+    readonly composeProject?: string;
+  }>
+> {
   const ids = (await capture("docker", ["network", "ls", "-q"])).split("\n").filter(Boolean);
   if (ids.length === 0) return [];
 
@@ -85,17 +108,55 @@ export async function listLiveDockerSubnets(
     throw new UatSubnetSelectionError("Docker network inspect returned a non-array response");
   }
 
-  const live: Array<{ readonly networkName: string; readonly subnet: string }> = [];
+  const live: Array<{
+    readonly networkName: string;
+    readonly subnet: string;
+    readonly composeProject?: string;
+  }> = [];
   for (const network of inspected) {
-    if (typeof network !== "object" || network === null) continue;
-    const record = network as { Name?: unknown; IPAM?: { Config?: unknown } };
-    const networkName = typeof record.Name === "string" ? record.Name : "<unknown>";
-    const configs = record.IPAM?.Config;
-    if (!Array.isArray(configs)) continue;
+    if (typeof network !== "object" || network === null || Array.isArray(network)) {
+      throw new UatSubnetSelectionError("Docker network inspect returned a malformed record");
+    }
+    const record = network as Record<string, unknown>;
+    if (typeof record.Name !== "string" || record.Name.length === 0) {
+      throw new UatSubnetSelectionError("Docker network inspect record has an invalid name");
+    }
+    const networkName = record.Name;
+    if (typeof record.IPAM !== "object" || record.IPAM === null || Array.isArray(record.IPAM)) {
+      throw new UatSubnetSelectionError(`Docker network ${networkName} has malformed IPAM`);
+    }
+    const configs = (record.IPAM as Record<string, unknown>).Config;
+    if (!Array.isArray(configs)) {
+      throw new UatSubnetSelectionError(`Docker network ${networkName} has malformed IPAM config`);
+    }
+    if (
+      typeof record.Labels !== "object" ||
+      record.Labels === null ||
+      Array.isArray(record.Labels)
+    ) {
+      throw new UatSubnetSelectionError(`Docker network ${networkName} has malformed labels`);
+    }
+    const composeProject = (record.Labels as Record<string, unknown>)["com.docker.compose.project"];
+    if (
+      composeProject !== undefined &&
+      (typeof composeProject !== "string" || composeProject.length === 0)
+    ) {
+      throw new UatSubnetSelectionError(
+        `Docker network ${networkName} has an invalid Compose project label`
+      );
+    }
     for (const config of configs) {
-      if (typeof config !== "object" || config === null) continue;
+      if (typeof config !== "object" || config === null || Array.isArray(config)) {
+        throw new UatSubnetSelectionError(
+          `Docker network ${networkName} has a malformed IPAM config entry`
+        );
+      }
       const subnet = (config as { Subnet?: unknown }).Subnet;
-      if (typeof subnet !== "string") continue;
+      if (typeof subnet !== "string" || subnet.length === 0) {
+        throw new UatSubnetSelectionError(
+          `Docker network ${networkName} has a malformed IPAM subnet`
+        );
+      }
       if (subnet.includes(":")) {
         if (isIpv6Cidr(subnet)) continue;
         throw new UatSubnetSelectionError(
@@ -109,7 +170,11 @@ export async function listLiveDockerSubnets(
           `Docker network ${networkName} has invalid IPv4 subnet ${subnet}: ${String(error)}`
         );
       }
-      live.push({ networkName, subnet });
+      live.push({
+        networkName,
+        subnet,
+        ...(typeof composeProject === "string" ? { composeProject } : {})
+      });
     }
   }
   return live;

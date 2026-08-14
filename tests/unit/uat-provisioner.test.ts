@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { createServer } from "node:net";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   bareSeedHook,
   buildSeedHookInput,
@@ -11,6 +11,7 @@ import {
   jobSearchFixtureContainerName,
   findAvailablePort,
   generateUatRunId,
+  provisionForUat,
   UAT_PORT_RANGE_START,
   UAT_PORT_RANGE_SIZE,
   uatComposeInterpolationEnv,
@@ -18,6 +19,70 @@ import {
 } from "../uat/provisioner.js";
 
 const TEST_SUBNET = "10.249.0.0/24";
+
+const originalRequestedSubnet = process.env.UAT_DOCKER_SUBNET;
+const originalCliToolsPrefix = process.env.JARVIS_CLI_TOOLS_PREFIX;
+const originalRealChatEnvFile = process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE;
+
+afterEach(() => {
+  if (originalRequestedSubnet === undefined) delete process.env.UAT_DOCKER_SUBNET;
+  else process.env.UAT_DOCKER_SUBNET = originalRequestedSubnet;
+  if (originalCliToolsPrefix === undefined) delete process.env.JARVIS_CLI_TOOLS_PREFIX;
+  else process.env.JARVIS_CLI_TOOLS_PREFIX = originalCliToolsPrefix;
+  if (originalRealChatEnvFile === undefined) delete process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE;
+  else process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE = originalRealChatEnvFile;
+});
+
+describe("provisionForUat setup cleanup", () => {
+  it("restores run-scoped state when the requested production subnet is refused", async () => {
+    const cleanup = vi.fn();
+    process.env.UAT_DOCKER_SUBNET = "10.252.0.0/24";
+    process.env.JARVIS_CLI_TOOLS_PREFIX = "sentinel-original";
+    process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE = "sentinel-original-env-file";
+
+    await expect(
+      provisionForUat(
+        "bare",
+        { chatScript: "phase1-smoke" },
+        {
+          listLiveSubnets: async () => [],
+          writeRealChatEnvFile: async () => {
+            process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE = "/tmp/decrypted-real-chat.env";
+            return { path: "/tmp/decrypted-real-chat.env", cleanup };
+          }
+        }
+      )
+    ).rejects.toThrow(/10\.252\.0\.0\/24.*production/i);
+
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(process.env.JARVIS_CLI_TOOLS_PREFIX).toBe("sentinel-original");
+    expect(process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE).toBe("sentinel-original-env-file");
+  });
+
+  it("restores run-scoped state when live subnet discovery fails", async () => {
+    const cleanup = vi.fn();
+    process.env.JARVIS_CLI_TOOLS_PREFIX = "sentinel-original";
+
+    await expect(
+      provisionForUat(
+        "bare",
+        { chatScript: "phase1-smoke" },
+        {
+          listLiveSubnets: async () => {
+            throw new Error("malformed Docker inspect state");
+          },
+          writeRealChatEnvFile: async () => ({
+            path: "/tmp/decrypted-real-chat.env",
+            cleanup
+          })
+        }
+      )
+    ).rejects.toThrow(/malformed Docker inspect state/i);
+
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(process.env.JARVIS_CLI_TOOLS_PREFIX).toBe("sentinel-original");
+  });
+});
 
 describe("generateUatRunId", () => {
   it("produces a docker-safe project name prefixed uat-", () => {
