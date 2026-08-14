@@ -5132,3 +5132,17 @@ digest only) remains the fallback for security-tier sign-off.
   malformed owners time out fail-closed; only `ESRCH` is dead; unlink/release is observed-token checked
   against ABA/PID reuse; 300-second evidence-based bound. No provider/model/retrieval change, DB/UAT,
   new dependency or push until RED→GREEN and focused/static evidence.
+- **#1275 / PR #1608:** remediation pushed at exact head
+  `8f82423b631c54270eed043884fa74e44633534f`, base current main `f648b8da0`; durable mixed local
+  evidence `issuecomment-5292695408`. Exact-head foundation/app and both smokes are green; image build
+  remains in progress. Fresh security QA `/root/qa_1275_pr1608_r4` is running and must preserve the
+  truthful local infrastructure RED (181 files passed before PostgreSQL shutdown caused 12-file/15-
+  test connection failures) while treating terminal exact-head CI as the replacement final check.
+  No local retry or merge.
+- **#1556 Phase-5 independent review:** throwaway diagnostic was deleted and root typecheck is green,
+  leaving the intended four-file diff, but Standards and Spec both returned REVISE. Open blockers:
+  non-owner claim directories leak on timeout/pre-acquisition error/waiter crash; synchronous `work()`
+  throw bypasses release; concurrency RED uses a pre-import 150ms timing heuristic and can false-green;
+  spawned children are not guaranteed terminated; killed-owner test does not prove the real lock
+  existed; isolated-worker wrapper lacks proof. Duplicate loader/`512` smell is advisory only and will
+  not trigger broad refactor. Owner is revising these exact findings; no commit/DB/UAT/push.
