@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { isIP } from "node:net";
 import { promisify } from "node:util";
 
 export const UAT_SUBNET_CANDIDATES: readonly string[] = [
@@ -55,6 +56,18 @@ const captureCommand: Capture = async (command, args) => {
   return stdout;
 };
 
+function isIpv6Cidr(cidr: string): boolean {
+  const [address, prefix, extra] = cidr.split("/");
+  return (
+    extra === undefined &&
+    address !== undefined &&
+    isIP(address) === 6 &&
+    prefix !== undefined &&
+    /^\d+$/.test(prefix) &&
+    Number(prefix) <= 128
+  );
+}
+
 /** Read-only enumeration of live Docker IPv4 subnets. */
 export async function listLiveDockerSubnets(
   capture: Capture = captureCommand
@@ -82,7 +95,13 @@ export async function listLiveDockerSubnets(
     for (const config of configs) {
       if (typeof config !== "object" || config === null) continue;
       const subnet = (config as { Subnet?: unknown }).Subnet;
-      if (typeof subnet !== "string" || subnet.includes(":")) continue;
+      if (typeof subnet !== "string") continue;
+      if (subnet.includes(":")) {
+        if (isIpv6Cidr(subnet)) continue;
+        throw new UatSubnetSelectionError(
+          `Docker network ${networkName} has invalid IPv6 subnet ${subnet}`
+        );
+      }
       try {
         parseIpv4Cidr(subnet);
       } catch (error) {
@@ -104,15 +123,15 @@ export function selectUatSubnet(input: {
 }): { readonly subnet: string; readonly source: "requested" | "auto" } {
   if (input.requested !== undefined) {
     parseIpv4Cidr(input.requested);
-    const collision = input.live.find((network) => cidrsOverlap(input.requested!, network.subnet));
-    if (collision) {
-      throw new UatSubnetSelectionError(
-        `requested UAT subnet ${input.requested} overlaps live Docker network ${collision.networkName} (${collision.subnet})`
-      );
-    }
     const forbidden = UAT_FORBIDDEN_SUBNETS.find((entry) =>
       cidrsOverlap(input.requested!, entry.cidr)
     );
+    const collision = input.live.find((network) => cidrsOverlap(input.requested!, network.subnet));
+    if (collision) {
+      throw new UatSubnetSelectionError(
+        `requested UAT subnet ${input.requested} overlaps live Docker network ${collision.networkName} (${collision.subnet})${forbidden ? `; ${forbidden.reason}` : ""}`
+      );
+    }
     if (forbidden) {
       throw new UatSubnetSelectionError(
         `requested UAT subnet ${input.requested} overlaps ${forbidden.cidr}, ${forbidden.reason}`

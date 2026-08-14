@@ -11,12 +11,13 @@ import {
   jobSearchFixtureContainerName,
   findAvailablePort,
   generateUatRunId,
-  UAT_DOCKER_SUBNET,
   UAT_PORT_RANGE_START,
   UAT_PORT_RANGE_SIZE,
   uatComposeInterpolationEnv,
   writeUatEnvFile
 } from "../uat/provisioner.js";
+
+const TEST_SUBNET = "10.249.0.0/24";
 
 describe("generateUatRunId", () => {
   it("produces a docker-safe project name prefixed uat-", () => {
@@ -34,10 +35,6 @@ describe("generateUatRunId", () => {
 });
 
 describe("reserved ranges", () => {
-  it("uses a UAT subnet distinct from dev/prod (10.251.0.0/24) and smoke (10.253.0.0/24)", () => {
-    expect(UAT_DOCKER_SUBNET).toBe("10.254.0.0/24");
-  });
-
   it("reserves a 100-port UAT range starting at 20000, above the prod default (1533)", () => {
     expect(UAT_PORT_RANGE_START).toBe(20000);
     expect(UAT_PORT_RANGE_SIZE).toBe(100);
@@ -70,11 +67,11 @@ describe("findAvailablePort", () => {
 
 describe("writeUatEnvFile", () => {
   it("writes an env file pinning the chosen port, UAT subnet, and a stub embed provider", () => {
-    const { path, cleanup } = writeUatEnvFile({ webPort: 20077 });
+    const { path, cleanup } = writeUatEnvFile({ webPort: 20077, subnet: TEST_SUBNET });
     try {
       const contents = readFileSync(path, "utf8");
       expect(contents).toContain("JARVIS_WEB_PORT=20077");
-      expect(contents).toContain("JARVIS_DOCKER_SUBNET=10.254.0.0/24");
+      expect(contents).toContain(`JARVIS_DOCKER_SUBNET=${TEST_SUBNET}`);
       // #1024/#1000: bare level has no users/data to embed, so the stub provider avoids an
       // unnecessary model download on every ephemeral run (spec §3.3 model-cache-volume note).
       expect(contents).toContain("JARVIS_EMBED_PROVIDER=stub");
@@ -95,7 +92,7 @@ describe("writeUatEnvFile", () => {
   it("omits JARVIS_RUNTIME_MODE and JARVIS_E2E_MODULE_FETCH_BASE when no fixture URL is given", () => {
     // #1306 Task 22: these two vars may never appear in a checked-in compose file, .env.example,
     // or dev script — provisioner-only, and only when a caller opts in.
-    const { path, cleanup } = writeUatEnvFile({ webPort: 20078 });
+    const { path, cleanup } = writeUatEnvFile({ webPort: 20078, subnet: TEST_SUBNET });
     try {
       const contents = readFileSync(path, "utf8");
       expect(contents).not.toContain("JARVIS_RUNTIME_MODE");
@@ -108,6 +105,7 @@ describe("writeUatEnvFile", () => {
   it("writes both fetch-bypass vars together when a fixture URL is given", () => {
     const { path, cleanup } = writeUatEnvFile({
       webPort: 20079,
+      subnet: TEST_SUBNET,
       jobSearchFixtureBaseUrl: "http://uat-1_abcd1234-jsfixture:8080"
     });
     try {
@@ -134,7 +132,7 @@ describe("job-search fixture origin addressing", () => {
     expect(url).toBe(`http://${jobSearchFixtureContainerName(projectName)}:8080`);
     expect(url).not.toContain("127.0.0.1");
     expect(url).not.toContain("localhost");
-    expect(url).not.toContain(UAT_DOCKER_SUBNET.split("/")[0]?.replace(/\.0$/, "") ?? "");
+    expect(url).not.toContain(TEST_SUBNET.split("/")[0]?.replace(/\.0$/, "") ?? "");
   });
 
   it("scopes the container name to the Compose project so concurrent runs never collide", () => {
@@ -154,9 +152,9 @@ describe("uatComposeInterpolationEnv", () => {
     // key here must match a `${KEY...}` reference in infra/docker-compose.prod.yml or the
     // provisioner would silently fall back to prod's port/subnet defaults, or hard-fail on the
     // two `:?`-required secrets (POSTGRES_PASSWORD, JARVIS_CLI_RUNNER_RPC_SECRET).
-    const env = uatComposeInterpolationEnv({ webPort: 20077 });
+    const env = uatComposeInterpolationEnv({ webPort: 20077, subnet: TEST_SUBNET });
     expect(env.JARVIS_WEB_PORT).toBe("20077");
-    expect(env.JARVIS_DOCKER_SUBNET).toBe(UAT_DOCKER_SUBNET);
+    expect(env.JARVIS_DOCKER_SUBNET).toBe(TEST_SUBNET);
     expect(env.POSTGRES_PASSWORD).toBeTruthy();
     expect(env.JARVIS_CLI_RUNNER_RPC_SECRET).toBeTruthy();
   });

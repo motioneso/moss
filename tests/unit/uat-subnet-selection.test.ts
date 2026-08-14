@@ -118,4 +118,13 @@ describe("listLiveDockerSubnets", () => {
 
     await expect(listLiveDockerSubnets(capture)).rejects.toThrow(UatSubnetSelectionError);
   });
+
+  it("fails closed instead of treating malformed colon syntax as IPv6", async () => {
+    const capture = async (_command: string, args: readonly string[]) =>
+      args[1] === "ls"
+        ? "bad-id\n"
+        : JSON.stringify([{ Name: "bad", IPAM: { Config: [{ Subnet: "not:v6/64" }] } }]);
+
+    await expect(listLiveDockerSubnets(capture)).rejects.toThrow(UatSubnetSelectionError);
+  });
 });
