@@ -5116,3 +5116,11 @@ digest only) remains the fallback for security-tier sign-off.
   authorized after boolean-only runtime-model identity grounding: two concurrent Local cold calls in
   separate processes sharing one fresh UAT cache, one 300-second outer bound, value-suppressed output,
   one final teardown. RED stops before controls; GREEN also stops pending a new ruling. No retry/edit.
+- **#1556 root cause reproduced:** runtime model identity matched the provider default. In exactly one
+  fresh UAT stack, two concurrent separate-process `LocalEmbeddingProvider` calls shared the empty HF
+  cache: one passed in 8.999s; the other failed in 842ms with the same protobuf/model-load signature.
+  Harness exited 1, stopped before controls/retry, and one final teardown left zero resources. This
+  confirms a cross-process first-use cache-population race. Owner is now building a fast deterministic
+  two-process RED test without network/model download, then will propose the minimum existing/native
+  cross-process cache-init lock at the shared `loadPipe` seam. No production edit, DB/UAT or push until
+  the TDD command and plan are approved; no timeout inflation/new dependency by default.
