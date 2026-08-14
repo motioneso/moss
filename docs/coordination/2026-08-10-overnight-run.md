@@ -4506,11 +4506,22 @@ digest only) remains the fallback for security-tier sign-off.
 - **#1108 spec/plan:** draft PR #1614, branch `spec-1108-uat-subnet`, commit `61ff5880c`.
   Author reports no Ben decision and a collision with `tests/uat/provisioner.ts` work in
   #1121/#1557; implementation must sequence after collision review. Independent Fable approval is
-  assigned to the #1454 agent.
+  assigned to the #1454 agent. `Verify docs` is RED at this head; author is queued to fix it after
+  completing the sibling review. No red spec PR merges.
 - **#1454 spec/plan:** draft PR #1615, branch `spec-1454-publish-alarm`, commit `df18fbf45`.
   Author reports no Ben decision and zero code collision; design uses a native `workflow_run`
   alarm without publish permission or gate weakening. Independent Fable approval is assigned to
   the #1108 agent.
+- **#1013 spec/plan:** draft PR #1616, branch `spec-1013-ddl-lock`, commit `fbfb59ada`.
+  Author reports no Ben decision; design uses a session-level advisory lock on the maintenance DB
+  only inside cluster-DDL seam owners, preserving parallel per-database work. Independent Fable
+  review is assigned to the #1592 agent; implementation proof must reproduce unlocked contention
+  and pass locked two-worker plus two-worktree gates. `Verify docs` is RED at this head; author is
+  queued to fix it after reviewing #1592.
+- **#1592 spec/plan:** draft PR #1617, branch `spec-1592-confirm-routing`, commit `8380765ce`;
+  docs CI GREEN. Author reports no Ben decision and confirms direct overlap with #1591/PR #1613 on
+  `gateway.ts` plus integration semantics, so implementation is hard-serialized until #1591 lands
+  and must rebase onto that main. Independent Fable approval is assigned to the #1013 agent.
 - **Spec approval rule:** Fable authors do not self-approve. Sibling Fable agents post durable
   APPROVE/REVISE comments; GREEN docs QA/CI then permits spec merge and a fresh Codex build lane.
 - **Pane layout:** `agents 2` remains four equal quadrants. Original agents tab is below the
