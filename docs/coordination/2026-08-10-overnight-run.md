@@ -4748,3 +4748,18 @@ digest only) remains the fallback for security-tier sign-off.
   instead of canonical Compose project labels. Owner is making the minimum TDD root-cause revision,
   adding the mechanical `/16` containment regression, and must rerun changed-path proof/checks before
   fresh exact-head QA. No Sol sign-off or merge while RED.
+
+## 2026-08-14 — #1556 second QA RED; #1108 remediation rebase
+
+- **#1556 / PR #1619:** second exact-head security QA RED at
+  `df9fbba632d9743cdb0dc82b0e8f2a4405c30393`, durable `issuecomment-5291128182`. Four blockers:
+  persona-driven/default MCP `notes.search` still bypasses credential and incognito/recall-disabled
+  gates; the UAT can false-green because New chat does not await `/api/chat/clear`; a committed
+  handoff contains an absolute local path; and six implementation commits lack required release-note
+  statements. Owner is fixing all four with a shared-trust-seam/root-cause approach and corrected
+  live UAT. QA's unnecessary queued exclusive gate is being explicitly cancelled so it cannot hold
+  the shared runner. No merge or waiver.
+- **#1108 / PR #1620:** remediation commit `61fe06101` has targeted/static and allocation proofs
+  green. Owner is rebasing onto current main, proving patch equivalence and the exact approved
+  four-file surface, then pushing for fresh exact-head security QA. Prior full gate plus fresh scoped
+  proofs is accepted; no additional shared-DB gate is required for this review-only remediation.
