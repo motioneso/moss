@@ -4493,3 +4493,25 @@ digest only) remains the fallback for security-tier sign-off.
 - **Board/source truth:** #1556 moved `Ready` → `In progress` when the Codex build lane adopted it.
   #1013, #1108, #1454, and #1592 remain `Ready` while their Fable lanes prepare build eligibility.
   No screenshots.
+
+## 2026-08-14 — Ben offline; reviews and spec approvals continue
+
+- **Ben direction:** continue the fleet while he sleeps. Use delegated Fable/Sol authority and
+  surface only genuine unresolved product/safety decisions.
+- **#1591 / PR #1613:** owner corrected the PR body per QA comment `5290354120`; the false
+  main/#1606 typecheck attribution is removed, exact code head remains
+  `6f201723b79bfcb2bd6fa28b17416fdf9871becd`, CI and Opus QA are GREEN. High-effort gpt-5.6 Sol
+  sign-off agent `signoff-1613-sol`, session `019fff07-bfb9-7af2-984a-01543b3842e8`, is reviewing
+  in the single-agent `reviews` tab and must post a durable exact-head verdict before merge.
+- **#1108 spec/plan:** draft PR #1614, branch `spec-1108-uat-subnet`, commit `61ff5880c`.
+  Author reports no Ben decision and a collision with `tests/uat/provisioner.ts` work in
+  #1121/#1557; implementation must sequence after collision review. Independent Fable approval is
+  assigned to the #1454 agent.
+- **#1454 spec/plan:** draft PR #1615, branch `spec-1454-publish-alarm`, commit `df18fbf45`.
+  Author reports no Ben decision and zero code collision; design uses a native `workflow_run`
+  alarm without publish permission or gate weakening. Independent Fable approval is assigned to
+  the #1108 agent.
+- **Spec approval rule:** Fable authors do not self-approve. Sibling Fable agents post durable
+  APPROVE/REVISE comments; GREEN docs QA/CI then permits spec merge and a fresh Codex build lane.
+- **Pane layout:** `agents 2` remains four equal quadrants. Original agents tab is below the
+  four-agent cap. `reviews` currently contains one Sol agent. No screenshots.
