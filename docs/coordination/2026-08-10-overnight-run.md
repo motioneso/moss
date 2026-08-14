@@ -4763,3 +4763,9 @@ digest only) remains the fallback for security-tier sign-off.
   green. Owner is rebasing onto current main, proving patch equivalence and the exact approved
   four-file surface, then pushing for fresh exact-head security QA. Prior full gate plus fresh scoped
   proofs is accepted; no additional shared-DB gate is required for this review-only remediation.
+- **#1108 update:** remediation is pushed at exact head
+  `61fe061014d73e97780bf41617a14ad50b85c896`; three-commit range-diff is patch-identical,
+  `origin/main...HEAD` remains exactly the approved four files, 47 targeted tests and all scoped
+  static/allocation proofs are green, durable evidence `issuecomment-5291174380`. Fresh independent
+  security QA `/root/qa_1108_pr1620_r2` is running pinned to that head. CI is active; no Sol sign-off
+  or merge before both are green.
