@@ -4701,9 +4701,10 @@ digest only) remains the fallback for security-tier sign-off.
   diagnosing/rerunning the UI sequence. No waiver or merge path.
 - **#1467 / PR #1610:** exact-head runtime evidence is durable at `issuecomment-5290669208`: real
   vault write/read through UI and all three blocking UATs exited 0; advisory UAT exited 0 with two
-  expected skips; CI, prior Opus QA, teardown and exact-head checks are green. Fresh Sol-high
-  security sign-off `/root/signoff_1467_pr1610` is running; merge remains blocked until its durable
-  comment lands.
+  expected skips; CI, prior Opus QA, teardown and exact-head checks are green. Sol-high DENIED
+  sign-off at `issuecomment-5290825595` solely for two committed handoff-doc violations: an exposed
+  absolute local path and stale screenshot instruction. Codex continuation is making only those two
+  docs corrections; after push, require green docs CI plus fresh exact-head QA and Sol reaffirmation.
 - **Operational handoffs:** coordinator-authored build handoff commits on #1454 (`8247fc9c8`),
   #1108 (`5177a4b7b`), and #1592 (`15c5a36d2`) are scaffolding, not implementation scope. Owners are
   instructed to finish active gates first, then drop only those commits, rebase onto current main,
