@@ -4453,9 +4453,13 @@ digest only) remains the fallback for security-tier sign-off.
   `fa24843c79d2b56c658c0316e9f5dc30d23dd3f3`. The owner has the two-file round-3
   dangling-symlink fix uncommitted while its full gate runs, then will push and request fresh Opus
   QA. No merge until CI, durable GREEN QA, and durable Sol high sign-off.
-- **#1591:** owner pane `1591-owner-scope-relay4` remains adopted. Gate retry 2 is fully GREEN
-  (`rc=0`), rebase onto current `origin/main` is complete, and the clean branch is 9 commits ahead.
-  The owner is running the post-rebase pre-push trio, then coordinated wrap-up/PR. No PR yet.
+- **#1591 / PR #1613:** owner pane `1591-owner-scope-relay4` is done and remains available for
+  findings. Security-tier PR is open at exact head
+  `6f201723b79bfcb2bd6fa28b17416fdf9871becd`; CI is in progress. Owner's isolated full gate is
+  GREEN (`rc=0`, 191/191 files, 1894 passed / 2 skipped) after rebase. Post-rebase format/lint are
+  green; typecheck `rc=2` is reproduced on clean `origin/main` and attributed to #1606's missing
+  external-module `@moss/db` path mapping, not waived or fixed in this branch. Next gates are CI,
+  fresh Opus adversarial QA with a durable verdict, then durable Sol high sign-off. Not merged.
 - **Board:** live project 2 confirms #1275, #1467, and #1591 are all `In progress`.
   `AWAITING-BEN.md` contains no unresolved decision for these lanes. No screenshots.
 - **merges_since_relay:** 0 for this successor session.
