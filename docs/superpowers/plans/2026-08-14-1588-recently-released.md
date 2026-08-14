@@ -80,12 +80,15 @@ Expected RED: the `ReleasedPane` module does not exist.
    ## vX.Y.Z — YYYY-MM-DD
 
    ### Added
+
    ...
 
    ### Fixed
+
    ...
 
    ### Changed
+
    ...
    ```
 
@@ -94,7 +97,6 @@ Expected RED: the `ReleasedPane` module does not exist.
    document bounded to content present at the build commit.
 
 2. Add `settings-released-pane.tsx`:
-
    - import `../../../../docs/WHATS_NEW.md?raw` directly;
    - render `PaneHead` with title **Recently Released** and one short description;
    - render the imported string through `MarkdownMessage`;

@@ -37,14 +37,14 @@ most often visit it after an update, but it remains available at any time for cu
 
 ## Resolved Decisions
 
-| Decision | Choice | Reason |
-| --- | --- | --- |
-| Audience | Every signed-in user | Release information is product documentation, not an admin operation. |
-| Entry point | A **Recently Released** item in the **Moss** group of Settings | It is discoverable without adding another primary navigation destination. |
-| Route | Deep-linkable Settings section, `/settings?section=released` | Reuses the existing Settings navigation model and supports direct navigation. |
-| Source | Build-bundled `docs/WHATS_NEW.md` | It is already the curated user-facing changelog and avoids an incomplete runtime GitHub history. |
-| Version boundary | Content bundled into the installed build | An installed image cannot display notes authored after that build, so the visible history naturally ends at the installed version. |
-| Interaction | Read-only chronological document | Navigation and visibility are the entire requested behavior. |
+| Decision         | Choice                                                         | Reason                                                                                                                             |
+| ---------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Audience         | Every signed-in user                                           | Release information is product documentation, not an admin operation.                                                              |
+| Entry point      | A **Recently Released** item in the **Moss** group of Settings | It is discoverable without adding another primary navigation destination.                                                          |
+| Route            | Deep-linkable Settings section, `/settings?section=released`   | Reuses the existing Settings navigation model and supports direct navigation.                                                      |
+| Source           | Build-bundled `docs/WHATS_NEW.md`                              | It is already the curated user-facing changelog and avoids an incomplete runtime GitHub history.                                   |
+| Version boundary | Content bundled into the installed build                       | An installed image cannot display notes authored after that build, so the visible history naturally ends at the installed version. |
+| Interaction      | Read-only chronological document                               | Navigation and visibility are the entire requested behavior.                                                                       |
 
 ## Architecture
 
