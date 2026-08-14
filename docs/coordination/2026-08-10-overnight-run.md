@@ -4411,3 +4411,26 @@ digest only) remains the fallback for security-tier sign-off.
   Sol high sign-off are next.
 - **#1591:** owner `w1:p9P` reactivated to run the retry gate, pre-push trio, rebase, and wrap-up;
   no PR yet.
+
+## 2026-08-14 — relay continuation: #1275 QA green; #1467 fix pushed
+
+- **Coordinator authority:** Codex session `019ffe6c-9e0f-7c11-8dd3-1b74aab43b23`, sole
+  `Coordinator` pane currently resolves to `w1:pAM`; stale session
+  `019ffd3f-3098-73c0-bab8-31f491615168` is absent and already closed. Successor must re-confirm
+  its own session id and re-resolve all panes by label.
+- **#1275 / PR #1608:** fresh Opus security QA is GREEN/MERGE-READY at exact HEAD
+  `79ee0b7b3908a73e47fbb4b85261e64b66fb493b`; durable verdict
+  `issuecomment-5289960250`. Authorized Sol high sign-off agent is reviewing now; it must post a
+  durable approval comment before merge. No screenshots.
+- **#1467 / PR #1610:** owner pane label `1467 permission boundary shell-quote (relay7)` is
+  finishing the full gate and requesting fresh Opus security QA after the realpath/dotdot symlink
+  containment fix. Current pushed head is `fa24843c79d2b56c658c0316e9f5dc30d23dd3f3`; CI
+  foundation/app is still in progress. No merge until CI, fresh Opus QA, and Sol high sign-off.
+- **#1591:** owner pane label `1591-owner-scope-relay4` was reactivated; retry gate is in progress,
+  followed by pre-push trio/rebase and coordinated wrap-up. No PR yet. Unknown shell panes in the
+  same worktree are intentionally not reaped.
+- **Board:** #1248, #1585, and #1141 are `Done`; #1275, #1467, and #1591 remain `In progress`;
+  #1470 and #1440 remain open epics. GitHub is the source of truth.
+- **Relay trigger:** `merges_since_relay=2` (the two sensitive merges #1248 and #1585); this note
+  is the mandatory continuation point. Next coordinator must relay immediately after adoption is
+  confirmed, then continue the lanes above. No screenshots.
