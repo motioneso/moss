@@ -4250,3 +4250,12 @@ digest only) remains the fallback for security-tier sign-off.
 - **Coordinator lock:** Codex session `019ffd3f-3098-73c0-bab8-31f491615168`, label `Coordinator`,
   pane `w1:pA1`. `merges_since_relay=1` (sensitive); no relay trigger fired. `Sol high` identity
   remains unresolved in `AWAITING-BEN.md`; do not invent it.
+
+## 2026-08-14 — #1248 live proof complete; sensitive QA dispatched
+
+- **#1248 / PR #1606:** relay10 supplied the durable live-path proof
+  (`issuecomment-5288814352`): `1217-uat-vault-ownership` passed 1/1 with real attachment POST
+  201, and `module-install` passed 1/1 with real restart and Finance installed/enabled. Both
+  ephemeral stacks tore down cleanly; no screenshots. Fresh sensitive QA is running in isolated
+  worktree `.claude/worktrees/qa-1248-sensitive`, pane `w1:pAE`, agent `qa1248-sensitive` (Sonnet).
+  Merge, issue close, and board `Done` remain held for the QA verdict.
