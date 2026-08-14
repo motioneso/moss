@@ -5107,3 +5107,12 @@ digest only) remains the fallback for security-tier sign-off.
   exact-head CI green, mergeable, and #1618 remains the sole approved deferral. Coordinator authority,
   head/base and checks re-confirmed. Security merge now waits only for Ben's explicit exact-head
   approval in `AWAITING-BEN.md`; no merge/issue/board action yet.
+- **#1556 runtime topology:** the prior GREEN probe did not exercise production's provider. Real
+  notes sync uses `LocalEmbeddingProvider` in the resident worker; automatic recall and notes.search
+  use process-cached Local providers in the separate API process. API and worker share one fresh,
+  unseeded HF cache volume but have separate process-local pipeline caches; real composed flow uses
+  zero `CpuIsolatedEmbeddingProvider` instances. Leading hypothesis: concurrent first-use Local model
+  population across two OS processes corrupts/observes a partial ONNX cache. One conditional probe is
+  authorized after boolean-only runtime-model identity grounding: two concurrent Local cold calls in
+  separate processes sharing one fresh UAT cache, one 300-second outer bound, value-suppressed output,
+  one final teardown. RED stops before controls; GREEN also stops pending a new ruling. No retry/edit.
