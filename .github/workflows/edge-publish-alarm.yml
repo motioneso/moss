@@ -11,6 +11,10 @@ permissions:
   actions: read
   issues: write
 
+concurrency:
+  group: edge-publish-alarm
+  cancel-in-progress: false
+
 jobs:
   alarm:
     if: github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main'
@@ -31,9 +35,18 @@ jobs:
           set -euo pipefail
 
           label=edge-publish-alarm
+          require_current_main() {
+            current_sha=$(gh api "repos/$REPO/commits/main" --jq .sha)
+            if [ "$SHA" != "$current_sha" ]; then
+              echo "Ignoring completed CI run for stale main SHA $SHA; current main is $current_sha."
+              exit 0
+            fi
+          }
+
           open_issues=$(gh issue list --repo "$REPO" --label "$label" --state open --limit 100 --json number --jq '.[].number')
 
           if [ "$CONCLUSION" = success ]; then
+            require_current_main
             for issue in $open_issues; do
               gh issue comment "$issue" --repo "$REPO" --body ":edge published from $SHA"
               gh issue close "$issue" --repo "$REPO"
@@ -48,6 +61,7 @@ jobs:
           printf -v body 'Full head SHA: `%s`\n\nHead commit: %s\n\nPublish job: `%s`\n\nRun: %s\n\nProd continues running the previous `:edge`.' \
             "$SHA" "$commit_title" "$publish_conclusion" "$RUN_URL"
 
+          require_current_main
           if [ -n "$open_issues" ]; then
             gh issue comment "${open_issues%%$'\n'*}" --repo "$REPO" --body "$body"
           else
