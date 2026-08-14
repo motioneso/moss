@@ -47,10 +47,10 @@ export function combineHiddenContextBlocks(
   // Priority order (highest first): passive (facts) > cross-tool > notes — facts and cross-tool
   // predate notes recall, and notes is strictly additive this phase (#1556). When the combined
   // total exceeds the cap, blocks are dropped lowest-priority first (notes, then cross-tool)
-  // until what remains fits; the sole surviving highest-priority block is always kept even if it
-  // alone still exceeds the cap — this function only arbitrates between blocks, not within one.
+  // until what remains fits. A sole passive block keeps main's cap exemption; a sole cross-tool
+  // or notes block is dropped when it exceeds the cap.
   const kept = [passiveBlock, crossToolBlock, notesBlock ?? ""].filter((block) => block.length > 0);
-  while (kept.length > 1 && sumTokens(kept) > combinedCap) {
+  while (sumTokens(kept) > combinedCap && (kept.length > 1 || passiveBlock.length === 0)) {
     kept.pop();
   }
   return kept.join("\n\n");

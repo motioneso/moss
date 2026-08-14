@@ -76,14 +76,24 @@ describe("combineHiddenContextBlocks", () => {
     expect(combineHiddenContextBlocks("", crossTool)).toBe(crossTool);
   });
 
+  it.each([
+    ["cross-tool", "", "x".repeat(8004), undefined],
+    ["notes", "", "", "x".repeat(8004)]
+  ])("drops a lone over-cap %s block", (_label, passive, crossTool, notes) => {
+    expect(combineHiddenContextBlocks(passive, crossTool, notes)).toBe("");
+  });
+
+  it("keeps a lone over-cap passive block", () => {
+    const passive = "x".repeat(8004);
+    expect(combineHiddenContextBlocks(passive, "")).toBe(passive);
+  });
+
   it("joins all three blocks when passive, cross-tool, and notes all fit under cap", () => {
     const passive = "<retrieved_context>fact</retrieved_context>";
     const crossTool = "<cross_tool_context>event</cross_tool_context>";
     const notes = "<retrieved_context>note</retrieved_context>";
     const result = combineHiddenContextBlocks(passive, crossTool, notes);
-    expect(result).toContain("fact");
-    expect(result).toContain("event");
-    expect(result).toContain("note");
+    expect(result).toBe(`${passive}\n\n${crossTool}\n\n${notes}`);
   });
 
   it("returns passive and cross-tool unchanged when notes is empty", () => {
