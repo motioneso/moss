@@ -143,6 +143,41 @@ function underRoot(candidate, root) {
   return normalized === root || normalized.startsWith(root + "/");
 }
 
+function realpathOrUndefined(target) {
+  try {
+    return fs.realpathSync(target);
+  } catch {
+    return undefined;
+  }
+}
+
+// Fail-closed symlink containment: lexical containment alone isn't enough — a symlink planted
+// inside a root can point anywhere on disk while its own path string still reads as "under root".
+// Resolve the real filesystem location of both root and candidate, walking up to the nearest
+// EXISTING ancestor when the candidate itself doesn't exist yet (a Glob pattern, a not-yet-created
+// file), and require the resolved candidate to still live under the resolved root. Anything that
+// can't be resolved at all (root missing, permission error) fails closed: no pre-approval, falls
+// through to the normal permission card.
+function resolveExistingAncestor(candidate) {
+  let current = candidate;
+  while (true) {
+    const real = realpathOrUndefined(current);
+    if (real !== undefined) return real;
+    const parent = path.posix.dirname(current);
+    if (parent === current) return undefined;
+    current = parent;
+  }
+}
+
+function realUnderRoot(candidate, root) {
+  if (!underRoot(candidate, root)) return false;
+  const rootReal = realpathOrUndefined(root);
+  if (rootReal === undefined) return false;
+  const candidateReal = resolveExistingAncestor(candidate);
+  if (candidateReal === undefined) return false;
+  return candidateReal === rootReal || candidateReal.startsWith(rootReal + "/");
+}
+
 function readCandidate(tool, input) {
   if (tool === "Read") return input.file_path;
   if (tool === "Glob") return input.path ?? input.pattern;
@@ -153,7 +188,7 @@ function readCandidate(tool, input) {
 function safeVaultRead(tool, input) {
   if (tool !== "Read" && tool !== "Glob" && tool !== "Grep") return false;
   const candidate = readCandidate(tool, input);
-  return roots().some((root) => underRoot(candidate, root));
+  return roots().some((root) => realUnderRoot(candidate, root));
 }
 
 function stdinText() {
@@ -308,7 +343,8 @@ export async function writeClaudeOneShotPermissionHook(
   return settingsPath;
 }
 
-export const CLAUDE_ONE_SHOT_PERMISSION_HOOK_SOURCE = `import path from "node:path";
+export const CLAUDE_ONE_SHOT_PERMISSION_HOOK_SOURCE = `import fs from "node:fs";
+import path from "node:path";
 
 const ROOT_PATTERN = /^\\/[\\w.-][\\w./-]*$/;
 
@@ -357,6 +393,40 @@ function underRoot(candidate, root) {
   return normalized === root || normalized.startsWith(root + "/");
 }
 
+function realpathOrUndefined(target) {
+  try {
+    return fs.realpathSync(target);
+  } catch {
+    return undefined;
+  }
+}
+
+// Fail-closed symlink containment: lexical containment alone isn't enough — a symlink planted
+// inside a root can point anywhere on disk while its own path string still reads as "under root".
+// Resolve the real filesystem location of both root and candidate, walking up to the nearest
+// EXISTING ancestor when the candidate itself doesn't exist yet (a Glob pattern, a not-yet-created
+// file), and require the resolved candidate to still live under the resolved root. Anything that
+// can't be resolved at all (root missing, permission error) fails closed: no pre-approval.
+function resolveExistingAncestor(candidate) {
+  let current = candidate;
+  while (true) {
+    const real = realpathOrUndefined(current);
+    if (real !== undefined) return real;
+    const parent = path.posix.dirname(current);
+    if (parent === current) return undefined;
+    current = parent;
+  }
+}
+
+function realUnderRoot(candidate, root) {
+  if (!underRoot(candidate, root)) return false;
+  const rootReal = realpathOrUndefined(root);
+  if (rootReal === undefined) return false;
+  const candidateReal = resolveExistingAncestor(candidate);
+  if (candidateReal === undefined) return false;
+  return candidateReal === rootReal || candidateReal.startsWith(rootReal + "/");
+}
+
 function readCandidate(tool, input) {
   if (tool === "Read") return input.file_path;
   if (tool === "Glob") return input.path ?? input.pattern;
@@ -371,7 +441,7 @@ function safeVaultRead(tool, input) {
     .map((root) => root.trim())
     .filter((root) => root.length > 0)
     .filter(validRoot)
-    .some((root) => underRoot(candidate, root));
+    .some((root) => realUnderRoot(candidate, root));
 }
 
 function writeCandidate(tool, input) {
@@ -388,7 +458,7 @@ function writeCandidate(tool, input) {
 
 function safeWorkspaceWrite(tool, input) {
   const candidate = writeCandidate(tool, input);
-  return candidate !== undefined && roots().some((root) => underRoot(candidate, root));
+  return candidate !== undefined && roots().some((root) => realUnderRoot(candidate, root));
 }
 
 function stdinText() {
