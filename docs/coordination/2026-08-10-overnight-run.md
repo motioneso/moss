@@ -4863,3 +4863,9 @@ digest only) remains the fallback for security-tier sign-off.
   checks green, outgoing snapshot/ancestor scans clean, tree clean. Owner correctly has not pushed
   or run DB/live verification. HOLD remains until #1013 releases; then recheck main and run blocking
   full/integration/live UAT before force-with-lease push.
+- **#1108 / PR #1620:** third remediation pushed at exact head
+  `c3ade6cd2baaf84ab52037439ca79a9059da00bb`; strict native IPv4 rejection and dual
+  setup+cleanup `AggregateError` behavior are green, five-commit range-diff patch-identical, exact
+  four-file scope, 57 targeted/static/malformed/forbidden/concurrent proofs green with zero residuals,
+  evidence `issuecomment-5291722799`. Fresh fourth exact-head security QA
+  `/root/qa_1108_pr1620_r4` is running; CI active, no Sol sign-off or merge before both green.
