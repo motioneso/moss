@@ -82,6 +82,9 @@ describe("writeUatEnvFile", () => {
       // otherwise refuse "stub" and silently fall back to "local" — this escape hatch is what
       // actually keeps the stub provider (not a real model download) in effect for this instance.
       expect(contents).toContain("JARVIS_ALLOW_STUB_EMBEDDINGS=1");
+      expect(contents).toContain(
+        "JARVIS_NOTES_ROOTS=/data/vaults/00000000-0000-4000-8000-000000000001"
+      );
       expect(contents).toContain("JARVIS_MIGRATION_DATABASE_URL=");
       // #1024/#1000: NODE_ENV=production means resolveKeyring enforces this (>=32 bytes) since
       // #918 Slice 2 — a real boot crash Task 7's live run caught (JARVIS_MODULE_CREDENTIAL_SECRET_KEY

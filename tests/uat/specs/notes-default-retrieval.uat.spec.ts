@@ -1,12 +1,13 @@
 import { expect, test, type APIResponse, type Page } from "@playwright/test";
 
-import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
+import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 
 export const uatLevel = { level: "admin+data", without: [] } as const;
 
 const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE);
 const POLL_DEADLINE_MS = 60_000;
 const FACT = "kumquat focaccia";
+const NOTES_ROOT = `/data/vaults/${UAT_ADMIN_ID}`;
 
 function requireBaseURL(): string {
   const baseURL = process.env.JARVIS_UAT_BASE_URL;
@@ -49,17 +50,41 @@ async function ensureRealChat(page: Page): Promise<void> {
   )) as { status?: string };
   expect(login.status).toBe("ready");
 
+  let chatModelId: string | undefined;
   await expect
     .poll(
       async () => {
         const body = (await readJson(await page.request.get("/api/ai/models"))) as {
-          models: readonly { capabilities: readonly string[]; status: string }[];
+          models: readonly {
+            id: string;
+            capabilities: readonly string[];
+            status: string;
+          }[];
         };
-        return body.models.some(
+        chatModelId = body.models.find(
           (model) => model.status === "active" && model.capabilities.includes("chat")
-        );
+        )?.id;
+        return Boolean(chatModelId);
       },
       { timeout: POLL_DEADLINE_MS, message: "no active chat-capable model became available" }
+    )
+    .toBe(true);
+
+  await readJson(
+    await page.request.put("/api/ai/services/chat/binding", {
+      data: { binding: { kind: "model", modelId: chatModelId } }
+    })
+  );
+
+  await expect
+    .poll(
+      async () => {
+        const body = (await readJson(await page.request.get("/api/ai/capability-route/chat"))) as {
+          route: { available: boolean };
+        };
+        return body.route.available;
+      },
+      { timeout: POLL_DEADLINE_MS, message: "configured chat route did not become available" }
     )
     .toBe(true);
 }
@@ -69,22 +94,22 @@ test("a later chat answers from notes without narrating retrieval (#1556)", asyn
   test.setTimeout(240_000);
 
   await signIn(page);
+  await readJson(await page.request.put("/api/me/notes-source", { data: { path: NOTES_ROOT } }));
   await ensureRealChat(page);
 
   await page.getByRole("button", { name: "Chat with Moss" }).click();
   const composer = page.getByRole("textbox", { name: "Message Moss" });
   const path = `uat/notes-default-retrieval-${Date.now()}.md`;
+  const syncNotBefore = Date.now();
   await composer.fill(
     `Use notes.create to create ${path} containing exactly: Launch snack decision: ${FACT}. ` +
       "Do not ask a follow-up question."
   );
   await composer.press("Enter");
 
-  const action = page.getByRole("region", { name: "Action request" });
-  await expect(action).toBeVisible({ timeout: 60_000 });
-  const syncNotBefore = Date.now();
-  await action.getByRole("button", { name: "Approve" }).click();
-  await expect(action.getByText("Approved")).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Executed: notes.create" })).toBeVisible({
+    timeout: 60_000
+  });
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
 
   await expect
@@ -114,7 +139,7 @@ test("a later chat answers from notes without narrating retrieval (#1556)", asyn
   await composer.press("Enter");
 
   await expect(page.getByText(new RegExp(FACT, "i"))).toBeVisible({ timeout: 60_000 });
-  const threadText = await page.locator(".chatd__log").innerText();
+  const threadText = await page.getByRole("dialog", { name: "Chat with Moss" }).innerText();
   expect(threadText).not.toMatch(
     /searching (?:your )?notes|checking (?:your )?notes|let me (?:check|search)/i
   );
