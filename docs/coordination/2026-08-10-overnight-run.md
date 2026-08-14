@@ -4259,3 +4259,11 @@ digest only) remains the fallback for security-tier sign-off.
   ephemeral stacks tore down cleanly; no screenshots. Fresh sensitive QA is running in isolated
   worktree `.claude/worktrees/qa-1248-sensitive`, pane `w1:pAE`, agent `qa1248-sensitive` (Sonnet).
   Merge, issue close, and board `Done` remain held for the QA verdict.
+
+## 2026-08-14 — #1585 full verification green; sensitive QA dispatched
+
+- **#1585 / PR #1611:** exactly one planned post-cleanup isolated `scripts/run-gate.sh` retry
+  completed `DONE rc=0` at HEAD `411c1614c1322bcc648cc658ef9a44f4509dad12`; worktree clean,
+  no screenshots or retained artifacts. Fresh sensitive QA is running in isolated worktree
+  `.claude/worktrees/qa-1585-sensitive`, pane `w1:pAF`, agent `qa1585-sensitive` (Sonnet).
+  Merge and board `Done` remain held for the QA verdict.
