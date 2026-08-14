@@ -3,10 +3,10 @@
 **Date:** 2026-08-10
 **Coordinator lock:** label `Coordinator`, stable anchor = Codex session id `019ffed3-094a-7032-842e-3a1f6c5ca9d0` (current pane resolves fresh by label+session; pane numbers are ephemeral). Exactly one pane with this label and session holds merge authority. Superseded Codex anchor `019ffe6c-9e0f-7c11-8dd3-1b74aab43b23` was closed after this successor confirmed adoption on 2026-08-14.
 **Delegated authority:** Ben explicitly delegated overnight product/design decisions to Fable. Existing repository rule still applies: #1557 never merges without fresh Fable approval.
-**CORRECTED 2026-08-13 (Fable, cross-session, unprompted):** the "Fable's green security review counts as merge sign-off" line above was a carry-forward assumption from the 2026-08-09 waves-3-6 run (`fable-signoff-delegation-waves-3-6` memory) — Fable states that delegation was explicitly scoped to that run only and does NOT carry forward. Default policy for tonight's batch: **security-tier PRs need Ben's explicit sign-off, full stop.** Fable is doing first-pass reviews overnight to keep his morning queue short, but those verdicts are review, not merge authority. Security-tier PRs land green + verified + **unmerged**; queued via AWAITING-BEN for his morning ruling, not silently held.
+**SECURITY MERGE AUTHORITY (Ben, 2026-08-14 morning; supersedes the prior per-merge approval rule):** a durable exact-head Sol-high grant is sufficient merge authority once all other gates are green. Ben receives a concise summary of security-tier merges; no separate approval pause is required.
 **Merge policy:** routine/sensitive only after verified QA and live-path proof where applicable; security tier requires fresh adversarial QA GREEN plus a durable high-effort `gpt-5.6 Sol` sign-off comment under Ben's 2026-08-14 delegation.
 **Merge notification:** after every merge, run `needs-ben coordinator "<issue/PR — one-line description of what landed>"` and retain the normal GitHub/project bookkeeping.
-**merges_since_relay:** 1 — #1591 / PR #1613 merged under successor session `019ffed3-094a-7032-842e-3a1f6c5ca9d0`; standing Ben override keeps this coordinator resident instead of relaying.
+**merges_since_relay:** 3 — #1591 / PR #1613, #1592 / PR #1622, and #1108 / PR #1620 merged under successor session `019ffed3-094a-7032-842e-3a1f6c5ca9d0`; standing Ben override keeps this coordinator resident instead of relaying.
 **Standing override (Ben, binding for the rest of this run):** "lets stop relaying, just auto compact coordinator" — this session does NOT spawn a successor at context checkpoints, including the 70%-meter warning or merge-count triggers. It stays resident through auto-compaction. Confirmed live against a real 70% checkpoint hook firing this leg; declined per this override.
 
 GitHub/project 2 is the source of truth. Detailed continuation evidence stays in `/tmp/jarv1s-monitor-state.md`.
@@ -5219,3 +5219,20 @@ digest only) remains the fallback for security-tier sign-off.
   is authorized: frozen install inside both exact-head trees, boolean link readiness, then concurrent
   full gates. P1/P2 are not repeated; any later participant/unattributable XX000 or failure gets no
   further attempt. Unrelated old test DBs remain untouched.
+- **#1592 / PR #1622 MERGED:** exact reviewed head `9e716c640`, security QA GREEN, Sol-high granted,
+  CI terminal green, live path N/A. Squash merge `c1015faf3926b5c0341a7a289f9797e19866a87a`;
+  issue closed and project 2 Done.
+- **#1108 / PR #1620 MERGED:** exact reviewed head `e80ad1407`, final security QA r5 GREEN, Sol-high
+  granted, CI and bounded allocation/concurrency proof green. Squash merge
+  `23be72c6ad1f1dc972cfc775d87d7004b83f8226`; issue closed and project 2 Done. #1618 remains the
+  approved full-concurrency/TOCTOU/forced-removal follow-up.
+- **#1275 ruling:** Ben approved the Worker-confinement divergence from the earlier install-time-lint
+  plan. Fresh exact-head security QA has been requested at `8f82423b6` under that superseding ruling;
+  merge remains gated on a durable GREEN verdict.
+- **#1013 valid P3/P4 RED:** setup-corrected concurrent full gates both reached tests and exited 1;
+  XX000=0, but each recorded attributable cross-database module-purge dependency failures followed
+  by cascades. Cleanup is terminal and no push/retry occurred. Spec is reopened; the same Fable
+  reviewer is adjudicating the decision only, with no edits or DB work authorized.
+- **#1556 final QA RED:** exact head `17a3592a0` has terminal green CI and live real-chat proof, and
+  the Phase-5 abstract-socket security fix passed. Merge is blocked because a lone hidden context
+  block can bypass Task 6's combined 2,000-token cap; lane awaits adjudication before another cycle.

@@ -1,46 +1,5 @@
 # Awaiting Ben
 
-## #1592 / PR #1622 — exact-head security merge sign-off
-
-PR #1622 is technically merge-ready at exact head
-`9e716c640dd12d0b7ae3e913db46c35da17a7e3b`: fresh security QA GREEN
-(`issuecomment-5292291191`), fresh Sol-high SIGN-OFF GRANTED (`issuecomment-5292563465`), all
-applicable exact-head CI terminal green, prior patch-identical blocking module-install UAT green,
-and live path N/A for the test-only unwired topology. The PR is open and mergeable; no merge or
-board/issue action has been taken.
-
-**Ben decision:** approve merging PR #1622 at this exact head, or hold it. Recommendation: approve.
-
-## #1108 / PR #1620 — exact-head security merge sign-off
-
-PR #1620 is technically merge-ready at exact head
-`e80ad140719cfecc82e06c7e7bf3752e722e50a3`: final authorized security QA r5 GREEN
-(`issuecomment-5292709725`), Sol-high SIGN-OFF GRANTED (`issuecomment-5292758408`), all applicable
-exact-head CI terminal green, exact four-file scope, and bounded live allocation/refusal/cleanup
-proof green. The only approved deferral is #1618 for the fixed Compose container name and related
-full-concurrency/TOCTOU/forced-removal follow-ups. The PR is open and mergeable; no merge or
-board/issue action has been taken.
-
-**Ben decision:** approve merging PR #1620 at this exact head, or hold it. Recommendation: approve.
-
-## #1275 / PR #1608 — approved-spec mismatch after security QA
-
-Fresh exact-head security QA is RED at `8f82423b631c54270eed043884fa74e44633534f`
-(`issuecomment-5293030445`) despite terminal green CI and a sound invocation-wide runtime deadline.
-The approved #1275 spec requires install-time regex complexity lint and explicitly defers the Worker
-design. The PR instead ships Worker-based runtime confinement, while catastrophic patterns still
-pass installation. The lane is STOP/HOLD with no further edit, rebase, push, QA or merge.
-
-**Ben decision:** choose one:
-
-1. Supersede/update the spec to accept Worker runtime confinement as the #1275 solution.
-2. Require the approved install-time lint (and decide whether the Worker work remains as explicitly
-   approved defense-in-depth or moves to a separate issue/PR).
-3. Stop/re-scope PR #1608 and split the Worker design into a separately specified issue.
-
-**Recommendation:** option 2—retain the already-reviewed runtime boundary only with explicit spec
-approval, and complete the install-time acceptance criterion before merge.
-
 ## RESOLVED — #1467 one-shot write authority ruling (2026-08-14)
 
 Security QA for PR #1610 found one non-blocking but newly activated behavior: injecting
