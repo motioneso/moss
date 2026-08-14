@@ -5164,3 +5164,11 @@ digest only) remains the fallback for security-tier sign-off.
   the plan kill gate; remediation commit lacks release-note language. Two-cycle QA budget exhausted:
   author STOP/HOLD, no further edit/rebase/push/DB/proof/QA. Existing Fable lane is adjudicating whether
   one bounded final closure is defensible or the spec/plan must reset; no merge.
+- **#1556 round-3 review/design ruling:** hard-link election closed replacement-owner ABA, but both
+  reviewers found an unrecoverable crash window if the elected cleaner dies between candidate and
+  fixed-link unlink; the fallback also hot-loops past deadline. Custom stale-owner recovery is stopped.
+  New minimum ruling, conditional on confirmed single-container Linux topology: a Node stdlib abstract
+  Unix-domain listening socket keyed by hashed canonical cache+model. Kernel bind is atomic and process
+  death releases it; EADDRINUSE polls bounded 300s, other/unsupported errors fail closed; server stays
+  open across work and closes in finally. No files, stale cleanup, dependency or external command.
+  Owner must confirm topology and TDD concurrent/SIGKILL/sync+async/worker seams; no commit/DB/UAT/push.
