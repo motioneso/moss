@@ -4267,3 +4267,11 @@ digest only) remains the fallback for security-tier sign-off.
   no screenshots or retained artifacts. Fresh sensitive QA is running in isolated worktree
   `.claude/worktrees/qa-1585-sensitive`, pane `w1:pAF`, agent `qa1585-sensitive` (Sonnet).
   Merge and board `Done` remain held for the QA verdict.
+
+## 2026-08-14 — #1141 rebased and CI green; security QA dispatched
+
+- **#1141 / PR #1601:** rebased cleanly onto `origin/main` (11 commits, zero conflicts), pushed
+  HEAD `f73167797`. Fresh CI run `31764753040` is fully green, including foundation/app, image
+  publish, and both compose smokes; no waiver is needed. Existing 3-spec UAT proof and
+  defence-in-depth PR wording were verified unchanged. Fresh security QA is running in isolated
+  worktree `.claude/worktrees/qa-1141-security`, pane `w1:pAG`, agent `qa1141-security` (Opus).
