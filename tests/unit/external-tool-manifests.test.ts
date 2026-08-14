@@ -37,7 +37,7 @@ it("adapts declarations into executable tools with parent-bound identity", async
   expect(manifest).toMatchObject({
     id: "acme",
     availability: { supportsUserDisable: true },
-    assistantTools: [{ name: "acme.write", risk: "write" }]
+    assistantTools: [{ name: "acme.write", risk: "write", isExternal: true }]
   });
   const execute = manifest?.assistantTools?.[0]?.execute;
   if (!execute) throw new Error("expected execute");

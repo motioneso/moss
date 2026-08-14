@@ -124,6 +124,10 @@ async function buildTarget(target: Target): Promise<void> {
       "../pdf.worker.mjs"
     );
     copyFileSync(workerSource, resolve(root, dirname(outfile), "pdf.worker.mjs"));
+    copyFileSync(
+      resolve(root, "packages/ai/src/gateway/pattern-worker.mjs"),
+      resolve(root, dirname(outfile), "pattern-worker.mjs")
+    );
   }
   console.log(`built ${outfile} (parse-checked)`);
 }

@@ -19,23 +19,31 @@ describe("tool input validation", () => {
     properties: { taskId: { type: "string" }, count: { type: "number" } }
   };
 
-  it("accepts valid input", () => {
-    expect(validateToolInput(schema, { taskId: "t1", count: 2 })).toEqual({
+  it("accepts valid input", async () => {
+    await expect(
+      validateToolInput(schema, { taskId: "t1", count: 2 }, { external: false })
+    ).resolves.toEqual({
       taskId: "t1",
       count: 2
     });
   });
 
-  it("rejects a missing required key", () => {
-    expect(() => validateToolInput(schema, { count: 2 })).toThrow(ToolInputValidationError);
+  it("rejects a missing required key", async () => {
+    await expect(validateToolInput(schema, { count: 2 }, { external: false })).rejects.toThrow(
+      ToolInputValidationError
+    );
   });
 
-  it("rejects a wrong declared type", () => {
-    expect(() => validateToolInput(schema, { taskId: 5 })).toThrow(ToolInputValidationError);
+  it("rejects a wrong declared type", async () => {
+    await expect(validateToolInput(schema, { taskId: 5 }, { external: false })).rejects.toThrow(
+      ToolInputValidationError
+    );
   });
 
-  it("accepts anything when no schema is declared", () => {
-    expect(validateToolInput(undefined, { whatever: true })).toEqual({ whatever: true });
+  it("accepts anything when no schema is declared", async () => {
+    await expect(
+      validateToolInput(undefined, { whatever: true }, { external: false })
+    ).resolves.toEqual({ whatever: true });
   });
 
   // #1265 security QA BLOCKING-1(b): the sports follow tools bound their catalog keys with
@@ -52,41 +60,126 @@ describe("tool input validation", () => {
       }
     };
 
-    it("accepts a value inside every bound", () => {
-      expect(validateToolInput(bounded, { key: "eng.1" })).toEqual({ key: "eng.1" });
+    it("accepts a value inside every bound", async () => {
+      await expect(
+        validateToolInput(bounded, { key: "eng.1" }, { external: false })
+      ).resolves.toEqual({ key: "eng.1" });
     });
 
-    it("rejects a value over maxLength", () => {
-      expect(() => validateToolInput(bounded, { key: "abcdefghij" })).toThrow(
+    it("accepts a valid external-module pattern", async () => {
+      await expect(
+        validateToolInput(
+          { type: "object", properties: { value: { type: "string", pattern: "[a-z]+" } } },
+          { value: "safe" },
+          { external: true }
+        )
+      ).resolves.toEqual({ value: "safe" });
+    });
+
+    it("confines a hostile external-module array and recovers for the next invocation", async () => {
+      const started = performance.now();
+      let loopTurned = false;
+      setImmediate(() => {
+        loopTurned = true;
+      });
+      await expect(
+        validateToolInput(
+          {
+            type: "object",
+            properties: {
+              values: { type: "array", items: { type: "string", pattern: "(a+)+$" } }
+            }
+          },
+          { values: ["aaaa", `${"a".repeat(28)}!`, "aaaa", "aaaa"] },
+          { external: true }
+        )
+      ).rejects.toThrow(ToolInputValidationError);
+      expect(loopTurned).toBe(true);
+      // A completed catastrophic match takes ~1.5s here; returning in this wide window
+      // proves terminate() preempted the live worker rather than merely moving the stall.
+      expect(performance.now() - started).toBeLessThan(500);
+      await expect(
+        validateToolInput(
+          { type: "object", properties: { value: { type: "string", pattern: "[a-z]+" } } },
+          { value: "safe" },
+          { external: true }
+        )
+      ).resolves.toEqual({ value: "safe" });
+    });
+
+    it("accepts at least four benign patterns within one validation invocation budget", async () => {
+      await expect(
+        validateToolInput(
+          {
+            type: "object",
+            properties: {
+              values: { type: "array", items: { type: "string", pattern: "[a-z]+" } }
+            }
+          },
+          { values: Array.from({ length: 4 }, () => "safe") },
+          { external: true }
+        )
+      ).resolves.toEqual({ values: ["safe", "safe", "safe", "safe"] });
+    });
+
+    it("bounds queued pattern work and releases the pool for the next invocation", async () => {
+      const hostileSchema = {
+        type: "object",
+        properties: { value: { type: "string", pattern: "(a+)+$" } }
+      };
+      const started = performance.now();
+      const results = await Promise.allSettled(
+        Array.from({ length: 9 }, () =>
+          validateToolInput(hostileSchema, { value: `${"a".repeat(28)}!` }, { external: true })
+        )
+      );
+
+      expect(results.every((result) => result.status === "rejected")).toBe(true);
+      expect(performance.now() - started).toBeLessThan(250);
+      await expect(
+        validateToolInput(
+          { type: "object", properties: { value: { type: "string", pattern: "[a-z]+" } } },
+          { value: "safe" },
+          { external: true }
+        )
+      ).resolves.toEqual({ value: "safe" });
+    });
+
+    it("rejects a value over maxLength", async () => {
+      await expect(
+        validateToolInput(bounded, { key: "abcdefghij" }, { external: false })
+      ).rejects.toThrow(ToolInputValidationError);
+    });
+
+    it("rejects a value under minLength", async () => {
+      await expect(validateToolInput(bounded, { key: "" }, { external: false })).rejects.toThrow(
         ToolInputValidationError
       );
     });
 
-    it("rejects a value under minLength", () => {
-      expect(() => validateToolInput(bounded, { key: "" })).toThrow(ToolInputValidationError);
-    });
-
-    it("rejects a value that does not match the pattern", () => {
-      expect(() => validateToolInput(bounded, { key: "../evil" })).toThrow(
-        ToolInputValidationError
-      );
+    it("rejects a value that does not match the pattern", async () => {
+      await expect(
+        validateToolInput(bounded, { key: "../evil" }, { external: false })
+      ).rejects.toThrow(ToolInputValidationError);
     });
 
     // An unanchored pattern must not be satisfied by a matching substring — otherwise
     // "ok/../../etc" would pass a naive `/[a-z]+/.test(...)`.
-    it("requires the whole string to match, not a substring", () => {
+    it("requires the whole string to match, not a substring", async () => {
       const loose = { type: "object", properties: { key: { type: "string", pattern: "[a-z]+" } } };
-      expect(() => validateToolInput(loose, { key: "ok/../evil" })).toThrow(
-        ToolInputValidationError
-      );
+      await expect(
+        validateToolInput(loose, { key: "ok/../evil" }, { external: false })
+      ).rejects.toThrow(ToolInputValidationError);
     });
 
-    it("leaves non-strings and undeclared bounds alone", () => {
+    it("leaves non-strings and undeclared bounds alone", async () => {
       const mixed = {
         type: "object",
         properties: { n: { type: "number" }, s: { type: "string" } }
       };
-      expect(validateToolInput(mixed, { n: 12345678901234, s: "anything at all" })).toEqual({
+      await expect(
+        validateToolInput(mixed, { n: 12345678901234, s: "anything at all" }, { external: false })
+      ).resolves.toEqual({
         n: 12345678901234,
         s: "anything at all"
       });
@@ -129,6 +222,11 @@ describe("tool input validation", () => {
           `pattern failed to compile: ${pattern}`
         ).not.toThrow();
       }
+      expect(
+        manifests
+          .flatMap((manifest) => manifest.assistantTools ?? [])
+          .every((tool) => tool.isExternal === false)
+      ).toBe(true);
     });
 
     // #1265 security QA BLOCKING-1: compilePattern must fail CLOSED, not silently skip the bound.
@@ -141,16 +239,17 @@ describe("tool input validation", () => {
         );
       });
 
-      it("rejects an unbalanced-paren pattern rather than compiling a wrapper that matches anything", () => {
+      it("rejects an unbalanced-paren pattern rather than compiling a wrapper that matches anything", async () => {
         // Wrapping `[a-z]+)|(.*` as `^(?:[a-z]+)|(.*)$` is valid regex whose top-level alternation
         // sits OUTSIDE the anchors and matches any string. Must be rejected before it is wrapped.
         expect(() => compilePattern("[a-z]+)|(.*")).toThrow(ToolInputValidationError);
-        expect(() =>
+        await expect(
           validateToolInput(
             { type: "object", properties: { key: { type: "string", pattern: "[a-z]+)|(.*" } } },
-            { key: "HOSTILE ANYTHING AT ALL" }
+            { key: "HOSTILE ANYTHING AT ALL" },
+            { external: false }
           )
-        ).toThrow(ToolInputValidationError);
+        ).rejects.toThrow(ToolInputValidationError);
       });
 
       it("caches the rejection so a broken pattern keeps rejecting on repeat calls", () => {

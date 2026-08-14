@@ -58,6 +58,7 @@ export function createExternalToolManifests(
           selfOperationGrant: tool.selfOperationGrant,
           requiresConfirmation,
           inputSchema: tool.inputSchema,
+          isExternal: true,
           outputSchema: tool.outputSchema,
           execute: (_scopedDb, input, context) => invoke(module, tool, input, context)
         };
