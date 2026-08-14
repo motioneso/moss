@@ -4584,3 +4584,31 @@ digest only) remains the fallback for security-tier sign-off.
   independent reaffirmation is durable at `issuecomment-5290485904`, so the spec is merge-eligible.
 - **Pane cap/layout:** `agents 2` remains exactly four Fable agents in equal 2×2 quarters; other
   agent tabs remain below four. No screenshots.
+
+## 2026-08-14 — approved specs merged; Codex builds dispatched
+
+- **#1454 / PR #1615:** docs-only spec/plan merged as squash
+  `509810fcfc919d850b70bd6461324228ae75c3e6` after green docs CI and exact-head sibling approval
+  `issuecomment-5290485904`. Issue remains open. Codex build `build-1454-publish-alarm`, session
+  `019fff1b-e10d-7cf3-a737-9c06d67f0f52`, branch `build-1454-publish-alarm`, label
+  `1454 publish alarm Codex`, is active and grounded with no fork. Tier remains security; exact-head
+  adversarial QA and Sol-high durable sign-off are required before any implementation merge.
+- **#1108 / PR #1614:** docs-only spec/plan merged as squash
+  `1e35c783ad0a915a71a0b3644dd5248aa0333057` after green docs CI and exact-head sibling approval
+  `issuecomment-5290550041`. Issue remains open; #1618 owns full fixed-container-name concurrency.
+  Codex build `build-1108-uat-subnet`, session `019fff1b-e106-7f53-be96-47f8a2744390`, branch
+  `build-1108-uat-subnet`, label `1108 UAT subnet Codex`, is rebasing/grounding before code. Tier
+  remains security; exact-head adversarial QA and Sol-high durable sign-off are required.
+- **Board:** both #1454 and #1108 were submitted for `Ready` → `In progress`; GitHub GraphQL rate
+  limiting blocked only the immediate read-back, not further fleet work. Verify once rate limits
+  recover. Issue comments record both merged specs and active build lanes.
+- **#1592 / PR #1617:** exact-head sibling APPROVE reaffirmed at
+  `f0674a2c196b2e747af36e7392d6914937eb8eab` (`issuecomment-5290578113`). Merge follows green docs
+  CI/read-back; implementation then gets a new Codex lane.
+- **#1013 / PR #1616:** author content revision is now
+  `422b5df2d6f7627d9463c3e8200160d0f77c4b0f`, docs CI green. It maps/wraps `purgeModule`, widens TS
+  role-DDL discovery and folds in the four review notes. Exact-head sibling re-review is running;
+  no merge before its durable verdict.
+- **Pane cap/layout:** completed #1108/#1454 Fable panes were closed and replaced in place by their
+  Codex builders. `agents 2` remains exactly four equal 2×2 quarters (#1013 Fable, #1592 Fable,
+  #1108 Codex, #1454 Codex). No screenshots.
