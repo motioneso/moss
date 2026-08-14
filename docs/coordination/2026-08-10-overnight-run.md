@@ -4710,3 +4710,7 @@ digest only) remains the fallback for security-tier sign-off.
   instructed to finish active gates first, then drop only those commits, rebase onto current main,
   and verify approved name-only PR surfaces before push. Future #1013 boot uses an external brief
   and adds no handoff commit to its branch.
+- **#1108:** full isolated gate is green (`VF_EXIT=0`). Owner is now dropping only operational
+  handoff `5177a4b7b`, rebasing the two implementation commits onto current main, and must prove
+  patch equivalence plus the approved name-only surface before push/PR. No redundant full-gate rerun
+  is required for patch-identical history cleanup onto a docs-only base change.
