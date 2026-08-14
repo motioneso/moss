@@ -4629,3 +4629,12 @@ digest only) remains the fallback for security-tier sign-off.
 - **Merge counter:** `merges_since_relay=4` (#1591 plus docs specs #1454, #1108, #1592). Ben's
   standing instruction for this overnight run is to keep the Codex coordinator resident through
   compaction, so the ordinary relay counter does not replace this active coordinator.
+
+## 2026-08-14 — #1013 round-two review
+
+- **#1013 / PR #1616:** exact-head review of `422b5df2d6f7627d9463c3e8200160d0f77c4b0f`
+  remains REVISE at `issuecomment-5290627554`. All earlier findings are resolved, but the reviewer
+  found one same-class blocker: five cluster-global role-membership GRANT/REVOKE sites are outside
+  the proposed lock and invisible to the current role-DDL discovery pattern. Author is tasked with
+  one bounded mapping/routing revision plus a widened membership-write pattern, then green docs CI
+  and round-three exact-head sibling review. The lock mechanism and proof design otherwise stand.
