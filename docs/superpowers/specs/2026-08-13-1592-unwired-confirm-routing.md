@@ -1,6 +1,6 @@
 # #1592 — Scope the unwired-gateway 503 to statuses that need the gateway
 
-**Status:** Proposed (awaiting approval)
+**Status:** Approved — independent Fable review on PR #1617 (comment 5290446273, 2026-08-14)
 **Date:** 2026-08-13
 **Owner:** Ben
 **GitHub:** task #1592 · follow-up from #1256 / PR #1587 QA finding NEW-2
@@ -35,7 +35,7 @@ Scope the fail-closed 503 to the statuses that genuinely require the gateway (`c
 may unblock a paused tool call and cause **execution**), and restore gateway-independent behavior
 for `rejected`/`cancelled` — without weakening any security property #1587 established.
 
-## Grounded mechanism (all citations verified 2026-08-13 on this branch)
+## Grounded mechanism (citations verified 2026-08-13; re-verified 2026-08-14 after rebase onto `main` @ `322e6afb6`)
 
 - Route handler: `packages/ai/src/routes.ts:541-574`. Body parse (`:547`, validator `:861-869`
   accepts only `confirmed | rejected | cancelled`) runs **before** the 503 dependency guard
@@ -43,7 +43,7 @@ for `rejected`/`cancelled` — without weakening any security property #1587 est
 - Wired path: the module-registry closure defers to the per-server getter
   (`packages/module-registry/src/index.ts:2212-2216`) which holds
   `gateway.resolveActionRequest` after chat adoption.
-- `AssistantToolGateway.resolveActionRequest` (`packages/ai/src/gateway/gateway.ts:433-459`):
+- `AssistantToolGateway.resolveActionRequest` (`packages/ai/src/gateway/gateway.ts:433-474`):
   `confirmed` with no live confirmation waiter → `"expired"` (route → 409, fail-closed: a
   confirm only means anything while the blocked call is awaiting); otherwise an **owner-scoped,
   pending-only** UPDATE via `repository.resolveAssistantAction`
@@ -94,7 +94,7 @@ callers that pass no resolver at all.
 
 Why here: it keeps the #1587 QA-verified invariant intact — **every caller of
 `repository.resolveAssistantAction` stays in `gateway.ts`** (currently exactly two:
-`gateway.ts:300` YOLO auto-grant and `gateway.ts:451` gated path). The status-conditional
+`gateway.ts:300` YOLO auto-grant and `gateway.ts:467` gated path). The status-conditional
 security decision ("confirm requires a gateway") lives beside the gateway's existing fail-closed
 confirm guard where future editors of confirm semantics will see it, not in composition-root glue.
 
@@ -124,18 +124,18 @@ bypass closed — and splits status-conditional security logic across two packag
 - No change to any real-deployment behavior (the unwired topology is test-only).
 - Not user-visible: release-note line is "internal correctness fix; no user-visible change".
 
-## Collision with #1591 / PR #1613 — checked, overlap confirmed, serialize
+## Collision with #1591 / PR #1613 — resolved: dependency landed
 
-PR #1613 ("check owner scope before confirmation liveness") edits
-`packages/ai/src/gateway/gateway.ts` (`resolveActionRequest`, `:433-458`) and
-`tests/integration/ai-assistant-action-resolve.test.ts`, and changes wired confirm semantics
-(owner-scoped pre-check before `isAwaiting`; already-resolved confirm → 404 instead of 409).
+PR #1613 ("check owner scope before confirmation liveness") **merged to `main` as `322e6afb6`
+(2026-08-14)**, and this branch is rebased onto it. The wired rows of the matrix above reflect
+the merged post-#1591 semantics (owner-scoped pre-check before `isAwaiting`
+(`gateway.ts:446-464`); already-resolved / foreign confirm → 404 instead of 409) — verified
+in-tree after the rebase, no longer an assumption about an in-flight PR.
 
-- Same-file overlap: this design adds a sibling export to `gateway.ts`.
-- Behavioral dependency: the wired rows of the matrix above assume post-#1591 ordering.
-- Therefore **implementation serializes after #1591 lands on `main`** (this spec/plan proceeds
-  now, per the handoff). The build starts from a rebase onto a `main` that contains #1613; the
-  new tests live in a new file to avoid test-file merge friction.
+- Same-file overlap (this design adds a sibling export to `gateway.ts`) is now ordinary work on
+  `main` — no serialization constraint remains.
+- The new tests still live in a new file (`ai-assistant-action-resolve-unwired.test.ts`) so the
+  existing wired suite stays untouched.
 
 ## Kill gate
 

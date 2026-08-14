@@ -1,8 +1,10 @@
 # Build plan — #1592 scope the unwired-gateway 503 to confirm only
 
-**Spec:** `docs/superpowers/specs/2026-08-13-1592-unwired-confirm-routing.md` (approval pending)
+**Spec:** `docs/superpowers/specs/2026-08-13-1592-unwired-confirm-routing.md` (approved — PR
+#1617 comment 5290446273)
 **Task issue:** #1592
-**Precondition:** #1591 / PR #1613 merged to `main`; branch starts from a rebase onto that `main`.
+**Precondition — satisfied 2026-08-14:** #1591 / PR #1613 merged to `main` (`322e6afb6`); this
+branch is rebased onto it and citations below are re-verified against that tree.
 Single phase, three tasks.
 
 ## Seams check (every capability cited from the current tree)
@@ -80,7 +82,7 @@ Test cases — behavior, and why each fails against a broken implementation:
    isn't reject-only.
 3. **A confirms own pending action → 503**, row still `pending`, `resolved_at` null. Fails if
    the fallback wrongly persists confirm (phantom-confirmed — the exact hazard
-   `gateway.ts:438-446` documents) or maps it to 409.
+   `gateway.ts:455-461` documents) or maps it to 409.
 4. **B rejects A's pending action → 404**, row still `pending` under A's scope. Fails if the
    fallback skips the RLS-scoped runner (cross-user resolution — would re-open the #1256 class).
 5. **A rejects an unknown v4 UUID → 404.** Fails if the fallback throws instead of returning
@@ -126,8 +128,9 @@ of widening.
 - Chat's resolve route does not exist unwired (`packages/chat/src/routes.ts:370-410`) — no chat-side
   work in #1592.
 - `#1587` QA invariant to preserve: `repository.resolveAssistantAction` callers all live in
-  `gateway.ts` (`:300`, `:451` pre-#1613).
+  `gateway.ts` (`:300`, `:467` post-#1613 merge; was `:451`).
 - `ApiServerConfig.mcpServerUrl` is required `string` but `""` is falsy at
   `packages/chat/src/routes.ts:230-231` — the cast-free unwired harness.
 - #1613 overlap: `gateway.ts` + `ai-assistant-action-resolve.test.ts`; wired confirm on a
-  non-pending/foreign row → 404 post-#1591 (was 409 for already-resolved). Serialize after it.
+  non-pending/foreign row → 404 post-#1591 (was 409 for already-resolved). Landed on `main` as
+  `322e6afb6` (2026-08-14); branch rebased onto it — no serialization constraint remains.
