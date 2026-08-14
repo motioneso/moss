@@ -4817,3 +4817,17 @@ digest only) remains the fallback for security-tier sign-off.
 - **Merge counter:** `merges_since_relay=5`. This merge is security-tier; Ben's standing overnight
   instruction keeps the Codex coordinator resident through compaction despite the ordinary relay
   trigger.
+
+## 2026-08-14 — #1108 third QA; #1454 QA RED
+
+- **#1108 / PR #1620:** second remediation pushed at exact head
+  `dcb78b1cb3bef0eec30ec42334757f535f1a66df`; atomic finally cleanup/failure aggregation survived
+  rebase patch-identically, approved four-file surface only, 49 targeted/static/allocation proofs
+  green with zero exact-project residuals, evidence `issuecomment-5291403221`. Fresh third security
+  QA `/root/qa_1108_pr1620_r3` is running; CI active, no Sol sign-off or merge before both green.
+- **#1454 / PR #1621:** first security QA RED at stale head
+  `c3f11aa2a76eac94e1b7bb90adc6291704c9b05c`, durable `issuecomment-5291393467`. Beyond the stale
+  base, two workflow races block: out-of-order runs can resolve/recreate the wrong SHA alarm, and
+  concurrent runs can create duplicate open issues. Owner is rebasing and implementing the minimum
+  native concurrency/idempotence fix with deterministic race checks; preserve no `packages:write`
+  and unchanged publish gate. Fresh exact-head QA required; no post-merge proof or merge while RED.
