@@ -4734,3 +4734,10 @@ digest only) remains the fallback for security-tier sign-off.
   implementation commits, proving patch equivalence, and running exactly one full gate on final
   history. A second failure is stop-the-line; no waiver or third attempt. #1013 remains serialized
   behind this active DB run.
+- **#1556 / PR #1619:** remediation pushed at exact head
+  `df9fbba632d9743cdb0dc82b0e8f2a4405c30393`. Owner reports all three prior security blockers fixed
+  at the shared seam; scoped unit 31/31, isolated notes integration/RLS 35/35, format/lint/typecheck
+  green, outgoing boolean secret scan clean, evidence `issuecomment-5290981966`. Fresh exact-head
+  security QA `/root/qa_1556_pr1619_r2` is running. Live path remains BLOCKING RED because even a
+  supported reload stayed disconnected/no-model despite an active chat model; relevant UI files
+  match main, so no unrelated UI change is authorized in this PR. No proof and no merge.
