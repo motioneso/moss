@@ -34,11 +34,14 @@ import {
 } from "@moss/settings";
 
 import { extractTimezone } from "./locale-utils.js";
+import { ChatRepository } from "./repository.js";
+import { ChatUserMemorySettingsRepository } from "./memory-settings-repository.js";
 import { buildCalendarWriteService } from "./calendar-write-impl.js";
 import { buildEmailWriteService } from "./email-write-impl.js";
 import { NATIVE_CONFIRM_TIMEOUT_MS } from "./live/claude-permission-hook.js";
 import type { CurrentViewReadService } from "./live/current-view.js";
 import type { ChatAttachmentsService } from "./attachments-service.js";
+import { createNotesReadToolTrustBoundary } from "./live/notes-tool-trust.js";
 
 const YOLO_INSTANCE_SETTING_KEY = "yolo.instance_enabled";
 const YOLO_ALLOWED_PREF_KEY = "yolo.allowed";
@@ -166,6 +169,10 @@ export function buildChatGatewayDependencies(args: {
         resolveYoloMode
       ),
     toolServices: buildChatToolServices(args.collaborators),
+    readToolTrustBoundary: createNotesReadToolTrustBoundary({
+      threads: new ChatRepository(),
+      memorySettings: new ChatUserMemorySettingsRepository()
+    }),
     readToolServices:
       args.collaborators.featureGrantService ||
       args.collaborators.sourceContextService ||

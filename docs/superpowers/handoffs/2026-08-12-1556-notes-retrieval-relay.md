@@ -6,7 +6,7 @@ No commits yet on this branch beyond what was already on origin/main.
 ## Pointers (read these, don't re-derive)
 
 - Handoff doc (lives at the **overnight coordinator root**, not this worktree):
-  `/home/ben/Jarv1s/.claude/worktrees/coord-overnight-20260810/docs/coordination/handoff-1556-notes-retrieval.md`
+  `~/Jarv1s/.claude/worktrees/coord-overnight-20260810/docs/coordination/handoff-1556-notes-retrieval.md`
 - Spec, Phase 2 section only: `docs/superpowers/specs/2026-08-10-1553-context-continuity-and-notes-retrieval.md`
   lines 119–159 ("Notes retrieval defaulting") + acceptance criteria 2, 4, 5 (lines 170–182).
   Phase 1 (replay) is `## Design > ### Replay contract`, lines 83–117 — **already merged, PR #1562, not your scope.**

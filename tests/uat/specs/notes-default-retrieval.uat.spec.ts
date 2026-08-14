@@ -82,11 +82,34 @@ test("a later chat answers from notes without narrating retrieval (#1556)", asyn
 
   const action = page.getByRole("region", { name: "Action request" });
   await expect(action).toBeVisible({ timeout: 60_000 });
+  const syncNotBefore = Date.now();
   await action.getByRole("button", { name: "Approve" }).click();
   await expect(action.getByText("Approved")).toBeVisible();
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
 
+  await expect
+    .poll(
+      async () => {
+        const body = (await readJson(await page.request.get("/api/me/notes-last-sync"))) as {
+          lastSync: { at: string | null; ingested: number; errors: number } | null;
+        };
+        const completedAt = body.lastSync?.at ? Date.parse(body.lastSync.at) : 0;
+        return (
+          completedAt >= syncNotBefore && body.lastSync!.ingested > 0 && body.lastSync!.errors === 0
+        );
+      },
+      { timeout: POLL_DEADLINE_MS, message: "created note was not indexed" }
+    )
+    .toBe(true);
+
+  const cleared = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname === "/api/chat/clear" &&
+      response.status() === 204
+  );
   await page.getByRole("button", { name: "New chat" }).click();
+  await cleared;
   await composer.fill("What snack did we choose for the launch?");
   await composer.press("Enter");
 
