@@ -6,7 +6,7 @@
 **CORRECTED 2026-08-13 (Fable, cross-session, unprompted):** the "Fable's green security review counts as merge sign-off" line above was a carry-forward assumption from the 2026-08-09 waves-3-6 run (`fable-signoff-delegation-waves-3-6` memory) — Fable states that delegation was explicitly scoped to that run only and does NOT carry forward. Default policy for tonight's batch: **security-tier PRs need Ben's explicit sign-off, full stop.** Fable is doing first-pass reviews overnight to keep his morning queue short, but those verdicts are review, not merge authority. Security-tier PRs land green + verified + **unmerged**; queued via AWAITING-BEN for his morning ruling, not silently held.
 **Merge policy:** routine/sensitive only after verified QA and live-path proof where applicable; security tier builds + PRs + QA proceed overnight but hold at "code-complete, unverified" for merge — Ben's explicit sign-off only, no delegation assumed.
 **Merge notification:** after every merge, run `needs-ben coordinator "<issue/PR — one-line description of what landed>"` and retain the normal GitHub/project bookkeeping.
-**merges_since_relay:** 0 — reset after the mandatory security-tier relay; no merge has occurred under the current coordinator authority.
+**merges_since_relay:** 1 — #1248 / PR #1606 merged under the current coordinator authority; no relay trigger yet.
 **Standing override (Ben, binding for the rest of this run):** "lets stop relaying, just auto compact coordinator" — this session does NOT spawn a successor at context checkpoints, including the 70%-meter warning or merge-count triggers. It stays resident through auto-compaction. Confirmed live against a real 70% checkpoint hook firing this leg; declined per this override.
 
 GitHub/project 2 is the source of truth. Detailed continuation evidence stays in `/tmp/jarv1s-monitor-state.md`.
@@ -4359,6 +4359,14 @@ digest only) remains the fallback for security-tier sign-off.
 - **#1585 / PR #1611:** required checks remain green except image publishing, which is still in
   progress; fresh sensitive QA waits for the complete CI result.
 
+## 2026-08-14 — #1248 merged and board reconciled
+
+- **#1248 / PR #1606 — MERGED:** squash merge `d1ac37819cd5a2f4479486dc3cd1b2df2f8da619` after
+  refreshed sensitive QA GREEN (`issuecomment-5289602343`), current CI green after the one rerun of
+  the unrelated #1310 theme e2e, and durable blocking UAT proof. Issue #1248 was explicitly closed
+  and its project item moved to `Done`; merge digest sent via `needs-ben`.
+- Reaped the completed #1248 QA pane/worktree and merged build worktree cleanly.
+
 ## 2026-08-14 — #1467 security QA RED; symlink containment routed
 
 - **#1467 / PR #1610:** Opus security QA verdict RED (`issuecomment-5289457919`) at exact HEAD
@@ -4371,3 +4379,13 @@ digest only) remains the fallback for security-tier sign-off.
   `docs/coordination/AWAITING-BEN.md`; Ben ruled writes approved by default under configured vault
   roots and delete approval only. Ruling is recorded on PR #1610 (`issuecomment-5289570762`); a
   settings toggle can be a follow-up if not cleanly in scope.
+
+## 2026-08-14 — #1585 fresh QA dispatched after CI green
+
+- **#1248 / PR #1606:** merged and fully reaped; issue closed and board `Done`.
+- **#1585 / PR #1611:** all required CI checks are green at rebased HEAD `ff1da2d5b`. Fresh
+  sensitive QA is active in `w1:pAQ` (`QA 1585 sensitive rerun`, session
+  `f6805520-62ce-4386-bceb-a70892c12023`); no merge until its verdict.
+- **#1467 / PR #1610:** owner full gate remains active after the symlink-containment fix; fresh
+  Opus QA follows the gate.
+- **merges_since_relay:** 1.
