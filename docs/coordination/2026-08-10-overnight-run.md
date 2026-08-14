@@ -4612,3 +4612,22 @@ digest only) remains the fallback for security-tier sign-off.
 - **Pane cap/layout:** completed #1108/#1454 Fable panes were closed and replaced in place by their
   Codex builders. `agents 2` remains exactly four equal 2×2 quarters (#1013 Fable, #1592 Fable,
   #1108 Codex, #1454 Codex). No screenshots.
+
+## 2026-08-14 — #1592 spec landed and build started
+
+- **#1592 / PR #1617:** docs-only spec/plan merged as squash
+  `bbf172a0f16d3deb527d5b0cd54e64924e94c83b` after exact-head sibling approval and green docs CI.
+  The remote spec branch was deleted; issue #1592 remains open. Codex build
+  `build-1592-confirm-routing`, session `019fff1f-8e9c-7a93-8b18-dfdbab63d1af`, branch
+  `build-1592-confirm-routing`, label `1592 confirm routing Codex`, is active on post-#1591 main.
+  Tier remains security; exact-head adversarial QA and Sol-high durable sign-off are required.
+- **Capacity:** the completed #1275 rebase-owner pane was closed and its original-agents quadrant
+  reused for #1592. That tab remains four equal quarters (two Codex agents plus two retained shell
+  panes); `agents 2` remains four equal quarters. No tab exceeds four panes and no screenshots were
+  used.
+- **Bookkeeping:** issue comment `issuecomment-5290612056` records the merged spec and active Codex
+  build. Project-board `In progress` verification is deferred until the temporary GitHub GraphQL
+  rate limit clears.
+- **Merge counter:** `merges_since_relay=4` (#1591 plus docs specs #1454, #1108, #1592). Ben's
+  standing instruction for this overnight run is to keep the Codex coordinator resident through
+  compaction, so the ordinary relay counter does not replace this active coordinator.
