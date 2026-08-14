@@ -31,7 +31,7 @@ export function renderNotesContextBlock(
     "",
     ...snippets.map(
       (snippet) =>
-        `- [${snippet.sourcePath} modified=${snippet.updatedAt.toISOString().slice(0, 10)}] ${neutralizeSeedFraming(snippet.text)}`
+        `- [${neutralizeSeedFraming(snippet.sourcePath)} modified=${snippet.updatedAt.toISOString().slice(0, 10)}] ${neutralizeSeedFraming(snippet.text)}`
     ),
     "</retrieved_context>"
   ];

@@ -58,6 +58,10 @@ export async function buildEngineText(
             localTimezone: threadCtx.localTimezone ?? "UTC"
           })
         : null;
+    const crossToolPlan =
+      plan != null && deps.notesRetrieval != null
+        ? { ...plan, sources: plan.sources.filter((source) => source !== "notes") }
+        : plan;
 
     const [passiveResult, crossToolResult, notesResult] = await Promise.all([
       deps.passiveRetrieval != null
@@ -78,10 +82,10 @@ export async function buildEngineText(
                 .then((block) => ({ block, items: [] as MemoryRecallItem[] }))
           ).catch(() => ({ block: "", items: [] as MemoryRecallItem[] }))
         : Promise.resolve({ block: "", items: [] as MemoryRecallItem[] }),
-      plan != null && deps.crossToolRead != null
+      crossToolPlan != null && deps.crossToolRead != null
         ? collectCrossToolContextAndItems(
             actorUserId,
-            plan,
+            crossToolPlan,
             deps.crossToolRead,
             localNow,
             threadCtx.localTimezone ?? "UTC"

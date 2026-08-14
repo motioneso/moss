@@ -1,3 +1,5 @@
+import { containsSensitiveMemoryText } from "../memory-distillation.js";
+
 /**
  * Fail-closed credential/secret shape detector for notes recall (#1556 Task 3). Runs in chat,
  * not `@moss/notes` — notes are allowed to store credential-shaped text, chat is never allowed
@@ -27,5 +29,7 @@ const CREDENTIAL_PATTERNS: readonly RegExp[] = [
 ];
 
 export function isCredentialShaped(text: string): boolean {
-  return CREDENTIAL_PATTERNS.some((pattern) => pattern.test(text));
+  return (
+    containsSensitiveMemoryText(text) || CREDENTIAL_PATTERNS.some((pattern) => pattern.test(text))
+  );
 }

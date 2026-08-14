@@ -1,6 +1,13 @@
 import { expect, it, vi } from "vitest";
 
+import type { DataContextRunner } from "@moss/db";
+
 import { buildEngineText } from "../../packages/chat/src/live/engine-text.js";
+import { NotesContextRetriever } from "../../packages/chat/src/live/notes-retrieval.js";
+
+const dataContext: Pick<DataContextRunner, "withDataContext"> = {
+  withDataContext: async (_ctx, cb) => cb({} as never)
+};
 
 it("never injects page context into ordinary engine text (#1109 — pull-only tool replaces the turn push)", async () => {
   const result = await buildEngineText({ persistence: {} as never }, "u1", "hello");
@@ -8,7 +15,7 @@ it("never injects page context into ordinary engine text (#1109 — pull-only to
   expect(result.text).not.toContain("<page_context>");
 });
 
-it("retrieves passive, cross-tool, and notes context in parallel", async () => {
+it("uses the guarded retriever as the sole automatic notes path", async () => {
   let resolvePassive!: (value: { block: string; items: [] }) => void;
   let resolveNotes!: (value: {
     block: string;
@@ -56,7 +63,7 @@ it("retrieves passive, cross-tool, and notes context in parallel", async () => {
         getThreadContext: async () => ({
           threadTitle: "Remodel",
           localTimezone: "UTC",
-          incognito: true
+          incognito: false
         })
       } as never,
       passiveRetrieval,
@@ -73,8 +80,9 @@ it("retrieves passive, cross-tool, and notes context in parallel", async () => {
     expect(crossToolRead.runReadTool).toHaveBeenCalled();
   });
   expect(notesRetrieval.retrieveWithItems).toHaveBeenCalledWith(
-    expect.objectContaining({ actorUserId: "u1", incognito: true })
+    expect.objectContaining({ actorUserId: "u1", incognito: false })
   );
+  expect(crossToolRead.runReadTool.mock.calls.map((call) => call[1])).not.toContain("notes.search");
 
   resolvePassive({ block: "<memory>Passive fact</memory>", items: [] });
   resolveNotes({
@@ -91,7 +99,6 @@ it("retrieves passive, cross-tool, and notes context in parallel", async () => {
 
   const result = await pending;
   expect(result.text).toContain("Passive fact");
-  expect(result.text).toContain("Cross-tool remodel context");
   expect(result.text).toContain("Notes context");
   expect(result.pendingItems).toContainEqual(
     expect.objectContaining({
@@ -100,4 +107,114 @@ it("retrieves passive, cross-tool, and notes context in parallel", async () => {
       occurredAt: "2026-08-01T12:00:00.000Z"
     })
   );
+});
+
+it.each([
+  ["incognito", true, true],
+  ["recall disabled", false, false]
+])("does not let cross-tool notes bypass %s", async (_label, incognito, recallEnabled) => {
+  const notesRecall = { recall: vi.fn().mockResolvedValue({ snippets: [] }) };
+  const notesRetrieval = new NotesContextRetriever({
+    dataContext,
+    notesRecall,
+    settingsRepo: {
+      getOrCreate: async () => ({
+        userId: "u1",
+        recallEnabled,
+        factsEnabled: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+    }
+  });
+  const crossToolRead = {
+    runReadTool: vi.fn(async (_actorUserId: string, toolName: string) => ({
+      ok: true,
+      data:
+        toolName === "notes.search"
+          ? {
+              chunks: [
+                {
+                  sourcePath: "notes/project.md",
+                  text: "cross-tool bypass marker",
+                  lineStart: 1,
+                  lineEnd: 1
+                }
+              ]
+            }
+          : {}
+    }))
+  };
+
+  const result = await buildEngineText(
+    {
+      persistence: {
+        listPriorTurns: async () => ({ recent: [] }),
+        getThreadContext: async () => ({
+          threadTitle: "Remodel",
+          localTimezone: "UTC",
+          incognito
+        })
+      } as never,
+      crossToolRead,
+      notesRetrieval
+    },
+    "u1",
+    "what is the status of Remodel?"
+  );
+
+  expect(notesRecall.recall).not.toHaveBeenCalled();
+  expect(crossToolRead.runReadTool.mock.calls.map((call) => call[1])).not.toContain("notes.search");
+  expect(result.text).not.toContain("cross-tool bypass marker");
+});
+
+it("keeps automatic notes retrieval within the approved 500ms budget", async () => {
+  vi.useFakeTimers();
+  try {
+    const notesRecall = {
+      recall: vi
+        .fn()
+        .mockImplementation(
+          () => new Promise((resolve) => setTimeout(() => resolve({ snippets: [] }), 1000))
+        )
+    };
+    const notesRetrieval = new NotesContextRetriever({
+      dataContext,
+      notesRecall,
+      settingsRepo: {
+        getOrCreate: async () => ({
+          userId: "u1",
+          recallEnabled: true,
+          factsEnabled: true,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+      }
+    });
+    const pending = buildEngineText(
+      {
+        persistence: {
+          listPriorTurns: async () => ({ recent: [] }),
+          getThreadContext: async () => ({
+            threadTitle: "Remodel",
+            localTimezone: "UTC",
+            incognito: false
+          })
+        } as never,
+        crossToolRead: { runReadTool: vi.fn(async () => ({ ok: true, data: {} })) },
+        notesRetrieval
+      },
+      "u1",
+      "what is the status of Remodel?"
+    );
+
+    await vi.advanceTimersByTimeAsync(501);
+
+    await expect(pending).resolves.toEqual({
+      text: "what is the status of Remodel?",
+      pendingItems: []
+    });
+  } finally {
+    vi.useRealTimers();
+  }
 });

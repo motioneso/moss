@@ -76,12 +76,10 @@ export class NotesContextRetriever {
         );
 
         const safe = result.snippets.filter((snippet) => {
-          if (isCredentialShaped(snippet.text)) {
+          if (isCredentialShaped(snippet.text) || isCredentialShaped(snippet.sourcePath)) {
             console.warn(
               JSON.stringify({
-                event: "chat.notes.credential-shaped-dropped",
-                actorUserId: input.actorUserId,
-                sourcePath: snippet.sourcePath
+                event: "chat.notes.credential-shaped-dropped"
               })
             );
             return false;

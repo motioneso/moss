@@ -25,16 +25,16 @@ const CREDENTIAL_SHAPED: readonly [string, string][] = [
   [
     "secret keyword adjacent to a long base64 run",
     "secret=QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo1Njc4"
-  ]
+  ],
+  ["canonical guard: standalone secret language", "keep it a secret between us"],
+  ["canonical guard: password language", "my password is weak, I should change it"],
+  ["canonical guard: api_key language", "the api_key field in the config schema"]
 ];
 
 const NOT_CREDENTIAL_SHAPED: readonly [string, string][] = [
   ["plain note text", "buy milk and eggs tomorrow"],
-  ["bare word secret with no adjacent token", "keep it a secret between us"],
-  ["password mentioned without a value", "my password is weak, I should change it"],
   ["meeting notes", "meeting notes: discuss Q3 roadmap"],
   ["token mentioned with no adjacent long run", "TOKEN of appreciation for your hard work"],
-  ["api_key mentioned with no adjacent long run", "the api_key field in the config schema"],
   ["unrelated env assignment", "DEBUG=true"],
   ["empty string", ""]
 ];
@@ -46,5 +46,11 @@ describe("isCredentialShaped", () => {
 
   it.each(NOT_CREDENTIAL_SHAPED)("does not flag %s", (_label, text) => {
     expect(isCredentialShaped(text)).toBe(false);
+  });
+
+  it("includes provider-token shapes covered by the canonical memory guard", () => {
+    const providerTokenShape = ["g", "hp_", "not-a-real-credential"].join("");
+
+    expect(isCredentialShaped(providerTokenShape)).toBe(true);
   });
 });
