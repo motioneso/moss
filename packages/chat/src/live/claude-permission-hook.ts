@@ -139,13 +139,25 @@ function underRoot(candidate, root) {
   if (typeof candidate !== "string" || !candidate.startsWith("/") || candidate.includes("\\0")) {
     return false;
   }
+  // #1467 QA: a ".." segment must be rejected on the RAW candidate, before normalize() collapses
+  // it. path.resolve/normalize collapse ".." lexically; the kernel resolves ".." only after
+  // expanding each symlink component. A symlink planted inside the root (root/escape -> outside)
+  // makes those two disagree on root/escape/../secret — normalize walks it back inside the root,
+  // but open() walks it out through the symlink target's parent. No legitimate vault path needs a
+  // ".." segment, so refuse it outright rather than trying to reason about where it lexically lands.
+  if (candidate.split("/").includes("..")) return false;
   const normalized = path.posix.normalize(candidate);
   return normalized === root || normalized.startsWith(root + "/");
 }
 
 function realpathOrUndefined(target) {
   try {
-    return fs.realpathSync(target);
+    // #1467 QA: fs.realpathSync (JS) calls path.resolve() first, collapsing ".." lexically before
+    // any symlink is expanded — it can disagree with the kernel about where a path lands. .native
+    // is realpath(3): it resolves each symlink component before applying "..", matching what
+    // open(2) actually does. The underRoot() ".." rejection above is the primary defense; this
+    // keeps realpath semantics correct in general rather than relying on that check alone.
+    return fs.realpathSync.native(target);
   } catch {
     return undefined;
   }
@@ -389,13 +401,25 @@ function underRoot(candidate, root) {
   if (typeof candidate !== "string" || !candidate.startsWith("/") || candidate.includes("\\0")) {
     return false;
   }
+  // #1467 QA: a ".." segment must be rejected on the RAW candidate, before normalize() collapses
+  // it. path.resolve/normalize collapse ".." lexically; the kernel resolves ".." only after
+  // expanding each symlink component. A symlink planted inside the root (root/escape -> outside)
+  // makes those two disagree on root/escape/../secret — normalize walks it back inside the root,
+  // but open() walks it out through the symlink target's parent. No legitimate vault path needs a
+  // ".." segment, so refuse it outright rather than trying to reason about where it lexically lands.
+  if (candidate.split("/").includes("..")) return false;
   const normalized = path.posix.normalize(candidate);
   return normalized === root || normalized.startsWith(root + "/");
 }
 
 function realpathOrUndefined(target) {
   try {
-    return fs.realpathSync(target);
+    // #1467 QA: fs.realpathSync (JS) calls path.resolve() first, collapsing ".." lexically before
+    // any symlink is expanded — it can disagree with the kernel about where a path lands. .native
+    // is realpath(3): it resolves each symlink component before applying "..", matching what
+    // open(2) actually does. The underRoot() ".." rejection above is the primary defense; this
+    // keeps realpath semantics correct in general rather than relying on that check alone.
+    return fs.realpathSync.native(target);
   } catch {
     return undefined;
   }

@@ -452,6 +452,66 @@ describe("Claude PreToolUse permission hook", () => {
     expect(JSON.parse(result.stdout).hookSpecificOutput.permissionDecision).toBe("deny");
   });
 
+  // #1467 QA round 2 (RED): fs.realpathSync collapses ".." LEXICALLY before resolving symlinks,
+  // while the kernel resolves ".." only AFTER expanding each symlink component — so root/escape/../
+  // secret disagreed between the hook's decision and what open(2) would actually read/write. These
+  // build the candidate by raw string concatenation, never path.join/path.resolve, because those
+  // collapse ".." in the TEST HARNESS before the string ever reaches the hook, which is exactly the
+  // gap that let the first round of these tests pass against the still-broken code.
+  it("fails closed against a dotdot-over-symlink read escape (#1467 QA2)", async () => {
+    const vaultDir = await mkdtemp(join(tmpdir(), "jarvis-vault-"));
+    const outsideDir = await mkdtemp(join(tmpdir(), "jarvis-outside-"));
+    try {
+      await mkdir(join(outsideDir, "targetdir"), { recursive: true });
+      await mkdir(join(outsideDir, "secrets"), { recursive: true });
+      await writeFile(join(outsideDir, "secrets", "id_rsa"), "-----BEGIN OPENSSH PRIVATE KEY-----");
+      const escapeLink = join(vaultDir, "escape");
+      await symlink(join(outsideDir, "targetdir"), escapeLink, "dir");
+      // Raw concatenation: escapeLink + "/../secrets/id_rsa" — a real ".." segment, not collapsed
+      // before it reaches the hook.
+      const candidate = escapeLink + "/../secrets/id_rsa";
+
+      const result = await runHook(
+        { tool_name: "Read", tool_input: { file_path: candidate } },
+        {
+          JARVIS_NOTES_ROOTS: vaultDir,
+          JARVIS_PERM_URL: "http://127.0.0.1:1/internal/permission",
+          JARVIS_PERM_TOKEN_FILE: "/no/such/token"
+        }
+      );
+
+      expect(result.code).toBe(0);
+      const decision = JSON.parse(result.stdout).hookSpecificOutput;
+      expect(decision.permissionDecision).toBe("deny");
+      expect(decision.permissionDecisionReason).toBe("missing session token");
+    } finally {
+      await rm(vaultDir, { recursive: true, force: true });
+      await rm(outsideDir, { recursive: true, force: true });
+    }
+  });
+
+  it("fails closed against a dotdot-over-symlink write escape (#1467 QA2)", async () => {
+    const sessionDir = await mkdtemp(join(tmpdir(), "jarvis-session-"));
+    const outsideDir = await mkdtemp(join(tmpdir(), "jarvis-outside-"));
+    try {
+      await mkdir(join(outsideDir, "targetdir"), { recursive: true });
+      const escapeLink = join(sessionDir, "escape");
+      await symlink(join(outsideDir, "targetdir"), escapeLink, "dir");
+      const candidate = escapeLink + "/../pwned.md";
+
+      const result = await runOneShotHook(
+        { tool_name: "Write", tool_input: { file_path: candidate } },
+        { JARVIS_SESSION_ROOT: sessionDir }
+      );
+
+      expect(result.code).toBe(0);
+      expect(result.decision).toBe("deny");
+    } finally {
+      await rm(sessionDir, { recursive: true, force: true });
+      await rm(outsideDir, { recursive: true, force: true });
+    }
+  });
+
   it("denies with exit 0 when token file is missing", async () => {
     const result = await runHook(
       { tool_name: "Bash", tool_input: { command: "echo hi" } },
