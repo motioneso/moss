@@ -4449,13 +4449,13 @@ digest only) remains the fallback for security-tier sign-off.
   `019ffed1-4869-7a30-8131-02c0cbbb254a` is still running; merge remains blocked until its durable
   PR comment is verified.
 - **#1467 / PR #1610:** owner pane `1467 permission boundary shell-quote (relay7)` remains adopted.
-  Exact pushed head is `fa24843c79d2b56c658c0316e9f5dc30d23dd3f3`; foundation/app CI is
-  still in progress. The owner has a fresh adversarial security QA agent active after the
-  symlink-containment fix. No merge until CI, durable GREEN QA, and durable Sol high sign-off.
-- **#1591:** owner pane `1591-owner-scope-relay4` remains adopted. Pre-push
-  `format:check`/`lint`/`typecheck` all passed; gate retry 2 is genuinely active in
-  `test:integration` after migrations and `test:uat-seed` passed. Branch is clean and 8 ahead / 12
-  behind `origin/main`; owner will rebase and open the PR after the gate completes. No PR yet.
+  Round-2 adversarial QA posted RED at pushed head
+  `fa24843c79d2b56c658c0316e9f5dc30d23dd3f3`. The owner has the two-file round-3
+  dangling-symlink fix uncommitted while its full gate runs, then will push and request fresh Opus
+  QA. No merge until CI, durable GREEN QA, and durable Sol high sign-off.
+- **#1591:** owner pane `1591-owner-scope-relay4` remains adopted. Gate retry 2 is fully GREEN
+  (`rc=0`), rebase onto current `origin/main` is complete, and the clean branch is 9 commits ahead.
+  The owner is running the post-rebase pre-push trio, then coordinated wrap-up/PR. No PR yet.
 - **Board:** live project 2 confirms #1275, #1467, and #1591 are all `In progress`.
   `AWAITING-BEN.md` contains no unresolved decision for these lanes. No screenshots.
 - **merges_since_relay:** 0 for this successor session.
