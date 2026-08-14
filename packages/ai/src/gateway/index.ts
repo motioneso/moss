@@ -29,6 +29,7 @@ export type {
 } from "./types.js";
 export {
   AssistantToolGateway,
+  createUnwiredActionResolver,
   type AssistantToolGatewayDependencies,
   type NativeToolPermissionRequest,
   type NativeToolPermissionResponse
