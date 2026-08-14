@@ -4769,3 +4769,10 @@ digest only) remains the fallback for security-tier sign-off.
   static/allocation proofs are green, durable evidence `issuecomment-5291174380`. Fresh independent
   security QA `/root/qa_1108_pr1620_r2` is running pinned to that head. CI is active; no Sol sign-off
   or merge before both are green.
+- **#1467 / PR #1610:** docs-only Sol-blocker fix pushed at exact head
+  `dfb79df31bf552110122563fde3f950688246684`, rebased/current/clean. Tip changes only the two
+  handoff docs: absolute local path converted to `~/Jarv1s`, stale screenshot instruction replaced
+  by durable DOM/network/application-log evidence with no screenshots. Exact-head CI run
+  `31781270331` is fully green; existing code-head live/UAT proof remains applicable. Fresh exact-head
+  security QA `/root/qa_1467_pr1610_r4` is running; Sol-high reaffirmation follows only after its
+  durable GREEN. No merge.
