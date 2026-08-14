@@ -4225,3 +4225,28 @@ digest only) remains the fallback for security-tier sign-off.
 - **Open Ben decisions:** #895 branch-protection change and #1429 board mistrack remain
   unresolved; do not guess. Fable-type decisions must first go through `needs-ben` to identify
   Ben's intended "Sol high" authority; until then use the existing Opus/Fable chain as applicable.
+
+## 2026-08-14 — coordinator resumed; #1590 merged, remaining proof lanes reactivated
+
+- **#1590 / PR #1609 — MERGED:** sensitive QA GREEN (`issuecomment-5287854860`), all required
+  CI checks green, registered-worker 251-chunk continuation proof posted (`issuecomment-5287742983`),
+  squash merge `e546bd7d85a88018b4682b6505f5988ee530841e`. Issue #1590 was closed and its project
+  item moved to `Done`. The finished Codex QA/build panes and worktrees were reaped after confirming
+  no live processes or untracked source remained.
+- **#1585 / PR #1611:** targeted/live proof and CI are green; the one permitted post-cleanup full
+  gate retry is now running in `w1:pA2` (`build-1585-news-stale`). No screenshots or retained UAT
+  artifacts. Do not merge until its full-gate result is reported and fresh sensitive QA is complete.
+- **#1248 / PR #1606:** CI is green, but relay10 had stopped after only committing its continuation
+  doc (`8dc263e87`); the two required UAT specs were not run and no proof comment exists. Existing
+  pane `w1:pAD` (`vault1248relay10`) was reactivated to run both specs and post bounded evidence;
+  no screenshots.
+- **#1467 / PR #1610:** CI is green but live real-chat onboarding proof is still outstanding.
+  Existing pane `w1:pA8` (`relay7-1467`) was re-briefed to execute the driver and post bounded
+  proof; no screenshots.
+- **#1141 / PR #1601:** 3 blocking UAT specs and defence-in-depth wording are posted, but the
+  required foundation check remains red on the known chat-drawer assertion. Existing pane `w1:pAA`
+  (`credenv-relay4`) was re-briefed to rebase onto current `origin/main` and resolve/report the
+  required-check state without blind reruns; fresh security QA remains required.
+- **Coordinator lock:** Codex session `019ffd3f-3098-73c0-bab8-31f491615168`, label `Coordinator`,
+  pane `w1:pA1`. `merges_since_relay=1` (sensitive); no relay trigger fired. `Sol high` identity
+  remains unresolved in `AWAITING-BEN.md`; do not invent it.
