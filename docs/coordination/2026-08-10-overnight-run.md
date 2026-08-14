@@ -4358,5 +4358,6 @@ digest only) remains the fallback for security-tier sign-off.
   was reactivated with the minimal fail-closed realpath-containment fix and symlink regression test;
   fresh full gate and Opus QA are required afterward.
 - QA also flagged newly live one-shot write authority as a ruling point. Added to
-  `docs/coordination/AWAITING-BEN.md` and pinged Ben (`1786681852414774247.msg`); no merge or silent
-  assumption until ruled.
+  `docs/coordination/AWAITING-BEN.md`; Ben ruled writes approved by default under configured vault
+  roots and delete approval only. Ruling is recorded on PR #1610 (`issuecomment-5289570762`); a
+  settings toggle can be a follow-up if not cleanly in scope.
