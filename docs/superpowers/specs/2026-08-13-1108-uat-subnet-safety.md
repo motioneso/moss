@@ -58,8 +58,14 @@ One implementation PR against #1108. It makes the provisioner:
 2. **Refuse, fail-closed and before any `docker compose` invocation**, an explicitly requested
    `UAT_DOCKER_SUBNET` that overlaps a live network or a statically forbidden subnet. An explicit
    request is never silently re-picked — refusal only.
-3. **Support concurrent runs** by combining per-attempt selection with a bounded retry on Docker's
-   own pool-overlap failure (mirroring the existing port-bind TOCTOU retry).
+3. **Support concurrent subnet allocation** by combining per-attempt selection with a bounded retry
+   on Docker's own pool-overlap failure (mirroring the existing port-bind TOCTOU retry). Scope note
+   (review finding B1): this makes concurrent runs _allocate_ safely — full concurrent UAT stacks
+   remain blocked by the fixed `container_name: moss` in the compose file itself
+   (`infra/docker-compose.prod.yml:133`, provisioned by every UAT run via
+   `tests/uat/provisioner.ts:437`), which mutually excludes any two live stacks at the second `up`
+   regardless of subnets. That is a prod-facing compose change tracked separately in #1618 and
+   deliberately not made here.
 4. **Clean up only networks demonstrably owned by the current run** — matched by the run's unique
    compose-project label — and extend the leak assertion so a surviving network is loud. **No
    cross-run reaping, ever.**
@@ -121,11 +127,16 @@ enumerator; an IPv4 /24 cannot overlap them. A malformed subnet string coming ba
 itself fails the run loudly rather than being skipped — a guard that ignores what it cannot parse is
 not fail-closed.
 
+The retry keys on Docker's exact stderr signature by design: if a future Docker release rewords the
+message, the conflict degrades to a terminal fail-closed error rather than a silent retry — that is
+the intended safe direction. Do not "fix" this into a broader fuzzy match.
+
 ### D5 — Ownership marker and cleanup scope
 
 The ownership marker is the run's unique compose project name (`uat-<pid>_<hex8>`,
 `tests/uat/provisioner.ts:26-29`), which Compose stamps on the network as the
-`com.docker.compose.project` label (verified live on this box for compose v2.24.6 and v5.1.4).
+`com.docker.compose.project` label (verified live on this box for both installed Compose binaries:
+the `docker compose` plugin v2.24.6 and the standalone `docker-compose` reporting v5.1.4).
 
 - **Current-run teardown:** after `down -v`, any network still carrying **this exact run's** label
   is removed explicitly (idempotent, never throws — same contract as
@@ -141,6 +152,9 @@ The ownership marker is the run's unique compose project name (`uat-<pid>_<hex8>
 - Issue #1108's "reap the two strays at 10.254/10.255" bullet is already satisfied: they no longer
   exist (verified 2026-08-13). What this PR owes is prevention (own-network removal + loud leak
   assertion) — not retroactive deletion of anything.
+- This narrows the issue's "reap leftover `uat-*` networks" wording to own-run cleanup only. The
+  deviation is deliberate (cross-run auto-delete on a multi-agent box is the dangerous choice) and
+  is surfaced on #1108 itself in the acceptance-amendment comment, not just recorded here.
 
 ### D6 — Surface and signature changes
 
@@ -192,8 +206,14 @@ overlap verdict, refusal message) is deterministic code over `docker network` ou
 
 - `scripts/smoke-compose.ts`'s fixed `10.253.0.0/24` has the same no-guard shape. Not owned by
   #1108; the forbidden list here protects UAT from smoke, not smoke from anything.
-- CI e2e wiring, host firewall (ufw) behaviour, and the orphaned-stack `moss` container-name
-  collision (separate memory/issue) are untouched.
+- CI e2e wiring and host firewall (ufw) behaviour are untouched.
+- **The fixed `container_name: moss` (`infra/docker-compose.prod.yml:133`) — tracked as #1618.**
+  Every UAT stack provisions from that compose file (`tests/uat/provisioner.ts:437`), so the fixed
+  name mutually excludes any two live UAT stacks: the second run's `up` dies on
+  `Conflict. The container name "/moss" is already in use`, whatever its subnet. This is not merely
+  an orphaned-stack hazard — it deterministically caps this box at one live UAT stack. Removing or
+  project-scoping the name is a prod-facing change (Portainer stack and Watchtower track the prod
+  container) requiring Ben's sign-off, hence the separate issue rather than a scope creep here.
 - No compose-file change: `infra/docker-compose.prod.yml:222` keeps its `10.251.0.0/24` default —
   prod deploys rely on it; the provisioner always interpolates an explicit value.
 
@@ -206,15 +226,22 @@ overlap verdict, refusal message) is deterministic code over `docker network` ou
    exits non-zero with the reserved-for-production refusal **before any compose invocation**.
    Second refusal proof against a live overlap uses a **throwaway network created by the proof
    itself** (e.g. `10.249.0.0/24`) and removes only that self-created network afterwards.
-3. **Concurrency proof:** two concurrent bare-level provision+teardown runs, no subnet env vars,
-   both succeed; logs show two distinct auto-selected subnets; afterwards `docker network ls` shows
-   zero `uat-*` networks.
+3. **Concurrent-allocation proof:** two concurrent bare-level provisioner runs, no subnet env vars.
+   Asserted: both logs show a `subnet <cidr> (auto)` line and the two CIDRs are **distinct** (the
+   allocation guard worked); the losing run fails on the **container-name** conflict
+   (`Conflict. The container name "/moss" is already in use`, #1618) and **never** on subnet
+   overlap; afterwards `docker network ls` shows zero `uat-*` networks (both runs — including the
+   name-collision loser — cleaned their own networks). Both-runs-fully-up is **not** asserted: full
+   concurrent stacks are blocked by #1618 and that half of issue #1108's original acceptance is
+   deferred to #1618 (amendment recorded on the issue).
 
 Exact commands, expected exits, and evidence bounds live in the companion plan.
 
 ## Kill gate
 
-If the concurrency proof shows this box cannot host two simultaneous UAT stacks for reasons outside
-the subnet guard (ufw, Docker daemon limits), stop after Task 1+2 land their unit-tested selection
-logic, report to the Coordinator, and let Ben decide whether concurrent UAT on this box is a goal
-worth chasing. Owner of the call: Ben.
+The loser failing on the `container_name` conflict is the **expected** outcome (#1618), not a kill
+signal. The kill trigger is the subnet guard itself misbehaving in the concurrent-allocation proof:
+identical auto-selected subnets, a subnet-overlap failure surviving the bounded retry, or a leaked
+`uat-*` network after teardown. On that observation, stop after Task 1+2 land their unit-tested
+selection logic, report to the Coordinator, and let Ben decide the next step. Owner of the call:
+Ben.

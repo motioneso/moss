@@ -22,8 +22,10 @@ lanes touch it), re-ground before writing a line.
 | Positive leak assertion (containers+volumes today)            | `assertNoLeakedResources`, `tests/uat/provisioner.ts:527-548`                         |
 | Subnet consumed at exactly two seams                          | env file `tests/uat/provisioner.ts:207`, interpolation `tests/uat/provisioner.ts:271` |
 | Compose IPAM interpolation with prod default                  | `infra/docker-compose.prod.yml:222`                                                   |
-| Compose stamps `com.docker.compose.project` label on networks | verified live 2026-08-13, compose v2.24.6 and v5.1.4                                  |
+| Compose stamps `com.docker.compose.project` label on networks | verified live 2026-08-13 on both binaries: plugin v2.24.6, standalone v5.1.4          |
 | Unit tests pinning today's literal/signatures                 | `tests/unit/uat-provisioner.test.ts:14,38,77,137,159`                                 |
+| Fixed `container_name: moss` blocks 2nd live stack (#1618)    | `infra/docker-compose.prod.yml:133`                                                   |
+| Every UAT stack provisions from the prod compose file         | `UAT_COMPOSE_FILE`, `tests/uat/provisioner.ts:437`                                    |
 
 Open questions: none. No new dependency; no migration; no user-facing UI.
 
@@ -113,12 +115,17 @@ two concurrent runs don't race one image build. Stagger the concurrent starts by
    `UAT_DOCKER_SUBNET=10.249.0.0/24 … tsx tests/uat/provisioner.ts > /tmp/uat1108-refuse2.log 2>&1; echo "EXIT=$?"`
    → `EXIT=1`, message names `uat1108-proof`. Cleanup: `docker network rm uat1108-proof` — created
    by this proof, the only network the proof ever deletes.
-3. **Concurrency:** two staggered
+3. **Concurrent allocation (option b — see spec acceptance 3):** two staggered
    `JARVIS_UAT_BUILD=0 pnpm exec tsx tests/uat/provisioner.ts > /tmp/uat1108-c{1,2}.log 2>&1; echo "EXIT=$?"`
-   → both `EXIT=0`; the two `subnet <cidr> (auto)` log lines differ;
-   `docker network ls --format '{{.Name}}'` afterwards contains no `uat-` entry. If the loser hits
-   the TOCTOU retry, its log shows the subnet-conflict retry warning — paste it; that line is the
-   D4 mechanism working, not a flake.
+   → winner `EXIT=0`; loser is **expected to fail on the fixed-container-name conflict**
+   (`Conflict. The container name "/moss" is already in use`, #1618) — grep the loser's log and
+   confirm the failure is the name conflict and **not** a subnet overlap. Both logs show a
+   `subnet <cidr> (auto)` line and the two CIDRs differ (allocation guard proven);
+   `docker network ls --format '{{.Name}}'` afterwards contains no `uat-` entry (the loser's
+   failed-attempt teardown removed its own labelled network). Both-stacks-healthy is **not** part
+   of this proof — that half of #1108's acceptance is deferred to #1618. If the loser instead hits
+   the TOCTOU subnet retry, its log shows the subnet-conflict retry warning — paste it; that line
+   is the D4 mechanism working, not a flake.
 
 Evidence bound per proof: exit line + ≤10 grep'd log lines. All verification commands above keep
 the `; echo "EXIT=$?"` shape — never piped.
@@ -132,18 +139,27 @@ suite). `pnpm lint`, `pnpm format:check`, `pnpm check:file-size`, `pnpm typechec
 
 ## Kill gate
 
-After Tasks 1–2 (selection logic, unit-proven) the line pauses for the Task 4 proofs. If proof 3
-fails for reasons **outside** the subnet guard (ufw, daemon limits — the guard's own logs clean),
-stop, report to the Coordinator; Ben owns the call on whether concurrent UAT on this box stays a
-goal. Tasks 1–3 are still shippable as the fail-closed guard alone; say "code-complete, unverified
-for concurrency" plainly if so.
+After Tasks 1–2 (selection logic, unit-proven) the line pauses for the Task 4 proofs. In proof 3
+the loser dying on the `container_name` conflict is the **expected** outcome (#1618), never a kill
+signal. The kill trigger is the subnet guard itself misbehaving: identical auto-selected subnets,
+a subnet-overlap failure surviving the bounded retry, a leaked `uat-*` network after teardown, or
+proof failures with the guard's own logs clean (ufw, daemon limits). On that observation stop and
+report to the Coordinator; Ben owns the call. Tasks 1–3 are still shippable as the fail-closed
+guard alone; say "code-complete, unverified for concurrency" plainly if so.
 
 ## Rulings ledger (facts uncovered while grounding)
 
 - The two stranded `uat-*` networks cited in #1108 (10.254/10.255) were already gone on 2026-08-13;
   both /24s free. Issue's bullet 3 is prevention-only now.
-- Compose v2.24.6 **and** v5.1.4 both stamp `com.docker.compose.project` on networks (live
-  inspect) — the ownership marker is version-stable on this box.
+- Review finding B1 (PR #1614 independent verdict): the fixed `container_name: moss` in
+  `infra/docker-compose.prod.yml:133`, provisioned by every UAT run via
+  `tests/uat/provisioner.ts:437`, mutually excludes any two live UAT stacks — the second `up` dies
+  on the name conflict regardless of subnet. #1108 therefore proves concurrent _allocation_ only;
+  full concurrency is deferred to #1618 (prod-facing, needs Ben). Prod survives today only because
+  its container is capitalized `Moss`.
+- This box carries **two** Compose binaries — the `docker compose` plugin v2.24.6 and a standalone
+  `docker-compose` reporting v5.1.4 — and both stamp `com.docker.compose.project` on networks
+  (live inspect). The ownership marker is stable across both.
 - Live box carries ~28 non-jarv1s compose networks across `172.16–31/16` and `192.168.x/20` —
   string-equality overlap checks would pass everything; real CIDR math is mandatory.
 - `assertNoLeakedResources` checks containers+volumes only (`tests/uat/provisioner.ts:527-548`) —
