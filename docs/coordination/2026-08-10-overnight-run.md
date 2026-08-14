@@ -5082,3 +5082,9 @@ digest only) remains the fallback for security-tier sign-off.
   seconds; only if cold is green, one 15-second warm repeat in the same stack; one final teardown with
   zero-resource assertion. Cold RED stops before a second probe. No notes UAT, production edit, push
   or retry.
+- **#1108 / PR #1620:** final authorized security QA r5 GREEN at exact head
+  `e80ad140719cfecc82e06c7e7bf3752e722e50a3`, durable `issuecomment-5292709725`. Preflight,
+  exact-head CI, 63 targeted tests, canonical boundaries, cleanup/security invariants and the
+  Fable-locked closure all pass; no bypass or new-class finding, so the no-round-6 stop was not
+  triggered. Final Sol-high exact-head sign-off `/root/signoff_1108_pr1620` is running; security merge
+  remains Ben-gated. #1618 remains the sole deferred fixed-name/full-concurrency follow-up.
