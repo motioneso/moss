@@ -4599,9 +4599,8 @@ digest only) remains the fallback for security-tier sign-off.
   Codex build `build-1108-uat-subnet`, session `019fff1b-e106-7f53-be96-47f8a2744390`, branch
   `build-1108-uat-subnet`, label `1108 UAT subnet Codex`, is rebasing/grounding before code. Tier
   remains security; exact-head adversarial QA and Sol-high durable sign-off are required.
-- **Board:** both #1454 and #1108 were submitted for `Ready` → `In progress`; GitHub GraphQL rate
-  limiting blocked only the immediate read-back, not further fleet work. Verify once rate limits
-  recover. Issue comments record both merged specs and active build lanes.
+- **Board:** #1454 and #1108 are verified `In progress`. Issue comments record both merged specs
+  and active build lanes.
 - **#1592 / PR #1617:** exact-head sibling APPROVE reaffirmed at
   `f0674a2c196b2e747af36e7392d6914937eb8eab` (`issuecomment-5290578113`). Merge follows green docs
   CI/read-back; implementation then gets a new Codex lane.
@@ -4626,8 +4625,7 @@ digest only) remains the fallback for security-tier sign-off.
   panes); `agents 2` remains four equal quarters. No tab exceeds four panes and no screenshots were
   used.
 - **Bookkeeping:** issue comment `issuecomment-5290612056` records the merged spec and active Codex
-  build. Project-board `In progress` verification is deferred until the temporary GitHub GraphQL
-  rate limit clears.
+  build. Project-board status is verified `In progress`.
 - **Merge counter:** `merges_since_relay=4` (#1591 plus docs specs #1454, #1108, #1592). Ben's
   standing instruction for this overnight run is to keep the Codex coordinator resident through
   compaction, so the ordinary relay counter does not replace this active coordinator.
