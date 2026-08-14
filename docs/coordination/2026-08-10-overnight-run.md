@@ -5134,11 +5134,11 @@ digest only) remains the fallback for security-tier sign-off.
   new dependency or push until RED→GREEN and focused/static evidence.
 - **#1275 / PR #1608:** remediation pushed at exact head
   `8f82423b631c54270eed043884fa74e44633534f`, base current main `f648b8da0`; durable mixed local
-  evidence `issuecomment-5292695408`. Exact-head foundation/app and both smokes are green; image build
-  remains in progress. Fresh security QA `/root/qa_1275_pr1608_r4` is running and must preserve the
-  truthful local infrastructure RED (181 files passed before PostgreSQL shutdown caused 12-file/15-
-  test connection failures) while treating terminal exact-head CI as the replacement final check.
-  No local retry or merge.
+  evidence `issuecomment-5292695408`. Exact-head CI run `31795667681` is fully green: foundation/app,
+  both smokes, image build and scope. Fresh security QA `/root/qa_1275_pr1608_r4` is running and must
+  preserve the truthful local infrastructure RED (181 files passed before PostgreSQL shutdown caused
+  12-file/15-test connection failures) while treating terminal exact-head CI as the replacement final
+  check. No local retry or merge.
 - **#1556 Phase-5 independent review:** throwaway diagnostic was deleted and root typecheck is green,
   leaving the intended four-file diff, but Standards and Spec both returned REVISE. Open blockers:
   non-owner claim directories leak on timeout/pre-acquisition error/waiter crash; synchronous `work()`
