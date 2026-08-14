@@ -4650,3 +4650,20 @@ digest only) remains the fallback for security-tier sign-off.
   `43dbe3bc7468280caeae60a49fcacd174c4e2231`: only intended fixture substitutions/formatting differ,
   discarded objects are not HEAD ancestors, all 17 outgoing snapshots scan clean, targeted tests
   pass 16/16, and local/remote heads match. No bypass was used.
+
+## 2026-08-14 — #1556 PR and #1013 round-three checkpoint
+
+- **#1556 / PR #1619:** code-complete at exact head
+  `43dbe3bc7468280caeae60a49fcacd174c4e2231`; owner full isolated gate exited 0, focused memory and
+  chat/module-registry checks exited 0, tree clean, no dev/seed/DB teardown debt. It is explicitly
+  **LIVE-PATH UNVERIFIED / NOT MERGE-READY** until the blocking real-chat UAT posts durable proof.
+  Independent security-tier QA `/root/qa_1556_pr1619` is running. Coordinator verified a login
+  shell has `JARVIS_UAT_REAL_CHAT_TOKEN_FILE` set and its encrypted file exists mode 0600; the
+  derived `JARVIS_UAT_REAL_CHAT_ENV_FILE` is correctly absent before `tests/uat/provisioner.ts`
+  validates/decrypts the trigger. Owner is tasked to rerun through the provisioner with the trigger
+  inherited, never printing secret values.
+- **#1013 / PR #1616:** author B2 revision is now exact head
+  `4844fd84eae5f360c5edc0ab2c49b2186aaea5cc`, docs CI green. All five membership statements are
+  mapped as site 12; teardown REVOKEs use `preDropSql`, setup GRANTs use the proposed locked helper,
+  and discovery includes membership forms. Round-three exact-head sibling review is running; no
+  merge or build dispatch before its durable verdict.
