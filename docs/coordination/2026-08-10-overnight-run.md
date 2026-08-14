@@ -4455,13 +4455,14 @@ digest only) remains the fallback for security-tier sign-off.
   QA. No merge until CI, durable GREEN QA, and durable Sol high sign-off.
 - **#1591 / PR #1613:** owner pane `1591-owner-scope-relay4` is done and remains available for
   findings. Security-tier PR is open at exact head
-  `6f201723b79bfcb2bd6fa28b17416fdf9871becd`; CI is in progress. Owner's isolated full gate is
-  GREEN (`rc=0`, 191/191 files, 1894 passed / 2 skipped) after rebase. Post-rebase format/lint are
-  green; typecheck `rc=2` is reproduced on clean `origin/main` and attributed to #1606's missing
-  external-module `@moss/db` path mapping, not waived or fixed in this branch. Next gates are CI,
-  fresh Opus adversarial QA with a durable verdict, then durable Sol high sign-off. Fresh QA is
-  running in pane label `QA 1591 security adversarial`, session
-  `9fce578e-6dd4-4494-9161-57b53bb498b6`, isolated branch/worktree `qa-1613-security`. Not merged.
+  `6f201723b79bfcb2bd6fa28b17416fdf9871becd`; CI full gate and the owner's isolated gate are
+  GREEN (`rc=0`, 191/191 files, 1894 passed / 2 skipped). Fresh Opus QA is GREEN/MERGE-READY at
+  the exact head (`issuecomment-5290354120`, audit:preflight 0, 0 blocking). Its one pre-sign-off
+  condition is a PR-body correction: the owner's earlier typecheck `rc=2` / #1606 attribution was
+  disproven by QA on the exact base and PR head and was a transient local-environment artifact.
+  Correction is routed to the owner without a code/head change; durable Sol high sign-off follows.
+  QA pane was reaped after its durable verdict; worktree retained for later four-gate cleanup. Not
+  merged.
 - **Board:** live project 2 confirms #1275, #1467, and #1591 are all `In progress`.
   `AWAITING-BEN.md` contains no unresolved decision for these lanes. No screenshots.
 - **merges_since_relay:** 0 for this successor session.
