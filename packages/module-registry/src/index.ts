@@ -34,6 +34,7 @@ import {
   AiRepository,
   aiModuleManifest,
   aiModuleSqlMigrationDirectory,
+  createUnwiredActionResolver,
   createAiSecretCipher,
   generateStructured,
   ModelDiscoveryService,
@@ -165,7 +166,7 @@ import {
   registerDataContextWorker,
   type QueueDefinition
 } from "@moss/jobs";
-import { createModuleLogger, HttpError } from "@moss/module-sdk";
+import { createModuleLogger } from "@moss/module-sdk";
 import type {
   MossModuleManifest,
   JsonMossModuleManifest,
@@ -1353,6 +1354,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     registerRoutes: (server, deps) => {
       const preferencesRepository = new PreferencesRepository();
       const tasksCompatibility = new TasksCompatibilityHelper(preferencesRepository);
+      const unwiredActionResolver = createUnwiredActionResolver({ runner: deps.dataContext });
       return registerAiRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
@@ -1386,10 +1388,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         // per-server getter in `deps` (see getResolveActionRequestFn), instead of capturing a
         // module-level binding that every server sharing this process would contend over.
         resolveActionRequest: (actorUserId, id, status) => {
-          const fn = deps.getResolveActionRequestFn?.();
-          return fn
-            ? fn(actorUserId, id, status)
-            : Promise.reject(new HttpError(503, "Assistant action resolution is not available"));
+          const fn = deps.getResolveActionRequestFn?.() ?? unwiredActionResolver;
+          return fn(actorUserId, id, status);
         }
       });
     },
