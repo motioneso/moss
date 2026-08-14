@@ -4915,3 +4915,13 @@ digest only) remains the fallback for security-tier sign-off.
   same current-main run, and verifying publish recovery/self-close. Digest `1786702175755829465.msg`.
 - **Merge counter:** `merges_since_relay=6`; Ben's standing overnight instruction keeps this Codex
   coordinator resident despite ordinary relay triggers.
+
+## 2026-08-14 — #1013 PR opened, refresh required
+
+- **#1013 / PR #1624:** draft opened at exact head
+  `fd2964813c77536ef6bb7622fb6bd20b7f58be8d` with full proof package green: final isolated gate
+  1912 passed/2 skipped, exact-commit contention gates 0/0 and tuple counts 0/0, integration 6/6,
+  locked harness zero errors, unlocked 59 `XX000`, fast checks green, teardown clean. However its
+  reported base `6f7d75391` became stale when #1454 merged as current main `f648b8da0`. QA is held
+  until owner rebases patch-identically onto current main, verifies patch ID/name-only/fast checks,
+  and pushes a fresh exact head. No DB proof rerun for the non-overlapping base-only change.
