@@ -4979,3 +4979,10 @@ digest only) remains the fallback for security-tier sign-off.
   is adjudicating whether `/024` canonical-prefix rejection plus two release-note statements are a
   mechanical final closure or require stop/re-scope. No author edit, rebase, push, fifth QA, or merge
   until that ruling lands.
+- **#1275 / PR #1608:** exact-head security QA RED at
+  `855eb86f7737017936a0e713fc05891c3cc1e153`, durable `issuecomment-5290833605`; CI and blocking
+  module-install UAT are green. One blocker: pattern work is bounded per match but not per validation
+  invocation, so an authenticated patterned collection can monopolize the eight-slot process-global
+  pool for minutes. New Codex owner `build-1275-remediation` / label `1275 pattern timeout Codex`
+  resumed the existing branch/worktree for a minimum TDD per-invocation bound. Fresh exact-head
+  security QA and Sol-high remain mandatory; no merge.
