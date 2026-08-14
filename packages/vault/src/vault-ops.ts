@@ -216,3 +216,21 @@ export async function deleteUserVaultDir(vaultsBaseDir: string, userId: string):
 
   await rm(userVaultDir, { recursive: true, force: true });
 }
+
+/**
+ * Operator-level helper: lists every owner's vault directory name under
+ * `vaultsBaseDir` (each is a userId). Like `deleteUserVaultDir`, intentionally
+ * NOT scoped to a VaultContext — used by the vault-ingest scheduler tick to
+ * enumerate owners for fan-out, not by a live user session. Returns an empty
+ * list (not an error) if the base dir does not exist yet.
+ */
+export async function listVaultOwnerIds(vaultsBaseDir: string): Promise<string[]> {
+  let entries;
+  try {
+    entries = await readdir(vaultsBaseDir, { withFileTypes: true });
+  } catch (err) {
+    if (isMissingPathError(err)) return [];
+    throw err;
+  }
+  return entries.filter((e) => e.isDirectory()).map((e) => e.name);
+}

@@ -11,6 +11,7 @@ export { CORE_VERSION, compareMossVersions, satisfiesCoreVersion } from "./core-
 
 export { createModuleLogger } from "./logger.js";
 export * from "./module-params.js";
+export type { VaultIngestRootProvider } from "./vault-ingest-provider.js";
 
 import type { ModuleExternalSourceManifest } from "./external-module.js";
 

@@ -21,6 +21,7 @@ import {
   registerPeopleRoutes,
   registerPersonIndexWorker,
   registerSyncPersonMemoryWorker,
+  createPeopleVaultIngestProvider,
   PERSON_INDEX_QUEUE,
   SYNC_PERSON_MEMORY_QUEUE
 } from "@moss/people";
@@ -53,12 +54,16 @@ import {
   memoryModuleManifest,
   memorySqlMigrationDirectory,
   registerMemoryDashboardRoutes,
-  registerMemoryGraphRoutes
+  registerMemoryGraphRoutes,
+  registerVaultIngestRootProvider,
+  registerVaultIngestWorkers,
+  VAULT_INGEST_QUEUE_DEFINITIONS
 } from "@moss/memory";
 import {
   PreferencesRepository,
   structuredStateModuleManifest,
-  structuredStateSqlMigrationDirectory
+  structuredStateSqlMigrationDirectory,
+  createStructuredStateVaultIngestProvider
 } from "@moss/structured-state";
 import { isBehaviorEnabled, type SourceBehaviorPreferencesPort } from "@moss/source-behaviors";
 import {
@@ -1533,7 +1538,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
   {
     manifest: memoryModuleManifest,
     sqlMigrationDirectories: [memorySqlMigrationDirectory],
-    queueDefinitions: [],
+    queueDefinitions: [...VAULT_INGEST_QUEUE_DEFINITIONS],
     registerRoutes: (server, deps) => {
       registerMemoryGraphRoutes(server, {
         dataContext: deps.dataContext,
@@ -1543,7 +1548,13 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext
       });
-    }
+    },
+    registerWorkers: (boss, deps) =>
+      registerVaultIngestWorkers(boss, deps.dataContext, {
+        vaultRunner: new VaultContextRunner(getVaultBaseDir()),
+        vaultsBaseDir: getVaultBaseDir(),
+        embeddingProviderFactory: createRuntimeEmbeddingProvider
+      })
   },
   {
     manifest: usefulnessFeedbackModuleManifest,
@@ -1587,7 +1598,11 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
   {
     manifest: structuredStateModuleManifest,
     sqlMigrationDirectories: [structuredStateSqlMigrationDirectory],
-    queueDefinitions: []
+    queueDefinitions: [],
+    registerWorkers: async () => {
+      registerVaultIngestRootProvider(createStructuredStateVaultIngestProvider());
+      return [];
+    }
   },
   {
     manifest: wellnessModuleManifest,
@@ -1837,13 +1852,14 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         dataContext: deps.dataContext,
         boss: deps.boss,
         vaultRunner: new VaultContextRunner(getVaultBaseDir()),
-        peopleNotesService: new PeopleNotesService()
+        peopleNotesService: new PeopleNotesService({ boss: deps.boss })
       }),
     registerWorkers: async (boss, deps) => {
       const indexId = await registerPersonIndexWorker(boss, deps.dataContext, {
         providers: []
       });
       const syncId = await registerSyncPersonMemoryWorker(boss, deps.dataContext);
+      registerVaultIngestRootProvider(createPeopleVaultIngestProvider());
       return [indexId, syncId];
     }
   }

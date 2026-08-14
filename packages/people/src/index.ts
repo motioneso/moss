@@ -11,6 +11,8 @@ export type { PeopleRouteDependencies } from "./routes.js";
 export { registerPersonIndexWorker, registerSyncPersonMemoryWorker } from "./workers.js";
 export type { PersonIndexWorkerDeps } from "./workers.js";
 
+export { createPeopleVaultIngestProvider } from "./vault-ingest-provider.js";
+
 export {
   enqueuePersonIndex,
   enqueuePersonIndexBatch,
