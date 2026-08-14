@@ -4459,7 +4459,9 @@ digest only) remains the fallback for security-tier sign-off.
   GREEN (`rc=0`, 191/191 files, 1894 passed / 2 skipped) after rebase. Post-rebase format/lint are
   green; typecheck `rc=2` is reproduced on clean `origin/main` and attributed to #1606's missing
   external-module `@moss/db` path mapping, not waived or fixed in this branch. Next gates are CI,
-  fresh Opus adversarial QA with a durable verdict, then durable Sol high sign-off. Not merged.
+  fresh Opus adversarial QA with a durable verdict, then durable Sol high sign-off. Fresh QA is
+  running in pane label `QA 1591 security adversarial`, session
+  `9fce578e-6dd4-4494-9161-57b53bb498b6`, isolated branch/worktree `qa-1613-security`. Not merged.
 - **Board:** live project 2 confirms #1275, #1467, and #1591 are all `In progress`.
   `AWAITING-BEN.md` contains no unresolved decision for these lanes. No screenshots.
 - **merges_since_relay:** 0 for this successor session.
