@@ -163,6 +163,15 @@ function realpathOrUndefined(target) {
   }
 }
 
+function lstatExists(target) {
+  try {
+    fs.lstatSync(target);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Fail-closed symlink containment: lexical containment alone isn't enough — a symlink planted
 // inside a root can point anywhere on disk while its own path string still reads as "under root".
 // Resolve the real filesystem location of both root and candidate, walking up to the nearest
@@ -175,6 +184,13 @@ function resolveExistingAncestor(candidate) {
   while (true) {
     const real = realpathOrUndefined(current);
     if (real !== undefined) return real;
+    // #1467 QA round 2: a realpath failure does NOT mean "this path doesn't exist yet" — a
+    // DANGLING symlink also fails realpath (ENOENT on its target) while still existing as a
+    // filesystem entry. open(O_CREAT) follows that link and creates the file at the link's
+    // target, outside any root the link's own location would suggest. Climbing to the parent as
+    // a "safe proxy" is only valid when "current" genuinely doesn't exist; if lstat finds an
+    // entry there (a dangling symlink), fail closed instead of climbing past it.
+    if (lstatExists(current)) return undefined;
     const parent = path.posix.dirname(current);
     if (parent === current) return undefined;
     current = parent;
@@ -425,6 +441,15 @@ function realpathOrUndefined(target) {
   }
 }
 
+function lstatExists(target) {
+  try {
+    fs.lstatSync(target);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Fail-closed symlink containment: lexical containment alone isn't enough — a symlink planted
 // inside a root can point anywhere on disk while its own path string still reads as "under root".
 // Resolve the real filesystem location of both root and candidate, walking up to the nearest
@@ -436,6 +461,13 @@ function resolveExistingAncestor(candidate) {
   while (true) {
     const real = realpathOrUndefined(current);
     if (real !== undefined) return real;
+    // #1467 QA round 2: a realpath failure does NOT mean "this path doesn't exist yet" — a
+    // DANGLING symlink also fails realpath (ENOENT on its target) while still existing as a
+    // filesystem entry. open(O_CREAT) follows that link and creates the file at the link's
+    // target, outside any root the link's own location would suggest. Climbing to the parent as
+    // a "safe proxy" is only valid when "current" genuinely doesn't exist; if lstat finds an
+    // entry there (a dangling symlink), fail closed instead of climbing past it.
+    if (lstatExists(current)) return undefined;
     const parent = path.posix.dirname(current);
     if (parent === current) return undefined;
     current = parent;

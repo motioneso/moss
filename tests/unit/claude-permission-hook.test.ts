@@ -512,6 +512,76 @@ describe("Claude PreToolUse permission hook", () => {
     }
   });
 
+  // #1467 QA round 2 (RED, 2nd finding): resolveExistingAncestor treated ANY realpath failure as
+  // "this path doesn't exist yet, so climb to the parent" — true for a not-yet-created file, false
+  // for a DANGLING symlink. realpath fails ENOENT on a dangling link too, but the entry still
+  // exists (lstat finds it), and open(O_CREAT) follows the link to create the file at its target —
+  // outside the root the link's own location would suggest. The candidate here is planted with the
+  // leaf target absent so realpath genuinely can't resolve it, but lstat must still see the symlink.
+  it("fails closed when the write candidate itself is a dangling symlink pointing outside the root (#1467 QA2)", async () => {
+    const sessionDir = await mkdtemp(join(tmpdir(), "jarvis-session-"));
+    const outsideDir = await mkdtemp(join(tmpdir(), "jarvis-outside-"));
+    try {
+      await mkdir(join(sessionDir, "sub"), { recursive: true });
+      const danglingLink = join(sessionDir, "sub", "innocent.md");
+      // Target does not exist yet — the link is dangling — but it still resolves outside the root.
+      await symlink(join(outsideDir, "pwned.md"), danglingLink, "file");
+
+      const result = await runOneShotHook(
+        { tool_name: "Write", tool_input: { file_path: danglingLink } },
+        { JARVIS_SESSION_ROOT: sessionDir }
+      );
+
+      expect(result.code).toBe(0);
+      expect(result.decision).toBe("deny");
+    } finally {
+      await rm(sessionDir, { recursive: true, force: true });
+      await rm(outsideDir, { recursive: true, force: true });
+    }
+  });
+
+  it("fails closed when an intermediate directory component (not the leaf) is a dangling symlink pointing outside the root (#1467 QA3)", async () => {
+    const sessionDir = await mkdtemp(join(tmpdir(), "jarvis-session-"));
+    const outsideDir = await mkdtemp(join(tmpdir(), "jarvis-outside-"));
+    try {
+      await mkdir(join(sessionDir, "sub"), { recursive: true });
+      const danglingDirLink = join(sessionDir, "sub", "danglingdir");
+      // The link's target directory does not exist on disk at all — the link is dangling — but the
+      // ancestor-climb must still refuse to treat "it doesn't exist yet" as safe, because the link
+      // itself is a real fs entry that open(O_CREAT) would follow to a path outside the root.
+      await symlink(join(outsideDir, "nonexistent-dir"), danglingDirLink, "dir");
+      const candidate = danglingDirLink + "/new-note.md";
+
+      const result = await runOneShotHook(
+        { tool_name: "Write", tool_input: { file_path: candidate } },
+        { JARVIS_SESSION_ROOT: sessionDir }
+      );
+
+      expect(result.code).toBe(0);
+      expect(result.decision).toBe("deny");
+    } finally {
+      await rm(sessionDir, { recursive: true, force: true });
+      await rm(outsideDir, { recursive: true, force: true });
+    }
+  });
+
+  it("still pre-approves a deep not-yet-created path under a real vault root (#1467 QA3 no-regression)", async () => {
+    const sessionDir = await mkdtemp(join(tmpdir(), "jarvis-session-"));
+    try {
+      const candidate = join(sessionDir, "sub", "deeper", "brand-new-note.md");
+
+      const result = await runOneShotHook(
+        { tool_name: "Write", tool_input: { file_path: candidate } },
+        { JARVIS_SESSION_ROOT: sessionDir }
+      );
+
+      expect(result.code).toBe(0);
+      expect(result.decision).toBe("allow");
+    } finally {
+      await rm(sessionDir, { recursive: true, force: true });
+    }
+  });
+
   it("denies with exit 0 when token file is missing", async () => {
     const result = await runHook(
       { tool_name: "Bash", tool_input: { command: "echo hi" } },
