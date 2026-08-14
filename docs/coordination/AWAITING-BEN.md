@@ -23,6 +23,24 @@ board/issue action has been taken.
 
 **Ben decision:** approve merging PR #1620 at this exact head, or hold it. Recommendation: approve.
 
+## #1275 / PR #1608 — approved-spec mismatch after security QA
+
+Fresh exact-head security QA is RED at `8f82423b631c54270eed043884fa74e44633534f`
+(`issuecomment-5293030445`) despite terminal green CI and a sound invocation-wide runtime deadline.
+The approved #1275 spec requires install-time regex complexity lint and explicitly defers the Worker
+design. The PR instead ships Worker-based runtime confinement, while catastrophic patterns still
+pass installation. The lane is STOP/HOLD with no further edit, rebase, push, QA or merge.
+
+**Ben decision:** choose one:
+
+1. Supersede/update the spec to accept Worker runtime confinement as the #1275 solution.
+2. Require the approved install-time lint (and decide whether the Worker work remains as explicitly
+   approved defense-in-depth or moves to a separate issue/PR).
+3. Stop/re-scope PR #1608 and split the Worker design into a separately specified issue.
+
+**Recommendation:** option 2—retain the already-reviewed runtime boundary only with explicit spec
+approval, and complete the install-time acceptance criterion before merge.
+
 ## RESOLVED — #1467 one-shot write authority ruling (2026-08-14)
 
 Security QA for PR #1610 found one non-blocking but newly activated behavior: injecting

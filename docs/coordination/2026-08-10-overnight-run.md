@@ -5146,3 +5146,14 @@ digest only) remains the fallback for security-tier sign-off.
   spawned children are not guaranteed terminated; killed-owner test does not prove the real lock
   existed; isolated-worker wrapper lacks proof. Duplicate loader/`512` smell is advisory only and will
   not trigger broad refactor. Owner is revising these exact findings; no commit/DB/UAT/push.
+- **#1556 round-2 review:** all prior blockers closed except one atomicity flaw: stale-owner cleanup
+  does readlink/compare then unlink, allowing two cleaners to observe dead token T, one replace it with
+  live U, and the paused cleaner to delete U. Another re-read cannot make this atomic. Owner must use
+  an atomic stale-cleaner election primitive, guarantee/reap abandoned claims, and add a deterministic
+  replacement-owner ABA regression. No commit/DB/UAT/push until same-reviewer GREEN.
+- **#1275 / PR #1608:** fresh exact-head security QA RED at `8f82423b6`, durable
+  `issuecomment-5293030445`. Runtime invocation deadline/pool cleanup is sound and CI is fully green,
+  but the approved spec requires install-time complexity lint and explicitly defers the Worker design;
+  catastrophic patterns still install. Lane is STOP/HOLD with no further cycle. Ben must choose spec
+  supersession, approved lint plus explicit Worker disposition, or split/re-scope; tracked in
+  `AWAITING-BEN.md`. No merge.
