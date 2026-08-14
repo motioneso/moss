@@ -4857,3 +4857,9 @@ digest only) remains the fallback for security-tier sign-off.
   making a path-scoped implementation commit so the second proof worktree can run the exact commit,
   then must complete the two-worktree contention proof and full isolated gate before releasing the
   solo window.
+- **#1556 hold checkpoint:** STATIC-READY at `89ccd0a464a42799c2e41e9916526368bb7ae52b`
+  on current main `6f7d75391`: exact 20-commit range-diff and aggregate patch ID unchanged, six
+  QA-named implementation commits have release-note statements with zero patch mismatches, fast
+  checks green, outgoing snapshot/ancestor scans clean, tree clean. Owner correctly has not pushed
+  or run DB/live verification. HOLD remains until #1013 releases; then recheck main and run blocking
+  full/integration/live UAT before force-with-lease push.
