@@ -39,7 +39,8 @@ Fable's explicit "approved" — do NOT write any code until you see it.**
    in the existing test suite); (3) `settings-vault-chooser.tsx:156` string fix, no test needed.
 4. Follow `coordinated-build` for the rest of the build/PR lifecycle; `coordinated-wrap-up` at the
    finish line. Live-path proof required on the PR (real notes read through UI on live dev,
-   pre-approved with no permission card — screenshot).
+  pre-approved with no permission card — record durable DOM, network, or application-log evidence;
+  do not take screenshots).
 
 ## Traps already resolved (don't re-hit these)
 

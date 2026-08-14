@@ -84,9 +84,9 @@ flow) — `bare` has no seeded admin user.
 **Import path**: write the driver in the session scratchpad dir (not `tests/uat/`, per relay6),
 run via `npx tsx <scratchpad-path>/driver.ts` from repo root (`cwd` matters — compose args are
 relative to repo root per `buildUatComposeArgs`). Import provisioner exports with an **absolute
-`file://` URL specifier** (Node ESM supports this): ``import { writeUatEnvFile, ... } from
-"file:///home/ben/Jarv1s/.claude/worktrees/coord-overnight-20260810/.claude/worktrees/1467-permission-boundary-shell-quote/tests/uat/provisioner.ts"``
-— avoids fragile relative-path math from an out-of-repo scratchpad location. Not yet tried; if
+`file://` URL specifier** (Node ESM supports this) resolved from the worktree path under
+`~/Jarv1s/.claude/worktrees/coord-overnight-20260810/.claude/worktrees/1467-permission-boundary-shell-quote/tests/uat/provisioner.ts`
+— this avoids fragile relative-path math from an out-of-repo scratchpad location. Not yet tried; if
 `file://` + `.ts` extension resolution fails under this repo's tsx/ESM config, fall back to a
 relative import and place the driver one level above `tests/uat/` inside the repo (e.g.
 `tests/.scratch-1467-driver.ts`, still outside `tests/uat/` itself) — untracked, never `git add`.
