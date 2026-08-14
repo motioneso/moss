@@ -46,7 +46,12 @@ const CLI_ENV_KEYS = new Set([
   "JARVIS_CLI_RUNNER_SINGLE_USER",
   "JARVIS_CLI_RUNNER_SOCKET",
   "JARVIS_MCP_SERVER_URL",
-  "JARVIS_MULTIPLEXER"
+  "JARVIS_MULTIPLEXER",
+  // #1467: the cli-runner builds the live permission-hook command line for every containerized
+  // deploy (resolveVaultRoots() -> vaultRootsEnvEntry() in claude-permission-hook.ts) and needs
+  // the app-validated vault roots to do it; without these, that fix is inert in this topology.
+  "JARVIS_NOTES_ROOTS",
+  "MOSS_NOTES_ROOTS"
 ]);
 
 const CLI_ENV_PREFIXES = ["LC_"];
