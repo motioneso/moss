@@ -4530,3 +4530,28 @@ digest only) remains the fallback for security-tier sign-off.
   APPROVE/REVISE comments; GREEN docs QA/CI then permits spec merge and a fresh Codex build lane.
 - **Pane layout:** `agents 2` remains four equal quadrants. Original agents tab is below the
   four-agent cap. `reviews` currently contains one Sol agent. No screenshots.
+
+## 2026-08-14 — post-#1591 merge fleet checkpoint
+
+- **#1591 teardown:** owner confirmed no dev listener/process, seeded rows, or retained
+  `jarvis_gate_1591*` database; owner and Sol panes closed. The squash-merged owner/QA worktrees
+  remain because conservative four-gate cleanup treats ahead commits as keep.
+- **#1275 / PR #1608:** original delegated Sol session ended without a durable comment, and the
+  previous QA head predates current main. Codex owner `build-1275-rebase`, session
+  `019fff12-6bf0-7251-ad3b-eef6fb0c1b28`, label `1275 rebase Codex`, is rebasing the clean existing
+  branch onto current main. Fresh exact-head Opus QA and Sol high sign-off follow; no stale approval
+  will be reused.
+- **#1467 / PR #1610:** CI and containment security review are GREEN at `f8aa195cf`. Existing owner
+  is running exact-head legitimate-vault live proof plus the three blocking UAT specs and one
+  advisory spec before Sol sign-off.
+- **#1556:** Codex Phase-2 build is in its integrated isolated gate; no PR yet.
+- **#1108 / PR #1614:** revised head `07831ed52`, docs CI GREEN, awaiting fresh exact-head Fable
+  review after the container-name concurrency scope split.
+- **#1454 / PR #1615:** independently approved, rebased/ready head `9f1d80ec9`, docs CI GREEN,
+  awaiting durable exact-head reaffirmation.
+- **#1013 / PR #1616:** first Fable review REVISE (`issuecomment-5290473655`) for omitted
+  `purgeModule` cluster-role DDL. Revised head `7b4184404` is docs-green and awaiting fresh review.
+- **#1592 / PR #1617:** first Fable review APPROVE (`issuecomment-5290446273`), docs CI GREEN;
+  author is queued to rebase/update now that #1591 has landed, then obtain exact-head reaffirmation.
+- **Pane cap:** every tab remains at or below four agents; the four Fable lanes remain an equal
+  2×2 grid. No screenshots.
