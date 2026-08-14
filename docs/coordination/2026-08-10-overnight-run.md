@@ -5211,3 +5211,11 @@ digest only) remains the fallback for security-tier sign-off.
   local/remote/PR heads and current base match, 21/21 range identity and value-suppressed signature
   scan clean, exact outgoing scope/tree clean. Fresh exact-head security QA
   `/root/qa_1556_pr1619_final` is running; CI pending. No more DB/UAT, merge or board action.
+- **#1013 P1/P2 green; P3/P4 setup-invalid:** at exact head `8bc7cd112`, diagnostics passed 20/20;
+  solo locked N30 passed with zero errors/XX000 and 120 complete acquired/releasing/released traces.
+  Both fresh two-worktree gates exited 2 before DB because the disposable trees lacked workspace-local
+  React/lucide links; XX000=0 and neither reached migration/integration. Cleanup/worktree removal is
+  complete. This does not trigger Fable's lock kill gate. One setup-corrected first valid P3/P4 attempt
+  is authorized: frozen install inside both exact-head trees, boolean link readiness, then concurrent
+  full gates. P1/P2 are not repeated; any later participant/unattributable XX000 or failure gets no
+  further attempt. Unrelated old test DBs remain untouched.
