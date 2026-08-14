@@ -4328,10 +4328,23 @@ digest only) remains the fallback for security-tier sign-off.
 - **#1585 / PR #1611:** owner rerun pane `w1:pAJ` (`1585 UAT rerun`) is done/awaiting report
   after the two shared Docker network-pool contention failures. Fresh sensitive QA is dispatched
   in isolated pane `w1:pAN` (`QA 1585 sensitive rerun`, session
-  `76730253-b1b5-46b5-ab44-86948754f8be`) against HEAD `411c1614c`; require its verdict before
-  merge.
-- **#1467 / PR #1610:** pane `w1:pA8` (`1467 permission boundary shell-quote (relay7)`) was
-  reactivated for the bounded live real-chat onboarding proof after the `CLI_ENV_KEYS` fix. Do not
-  merge without durable live-path evidence.
+  `76730253-b1b5-46b5-ab44-86948754f8be`) against HEAD `411c1614c`; it returned GREEN/MERGE-READY
+  (`issuecomment-5289329679`) with all three blocking UAT specs passing. QA pane/worktree were
+  reaped. Because the verdict grounded a head two unrelated commits behind current `main`, owner
+  pane `w1:pAJ` was reactivated to rebase and push; require fresh CI and QA at the rebased head.
+- **#1467 / PR #1610:** pane `w1:pA8` (`1467 permission boundary shell-quote (relay7)`) completed
+  the rebuilt live proof at HEAD `164c9c744` (exit 0, proof marker echoed, activity empty, clean
+  teardown), posted as `issuecomment-5289348519`. Fresh Opus security QA is active in `w1:pAP`
+  (`QA 1467 security adversarial`, session `5fb039c4-c593-4f61-8e49-92e5babcbd4d`); explicit
+  security sign-off remains required before merge.
 - **No screenshots:** coordinator instruction remains active for all three lanes.
 - **merges_since_relay:** 0.
+
+## 2026-08-14 — proof and rebase progress
+
+- **#1467 / PR #1610:** rebuilt container proof passed at HEAD `164c9c744` and is durable at
+  `issuecomment-5289348519`; Opus security QA is active in `w1:pAP`.
+- **#1585 / PR #1611:** owner rebased and pushed HEAD `ff1da2d5b`; required CI is in progress.
+  Existing screenshot-free UAT proof remains valid; fresh sensitive QA waits for green CI.
+- **#1248 / PR #1606:** integrated sensitive QA remains active in `w1:pAK`; current PR checks
+  include a red foundation result, so no merge until the fresh verdict and any owner fix/re-QA.
