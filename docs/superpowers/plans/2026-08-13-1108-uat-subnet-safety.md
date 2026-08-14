@@ -12,18 +12,18 @@ lanes touch it), re-ground before writing a line.
 
 ## Seams (each verified at `1e8df0257`)
 
-| Assumed capability | Citation |
-| --- | --- |
-| Per-attempt retry loop with candidate exhaustion | `tests/uat/provisioner.ts:717-825` |
-| Conflict-signature error class + stderr sniffing precedent | `PortBindConflictError`, `tests/uat/provisioner.ts:553-584` |
-| Injectable-probe test pattern | `findAvailablePort(candidates, probe)`, `tests/uat/provisioner.ts:152` |
-| Read-only docker capture helper | `runCapture`, `tests/uat/provisioner.ts:503-519` |
-| Idempotent never-throw teardown helper precedent | `removeJobSearchFixtureContainer`, `tests/uat/provisioner.ts:118-122` |
-| Positive leak assertion (containers+volumes today) | `assertNoLeakedResources`, `tests/uat/provisioner.ts:527-548` |
-| Subnet consumed at exactly two seams | env file `tests/uat/provisioner.ts:207`, interpolation `tests/uat/provisioner.ts:271` |
-| Compose IPAM interpolation with prod default | `infra/docker-compose.prod.yml:222` |
-| Compose stamps `com.docker.compose.project` label on networks | verified live 2026-08-13, compose v2.24.6 and v5.1.4 |
-| Unit tests pinning today's literal/signatures | `tests/unit/uat-provisioner.test.ts:14,38,77,137,159` |
+| Assumed capability                                            | Citation                                                                              |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Per-attempt retry loop with candidate exhaustion              | `tests/uat/provisioner.ts:717-825`                                                    |
+| Conflict-signature error class + stderr sniffing precedent    | `PortBindConflictError`, `tests/uat/provisioner.ts:553-584`                           |
+| Injectable-probe test pattern                                 | `findAvailablePort(candidates, probe)`, `tests/uat/provisioner.ts:152`                |
+| Read-only docker capture helper                               | `runCapture`, `tests/uat/provisioner.ts:503-519`                                      |
+| Idempotent never-throw teardown helper precedent              | `removeJobSearchFixtureContainer`, `tests/uat/provisioner.ts:118-122`                 |
+| Positive leak assertion (containers+volumes today)            | `assertNoLeakedResources`, `tests/uat/provisioner.ts:527-548`                         |
+| Subnet consumed at exactly two seams                          | env file `tests/uat/provisioner.ts:207`, interpolation `tests/uat/provisioner.ts:271` |
+| Compose IPAM interpolation with prod default                  | `infra/docker-compose.prod.yml:222`                                                   |
+| Compose stamps `com.docker.compose.project` label on networks | verified live 2026-08-13, compose v2.24.6 and v5.1.4                                  |
+| Unit tests pinning today's literal/signatures                 | `tests/unit/uat-provisioner.test.ts:14,38,77,137,159`                                 |
 
 Open questions: none. No new dependency; no migration; no user-facing UI.
 
@@ -41,7 +41,7 @@ Test cases — each stated with why it fails against a broken implementation:
 
 1. `cidrsOverlap("10.252.0.0/24", "10.252.0.0/24")` → true; `("10.0.0.0/8", "10.252.0.0/24")` →
    true both orders; `("10.254.0.0/24", "10.255.0.0/24")` → false; `("172.17.0.0/16",
-   "10.254.0.0/24")` → false. String-equality or prefix-string-compare fakes fail the /8⊃/24 case.
+"10.254.0.0/24")` → false. String-equality or prefix-string-compare fakes fail the /8⊃/24 case.
 2. `parseIpv4Cidr` throws on `"10.252.0.0"`, `"10.252.0.0/33"`, `"fd00::/64"`, `""` — a
    guard that ignores what it cannot parse is not fail-closed (spec D4).
 3. `selectUatSubnet({requested: undefined, live: []})` → `{subnet: "10.254.0.0/24", source: "auto"}`
@@ -53,7 +53,7 @@ Test cases — each stated with why it fails against a broken implementation:
 6. Requested overlap refused, colliding network **named** in the message
    (`requested: "10.251.0.0/24"` with live `infra_jarv1s` at same) — fails on silent re-pick.
 7. Requested forbidden refused **when absent from `live`** (`requested: "10.252.0.0/24"`, `live:
-   []`) with the reason string — the prod-down squat case, spec D2.
+[]`) with the reason string — the prod-down squat case, spec D2.
 8. Requested valid+free accepted verbatim with `source: "requested"`.
 9. Pool shape: every `UAT_FORBIDDEN_SUBNETS.cidr` overlaps no `UAT_SUBNET_CANDIDATES` entry;
    `UAT_SUBNET_CANDIDATES[0] === "10.254.0.0/24"`; pool length 13.
@@ -67,7 +67,7 @@ Test cases — each stated with why it fails against a broken implementation:
 - Delete `UAT_DOCKER_SUBNET` const (line 36). Add required `subnet` input to `writeUatEnvFile`
   and `uatComposeInterpolationEnv` (spec D6).
 - In `provisionForUat`: per attempt, `selectUatSubnet({requested: process.env.UAT_DOCKER_SUBNET,
-  live: await listLiveDockerSubnets()})` **before** any compose invocation; thread the result into
+live: await listLiveDockerSubnets()})` **before** any compose invocation; thread the result into
   the env file, interpolation env, and the attempt log line
   (`[uat] provisioning <project> on port <port> subnet <cidr> (<source>)`).
 - New `SubnetOverlapConflictError` matched in `runCommand` on

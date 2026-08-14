@@ -36,13 +36,13 @@ ends up as the compose network's IPAM subnet (`infra/docker-compose.prod.yml:222
 
 ### Live network map (dev box, verified read-only 2026-08-13)
 
-| Network | Subnet | Note |
-| --- | --- | --- |
-| `jarv1s-prod_jarv1s` | `10.252.0.0/24` | **LIVE PRODUCTION — never target** |
-| `infra_jarv1s` | `10.251.0.0/24` | dev/infra stack (also the compose-file default) |
-| _smoke reservation_ | `10.253.0.0/24` | `scripts/smoke-compose.ts:121` (no network exists until a smoke run) |
-| Docker auto-pools | `172.17–172.31.0.0/16`, `192.168.x.0/20` | ~28 unrelated compose stacks on this box |
-| `uat-*` strays | — | the two strays cited in #1108 (10.254/10.255) **no longer exist**; both /24s are free today |
+| Network              | Subnet                                   | Note                                                                                        |
+| -------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `jarv1s-prod_jarv1s` | `10.252.0.0/24`                          | **LIVE PRODUCTION — never target**                                                          |
+| `infra_jarv1s`       | `10.251.0.0/24`                          | dev/infra stack (also the compose-file default)                                             |
+| _smoke reservation_  | `10.253.0.0/24`                          | `scripts/smoke-compose.ts:121` (no network exists until a smoke run)                        |
+| Docker auto-pools    | `172.17–172.31.0.0/16`, `192.168.x.0/20` | ~28 unrelated compose stacks on this box                                                    |
+| `uat-*` strays       | —                                        | the two strays cited in #1108 (10.254/10.255) **no longer exist**; both /24s are free today |
 
 Two consequences the design must honour: existing networks include **/16 and /20** pools, so the
 overlap guard needs true CIDR-overlap math, not string equality; and every compose-created network
@@ -149,10 +149,16 @@ New file `tests/uat/subnet-selection.ts` (keeps `provisioner.ts`, already 841 li
 
 ```ts
 export const UAT_SUBNET_CANDIDATES: readonly string[];
-export const UAT_FORBIDDEN_SUBNETS: ReadonlyArray<{ readonly cidr: string; readonly reason: string }>;
+export const UAT_FORBIDDEN_SUBNETS: ReadonlyArray<{
+  readonly cidr: string;
+  readonly reason: string;
+}>;
 export class UatSubnetSelectionError extends Error {}
 /** throws on anything that is not a valid IPv4 CIDR */
-export function parseIpv4Cidr(cidr: string): { readonly base: number; readonly prefixLength: number };
+export function parseIpv4Cidr(cidr: string): {
+  readonly base: number;
+  readonly prefixLength: number;
+};
 export function cidrsOverlap(a: string, b: string): boolean;
 /** read-only enumeration; capture injectable for unit tests, same shape as findAvailablePort's probe */
 export function listLiveDockerSubnets(
