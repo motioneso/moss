@@ -4389,3 +4389,25 @@ digest only) remains the fallback for security-tier sign-off.
 - **#1467 / PR #1610:** owner full gate remains active after the symlink-containment fix; fresh
   Opus QA follows the gate.
 - **merges_since_relay:** 1.
+
+## 2026-08-14 — Sol high authorized for security sign-off
+
+- Ben authorized a high-effort `gpt-5.6 Sol` agent/persona to provide security-tier merge sign-off
+  for this issue run. The required order remains: fresh Opus adversarial QA GREEN, then Sol high
+  durable sign-off comment, then coordinator merge and board bookkeeping.
+- **#1275 / PR #1608:** CI is green and the owner’s fixes/positive-control/live proof are posted;
+  fresh Opus adversarial QA is the next gate, followed by Sol high sign-off.
+- **#1467 / PR #1610:** owner full gate is active after the symlink-containment fix; fresh Opus QA
+  and then Sol high sign-off remain before merge.
+- **#1591:** owner relay4 remains in the retry-gate → pre-push/rebase → wrap-up sequence; no PR yet.
+
+## 2026-08-14 — security lanes routed to Sol high; #1591 reactivated
+
+- **Security sign-off authority:** Ben authorized `gpt-5.6 Sol` high for this run. Fresh Opus QA
+  remains first; Sol high must post the durable sign-off before any security merge.
+- **#1275 / PR #1608:** fresh Opus adversarial QA dispatched in `w1:pAR` (`QA 1275 security
+  adversarial`, session `2d213eca-c8ce-4803-94b7-5d54215248f8`) at CI-green head `79ee0b7b3`.
+- **#1467 / PR #1610:** owner `w1:pA8` remains in the symlink-fix full gate; fresh Opus QA then
+  Sol high sign-off are next.
+- **#1591:** owner `w1:p9P` reactivated to run the retry gate, pre-push trio, rebase, and wrap-up;
+  no PR yet.

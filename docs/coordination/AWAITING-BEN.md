@@ -193,21 +193,11 @@ credential (`/home/ben/.config/moss/uat/anthropic-oauth.env.gpg`, 0600). Coordin
 #1121 non-interactive seed path fires automatically going forward. Issue #1582 closed. No further
 Ben action needed on this thread.
 
-## Security-tier merge sign-off — 7 lanes tonight (2026-08-13)
+## RESOLVED — Security-tier merge sign-off delegation (2026-08-14)
 
-**Blocked:** whether tonight's 7 parallel-safe security-tier lanes (#1489, #943, #1141, #1591,
-#1274, #1467, #1487) plus #1275/#1592 (serialize-after) can merge on Fable's green QA alone, or
-need your explicit sign-off per PR.
-**Why this is open:** the 2026-08-09 waves-3-6 run had you delegate security-tier merge sign-off
-to Fable (`fable-signoff-delegation-waves-3-6` memory). Fable flagged (unprompted, cross-session,
-2026-08-13) that the delegation was scoped to that run only and should not carry forward — default
-should be your explicit sign-off, one run at a time.
-**Options:** (a) re-delegate to Fable for tonight's batch too — fastest, keeps morning queue
-short; (b) require your sign-off per PR — safest, means these land green+verified+unmerged and
-wait for you.
-**Recommendation:** (b), per Fable's own read and the box-wide default of not assuming carry-
-forward authority. Proceeding on (b) unless you rule otherwise — PRs will be green, QA'd, and
-sitting ready, not blocking any other work.
+Ben ruled: a high-effort `gpt-5.6 Sol` agent/persona may provide security-tier merge sign-off for
+this issue run. Route each security PR through fresh Opus adversarial QA first; then Sol high posts a
+durable sign-off comment. Coordinator may merge only after both comments are present.
 
 <!-- Resolved 2026-08-14: Ben clarified that "Sol high" means the gpt-5.6 Sol agent/persona.
 Use that authority for Fable-type decisions, security-tier QA verdicts, and merge sign-off when
