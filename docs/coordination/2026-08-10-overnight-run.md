@@ -4434,3 +4434,28 @@ digest only) remains the fallback for security-tier sign-off.
 - **Relay trigger:** `merges_since_relay=2` (the two sensitive merges #1248 and #1585); this note
   is the mandatory continuation point. Next coordinator must relay immediately after adoption is
   confirmed, then continue the lanes above. No screenshots.
+
+## 2026-08-14 — Codex successor adopted the live fleet
+
+- **Coordinator authority:** Codex session `019ffed3-094a-7032-842e-3a1f6c5ca9d0`, pane label
+  `Coordinator` (resolved to `w1:pAT` at adoption). Retiring session
+  `019ffe6c-9e0f-7c11-8dd3-1b74aab43b23` was verified by exact label plus session id and closed.
+- **Agent policy clarification from Ben:** keep Codex as coordinator and use Codex for any new
+  build-agent spawns. Existing Claude lanes continue undisturbed; do not respawn them for model
+  uniformity.
+- **#1275 / PR #1608:** exact head `79ee0b7b3908a73e47fbb4b85261e64b66fb493b` remains CI-green
+  and mergeable. Fresh Opus security QA verdict is durably GREEN at
+  `issuecomment-5289960250`. Authorized Sol high sign-off agent
+  `019ffed1-4869-7a30-8131-02c0cbbb254a` is still running; merge remains blocked until its durable
+  PR comment is verified.
+- **#1467 / PR #1610:** owner pane `1467 permission boundary shell-quote (relay7)` remains adopted.
+  Exact pushed head is `fa24843c79d2b56c658c0316e9f5dc30d23dd3f3`; foundation/app CI is
+  still in progress. The owner has a fresh adversarial security QA agent active after the
+  symlink-containment fix. No merge until CI, durable GREEN QA, and durable Sol high sign-off.
+- **#1591:** owner pane `1591-owner-scope-relay4` remains adopted. Pre-push
+  `format:check`/`lint`/`typecheck` all passed; gate retry 2 is genuinely active in
+  `test:integration` after migrations and `test:uat-seed` passed. Branch is clean and 8 ahead / 12
+  behind `origin/main`; owner will rebase and open the PR after the gate completes. No PR yet.
+- **Board:** live project 2 confirms #1275, #1467, and #1591 are all `In progress`.
+  `AWAITING-BEN.md` contains no unresolved decision for these lanes. No screenshots.
+- **merges_since_relay:** 0 for this successor session.
