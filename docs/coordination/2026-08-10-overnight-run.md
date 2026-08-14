@@ -4993,3 +4993,10 @@ digest only) remains the fallback for security-tier sign-off.
   and `c3ade6cd2`; fresh exact-head/range-diff evidence. Existing Codex owner resumed. Any r5 finding
   outside the two converging cleanup/CIDR threads, or a surviving canonical-prefix bug, stops the lane
   with no round 6. TOCTOU/forced-removal tests remain deferred to #1618.
+- **#1013 targeted remediation proof:** cluster-lock integration passed 6/6 and the
+  module-distribution CLI-failure file passed 13/13. The sole locked proof-harness run nevertheless
+  exited 1 on `XX000 tuple concurrently updated` while #1556's isolated diagnostic integration was
+  active. Cleanup is complete: zero gate DBs, sessions, proof roles, or retained processes. Push and
+  DB reruns are HOLD pending bounded timestamp/application attribution. If the overlap proves an
+  external unwrapped cluster-role writer, schedule one genuinely solo final locked harness after all
+  DB lanes exit; otherwise treat this as a core algorithm RED and diagnose. No blind retry.
