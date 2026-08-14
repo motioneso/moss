@@ -4638,3 +4638,13 @@ digest only) remains the fallback for security-tier sign-off.
   the proposed lock and invisible to the current role-DDL discovery pattern. Author is tasked with
   one bounded mapping/routing revision plus a widened membership-write pattern, then green docs CI
   and round-three exact-head sibling review. The lock mechanism and proof design otherwise stand.
+
+## 2026-08-14 — #1556 push-protection fixture remediation
+
+- **#1556 `[SECURITY]`:** GitHub push protection rejected an older unit-test fixture whose shape
+  resembles a live Stripe key; owner reports no real credential. Coordinator approved replacing it
+  with an unmistakably fake value and rewriting only the two unpushed lane commits. Bypass is
+  forbidden. Before push, the owner must rerun the affected unit test and verify the rewritten
+  `origin/main..HEAD` history no longer matches the blocked signature without printing it. A
+  bounded independent Sol-high audit is running as `/root/review_1556_fixture` and may still block
+  the push if it finds broader exposure or unsafe history rewriting.
