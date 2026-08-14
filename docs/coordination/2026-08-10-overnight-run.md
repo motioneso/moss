@@ -4682,3 +4682,30 @@ digest only) remains the fallback for security-tier sign-off.
   is still draft only because GitHub's GraphQL mutation budget is exhausted until its imminent
   reset. After reset: mark ready, merge docs spec, leave issue open, move it `In progress`, and
   replace the completed #1013 Fable quadrant with a Codex build lane.
+
+## 2026-08-14 — #1013 build dispatch; #1556 RED; #1467 sign-off
+
+- **#1013 / PR #1616:** docs-only approved spec/plan merged as squash
+  `5b1d388d3b506c0996a038bcfe2481329d6f58f9`; remote spec branch deleted, issue left open and board
+  moved to `In progress`. Codex build `build-1013-ddl-lock`, session
+  `019fff34-b10b-7423-8b85-c4729d22c03c`, label `1013 DDL lock Codex`, is active in the former
+  author quadrant. It may implement/unit-test now but must obtain a coordinator-granted solo window
+  before the two-worker/two-worktree contention proof or full gate, because other lanes currently
+  hold the shared runner.
+- **#1556 / PR #1619:** independent security QA RED at exact head
+  `43dbe3bc7468280caeae60a49fcacd174c4e2231`, durable comment `issuecomment-5290779973`, with three
+  blockers: the parallel cross-tool notes path appears to bypass credential filtering, incognito /
+  recall-disabled no-call behavior, and the approved latency budget. The provisioned real-chat UAT
+  also exited 1 after provider activation because the already-loaded drawer stayed in no-model
+  state; no turn or retrieval assertion ran. Owner is fixing the shared-path invariants TDD before
+  diagnosing/rerunning the UI sequence. No waiver or merge path.
+- **#1467 / PR #1610:** exact-head runtime evidence is durable at `issuecomment-5290669208`: real
+  vault write/read through UI and all three blocking UATs exited 0; advisory UAT exited 0 with two
+  expected skips; CI, prior Opus QA, teardown and exact-head checks are green. Fresh Sol-high
+  security sign-off `/root/signoff_1467_pr1610` is running; merge remains blocked until its durable
+  comment lands.
+- **Operational handoffs:** coordinator-authored build handoff commits on #1454 (`8247fc9c8`),
+  #1108 (`5177a4b7b`), and #1592 (`15c5a36d2`) are scaffolding, not implementation scope. Owners are
+  instructed to finish active gates first, then drop only those commits, rebase onto current main,
+  and verify approved name-only PR surfaces before push. Future #1013 boot uses an external brief
+  and adds no handoff commit to its branch.
