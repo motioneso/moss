@@ -4465,3 +4465,30 @@ digest only) remains the fallback for security-tier sign-off.
 - **Board:** live project 2 confirms #1275, #1467, and #1591 are all `In progress`.
   `AWAITING-BEN.md` contains no unresolved decision for these lanes. No screenshots.
 - **merges_since_relay:** 0 for this successor session.
+
+## 2026-08-14 — capacity refill: #1556 build plus four Fable spec/plan lanes
+
+- **Ben direction:** use Codex for new build-agent spawns; Claude Fable agents may create specs
+  and plans. Agent tabs are capped at four agents and four-agent tabs use an equal 2×2 grid.
+- **#1556 build:** adopted the clean existing `1556-notes-retrieval` worktree/branch with its 11
+  unmerged commits intact. Codex build agent `build-1556-notes`, session
+  `019ffefc-cd00-7470-8f90-5cceb192e912`, label `1556 notes retrieval Codex`, verified Phase 1
+  GREEN (memory unit/integration, notes, chat, standalone tsc all exit 0). Coordinator approved the
+  already-approved Phase 2 plan Tasks 8-12; agent is building through PR/wrap-up.
+- **New Fable spec/plan lanes:** all four use isolated branches/worktrees off `origin/main`, have a
+  committed handoff, and are active on Fable 5. They must create spec + plan + draft PR, not code:
+  - #1013 cluster-global DDL serialization — `spec-1013-fable`, session
+    `367c33b9-c056-4333-8c0e-d85d1e2364de`, branch `spec-1013-ddl-lock`.
+  - #1108 UAT subnet safety — `spec-1108-fable`, session
+    `9f3870cd-b149-4ac4-9b8d-5e0c1b4eda70`, branch `spec-1108-uat-subnet`.
+  - #1454 skipped image-publish alarm — `spec-1454-fable`, session
+    `e285f4a6-79af-49a3-8f64-97061ce67a9d`, branch `spec-1454-publish-alarm`.
+  - #1592 unwired confirm-route status matrix — `spec-1592-fable`, session
+    `29e30f8a-1b75-4f2c-810e-1a8a1fe26020`, branch `spec-1592-confirm-routing`; implementation
+    must serialize after #1591 if its collision check confirms overlap.
+- **Pane hygiene:** `agents 2` tab contains exactly the four Fable lanes in equal quarters. The
+  original agents tab contains three agents (#1591 owner, #1591 QA, #1556 build). Spent durable-QA
+  panes for #1141 and #1275 were closed; their worktrees remain for a later four-gate cleanup.
+- **Board/source truth:** #1556 moved `Ready` → `In progress` when the Codex build lane adopted it.
+  #1013, #1108, #1454, and #1592 remain `Ready` while their Fable lanes prepare build eligibility.
+  No screenshots.
