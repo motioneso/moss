@@ -5,6 +5,7 @@ import {
   bareSeedHook,
   buildSeedHookInput,
   buildUatComposeArgs,
+  cleanupUatAttempt,
   createUatProvisionPlan,
   expectedUatVolumeNames,
   jobSearchFixtureBaseUrlFor,
@@ -23,6 +24,7 @@ const TEST_SUBNET = "10.249.0.0/24";
 const originalRequestedSubnet = process.env.UAT_DOCKER_SUBNET;
 const originalCliToolsPrefix = process.env.JARVIS_CLI_TOOLS_PREFIX;
 const originalRealChatEnvFile = process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE;
+const originalTmpDir = process.env.TMPDIR;
 
 afterEach(() => {
   if (originalRequestedSubnet === undefined) delete process.env.UAT_DOCKER_SUBNET;
@@ -31,6 +33,8 @@ afterEach(() => {
   else process.env.JARVIS_CLI_TOOLS_PREFIX = originalCliToolsPrefix;
   if (originalRealChatEnvFile === undefined) delete process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE;
   else process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE = originalRealChatEnvFile;
+  if (originalTmpDir === undefined) delete process.env.TMPDIR;
+  else process.env.TMPDIR = originalTmpDir;
 });
 
 describe("provisionForUat setup cleanup", () => {
@@ -81,6 +85,53 @@ describe("provisionForUat setup cleanup", () => {
 
     expect(cleanup).toHaveBeenCalledOnce();
     expect(process.env.JARVIS_CLI_TOOLS_PREFIX).toBe("sentinel-original");
+  });
+
+  it("restores run-scoped state when the UAT env file cannot be created", async () => {
+    const cleanup = vi.fn();
+    process.env.TMPDIR = "/definitely-missing-uat-temp-root";
+    process.env.JARVIS_CLI_TOOLS_PREFIX = "sentinel-original";
+    process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE = "sentinel-original-env-file";
+
+    await expect(
+      provisionForUat(
+        "bare",
+        { chatScript: "phase1-smoke" },
+        {
+          listLiveSubnets: async () => [],
+          writeRealChatEnvFile: async () => {
+            process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE = "/tmp/decrypted-real-chat.env";
+            return { path: "/tmp/decrypted-real-chat.env", cleanup };
+          }
+        }
+      )
+    ).rejects.toThrow();
+
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(process.env.JARVIS_CLI_TOOLS_PREFIX).toBe("sentinel-original");
+    expect(process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE).toBe("sentinel-original-env-file");
+  });
+});
+
+describe("cleanupUatAttempt", () => {
+  it("deletes both env files without hiding a leak-assertion failure", async () => {
+    const leakError = new Error("owned UAT network remains");
+    const cleanupEnvFile = vi.fn();
+    const cleanupRunScopedState = vi.fn();
+
+    await expect(
+      cleanupUatAttempt({
+        teardownCompose: async () => {},
+        assertNoLeaks: async () => {
+          throw leakError;
+        },
+        cleanupEnvFile,
+        cleanupRunScopedState
+      })
+    ).rejects.toBe(leakError);
+
+    expect(cleanupEnvFile).toHaveBeenCalledOnce();
+    expect(cleanupRunScopedState).toHaveBeenCalledOnce();
   });
 });
 

@@ -192,63 +192,68 @@ export function writeUatEnvFile(input: {
 }): UatEnvFile {
   const dir = mkdtempSync(join(tmpdir(), "jarv1s-uat-"));
   const path = join(dir, "env.production.local");
-  writeFileSync(
-    path,
-    [
-      "NODE_ENV=production",
-      `JARVIS_WEB_PORT=${input.webPort}`,
-      // #1026: Playwright drives this instance at http://127.0.0.1:<webPort> (see baseURL
-      // below), which is a DIFFERENT origin than better-auth's "http://localhost:<port>"
-      // default (resolveAuthOriginConfig, packages/auth/src/runtime-config.ts) — 127.0.0.1 and
-      // localhost are distinct origins for its exact-string check, so login was rejected with
-      // "Invalid origin" until this was added. Reuses the same deriveTrustedOrigins helper
-      // scripts/setup-prod.ts uses for real deploys (#379) rather than hand-rolling the list.
-      `JARVIS_AUTH_TRUSTED_ORIGINS=${deriveTrustedOrigins({ webPort: String(input.webPort), publicOrigin: "127.0.0.1" })}`,
-      `JARVIS_DOCKER_SUBNET=${input.subnet}`,
-      `POSTGRES_PASSWORD=${UAT_POSTGRES_PASSWORD}`,
-      "JARVIS_BOOTSTRAP_DATABASE_URL=postgres://postgres:postgres@postgres:5432/jarv1s",
-      // #1024/#1000: jarvis_migration_owner is NOSUPERUSER/NOBYPASSRLS but schema-owner + a
-      // member of jarvis_auth_runtime (infra/postgres/bootstrap/0000_roles.sql) — this is the
-      // seam #1025's seed script plugs a privileged connection into. NEVER grant BYPASSRLS to
-      // jarvis_app_runtime / jarvis_worker_runtime — that would violate the project's hard "no
-      // BYPASSRLS on runtime roles" invariant.
-      "JARVIS_MIGRATION_DATABASE_URL=postgres://jarvis_migration_owner:uat-migration-pw@postgres:5432/jarv1s",
-      "JARVIS_APP_DATABASE_URL=postgres://jarvis_app_runtime:uat-app-pw@postgres:5432/jarv1s",
-      "JARVIS_AUTH_DATABASE_URL=postgres://jarvis_auth_runtime:uat-auth-pw@postgres:5432/jarv1s",
-      "JARVIS_WORKER_DATABASE_URL=postgres://jarvis_worker_runtime:uat-worker-pw@postgres:5432/jarv1s",
-      "BETTER_AUTH_SECRET=uat-only-not-a-real-secret-00000000000",
-      "JARVIS_CONNECTOR_SECRET_KEY=00000000000000000000000000000000",
-      "JARVIS_AI_SECRET_KEY=11111111111111111111111111111111",
-      // #1024/#1000: required in any non-development/test NODE_ENV since #918 Slice 2
-      // (resolveKeyring enforces >=32 bytes) — matches .github/workflows/ci.yml's convention.
-      // Caught live by Task 7 (this plan predates #918 landing on main).
-      "JARVIS_MODULE_CREDENTIAL_SECRET_KEY=22222222222222222222222222222222",
-      `JARVIS_CLI_RUNNER_RPC_SECRET=${UAT_CLI_RUNNER_RPC_SECRET}`,
-      "JARVIS_EMBED_PROVIDER=stub",
-      // #1313: this instance runs NODE_ENV=production above (not the vitest NODE_ENV=test
-      // signal), so without this explicit escape hatch createEmbeddingProvider would now refuse
-      // "stub" and silently fall back to "local" -- reintroducing exactly the real-model
-      // download into a per-run cache volume this UAT `bare` level exists to avoid.
-      "JARVIS_ALLOW_STUB_EMBEDDINGS=1",
-      // #1110: module-registry's buildUatNewsPreviewOverride() reads these at app runtime (not
-      // seed-time) to deterministically fake a transient News preview error for one sentinel
-      // input — hence env_file: here, not the seed container's docker -e args below.
-      "JARVIS_UAT_SEED_CONFIRM=1",
-      "JARVIS_UAT_NEWS_TRANSIENT_INPUT=uat-transient.invalid",
-      // #1306 Task 22: absent unless a caller passes jobSearchFixtureBaseUrl — see this
-      // function's param doc. JARVIS_RUNTIME_MODE alone (without the base URL) would throw at
-      // host boot per resolveE2eFetchOverride's fail-closed guard, so these two are written
-      // together or not at all.
-      ...(input.jobSearchFixtureBaseUrl
-        ? [
-            "JARVIS_RUNTIME_MODE=e2e",
-            `JARVIS_E2E_MODULE_FETCH_BASE=${input.jobSearchFixtureBaseUrl}`
-          ]
-        : []),
-      ""
-    ].join("\n"),
-    { mode: 0o600 }
-  );
+  try {
+    writeFileSync(
+      path,
+      [
+        "NODE_ENV=production",
+        `JARVIS_WEB_PORT=${input.webPort}`,
+        // #1026: Playwright drives this instance at http://127.0.0.1:<webPort> (see baseURL
+        // below), which is a DIFFERENT origin than better-auth's "http://localhost:<port>"
+        // default (resolveAuthOriginConfig, packages/auth/src/runtime-config.ts) — 127.0.0.1 and
+        // localhost are distinct origins for its exact-string check, so login was rejected with
+        // "Invalid origin" until this was added. Reuses the same deriveTrustedOrigins helper
+        // scripts/setup-prod.ts uses for real deploys (#379) rather than hand-rolling the list.
+        `JARVIS_AUTH_TRUSTED_ORIGINS=${deriveTrustedOrigins({ webPort: String(input.webPort), publicOrigin: "127.0.0.1" })}`,
+        `JARVIS_DOCKER_SUBNET=${input.subnet}`,
+        `POSTGRES_PASSWORD=${UAT_POSTGRES_PASSWORD}`,
+        "JARVIS_BOOTSTRAP_DATABASE_URL=postgres://postgres:postgres@postgres:5432/jarv1s",
+        // #1024/#1000: jarvis_migration_owner is NOSUPERUSER/NOBYPASSRLS but schema-owner + a
+        // member of jarvis_auth_runtime (infra/postgres/bootstrap/0000_roles.sql) — this is the
+        // seam #1025's seed script plugs a privileged connection into. NEVER grant BYPASSRLS to
+        // jarvis_app_runtime / jarvis_worker_runtime — that would violate the project's hard "no
+        // BYPASSRLS on runtime roles" invariant.
+        "JARVIS_MIGRATION_DATABASE_URL=postgres://jarvis_migration_owner:uat-migration-pw@postgres:5432/jarv1s",
+        "JARVIS_APP_DATABASE_URL=postgres://jarvis_app_runtime:uat-app-pw@postgres:5432/jarv1s",
+        "JARVIS_AUTH_DATABASE_URL=postgres://jarvis_auth_runtime:uat-auth-pw@postgres:5432/jarv1s",
+        "JARVIS_WORKER_DATABASE_URL=postgres://jarvis_worker_runtime:uat-worker-pw@postgres:5432/jarv1s",
+        "BETTER_AUTH_SECRET=uat-only-not-a-real-secret-00000000000",
+        "JARVIS_CONNECTOR_SECRET_KEY=00000000000000000000000000000000",
+        "JARVIS_AI_SECRET_KEY=11111111111111111111111111111111",
+        // #1024/#1000: required in any non-development/test NODE_ENV since #918 Slice 2
+        // (resolveKeyring enforces >=32 bytes) — matches .github/workflows/ci.yml's convention.
+        // Caught live by Task 7 (this plan predates #918 landing on main).
+        "JARVIS_MODULE_CREDENTIAL_SECRET_KEY=22222222222222222222222222222222",
+        `JARVIS_CLI_RUNNER_RPC_SECRET=${UAT_CLI_RUNNER_RPC_SECRET}`,
+        "JARVIS_EMBED_PROVIDER=stub",
+        // #1313: this instance runs NODE_ENV=production above (not the vitest NODE_ENV=test
+        // signal), so without this explicit escape hatch createEmbeddingProvider would now refuse
+        // "stub" and silently fall back to "local" -- reintroducing exactly the real-model
+        // download into a per-run cache volume this UAT `bare` level exists to avoid.
+        "JARVIS_ALLOW_STUB_EMBEDDINGS=1",
+        // #1110: module-registry's buildUatNewsPreviewOverride() reads these at app runtime (not
+        // seed-time) to deterministically fake a transient News preview error for one sentinel
+        // input — hence env_file: here, not the seed container's docker -e args below.
+        "JARVIS_UAT_SEED_CONFIRM=1",
+        "JARVIS_UAT_NEWS_TRANSIENT_INPUT=uat-transient.invalid",
+        // #1306 Task 22: absent unless a caller passes jobSearchFixtureBaseUrl — see this
+        // function's param doc. JARVIS_RUNTIME_MODE alone (without the base URL) would throw at
+        // host boot per resolveE2eFetchOverride's fail-closed guard, so these two are written
+        // together or not at all.
+        ...(input.jobSearchFixtureBaseUrl
+          ? [
+              "JARVIS_RUNTIME_MODE=e2e",
+              `JARVIS_E2E_MODULE_FETCH_BASE=${input.jobSearchFixtureBaseUrl}`
+            ]
+          : []),
+        ""
+      ].join("\n"),
+      { mode: 0o600 }
+    );
+  } catch (error) {
+    rmSync(dir, { force: true, recursive: true });
+    throw error;
+  }
   return { path, cleanup: () => rmSync(dir, { force: true, recursive: true }) };
 }
 
@@ -557,6 +562,42 @@ export async function assertNoLeakedResources(projectName: string): Promise<void
   }
 }
 
+export async function cleanupUatAttempt(input: {
+  readonly teardownCompose: () => Promise<void>;
+  readonly assertNoLeaks: () => Promise<void>;
+  readonly cleanupEnvFile: () => void;
+  readonly cleanupRunScopedState: () => void;
+  readonly error?: unknown;
+  readonly preserveRunScopedState?: boolean;
+}): Promise<void> {
+  const errors: unknown[] = Object.hasOwn(input, "error") ? [input.error] : [];
+  try {
+    for (const cleanup of [input.teardownCompose, input.assertNoLeaks]) {
+      try {
+        await cleanup();
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+  } finally {
+    try {
+      input.cleanupEnvFile();
+    } catch (error) {
+      errors.push(error);
+    } finally {
+      if (!input.preserveRunScopedState || errors.length > 0) {
+        try {
+          input.cleanupRunScopedState();
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+    }
+  }
+  if (errors.length === 1) throw errors[0];
+  if (errors.length > 1) throw new AggregateError(errors, "UAT teardown and cleanup failed");
+}
+
 // #1024/#1000: thrown only when a command's failure looks like a lost port-bind race (see
 // runCommand below) so main()'s retry loop can distinguish "retry with next port" from every
 // other failure mode, which should abort the run instead of masking a real error.
@@ -740,14 +781,17 @@ export async function provisionForUat(
   let runStateCleaned = false;
   const cleanupRunScopedState = () => {
     if (runStateCleaned) return;
-    runStateCleaned = true;
-    realChatEnvFile?.cleanup();
-    if (previousRealChatEnvFile === undefined) {
-      delete process.env[REAL_CHAT_ENV_FILE_RESULT_ENV];
-    } else {
-      process.env[REAL_CHAT_ENV_FILE_RESULT_ENV] = previousRealChatEnvFile;
+    try {
+      realChatEnvFile?.cleanup();
+    } finally {
+      if (previousRealChatEnvFile === undefined) {
+        delete process.env[REAL_CHAT_ENV_FILE_RESULT_ENV];
+      } else {
+        process.env[REAL_CHAT_ENV_FILE_RESULT_ENV] = previousRealChatEnvFile;
+      }
+      restoreCliToolsPrefix();
+      runStateCleaned = true;
     }
-    restoreCliToolsPrefix();
   };
 
   while (remainingCandidates.length > 0) {
@@ -783,13 +827,20 @@ export async function provisionForUat(
     const jobSearchFixtureBaseUrl = opts?.withJobSearchFixture
       ? jobSearchFixtureBaseUrlFor(projectName)
       : undefined;
-    const envFile = writeUatEnvFile({ webPort, subnet: subnet.subnet, jobSearchFixtureBaseUrl });
-    process.env.JARVIS_ENV_FILE = envFile.path;
-    process.env.JARVIS_IMAGE_TAG ??= "uat-smoke";
-    // #1024/#1000: must be exported for every retry iteration, not just the first — a TOCTOU
-    // port-bind retry picks a new webPort, and JARVIS_WEB_PORT must track it or compose would
-    // interpolate the stale (or default/prod) port. See uatComposeInterpolationEnv's doc comment.
-    Object.assign(process.env, uatComposeInterpolationEnv({ webPort, subnet: subnet.subnet }));
+    let envFile!: UatEnvFile;
+    let envFileReady = false;
+    try {
+      envFile = writeUatEnvFile({ webPort, subnet: subnet.subnet, jobSearchFixtureBaseUrl });
+      process.env.JARVIS_ENV_FILE = envFile.path;
+      process.env.JARVIS_IMAGE_TAG ??= "uat-smoke";
+      // #1024/#1000: must be exported for every retry iteration, not just the first — a TOCTOU
+      // port-bind retry picks a new webPort, and JARVIS_WEB_PORT must track it or compose would
+      // interpolate the stale (or default/prod) port. See uatComposeInterpolationEnv's doc comment.
+      Object.assign(process.env, uatComposeInterpolationEnv({ webPort, subnet: subnet.subnet }));
+      envFileReady = true;
+    } finally {
+      if (!envFileReady) cleanupRunScopedState();
+    }
 
     // #1306: the fixture container is removed FIRST — an outside container still attached to the
     // Compose network blocks `down -v` from removing that network, and the leak assertion that
@@ -813,6 +864,16 @@ export async function provisionForUat(
         await runCommand("docker", ["network", "rm", networkId]).catch(() => {});
       }
     };
+    const cleanupAttempt = (
+      options: { readonly error?: unknown; readonly preserveRunScopedState?: boolean } = {}
+    ) =>
+      cleanupUatAttempt({
+        teardownCompose,
+        assertNoLeaks: () => assertNoLeakedResources(projectName),
+        cleanupEnvFile: envFile.cleanup,
+        cleanupRunScopedState,
+        ...options
+      });
 
     try {
       console.log(
@@ -856,17 +917,12 @@ export async function provisionForUat(
         // in a `finally` here. SIGINT/SIGTERM handling moves to the caller (tests/uat/run-uat.ts),
         // which is the one that knows when a long-running Playwright child should be interrupted.
         teardown: async () => {
-          await teardownCompose();
-          await assertNoLeakedResources(projectName);
-          envFile.cleanup();
-          cleanupRunScopedState();
+          await cleanupAttempt();
         }
       };
     } catch (error) {
-      await teardownCompose();
-      await assertNoLeakedResources(projectName);
-      envFile.cleanup();
       if (error instanceof PortBindConflictError) {
+        await cleanupAttempt({ preserveRunScopedState: true });
         // #1024/#1000: Coordinator condition 1 — findAvailablePort (Task 2) only proved this port
         // free at probe time; docker just told us another process won the bind race. Retry with
         // the next untried candidate instead of flaking the whole gate. The fixture container (if
@@ -878,6 +934,7 @@ export async function provisionForUat(
         continue;
       }
       if (error instanceof SubnetOverlapConflictError && subnet.source === "auto") {
+        await cleanupAttempt({ preserveRunScopedState: true });
         console.warn(
           `[uat] subnet ${subnet.subnet} lost the allocation race; retrying with next candidate (#1108)`
         );
@@ -886,8 +943,8 @@ export async function provisionForUat(
         );
         continue;
       }
-      cleanupRunScopedState();
-      throw error;
+      await cleanupAttempt({ error });
+      throw error; // unreachable: cleanupUatAttempt rethrows the provisioning failure
     }
   }
   cleanupRunScopedState();
