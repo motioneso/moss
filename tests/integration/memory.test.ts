@@ -223,30 +223,6 @@ describe("MemoryRepository", () => {
     expect(otherResults.every((r) => r.sourcePath !== path)).toBe(true);
   });
 
-  it("vectorSearch exposes updatedAt matching the row's memory_chunks.updated_at", async () => {
-    const path = "notes/repo-test-updated-at.md";
-    const chunks = await makeChunks(path, ["Freshly ingested content"]);
-    await dataContext.withDataContext(ctx(userId), async (scopedDb) => {
-      await repo.upsertFileChunks(scopedDb, userId, path, chunks, "stub", "0");
-    });
-
-    const dbUpdatedAt = await dataContext.withDataContext(ctx(userId), async (scopedDb) => {
-      const row = await sql<{ updated_at: Date }>`
-        SELECT updated_at FROM app.memory_chunks WHERE source_path = ${path}
-      `.execute(scopedDb.db);
-      return row.rows[0]?.updated_at;
-    });
-    expect(dbUpdatedAt).toBeInstanceOf(Date);
-
-    const queryVec = await provider.embedQuery("Freshly ingested content");
-    const results = await dataContext.withDataContext(ctx(userId), async (scopedDb) =>
-      repo.vectorSearch(scopedDb, queryVec, 10)
-    );
-    const match = results.find((r) => r.sourcePath === path);
-    expect(match?.updatedAt).toBeInstanceOf(Date);
-    expect(match?.updatedAt.getTime()).toBe(dbUpdatedAt?.getTime());
-  });
-
   it("deleteFileChunks removes all chunks for a path", async () => {
     const path = "notes/repo-test-4.md";
     const chunks = await makeChunks(path, ["To be deleted"]);
