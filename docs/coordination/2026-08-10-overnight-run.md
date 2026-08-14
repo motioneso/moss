@@ -5157,3 +5157,10 @@ digest only) remains the fallback for security-tier sign-off.
   catastrophic patterns still install. Lane is STOP/HOLD with no further cycle. Ben must choose spec
   supersession, approved lint plus explicit Worker disposition, or split/re-scope; tracked in
   `AWAITING-BEN.md`. No merge.
+- **#1013 / PR #1624:** second exact-head security QA RED at `231463581`, durable
+  `issuecomment-5293103503`; CI terminal green. Blockers: reconcile install path still splits the
+  injected-env lock domain; integration child argv exposes bootstrap credentials; teardown helpers
+  swallow lock failures; unexplained locked `XX000` plus missing exact-head concurrent proof triggers
+  the plan kill gate; remediation commit lacks release-note language. Two-cycle QA budget exhausted:
+  author STOP/HOLD, no further edit/rebase/push/DB/proof/QA. Existing Fable lane is adjudicating whether
+  one bounded final closure is defensible or the spec/plan must reset; no merge.
