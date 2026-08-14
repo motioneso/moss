@@ -4776,3 +4776,17 @@ digest only) remains the fallback for security-tier sign-off.
   `31781270331` is fully green; existing code-head live/UAT proof remains applicable. Fresh exact-head
   security QA `/root/qa_1467_pr1610_r4` is running; Sol-high reaffirmation follows only after its
   durable GREEN. No merge.
+
+## 2026-08-14 — #1108 second QA RED; #1556 history cleanup
+
+- **#1108 / PR #1620:** second security QA RED at exact head
+  `61fe061014d73e97780bf41617a14ad50b85c896`, durable `issuecomment-5291238572`. One blocker
+  remains: later setup/teardown failures still bypass decrypted credential cleanup and environment
+  restoration; adversarial repro left `cleanupCount=0` and both overrides mutated. Owner is adding
+  true finally-based cleanup plus throw-path tests before another exact-head review. QA's accidental
+  ephemeral project was exact-project torn down and verified zero residual; production untouched.
+- **#1556 / PR #1619:** owner reports the four second-review remediations committed and is rebasing
+  onto current main while rewriting exactly the six QA-named implementation commit messages to add
+  required release-note/no-visible-change statements. Trees/patches must remain equivalent and be
+  range-diff verified before force-with-lease. Fresh exact-head security QA, CI, and a passing live
+  UAT remain mandatory; no merge.
