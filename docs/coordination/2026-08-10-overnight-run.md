@@ -6,7 +6,7 @@
 **CORRECTED 2026-08-13 (Fable, cross-session, unprompted):** the "Fable's green security review counts as merge sign-off" line above was a carry-forward assumption from the 2026-08-09 waves-3-6 run (`fable-signoff-delegation-waves-3-6` memory) — Fable states that delegation was explicitly scoped to that run only and does NOT carry forward. Default policy for tonight's batch: **security-tier PRs need Ben's explicit sign-off, full stop.** Fable is doing first-pass reviews overnight to keep his morning queue short, but those verdicts are review, not merge authority. Security-tier PRs land green + verified + **unmerged**; queued via AWAITING-BEN for his morning ruling, not silently held.
 **Merge policy:** routine/sensitive only after verified QA and live-path proof where applicable; security tier requires fresh adversarial QA GREEN plus a durable high-effort `gpt-5.6 Sol` sign-off comment under Ben's 2026-08-14 delegation.
 **Merge notification:** after every merge, run `needs-ben coordinator "<issue/PR — one-line description of what landed>"` and retain the normal GitHub/project bookkeeping.
-**merges_since_relay:** 0 — reset when successor session `019ffed3-094a-7032-842e-3a1f6c5ca9d0` adopted the fleet.
+**merges_since_relay:** 1 — #1591 / PR #1613 merged under successor session `019ffed3-094a-7032-842e-3a1f6c5ca9d0`; standing Ben override keeps this coordinator resident instead of relaying.
 **Standing override (Ben, binding for the rest of this run):** "lets stop relaying, just auto compact coordinator" — this session does NOT spawn a successor at context checkpoints, including the 70%-meter warning or merge-count triggers. It stays resident through auto-compaction. Confirmed live against a real 70% checkpoint hook firing this leg; declined per this override.
 
 GitHub/project 2 is the source of truth. Detailed continuation evidence stays in `/tmp/jarv1s-monitor-state.md`.
@@ -4498,16 +4498,20 @@ digest only) remains the fallback for security-tier sign-off.
 
 - **Ben direction:** continue the fleet while he sleeps. Use delegated Fable/Sol authority and
   surface only genuine unresolved product/safety decisions.
-- **#1591 / PR #1613:** owner corrected the PR body per QA comment `5290354120`; the false
-  main/#1606 typecheck attribution is removed, exact code head remains
-  `6f201723b79bfcb2bd6fa28b17416fdf9871becd`, CI and Opus QA are GREEN. High-effort gpt-5.6 Sol
-  sign-off agent `signoff-1613-sol`, session `019fff07-bfb9-7af2-984a-01543b3842e8`, is reviewing
-  in the single-agent `reviews` tab and must post a durable exact-head verdict before merge.
+- **#1591 / PR #1613:** **MERGED** as squash `322e6afb63831ea3c09c821c9debd592ddde6e75`.
+  Exact code head `6f201723b79bfcb2bd6fa28b17416fdf9871becd` had CI GREEN, Opus QA GREEN
+  (`issuecomment-5290354120`), corrected PR metadata, and durable high-effort Sol sign-off
+  (`issuecomment-5290423210`). Issue closed and project item is `Done`; needs-ben digest
+  `1786690541741906252.msg` queued. Remote feature branch deleted after merge proof. Sol pane was
+  reaped; owner/QA worktrees remain for four-gate cleanup after owner teardown confirmation.
 - **#1108 spec/plan:** draft PR #1614, branch `spec-1108-uat-subnet`, commit `61ff5880c`.
   Author reports no Ben decision and a collision with `tests/uat/provisioner.ts` work in
   #1121/#1557; implementation must sequence after collision review. Independent Fable approval is
-  assigned to the #1454 agent. `Verify docs` is RED at this head; author is queued to fix it after
-  completing the sibling review. No red spec PR merges.
+  RED/REVISE at `issuecomment-5290442234`: the issue's full two-stack concurrency criterion is
+  impossible while prod compose pins `container_name: moss`. Under delegated overnight authority,
+  the safe scope split is chosen: revise #1108 to prove concurrent subnet allocation, file a
+  separate container-name/prod-topology task for Ben, preserve no-cross-run cleanup, fix red docs
+  CI, then request fresh sibling review. No red/revise spec PR merges.
 - **#1454 spec/plan:** draft PR #1615, branch `spec-1454-publish-alarm`, commit `df18fbf45`.
   Author reports no Ben decision and zero code collision; design uses a native `workflow_run`
   alarm without publish permission or gate weakening. Independent Fable approval is assigned to
