@@ -4790,3 +4790,12 @@ digest only) remains the fallback for security-tier sign-off.
   required release-note/no-visible-change statements. Trees/patches must remain equivalent and be
   range-diff verified before force-with-lease. Fresh exact-head security QA, CI, and a passing live
   UAT remain mandatory; no merge.
+- **#1454:** full isolated gate green (`VF_EXIT=0`). Owner is now dropping operational handoff
+  `8247fc9c8` and rebasing only workflow commit `c707cc79a` onto current main. Before push it must
+  prove workflow blob/patch identity and a one-file outgoing surface
+  `.github/workflows/edge-publish-alarm.yml`; no redundant DB gate if patch-identical.
+- **#1467 / PR #1610:** fresh exact-head security QA GREEN at
+  `dfb79df31bf552110122563fde3f950688246684`, durable `issuecomment-5291277225`: both prior Sol
+  blockers closed, executable content byte-identical to the security-green head, exact-head CI green,
+  zero findings, merge-ready from QA. Final Sol-high reaffirmation `/root/signoff_1467_pr1610_r2`
+  is running; no merge until its durable comment lands.
