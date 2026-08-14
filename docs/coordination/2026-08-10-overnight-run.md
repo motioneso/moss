@@ -5180,3 +5180,10 @@ digest only) remains the fallback for security-tier sign-off.
   participant application names and XX000 attribution; solo locked N>=30; fresh quiet-window two-
   worktree full gates. No-lock evidence carries. Any participant/unattributable XX000, fourth ambient-
   env site, or new-class r3 blocker => STOP/spec reopen/no r4. Owner resumed code/static work; DB held.
+- **#1556 Phase-5 final review:** Standards and Spec GREEN on the abstract-socket lock. Reviewers
+  independently verified 76-byte hashed abstract address, Linux/same-netns topology ceiling, single-
+  settle bind, EADDRINUSE-only bounded contention, fail-closed errors, awaited close and combined
+  work/cleanup errors, kernel SIGKILL release, deterministic child cleanup/RED capability and both
+  Local/isolated-worker seams; offline 13/13. Exact four-file commit is authorized with release-note
+  text, followed by rebase/fast proof. DB/live remains held pending a solo sequence: full gate, exact
+  two-process fresh-cache repro GREEN, then original real-chat notes retrieval UAT GREEN. No push yet.
