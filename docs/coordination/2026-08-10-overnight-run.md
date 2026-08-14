@@ -4714,3 +4714,18 @@ digest only) remains the fallback for security-tier sign-off.
   handoff `5177a4b7b`, rebasing the two implementation commits onto current main, and must prove
   patch equivalence plus the approved name-only surface before push/PR. No redundant full-gate rerun
   is required for patch-identical history cleanup onto a docs-only base change.
+
+## 2026-08-14 — #1108 PR and #1013 solo-window hold
+
+- **#1108 / PR #1620:** exact head `af63ea3176cff9edf3a758f83f7ac845acf4f3df`, rebased on
+  `5b1d388d3`; full gate exited 0, post-rebase fast checks/file-size passed, targeted unit 35/35,
+  range-diff proves the two implementation commits patch-identical after dropping the operational
+  handoff. GitHub name-only diff is the approved provisioner/subnet helper plus two unit tests.
+  Durable allocation/concurrency proof is `issuecomment-5290945015`; only #1618 is deferred and
+  teardown is clean. Independent exact-head security QA `/root/qa_1108_pr1620` is running; Sol-high
+  sign-off follows only after durable QA and CI green. No merge.
+- **#1013:** implementation/static phase is ready (format/lint/typecheck 0; targeted unit 6/6; full
+  unit 560/561 with the unrelated timing case green 8/8 in isolation). Solo DB window is withheld:
+  #1454 is still waiting on the shared suite lock, #1556 has an active gate, and #1592 is resolving
+  its gate result. The owner must run no DB command until the coordinator explicitly releases the
+  window after all three report terminal cleanup.
