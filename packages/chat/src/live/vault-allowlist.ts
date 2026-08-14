@@ -14,12 +14,20 @@ function isValidVaultRoot(root: string): boolean {
   return normalize(root) === root;
 }
 
-/** #578 Part 1: read-only Read/Glob/Grep scoped to JARVIS_NOTES_ROOTS (the vault mount). Never write/exec. */
-export function vaultReadOnlyToolPatterns(): string[] {
-  const roots = (resolveMossEnv(process.env, "JARVIS_NOTES_ROOTS") ?? "")
+/** Fail-closed parse of JARVIS_NOTES_ROOTS into the vault roots configured for this deploy. */
+export function resolveVaultRoots(): string[] {
+  return (resolveMossEnv(process.env, "JARVIS_NOTES_ROOTS") ?? "")
     .split(",")
     .map((s) => s.trim())
     .filter((s) => s.length > 0)
     .filter(isValidVaultRoot);
-  return roots.flatMap((root) => [`Read(${root}/**)`, `Glob(${root}/**)`, `Grep(${root}/**)`]);
+}
+
+/** #578 Part 1: read-only Read/Glob/Grep scoped to JARVIS_NOTES_ROOTS (the vault mount). Never write/exec. */
+export function vaultReadOnlyToolPatterns(): string[] {
+  return resolveVaultRoots().flatMap((root) => [
+    `Read(${root}/**)`,
+    `Glob(${root}/**)`,
+    `Grep(${root}/**)`
+  ]);
 }
