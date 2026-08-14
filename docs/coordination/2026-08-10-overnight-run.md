@@ -5124,3 +5124,11 @@ digest only) remains the fallback for security-tier sign-off.
   two-process RED test without network/model download, then will propose the minimum existing/native
   cross-process cache-init lock at the shared `loadPipe` seam. No production edit, DB/UAT or push until
   the TDD command and plan are approved; no timeout inflation/new dependency by default.
+- **#1556 Phase-5 plan approved:** deterministic unit TDD spawns two Vitest OS processes sharing one
+  mocked cache/barrier; pre-fix one reproduces the model/protobuf-shaped concurrent-load failure. A
+  killed-owner case proves recovery. No reusable runtime/file-lock primitive or installed dependency
+  exists, so the minimum fix is a tiny stdlib atomic-symlink lock keyed by cache directory plus hashed
+  model identity, reused by both Local and isolated-worker `pipeline()` first-load seams. Live or
+  malformed owners time out fail-closed; only `ESRCH` is dead; unlink/release is observed-token checked
+  against ABA/PID reuse; 300-second evidence-based bound. No provider/model/retrieval change, DB/UAT,
+  new dependency or push until RED→GREEN and focused/static evidence.
