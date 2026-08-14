@@ -4869,3 +4869,13 @@ digest only) remains the fallback for security-tier sign-off.
   four-file scope, 57 targeted/static/malformed/forbidden/concurrent proofs green with zero residuals,
   evidence `issuecomment-5291722799`. Fresh fourth exact-head security QA
   `/root/qa_1108_pr1620_r4` is running; CI active, no Sol sign-off or merge before both green.
+- **#1454 / PR #1621:** race remediation ready at exact head
+  `1be30bd35832e46839ab2e2531f4d57dea983852`, base `6f7d75391`, workflow blob
+  `f3e74a1b9034dd77b2e34783568c601f4543fd21`. Workflow-level serialization and current-main
+  recheck before every issue mutation are covered by deterministic stale-failure/stale-success/
+  duplicate/recovery fixtures; one-file diff, no publish permission/gate changes, exact-head CI
+  fully green. Fresh security QA `/root/qa_1454_pr1621_r2` is running; no Sol sign-off, merge, or
+  post-merge proof yet.
+- **#1108 QA operational note:** fourth QA agent's first turn was blocked by an automated policy
+  false-positive before any review/comment. The same exact-head review was restarted with narrow
+  defensive test-harness wording; no verdict is inferred from the failed turn.
