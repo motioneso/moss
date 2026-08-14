@@ -4879,3 +4879,16 @@ digest only) remains the fallback for security-tier sign-off.
 - **#1108 QA operational note:** fourth QA agent's first turn was blocked by an automated policy
   false-positive before any review/comment. The same exact-head review was restarted with narrow
   defensive test-harness wording; no verdict is inferred from the failed turn.
+
+## 2026-08-14 — #1454 Sol gate; #1108 QA-budget stop
+
+- **#1454 / PR #1621:** fresh security QA GREEN at exact head
+  `1be30bd35832e46839ab2e2531f4d57dea983852`, durable `issuecomment-5291908237`, zero findings,
+  exact one-file workflow scope/CI/remediation fixtures green. Final Sol-high sign-off
+  `/root/signoff_1454_pr1621` is running; no merge or post-merge proof until its durable verdict.
+- **#1108 / PR #1620:** fourth security QA RED at exact head
+  `c3ade6cd2baaf84ab52037439ca79a9059da00bb`, durable `issuecomment-5291875479`. Remaining findings:
+  non-canonical prefix `/024` passes validation until Docker rejects it; commits `dcb78b1cb` and
+  `c3ade6cd2` lack required release-note/no-visible-change statements. The lane has exceeded the
+  two-cycle QA failure budget and is HOLD—no further author edit/rebase/push/QA. Existing #1592
+  Fable is adjudicating the verdict chain and will return a minimal closure or stop/re-scope ruling.
