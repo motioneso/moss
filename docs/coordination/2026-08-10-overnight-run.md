@@ -4555,3 +4555,32 @@ digest only) remains the fallback for security-tier sign-off.
   author is queued to rebase/update now that #1591 has landed, then obtain exact-head reaffirmation.
 - **Pane cap:** every tab remains at or below four agents; the four Fable lanes remain an equal
   2×2 grid. No screenshots.
+
+## 2026-08-14 — exact-head correction checkpoint
+
+- **Coordinator lock:** Codex session `019ffed3-094a-7032-842e-3a1f6c5ca9d0`, label
+  `Coordinator`, re-confirmed from the live Herdr pane list. This is the sole coordinator.
+- **#1275 / PR #1608:** rebased head `855eb86f7737017936a0e713fc05891c3cc1e153`; CI foundation
+  remains pending while compose smokes are green. Fresh exact-head Opus QA is running in session
+  `601b38f6-cc4a-48b0-99a4-b77af8ba22e5`. Fresh Sol-high durable sign-off follows only after QA
+  and CI are green.
+- **#1467 / PR #1610:** exact head remains `f8aa195cfd3086d3729e628657b70112209a84f9`; CI is green.
+  Owner lane still owns the legitimate-vault live-path proof and matched blocking UAT evidence.
+- **#1556:** Codex build remains in the same integrated `scripts/run-gate.sh` run; no rerun and no
+  PR yet.
+- **#1108 / PR #1614 correction:** the stale reviewed head
+  `07831ed5236f2ff699a8582cb021b68f944eba31` lacked the requested scope-split wording, but author
+  head `491f3adca` now contains all three mechanical fixes and has green docs CI. Follow-up issue
+  #1618 owns fixed-container-name full-stack concurrency. Fresh exact-head sibling review is
+  queued; no duplicate content commit should churn the pending review head.
+- **#1013 / PR #1616 correction:** head `7b41844043d374135c620770e4e3b36e9b6946ef` is formatting
+  only; no content revision landed. REVISE remains at `issuecomment-5290501902`. Author is tasked
+  with the full `purgeModule`/TS-discovery and four non-blocking content revisions before another
+  exact-head review.
+- **#1592 / PR #1617:** rebased onto main after #1591, citations and dependency wording refreshed,
+  ready-for-review at exact head `f0674a2c196b2e747af36e7392d6914937eb8eab`; docs CI and sibling
+  exact-head reaffirmation are pending. No implementation starts before this docs PR merges.
+- **#1454 / PR #1615:** docs CI green at `9f1d80ec92caf695302502a16fd427ef77aafb08`; exact-head
+  independent reaffirmation is durable at `issuecomment-5290485904`, so the spec is merge-eligible.
+- **Pane cap/layout:** `agents 2` remains exactly four Fable agents in equal 2×2 quarters; other
+  agent tabs remain below four. No screenshots.
