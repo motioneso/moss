@@ -4249,7 +4249,7 @@ digest only) remains the fallback for security-tier sign-off.
   required-check state without blind reruns; fresh security QA remains required.
 - **Coordinator lock:** Codex session `019ffd3f-3098-73c0-bab8-31f491615168`, label `Coordinator`,
   pane `w1:pA1`. `merges_since_relay=1` (sensitive); no relay trigger fired. `Sol high` identity
-  remains unresolved in `AWAITING-BEN.md`; do not invent it.
+  is resolved: Ben clarified it means the `gpt-5.6 Sol` agent/persona for Fable-type decisions.
 
 ## 2026-08-14 — #1248 live proof complete; sensitive QA dispatched
 
