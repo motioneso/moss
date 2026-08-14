@@ -5088,3 +5088,9 @@ digest only) remains the fallback for security-tier sign-off.
   Fable-locked closure all pass; no bypass or new-class finding, so the no-round-6 stop was not
   triggered. Final Sol-high exact-head sign-off `/root/signoff_1108_pr1620` is running; security merge
   remains Ben-gated. #1618 remains the sole deferred fixed-name/full-concurrency follow-up.
+- **#1013 / PR #1624:** fixes pushed at exact head
+  `2314635817255e81b5461092487af2b28c913225`, base current main `f648b8da0`; local/remote/PR match,
+  exact 20-file scope, patch/range identity preserved, fast checks green and cleanup zero. Durable
+  `issuecomment-5292734564` retains both the unexplained locked RED and sole instrumented 30/0 GREEN
+  plus the missing-success-trace limitation; no causal claim or retry. Fresh exact-head security QA
+  `/root/qa_1013_pr1624_r2` is running and must independently judge that evidence; CI green required.
