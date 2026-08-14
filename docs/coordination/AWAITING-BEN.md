@@ -11,6 +11,18 @@ board/issue action has been taken.
 
 **Ben decision:** approve merging PR #1622 at this exact head, or hold it. Recommendation: approve.
 
+## #1108 / PR #1620 — exact-head security merge sign-off
+
+PR #1620 is technically merge-ready at exact head
+`e80ad140719cfecc82e06c7e7bf3752e722e50a3`: final authorized security QA r5 GREEN
+(`issuecomment-5292709725`), Sol-high SIGN-OFF GRANTED (`issuecomment-5292758408`), all applicable
+exact-head CI terminal green, exact four-file scope, and bounded live allocation/refusal/cleanup
+proof green. The only approved deferral is #1618 for the fixed Compose container name and related
+full-concurrency/TOCTOU/forced-removal follow-ups. The PR is open and mergeable; no merge or
+board/issue action has been taken.
+
+**Ben decision:** approve merging PR #1620 at this exact head, or hold it. Recommendation: approve.
+
 ## RESOLVED — #1467 one-shot write authority ruling (2026-08-14)
 
 Security QA for PR #1610 found one non-blocking but newly activated behavior: injecting
