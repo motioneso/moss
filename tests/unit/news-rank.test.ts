@@ -54,11 +54,12 @@ describe("rankCandidates", () => {
     });
   });
 
-  it("treats AI failures and malformed objects as ranking failure", async () => {
-    for (const generated of [
-      { ok: false as const, error: "provider_error" as const },
-      { ok: true as const, object: { nope: [] } }
-    ]) {
+  it("preserves provider/configuration and malformed-output failure categories", async () => {
+    for (const [generated, error] of [
+      [{ ok: false as const, error: "provider_error" as const }, "provider_error"],
+      [{ ok: false as const, error: "needs_config" as const }, "needs_config"],
+      [{ ok: true as const, object: { nope: [] } }, "malformed_output"]
+    ] as const) {
       await expect(
         rankCandidates(
           db,
@@ -70,7 +71,7 @@ describe("rankCandidates", () => {
           },
           { candidates: [candidate()], topics: [] }
         )
-      ).resolves.toEqual({ ok: false });
+      ).resolves.toEqual({ ok: false, error });
     }
   });
 

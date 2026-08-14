@@ -66,6 +66,7 @@ function dependencies(
     publish?: boolean;
     payloads?: NewsSnapshotPayload[];
     unavailable?: string[];
+    warnings?: Record<string, unknown>[];
   } = {}
 ) {
   return {
@@ -98,7 +99,10 @@ function dependencies(
     repo: makeRepo(options),
     prefs: { list: async () => [] },
     catalog: [],
-    logger: { info: () => undefined }
+    logger: {
+      info: () => undefined,
+      warn: (fields: Record<string, unknown>) => options.warnings?.push(fields)
+    }
   };
 }
 
@@ -116,16 +120,21 @@ describe("compilePersonalizedNews", () => {
     expect(JSON.stringify(payloads[0])).not.toContain("fingerprint");
   });
 
-  it("keeps the last good snapshot when AI fails", async () => {
+  it("publishes a deterministic snapshot and warns when AI ranking fails", async () => {
     const payloads: NewsSnapshotPayload[] = [];
+    const warnings: Record<string, unknown>[] = [];
     await expect(
       compilePersonalizedNews(
         db,
-        dependencies({ sources: [source()], aiFailure: true, payloads }),
+        dependencies({ sources: [source()], aiFailure: true, payloads, warnings }),
         { now, generation: 1 }
       )
-    ).resolves.toEqual({ outcome: "kept_last_good", failureKind: "ai" });
-    expect(payloads).toEqual([]);
+    ).resolves.toEqual({ outcome: "replaced" });
+    expect(payloads[0]?.articles).toHaveLength(15);
+    expect(Object.keys(warnings[0] ?? {}).sort()).toEqual(["aiError", "candidateCount", "event"]);
+    expect(warnings).toEqual([
+      { event: "news_compile_ai_fallback", aiError: "provider_error", candidateCount: 15 }
+    ]);
   });
 
   it("keeps the last good snapshot and marks a failed source unavailable", async () => {

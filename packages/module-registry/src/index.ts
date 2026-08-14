@@ -1740,7 +1740,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       return registerNewsJobWorkers(boss, deps.dataContext, {
         ...discovery,
         logger: {
-          info: (fields) => deps.logger?.info(fields, "news compilation")
+          info: (fields) => deps.logger?.info(fields, "news compilation"),
+          warn: (fields) => deps.logger?.warn(fields, "news compilation")
         },
         // #975 Slice 4: revalidation summary notification honors quiet hours and the
         // owner's per-module notification preference like every other module emitter.
