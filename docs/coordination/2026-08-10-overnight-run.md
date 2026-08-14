@@ -4925,3 +4925,17 @@ digest only) remains the fallback for security-tier sign-off.
   reported base `6f7d75391` became stale when #1454 merged as current main `f648b8da0`. QA is held
   until owner rebases patch-identically onto current main, verifies patch ID/name-only/fast checks,
   and pushes a fresh exact head. No DB proof rerun for the non-overlapping base-only change.
+
+## 2026-08-14 — #1013 refreshed QA; #1592 stale-base hold
+
+- **#1013 / PR #1624:** refreshed exact head
+  `6066ec9b950cde0a5ae30cd853456af5811ab88f`, base
+  `f648b8da0c1a68090c55c4500928aa59f3fc33b8`; stable patch ID/range-diff unchanged, exact approved
+  18-file surface, fast checks green, remote/local/PR heads match, tree clean. Prior DB/full proof
+  remains applicable. Independent exact-head security QA `/root/qa_1013_pr1624` is running; no
+  merge before durable QA, CI and Sol-high sign-off.
+- **#1592 / PR #1622:** Sol-high SIGN-OFF GRANTED at exact old head `4c09489be`, durable
+  `issuecomment-5292144945`, but the branch base `6f7d75391` predates #1454/current main `f648b8da0`.
+  Merge is HOLD. Owner must perform a patch-equivalent rebase onto current main, fast checks/push,
+  then obtain fresh exact-head QA and Sol reaffirmation. No redundant DB/full/UAT rerun for the
+  non-overlapping base-only change.
