@@ -4667,3 +4667,18 @@ digest only) remains the fallback for security-tier sign-off.
   mapped as site 12; teardown REVOKEs use `preDropSql`, setup GRANTs use the proposed locked helper,
   and discovery includes membership forms. Round-three exact-head sibling review is running; no
   merge or build dispatch before its durable verdict.
+
+## 2026-08-14 — #1467 continuation replacement and #1013 approval
+
+- **#1467 / PR #1610:** the existing Claude owner twice ended without consuming/reporting its
+  delegated `livepath-uat-1610` result. It was exited in place without touching the worktree or
+  branch and replaced by Codex agent `finish-1467-livepath`, session
+  `019fff2e-ac90-7493-82fd-8cc3f2048308`, label `1467 live-path Codex`, in the same single-pane tab.
+  Its scope is only to recover or rerun missing exact-head vault live-path and blocking UAT
+  evidence, post one durable comment, confirm teardown, and report; no merge or feature rewrite
+  authority.
+- **#1013 / PR #1616:** round-three sibling review APPROVED exact head
+  `4844fd84eae5f360c5edc0ab2c49b2186aaea5cc` at `issuecomment-5290720885`; docs CI is green. The PR
+  is still draft only because GitHub's GraphQL mutation budget is exhausted until its imminent
+  reset. After reset: mark ready, merge docs spec, leave issue open, move it `In progress`, and
+  replace the completed #1013 Fable quadrant with a Codex build lane.
