@@ -4939,3 +4939,9 @@ digest only) remains the fallback for security-tier sign-off.
   Merge is HOLD. Owner must perform a patch-equivalent rebase onto current main, fast checks/push,
   then obtain fresh exact-head QA and Sol reaffirmation. No redundant DB/full/UAT rerun for the
   non-overlapping base-only change.
+- **#1592 refresh:** PR #1622 now exact head
+  `9e716c640dd12d0b7ae3e913db46c35da17a7e3b` on current main
+  `f648b8da0c1a68090c55c4500928aa59f3fc33b8`; local/remote/PR heads and merge-base match, all three
+  stable patch IDs/range-diff unchanged, exact approved four-file surface, fast checks green, tree
+  clean. Fresh exact-head security QA `/root/qa_1592_pr1622_r2` is running. Old Sol grant remains
+  stale; no merge until QA green and fresh Sol reaffirmation.
