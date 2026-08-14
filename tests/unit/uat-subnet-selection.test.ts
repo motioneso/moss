@@ -28,6 +28,8 @@ describe("IPv4 CIDR handling", () => {
     "10.024.0.0/24",
     "10.249.00.0/24",
     "10.249.0.00/24",
+    "10.249.0.0/024",
+    "10.249.0.0/00024",
     "fd00::/64",
     ""
   ])("rejects invalid IPv4 CIDR %j", (cidr) => {
@@ -123,6 +125,13 @@ describe("selectUatSubnet", () => {
     });
   });
 
+  it.each(["10.249.0.0/024", "10.249.0.0/00024"])(
+    "rejects a requested subnet with a non-canonical prefix %j",
+    (requested) => {
+      expect(() => selectUatSubnet({ requested, live: [] })).toThrow(UatSubnetSelectionError);
+    }
+  );
+
   it("keeps the candidate pool distinct from every forbidden range", () => {
     expect(UAT_SUBNET_CANDIDATES).toHaveLength(13);
     expect(UAT_SUBNET_CANDIDATES[0]).toBe("10.254.0.0/24");
@@ -195,20 +204,25 @@ describe("listLiveDockerSubnets", () => {
     await expect(listLiveDockerSubnets(capture)).rejects.toThrow(UatSubnetSelectionError);
   });
 
-  it("fails closed on malformed Docker IPv4 IPAM", async () => {
-    const capture = async (_command: string, args: readonly string[]) =>
-      args[1] === "ls"
-        ? "bad-id\n"
-        : JSON.stringify([{ Name: "bad", IPAM: { Config: [{ Subnet: "10.1.2.3/99" }] } }]);
+  it.each(["10.1.2.3/99", "10.249.0.0/024", "10.249.0.0/00024"])(
+    "fails closed on malformed Docker IPv4 IPAM %j",
+    async (subnet) => {
+      const capture = async (_command: string, args: readonly string[]) =>
+        args[1] === "ls"
+          ? "bad-id\n"
+          : JSON.stringify([{ Name: "bad", IPAM: { Config: [{ Subnet: subnet }] }, Labels: {} }]);
 
-    await expect(listLiveDockerSubnets(capture)).rejects.toThrow(UatSubnetSelectionError);
-  });
+      await expect(listLiveDockerSubnets(capture)).rejects.toThrow(UatSubnetSelectionError);
+    }
+  );
 
   it("fails closed instead of treating malformed colon syntax as IPv6", async () => {
     const capture = async (_command: string, args: readonly string[]) =>
       args[1] === "ls"
         ? "bad-id\n"
-        : JSON.stringify([{ Name: "bad", IPAM: { Config: [{ Subnet: "not:v6/64" }] } }]);
+        : JSON.stringify([
+            { Name: "bad", IPAM: { Config: [{ Subnet: "not:v6/64" }] }, Labels: {} }
+          ]);
 
     await expect(listLiveDockerSubnets(capture)).rejects.toThrow(UatSubnetSelectionError);
   });

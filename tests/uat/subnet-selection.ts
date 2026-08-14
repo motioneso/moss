@@ -28,7 +28,7 @@ export function parseIpv4Cidr(cidr: string): {
   readonly base: number;
   readonly prefixLength: number;
 } {
-  const match = /^(\d+)\.(\d+)\.(\d+)\.(\d+)\/(\d+)$/.exec(cidr);
+  const match = /^(\d+)\.(\d+)\.(\d+)\.(\d+)\/(0|[1-9][0-9]?)$/.exec(cidr);
   if (!match) {
     throw new UatSubnetSelectionError(`invalid IPv4 CIDR: ${cidr || "<empty>"}`);
   }
