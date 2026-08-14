@@ -639,7 +639,8 @@ export class CliChatEngineHost {
       // #363: inject the persisted claude OAuth token so `auth status` reports loggedIn.
       credentialEnv: this.deps.homeBase
         ? await readProviderCredentialEnv(this.deps.homeBase, provider)
-        : undefined
+        : undefined,
+      homeBase: this.deps.homeBase
     });
     return { status: result.status, message: result.message };
   }

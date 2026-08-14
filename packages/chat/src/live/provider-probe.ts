@@ -21,6 +21,7 @@ export async function probeProvider(
     readonly cliPresent: (provider: ProviderKind) => Promise<boolean>;
     readonly multiplexerUsable?: () => Promise<boolean>;
     readonly credentialEnv?: NodeJS.ProcessEnv;
+    readonly homeBase?: string;
   }
 ): Promise<ProbeProviderResult> {
   if (deps.multiplexerUsable && !(await deps.multiplexerUsable())) {
@@ -30,7 +31,7 @@ export async function probeProvider(
     if (!(await deps.cliPresent(provider))) return { status: "not_installed" };
     switch (provider) {
       case "anthropic":
-        return await probeClaudeAuth(deps.io, deps.credentialEnv);
+        return await probeClaudeAuth(deps.io, deps.credentialEnv, deps.homeBase);
       case "openai-compatible":
         return await probeCodexAuth(deps.io);
       case "google":
@@ -43,10 +44,15 @@ export async function probeProvider(
 
 async function probeClaudeAuth(
   io: Pick<TmuxIo, "run">,
-  credentialEnv?: NodeJS.ProcessEnv
+  credentialEnv?: NodeJS.ProcessEnv,
+  homeBase?: string
 ): Promise<ProbeProviderResult> {
+  const env: NodeJS.ProcessEnv | undefined =
+    homeBase === undefined && credentialEnv === undefined
+      ? undefined
+      : { ...(homeBase === undefined ? {} : { HOME: homeBase }), ...credentialEnv };
   const result = await probeWithTimeout(
-    io.run("claude", ["auth", "status"], credentialEnv ? { env: credentialEnv } : undefined)
+    io.run("claude", ["auth", "status"], env ? { env } : undefined)
   );
   try {
     const parsed = JSON.parse(result.stdout) as { loggedIn?: unknown };

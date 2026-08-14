@@ -203,7 +203,8 @@ export function createCliRunner(
         io,
         cliPresent: (p: ProviderKind) => cliAvailable(p),
         multiplexerUsable: () => tmuxAvailable(),
-        credentialEnv: await readProviderCredentialEnv(config.homeBase, provider)
+        credentialEnv: await readProviderCredentialEnv(config.homeBase, provider),
+        homeBase: config.homeBase
       })
   });
 
