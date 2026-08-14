@@ -4285,3 +4285,12 @@ digest only) remains the fallback for security-tier sign-off.
   two blocking changed-path specs (`app-map-grounding`, `module-install`) hit identical shared
   Docker network-pool contention twice. Owner rerun is active in pane `w1:pAJ` (`uat1585-rerun`);
   no waiver or merge until both pass and QA is refreshed.
+
+## 2026-08-14 — #1248 integrated rebase complete; QA rerun active
+
+- **#1248 / PR #1606:** author rebased onto current `origin/main` and force-pushed HEAD
+  `85ce2f8cc4791de15be41086937522dbe706f1c4`; the only conflict was additive
+  `ALLOWED_PAYLOAD_KEYS` content in `pg-boss.ts`, resolved retaining all four keys. Root
+  format/lint/typecheck passed and prior live UAT proof remains intact. Fresh integrated sensitive
+  QA is running in isolated worktree `.claude/worktrees/qa-1248-sensitive-rerun`, pane `w1:pAK`,
+  agent `qa1248-rerun` (Sonnet).
