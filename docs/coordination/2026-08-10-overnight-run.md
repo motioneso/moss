@@ -4892,3 +4892,26 @@ digest only) remains the fallback for security-tier sign-off.
   `c3ade6cd2` lack required release-note/no-visible-change statements. The lane has exceeded the
   two-cycle QA failure budget and is HOLD—no further author edit/rebase/push/QA. Existing #1592
   Fable is adjudicating the verdict chain and will return a minimal closure or stop/re-scope ruling.
+
+## 2026-08-14 — #1013 DB release; #1454 merged pending live alarm proof
+
+- **#1013:** solo DB window RELEASED at commit `f42c028b9`. Evidence: cluster integration 6/6;
+  locked harness 30 iterations/0 errors; unlocked harness 59 `XX000` collisions; both exact-commit
+  two-worktree gates and final isolated gate exited 0; tuple counts 0; all proof/gate/manual DBs,
+  proof worktree and processes removed. Direct gate-lock probe confirmed free. Owner is wrapping up
+  via patch-equivalent rebase/push/PR. Other lanes released.
+- **#1556:** released from HOLD and instructed to recheck main, then run blocking DB/full/live UAT
+  verification before force-with-lease push. No proof claim or merge until green.
+- **#1592 / PR #1622:** exact-head security QA GREEN at `4c09489be`, durable
+  `issuecomment-5291962744`; blocking module-install UAT exited 0, zero blockers and one non-blocking
+  YAGNI note. Verification CI green; image artifact job was pending at verdict. Sol-high waits for
+  terminal CI.
+- **#1454 / PR #1621:** Sol-high SIGN-OFF GRANTED at exact head
+  `1be30bd35832e46839ab2e2531f4d57dea983852`, durable `issuecomment-5291978943`. Coordinator
+  authority and exact-head CI rechecked; merged squash as
+  `f648b8da0c1a68090c55c4500928aa59f3fc33b8`. Auto-close/Done was intentionally reversed: issue
+  #1454 is open and board `In review` until the approved post-merge proof completes. Owner is now
+  cancelling only this merge's current-main CI run, verifying alarm issue/red run, rerunning that
+  same current-main run, and verifying publish recovery/self-close. Digest `1786702175755829465.msg`.
+- **Merge counter:** `merges_since_relay=6`; Ben's standing overnight instruction keeps this Codex
+  coordinator resident despite ordinary relay triggers.
