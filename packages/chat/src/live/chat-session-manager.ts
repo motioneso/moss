@@ -31,6 +31,7 @@ import type {
 import type { ReapReason } from "./provider-runtime.js";
 import { applyRemoteReap, countSubscribersFor, delay } from "./session-runtime-helpers.js";
 import type { PriorityModelPreferenceV1 } from "@moss/priority";
+import type { NotesContextRetriever } from "./notes-retrieval.js";
 import {
   DEFAULT_CHAT_SURFACE,
   normalizeChatSurface,
@@ -118,6 +119,7 @@ export interface ChatSessionManagerDeps {
   readonly recall?: RecallPort;
   /** Optional per-turn hidden context retrieval. Empty/failed result submits the raw turn. */
   readonly passiveRetrieval?: PassiveRetrievalPort;
+  readonly notesRetrieval?: Pick<NotesContextRetriever, "retrieveWithItems">;
   readonly crossToolRead?: CrossToolReadRunner;
   readonly priorityModel?: { getModel(actorUserId: string): Promise<PriorityModelPreferenceV1> };
   /**
@@ -417,6 +419,7 @@ export class ChatSessionManager {
         {
           persistence: this.deps.persistence,
           passiveRetrieval: this.deps.passiveRetrieval,
+          notesRetrieval: this.deps.notesRetrieval,
           crossToolRead: this.deps.crossToolRead,
           priorityModel: this.deps.priorityModel
         },

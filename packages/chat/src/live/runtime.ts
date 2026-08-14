@@ -26,9 +26,11 @@ import {
   type AiProviderExecutionMode
 } from "@moss/shared";
 import type { PgBoss } from "pg-boss";
+import type { NotesRecallPort } from "@moss/notes";
 
 import type { RecallPort } from "../recall-port.js";
 import { PassiveContextRetriever, type PassiveMemoryGraphRecallPort } from "./passive-retrieval.js";
+import { NotesContextRetriever } from "./notes-retrieval.js";
 import type { CrossToolReadRunner } from "./cross-tool-reasoning.js";
 import { ChatPriorityModelAdapter } from "./priority-model-adapter.js";
 
@@ -343,6 +345,7 @@ export interface CreateChatSessionRuntimeDeps {
   readonly recall?: RecallPort;
   /** Optional graph-only per-turn recall. */
   readonly passiveMemoryRecall?: PassiveMemoryGraphRecallPort;
+  readonly notesRecall?: NotesRecallPort;
   readonly personaPreferences?: PersonaPreferencesPort;
   /** Chat preferences port — reads `chat.settings.v1` for response-style prompt shaping. */
   readonly chatPreferences?: PreferencesPort;
@@ -562,6 +565,9 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
           dataContext: deps.dataContext,
           graphRecall: deps.passiveMemoryRecall
         })
+      : undefined,
+    notesRetrieval: deps.notesRecall
+      ? new NotesContextRetriever({ dataContext: deps.dataContext, notesRecall: deps.notesRecall })
       : undefined,
     crossToolRead: deps.crossToolGateway
       ? buildCrossToolReadAdapter(deps.crossToolGateway)

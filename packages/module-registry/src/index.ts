@@ -277,6 +277,7 @@ import { assertValidFetchHosts, createDatasetClient } from "@moss/datasets";
 import {
   notesModuleManifest,
   notesCommitmentProvider,
+  createNotesRecallPort,
   notesModuleSqlMigrationDirectory,
   NOTES_QUEUE_DEFINITIONS,
   reconcileNotesSchedule,
@@ -440,6 +441,7 @@ export interface BuiltInRouteDependencies {
   readonly chatEngineSelection?: ChatRoutesDependencies["engineSelection"];
   /** Chat-owned passive graph recall seam; no module imports graph internals directly. */
   readonly passiveMemoryRecall?: ChatRoutesDependencies["passiveMemoryRecall"];
+  readonly notesRecall?: ChatRoutesDependencies["notesRecall"];
   /**
    * #342 (§3.4) — the ONE RPC connection to the cli-runner sidecar, when the api runs containerized
    * (JARVIS_CLI_RUNNER_SOCKET set). Owned by the chat runtime (it constructs the connection WITH the
@@ -1430,6 +1432,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         localePreferences: new PreferencesRepository(),
         agencyPreferences: new PreferencesRepository(),
         priorityPreferences: new PreferencesRepository(),
+        notesRecall: deps.notesRecall,
         googleConnectionService: deps.googleConnectionService,
         googleApiClient: deps.googleApiClient,
         connectorsRepository: deps.connectorsRepository,
@@ -2349,6 +2352,7 @@ export function registerBuiltInApiRoutes(
         return new GraphMemoryRecallService(provider).recall(scopedDb, ownerUserId, query, options);
       }
     },
+    notesRecall: createNotesRecallPort(),
     getChatMultiplexerStatus,
     onboardingProbes,
     onboardingInstall,

@@ -8,7 +8,11 @@ import type { AnswerSourceSupport, ChatSurface } from "@moss/shared";
 import type { MemoryRecallItem } from "@moss/memory";
 import type { PriorityModelPreferenceV1 } from "@moss/priority";
 
-import { crossToolItemToSupport, memoryItemToSupport } from "./answer-provenance.js";
+import {
+  crossToolItemToSupport,
+  memoryItemToSupport,
+  notesItemToSupport
+} from "./answer-provenance.js";
 import type { ChatPersistencePort, PassiveRetrievalPort } from "./chat-session-manager.js";
 import {
   collectCrossToolContextAndItems,
@@ -18,10 +22,12 @@ import {
 } from "./cross-tool-reasoning.js";
 import { rankChatContext, reorderByPriority } from "../priority-consumer.js";
 import { combineHiddenContextBlocks } from "./chat-session-manager.js";
+import type { NotesContextRetriever } from "./notes-retrieval.js";
 
 export interface EngineTextDeps {
   readonly persistence: Pick<ChatPersistencePort, "listPriorTurns" | "getThreadContext">;
   readonly passiveRetrieval?: PassiveRetrievalPort;
+  readonly notesRetrieval?: Pick<NotesContextRetriever, "retrieveWithItems">;
   readonly crossToolRead?: CrossToolReadRunner;
   readonly priorityModel?: { getModel(actorUserId: string): Promise<PriorityModelPreferenceV1> };
 }
@@ -32,7 +38,7 @@ export async function buildEngineText(
   text: string,
   surface?: ChatSurface
 ): Promise<{ text: string; pendingItems: AnswerSourceSupport[] }> {
-  if (!deps.passiveRetrieval && !deps.crossToolRead) {
+  if (!deps.passiveRetrieval && !deps.crossToolRead && !deps.notesRetrieval) {
     return { text, pendingItems: [] };
   }
   try {
@@ -53,7 +59,7 @@ export async function buildEngineText(
           })
         : null;
 
-    const [passiveResult, crossToolResult] = await Promise.all([
+    const [passiveResult, crossToolResult, notesResult] = await Promise.all([
       deps.passiveRetrieval != null
         ? (deps.passiveRetrieval.retrieveWithItems != null
             ? deps.passiveRetrieval.retrieveWithItems({
@@ -80,6 +86,17 @@ export async function buildEngineText(
             localNow,
             threadCtx.localTimezone ?? "UTC"
           ).catch(() => ({ block: "", items: [] }))
+        : Promise.resolve({ block: "", items: [] }),
+      deps.notesRetrieval != null
+        ? deps.notesRetrieval
+            .retrieveWithItems({
+              actorUserId,
+              userText: text,
+              threadTitle: threadCtx.threadTitle,
+              recentTurns: recent,
+              incognito: threadCtx.incognito
+            })
+            .catch(() => ({ block: "", items: [] }))
         : Promise.resolve({ block: "", items: [] })
     ]);
 
@@ -110,9 +127,14 @@ export async function buildEngineText(
     let idx = 0;
     const memoryItems = passiveResult.items.map((item) => memoryItemToSupport(item, idx++));
     const crossToolItems = crossTool.items.map((item) => crossToolItemToSupport(item, idx++));
-    const pendingItems: AnswerSourceSupport[] = [...memoryItems, ...crossToolItems];
+    const notesItems = notesResult.items.map((item) => notesItemToSupport(item, idx++));
+    const pendingItems: AnswerSourceSupport[] = [...memoryItems, ...crossToolItems, ...notesItems];
 
-    const combined = combineHiddenContextBlocks(passiveResult.block, crossTool.block);
+    const combined = combineHiddenContextBlocks(
+      passiveResult.block,
+      crossTool.block,
+      notesResult.block
+    );
     return { text: combined ? `${combined}\n\n${text}` : text, pendingItems };
   } catch {
     return { text, pendingItems: [] };

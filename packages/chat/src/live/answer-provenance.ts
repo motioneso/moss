@@ -6,6 +6,7 @@ import type {
   AnswerSourceSupportCard
 } from "@moss/shared";
 import type { MemoryRecallItem } from "@moss/memory";
+import type { NotesRecallSnippet } from "@moss/notes";
 
 import type { CrossToolEvidenceItem, CrossToolSource } from "./cross-tool-reasoning.js";
 
@@ -167,6 +168,19 @@ export function memoryItemToSupport(item: MemoryRecallItem, idx: number): Answer
     confidenceTier: item.confidenceTier,
     provenance: item.provenance as AnswerSourceSupport["provenance"],
     occurredAt,
+    canDereference: false
+  };
+}
+
+export function notesItemToSupport(item: NotesRecallSnippet, idx: number): AnswerSourceSupport {
+  return {
+    supportId: supportIdForIndex(idx),
+    sourceKind: "note",
+    sourceLabel: sanitizeLabel(item.sourcePath),
+    title: sanitizeTitle(item.sourcePath),
+    snippet: sanitizeSnippet(item.text) || undefined,
+    state: "unverified_context",
+    occurredAt: item.updatedAt.toISOString(),
     canDereference: false
   };
 }
