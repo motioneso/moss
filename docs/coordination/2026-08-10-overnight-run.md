@@ -5068,3 +5068,17 @@ digest only) remains the fallback for security-tier sign-off.
 - **#1013:** #1275's DB window is terminal and clean. Exactly one prepared instrumented locked-harness
   run is now authorized under a fresh non-blocking gate-lock probe. #1556 remains held. No retry or
   other DB suite; report bounded backend/phase/native-pg evidence and cleanup before any push.
+
+## 2026-08-14 — #1013 instrumented green; #1556 cold probe released
+
+- **#1013 / PR #1624:** sole instrumented locked harness passed 30 iterations with zero errors in
+  five seconds; all bootstrap/password phases completed and cleanup counts are zero. Successful child
+  backend traces were not persisted because the harness prints them only on error, so the prior
+  unexplained locked-harness RED is not causally resolved. No rerun. Owner is authorized to commit,
+  patch-equivalently rebase, fast-check and push with durable evidence naming both the RED and GREEN
+  plus this diagnostic limitation. Fresh exact-head CI/security QA decide readiness; no merge.
+- **#1556 / PR #1619:** #1013 released the solo window cleanly. Exactly one approved option-A probe
+  is authorized: one provisioned stack, one value-suppressed cold real-provider call bounded at 300
+  seconds; only if cold is green, one 15-second warm repeat in the same stack; one final teardown with
+  zero-resource assertion. Cold RED stops before a second probe. No notes UAT, production edit, push
+  or retry.
