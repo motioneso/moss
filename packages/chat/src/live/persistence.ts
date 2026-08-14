@@ -384,7 +384,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
   async getThreadContext(
     actorUserId: string,
     surface?: ChatSurface
-  ): Promise<{ threadTitle: string | null; localTimezone: string | null }> {
+  ): Promise<{ threadTitle: string | null; localTimezone: string | null; incognito: boolean }> {
     const chatSurface = normalizeChatSurface(surface);
     return this.run(actorUserId, "get-thread-context", async (scopedDb) => {
       const [thread, localeRaw] = await Promise.all([
@@ -395,7 +395,8 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       const localTimezone = extractTimezone(localeRaw);
       return {
         threadTitle: title && title !== DEFAULT_CONVERSATION_TITLE ? title : null,
-        localTimezone
+        localTimezone,
+        incognito: thread?.incognito ?? false
       };
     });
   }

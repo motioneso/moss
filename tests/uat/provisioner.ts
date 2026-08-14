@@ -11,6 +11,7 @@ import { resolveMossEnv } from "@moss/db";
 
 import { deriveTrustedOrigins } from "../../scripts/setup-prod-origins.js";
 import { JOB_SEARCH_FIXTURE_CONTAINER_PORT } from "./fixtures/job-search-fixture-server.js";
+import { UAT_ADMIN_ID } from "./seed/admin.js";
 import { parseUatSeedLevel } from "./seed/level-validation.js";
 import {
   UAT_SUBNET_CANDIDATES,
@@ -231,6 +232,7 @@ export function writeUatEnvFile(input: {
         // "stub" and silently fall back to "local" -- reintroducing exactly the real-model
         // download into a per-run cache volume this UAT `bare` level exists to avoid.
         "JARVIS_ALLOW_STUB_EMBEDDINGS=1",
+        `JARVIS_NOTES_ROOTS=/data/vaults/${UAT_ADMIN_ID}`,
         // #1110: module-registry's buildUatNewsPreviewOverride() reads these at app runtime (not
         // seed-time) to deterministically fake a transient News preview error for one sentinel
         // input — hence env_file: here, not the seed container's docker -e args below.

@@ -98,6 +98,23 @@ describe("AssistantToolGateway.runReadToolForActor", () => {
     );
   });
 
+  it("routes read execution through the shared trust boundary", async () => {
+    const module = makeReadTool("notes.search", { data: { chunks: [{ text: "unsafe" }] } });
+    const execute = module.assistantTools[0]!.execute as ReturnType<typeof vi.fn>;
+    const readToolTrustBoundary = vi.fn(async () => ({ data: { chunks: [] } }));
+    const deps = makeDeps({
+      resolveActiveModules: vi.fn().mockResolvedValue([module]),
+      readToolTrustBoundary
+    } as never);
+    const gw = new AssistantToolGateway(deps);
+
+    const result = await gw.runReadToolForActor("u1", "notes.search", { q: "remodel" });
+
+    expect(result.ok).toBe(true);
+    expect(execute).not.toHaveBeenCalled();
+    expect(readToolTrustBoundary).toHaveBeenCalledOnce();
+  });
+
   it("sanitizes handler throws (never leaks internals)", async () => {
     const tool = {
       ...makeReadTool("notes.search").assistantTools[0],

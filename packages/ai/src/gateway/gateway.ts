@@ -10,6 +10,7 @@ import type {
   ModuleAssistantToolManifest,
   ToolContext,
   ToolExecute,
+  ToolResult,
   ToolServices
 } from "@moss/module-sdk";
 import type { ActionAuditInputSummary, AiAssistantToolDto } from "@moss/shared";
@@ -51,6 +52,13 @@ export interface AssistantToolGatewayDependencies {
    * un-bypassable: write-capable services (calendarWrite, notesSync) are never in this map.
    */
   readonly readToolServices?: ToolServices;
+  /** One prompt-boundary policy for every read-tool execution path. */
+  readonly readToolTrustBoundary?: (args: {
+    readonly scopedDb: DataContextDb;
+    readonly toolName: string;
+    readonly ctx: ToolContext;
+    readonly execute: () => Promise<ToolResult>;
+  }) => Promise<ToolResult>;
   /**
    * Returns the user's configured IANA timezone (e.g. "America/Chicago"), or null if unknown.
    * Injected by the composition root; used to populate ToolContext.localTimezone so tools that
@@ -421,9 +429,7 @@ export class AssistantToolGateway {
 
     const readServices = this.deps.readToolServices ?? {};
     try {
-      const result = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
-        found.execute(scopedDb, input, ctx, readServices)
-      );
+      const result = await this.executeTool(found, input, ctx, readServices, access);
       return {
         ok: true,
         data: renderAndCap(
@@ -525,9 +531,7 @@ export class AssistantToolGateway {
     const access: AccessContext = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
     const services = this.servicesFor(found.tool);
     try {
-      const result = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
-        found.execute(scopedDb, input, ctx, services)
-      );
+      const result = await this.executeTool(found, input, ctx, services, access);
       const sanitized = sanitizeAssistantToolResult(found.tool.outputSchema, result);
       return {
         ok: true,
@@ -558,6 +562,26 @@ export class AssistantToolGateway {
       );
       return { ok: false, error: `Tool ${found.dto.name} failed` };
     }
+  }
+
+  private executeTool(
+    found: ExecutableTool,
+    input: Record<string, unknown>,
+    ctx: ToolContext,
+    services: ToolServices,
+    access: AccessContext
+  ): Promise<ToolResult> {
+    return this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) => {
+      const execute = () => found.execute(scopedDb, input, ctx, services);
+      return found.tool.risk === "read" && this.deps.readToolTrustBoundary
+        ? this.deps.readToolTrustBoundary({
+            scopedDb,
+            toolName: found.tool.name,
+            ctx,
+            execute
+          })
+        : execute();
+    });
   }
 
   private async confirmAndRun(

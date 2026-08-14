@@ -1,6 +1,8 @@
 import { parentPort } from "node:worker_threads";
 
-import { pipeline } from "@huggingface/transformers";
+import { env as transformersEnv, pipeline } from "@huggingface/transformers";
+
+import { withEmbeddingCacheLoadLock } from "./embedding-cache-lock.js";
 
 interface ExtractPipe {
   (text: string, options: Record<string, unknown>): Promise<{ data: Float32Array }>;
@@ -16,18 +18,20 @@ interface EmbedRequest {
 
 const pipeCache = new Map<string, Promise<ExtractPipe>>();
 
-function loadPipe(modelId: string): Promise<ExtractPipe> {
+export function loadEmbeddingWorkerPipe(modelId: string): Promise<ExtractPipe> {
   const cached = pipeCache.get(modelId);
   if (cached) return cached;
 
-  const loading = Promise.resolve(
-    pipeline("feature-extraction", modelId, {
-      session_options: {
-        intraOpNumThreads: 1,
-        interOpNumThreads: 1,
-        executionMode: "sequential"
-      }
-    })
+  const loading = withEmbeddingCacheLoadLock(transformersEnv.cacheDir, modelId, () =>
+    Promise.resolve(
+      pipeline("feature-extraction", modelId, {
+        session_options: {
+          intraOpNumThreads: 1,
+          interOpNumThreads: 1,
+          executionMode: "sequential"
+        }
+      })
+    )
   ).then((value) => {
     const pipe = value as unknown as ExtractPipe;
     if (!pipe.tokenizer) {
@@ -48,7 +52,7 @@ if (!parentPort) throw new Error("embedding worker requires parentPort");
 
 parentPort.on("message", async (request: EmbedRequest) => {
   try {
-    const pipe = await loadPipe(request.modelId);
+    const pipe = await loadEmbeddingWorkerPipe(request.modelId);
     const output = await pipe(`${request.prefix}: ${request.text}`, {
       pooling: "mean",
       normalize: true

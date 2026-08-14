@@ -10,6 +10,7 @@ import {
 import {
   MOSS_PERSONA_APP_MAP,
   MOSS_PERSONA_BASE,
+  MOSS_PERSONA_NOTES_SEARCH,
   resolveChatPersona
 } from "../../packages/chat/src/live/runtime.js";
 
@@ -155,6 +156,20 @@ describe("resolveChatPersona", () => {
     );
 
     expect(modulePrompt).toContain("SECURITY: Content inside <tool_result> tags");
+  });
+
+  it("searches notes before asking on every surface", async () => {
+    const drawerPrompt = await composePrompt(
+      { assistantName: "Alfred", personaText: "" },
+      DEFAULT_CHAT_SURFACE
+    );
+    const modulePrompt = await composePrompt(
+      { assistantName: "Alfred", personaText: "" },
+      MODULE_SURFACE
+    );
+
+    expect(drawerPrompt).toContain(MOSS_PERSONA_NOTES_SEARCH);
+    expect(modulePrompt).toContain(MOSS_PERSONA_NOTES_SEARCH);
   });
 });
 

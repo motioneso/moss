@@ -27,6 +27,7 @@ import {
   type SessionNotifier
 } from "@moss/ai";
 import { PreferencesRepository } from "@moss/structured-state";
+import type { NotesRecallPort } from "@moss/notes";
 import { getConnectorSyncAt } from "@moss/connectors";
 import type {
   ConnectorsRepository,
@@ -101,6 +102,7 @@ export interface ChatRoutesDependencies {
   /** pg-boss for enqueueing embed/extract-facts jobs after each completed turn. */
   readonly boss?: PgBoss;
   readonly passiveMemoryRecall?: PassiveMemoryGraphRecallPort;
+  readonly notesRecall?: NotesRecallPort;
   readonly personaPreferences?: PersonaPreferencesPort;
   readonly chatPreferences?: PreferencesPort;
   readonly localePreferences?: PreferencesPort;
@@ -283,6 +285,7 @@ export function registerChatRoutes(
     // #1414 — wire crossToolGateway so cross-tool reads (email, calendar, task, note, person) produce provenance chips
     crossToolGateway: wiring?.gateway,
     passiveMemoryRecall: dependencies.passiveMemoryRecall,
+    notesRecall: dependencies.notesRecall,
     personaPreferences: dependencies.personaPreferences,
     chatPreferences: dependencies.chatPreferences,
     localePreferences: dependencies.localePreferences,

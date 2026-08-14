@@ -420,7 +420,7 @@ describe("launchSession — bounded inject (fake engine)", () => {
       }),
       recordTurn: async () => {},
       openNewConversation: async () => {},
-      getThreadContext: async () => ({ threadTitle: null, localTimezone: null }),
+      getThreadContext: async () => ({ threadTitle: null, localTimezone: null, incognito: false }),
       touchExistingThread: async () => true
     };
 
@@ -453,7 +453,7 @@ describe("launchSession — bounded inject (fake engine)", () => {
       listPriorTurns: async () => ({ recent: [], oldSummary: null }),
       recordTurn: async () => {},
       openNewConversation: async () => {},
-      getThreadContext: async () => ({ threadTitle: null, localTimezone: null }),
+      getThreadContext: async () => ({ threadTitle: null, localTimezone: null, incognito: false }),
       touchExistingThread: async () => true
     };
 

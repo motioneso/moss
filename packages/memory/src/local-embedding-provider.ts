@@ -1,8 +1,9 @@
 import { Worker } from "node:worker_threads";
 
-import { pipeline } from "@huggingface/transformers";
+import { env as transformersEnv, pipeline } from "@huggingface/transformers";
 
 import type { EmbeddingProvider } from "./embedding-provider.js";
+import { withEmbeddingCacheLoadLock } from "./embedding-cache-lock.js";
 
 const DEFAULT_MODEL_ID = "nomic-ai/nomic-embed-text-v1.5";
 
@@ -123,7 +124,9 @@ function loadPipe(modelId: string): Promise<ExtractPipe> {
   if (cached) return cached;
 
   // pipeline() returns a complex union; we narrow to the callable shape we need.
-  const loading = Promise.resolve(pipeline("feature-extraction", modelId)).then((p) => {
+  const loading = withEmbeddingCacheLoadLock(transformersEnv.cacheDir, modelId, () =>
+    Promise.resolve(pipeline("feature-extraction", modelId))
+  ).then((p) => {
     const pipe = p as unknown as ExtractPipe;
     // #1359: transformers.js FeatureExtractionPipeline._call hardcodes its tokenizer call to
     // `{ padding: true, truncation: true }` and destructures only pooling/normalize/quantize/

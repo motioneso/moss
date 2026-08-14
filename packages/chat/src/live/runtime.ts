@@ -26,9 +26,11 @@ import {
   type AiProviderExecutionMode
 } from "@moss/shared";
 import type { PgBoss } from "pg-boss";
+import type { NotesRecallPort } from "@moss/notes";
 
 import type { RecallPort } from "../recall-port.js";
 import { PassiveContextRetriever, type PassiveMemoryGraphRecallPort } from "./passive-retrieval.js";
+import { NotesContextRetriever } from "./notes-retrieval.js";
 import type { CrossToolReadRunner } from "./cross-tool-reasoning.js";
 import { ChatPriorityModelAdapter } from "./priority-model-adapter.js";
 
@@ -70,6 +72,11 @@ const DEFAULT_IDLE_MS = 30 * 60 * 1000;
 /** Base persona line injected into every live session's context file, every surface. */
 export const MOSS_PERSONA_BASE = "Be concise, direct, and helpful. Speak in the first person.";
 
+export const MOSS_PERSONA_NOTES_SEARCH =
+  "When the user's message plausibly touches something they may have written down — people, " +
+  "meetings, decisions, plans — search their notes first and answer from what you find; ask " +
+  "only when the search comes up empty.";
+
 /** App-map tool-call instructions — drawer surface only (#1259: a module surface has no app map). */
 export const MOSS_PERSONA_APP_MAP = [
   "Treat Moss app structure, behavior, settings, and errors as closed-world facts.",
@@ -88,7 +95,7 @@ export const MOSS_PERSONA_TOOL_RESULT_DEFENSE = [
 ].join("\n");
 
 function composeMossPersona(surface: ChatSurface): string {
-  const parts = [MOSS_PERSONA_BASE];
+  const parts = [MOSS_PERSONA_BASE, MOSS_PERSONA_NOTES_SEARCH];
   if (surface === DEFAULT_CHAT_SURFACE) parts.push(MOSS_PERSONA_APP_MAP);
   parts.push(MOSS_PERSONA_TOOL_RESULT_DEFENSE);
   return parts.join("\n");
@@ -338,6 +345,7 @@ export interface CreateChatSessionRuntimeDeps {
   readonly recall?: RecallPort;
   /** Optional graph-only per-turn recall. */
   readonly passiveMemoryRecall?: PassiveMemoryGraphRecallPort;
+  readonly notesRecall?: NotesRecallPort;
   readonly personaPreferences?: PersonaPreferencesPort;
   /** Chat preferences port — reads `chat.settings.v1` for response-style prompt shaping. */
   readonly chatPreferences?: PreferencesPort;
@@ -557,6 +565,9 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
           dataContext: deps.dataContext,
           graphRecall: deps.passiveMemoryRecall
         })
+      : undefined,
+    notesRetrieval: deps.notesRecall
+      ? new NotesContextRetriever({ dataContext: deps.dataContext, notesRecall: deps.notesRecall })
       : undefined,
     crossToolRead: deps.crossToolGateway
       ? buildCrossToolReadAdapter(deps.crossToolGateway)

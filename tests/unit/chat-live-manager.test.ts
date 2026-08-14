@@ -278,8 +278,12 @@ class FakePersistence implements ChatPersistencePort {
     this.turns = [];
   }
 
-  async getThreadContext(): Promise<{ threadTitle: string | null; localTimezone: string | null }> {
-    return { threadTitle: null, localTimezone: null };
+  async getThreadContext(): Promise<{
+    threadTitle: string | null;
+    localTimezone: string | null;
+    incognito: boolean;
+  }> {
+    return { threadTitle: null, localTimezone: null, incognito: false };
   }
 
   async touchExistingThread(): Promise<boolean> {
