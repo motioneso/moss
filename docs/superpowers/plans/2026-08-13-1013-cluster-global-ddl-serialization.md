@@ -8,19 +8,21 @@ a then-current rebase of `main`.
 
 ## Seams check (file:line, verified on this branch at `be7edf725`)
 
-| Assumed capability                                                            | Evidence                                                                                                                 |
-| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------- | -------------------------------------------------------------------------- |
-| Bootstrap superuser URL available everywhere the lock is needed               | `getMossDatabaseUrls().bootstrap` — `packages/db/src/urls.ts:46`                                                         |
-| Maintenance-DB derivation prior art (swap URL database segment to `postgres`) | `scripts/test-integration.ts:45-51`                                                                                      |
-| Advisory-lock key idiom `hashtext('…')` already in tree                       | `packages/db/src/migrations/sql-runner.ts:199`                                                                           |
-| `runSqlFiles(connectionString, directory)` is the bootstrap executor to wrap  | `packages/db/src/migrations/sql-runner.ts:114`; callers `scripts/migrate.ts:23`, `tests/integration/test-database.ts:71` |
-| `applyRolePasswords` owns the ALTER ROLE…PASSWORD writes                      | `packages/db/src/role-bootstrap.ts:97-110`                                                                               |
-| Module role DDL confined to three broker functions                            | `packages/db/src/module-role-broker.ts:49-136`                                                                           |
-| Teardown DROP ROLE site                                                       | `tests/integration/test-database.ts:201-214`                                                                             |
-| Env resolution channel for the override var                                   | `resolveMossEnv` — exported from `@moss/db`, used at `tests/integration/test-database.ts:23-27`                          |
-| `@moss/db` public surface to extend                                           | `packages/db/src/index.ts` (exports `runSqlFiles`, `runSqlMigrations`, `resolveMossEnv` today)                           |
-| No role DDL hides in migrations or module SQL                                 | grep `CREATE ROLE                                                                                                        | ALTER ROLE | DROP ROLE`over`infra/postgres/migrations/`, `packages/\*/sql/` — zero hits |
-| DROP/CREATE DATABASE already serialized at gate start                         | `scripts/run-gate.sh:162-173` (`flock`) — unchanged by this plan                                                         |
+| Assumed capability                                                            | Evidence                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bootstrap superuser URL available everywhere the lock is needed               | `getMossDatabaseUrls().bootstrap` — `packages/db/src/urls.ts:46`                                                                                                                                                                                                                                                                                                                                        |
+| Maintenance-DB derivation prior art (swap URL database segment to `postgres`) | `scripts/test-integration.ts:45-51` (intent only — its trailing-segment regex clobbers query strings; Task 1 binds `new URL()` instead)                                                                                                                                                                                                                                                                 |
+| Advisory-lock key idiom `hashtext('…')` already in tree                       | `packages/db/src/migrations/sql-runner.ts:199`                                                                                                                                                                                                                                                                                                                                                          |
+| `runSqlFiles(connectionString, directory)` is the bootstrap executor to wrap  | `packages/db/src/migrations/sql-runner.ts:114`; callers `scripts/migrate.ts:23`, `tests/integration/test-database.ts:71`                                                                                                                                                                                                                                                                                |
+| `applyRolePasswords` owns the ALTER ROLE…PASSWORD writes                      | `packages/db/src/role-bootstrap.ts:97-110`                                                                                                                                                                                                                                                                                                                                                              |
+| Module role DDL confined to three broker functions                            | `packages/db/src/module-role-broker.ts:49-136`                                                                                                                                                                                                                                                                                                                                                          |
+| Teardown DROP ROLE site                                                       | `tests/integration/test-database.ts:201-214`; routed through by `module-install`, `module-role-broker`, `module-worker-rpc`, `finance-tables-install` tests                                                                                                                                                                                                                                             |
+| Purge role-DDL site (spec sites 9–11)                                         | `scripts/module-reconcile.ts:363-384` (`purgeModule` step 4); inline cleanups `tests/integration/job-search{,-store,-worker-surface,-tables-install}.test.ts`; membership revoke `tests/integration/module-worker-rpc.test.ts:769`                                                                                                                                                                      |
+| Reconcile's own lock cannot cover site 9                                      | `pg_advisory_lock(hashtext('jarv1s:module-reconcile'))` at `scripts/module-reconcile.ts:127` — per-lane DB session (per-database locktag), different key                                                                                                                                                                                                                                                |
+| Env resolution channel for the override var                                   | `resolveMossEnv` — exported from `@moss/db`, used at `tests/integration/test-database.ts:23-27`                                                                                                                                                                                                                                                                                                         |
+| `@moss/db` public surface to extend                                           | `packages/db/src/index.ts` (exports `runSqlFiles`, `runSqlMigrations`, `resolveMossEnv` today)                                                                                                                                                                                                                                                                                                          |
+| Role-DDL discovery is complete over SQL **and** TS sources                    | grep for `CREATE ROLE` / `ALTER ROLE` / `DROP ROLE` / `DROP OWNED` over `infra/postgres/migrations/`, `packages/*/sql/` (zero executor hits) and over `scripts/`, `packages/`, `apps/`, `tests/` `*.ts` — every TS hit dispositioned in the spec's site table or its exclusion list (comments; `audit-release-hardening.ts:429` attribute read; unit test asserting SQL text; per-database ACL revokes) |
+| DROP/CREATE DATABASE already serialized at gate start                         | `scripts/run-gate.sh:162-173` (`flock`) — unchanged by this plan                                                                                                                                                                                                                                                                                                                                        |
 
 Open questions: none.
 
@@ -57,6 +59,10 @@ export function runClusterBootstrapSql(
 Decisions bound by the spec: session-level lock (crash-release), `SET lock_timeout` before
 acquire, fail-closed throw naming the lock DB and `JARVIS_CLUSTER_LOCK_DATABASE`, unlock + `end()`
 in `finally`, no DROP/CREATE of anything, connection strings passed through unmodified.
+Maintenance-URL derivation uses `new URL()` with a pathname swap (query string — e.g.
+`?sslmode=…` — preserved), **not** the trailing-segment regex from
+`scripts/test-integration.ts:45-51`. Every function that acquires the lock internally (Task 2)
+carries a doc comment restating the non-reentrancy rule, not just the primitive.
 
 **Unit/integration tests (behavior + why a broken implementation fails):**
 
@@ -88,12 +94,27 @@ Diff-shaped decisions (no bodies):
 - `packages/db/src/module-role-broker.ts` — `ensureModuleRoles`, `enableInstallerLogin`,
   `disableInstallerLogin` each wrap their role-DDL section internally; signatures unchanged.
 - `tests/integration/test-database.ts:201` — `dropModuleRolesAtTeardown` wraps its DROP ROLE loop
-  in `withClusterDdlLock`; the 2BP01 tolerance stays inside `fn` unchanged.
+  in `withClusterDdlLock`; the 2BP01 tolerance stays inside `fn` unchanged. It gains an optional
+  third parameter `options?: { preDropSql?: string[] }` — statements executed inside the locked
+  section before the drops — and `tests/integration/module-worker-rpc.test.ts:769` moves its
+  membership `REVOKE` (spec site 11) into that hook instead of running it just before the call.
+- `scripts/module-reconcile.ts` — `purgeModule` wraps **only** its role-DDL section (step 4,
+  `:363-384`: REVOKE GRANT OPTION…CASCADE, DROP OWNED BY, DROP ROLE) in `withClusterDdlLock`
+  internally; signature unchanged. Steps 1–3 and 5–6 (per-lane tables, rows, files, the purge
+  mark) stay outside the lock. The file's Phase-0 `jarv1s:module-reconcile` advisory lock at
+  `:127` is untouched — different job (serializes reconcile runs per lane), different key.
+- The four inline job-search cleanups (spec site 10 — `tests/integration/job-search.test.ts:387-389`,
+  `job-search-store.test.ts:59-60`, `job-search-worker-surface.test.ts:203-205`,
+  `job-search-tables-install.test.ts:74-75`) switch to `dropModuleRolesAtTeardown`, keeping their
+  best-effort `.catch(() => {})` at the call site.
 
 **Non-nesting guard test:** a source-assertion test (reads its OWN worktree — see
-`source-assertion-tests-read-their-own-worktree`) asserting `scripts/migrate.ts` calls
-`runClusterBootstrapSql` and `applyRolePasswords` as sequential top-level statements, not one
-inside the other's callback. Fails if a refactor nests two wrapped sections → self-deadlock.
+`source-assertion-tests-read-their-own-worktree`) asserting that in **both** script-level
+compositions — `scripts/migrate.ts` (`runClusterBootstrapSql` + `applyRolePasswords`) and
+`scripts/module-reconcile.ts` (the wrapped purge section vs. the broker calls it triggers) — the
+wrapped sections are sequential siblings, not one inside the other's callback. Fails if a refactor
+nests two wrapped sections → self-deadlock. Belt-and-braces for call paths the assertion can't
+see: the non-reentrancy doc comment on every internally-wrapped function (Task 1 decision).
 
 **Wiring test (wired-not-just-defined):** integration test that calls
 `resetEmptyFoundationDatabase` while an independent session holds the cluster lock, and asserts
@@ -104,11 +125,15 @@ the reset blocks until release. Fails if the reset path silently kept lock-free 
 New `scripts/prove-cluster-ddl-lock.ts` (dev tooling, wired as `pnpm prove:ddl-lock`):
 
 - Spawns 2 child processes × N iterations (default 30). Each child loops: bootstrap SQL + role
-  passwords against its own scratch database (`moss_ddlproof_a` / `_b`, created and dropped by the
-  harness only — names never derived from `JARVIS_PGDATABASE`, so it cannot touch a lane DB).
+  passwords against its own scratch database (`moss_ddlproof_<pid>_a` / `_b` — per-run unique so
+  two overlapping harness invocations on the shared dev cluster never fight over the same scratch
+  DBs; created and dropped by the harness only, names never derived from `JARVIS_PGDATABASE`, so
+  it cannot touch a lane DB).
 - `--no-lock` mode calls raw `runSqlFiles`/unwrapped password loop: expected to surface
   shared-catalog errors (`tuple concurrently updated`, SQLSTATE XX000-class) across recorded runs —
   probabilistic, so the harness records error counts per run; evidence goes on the PR.
+  **`--no-lock` always exits 0** — it is an evidence run, never a gate; a 0-error `--no-lock` run
+  weakens the PR evidence (rerun with higher N) but fails nothing.
 - Locked mode (default): **0 errors, every run** — exits non-zero on any error.
 
 ## Verification (builder runs; all unpiped, expected exit codes stated)
@@ -117,7 +142,7 @@ New `scripts/prove-cluster-ddl-lock.ts` (dev tooling, wired as `pnpm prove:ddl-l
 pnpm typecheck > /tmp/1013-typecheck.log 2>&1; echo "EXIT=$?"          # expect EXIT=0
 pnpm lint > /tmp/1013-lint.log 2>&1; echo "EXIT=$?"                    # expect EXIT=0
 pnpm prove:ddl-lock > /tmp/1013-proof.log 2>&1; echo "EXIT=$?"         # expect EXIT=0
-pnpm prove:ddl-lock --no-lock > /tmp/1013-noproof.log 2>&1; echo "EXIT=$?"  # evidence run; record error count
+pnpm prove:ddl-lock --no-lock > /tmp/1013-noproof.log 2>&1; echo "EXIT=$?"  # expect EXIT=0 always (evidence run, never a gate); record error count on PR
 ```
 
 DB-touching commands (`prove:ddl-lock`, `test:integration`, the gate) require the `verify-gate`

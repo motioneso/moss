@@ -2,7 +2,10 @@
 
 **Date:** 2026-08-13
 
-**Status:** Draft — awaiting Fable review
+**Status:** Draft — revised 2026-08-14 per independent Fable review
+([comment 5290473655](https://github.com/motioneso/moss/pull/1616#issuecomment-5290473655)):
+B1 collision-map gap closed (module-reconcile purge + widened TS-source discovery), four
+non-blockers folded in. Awaiting re-review.
 
 **Issue:** #1013 (task; no parent roll-up)
 
@@ -16,7 +19,8 @@ in this tree: `scripts/run-gate.sh`, `scripts/migrate.ts`, `scripts/test-integra
 `packages/db/src/migrations/sql-runner.ts`, `packages/db/src/role-bootstrap.ts`,
 `packages/db/src/module-role-broker.ts`, `packages/db/src/urls.ts`,
 `tests/integration/test-database.ts`, `infra/postgres/bootstrap/0000_roles.sql`,
-`infra/postgres/grants/*.sql`, `package.json`.
+`infra/postgres/grants/*.sql`, `package.json`, `scripts/module-reconcile.ts`, and the
+role-DDL-bearing integration tests named in sites 10–11.
 
 **Pre-build grounding gate:** rebase on then-current `main`, re-read the owned files, replace stale
 line references before implementation.
@@ -30,16 +34,37 @@ tuple from two lanes produce `tuple concurrently updated`, a nondeterministic ha
 
 The repo writes those same shared tuples on every gate run and every integration-suite reset:
 
-| #   | Site                                                                                                                                      | Shared-catalog write                                                                                             | Frequency under one gate                                                                                              |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| 1   | `infra/postgres/bootstrap/0000_roles.sql:35-65`                                                                                           | unconditional `ALTER ROLE` on the same four fixed roles → `pg_authid`                                            | once per `db:migrate` **and once per integration suite file** (100+ resets per gate) via site 3                       |
-| 2   | `infra/postgres/bootstrap/0000_roles.sql:80`                                                                                              | `GRANT jarvis_auth_runtime TO jarvis_migration_owner` → `pg_auth_members`                                        | same as site 1                                                                                                        |
-| 3   | `runSqlFiles` on the bootstrap dir — `scripts/migrate.ts:23` and `tests/integration/test-database.ts:71` (`resetEmptyFoundationDatabase`) | executes sites 1–2; `runSqlFiles` (`packages/db/src/migrations/sql-runner.ts:114`) holds **no lock of any kind** | as above                                                                                                              |
-| 4   | `applyRolePasswords` (`packages/db/src/role-bootstrap.ts:97-110`)                                                                         | `ALTER ROLE … LOGIN PASSWORD` on the same four roles → `pg_authid`                                               | once per `db:migrate` (`scripts/migrate.ts:28`)                                                                       |
-| 5   | `packages/db/src/module-role-broker.ts:49-136` (`ensureModuleRoles` / `enableInstallerLogin` / `disableInstallerLogin`)                   | `CREATE ROLE`/`ALTER ROLE` → `pg_authid`; `GRANT role TO role` → `pg_auth_members`                               | per module-install flow and per module integration suite                                                              |
-| 6   | `dropModuleRolesAtTeardown` (`tests/integration/test-database.ts:201-214`)                                                                | `DROP ROLE` → `pg_authid`                                                                                        | per module suite teardown                                                                                             |
-| 7   | `scripts/run-gate.sh:162-173`                                                                                                             | `DROP/CREATE DATABASE` → `pg_database`                                                                           | once per gate — **already serialized** by `flock` on `$STATE_DIR/db.lock`                                             |
-| 8   | `scripts/test-integration.ts:53-76`                                                                                                       | `CREATE/DROP DATABASE` → `pg_database`                                                                           | only when `JARVIS_PGDATABASE` is unset (ad-hoc runs; passthrough under run-gate, `scripts/test-integration.ts:19-21`) |
+| #   | Site                                                                                                                                                                                                       | Shared-catalog write                                                                                                                                                                                                                           | Frequency under one gate                                                                                              |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| 1   | `infra/postgres/bootstrap/0000_roles.sql:35-65`                                                                                                                                                            | unconditional `ALTER ROLE` on the same four fixed roles → `pg_authid`                                                                                                                                                                          | once per `db:migrate` **and once per integration suite file** (100+ resets per gate) via site 3                       |
+| 2   | `infra/postgres/bootstrap/0000_roles.sql:80`                                                                                                                                                               | `GRANT jarvis_auth_runtime TO jarvis_migration_owner` → `pg_auth_members`                                                                                                                                                                      | same as site 1                                                                                                        |
+| 3   | `runSqlFiles` on the bootstrap dir — `scripts/migrate.ts:23` and `tests/integration/test-database.ts:71` (`resetEmptyFoundationDatabase`)                                                                  | executes sites 1–2; `runSqlFiles` (`packages/db/src/migrations/sql-runner.ts:114`) holds **no lock of any kind**                                                                                                                               | as above                                                                                                              |
+| 4   | `applyRolePasswords` (`packages/db/src/role-bootstrap.ts:97-110`)                                                                                                                                          | `ALTER ROLE … LOGIN PASSWORD` on the same four roles → `pg_authid`                                                                                                                                                                             | once per `db:migrate` (`scripts/migrate.ts:28`)                                                                       |
+| 5   | `packages/db/src/module-role-broker.ts:49-136` (`ensureModuleRoles` / `enableInstallerLogin` / `disableInstallerLogin`)                                                                                    | `CREATE ROLE`/`ALTER ROLE` → `pg_authid`; `GRANT role TO role` → `pg_auth_members`                                                                                                                                                             | per module-install flow and per module integration suite                                                              |
+| 6   | `dropModuleRolesAtTeardown` (`tests/integration/test-database.ts:201-214`)                                                                                                                                 | `DROP ROLE` → `pg_authid`                                                                                                                                                                                                                      | per module suite teardown                                                                                             |
+| 7   | `scripts/run-gate.sh:162-173`                                                                                                                                                                              | `DROP/CREATE DATABASE` → `pg_database`                                                                                                                                                                                                         | once per gate — **already serialized** by `flock` on `$STATE_DIR/db.lock`                                             |
+| 8   | `scripts/test-integration.ts:53-76`                                                                                                                                                                        | `CREATE/DROP DATABASE` → `pg_database`                                                                                                                                                                                                         | only when `JARVIS_PGDATABASE` is unset (ad-hoc runs; passthrough under run-gate, `scripts/test-integration.ts:19-21`) |
+| 9   | `purgeModule` role section (`scripts/module-reconcile.ts:363-384`)                                                                                                                                         | `REVOKE GRANT OPTION … CASCADE`, `DROP OWNED BY`, `DROP ROLE` on `jarvis_mod_<slug>_{install,runtime}` → `pg_authid`, `pg_auth_members` (role names derive only from moduleId, `packages/db/src/module-role-broker.ts:31-37` — cluster-global) | per purge-marked module; live on real paths (container boot after migrate, root `db:reconcile`)                       |
+| 10  | Inline job-search test cleanups (`tests/integration/job-search.test.ts:387-389`, `job-search-store.test.ts:59-60`, `job-search-worker-surface.test.ts:203-205`, `job-search-tables-install.test.ts:74-75`) | best-effort `DROP ROLE IF EXISTS … .catch(() => {})` → `pg_authid`                                                                                                                                                                             | per suite teardown in those four files                                                                                |
+| 11  | Worker-RPC membership revoke (`tests/integration/module-worker-rpc.test.ts:769`)                                                                                                                           | `REVOKE jarvis_mod_acme_db_runtime FROM jarvis_worker_runtime` → `pg_auth_members` (runs before, not inside, the site-6 helper call at `:780`)                                                                                                 | per suite teardown                                                                                                    |
+
+Sites 9–11 were added in the 2026-08-14 revision: the original discovery grep covered only SQL
+directories (`infra/postgres/migrations/`, `packages/*/sql/`); re-running it over TS sources
+(`scripts/`, `packages/`, `apps/`, `tests/`, pattern `CREATE ROLE|ALTER ROLE|DROP ROLE|DROP OWNED`)
+surfaced them. All other TS hits are non-executors, verified individually: comments and doc strings;
+`scripts/audit-release-hardening.ts:429` (reads the `rolcreaterole` attribute, no DDL);
+`tests/unit/role-bootstrap.test.ts` (asserts SQL text, opens no cluster connection); schema/table
+ACL `REVOKE`s (per-database, same class as the grants dir); and four test files
+(`module-install`, `module-role-broker`, `module-worker-rpc`, `finance-tables-install`) whose
+`DROP ROLE`s already route through site 6's `dropModuleRolesAtTeardown`.
+
+Site 9's own file lock does not cover it:
+`pg_advisory_lock(hashtext('jarv1s:module-reconcile'))` (`scripts/module-reconcile.ts:127`) is
+taken on a session opened against the per-lane bootstrap URL — a per-database locktag — and is a
+different key from `moss:cluster-ddl`, so it can never exclude the wrapped broker/teardown sites.
+An unwrapped purge racing a wrapped broker call on the same module's roles is exactly the class
+this spec closes, and the two-worktree gate proof would not reliably catch it (a reconcile must
+happen to run in the window).
 
 Sites 1 and 4 are the high-probability collisions: four fixed `pg_authid` tuples rewritten
 unconditionally, over a hundred times per gate, by every lane on the cluster.
@@ -67,7 +92,7 @@ suites.
 ## Decision
 
 Add one primitive to `@moss/db` — a **cluster-scoped advisory lock** — and hold it around exactly
-the cluster-global DDL sections (sites 1–6). Nothing else changes: per-lane databases, migration
+the cluster-global DDL sections (sites 1–6 and 9–11). Nothing else changes: per-lane databases, migration
 flow, and gate parallelism are preserved; only the seconds-long shared-catalog sections serialize.
 
 ### The primitive
@@ -75,10 +100,12 @@ flow, and gate parallelism are preserved; only the seconds-long shared-catalog s
 `withClusterDdlLock(bootstrapConnectionString, fn)` in a new `packages/db/src/cluster-ddl-lock.ts`:
 
 1. Derive a maintenance connection: the bootstrap URL with its database segment swapped to
-   `postgres` — the exact prior art at `scripts/test-integration.ts:45-51` — overridable via
-   `JARVIS_CLUSTER_LOCK_DATABASE` (through `resolveMossEnv`) for clusters whose maintenance DB is
-   named differently. Every lane shares host:port, so every lane's lock session lands in the same
-   database and the advisory locktags finally collide — which is the point.
+   `postgres` — same intent as the prior art at `scripts/test-integration.ts:45-51`, but via
+   `new URL()` pathname swap, **not** that file's trailing-segment regex, which would clobber a
+   `?sslmode=…` query string — overridable via `JARVIS_CLUSTER_LOCK_DATABASE` (through
+   `resolveMossEnv`) for clusters whose maintenance DB is named differently. Every lane shares
+   host:port, so every lane's lock session lands in the same database and the advisory locktags
+   finally collide — which is the point.
 2. Open a dedicated session there, `SET lock_timeout` (default 120s, see Failure semantics), then
    `SELECT pg_advisory_lock(hashtext('moss:cluster-ddl'))` — session-level, matching the existing
    `hashtext(...)` key idiom in `sql-runner.ts:199`.
@@ -101,14 +128,24 @@ cannot forget it:
   only) and must not serialize cross-lane.
 - `applyRolePasswords` acquires internally.
 - `ensureModuleRoles`, `enableInstallerLogin`, `disableInstallerLogin` acquire internally.
-- `dropModuleRolesAtTeardown` acquires via the exported helper.
+- `dropModuleRolesAtTeardown` acquires via the exported helper, and gains an optional
+  `preDropSql` hook so site 11's membership `REVOKE` executes inside the same locked section
+  instead of just before it.
+- `purgeModule` (site 9) wraps **only its role-DDL section** (`scripts/module-reconcile.ts:363-384`)
+  internally, signature unchanged — steps 1–3 and 5–6 of the purge are per-lane table/row/file work
+  and must not serialize cross-lane. The file's own `jarv1s:module-reconcile` advisory lock stays
+  as-is (it serializes whole reconcile runs per lane; different job, different key).
+- The four inline job-search cleanups (site 10) switch to `dropModuleRolesAtTeardown`, keeping
+  their best-effort `.catch(() => {})` at the call site.
 
 **Non-reentrancy constraint (binding):** the helper opens its own session per call, so a nested
 call would self-deadlock against a sibling process only after first deadlocking on design review.
 No wrapped section may call another wrapped section. Today none does (verified: `migrate.ts`
-sequences sites 3→4 as sibling sections; the role broker is never called under site 3/4). The
-implementation must document this at the helper and the plan adds a test asserting the sections are
-siblings, not nested.
+sequences sites 3→4 as sibling sections; the role broker is never called under site 3/4;
+`reconcileModules` reaches the wrapped broker functions and the site-9 section as siblings, never
+one inside the other). The implementation must document this constraint in a doc comment on
+**every** wrapped function, not only the primitive, and the plan's source assertion covers both
+script-level compositions (`migrate.ts`, `module-reconcile.ts`).
 
 ### Failure semantics (fail-safe, fail-closed)
 
