@@ -4799,3 +4799,21 @@ digest only) remains the fallback for security-tier sign-off.
   blockers closed, executable content byte-identical to the security-green head, exact-head CI green,
   zero findings, merge-ready from QA. Final Sol-high reaffirmation `/root/signoff_1467_pr1610_r2`
   is running; no merge until its durable comment lands.
+
+## 2026-08-14 — #1467 merged; #1454 QA dispatched
+
+- **#1467 / PR #1610:** Sol-high SIGN-OFF GRANTED at exact head
+  `dfb79df31bf552110122563fde3f950688246684`, durable `issuecomment-5291360123`. Coordinator
+  authority re-confirmed; exact-head CI/QA/live-UAT/teardown all green. Merged squash as
+  `6f7d75391bef23c5e2af2a40e3826be227af9651`. Issue #1467 is closed and project item `Done`; remote
+  branch deleted; merge digest queued as `1786697236040926252.msg`. Continuation pane closed;
+  squash-ahead worktree retained conservatively.
+- **#1454 / PR #1621:** code-complete at exact head
+  `c3f11aa2a76eac94e1b7bb90adc6291704c9b05c`, one-file workflow diff, patch-identical blob
+  `8e667dc839e7521f4c3b509eb8f6a44bef707fbd`, full isolated gate/fast checks green, teardown clean.
+  Independent exact-head security QA `/root/qa_1454_pr1621` is running. Approved live alarm proof
+  remains post-merge cancel-then-rerun of this merge's current-main run only; never an older SHA.
+  Sol-high sign-off and merge remain gated on QA/CI.
+- **Merge counter:** `merges_since_relay=5`. This merge is security-tier; Ben's standing overnight
+  instruction keeps the Codex coordinator resident through compaction despite the ordinary relay
+  trigger.
