@@ -4852,3 +4852,8 @@ digest only) remains the fallback for security-tier sign-off.
   isolated gate as one exclusive sequence, then verify DB/process cleanup and explicitly release the
   window. #1556 is held to non-DB history/static work until release; no other lane may start shared
   DB or live-UAT work.
+- **#1013 proof checkpoint:** locked integration passed 6/6; locked two-child harness produced zero
+  errors; unlocked harness reproduced 59 `XX000` collisions, satisfying the kill gate. Owner is
+  making a path-scoped implementation commit so the second proof worktree can run the exact commit,
+  then must complete the two-worktree contention proof and full isolated gate before releasing the
+  solo window.
