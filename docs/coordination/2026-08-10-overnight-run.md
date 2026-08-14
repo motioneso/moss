@@ -4831,3 +4831,18 @@ digest only) remains the fallback for security-tier sign-off.
   concurrent runs can create duplicate open issues. Owner is rebasing and implementing the minimum
   native concurrency/idempotence fix with deterministic race checks; preserve no `packages:write`
   and unchanged publish gate. Fresh exact-head QA required; no post-merge proof or merge while RED.
+
+## 2026-08-14 — #1592 PR; #1108 third QA RED
+
+- **#1592 / PR #1622:** code-complete at exact head
+  `4c09489beab4d43b4d9c8c855d0c44011d89b1c7`, base
+  `6f7d75391bef23c5e2af2a40e3826be227af9651`; final isolated full gate exited 0 after one unrelated
+  suite-order flake cleared, patch IDs stable across rebase, fast checks green, approved four-file
+  surface only, live path n/a for test-only unwired topology, teardown clean. Independent exact-head
+  security QA `/root/qa_1592_pr1622` is running; Sol-high and merge gated on durable QA/CI.
+- **#1108 / PR #1620:** third security QA RED at exact head
+  `dcb78b1cb3bef0eec30ec42334757f535f1a66df`, durable `issuecomment-5291474213`. Two blockers:
+  leading-zero malformed IPv4 CIDRs are accepted instead of fail-closed, and concurrent setup plus
+  cleanup failures mask the originating error instead of aggregating both. Owner is adding canonical
+  boundary validation and native/existing error aggregation with deterministic tests. Fresh exact-head
+  QA required; no Sol sign-off or merge.
