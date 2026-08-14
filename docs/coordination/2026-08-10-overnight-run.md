@@ -5022,3 +5022,21 @@ digest only) remains the fallback for security-tier sign-off.
   `input-validation.ts` plus its unit test. Focused 26/26, Prettier and lint pass. A transient
   `@moss/db` type-resolution failure is being repaired by one frozen install/typecheck. If green,
   exactly one exclusive full gate is authorized; it currently owns the gate window. No push yet.
+- **#1108 final closure:** Fable-authorized revision pushed at exact head
+  `e80ad140719cfecc82e06c7e7bf3752e722e50a3`, durable `issuecomment-5292545390`. Canonical-prefix
+  TDD went from six boundary failures to 63/63 green; static checks and allocation/forbidden/
+  concurrency cleanup proofs pass; range-diff is patch-equivalent aside from required release-note
+  message rewrites; exact four-file surface. Exact-head CI foundation is pending. Final security QA
+  r5 `/root/qa_1108_pr1620_r5` is running under the no-round-6 stop boundary.
+- **#1013 diagnostic probe:** harness-only instrumentation is ready while DB HOLD remains honored:
+  phase/iteration labels, native pg code/position/routine, child/phase `application_name`, and bounded
+  maintenance-backend acquire/callback-error/release identity events through an optional diagnostic
+  callback. Diagnostic failures are contained from lock work/cleanup; no secrets or URLs logged.
+  Helper 6/6, wiring/reconcile 15/15 and fast checks pass. Exactly one solo locked run waits behind
+  #1275's terminal gate cleanup; no push or lock-semantic change.
+- **#1592 / PR #1622:** fresh Sol-high SIGN-OFF GRANTED at exact head
+  `9e716c640dd12d0b7ae3e913db46c35da17a7e3b`, durable `issuecomment-5292563465`. Coordinator
+  re-confirmed sole authority, live head/base, mergeability and all applicable exact-head CI terminal
+  green. Fresh QA GREEN is `issuecomment-5292291191`; prior patch-identical blocking module-install
+  UAT remains applicable; live path N/A. Security merge is now waiting only for Ben's explicit exact-
+  head approval, tracked in `AWAITING-BEN.md`; no merge/issue/board action yet.

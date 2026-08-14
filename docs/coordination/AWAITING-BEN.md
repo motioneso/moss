@@ -1,5 +1,16 @@
 # Awaiting Ben
 
+## #1592 / PR #1622 — exact-head security merge sign-off
+
+PR #1622 is technically merge-ready at exact head
+`9e716c640dd12d0b7ae3e913db46c35da17a7e3b`: fresh security QA GREEN
+(`issuecomment-5292291191`), fresh Sol-high SIGN-OFF GRANTED (`issuecomment-5292563465`), all
+applicable exact-head CI terminal green, prior patch-identical blocking module-install UAT green,
+and live path N/A for the test-only unwired topology. The PR is open and mergeable; no merge or
+board/issue action has been taken.
+
+**Ben decision:** approve merging PR #1622 at this exact head, or hold it. Recommendation: approve.
+
 ## RESOLVED — #1467 one-shot write authority ruling (2026-08-14)
 
 Security QA for PR #1610 found one non-blocking but newly activated behavior: injecting
