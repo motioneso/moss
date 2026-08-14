@@ -5229,10 +5229,13 @@ digest only) remains the fallback for security-tier sign-off.
 - **#1275 ruling:** Ben approved the Worker-confinement divergence from the earlier install-time-lint
   plan. Fresh exact-head security QA has been requested at `8f82423b6` under that superseding ruling;
   merge remains gated on a durable GREEN verdict.
-- **#1013 valid P3/P4 RED:** setup-corrected concurrent full gates both reached tests and exited 1;
-  XX000=0, but each recorded attributable cross-database module-purge dependency failures followed
-  by cascades. Cleanup is terminal and no push/retry occurred. Spec is reopened; the same Fable
-  reviewer is adjudicating the decision only, with no edits or DB work authorized.
+- **#1013 P3/P4 adjudicated:** setup-corrected concurrent full gates both reached tests and exited 1,
+  with XX000=0 and no unattributable errors. Fable's kill-gate-owner addendum
+  `issuecomment-5295332960` rules the serialization proof satisfied: the failures are the separate,
+  pre-existing fixed-module-fixture collision across lane databases, which no short advisory lock can
+  solve. Do not absorb that 12-file refactor into #1013; file a small follow-up for lane-scoped module
+  fixture identities with NAMEDATALEN-63 care. Exact local head `8bc7cd112` is authorized to push
+  patch-equivalently and request QA r3 without another DB/full/proof run.
 - **#1556 final QA RED:** exact head `17a3592a0` has terminal green CI and live real-chat proof, and
   the Phase-5 abstract-socket security fix passed. Merge is blocked because a lone hidden context
   block can bypass Task 6's combined 2,000-token cap; lane awaits adjudication before another cycle.
