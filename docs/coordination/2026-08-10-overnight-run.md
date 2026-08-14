@@ -4986,3 +4986,10 @@ digest only) remains the fallback for security-tier sign-off.
   pool for minutes. New Codex owner `build-1275-remediation` / label `1275 pattern timeout Codex`
   resumed the existing branch/worktree for a minimum TDD per-invocation bound. Fresh exact-head
   security QA and Sol-high remain mandatory; no merge.
+- **#1108 adjudication:** Fable ruled the remaining work a MECHANICAL FINAL CLOSURE and authorized
+  exactly one author revision plus security QA r5, durable `issuecomment-5292401388`. Binding scope:
+  canonical prefix regex `(0|[1-9][0-9]?)`; `/024` and `/00024` tests at all three boundaries with
+  valid inspect labels plus `/0` and `/32` acceptance; release-note rewrites for commits `dcb78b1cb`
+  and `c3ade6cd2`; fresh exact-head/range-diff evidence. Existing Codex owner resumed. Any r5 finding
+  outside the two converging cleanup/CIDR threads, or a surviving canonical-prefix bug, stops the lane
+  with no round 6. TOCTOU/forced-removal tests remain deferred to #1618.
