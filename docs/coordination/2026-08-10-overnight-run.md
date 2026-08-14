@@ -4945,3 +4945,37 @@ digest only) remains the fallback for security-tier sign-off.
   stable patch IDs/range-diff unchanged, exact approved four-file surface, fast checks green, tree
   clean. Fresh exact-head security QA `/root/qa_1592_pr1622_r2` is running. Old Sol grant remains
   stale; no merge until QA green and fresh Sol reaffirmation.
+
+## 2026-08-14 — post-merge alarm proof; refreshed QA outcomes
+
+- **#1454 / PR #1621:** post-merge proof PASSED on current main
+  `f648b8da0c1a68090c55c4500928aa59f3fc33b8`. CI run `31791041676` attempt 1 was cancelled; alarm
+  run `31791130380` failed after 11 seconds and opened exactly issue #1623 naming the full current
+  SHA. The same CI run attempt 2 succeeded, publish job `94743469760` passed, recovery alarm
+  `31792908865` succeeded, and #1623 closed with no open alarm issues. Durable PR proof
+  `issuecomment-5292354056`; issue proof `issuecomment-5292354168`. Issue #1454 and board item are
+  Done; remote branch deleted; digest `1786703915481564792.msg`; spent pane closed.
+- **#1013 / PR #1624:** refreshed security QA RED at exact head
+  `6066ec9b950cde0a5ae30cd853456af5811ab88f`, durable `issuecomment-5292260361`. Two blockers:
+  reconcile can perform DDL against the `options.env` cluster while acquiring its lock through
+  ambient `process.env`, and lock acquisition/connect failures are downgraded to warnings with a
+  successful CLI exit. Mechanical follow-ups: preserve callback plus cleanup errors and reject
+  non-positive timeout values. CI's chat-drawer failure passed targeted rerun 10/10 but remains a
+  red required check. Owner is fixing TDD; fresh exact-head QA/CI/Sol-high required.
+- **#1592 / PR #1622:** refreshed security QA GREEN at exact head
+  `9e716c640dd12d0b7ae3e913db46c35da17a7e3b`, durable `issuecomment-5292291191`; zero blockers and
+  one approved non-blocking repository-seam/YAGNI note. Compose smokes are green; exact-head
+  foundation/app CI remains in progress. Fresh Sol-high starts only after terminal green CI; no
+  merge before that exact-head reaffirmation.
+- **#1556 / PR #1619:** unchanged local head
+  `89ccd0a464a42799c2e41e9916526368bb7ae52b`. Exclusive full gate passed, but corrected real-chat
+  UAT failed at `notes-default-retrieval.uat.spec.ts:128`: the created note did not become indexed
+  within 60 seconds. Credential preflight was valid and provisioner cleanup left zero resources.
+  No edit, push, or green proof was made. Owner is building a fast red-capable diagnostic loop that
+  separates persistence, job emission/completion, index-row creation, and retrieval/RLS visibility
+  before forming hypotheses. Current main advanced to `f648b8da0`; fetch before eventual rebase.
+- **#1108 / PR #1620:** HOLD remains at exact head
+  `c3ade6cd2baaf84ab52037439ca79a9059da00bb` after four security QA RED cycles. Existing Fable lane
+  is adjudicating whether `/024` canonical-prefix rejection plus two release-note statements are a
+  mechanical final closure or require stop/re-scope. No author edit, rebase, push, fifth QA, or merge
+  until that ruling lands.
