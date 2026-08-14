@@ -4346,8 +4346,18 @@ digest only) remains the fallback for security-tier sign-off.
   `issuecomment-5289348519`; Opus security QA is active in `w1:pAP`.
 - **#1585 / PR #1611:** owner rebased and pushed HEAD `ff1da2d5b`; required CI is in progress.
   Existing screenshot-free UAT proof remains valid; fresh sensitive QA waits for green CI.
-- **#1248 / PR #1606:** integrated sensitive QA remains active in `w1:pAK`; current PR checks
-  include a red foundation result, so no merge until the fresh verdict and any owner fix/re-QA.
+- **#1248 / PR #1606:** integrated sensitive QA remains active in `w1:pAK`; the earlier red
+  foundation result has been rerun green, so no merge until the refreshed durable verdict lands.
+
+## 2026-08-14 — QA reruns routed after current checks changed
+
+- **#1248 / PR #1606:** current required checks are now green after the app-shell e2e rerun. The
+  prior RED verdict was grounded before that rerun completed; QA pane `w1:pAK` was reactivated to
+  post a refreshed sensitive verdict against the same head. No merge until that durable verdict.
+- **#1467 / PR #1610:** completed RED Opus QA pane/worktree was reaped after its verdict was
+  recorded. Owner `w1:pA8` is running the symlink-containment full gate; fresh Opus QA follows.
+- **#1585 / PR #1611:** required checks remain green except image publishing, which is still in
+  progress; fresh sensitive QA waits for the complete CI result.
 
 ## 2026-08-14 — #1467 security QA RED; symlink containment routed
 
