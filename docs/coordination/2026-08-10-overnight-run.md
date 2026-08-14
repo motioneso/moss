@@ -4729,3 +4729,8 @@ digest only) remains the fallback for security-tier sign-off.
   #1454 is still waiting on the shared suite lock, #1556 has an active gate, and #1592 is resolving
   its gate result. The owner must run no DB command until the coordinator explicitly releases the
   window after all three report terminal cleanup.
+- **#1592:** first full gate exited 1 on an unrelated suite-order chat-drawer flake; the targeted
+  case and full file pass. Owner is dropping operational handoff `15c5a36d2`, rebasing the three
+  implementation commits, proving patch equivalence, and running exactly one full gate on final
+  history. A second failure is stop-the-line; no waiver or third attempt. #1013 remains serialized
+  behind this active DB run.
