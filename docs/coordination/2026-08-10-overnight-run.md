@@ -4294,3 +4294,10 @@ digest only) remains the fallback for security-tier sign-off.
   format/lint/typecheck passed and prior live UAT proof remains intact. Fresh integrated sensitive
   QA is running in isolated worktree `.claude/worktrees/qa-1248-sensitive-rerun`, pane `w1:pAK`,
   agent `qa1248-rerun` (Sonnet).
+
+## 2026-08-14 — #1141 security QA GREEN; explicit sign-off pending
+
+- **#1141 / PR #1601:** fresh Opus security QA is GREEN and merge-ready at HEAD `f73167797`;
+  CI run `31764753040`, focused provider-probe tests, invariants, and exit criteria all pass.
+  Durable verdict: `issuecomment-5289138326`. Security-tier merge remains held for Ben's explicit
+  sign-off. Four QA follow-ups are non-blocking; no source blocker.
