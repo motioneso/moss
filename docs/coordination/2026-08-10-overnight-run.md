@@ -4741,3 +4741,10 @@ digest only) remains the fallback for security-tier sign-off.
   security QA `/root/qa_1556_pr1619_r2` is running. Live path remains BLOCKING RED because even a
   supported reload stayed disconnected/no-model despite an active chat model; relevant UI files
   match main, so no unrelated UI change is authorized in this PR. No proof and no merge.
+- **#1108 / PR #1620:** independent security QA RED at exact head
+  `af63ea3176cff9edf3a758f83f7ac845acf4f3df`, durable `issuecomment-5291002164`. Three blockers:
+  subnet discovery/selection can throw before credential/CLI cleanup; malformed Docker inspect
+  state is silently skipped instead of fail-closed; stranded-UAT warnings use network-name prefixes
+  instead of canonical Compose project labels. Owner is making the minimum TDD root-cause revision,
+  adding the mechanical `/16` containment regression, and must rerun changed-path proof/checks before
+  fresh exact-head QA. No Sol sign-off or merge while RED.
