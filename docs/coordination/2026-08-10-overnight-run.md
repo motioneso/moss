@@ -4301,3 +4301,18 @@ digest only) remains the fallback for security-tier sign-off.
   CI run `31764753040`, focused provider-probe tests, invariants, and exit criteria all pass.
   Durable verdict: `issuecomment-5289138326`. Security-tier merge remains held for Ben's explicit
   sign-off. Four QA follow-ups are non-blocking; no source blocker.
+
+## 2026-08-14 — security merge completed; coordinator relay required
+
+- **#1141 / PR #1601 — MERGED:** Ben explicitly approved the security-tier merge. Squash merge
+  `34242c8876a0867cf605e3974e3fd99746959ee`; issue #1141 closed and project item moved to `Done`.
+  CI run `31764753040` and Opus QA verdict `issuecomment-5289138326` were green.
+- **Current in-flight lanes:** #1248 integrated sensitive QA is active in `w1:pAK` at HEAD
+  `85ce2f8cc`; #1585 owner UAT rerun is active in `w1:pAJ` after two shared Docker network-pool
+  contention failures; #1467 pane `w1:pA8` remains on live-proof wrap-up. No screenshots are being
+  generated or retained.
+- **Continuation note:** security merge just completed; this manifest is flushed and pushed. The
+  next coordinator must collect the #1248 QA verdict, finish #1585's two blocking UAT specs and
+  re-QA, then continue #1467. `merges_since_relay=0` after this mandatory relay trigger.
+- **Coordinator authority:** current Codex session
+  `019ffd3f-3098-73c0-bab8-31f491615168`, label `Coordinator`, pane resolve fresh by label/session.
