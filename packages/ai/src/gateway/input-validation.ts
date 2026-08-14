@@ -31,8 +31,8 @@ interface SchemaNode {
  *  instead of once per tool call. For BUILT-IN modules this is not a new trust boundary: the
  *  pattern is trusted code, same as everything else in the manifest.
  *
- *  For EXTERNAL (third-party) modules, matching runs in a short-lived Worker with a hard timeout
- *  and resource limits. Built-in modules keep the synchronous compiled-RegExp path below. */
+ *  For EXTERNAL (third-party) modules, matching runs in one Worker per validation invocation with
+ *  a hard shared timeout and resource limits. Built-in modules keep the synchronous path below. */
 const PATTERN_INVALID = Symbol("pattern-invalid");
 const patternCache = new Map<string, RegExp | typeof PATTERN_INVALID>();
 const EXTERNAL_PATTERN_INVOCATION_TIMEOUT_MS = 100;
@@ -79,21 +79,42 @@ async function acquirePatternWorker(signal: AbortSignal): Promise<() => void> {
   };
 }
 
-async function matchExternalPattern(
-  pattern: string,
-  value: string,
-  signal: AbortSignal
-): Promise<boolean> {
+interface ExternalPatternSession {
+  match(pattern: string, value: string): Promise<boolean>;
+  close(): Promise<void>;
+}
+
+function createExternalPatternSession(signal: AbortSignal): ExternalPatternSession {
   let release: (() => void) | undefined;
   let worker: Worker | undefined;
-  let onAbort: (() => void) | undefined;
-  try {
+  let closing = false;
+  let pending:
+    | { resolve: (value: unknown) => void; reject: (reason?: unknown) => void }
+    | undefined;
+
+  const failPending = () => {
+    const request = pending;
+    pending = undefined;
+    request?.reject(new Error("pattern worker failed"));
+  };
+  const onMessage = (message: unknown) => {
+    const request = pending;
+    pending = undefined;
+    request?.resolve(message);
+  };
+  const onError = () => failPending();
+  const onExit = () => {
+    if (!closing) failPending();
+  };
+  const onAbort = () => failPending();
+  signal.addEventListener("abort", onAbort, { once: true });
+
+  const start = async (): Promise<Worker> => {
     release = await acquirePatternWorker(signal);
     worker = new Worker(new URL("./pattern-worker.mjs", import.meta.url), {
       // Do not inherit the host's --require/--import hooks. In tsx-launched dev processes those
       // hooks can consume the worker's bounded heap before the pattern runs.
       execArgv: [],
-      workerData: { pattern, value },
       resourceLimits: {
         maxOldGenerationSizeMb: 16,
         maxYoungGenerationSizeMb: 4,
@@ -101,43 +122,49 @@ async function matchExternalPattern(
         stackSizeMb: 1
       }
     });
-    const result = await new Promise<unknown>((resolve, reject) => {
-      const onMessage = (message: unknown) => resolve(message);
-      const onError = () => reject(new Error("pattern worker failed"));
-      const onExit = (code: number) => {
-        if (code !== 0) reject(new Error("pattern worker exited"));
-      };
-      onAbort = () => {
-        reject(new Error("pattern validation timed out"));
-      };
-      worker!.once("message", onMessage);
-      worker!.once("error", onError);
-      worker!.once("exit", onExit);
-      signal.addEventListener("abort", onAbort, { once: true });
-      if (signal.aborted) onAbort();
-    });
-    if (typeof result !== "boolean")
-      throw new Error("pattern worker returned a non-boolean result");
-    return result;
-  } catch {
-    throw new ToolInputValidationError("Pattern matching failed and was rejected");
-  } finally {
-    try {
-      if (onAbort) signal.removeEventListener("abort", onAbort);
-      if (worker) {
-        worker.removeAllListeners("message");
-        worker.removeAllListeners("error");
-        worker.removeAllListeners("exit");
-        try {
-          await worker.terminate();
-        } catch {
-          // Validation already fails closed; cleanup must still release the process-global slot.
-        }
+    worker.on("message", onMessage);
+    worker.once("error", onError);
+    worker.once("exit", onExit);
+    return worker;
+  };
+
+  return {
+    async match(pattern, value) {
+      try {
+        if (signal.aborted) throw new Error("pattern validation timed out");
+        const activeWorker = worker ?? (await start());
+        const result = await new Promise<unknown>((resolve, reject) => {
+          pending = { resolve, reject };
+          activeWorker.postMessage({ pattern, value });
+          if (signal.aborted) onAbort();
+        });
+        if (typeof result !== "boolean")
+          throw new Error("pattern worker returned a non-boolean result");
+        return result;
+      } catch {
+        throw new ToolInputValidationError("Pattern matching failed and was rejected");
       }
-    } finally {
-      release?.();
+    },
+    async close() {
+      closing = true;
+      signal.removeEventListener("abort", onAbort);
+      failPending();
+      try {
+        if (worker) {
+          worker.removeAllListeners("message");
+          worker.removeAllListeners("error");
+          worker.removeAllListeners("exit");
+          try {
+            await worker.terminate();
+          } catch {
+            // Validation already fails closed; cleanup must still release the process-global slot.
+          }
+        }
+      } finally {
+        release?.();
+      }
     }
-  }
+  };
 }
 
 /**
@@ -195,8 +222,7 @@ async function validateStringBounds(
   schema: SchemaNode,
   value: string,
   path: string,
-  external: boolean,
-  signal?: AbortSignal
+  externalPatterns?: ExternalPatternSession
 ): Promise<void> {
   if (typeof schema.minLength === "number" && value.length < schema.minLength) {
     throw new ToolInputValidationError(
@@ -209,8 +235,8 @@ async function validateStringBounds(
     );
   }
   if (typeof schema.pattern === "string") {
-    const matches = external
-      ? await matchExternalPattern(schema.pattern, value, signal!)
+    const matches = externalPatterns
+      ? await externalPatterns.match(schema.pattern, value)
       : (() => {
           let compiled: RegExp;
           try {
@@ -236,8 +262,7 @@ async function validateObject(
   schema: SchemaNode,
   value: ToolInput,
   basePath: string,
-  external: boolean,
-  signal?: AbortSignal
+  externalPatterns?: ExternalPatternSession
 ): Promise<void> {
   const required = Array.isArray(schema.required) ? schema.required : [];
   for (const key of required) {
@@ -251,7 +276,7 @@ async function validateObject(
     if (!(key in value)) {
       continue;
     }
-    await validateValue(declared, value[key], joinPath(basePath, key), external, signal);
+    await validateValue(declared, value[key], joinPath(basePath, key), externalPatterns);
   }
 }
 
@@ -259,8 +284,7 @@ async function validateValue(
   schema: SchemaNode,
   value: unknown,
   path: string,
-  external: boolean,
-  signal?: AbortSignal
+  externalPatterns?: ExternalPatternSession
 ): Promise<void> {
   if (Array.isArray(schema.enum) && !schema.enum.some((option) => option === value)) {
     const allowed = schema.enum.map((option) => JSON.stringify(option)).join(", ");
@@ -275,16 +299,16 @@ async function validateValue(
   }
 
   if (typeof value === "string") {
-    await validateStringBounds(schema, value, path, external, signal);
+    await validateStringBounds(schema, value, path, externalPatterns);
   }
 
   if (schema.type === "object" && schema.properties) {
-    await validateObject(schema, value as ToolInput, path, external, signal);
+    await validateObject(schema, value as ToolInput, path, externalPatterns);
   }
 
   if (schema.type === "array" && schema.items && Array.isArray(value)) {
     for (const [index, item] of value.entries()) {
-      await validateValue(schema.items as SchemaNode, item, `${path}[${index}]`, external, signal);
+      await validateValue(schema.items as SchemaNode, item, `${path}[${index}]`, externalPatterns);
     }
   }
 }
@@ -341,10 +365,13 @@ export async function validateToolInput(
     return value;
   }
 
-  const signal = options.external
-    ? AbortSignal.timeout(EXTERNAL_PATTERN_INVOCATION_TIMEOUT_MS)
+  const externalPatterns = options.external
+    ? createExternalPatternSession(AbortSignal.timeout(EXTERNAL_PATTERN_INVOCATION_TIMEOUT_MS))
     : undefined;
-  await validateObject(schema as SchemaNode, value, "", options.external, signal);
-
-  return value;
+  try {
+    await validateObject(schema as SchemaNode, value, "", externalPatterns);
+    return value;
+  } finally {
+    await externalPatterns?.close();
+  }
 }

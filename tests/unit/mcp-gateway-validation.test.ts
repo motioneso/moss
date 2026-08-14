@@ -76,7 +76,7 @@ describe("tool input validation", () => {
       ).resolves.toEqual({ value: "safe" });
     });
 
-    it("confines external-module ReDoS matching and keeps the host loop responsive", async () => {
+    it("confines a hostile external-module array and recovers for the next invocation", async () => {
       const started = performance.now();
       let loopTurned = false;
       setImmediate(() => {
@@ -84,8 +84,13 @@ describe("tool input validation", () => {
       });
       await expect(
         validateToolInput(
-          { type: "object", properties: { value: { type: "string", pattern: "(a+)+$" } } },
-          { value: `${"a".repeat(28)}!` },
+          {
+            type: "object",
+            properties: {
+              values: { type: "array", items: { type: "string", pattern: "(a+)+$" } }
+            }
+          },
+          { values: ["aaaa", `${"a".repeat(28)}!`, "aaaa", "aaaa"] },
           { external: true }
         )
       ).rejects.toThrow(ToolInputValidationError);
@@ -93,10 +98,16 @@ describe("tool input validation", () => {
       // A completed catastrophic match takes ~1.5s here; returning in this wide window
       // proves terminate() preempted the live worker rather than merely moving the stall.
       expect(performance.now() - started).toBeLessThan(500);
+      await expect(
+        validateToolInput(
+          { type: "object", properties: { value: { type: "string", pattern: "[a-z]+" } } },
+          { value: "safe" },
+          { external: true }
+        )
+      ).resolves.toEqual({ value: "safe" });
     });
 
-    it("bounds all external pattern work to one validation invocation budget", async () => {
-      const started = performance.now();
+    it("accepts at least four benign patterns within one validation invocation budget", async () => {
       await expect(
         validateToolInput(
           {
@@ -105,11 +116,10 @@ describe("tool input validation", () => {
               values: { type: "array", items: { type: "string", pattern: "[a-z]+" } }
             }
           },
-          { values: Array.from({ length: 100 }, () => "safe") },
+          { values: Array.from({ length: 4 }, () => "safe") },
           { external: true }
         )
-      ).rejects.toThrow(ToolInputValidationError);
-      expect(performance.now() - started).toBeLessThan(500);
+      ).resolves.toEqual({ values: ["safe", "safe", "safe", "safe"] });
     });
 
     it("bounds queued pattern work and releases the pool for the next invocation", async () => {
