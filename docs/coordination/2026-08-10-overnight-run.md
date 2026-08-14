@@ -5010,3 +5010,15 @@ digest only) remains the fallback for security-tier sign-off.
   Playwright trace's notes-create and notes-last-sync network records to determine whether a fast
   stale/null/error predicate replay can become the actual red-capable loop. Test-only diagnostic file
   remains untracked; production/history unchanged.
+- **#1556 retained-trace result:** chat returned HTTP 200 with a creation claim, but all 61
+  notes-last-sync polls referenced one already-terminal state: `ingested=0`, `skipped=0`, `errors=0`,
+  stable non-null `lastError`. Sanitized classification is embedding/provider/filesystem=true and
+  queue/database/timeout/credential=false. The state predates the first poll, ruling out timeout
+  inflation. A value-suppressed jq predicate is retained as a fast artifact oracle, not a live repro.
+  Owner is tracing the error formatter/throw boundary and will propose a seconds-scale provisioned
+  runtime loop; no DB/UAT or production edit authorized.
+- **#1275 remediation:** rebased exact local head `8f82423b6` onto current main `f648b8da0`; the six
+  prior PR commits remain patch-identical and the seventh remediation commit touches only
+  `input-validation.ts` plus its unit test. Focused 26/26, Prettier and lint pass. A transient
+  `@moss/db` type-resolution failure is being repaired by one frozen install/typecheck. If green,
+  exactly one exclusive full gate is authorized; it currently owns the gate window. No push yet.
