@@ -91,4 +91,8 @@ test("a later chat answers from notes without narrating retrieval (#1556)", asyn
   await composer.press("Enter");
 
   await expect(page.getByText(new RegExp(FACT, "i"))).toBeVisible({ timeout: 60_000 });
+  const threadText = await page.locator(".chatd__log").innerText();
+  expect(threadText).not.toMatch(
+    /searching (?:your )?notes|checking (?:your )?notes|let me (?:check|search)/i
+  );
 });
