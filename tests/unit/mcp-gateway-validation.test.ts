@@ -95,6 +95,46 @@ describe("tool input validation", () => {
       expect(performance.now() - started).toBeLessThan(500);
     });
 
+    it("bounds all external pattern work to one validation invocation budget", async () => {
+      const started = performance.now();
+      await expect(
+        validateToolInput(
+          {
+            type: "object",
+            properties: {
+              values: { type: "array", items: { type: "string", pattern: "[a-z]+" } }
+            }
+          },
+          { values: Array.from({ length: 100 }, () => "safe") },
+          { external: true }
+        )
+      ).rejects.toThrow(ToolInputValidationError);
+      expect(performance.now() - started).toBeLessThan(500);
+    });
+
+    it("bounds queued pattern work and releases the pool for the next invocation", async () => {
+      const hostileSchema = {
+        type: "object",
+        properties: { value: { type: "string", pattern: "(a+)+$" } }
+      };
+      const started = performance.now();
+      const results = await Promise.allSettled(
+        Array.from({ length: 9 }, () =>
+          validateToolInput(hostileSchema, { value: `${"a".repeat(28)}!` }, { external: true })
+        )
+      );
+
+      expect(results.every((result) => result.status === "rejected")).toBe(true);
+      expect(performance.now() - started).toBeLessThan(250);
+      await expect(
+        validateToolInput(
+          { type: "object", properties: { value: { type: "string", pattern: "[a-z]+" } } },
+          { value: "safe" },
+          { external: true }
+        )
+      ).resolves.toEqual({ value: "safe" });
+    });
+
     it("rejects a value over maxLength", async () => {
       await expect(
         validateToolInput(bounded, { key: "abcdefghij" }, { external: false })
