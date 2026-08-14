@@ -5017,6 +5017,21 @@ digest only) remains the fallback for security-tier sign-off.
   inflation. A value-suppressed jq predicate is retained as a fast artifact oracle, not a live repro.
   Owner is tracing the error formatter/throw boundary and will propose a seconds-scale provisioned
   runtime loop; no DB/UAT or production edit authorized.
+- **#1556 root boundary:** read-only source/retained metadata localizes the terminal sync error to
+  `local-embedding-worker.loadPipe()` → Hugging Face `pipeline(feature-extraction)` → ONNX model/
+  protobuf loading inside the provisioned CPU-isolated embedding worker. Queue, DB, RLS and polling
+  are downstream bystanders. The worker currently collapses the original exception to `message`, so
+  class/code/stack are unavailable. A value-suppressed compose-exec call to the real
+  `CpuIsolatedEmbeddingProvider` is approved as the seconds-scale red/green loop with guaranteed
+  provider/provisioner cleanup. It waits behind #1275 and #1013's serialized DB claims; no production
+  edit or push.
+- **#1556 cold-cache fork:** fresh provisioner volumes and `HF_HOME` are intentionally empty; the
+  repo's real-local embedding test allows 300 seconds for download plus inference, so a 15-second
+  cold bound is invalid and cache injection would add unnecessary machinery. Ruling: reuse one
+  existing provisioned stack for one value-suppressed cold provider probe bounded at 300 seconds. If
+  cold fails, stop and report before any second probe; if it succeeds, run one 15-second warm repeat,
+  then teardown once and assert zero resources. No new harness file, notes UAT or production edit.
+  Execution remains serialized behind #1275 then #1013.
 - **#1275 remediation:** rebased exact local head `8f82423b6` onto current main `f648b8da0`; the six
   prior PR commits remain patch-identical and the seventh remediation commit touches only
   `input-validation.ts` plus its unit test. Focused 26/26, Prettier and lint pass. A transient
