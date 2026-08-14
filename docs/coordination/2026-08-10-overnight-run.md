@@ -4846,3 +4846,9 @@ digest only) remains the fallback for security-tier sign-off.
   cleanup failures mask the originating error instead of aggregating both. Owner is adding canonical
   boundary validation and native/existing error aggregation with deterministic tests. Fresh exact-head
   QA required; no Sol sign-off or merge.
+- **#1013 solo DB window:** GRANTED after a direct non-blocking probe confirmed
+  `/tmp/jarv1s-gate/db.lock` free and #1592/#1454 gates terminal. Owner must run the approved
+  cluster-lock integration, locked/no-lock child harness, two-worktree contention proof, and full
+  isolated gate as one exclusive sequence, then verify DB/process cleanup and explicitly release the
+  window. #1556 is held to non-DB history/static work until release; no other lane may start shared
+  DB or live-UAT work.
