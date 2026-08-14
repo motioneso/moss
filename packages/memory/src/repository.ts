@@ -59,10 +59,13 @@ export class MemoryRepository {
     chunks: readonly NewChunkData[],
     embedModelName: string,
     embedModelVersion: string,
-    sourceKind: string = "vault"
+    sourceKind: string = "vault",
+    replaceExisting = true
   ): Promise<void> {
     assertDataContextDb(scopedDb);
-    await this.deleteFileChunks(scopedDb, ownerUserId, sourcePath, sourceKind);
+    if (replaceExisting) {
+      await this.deleteFileChunks(scopedDb, ownerUserId, sourcePath, sourceKind);
+    }
 
     for (const chunk of chunks) {
       const vectorLiteral = toVectorLiteral(chunk.embedding);

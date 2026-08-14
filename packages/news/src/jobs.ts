@@ -6,7 +6,8 @@ import {
   registerDataContextWorker,
   sendJob,
   type ActorScopedJobPayload,
-  type QueueDefinition
+  type QueueDefinition,
+  toAccessContext
 } from "@moss/jobs";
 import type { NotificationsRepository } from "@moss/notifications";
 
@@ -108,53 +109,86 @@ export async function registerNewsJobWorkers(
   const repository = deps.repository ?? new NewsPersonalizationRepository();
   const prefs = deps.prefsRepository ?? new NewsPrefsRepository();
   const revalidationLogger = deps.revalidationLogger ?? { info: () => undefined };
-  const refreshWorkId = await registerDataContextWorker<NewsRefreshPayload, { outcome: string }>(
-    boss,
+  const refreshWorkId = await boss.work<NewsRefreshPayload, { outcome: string }>(
     NEWS_REFRESH_QUEUE,
-    dataContext,
-    async (job, scopedDb) => {
+    { pollingIntervalSeconds: 2 },
+    async ([job]) => {
+      if (!job) throw new Error(`pg-boss invoked ${NEWS_REFRESH_QUEUE} without a job`);
       assertMetadataOnlyPayload(job.data);
+      const accessContext = toAccessContext(job);
       for (;;) {
-        const generation = await repository.beginRefreshRun(scopedDb);
-        const result = await compilePersonalizedNews(
-          scopedDb,
-          {
-            fetch: deps.fetch,
-            search: deps.search,
-            ai: deps.ai,
-            repo: repository,
-            prefs,
-            catalog: NEWS_CATALOG,
-            logger: deps.logger
-          },
-          { now: new Date(), generation }
-        );
-        if (result.outcome === "stale") continue;
-        const finished =
-          result.outcome === "replaced" ||
-          (await repository.failRefreshRunIfCurrent(
-            scopedDb,
-            generation,
-            result.failureKind ?? "internal"
-          ));
-        if (!finished) continue;
-        // Provider-change drift hook (#975 Slice 4): a verdict is only meaningful under
-        // the fingerprint it was computed with, so any stored fingerprint that differs
-        // from the CURRENT provider fingerprint means the owner's config changed since
-        // validation. Enqueue (singleton-coalesced) rather than revalidate inline so the
-        // refresh run stays fast and revalidation failures can't fail the refresh.
-        const fingerprint = await deps.ai.fingerprint(scopedDb);
-        if (fingerprint !== null) {
-          const [sources, topics] = await Promise.all([
-            repository.listSourceValidationStates(scopedDb),
-            repository.listTopicValidationStates(scopedDb)
-          ]);
-          const drifted = [...sources, ...topics].some(
-            (item) => item.validationFingerprint !== fingerprint
-          );
-          if (drifted) await enqueueNewsRevalidation(boss, job.data.actorUserId);
+        let generation: number | undefined;
+        try {
+          const attempt = await dataContext.withDataContext(accessContext, async (scopedDb) => {
+            generation = await repository.beginRefreshRun(scopedDb);
+            const result = await compilePersonalizedNews(
+              scopedDb,
+              {
+                fetch: deps.fetch,
+                search: deps.search,
+                ai: deps.ai,
+                repo: repository,
+                prefs,
+                catalog: NEWS_CATALOG,
+                logger: deps.logger
+              },
+              { now: new Date(), generation }
+            );
+            if (result.outcome === "stale") return { outcome: "stale" as const };
+
+            if (result.outcome === "replaced") {
+              // Provider-change drift hook (#975 Slice 4): a verdict is only meaningful under
+              // the fingerprint it was computed with, so any stored fingerprint that differs
+              // from the CURRENT provider fingerprint means the owner's config changed since
+              // validation. Enqueue (singleton-coalesced) rather than revalidate inline so the
+              // refresh run stays fast and revalidation failures can't fail the refresh.
+              const fingerprint = await deps.ai.fingerprint(scopedDb);
+              if (fingerprint !== null) {
+                const [sources, topics] = await Promise.all([
+                  repository.listSourceValidationStates(scopedDb),
+                  repository.listTopicValidationStates(scopedDb)
+                ]);
+                const drifted = [...sources, ...topics].some(
+                  (item) => item.validationFingerprint !== fingerprint
+                );
+                if (drifted) await enqueueNewsRevalidation(boss, job.data.actorUserId);
+              }
+              return { outcome: result.outcome };
+            }
+
+            return {
+              outcome: result.outcome,
+              generation,
+              failureKind: result.failureKind ?? "internal"
+            };
+          });
+
+          if (attempt.outcome === "stale") continue;
+          if (attempt.generation !== undefined) {
+            const finished = await repository.failRefreshRunIfCurrent(
+              dataContext,
+              accessContext,
+              attempt.generation,
+              attempt.failureKind
+            );
+            if (!finished) continue;
+          }
+          return { outcome: attempt.outcome };
+        } catch (error) {
+          if (generation !== undefined) {
+            try {
+              await repository.failRefreshRunIfCurrent(
+                dataContext,
+                accessContext,
+                generation,
+                "internal"
+              );
+            } catch {
+              // Preserve the original job error if the recovery write also fails.
+            }
+          }
+          throw error;
         }
-        return { outcome: result.outcome };
       }
     }
   );

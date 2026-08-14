@@ -12,7 +12,7 @@ import Fastify from "fastify";
 import { createApiServer } from "../../apps/api/src/server.js";
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
 import type { GetNotesSourceResponse, PostNotesSyncResponse } from "@moss/shared";
-import { StubEmbeddingProvider } from "@moss/memory";
+import { parseDocument, StubEmbeddingProvider } from "@moss/memory";
 import { NOTES_SOURCE_PREFERENCE_KEY, resolveNotesRoots } from "@moss/settings";
 import { PreferencesRepository } from "@moss/structured-state";
 import {
@@ -22,9 +22,11 @@ import {
   handleNotesSyncJobWithDataContext,
   writeNotesLastSync,
   registerNotesSyncRoutes,
+  registerNotesJobWorkers,
   NOTES_SYNC_QUEUE,
   type NotesSyncJobPayload
 } from "@moss/notes";
+import { createPgBossClient, sendJob } from "@moss/jobs";
 import { notesSearchExecute } from "../../packages/notes/src/tools.js";
 // notesMonitorProvider is internal wiring (registered via notesModuleManifest), not part of the
 // package's public API — imported directly from source, same pattern as notesSearchExecute above.
@@ -336,6 +338,7 @@ describe("handleNotesSyncJob", () => {
   let dataContext: DataContextRunner;
   let workerDb: Kysely<MossDatabase>;
   let workerDataContext: DataContextRunner;
+  let workerBoss: PgBoss;
   const provider = new StubEmbeddingProvider();
   const prefsRepo = new PreferencesRepository();
   const jobUserId = "00000000-0000-4000-8100-000000000099";
@@ -367,10 +370,13 @@ describe("handleNotesSyncJob", () => {
     dataContext = new DataContextRunner(appDb);
     workerDb = createDatabase({ connectionString: connectionStrings.worker, maxConnections: 1 });
     workerDataContext = new DataContextRunner(workerDb);
+    workerBoss = createPgBossClient(connectionStrings.worker, { connectionTimeoutMillis: 25_000 });
+    await workerBoss.start();
     process.env["JARVIS_NOTES_ROOTS"] = jobNotesDir;
   });
 
   afterAll(async () => {
+    await workerBoss?.stop({ graceful: false });
     await workerDb?.destroy();
     await rm(jobNotesDir, { recursive: true, force: true });
     delete process.env["JARVIS_NOTES_ROOTS"];
@@ -388,6 +394,86 @@ describe("handleNotesSyncJob", () => {
     expect(result.ingested).toBe(2);
     expect(result.skipped).toBe(0);
     expect(result.errors).toBe(0);
+  });
+
+  it("dispatches every oversized-file continuation through the registered worker", async () => {
+    const largeNotesDir = join(jobNotesDir, `oversized-${randomUUID()}`);
+    const largeFile = join(largeNotesDir, "note.md");
+    const content = `# Oversized note\n${"x".repeat(500_000)}\n`;
+    await mkdir(largeNotesDir, { recursive: true });
+    await writeFile(largeFile, content);
+    const expectedChunkCount = parseDocument(content).chunks.length;
+
+    const workIds = await registerNotesJobWorkers(workerBoss, workerDataContext, {
+      embeddingProviderFactory: async () => provider,
+      preferencesRepository: prefsRepo
+    });
+
+    try {
+      const rootJobId = await sendJob(
+        workerBoss,
+        NOTES_SYNC_QUEUE,
+        {
+          actorUserId: jobUserId,
+          sourcePath: largeNotesDir
+        },
+        { singletonKey: `notes-sync:${jobUserId}` }
+      );
+      expect(rootJobId).toEqual(expect.any(String));
+
+      const client = new Client({ connectionString: connectionStrings.bootstrap });
+      await client.connect();
+      try {
+        for (let attempt = 0; attempt < 100; attempt += 1) {
+          const result = await client.query<{
+            completed: string;
+            pending: string;
+            chunks: string;
+          }>(
+            `SELECT
+               count(*) FILTER (WHERE name = $1 AND state = 'completed')::text AS completed,
+               count(*) FILTER (WHERE name = $1 AND state IN ('created', 'active'))::text AS pending,
+               count(*) FILTER (WHERE source_path = $2)::text AS chunks
+             FROM pgboss.job
+             CROSS JOIN LATERAL (VALUES (data->>'filePath')) AS files(source_path)
+             WHERE name = $1 OR source_path = $2`,
+            [NOTES_SYNC_QUEUE, await realpath(largeFile)]
+          );
+          const row = result.rows[0]!;
+          if (Number(row.completed) > 1 && row.pending === "0") break;
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+
+        const chunks = await client.query<{ count: string }>(
+          `SELECT count(*)::text AS count
+             FROM app.memory_chunks
+            WHERE owner_user_id = $1
+              AND source_kind = 'notes'
+              AND source_path = $2`,
+          [jobUserId, await realpath(largeFile)]
+        );
+        expect(Number(chunks.rows[0]?.count)).toBe(expectedChunkCount);
+
+        const jobs = await client.query<{ state: string; count: string }>(
+          `SELECT state, count(*)::text AS count
+             FROM pgboss.job
+            WHERE name = $1
+              AND (data->>'sourcePath' = $2 OR data->>'filePath' = $3)
+            GROUP BY state`,
+          [NOTES_SYNC_QUEUE, jobNotesDir, await realpath(largeFile)]
+        );
+        expect(jobs.rows).toHaveLength(1);
+        expect(jobs.rows[0]).toEqual({ state: "completed", count: expect.any(String) });
+        expect(Number(jobs.rows[0]?.count)).toBeGreaterThan(1);
+      } finally {
+        await client.end();
+      }
+    } finally {
+      await rm(largeNotesDir, { recursive: true, force: true });
+      await Promise.all(
+        workIds.map((workId) => workerBoss.offWork(NOTES_SYNC_QUEUE, { id: workId, wait: true }))
+      );
+    }
   });
 
   it("skips unchanged files on re-run", async () => {

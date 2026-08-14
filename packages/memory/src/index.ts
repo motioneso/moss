@@ -1,9 +1,14 @@
 export { embedChunks, EMBED_CONCURRENCY } from "./embed-chunks.js";
+export {
+  CpuIsolatedEmbeddingProvider,
+  EMBED_MAX_TOKENS,
+  LocalEmbeddingProvider,
+  resetEmbeddingPipelineCacheForTests
+} from "./local-embedding-provider.js";
 export type { EmbeddingProvider } from "./embedding-provider.js";
 export { StubEmbeddingProvider } from "./embedding-provider.js";
 export { IngestionService } from "./ingestion-service.js";
 export type { IngestOptions, IngestStats, IngestFailure } from "./ingestion-service.js";
-export { LocalEmbeddingProvider } from "./local-embedding-provider.js";
 export type {
   EmbeddingProviderConfig,
   EmbeddingRuntimeConfigResolver,
