@@ -3,6 +3,7 @@ import { lstat, realpath } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
+import { HttpError } from "@moss/module-sdk";
 import type {
   ActionRequestPreview,
   MossModuleManifest,
@@ -15,7 +16,7 @@ import type {
 import type { ActionAuditInputSummary, AiAssistantToolDto } from "@moss/shared";
 
 import { summarizeAssistantToolInput } from "../assistant-tools.js";
-import type { AiRepository, InsertAuditLogInput } from "../repository.js";
+import { AiRepository, type InsertAuditLogInput } from "../repository.js";
 import { AutoRunRateLimiter } from "./auto-run-rate-limit.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
 import { validateToolInput } from "./input-validation.js";
@@ -90,6 +91,24 @@ export interface NativeToolPermissionRequest {
 export interface NativeToolPermissionResponse {
   readonly decision: "allow" | "deny";
   readonly reason: string;
+}
+
+export function createUnwiredActionResolver(deps: {
+  readonly runner: DataContextRunner;
+  readonly repository?: AiRepository;
+}): AssistantToolGateway["resolveActionRequest"] {
+  const repository = deps.repository ?? new AiRepository();
+  return async (actorUserId, actionRequestId, status) => {
+    if (status === "confirmed") {
+      throw new HttpError(503, "Assistant action resolution is not available");
+    }
+
+    const access: AccessContext = { actorUserId, requestId: `unwired_${randomUUID()}` };
+    const resolved = await deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
+      repository.resolveAssistantAction(scopedDb, actionRequestId, { status })
+    );
+    return resolved ? "resolved" : "not_found";
+  };
 }
 
 const NATIVE_TOOL_MODULE_ID = "claude-native";
