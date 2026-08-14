@@ -4995,8 +4995,18 @@ digest only) remains the fallback for security-tier sign-off.
   with no round 6. TOCTOU/forced-removal tests remain deferred to #1618.
 - **#1013 targeted remediation proof:** cluster-lock integration passed 6/6 and the
   module-distribution CLI-failure file passed 13/13. The sole locked proof-harness run nevertheless
-  exited 1 on `XX000 tuple concurrently updated` while #1556's isolated diagnostic integration was
-  active. Cleanup is complete: zero gate DBs, sessions, proof roles, or retained processes. Push and
-  DB reruns are HOLD pending bounded timestamp/application attribution. If the overlap proves an
-  external unwrapped cluster-role writer, schedule one genuinely solo final locked harness after all
-  DB lanes exit; otherwise treat this as a core algorithm RED and diagnose. No blind retry.
+  exited 1 on `XX000 tuple concurrently updated`; it ran 03:47:28–03:47:36 PDT, while #1556's first
+  role-DDL provisioning began at 03:48:20 PDT. NO OVERLAP: the collision is a core algorithm RED, not
+  an external-writer waiver. Cleanup is complete: zero gate DBs, sessions, proof roles, or retained
+  processes. Push and DB reruns remain HOLD. Owner is tracing the exact failing statement/caller and
+  same-lock target/client/lifetime across both children, then will rank 3–5 falsifiable hypotheses
+  before any instrumentation or second DB attempt. No blind retry or timeout increase.
+- **#1556 diagnosis checkpoint:** the 6.97-second integration harness is a GREEN differential, not a
+  red-capable reproduction of the live failure. It proved persistence, pg-boss emission/completion,
+  one chunk/index row, same-owner retrieval and cross-user invisibility with a fresh in-process boss
+  pair, host temp root and stub embeddings. It does not reproduce the provisioned runtime singleton/
+  queue state, production composition, Docker vault sharing, or real embedding provider. No further
+  DB/UAT run is authorized. Next probe is read-only, value-suppressed parsing of the retained
+  Playwright trace's notes-create and notes-last-sync network records to determine whether a fast
+  stale/null/error predicate replay can become the actual red-capable loop. Test-only diagnostic file
+  remains untracked; production/history unchanged.
