@@ -1,5 +1,18 @@
 # Awaiting Ben
 
+## #1467 one-shot write authority ruling (2026-08-14)
+
+Security QA for PR #1610 found one non-blocking but newly activated behavior that needs an explicit
+ruling: injecting `JARVIS_NOTES_ROOTS`/`MOSS_NOTES_ROOTS` makes the one-shot permission hook's
+`safeWorkspaceWrite()` allow Write/Edit/MultiEdit/NotebookEdit anywhere under a vault root without
+the gateway confirmation card. The behavior predates this PR, but the env fix makes it live in
+containerized deploys. Options: (a) accept and document the authority, with a regression test, or
+(b) keep writes confirmation-gated and narrow the hook. Recommendation: (b) unless Ben explicitly
+confirms vault roots are trusted write scopes. The separate blocking symlink/realpath containment
+fix is already routed to the owner and does not wait on this ruling.
+
+Pinged `needs-ben coordinator` (`1786681852414774247.msg`).
+
 Decisions that need Ben and only Ben. Each entry says what is blocked and what the options are.
 Remove an entry once he rules and the ruling is recorded where the work lives.
 

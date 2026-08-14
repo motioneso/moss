@@ -4348,3 +4348,15 @@ digest only) remains the fallback for security-tier sign-off.
   Existing screenshot-free UAT proof remains valid; fresh sensitive QA waits for green CI.
 - **#1248 / PR #1606:** integrated sensitive QA remains active in `w1:pAK`; current PR checks
   include a red foundation result, so no merge until the fresh verdict and any owner fix/re-QA.
+
+## 2026-08-14 — #1467 security QA RED; symlink containment routed
+
+- **#1467 / PR #1610:** Opus security QA verdict RED (`issuecomment-5289457919`) at exact HEAD
+  `164c9c744`. CI, live proof, and all blocking UAT specs pass, but `claude-permission-hook.ts`
+  uses lexical-only `underRoot()`, allowing a symlink under a trusted vault root to resolve outside
+  the vault and potentially expose mounted OAuth credentials to model context. Owner pane `w1:pA8`
+  was reactivated with the minimal fail-closed realpath-containment fix and symlink regression test;
+  fresh full gate and Opus QA are required afterward.
+- QA also flagged newly live one-shot write authority as a ruling point. Added to
+  `docs/coordination/AWAITING-BEN.md` and pinged Ben (`1786681852414774247.msg`); no merge or silent
+  assumption until ruled.
