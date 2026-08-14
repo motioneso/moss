@@ -5172,3 +5172,11 @@ digest only) remains the fallback for security-tier sign-off.
   death releases it; EADDRINUSE polls bounded 300s, other/unsupported errors fail closed; server stays
   open across work and closes in finally. No files, stale cleanup, dependency or external command.
   Owner must confirm topology and TDD concurrent/SIGKILL/sync+async/worker seams; no commit/DB/UAT/push.
+- **#1013 Fable adjudication:** CONDITIONAL MECHANICAL FINAL CLOSURE authorized at exact head
+  `231463581`, durable `issuecomment-5293175307`: one author cycle plus QA r3, no re-spec today. Binding
+  code: injected env through install to exactly three broker sites with diagnostics equality test; child
+  bootstrap string via env, never argv; remove four whole-teardown catches plus teardown-red test and
+  one-line fail-closed plan amendment; release-note reword. Final-head proof: persist success traces,
+  participant application names and XX000 attribution; solo locked N>=30; fresh quiet-window two-
+  worktree full gates. No-lock evidence carries. Any participant/unattributable XX000, fourth ambient-
+  env site, or new-class r3 blocker => STOP/spec reopen/no r4. Owner resumed code/static work; DB held.
