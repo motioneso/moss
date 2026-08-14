@@ -5194,3 +5194,14 @@ digest only) remains the fallback for security-tier sign-off.
   gate; exact fresh-cache two-process Local-provider repro both green; corrected real-chat notes UAT
   green, with teardown/zero-resource proof after each. #1013 is explicitly DB-held. No push until all
   three pass and the window is released cleanly.
+- **#1556 final proof:** exact head `17a3592a0e402c932b8985e3b4f70d510001f62e` passed the complete
+  serial sequence with no retry: isolated foundation gate rc=0/DB zero; original two-process fresh-
+  cache Local repro rc=0 with query and document both green in 10.138s/9.078s and zero resources;
+  corrected real-chat notes-default-retrieval UAT rc=0, 1 passed in 24.6s, not skipped, credential
+  preflight boolean/mode checks true, zero resources. Solo window explicitly released; tree clean.
+  Push/wrap-up authorized with durable value-suppressed evidence, then fresh exact-head security QA.
+- **#1013 final proof window:** #1556 released terminal/zero. Exact local head `8bc7cd112` now owns the
+  quiet P1-P4 window: diagnostics integration; solo locked N>=30; fresh exact-head concurrent two-
+  worktree full gates with persisted success traces, participant application names and XX000
+  attribution. No no-lock rerun/retry. Any participant or unattributable XX000 triggers immediate
+  STOP/spec reopen/no push/r4. Cleanup and explicit release required before wrap-up.
