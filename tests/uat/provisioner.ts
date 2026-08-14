@@ -793,6 +793,16 @@ export async function provisionForUat(
       runStateCleaned = true;
     }
   };
+  const cleanupRunScopedStateAfterError = (error: unknown): never => {
+    try {
+      cleanupRunScopedState();
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], "UAT setup and cleanup failed", {
+        cause: cleanupError
+      });
+    }
+    throw error;
+  };
 
   while (remainingCandidates.length > 0) {
     const { projectName } = generateUatRunId();
@@ -808,8 +818,7 @@ export async function provisionForUat(
         candidates: remainingSubnetCandidates
       });
     } catch (error) {
-      cleanupRunScopedState();
-      throw error;
+      return cleanupRunScopedStateAfterError(error);
     }
     if (subnet.source === "auto") {
       for (const network of findSkippedUatNetworks(liveSubnets, remainingSubnetCandidates)) {
@@ -828,7 +837,6 @@ export async function provisionForUat(
       ? jobSearchFixtureBaseUrlFor(projectName)
       : undefined;
     let envFile!: UatEnvFile;
-    let envFileReady = false;
     try {
       envFile = writeUatEnvFile({ webPort, subnet: subnet.subnet, jobSearchFixtureBaseUrl });
       process.env.JARVIS_ENV_FILE = envFile.path;
@@ -837,9 +845,8 @@ export async function provisionForUat(
       // port-bind retry picks a new webPort, and JARVIS_WEB_PORT must track it or compose would
       // interpolate the stale (or default/prod) port. See uatComposeInterpolationEnv's doc comment.
       Object.assign(process.env, uatComposeInterpolationEnv({ webPort, subnet: subnet.subnet }));
-      envFileReady = true;
-    } finally {
-      if (!envFileReady) cleanupRunScopedState();
+    } catch (error) {
+      return cleanupRunScopedStateAfterError(error);
     }
 
     // #1306: the fixture container is removed FIRST — an outside container still attached to the
@@ -947,11 +954,12 @@ export async function provisionForUat(
       throw error; // unreachable: cleanupUatAttempt rethrows the provisioning failure
     }
   }
-  cleanupRunScopedState();
-  throw new Error(
-    `exhausted all ${UAT_PORT_RANGE_SIZE} reserved UAT ports (${UAT_PORT_RANGE_START}-${
-      UAT_PORT_RANGE_START + UAT_PORT_RANGE_SIZE - 1
-    }) without a successful bind`
+  return cleanupRunScopedStateAfterError(
+    new Error(
+      `exhausted all ${UAT_PORT_RANGE_SIZE} reserved UAT ports (${UAT_PORT_RANGE_START}-${
+        UAT_PORT_RANGE_START + UAT_PORT_RANGE_SIZE - 1
+      }) without a successful bind`
+    )
   );
 }
 

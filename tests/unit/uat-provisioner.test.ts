@@ -87,6 +87,37 @@ describe("provisionForUat setup cleanup", () => {
     expect(process.env.JARVIS_CLI_TOOLS_PREFIX).toBe("sentinel-original");
   });
 
+  it("preserves both setup and credential-cleanup failures", async () => {
+    const setupError = new Error("malformed Docker inspect state");
+    const cleanupError = new Error("credential cleanup failed");
+    process.env.JARVIS_CLI_TOOLS_PREFIX = "sentinel-original";
+    process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE = "sentinel-original-env-file";
+
+    const failure = await provisionForUat(
+      "bare",
+      { chatScript: "phase1-smoke" },
+      {
+        listLiveSubnets: async () => {
+          throw setupError;
+        },
+        writeRealChatEnvFile: async () => {
+          process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE = "/tmp/decrypted-real-chat.env";
+          return {
+            path: "/tmp/decrypted-real-chat.env",
+            cleanup: () => {
+              throw cleanupError;
+            }
+          };
+        }
+      }
+    ).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect((failure as AggregateError).errors).toEqual([setupError, cleanupError]);
+    expect(process.env.JARVIS_CLI_TOOLS_PREFIX).toBe("sentinel-original");
+    expect(process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE).toBe("sentinel-original-env-file");
+  });
+
   it("restores run-scoped state when the UAT env file cannot be created", async () => {
     const cleanup = vi.fn();
     process.env.TMPDIR = "/definitely-missing-uat-temp-root";

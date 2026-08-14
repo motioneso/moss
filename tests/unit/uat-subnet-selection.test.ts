@@ -21,10 +21,23 @@ describe("IPv4 CIDR handling", () => {
     expect(cidrsOverlap("172.17.0.0/16", "10.254.0.0/24")).toBe(false);
   });
 
-  it.each(["10.252.0.0", "10.252.0.0/33", "fd00::/64", ""])(
-    "rejects invalid IPv4 CIDR %j",
+  it.each([
+    "10.252.0.0",
+    "10.252.0.0/33",
+    "010.249.0.0/24",
+    "10.024.0.0/24",
+    "10.249.00.0/24",
+    "10.249.0.00/24",
+    "fd00::/64",
+    ""
+  ])("rejects invalid IPv4 CIDR %j", (cidr) => {
+    expect(() => parseIpv4Cidr(cidr)).toThrow(UatSubnetSelectionError);
+  });
+
+  it.each(["0.0.0.0/0", "10.249.0.0/24", "255.255.255.255/32"])(
+    "accepts canonical IPv4 CIDR %j",
     (cidr) => {
-      expect(() => parseIpv4Cidr(cidr)).toThrow(UatSubnetSelectionError);
+      expect(() => parseIpv4Cidr(cidr)).not.toThrow();
     }
   );
 });

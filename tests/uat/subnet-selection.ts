@@ -32,9 +32,10 @@ export function parseIpv4Cidr(cidr: string): {
   if (!match) {
     throw new UatSubnetSelectionError(`invalid IPv4 CIDR: ${cidr || "<empty>"}`);
   }
+  const addressText = match.slice(1, 5).join(".");
   const octets = match.slice(1, 5).map(Number);
   const prefixLength = Number(match[5]);
-  if (octets.some((octet) => octet > 255) || prefixLength > 32) {
+  if (isIP(addressText) !== 4 || prefixLength > 32) {
     throw new UatSubnetSelectionError(`invalid IPv4 CIDR: ${cidr}`);
   }
   const address = ((octets[0]! << 24) | (octets[1]! << 16) | (octets[2]! << 8) | octets[3]!) >>> 0;
