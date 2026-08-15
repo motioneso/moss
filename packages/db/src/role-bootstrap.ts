@@ -1,8 +1,7 @@
-import pg from "pg";
+import { escapeIdentifier, escapeLiteral } from "pg";
 
+import { withClusterDdlLock, type WithClusterDdlLockOptions } from "./cluster-ddl-lock.js";
 import type { MossDatabaseUrls } from "./urls.js";
-
-const { Client } = pg;
 
 export interface RolePasswordEntry {
   readonly role: string;
@@ -75,14 +74,15 @@ export function buildRolePasswordPlan(
 
 /**
  * Build the idempotent `ALTER ROLE` statement that assigns one role's password.
- * The role name and password are escaped via the `pg` client's
- * `escapeIdentifier`/`escapeLiteral` so arbitrary configured secrets cannot break
- * out of the statement.
+ * The role name and password are escaped via `pg`'s module-level
+ * `escapeIdentifier`/`escapeLiteral` — the same functions `pg.Client`'s instance
+ * methods delegate to — so arbitrary configured secrets cannot break out of the
+ * statement without needing a live client to escape with.
  */
-export function buildAlterRoleStatement(client: pg.Client, entry: RolePasswordEntry): string {
+export function buildAlterRoleStatement(entry: RolePasswordEntry): string {
   return (
-    `ALTER ROLE ${client.escapeIdentifier(entry.role)} ` +
-    `WITH LOGIN PASSWORD ${client.escapeLiteral(entry.password)}`
+    `ALTER ROLE ${escapeIdentifier(entry.role)} ` +
+    `WITH LOGIN PASSWORD ${escapeLiteral(entry.password)}`
   );
 }
 
@@ -96,15 +96,16 @@ export function buildAlterRoleStatement(client: pg.Client, entry: RolePasswordEn
  */
 export async function applyRolePasswords(
   connectionString: string,
-  plan: RolePasswordEntry[]
+  plan: RolePasswordEntry[],
+  options: WithClusterDdlLockOptions = {}
 ): Promise<void> {
-  const client = new Client({ connectionString });
-  await client.connect();
-  try {
-    for (const entry of plan) {
-      await client.query(buildAlterRoleStatement(client, entry));
-    }
-  } finally {
-    await client.end();
-  }
+  return withClusterDdlLock(
+    connectionString,
+    async (client) => {
+      for (const entry of plan) {
+        await client.query(buildAlterRoleStatement(entry));
+      }
+    },
+    options
+  );
 }

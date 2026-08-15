@@ -113,29 +113,47 @@ export async function runSqlMigrations(
  */
 export async function runSqlFiles(connectionString: string, directory: string): Promise<string[]> {
   const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    return await runSqlFilesWithClient(client, directory);
+  } finally {
+    await client.end();
+  }
+}
+
+/** The minimum a client must offer to execute SQL files — satisfied by both `pg.Client` and the
+ * cluster-DDL lock's owner client, so a caller can run these files on a lock-holding session. */
+export interface SqlFileClient {
+  query(text: string): Promise<unknown>;
+}
+
+/**
+ * The file loop of {@link runSqlFiles}, running on a caller-owned connection. Never connects or
+ * ends the client: #1632's cluster-DDL lock hands its own lock-holding session in here so the
+ * bootstrap DDL and the advisory lock share one backend.
+ */
+export async function runSqlFilesWithClient(
+  client: SqlFileClient,
+  directory: string
+): Promise<string[]> {
   const files = await readdir(directory);
   const sqlFiles = files.filter((file) => file.endsWith(".sql")).sort();
   const executed: string[] = [];
 
-  await client.connect();
-  try {
-    for (const fileName of sqlFiles) {
-      const sql = await readFile(join(directory, fileName), "utf8");
-      await client.query("BEGIN");
-      try {
-        await client.query(sql);
-        await client.query("COMMIT");
-        executed.push(fileName);
-      } catch (error) {
-        await client.query("ROLLBACK");
-        throw error;
-      }
+  for (const fileName of sqlFiles) {
+    const sql = await readFile(join(directory, fileName), "utf8");
+    await client.query("BEGIN");
+    try {
+      await client.query(sql);
+      await client.query("COMMIT");
+      executed.push(fileName);
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
     }
-
-    return executed;
-  } finally {
-    await client.end();
   }
+
+  return executed;
 }
 
 export async function loadMigrationFiles(directory: string): Promise<MigrationFile[]> {

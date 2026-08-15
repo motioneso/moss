@@ -2,14 +2,16 @@ import { describe, expect, it } from "vitest";
 import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import pg from "pg";
 
 import {
   RUNTIME_ROLE_PASSWORD_DEFAULTS,
+  applyRolePasswords,
   buildAlterRoleStatement,
   buildRolePasswordPlan,
   getMossDatabaseUrls
 } from "@moss/db";
+
+import { createFakeLockHarness } from "../../packages/db/src/__tests__/fake-lock-client.js";
 
 describe("buildRolePasswordPlan", () => {
   it("derives runtime role passwords from local dev fallback URLs", () => {
@@ -90,8 +92,7 @@ describe("buildRolePasswordPlan", () => {
 
 describe("buildAlterRoleStatement", () => {
   it("escapes the identifier and password literal", () => {
-    const client = new pg.Client();
-    const sql = buildAlterRoleStatement(client, {
+    const sql = buildAlterRoleStatement({
       role: "jarvis_app_runtime",
       password: "a'b\\c"
     });
@@ -99,6 +100,36 @@ describe("buildAlterRoleStatement", () => {
     expect(sql).toContain("WITH LOGIN PASSWORD ");
     // The raw, unescaped password must never appear verbatim in the statement.
     expect(sql).not.toContain("a'b\\c");
+  });
+});
+
+// #1632: ALTER ROLE is cluster-global DDL, so it must run on the cluster-DDL lock's owner
+// session rather than a connection of its own.
+describe("applyRolePasswords under the cluster DDL lock", () => {
+  it("runs every ALTER ROLE on the lock-owner session and opens no other client", async () => {
+    const harness = createFakeLockHarness();
+
+    await applyRolePasswords(
+      "postgres://postgres:rootpw@db:5432/moss",
+      [
+        { role: "jarvis_app_runtime", password: "app-secret" },
+        { role: "jarvis_worker_runtime", password: "worker-secret" }
+      ],
+      harness.options
+    );
+
+    const texts = harness.owner.texts;
+    expect(texts[0]).toContain("pg_advisory_lock");
+    expect(texts.at(-1)).toContain("pg_advisory_unlock");
+    expect(texts).toContain(`ALTER ROLE "jarvis_app_runtime" WITH LOGIN PASSWORD 'app-secret'`);
+    expect(texts).toContain(
+      `ALTER ROLE "jarvis_worker_runtime" WITH LOGIN PASSWORD 'worker-secret'`
+    );
+    expect(harness.owner.connectCalls).toBe(1);
+    expect(harness.connectionStrings).toEqual([
+      "postgres://postgres:rootpw@db:5432/postgres",
+      "postgres://postgres:rootpw@db:5432/postgres"
+    ]);
   });
 });
 

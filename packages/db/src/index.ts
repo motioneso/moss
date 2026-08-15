@@ -1,4 +1,5 @@
 export * from "./auth-session.js";
+export * from "./cluster-ddl-lock.js";
 export * from "./data-context.js";
 export * from "./database.js";
 export * from "./env.js";
