@@ -1,8 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { renderToString } from "react-dom/server";
+import { renderToPipeableStream, renderToString } from "react-dom/server";
 import { MemoryRouter } from "react-router";
+import { Writable } from "node:stream";
+import type { ReactNode } from "react";
 
 import { SettingsPage } from "../../apps/web/src/settings/settings-page.js";
+import { CORE_APP_SETTINGS } from "../../packages/shared/src/app-map-core.js";
+
+function renderAll(element: ReactNode): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let html = "";
+    const destination = new Writable({
+      write(chunk, _encoding, callback) {
+        html += chunk.toString();
+        callback();
+      }
+    });
+    destination.on("finish", () => resolve(html));
+    const { pipe } = renderToPipeableStream(element, {
+      onAllReady: () => pipe(destination),
+      onError: reject
+    });
+  });
+}
 
 describe("SettingsPage priorities navigation", () => {
   const nonAdminMe = {
@@ -96,5 +116,27 @@ describe("SettingsPage priorities navigation", () => {
 
     expect(html).toContain("Account &amp; preferences");
     expect(html).not.toContain("People &amp; access");
+  });
+
+  it("renders Recently Released as the active Moss destination for a non-admin", async () => {
+    const html = await renderAll(
+      <MemoryRouter initialEntries={["/settings?section=released"]}>
+        <SettingsPage me={nonAdminMe} />
+      </MemoryRouter>
+    );
+    expect(html).toContain("Moss");
+    expect(html).toContain("Recently Released");
+    expect(html).toContain('aria-current="true"');
+    expect(html).toContain("Guided Job Search onboarding");
+  });
+
+  it("declares Recently Released in the core app map", () => {
+    expect(CORE_APP_SETTINGS).toContainEqual({
+      id: "released",
+      label: "Recently Released",
+      description: "See what was added, fixed, and changed in recent Moss releases.",
+      path: "/settings?section=released",
+      scope: "user"
+    });
   });
 });

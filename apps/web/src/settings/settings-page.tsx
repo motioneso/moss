@@ -66,7 +66,8 @@ type PersonalSectionId =
   | "modules"
   | "appearance"
   | "activity"
-  | "skills";
+  | "skills"
+  | "released";
 
 type AdminSectionId = "people" | "aiproviders" | "instmods" | "audit" | "oversight" | "host";
 
@@ -97,6 +98,9 @@ const ActivityPane = lazyPane(() =>
 );
 const SkillsPane = lazyPane(() =>
   import("./settings-skills-pane").then((module) => ({ default: module.SettingsSkillsPane }))
+);
+const ReleasedPane = lazyPane(() =>
+  import("./settings-released-pane").then((module) => ({ default: module.ReleasedPane }))
 );
 
 function PrioritiesPane(_props: PaneProps) {
@@ -174,6 +178,13 @@ const PERSONAL_GROUPS = [
         label: "Activity",
         description: coreSettingDescription("activity"),
         Pane: ActivityPane
+      },
+      {
+        id: "released",
+        icon: ScrollText,
+        label: "Recently Released",
+        description: coreSettingDescription("released"),
+        Pane: ReleasedPane
       }
     ]
   },
