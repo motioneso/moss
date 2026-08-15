@@ -1,5 +1,33 @@
 # What's New in Moss
 
+## Edge channel — 2026-08-14
+
+Edge builds include the stable history below plus the user-facing changes already available in
+the current edge image. This section is intentionally build-bundled so it never advertises a
+feature that is not present in the image you are running.
+
+### Added
+
+- **Recently Released.** Settings now includes a read-only release history so you can see what
+  Moss has added, fixed, and changed. [PR #1630](https://github.com/motioneso/Jarv1s/pull/1630)
+- **Recall relevant notes before answering.** Chat can use relevant notes as context before it
+  answers, making note-backed conversations more useful. [PR #1619](https://github.com/motioneso/Jarv1s/pull/1619)
+- **Threaded chat routing.** Chat sends now preserve the active thread surface so replies stay
+  attached to the conversation you started. [PR #1574](https://github.com/motioneso/Jarv1s/pull/1574)
+- **Vault ingestion.** Notes and other approved vault content can be ingested through the new
+  allowlisted ingestion path. [PR #1606](https://github.com/motioneso/Jarv1s/pull/1606)
+- **Approval-card summaries.** Action cards now prefer a module's user-facing action label when
+  one is available. [PR #1492](https://github.com/motioneso/Jarv1s/pull/1492)
+
+### Fixed
+
+- **Safer external-module validation.** Patterned input validation now stays bounded and keeps
+  the host responsive even for hostile input. [PR #1608](https://github.com/motioneso/Jarv1s/pull/1608)
+- **Weather location overrides.** A manually selected weather location now remains authoritative
+  instead of being replaced by an automatic lookup. [PR #1535](https://github.com/motioneso/Jarv1s/pull/1535)
+- **Chat availability and approval recovery.** Chat now waits for the selected model route and
+  restores approval cards reliably after the drawer is reopened. [PR #1482](https://github.com/motioneso/Jarv1s/pull/1482) · [PR #1494](https://github.com/motioneso/Jarv1s/pull/1494)
+
 ## v0.1.16 — 2026-08-05
 
 ### Added
