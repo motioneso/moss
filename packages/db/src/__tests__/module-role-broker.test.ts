@@ -44,9 +44,12 @@ describe("ensureModuleRoles under the cluster DDL lock", () => {
     expect(texts.some((t) => t.includes("GRANT REFERENCES (id) ON app.users"))).toBe(true);
 
     // One owner client, one probe client — no third connection of the caller's own.
+    // #1632 fix: the owner session executes the CREATE/ALTER/GRANT ROLE DDL directly, so it must
+    // stay on the caller's real target database (moss) — only the heartbeat probe (never DDL)
+    // uses the maintenance-DB swap (postgres).
     expect(harness.owner.connectCalls).toBe(1);
     expect(harness.connectionStrings).toEqual([
-      "postgres://postgres:rootpw@db:5432/postgres",
+      "postgres://postgres:rootpw@db:5432/moss",
       "postgres://postgres:rootpw@db:5432/postgres"
     ]);
   });

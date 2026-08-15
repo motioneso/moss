@@ -126,8 +126,11 @@ describe("applyRolePasswords under the cluster DDL lock", () => {
       `ALTER ROLE "jarvis_worker_runtime" WITH LOGIN PASSWORD 'worker-secret'`
     );
     expect(harness.owner.connectCalls).toBe(1);
+    // #1632 fix: the owner session executes the ALTER ROLE DDL directly, so it must stay on the
+    // caller's real target database (moss) — only the heartbeat probe (never DDL) uses the
+    // maintenance-DB swap (postgres).
     expect(harness.connectionStrings).toEqual([
-      "postgres://postgres:rootpw@db:5432/postgres",
+      "postgres://postgres:rootpw@db:5432/moss",
       "postgres://postgres:rootpw@db:5432/postgres"
     ]);
   });
