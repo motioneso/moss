@@ -1,7 +1,8 @@
 # #1632 — cluster DDL lock session liveness
 
-**Status:** Proposed follow-up to #1013; design only. No implementation or proof is authorized by
-this document.
+**Status:** Ben-approved design follow-up to #1013. Implementation may proceed only within the
+bound and proof gate below; no DB/full-gate proof is authorized until the implementation review
+clears.
 
 ## Why the previous closure stopped
 
@@ -34,12 +35,15 @@ weakening attribution, serializing whole gates, or adding a distributed service/
    have an explicit, testable ownership relationship. A lock acquired on one backend must not be
    treated as sufficient after that backend has disconnected.
 2. **Continuous liveness.** While `fn` is running, the helper must detect lock-session loss before
-   allowing another protected DDL phase to be reported successful. The detection bound must be
-   explicit and configurable only within a documented safe range; the default must be short
-   enough to prevent a second lane from entering during an undetected callback window.
+   allowing another protected DDL phase to be reported successful. The detection bound is a
+   separate liveness setting from acquisition `lockTimeoutMs`; it must be explicit, configurable
+   only within a documented safe range, and have a measured p99 bound in the proof. The default
+   must be short enough to prevent a second lane from entering during an undetected callback
+   window.
 3. **Fail closed.** If ownership cannot be proven (connect, identity, heartbeat, callback, or
-   cleanup failure), protected work must not start or must fail with a typed lock error. Never
-   continue unlocked and never silently convert an ownership failure into a diagnostic-only event.
+   cleanup failure), protected work must not start or must fail with a typed lock error. Liveness
+   loss has a distinct typed error from acquisition failure and callback failure. Never continue
+   unlocked and never silently convert an ownership failure into a diagnostic-only event.
 4. **No false release.** A stale/old owner cannot unlock or supersede a newer owner. Cleanup must
    be idempotent and must not release a lock acquired by another invocation.
 5. **Crash safety.** Process termination, backend termination, network loss, and database restart
@@ -61,6 +65,9 @@ weakening attribution, serializing whole gates, or adding a distributed service/
   ownership is known; a sink failure must not cause protected work to run unlocked.
 - Preserve the current maintenance DB override and URL query parameters. Never create/drop or
   migrate a shared database as part of lock management.
+- The implementation plan must state whether `withClusterDdlLock` is modified in place or
+  superseded by a new export. If superseded, the old export must be removed or made impossible to
+  import without the liveness contract.
 
 ## Acceptance checklist
 
@@ -72,7 +79,7 @@ weakening attribution, serializing whole gates, or adding a distributed service/
 - [ ] Owner backend termination during an idle callback is detected within the documented bound;
       the callback fails and a new waiter can acquire only after the old owner is gone.
 - [ ] Owner backend termination while DDL is executing cannot yield a successful protected phase;
-      the result is a typed liveness/lock error and cleanup is deterministic.
+      the result is the distinct typed liveness-loss error and cleanup is deterministic.
 - [ ] Network/session loss and PostgreSQL restart are treated like owner loss, not as a successful
       unlock or an unlocked continuation.
 - [ ] A live owner is never stolen; malformed, ambiguous, or unverified ownership fails closed.
@@ -81,11 +88,16 @@ weakening attribution, serializing whole gates, or adding a distributed service/
 - [ ] Normal release, owner crash, and waiter timeout leave no lock residue and permit a later
       acquisition.
 - [ ] Existing diagnostics cannot alter acquisition, liveness, callback, or cleanup semantics.
+- [ ] The implementation records the measured owner-loss detection latency (p50/p99/max) and
+      proves it stays within the documented safe bound across all owner-loss trials.
 
 ### Coverage and source guards
 
 - [ ] Source assertion proves every approved cluster-global DDL site routes through the liveness-
       aware helper and no old lock-free path remains.
+- [ ] The source guard individually locates bootstrap, role-password, module-role, teardown,
+      purge, and membership grant/revoke call sites; any absent or not-yet-applicable category is
+      reported explicitly rather than silently counted as covered.
 - [ ] Source assertion proves wrapped sections are sequential siblings, not nested acquisitions.
 - [ ] The helper documents its non-reentrancy and ownership/liveness contract at the exported seam.
 
@@ -112,4 +124,3 @@ scope. The report must explicitly distinguish:
 
 Until that report is green and independently reviewed, PR #1624 remains frozen and no production
 or full-gate claim is reopened.
-
