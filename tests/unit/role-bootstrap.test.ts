@@ -11,7 +11,7 @@ import {
   getMossDatabaseUrls
 } from "@moss/db";
 
-import { createFakeLockHarness } from "../../packages/db/src/__tests__/fake-lock-client.js";
+import { createFakeClusterHarness } from "../../packages/db/src/__tests__/fake-pg-cluster.js";
 
 describe("buildRolePasswordPlan", () => {
   it("derives runtime role passwords from local dev fallback URLs", () => {
@@ -103,11 +103,12 @@ describe("buildAlterRoleStatement", () => {
   });
 });
 
-// #1632: ALTER ROLE is cluster-global DDL, so it must run on the cluster-DDL lock's owner
-// session rather than a connection of its own.
+// #1632: ALTER ROLE is cluster-global in effect but must be issued from a session on the target
+// database, so it runs on the lock's DDL session — never on a connection of its own, and never on
+// the lock session, which stays on the maintenance database holding the advisory lock.
 describe("applyRolePasswords under the cluster DDL lock", () => {
-  it("runs every ALTER ROLE on the lock-owner session and opens no other client", async () => {
-    const harness = createFakeLockHarness();
+  it("runs every ALTER ROLE on the DDL session and opens no other client", async () => {
+    const harness = createFakeClusterHarness();
 
     await applyRolePasswords(
       "postgres://postgres:rootpw@db:5432/moss",
@@ -118,20 +119,23 @@ describe("applyRolePasswords under the cluster DDL lock", () => {
       harness.options
     );
 
-    const texts = harness.owner.texts;
-    expect(texts[0]).toContain("pg_advisory_lock");
-    expect(texts.at(-1)).toContain("pg_advisory_unlock");
+    const texts = harness.ddl.texts;
     expect(texts).toContain(`ALTER ROLE "jarvis_app_runtime" WITH LOGIN PASSWORD 'app-secret'`);
     expect(texts).toContain(
       `ALTER ROLE "jarvis_worker_runtime" WITH LOGIN PASSWORD 'worker-secret'`
     );
-    expect(harness.owner.connectCalls).toBe(1);
-    // #1632 fix: the owner session executes the ALTER ROLE DDL directly, so it must stay on the
-    // caller's real target database (moss) — only the heartbeat probe (never DDL) uses the
-    // maintenance-DB swap (postgres).
+    expect(texts.some((t) => t.includes("pg_advisory"))).toBe(false);
+    expect(harness.lock.texts[0]).toContain("pg_advisory_lock");
+    expect(harness.lock.texts.at(-1)).toContain("pg_advisory_unlock");
+    expect(harness.lockClients).toHaveLength(1);
+    expect(harness.ddlClients).toHaveLength(1);
+    expect(harness.lock.connectCalls).toBe(1);
+    expect(harness.ddl.connectCalls).toBe(1);
+    // The lock session takes the maintenance database (advisory-lock tags are per-database, so
+    // cluster-wide exclusion needs one agreed database); the DDL session takes the caller's.
     expect(harness.connectionStrings).toEqual([
-      "postgres://postgres:rootpw@db:5432/moss",
-      "postgres://postgres:rootpw@db:5432/postgres"
+      "postgres://postgres:rootpw@db:5432/postgres",
+      "postgres://postgres:rootpw@db:5432/moss"
     ]);
   });
 });

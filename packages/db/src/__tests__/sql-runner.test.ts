@@ -1,6 +1,6 @@
 // #1632: runSqlFiles' file loop is split out as runSqlFilesWithClient so scripts/migrate.ts can
-// run the bootstrap directory on the cluster-DDL lock's owner session instead of a second
-// connection. The extracted loop must own no connection lifecycle of its own.
+// run the bootstrap directory on the cluster-DDL lock's guarded DDL session instead of a second,
+// unguarded connection. The extracted loop must own no connection lifecycle of its own.
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

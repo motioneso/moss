@@ -1,4 +1,9 @@
+// #1632 dual-session cluster-DDL lock. Every test runs against FakePgCluster, which models
+// advisory locks as per-(database, key) exactly like PostgreSQL's locktag — the property that
+// makes cross-database mutual exclusion observable in a unit test at all.
 import { describe, expect, test, vi } from "vitest";
+
+import type * as ClusterDdlLockModule from "../cluster-ddl-lock.js";
 
 import {
   ClusterDdlLockAcquisitionError,
@@ -6,459 +11,718 @@ import {
   ClusterDdlLockLivenessLostError,
   ClusterDdlLockReentrancyError,
   DEFAULT_CLUSTER_LOCK_DATABASE,
+  DEFAULT_CLUSTER_LOCK_KEY,
   getClusterLockDatabaseUrl,
   withClusterDdlLock,
-  type ClusterDdlLockClient
+  type ClusterDdlLockDiagnosticEvent,
+  type WithClusterDdlLockOptions
 } from "../cluster-ddl-lock.js";
+import {
+  FakePgCluster,
+  MAINTENANCE_DATABASE,
+  createFakeClusterHarness
+} from "./fake-pg-cluster.js";
 
-interface FakeClientOptions {
-  readonly connect?: () => Promise<void>;
-  readonly query?: (text: string, params?: readonly unknown[]) => Promise<{ rows: unknown[] }>;
+const BOOTSTRAP_URL = "postgres://u:p@h:5432/jarv1s";
+
+/** A macrotask boundary — flushes every pending microtask, so acquisition completes. */
+function flush(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-class FakeClient implements ClusterDdlLockClient {
-  readonly queryCalls: Array<{ text: string; params?: readonly unknown[] }> = [];
-  endCalls = 0;
-  private readonly connectImpl: () => Promise<void>;
-  private readonly queryImpl: (
-    text: string,
-    params?: readonly unknown[]
-  ) => Promise<{ rows: unknown[] }>;
-  private readonly listeners = new Map<string, Set<(error: Error) => void>>();
-
-  constructor(options: FakeClientOptions = {}) {
-    this.connectImpl = options.connect ?? (async () => {});
-    this.queryImpl = options.query ?? (async () => ({ rows: [] }));
-  }
-
-  connect(): Promise<void> {
-    return this.connectImpl();
-  }
-
-  query<T = Record<string, unknown>>(
-    text: string,
-    params?: readonly unknown[]
-  ): Promise<{ rows: T[] }> {
-    this.queryCalls.push({ text, params });
-    return this.queryImpl(text, params) as Promise<{ rows: T[] }>;
-  }
-
-  end(): Promise<void> {
-    this.endCalls++;
-    return Promise.resolve();
-  }
-
-  on(event: "error", listener: (error: Error) => void): this {
-    const set = this.listeners.get(event) ?? new Set();
-    set.add(listener);
-    this.listeners.set(event, set);
-    return this;
-  }
-
-  removeListener(event: "error", listener: (error: Error) => void): this {
-    this.listeners.get(event)?.delete(listener);
-    return this;
-  }
-
-  emitError(error: Error): void {
-    for (const listener of this.listeners.get("error") ?? []) {
-      listener(error);
-    }
-  }
+function never<T>(): Promise<T> {
+  return new Promise<T>(() => {});
 }
 
-const OWNER_PID = 4242;
-
-/** A working owner client: acquires the lock and reports OWNER_PID, idle until told otherwise. */
-function createWorkingOwner(overrides: Partial<FakeClientOptions> = {}): FakeClient {
-  return new FakeClient({
-    query: async (text) => {
-      if (text.includes("pg_backend_pid")) {
-        return { rows: [{ pid: OWNER_PID }] };
-      }
-      return { rows: [{}] };
-    },
-    ...overrides
-  });
-}
-
-/** A probe client that reports the owner alive until `markGone()` is called. */
-function createProbe(): {
-  probe: FakeClient;
-  markGone: () => void;
-  failNextQuery: (error: Error) => void;
-} {
-  let gone = false;
-  let pendingFailure: Error | undefined;
-  const probe = new FakeClient({
-    query: async (text) => {
-      if (pendingFailure) {
-        const error = pendingFailure;
-        pendingFailure = undefined;
-        throw error;
-      }
-      if (text.includes("pg_stat_activity")) {
-        return { rows: gone ? [] : [{ pid: OWNER_PID }] };
-      }
-      return { rows: [] };
-    }
-  });
+function laneOptions(cluster: FakePgCluster): WithClusterDdlLockOptions {
   return {
-    probe,
-    markGone: () => {
-      gone = true;
-    },
-    failNextQuery: (error: Error) => {
-      pendingFailure = error;
-    }
+    env: {} as NodeJS.ProcessEnv,
+    livenessIntervalMs: 5000,
+    createLockClient: (connectionString) => cluster.createClient(connectionString),
+    createDdlClient: (connectionString) => cluster.createClient(connectionString)
   };
 }
 
-describe("withClusterDdlLock", () => {
-  test("owner session connects to the caller's real database, not the maintenance-DB swap", async () => {
-    const bootstrapUrl = "postgres://u:p@h:5432/jarv1s";
-    const owner = createWorkingOwner();
-    const { probe } = createProbe();
-    const ownerConnectionStrings: string[] = [];
-    const probeConnectionStrings: string[] = [];
+/**
+ * A fresh module instance, i.e. an independent process as far as the module-level reentrancy
+ * flag is concerned. Two lanes contending on one FakePgCluster is the unit-test twin of two CI
+ * lanes contending on one PostgreSQL cluster.
+ */
+async function loadLane(): Promise<typeof ClusterDdlLockModule> {
+  vi.resetModules();
+  return import("../cluster-ddl-lock.js");
+}
 
-    await withClusterDdlLock(bootstrapUrl, async () => "ok", {
-      createOwnerClient: (connectionString) => {
-        ownerConnectionStrings.push(connectionString);
-        return owner;
+function maintenanceHolder(cluster: FakePgCluster): number | undefined {
+  return cluster.advisoryLockHolder(MAINTENANCE_DATABASE, DEFAULT_CLUSTER_LOCK_KEY);
+}
+
+describe("session targeting", () => {
+  test("the lock session uses the maintenance DB and the DDL session the caller's database", async () => {
+    // Pins both axes at once: round 1 put the DDL on the maintenance DB (42501 on schema-scoped
+    // GRANTs), round 2 put the lock on the target DB (per-database locktags, no cluster-wide
+    // exclusion). Either regression flips one of these two assertions.
+    const cluster = new FakePgCluster();
+    const lockUrls: string[] = [];
+    const ddlUrls: string[] = [];
+
+    await withClusterDdlLock(BOOTSTRAP_URL, async () => "ok", {
+      env: {} as NodeJS.ProcessEnv,
+      livenessIntervalMs: 5000,
+      createLockClient: (connectionString) => {
+        lockUrls.push(connectionString);
+        return cluster.createClient(connectionString);
       },
-      createProbeClient: (connectionString) => {
-        probeConnectionStrings.push(connectionString);
-        return probe;
+      createDdlClient: (connectionString) => {
+        ddlUrls.push(connectionString);
+        return cluster.createClient(connectionString);
       }
     });
 
-    // The owner session executes fn's DDL directly (single-owner-session design), so it must
-    // stay on the caller's real target database, never the maintenance-DB swap — only the probe
-    // (heartbeat-only, never DDL) uses the swap. Regression pin for the bug that broke #1633's
-    // CI: the owner previously inherited the probe's maintenance-DB connection string, so all
-    // wrapped DDL silently ran against the wrong database.
-    expect(ownerConnectionStrings).toEqual([bootstrapUrl]);
-    expect(probeConnectionStrings).toEqual([getClusterLockDatabaseUrl(bootstrapUrl)]);
+    expect(lockUrls).toEqual([getClusterLockDatabaseUrl(BOOTSTRAP_URL, {})]);
+    expect(ddlUrls).toEqual([BOOTSTRAP_URL]);
+  });
+});
+
+describe("mutual exclusion across lanes", () => {
+  test("two lanes on different target databases still serialize", async () => {
+    const cluster = new FakePgCluster();
+    const laneA = await loadLane();
+    const laneB = await loadLane();
+
+    let releaseA: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      releaseA = resolve;
+    });
+
+    const runA = laneA.withClusterDdlLock(
+      "postgres://u:p@h:5432/lane_a",
+      async (client) => {
+        await client.query("DDL A");
+        await gate;
+        return "a";
+      },
+      laneOptions(cluster)
+    );
+    await flush();
+
+    const runB = laneB.withClusterDdlLock(
+      "postgres://u:p@h:5432/lane_b",
+      async (client) => {
+        await client.query("DDL B");
+        return "b";
+      },
+      laneOptions(cluster)
+    );
+    await flush();
+
+    // B is parked in pg_advisory_lock on the maintenance DB, so none of its DDL has run.
+    expect(cluster.log.some((event) => event.text === "DDL B")).toBe(false);
+    expect(cluster.log.filter((event) => event.kind === "wait").map((event) => event.db)).toEqual([
+      MAINTENANCE_DATABASE
+    ]);
+
+    releaseA();
+    await expect(runA).resolves.toBe("a");
+    await expect(runB).resolves.toBe("b");
+
+    const kinds = cluster.log;
+    const ddlA = kinds.findIndex((event) => event.text === "DDL A");
+    const ddlB = kinds.findIndex((event) => event.text === "DDL B");
+    const unlockA = kinds.findIndex((event) => event.kind === "unlock");
+    expect(ddlA).toBeGreaterThanOrEqual(0);
+    expect(ddlA).toBeLessThan(unlockA);
+    expect(unlockA).toBeLessThan(ddlB);
+
+    // Both lanes contended on the same (maintenance database, key) — the whole point.
+    const acquires = kinds.filter((event) => event.kind === "acquire");
+    expect(acquires).toHaveLength(2);
+    expect(acquires.every((event) => event.db === MAINTENANCE_DATABASE)).toBe(true);
+    expect(new Set(acquires.map((event) => event.key)).size).toBe(1);
+    // And each lane's DDL landed on its own target database.
+    expect(kinds.find((event) => event.text === "DDL A")?.db).toBe("lane_a");
+    expect(kinds.find((event) => event.text === "DDL B")?.db).toBe("lane_b");
   });
 
-  test("acquisition failure prevents the callback from ever running", async () => {
-    const owner = new FakeClient({
-      connect: async () => {
-        throw new Error("ECONNREFUSED");
+  test("two lanes on the same target database serialize", async () => {
+    const cluster = new FakePgCluster();
+    const laneA = await loadLane();
+    const laneB = await loadLane();
+
+    let releaseA: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      releaseA = resolve;
+    });
+
+    const runA = laneA.withClusterDdlLock(
+      BOOTSTRAP_URL,
+      async (client) => {
+        await client.query("DDL A");
+        await gate;
+        return "a";
+      },
+      laneOptions(cluster)
+    );
+    await flush();
+    const runB = laneB.withClusterDdlLock(
+      BOOTSTRAP_URL,
+      async (client) => {
+        await client.query("DDL B");
+        return "b";
+      },
+      laneOptions(cluster)
+    );
+    await flush();
+
+    expect(cluster.log.some((event) => event.text === "DDL B")).toBe(false);
+    releaseA();
+    await runA;
+    await runB;
+
+    const unlockA = cluster.log.findIndex((event) => event.kind === "unlock");
+    expect(cluster.log.findIndex((event) => event.text === "DDL A")).toBeLessThan(unlockA);
+    expect(cluster.log.findIndex((event) => event.text === "DDL B")).toBeGreaterThan(unlockA);
+  });
+
+  test("a waiter acquires only after the live owner's backend is gone", async () => {
+    const cluster = new FakePgCluster();
+    const laneA = await loadLane();
+    const laneB = await loadLane();
+
+    let lockPidA = 0;
+    const runA = laneA.withClusterDdlLock(BOOTSTRAP_URL, () => never<string>(), {
+      ...laneOptions(cluster),
+      onDiagnostic: (event) => {
+        if (event.type === "acquired") lockPidA = event.ownerPid;
       }
     });
+    runA.catch(() => {});
+    await flush();
+
+    const runB = laneB.withClusterDdlLock(BOOTSTRAP_URL, async () => "b", laneOptions(cluster));
+    await flush();
+
+    // While A's backend lives, B must still be waiting — no stealing.
+    expect(cluster.log.filter((event) => event.kind === "acquire")).toHaveLength(1);
+    expect(maintenanceHolder(cluster)).toBe(lockPidA);
+
+    cluster.killBackend(lockPidA);
+    await expect(runA).rejects.toBeInstanceOf(laneA.ClusterDdlLockLivenessLostError);
+    await expect(runB).resolves.toBe("b");
+
+    const killIndex = cluster.log.findIndex((event) => event.kind === "kill");
+    const acquires = cluster.log
+      .map((event, index) => ({ event, index }))
+      .filter((entry) => entry.event.kind === "acquire");
+    expect(acquires).toHaveLength(2);
+    expect(acquires[1]?.index).toBeGreaterThan(killIndex);
+  });
+});
+
+describe("acquisition failures", () => {
+  test("a lock-session connect failure is typed and never creates a DDL session", async () => {
+    const cluster = new FakePgCluster();
     const fn = vi.fn(async () => "unreachable");
+    let ddlClientsCreated = 0;
 
     await expect(
-      withClusterDdlLock("postgres://u:p@h:5432/jarv1s", fn, {
-        createOwnerClient: () => owner,
-        createProbeClient: () => createProbe().probe
-      })
-    ).rejects.toBeInstanceOf(ClusterDdlLockAcquisitionError);
-
-    expect(fn).not.toHaveBeenCalled();
-  });
-
-  test("identity-query failure after connect is a typed acquisition error, callback never runs", async () => {
-    const owner = new FakeClient({
-      query: async (text) => {
-        if (text.includes("pg_backend_pid")) {
-          throw new Error("identity query failed");
+      withClusterDdlLock(BOOTSTRAP_URL, fn, {
+        env: {} as NodeJS.ProcessEnv,
+        createLockClient: (connectionString) =>
+          cluster.createClient(connectionString, {
+            connect: () => {
+              throw new Error("ECONNREFUSED");
+            }
+          }),
+        createDdlClient: (connectionString) => {
+          ddlClientsCreated += 1;
+          return cluster.createClient(connectionString);
         }
-        return { rows: [{}] };
-      }
-    });
-    const fn = vi.fn(async () => "unreachable");
-
-    await expect(
-      withClusterDdlLock("postgres://u:p@h:5432/jarv1s", fn, {
-        createOwnerClient: () => owner,
-        createProbeClient: () => createProbe().probe
       })
     ).rejects.toBeInstanceOf(ClusterDdlLockAcquisitionError);
 
     expect(fn).not.toHaveBeenCalled();
-    expect(owner.endCalls).toBe(1);
+    expect(ddlClientsCreated).toBe(0);
   });
 
-  test("successful acquisition invokes the callback exactly once with the owner client", async () => {
-    const owner = createWorkingOwner();
-    const { probe } = createProbe();
-    const fn = vi.fn(async (client: ClusterDdlLockClient) => {
-      expect(client).toBe(owner);
+  test("a DDL-session connect failure releases the lock and never runs the callback", async () => {
+    const cluster = new FakePgCluster();
+    const fn = vi.fn(async () => "unreachable");
+
+    const error = await withClusterDdlLock(BOOTSTRAP_URL, fn, {
+      env: {} as NodeJS.ProcessEnv,
+      createLockClient: (connectionString) => cluster.createClient(connectionString),
+      createDdlClient: (connectionString) =>
+        cluster.createClient(connectionString, {
+          connect: () => {
+            throw new Error("ddl connect refused");
+          }
+        })
+    }).catch((cause: unknown) => cause);
+
+    expect(error).toBeInstanceOf(ClusterDdlLockAcquisitionError);
+    expect((error as ClusterDdlLockAcquisitionError).cause).toMatchObject({
+      message: "ddl connect refused"
+    });
+    expect(fn).not.toHaveBeenCalled();
+    expect(maintenanceHolder(cluster)).toBeUndefined();
+
+    // No residue: the next invocation on the same cluster acquires immediately.
+    const follower = createFakeClusterHarness({ cluster });
+    await expect(
+      withClusterDdlLock(BOOTSTRAP_URL, async () => "follower", follower.options)
+    ).resolves.toBe("follower");
+  });
+
+  test("an identity-query failure is an acquisition error and ends every opened session once", async () => {
+    const cluster = new FakePgCluster();
+    const fn = vi.fn(async () => "unreachable");
+    let ddlClientsCreated = 0;
+    const lockClient = cluster.createClient(getClusterLockDatabaseUrl(BOOTSTRAP_URL, {}), {
+      query: (text) =>
+        text.includes("pg_backend_pid")
+          ? Promise.reject(new Error("identity query failed"))
+          : undefined
+    });
+
+    await expect(
+      withClusterDdlLock(BOOTSTRAP_URL, fn, {
+        env: {} as NodeJS.ProcessEnv,
+        createLockClient: () => lockClient,
+        createDdlClient: (connectionString) => {
+          ddlClientsCreated += 1;
+          return cluster.createClient(connectionString);
+        }
+      })
+    ).rejects.toBeInstanceOf(ClusterDdlLockAcquisitionError);
+
+    expect(fn).not.toHaveBeenCalled();
+    expect(lockClient.endCalls).toBe(1);
+    expect(ddlClientsCreated).toBe(0);
+  });
+});
+
+describe("the success path", () => {
+  test("every callback statement runs on the DDL session while our lock session holds the lock", async () => {
+    const harness = createFakeClusterHarness();
+    const fn = vi.fn(async (client: { query: (text: string) => Promise<unknown> }) => {
+      await client.query("CREATE ROLE demo");
+      await client.query("GRANT CREATE ON SCHEMA app TO demo");
       return "ok";
     });
 
-    const result = await withClusterDdlLock("postgres://u:p@h:5432/jarv1s", fn, {
-      createOwnerClient: () => owner,
-      createProbeClient: () => probe
-    });
-
-    expect(result).toBe("ok");
+    await expect(withClusterDdlLock(BOOTSTRAP_URL, fn, harness.options)).resolves.toBe("ok");
     expect(fn).toHaveBeenCalledTimes(1);
-  });
 
-  test("owner connection error while the callback is in flight yields a liveness-lost error", async () => {
-    const owner = createWorkingOwner();
-    const { probe } = createProbe();
-
-    const fn = () =>
-      new Promise<string>((_resolve, reject) => {
-        setTimeout(() => {
-          owner.emitError(new Error("connection terminated unexpectedly"));
-        }, 5);
-        // fn never settles on its own — only the connection-error path should resolve this call.
-        setTimeout(() => reject(new Error("test callback should not out-race liveness")), 500);
-      });
-
-    const promise = withClusterDdlLock("postgres://u:p@h:5432/jarv1s", fn, {
-      createOwnerClient: () => owner,
-      createProbeClient: () => probe,
-      livenessIntervalMs: 1000
-    });
-
-    await expect(promise).rejects.toBeInstanceOf(ClusterDdlLockLivenessLostError);
-  });
-
-  test("heartbeat probe losing the owner during an idle callback is detected within one interval", async () => {
-    const owner = createWorkingOwner();
-    const { probe, markGone } = createProbe();
-
-    const fn = () => new Promise<string>(() => {}); // idle forever; only the probe can end this
-
-    const promise = withClusterDdlLock("postgres://u:p@h:5432/jarv1s", fn, {
-      createOwnerClient: () => owner,
-      createProbeClient: () => probe,
-      livenessIntervalMs: 50
-    });
-
-    setTimeout(markGone, 5);
-
-    const start = Date.now();
-    await expect(promise).rejects.toBeInstanceOf(ClusterDdlLockLivenessLostError);
-    expect(Date.now() - start).toBeLessThan(500);
-  });
-
-  test("heartbeat probe query failure (e.g. restart) is classified as liveness loss", async () => {
-    const owner = createWorkingOwner();
-    const { probe, failNextQuery } = createProbe();
-
-    const fn = () => new Promise<string>(() => {});
-
-    const promise = withClusterDdlLock("postgres://u:p@h:5432/jarv1s", fn, {
-      createOwnerClient: () => owner,
-      createProbeClient: () => probe,
-      livenessIntervalMs: 50
-    });
-
-    setTimeout(
-      () => failNextQuery(new Error("terminating connection due to administrator command")),
-      5
+    const { cluster, lock, ddl } = harness;
+    const callbackStatements = cluster.log.filter(
+      (event) => event.kind === "statement" && event.pid === ddl.pid
+    );
+    expect(callbackStatements.map((event) => event.text)).toEqual([
+      "CREATE ROLE demo",
+      "GRANT CREATE ON SCHEMA app TO demo"
+    ]);
+    expect(callbackStatements.every((event) => event.db === "jarv1s")).toBe(true);
+    // The serialization claim itself: our lock session held the maintenance lock for each one.
+    expect(callbackStatements.every((event) => event.maintenanceLockHolderPid === lock.pid)).toBe(
+      true
     );
 
-    await expect(promise).rejects.toBeInstanceOf(ClusterDdlLockLivenessLostError);
+    const acquires = cluster.log.filter((event) => event.kind === "acquire");
+    const unlocks = cluster.log.filter((event) => event.kind === "unlock");
+    expect(acquires.map((event) => event.pid)).toEqual([lock.pid]);
+    expect(unlocks.map((event) => event.pid)).toEqual([lock.pid]);
+
+    const acquireIndex = cluster.log.findIndex((event) => event.kind === "acquire");
+    const unlockIndex = cluster.log.findIndex((event) => event.kind === "unlock");
+    const firstStatement = cluster.log.findIndex(
+      (event) => event.kind === "statement" && event.pid === ddl.pid
+    );
+    const lastStatement = cluster.log.reduce(
+      (last, event, index) =>
+        event.kind === "statement" && event.pid === ddl.pid ? index : last,
+      -1
+    );
+    expect(acquireIndex).toBeLessThan(firstStatement);
+    expect(lastStatement).toBeLessThan(unlockIndex);
   });
 
-  test("synchronous callback throw propagates un-wrapped and cleanup still runs", async () => {
-    const owner = createWorkingOwner();
-    const { probe } = createProbe();
-    const fn = () => {
-      throw new Error("boom");
-    };
+  test("success releases exactly once, ends both sessions, and leaves no lock residue", async () => {
+    const harness = createFakeClusterHarness();
 
+    await withClusterDdlLock(
+      BOOTSTRAP_URL,
+      async (client) => {
+        await client.query("ALTER ROLE demo NOLOGIN");
+      },
+      harness.options
+    );
+
+    expect(harness.lock.texts.filter((text) => text.includes("pg_advisory_unlock"))).toHaveLength(
+      1
+    );
+    expect(harness.lock.endCalls).toBe(1);
+    expect(harness.ddl.endCalls).toBe(1);
+    expect(maintenanceHolder(harness.cluster)).toBeUndefined();
+
+    const follower = createFakeClusterHarness({ cluster: harness.cluster });
     await expect(
-      withClusterDdlLock("postgres://u:p@h:5432/jarv1s", fn, {
-        createOwnerClient: () => owner,
-        createProbeClient: () => probe
-      })
-    ).rejects.toThrow("boom");
+      withClusterDdlLock(BOOTSTRAP_URL, async () => "follower", follower.options)
+    ).resolves.toBe("follower");
+  });
+});
 
-    expect(owner.queryCalls.some((c) => c.text.includes("pg_advisory_unlock"))).toBe(true);
-    expect(owner.endCalls).toBe(1);
+describe("liveness detection", () => {
+  test("a lock-session 'error' event mid-callback is liveness loss, and never unlocks", async () => {
+    const harness = createFakeClusterHarness();
+    const promise = withClusterDdlLock(BOOTSTRAP_URL, () => never<string>(), harness.options);
+    await flush();
+
+    harness.cluster.killBackend(harness.lock.pid);
+    const error = await promise.catch((cause: unknown) => cause);
+
+    expect(error).toBeInstanceOf(ClusterDdlLockLivenessLostError);
+    expect((error as ClusterDdlLockLivenessLostError).signal).toBe("connection-error");
+    expect((error as ClusterDdlLockLivenessLostError).ownerPid).toBe(harness.lock.pid);
+    expect(harness.lock.texts.some((text) => text.includes("pg_advisory_unlock"))).toBe(false);
+    expect(harness.lock.endCalls).toBe(1);
+    expect(harness.ddl.endCalls).toBe(1);
   });
 
-  test("callback rejection concurrent with connection loss combines into an AggregateError", async () => {
-    const owner = createWorkingOwner();
-    const { probe } = createProbe();
+  test("the heartbeat detects a silently dead lock backend during an idle callback", async () => {
+    const harness = createFakeClusterHarness({ livenessIntervalMs: 50 });
+    const promise = withClusterDdlLock(BOOTSTRAP_URL, () => never<string>(), harness.options);
+    await flush();
 
-    const fn = () =>
-      new Promise<string>((_resolve, reject) => {
-        owner.emitError(new Error("connection terminated unexpectedly"));
-        reject(new Error("callback also failed"));
-      });
+    // emitError: false — the driver pushes nothing, so only the heartbeat can find this.
+    const killedAt = Date.now();
+    harness.cluster.killBackend(harness.lock.pid, { emitError: false });
+    const error = await promise.catch((cause: unknown) => cause);
 
-    const outcome = await withClusterDdlLock("postgres://u:p@h:5432/jarv1s", fn, {
-      createOwnerClient: () => owner,
-      createProbeClient: () => probe,
-      livenessIntervalMs: 1000
-    }).catch((error: unknown) => error);
+    expect(error).toBeInstanceOf(ClusterDdlLockLivenessLostError);
+    expect((error as ClusterDdlLockLivenessLostError).signal).toBe("heartbeat");
+    // Documented bound: <= 2 x livenessIntervalMs plus scheduler jitter.
+    expect(Date.now() - killedAt).toBeLessThan(2 * 50 + 400);
+  });
+
+  test("a heartbeat query rejection is liveness loss", async () => {
+    let failHeartbeat = false;
+    const harness = createFakeClusterHarness({
+      livenessIntervalMs: 50,
+      lockBehavior: {
+        query: (text) =>
+          failHeartbeat && text === "SELECT 1"
+            ? Promise.reject(new Error("terminating connection due to administrator command"))
+            : undefined
+      }
+    });
+    const promise = withClusterDdlLock(BOOTSTRAP_URL, () => never<string>(), harness.options);
+    setTimeout(() => {
+      failHeartbeat = true;
+    }, 5);
+
+    const error = await promise.catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(ClusterDdlLockLivenessLostError);
+    expect((error as ClusterDdlLockLivenessLostError).signal).toBe("heartbeat");
+  });
+
+  test("a heartbeat that never settles before the next tick is liveness loss", async () => {
+    // The hang/partition case: nothing rejects, so a rejection-only implementation waits forever.
+    const harness = createFakeClusterHarness({
+      livenessIntervalMs: 50,
+      lockBehavior: {
+        query: (text) => (text === "SELECT 1" ? never<{ rows: unknown[] }>() : undefined)
+      }
+    });
+
+    const startedAt = Date.now();
+    const error = await withClusterDdlLock(
+      BOOTSTRAP_URL,
+      () => never<string>(),
+      harness.options
+    ).catch((cause: unknown) => cause);
+
+    expect(error).toBeInstanceOf(ClusterDdlLockLivenessLostError);
+    expect((error as ClusterDdlLockLivenessLostError).signal).toBe("heartbeat");
+    expect(Date.now() - startedAt).toBeGreaterThanOrEqual(50);
+  });
+
+  test("the final check rejects a callback that fulfilled after its lock session died", async () => {
+    const harness = createFakeClusterHarness();
+
+    const error = await withClusterDdlLock(
+      BOOTSTRAP_URL,
+      async (client) => {
+        await client.query("LAST DDL");
+        harness.cluster.killBackend(harness.lock.pid, { emitError: false });
+        return "must-never-be-reported";
+      },
+      harness.options
+    ).catch((cause: unknown) => cause);
+
+    expect(error).toBeInstanceOf(ClusterDdlLockLivenessLostError);
+    expect((error as ClusterDdlLockLivenessLostError).signal).toBe("final-check");
+  });
+});
+
+describe("the guarded DDL client", () => {
+  test("fails closed: a query issued after recorded loss never reaches the wire", async () => {
+    const harness = createFakeClusterHarness();
+    let guardRejection: unknown;
+
+    const outcome = await withClusterDdlLock(
+      BOOTSTRAP_URL,
+      async (client) => {
+        await client.query("BEFORE LOSS");
+        harness.cluster.killBackend(harness.lock.pid);
+        guardRejection = await client.query("AFTER LOSS").catch((cause: unknown) => cause);
+        throw guardRejection;
+      },
+      harness.options
+    ).catch((cause: unknown) => cause);
+
+    expect(guardRejection).toBeInstanceOf(ClusterDdlLockLivenessLostError);
+    expect(harness.cluster.log.some((event) => event.text === "AFTER LOSS")).toBe(false);
+    // The callback rethrew the guard's own liveness error: reported alone, not self-aggregated.
+    expect(outcome).toBe(guardRejection);
+    expect(outcome).not.toBeInstanceOf(AggregateError);
+  });
+
+  test("a statement in flight when the lock dies rejects, and its late result never surfaces", async () => {
+    let completeSlow: (result: { rows: unknown[] }) => void = () => {};
+    const slow = new Promise<{ rows: unknown[] }>((resolve) => {
+      completeSlow = resolve;
+    });
+    const harness = createFakeClusterHarness({
+      ddlBehavior: { query: (text) => (text === "SLOW DDL" ? slow : undefined) }
+    });
+
+    let observed: unknown;
+    await withClusterDdlLock(
+      BOOTSTRAP_URL,
+      async (client) => {
+        const pending = client.query("SLOW DDL");
+        setTimeout(() => harness.cluster.killBackend(harness.lock.pid), 5);
+        setTimeout(() => completeSlow({ rows: [{ late: true }] }), 25);
+        observed = await pending.catch((cause: unknown) => cause);
+        throw observed;
+      },
+      harness.options
+    ).catch(() => {});
+
+    expect(observed).toBeInstanceOf(ClusterDdlLockLivenessLostError);
+  });
+
+  test("DDL-session death is an ordinary callback failure, not liveness loss", async () => {
+    const harness = createFakeClusterHarness({
+      ddlBehavior: {
+        query: (text) => (text === "SLOW DDL" ? never<{ rows: unknown[] }>() : undefined)
+      }
+    });
+
+    const error = await withClusterDdlLock(
+      BOOTSTRAP_URL,
+      async (client) => {
+        setTimeout(() => harness.cluster.killBackend(harness.ddl.pid), 5);
+        return await client.query("SLOW DDL");
+      },
+      harness.options
+    ).catch((cause: unknown) => cause);
+
+    expect(error).not.toBeInstanceOf(ClusterDdlLockLivenessLostError);
+    expect((error as Error).message).toBe("Connection terminated unexpectedly");
+    // The lock session was never in trouble, so it released cleanly.
+    expect(harness.lock.texts.some((text) => text.includes("pg_advisory_unlock"))).toBe(true);
+    expect(maintenanceHolder(harness.cluster)).toBeUndefined();
+
+    const follower = createFakeClusterHarness({ cluster: harness.cluster });
+    await expect(
+      withClusterDdlLock(BOOTSTRAP_URL, async () => "follower", follower.options)
+    ).resolves.toBe("follower");
+  });
+});
+
+describe("error combination", () => {
+  test("an independent callback failure concurrent with liveness loss aggregates both", async () => {
+    const harness = createFakeClusterHarness();
+
+    const outcome = await withClusterDdlLock(
+      BOOTSTRAP_URL,
+      async () => {
+        harness.cluster.killBackend(harness.lock.pid);
+        throw new Error("callback also failed");
+      },
+      harness.options
+    ).catch((cause: unknown) => cause);
 
     expect(outcome).toBeInstanceOf(AggregateError);
     const errors = (outcome as AggregateError).errors;
-    expect(errors.some((e) => e instanceof ClusterDdlLockLivenessLostError)).toBe(true);
-    expect(errors.some((e) => e instanceof Error && e.message === "callback also failed")).toBe(
-      true
-    );
+    expect(errors.some((error) => error instanceof ClusterDdlLockLivenessLostError)).toBe(true);
+    expect(
+      errors.some((error) => error instanceof Error && error.message === "callback also failed")
+    ).toBe(true);
   });
 
-  test("cleanup failure after a successful callback is reported, not swallowed", async () => {
-    const owner = createWorkingOwner({
-      query: async (text) => {
-        if (text.includes("pg_backend_pid")) {
-          return { rows: [{ pid: OWNER_PID }] };
-        }
-        if (text.includes("pg_advisory_unlock")) {
-          throw new Error("unlock failed");
-        }
-        return { rows: [{}] };
+  test("a cleanup failure after a successful callback is reported, not swallowed", async () => {
+    const harness = createFakeClusterHarness({
+      lockBehavior: {
+        query: (text) =>
+          text.includes("pg_advisory_unlock")
+            ? Promise.reject(new Error("unlock failed"))
+            : undefined
       }
     });
-    const { probe } = createProbe();
 
     await expect(
-      withClusterDdlLock("postgres://u:p@h:5432/jarv1s", async () => "ok", {
-        createOwnerClient: () => owner,
-        createProbeClient: () => probe
-      })
+      withClusterDdlLock(BOOTSTRAP_URL, async () => "ok", harness.options)
     ).rejects.toBeInstanceOf(ClusterDdlLockCleanupError);
   });
 
-  test("callback rejection plus cleanup failure combines into an AggregateError", async () => {
-    const owner = createWorkingOwner({
-      query: async (text) => {
-        if (text.includes("pg_backend_pid")) {
-          return { rows: [{ pid: OWNER_PID }] };
-        }
-        if (text.includes("pg_advisory_unlock")) {
-          throw new Error("unlock failed");
-        }
-        return { rows: [{}] };
+  test("a callback failure plus a cleanup failure preserves both members", async () => {
+    const harness = createFakeClusterHarness({
+      lockBehavior: {
+        query: (text) =>
+          text.includes("pg_advisory_unlock")
+            ? Promise.reject(new Error("unlock failed"))
+            : undefined
       }
     });
-    const { probe } = createProbe();
 
     const outcome = await withClusterDdlLock(
-      "postgres://u:p@h:5432/jarv1s",
+      BOOTSTRAP_URL,
       async () => {
         throw new Error("callback failed");
       },
-      { createOwnerClient: () => owner, createProbeClient: () => probe }
-    ).catch((error: unknown) => error);
+      harness.options
+    ).catch((cause: unknown) => cause);
 
     expect(outcome).toBeInstanceOf(AggregateError);
     const errors = (outcome as AggregateError).errors;
     expect(errors).toHaveLength(2);
-    expect(errors.some((e) => e instanceof Error && e.message === "callback failed")).toBe(true);
-    expect(errors.some((e) => e instanceof ClusterDdlLockCleanupError)).toBe(true);
+    expect(errors.some((error) => error instanceof Error && error.message === "callback failed")).toBe(
+      true
+    );
+    expect(errors.some((error) => error instanceof ClusterDdlLockCleanupError)).toBe(true);
   });
+});
 
-  test("normal success releases the advisory lock exactly once and ends the connection", async () => {
-    const owner = createWorkingOwner();
-    const { probe } = createProbe();
+describe("guard rails", () => {
+  test("a reentrant call is refused before any connection is attempted", async () => {
+    const harness = createFakeClusterHarness();
+    let nestedClientsCreated = 0;
 
-    await withClusterDdlLock("postgres://u:p@h:5432/jarv1s", async () => "ok", {
-      createOwnerClient: () => owner,
-      createProbeClient: () => probe
-    });
-
-    const unlockCalls = owner.queryCalls.filter((c) => c.text.includes("pg_advisory_unlock"));
-    expect(unlockCalls).toHaveLength(1);
-    expect(owner.endCalls).toBe(1);
-  });
-
-  test("liveness-lost cleanup does not attempt pg_advisory_unlock on the dead connection", async () => {
-    const owner = createWorkingOwner();
-    const { probe } = createProbe();
-
-    const fn = () =>
-      new Promise<string>(() => {
-        owner.emitError(new Error("connection terminated unexpectedly"));
-      });
-
-    await withClusterDdlLock("postgres://u:p@h:5432/jarv1s", fn, {
-      createOwnerClient: () => owner,
-      createProbeClient: () => probe,
-      livenessIntervalMs: 1000
-    }).catch(() => {});
-
-    expect(owner.queryCalls.some((c) => c.text.includes("pg_advisory_unlock"))).toBe(false);
-    expect(owner.endCalls).toBe(1);
-  });
-
-  test("a nested/reentrant call from the same process is refused before any connect()", async () => {
-    const owner = createWorkingOwner();
-    const { probe } = createProbe();
-    const connectSpy = vi.fn(async () => {});
-    const nestedConnectSpy = vi.fn(async () => {});
-
-    let releaseFirst: () => void = () => {};
+    let releaseOuter: () => void = () => {};
     const gate = new Promise<void>((resolve) => {
-      releaseFirst = resolve;
+      releaseOuter = resolve;
     });
 
     const outer = withClusterDdlLock(
-      "postgres://u:p@h:5432/jarv1s",
+      BOOTSTRAP_URL,
       async () => {
         await gate;
         return "outer-done";
       },
-      {
-        createOwnerClient: () => Object.assign(owner, { connect: connectSpy }),
-        createProbeClient: () => probe
-      }
+      harness.options
     );
+    await flush();
 
-    const nestedOwner = createWorkingOwner();
     await expect(
-      withClusterDdlLock("postgres://u:p@h:5432/jarv1s", async () => "nested", {
-        createOwnerClient: () => Object.assign(nestedOwner, { connect: nestedConnectSpy }),
-        createProbeClient: () => createProbe().probe
+      withClusterDdlLock(BOOTSTRAP_URL, async () => "nested", {
+        env: {} as NodeJS.ProcessEnv,
+        createLockClient: (connectionString) => {
+          nestedClientsCreated += 1;
+          return harness.cluster.createClient(connectionString);
+        },
+        createDdlClient: (connectionString) => {
+          nestedClientsCreated += 1;
+          return harness.cluster.createClient(connectionString);
+        }
       })
     ).rejects.toBeInstanceOf(ClusterDdlLockReentrancyError);
+    expect(nestedClientsCreated).toBe(0);
 
-    expect(nestedConnectSpy).not.toHaveBeenCalled();
-
-    releaseFirst();
+    releaseOuter();
     await expect(outer).resolves.toBe("outer-done");
   });
 
-  test("a diagnostic sink that throws never alters the outcome", async () => {
-    const owner = createWorkingOwner();
-    const { probe } = createProbe();
-
-    const result = await withClusterDdlLock("postgres://u:p@h:5432/jarv1s", async () => "ok", {
-      createOwnerClient: () => owner,
-      createProbeClient: () => probe,
-      onDiagnostic: () => {
-        throw new Error("sink exploded");
+  test("livenessIntervalMs outside [50, 5000] is rejected before any client is created", async () => {
+    const cluster = new FakePgCluster();
+    let clientsCreated = 0;
+    const counting: WithClusterDdlLockOptions = {
+      env: {} as NodeJS.ProcessEnv,
+      createLockClient: (connectionString) => {
+        clientsCreated += 1;
+        return cluster.createClient(connectionString);
+      },
+      createDdlClient: (connectionString) => {
+        clientsCreated += 1;
+        return cluster.createClient(connectionString);
       }
-    });
-
-    expect(result).toBe("ok");
-  });
-
-  test("livenessIntervalMs outside [50, 5000] is rejected before any connection is attempted", async () => {
-    const connectSpy = vi.fn(async () => {});
-    const owner = new FakeClient({ connect: connectSpy });
+    };
 
     await expect(
-      withClusterDdlLock("postgres://u:p@h:5432/jarv1s", async () => "unreachable", {
-        createOwnerClient: () => owner,
-        createProbeClient: () => createProbe().probe,
+      withClusterDdlLock(BOOTSTRAP_URL, async () => "unreachable", {
+        ...counting,
         livenessIntervalMs: 10
       })
     ).rejects.toThrow(/livenessIntervalMs/);
-    expect(connectSpy).not.toHaveBeenCalled();
-
     await expect(
-      withClusterDdlLock("postgres://u:p@h:5432/jarv1s", async () => "unreachable", {
-        createOwnerClient: () => owner,
-        createProbeClient: () => createProbe().probe,
+      withClusterDdlLock(BOOTSTRAP_URL, async () => "unreachable", {
+        ...counting,
         livenessIntervalMs: 10_000
       })
     ).rejects.toThrow(/livenessIntervalMs/);
-    expect(connectSpy).not.toHaveBeenCalled();
+    expect(clientsCreated).toBe(0);
+  });
+});
+
+describe("diagnostics", () => {
+  test("a sink that throws never alters the outcome", async () => {
+    const harness = createFakeClusterHarness();
+
+    await expect(
+      withClusterDdlLock(BOOTSTRAP_URL, async () => "ok", {
+        ...harness.options,
+        onDiagnostic: () => {
+          throw new Error("sink exploded");
+        }
+      })
+    ).resolves.toBe("ok");
+  });
+
+  test("the success path emits acquired, then any heartbeats, then released", async () => {
+    const harness = createFakeClusterHarness({ livenessIntervalMs: 50 });
+    const events: ClusterDdlLockDiagnosticEvent[] = [];
+
+    await withClusterDdlLock(
+      BOOTSTRAP_URL,
+      async (client) => {
+        await new Promise((resolve) => setTimeout(resolve, 120));
+        await client.query("DDL");
+      },
+      { ...harness.options, onDiagnostic: (event) => events.push(event) }
+    );
+
+    expect(events[0]).toEqual({ type: "acquired", ownerPid: harness.lock.pid });
+    expect(events.at(-1)).toEqual({ type: "released", released: true });
+    const heartbeats = events.slice(1, -1);
+    expect(heartbeats.length).toBeGreaterThan(0);
+    expect(heartbeats.every((event) => event.type === "heartbeat")).toBe(true);
+  });
+
+  test("the liveness-loss path never reports a release", async () => {
+    const harness = createFakeClusterHarness();
+    const events: ClusterDdlLockDiagnosticEvent[] = [];
+
+    const promise = withClusterDdlLock(BOOTSTRAP_URL, () => never<string>(), {
+      ...harness.options,
+      onDiagnostic: (event) => events.push(event)
+    });
+    await flush();
+    harness.cluster.killBackend(harness.lock.pid);
+    await promise.catch(() => {});
+
+    expect(events.some((event) => event.type === "released")).toBe(false);
   });
 });
 

@@ -361,7 +361,7 @@ export async function purgeModule(
   await client.query("DELETE FROM app.module_installs WHERE module_id = $1", [moduleId]);
 
   // 4. Roles. Roles are cluster-global, so this block — and only this block — runs under the
-  // #1632 cluster-DDL lock, on that lock's own owner session (`lockClient`) rather than the
+  // #1632 cluster-DDL lock, on that lock's guarded DDL session (`lockClient`) rather than the
   // reconcile run's connection. The install role re-grants schema USAGE + the RLS-predicate
   // function's EXECUTE onward to the runtime role using its own GRANT OPTION
   // (module-role-broker.ts's ensureModuleRoles) — those two ACL entries are recorded with

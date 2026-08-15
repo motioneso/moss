@@ -1,7 +1,8 @@
 // #1632: a module purge drops cluster-global Postgres roles. Only that final REVOKE/DROP ROLE
-// block runs under the cluster-DDL lock — on the lock's own owner session — while the rest of the
-// purge (table drops, journal deletes, the purge mark) stays on the reconcile run's client, which
-// holds the separate, unrelated `jarv1s:module-reconcile` advisory lock for the whole run.
+// block runs under the cluster-DDL lock — on the lock's DDL session, while a separate lock session
+// holds the advisory lock on the maintenance database — while the rest of the purge (table drops,
+// journal deletes, the purge mark) stays on the reconcile run's client, which holds the separate,
+// unrelated `jarv1s:module-reconcile` advisory lock for the whole run.
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,7 +11,7 @@ import type { Client } from "pg";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { purgeModule } from "../../scripts/module-reconcile.js";
-import { createFakeLockHarness } from "../../packages/db/src/__tests__/fake-lock-client.js";
+import { createFakeClusterHarness } from "../../packages/db/src/__tests__/fake-pg-cluster.js";
 
 const BOOTSTRAP_URL = "postgres://postgres:rootpw@db:5432/moss";
 const MODULE_ID = "demo-module";
@@ -39,9 +40,9 @@ afterEach(async () => {
 });
 
 describe("purgeModule role teardown", () => {
-  it("runs the role REVOKE/DROP block on the lock-owner session, not the reconcile client", async () => {
+  it("runs the role REVOKE/DROP block on the lock's DDL session, not the reconcile client", async () => {
     const outer = new RecordingReconcileClient();
-    const harness = createFakeLockHarness();
+    const harness = createFakeClusterHarness();
 
     await purgeModule(
       outer as unknown as Client,
@@ -51,9 +52,9 @@ describe("purgeModule role teardown", () => {
       harness.options
     );
 
-    const lockTexts = harness.owner.texts;
-    expect(lockTexts[0]).toContain("pg_advisory_lock");
-    expect(lockTexts.at(-1)).toContain("pg_advisory_unlock");
+    const lockTexts = harness.ddl.texts;
+    expect(harness.lock.texts[0]).toContain("pg_advisory_lock");
+    expect(harness.lock.texts.at(-1)).toContain("pg_advisory_unlock");
     expect(lockTexts.some((t) => t.includes("REVOKE GRANT OPTION FOR USAGE ON SCHEMA app"))).toBe(
       true
     );
@@ -78,7 +79,7 @@ describe("purgeModule role teardown", () => {
 
   it("keeps the non-role purge steps on the reconcile client, with the purge mark deleted last", async () => {
     const outer = new RecordingReconcileClient();
-    const harness = createFakeLockHarness();
+    const harness = createFakeClusterHarness();
 
     await purgeModule(
       outer as unknown as Client,
@@ -96,13 +97,14 @@ describe("purgeModule role teardown", () => {
 
   it("rejects an invalid module id before touching either connection", async () => {
     const outer = new RecordingReconcileClient();
-    const harness = createFakeLockHarness();
+    const harness = createFakeClusterHarness();
 
     await expect(
       purgeModule(outer as unknown as Client, modulesDir, "Bad_Id", BOOTSTRAP_URL, harness.options)
     ).rejects.toThrow(/invalid module id/);
 
     expect(outer.texts).toHaveLength(0);
-    expect(harness.owner.queries).toHaveLength(0);
+    expect(harness.lockClients).toHaveLength(0);
+    expect(harness.ddlClients).toHaveLength(0);
   });
 });

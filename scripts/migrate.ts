@@ -23,8 +23,9 @@ const migrationsDirectory = join(root, "infra/postgres/migrations");
 const grantsDirectory = join(root, "infra/postgres/grants");
 
 // The bootstrap directory creates cluster-global objects (roles, extensions), so it runs under
-// the #1632 cluster-DDL lock — on that lock's own session, so a dead lock holder can never leave
-// this DDL running unserialized. The grants directory below is database-local and stays unlocked.
+// the #1632 cluster-DDL lock — on that lock's guarded DDL session, whose statements stop the
+// instant the lock-holding session dies, so this DDL can never run unserialized. The grants
+// directory below is database-local and stays unlocked.
 await withClusterDdlLock(urls.bootstrap, (client) =>
   runSqlFilesWithClient(client, bootstrapDirectory)
 );

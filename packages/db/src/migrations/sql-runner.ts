@@ -122,15 +122,15 @@ export async function runSqlFiles(connectionString: string, directory: string): 
 }
 
 /** The minimum a client must offer to execute SQL files — satisfied by both `pg.Client` and the
- * cluster-DDL lock's owner client, so a caller can run these files on a lock-holding session. */
+ * cluster-DDL lock's guarded DDL session, so a caller can run these files under the lock. */
 export interface SqlFileClient {
   query(text: string): Promise<unknown>;
 }
 
 /**
  * The file loop of {@link runSqlFiles}, running on a caller-owned connection. Never connects or
- * ends the client: #1632's cluster-DDL lock hands its own lock-holding session in here so the
- * bootstrap DDL and the advisory lock share one backend.
+ * ends the client: #1632's cluster-DDL lock hands in its guarded DDL session, whose statements are
+ * refused the moment the separate lock-holding session's liveness is lost.
  */
 export async function runSqlFilesWithClient(
   client: SqlFileClient,
