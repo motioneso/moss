@@ -339,8 +339,7 @@ describe("the success path", () => {
       (event) => event.kind === "statement" && event.pid === ddl.pid
     );
     const lastStatement = cluster.log.reduce(
-      (last, event, index) =>
-        event.kind === "statement" && event.pid === ddl.pid ? index : last,
+      (last, event, index) => (event.kind === "statement" && event.pid === ddl.pid ? index : last),
       -1
     );
     expect(acquireIndex).toBeLessThan(firstStatement);
@@ -599,9 +598,9 @@ describe("error combination", () => {
     expect(outcome).toBeInstanceOf(AggregateError);
     const errors = (outcome as AggregateError).errors;
     expect(errors).toHaveLength(2);
-    expect(errors.some((error) => error instanceof Error && error.message === "callback failed")).toBe(
-      true
-    );
+    expect(
+      errors.some((error) => error instanceof Error && error.message === "callback failed")
+    ).toBe(true);
     expect(errors.some((error) => error instanceof ClusterDdlLockCleanupError)).toBe(true);
   });
 });

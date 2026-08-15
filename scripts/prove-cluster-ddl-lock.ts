@@ -194,10 +194,14 @@ async function runOwnerLossIteration(
 
   const followerDiagnostics: ClusterDdlLockDiagnosticEvent[] = [];
   try {
-    await withClusterDdlLock(bootstrapUrl, async (client) => void (await client.query("SELECT 1")), {
-      livenessIntervalMs,
-      onDiagnostic: suppressedSink(followerDiagnostics)
-    });
+    await withClusterDdlLock(
+      bootstrapUrl,
+      async (client) => void (await client.query("SELECT 1")),
+      {
+        livenessIntervalMs,
+        onDiagnostic: suppressedSink(followerDiagnostics)
+      }
+    );
     trials.push({
       ok: true,
       detail: `iteration ${iteration} follower acquired after lock-session death`,
@@ -388,7 +392,8 @@ async function main(): Promise<void> {
   const bootstrapUrl = getMossDatabaseUrls().bootstrap;
 
   if (mode === "cross-db-lane") {
-    if (!laneDatabase) throw new Error("--mode=cross-db-lane requires --lane-db=<scratch database>");
+    if (!laneDatabase)
+      throw new Error("--mode=cross-db-lane requires --lane-db=<scratch database>");
     await runCrossDbLane(bootstrapUrl, laneDatabase);
     return;
   }

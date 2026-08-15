@@ -40,7 +40,7 @@ lease-loss path and its race semantics specified and tested.**
   its own bootstrap URL, the locktag's database OID is identical across lanes → true
   cluster-wide mutual exclusion, restoring invariant (a).
 - **DDL session** — connects to `bootstrapConnectionString` unmodified (the caller's real target
-  DB). `fn` receives a *guarded* view of this session and runs all protected DDL on it →
+  DB). `fn` receives a _guarded_ view of this session and runs all protected DDL on it →
   invariant (b). No statement_timeout is set on it (bootstrap SQL may be long); acquisition
   `lockTimeoutMs` applies to the lock session only, as today.
 
@@ -71,8 +71,8 @@ Three detection channels, all raising `ClusterDdlLockLivenessLostError` with a d
 auto-reconnect, and a session-level advisory lock is held exactly as long as its backend lives.
 So if the final check succeeds, the lock session's backend was alive continuously from
 acquisition through the last statement `fn` committed — meaning every committed statement
-executed under the lock. Heartbeats bound *detection latency* for early abort; the final check
-is the *serialization proof* for any run that reports success. A run whose lock died can
+executed under the lock. Heartbeats bound _detection latency_ for early abort; the final check
+is the _serialization proof_ for any run that reports success. A run whose lock died can
 therefore never report success (spec contract items 1–3).
 
 ### Race semantics across the two-session boundary
@@ -83,7 +83,7 @@ Let T be the instant liveness loss is recorded.
   argument; if loss is detected mid-run, those commits still happened under the lock, and the
   run reports the typed liveness error, never success).
 - **New statements after T**: the client handed to `fn` is a guard around the DDL session. Each
-  `query()` checks the liveness state *before* issuing; once loss is recorded it rejects
+  `query()` checks the liveness state _before_ issuing; once loss is recorded it rejects
   synchronously with the same `ClusterDdlLockLivenessLostError` and the statement never reaches
   the wire. Fail closed at the statement boundary (contract item 3).
 - **The statement in flight at T**: its promise is raced against the liveness-loss promise; if
@@ -95,7 +95,7 @@ Let T be the instant liveness loss is recorded.
   plan does not wrap `fn` in a transaction because callers manage their own transactions
   (`runSqlFilesWithClient` BEGIN/COMMITs per file) and a wrapper would change call-site
   semantics for no complete fix (a lock-check-then-COMMIT pair has the same gap).
-- **Outer settlement**: if `fn` was rejected *by the guard's own liveness error* (same error
+- **Outer settlement**: if `fn` was rejected _by the guard's own liveness error_ (same error
   instance, or an error whose `cause` chain contains it), throw the liveness error alone. Only
   when `fn` fails with an **independent** error concurrent with liveness loss does the helper
   throw `AggregateError([livenessError, callbackReason])` — preserving today's contract without
@@ -127,16 +127,16 @@ started; if the release also fails, `AggregateError([acquisition, cleanup])`).
 
 ## Seams check (file:line, verified on this branch at `f2f9dcd3d`)
 
-| Assumed capability                                       | Evidence                                                                                                                                              |
-| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Current primitive to modify in place                     | `packages/db/src/cluster-ddl-lock.ts` (all of it), exported via `packages/db/src/index.ts:2` (`export *`)                                              |
-| Maintenance-URL derivation to keep                       | `getClusterLockDatabaseUrl` — `cluster-ddl-lock.ts:104-113`, env override incl. MOSS/JARVIS precedence                                                 |
-| Six call sites use only `client.query(text[, params])`   | `role-bootstrap.ts:102-110`; `module-role-broker.ts:58-80,112-120,131-137`; `scripts/migrate.ts:28-30` (via `runSqlFilesWithClient`); `scripts/module-reconcile.ts:375-401` |
-| `runSqlFilesWithClient` accepts a minimal `{query}`      | `packages/db/src/migrations/sql-runner.ts:126-140` (`SqlFileClient`)                                                                                   |
-| Target-DB-scoped DDL forces the DDL session onto target  | broker GRANTs on `schema app` (`module-role-broker.ts:81-83`), reconcile `REVOKE … ON SCHEMA app` (`module-reconcile.ts:379-386`), bootstrap extensions |
-| Source-coverage guard to preserve                        | `tests/unit/cluster-ddl-lock-wiring.test.ts` — six-category guard, `new Client(` ban, migrate substring pins (all remain true under this design)        |
-| Caller fake harness to replace                           | `packages/db/src/__tests__/fake-lock-client.ts` (single owner+probe pair; cannot model per-database locktags — the coverage gap behind both bugs)       |
-| Proof harness to rework (not run)                        | `scripts/prove-cluster-ddl-lock.ts` — solo + single owner-loss trial; latency measured from run start, not kill instant                                 |
+| Assumed capability                                      | Evidence                                                                                                                                                                    |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Current primitive to modify in place                    | `packages/db/src/cluster-ddl-lock.ts` (all of it), exported via `packages/db/src/index.ts:2` (`export *`)                                                                   |
+| Maintenance-URL derivation to keep                      | `getClusterLockDatabaseUrl` — `cluster-ddl-lock.ts:104-113`, env override incl. MOSS/JARVIS precedence                                                                      |
+| Six call sites use only `client.query(text[, params])`  | `role-bootstrap.ts:102-110`; `module-role-broker.ts:58-80,112-120,131-137`; `scripts/migrate.ts:28-30` (via `runSqlFilesWithClient`); `scripts/module-reconcile.ts:375-401` |
+| `runSqlFilesWithClient` accepts a minimal `{query}`     | `packages/db/src/migrations/sql-runner.ts:126-140` (`SqlFileClient`)                                                                                                        |
+| Target-DB-scoped DDL forces the DDL session onto target | broker GRANTs on `schema app` (`module-role-broker.ts:81-83`), reconcile `REVOKE … ON SCHEMA app` (`module-reconcile.ts:379-386`), bootstrap extensions                     |
+| Source-coverage guard to preserve                       | `tests/unit/cluster-ddl-lock-wiring.test.ts` — six-category guard, `new Client(` ban, migrate substring pins (all remain true under this design)                            |
+| Caller fake harness to replace                          | `packages/db/src/__tests__/fake-lock-client.ts` (single owner+probe pair; cannot model per-database locktags — the coverage gap behind both bugs)                           |
+| Proof harness to rework (not run)                       | `scripts/prove-cluster-ddl-lock.ts` — solo + single owner-loss trial; latency measured from run start, not kill instant                                                     |
 
 Open questions: none.
 
@@ -156,7 +156,9 @@ export interface ClusterDdlSessionClient {
 }
 
 /** Unchanged shape (connect/query/end/on/removeListener) — now used for BOTH real sessions. */
-export interface ClusterDdlLockClient { /* as today, cluster-ddl-lock.ts:19-28 */ }
+export interface ClusterDdlLockClient {
+  /* as today, cluster-ddl-lock.ts:19-28 */
+}
 
 export type ClusterDdlLockLivenessSignal = "connection-error" | "heartbeat" | "final-check";
 
@@ -241,7 +243,7 @@ Semantics the fakes must honor (each is load-bearing for a test below):
 - `pg_backend_pid()` returns the session pid; `SELECT 1` and arbitrary DDL text are logged as
   statements with a snapshot of who currently holds the maintenance-DB lock (this is how tests
   assert "every DDL statement executed while OUR lock session held the lock").
-- A killed backend rejects the *currently in-flight* query too, not only future ones.
+- A killed backend rejects the _currently in-flight_ query too, not only future ones.
 
 Caller tests get a thin convenience (`createFakeClusterHarness()`) returning
 `{ cluster, options }` where `options` wires `createLockClient`/`createDdlClient` into one
@@ -258,12 +260,12 @@ Rewrite `packages/db/src/__tests__/cluster-ddl-lock.test.ts` on the fake cluster
 states behavior **and** why a broken implementation fails it.
 
 1. **Session targeting**: lock client is created with `getClusterLockDatabaseUrl(bootstrapUrl)`;
-   DDL client with `bootstrapUrl` unmodified. Fails against *either* prior bug — round 1 flipped
+   DDL client with `bootstrapUrl` unmodified. Fails against _either_ prior bug — round 1 flipped
    the DDL side, round 2 flipped the lock side; this pins both axes at once.
 2. **Cross-database exclusion (the centerpiece)**: two concurrent `withClusterDdlLock` calls on
-   one `FakePgCluster` with bootstrap URLs naming *different* target databases; assert strict
+   one `FakePgCluster` with bootstrap URLs naming _different_ target databases; assert strict
    A-then-B serialization from the global log (B's first DDL statement after A's unlock), and
-   that both lock sessions contended on the *same* (maintenance-db, key). Fails for any
+   that both lock sessions contended on the _same_ (maintenance-db, key). Fails for any
    per-target-DB locking scheme — the exact `d940eabf9` regression. (Concurrent calls come from
    two harness "lanes"; the process-local reentrancy flag is a DI-visible seam — the builder
    exposes it for tests via the existing options object or module reset, builder's choice, so
@@ -286,7 +288,7 @@ states behavior **and** why a broken implementation fails it.
    (`killBackend(lockPid)` while `fn` idles; assert rejection latency < documented bound, small
    real-timer interval as today).
 10. **Heartbeat query rejection** (e.g. restart-style error) → liveness loss, `signal:
-    "heartbeat"`.
+"heartbeat"`.
 11. **Heartbeat overrun**: previous beat unsettled when the next tick fires → liveness loss —
     the hang/partition case no prior design detected. Fails if the implementation only treats
     rejections as loss.
@@ -305,7 +307,7 @@ states behavior **and** why a broken implementation fails it.
     mid-`fn`; the original driver error propagates (no liveness wrapper), the lock releases
     cleanly on the live lock session, and a follow-up invocation acquires. Fails if the two
     sessions' failure classes are conflated.
-16. **AggregateError discipline**: (a) `fn` rejecting with an *independent* error concurrent
+16. **AggregateError discipline**: (a) `fn` rejecting with an _independent_ error concurrent
     with liveness loss → `AggregateError([liveness, callback])`; (b) `fn` rejecting with the
     guard's own liveness error → that liveness error alone, no self-aggregate.
 17. **Cleanup failures**: unlock failure after success + final check →
