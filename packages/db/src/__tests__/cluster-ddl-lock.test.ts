@@ -115,6 +115,33 @@ function createProbe(): {
 }
 
 describe("withClusterDdlLock", () => {
+  test("owner session connects to the caller's real database, not the maintenance-DB swap", async () => {
+    const bootstrapUrl = "postgres://u:p@h:5432/jarv1s";
+    const owner = createWorkingOwner();
+    const { probe } = createProbe();
+    const ownerConnectionStrings: string[] = [];
+    const probeConnectionStrings: string[] = [];
+
+    await withClusterDdlLock(bootstrapUrl, async () => "ok", {
+      createOwnerClient: (connectionString) => {
+        ownerConnectionStrings.push(connectionString);
+        return owner;
+      },
+      createProbeClient: (connectionString) => {
+        probeConnectionStrings.push(connectionString);
+        return probe;
+      }
+    });
+
+    // The owner session executes fn's DDL directly (single-owner-session design), so it must
+    // stay on the caller's real target database, never the maintenance-DB swap — only the probe
+    // (heartbeat-only, never DDL) uses the swap. Regression pin for the bug that broke #1633's
+    // CI: the owner previously inherited the probe's maintenance-DB connection string, so all
+    // wrapped DDL silently ran against the wrong database.
+    expect(ownerConnectionStrings).toEqual([bootstrapUrl]);
+    expect(probeConnectionStrings).toEqual([getClusterLockDatabaseUrl(bootstrapUrl)]);
+  });
+
   test("acquisition failure prevents the callback from ever running", async () => {
     const owner = new FakeClient({
       connect: async () => {

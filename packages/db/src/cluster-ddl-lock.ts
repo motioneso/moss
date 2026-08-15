@@ -167,12 +167,17 @@ export async function withClusterDdlLock<T>(
   try {
     const env = options.env ?? process.env;
     const lockKey = options.lockKey ?? DEFAULT_CLUSTER_LOCK_KEY;
-    const connectionString = getClusterLockDatabaseUrl(bootstrapConnectionString, env);
+    // Advisory locks and pg_stat_activity are cluster-wide regardless of which database a
+    // session connects to, but a session can only run DDL against its own connected database.
+    // The owner session executes fn's DDL directly (single-owner-session design), so it must
+    // stay on the caller's real target database — only the probe (heartbeat-only, never DDL)
+    // uses the maintenance-DB swap.
+    const probeConnectionString = getClusterLockDatabaseUrl(bootstrapConnectionString, env);
     const createOwnerClient = options.createOwnerClient ?? defaultCreateClient;
     const createProbeClient = options.createProbeClient ?? defaultCreateClient;
     const emitDiagnostic = safeDiagnosticEmitter(options.onDiagnostic);
 
-    const ownerClient = createOwnerClient(connectionString);
+    const ownerClient = createOwnerClient(bootstrapConnectionString);
     let ownerPid: number;
     try {
       await ownerClient.connect();
@@ -199,7 +204,7 @@ export async function withClusterDdlLock<T>(
       lockKey,
       livenessIntervalMs,
       createProbeClient,
-      connectionString,
+      connectionString: probeConnectionString,
       emitDiagnostic
     });
   } finally {
@@ -257,7 +262,13 @@ async function runProtected<T>(
   let probeConnected = false;
   let probeTimer: ReturnType<typeof setInterval> | undefined;
 
+  const onProbeError = (error: Error): void => {
+    recordLivenessLoss({ signal: "heartbeat", cause: error });
+  };
+  probeClient.on("error", onProbeError);
+
   const stopProbe = async (): Promise<void> => {
+    probeClient.removeListener("error", onProbeError);
     if (probeTimer !== undefined) {
       clearInterval(probeTimer);
       probeTimer = undefined;
