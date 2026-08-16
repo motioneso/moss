@@ -431,6 +431,210 @@ test.describe("Chat drawer — Approve/Reject card", () => {
     expect(resolveUrl).toContain("/api/chat/action-requests/ar_test_2/resolve");
   });
 
+  // #1518/1139-A: a same-tick double click must not fire two resolve requests. `setStatus` is
+  // React state (not synchronous), so a second click in the same JS task before the first render
+  // commit would previously still read the pre-click status and resolve again.
+  test("a same-task double click on Approve sends exactly one resolve request", async ({
+    page
+  }) => {
+    await mockApi(page, {
+      authenticated: true,
+      connectorAccounts: [],
+      connectorProviders: createMockConnectorProviders(),
+      notifications: [],
+      tasks: []
+    });
+
+    const actionRequestEvent = JSON.stringify({
+      kind: "action_request",
+      text: "Approve or deny: Write the value 'test'",
+      actionRequestId: "ar_test_dbl",
+      toolName: "example.write",
+      summary: "Write the value 'test'"
+    });
+    let streamServed = false;
+    await page.route("**/api/chat/stream*", async (route) => {
+      if (streamServed) {
+        return;
+      }
+      streamServed = true;
+      await route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        headers: { "cache-control": "no-cache" },
+        body: `data: ${actionRequestEvent}\n\n`
+      });
+    });
+
+    let resolveCallCount = 0;
+    const gate: { resolve: (() => void) | null } = { resolve: null };
+    const released = new Promise<void>((resolve) => {
+      gate.resolve = resolve;
+    });
+    await page.route("**/api/chat/action-requests/*/resolve", async (route) => {
+      resolveCallCount += 1;
+      await released;
+      await route.fulfill({ status: 204, body: "" });
+    });
+
+    await page.goto("/");
+    await page.getByRole("button", { name: "Chat with Moss" }).click();
+
+    await expect(page.locator(".action-request-card")).toBeVisible({ timeout: 3000 });
+
+    // Two synchronous clicks in the same JS task — no await between them — so both handler
+    // invocations race the same pre-mutate tick.
+    await page.evaluate(() => {
+      const button = document.querySelector(
+        ".action-request-card .primary-button"
+      ) as HTMLButtonElement;
+      button.click();
+      button.click();
+    });
+
+    await expect(page.locator(".action-request-actions")).toHaveCount(0);
+    await expect(page.getByText("Resolving…")).toBeVisible();
+    await expect(page.locator('.action-request-card [data-state="confirmed"]')).toHaveCount(0);
+
+    gate.resolve?.();
+
+    await expect(page.locator('.action-request-card [data-state="confirmed"]')).toHaveText(
+      "Approved"
+    );
+    expect(resolveCallCount).toBe(1);
+  });
+
+  // #1518/1139-A: unmounting the drawer while a resolution is pending must not throw or warn —
+  // guards the synchronous admission ref specifically, as the regression net for a future edit
+  // that reintroduces an unmount-unsafe write.
+  test("unmounting the drawer while a resolution is pending raises no console or page error", async ({
+    page
+  }) => {
+    // Filters out unmocked-resource network noise (favicons, etc.) unrelated to the
+    // admission-guard behavior under test; a React unmount-safety warning or an uncaught
+    // exception would not match this pattern.
+    const consoleErrors: string[] = [];
+    const pageErrors: string[] = [];
+    page.on("console", (message) => {
+      if (message.type() === "error" && !/Failed to load resource|net::ERR_/.test(message.text())) {
+        consoleErrors.push(message.text());
+      }
+    });
+    page.on("pageerror", (error) => {
+      pageErrors.push(error.message);
+    });
+
+    await mockApi(page, {
+      authenticated: true,
+      connectorAccounts: [],
+      connectorProviders: createMockConnectorProviders(),
+      notifications: [],
+      tasks: []
+    });
+
+    const actionRequestEvent = JSON.stringify({
+      kind: "action_request",
+      text: "Approve or deny: Write the value 'test'",
+      actionRequestId: "ar_test_unmount",
+      toolName: "example.write",
+      summary: "Write the value 'test'"
+    });
+    let streamServed = false;
+    await page.route("**/api/chat/stream*", async (route) => {
+      if (streamServed) {
+        return;
+      }
+      streamServed = true;
+      await route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        headers: { "cache-control": "no-cache" },
+        body: `data: ${actionRequestEvent}\n\n`
+      });
+    });
+
+    const gate: { resolve: (() => void) | null } = { resolve: null };
+    const released = new Promise<void>((resolve) => {
+      gate.resolve = resolve;
+    });
+    await page.route("**/api/chat/action-requests/*/resolve", async (route) => {
+      await released;
+      await route.fulfill({ status: 204, body: "" });
+    });
+
+    await page.goto("/");
+    await page.getByRole("button", { name: "Chat with Moss" }).click();
+
+    await expect(page.locator(".action-request-card")).toBeVisible({ timeout: 3000 });
+    await page.locator(".action-request-card").getByRole("button", { name: "Approve" }).click();
+    await expect(page.getByText("Resolving…")).toBeVisible();
+
+    await page.getByRole("button", { name: "Close chat" }).click();
+
+    gate.resolve?.();
+    await page.waitForTimeout(200);
+
+    expect(consoleErrors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+  });
+
+  // #1518/1139-A: new regression coverage for the existing expired-request copy/state, now
+  // derived from the mutation's ApiError status instead of a message string-match.
+  test("an expired (409) resolution shows the expiry message and no retry controls", async ({
+    page
+  }) => {
+    await mockApi(page, {
+      authenticated: true,
+      connectorAccounts: [],
+      connectorProviders: createMockConnectorProviders(),
+      notifications: [],
+      tasks: []
+    });
+
+    const actionRequestEvent = JSON.stringify({
+      kind: "action_request",
+      text: "Approve or deny: Write the value 'test'",
+      actionRequestId: "ar_test_expired",
+      toolName: "example.write",
+      summary: "Write the value 'test'"
+    });
+    let streamServed = false;
+    await page.route("**/api/chat/stream*", async (route) => {
+      if (streamServed) {
+        return;
+      }
+      streamServed = true;
+      await route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        headers: { "cache-control": "no-cache" },
+        body: `data: ${actionRequestEvent}\n\n`
+      });
+    });
+
+    await page.route("**/api/chat/action-requests/*/resolve", async (route) => {
+      await route.fulfill({
+        status: 409,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Action request expired" })
+      });
+    });
+
+    await page.goto("/");
+    await page.getByRole("button", { name: "Chat with Moss" }).click();
+
+    await expect(page.locator(".action-request-card")).toBeVisible({ timeout: 3000 });
+    await page.locator(".action-request-card").getByRole("button", { name: "Approve" }).click();
+
+    await expect(page.getByText("This request expired — ask again.")).toBeVisible();
+    await expect(
+      page.locator(".action-request-card").getByRole("button", { name: "Approve" })
+    ).toHaveCount(0);
+    await expect(
+      page.locator(".action-request-card").getByRole("button", { name: "Reject" })
+    ).toHaveCount(0);
+  });
+
   // #1264: mutation-tight frontend counterpart to
   // tests/integration/mcp-gateway-self-operation.test.ts's "first use after install grant runs
   // without an action card" — that test proves the real gateway emits ONLY an `action_result`
