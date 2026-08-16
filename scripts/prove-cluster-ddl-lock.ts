@@ -597,8 +597,14 @@ async function runCrossDb(bootstrapUrl: string): Promise<Trial[]> {
       detail:
         unexplained.length === 0
           ? externalWriterDemo
-            ? `all ${errors.length} lane errors attributed to the unlocked external writer across ` +
-              `${laneA.sections.length + laneB.sections.length} locked sections`
+            ? errors.length === 0
+              ? // Saying "all 0 errors were attributed" would read as though the attribution path
+                // ran. It did not: the writer never collided, so this run proves only that the
+                // observer sees it — the trial below — not that an error can be classified.
+                `no lane errors occurred across ${laneA.sections.length + laneB.sections.length} ` +
+                "locked sections, so the attribution path was not exercised on this run"
+              : `all ${errors.length} lane errors attributed to the unlocked external writer across ` +
+                `${laneA.sections.length + laneB.sections.length} locked sections`
             : `no shared-catalog errors across ${laneA.sections.length + laneB.sections.length} locked sections`
           : `shared-catalog/locking errors: ${unexplained.map(describeError).join(" | ")}`,
       diagnostics: []
