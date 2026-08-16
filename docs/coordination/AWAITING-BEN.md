@@ -447,3 +447,12 @@ between them is process/prioritization:**
 
 No recommendation between A/B from me — flagging for your call as the process/prioritization
 question it is. Coordinator holding the lane, no further action taken pending your ruling.
+
+**RESOLVED 2026-08-16 (direct chat, post1632-queue-2026-08-16 coordinator):** Ben ruled **(A)** —
+re-scope #1624 in place against #1632's new API (new callback signature, new diagnostics shape),
+re-run the two-worktree P1′ proof, keep it as the existing issue/spec, amended. Relayed to the lane
+(`w1:pBQ`), confirmed picked up and working.
+
+**Standing note for overnight (2026-08-16):** Ben is signing off for the night. Any Ben-level
+decisions that come up overnight should be routed to **Fable 5** in his place, not queued to
+`AWAITING-BEN.md` for the morning.
