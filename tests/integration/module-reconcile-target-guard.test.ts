@@ -35,10 +35,11 @@ async function insertUser(input: {
   readonly isBootstrapOwner?: boolean;
 }): Promise<void> {
   await withClient(connectionStrings.bootstrap, (client) =>
-    client.query(
-      `INSERT INTO app.users (id, email, is_bootstrap_owner) VALUES ($1, $2, $3)`,
-      [input.id, input.email, input.isBootstrapOwner ?? false]
-    )
+    client.query(`INSERT INTO app.users (id, email, is_bootstrap_owner) VALUES ($1, $2, $3)`, [
+      input.id,
+      input.email,
+      input.isBootstrapOwner ?? false
+    ])
   );
 }
 

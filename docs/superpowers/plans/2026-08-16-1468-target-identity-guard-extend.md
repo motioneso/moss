@@ -21,9 +21,10 @@
 The other two scripts are always operator-run from a terminal (a human is present to type `--confirm-owner-email` or answer a prompt). `module-reconcile.ts` is **not**: it runs once per container start, before the API boots, with zero CLI args, wired straight into `infra/docker-compose.prod.yml`'s `module-install` service. There is no dry-run/execute split to gate on (spec's "execute/non-dry-run path only" phrasing doesn't map onto this script), and requiring an interactive flag would break every automated boot/redeploy.
 
 Recommended design (built into Task 2 below, held for coordinator sign-off):
+
 - Read confirmation from an env var, not a CLI flag: `JARVIS_RECONCILE_CONFIRM_OWNER_EMAIL` (via `resolveMossEnv`, same helper already used in this file at `scripts/module-reconcile.ts:157`).
 - Guard call sits right after `client.connect()`, before Phase 0's advisory lock (`scripts/module-reconcile.ts:120-127`) — earliest point, before any mutation.
-- **Fresh-install exception:** unlike `restore-database.ts`, "no bootstrap owner yet" is the *normal* state for every brand-new Moss instance's first boot (nobody has signed up yet). Blocking first boot on this would break every fresh install permanently. So: if no bootstrap owner exists, proceed without confirmation (this one caller doesn't need the `restore-database.ts`-style explicit opt-out, because there's nothing yet to mis-target). If a bootstrap owner **does** exist, require the env var and require it to match, exactly like the other two scripts, and exit non-zero (matching this script's existing "only lock/connection failures exit non-zero" failure model, not the per-module warn-and-continue model) — a wrong target here is not a per-module failure, it's the whole boot pointed at the wrong database.
+- **Fresh-install exception:** unlike `restore-database.ts`, "no bootstrap owner yet" is the _normal_ state for every brand-new Moss instance's first boot (nobody has signed up yet). Blocking first boot on this would break every fresh install permanently. So: if no bootstrap owner exists, proceed without confirmation (this one caller doesn't need the `restore-database.ts`-style explicit opt-out, because there's nothing yet to mis-target). If a bootstrap owner **does** exist, require the env var and require it to match, exactly like the other two scripts, and exit non-zero (matching this script's existing "only lock/connection failures exit non-zero" failure model, not the per-module warn-and-continue model) — a wrong target here is not a per-module failure, it's the whole boot pointed at the wrong database.
 - **Not touching `infra/docker-compose.prod.yml`** in this lane — that's a separate deploy-config change outside this lane's scope (handoff bans touching shared production files without call-out), and setting the env var is an operational decision, not a code change. Documented as a required follow-up in the PR body.
 
 Escalating this whole section to the coordinator for explicit approval before Task 2 starts (Task 1 and Task 3 have no such fork and can start immediately once the plan is approved).
@@ -44,6 +45,7 @@ No UI/model surface touched — pure backend ops-tooling. N/A.
 - Import: `import { ..., assertOperatorConfirmsTargetOwner } from "@moss/db";`
 
 **Test** (new file `packages/db/src/__tests__/rewrap-secrets-guard.test.ts` or co-located under `scripts/__tests__/` — match whichever directory `scripts/*.test.ts` precedent uses; grep at build time, default to `scripts/__tests__/rewrap-secrets.guard.test.ts` since `module-reconcile-plan.test.ts` lives under `tests/unit/`, not `scripts/__tests__/`, so mirror that: `tests/unit/rewrap-secrets-guard.test.ts`):
+
 - Export a small testable seam: `export async function runRewrap(db, confirmOwnerEmail)` is too invasive a refactor for a script with no existing exports. Instead export just enough to test the wiring without a full run: refactor the guard call into an exported function `assertRewrapTargetIdentity(db, confirmOwnerEmail)` that is a 1-line pass-through to `assertOperatorConfirmsTargetOwner` (exists purely so the test imports the same code path `main()` calls, proving wiring, not re-deriving the guard's own logic already covered by `target-identity-guard.test.ts`).
 - Test case: seed a bootstrap owner row (same fixture shape as `target-identity-guard.test.ts:99-116`), call `assertRewrapTargetIdentity(db, "wrong@example.com")`, assert it rejects with `TargetIdentityMismatchError` — proves the caller is wired to the real guard, not a no-op.
 - Verification: `pnpm --filter @moss/db test -- rewrap-secrets-guard --run 2>&1 | cat; echo "EXIT=${PIPESTATUS[0]}"` expected `EXIT=0`. (Per gate rules, real gate run happens under `verify-gate` skill at wrap-up; this is the task-local check only.)
@@ -60,6 +62,7 @@ No UI/model surface touched — pure backend ops-tooling. N/A.
 - `ReconcileModulesOptions.env` (`scripts/module-reconcile.ts:98`) already threads a test-injectable env — no new option needed.
 
 **Test** (`tests/unit/module-reconcile-plan.test.ts` — extend existing file, no new file, matching its "pure-logic units" scope note at line 1-2... but this check needs a live `pg.Client`, so it does NOT belong there):
+
 - New file `tests/integration/module-reconcile-target-guard.test.ts` (live-DB, mirrors `target-identity-guard.test.ts` fixture): seed a bootstrap owner, call `assertReconcileTargetIdentity(client)` with `JARVIS_RECONCILE_CONFIRM_OWNER_EMAIL` unset → expect rejection; with it set to a mismatched value → expect rejection; with it matching → resolves; delete the owner row (simulating fresh install, table still exists) → resolves without requiring the env var.
 - Verification: `pnpm vitest run tests/integration/module-reconcile-target-guard.test.ts 2>&1 | cat; echo "EXIT=${PIPESTATUS[0]}"`, expected `EXIT=0`. (Root-tests-never-run-via-package-filter — confirmed against memory, using root vitest invocation, not `--filter`.)
 
@@ -67,19 +70,23 @@ No UI/model surface touched — pure backend ops-tooling. N/A.
 
 - Add `confirmOwnerEmail?: string` and `allowEmptyTarget?: boolean` to `RestorePlanInput` (`scripts/restore-database.ts:12-18`); no change to `RestorePlan`'s return shape (guard runs in `main()`, not inside the pure `createRestorePlan`, so `createRestorePlan`'s existing unit tests at `tests/integration/release-hardening.test.ts:437-560` are untouched).
 - New exported function in `scripts/restore-database.ts`:
+
   ```ts
   export async function assertRestoreTargetIdentity(
     db: Kysely<MossDatabase>,
     input: { readonly confirmOwnerEmail?: string; readonly allowEmptyTarget?: boolean }
-  ): Promise<{ readonly id: string; readonly email: string } | null>
+  ): Promise<{ readonly id: string; readonly email: string } | null>;
   ```
+
   - `SELECT to_regclass('app.users')` — null (no schema) → if `!input.allowEmptyTarget` throw `NoBootstrapOwnerFoundError`; else return `null`.
   - Else delegate to `assertOperatorConfirmsTargetOwner(db, input.confirmOwnerEmail)` for the has-schema case — if that throws `NoBootstrapOwnerFoundError` (schema exists, `app.users` empty) and `input.allowEmptyTarget` is true, return `null`; otherwise rethrow (including `TargetIdentityMismatchError` always rethrown, opt-out never bypasses a mismatch, only bypasses the "no owner to confirm against" case).
+
 - In `main()` (`scripts/restore-database.ts:99-119`), after `await access(plan.backupFile)` and before `runCommandFromFile`, when `plan.execute`: build a `Kysely<MossDatabase>` via `createDatabase({connectionString: args.connectionString ?? getMossDatabaseUrls().bootstrap})` (same URL `createRestorePlan` already resolves from) and call `assertRestoreTargetIdentity`, destroying the db handle in a `finally`.
 - New flags in `parseArgs`: `--confirm-owner-email <email>`, `--allow-empty-target` (boolean, `args.includes(...)`).
 - Update the `!plan.execute` help text (`scripts/restore-database.ts:104-110`) to mention the new required flag.
 
 **Test** (extend `tests/integration/release-hardening.test.ts`, near the existing restore-plan tests at line 437-560 — same file already does live-DB + pure-plan tests together):
+
 - Seed bootstrap owner, call `assertRestoreTargetIdentity(db, {confirmOwnerEmail: "wrong@example.com"})` → rejects `TargetIdentityMismatchError`.
 - Seed bootstrap owner, call with matching email → resolves to the owner row.
 - Delete owner row (schema present, no owner), call with no `allowEmptyTarget` → rejects `NoBootstrapOwnerFoundError` (proves no silent bypass).

@@ -162,7 +162,9 @@ async function main(): Promise<void> {
 
   await access(plan.backupFile);
 
-  const db = createDatabase({ connectionString: args.connectionString ?? getMossDatabaseUrls().bootstrap });
+  const db = createDatabase({
+    connectionString: args.connectionString ?? getMossDatabaseUrls().bootstrap
+  });
   try {
     await assertRestoreTargetIdentity(db, {
       confirmOwnerEmail: args.confirmOwnerEmail,
