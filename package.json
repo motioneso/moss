@@ -71,7 +71,7 @@
     "test:tasks-tools": "tsx scripts/test-integration.ts tests/integration/tasks-tools.test.ts",
     "test:commitments": "JARVIS_PGDATABASE=jarvis_build_537 vitest run tests/integration/commitments.test.ts",
     "test:wellness": "tsx scripts/test-integration.ts tests/integration/wellness.test.ts tests/integration/wellness-phase2.test.ts tests/integration/wellness-medications.test.ts",
-    "test:memory": "tsx scripts/test-integration.ts tests/integration/memory.test.ts tests/integration/memory-updated-at.test.ts tests/integration/memory-facts-rls.test.ts tests/integration/memory-graph.test.ts",
+    "test:memory": "tsx scripts/test-integration.ts tests/integration/memory.test.ts tests/integration/memory-sanitization.test.ts tests/integration/memory-updated-at.test.ts tests/integration/memory-facts-rls.test.ts tests/integration/memory-graph.test.ts",
     "test:memory:local": "tsx scripts/test-integration.ts tests/slow/memory-local-embed.test.ts",
     "ingest:vault": "tsx scripts/ingest-vault.ts",
     "test:vault": "tsx scripts/test-integration.ts tests/integration/vault.test.ts",

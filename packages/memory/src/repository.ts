@@ -52,6 +52,16 @@ function toVectorLiteral(embedding: readonly number[]): string {
   return `[${embedding.join(",")}]`;
 }
 
+/**
+ * Postgres rejects NUL (`U+0000`) in `text` columns outright (#1589). Strip the
+ * rest of the C0 control range too, except `\t`/`\n`/`\r`, which chunk text can
+ * legitimately carry.
+ */
+function sanitizeChunkText(text: string): string {
+  // eslint-disable-next-line no-control-regex -- stripping control chars is the point
+  return text.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "");
+}
+
 export class MemoryRepository {
   async upsertFileChunks(
     scopedDb: DataContextDb,
@@ -76,7 +86,7 @@ export class MemoryRepository {
            embedding, embed_model_name, embed_model_version)
         VALUES
           (${ownerUserId}::uuid, ${sourceKind}, ${chunk.sourcePath}, ${chunk.lineStart},
-           ${chunk.lineEnd}, ${chunk.contentHash}, ${chunk.text}, ${vectorLiteral}::vector,
+           ${chunk.lineEnd}, ${chunk.contentHash}, ${sanitizeChunkText(chunk.text)}, ${vectorLiteral}::vector,
            ${embedModelName}, ${embedModelVersion})
       `.execute(scopedDb.db);
     }
