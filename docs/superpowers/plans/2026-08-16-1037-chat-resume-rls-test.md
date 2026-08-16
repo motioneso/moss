@@ -97,22 +97,27 @@ owner (catches a false-"secure" state from an over-broad denial).
 ```bash
 pnpm test:integration tests/integration/chat-resume-privacy.test.ts > /tmp/1037-test.log 2>&1; echo "EXIT=$?"
 ```
-*(Matches `package.json:56` (`test:integration": "tsx scripts/test-integration.ts"`) and the
+
+_(Matches `package.json:56` (`test:integration": "tsx scripts/test-integration.ts"`) and the
 per-file pattern at `package.json:60` (`test:chat`). This provisions its own isolated DB per
-`test-database.ts:52-62`'s guard.)* Expected exit code: `0`, with both `it()`s reported passing.
+`test-database.ts:52-62`'s guard.)_ Expected exit code: `0`, with both `it()`s reported passing.
 
 Full gate before PR, per `coordinated-wrap-up` (isolated gate DB, per `verify-gate` skill):
+
 ```bash
 pnpm verify:foundation > /tmp/1037-gate.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `0`.
 
 Pre-push trio:
+
 ```bash
 pnpm format:check > /tmp/1037-fmt.log 2>&1; echo "EXIT=$?"
 pnpm lint > /tmp/1037-lint.log 2>&1; echo "EXIT=$?"
 pnpm typecheck > /tmp/1037-tsc.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `0` each.
 
 ## Kill gate
