@@ -66,6 +66,12 @@ services:
     command: ["node_modules/.bin/tsx", "scripts/module-reconcile.ts"]
     environment:
       JARVIS_MODULES_DIR: /data/modules
+      # #1468: target-identity guard requires this once app.users has a bootstrap owner
+      # (fresh installs are exempted). Ben is prod's bootstrap owner. This is compose-time
+      # interpolation (shell env or --env-file), not the env_file: above — override by
+      # exporting JARVIS_RECONCILE_CONFIRM_OWNER_EMAIL before `docker compose up`, same as
+      # POSTGRES_PASSWORD below.
+      JARVIS_RECONCILE_CONFIRM_OWNER_EMAIL: ${JARVIS_RECONCILE_CONFIRM_OWNER_EMAIL:-bendlove@gmail.com}
     volumes:
       - jarv1s-modules:/data/modules
     depends_on:
