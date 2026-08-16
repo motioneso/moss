@@ -475,3 +475,24 @@ Full detail: `docs/coordination/post1632-queue-2026-08-16.md`.
 **RESOLVED 2026-08-16.** Ben replied via `needs-ben`: "Yes that's good." Merge sign-off confirmed
 for both PR #1639 and PR #1624. Handed to the take-13 coordinator relay to execute (manifest
 continuation note, same file, has the merge/comment/board-update steps).
+
+## #1468 (target-identity guard extend) — needs a companion env/config decision before its PR merges — 2026-08-16, post1632-queue coordinator, take 25
+
+The build for #1468 is done: all 3 scripts (`rewrap-secrets.ts`, `module-reconcile.ts`,
+`restore-database.ts`) now refuse to run against the wrong database unless the operator confirms
+the owner's email, with 6 passing tests. Wrap-up (pre-push checks, PR) is running now.
+
+**The catch:** the new guard on `module-reconcile.ts` reads a setting called
+`JARVIS_RECONCILE_CONFIRM_OWNER_EMAIL`, and that setting isn't set anywhere today — not in dev,
+not in prod. If this PR merges as-is, the next time you redeploy, module reconcile will simply
+refuse to run (safe failure, but a real outage of that feature) until someone adds that setting to
+the deploy config.
+
+**What I need from you:** before or right when this PR merges, someone needs to add
+`JARVIS_RECONCILE_CONFIRM_OWNER_EMAIL` (your email, or whichever address should count as the
+confirmed owner) to the deployment's environment/compose config. I can point you to exactly where
+once the PR is open, or write the config change myself if you'd rather I just do it as part of the
+same PR — your call on which you'd prefer.
+
+No action needed from you right this second — the PR isn't open yet. Flagging now so this doesn't
+turn into a silent post-merge surprise. Will ping again once the PR is actually up.
