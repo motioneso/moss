@@ -494,5 +494,9 @@ confirmed owner) to the deployment's environment/compose config. I can point you
 once the PR is open, or write the config change myself if you'd rather I just do it as part of the
 same PR — your call on which you'd prefer.
 
-No action needed from you right this second — the PR isn't open yet. Flagging now so this doesn't
-turn into a silent post-merge surprise. Will ping again once the PR is actually up.
+**UPDATE 2026-08-16, same day:** the build is fully done (all 3 tasks, tests green, gate green) and
+the agent is now holding the PR open specifically waiting on this answer before it opens it —
+ping sent via `needs-ben`. Two options: (1) I add the `JARVIS_RECONCILE_CONFIRM_OWNER_EMAIL`
+setting to prod's deploy config myself, as part of the same PR, or (2) you handle that deploy
+config change separately and I just make sure the PR mentions it's needed. Either way works; just
+need to know which so the lane can move.
