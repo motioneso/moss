@@ -19,7 +19,8 @@ import {
   generateModuleTableRlsSql,
   getAppliedModuleMigrations,
   loadModuleMigrationFiles,
-  recordModuleMigrations
+  recordModuleMigrations,
+  type WithClusterDdlLockOptions
 } from "@moss/db";
 
 export interface ModuleInstallOptions {
@@ -31,6 +32,14 @@ export interface ModuleInstallOptions {
   readonly bootstrapConnectionString: string;
   readonly migrationConnectionString: string;
   readonly migrationsDirectory: string;
+  /**
+   * Cluster-DDL lock options for phases A and D (#1013). Every role-touching call below writes the
+   * cluster-global `pg_authid`, so all three must land in the SAME lock domain. The lock derives
+   * its maintenance database from `options.env`; leaving this undefined makes it fall back to
+   * ambient `process.env` while the connection strings came from a caller-injected env — a
+   * lock-domain split that acquires a real lock in the wrong database and excludes nobody.
+   */
+  readonly lock?: WithClusterDdlLockOptions;
 }
 
 export async function installModule(
@@ -38,9 +47,14 @@ export async function installModule(
 ): Promise<{ installed: string[] }> {
   const { moduleId, manifest, bootstrapConnectionString, migrationConnectionString } = options;
   const ownedTables = manifest.database?.ownedTables ?? [];
+  const lock = options.lock ?? {};
 
   // Phase A
-  const { runtimeRole, installRole } = await ensureModuleRoles(bootstrapConnectionString, moduleId);
+  const { runtimeRole, installRole } = await ensureModuleRoles(
+    bootstrapConnectionString,
+    moduleId,
+    lock
+  );
   await journalUpsert(bootstrapConnectionString, {
     moduleId,
     status: "installing",
@@ -49,7 +63,7 @@ export async function installModule(
     runtimeRole,
     installRole
   });
-  const password = await enableInstallerLogin(bootstrapConnectionString, moduleId);
+  const password = await enableInstallerLogin(bootstrapConnectionString, moduleId, lock);
 
   let installed: string[];
   try {
@@ -106,7 +120,7 @@ export async function installModule(
     installed = files.map((file) => file.name);
   } finally {
     // Phase D — always, success or failure.
-    await disableInstallerLogin(bootstrapConnectionString, moduleId);
+    await disableInstallerLogin(bootstrapConnectionString, moduleId, lock);
   }
 
   return { installed };

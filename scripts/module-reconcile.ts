@@ -105,6 +105,12 @@ export interface ReconcileModulesOptions {
 export async function reconcileModules(options: ReconcileModulesOptions): Promise<ReconcileReport> {
   const env = options.env ?? process.env;
   const urls = getMossDatabaseUrls(env);
+  // The connection strings above come from `env`; the cluster-DDL lock resolves its maintenance
+  // database (JARVIS_CLUSTER_LOCK_DATABASE) from its own options. Handing it anything other than
+  // the same `env` splits the lock domain: every participant still acquires a real advisory lock,
+  // just in a different database, and advisory-lock tags are scoped by database OID — so the lock
+  // succeeds and excludes nobody (#1013).
+  const lock: WithClusterDdlLockOptions = { env };
   const report: ReconcileReport = {
     purged: [],
     ensured: [],
@@ -146,7 +152,7 @@ export async function reconcileModules(options: ReconcileModulesOptions): Promis
     );
     for (const row of purgeRows.rows) {
       try {
-        await purgeModule(client, options.modulesDir, row.id, urls.bootstrap);
+        await purgeModule(client, options.modulesDir, row.id, urls.bootstrap, lock);
         report.purged.push(row.id);
       } catch (error) {
         warn(row.id, "purge", error);
@@ -267,7 +273,8 @@ export async function reconcileModules(options: ReconcileModulesOptions): Promis
           manifest: discovery.manifest,
           bootstrapConnectionString: urls.bootstrap,
           migrationConnectionString: urls.migration,
-          migrationsDirectory: sqlDir
+          migrationsDirectory: sqlDir,
+          lock
         });
         if (installed.length > 0) report.installed.push(discovery.id);
         // A previous failure heals on successful install: clear the error but do NOT
