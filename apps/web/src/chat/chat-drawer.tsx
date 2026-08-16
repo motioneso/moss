@@ -685,7 +685,9 @@ function HistoryList(props: {
 }
 
 function sameTranscriptRecord(a: TranscriptRecord, b: TranscriptRecord): boolean {
-  return a.kind === b.kind && a.text === b.text;
+  if (a.kind !== b.kind) return false;
+  if (a.messageId || b.messageId) return a.messageId === b.messageId;
+  return a.text === b.text;
 }
 
 export function chatAvailableFromRoute(data: LookupAiCapabilityRouteResponse | undefined): boolean {
