@@ -10,7 +10,9 @@
 // retry/cleanup logic. A retried Phase A always leaves the install role login-disabled.
 import { randomBytes } from "node:crypto";
 
-import { Client } from "pg";
+import { escapeIdentifier, escapeLiteral } from "pg";
+
+import { withClusterDdlLock, type WithClusterDdlLockOptions } from "./cluster-ddl-lock.js";
 
 // Mirrors packages/module-registry/src/external/validate.ts's MODULE_ID_RE. Duplicated rather
 // than imported: module-registry already depends on @moss/db, so importing the other way would
@@ -48,89 +50,89 @@ export interface ModuleRoles {
  */
 export async function ensureModuleRoles(
   connectionString: string,
-  moduleId: string
+  moduleId: string,
+  options: WithClusterDdlLockOptions = {}
 ): Promise<ModuleRoles> {
   const runtimeRole = moduleRuntimeRoleName(moduleId);
   const installRole = moduleInstallRoleName(moduleId);
-  const client = new Client({ connectionString });
-  await client.connect();
-  try {
-    for (const role of [runtimeRole, installRole]) {
-      await client.query(
-        `DO $$
+  return withClusterDdlLock(
+    connectionString,
+    async (client) => {
+      for (const role of [runtimeRole, installRole]) {
+        await client.query(
+          `DO $$
          BEGIN
-           IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ${client.escapeLiteral(role)}) THEN
+           IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ${escapeLiteral(role)}) THEN
              EXECUTE format('CREATE ROLE %I NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE ' ||
                'NOINHERIT NOREPLICATION NOBYPASSRLS', '${role}');
            END IF;
          END $$;`
+        );
+      }
+      // Unconditionally force the install role back to NOLOGIN PASSWORD NULL on EVERY call, not just
+      // at creation. This makes Phase A itself the crash-recovery safety net: if a crash landed
+      // between Phase B (enableInstallerLogin) and Phase D (disableInstallerLogin), a retried Phase A
+      // clears the stale LOGIN + password regardless of whether Task 7's try/finally cleanup ran.
+      await client.query(`ALTER ROLE ${escapeIdentifier(installRole)} NOLOGIN PASSWORD NULL`);
+      await client.query(
+        `GRANT ${escapeIdentifier(runtimeRole)} TO jarvis_app_runtime, jarvis_worker_runtime ` +
+          `WITH INHERIT FALSE`
       );
-    }
-    // Unconditionally force the install role back to NOLOGIN PASSWORD NULL on EVERY call, not just
-    // at creation. This makes Phase A itself the crash-recovery safety net: if a crash landed
-    // between Phase B (enableInstallerLogin) and Phase D (disableInstallerLogin), a retried Phase A
-    // clears the stale LOGIN + password regardless of whether Task 7's try/finally cleanup ran.
-    await client.query(`ALTER ROLE ${client.escapeIdentifier(installRole)} NOLOGIN PASSWORD NULL`);
-    await client.query(
-      `GRANT ${client.escapeIdentifier(runtimeRole)} TO jarvis_app_runtime, jarvis_worker_runtime ` +
-        `WITH INHERIT FALSE`
-    );
-    // Scoped install-role privileges per spec D2: enough to CREATE its own tables under schema
-    // app and FK-reference app.users(id) — nothing else. GRANT is idempotent (re-granting an
-    // already-held privilege is a no-op), so this is safe on every call, not just at creation.
-    await client.query(`GRANT CREATE ON SCHEMA app TO ${client.escapeIdentifier(installRole)}`);
-    // USAGE (and EXECUTE on the RLS-predicate function) need WITH GRANT OPTION: Phase B's
-    // generated RLS (module-rls-emitter.ts) re-grants both onward to the module's own runtime
-    // role from an installer-role connection, not this bootstrap/superuser one. Without grant
-    // option Postgres silently no-ops the re-grant (no error, ACL unchanged) rather than failing
-    // loud — a footgun discovered via a manual ACL inspection, not a thrown error.
-    await client.query(
-      `GRANT USAGE ON SCHEMA app TO ${client.escapeIdentifier(installRole)} WITH GRANT OPTION`
-    );
-    await client.query(
-      `GRANT EXECUTE ON FUNCTION app.current_actor_user_id() TO ` +
-        `${client.escapeIdentifier(installRole)} WITH GRANT OPTION`
-    );
-    await client.query(
-      `GRANT REFERENCES (id) ON app.users TO ${client.escapeIdentifier(installRole)}`
-    );
-  } finally {
-    await client.end();
-  }
-  return { runtimeRole, installRole };
+      // Scoped install-role privileges per spec D2: enough to CREATE its own tables under schema
+      // app and FK-reference app.users(id) — nothing else. GRANT is idempotent (re-granting an
+      // already-held privilege is a no-op), so this is safe on every call, not just at creation.
+      await client.query(`GRANT CREATE ON SCHEMA app TO ${escapeIdentifier(installRole)}`);
+      // USAGE (and EXECUTE on the RLS-predicate function) need WITH GRANT OPTION: Phase B's
+      // generated RLS (module-rls-emitter.ts) re-grants both onward to the module's own runtime
+      // role from an installer-role connection, not this bootstrap/superuser one. Without grant
+      // option Postgres silently no-ops the re-grant (no error, ACL unchanged) rather than failing
+      // loud — a footgun discovered via a manual ACL inspection, not a thrown error.
+      await client.query(
+        `GRANT USAGE ON SCHEMA app TO ${escapeIdentifier(installRole)} WITH GRANT OPTION`
+      );
+      await client.query(
+        `GRANT EXECUTE ON FUNCTION app.current_actor_user_id() TO ` +
+          `${escapeIdentifier(installRole)} WITH GRANT OPTION`
+      );
+      await client.query(`GRANT REFERENCES (id) ON app.users TO ${escapeIdentifier(installRole)}`);
+      return { runtimeRole, installRole };
+    },
+    options
+  );
 }
 
 /** Phase A/B boundary: flips the installer role to LOGIN with a fresh random password, returned only in memory. */
 export async function enableInstallerLogin(
   connectionString: string,
-  moduleId: string
+  moduleId: string,
+  options: WithClusterDdlLockOptions = {}
 ): Promise<string> {
   const installRole = moduleInstallRoleName(moduleId);
   const password = randomBytes(24).toString("base64url");
-  const client = new Client({ connectionString });
-  await client.connect();
-  try {
-    await client.query(
-      `ALTER ROLE ${client.escapeIdentifier(installRole)} LOGIN PASSWORD ` +
-        client.escapeLiteral(password)
-    );
-  } finally {
-    await client.end();
-  }
+  await withClusterDdlLock(
+    connectionString,
+    async (client) => {
+      await client.query(
+        `ALTER ROLE ${escapeIdentifier(installRole)} LOGIN PASSWORD ` + escapeLiteral(password)
+      );
+    },
+    options
+  );
   return password;
 }
 
 /** Phase D: flips the installer role back to NOLOGIN and clears its password, regardless of install outcome. */
 export async function disableInstallerLogin(
   connectionString: string,
-  moduleId: string
+  moduleId: string,
+  options: WithClusterDdlLockOptions = {}
 ): Promise<void> {
   const installRole = moduleInstallRoleName(moduleId);
-  const client = new Client({ connectionString });
-  await client.connect();
-  try {
-    await client.query(`ALTER ROLE ${client.escapeIdentifier(installRole)} NOLOGIN PASSWORD NULL`);
-  } finally {
-    await client.end();
-  }
+  return withClusterDdlLock(
+    connectionString,
+    async (client) => {
+      await client.query(`ALTER ROLE ${escapeIdentifier(installRole)} NOLOGIN PASSWORD NULL`);
+    },
+    options
+  );
 }
