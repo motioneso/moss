@@ -457,13 +457,17 @@ re-run the two-worktree P1′ proof, keep it as the existing issue/spec, amended
 decisions that come up overnight should be routed to **Fable 5** in his place, not queued to
 `AWAITING-BEN.md` for the morning.
 
-## Merge sign-off needed on PR #1639 (security tier) — 2026-08-16, post1632-queue coordinator
+## Merge sign-off needed on PR #1639 AND PR #1624 (both security tier) — 2026-08-16, post1632-queue coordinator
 
-PR #1639 (fix-1013-lock-domain-env-consistency, closes #1637) has a GREEN security-tier QA verdict
-— CI green, live e2e install test passed, 0 blocking findings, posted on the PR. It just needs the
-explicit human sign-off security tier always requires before merge (never auto-merged). Tried to
-route this to Fable 5 per tonight's standing note, but no Fable-5 pane or session is currently
-reachable anywhere in Herdr — so filing it here instead and pinging via `needs-ben`, per the
-box-wide rule for a blocked human decision. Companion PR #1624 (#1013 itself) is still in QA;
-plan is to ask for both sign-offs together once that verdict lands, rather than pinging twice.
+Both PRs now have GREEN security-tier QA verdicts — CI green, 0 blocking findings, verdicts posted
+on each PR. Both just need the explicit human sign-off security tier always requires before merge
+(never auto-merged). Tried to route this to Fable 5 per tonight's standing note, but no Fable-5
+pane or session is currently reachable anywhere in Herdr — so filing it here instead and pinging
+via `needs-ben`, per the box-wide rule for a blocked human decision.
+
+- **PR #1639** (fix-1013-lock-domain-env-consistency, closes #1637): production-path DDL lock now
+  reads which database to lock from the same env source everywhere. Live e2e install test passed.
+- **PR #1624** (build-1013-ddl-lock, #1013): the companion fix for the test suite's own DDL race —
+  only test/script/doc files touched, no production code, so nothing to click through live.
+
 Full detail: `docs/coordination/post1632-queue-2026-08-16.md`.
