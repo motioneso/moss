@@ -31,6 +31,10 @@ export function createPreviewStore(
 
   return {
     put(preview) {
+      const nowTs = now();
+      for (const [id, value] of entries) {
+        if (nowTs - value.createdAt > ttlMs) entries.delete(id);
+      }
       const ownerEntries = [...entries].filter(
         ([, value]) => value.ownerUserId === preview.ownerUserId
       );
