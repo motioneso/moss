@@ -14,18 +14,58 @@
  *   JARVIS_CONNECTOR_SECRET_KEY=... JARVIS_AI_SECRET_KEY=... \
  *   JARVIS_CONNECTOR_SECRET_KEYS='{"v1":"old"}' JARVIS_AI_SECRET_KEYS='{"v1":"old"}' \
  *   JARVIS_CONNECTOR_SECRET_KEY_ID=v2 JARVIS_AI_SECRET_KEY_ID=v2 \
- *   pnpm tsx scripts/rewrap-secrets.ts
+ *   pnpm tsx scripts/rewrap-secrets.ts --confirm-owner-email <target's bootstrap owner email>
+ *
+ * --confirm-owner-email proves this run is pointed at the instance the operator thinks it is
+ * (#1383) — the target's actual bootstrap-owner email, not a hardcoded fingerprint.
  *
  * See docs/operations/secret-key-rotation.md for the full runbook.
  */
 import { randomUUID } from "node:crypto";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { createConnectorSecretCipher } from "@moss/connectors";
-import { DataContextRunner, createDatabase, getMossDatabaseUrls } from "@moss/db";
+import {
+  assertOperatorConfirmsTargetOwner,
+  DataContextRunner,
+  createDatabase,
+  getMossDatabaseUrls,
+  type MossDatabase
+} from "@moss/db";
+import type { Kysely } from "kysely";
 import { createAiSecretCipher } from "@moss/ai";
 
+export async function assertRewrapTargetIdentity(
+  db: Kysely<MossDatabase>,
+  confirmOwnerEmail: string | undefined
+): Promise<void> {
+  await assertOperatorConfirmsTargetOwner(db, confirmOwnerEmail);
+}
+
+function parseArgs(args: readonly string[]): { readonly confirmOwnerEmail?: string } {
+  return { confirmOwnerEmail: readFlag(args, "--confirm-owner-email") };
+}
+
+function readFlag(args: readonly string[], name: string): string | undefined {
+  const index = args.indexOf(name);
+
+  if (index === -1) {
+    return undefined;
+  }
+
+  const value = args[index + 1];
+  if (!value) {
+    throw new Error(`${name} requires a value`);
+  }
+
+  return value;
+}
+
 async function main(): Promise<void> {
+  const args = parseArgs(process.argv.slice(2));
   const db = createDatabase({ connectionString: getMossDatabaseUrls().bootstrap });
+  await assertRewrapTargetIdentity(db, args.confirmOwnerEmail);
   const connectorCipher = createConnectorSecretCipher();
   const aiCipher = createAiSecretCipher();
   const dataContext = new DataContextRunner(db);
@@ -164,7 +204,18 @@ async function main(): Promise<void> {
   await db.destroy();
 }
 
-main().catch((err: unknown) => {
-  console.error("rewrap-secrets failed:", err instanceof Error ? err.message : err);
-  process.exit(1);
-});
+// Run only when executed directly (`tsx scripts/rewrap-secrets.ts`) — mirrors the guard
+// convention of the other operator scripts. Without this, importing assertRewrapTargetIdentity
+// for tests would also trigger a live rewrap run as a side effect of module evaluation.
+const isThisModuleEntry =
+  import.meta.url.endsWith("rewrap-secrets.ts") || import.meta.url.endsWith("rewrap-secrets.js");
+if (
+  isThisModuleEntry &&
+  process.argv[1] &&
+  fileURLToPath(import.meta.url) === resolve(process.argv[1])
+) {
+  await main().catch((err: unknown) => {
+    console.error("rewrap-secrets failed:", err instanceof Error ? err.message : err);
+    process.exit(1);
+  });
+}
