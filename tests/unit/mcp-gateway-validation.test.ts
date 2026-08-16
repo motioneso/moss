@@ -21,7 +21,11 @@ describe("tool input validation", () => {
 
   it("accepts valid input", async () => {
     await expect(
-      validateToolInput(schema, { taskId: "t1", count: 2 }, { external: false, toolName: "test-tool" })
+      validateToolInput(
+        schema,
+        { taskId: "t1", count: 2 },
+        { external: false, toolName: "test-tool" }
+      )
     ).resolves.toEqual({
       taskId: "t1",
       count: 2
@@ -29,15 +33,15 @@ describe("tool input validation", () => {
   });
 
   it("rejects a missing required key", async () => {
-    await expect(validateToolInput(schema, { count: 2 }, { external: false, toolName: "test-tool" })).rejects.toThrow(
-      ToolInputValidationError
-    );
+    await expect(
+      validateToolInput(schema, { count: 2 }, { external: false, toolName: "test-tool" })
+    ).rejects.toThrow(ToolInputValidationError);
   });
 
   it("rejects a wrong declared type", async () => {
-    await expect(validateToolInput(schema, { taskId: 5 }, { external: false, toolName: "test-tool" })).rejects.toThrow(
-      ToolInputValidationError
-    );
+    await expect(
+      validateToolInput(schema, { taskId: 5 }, { external: false, toolName: "test-tool" })
+    ).rejects.toThrow(ToolInputValidationError);
   });
 
   it("accepts anything when no schema is declared", async () => {
@@ -130,7 +134,11 @@ describe("tool input validation", () => {
       const started = performance.now();
       const results = await Promise.allSettled(
         Array.from({ length: 9 }, () =>
-          validateToolInput(hostileSchema, { value: `${"a".repeat(28)}!` }, { external: true, toolName: "test-tool" })
+          validateToolInput(
+            hostileSchema,
+            { value: `${"a".repeat(28)}!` },
+            { external: true, toolName: "test-tool" }
+          )
         )
       );
 
@@ -147,14 +155,18 @@ describe("tool input validation", () => {
 
     it("rejects a value over maxLength", async () => {
       await expect(
-        validateToolInput(bounded, { key: "abcdefghij" }, { external: false, toolName: "test-tool" })
+        validateToolInput(
+          bounded,
+          { key: "abcdefghij" },
+          { external: false, toolName: "test-tool" }
+        )
       ).rejects.toThrow(ToolInputValidationError);
     });
 
     it("rejects a value under minLength", async () => {
-      await expect(validateToolInput(bounded, { key: "" }, { external: false, toolName: "test-tool" })).rejects.toThrow(
-        ToolInputValidationError
-      );
+      await expect(
+        validateToolInput(bounded, { key: "" }, { external: false, toolName: "test-tool" })
+      ).rejects.toThrow(ToolInputValidationError);
     });
 
     it("rejects a value that does not match the pattern", async () => {
@@ -178,7 +190,11 @@ describe("tool input validation", () => {
         properties: { n: { type: "number" }, s: { type: "string" } }
       };
       await expect(
-        validateToolInput(mixed, { n: 12345678901234, s: "anything at all" }, { external: false, toolName: "test-tool" })
+        validateToolInput(
+          mixed,
+          { n: 12345678901234, s: "anything at all" },
+          { external: false, toolName: "test-tool" }
+        )
       ).resolves.toEqual({
         n: 12345678901234,
         s: "anything at all"

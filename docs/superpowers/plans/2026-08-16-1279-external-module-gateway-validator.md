@@ -13,7 +13,7 @@ live-path/UAT proof needed.
   pins external tools onto the worker-thread pattern-matching path — confirmed, untested today (no
   existing test exercises input validation for an external tool).
 - `packages/ai/src/gateway/input-validation.ts:355-377` — `validateToolInput(schema, input,
-  options: { readonly external: boolean })`. Throws `ToolInputValidationError` at 7 sites, all
+options: { readonly external: boolean })`. Throws `ToolInputValidationError` at 7 sites, all
   field-path-only, no tool name: lines 145, 197, 211, 228, 233, 245, 252, 270, 291, 297, 361 (the
   Missing-required-field / enum / type-mismatch / bounds / pattern messages already read verbatim
   in the handoff doc).
@@ -21,9 +21,9 @@ live-path/UAT proof needed.
   confirmed on this branch:
   - `packages/ai/src/gateway/gateway.ts:184` — `callTool(token, toolName, rawInput)`, `toolName` in
     scope, caught locally at line ~189 (`error instanceof Error ? error.message : "Invalid
-    input"`), returned as `{ ok: false, error }`.
+input"`), returned as `{ ok: false, error }`.
   - `packages/ai/src/gateway/gateway.ts:424` — `runReadToolForActor(actorUserId, toolName,
-    rawInput)`, `toolName` in scope, same local catch/return shape at line ~429.
+rawInput)`, `toolName` in scope, same local catch/return shape at line ~429.
   - `packages/ai/src/routes.ts:713` — REST route handler, `manifestTool`/`selectedTool.name` in
     scope; this call is inside a broader try/catch that delegates to the generic
     `handleRouteError` (routes.ts ~1180), which only knows `error.message` — confirms the fix must
@@ -62,14 +62,13 @@ File: `packages/ai/src/gateway/input-validation.ts`
     schema: JsonSchema | undefined,
     input: unknown,
     options: { readonly external: boolean; readonly toolName: string }
-  ): Promise<ToolInput>
+  ): Promise<ToolInput>;
   ```
 - Wrap the existing body (the `if (!schema)` early return already needs no wrapping — no error can
   throw before it) in try/catch around the `validateObject` call and the `"object"` type-guard at
   the top: catch any `ToolInputValidationError`, re-throw
   `new ToolInputValidationError(\`Tool ${options.toolName}: ${error.message}\`)`. Single DRY point
-  of change in `validateToolInput` itself — do NOT thread `toolName` through
-  `validateObject`/`validateValue`/`validateStringBounds`/`compilePattern` (that's ~7 call sites of
+of change in `validateToolInput`itself — do NOT thread`toolName`through`validateObject`/`validateValue`/`validateStringBounds`/`compilePattern` (that's ~7 call sites of
   unnecessary churn for the same result).
 - Non-`ToolInputValidationError` throws (there shouldn't be any, but the catch is typed to
   `unknown`) re-throw unchanged — only prefix our own error class.
@@ -98,7 +97,7 @@ validation"**
   array (asserting it's never called — validation must reject before the handler runs).
 - Construct `AssistantToolGateway` with the same deps shape as the existing tests
   (`resolveActiveModules`, `repository: new AiRepository()`, `runner: new
-  DataContextRunner(appDb)`, `tokens`, `confirmations`, `notifier`, `confirmTimeoutMs`) — token/
+DataContextRunner(appDb)`, `tokens`, `confirmations`, `notifier`, `confirmTimeoutMs`) — token/
   confirmations/notifier are unused by `runReadToolForActor` but required by the constructor.
 - Call `gateway.runReadToolForActor(ids.userA, "acme.read", { value: "NOT-LOWERCASE-OR-WHATEVER" })`
   directly — no token mint, no notifier wait loop.
@@ -116,18 +115,22 @@ on the tool name in `result.error` fails until Task 1+2 land.
 ```bash
 pnpm --filter @moss/ai typecheck > /tmp/1279-ai-typecheck.log 2>&1; echo "EXIT=$?"
 ```
+
 Expect `EXIT=0`.
 
 ```bash
 pnpm --filter @moss/module-registry typecheck > /tmp/1279-mr-typecheck.log 2>&1; echo "EXIT=$?"
 ```
+
 Expect `EXIT=0`.
 
 Integration test — run via the `verify-gate` skill's isolated-DB recipe (never bare
 `vitest run tests/integration/external-module-gateway.test.ts` against the live dev DB):
+
 ```bash
 # per verify-gate skill, gate-DB scoped
 ```
+
 Expect the new test green, both existing tests in the same file still green (regression check on
 the write-risk/confirm-flow path, since `callTool`'s options object also changed shape).
 
