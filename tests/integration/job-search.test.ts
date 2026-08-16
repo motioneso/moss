@@ -37,7 +37,12 @@ import {
   moduleRuntimeRoleName
 } from "../../packages/db/src/module-role-broker.js";
 import { JOB_SEARCH_TABLES } from "../../external-modules/job-search/src/db/tables.js";
-import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
+import {
+  connectionStrings,
+  dropModuleRolesAtTeardown,
+  ids,
+  resetFoundationDatabase
+} from "./test-database.js";
 
 const { Client } = pg;
 
@@ -383,10 +388,8 @@ describe("job-search module RLS (#1305, tier A — no worker process)", () => {
         `REVOKE EXECUTE ON FUNCTION app.current_actor_user_id() FROM ` +
           `${moduleInstallRoleName(realModuleId)} CASCADE`
       );
-      await client
-        .query(`DROP ROLE IF EXISTS ${moduleInstallRoleName(realModuleId)}`)
-        .catch(() => {});
-      await client.query(`DROP ROLE IF EXISTS ${runtimeRole}`).catch(() => {});
+      // Cluster-global: locked, and fail-closed apart from the one documented 2BP01 case (#1013).
+      await dropModuleRolesAtTeardown([moduleInstallRoleName(realModuleId), runtimeRole]);
       await client.query("DELETE FROM app.module_installs WHERE module_id = $1", [realModuleId]);
       await client.query("DELETE FROM app.module_schema_migrations WHERE module_id = $1", [
         realModuleId

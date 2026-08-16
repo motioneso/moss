@@ -21,8 +21,10 @@ import type { Kysely } from "kysely";
 import {
   connectionStrings,
   dropModuleRolesAtTeardown,
+  grantModuleMembershipAtSetup,
   ids,
-  resetFoundationDatabase
+  resetFoundationDatabase,
+  revokeModuleMembershipAtTeardown
 } from "./test-database.js";
 
 const { Client } = pg;
@@ -746,27 +748,31 @@ describe("db.query (#1167)", () => {
       for (const statement of generateModuleTableRlsSql(dbModuleId, ["app.acme_db_items"])) {
         await client.query(statement);
       }
-      // The rpc handler runs on the worker pool; the broker grants the runtime
-      // role to jarvis_worker_runtime at ensureModuleRoles time — this explicit
-      // grant is idempotent and keeps the test self-documenting.
-      await client.query(
-        "GRANT jarvis_mod_acme_db_runtime TO jarvis_worker_runtime WITH INHERIT FALSE"
-      );
     } finally {
       await client.end();
     }
+
+    // The rpc handler runs on the worker pool; the broker grants the runtime role to
+    // jarvis_worker_runtime at ensureModuleRoles time — this explicit grant is idempotent and
+    // keeps the test self-documenting. Membership is cluster-global, so it is locked (#1013).
+    await grantModuleMembershipAtSetup([
+      "GRANT jarvis_mod_acme_db_runtime TO jarvis_worker_runtime WITH INHERIT FALSE"
+    ]);
   });
 
   afterAll(async () => {
+    // Revoke order matters: downstream runtime grants before the install role's grant-option
+    // privileges, mirroring module-storage-rpc.test.ts. DROP ROLE fails while a role still holds
+    // any privileges, so every privilege ensureModuleRoles granted must be revoked first (Postgres
+    // does not implicitly strip these on DROP TABLE/DROP ROLE). Membership is cluster-global and
+    // goes first, under the lock (#1013); the per-database revokes below stay on this connection.
+    await revokeModuleMembershipAtTeardown([
+      "REVOKE jarvis_mod_acme_db_runtime FROM jarvis_worker_runtime"
+    ]);
+
     const client = new Client({ connectionString: connectionStrings.bootstrap });
     await client.connect();
     try {
-      // Revoke order matters: downstream runtime grants before the install
-      // role's grant-option privileges, mirroring module-storage-rpc.test.ts.
-      // DROP ROLE fails while a role still holds any privileges, so every
-      // privilege ensureModuleRoles granted must be revoked first (Postgres
-      // does not implicitly strip these on DROP TABLE/DROP ROLE).
-      await client.query("REVOKE jarvis_mod_acme_db_runtime FROM jarvis_worker_runtime");
       await client.query("DROP TABLE IF EXISTS app.acme_db_items");
       await client.query("REVOKE ALL PRIVILEGES ON SCHEMA app FROM jarvis_mod_acme_db_runtime");
       await client.query(
@@ -777,10 +783,7 @@ describe("db.query (#1167)", () => {
       await client.query(
         "REVOKE EXECUTE ON FUNCTION app.current_actor_user_id() FROM jarvis_mod_acme_db_install"
       );
-      await dropModuleRolesAtTeardown(client, [
-        "jarvis_mod_acme_db_install",
-        "jarvis_mod_acme_db_runtime"
-      ]);
+      await dropModuleRolesAtTeardown(["jarvis_mod_acme_db_install", "jarvis_mod_acme_db_runtime"]);
     } finally {
       await client.end();
     }
