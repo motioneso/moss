@@ -203,6 +203,45 @@ describe("MemoryRepository", () => {
     });
   });
 
+  it("upsertFileChunks strips NUL bytes so the insert does not throw", async () => {
+    const path = "notes/repo-test-nul-1.md";
+    const chunks = await makeChunks(path, ["before\u0000after"]);
+    await dataContext.withDataContext(ctx(userId), async (scopedDb) => {
+      await repo.upsertFileChunks(scopedDb, userId, path, chunks, "stub", "0");
+      const stored = await sql<{ text: string }>`
+        SELECT text FROM app.memory_chunks WHERE source_path = ${path}
+      `.execute(scopedDb.db);
+      expect(stored.rows.map((r) => r.text)).toEqual(["beforeafter"]);
+    });
+  });
+
+  it("upsertFileChunks does not lose existing chunks when a re-ingested file introduces a NUL byte", async () => {
+    const path = "notes/repo-test-nul-2.md";
+    const cleanChunks = await makeChunks(path, ["Chunk A", "Chunk B"]);
+    const reingestedChunks = await makeChunks(path, ["Chunk A\u0000", "Chunk B"]);
+    await dataContext.withDataContext(ctx(userId), async (scopedDb) => {
+      await repo.upsertFileChunks(scopedDb, userId, path, cleanChunks, "stub", "0");
+      await repo.upsertFileChunks(scopedDb, userId, path, reingestedChunks, "stub", "0");
+      const stored = await sql<{ text: string }>`
+        SELECT text FROM app.memory_chunks WHERE source_path = ${path}
+      `.execute(scopedDb.db);
+      expect(stored.rows).toHaveLength(2);
+    });
+  });
+
+  it("upsertFileChunks preserves tab, newline, and carriage return in chunk text", async () => {
+    const path = "notes/repo-test-nul-3.md";
+    const text = "line one\tcol\nline two\r\n";
+    const chunks = await makeChunks(path, [text]);
+    await dataContext.withDataContext(ctx(userId), async (scopedDb) => {
+      await repo.upsertFileChunks(scopedDb, userId, path, chunks, "stub", "0");
+      const stored = await sql<{ text: string }>`
+        SELECT text FROM app.memory_chunks WHERE source_path = ${path}
+      `.execute(scopedDb.db);
+      expect(stored.rows.map((r) => r.text)).toEqual([text]);
+    });
+  });
+
   it("vectorSearch returns chunks ranked by similarity (owner-scoped)", async () => {
     const path = "notes/repo-test-3.md";
     const chunks = await makeChunks(path, ["The quick brown fox"]);
