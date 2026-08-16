@@ -184,7 +184,8 @@ export class AssistantToolGateway {
       input = await validateToolInput(found.tool.inputSchema, rawInput, {
         // Missing provenance is untrusted: only the registry's explicit false marker gets the
         // built-in synchronous path.
-        external: found.tool.isExternal !== false
+        external: found.tool.isExternal !== false,
+        toolName
       });
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : "Invalid input" };
@@ -424,7 +425,8 @@ export class AssistantToolGateway {
       input = await validateToolInput(found.tool.inputSchema, rawInput, {
         // Missing provenance is untrusted: only the registry's explicit false marker gets the
         // built-in synchronous path.
-        external: found.tool.isExternal !== false
+        external: found.tool.isExternal !== false,
+        toolName
       });
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : "Invalid input" };

@@ -713,7 +713,8 @@ export function registerAiRoutes(
         const validatedInput = await validateToolInput(manifestTool.inputSchema, body.input ?? {}, {
           // Missing provenance is untrusted: only the registry's explicit false marker gets the
           // built-in synchronous path.
-          external: manifestTool.isExternal !== false
+          external: manifestTool.isExternal !== false,
+          toolName: selectedTool.name
         });
         // Read-only services (no write-capable entries) are passed here so read tools can access
         // informational services like featureGrants. The write→confirm floor remains structurally
