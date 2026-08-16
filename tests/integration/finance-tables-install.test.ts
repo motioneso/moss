@@ -40,10 +40,7 @@ afterEach(async () => {
   await client.query(
     "REVOKE EXECUTE ON FUNCTION app.current_actor_user_id() FROM jarvis_mod_finance_install CASCADE"
   );
-  await dropModuleRolesAtTeardown(client, [
-    "jarvis_mod_finance_install",
-    "jarvis_mod_finance_runtime"
-  ]);
+  await dropModuleRolesAtTeardown(["jarvis_mod_finance_install", "jarvis_mod_finance_runtime"]);
   await client.query("DELETE FROM app.module_installs WHERE module_id = $1", [moduleId]);
   await client.query("DELETE FROM app.module_schema_migrations WHERE module_id = $1", [moduleId]);
   await client.end();

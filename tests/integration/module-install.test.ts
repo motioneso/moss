@@ -36,7 +36,7 @@ afterEach(async () => {
     "REVOKE EXECUTE ON FUNCTION app.current_actor_user_id() " +
       "FROM jarvis_mod_install_fixture_install CASCADE"
   );
-  await dropModuleRolesAtTeardown(client, [
+  await dropModuleRolesAtTeardown([
     "jarvis_mod_install_fixture_install",
     "jarvis_mod_install_fixture_runtime"
   ]);

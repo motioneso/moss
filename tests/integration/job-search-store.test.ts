@@ -20,7 +20,7 @@ import type {
   Posting,
   SearchCriteria
 } from "../../external-modules/job-search/src/domain/records.js";
-import { resetEmptyFoundationDatabase } from "./test-database.js";
+import { dropModuleRolesAtTeardown, resetEmptyFoundationDatabase } from "./test-database.js";
 
 const urls = getMossDatabaseUrls();
 const moduleId = "job-search";
@@ -56,8 +56,8 @@ afterEach(async () => {
     `REVOKE EXECUTE ON FUNCTION app.current_actor_user_id() FROM ` +
       `${moduleInstallRoleName(moduleId)} CASCADE`
   );
-  await client.query(`DROP ROLE IF EXISTS ${moduleInstallRoleName(moduleId)}`).catch(() => {});
-  await client.query(`DROP ROLE IF EXISTS ${runtimeRole}`).catch(() => {});
+  // Cluster-global: locked, and fail-closed apart from the one documented 2BP01 case (#1013).
+  await dropModuleRolesAtTeardown([moduleInstallRoleName(moduleId), runtimeRole]);
   await client.query("DELETE FROM app.module_installs WHERE module_id = $1", [moduleId]);
   await client.query("DELETE FROM app.module_schema_migrations WHERE module_id = $1", [moduleId]);
   // Cases 7-8's fixtures. The bootstrap connection is a superuser role for test setup/teardown

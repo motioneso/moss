@@ -52,8 +52,10 @@ import { storageMigrateHandler } from "../../external-modules/finance/src/worker
 import {
   connectionStrings,
   dropModuleRolesAtTeardown,
+  grantModuleMembershipAtSetup,
   ids,
-  resetFoundationDatabase
+  resetFoundationDatabase,
+  revokeModuleMembershipAtTeardown
 } from "./test-database.js";
 
 const urls = getMossDatabaseUrls();
@@ -421,10 +423,11 @@ beforeAll(async () => {
   bootstrap = new Client({ connectionString: connectionStrings.bootstrap });
   await bootstrap.connect();
   // module-storage-rpc.test.ts pattern: let the app-runtime role assume the module's
-  // runtime role for createModuleStorageRpc's per-call SET LOCAL ROLE.
-  await bootstrap.query(
+  // runtime role for createModuleStorageRpc's per-call SET LOCAL ROLE. Membership is
+  // cluster-global, so it goes through the lock rather than this connection (#1013).
+  await grantModuleMembershipAtSetup([
     "GRANT jarvis_mod_finance_runtime TO jarvis_app_runtime WITH INHERIT FALSE"
-  );
+  ]);
   // external-module-job-search-kv-isolation.test.ts pattern: the lightweight direct
   // bootstrap insert that satisfies jarvis_worker_runtime's module_kv RLS policy
   // (0157_module_worker_runtime_access.sql requires an enabled app.external_modules row)
@@ -444,12 +447,16 @@ beforeAll(async () => {
 afterAll(async () => {
   await Promise.allSettled([appDb?.destroy(), workerDb?.destroy()]);
 
+  // Role membership first — Postgres refuses to revoke a grant-option privilege while a
+  // dependent downstream grant still exists (module-storage-rpc.test.ts's ordering). It is also
+  // cluster-global, so it runs under the lock on its own session (#1013).
+  await revokeModuleMembershipAtTeardown([
+    "REVOKE jarvis_mod_finance_runtime FROM jarvis_app_runtime"
+  ]);
+
   const client = new Client({ connectionString: connectionStrings.bootstrap });
   await client.connect();
   try {
-    // Role membership first — Postgres refuses to revoke a grant-option privilege while a
-    // dependent downstream grant still exists (module-storage-rpc.test.ts's ordering).
-    await client.query("REVOKE jarvis_mod_finance_runtime FROM jarvis_app_runtime");
     for (const table of ownedTables) {
       await client.query(`DROP TABLE IF EXISTS ${table} CASCADE`);
     }
@@ -464,10 +471,7 @@ afterAll(async () => {
     await client.query(
       "REVOKE EXECUTE ON FUNCTION app.current_actor_user_id() FROM jarvis_mod_finance_install CASCADE"
     );
-    await dropModuleRolesAtTeardown(client, [
-      "jarvis_mod_finance_install",
-      "jarvis_mod_finance_runtime"
-    ]);
+    await dropModuleRolesAtTeardown(["jarvis_mod_finance_install", "jarvis_mod_finance_runtime"]);
     await client.query("DELETE FROM app.module_installs WHERE module_id = $1", [moduleId]);
     await client.query("DELETE FROM app.module_schema_migrations WHERE module_id = $1", [moduleId]);
     await client.query("DELETE FROM app.external_modules WHERE id = $1", [moduleId]);

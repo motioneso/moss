@@ -1,12 +1,15 @@
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import type { WithClusterDdlLockOptions } from "@moss/db";
 import {
   DEFAULT_JARVIS_DATABASE_NAME,
   getMossDatabaseUrls,
   resolveMossEnv,
   runSqlFiles,
-  runSqlMigrations
+  runSqlFilesWithClient,
+  runSqlMigrations,
+  withClusterDdlLock
 } from "@moss/db";
 import { migratePgBoss } from "@moss/jobs";
 import { getAllQueueDefinitions, getBuiltInSqlMigrationDirectories } from "@moss/module-registry";
@@ -68,7 +71,13 @@ export async function resetFoundationDatabase(): Promise<void> {
 export async function resetEmptyFoundationDatabase(): Promise<void> {
   assertIsolatedTestDatabase(connectionStrings.bootstrap);
   await dropApplicationSchemas();
-  await runSqlFiles(connectionStrings.bootstrap, join(root, "infra/postgres/bootstrap"));
+  // The bootstrap directory issues CREATE ROLE / ALTER ROLE, which write the cluster-global
+  // pg_authid — shared by every gate database on this host. Two lanes resetting at once collide
+  // with `tuple concurrently updated` (#1013), and this reset runs ~100 times per gate, so it is
+  // by far the heaviest participant. Same shape as scripts/migrate.ts's production path (#1632).
+  await withClusterDdlLock(connectionStrings.bootstrap, (client) =>
+    runSqlFilesWithClient(client, join(root, "infra/postgres/bootstrap"))
+  );
   await runSqlMigrations({
     connectionString: connectionStrings.migration,
     migrationsDirectory: join(root, "infra/postgres/migrations")
@@ -185,6 +194,50 @@ async function seedProbeData(): Promise<void> {
 }
 
 /**
+ * Options for the cluster-global DDL helpers below. `lock` is a pass-through to #1632's helper and
+ * exists so `tests/unit/test-database-role-ddl-lock.test.ts` can pin routing through the DI seams
+ * without a live cluster; suites never pass it.
+ */
+export interface ClusterGlobalDdlOptions {
+  readonly lock?: WithClusterDdlLockOptions;
+}
+
+/**
+ * Run cluster-global DDL under #1632's lock, on its guarded DDL session.
+ *
+ * One lock section per call, never one per statement: acquire/release is a cluster-wide
+ * serialization point, and nesting sections to amortise it throws `ClusterDdlLockReentrancyError`
+ * (the guard is process-global). Callers are safe to chain these back to back because vitest runs
+ * suites sequentially here (`vitest.config.ts` — `pool: "forks"`, `fileParallelism: false`), so
+ * every section is a sibling rather than a nested call.
+ *
+ * The connection string is the BOOTSTRAP url on purpose: the lock session swaps its database to
+ * `JARVIS_CLUSTER_LOCK_DATABASE` itself, so every participant lands on one maintenance database and
+ * the advisory-lock tags actually match.
+ */
+async function runClusterGlobalDdl(
+  statements: readonly string[],
+  options: ClusterGlobalDdlOptions,
+  isTolerated: (error: unknown) => boolean = () => false
+): Promise<void> {
+  if (statements.length === 0) return;
+
+  await withClusterDdlLock(
+    connectionStrings.bootstrap,
+    async (client) => {
+      for (const statement of statements) {
+        try {
+          await client.query(statement);
+        } catch (error) {
+          if (!isTolerated(error)) throw error;
+        }
+      }
+    },
+    options.lock
+  );
+}
+
+/**
  * Drop a module's per-module Postgres roles during teardown, tolerating the one failure that is
  * not ours to fix.
  *
@@ -197,18 +250,51 @@ async function seedProbeData(): Promise<void> {
  * already clean; and `ensureModuleRoles` Phase A unconditionally resets a pre-existing role to
  * NOLOGIN PASSWORD NULL on every invocation, so a surviving role cannot carry login capability into
  * the next run. Any other error still throws. See issue #1345.
+ *
+ * Takes no caller connection (#1013): the drops run on the lock's guarded DDL session, and a
+ * `client` parameter that no statement lands on would invite callers to assume otherwise — that
+ * these drops join their transaction, or that they can be reordered against the per-database
+ * REVOKEs above the call. They cannot; the REVOKEs must still complete first, on the caller's own
+ * connection, or Postgres refuses the drop.
  */
 export async function dropModuleRolesAtTeardown(
-  client: pg.Client,
-  roles: readonly string[]
+  roles: readonly string[],
+  options: ClusterGlobalDdlOptions = {}
 ): Promise<void> {
-  for (const role of roles) {
-    try {
-      await client.query(`DROP ROLE IF EXISTS ${role}`);
-    } catch (error) {
-      if ((error as { code?: string }).code !== "2BP01") {
-        throw error;
-      }
-    }
-  }
+  await runClusterGlobalDdl(
+    roles.map((role) => `DROP ROLE IF EXISTS ${role}`),
+    options,
+    (error) => (error as { code?: string }).code === "2BP01"
+  );
+}
+
+/**
+ * Grant role membership (`GRANT <role> TO <role>`) from a suite's arrange phase.
+ *
+ * Membership lives in `pg_auth_members`, which is cluster-global exactly like `pg_authid` — so
+ * these writes race across parallel gate databases the same way `DROP ROLE` does. Fail-closed: a
+ * membership failure is a real cluster-catalog error, never another database's ownership claim, so
+ * it gets none of `DROP ROLE`'s 2BP01 tolerance.
+ */
+export async function grantModuleMembershipAtSetup(
+  statements: readonly string[],
+  options: ClusterGlobalDdlOptions = {}
+): Promise<void> {
+  await runClusterGlobalDdl(statements, options);
+}
+
+/**
+ * Revoke role membership during teardown. Cluster-global and fail-closed — see
+ * {@link grantModuleMembershipAtSetup}.
+ *
+ * Call this BEFORE the per-database privilege REVOKEs that follow it in a suite's teardown:
+ * Postgres refuses to revoke a grant-option privilege while a dependent downstream grant still
+ * exists, so the membership has to go first. That ordering is why this is a separate lock section
+ * from {@link dropModuleRolesAtTeardown} rather than one wrapping both.
+ */
+export async function revokeModuleMembershipAtTeardown(
+  statements: readonly string[],
+  options: ClusterGlobalDdlOptions = {}
+): Promise<void> {
+  await runClusterGlobalDdl(statements, options);
 }

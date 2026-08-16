@@ -10,6 +10,12 @@ in four non-blockers; round 2
 B2 (role-membership `GRANT`/`REVOKE` writers mapped as site 12, discovery pattern widened to
 membership forms). Awaiting re-review.
 
+**Amended:** 2026-08-16 — see [Amendment](#amendment--2026-08-16-what-actually-shipped). The
+primitive this spec designed was built and merged under a different issue (#1632, PR #1633,
+`389e96488`) with a different signature, so the sections marked _(amended)_ below describe the
+design, not the code. #1013 keeps the acceptance criteria and now owns the surface #1632 left
+uncovered.
+
 **Issue:** #1013 (task; no parent roll-up)
 
 **Source:** two full-gate attempts during UX #990 failed in different integration suites inside
@@ -107,7 +113,7 @@ Add one primitive to `@moss/db` — a **cluster-scoped advisory lock** — and h
 the cluster-global DDL sections (sites 1–6 and 9–12). Nothing else changes: per-lane databases, migration
 flow, and gate parallelism are preserved; only the seconds-long shared-catalog sections serialize.
 
-### The primitive
+### The primitive _(amended — built as #1632; see Amendment)_
 
 `withClusterDdlLock(bootstrapConnectionString, fn)` in a new `packages/db/src/cluster-ddl-lock.ts`:
 
@@ -127,7 +133,7 @@ flow, and gate parallelism are preserved; only the seconds-long shared-catalog s
 process crash, `kill -9`, network drop, or Postgres restart. There is no lock file to go stale and
 no cleanup path to build. This is the decisive advantage over any file-based lock.
 
-### Wrap sites — the lock lives with the DDL, not with callers
+### Wrap sites — the lock lives with the DDL, not with callers _(amended)_
 
 Per the `wired-not-just-defined` lesson, acquisition goes inside the seam owners so future callers
 cannot forget it:
@@ -216,7 +222,7 @@ reliability fix, no feature-visible delta). The env override exists for managed 
 - A concurrent two-worktree proof no longer produces catalog tuple-update failures.
 - Lock acquisition/release fails safely and cannot delete or migrate sibling/shared databases.
 
-## Verification strategy
+## Verification strategy _(amended)_
 
 Two tiers, defined precisely in the plan:
 
@@ -233,6 +239,91 @@ Two tiers, defined precisely in the plan:
 Determinism boundary: not applicable — no user-facing surface and no model involvement anywhere in
 this change. Live-path UAT: not required (internal tooling; `docs/DEVELOPMENT_STANDARDS.md`
 Live-Path Gate out-of-scope clause).
+
+## Amendment — 2026-08-16: what actually shipped
+
+The primitive this spec designed was built and merged under **#1632 / PR #1633 (`389e96488`)**
+while #1013 was frozen. It is the same decision, built to a different shape, so the design sections
+above stand as the rationale and this section is the record of the code. Where the two disagree,
+this section is correct. Nothing here changes [Acceptance](#acceptance-from-1013-unchanged).
+
+### The primitive as built
+
+`withClusterDdlLock(connectionString, fn, options?)` in `packages/db/src/cluster-ddl-lock.ts`, with
+three departures from the design:
+
+1. **Dual-session, and the callback gets a client.** The lock session lives on the maintenance
+   database as designed, but the callback now receives a _guarded client_ already connected to the
+   target database, so the wrapped work runs on a session the primitive owns and can vouch for. The
+   seam is therefore `runSqlFilesWithClient(client, directory)`, not `runSqlFiles(url, directory)`.
+2. **Liveness, which this spec did not ask for.** A heartbeat checks the lock session throughout
+   the section and throws `ClusterDdlLockLivenessLostError` if it dies mid-section. The spec's
+   "crash recovery is inherent" claim is true but insufficient on its own: the lock evaporating is
+   exactly the case where the section must not keep running as though it still held it.
+3. **An options parameter.** `WithClusterDdlLockOptions` carries the lock key, the liveness
+   interval, and a diagnostics sink emitting `{type: "acquired" | "heartbeat" | "released",
+ownerPid}`. Threading it is not optional at a call site that has one — see #1637 below.
+
+The default lock key is `jarv1s:cluster-ddl`, not the `moss:cluster-ddl` named above.
+
+**Non-reentrancy is enforced, not just documented.** A process-global flag makes a nested or
+concurrent call throw `ClusterDdlLockReentrancyError`, superseding the design's plan to document
+the constraint on every wrapped function. Lock sections must be sequential siblings. In the test
+suite this holds only because `vitest.config.ts` sets `pool: "forks"` with `fileParallelism:
+false` — one lock section per process at a time. That configuration is now load-bearing.
+
+### Wrap sites as built
+
+- **No `runClusterBootstrapSql`.** Both bootstrap sites call the primitive directly:
+  `scripts/migrate.ts:29` and `tests/integration/test-database.ts:78`. Grants stay unlocked, as
+  designed.
+- **No `preDropSql` hook.** The test surface funnels through one helper,
+  `runClusterGlobalDdl(statements, options, isTolerated?)` in `tests/integration/test-database.ts`,
+  with three callers: `dropModuleRolesAtTeardown` (tolerates SQLSTATE `2BP01` only),
+  `grantModuleMembershipAtSetup` and `revokeModuleMembershipAtTeardown` (both fail-closed). They
+  are sibling calls in `beforeAll`/`afterAll`, never nested, which is what the reentrancy guard
+  now requires rather than merely prefers.
+- **The membership ordering constraint is load-bearing.** Membership `REVOKE` must precede
+  per-database revokes, which must precede `DROP ROLE`: Postgres refuses to revoke a grant-option
+  privilege while a dependent downstream grant exists. `tests/unit/cluster-ddl-lock-wiring.test.ts`
+  asserts the ordering in every suite that calls the teardown helper.
+- Site 10's four inline job-search cleanups route through `dropModuleRolesAtTeardown` as designed.
+- The spec's claim that membership grant/revoke "is not a standalone call site" is **true of
+  production and false of the test suite**. That gap is the whole of #1013's remaining scope: the
+  collisions acceptance criterion 3 names are on the test path, so #1632 could not close it.
+
+### #1637 — the production-path half, split out
+
+Threading `options` partially is a partial lock domain. `reconcileModules` resolved its connection
+strings from an injected `env` while the lock resolved its maintenance database from ambient
+`process.env`; under a non-default `JARVIS_CLUSTER_LOCK_DATABASE` the two diverge, and because
+advisory-lock tags are scoped by database OID, every participant acquires a real lock that excludes
+nobody — silent, no error, green suite. Fixed on `fix-1013-lock-domain-env-consistency`
+(`755e1aa2a`) under issue #1637, shipping separately so the production and test paths carry
+separate proof.
+
+### Verification strategy as built (supersedes [Verification strategy](#verification-strategy))
+
+**Tier 1** is `scripts/prove-cluster-ddl-lock.ts`, modes `solo`, `owner-loss`, `cross-db`,
+`cross-db-lane`. #1013 adds to `cross-db`:
+
+- **D2 — attribution.** All cluster backends are sampled during the run and each lane error is
+  attributed to the backends captured around it. An error nobody was captured for fails the run on
+  its own line: unattributable means the lock can be neither convicted nor cleared.
+- **T3 — negative control.** `--external-writer-demo` runs an unlocked writer alongside the lanes
+  and fails unless that writer is actually captured and classified external, so a blind observer
+  cannot read as a clean proof.
+
+This replaces the design's unlocked baseline ("without the lock it must observe at least one
+error"), which staked the proof on catching a probabilistic race. The harness now proves exclusion
+positively — zero measured overlap between the two lanes' locked sections — and proves the
+measurement itself is live via T3.
+
+**Tier 2** is unchanged in substance but not in owner: the two-worktree concurrent gate is run as a
+**kill gate by the Coordinator**, in two throwaway worktrees with separate gate databases, not by
+the builder. Pass is zero `XX000 tuple concurrently updated` and zero unattributable errors.
+Cross-lane `2BP01` `DROP ROLE` dependency errors arising from fixed module fixture ids are a
+known-accepted residual and not a trip.
 
 ## Out of scope
 

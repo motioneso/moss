@@ -18,7 +18,7 @@ import {
 } from "../../packages/db/src/module-role-broker.js";
 import { getMossDatabaseUrls } from "../../packages/db/src/urls.js";
 import { JOB_SEARCH_TABLES } from "../../external-modules/job-search/src/db/tables.js";
-import { resetEmptyFoundationDatabase } from "./test-database.js";
+import { dropModuleRolesAtTeardown, resetEmptyFoundationDatabase } from "./test-database.js";
 
 const urls = getMossDatabaseUrls();
 const moduleId = "job-search";
@@ -61,18 +61,21 @@ afterEach(async () => {
     `REVOKE EXECUTE ON FUNCTION app.current_actor_user_id() FROM ` +
       `${moduleInstallRoleName(moduleId)} CASCADE`
   );
-  // Best-effort: DROP ROLE is cluster-wide, and this shared dev Postgres instance carries ~40
-  // other agents' gate/UAT databases. If the role was ever installed against one of those (outside
-  // this file's control), it still holds grants there and DROP ROLE fails with "some objects
-  // depend on it" even though this database's own grants were just fully revoked above. Losing
-  // the role drop only leaks a harmless NOLOGIN role in the cluster — ensureModuleRoles
-  // (module-role-broker.ts) treats an already-existing role as fully idempotent on the next
-  // install(), so it can't break this suite. What MUST survive a role-drop failure is the ledger
-  // cleanup below: without it, the next `it`'s install() sees migrations already recorded, skips
-  // reapplying them, and then fails emitting RLS SQL against tables this afterEach already
-  // dropped.
-  await client.query(`DROP ROLE IF EXISTS ${moduleInstallRoleName(moduleId)}`).catch(() => {});
-  await client.query(`DROP ROLE IF EXISTS ${runtimeRole}`).catch(() => {});
+  // DROP ROLE is cluster-wide, and this shared dev Postgres instance carries ~40 other agents'
+  // gate/UAT databases. If the role was ever installed against one of those (outside this file's
+  // control), it still holds grants there and DROP ROLE fails with "some objects depend on it"
+  // even though this database's own grants were just fully revoked above. Losing the role drop
+  // only leaks a harmless NOLOGIN role in the cluster — ensureModuleRoles (module-role-broker.ts)
+  // treats an already-existing role as fully idempotent on the next install(), so it can't break
+  // this suite. What MUST survive a role-drop failure is the ledger cleanup below: without it, the
+  // next `it`'s install() sees migrations already recorded, skips reapplying them, and then fails
+  // emitting RLS SQL against tables this afterEach already dropped.
+  //
+  // That tolerance now lives in dropModuleRolesAtTeardown, narrowed to SQLSTATE 2BP01 — the
+  // blanket `.catch(() => {})` this replaces also swallowed permission and syntax failures. The
+  // drops additionally run under the cluster-DDL lock, since pg_authid is shared by every gate
+  // database on the host (#1013).
+  await dropModuleRolesAtTeardown([moduleInstallRoleName(moduleId), runtimeRole]);
   await client.query("DELETE FROM app.module_installs WHERE module_id = $1", [moduleId]);
   await client.query("DELETE FROM app.module_schema_migrations WHERE module_id = $1", [moduleId]);
   await client.query("DELETE FROM app.users WHERE id = ANY($1::uuid[])", [[ownerA, ownerB]]);
