@@ -22,6 +22,7 @@ import {
   moduleInstallRoleName,
   moduleRuntimeRoleName,
   resolveMossEnv,
+  TargetIdentityMismatchError,
   withClusterDdlLock,
   type WithClusterDdlLockOptions
 } from "@moss/db";
@@ -102,6 +103,73 @@ export interface ReconcileModulesOptions {
   readonly fetchFn?: typeof fetch;
 }
 
+/**
+ * #1468: extends #1383's target-identity guard to this boot-time supervisor entrypoint. An
+ * "un-provisioned target" — a database nobody has installed onto yet — is the only state
+ * allowed through without a confirmation email, and only when BOTH hold: the connected role is
+ * trustworthy (superuser, has `rolbypassrls`, or owns `app.users` — so an unprivileged
+ * connection can't forge the exception) AND `app.users` is genuinely empty (`COUNT(*) = 0`, not
+ * merely "no row has `is_bootstrap_owner` set" — a populated table with no flagged owner is a
+ * broken or tampered state, not a fresh install, and must still refuse).
+ */
+export async function assertReconcileTargetIdentity(
+  client: Client,
+  env: NodeJS.ProcessEnv = process.env
+): Promise<void> {
+  const trusted = await isConnectedRoleTrustedForUnprovisionedTarget(client);
+  if (trusted && (await isAppUsersGenuinelyEmpty(client))) {
+    return;
+  }
+
+  const ownerResult = await client.query<{ id: string; email: string }>(
+    "SELECT id, email FROM app.users WHERE is_bootstrap_owner = true LIMIT 1"
+  );
+  const owner = ownerResult.rows[0];
+  const confirmedEmail = resolveMossEnv(env, "JARVIS_RECONCILE_CONFIRM_OWNER_EMAIL");
+
+  if (!owner || !confirmedEmail || confirmedEmail !== owner.email) {
+    throw new TargetIdentityMismatchError();
+  }
+}
+
+async function isConnectedRoleTrustedForUnprovisionedTarget(client: Client): Promise<boolean> {
+  const roleResult = await client.query<{
+    role_name: string;
+    rolsuper: boolean;
+    rolbypassrls: boolean;
+  }>(
+    `SELECT current_user AS role_name, rolsuper, rolbypassrls
+       FROM pg_roles
+      WHERE rolname = current_user`
+  );
+  const role = roleResult.rows[0];
+  if (!role) {
+    return false;
+  }
+  if (role.rolsuper || role.rolbypassrls) {
+    return true;
+  }
+
+  const ownerResult = await client.query<{ tableowner: string }>(
+    `SELECT tableowner
+       FROM pg_tables
+      WHERE schemaname = 'app' AND tablename = 'users'`
+  );
+  return ownerResult.rows[0]?.tableowner === role.role_name;
+}
+
+async function isAppUsersGenuinelyEmpty(client: Client): Promise<boolean> {
+  const schemaCheck = await client.query<{ to_regclass: string | null }>(
+    "SELECT to_regclass('app.users')"
+  );
+  if (schemaCheck.rows[0]?.to_regclass === null) {
+    return true;
+  }
+
+  const countResult = await client.query<{ count: string }>("SELECT COUNT(*) FROM app.users");
+  return countResult.rows[0]?.count === "0";
+}
+
 export async function reconcileModules(options: ReconcileModulesOptions): Promise<ReconcileReport> {
   const env = options.env ?? process.env;
   const urls = getMossDatabaseUrls(env);
@@ -128,6 +196,8 @@ export async function reconcileModules(options: ReconcileModulesOptions): Promis
   const client = new Client({ connectionString: urls.bootstrap });
   await client.connect();
   try {
+    await assertReconcileTargetIdentity(client, env);
+
     // Phase 0 — one lock for the whole run (sql-runner.ts:199 precedent). Session-level
     // (not xact) because destructive phases intentionally run OUTSIDE one big
     // transaction: a purge is a sequence of DDL + fs operations that cannot roll back
