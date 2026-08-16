@@ -471,3 +471,7 @@ via `needs-ben`, per the box-wide rule for a blocked human decision.
   only test/script/doc files touched, no production code, so nothing to click through live.
 
 Full detail: `docs/coordination/post1632-queue-2026-08-16.md`.
+
+**RESOLVED 2026-08-16.** Ben replied via `needs-ben`: "Yes that's good." Merge sign-off confirmed
+for both PR #1639 and PR #1624. Handed to the take-13 coordinator relay to execute (manifest
+continuation note, same file, has the merge/comment/board-update steps).
