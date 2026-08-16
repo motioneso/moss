@@ -120,7 +120,7 @@ the existing two tests (lines 317-360 pattern, reused as scaffolding).
    Assert: exactly one resolve request received; while held, `.action-request-actions` is not
    present and `Resolving…` is visible; `[data-state="confirmed"]` is not present. Release the gate;
    assert `[data-state="confirmed"]` renders `"Approved"` exactly once.
-   *Why it fails today:* the old code's only ordering guard was `setStatus("loading")`, a React
+   _Why it fails today:_ the old code's only ordering guard was `setStatus("loading")`, a React
    state update — not synchronous — so a second click fired in the same task before the first
    render commit reads `status === "pending"` too and calls `resolve` again, sending two requests.
 2. **"unmounting the drawer while a resolution is pending raises no console or page error"** —
@@ -128,9 +128,9 @@ the existing two tests (lines 317-360 pattern, reused as scaffolding).
    the resolve route open, click Approve once, then click "Close chat" (unmounts per
    `chat-drawer.tsx:439-443` / proof at `chat-drawer.spec.ts:646-651`) while the request is still
    pending, then release the held route. Assert the collected error arrays are empty after release.
-   *Why it fails today:* the old code's `.catch`/`.then` continuation calls `setStatus`/`setDecision`
+   _Why it fails today:_ the old code's `.catch`/`.then` continuation calls `setStatus`/`setDecision`
    unconditionally after `await`, which is a no-op post-unmount in React 18 (batched, warning-free)
-   for a **single** in-flight call — this test is guarding the *combination* the spec calls out
+   for a **single** in-flight call — this test is guarding the _combination_ the spec calls out
    (unmount-safety of the admission ref specifically), so it must pass against the new code and
    would be the regression net if a future edit reintroduces an unmount-unsafe write (e.g. a second
    ref/flag guarded incorrectly).
@@ -143,7 +143,7 @@ the existing two tests (lines 317-360 pattern, reused as scaffolding).
    `apps/web/src/api/client.ts` around `readErrorBody` for the exact field name before writing this
    fixture). Click Approve once. Assert `"This request expired — ask again."` is visible and no
    `Approve`/`Reject` buttons are present afterward.
-   *Why it fails today:* this exact copy/state already exists in the current component, so this
+   _Why it fails today:_ this exact copy/state already exists in the current component, so this
    test is new regression coverage (the "drift" noted in the seams check), not a red-then-green
    TDD case against broken code — write it, confirm it passes against the new mutation-based
    `isExpired` derivation, and treat a red result here as a bug in the new code, not an expected
