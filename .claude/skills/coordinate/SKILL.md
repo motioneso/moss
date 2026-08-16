@@ -337,6 +337,12 @@ When an agent reports **done** (PR open + its own green evidence — which you d
    ```bash
    gh pr merge <PR> --squash --delete-branch
    ```
+   Once the `CI gate` required-status-check ruleset (#895) is applied to `main`, `--auto` is safe
+   to add here for `routine`/`sensitive` tiers — GitHub then holds the merge until the required
+   check resolves instead of merging immediately. Until the ruleset lands, do not add it: with no
+   required check configured, `--auto` would merge without waiting on anything. `security` tier is
+   unaffected either way — Ben's explicit sign-off stays a separate, non-bypassable gate.
+
    Then GitHub bookkeeping (source of truth): close the issue, check epic exit-criteria, move the
    board item to Done, close the milestone if complete (field IDs: `start` skill's GitHub
    reference). Add the merge to Ben's standing digest.
