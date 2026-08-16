@@ -113,6 +113,13 @@ OK. `routine` auto-merges after green; `sensitive` auto-merges + per-merge diges
 a **standing per-merge digest** (what landed, PR link, tier, verified exit codes) so Ben has a
 continuous picture without gating routine work.
 
+**Every Ben-facing message — digests, sign-off asks, needs-ben pings, chat replies — is in plain
+English, not jargon.** Ben flagged this directly (2026-08-16): a dense paragraph full of backticked
+identifiers, commit hashes, and internal vocabulary makes him decode a sentence to get a fact he
+could've been told directly. Say what happened in normal words first; keep exact identifiers (PR
+numbers, commit hashes, file paths) available for when he needs to act on one, but don't lead with
+them or stack them. Full guidance: agentmemory `feedback-plain-english.md`.
+
 ## Phase 0a — claim the single-coordinator lock (FIRST, before anything)
 
 There must be **exactly one** coordinator (see incidents: a stale labelled pane once ran a
