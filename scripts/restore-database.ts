@@ -5,16 +5,65 @@ import { resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 
-import { getMossDatabaseUrls } from "@moss/db";
+import {
+  assertOperatorConfirmsTargetOwner,
+  createDatabase,
+  getMossDatabaseUrls,
+  NoBootstrapOwnerFoundError,
+  type MossDatabase
+} from "@moss/db";
+import { sql, type Kysely } from "kysely";
 
 const POSTGRES_CONTAINER = "jarv1s-postgres";
 
 export interface RestorePlanInput {
+  readonly allowEmptyTarget?: boolean;
   readonly backupFile: string;
   readonly confirmDatabase?: string;
+  readonly confirmOwnerEmail?: string;
   readonly confirmRestore?: boolean;
   readonly connectionString?: string;
   readonly execute?: boolean;
+}
+
+/**
+ * #1468: extends the #1383 target-identity guard to the restore path. A restore's `--clean
+ * --if-exists` drops and recreates every object in the target, so proving the operator is
+ * pointed at the instance they think they are matters as much here as for secret rewrap.
+ *
+ * `allowEmptyTarget` is a narrow, explicit opt-out for the one case the base guard can't pass
+ * through on its own: restoring into a target that has no `app.users` schema yet (a fresh,
+ * never-migrated database) or a migrated-but-empty one (schema present, zero rows) has no
+ * owner to confirm identity against. A `TargetIdentityMismatchError` — a real owner row that
+ * doesn't match the supplied email — is never suppressed by this flag; it only widens the
+ * "there's nothing to confirm against" case that would otherwise throw
+ * `NoBootstrapOwnerFoundError` unconditionally.
+ */
+export async function assertRestoreTargetIdentity(
+  db: Kysely<MossDatabase>,
+  input: { readonly confirmOwnerEmail?: string; readonly allowEmptyTarget?: boolean }
+): Promise<{ readonly id: string; readonly email: string } | null> {
+  const schemaCheck = await sql<{ to_regclass: string | null }>`
+    SELECT to_regclass('app.users')
+  `.execute(db);
+
+  const usersTableExists = schemaCheck.rows[0]?.to_regclass !== null;
+
+  if (!usersTableExists) {
+    if (!input.allowEmptyTarget) {
+      throw new NoBootstrapOwnerFoundError();
+    }
+    return null;
+  }
+
+  try {
+    return await assertOperatorConfirmsTargetOwner(db, input.confirmOwnerEmail);
+  } catch (error) {
+    if (error instanceof NoBootstrapOwnerFoundError && input.allowEmptyTarget) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 export interface RestorePlan {
@@ -104,13 +153,25 @@ async function main(): Promise<void> {
     console.log(`Restore target: database "${plan.database}" on host "${plan.host}".`);
     console.log(
       "Restore drill plan only. Add --execute --confirm-restore " +
-        `--confirm-database ${plan.database} to run pg_restore.`
+        `--confirm-database ${plan.database} --confirm-owner-email <target's bootstrap owner email> ` +
+        "to run pg_restore."
     );
     console.log(`${plan.backupFile} | ${plan.dockerCommand} ${plan.restoreArgs.join(" ")}`);
     return;
   }
 
   await access(plan.backupFile);
+
+  const db = createDatabase({ connectionString: args.connectionString ?? getMossDatabaseUrls().bootstrap });
+  try {
+    await assertRestoreTargetIdentity(db, {
+      confirmOwnerEmail: args.confirmOwnerEmail,
+      allowEmptyTarget: args.allowEmptyTarget
+    });
+  } finally {
+    await db.destroy();
+  }
+
   console.log(
     `Restoring database "${plan.database}" on host "${plan.host}" from sensitive backup ${plan.backupFile}`
   );
@@ -120,8 +181,10 @@ async function main(): Promise<void> {
 
 function parseArgs(args: readonly string[]): RestorePlanInput {
   return {
+    allowEmptyTarget: args.includes("--allow-empty-target"),
     backupFile: readRequiredFlag(args, "--input"),
     confirmDatabase: readOptionalFlag(args, "--confirm-database"),
+    confirmOwnerEmail: readOptionalFlag(args, "--confirm-owner-email"),
     confirmRestore: args.includes("--confirm-restore"),
     execute: args.includes("--execute")
   };
