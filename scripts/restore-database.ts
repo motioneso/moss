@@ -32,12 +32,17 @@ export interface RestorePlanInput {
  * pointed at the instance they think they are matters as much here as for secret rewrap.
  *
  * `allowEmptyTarget` is a narrow, explicit opt-out for the one case the base guard can't pass
- * through on its own: restoring into a target that has no `app.users` schema yet (a fresh,
- * never-migrated database) or a migrated-but-empty one (schema present, zero rows) has no
- * owner to confirm identity against. A `TargetIdentityMismatchError` — a real owner row that
- * doesn't match the supplied email — is never suppressed by this flag; it only widens the
- * "there's nothing to confirm against" case that would otherwise throw
- * `NoBootstrapOwnerFoundError` unconditionally.
+ * through on its own: restoring into a target with nothing to confirm identity against. That
+ * covers a fresh, never-migrated database (no `app.users` schema), a migrated-but-empty one
+ * (schema present, zero rows), AND — because `assertOperatorConfirmsTargetOwner` can't tell
+ * these apart from a single failed lookup — a schema that's populated but has no row flagged
+ * `is_bootstrap_owner` (see `tests/integration/restore-database-target-guard.test.ts`'s third
+ * case). A `TargetIdentityMismatchError` — a real bootstrap-owner row that doesn't match the
+ * supplied email — is never suppressed by this flag; it only widens the "there's nothing to
+ * confirm against" case that would otherwise throw `NoBootstrapOwnerFoundError` unconditionally.
+ * QA finding N2 on PR #1647: tightening this to require the "populated but unflagged" case to
+ * go through a separate, more explicit opt-out is a real follow-up, deliberately deferred —
+ * it's a behavior change to a destructive-operation guard, not a QA-RED fix.
  */
 export async function assertRestoreTargetIdentity(
   db: Kysely<MossDatabase>,

@@ -307,6 +307,10 @@ describe("uatComposeInterpolationEnv", () => {
     expect(env.JARVIS_DOCKER_SUBNET).toBe(TEST_SUBNET);
     expect(env.POSTGRES_PASSWORD).toBeTruthy();
     expect(env.JARVIS_CLI_RUNNER_RPC_SECRET).toBeTruthy();
+    // #1468 (B2): restartUatStack's `docker compose restart jarv1s` reruns the container's
+    // already-materialized env — the bootstrap-owner confirmation must be interpolated at the
+    // earlier `up -d jarv1s --wait` step, or module-reconcile.ts's boot one-shot refuses.
+    expect(env.MOSS_RECONCILE_CONFIRM_OWNER_EMAIL).toBe("uat-admin@jarv1s.local");
   });
 });
 
