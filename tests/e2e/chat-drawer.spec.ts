@@ -740,6 +740,123 @@ test("#664: a sent message renders after the prior turn, not at the top", async 
   gate.resolve?.();
 });
 
+// #1519 (1139-B): reconcile fallback records by identity (kind + messageId), not by kind + exact
+// text. Two turns sent with identical text produce two same-kind, same-text fallback pairs with
+// distinct ids. The old predicate matched an incoming SSE record against BOTH identical fallbacks
+// by text alone, so the first SSE delivery silently dropped its still-unconfirmed sibling — a
+// visible flicker from 2 bubbles to 1. This locks the fix: each SSE delivery must retire only the
+// fallback that shares its messageId, and the legacy (id-less on both sides) case must still fall
+// back to kind + exact text.
+test("identical fallbacks reconcile by messageId, not by kind+text", async ({ page }) => {
+  await mockApi(page, {
+    authenticated: true,
+    chatThreads: [],
+    connectorAccounts: [],
+    connectorProviders: createMockConnectorProviders(),
+    notifications: [],
+    tasks: []
+  });
+
+  // Three staged SSE connections, one per reconciling delivery, each held open until its gate
+  // resolves so we control exactly when it lands relative to the POST turns already having
+  // populated fallbackRecords. After the third, hold the stream open forever (no replay).
+  function makeGate(): { readonly promise: Promise<void>; readonly resolve: () => void } {
+    let resolve: (() => void) | null = null;
+    const promise = new Promise<void>((r) => {
+      resolve = r;
+    });
+    return { promise, resolve: resolve! };
+  }
+  const gate0 = makeGate();
+  const gate1 = makeGate();
+  const gate2 = makeGate();
+  const connections: ReadonlyArray<{
+    readonly gate: { readonly promise: Promise<void>; readonly resolve: () => void };
+    readonly body: string;
+  }> = [
+    {
+      gate: gate0,
+      body: 'retry: 10\ndata: {"kind":"reply","text":"Reply to Ping","messageId":"turn-1-reply"}\n\n'
+    },
+    {
+      gate: gate1,
+      body: 'retry: 10\ndata: {"kind":"reply","text":"Reply to Ping","messageId":"turn-2-reply"}\n\n'
+    },
+    { gate: gate2, body: 'data: {"kind":"reply","text":"Reply to Legacy ping"}\n\n' }
+  ];
+  let connectionIndex = 0;
+  await page.route("**/api/chat/stream*", async (route) => {
+    const idx = connectionIndex++;
+    const connection = connections[idx];
+    if (!connection) {
+      return; // hold the final reconnect open forever; no replay
+    }
+    await connection.gate.promise;
+    await route.fulfill({
+      status: 200,
+      contentType: "text/event-stream",
+      headers: { "cache-control": "no-cache" },
+      body: connection.body
+    });
+  });
+
+  let turnCount = 0;
+  await page.route("**/api/chat/turn", async (route) => {
+    const body = route.request().postDataJSON() as { readonly text: string };
+    if (body.text === "Legacy ping") {
+      // Simulate a pre-#1482 backend response carrying no ids.
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ reply: "Reply to Legacy ping" })
+      });
+      return;
+    }
+    turnCount++;
+    const n = turnCount;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        reply: "Reply to Ping",
+        userMessageId: `turn-${n}-user`,
+        assistantMessageId: `turn-${n}-reply`
+      })
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Chat with Moss" }).click();
+  const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
+  const composerInput = drawer.getByLabel("Message Moss");
+
+  // Two identical turns land as two same-kind, same-text fallback pairs with distinct ids.
+  await composerInput.fill("Ping");
+  await composerInput.press("Enter");
+  await expect(drawer.getByText("Reply to Ping")).toHaveCount(1);
+  await composerInput.fill("Ping");
+  await composerInput.press("Enter");
+  await expect(drawer.getByText("Reply to Ping")).toHaveCount(2);
+
+  // First matching SSE delivery: only its own fallback must disappear. The old kind+text-only
+  // predicate matched BOTH identical fallbacks against this one SSE record, dropping the count
+  // to 1 — the flicker this test exists to close.
+  gate0.resolve();
+  await expect(drawer.getByText("Reply to Ping")).toHaveCount(2);
+
+  // Second matching SSE delivery: the remaining fallback reconciles too, no duplicate.
+  gate1.resolve();
+  await expect(drawer.getByText("Reply to Ping")).toHaveCount(2);
+
+  // Legacy id-less fixture: neither side has a messageId, so the kind+text fallback still
+  // applies and must not survive its own SSE echo.
+  await composerInput.fill("Legacy ping");
+  await composerInput.press("Enter");
+  await expect(drawer.getByText("Reply to Legacy ping")).toHaveCount(1);
+  gate2.resolve();
+  await expect(drawer.getByText("Reply to Legacy ping")).toHaveCount(1);
+});
+
 test("renders a large markdown reply without error", async ({ page }) => {
   await mockApi(page, {
     authenticated: true,
