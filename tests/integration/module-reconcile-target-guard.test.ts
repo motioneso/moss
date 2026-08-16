@@ -14,7 +14,7 @@ const OWNER_ID = "00000000-0000-4000-8000-000000001468";
 const OWNER_EMAIL = "owner-1468@example.test";
 const OTHER_ID = "00000000-0000-4000-8000-000000001469";
 const OTHER_EMAIL = "other-1468@example.test";
-const ENV_VAR = "JARVIS_RECONCILE_CONFIRM_OWNER_EMAIL";
+const ENV_VAR = "MOSS_RECONCILE_CONFIRM_OWNER_EMAIL";
 
 async function withClient<T>(
   connectionString: string,

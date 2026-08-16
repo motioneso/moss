@@ -194,12 +194,12 @@ beforeAll(async () => {
   // row, the DB is no longer "unprovisioned", so every reconcileModules({ modulesDir }) call
   // below needs a confirmation email that matches it — same env var prod's compose sets
   // (7c350344a), just scoped to this suite's fixture owner.
-  process.env.JARVIS_RECONCILE_CONFIRM_OWNER_EMAIL = "owner@moddist.test";
+  process.env.MOSS_RECONCILE_CONFIRM_OWNER_EMAIL = "owner@moddist.test";
 });
 
 afterAll(async () => {
   delete process.env.JARVIS_MODULE_REGISTRY_URL;
-  delete process.env.JARVIS_RECONCILE_CONFIRM_OWNER_EMAIL;
+  delete process.env.MOSS_RECONCILE_CONFIRM_OWNER_EMAIL;
   await Promise.allSettled([server?.close(), appDb?.destroy(), boss?.stop({ graceful: false })]);
   await new Promise((resolve) => registry?.close(resolve));
   rmSync(root, { recursive: true, force: true });

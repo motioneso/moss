@@ -154,7 +154,8 @@ async function main(): Promise<void> {
     console.log(
       "Restore drill plan only. Add --execute --confirm-restore " +
         `--confirm-database ${plan.database} --confirm-owner-email <target's bootstrap owner email> ` +
-        "to run pg_restore."
+        "to run pg_restore. If the target has no app.users rows yet (a fresh database), pass " +
+        "--allow-empty-target instead of --confirm-owner-email."
     );
     console.log(`${plan.backupFile} | ${plan.dockerCommand} ${plan.restoreArgs.join(" ")}`);
     return;

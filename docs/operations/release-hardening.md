@@ -99,6 +99,10 @@ The restore path uses the bootstrap/operator database URL and `pg_restore --clea
 --no-owner --no-privileges`. Like backups, the script passes the database password through
 `PGPASSWORD` instead of command arguments.
 
+#1468: the restore path confirms the target's identity before restoring — pass
+`--confirm-owner-email <email>` matching the target's current bootstrap owner, or
+`--allow-empty-target` for a target with no `app.users` rows yet (a fresh database).
+
 Treat restore as a destructive operator action. Run it only against the intended database, verify
 the backup file location before execution, and run `pnpm db:migrate` after restore when applying an
 older backup to a newer checkout.
