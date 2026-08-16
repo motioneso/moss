@@ -14,7 +14,7 @@ news previews" (lines 71-99).
 - `packages/news/src/discovery/preview-store.ts:29` — `now` is already an injectable
   `() => number` (defaults to `Date.now`), usable directly for the sweep's single `now()` read.
 - `packages/news/src/discovery/preview-store.ts:30` — `entries` is a plain `Map<string,
-  PendingSourcePreview>`; iterable with `for...of` / spread, no new data structure needed.
+PendingSourcePreview>`; iterable with `for...of` / spread, no new data structure needed.
 - `packages/news/src/discovery/preview-store.ts:45-50` — `take()` already treats
   `now() - preview.createdAt <= ttlMs` as valid (inclusive at exactly `ttlMs`). The new sweep must
   use the same inclusive boundary (delete when `age > ttlMs`) so the two functions agree.
@@ -49,15 +49,15 @@ for (const [id, value] of entries) {
 
 **Test cases** (added to `tests/unit/news-preview-store.test.ts`):
 
-1. *Cross-owner sweep.* Owner A puts an entry, clock advances past `ttlMs`, owner B puts a new
+1. _Cross-owner sweep._ Owner A puts an entry, clock advances past `ttlMs`, owner B puts a new
    entry. Assert owner A's `take` now returns `null` (swept), proving the sweep is global, not
    scoped to the owner performing the put. Would fail against the current implementation, which
-   only ever deletes within the *put-time owner's* cap logic and never inspects other owners'
+   only ever deletes within the _put-time owner's_ cap logic and never inspects other owners'
    entries.
-2. *Boundary.* One entry aged exactly `ttlMs` at the moment of a triggering put must survive the
+2. _Boundary._ One entry aged exactly `ttlMs` at the moment of a triggering put must survive the
    sweep (not deleted); an entry aged `ttlMs + 1` must be gone. Would fail against an off-by-one
    sweep condition (`>=` instead of `>`).
-3. *Cap regression.* Existing "evicts the oldest preview per owner without affecting other owners"
+3. _Cap regression._ Existing "evicts the oldest preview per owner without affecting other owners"
    test (`tests/unit/news-preview-store.test.ts:27-38`) must continue to pass unmodified — proves
    the sweep doesn't change cap behavior for live (non-expired) entries.
 
@@ -73,6 +73,7 @@ explicitly says "keep the existing... per-owner cap" unchanged.
 ```bash
 pnpm vitest run tests/unit/news-preview-store.test.ts > /tmp/1140a-vitest.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`, 4 tests passing (2 existing + 2 new; boundary case may be one `it` with two
 assertions).
 
