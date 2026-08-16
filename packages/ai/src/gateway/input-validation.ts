@@ -355,23 +355,30 @@ async function validateValue(
 export async function validateToolInput(
   schema: JsonSchema | undefined,
   input: unknown,
-  options: { readonly external: boolean }
+  options: { readonly external: boolean; readonly toolName: string }
 ): Promise<ToolInput> {
-  if (typeof input !== "object" || input === null || Array.isArray(input)) {
-    throw new ToolInputValidationError("Tool input must be an object");
-  }
-  const value = input as ToolInput;
-  if (!schema) {
-    return value;
-  }
-
-  const externalPatterns = options.external
-    ? createExternalPatternSession(AbortSignal.timeout(EXTERNAL_PATTERN_INVOCATION_TIMEOUT_MS))
-    : undefined;
   try {
-    await validateObject(schema as SchemaNode, value, "", externalPatterns);
-    return value;
-  } finally {
-    await externalPatterns?.close();
+    if (typeof input !== "object" || input === null || Array.isArray(input)) {
+      throw new ToolInputValidationError("Tool input must be an object");
+    }
+    const value = input as ToolInput;
+    if (!schema) {
+      return value;
+    }
+
+    const externalPatterns = options.external
+      ? createExternalPatternSession(AbortSignal.timeout(EXTERNAL_PATTERN_INVOCATION_TIMEOUT_MS))
+      : undefined;
+    try {
+      await validateObject(schema as SchemaNode, value, "", externalPatterns);
+      return value;
+    } finally {
+      await externalPatterns?.close();
+    }
+  } catch (error) {
+    if (error instanceof ToolInputValidationError) {
+      throw new ToolInputValidationError(`Tool ${options.toolName}: ${error.message}`);
+    }
+    throw error;
   }
 }

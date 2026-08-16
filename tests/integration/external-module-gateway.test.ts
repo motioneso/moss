@@ -167,4 +167,61 @@ describe("external module AssistantToolGateway", () => {
     await gateway.resolveActionRequest(ids.userA, request.actionRequestId, "confirmed");
     await pending;
   });
+
+  it("names the tool in the rejection when an external read tool's input fails pattern validation", async () => {
+    const discovery: ExternalModuleDiscovery = {
+      id: "acme",
+      dir: "/unused",
+      manifest: {
+        schemaVersion: 1,
+        id: "acme",
+        name: "Acme",
+        version: "1.0.0",
+        publisher: "Acme",
+        lifecycle: "optional",
+        compatibility: { jarv1s: ">=0.0.0" },
+        runtime: { workerEntrypoint: "worker.js", workerContractVersion: 1 },
+        assistantTools: [
+          {
+            name: "acme.read",
+            description: "Read",
+            permissionId: "acme.read",
+            risk: "read",
+            handler: "read",
+            inputSchema: {
+              type: "object",
+              required: ["value"],
+              properties: { value: { type: "string", pattern: "[a-z]+" } }
+            }
+          }
+        ]
+      },
+      manifestHash: "sha256:c",
+      packageHash: "sha256:c"
+    };
+    const calls: unknown[] = [];
+    const manifests = createExternalToolManifests([discovery], async (...args) => {
+      calls.push(args);
+      return { data: {} };
+    });
+    const tokens = new SessionTokenRegistry();
+    const confirmations = new ConfirmationRegistry();
+    const emitted: GatewaySessionRecord[] = [];
+    const gateway = new AssistantToolGateway({
+      resolveActiveModules: async () => manifests,
+      repository: new AiRepository(),
+      runner: new DataContextRunner(appDb),
+      tokens,
+      confirmations,
+      notifier: { emit: (_session, record) => emitted.push(record) },
+      confirmTimeoutMs: 5_000
+    });
+    const result = await gateway.runReadToolForActor(ids.userA, "acme.read", {
+      value: "NOT-LOWERCASE-123"
+    });
+    expect(result).toMatchObject({ ok: false });
+    expect(calls).toHaveLength(0);
+    expect((result as { ok: false; error: string }).error).toContain("acme.read");
+    expect((result as { ok: false; error: string }).error).toContain("has an invalid format");
+  });
 });

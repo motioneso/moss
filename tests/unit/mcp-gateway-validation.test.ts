@@ -21,7 +21,11 @@ describe("tool input validation", () => {
 
   it("accepts valid input", async () => {
     await expect(
-      validateToolInput(schema, { taskId: "t1", count: 2 }, { external: false })
+      validateToolInput(
+        schema,
+        { taskId: "t1", count: 2 },
+        { external: false, toolName: "test-tool" }
+      )
     ).resolves.toEqual({
       taskId: "t1",
       count: 2
@@ -29,20 +33,20 @@ describe("tool input validation", () => {
   });
 
   it("rejects a missing required key", async () => {
-    await expect(validateToolInput(schema, { count: 2 }, { external: false })).rejects.toThrow(
-      ToolInputValidationError
-    );
+    await expect(
+      validateToolInput(schema, { count: 2 }, { external: false, toolName: "test-tool" })
+    ).rejects.toThrow(ToolInputValidationError);
   });
 
   it("rejects a wrong declared type", async () => {
-    await expect(validateToolInput(schema, { taskId: 5 }, { external: false })).rejects.toThrow(
-      ToolInputValidationError
-    );
+    await expect(
+      validateToolInput(schema, { taskId: 5 }, { external: false, toolName: "test-tool" })
+    ).rejects.toThrow(ToolInputValidationError);
   });
 
   it("accepts anything when no schema is declared", async () => {
     await expect(
-      validateToolInput(undefined, { whatever: true }, { external: false })
+      validateToolInput(undefined, { whatever: true }, { external: false, toolName: "test-tool" })
     ).resolves.toEqual({ whatever: true });
   });
 
@@ -62,7 +66,7 @@ describe("tool input validation", () => {
 
     it("accepts a value inside every bound", async () => {
       await expect(
-        validateToolInput(bounded, { key: "eng.1" }, { external: false })
+        validateToolInput(bounded, { key: "eng.1" }, { external: false, toolName: "test-tool" })
       ).resolves.toEqual({ key: "eng.1" });
     });
 
@@ -71,7 +75,7 @@ describe("tool input validation", () => {
         validateToolInput(
           { type: "object", properties: { value: { type: "string", pattern: "[a-z]+" } } },
           { value: "safe" },
-          { external: true }
+          { external: true, toolName: "test-tool" }
         )
       ).resolves.toEqual({ value: "safe" });
     });
@@ -91,7 +95,7 @@ describe("tool input validation", () => {
             }
           },
           { values: ["aaaa", `${"a".repeat(28)}!`, "aaaa", "aaaa"] },
-          { external: true }
+          { external: true, toolName: "test-tool" }
         )
       ).rejects.toThrow(ToolInputValidationError);
       expect(loopTurned).toBe(true);
@@ -102,7 +106,7 @@ describe("tool input validation", () => {
         validateToolInput(
           { type: "object", properties: { value: { type: "string", pattern: "[a-z]+" } } },
           { value: "safe" },
-          { external: true }
+          { external: true, toolName: "test-tool" }
         )
       ).resolves.toEqual({ value: "safe" });
     });
@@ -117,7 +121,7 @@ describe("tool input validation", () => {
             }
           },
           { values: Array.from({ length: 4 }, () => "safe") },
-          { external: true }
+          { external: true, toolName: "test-tool" }
         )
       ).resolves.toEqual({ values: ["safe", "safe", "safe", "safe"] });
     });
@@ -130,7 +134,11 @@ describe("tool input validation", () => {
       const started = performance.now();
       const results = await Promise.allSettled(
         Array.from({ length: 9 }, () =>
-          validateToolInput(hostileSchema, { value: `${"a".repeat(28)}!` }, { external: true })
+          validateToolInput(
+            hostileSchema,
+            { value: `${"a".repeat(28)}!` },
+            { external: true, toolName: "test-tool" }
+          )
         )
       );
 
@@ -140,26 +148,30 @@ describe("tool input validation", () => {
         validateToolInput(
           { type: "object", properties: { value: { type: "string", pattern: "[a-z]+" } } },
           { value: "safe" },
-          { external: true }
+          { external: true, toolName: "test-tool" }
         )
       ).resolves.toEqual({ value: "safe" });
     });
 
     it("rejects a value over maxLength", async () => {
       await expect(
-        validateToolInput(bounded, { key: "abcdefghij" }, { external: false })
+        validateToolInput(
+          bounded,
+          { key: "abcdefghij" },
+          { external: false, toolName: "test-tool" }
+        )
       ).rejects.toThrow(ToolInputValidationError);
     });
 
     it("rejects a value under minLength", async () => {
-      await expect(validateToolInput(bounded, { key: "" }, { external: false })).rejects.toThrow(
-        ToolInputValidationError
-      );
+      await expect(
+        validateToolInput(bounded, { key: "" }, { external: false, toolName: "test-tool" })
+      ).rejects.toThrow(ToolInputValidationError);
     });
 
     it("rejects a value that does not match the pattern", async () => {
       await expect(
-        validateToolInput(bounded, { key: "../evil" }, { external: false })
+        validateToolInput(bounded, { key: "../evil" }, { external: false, toolName: "test-tool" })
       ).rejects.toThrow(ToolInputValidationError);
     });
 
@@ -168,7 +180,7 @@ describe("tool input validation", () => {
     it("requires the whole string to match, not a substring", async () => {
       const loose = { type: "object", properties: { key: { type: "string", pattern: "[a-z]+" } } };
       await expect(
-        validateToolInput(loose, { key: "ok/../evil" }, { external: false })
+        validateToolInput(loose, { key: "ok/../evil" }, { external: false, toolName: "test-tool" })
       ).rejects.toThrow(ToolInputValidationError);
     });
 
@@ -178,7 +190,11 @@ describe("tool input validation", () => {
         properties: { n: { type: "number" }, s: { type: "string" } }
       };
       await expect(
-        validateToolInput(mixed, { n: 12345678901234, s: "anything at all" }, { external: false })
+        validateToolInput(
+          mixed,
+          { n: 12345678901234, s: "anything at all" },
+          { external: false, toolName: "test-tool" }
+        )
       ).resolves.toEqual({
         n: 12345678901234,
         s: "anything at all"
@@ -247,7 +263,7 @@ describe("tool input validation", () => {
           validateToolInput(
             { type: "object", properties: { key: { type: "string", pattern: "[a-z]+)|(.*" } } },
             { key: "HOSTILE ANYTHING AT ALL" },
-            { external: false }
+            { external: false, toolName: "test-tool" }
           )
         ).rejects.toThrow(ToolInputValidationError);
       });
