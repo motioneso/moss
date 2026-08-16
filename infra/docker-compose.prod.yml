@@ -67,11 +67,14 @@ services:
     environment:
       JARVIS_MODULES_DIR: /data/modules
       # #1468: target-identity guard requires this once app.users has a bootstrap owner
-      # (fresh installs are exempted). Ben is prod's bootstrap owner. This is compose-time
-      # interpolation (shell env or --env-file), not the env_file: above — override by
-      # exporting JARVIS_RECONCILE_CONFIRM_OWNER_EMAIL before `docker compose up`, same as
-      # POSTGRES_PASSWORD below.
-      JARVIS_RECONCILE_CONFIRM_OWNER_EMAIL: ${JARVIS_RECONCILE_CONFIRM_OWNER_EMAIL:-bendlove@gmail.com}
+      # (fresh installs are exempted — see assertReconcileTargetIdentity). Deliberately a safe
+      # empty default here, NOT a hardcoded email — this repo is public, don't ship a real
+      # address as a compose fallback. Set the real value as a KEY=VALUE line in
+      # env.production.local (same conduit as POSTGRES_PASSWORD/JARVIS_CLI_RUNNER_RPC_SECRET
+      # above/below: compose-time ${...} interpolation reads shell env or the `--env-file` CLI
+      # flag, not the env_file: block above — see the header comment for the documented
+      # `--env-file ./env.production.local` invocation).
+      MOSS_RECONCILE_CONFIRM_OWNER_EMAIL: ${MOSS_RECONCILE_CONFIRM_OWNER_EMAIL:-}
     volumes:
       - jarv1s-modules:/data/modules
     depends_on:
@@ -165,6 +168,11 @@ services:
       JARVIS_EMBED_PROVIDER: ${JARVIS_EMBED_PROVIDER:-local}
       JARVIS_EMBED_MODEL: ${JARVIS_EMBED_MODEL:-}
       JARVIS_MODULES_DIR: /data/modules
+      # #1468: start-jarv1s.ts runs module-reconcile.ts as a mandatory boot one-shot, which
+      # calls assertReconcileTargetIdentity — without this, prod crash-loops on boot the moment
+      # app.users has a bootstrap owner (fresh installs are exempted). See the module-install
+      # service above for why the default is empty, not a hardcoded email.
+      MOSS_RECONCILE_CONFIRM_OWNER_EMAIL: ${MOSS_RECONCILE_CONFIRM_OWNER_EMAIL:-}
     restart: unless-stopped
     healthcheck:
       test:
