@@ -500,3 +500,7 @@ ping sent via `needs-ben`. Two options: (1) I add the `JARVIS_RECONCILE_CONFIRM_
 setting to prod's deploy config myself, as part of the same PR, or (2) you handle that deploy
 config change separately and I just make sure the PR mentions it's needed. Either way works; just
 need to know which so the lane can move.
+
+**RESOLVED 2026-08-16.** Ben replied via `needs-ben`: "Yes add as a part, a pr must never break
+prod." Relayed to the build agent — it's adding the setting to prod deploy config as part of this
+PR before opening it.
