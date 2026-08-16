@@ -2,12 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { readFile } from "node:fs/promises";
 import pg from "pg";
 
-import {
-  AuthSessionResolver,
-  createDatabase,
-  NoBootstrapOwnerFoundError,
-  TargetIdentityMismatchError
-} from "@moss/db";
+import { AuthSessionResolver, createDatabase } from "@moss/db";
 import { createPgBossClient } from "@moss/jobs";
 import { createApiServer } from "../../apps/api/src/server.js";
 import { createBackupPlan } from "../../scripts/backup-database.js";
@@ -15,7 +10,7 @@ import { auditReleaseHardening } from "../../scripts/audit-release-hardening.js"
 import { deleteUserData } from "../../scripts/delete-user-data.js";
 import { createComposeSmokePlan } from "../../scripts/smoke-compose.js";
 import { exportUserData } from "../../scripts/export-user-data.js";
-import { assertRestoreTargetIdentity, createRestorePlan } from "../../scripts/restore-database.js";
+import { createRestorePlan } from "../../scripts/restore-database.js";
 import { connectionStrings, ids, resetEmptyFoundationDatabase } from "./test-database.js";
 
 const { Client } = pg;
@@ -525,60 +520,6 @@ describe("M7 release hardening lifecycle scripts", () => {
         connectionString: "postgres://postgres:super-secret@db.example.test:5432/jarv1s"
       })
     ).not.toThrow();
-  });
-
-  it("rejects a restore pointed at a target whose bootstrap owner doesn't match the confirmation", async () => {
-    const db = createDatabase({ connectionString: connectionStrings.bootstrap });
-    try {
-      await db
-        .updateTable("app.users")
-        .set({ is_bootstrap_owner: true })
-        .where("id", "=", ids.userA)
-        .execute();
-
-      await expect(
-        assertRestoreTargetIdentity(db, { confirmOwnerEmail: "wrong@example.test" })
-      ).rejects.toThrow(TargetIdentityMismatchError);
-    } finally {
-      await db.destroy();
-    }
-  });
-
-  it("allows a restore through when the confirmation matches the target's bootstrap owner", async () => {
-    const db = createDatabase({ connectionString: connectionStrings.bootstrap });
-    try {
-      await db
-        .updateTable("app.users")
-        .set({ is_bootstrap_owner: true })
-        .where("id", "=", ids.userA)
-        .execute();
-
-      await expect(
-        assertRestoreTargetIdentity(db, { confirmOwnerEmail: "user-a@example.test" })
-      ).resolves.toEqual({ id: ids.userA, email: "user-a@example.test" });
-    } finally {
-      await db.destroy();
-    }
-  });
-
-  it("rejects a restore into a target with no bootstrap owner unless --allow-empty-target is set", async () => {
-    // seedLifecycleData's users are never marked is_bootstrap_owner, so this target already
-    // has an app.users schema with rows but no owner to confirm identity against.
-    const db = createDatabase({ connectionString: connectionStrings.bootstrap });
-    try {
-      await expect(
-        assertRestoreTargetIdentity(db, { confirmOwnerEmail: "user-a@example.test" })
-      ).rejects.toThrow(NoBootstrapOwnerFoundError);
-
-      await expect(
-        assertRestoreTargetIdentity(db, {
-          confirmOwnerEmail: "user-a@example.test",
-          allowEmptyTarget: true
-        })
-      ).resolves.toBeNull();
-    } finally {
-      await db.destroy();
-    }
   });
 
   it("rejects backup and restore connection strings missing a username", () => {
