@@ -3,7 +3,8 @@
 **Date:** 2026-08-16
 **Run:** `docs/coordination/post1632-queue-2026-08-16.md`
 **Issues:** #1037, #1038, #1468
-**Status:** draft, pending Ben's approval
+**Status:** Approved by Ben on 2026-08-16 (approved in chat alongside the full 4-item batch:
+#1279 + #1037 + #1038 + #1468)
 
 ## Context
 
