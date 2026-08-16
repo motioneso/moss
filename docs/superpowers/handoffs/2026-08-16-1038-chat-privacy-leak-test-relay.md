@@ -14,12 +14,18 @@
   files staged.
 - Targeted run green: 3/3 pass (`pnpm vitest run tests/integration/chat-privacy-history-leak.test.ts`).
 - **Load-bearing verification done:** temporarily removed the app-level ownership check in
-  `packages/chat/src/routes.ts` (detail route, the `if (thread?.owner_user_id !== access.actorUserId)
+  `packages/chat/src/routes.ts` (messages route, the `if (thread?.owner_user_id !== access.actorUserId)
   return null;` line) as an uncommitted scratch edit. Test suite **stayed green (3/3)** — RLS on the
   request-scoped connection independently blocks the cross-actor read even with that app check gone.
   Edit fully reverted; confirmed via `git diff --stat packages/chat/src/routes.ts` (no diff).
-  **Conclusion: no real gap found — isolation is enforced at the RLS layer; the app check is
-  defense-in-depth, not the sole guard. Nothing to escalate.**
+  **Conclusion, corrected 2026-08-16 per QA (PR #1643 review):** this holds only for the *unshared*
+  case exercised by the test fixture (no `app.shares` row). `chat_threads_select` /
+  `chat_messages_select` RLS is **owner-OR-share** (`app.has_share('chat_thread', id, 'view')`), but
+  the app-level check at `routes.ts:464` is **owner-strict**. For a view-shared thread, RLS alone
+  would permit the share-grantee to read the thread's messages — the app check is the **sole guard**
+  currently blocking that (not a redundant backstop), because it enforces a narrower rule than RLS
+  does. Not exploitable today (zero production callers of `shares-repository.ts`), but the app check
+  is **load-bearing for the share case** and must not be removed as "RLS already covers it."
 - Pre-push trio green: `pnpm format:check`, `pnpm lint`, `pnpm typecheck` all `rc=0`.
 - Scratch gate DB `jarvis_gate_1038` created, used, and **already dropped**.
 - `git status --short` clean except the one committed test file (verified before commit).
