@@ -68,7 +68,7 @@ if (nullableBranch) {
 ```
 
 Why a separate helper instead of extending `getScalarTypes`: `getScalarTypes` returns a list of
-*scalar type names* consumed by `JSON_SCALAR_TYPE_OF` — object/array aren't scalar types and don't
+_scalar type names_ consumed by `JSON_SCALAR_TYPE_OF` — object/array aren't scalar types and don't
 fit that return shape. Keeping the compound case as a distinct branch that recurses through
 `sanitizeToolOutputValue` reuses the existing object/array sanitization (required-key checks,
 allow-list projection, array-item recursion) instead of duplicating it, and leaves the scalar path
@@ -102,7 +102,7 @@ above. No other function's behavior changes.
    `anyOf` branch is silently unvalidated) — proves the sanitizer recurses, not passes through.
 3. `"rejects an invalid object on a declared nullable-object field"` — same schema, data
    `{ match: { secret: "x" } }` (missing required `id`) → `expect(...).toThrow(/missing required
-   output field "id"/)`. Fails on unpatched code (currently doesn't throw — passes through).
+output field "id"/)`. Fails on unpatched code (currently doesn't throw — passes through).
 4. `"accepts null and sanitizes the non-null branch of a declared nullable-array field"` — schema
    `{ type: "object", required: ["items"], properties: { items: { anyOf: [{ type: "array", items: { type: "object", required: ["id"], properties: { id: { type: "string" } } } }, { type: "null" }] } } }`;
    two assertions in one test or two tests: `{ items: null }` → `{ items: null }`; and
@@ -132,13 +132,13 @@ N/A — no UI, no model turn, no user-facing surface. Pure synchronous validatio
 
 Phase 1 is the only phase (single-file, single-lane fix, spec explicitly scopes to one
 lightweight table-spec item). Kill/rework call: if task 2's tests 2/3 (the pass-through-proof
-tests) pass *before* task 1 lands, the seams check above was wrong about the current bug and the
+tests) pass _before_ task 1 lands, the seams check above was wrong about the current bug and the
 lane stops to re-verify against the spec's Context section rather than proceeding — owner: build
 agent, escalate to Coordinator if it happens.
 
 ## Deferred (recorded, not built)
 
-Spec non-goal: whether the silent pass-through for *other* unrecognized `anyOf` shapes should
+Spec non-goal: whether the silent pass-through for _other_ unrecognized `anyOf` shapes should
 become an explicit rejection is left open, contingent on proving it's behavior-preserving for
 every shipped/staged module schema — out of scope for this lane. If worth pursuing, file as a
 follow-up issue at wrap-up time (report to Coordinator; this build agent does not open issues).
