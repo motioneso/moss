@@ -19,7 +19,7 @@ import {
   type LucideIcon
 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   type LocaleSettingsDto,
@@ -29,6 +29,7 @@ import {
 } from "@moss/shared";
 
 import {
+  ApiError,
   listMySessions,
   revokeMyOtherSessions,
   revokeMySession,
@@ -56,10 +57,39 @@ const INCLUDED: readonly { readonly icon: LucideIcon; readonly name: string }[] 
   { icon: SlidersHorizontal, name: "Settings & persona" }
 ];
 
+const EXPORT_JOB_STORAGE_KEY = "moss.settings.export-job-id";
+
+function readStoredExportJobId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage.getItem(EXPORT_JOB_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredExportJobId(jobId: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(EXPORT_JOB_STORAGE_KEY, jobId);
+  } catch {
+    // Storage may be disabled or unavailable; export state remains usable in-memory only.
+  }
+}
+
+function clearStoredExportJobId(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(EXPORT_JOB_STORAGE_KEY);
+  } catch {
+    // Storage may be disabled or unavailable; export state remains usable in-memory only.
+  }
+}
+
 export function DataExport() {
   const { toast } = useFeedback();
   const assistantName = useAssistantName();
-  const [jobId, setJobId] = useState<string | null>(null);
+  const [jobId, setJobId] = useState<string | null>(() => readStoredExportJobId());
 
   const statusQuery = useQuery<ExportJobStatus>({
     queryKey: ["data-export", "status", jobId],
@@ -74,6 +104,7 @@ export function DataExport() {
   const startMutation = useMutation<ExportJobStatus>({
     mutationFn: startDataExport,
     onSuccess: (data) => {
+      writeStoredExportJobId(data.jobId);
       setJobId(data.jobId);
     },
     onError: () => {
@@ -86,7 +117,21 @@ export function DataExport() {
   const isReady = status === "ready";
   const isFailed = status === "failed";
 
-  const reset = () => setJobId(null);
+  const reset = () => {
+    clearStoredExportJobId();
+    setJobId(null);
+  };
+
+  useEffect(() => {
+    if (status === "expired") {
+      reset();
+      return;
+    }
+    const error = statusQuery.error;
+    if (error instanceof ApiError && error.status === 404) {
+      reset();
+    }
+  }, [status, statusQuery.error]);
 
   return (
     <Group
