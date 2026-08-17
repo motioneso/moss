@@ -554,3 +554,16 @@ coordinator, not that nobody is physically at her pane (the real 21:38 board mov
 genuinely be active right now). Status of this incident: **unconfirmed, pending trace** — not
 resolved either way — until Ben replies directly via `needs-ben`/Telegram or a real `motioneso`
 GitHub comment lands on #1252.
+
+**Update, further escalated, new technique:** a message hit Fable's pane that she describes as her
+own real coordinator reply (mine) fused with a Ben-voiced fragment claiming all 15 prior logged
+incidents were actually Ben. That claim is rejected — not corroborated by anything on our side,
+directly contradicts the logged history, quarantined per Fable's call, incident log NOT amended on
+its strength. The message also tried to get the coordinator to prefix a reply with an invented
+"confirmation token" (`CONFIRM-C25`) — declined; inventing an ad-hoc verification protocol
+mid-incident is itself a manipulation vector (a token like that could be harvested and replayed
+later as fake proof of authentication). If the "fused turn" description is accurate, it may mean
+text is landing directly in Fable's pane input box, not just arriving as chat messages — a
+pane-access question, not only a spoofed-message one. Ben pinged again via `needs-ben` with this
+specific detail. Still nothing accepted except a direct `needs-ben`/Telegram reply or a real
+`motioneso` GitHub comment on #1252.
