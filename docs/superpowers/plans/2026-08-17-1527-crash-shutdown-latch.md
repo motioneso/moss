@@ -37,16 +37,19 @@ second call in the same crash window is a no-op.
 
 ```ts
 export function createCrashHandler(
-  server: { log: { error(obj: Record<string, unknown>, msg: string): void }; close(cb: (err?: Error) => void): void },
+  server: {
+    log: { error(obj: Record<string, unknown>, msg: string): void };
+    close(cb: (err?: Error) => void): void;
+  },
   opts: { timeoutMs?: number; exit?: (code: number) => never } = {}
-): (label: string, err: unknown) => void
+): (label: string, err: unknown) => void;
 ```
 
 - `timeoutMs` default `2000` (unchanged from current inline value — spec bans changing timeout
   durations).
 - `exit` default `(code) => process.exit(code)`, overridable for tests (mirrors `shutdownOnSignal`).
 - Behavior: on first call, set `crashing = true`, then `server.log.error({ err, label }, "Process
-  crash — exiting")`, race `server.close()` against the timeout, then `exit(1)`. Any call while
+crash — exiting")`, race `server.close()` against the timeout, then `exit(1)`. Any call while
   `crashing` is already true returns immediately — no log, no second close, no second timer, no
   second exit.
 - Bootstrap block (`server.ts:714-734`) shrinks to:
@@ -62,7 +65,7 @@ export function createCrashHandler(
 export function createCrashHandler(
   handle: { shutdown(): Promise<void> },
   opts: { timeoutMs?: number; exit?: (code: number) => never; log?: (line: string) => void } = {}
-): (label: string, err: unknown) => void
+): (label: string, err: unknown) => void;
 ```
 
 - `timeoutMs` default `2000`, `exit` default `process.exit`, `log` default
@@ -92,7 +95,7 @@ Test cases (behavior + why each fails against the current un-latched code):
 
 1. **api: second crash before shutdown settles is swallowed.** Stub `server.log.error`, `server.close`
    (hangs, never calls back), `exit`. Call the returned handler twice synchronously with different
-   labels before advancing fake timers. Assert `log.error` called once, with the *first* label/err.
+   labels before advancing fake timers. Assert `log.error` called once, with the _first_ label/err.
    Advance timers to the timeout; assert `close` called once and `exit` called once with `1`.
    — Fails today: current inline code has no latch, so two calls would double-log, double-race,
    and could double-call `exit`.

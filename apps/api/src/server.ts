@@ -705,26 +705,51 @@ export async function shutdownOnSignal(
   exit(0);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
-  const apiServerConfig = resolveApiServerConfig();
-  const server = createApiServer({ apiServerConfig });
-  const port = apiServerConfig.port;
-  const host = apiServerConfig.host;
-
-  const handleCrash = (label: string, err: unknown): void => {
+/**
+ * Crash-handler factory for the api entrypoint (spec §1140-E, #1527). Both
+ * `unhandledRejection` and `uncaughtException` share the closure-local
+ * `crashing` latch below: the first crash notification logs, races a bounded
+ * shutdown, and exits; any later notification in the same window is a no-op,
+ * so a second error can never re-log, re-close, or re-exit.
+ *
+ * Exported (and parameterized with timeout/exit) so it is unit-testable
+ * without spawning the real binary or racing a second real crash.
+ */
+export function createCrashHandler(
+  server: {
+    log: { error(obj: Record<string, unknown>, msg: string): void };
+    close(cb: (err?: Error) => void): void;
+  },
+  opts: { timeoutMs?: number; exit?: (code: number) => never } = {}
+): (label: string, err: unknown) => void {
+  const timeoutMs = opts.timeoutMs ?? 2000;
+  const exit = opts.exit ?? ((code: number) => process.exit(code));
+  let crashing = false;
+  return (label: string, err: unknown): void => {
+    if (crashing) return;
+    crashing = true;
     server.log.error({ err, label }, "Process crash — exiting");
     const drain = Promise.race([
       new Promise<void>((resolve) => {
         server.close(() => resolve());
       }),
       new Promise<void>((resolve) => {
-        setTimeout(resolve, 2000);
+        setTimeout(resolve, timeoutMs);
       })
     ]);
     void drain.then(() => {
-      process.exit(1);
+      exit(1);
     });
   };
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const apiServerConfig = resolveApiServerConfig();
+  const server = createApiServer({ apiServerConfig });
+  const port = apiServerConfig.port;
+  const host = apiServerConfig.host;
+
+  const handleCrash = createCrashHandler(server);
 
   process.on("unhandledRejection", (reason) => {
     handleCrash("unhandledRejection", reason);
