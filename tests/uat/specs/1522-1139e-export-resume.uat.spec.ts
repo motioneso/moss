@@ -91,8 +91,14 @@ test("data export resumes across a real Settings remount, no duplicate job (#152
 
   // Wait for completion and confirm the download link targets the resumed job id.
   await expect(ready).toBeVisible({ timeout: 60_000 });
-  await expect(ready).toHaveAttribute("href", new RegExp(`/api/me/export/download/${jobIdBefore}$`));
-  await page.screenshot({ path: test.info().outputPath("export-resumed-ready.png"), fullPage: true });
+  await expect(ready).toHaveAttribute(
+    "href",
+    new RegExp(`/api/me/export/download/${jobIdBefore}$`)
+  );
+  await page.screenshot({
+    path: test.info().outputPath("export-resumed-ready.png"),
+    fullPage: true
+  });
 
   // Cleanup: return to idle state so this run leaves no lingering job pointer for the next one.
   await page.getByRole("button", { name: "Prepare a new export" }).click();
