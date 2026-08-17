@@ -430,6 +430,40 @@ describe("verified submit attempt ledger", () => {
 
     expect(verified).not.toHaveBeenCalled();
   });
+
+  it("bounds synthetic tombstones to a 128 FIFO and never evicts a real submitted attempt", async () => {
+    const { io } = makeFakeIo();
+    const host = makeHost(io);
+    await host.launch("alice", launchParams());
+    const verified = vi
+      .spyOn(CliChatEngineImpl.prototype, "verifiedSubmit")
+      .mockResolvedValue(undefined);
+
+    const realAttemptId = "real-attempt-0";
+    await host.submit("alice", { attemptId: realAttemptId, text: "real payload" });
+
+    for (let i = 0; i < 129; i++) {
+      await host.cancelSubmit("alice", { attemptId: `tombstone-${i}` });
+    }
+
+    // Oldest tombstone was evicted: its delayed submit now reaches the engine instead of
+    // rejecting "unavailable".
+    await expect(
+      host.submit("alice", { attemptId: "tombstone-0", text: "late payload" })
+    ).resolves.toBeUndefined();
+
+    // Newest tombstone is still within the 128 ceiling: it must still block its delayed submit.
+    await expect(
+      host.submit("alice", { attemptId: "tombstone-128", text: "late payload" })
+    ).rejects.toMatchObject({ code: "unavailable" });
+
+    // The real submitted attempt (created before any cancellation) was never evicted: a
+    // duplicate same-ID/same-payload submit still joins the cached promise instead of firing a
+    // second verifiedSubmit.
+    await host.submit("alice", { attemptId: realAttemptId, text: "real payload" });
+
+    expect(verified).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("replay launch attempt ledger", () => {
