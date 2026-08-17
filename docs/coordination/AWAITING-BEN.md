@@ -247,3 +247,8 @@ prod auto-pulls, so the new image could reach prod before anyone updates the con
 Portainer stack env? If yes, this is a non-issue and the PR can merge once its description is
 corrected (separate, non-blocking fix already relayed to the build agent). If no, it needs to be
 set there before this merges, or the next prod pull crash-loops the app.
+
+**RESOLVED 2026-08-17.** Ben replied via `needs-ben`: "No I don't think it is, set to
+bendlove@gmail.com" — confirms prod does not have `MOSS_RECONCILE_CONFIRM_OWNER_EMAIL` set yet.
+Relayed to the build agent (`w1:pD1`): add it to prod's deploy config as part of PR #1647, value
+`bendlove@gmail.com`, same pattern as the precedent above.
