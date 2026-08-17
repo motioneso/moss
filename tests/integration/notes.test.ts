@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -8,6 +8,34 @@ import type { Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
 import pg from "pg";
 import Fastify from "fastify";
+
+// TOCTOU test support (tests 6-7 in the handleNotesSyncJob describe block below): vi.spyOn cannot
+// patch the "node:fs/promises" namespace directly (ESM module namespaces aren't configurable), so
+// realpath is routed through this mock via vi.mock instead. Every other export, and every call to
+// realpath outside those two tests, passes through to the real implementation untouched. vi.hoisted
+// is required (not a plain top-level const) because vi.mock factories are hoisted above all
+// imports, including any plain variable declarations that would otherwise sit below them. Same
+// technique as tests/integration/notes-write-tools.test.ts.
+type FsPromises = typeof import("node:fs/promises");
+
+const fsMocks = vi.hoisted(() => ({
+  realpathMock: vi.fn(),
+  actualFs: undefined as unknown
+}));
+const { realpathMock } = fsMocks;
+function actualFs(): FsPromises {
+  return fsMocks.actualFs as FsPromises;
+}
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<FsPromises>();
+  fsMocks.actualFs = actual;
+  fsMocks.realpathMock.mockImplementation(actual.realpath);
+  return {
+    ...actual,
+    realpath: (...args: Parameters<FsPromises["realpath"]>) => fsMocks.realpathMock(...args)
+  };
+});
 
 import { createApiServer } from "../../apps/api/src/server.js";
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
@@ -592,6 +620,88 @@ describe("handleNotesSyncJob", () => {
     } finally {
       await rm(isolatedDir, { recursive: true, force: true });
       process.env["JARVIS_NOTES_ROOTS"] = jobNotesDir;
+    }
+  });
+
+  it("closes the TOCTOU window: handleNotesSyncJob target swapped to a symlink after the initial check, before ingest", async () => {
+    const outside = join(tmpdir(), `jarv1s-notes-outside-toctou6-${randomUUID()}`);
+    await mkdir(outside, { recursive: true });
+    await writeFile(join(outside, "secret6.md"), "TOP SECRET worker payload 6");
+
+    const isolatedDir = join(tmpdir(), `jarv1s-notes-toctou6-${randomUUID()}`);
+    await mkdir(isolatedDir, { recursive: true });
+    const targetPath = join(isolatedDir, "note6.md");
+    await writeFile(targetPath, "safe content 6");
+
+    realpathMock.mockImplementation(async (p: Parameters<FsPromises["realpath"]>[0]) => {
+      const resolved = await actualFs().realpath(p);
+      if (p === targetPath) {
+        await rm(targetPath, { force: true });
+        await symlink(join(outside, "secret6.md"), targetPath);
+      }
+      return resolved;
+    });
+
+    process.env["JARVIS_NOTES_ROOTS"] = isolatedDir;
+    try {
+      await expect(
+        dataContext.withDataContext(
+          { actorUserId: jobUserId, requestId: "req:worker-toctou6" },
+          (scopedDb) => handleNotesSyncJob(makeJob(isolatedDir), scopedDb, provider, prefsRepo)
+        )
+      ).rejects.toThrow("not within allowed root");
+      await expect(readFile(join(outside, "secret6.md"), "utf-8")).resolves.toBe(
+        "TOP SECRET worker payload 6"
+      );
+    } finally {
+      realpathMock.mockImplementation(async (p: Parameters<FsPromises["realpath"]>[0]) =>
+        actualFs().realpath(p)
+      );
+      process.env["JARVIS_NOTES_ROOTS"] = jobNotesDir;
+      await rm(isolatedDir, { recursive: true, force: true });
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("closes the TOCTOU window: handleNotesSyncJobWithDataContext target swapped across the withDataContext boundary", async () => {
+    const outside = join(tmpdir(), `jarv1s-notes-outside-toctou7-${randomUUID()}`);
+    await mkdir(outside, { recursive: true });
+    await writeFile(join(outside, "secret7.md"), "TOP SECRET worker payload 7");
+
+    const isolatedDir = join(tmpdir(), `jarv1s-notes-toctou7-${randomUUID()}`);
+    await mkdir(isolatedDir, { recursive: true });
+    const targetPath = join(isolatedDir, "note7.md");
+    await writeFile(targetPath, "safe content 7");
+
+    realpathMock.mockImplementation(async (p: Parameters<FsPromises["realpath"]>[0]) => {
+      const resolved = await actualFs().realpath(p);
+      if (p === targetPath) {
+        await rm(targetPath, { force: true });
+        await symlink(join(outside, "secret7.md"), targetPath);
+      }
+      return resolved;
+    });
+
+    process.env["JARVIS_NOTES_ROOTS"] = isolatedDir;
+    try {
+      await expect(
+        handleNotesSyncJobWithDataContext(
+          makeJob(isolatedDir),
+          workerDataContext,
+          async () => provider,
+          prefsRepo
+        )
+      ).rejects.toThrow("not within allowed root");
+      await expect(readFile(join(outside, "secret7.md"), "utf-8")).resolves.toBe(
+        "TOP SECRET worker payload 7"
+      );
+    } finally {
+      realpathMock.mockImplementation(async (p: Parameters<FsPromises["realpath"]>[0]) =>
+        actualFs().realpath(p)
+      );
+      process.env["JARVIS_NOTES_ROOTS"] = jobNotesDir;
+      await rm(isolatedDir, { recursive: true, force: true });
+      await rm(outside, { recursive: true, force: true });
     }
   });
 

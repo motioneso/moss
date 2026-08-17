@@ -29,7 +29,7 @@ import {
 } from "@moss/settings";
 import type { PreferencesRepository } from "@moss/structured-state";
 
-import { assertWithinRoot, NotesPathError } from "./path-guard.js";
+import { assertWithinRoot, recheckWithinRoot, NotesPathError } from "./path-guard.js";
 import { NOTES_SYNC_QUEUE } from "./manifest.js";
 
 const NOTES_SOURCE_KIND = "notes";
@@ -141,6 +141,7 @@ async function resolveSourcePath(
 }
 
 async function ingestResolvedMarkdownFile(
+  resolvedRoot: string,
   scopedDb: DataContextDb,
   actorUserId: string,
   resolvedFile: string,
@@ -150,6 +151,7 @@ async function ingestResolvedMarkdownFile(
   chunkLimit = NOTES_SYNC_MAX_CHUNKS_PER_RUN,
   expectedFileHash?: string
 ): Promise<NotesFileIngestResult> {
+  await recheckWithinRoot(resolvedRoot, resolvedFile);
   const content = await readFile(resolvedFile, "utf-8");
   const fileHash = createHash("sha256").update(content).digest("hex");
   const effectiveChunkOffset = expectedFileHash === fileHash ? chunkOffset : 0;
@@ -315,6 +317,7 @@ export async function handleNotesSyncJob(
       }
 
       const status = await ingestResolvedMarkdownFile(
+        resolvedRoot,
         scopedDb,
         actorUserId,
         resolvedFile,
@@ -459,6 +462,7 @@ export async function handleNotesSyncJobWithDataContext(
     try {
       const status = await dataContextRunner.withDataContext(accessContext, (scopedDb) =>
         ingestResolvedMarkdownFile(
+          resolvedRoot,
           scopedDb,
           actorUserId,
           resolvedFile,
