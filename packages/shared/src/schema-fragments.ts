@@ -10,7 +10,8 @@ export const errorResponseSchema = {
   additionalProperties: false,
   required: ["error"],
   properties: {
-    error: { type: "string" }
+    error: { type: "string" },
+    code: { type: "string" }
   }
 } as const;
 
