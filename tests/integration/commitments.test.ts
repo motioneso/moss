@@ -81,6 +81,37 @@ describe("CommitmentsRepository", () => {
 
       expect(second.sourceCount).toBe(2);
     });
+
+    it("resolves two concurrent upserts of the same signature to one row with no 23505", async () => {
+      const sig = `test-sig-concurrent-${randomUUID()}`;
+      const input = {
+        ownerUserId: userA,
+        candidateSignature: sig,
+        kind: "promise" as const,
+        title: "Concurrent write test",
+        dueLocalDate: null,
+        counterpartyLabel: null,
+        confidence: "medium" as const,
+        suggestedHandling: null,
+        occurredAt: null
+      };
+
+      const [first, second] = await Promise.all([
+        dataContext.withDataContext(userAContext(), (scopedDb) =>
+          repo.upsertCandidate(scopedDb, input)
+        ),
+        dataContext.withDataContext(userAContext(), (scopedDb) =>
+          repo.upsertCandidate(scopedDb, input)
+        )
+      ]);
+
+      expect(first.id).toBe(second.id);
+
+      const settled = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+        repo.getCandidate(scopedDb, userA, first.id)
+      );
+      expect(settled?.sourceCount).toBe(2);
+    });
   });
 
   describe("addEvidenceRow", () => {
