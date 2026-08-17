@@ -65,6 +65,10 @@ export function ChatDrawer(props: {
   const assistantName = useAssistantName("");
   const surfaceRef = useRef(props.surface);
   surfaceRef.current = props.surface;
+  // #1520/1139-C: latest-value ref so an SSE-only records tick can't change sendMessage's
+  // identity and retrigger the queued-drain effect below.
+  const latestRecordsRef = useRef(props.records);
+  latestRecordsRef.current = props.records;
   const [reviewThreadId, setReviewThreadId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [privateMode, setPrivateMode] = useState(false);
@@ -252,7 +256,7 @@ export function ChatDrawer(props: {
             }
           ];
           setFallbackRecords((current) =>
-            reconcileFallbacks([...current, ...postResponseRecords], props.records)
+            reconcileFallbacks([...current, ...postResponseRecords], latestRecordsRef.current)
           );
         } catch (caught) {
           if (surfaceRef.current !== initiatingSurface) return;
@@ -275,7 +279,6 @@ export function ChatDrawer(props: {
       isSending,
       messagesQuery.data?.messages,
       privateEnded,
-      props.records,
       queryClient,
       reviewThreadId
     ]
