@@ -231,3 +231,19 @@ needs-ben (twice) that he does want the log consolidated and the pane-message ch
 going forward — done here. The coordinator has no memory-deletion tool available regardless, so
 the agentmemory side of that ask was never actionable from this session; flagging it stays open if
 Ben wants it done through another channel.
+
+## PR #1647 (#1468) — prod needs `MOSS_RECONCILE_CONFIRM_OWNER_EMAIL` set before this merges (2026-08-17, post1632-queue take 25)
+
+QA re-check just cleared all three prior code blockers on PR #1647 (target-identity guard extend
+to restore-database/module-reconcile). One new blocker, not a code defect: the PR wires prod's
+compose to read `MOSS_RECONCILE_CONFIRM_OWNER_EMAIL`, but doesn't set it — it defaults to empty,
+and `module-reconcile.ts` treats empty the same as "not set," which makes it throw. Since prod
+already has a real (bootstrap) owner account, that's not the safe case the guard forgives — it's a
+hard boot failure. `module-reconcile.ts` runs as a mandatory one-shot at container start, so the
+container would exit and just keep restarting in a loop. Publish is already queued on this run and
+prod auto-pulls, so the new image could reach prod before anyone updates the config by hand.
+
+**Decision needed:** is `MOSS_RECONCILE_CONFIRM_OWNER_EMAIL` already set in prod's env file /
+Portainer stack env? If yes, this is a non-issue and the PR can merge once its description is
+corrected (separate, non-blocking fix already relayed to the build agent). If no, it needs to be
+set there before this merges, or the next prod pull crash-loops the app.
