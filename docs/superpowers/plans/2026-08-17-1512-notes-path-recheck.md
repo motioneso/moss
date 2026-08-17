@@ -202,11 +202,28 @@ source"`, both confirmed present in the current `write-tools.ts`:
    uses lstat-based `Dirent` info, so a symlink placed before sync starts is silently excluded from
    the walk, not a trigger. Not cleanly forceable through pure UI action.
 
-**Scope decision (approved by Coordinator before build — see escalation)**: live UAT proof covers
-(a) legitimate in-root create/edit/delete/sync via real chat, succeeding, and (b) the
-`rejectSymlinkParent` refusal live via real chat, confirming the generic message with no host path
-in the tool-error/`notes-last-sync` response. The specific `NotesPathError`/`sanitizedErrorMessage`
-chain is instead proven by the existing `tests/integration/notes.test.ts`
-`recheckWithinRoot`/symlink-escape unit tests (re-run fresh this relay, output cited in the PR
-comment) because true live reproduction requires an unforceable TOCTOU race. Stated plainly in the
-PR comment, not hidden.
+**Coordinator ruling (blocking correction to the above, applied)**: the original (b)+(c) proposal
+gave zero live coverage of #1512's actual change. `rejectSymlinkParent` only walks `dirname(rel)`
+(the parent directories) — it never calls `recheckWithinRoot`/`NotesPathError` and is pre-existing
+code, not this PR's guard. Only `recheckInside` (→ `recheckWithinRoot` → `canonicalizeAsFarAsExists`)
+reaches the new logic, and it runs against the **leaf path itself**
+(`notesCreateExecute`'s non-overwrite branch, `write-tools.ts:189`, immediately before
+`open(file, "wx")`). A leaf-level symlink escape is deterministically live-forceable, not a TOCTOU
+race: pre-seed `$ROOT/S -> outside` and `$ROOT/b.md -> S/../evil.md` (the exact case covered by
+`tests/integration/notes.test.ts:98-105`, "rejects a lexical .. escape through a symlinked
+directory"), then ask the assistant via real chat to create a note at `b.md`. `recheckWithinRoot`
+resolves through `S`, pops via `..` to the real parent of `outside` (kernel-accurate, not lexical),
+lands outside root, throws `NotesPathError` → `HttpError(400, "path is not within the linked notes
+source")`. Synchronous, repeatable, no race.
+
+**Final scope**: live UAT proof covers (a) legitimate in-root create/edit/delete/sync via real
+chat, succeeding; (b) `rejectSymlinkParent` ancestor-directory refusal live via real chat; and
+(c') the symlinked-leaf-file refusal above live via real chat — this is the only live proof of
+#1512's actual guard and is non-optional. The **only** remaining test-only substitute, narrowly
+scoped: the sync-worker's `collectMarkdownFiles` (`jobs.ts:116-128`) uses lstat-based `Dirent`
+info and silently excludes symlinks from its `readdir` walk, so a symlink swapped in *after* the
+walk but *before* the loop reaches that file is a genuine `readdir`→`realpath` TOCTOU race with no
+deterministic UI trigger — that sliver alone is proven by the existing
+`tests/integration/notes.test.ts` `recheckWithinRoot` unit tests (re-run fresh, output cited in
+the PR comment). State this precisely and narrowly in the PR comment; do not generalize the
+"unforceable" claim to (b) or (c').
