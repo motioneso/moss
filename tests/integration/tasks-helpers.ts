@@ -155,7 +155,10 @@ export async function handleNextRecurrenceJob(
  * `handleNextTaskJob` uses. Callers must invoke `close()` once done (typically in a test's
  * `finally`) — the underlying pool is not otherwise reclaimed.
  */
-export function workerDataContext(): { dataContext: DataContextRunner; close: () => Promise<void> } {
+export function workerDataContext(): {
+  dataContext: DataContextRunner;
+  close: () => Promise<void>;
+} {
   const scopedWorkerDb = createDatabase({
     connectionString: connectionStrings.worker,
     maxConnections: 1
