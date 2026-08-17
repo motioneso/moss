@@ -167,7 +167,9 @@ test("reloading the page restores private-mode indication from server truth", as
   );
 });
 
-test("stages next message while response is running and sends it after stop", async ({ page }) => {
+test("queued chat drain stays stable while SSE records arrive, then sends once after stop", async ({
+  page
+}) => {
   await mockApi(page, {
     authenticated: true,
     chatThreads: [],
@@ -211,6 +213,18 @@ test("stages next message while response is running and sends it after stop", as
 
   await page.route("**/api/chat/clear", (route) => route.fulfill({ status: 204, body: "" }));
 
+  // Three SSE reconnects fire while the first turn is held and a second sits queued (#1520).
+  let streamTicks = 0;
+  await page.route("**/api/chat/stream*", async (route) => {
+    const tick = streamTicks++;
+    if (tick >= 3) return;
+    await route.fulfill({
+      status: 200,
+      contentType: "text/event-stream",
+      headers: { "cache-control": "no-cache" },
+      body: `data: ${JSON.stringify({ kind: "reply", text: `Tick ${tick}`, messageId: `tick-${tick}` })}\n\n`
+    });
+  });
   await page.goto("/");
   await page.getByRole("button", { name: "Chat with Moss" }).click();
   const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
@@ -252,11 +266,13 @@ test("stages next message while response is running and sends it after stop", as
   await composerInput.press("Enter");
   await expect(queuedChip).toContainText('Next: "Drained queued"');
 
+  await expect(drawer.getByText("Tick 2")).toBeVisible();
+  await expect(queuedChip).toContainText('Next: "Drained queued"');
   await composerAction.click();
-
   await expect.poll(() => turnTexts).toEqual(["First question", "Drained queued"]);
   expect(cancelRequests).toBe(1);
   await expect(drawer.getByText(/Next:/)).toHaveCount(0);
+  await expect(drawer.getByText("Drained queued", { exact: true })).toHaveCount(1);
 });
 
 test("selecting a History row both opens and activates it — no separate resume step", async ({
