@@ -36,4 +36,30 @@ describe("createPreviewStore", () => {
     expect(store.take("owner-a", third)).not.toBeNull();
     expect(store.take("owner-b", other)).not.toBeNull();
   });
+
+  it("sweeps another owner's expired entry when a different owner puts", () => {
+    let now = 0;
+    const store = createPreviewStore({ ttlMs: 100, now: () => now });
+    const abandoned = store.put(preview("owner-a", now));
+
+    now = 101;
+    store.put(preview("owner-b", now));
+
+    expect(store.take("owner-a", abandoned)).toBeNull();
+  });
+
+  it("keeps an entry exactly ttlMs old and sweeps one ttlMs + 1 old", () => {
+    let now = 0;
+    const store = createPreviewStore({ ttlMs: 100, now: () => now });
+    const atBoundary = store.put(preview("owner-a", now));
+    const pastBoundary = store.put(preview("owner-a", now));
+
+    now = 100;
+    store.put(preview("owner-c", now));
+    expect(store.take("owner-a", atBoundary)).not.toBeNull();
+
+    now = 101;
+    store.put(preview("owner-c", now));
+    expect(store.take("owner-a", pastBoundary)).toBeNull();
+  });
 });
