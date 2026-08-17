@@ -137,4 +137,225 @@ describe("sanitizeAssistantToolResult", () => {
 
     expect(sanitized.columnOrder).toEqual(["id"]);
   });
+
+  it("accepts null for a declared nullable-object field", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      required: ["match"],
+      properties: {
+        match: {
+          anyOf: [
+            { type: "object", required: ["id"], properties: { id: { type: "string" } } },
+            { type: "null" }
+          ]
+        }
+      }
+    };
+    const result: ToolResult = { data: { match: null } };
+
+    const sanitized = sanitizeAssistantToolResult(schema, result);
+
+    expect(sanitized.data).toEqual({ match: null });
+  });
+
+  it("sanitizes the non-null branch of a declared nullable-object field, stripping undeclared keys", () => {
+    // This is the case that fails on unpatched code: getScalarTypes silently drops an
+    // object/array anyOf branch, so the value passes through unvalidated and "secret" survives.
+    const schema: JsonSchema = {
+      type: "object",
+      required: ["match"],
+      properties: {
+        match: {
+          anyOf: [
+            { type: "object", required: ["id"], properties: { id: { type: "string" } } },
+            { type: "null" }
+          ]
+        }
+      }
+    };
+    const result: ToolResult = { data: { match: { id: "m1", secret: "x" } } };
+
+    const sanitized = sanitizeAssistantToolResult(schema, result);
+
+    const match = sanitized.data as Record<string, unknown>;
+    expect(match.match).toEqual({ id: "m1" });
+    expect(
+      Object.prototype.hasOwnProperty.call(match.match as Record<string, unknown>, "secret")
+    ).toBe(false);
+  });
+
+  it("rejects an invalid object on a declared nullable-object field", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      required: ["match"],
+      properties: {
+        match: {
+          anyOf: [
+            { type: "object", required: ["id"], properties: { id: { type: "string" } } },
+            { type: "null" }
+          ]
+        }
+      }
+    };
+    const result: ToolResult = { data: { match: { secret: "x" } } };
+
+    expect(() => sanitizeAssistantToolResult(schema, result)).toThrow(
+      /missing required output field "id"/
+    );
+  });
+
+  it("accepts null for a declared nullable-array field", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      required: ["items"],
+      properties: {
+        items: {
+          anyOf: [
+            {
+              type: "array",
+              items: { type: "object", required: ["id"], properties: { id: { type: "string" } } }
+            },
+            { type: "null" }
+          ]
+        }
+      }
+    };
+    const result: ToolResult = { data: { items: null } };
+
+    const sanitized = sanitizeAssistantToolResult(schema, result);
+
+    expect(sanitized.data).toEqual({ items: null });
+  });
+
+  it("sanitizes the non-null branch of a declared nullable-array field, stripping undeclared keys per item", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      required: ["items"],
+      properties: {
+        items: {
+          anyOf: [
+            {
+              type: "array",
+              items: { type: "object", required: ["id"], properties: { id: { type: "string" } } }
+            },
+            { type: "null" }
+          ]
+        }
+      }
+    };
+    const result: ToolResult = { data: { items: [{ id: "m1", secret: "x" }] } };
+
+    const sanitized = sanitizeAssistantToolResult(schema, result);
+
+    expect(sanitized.data).toEqual({ items: [{ id: "m1" }] });
+  });
+
+  it("accepts null for the job-search match.get nullable-detail shape", () => {
+    // Fixture mirrors MatchDetail (external-modules/job-search/src/worker/handlers/matches.ts)
+    // end-to-end, proving the shape job-search.match.get would declare validates correctly.
+    // Fixture only — no external-modules/job-search file is touched by this change.
+    const matchDetailSchema: JsonSchema = {
+      type: "object",
+      required: [
+        "id",
+        "title",
+        "company",
+        "url",
+        "body",
+        "fit",
+        "want",
+        "fitReason",
+        "wantReason",
+        "outsideFrame",
+        "scoredAt",
+        "state"
+      ],
+      properties: {
+        id: { type: "string" },
+        title: { type: "string" },
+        company: { type: "string" },
+        url: { type: "string" },
+        body: { type: "string" },
+        fit: { anyOf: [{ type: "number" }, { type: "null" }] },
+        want: { anyOf: [{ type: "number" }, { type: "null" }] },
+        fitReason: { type: "string" },
+        wantReason: { type: "string" },
+        outsideFrame: { type: "boolean" },
+        scoredAt: { anyOf: [{ type: "string" }, { type: "null" }] },
+        state: { type: "string" }
+      }
+    };
+    const schema: JsonSchema = {
+      type: "object",
+      required: ["match"],
+      properties: { match: { anyOf: [matchDetailSchema, { type: "null" }] } }
+    };
+    const result: ToolResult = { data: { match: null } };
+
+    const sanitized = sanitizeAssistantToolResult(schema, result);
+
+    expect(sanitized.data).toEqual({ match: null });
+  });
+
+  it("strips an undeclared key from the job-search match.get nullable-detail shape", () => {
+    const matchDetailSchema: JsonSchema = {
+      type: "object",
+      required: [
+        "id",
+        "title",
+        "company",
+        "url",
+        "body",
+        "fit",
+        "want",
+        "fitReason",
+        "wantReason",
+        "outsideFrame",
+        "scoredAt",
+        "state"
+      ],
+      properties: {
+        id: { type: "string" },
+        title: { type: "string" },
+        company: { type: "string" },
+        url: { type: "string" },
+        body: { type: "string" },
+        fit: { anyOf: [{ type: "number" }, { type: "null" }] },
+        want: { anyOf: [{ type: "number" }, { type: "null" }] },
+        fitReason: { type: "string" },
+        wantReason: { type: "string" },
+        outsideFrame: { type: "boolean" },
+        scoredAt: { anyOf: [{ type: "string" }, { type: "null" }] },
+        state: { type: "string" }
+      }
+    };
+    const schema: JsonSchema = {
+      type: "object",
+      required: ["match"],
+      properties: { match: { anyOf: [matchDetailSchema, { type: "null" }] } }
+    };
+    const validMatch = {
+      id: "m1",
+      title: "Engineer",
+      company: "Acme",
+      url: "https://example.com/1",
+      body: "desc",
+      fit: 80,
+      want: 70,
+      fitReason: "reason",
+      wantReason: "reason",
+      outsideFrame: false,
+      scoredAt: "2026-08-16T00:00:00.000Z",
+      state: "scored",
+      secret: "should not survive"
+    };
+    const result: ToolResult = { data: { match: validMatch } };
+
+    const sanitized = sanitizeAssistantToolResult(schema, result);
+
+    const data = sanitized.data as Record<string, unknown>;
+    const match = data.match as Record<string, unknown>;
+    expect(match.id).toBe("m1");
+    expect(Object.prototype.hasOwnProperty.call(match, "secret")).toBe(false);
+  });
 });
