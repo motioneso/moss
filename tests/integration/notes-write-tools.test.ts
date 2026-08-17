@@ -534,7 +534,7 @@ describe("notes write assistant tools", () => {
     await rm(outside, { recursive: true, force: true });
   });
 
-  it("closes the TOCTOU window: create overwrite, parent swapped to a symlink after the parent check, before writeFile", async () => {
+  it("narrows the TOCTOU window: create overwrite, parent swapped to a symlink after the parent check, before writeFile", async () => {
     const outside = await mkdtemp(join(tmpdir(), `jarv1s-outside-toctou1-${randomUUID()}-`));
     const parentDir = join(root, "sub1");
     await mkdir(parentDir, { recursive: true });
@@ -560,7 +560,7 @@ describe("notes write assistant tools", () => {
     await rm(outside, { recursive: true, force: true });
   });
 
-  it("closes the TOCTOU window: create exclusive, parent swapped to a symlink after the parent check, before open", async () => {
+  it("narrows the TOCTOU window: create exclusive, parent swapped to a symlink after the parent check, before open", async () => {
     const outside = await mkdtemp(join(tmpdir(), `jarv1s-outside-toctou2-${randomUUID()}-`));
     const parentDir = join(root, "sub2");
     await mkdir(parentDir, { recursive: true });
@@ -586,7 +586,7 @@ describe("notes write assistant tools", () => {
     await rm(outside, { recursive: true, force: true });
   });
 
-  it("closes the TOCTOU window: edit, target swapped to a symlink after resolveExistingFile, before readFile", async () => {
+  it("narrows the TOCTOU window: edit, target swapped to a symlink after resolveExistingFile, before readFile", async () => {
     const outside = await mkdtemp(join(tmpdir(), `jarv1s-outside-toctou3-${randomUUID()}-`));
     await writeFile(join(outside, "secret.md"), "TOP SECRET");
     const targetPath = join(root, "note3.md");
@@ -613,7 +613,7 @@ describe("notes write assistant tools", () => {
     await rm(outside, { recursive: true, force: true });
   });
 
-  it("closes the TOCTOU window: edit, target swapped to a symlink after readFile succeeds, before writeFile", async () => {
+  it("narrows the TOCTOU window: edit, target swapped to a symlink after readFile succeeds, before writeFile", async () => {
     const outside = await mkdtemp(join(tmpdir(), `jarv1s-outside-toctou4-${randomUUID()}-`));
     const targetPath = join(root, "note4.md");
     await writeFile(targetPath, "hello world");
@@ -639,7 +639,7 @@ describe("notes write assistant tools", () => {
     await rm(outside, { recursive: true, force: true });
   });
 
-  it("closes the TOCTOU window: delete, parent swapped to a symlink after resolveExistingFile, before unlink", async () => {
+  it("narrows the TOCTOU window: delete, parent swapped to a symlink after resolveExistingFile, before unlink", async () => {
     const outside = await mkdtemp(join(tmpdir(), `jarv1s-outside-toctou5-${randomUUID()}-`));
     await writeFile(join(outside, "note5.md"), "do not delete me");
     const parentDir = join(root, "sub5");

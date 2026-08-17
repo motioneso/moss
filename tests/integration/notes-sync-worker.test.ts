@@ -9,7 +9,7 @@ import type { PgBoss } from "pg-boss";
 import type * as NodeFsPromises from "node:fs/promises";
 import pg from "pg";
 
-// TOCTOU test support (the two "closes the TOCTOU window" tests below): vi.spyOn cannot patch the
+// TOCTOU test support (the two "narrows the TOCTOU window" tests below): vi.spyOn cannot patch the
 // "node:fs/promises" namespace directly (ESM module namespaces aren't configurable), so realpath is
 // routed through this mock via vi.mock instead. Every other export, and every call to realpath
 // outside those two tests, passes through to the real implementation untouched. vi.hoisted is
@@ -321,7 +321,7 @@ describe("handleNotesSyncJob", () => {
     }
   });
 
-  it("closes the TOCTOU window: handleNotesSyncJob target swapped to a symlink after the initial check, before ingest", async () => {
+  it("narrows the TOCTOU window: handleNotesSyncJob target swapped to a symlink after the initial check, before ingest", async () => {
     const outside = join(tmpdir(), `jarv1s-notes-outside-toctou6-${randomUUID()}`);
     await mkdir(outside, { recursive: true });
     await writeFile(join(outside, "secret6.md"), "TOP SECRET worker payload 6");
@@ -361,7 +361,7 @@ describe("handleNotesSyncJob", () => {
     }
   });
 
-  it("closes the TOCTOU window: handleNotesSyncJobWithDataContext target swapped across the withDataContext boundary", async () => {
+  it("narrows the TOCTOU window: handleNotesSyncJobWithDataContext target swapped across the withDataContext boundary", async () => {
     const outside = join(tmpdir(), `jarv1s-notes-outside-toctou7-${randomUUID()}`);
     await mkdir(outside, { recursive: true });
     await writeFile(join(outside, "secret7.md"), "TOP SECRET worker payload 7");
