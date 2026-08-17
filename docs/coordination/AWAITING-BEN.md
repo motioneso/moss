@@ -253,8 +253,51 @@ bendlove@gmail.com" — confirms prod does not have `MOSS_RECONCILE_CONFIRM_OWNE
 Relayed to the build agent (`w1:pD1`): add it to prod's deploy config as part of PR #1647, value
 `bendlove@gmail.com`, same pattern as the precedent above.
 
+**CORRECTION 2026-08-17 (build agent, w1:pD1):** the "add as part of PR #1647" framing above turns
+out not to be executable, and isn't actually the same pattern as the precedent above. Checked:
+`infra/env.production.local` is deliberately untracked (`.gitignore:23`) and has never once been
+touched by any commit in this repo's history (`git log --all -- infra/env.production.local` is
+empty). The earlier precedent's "added as part of the PR" only ever meant the git-tracked *wiring*
+— the `${MOSS_RECONCILE_CONFIRM_OWNER_EMAIL:-}` interpolation slot in
+`infra/docker-compose.prod.yml` (both the `jarv1s` and `module-install` services) — which PR #1647
+does ship. The actual *value* cannot land through a PR/commit at all; it has to be set directly in
+prod's operator-managed env file or the equivalent Portainer stack-env entry, which only Ben (or
+whoever holds prod host/Portainer access) can do. No agent in this session has that access, and per
+`CLAUDE.md` ("Ben deploys via Portainer... never CLI docker compose up") none should attempt it.
+
+**Action needed from Ben, before or atomically with PR #1647 reaching prod** — add this line to
+prod's `infra/env.production.local` (or the equivalent Portainer stack-env entry for the `jarv1s`
+and `module-install` services):
+
+    MOSS_RECONCILE_CONFIRM_OWNER_EMAIL=bendlove@gmail.com
+
+Already documented as the expected format at `infra/env.production.example:98`. Without this, once
+PR #1647's image reaches prod (publish is already queued, prod auto-pulls), `module-reconcile.ts`'s
+mandatory boot one-shot will refuse to run and the `jarv1s` container will crash-loop.
+
 **Correction, still open 2026-08-17.** The build agent can't set this from its worktree — it's a
 live prod environment change (Portainer stack env or `env.production.local` on the prod host), not
 a repo/PR change. PR #1647's code side is done (compose conduit added, body corrected, verified).
 Remaining: you set `MOSS_RECONCILE_CONFIRM_OWNER_EMAIL=bendlove@gmail.com` directly in prod's env
 before (or atomically with) this image reaching prod. Once that's done, PR #1647 is merge-ready.
+
+**RESOLVED 2026-08-17 (coordinator).** Per Ben's direct instruction plus his needs-ben confirmation
+("You have my full permission to do whatever"), done live on the prod host — this is a one-time
+exception to "coordinator never touches prod," authorized explicitly by Ben:
+
+- `MOSS_RECONCILE_CONFIRM_OWNER_EMAIL=bendlove@gmail.com` added to `env.production.local` on the
+  prod host (`~/JarvisProd/`), plus the matching `${MOSS_RECONCILE_CONFIRM_OWNER_EMAIL:-}`
+  interpolation slot mirrored into `~/JarvisProd/docker-compose.prod.yml`'s `jarv1s` and
+  `module-install` services (same shape as PR #1647's not-yet-merged compose diff — prod's live
+  file is a separate copy, not a checkout of this repo, so it needed the same edit applied there
+  directly).
+- Also per Ben's request: pulled the latest `ghcr.io/motioneso/moss:edge` image, and set
+  `container_name: Moss` on the `jarv1s` service (previous default-generated name was
+  `jarv1s-prod-jarv1s-1`).
+- Applied with `docker compose ... up -d`; container recreated clean as `Moss`. Verified: container
+  reports healthy, `module-reconcile.ts`'s boot guard ran with no errors/crash-loop
+  (`purged=0 ensured=0 accepted=0 installed=0 drifted=0 warnings=0`), and
+  `curl http://127.0.0.1:1533/health/ready` → `{"ok":true,"db":"ok","pgboss":"ok"}`.
+- Backed up the pre-change env file to
+  `env.production.local.bak-pre-1468-20260816` before editing, in case of rollback.
+- PR #1647 is now merge-ready from the deploy-config side; relayed to `w1:pD1`.
