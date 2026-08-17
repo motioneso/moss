@@ -1,7 +1,7 @@
 /**
  * #1121: tests/uat/seed/cli.ts's opt-in step — when the compose `seed` service receives
  * CLAUDE_CODE_OAUTH_TOKEN (only ever via its own opt-in env_file entry, see
- * infra/docker-compose.prod.yml + tests/uat/provisioner.ts's writeUatRealChatEnvFile), it
+ * infra/docker-compose.prod.yml + tests/uat/real-chat-env.ts's writeUatRealChatEnvFile), it
  * persists that token into the shared cli-auth volume so jarv1s's chat launch can read it back.
  * Absent env var ⇒ no-op, default/CI seed behavior unchanged.
  */

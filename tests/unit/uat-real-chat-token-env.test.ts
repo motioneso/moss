@@ -12,7 +12,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   validateSingleTokenEnvContent,
   writeUatRealChatEnvFile
-} from "../../tests/uat/provisioner.js";
+} from "../../tests/uat/real-chat-env.js";
 
 describe("validateSingleTokenEnvContent", () => {
   it("throws on an extra key", () => {
