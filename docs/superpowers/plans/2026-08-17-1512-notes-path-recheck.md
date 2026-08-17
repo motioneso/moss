@@ -57,12 +57,15 @@ Add to `packages/notes/src/path-guard.ts`:
 export async function recheckWithinRoot(resolvedRoot: string, targetPath: string): Promise<void>;
 ```
 
-Behavior: walk upward from `targetPath` (which may not exist yet) to the deepest existing
-ancestor, `realpath()` that ancestor, then call the existing `assertWithinRoot(resolvedRoot,
-<resolved ancestor>)` — reusing its error path unchanged, so `NotesPathError` messages stay
-host-path-free by construction (no new message to audit). Only `ENOENT` on the walk continues to
-the parent; every other error (including `NotesPathError` from `assertWithinRoot`) propagates
-immediately.
+**Superseded during QA remediation** (Opus adversarial QA on PR #1671 found this walk-upward
+design produces a false pass when a symlinked directory component precedes a lexical `..` — the
+kernel resolves `..` against the already-dereferenced path, not the literal text; see
+`packages/notes/src/path-guard.ts`'s `canonicalizeAsFarAsExists` for the shipped kernel-accurate
+replacement and its docstring for the full mechanism). The `NotesPathError` messages are NOT
+host-path-free: `assertWithinRoot` embeds both the absolute path and the resolved root in its
+thrown message. Callers that persist this message across the API boundary (`jobs.ts`'s
+`lastErrorMessage`, flowing to the `notes-last-sync` preference) now sanitize it via
+`sanitizedErrorMessage()` instead of relying on the message being safe by construction.
 
 ## Decision: call-site insertions (zero intervening `await` between guard and syscall)
 
@@ -149,10 +152,31 @@ before.
 
 ## Live-path gate
 
-Not applicable — backend filesystem-guard fix, no UI surface. Stated explicitly in the PR/wrap-up
-per the handoff doc's override of the general live-path rule for this lane.
+**Corrected during QA remediation**: a plan cannot override the spec's own acceptance row (Opus
+adversarial QA on PR #1671, blocking finding 3). Spec `2026-08-10-1137-robustness-followups.md`
+§B1 requires a live-path proof; "no UI surface" does not exempt it — the assistant create/edit/
+delete tools and the notes sync worker are both reachable from the real chat UI on a live dev
+instance. Status: **code-complete, unverified** — live-path proof not yet produced. Next step for
+whoever picks this up: configure a disposable in-root notes source on a live dev instance, exercise
+real assistant create/edit/delete calls plus a sync run through the actual chat UI, and confirm
+(a) legitimate in-root operations still succeed and (b) the settings payload's `notes-last-sync`
+error field never surfaces a host path (exercise a real `NotesPathError` case, e.g. point the
+assistant at a path outside the configured root, and read the settings response). Avoid pasting
+literal host paths or outside-root file content into the PR evidence itself.
+
+## Residual risk (acknowledged, out of scope for #1512)
+
+`canonicalizeAsFarAsExists` resolves symlinks but does not defend against hardlinks or bind mounts:
+a hardlink inside the notes root pointing at inode content outside it, or a bind-mounted directory
+swapped in at the OS level, both present as an ordinary (non-symlink) file/directory to `lstat` and
+pass containment. Neither is reachable through the assistant tools or sync worker without
+filesystem-level access outside this application's control surface (i.e., an attacker who can
+already create hardlinks/bind-mounts on the host has broader access than this guard is scoped to
+defend against). Noted per Opus adversarial QA on PR #1671 (non-blocking finding D) as an
+acknowledged residual, not a defect to fix in this lane.
 
 ## Open items for Coordinator review
 
-- None blocking. Signature/insertion decisions above are complete and grounded in file:line reads
-  on this branch.
+- Live-path proof (spec B1) is the one remaining blocking item before this lane can merge; see
+  "Live-path gate" above for the concrete next step. Everything else QA flagged (3 blocking + 4
+  non-blocking findings on PR #1671) has been fixed and committed on this branch.

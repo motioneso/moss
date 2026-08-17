@@ -117,6 +117,12 @@ async function canonicalizeAsFarAsExists(targetPath: string): Promise<string> {
  * landing in the residual window between this recheck returning and the actual syscall is not —
  * that window can only be closed with O_NOFOLLOW / dirfd-relative I/O, which this guard does not
  * use.
+ *
+ * Acknowledged residual (out of scope): this resolves symlinks, not hardlinks or bind mounts. A
+ * hardlink inside resolvedRoot pointing at inode content outside it, or a directory bind-mounted
+ * over an in-root path at the OS level, both present as an ordinary file/directory to lstat and
+ * pass containment. Both require filesystem-level access this guard is not scoped to defend
+ * against (an attacker who can create either already has host access broader than this boundary).
  */
 export async function recheckWithinRoot(resolvedRoot: string, targetPath: string): Promise<void> {
   const resolved = await canonicalizeAsFarAsExists(targetPath);
