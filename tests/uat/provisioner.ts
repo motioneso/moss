@@ -190,6 +190,11 @@ export function writeUatEnvFile(input: {
   // JARVIS_E2E_MODULE_FETCH_BASE may appear in any checked-in compose file, .env.example, or dev
   // script. See provisionForUat's jobSearchFixture wiring.
   readonly jobSearchFixtureBaseUrl?: string;
+  // #1121: the scripted provider (tests/uat/fixtures/scripted-provider/claude-main.ts) reads
+  // JARVIS_UAT_SEED_CHAT_SCRIPT from its OWN process env at app runtime, inside the jarv1s
+  // container — so it has to be here, not only on composeSeedHook's `docker -e` args. Same
+  // runtime-vs-seed-time split as JARVIS_UAT_NEWS_TRANSIENT_INPUT below.
+  readonly chatScript?: string;
 }): UatEnvFile {
   const dir = mkdtempSync(join(tmpdir(), "jarv1s-uat-"));
   const path = join(dir, "env.production.local");
@@ -238,6 +243,9 @@ export function writeUatEnvFile(input: {
         // input — hence env_file: here, not the seed container's docker -e args below.
         "JARVIS_UAT_SEED_CONFIRM=1",
         "JARVIS_UAT_NEWS_TRANSIENT_INPUT=uat-transient.invalid",
+        // #1121: absent unless a spec declares uatLevel.chatScript. Omitted rather than written
+        // empty so a stack with no scripted chat never hands the provider a "" it would reject.
+        ...(input.chatScript ? [`JARVIS_UAT_SEED_CHAT_SCRIPT=${input.chatScript}`] : []),
         // #1306 Task 22: absent unless a caller passes jobSearchFixtureBaseUrl — see this
         // function's param doc. JARVIS_RUNTIME_MODE alone (without the base URL) would throw at
         // host boot per resolveE2eFetchOverride's fail-closed guard, so these two are written
@@ -851,7 +859,12 @@ export async function provisionForUat(
       : undefined;
     let envFile!: UatEnvFile;
     try {
-      envFile = writeUatEnvFile({ webPort, subnet: subnet.subnet, jobSearchFixtureBaseUrl });
+      envFile = writeUatEnvFile({
+        webPort,
+        subnet: subnet.subnet,
+        jobSearchFixtureBaseUrl,
+        chatScript: opts?.chatScript
+      });
       process.env.JARVIS_ENV_FILE = envFile.path;
       process.env.JARVIS_IMAGE_TAG ??= "uat-smoke";
       // #1024/#1000: must be exported for every retry iteration, not just the first — a TOCTOU
