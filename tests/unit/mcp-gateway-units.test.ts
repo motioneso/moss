@@ -603,7 +603,9 @@ describe("native Claude tool permission bridge", () => {
 
 describe("gateway audit outcome truth (#1252)", () => {
   function manifestWithTool(
-    toolOverrides: Partial<ModuleAssistantToolManifest> & { execute: ModuleAssistantToolManifest["execute"] }
+    toolOverrides: Partial<ModuleAssistantToolManifest> & {
+      execute: ModuleAssistantToolManifest["execute"];
+    }
   ): MossModuleManifest {
     return {
       id: "acme",
@@ -625,7 +627,9 @@ describe("gateway audit outcome truth (#1252)", () => {
   }
 
   async function runYoloAndCaptureAudit(
-    toolOverrides: Partial<ModuleAssistantToolManifest> & { execute: ModuleAssistantToolManifest["execute"] }
+    toolOverrides: Partial<ModuleAssistantToolManifest> & {
+      execute: ModuleAssistantToolManifest["execute"];
+    }
   ): Promise<{ outcome: string; errorClass: string | null }> {
     const audits: { outcome: string; errorClass: string | null }[] = [];
     const tokens = new SessionTokenRegistry();
@@ -633,7 +637,10 @@ describe("gateway audit outcome truth (#1252)", () => {
     const gateway = new AssistantToolGateway({
       resolveActiveModules: async () => [manifestWithTool(toolOverrides)],
       repository: {
-        insertActionAuditLog: async (_db: unknown, input: { outcome: string; errorClass: string | null }) => {
+        insertActionAuditLog: async (
+          _db: unknown,
+          input: { outcome: string; errorClass: string | null }
+        ) => {
           audits.push({ outcome: input.outcome, errorClass: input.errorClass });
         }
       } as never,
@@ -657,12 +664,15 @@ describe("gateway audit outcome truth (#1252)", () => {
     ["status: error", { status: "error" }],
     ["ok: false", { ok: false }],
     ["error: <string>", { error: "boom" }]
-  ])("audits a %s handler payload as failed/module_reported (external tool)", async (_label, data) => {
-    const audit = await runYoloAndCaptureAudit({
-      execute: async (): Promise<ToolResult> => ({ data })
-    });
-    expect(audit).toEqual({ outcome: "failed", errorClass: "module_reported" });
-  });
+  ])(
+    "audits a %s handler payload as failed/module_reported (external tool)",
+    async (_label, data) => {
+      const audit = await runYoloAndCaptureAudit({
+        execute: async (): Promise<ToolResult> => ({ data })
+      });
+      expect(audit).toEqual({ outcome: "failed", errorClass: "module_reported" });
+    }
+  );
 
   it("audits a normal success payload as success/null (external tool)", async () => {
     const audit = await runYoloAndCaptureAudit({

@@ -13,7 +13,7 @@ first (only phase with an open design decision), then #946, then #1490.
 
 ### Decision: closed set of conventional error shapes + `error_class`
 
-A payload counts as **module-reported error** iff, after `executeTool` returns and *before*
+A payload counts as **module-reported error** iff, after `executeTool` returns and _before_
 `sanitizeAssistantToolResult`/`renderAndCap` run, the raw `result.data` (`Record<string, unknown>`,
 confirmed at `packages/module-sdk/src/index.ts:76-80`) matches any of:
 
@@ -61,12 +61,13 @@ private async runHandler(
 Detection helper (local, unexported, gateway.ts):
 
 ```ts
-function detectModuleReportedError(payload: Record<string, unknown>): boolean
+function detectModuleReportedError(payload: Record<string, unknown>): boolean;
 ```
 
 ### Call-site changes (3 sites: ~218/230, ~257/270, ~678/689)
 
 Each currently does:
+
 ```ts
 const result = await this.runHandler(found, input, ctx);
 ...
@@ -79,6 +80,7 @@ return result;
 ```
 
 Becomes:
+
 ```ts
 const { response: result, moduleReportedErrorClass } = await this.runHandler(found, input, ctx);
 ...
@@ -128,10 +130,12 @@ report to Coordinator instead of improvising a broader refactor.
 ### BlockList fix (1 line)
 
 Add to the ipv6 subnet list (`index.ts:142-154`, alongside the existing `["::", 128]` etc. entries):
+
 ```ts
 ["::ffff:0:0", 96],
 ```
-This closes the gap: `isBlocked()` (`index.ts:376-380`) only regex-normalizes *dotted-form*
+
+This closes the gap: `isBlocked()` (`index.ts:376-380`) only regex-normalizes _dotted-form_
 v4-mapped addresses (`::ffff:1.2.3.4`) before checking the ipv4 list; hex-form v4-mapped addresses
 (e.g. `::ffff:a9fe:a9fe` = 169.254.169.254, the classic cloud-metadata SSRF target) fall through to
 the raw ipv6 `BLOCKED.check`, which has no `::ffff:0:0/96` entry today. Adding the subnet directly
@@ -141,7 +145,7 @@ closes it regardless of literal form.
 
 1. **Hex-form v4-mapped literal** — extend the existing `it.each` blocked-DNS-answer table
    (`host-pinned-fetch.test.ts:37-44`) with `["hex-form v4-mapped IPv6 (metadata endpoint)",
-   "::ffff:a9fe:a9fe", 6]`. Fails today (pre-fix) because no ipv6 subnet covers it; the one-line fix
+"::ffff:a9fe:a9fe", 6]`. Fails today (pre-fix) because no ipv6 subnet covers it; the one-line fix
    above makes it pass.
 2. **Non-443 port** — `fetchFn("https://api.example.com:8443/data")` (or any port literal) →
    `rejects.toMatchObject({ code: "invalid_request" })`, asserting `validateUrl` (`index.ts:341-346`)
@@ -155,10 +159,10 @@ closes it regardless of literal form.
    `rejects.toMatchObject({ code: "response_too_large" })`, asserting the accumulation loop
    (`index.ts:~231-240`) aborts mid-stream rather than buffering unbounded.
 5. **Cross-origin redirect header wipe, incl. same-host different-port** — `request` mock
-   returns a 302 with `location` pointing at (a) a different host and (b) the *same* hostname but a
+   returns a 302 with `location` pointing at (a) a different host and (b) the _same_ hostname but a
    different port; assert the second hop's `headers` sent to `request` do **not** include a
    caller-supplied sensitive header (e.g. `authorization`) in both cases — proving `next.origin !==
-   url.origin` (`index.ts:~219`) treats port as origin-significant (`URL.origin` includes port), not
+url.origin` (`index.ts:~219`) treats port as origin-significant (`URL.origin` includes port), not
    just hostname.
 6. **Redirect-to-blocked re-validation** — `resolve` mock returns a public address on hop 0 and a
    blocked address (e.g. `169.254.169.254`) on hop 1 after a redirect; assert the second hop still
@@ -192,11 +196,11 @@ probe directly (spot-checked: they exercise higher-level routes/tools, not the r
 
 ### Why this differs from the existing #1055 test (line 814)
 
-That test covers a `view`-level share — `create()` correctly makes B a *new* row instead of matching
+That test covers a `view`-level share — `create()` correctly makes B a _new_ row instead of matching
 A's. The regression risk #1490 targets is sharper: `app.tasks`'s `tasks_update` RLS policy
 (`packages/tasks/sql/0019_tasks_owner_or_share.sql:33-51`) legitimately grants UPDATE to a
 **`manage`**-level share holder (`owner_user_id = actor OR app.has_share('task', id, 'manage')`) —
-so at the RLS layer, B genuinely *can* write to A's row through other code paths. The invariant under
+so at the RLS layer, B genuinely _can_ write to A's row through other code paths. The invariant under
 test is that `create()`'s idempotency-resurface UPDATE branches (`repository.ts:219-241`,
 `242-252`) can only ever be reached via `existing`, and `existing`'s query is owner-scoped
 (`repository.ts:216`, the #1055/#1483 fix, commit `7fc432f39`) — so even a `manage` share, which
@@ -258,6 +262,7 @@ restoring) and pass on the current tree.
   user-visible either, but worth a sentence for the security-audit trail).
 
 ## Verification (run after each phase, per `verify-gate` skill — never run `pnpm verify:foundation`
+
 directly without it)
 
 ```bash

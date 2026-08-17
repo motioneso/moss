@@ -755,11 +755,7 @@ export class AssistantToolGateway {
       return { ok: false, denied: true, reason };
     }
 
-    const { response: result, moduleReportedErrorClass } = await this.runHandler(
-      found,
-      input,
-      ctx
-    );
+    const { response: result, moduleReportedErrorClass } = await this.runHandler(found, input, ctx);
     this.deps.notifier.emit(ctx.chatSessionId, {
       kind: "action_result",
       actionRequestId: action.id,
