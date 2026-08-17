@@ -87,6 +87,28 @@ export function decideStagedAcceptance(input: {
   };
 }
 
+/**
+ * Pure decision for phase 3 (#1057): an exact version pin in `JARVIS_MODULES_ENSURE` must be
+ * honored even when some version of the module is already on disk. `onDiskVersions` comes from
+ * `preScan.discoveries` (readable manifest, real version); `onDiskUnreadable` comes from
+ * `preScan.rejected` (present but no readable manifest — no version to compare, preserve the
+ * prior skip-if-present behavior for this leg, out of #1057's scope).
+ */
+export function decideEnsureAction(
+  entry: { readonly id: string; readonly version?: string },
+  onDiskVersions: Map<string, string>,
+  onDiskUnreadable: Set<string>
+): "skip" | "stage" {
+  const onDiskVersion = onDiskVersions.get(entry.id);
+  if (onDiskVersion !== undefined) {
+    return entry.version === undefined || onDiskVersion === entry.version ? "skip" : "stage";
+  }
+  if (onDiskUnreadable.has(entry.id)) {
+    return "skip";
+  }
+  return "stage";
+}
+
 interface ExternalModuleAdminRow {
   readonly id: string;
   readonly status: "enabled" | "disabled";
@@ -241,12 +263,10 @@ export async function reconcileModules(options: ReconcileModulesOptions): Promis
       coreVersion: CORE_VERSION,
       reservedQueueNames: new Set(getAllQueueDefinitions().map((queue) => queue.name))
     });
-    const onDisk = new Set([
-      ...preScan.discoveries.map((d) => d.id),
-      ...preScan.rejected.map((r) => r.id)
-    ]);
+    const onDiskVersions = new Map(preScan.discoveries.map((d) => [d.id, d.manifest.version]));
+    const onDiskUnreadable = new Set(preScan.rejected.map((r) => r.id));
     for (const entry of ensure.entries) {
-      if (onDisk.has(entry.id)) continue;
+      if (decideEnsureAction(entry, onDiskVersions, onDiskUnreadable) === "skip") continue;
       try {
         const staged = await downloadAndStageModule({
           moduleId: entry.id,
