@@ -252,3 +252,9 @@ set there before this merges, or the next prod pull crash-loops the app.
 bendlove@gmail.com" — confirms prod does not have `MOSS_RECONCILE_CONFIRM_OWNER_EMAIL` set yet.
 Relayed to the build agent (`w1:pD1`): add it to prod's deploy config as part of PR #1647, value
 `bendlove@gmail.com`, same pattern as the precedent above.
+
+**Correction, still open 2026-08-17.** The build agent can't set this from its worktree — it's a
+live prod environment change (Portainer stack env or `env.production.local` on the prod host), not
+a repo/PR change. PR #1647's code side is done (compose conduit added, body corrected, verified).
+Remaining: you set `MOSS_RECONCILE_CONFIRM_OWNER_EMAIL=bendlove@gmail.com` directly in prod's env
+before (or atomically with) this image reaching prod. Once that's done, PR #1647 is merge-ready.
