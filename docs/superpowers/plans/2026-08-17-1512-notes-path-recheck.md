@@ -180,3 +180,33 @@ acknowledged residual, not a defect to fix in this lane.
 - Live-path proof (spec B1) is the one remaining blocking item before this lane can merge; see
   "Live-path gate" above for the concrete next step. Everything else QA flagged (3 blocking + 4
   non-blocking findings on PR #1671) has been fixed and committed on this branch.
+
+## Addendum (relay 8): live-path proof scope decision
+
+The "Live-path gate" section's suggested trigger ("point the assistant at a path outside the
+configured root") does not reach `NotesPathError`/`recheckWithinRoot` — `requireMarkdownPath()`
+(`write-tools.ts:27`) synchronously rejects absolute/`..`-traversal input first, with an earlier,
+different `HttpError(400, "path must be a relative Markdown path")`. Confirmed by fresh read this
+relay of `path-guard.ts` and `write-tools.ts` in full.
+
+Two chat-reachable ways to hit the actual target string `"path is not within the linked notes
+source"`, both confirmed present in the current `write-tools.ts`:
+
+1. `rejectSymlinkParent()` (`write-tools.ts:124-141`) — pre-seed a symlinked ancestor directory
+   inside the notes root, then have the assistant create/edit a note through it via real chat.
+   Synchronous, deterministic, no race. Throws the same message string directly.
+2. The literal `NotesPathError` → `sanitizedErrorMessage()` (`jobs.ts:43-44`) →
+   `notes-last-sync.lastError` chain — confirmed it returns the same string for `NotesPathError`
+   specifically. Only reachable via a genuine TOCTOU race in the sync job's per-file loop (swap a
+   file for a symlink between the `readdir` walk and the loop reaching it); `collectMarkdownFiles`
+   uses lstat-based `Dirent` info, so a symlink placed before sync starts is silently excluded from
+   the walk, not a trigger. Not cleanly forceable through pure UI action.
+
+**Scope decision (approved by Coordinator before build — see escalation)**: live UAT proof covers
+(a) legitimate in-root create/edit/delete/sync via real chat, succeeding, and (b) the
+`rejectSymlinkParent` refusal live via real chat, confirming the generic message with no host path
+in the tool-error/`notes-last-sync` response. The specific `NotesPathError`/`sanitizedErrorMessage`
+chain is instead proven by the existing `tests/integration/notes.test.ts`
+`recheckWithinRoot`/symlink-escape unit tests (re-run fresh this relay, output cited in the PR
+comment) because true live reproduction requires an unforceable TOCTOU race. Stated plainly in the
+PR comment, not hidden.
