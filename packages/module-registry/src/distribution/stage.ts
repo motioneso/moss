@@ -12,6 +12,16 @@ export const stagingDirFor = (modulesDir: string, moduleId: string): string =>
 const prevDirFor = (modulesDir: string, moduleId: string): string =>
   join(modulesDir, `.prev-${moduleId}`);
 
+/** #1223: a pre-existing .prev-<id> (any owner) that stageModuleDir cannot clear before rotating. */
+export class StagePrevCleanupError extends Error {
+  constructor(path: string) {
+    super(
+      `cannot clear stale backup at "${path}" — remove it manually (e.g. sudo rm -rf "${path}") and retry`
+    );
+    this.name = "StagePrevCleanupError";
+  }
+}
+
 /**
  * Swap extractedDir into place as modulesDir/moduleId. If a version is already
  * installed it is parked at .prev-<id> and restored when the swap fails, so a crash
@@ -20,7 +30,11 @@ const prevDirFor = (modulesDir: string, moduleId: string): string =>
 export function stageModuleDir(extractedDir: string, modulesDir: string, moduleId: string): void {
   const target = join(modulesDir, moduleId);
   const prev = prevDirFor(modulesDir, moduleId);
-  rmSync(prev, { recursive: true, force: true });
+  try {
+    rmSync(prev, { recursive: true, force: true });
+  } catch {
+    throw new StagePrevCleanupError(prev);
+  }
   const hadPrevious = existsSync(target);
   if (hadPrevious) renameSync(target, prev);
   try {
@@ -37,7 +51,13 @@ export function sweepStagingDirs(modulesDir: string): void {
   if (!existsSync(modulesDir)) return;
   for (const name of readdirSync(modulesDir)) {
     if (name.startsWith(".staging-") || name.startsWith(".prev-")) {
-      rmSync(join(modulesDir, name), { recursive: true, force: true });
+      try {
+        rmSync(join(modulesDir, name), { recursive: true, force: true });
+      } catch {
+        // Opportunistic crash cleanup (reconcile phase 1) — a foreign-owned leftover must not
+        // abort sweeping the other entries. stageModuleDir's StagePrevCleanupError is the
+        // authoritative wedge-fix on the live rotation path.
+      }
     }
   }
 }
