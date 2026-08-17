@@ -3,8 +3,9 @@
 **Date:** 2026-08-16
 **Run:** `docs/coordination/post1632-queue-2026-08-16.md`
 **Issues:** #1337
-**Status:** DRAFT — awaiting Ben's approval (drafted by Fable 5 under the 2026-08-16 overnight
-delegation; Coordinator take-25 to present)
+**Status:** DRAFT — Ben's 2026-08-17 comment on #1252 confirms his approval of the batch's
+Group A spec; whether it extends to this Group C file needs one line of scope confirmation via
+the Coordinator's channel. Drafted by Fable 5 under the overnight delegation.
 
 ## Context
 

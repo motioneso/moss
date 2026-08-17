@@ -3,8 +3,9 @@
 **Date:** 2026-08-16
 **Run:** `docs/coordination/post1632-queue-2026-08-16.md`
 **Issues:** #1252, #946, #1490
-**Status:** DRAFT — awaiting Ben's approval (drafted by Fable 5 under the 2026-08-16 overnight
-delegation; Coordinator take-25 to present)
+**Status:** Approved by Ben on 2026-08-17 — durable trace: GitHub comment by `motioneso` on
+issue #1252 at 2026-08-17T01:14:52Z ("This is Ben. I approved the spec."), following his in-pane
+approval on 2026-08-16. Drafted by Fable 5 under the overnight delegation.
 
 ## Context
 
