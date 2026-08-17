@@ -8,6 +8,7 @@ import {
   AssistantToolGateway,
   ConfirmationRegistry,
   InvalidSessionTokenError,
+  renderAndCap,
   resolvePolicy,
   SessionTokenRegistry,
   type ActionPolicyLookup
@@ -631,6 +632,18 @@ describe("gateway audit outcome truth (#1252)", () => {
       execute: ModuleAssistantToolManifest["execute"];
     }
   ): Promise<{ outcome: string; errorClass: string | null }> {
+    const { audit } = await runYoloAndCaptureAuditAndResponse(toolOverrides);
+    return audit;
+  }
+
+  async function runYoloAndCaptureAuditAndResponse(
+    toolOverrides: Partial<ModuleAssistantToolManifest> & {
+      execute: ModuleAssistantToolManifest["execute"];
+    }
+  ): Promise<{
+    audit: { outcome: string; errorClass: string | null };
+    response: Awaited<ReturnType<AssistantToolGateway["callTool"]>>;
+  }> {
     const audits: { outcome: string; errorClass: string | null }[] = [];
     const tokens = new SessionTokenRegistry();
     const confirmations = new ConfirmationRegistry();
@@ -655,9 +668,9 @@ describe("gateway audit outcome truth (#1252)", () => {
       yoloMode: async () => true
     });
     const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
-    await gateway.callTool(token, "acme.write", {});
+    const response = await gateway.callTool(token, "acme.write", {});
     await vi.waitFor(() => expect(audits).toHaveLength(1));
-    return audits[0]!;
+    return { audit: audits[0]!, response };
   }
 
   it.each([
@@ -674,6 +687,24 @@ describe("gateway audit outcome truth (#1252)", () => {
     }
   );
 
+  it("leaves the model-visible envelope byte-identical to pre-change rendering when auditing a module-reported error (#1252)", async () => {
+    const data = { status: "error", message: "insufficient funds" };
+    const { audit, response } = await runYoloAndCaptureAuditAndResponse({
+      execute: async (): Promise<ToolResult> => ({ data })
+    });
+    expect(audit).toEqual({ outcome: "failed", errorClass: "module_reported" });
+    // The audit row now reflects the module-reported error, but callTool's actual return value —
+    // what the model sees — must be exactly what runHandler would have produced without this
+    // change: an ok:true envelope rendering the handler's payload verbatim, computed here via the
+    // same renderAndCap the gateway calls internally, so this fails if detection ever starts
+    // altering (rather than just observing) the response.
+    expect(response).toEqual({
+      ok: true,
+      data: renderAndCap(undefined, { data }),
+      structuredData: data
+    });
+  });
+
   it("audits a normal success payload as success/null (external tool)", async () => {
     const audit = await runYoloAndCaptureAudit({
       execute: async (): Promise<ToolResult> => ({ data: { written: true } })
@@ -685,6 +716,20 @@ describe("gateway audit outcome truth (#1252)", () => {
     const audit = await runYoloAndCaptureAudit({
       isExternal: false,
       execute: async (): Promise<ToolResult> => ({ data: { status: "error" } })
+    });
+    expect(audit).toEqual({ outcome: "success", errorClass: null });
+  });
+
+  it("does not recurse into a nested schema-declared key that itself looks like an error shape (#1252)", async () => {
+    // Detection matches the closed set only against the top-level raw payload (data.status /
+    // data.ok / data.error). `data.result.ok === false` here is nested under a schema-declared
+    // key, not top-level — proving detection doesn't recurse into declared sub-objects.
+    const audit = await runYoloAndCaptureAudit({
+      outputSchema: {
+        type: "object",
+        properties: { result: { type: "object", properties: { ok: { type: "boolean" } } } }
+      },
+      execute: async (): Promise<ToolResult> => ({ data: { result: { ok: false } } })
     });
     expect(audit).toEqual({ outcome: "success", errorClass: null });
   });
