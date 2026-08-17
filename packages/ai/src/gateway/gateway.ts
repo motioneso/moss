@@ -35,6 +35,27 @@ const defaultGatewayLogger: GatewayLogger = {
   error: (event, fields) => console.error(JSON.stringify({ event, ...fields }))
 };
 
+/**
+ * Private runHandler return shape — carries the audit-truth signal alongside the unchanged
+ * public envelope so callers can distinguish a module self-reporting failure inside an
+ * `ok:true` result from genuine handler success. Never exposed outside this file.
+ */
+interface RunHandlerOutcome {
+  readonly response: GatewayToolResponse;
+  readonly moduleReportedErrorClass: string | null;
+}
+
+/**
+ * Closed set of conventional error shapes a module handler may return inside an `ok:true`
+ * ToolResult. Checked on the raw pre-sanitize payload (#1252) — top-level only, no recursion.
+ */
+function isModuleReportedError(data: Record<string, unknown>): boolean {
+  if (data.status === "error") return true;
+  if (data.ok === false) return true;
+  if (typeof data.error === "string" && data.error.length > 0) return true;
+  return false;
+}
+
 export interface AssistantToolGatewayDependencies {
   readonly resolveActiveModules: ActiveModulesResolver;
   readonly repository: AiRepository;
@@ -225,7 +246,11 @@ export class AssistantToolGateway {
           reason: "Rate limit exceeded for unattended runs of this tool. Try again shortly."
         };
       }
-      const result = await this.runHandler(found, input, ctx);
+      const { response: result, moduleReportedErrorClass } = await this.runHandler(
+        found,
+        input,
+        ctx
+      );
       this.deps.notifier.emit(ctx.chatSessionId, {
         kind: "action_result",
         actionRequestId: ctx.requestId,
@@ -239,8 +264,8 @@ export class AssistantToolGateway {
       const access: AccessContext = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
       void this.recordAudit(access, found, {
         approvalMode: "yolo",
-        outcome: result.ok ? "success" : "failed",
-        errorClass: result.ok ? null : "handler_error",
+        outcome: result.ok && moduleReportedErrorClass === null ? "success" : "failed",
+        errorClass: result.ok ? moduleReportedErrorClass : "handler_error",
         chatSessionId: ctx.chatSessionId
       });
       return result;
@@ -265,7 +290,11 @@ export class AssistantToolGateway {
           "Automatic execution hit its rate limit — please confirm this action."
         );
       }
-      const result = await this.runHandler(found, input, ctx);
+      const { response: result, moduleReportedErrorClass } = await this.runHandler(
+        found,
+        input,
+        ctx
+      );
       if (found.tool.risk !== "read") {
         this.deps.notifier.emit(ctx.chatSessionId, {
           kind: "action_result",
@@ -280,8 +309,8 @@ export class AssistantToolGateway {
         const access: AccessContext = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
         void this.recordAudit(access, found, {
           approvalMode: "auto",
-          outcome: result.ok ? "success" : "failed",
-          errorClass: result.ok ? null : "handler_error",
+          outcome: result.ok && moduleReportedErrorClass === null ? "success" : "failed",
+          errorClass: result.ok ? moduleReportedErrorClass : "handler_error",
           chatSessionId: ctx.chatSessionId
         });
       }
@@ -577,28 +606,38 @@ export class AssistantToolGateway {
     found: ExecutableTool,
     input: Record<string, unknown>,
     ctx: ToolContext
-  ): Promise<GatewayToolResponse> {
+  ): Promise<RunHandlerOutcome> {
     const access: AccessContext = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
     const services = this.servicesFor(found.tool);
     try {
       const result = await this.executeTool(found, input, ctx, services, access);
       const sanitized = sanitizeAssistantToolResult(found.tool.outputSchema, result);
+      // Detection must run on the raw pre-sanitize payload: sanitizeAssistantToolResult
+      // allow-lists to schema-declared keys, so an undeclared status/ok/error field would
+      // already be stripped from structuredData by the time we could inspect it.
+      const moduleReportedErrorClass =
+        found.tool.isExternal !== false && isModuleReportedError(result.data)
+          ? "module_reported"
+          : null;
       return {
-        ok: true,
-        data: renderAndCap(
-          found.tool.outputSchema,
-          result,
-          // Scope trust-boundary wrapping to tools with untrusted external content only.
-          // Internal tools whose output Jarvis controls must not be wrapped (PR #435 sets
-          // externalContent: true on web.search + web.read; all others leave it unset).
-          found.tool.externalContent ? found.tool.name : undefined
-        ),
-        structuredData: sanitized.data,
-        // #1133 — media (image bytes) bypasses renderAndCap on purpose: sanitize's schema
-        // projection would drop the field and the 16k text cap would truncate base64. Size
-        // is already bounded at upload (attachment caps), and the payload flows only over
-        // the engine's MCP stdio channel — never into logs, DB, or job payloads.
-        ...(result.media ? { media: result.media } : {})
+        response: {
+          ok: true,
+          data: renderAndCap(
+            found.tool.outputSchema,
+            result,
+            // Scope trust-boundary wrapping to tools with untrusted external content only.
+            // Internal tools whose output Jarvis controls must not be wrapped (PR #435 sets
+            // externalContent: true on web.search + web.read; all others leave it unset).
+            found.tool.externalContent ? found.tool.name : undefined
+          ),
+          structuredData: sanitized.data,
+          // #1133 — media (image bytes) bypasses renderAndCap on purpose: sanitize's schema
+          // projection would drop the field and the 16k text cap would truncate base64. Size
+          // is already bounded at upload (attachment caps), and the payload flows only over
+          // the engine's MCP stdio channel — never into logs, DB, or job payloads.
+          ...(result.media ? { media: result.media } : {})
+        },
+        moduleReportedErrorClass
       };
     } catch {
       // #1251: a tool handler (including third-party module handlers) can throw an arbitrary
@@ -608,7 +647,10 @@ export class AssistantToolGateway {
         requestId: ctx.requestId,
         errorClass: "handler_error"
       });
-      return { ok: false, error: `Tool ${found.dto.name} failed` };
+      return {
+        response: { ok: false, error: `Tool ${found.dto.name} failed` },
+        moduleReportedErrorClass: null
+      };
     }
   }
 
@@ -713,7 +755,11 @@ export class AssistantToolGateway {
       return { ok: false, denied: true, reason };
     }
 
-    const result = await this.runHandler(found, input, ctx);
+    const { response: result, moduleReportedErrorClass } = await this.runHandler(
+      found,
+      input,
+      ctx
+    );
     this.deps.notifier.emit(ctx.chatSessionId, {
       kind: "action_result",
       actionRequestId: action.id,
@@ -726,8 +772,8 @@ export class AssistantToolGateway {
     });
     void this.recordAudit(access, found, {
       approvalMode: "confirmed",
-      outcome: result.ok ? "success" : "failed",
-      errorClass: result.ok ? null : "handler_error",
+      outcome: result.ok && moduleReportedErrorClass === null ? "success" : "failed",
+      errorClass: result.ok ? moduleReportedErrorClass : "handler_error",
       chatSessionId: ctx.chatSessionId
     });
     return result;

@@ -12,7 +12,12 @@ import {
   SessionTokenRegistry,
   type ActionPolicyLookup
 } from "@moss/ai";
-import type { ModuleAssistantToolManifest, ToolContext, ToolResult } from "@moss/module-sdk";
+import type {
+  ModuleAssistantToolManifest,
+  MossModuleManifest,
+  ToolContext,
+  ToolResult
+} from "@moss/module-sdk";
 
 describe("module-sdk tool contract", () => {
   it("lets a module declare a tool with an execute handler", async () => {
@@ -593,5 +598,93 @@ describe("native Claude tool permission bridge", () => {
     expect(emitted).toContainEqual(
       expect.objectContaining({ kind: "action_result", outcome: "allowed" })
     );
+  });
+});
+
+describe("gateway audit outcome truth (#1252)", () => {
+  function manifestWithTool(
+    toolOverrides: Partial<ModuleAssistantToolManifest> & { execute: ModuleAssistantToolManifest["execute"] }
+  ): MossModuleManifest {
+    return {
+      id: "acme",
+      name: "Acme",
+      version: "1.0.0",
+      publisher: "Acme",
+      lifecycle: "optional",
+      compatibility: { jarv1s: ">=0.0.0" },
+      assistantTools: [
+        {
+          name: "acme.write",
+          description: "Write",
+          permissionId: "acme.write",
+          risk: "write",
+          ...toolOverrides
+        }
+      ]
+    };
+  }
+
+  async function runYoloAndCaptureAudit(
+    toolOverrides: Partial<ModuleAssistantToolManifest> & { execute: ModuleAssistantToolManifest["execute"] }
+  ): Promise<{ outcome: string; errorClass: string | null }> {
+    const audits: { outcome: string; errorClass: string | null }[] = [];
+    const tokens = new SessionTokenRegistry();
+    const confirmations = new ConfirmationRegistry();
+    const gateway = new AssistantToolGateway({
+      resolveActiveModules: async () => [manifestWithTool(toolOverrides)],
+      repository: {
+        insertActionAuditLog: async (_db: unknown, input: { outcome: string; errorClass: string | null }) => {
+          audits.push({ outcome: input.outcome, errorClass: input.errorClass });
+        }
+      } as never,
+      runner: {
+        withDataContext: async (_access: unknown, work: (db: unknown) => Promise<unknown>) =>
+          work({})
+      } as never,
+      tokens,
+      confirmations,
+      notifier: { emit: () => {} },
+      confirmTimeoutMs: 50,
+      yoloMode: async () => true
+    });
+    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+    await gateway.callTool(token, "acme.write", {});
+    await vi.waitFor(() => expect(audits).toHaveLength(1));
+    return audits[0]!;
+  }
+
+  it.each([
+    ["status: error", { status: "error" }],
+    ["ok: false", { ok: false }],
+    ["error: <string>", { error: "boom" }]
+  ])("audits a %s handler payload as failed/module_reported (external tool)", async (_label, data) => {
+    const audit = await runYoloAndCaptureAudit({
+      execute: async (): Promise<ToolResult> => ({ data })
+    });
+    expect(audit).toEqual({ outcome: "failed", errorClass: "module_reported" });
+  });
+
+  it("audits a normal success payload as success/null (external tool)", async () => {
+    const audit = await runYoloAndCaptureAudit({
+      execute: async (): Promise<ToolResult> => ({ data: { written: true } })
+    });
+    expect(audit).toEqual({ outcome: "success", errorClass: null });
+  });
+
+  it("does not apply module-reported detection to a first-party tool (isExternal: false)", async () => {
+    const audit = await runYoloAndCaptureAudit({
+      isExternal: false,
+      execute: async (): Promise<ToolResult> => ({ data: { status: "error" } })
+    });
+    expect(audit).toEqual({ outcome: "success", errorClass: null });
+  });
+
+  it("still audits a handler throw as failed/handler_error", async () => {
+    const audit = await runYoloAndCaptureAudit({
+      execute: async (): Promise<ToolResult> => {
+        throw new Error("boom");
+      }
+    });
+    expect(audit).toEqual({ outcome: "failed", errorClass: "handler_error" });
   });
 });
