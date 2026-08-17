@@ -12,10 +12,9 @@ repository method, no UI surface) — stated explicitly in wrap-up per handoff.
   — `CONSTRAINT uq_candidate_owner_sig UNIQUE (owner_user_id, candidate_signature)`.
 - `assertDataContextDb` narrowing pattern already used by every method in this file:
   `packages/commitments/src/repository.ts:20` (import line 1).
-- Existing `INSERT ... ON CONFLICT ... DO UPDATE SET <col> = sql<T>\`table.col + 1\`` precedent
-  in this codebase (same increment-on-conflict shape this task needs):
-  `packages/connectors/src/action-suppression-repository.ts:137-142`
-  (`dismissal_count: sql<number>\`email_action_suppression.dismissal_count + 1\``).
+- Existing `INSERT ... ON CONFLICT ... DO UPDATE SET <col> = sql<T>\`table.col + 1\``precedent
+in this codebase (same increment-on-conflict shape this task needs):`packages/connectors/src/action-suppression-repository.ts:137-142`
+(`dismissal_count: sql<number>\`email_action_suppression.dismissal_count + 1\``).
 - `rowToCandidate` mapper to reuse unchanged: `packages/commitments/src/repository.ts:238-260`.
 - Existing tests to extend, not replace: `tests/integration/commitments.test.ts:32-83`
   (`describe("upsertCandidate", ...)`, includes the sequential re-upsert case at line 61 that
@@ -81,18 +80,22 @@ Focused test only, on an isolated gate DB per the repo's guarded procedure (neve
 ```bash
 pnpm --filter @moss/commitments typecheck > /tmp/1514-typecheck.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`.
 
 ```bash
 pnpm check:file-size > /tmp/1514-filesize.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0` (no new file crosses the size gate; this task shrinks `repository.ts`).
 
 DB-touching test (commitments integration suite) — run only via the `verify-gate` skill's isolated
 gate DB, not directly:
+
 ```bash
 <gate-DB-scoped vitest invocation for tests/integration/commitments.test.ts, per verify-gate skill>
 ```
+
 Expected: all `CommitmentsRepository` tests green, including the new concurrency test.
 
 Full local gate at wrap-up: `pnpm verify:foundation`, run only via the `verify-gate` skill.
