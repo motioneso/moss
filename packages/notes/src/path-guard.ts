@@ -1,4 +1,5 @@
-import { normalize } from "node:path";
+import { realpath } from "node:fs/promises";
+import { dirname, normalize } from "node:path";
 
 export class NotesPathError extends Error {
   constructor(
@@ -22,5 +23,28 @@ export function assertWithinRoot(resolvedRoot: string, absoluteFilePath: string)
       `Path "${absoluteFilePath}" is not within allowed root "${resolvedRoot}"`,
       "PATH_NOT_IN_ROOT"
     );
+  }
+}
+
+/**
+ * TOCTOU close: re-resolves targetPath immediately before a filesystem I/O call and re-asserts
+ * containment. targetPath may not exist yet (e.g. a not-yet-created file), so this walks upward
+ * to the deepest existing ancestor and realpath's that instead — an attacker who swaps an
+ * ancestor directory for a symlink between the last check and the syscall is caught here because
+ * the swapped ancestor now realpath's outside resolvedRoot.
+ */
+export async function recheckWithinRoot(resolvedRoot: string, targetPath: string): Promise<void> {
+  let current = targetPath;
+  for (;;) {
+    try {
+      const resolved = await realpath(current);
+      assertWithinRoot(resolvedRoot, resolved);
+      return;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      const parent = dirname(current);
+      if (parent === current) throw error;
+      current = parent;
+    }
   }
 }
