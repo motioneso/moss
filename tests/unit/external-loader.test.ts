@@ -142,6 +142,27 @@ describe("getExternalModuleRegistrations (#917)", () => {
     expect(result.rejected[0]!.reason).toContain("slug");
   });
 
+  // #1222: a leftover .prev-<id>/.staging-<id> backup dir must never surface as a
+  // rejected module in the admin UI — it should be skipped entirely, absent from both
+  // discoveries and rejected, same as the distribution layer already treats it (#964).
+  it("skips a .prev-<id> backup directory entirely (absent from both discoveries and rejected)", () => {
+    const dir = join(modulesDir, ".prev-acme-widgets");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "jarvis.module.json"), validManifest("acme-widgets"));
+
+    const result = getExternalModuleRegistrations({ modulesDir, coreVersion: "0.1.0" });
+    expect(result.discoveries).toEqual([]);
+    expect(result.rejected).toEqual([]);
+  });
+
+  it("skips a plain dot-directory entirely (absent from both discoveries and rejected)", () => {
+    mkdirSync(join(modulesDir, ".hidden"), { recursive: true });
+
+    const result = getExternalModuleRegistrations({ modulesDir, coreVersion: "0.1.0" });
+    expect(result.discoveries).toEqual([]);
+    expect(result.rejected).toEqual([]);
+  });
+
   it("rejects a module directory that is missing its manifest", () => {
     mkdirSync(join(modulesDir, "acme-widgets"), { recursive: true });
 
