@@ -41,9 +41,9 @@ involvement, no chat turns, no AI-authored content. N/A beyond that.
   `SettingsStorageKey`).
 - Helper functions, module-private to `settings-profile-subviews.tsx`:
   ```ts
-  function readStoredExportJobId(): string | null
-  function writeStoredExportJobId(jobId: string): void
-  function clearStoredExportJobId(): void
+  function readStoredExportJobId(): string | null;
+  function writeStoredExportJobId(jobId: string): void;
+  function clearStoredExportJobId(): void;
   ```
   Each guards `typeof window === "undefined"` and wraps `sessionStorage` access in `try/catch`,
   matching `settings-storage.ts:14-41`'s fallback shape (return `null` / no-op on failure).
@@ -102,16 +102,19 @@ Behavior asserted, and why each would fail against the current in-memory-only im
 ```bash
 pnpm exec playwright test tests/e2e/settings-shell.spec.ts --grep "export.*remount" > /tmp/1139e-focused.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`.
 
 ```bash
 pnpm --filter web typecheck > /tmp/1139e-typecheck.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`. (Cross-check with root `pnpm typecheck` per the `pnpm-filter-typecheck-tsrootdir-false-red` memory if this one reads red.)
 
 ```bash
 pnpm check:file-size > /tmp/1139e-filesize.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`.
 
 Full gate (`pnpm verify:foundation`) only via the `verify-gate` skill's isolated-DB recipe, at
