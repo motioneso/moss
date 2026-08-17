@@ -35,6 +35,16 @@ import { NOTES_SYNC_QUEUE } from "./manifest.js";
 const NOTES_SOURCE_KIND = "notes";
 export const NOTES_SYNC_MAX_CHUNKS_PER_RUN = 100;
 
+// NotesPathError.message embeds the absolute host path and the configured notes root (see
+// assertWithinRoot in path-guard.ts). lastErrorMessage is persisted to the notes-last-sync
+// preference and returned verbatim in the settings API payload, so a raw NotesPathError message
+// would leak host filesystem layout to that payload. Every other error type keeps its message —
+// they are not part of the path-guard's threat surface.
+function sanitizedErrorMessage(err: unknown): string {
+  if (err instanceof NotesPathError) return "path is not within the linked notes source";
+  return err instanceof Error ? err.message : String(err);
+}
+
 export interface NotesSyncJobPayload extends ActorScopedJobPayload {
   /**
    * Optional. The manual POST route passes it explicitly; the 15-min scheduled
@@ -301,7 +311,7 @@ export async function handleNotesSyncJob(
         resolvedFile = await realpath(absolutePath);
       } catch (err) {
         errors += 1;
-        lastErrorMessage = err instanceof Error ? err.message : String(err);
+        lastErrorMessage = sanitizedErrorMessage(err);
         continue;
       }
 
@@ -310,7 +320,7 @@ export async function handleNotesSyncJob(
       } catch (e) {
         if (e instanceof NotesPathError) {
           errors += 1;
-          lastErrorMessage = e.message;
+          lastErrorMessage = sanitizedErrorMessage(e);
           continue;
         }
         throw e;
@@ -366,7 +376,7 @@ export async function handleNotesSyncJob(
       }
     } catch (err) {
       errors += 1;
-      lastErrorMessage = err instanceof Error ? err.message : String(err);
+      lastErrorMessage = sanitizedErrorMessage(err);
     }
   }
 
@@ -455,7 +465,7 @@ export async function handleNotesSyncJobWithDataContext(
       resolvedFile = await resolveAndValidateNoteFile(resolvedRoot, absolutePath);
     } catch (err) {
       errors += 1;
-      lastErrorMessage = err instanceof Error ? err.message : String(err);
+      lastErrorMessage = sanitizedErrorMessage(err);
       continue;
     }
 
@@ -508,7 +518,7 @@ export async function handleNotesSyncJobWithDataContext(
       }
     } catch (err) {
       errors += 1;
-      lastErrorMessage = err instanceof Error ? err.message : String(err);
+      lastErrorMessage = sanitizedErrorMessage(err);
     }
   }
 
