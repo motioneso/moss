@@ -213,16 +213,11 @@ test("queued chat drain stays stable while SSE records arrive, then sends once a
 
   await page.route("**/api/chat/clear", (route) => route.fulfill({ status: 204, body: "" }));
 
-  // Three SSE reconnects fire (EventSource auto-reconnects after each fulfilled body closes
-  // the connection) while the first turn is held open and a second turn sits queued. Each
-  // records tick must not retrigger the drain effect (#1520/1139-C) or produce an extra
-  // /api/chat/turn POST.
+  // Three SSE reconnects fire while the first turn is held and a second sits queued (#1520).
   let streamTicks = 0;
   await page.route("**/api/chat/stream*", async (route) => {
     const tick = streamTicks++;
-    if (tick >= 3) {
-      return; // hold the final reconnect open; no more ticks needed
-    }
+    if (tick >= 3) return;
     await route.fulfill({
       status: 200,
       contentType: "text/event-stream",
@@ -230,7 +225,6 @@ test("queued chat drain stays stable while SSE records arrive, then sends once a
       body: `data: ${JSON.stringify({ kind: "reply", text: `Tick ${tick}`, messageId: `tick-${tick}` })}\n\n`
     });
   });
-
   await page.goto("/");
   await page.getByRole("button", { name: "Chat with Moss" }).click();
   const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
@@ -272,14 +266,9 @@ test("queued chat drain stays stable while SSE records arrive, then sends once a
   await composerInput.press("Enter");
   await expect(queuedChip).toContainText('Next: "Drained queued"');
 
-  // Let all three SSE reconnects land — each one changes props.records — while the first
-  // turn is still held and the second sits queued. Pre-fix, every records tick changed
-  // sendMessage's identity and retriggered the drain effect on each reconnect.
   await expect(drawer.getByText("Tick 2")).toBeVisible();
   await expect(queuedChip).toContainText('Next: "Drained queued"');
-
   await composerAction.click();
-
   await expect.poll(() => turnTexts).toEqual(["First question", "Drained queued"]);
   expect(cancelRequests).toBe(1);
   await expect(drawer.getByText(/Next:/)).toHaveCount(0);
