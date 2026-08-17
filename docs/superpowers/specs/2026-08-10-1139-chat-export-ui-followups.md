@@ -154,23 +154,48 @@ Keep `sameTranscriptRecord` private and keep the existing fallback arrays. Tight
 contract:
 
 - kinds must match;
-- when either side has a `messageId`, both sides must have the same `messageId` to match; and
-- only the legacy case where neither side has an id falls back to kind + exact text.
+- **only when BOTH sides have a `messageId`** must the two ids be equal to match — one side having
+  an id and the other not is not a mismatch, it falls through to the text comparison below; and
+- otherwise (either side missing an id, including the legacy case where neither has one) fall back
+  to kind + exact text.
 
-Use that one predicate in both the state cleanup and `visibleFallbackRecords` suppression. Do not
-compare array position, timestamp, rendered DOM text, or object identity. Do not move transcript
-ownership out of the drawer or create a general record store.
+_(2026-08-17 correction, QA-RED on PR #1650: the text above originally read "when either side has
+a `messageId`, both sides must have the same `messageId` to match" — an OR, not an AND. That
+literal spec text was faithfully implemented and shipped a real bug: the live SSE `kind: "user"`
+echo (`packages/chat/src/live/chat-session-manager.ts`) is emitted before the POST `/api/chat/turn`
+response and structurally never carries a `messageId`, while the POST-built fallback for that same
+turn always does. Under the OR predicate that pair reads as `undefined !== '<uuid>'` — a permanent
+mismatch — so the user's own message rendered twice on every non-private turn. The AND predicate
+above is the corrected contract: strict id equality only applies when both sides actually carry an
+id; an id on only one side is exactly the "neither/legacy" case, not a mismatch.)_
+
+Use that one predicate in **all three** reconciliation call sites in the drawer: the
+`props.records`-keyed fallback-cleanup effect, the post-response merge into `fallbackRecords`, and
+the render-time `visibleFallbackRecords` suppression. Do not compare array position, timestamp,
+rendered DOM text, or object identity. Do not move transcript ownership out of the drawer or create
+a general record store.
+
+**Reconciliation must be one-to-one, not existence-based.** A live record may retire at most one
+fallback. Checking "does some live record match this fallback" independently per fallback (e.g. a
+bare `.some()` filter) lets a single live record satisfy the predicate against _every_ fallback that
+shares its match key at once — this is reachable again specifically because `kind: "user"` live
+records never carry a disambiguating id, so two identical-text user turns can collapse together the
+same way #1519's original `kind: "reply"` bug did. Route all three call sites through a single
+consuming-match helper (e.g. `reconcileFallbacks(fallbacks, liveRecords)`) that removes each matched
+live record from its candidate pool as it is consumed.
 
 The required fixture uses two same-kind, same-text fallback records with distinct ids. Deliver the
 first matching SSE record and prove only its fallback disappears; deliver the second and prove the
 remaining fallback disappears. Also retain one id-less legacy fixture so the existing kind + text
-fallback is not accidentally deleted.
+fallback is not accidentally deleted. Additionally cover the asymmetric case directly: a `kind:
+"user"` live record with no `messageId` reconciling against a same-text fallback that does have one,
+across two duplicate sends, proving each fallback retires against only its own live echo.
 
 Focused command:
 
 ```bash
 cd ~/Jarv1s
-pnpm exec playwright test tests/e2e/chat-drawer.spec.ts --grep "identical fallbacks"
+pnpm exec playwright test tests/e2e/chat-drawer.spec.ts --grep "reconciles"
 ```
 
 ### Live-path artifact

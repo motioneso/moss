@@ -161,14 +161,7 @@ export function ChatDrawer(props: {
   }, [props.records, pendingUser]);
 
   useEffect(() => {
-    setFallbackRecords((current) =>
-      current.filter(
-        (fallback) =>
-          !props.records.some(
-            (record) => record.kind === fallback.kind && record.text === fallback.text
-          )
-      )
-    );
+    setFallbackRecords((current) => reconcileFallbacks(current, props.records));
   }, [props.records]);
 
   // #1533: switching surfaces (e.g. drawer <-> module-embedded chat) must not leak state from the
@@ -259,9 +252,7 @@ export function ChatDrawer(props: {
             }
           ];
           setFallbackRecords((current) =>
-            [...current, ...postResponseRecords].filter(
-              (fallback) => !props.records.some((record) => sameTranscriptRecord(record, fallback))
-            )
+            reconcileFallbacks([...current, ...postResponseRecords], props.records)
           );
         } catch (caught) {
           if (surfaceRef.current !== initiatingSurface) return;
@@ -302,9 +293,7 @@ export function ChatDrawer(props: {
   const displayRecords = reviewing
     ? recordsFromMessages(messagesQuery.data?.messages ?? [])
     : props.records;
-  const visibleFallbackRecords = fallbackRecords.filter(
-    (fallback) => !displayRecords.some((record) => sameTranscriptRecord(record, fallback))
-  );
+  const visibleFallbackRecords = reconcileFallbacks(fallbackRecords, displayRecords);
 
   // Merge the optimistic user record into the live feed (#399, live mode only — history review
   // uses fetched messages directly). Appended AFTER the older fallback records since it's the
@@ -685,7 +674,30 @@ function HistoryList(props: {
 }
 
 function sameTranscriptRecord(a: TranscriptRecord, b: TranscriptRecord): boolean {
-  return a.kind === b.kind && a.text === b.text;
+  if (a.kind !== b.kind) return false;
+  if (a.messageId && b.messageId) return a.messageId === b.messageId;
+  return a.text === b.text;
+}
+
+// #1519: a pending-record fallback must be retired by AT MOST ONE live record, never by every
+// live record that happens to match it. sameTranscriptRecord alone can't guarantee that — when
+// two fallbacks share identical (kind, text) and neither the live record nor one of the fallbacks
+// carries a messageId (true of every "kind: user" SSE echo, which never carries one), a single
+// live record's arrival would otherwise satisfy the predicate against BOTH fallbacks at once and
+// collapse them together — the exact flicker this issue exists to prevent, just relocated from the
+// reply bubble to the user bubble. Consuming each matched live record once (in fallback order)
+// keeps the reconciliation one-to-one.
+function reconcileFallbacks(
+  fallbacks: readonly TranscriptRecord[],
+  liveRecords: readonly TranscriptRecord[]
+): readonly TranscriptRecord[] {
+  const unmatched = [...liveRecords];
+  return fallbacks.filter((fallback) => {
+    const idx = unmatched.findIndex((record) => sameTranscriptRecord(record, fallback));
+    if (idx === -1) return true;
+    unmatched.splice(idx, 1);
+    return false;
+  });
 }
 
 export function chatAvailableFromRoute(data: LookupAiCapabilityRouteResponse | undefined): boolean {
