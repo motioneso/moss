@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Job } from "pg-boss";
 import type { Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
@@ -27,6 +27,9 @@ import { notesSearchExecute } from "../../packages/notes/src/tools.js";
 // notesMonitorProvider is internal wiring (registered via notesModuleManifest), not part of the
 // package's public API — imported directly from source, same pattern as notesSearchExecute above.
 import { notesMonitorProvider } from "../../packages/notes/src/monitor-provider.js";
+// recheckWithinRoot is internal (write-tools.ts/jobs.ts import it via a relative path, same
+// package) — not part of @moss/notes's public API, imported directly from source for testing.
+import { recheckWithinRoot } from "../../packages/notes/src/path-guard.js";
 import {
   connectionStrings,
   resetEmptyFoundationDatabase,
@@ -60,6 +63,63 @@ describe("assertWithinRoot", () => {
 
   it("rejects path traversal attempt", () => {
     expect(() => assertWithinRoot("/notes", "/notes/../etc/passwd")).toThrowError(NotesPathError);
+  });
+});
+
+// ── recheckWithinRoot ─────────────────────────────────────────────────────────
+
+describe("recheckWithinRoot", () => {
+  let scratchRoot: string;
+  let root: string;
+  let outside: string;
+
+  beforeEach(async () => {
+    scratchRoot = join(tmpdir(), `notes-recheck-${randomUUID()}`);
+    root = join(scratchRoot, "root");
+    outside = join(scratchRoot, "outside");
+    await mkdir(root, { recursive: true });
+    await mkdir(outside, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await rm(scratchRoot, { recursive: true, force: true });
+  });
+
+  it("passes for an existing plain nested file", async () => {
+    await mkdir(join(root, "sub"), { recursive: true });
+    await writeFile(join(root, "sub", "note.md"), "hi", "utf-8");
+    await expect(recheckWithinRoot(root, join(root, "sub", "note.md"))).resolves.toBeUndefined();
+  });
+
+  it("passes for a not-yet-created file inside the root", async () => {
+    await expect(recheckWithinRoot(root, join(root, "new.md"))).resolves.toBeUndefined();
+  });
+
+  it("rejects a lexical .. escape through a symlinked directory (kernel-vs-lexical divergence)", async () => {
+    // root/S -> outside (dir); root/b.md -> S/../evil.md
+    // kernel resolves S first (-> outside), then ".." pops outside's PARENT (scratchRoot), landing
+    // on scratchRoot/evil.md — outside root. A lexical resolve(dirname, "S/../evil.md") instead
+    // cancels "S/.." against the literal text and produces root/evil.md, a false pass.
+    await symlink(outside, join(root, "S"));
+    await symlink("S/../evil.md", join(root, "b.md"));
+    await expect(recheckWithinRoot(root, join(root, "b.md"))).rejects.toThrow(NotesPathError);
+  });
+
+  it("rejects and terminates on a self-referential dangling symlink via a symlinked directory", async () => {
+    // root/S -> outside (dir); root/a.md -> S/../a.md
+    // A lexical resolver collapses "S/.." straight back to root, reproducing the same input on
+    // every iteration — an infinite loop with no hop cap. The kernel-accurate resolver here
+    // dereferences S to `outside`, pops to its real parent, and reaches a terminal (nonexistent)
+    // path instead of looping.
+    await symlink(outside, join(root, "S"));
+    await symlink("S/../a.md", join(root, "a.md"));
+    await expect(recheckWithinRoot(root, join(root, "a.md"))).rejects.toThrow(NotesPathError);
+  });
+
+  it("rejects a symlink cycle instead of hanging", async () => {
+    await symlink(join(root, "b"), join(root, "a"));
+    await symlink(join(root, "a"), join(root, "b"));
+    await expect(recheckWithinRoot(root, join(root, "a"))).rejects.toThrow(NotesPathError);
   });
 });
 
