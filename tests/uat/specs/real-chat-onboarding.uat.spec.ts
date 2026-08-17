@@ -11,7 +11,7 @@ import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 export const uatLevel = { level: "solo-admin", without: [] } as const;
 
 // #1121: the provisioner exports this ONLY after decrypting + shape-validating the operator's
-// real-chat token env file (tests/uat/provisioner.ts writeUatRealChatEnvFile). Its presence is the
+// real-chat token env file (tests/uat/real-chat-env.ts writeUatRealChatEnvFile). Its presence is the
 // authoritative "a real chat token was configured for THIS run" signal — absent on every default/CI
 // run, so the whole spec skips rather than failing. run-uat.ts spawns Playwright with `...process.env`
 // (tests/uat/run-uat.ts:92-96), so the var the provisioner set on the harness process reaches here.
