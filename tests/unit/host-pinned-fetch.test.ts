@@ -40,7 +40,8 @@ describe("host-pinned fetch transport", () => {
     ["multicast IPv4", "224.0.0.1", 4],
     ["ORCHIDv1 IPv6", "2001:10::1", 6],
     ["unique-local IPv6", "fd00::1", 6],
-    ["multicast IPv6", "ff02::1", 6]
+    ["multicast IPv6", "ff02::1", 6],
+    ["hex-form v4-mapped IPv6 (metadata endpoint)", "::ffff:a9fe:a9fe", 6]
   ] as const)("rejects %s DNS answers", async (_name, address, family) => {
     let requested = false;
     const fetchFn = createHostPinnedFetch(["api.example.com"], {
@@ -184,5 +185,133 @@ describe("host-pinned fetch transport", () => {
 
       await expect(fetchFn("https://api.example.com/data")).rejects.toThrow(/response_too_large/);
     });
+  });
+
+  it("rejects a non-443 port before any DNS resolution or request", async () => {
+    let resolved = false;
+    let requested = false;
+    const fetchFn = createHostPinnedFetch(["api.example.com"], {
+      resolve: async () => {
+        resolved = true;
+        return [{ address: "93.184.216.34", family: 4 }];
+      },
+      request: async () => {
+        requested = true;
+        throw new Error("must not connect");
+      }
+    });
+
+    await expect(fetchFn("https://api.example.com:8443/data")).rejects.toMatchObject({
+      code: "invalid_request"
+    });
+    expect(resolved).toBe(false);
+    expect(requested).toBe(false);
+  });
+
+  it("rejects userinfo embedded in the URL", async () => {
+    let requested = false;
+    const fetchFn = createHostPinnedFetch(["api.example.com"], {
+      resolve: async () => [{ address: "93.184.216.34", family: 4 }],
+      request: async () => {
+        requested = true;
+        throw new Error("must not connect");
+      }
+    });
+
+    await expect(fetchFn("https://user:pass@api.example.com/data")).rejects.toMatchObject({
+      code: "invalid_request"
+    });
+    expect(requested).toBe(false);
+  });
+
+  it("aborts an unencoded stream mid-flight once it exceeds the response cap", async () => {
+    const fetchFn = createHostPinnedFetch(["api.example.com"], {
+      maxResponseBytes: 16,
+      resolve: async () => [{ address: "93.184.216.34", family: 4 }],
+      request: async () => ({
+        status: 200,
+        headers: {},
+        body: (async function* () {
+          for (let i = 0; i < 100; i += 1) {
+            yield Buffer.alloc(8, "a");
+          }
+        })()
+      })
+    });
+
+    await expect(fetchFn("https://api.example.com/data")).rejects.toMatchObject({
+      code: "response_too_large"
+    });
+  });
+
+  it("wipes caller headers on a cross-origin redirect, and never leaks them on a same-host port change", async () => {
+    const crossHostRequests: Array<Record<string, unknown>> = [];
+    const crossHostFetch = createHostPinnedFetch(["api.example.com", "other.example.com"], {
+      resolve: async () => [{ address: "93.184.216.34", family: 4 }],
+      request: async (request) => {
+        crossHostRequests.push(request as unknown as Record<string, unknown>);
+        if (crossHostRequests.length === 1) {
+          return {
+            status: 302,
+            headers: { location: "https://other.example.com/data" } as Record<string, string>,
+            body: (async function* () {})()
+          };
+        }
+        return {
+          status: 200,
+          headers: {} as Record<string, string>,
+          body: (async function* () {
+            yield Buffer.from("{}");
+          })()
+        };
+      }
+    });
+    await crossHostFetch("https://api.example.com/data", {
+      headers: { authorization: "Bearer secret" }
+    });
+    expect(crossHostRequests).toHaveLength(2);
+    expect(crossHostRequests[1]!.headers).not.toHaveProperty("authorization");
+
+    // A same-host redirect to a non-443 port can never reach a second request() call at all —
+    // validateUrl rejects the nonstandard port on the next hop before any headers could be sent,
+    // so the header-wipe path is unreachable for this shape rather than leaking anything.
+    let samePortHostRequests = 0;
+    const samePortFetch = createHostPinnedFetch(["api.example.com"], {
+      resolve: async () => [{ address: "93.184.216.34", family: 4 }],
+      request: async () => {
+        samePortHostRequests += 1;
+        return {
+          status: 302,
+          headers: { location: "https://api.example.com:8443/data" },
+          body: (async function* () {})()
+        };
+      }
+    });
+    await expect(
+      samePortFetch("https://api.example.com/data", { headers: { authorization: "Bearer secret" } })
+    ).rejects.toMatchObject({ code: "invalid_request" });
+    expect(samePortHostRequests).toBe(1);
+  });
+
+  it("re-validates DNS answers on every redirect hop, blocking a redirect to a blocked address", async () => {
+    let resolveCalls = 0;
+    const fetchFn = createHostPinnedFetch(["api.example.com"], {
+      resolve: async () => {
+        resolveCalls += 1;
+        return resolveCalls === 1
+          ? [{ address: "93.184.216.34", family: 4 }]
+          : [{ address: "169.254.169.254", family: 4 }];
+      },
+      request: async () => ({
+        status: 302,
+        headers: { location: "https://api.example.com/other" },
+        body: (async function* () {})()
+      })
+    });
+
+    await expect(fetchFn("https://api.example.com/data")).rejects.toMatchObject({
+      code: "blocked_address"
+    });
+    expect(resolveCalls).toBe(2);
   });
 });
