@@ -32,11 +32,8 @@ import { test } from "@playwright/test";
 // real chat-capable engine is shared seed infrastructure outside this lane's scope.
 export const uatLevel = { level: "solo-admin", without: [] } as const;
 
-test.fixme(
-  "queued chat drain stays stable across a real SSE tick from a second live session, then sends once after stop (#1520)",
-  async () => {
-    // Blocked: no UAT seed level configures a chat-capable AI provider, so no real turn -- from
-    // this session or a concurrent second session -- ever clears resolveActiveProvider and
-    // publishes a transcript record (see file header). Real proof: tests/e2e/chat-drawer.spec.ts.
-  }
-);
+test.fixme("queued chat drain stays stable across a real SSE tick from a second live session, then sends once after stop (#1520)", async () => {
+  // Blocked: no UAT seed level configures a chat-capable AI provider, so no real turn -- from
+  // this session or a concurrent second session -- ever clears resolveActiveProvider and
+  // publishes a transcript record (see file header). Real proof: tests/e2e/chat-drawer.spec.ts.
+});
