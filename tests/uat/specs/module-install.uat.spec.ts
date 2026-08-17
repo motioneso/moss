@@ -57,6 +57,11 @@ test("installing Finance from Settings reaches installed-enabled after a real re
     timeout: 30_000
   });
 
+  // #1042: the in-app instruction must name a command that actually applies the
+  // download — `docker compose pull && docker compose up -d` is a documented Compose
+  // no-op when the image tag hasn't changed (tests/uat/provisioner.ts:732).
+  await expect(moduleLibraryCard.getByText("docker compose restart jarv1s")).toBeVisible();
+
   // The real acceptance point (#999): install -> restart -> reconcile must land on
   // installed-enabled after an actual container restart, not just after the download step.
   await restartUatStack(projectName, baseURL);

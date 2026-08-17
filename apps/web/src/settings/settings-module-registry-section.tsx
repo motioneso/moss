@@ -243,7 +243,8 @@ export function ModuleRegistrySection({
       ) ? (
         <Note>
           Downloaded modules apply on the next restart. From your deployment directory:{" "}
-          <code>{"docker compose pull && docker compose up -d"}</code> (or restart the container).
+          <code>{"docker compose restart jarv1s"}</code> to apply now, or restart the container the
+          next time you deploy.
         </Note>
       ) : null}
       <Button
