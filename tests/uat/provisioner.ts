@@ -11,7 +11,7 @@ import { resolveMossEnv } from "@moss/db";
 
 import { deriveTrustedOrigins } from "../../scripts/setup-prod-origins.js";
 import { JOB_SEARCH_FIXTURE_CONTAINER_PORT } from "./fixtures/job-search-fixture-server.js";
-import { UAT_ADMIN_ID } from "./seed/admin.js";
+import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID } from "./seed/admin.js";
 import { parseUatSeedLevel } from "./seed/level-validation.js";
 import {
   UAT_SUBNET_CANDIDATES,
@@ -269,6 +269,16 @@ export function writeUatEnvFile(input: {
  * or `config --quiet` fails hard on the two required ones and would silently collide with a real
  * prod instance on the other two. Caught live by Task 7's first run (#1024) — the exact
  * deploy-compose-env-trap this project has hit before.
+ *
+ * #1468 (B2): MOSS_RECONCILE_CONFIRM_OWNER_EMAIL is the same `${...:-}`-interpolated shape on the
+ * `jarv1s` service (empty default, not `:?`-required — a fresh install has no bootstrap owner to
+ * confirm). module-install.uat.spec.ts seeds UAT_ADMIN_EMAIL as `isBootstrapOwner: true`
+ * (tests/uat/seed/admin.ts), so the boot-time `module-reconcile.ts` one-shot
+ * (start-jarv1s.ts -> assertReconcileTargetIdentity) refuses to proceed on `restartUatStack`'s
+ * `docker compose restart jarv1s` unless this was already set at the `up -d jarv1s --wait` step
+ * below — `restart` reruns the container's existing env, it does not re-interpolate. Belongs here,
+ * not in writeUatEnvFile: `restartUatStack` uses `restart`, not `run`, so there is no `-e` flag to
+ * lean on the way the `seed` service's JARVIS_UAT_SEED_CONFIRM does.
  */
 export function uatComposeInterpolationEnv(input: {
   readonly webPort: number;
@@ -278,7 +288,8 @@ export function uatComposeInterpolationEnv(input: {
     JARVIS_WEB_PORT: String(input.webPort),
     JARVIS_DOCKER_SUBNET: input.subnet,
     POSTGRES_PASSWORD: UAT_POSTGRES_PASSWORD,
-    JARVIS_CLI_RUNNER_RPC_SECRET: UAT_CLI_RUNNER_RPC_SECRET
+    JARVIS_CLI_RUNNER_RPC_SECRET: UAT_CLI_RUNNER_RPC_SECRET,
+    MOSS_RECONCILE_CONFIRM_OWNER_EMAIL: UAT_ADMIN_EMAIL
   };
 }
 

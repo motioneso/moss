@@ -61,8 +61,11 @@ JARVIS_CONNECTOR_SECRET_KEY="<current-old-secret>" \
 JARVIS_CONNECTOR_SECRET_KEY_ID="v1" \
 JARVIS_AI_SECRET_KEY="<current-old-ai-secret>" \
 JARVIS_AI_SECRET_KEY_ID="v1" \
-pnpm tsx scripts/rewrap-secrets.ts
+pnpm tsx scripts/rewrap-secrets.ts --confirm-owner-email <target's bootstrap owner email>
 ```
+
+(#1468: `--confirm-owner-email` is required once the target has a bootstrap owner — it rejects the
+run if it doesn't match, so a rotation can't be pointed at the wrong instance.)
 
 After this step every row has an explicit `keyId: "v1"` and there are no more legacy
 envelopes. The rotation in the next steps is now safe.
@@ -106,7 +109,7 @@ JARVIS_CONNECTOR_SECRET_KEYS='{"v1":"old-secret"}' \
 JARVIS_AI_SECRET_KEY="new-ai-secret" \
 JARVIS_AI_SECRET_KEY_ID="v2" \
 JARVIS_AI_SECRET_KEYS='{"v1":"old-ai-secret"}' \
-pnpm tsx scripts/rewrap-secrets.ts
+pnpm tsx scripts/rewrap-secrets.ts --confirm-owner-email <target's bootstrap owner email>
 ```
 
 The script logs each row id and the new `keyId` — never plaintext secrets.

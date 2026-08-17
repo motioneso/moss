@@ -407,7 +407,9 @@ present, applying migrations as it would for an admin-triggered install.
 
 **Dev parity.** `pnpm db:reconcile` (`tsx scripts/module-reconcile.ts`) runs the same reconcile
 pass boot uses, against your local registry and `JARVIS_MODULES_ENSURE` — use it to test an
-install/update/purge cycle without restarting the whole server.
+install/update/purge cycle without restarting the whole server. #1468: once a target has a
+bootstrap owner, this confirms `MOSS_RECONCILE_CONFIRM_OWNER_EMAIL` matches that owner's email
+before proceeding (fresh installs are exempted).
 
 ### Runtime credential writes (`ctx.auth.setCredential`)
 
