@@ -324,3 +324,12 @@ me the exact repeatable procedure so I can do it myself next time, or (c) if nei
 whether it's OK to accept the existing mocked e2e test (`tests/e2e/chat-drawer.spec.ts`) as
 evidence instead — same precedent already used for `1089-1090-chat-drawer-private.uat.spec.ts`.
 Either PR can merge as soon as you pick one of these.
+
+**RESOLVED 2026-08-17.** Ben confirmed via needs-ben that the earlier #1121 design (fresh
+disposable test copy per run) doesn't cover this — he wants credentials retained on the always-on
+shared dev instance so future testing doesn't need setup hoops each time. Filed as fast-follow
+issue [#1651](https://github.com/motioneso/moss/issues/1651) (needs its own design spec before
+build, security-tier per the #1121 precedent's own risk framing — not built inline by the
+coordinator). Not blocking: relayed to both build agents (`w1:pD8` for PR #1649/#1518, `w1:pD9` for
+PR #1650/#1519) to use the pre-existing mocked-e2e-test precedent as live-path evidence now, so
+both PRs can proceed to QA/merge without waiting on #1651.
