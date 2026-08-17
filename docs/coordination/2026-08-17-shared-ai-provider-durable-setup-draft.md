@@ -405,3 +405,15 @@ guard gets its own red-first test (the way `tests/unit/test-database-guard.test.
 5. A round-trip decrypt of the written row succeeds **under the API's own env**, proving §3.4 parity.
 6. Live-path proof: a real chat turn completes through the browser on the dev instance after a
    `db:reset`, recorded per the live-path gate.
+
+## Open question resolved — Ben, 2026-08-17
+
+Ben's ruling: dev must be a full duplicate of prod's setup (same processes, same lifecycle) so
+testing doesn't hit "didn't get started/restarted" drift. Concretely: run a dev cli-runner
+alongside `dev:api`, mirroring prod's — not the API-key HTTP provider alternative. Standing policy:
+no API-key billing for Codex or Claude for the foreseeable future; always capture and use the CLI
+OAuth token. Saved to project memory (`jarv1s`, type `architecture`).
+
+Next step: turn this draft into a proper `docs/superpowers/specs/` entry + GitHub issue (security
+tier — needs Ben's explicit build sign-off per CLAUDE.md process gate), scoped to "run a dev
+cli-runner mirroring prod's" rather than leaving both options open.
