@@ -35,6 +35,11 @@ blocking	packages/chat/src/live/engine-text.ts	tests/uat/specs/notes-default-ret
 blocking	apps/web/src/chat/**	tests/uat/specs/1089-1090-chat-drawer-private.uat.spec.ts
 blocking	apps/web/src/chat/**	tests/uat/specs/1133-chat-attachments.uat.spec.ts
 blocking	apps/web/src/chat/**	tests/uat/specs/runtime-context.uat.spec.ts
+# #1520 is fully test.fixme'd: no UAT seed level configures a chat-capable AI provider (#1121),
+# and a no-model turn never publishes any SSE record (traced in the spec's header), so no real
+# tick -- content-bearing or a bare reconnect -- is observable on this harness. Advisory below;
+# returns to blocking automatically once #1121 lands. Real proof: tests/e2e/chat-drawer.spec.ts.
+advisory	apps/web/src/chat/**	tests/uat/specs/1520-chat-drawer-queued-drain.uat.spec.ts
 blocking	apps/web/src/today/**	tests/uat/specs/1112-today-masthead-oneline.uat.spec.ts
 blocking	packages/ui/src/masthead.tsx	tests/uat/specs/1112-today-masthead-oneline.uat.spec.ts
 blocking	packages/news/**	tests/uat/specs/1185-news-layout.uat.spec.ts
