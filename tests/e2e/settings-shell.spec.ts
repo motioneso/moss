@@ -218,3 +218,62 @@ test("modules preserve list/detail URL recovery for legacy and contributed setti
   await expect(page).toHaveURL(/\?section=modules$/);
   await expect(page.getByRole("heading", { name: "Modules" })).toBeVisible();
 });
+
+test("data export resumes across remount and clears on new/expired job", async ({ page }) => {
+  await mockSettingsApi(page);
+
+  let job1Status: "pending" | "building" | "ready" = "pending";
+  let postCount = 0;
+  await page.route("**/api/me/export", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    postCount += 1;
+    job1Status = "building";
+    await route.fulfill({ json: { jobId: "job-1", status: "pending" } });
+  });
+  await page.route("**/api/me/export/status/job-1", (route) =>
+    route.fulfill({ json: { jobId: "job-1", status: job1Status } })
+  );
+
+  await page.goto("/settings");
+  const nav = page.getByRole("navigation", { name: "Settings categories" });
+
+  // 1. Baseline: start an export, building state renders.
+  await page.getByRole("button", { name: "Prepare export" }).click();
+  await expect(page.getByText("Building your archive…")).toBeVisible();
+  expect(postCount).toBe(1);
+
+  // 2. Remount DataExport by navigating away and back; the job resumes, no second POST.
+  await nav.getByRole("button", { name: "Modules" }).click();
+  await nav.getByRole("button", { name: "Account & preferences" }).click();
+  await expect(page.getByText("Building your archive…")).toBeVisible();
+  expect(postCount).toBe(1);
+
+  // 3. Once ready, the Download link targets the resumed job id.
+  job1Status = "ready";
+  await expect(page.getByRole("link", { name: "Download" })).toHaveAttribute(
+    "href",
+    "/api/me/export/download/job-1"
+  );
+
+  // 4. "Prepare a new export" clears the persisted id, not just in-memory state.
+  await page.getByRole("button", { name: "Prepare a new export" }).click();
+  await nav.getByRole("button", { name: "Modules" }).click();
+  await nav.getByRole("button", { name: "Account & preferences" }).click();
+  await expect(page.getByRole("button", { name: "Prepare export" })).toBeVisible();
+  expect(
+    await page.evaluate(() => window.sessionStorage.getItem("moss.settings.export-job-id"))
+  ).toBeNull();
+
+  // 5. A resumed-but-gone job (404) falls back to idle and clears storage.
+  await page.addInitScript(() => {
+    window.sessionStorage.setItem("moss.settings.export-job-id", "job-2");
+  });
+  await page.route("**/api/me/export/status/job-2", (route) =>
+    route.fulfill({ status: 404, json: { message: "not found" } })
+  );
+  await page.goto("/settings");
+  await expect(page.getByRole("button", { name: "Prepare export" })).toBeVisible();
+  expect(
+    await page.evaluate(() => window.sessionStorage.getItem("moss.settings.export-job-id"))
+  ).toBeNull();
+});
