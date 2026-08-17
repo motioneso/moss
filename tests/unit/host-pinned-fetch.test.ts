@@ -34,6 +34,13 @@ describe("host-pinned fetch transport", () => {
     ]);
   });
 
+  // The hex-form v4-mapped case below is parity/coverage, not a regression test: Node's
+  // net.BlockList already normalizes hex-form v4-mapped IPv6 (e.g. ::ffff:a9fe:a9fe) against
+  // ipv4 subnet rules before this change (verified empirically on v22.22.2 and v24.19.0 — the
+  // pre-fix isBlocked() already rejected all three addresses this it.each table targets via
+  // BLOCKED.check's own normalization). isBlocked()'s explicit hex-form normalization added in
+  // #946 makes that behavior independent of BlockList's implicit engine-version handling rather
+  // than closing a reachable gap.
   it.each([
     ["private IPv4", "10.0.0.1", 4],
     ["deprecated 6to4 relay", "192.88.99.1", 4],
@@ -293,6 +300,12 @@ describe("host-pinned fetch transport", () => {
     expect(samePortHostRequests).toBe(1);
   });
 
+  // Knock-out verified (PR #1654 QA follow-up, 2026-08-17): scratch-guarding the isBlocked()
+  // check with `hop === 0` so it only runs on the first hop turns this test red (rejects with
+  // "invalid_request" via the redirect-loop's own bookkeeping, not "blocked_address" — proving
+  // the assertion below depends on the per-hop re-validation, not a false pass). Restoring the
+  // unconditional per-hop check turns it green again. This guard is real, unlike the hex-form
+  // case above.
   it("re-validates DNS answers on every redirect hop, blocking a redirect to a blocked address", async () => {
     let resolveCalls = 0;
     const fetchFn = createHostPinnedFetch(["api.example.com"], {
