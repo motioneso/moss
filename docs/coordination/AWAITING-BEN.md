@@ -301,3 +301,26 @@ exception to "coordinator never touches prod," authorized explicitly by Ben:
 - Backed up the pre-change env file to
   `env.production.local.bak-pre-1468-20260816` before editing, in case of rollback.
 - PR #1647 is now merge-ready from the deploy-config side; relayed to `w1:pD1`.
+
+## Two PRs stuck on the same blocker: shared dev has no working AI chat — 2026-08-17, post1632-queue coordinator, take 25
+
+PR #1649 (#1518) and PR #1650 (#1519) are both otherwise done and QA-green, but neither can post
+the live-path proof the merge gate requires, because the shared dev instance they'd both prove
+against has no AI provider configured at all — so any real chat turn just fails, not just
+#1519's specific test. Separately, #1519's exact scenario (sending the identical message twice in
+one thread) may not even be expressible in the scripted-chat test harness we normally use, because
+the chat engine reuses one session and can't tell the two turns apart.
+
+I found two encrypted token files already sitting on the box from earlier setups
+(`~/.config/jarv1s/uat/anthropic-real-chat.env.gpg` from 2026-07-20, and the newer
+`~/.config/moss/uat/anthropic-oauth.env.gpg` from 2026-08-12) — these look like exactly the kind of
+dedicated test account credentials that would unblock this, but only you can decrypt them (I
+don't have and won't ask for the passphrase), and nothing in the repo currently wires either file
+into a running instance automatically.
+
+**What I need from you:** either (a) walk through your usual manual steps to get a real AI
+provider working on the shared dev instance so both PRs can get live proof normally, or (b) tell
+me the exact repeatable procedure so I can do it myself next time, or (c) if neither is quick, say
+whether it's OK to accept the existing mocked e2e test (`tests/e2e/chat-drawer.spec.ts`) as
+evidence instead — same precedent already used for `1089-1090-chat-drawer-private.uat.spec.ts`.
+Either PR can merge as soon as you pick one of these.
