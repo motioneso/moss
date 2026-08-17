@@ -385,38 +385,61 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
 // one-cron-owner invariant) does NOT connect to Postgres or register a worker.
 // Mirrors apps/api/src/server.ts's bootstrap guard.
 // ---------------------------------------------------------------------------
-async function bootstrap(): Promise<void> {
-  const handle = await buildWorker();
-
-  console.log(`Jarv1s worker listening on ${RLS_PROBE_QUEUE} and built-in module queues`);
-
-  // LOW (#165): document the intentional escalation path. unhandledRejection and
-  // uncaughtException both funnel into handleCrash, which logs, attempts a
-  // bounded drain (2s race), then exits with code 1.
-  //
-  // MED (#158): pg-boss internal `error` events are NO LONGER re-thrown — they are
-  // logged structured (defaultOnPgBossError) without escalation, so a transient
-  // boss-connection blip cannot crash the worker mid-drain. Genuine fatal failures
-  // still surface through unhandledRejection / uncaughtException above.
-  const handleCrash = (label: string, err: unknown): void => {
+/**
+ * Crash-handler factory for the worker entrypoint (spec §1140-E, #1527). Both
+ * `unhandledRejection` and `uncaughtException` share the closure-local
+ * `crashing` latch below: the first crash notification logs, races a bounded
+ * drain, and exits; any later notification in the same window is a no-op, so
+ * a second error can never re-log, re-drain, or re-exit.
+ *
+ * Exported (and parameterized with log/timeout/exit) so it is unit-testable
+ * without spawning the real binary or racing a second real crash.
+ *
+ * LOW (#165): document the intentional escalation path — unhandledRejection
+ * and uncaughtException both funnel here, which logs, attempts a bounded
+ * drain (2s race by default), then exits with code 1.
+ *
+ * MED (#158): pg-boss internal `error` events are NOT routed through this
+ * handler — they are logged structured (defaultOnPgBossError) without
+ * escalation, so a transient boss-connection blip cannot crash the worker
+ * mid-drain. Genuine fatal failures still surface through
+ * unhandledRejection / uncaughtException.
+ */
+export function createCrashHandler(
+  handle: { shutdown(): Promise<void> },
+  opts: { timeoutMs?: number; exit?: (code: number) => never; log?: (line: string) => void } = {}
+): (label: string, err: unknown) => void {
+  const timeoutMs = opts.timeoutMs ?? 2000;
+  const exit = opts.exit ?? ((code: number) => process.exit(code));
+  const log = opts.log ?? ((line: string) => console.error(line));
+  let crashing = false;
+  return (label: string, err: unknown): void => {
+    if (crashing) return;
+    crashing = true;
     // LOW (#165): log err.message for Error values instead of String(err), which
     // would stringify a non-Error object (e.g. a config/pool object) and could
     // surface a connection string. Non-Error rejection reasons collapse to
     // "unknown" — blunt, but never leaks.
     const message = err instanceof Error ? err.message : "unknown";
-    console.error(
-      JSON.stringify({ level: "fatal", label, err: message, msg: "Process crash — exiting" })
-    );
+    log(JSON.stringify({ level: "fatal", label, err: message, msg: "Process crash — exiting" }));
     const drain = Promise.race([
       handle.shutdown(),
       new Promise<void>((resolve) => {
-        setTimeout(resolve, 2000);
+        setTimeout(resolve, timeoutMs);
       })
     ]);
     void drain.then(() => {
-      process.exit(1);
+      exit(1);
     });
   };
+}
+
+async function bootstrap(): Promise<void> {
+  const handle = await buildWorker();
+
+  console.log(`Jarv1s worker listening on ${RLS_PROBE_QUEUE} and built-in module queues`);
+
+  const handleCrash = createCrashHandler(handle);
 
   process.once("SIGINT", () => {
     void handle.shutdown().then(() => process.exit(0));
