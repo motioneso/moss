@@ -1,9 +1,19 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 
 import { ActionRequestCard } from "../../apps/web/src/chat/action-request-card.js";
 import { parseRecord } from "../../apps/web/src/chat/use-chat-stream.js";
+
+// `ActionRequestCard` reads `useMutation` (#1518), which requires a `QueryClient` in context even
+// for the initial idle render — a fresh client per call keeps these tests isolated from each other.
+function renderCard(props: Parameters<typeof ActionRequestCard>[0]): string {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return renderToString(
+    createElement(QueryClientProvider, { client }, createElement(ActionRequestCard, props))
+  );
+}
 
 describe("ActionRequestCard email preview", () => {
   const baseProps = {
@@ -13,16 +23,14 @@ describe("ActionRequestCard email preview", () => {
   };
 
   it("renders recipient, subject and body when a preview is present", () => {
-    const html = renderToString(
-      createElement(ActionRequestCard, {
-        ...baseProps,
-        preview: {
-          to: "alice@example.test",
-          subject: "Re: lunch plans",
-          body: "Sounds great — see you at noon."
-        }
-      })
-    );
+    const html = renderCard({
+      ...baseProps,
+      preview: {
+        to: "alice@example.test",
+        subject: "Re: lunch plans",
+        body: "Sounds great — see you at noon."
+      }
+    });
     expect(html).toContain("alice@example.test");
     expect(html).toContain("Re: lunch plans");
     expect(html).toContain("Sounds great — see you at noon.");
@@ -32,7 +40,7 @@ describe("ActionRequestCard email preview", () => {
   });
 
   it("renders summary-only (no preview block) when no preview is supplied", () => {
-    const html = renderToString(createElement(ActionRequestCard, baseProps));
+    const html = renderCard(baseProps);
     expect(html).toContain("Draft a reply to Alice");
     expect(html).toContain('data-action-request-id="ar_1"');
     // The tool-name label reuses the "action-request-preview__label" class (Decision 6),
@@ -42,9 +50,7 @@ describe("ActionRequestCard email preview", () => {
   });
 
   it("keeps exact stable ID on a requested focus target", () => {
-    const html = renderToString(
-      createElement(ActionRequestCard, { ...baseProps, focusRequested: true })
-    );
+    const html = renderCard({ ...baseProps, focusRequested: true });
     expect(html).toContain('data-action-request-id="ar_1"');
   });
 
@@ -55,7 +61,7 @@ describe("ActionRequestCard email preview", () => {
     // asserting the removed behaviour and has been red ever since; it is rewritten here to the
     // shipped contract rather than deleted, because the thing worth defending is that a tool
     // identifier never leaks into the label.
-    const html = renderToString(createElement(ActionRequestCard, baseProps));
+    const html = renderCard(baseProps);
     expect(html).toContain("action-request-preview__label");
     expect(html).toContain("Needs your approval");
     expect(html).not.toContain("Draft Reply");
@@ -65,7 +71,7 @@ describe("ActionRequestCard email preview", () => {
   // Focus-return-on-resolve (status → done/error) is verified via manual dev QA;
   // renderToString has no DOM/focus APIs to assert against here.
   it("never renders an Always-approve control, and orders Approve before Reject", () => {
-    const html = renderToString(createElement(ActionRequestCard, baseProps));
+    const html = renderCard(baseProps);
     expect(html).not.toMatch(/always approve/i);
     expect(html.indexOf("Approve")).toBeLessThan(html.indexOf("Reject"));
   });

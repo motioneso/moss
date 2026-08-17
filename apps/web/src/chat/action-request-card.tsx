@@ -1,7 +1,8 @@
+import { useMutation } from "@tanstack/react-query";
 import { CheckCircle, LoaderCircle, XCircle } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
-import { resolveActionRequest } from "../api/client";
+import { ApiError, resolveActionRequest } from "../api/client";
 import type { ActionRequestPreview } from "./use-chat-stream";
 
 interface ActionRequestCardProps {
@@ -15,18 +16,21 @@ interface ActionRequestCardProps {
 }
 
 export function ActionRequestCard(props: ActionRequestCardProps) {
-  const [status, setStatus] = useState<"pending" | "loading" | "done" | "error" | "expired">(
-    "pending"
-  );
-  const [decision, setDecision] = useState<"confirmed" | "rejected" | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const admittedRef = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
+  const mutation = useMutation<"confirmed" | "rejected", unknown, "confirmed" | "rejected">({
+    mutationFn: (next) => resolveActionRequest(props.actionRequestId, next).then(() => next),
+    onSettled: () => {
+      admittedRef.current = false;
+    }
+  });
+
   useEffect(() => {
-    if (status === "done" || status === "error") {
+    if (mutation.isSuccess || mutation.isError) {
       rootRef.current?.focus();
     }
-  }, [status]);
+  }, [mutation.isSuccess, mutation.isError]);
 
   useEffect(() => {
     if (!props.focusRequested) return;
@@ -35,27 +39,22 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
     props.onFocusComplete?.();
   }, [props.focusRequested, props.onFocusComplete]);
 
-  const resolve = async (next: "confirmed" | "rejected") => {
-    setStatus("loading");
-    setError(null);
-    try {
-      await resolveActionRequest(props.actionRequestId, next);
-      setDecision(next);
-      setStatus("done");
-    } catch (err) {
-      // #1250 — server returns 409 for expired requests; card stays showing expiration message
-      const message = err instanceof Error ? err.message : "Could not resolve";
-      if (message.includes("expired")) {
-        setError("This request expired — ask again.");
-        setStatus("expired");
-      } else {
-        setError(message);
-        setStatus("error");
-      }
-    }
-  };
+  function handleResolve(next: "confirmed" | "rejected") {
+    if (admittedRef.current) return;
+    admittedRef.current = true;
+    mutation.mutate(next);
+  }
 
-  const isLoading = status === "loading";
+  // #1250 — server returns 409 for expired requests; card stays showing expiration message
+  const isExpired =
+    mutation.isError && mutation.error instanceof ApiError && mutation.error.status === 409;
+  const errorMessage = mutation.isError
+    ? isExpired
+      ? "This request expired — ask again."
+      : mutation.error instanceof Error
+        ? mutation.error.message
+        : "Could not resolve"
+    : null;
 
   return (
     <div
@@ -74,10 +73,10 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
           hook and the text stay derived from one value. */}
       <div
         className="action-request-preview__label"
-        data-state={status === "done" ? decision : "pending"}
+        data-state={mutation.isSuccess ? mutation.data : "pending"}
       >
-        {status === "done"
-          ? decision === "rejected"
+        {mutation.isSuccess
+          ? mutation.data === "rejected"
             ? "Not approved"
             : "Approved"
           : "Needs your approval"}
@@ -100,35 +99,29 @@ export function ActionRequestCard(props: ActionRequestCardProps) {
         </div>
       ) : null}
 
-      {status === "pending" || status === "error" ? (
+      {mutation.isPending ? (
+        <p className="muted-text">
+          <LoaderCircle className="spin" size={14} aria-hidden="true" /> Resolving…
+        </p>
+      ) : mutation.isSuccess ? null : isExpired ? (
+        <p className="form-error">{errorMessage}</p>
+      ) : (
         <div className="action-request-actions">
           <button
             className="primary-button"
-            disabled={isLoading}
             type="button"
-            onClick={() => void resolve("confirmed")}
+            onClick={() => handleResolve("confirmed")}
           >
             <CheckCircle size={16} aria-hidden="true" />
             Approve
           </button>
-          <button
-            className="ghost-button"
-            disabled={isLoading}
-            type="button"
-            onClick={() => void resolve("rejected")}
-          >
+          <button className="ghost-button" type="button" onClick={() => handleResolve("rejected")}>
             <XCircle size={16} aria-hidden="true" />
             Reject
           </button>
-          {error ? <p className="form-error">{error}</p> : null}
+          {errorMessage ? <p className="form-error">{errorMessage}</p> : null}
         </div>
-      ) : status === "loading" ? (
-        <p className="muted-text">
-          <LoaderCircle className="spin" size={14} aria-hidden="true" /> Resolving…
-        </p>
-      ) : status === "expired" ? (
-        <p className="form-error">{error}</p>
-      ) : null}
+      )}
     </div>
   );
 }
