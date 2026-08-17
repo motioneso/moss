@@ -289,7 +289,7 @@ pnpm verify:foundation
 ```
 
 Run the Playwright spec in Chromium at the three declared viewports. Final #986 acceptance is against
-the built app, not screenshots alone. #988 owns the later full narrated desktop/narrow dogfood pass.
+the built app. #988 owns the later full narrated desktop/narrow dogfood pass.
 
 ## Non-goals
 

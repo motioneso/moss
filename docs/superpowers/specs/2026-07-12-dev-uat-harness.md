@@ -338,10 +338,7 @@ scope for Phase 1 — start with the simple 1:1 mapping.)
 "test:uat -- job-search-install"                 # single spec, by name/glob
 ```
 
-Mirrors the existing `test:e2e` / `capture:screens` split (`capture:screens` is
-`CAPTURE=1 playwright test capture-screens --workers=1` — a single-spec-focused invocation of the
-same underlying config; `test:uat` follows the same "one wrapper script, arg-filterable" shape rather
-than inventing new tooling conventions).
+`test:uat` keeps the existing "one wrapper script, arg-filterable" convention.
 
 ## 6. First spec: job-search install (explicit steps)
 

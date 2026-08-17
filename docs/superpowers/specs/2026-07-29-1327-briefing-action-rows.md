@@ -651,7 +651,7 @@ explanation, inferred subject, summary, body, prompt, note text, memory text, or
     literals remain intact.
 16. `pnpm verify:foundation`, `pnpm test:e2e`, `pnpm check:design-tokens`, and file-size checks pass
     with real exit codes.
-17. A real dev-instance UAT is recorded on the PR with screenshots or video: full morning prose
+17. A real dev-instance UAT is recorded on the PR with assertions and bounded DOM/network/log evidence: full morning prose
     above “Start here”, its loading/empty/stale states, morning rows, Accept, Dismiss, View source,
     Reply→chat→existing confirmation→Gmail draft, catch-up, full primary evening prose, the compact
     evening tile, evening outstanding rows, and one permitted resurfacing. Without that artifact

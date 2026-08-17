@@ -231,7 +231,7 @@ written as a literal into a stylesheet (design-token gate stays green).
   scroll-button end-state logic (pure helper); standings selector + conference/division sections +
   legend rendering; news-band blurb + continue-reading + filter; column omission when a source is
   empty; time rendered via `formatTime`. No test asserts nothing.
-- **Visual:** `pnpm capture:screens` in **both** themes; manual review against the rev-3 mockup.
+- **Layout:** focused browser DOM/computed-style assertions in **both** themes against the rev-3 mockup.
 - **Gate:** `pnpm lint && pnpm format:check && pnpm check:file-size && pnpm check:design-tokens &&
 pnpm typecheck && pnpm test:unit`. Because there are server touches, also run the sports module's
   integration/unit suite for the changed server files (not the whole pg suite unless CI requires).
