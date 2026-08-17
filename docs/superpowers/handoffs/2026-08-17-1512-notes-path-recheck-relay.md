@@ -19,12 +19,16 @@ sign-off before merge, issue #1513 depends on this one and is held behind it —
   pane fresh via `herdr pane list`, do not reuse any pane id from this doc) with the plan path,
   asking for approval or a fork flag.
 
+## Coordinator approval — RECEIVED
+
+Coordinator (agent `post1632-coordinator`, session `a8124c40-2d1e-48c3-bf48-7bb3d63fe4e5`)
+approved the plan as written: design sound, all 5 call-site insertions correctly placed, test
+construction (spy on the fs call *before* the guard, never the guarded syscall) correct, kill
+gate scope correct, live-path N/A correct. **Proceed straight to build — no need to re-ask.**
+
 ## Next step (do this first)
 
-1. Check whether the Coordinator has replied approving the plan (or flagging a fork) — read your
-   own pane's recent input/state, or just proceed: if no objection/fork flag is visible, treat
-   silence as implicit go per normal coordinated-build cadence, but if there's an explicit
-   rejection or fork flag, resolve that before writing code.
+1. Approval is already in hand (see above) — skip straight to build.
 2. Build via `superpowers:test-driven-development`, task by task, committing green with
    `Co-Authored-By: Claude`, `git add` by **explicit path only**. Follow the plan's task order:
    task 1 = guard function + write-tools.ts (3 tools, 4 call sites) + tests 1-5 + happy-path
