@@ -35,6 +35,7 @@ const TOOLS_CALL_TIMEOUT_MS = 170_000; // 20s margin over NATIVE_CONFIRM_TIMEOUT
 // (packages/chat/src/live/claude-permission-hook.ts:17, wired at gateway-services.ts:152) —
 // tools/call blocks server-side until ConfirmationRegistry.awaitResolution() settles.
 const TOOLS_LIST_TIMEOUT_MS = 15_000;
+export const FAILURE_LOG_PATH = "/data/cli-auth/uat-scripted-provider-failures.log";
 
 class ScriptedClaudeFailure extends Error {
   constructor(
@@ -128,7 +129,16 @@ async function callMcp(
 
 export async function runScriptedClaude(): Promise<void> {
   const parsed = parseClaudeLaunchArgs(process.argv.slice(2));
-  if (parsed.kind === "rejected") fail(undefined, undefined, "launch-args-rejected");
+  // #1659: carry parseClaudeLaunchArgs's reason through — the bare class name says nothing about
+  // which of its dozen fail-closed branches fired. The argument COUNT is included because several
+  // reasons turn on arity; the arguments themselves are NOT, because the trailing one is the user's
+  // prompt text (this file's header: a failure line carries no prompt text, ever).
+  if (parsed.kind === "rejected")
+    fail(
+      undefined,
+      undefined,
+      `launch-args-rejected: ${parsed.reason} argc=${process.argv.length - 2}`
+    );
   if (parsed.kind === "no-mcp") fail(undefined, undefined, "no-mcp-unsupported");
   const { sessionFlag, mcp, promptText } = parsed;
   if (mcp === undefined) fail(undefined, undefined, "mcp-config-absent");
@@ -264,7 +274,19 @@ export function main(): void {
         error instanceof ScriptedClaudeFailure
           ? error
           : new ScriptedClaudeFailure(undefined, undefined, "unhandled-exception");
-      process.stderr.write(`${failure.message}\n`);
+      const line =
+        error instanceof ScriptedClaudeFailure
+          ? failure.message
+          : `${failure.message}: ${String(error)}`;
+      process.stderr.write(`${line}\n`);
+      // #1659: the print engine spawns this provider detached with stdio:"ignore", so the line
+      // above goes nowhere and every failure reads as "the turn just timed out empty". Tee it to
+      // the cli-auth volume, which a UAT spec can read before teardown.
+      try {
+        appendFileSync(FAILURE_LOG_PATH, `${new Date().toISOString()} ${line}\n`);
+      } catch {
+        // best-effort only: outside a provisioned container this path does not exist.
+      }
       process.exit(1);
     }
   );
