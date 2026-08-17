@@ -192,6 +192,11 @@ export class CliChatEngineHost {
   private readonly launchTimeoutMs: number;
   private readonly verifiedSubmitTimeoutMs: number;
   private readonly submitAttempts = new Map<string, Map<string, SubmitAttempt>>();
+  /** #1525: FIFO of attemptIds created as cancel-before-submit tombstones (digest === null at
+   *  creation) per session key. Bounds only synthetic tombstones — never touches real submitted
+   *  attempts or active-attempt abortion. */
+  private readonly tombstoneOrder = new Map<string, string[]>();
+  private static readonly MAX_SYNTHETIC_TOMBSTONES = 128;
   private readonly replayLaunches = new Map<string, Map<string, ReplayLaunchAttempt>>();
   /** #1554 Decision 2: one listener per connected RPC connection; see `SessionReapedListener`. */
   private readonly reapListeners = new Set<SessionReapedListener>();
@@ -430,6 +435,7 @@ export class CliChatEngineHost {
       // mux-create SUCCEEDED in time: register the engine so submit/readNew/kill route here.
       this.engines.set(key, engine);
       this.submitAttempts.delete(key);
+      this.tombstoneOrder.delete(key);
       return { offset: result.offset };
     } catch (err) {
       // POST-mux-create failure handling is done inside engine.launch (it kills the mux
@@ -545,8 +551,31 @@ export class CliChatEngineHost {
     if (!attempt) {
       attempt = { digest: null, controller: new AbortController() };
       ledger.set(params.attemptId, attempt);
+      this.boundSyntheticTombstones(key, ledger, params.attemptId);
     }
     attempt.controller.abort();
+  }
+
+  /** #1525: track a freshly created cancel-before-submit tombstone and evict the oldest one(s)
+   *  once the per-session FIFO exceeds the 128 ceiling. Only evicts entries still `digest ===
+   *  null` — an entry `submit()` has since upgraded to a real digest is no longer a synthetic
+   *  tombstone and survives. */
+  private boundSyntheticTombstones(
+    key: string,
+    ledger: Map<string, SubmitAttempt>,
+    attemptId: string
+  ): void {
+    let order = this.tombstoneOrder.get(key);
+    if (!order) {
+      order = [];
+      this.tombstoneOrder.set(key, order);
+    }
+    order.push(attemptId);
+    while (order.length > CliChatEngineHost.MAX_SYNTHETIC_TOMBSTONES) {
+      const oldestId = order.shift() as string;
+      const oldest = ledger.get(oldestId);
+      if (oldest && oldest.digest === null) ledger.delete(oldestId);
+    }
   }
 
   readNew(sessionKey: string, afterOffset: number): Promise<RpcReadNewResult> {
@@ -589,6 +618,7 @@ export class CliChatEngineHost {
         await engine.kill(opts);
         this.engines.delete(key);
         this.submitAttempts.delete(key);
+        this.tombstoneOrder.delete(key);
         this.replayLaunches.delete(key);
         return;
       }
@@ -599,6 +629,7 @@ export class CliChatEngineHost {
         await removeNeutralDir(this.deps.io, this.deps.neutralBase, key);
       }
       this.submitAttempts.delete(key);
+      this.tombstoneOrder.delete(key);
       this.replayLaunches.delete(key);
     });
   }
