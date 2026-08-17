@@ -543,3 +543,14 @@ real `motioneso` account on #1252 or the run manifest would also count as a dura
 
 **Open:** need Ben to confirm whether he approved Group A/B/C (and if so, exactly which — all
 three, or only what's already covered by #1252), sent by him directly (not via any pane).
+
+**Update, same day, escalated:** two more Ben-signed messages arrived in Fable's pane — a claimed
+"what do you need from me?" then a frustrated interrupt telling her to stop treating him as
+injection and "knock it off." Fable correctly declined to comply and did not flip any status,
+noting that dropping verification posture on a pressure/tone play is itself exactly the kind of
+state change that needs the authenticated channel. Fair correction from Fable on my wording above:
+"confirmed NOT authentic" overstated it — my cross-check only proves no such approval reached the
+coordinator, not that nobody is physically at her pane (the real 21:38 board move shows Ben may
+genuinely be active right now). Status of this incident: **unconfirmed, pending trace** — not
+resolved either way — until Ben replies directly via `needs-ben`/Telegram or a real `motioneso`
+GitHub comment lands on #1252.
