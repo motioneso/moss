@@ -19,12 +19,12 @@ against live Coordinator pane `w1:pCJ` session id match).
   - `notesCreateExecute` exclusive branch: `assertInside(root, resolvedParent)` (line 166) →
     `open(file, "wx")` at line 178. Same unresolved `file` string.
   - `notesEditExecute`: `resolveExistingFile` returns resolved `file` (line 219) → `readFile(file,
-    ...)` (line 220, currently tight) → ... → `writeFile(file, ...)` (line 223, genuine gap: a
+...)` (line 220, currently tight) → ... → `writeFile(file, ...)` (line 223, genuine gap: a
     `content.split`/`.replace` and no re-check).
   - `notesDeleteExecute`: `resolveExistingFile` (line 238) → `unlink(file)` (line 239) — already
     tight, but spec still requires an explicit recheck call here for consistency/defense-in-depth.
 - `packages/notes/src/jobs.ts:143-215` — `ingestResolvedMarkdownFile(scopedDb, actorUserId,
-  resolvedFile, repository, embeddingProvider, chunkOffset, chunkLimit, expectedFileHash)`, first
+resolvedFile, repository, embeddingProvider, chunkOffset, chunkLimit, expectedFileHash)`, first
   statement `readFile(resolvedFile, "utf-8")` at line 153. Does **not** currently receive
   `resolvedRoot` — needs a new required param.
   - Call site 1: `handleNotesSyncJob`, ~line 307 `assertWithinRoot(resolvedRoot, resolvedFile)`
@@ -38,7 +38,7 @@ against live Coordinator pane `w1:pCJ` session id match).
     satisfies the spec table's "covering both worker handlers" without duplicating the guard call.
 - Existing test coverage: `tests/integration/notes-write-tools.test.ts` (495 lines, full read)
   `"rejects traversal and symlink escape"` (lines 442-495) — covers symlinks already in place
-  *before* the tool call starts, i.e. today's upfront checks. It does **not** exercise the
+  _before_ the tool call starts, i.e. today's upfront checks. It does **not** exercise the
   post-check, pre-syscall window this task closes, so it does not by itself prove B1's guard is
   necessary or correct — new tests are additive, not a replacement.
 - `tests/integration/notes.test.ts` (949 lines, grepped) — `describe("assertWithinRoot", ...)` at
@@ -54,7 +54,7 @@ any of those.
 Add to `packages/notes/src/path-guard.ts`:
 
 ```ts
-export async function recheckWithinRoot(resolvedRoot: string, targetPath: string): Promise<void>
+export async function recheckWithinRoot(resolvedRoot: string, targetPath: string): Promise<void>;
 ```
 
 Behavior: walk upward from `targetPath` (which may not exist yet) to the deepest existing
@@ -67,6 +67,7 @@ immediately.
 ## Decision: call-site insertions (zero intervening `await` between guard and syscall)
 
 `packages/notes/src/write-tools.ts`:
+
 1. Overwrite branch — insert `await recheckWithinRoot(root, file);` immediately before line 174
    (`writeFile`).
 2. Exclusive-create branch — insert immediately before line 178 (`open(file, "wx")`).
@@ -74,11 +75,10 @@ immediately.
    immediately before line 223 (`writeFile`); two separate calls, not reused across the gap.
 4. `notesDeleteExecute` — insert immediately before line 239 (`unlink`).
 
-`packages/notes/src/jobs.ts`:
-5. `ingestResolvedMarkdownFile` gains a new first param `resolvedRoot: string`; insert
-   `await recheckWithinRoot(resolvedRoot, resolvedFile);` as the function's first statement,
-   before line 153 (`readFile`). Update both call sites (~line 317, ~line 461) to pass
-   `resolvedRoot` (already in scope at both).
+`packages/notes/src/jobs.ts`: 5. `ingestResolvedMarkdownFile` gains a new first param `resolvedRoot: string`; insert
+`await recheckWithinRoot(resolvedRoot, resolvedFile);` as the function's first statement,
+before line 153 (`readFile`). Update both call sites (~line 317, ~line 461) to pass
+`resolvedRoot` (already in scope at both).
 
 No other files change. No existing check is removed.
 
@@ -87,7 +87,7 @@ No other files change. No existing check is removed.
 All new cases live in `tests/integration/notes-write-tools.test.ts` (create/edit/delete) and
 `tests/integration/notes.test.ts` (worker path), reusing each file's existing DB/mkdtemp fixture
 pattern. Race is simulated deterministically via `vi.spyOn` on an fs call that legitimately still
-runs *before* the new last-moment guard (`mkdir`, `lstat`, or `resolveExistingFile`'s internals) —
+runs _before_ the new last-moment guard (`mkdir`, `lstat`, or `resolveExistingFile`'s internals) —
 never on the guarded syscall itself, since a swap injected inside the guarded syscall's own mock
 happens too late to be observable by any guard. The spy performs the symlink swap synchronously
 against real disk, then calls through to the real implementation.

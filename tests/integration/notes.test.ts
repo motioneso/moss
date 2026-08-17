@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import type { Job } from "pg-boss";
 import type { Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
+import type * as NodeFsPromises from "node:fs/promises";
 import pg from "pg";
 import Fastify from "fastify";
 
@@ -16,7 +17,7 @@ import Fastify from "fastify";
 // is required (not a plain top-level const) because vi.mock factories are hoisted above all
 // imports, including any plain variable declarations that would otherwise sit below them. Same
 // technique as tests/integration/notes-write-tools.test.ts.
-type FsPromises = typeof import("node:fs/promises");
+type FsPromises = typeof NodeFsPromises;
 
 const fsMocks = vi.hoisted(() => ({
   realpathMock: vi.fn(),

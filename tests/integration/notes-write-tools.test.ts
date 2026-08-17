@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { Kysely } from "kysely";
+import type * as NodeFsPromises from "node:fs/promises";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // TOCTOU test support: vi.spyOn cannot patch the "node:fs/promises" namespace directly (ESM
@@ -11,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // via vi.mock instead. Every other export passes through to the real implementation untouched.
 // vi.hoisted is required (not a plain top-level const) because vi.mock factories are hoisted
 // above all imports, including any plain variable declarations that would otherwise sit below them.
-type FsPromises = typeof import("node:fs/promises");
+type FsPromises = typeof NodeFsPromises;
 
 const fsMocks = vi.hoisted(() => ({
   realpathMock: vi.fn(),
@@ -64,7 +65,9 @@ describe("notes write assistant tools", () => {
   let service: NotesSyncToolService;
 
   beforeEach(async () => {
-    realpathMock.mockImplementation((p: Parameters<FsPromises["realpath"]>[0]) => actualFs().realpath(p));
+    realpathMock.mockImplementation((p: Parameters<FsPromises["realpath"]>[0]) =>
+      actualFs().realpath(p)
+    );
     readFileFsMock.mockImplementation((...args: Parameters<FsPromises["readFile"]>) =>
       actualFs().readFile(...args)
     );
