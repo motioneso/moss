@@ -1,5 +1,5 @@
-import { realpath } from "node:fs/promises";
-import { dirname, normalize } from "node:path";
+import { lstat, readlink, realpath } from "node:fs/promises";
+import { dirname, isAbsolute, normalize, resolve } from "node:path";
 
 export class NotesPathError extends Error {
   constructor(
@@ -42,6 +42,27 @@ export async function recheckWithinRoot(resolvedRoot: string, targetPath: string
       return;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+
+      // realpath ENOENTs both for "path component doesn't exist yet" and for "current exists as a
+      // symlink whose target is missing" (a dangling symlink). lstat distinguishes them: it does
+      // NOT follow the final symlink, so it succeeds on a dangling symlink node itself.
+      let stat;
+      try {
+        stat = await lstat(current);
+      } catch (lstatError) {
+        if ((lstatError as NodeJS.ErrnoException).code !== "ENOENT") throw lstatError;
+        stat = undefined;
+      }
+
+      if (stat?.isSymbolicLink()) {
+        // current is a real node (a symlink) whose target is missing — do not silently discard
+        // this hop by walking up the *original* path's syntactic parent. Follow the link and
+        // continue the check from where it actually points.
+        const linkTarget = await readlink(current);
+        current = isAbsolute(linkTarget) ? linkTarget : resolve(dirname(current), linkTarget);
+        continue;
+      }
+
       const parent = dirname(current);
       if (parent === current) throw error;
       current = parent;
