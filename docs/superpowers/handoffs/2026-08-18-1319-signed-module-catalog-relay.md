@@ -1,130 +1,166 @@
-# Relay: #1319 Signed Moss Module Catalog (relay #3)
+# Relay: #1319 Signed Moss Module Catalog (relay #12 — PLAN APPROVED, BUILD-READY)
+
+**Plan is DONE and approved.** Commit `fc525e53d` (on `53ff42bcd`/`755cdcc0a`, this branch/HEAD)
+is the final version — Ben ruled this revision round is final, no further Opus review follows.
+This session independently verified all 4 round-6 blocking findings actually close against real
+source (not just diff text): update-path gating (settings-module-registry-section.tsx:179-188),
+UAT reality (provisioner.ts NODE_ENV=production, no JARVIS_MODULE_REGISTRY_URL under tests/uat/),
+admin-auth ordering (routes-module-registry.ts:44,54,88,123), self-refusal design (mirrors
+resolveRegistryIndexUrl's precedent at registry-source.ts:23-26). No defects found. Verdict sent
+to Fable and jarv1s-09.
+
+**Next relay: start the TDD build.** Read `docs/superpowers/plans/2026-08-18-1319-signed-module-catalog.md`
+in full (it's the plan, self-contained), start at Phase 1 Task 1
+(`packages/module-registry/src/distribution/catalog-signing.ts`). Task-scoped commits via the
+`shared-checkout` skill (never `git add -A`/bare commit in this shared worktree). No further
+review round is coming — build against the plan as written; if you find a real defect while
+building, that's a normal build-time finding, fix it and note it, not a reason to re-open review.
+
+---
+
+# Relay: #1319 Signed Moss Module Catalog (relay #11, prior context below)
+
+## Review-pass status (this session, build-1319-relay3)
+
+Fable committed a **wholesale-fresh, non-incremental plan** as `755cdcc0a` (HEAD of this branch),
+replacing the old 4-times-patched draft at the same path. Independently verified real/on-branch
+before reading (git log/merge-base/show --stat). Read in full (631 lines).
+
+**Review pass (spot-check style, not exhaustive per-task) result: plan looks sound.**
+- D6 (test-key seam) premise confirmed: `JARVIS_MODULE_REGISTRY_URL` is real and
+  production-refused at `registry-source.ts:23-26,42-45` — matches D6's design exactly.
+- Ledger #19 structural claim confirmed: `tests/unit/module-distribution-pipeline.test.ts` has
+  exactly 4 `downloadAndStageModule` tests and 3 `fetchRegistryIndex` tests, none serving `.sig`.
+  **Nit**: cited line numbers (134,157,183,195) are off by 3-7 lines from the actual `it(`
+  positions (131,149,167,192) — imprecise citation, not a false claim. Worth a quick fix, not
+  blocking.
+- `client.ts` signatures spot-checked exact: `ApiError` (status/message/code, no digestSha256
+  yet — confirms Task 7 needs to add it), `readErrorBody`, `downloadRegistryModule(id, version?)`.
+- `routes-module-registry.ts` disabled early-return currently lacks `catalogVerification`/
+  `catalogDigestSha256` — expected pre-implementation state, Task 4 adds it. Not a plan defect.
+- No `MOSS_MODULE_CATALOG_*` symbols exist yet anywhere in the tree — consistent with this being
+  net-new, not yet built.
+
+**Not yet done**: exhaustive per-task line verification of all 19 ledger items / all 8 tasks (only
+spot-checked the two NEW items Fable flagged plus a few adjacent citations). If a successor session
+continues the review, that's the remaining scope — otherwise this spot-check level, given nothing
+found wrong beyond one line-number nit, is a reasonable basis to report "no blockers found" to
+Fable/Coordinator and let the Opus review round (Coordinator's call, already messaged separately by
+Fable) do the deeper adversarial pass.
+
+**Next action for successor**: message `fable-1319-plan` (or Coordinator pane, re-resolve via
+`herdr pane list`/`ListAgents` fresh — don't trust old pane ids) with the finding above, then hold.
+No code. No git write actions without `shared-checkout` skill.
+
+---
+
+# Relay: #1319 Signed Moss Module Catalog (relay #10, prior context below)
 
 - **Issue:** #1319, risk tier `security`. Approved by Ben 2026-08-17.
-- **Branch/worktree:** `build-1319-signed-module-catalog` (this worktree). Clean tree, **zero
-  commits, zero plan file, across all three relays.**
-- **Coordinator — STILL UNRESOLVED, run `herdr pane list` FRESH before messaging.** Relay #2 never
-  got to this step either. Last known state (2026-08-18, now stale): two panes held `Coordinator` —
-  `3e71acd4-1b49-4a73-8c0d-9adf1e41c447` (`agent_status:"done"`) and
-  `0af0d87c-2a93-4ced-9b55-56dbdfafd9fe` (`agent_status:"working"`, title "Boot coordinator take45
-  brief"). **Do not message either id from memory — resolve fresh by label, confirm exactly one
-  live `Coordinator`-labeled pane, only then message it** (0 or >1 matches = halt, don't guess).
-- **Skill to resume under:** `coordinated-build`, step 1 (plan). Step ½ (spec-vs-branch
-  verification) is DONE.
+- **Plan file (OLD, superseded — do not keep patching):**
+  `docs/superpowers/plans/2026-08-18-1319-signed-module-catalog.md`. 4 consecutive Opus review
+  rounds all landed REVISE (see "Round history" below for grounded findings). Ben ruled: pause the
+  patch-a-round cycle, write a fresh plan from scratch instead — see below.
+- **CONFIRMED by Ben directly** (`~/.needs-ben/replies/1787038559551-jarv1s-1319-relay.md`, in
+  reply to this session's own independently-queued ping, not just a relayed claim): **"yes,
+  confirm. Fable writtes [sic] the plan."** This resolves both concerns raised earlier in this
+  relay (the 3-hop claimed-coordinator chain `jarv1s-b4` → `jarv1s-1a` → `jarv1s-09`, and the
+  `feedback-sonnet-not-plan-author` conflict). Independently corroborated three ways before the
+  reply even landed: (1) `herdr pane list` — Coordinator pane `w1:pF6` / session
+  `ea71a9d5-0a84-4719-8483-00723264ae80` matched exactly as claimed; a live Fable pane `w1:pF8`
+  ("Fable: fresh #1319 plan", `agent_status: working`, correct worktree cwd) confirmed the spawn.
+  (2) `git show bae494b97` — real commit, deletes a detailed `## Open: #1319 plan review — 4th
+  round...` entry from `docs/coordination/AWAITING-BEN.md` matching the relayed findings
+  near-verbatim (4 rounds, genuinely-correct fixes each time, options 1/2/3, recommends option 2).
+  (3) current `docs/coordination/AWAITING-BEN.md` on disk has no #1319 entry. One loose thread
+  (commit hash `df1718a7f` cited by `jarv1s-09` wasn't found touching this file via `git log`)
+  never got reconciled but is now moot given Ben's direct reply.
+- **Fable 5 is authoring the fresh plan** — pane `w1:pF8`, agent name `fable-1319-plan`, in this
+  same worktree. This session's role once it posts: **review pass, not drafting.** No code either
+  way.
+- **No code has been written. Do not write code.**
 
-## What changed since relay #2
+## 5th review's findings (received, NOT yet applied — for whoever resumes)
 
-Nothing code-side. Relay #2 spent its budget re-verifying the spec (fetched and read the full
-GitHub issue #1319 body, all 99 lines, via `gh api repos/motioneso/moss/issues/1319 --jq .body`)
-and hit the context-meter 70% relay trigger immediately after, before drafting the plan. **Spec
-confirmed with zero drift against the seam map below — this is the last spec/seam read this lane
-needs.** Do not re-fetch the issue or re-read the two agentmemory decision memories; both are
-already fully captured between this doc and the previous one's seam map (unchanged, reproduced
-below). Go straight to drafting.
+Blocking: (1) `routes-module-registry.ts:92-97` `enabled:false` early-return omits
+`catalogVerification`/`catalogDigestSha256` — 5th missed call site, 500s on GET while distribution
+disabled, reds `pnpm typecheck`. (2) `apps/web/src/api/client.ts:1374-1394,177-185` —
+`readErrorBody`/`ApiError` discard the 409's `digestSha256` before `onError` runs; override flow
+dead. (3) `apps/web/src/api/client.ts:431-440` — real function is `downloadRegistryModule(id,
+version?)`, not `downloadExternalModule(...)` as Task 7 names it, and has no
+`overrideCatalogDigestSha256` param. (4) plan:593-594 vs `pipeline.ts:64-71` — plan's "insert after
+the existing index-fetch block" reads as two independent fetches given its own snippet; violates
+spec's "never pair entries or verification state from different snapshots".
 
-## Durable state — the seam map (unchanged from relay #2, do not re-derive)
+Medium: (5) plan:881 uses `pnpm vitest run tests/integration/module-distribution.e2e.test.ts`
+directly, bypassing `scripts/test-integration.ts`'s DB isolation — should be `pnpm test:integration
+<file>` like Tasks 4/6 already correctly use. (6) `module-distribution-port.ts:39-49` — plan
+doesn't state whether a failed fetch caches an "unavailable" snapshot into the 10-min
+`registryCache` (today it correctly doesn't — should stay that way, state it explicitly). (7)
+`registry-source.ts:68` uses `response.text()` but signing/digesting needs raw bytes — should be
+`arrayBuffer()`.
 
-Both memories (`mem_msy75bdj_94916a3aab69`, `mem_msy7avet_7aa9c3da101b` in agentmemory project
-`jarv1s`) gave exact file:line insertion points for all 8 work items — reproduced here so this
-relay is self-contained and nobody needs to re-recall:
+Nits: stale 6th call site in `tests/unit/instance-modules-dedup.test.tsx:27-42` (harmless, `.tsx`
+not typechecked); plan:477-478 references a nonexistent `installedVersion` identifier; plan:303-305
+misdescribes the `.sig` fetch wrapper (real one is `createRegistryFetch`, unpinned when
+`JARVIS_MODULE_REGISTRY_URL` is set); plan:602-603 dead init defended by a stale comment;
+`.github/workflows/modules-registry.yml:51` `gh release upload --clobber` has no atomicity between
+`index.json` and its `.sig`.
 
-1. **Ed25519 keyring module (new).** `packages/db/src/keyring.ts` is a shape-only rotation
-   precedent, NOT reusable code — the asymmetric verify side only needs a public-key map (key id →
-   public key), pinned in Moss, current+next overlap per spec's rotation decision.
-2. **Publish-time sign+self-verify.** `publish-module-registry.ts:150-153`, insert between the
-   existing self-check and `writeFileSync`. Generate catalog bytes once, sign those exact bytes,
-   verify inside the publish job before upload; fail the build if the key is missing, signing
-   fails, or self-verify fails. New GH Actions secret in `modules-registry.yml` (module-catalog
-   release workflow only — never repo, release assets, image, logs, config). Also fix the
-   prune-keep-list at line ~56 to retain the new `.sig` asset.
-3. **Fetch-time verify + cache reshape.** `registry-source.ts` `fetchRegistryIndex()` (line 60):
-   verify signature over raw catalog bytes before parsing/trusting. Cache reshape in
-   `module-distribution-port.ts`'s `registryCache` (line ~39-50): bytes/digest, verification state,
-   and parsed entries must travel together as one atomic snapshot — never pair state from one
-   fetch with entries from another.
-4. **DTO/schema/derive verification field.** `platform-api-modules.ts` `ModuleRegistryRowDto` +
-   schema (lines 415-497): add `verified | unverified | unavailable` + SHA-256 digest of the exact
-   fetched snapshot. `routes.ts` `ModuleDistributionDependencies.fetchRegistryEntries` (lines
-   156-179).
-5. **Admin-route 409/override contract.** `routes-module-registry.ts` download route (lines
-   114-166), insert between the priorStates check (line 128) and `dist.download()` (line 133).
-   Normal request on an unverified catalog → conflict response with safe reason + current digest,
-   no staging. Override = second request carrying the exact digest accepted; admin-only, one
-   attempt, never persisted; digest mismatch → reject, require fresh warning+confirmation. Override
-   bypasses catalog-signature verification ONLY — fingerprint/host-pin/extraction/manifest/id-version
-   /compatibility/staging/drift/enablement checks stay mandatory; a fingerprint mismatch is always
-   rejected even under a valid override.
-6. **`module-reconcile.ts` fail-closed, no override.** Phase-3 (lines 254-305), mirrors the existing
-   warn-and-continue pattern at 300-304: non-interactive ensure-at-boot has no bypass channel —
-   unverified catalog → bounded warning, skip the download, continue the rest of boot. Already
-   installed local modules keep their existing enablement/drift rules regardless.
-7. **UI verified/unverified/override-confirm surface.** `settings-module-registry-section.tsx`:
-   banner parallel to the existing `registryUnavailable` banner (line 236-240); override
-   confirmation dialog chained off the existing download-confirm flow (line 180-190) — must name
-   the target module, state Moss did not authenticate the catalog, state installing may execute
-   untrusted code after restart; no generic dismissible warning.
-8. **UAT spec + e2e mock-registry extension.** New UAT spec + a row in
-   `.claude/skills/coordinate/uat-trigger-map.tsv`. Extend `module-distribution.e2e.test.ts`'s mock
-   registry (serves `/index.json` at line 124, listens line 178) to also serve/omit/corrupt a
-   signature asset, covering: verified install succeeds; missing/malformed/unknown-key/wrong
-   signature → unverified + blocked, no staging; override succeeds only on matching digest +
-   fingerprint; catalog change between warning and retry invalidates the ack (fresh conflict, not
-   install); artifact mismatch blocked even under override; safe-extraction/manifest/compat/host-pin
-   /size-cap checks unchanged under override; direct-API and UI paths share the same policy incl.
-   admin-authz-before-verification-details; refresh/cache never mixes snapshots; ensure-at-boot
-   skips + warns + continues; publish-seam: deterministic bytes → verifiable sig, absent key fails
-   build, altered bytes fail verify; rotation accepts current+next, rejects unknown/retired.
-   Reuse the existing module-distribution pipeline/publisher/index-schema/e2e suites as prior art —
-   no new test framework.
+## Round 4 — all 5 findings fixed (verified against real source)
 
-## Spec decisions that shape task boundaries (confirmed this relay, full issue body read)
+- **Blocking 1** (409 schema broke 2 sibling `HttpError(409,...)` throws on the same route):
+  `catalogUnverifiedErrorSchema.required` narrowed to `["error"]` only (code/digestSha256 optional)
+  — one schema now serializes all 3 body shapes the route produces.
+- **Blocking 2** (test-collection / verification commands were false greens): confirmed
+  `vitest.config.ts` never collects `packages/*/src/**`, and `module-registry`/`settings`/`shared`
+  package.json files declare only `typecheck`, no `test`/`build`. Every new test in Tasks 1-5 is now
+  placed under `tests/unit/` or `tests/integration/` (several extend files that already exist —
+  `publish-module-registry.test.ts`, `module-registry-rows.test.ts`,
+  `module-distribution-pipeline.test.ts`, `module-registry.test.ts`,
+  `module-distribution.e2e.test.ts`). Every verification command now uses the real root scripts:
+  `pnpm test:unit tests/unit/<file>.test.ts` (confirmed via full read of `scripts/test-unit.ts`) and
+  `pnpm test:integration tests/integration/<file>.test.ts` (confirmed via full read of
+  `scripts/test-integration.ts` — auto-isolates a `jarvis_test_<pid>_<random>` DB unless
+  `JARVIS_PGDATABASE` is set). Task 6's exact file is the one remaining pick between two real
+  candidates (`tests/unit/module-reconcile-plan.test.ts` vs.
+  `tests/integration/module-reconcile-target-guard.test.ts`) — stated inline in the plan as that
+  task's first action, not a false-green risk.
+- **Blocking 3** (existing real call sites of changed types not enumerated): Task 4 now has an
+  "Existing call sites requiring updates" note naming all 4 — `module-registry-rows.test.ts`'s
+  `derive()` helper and its direct-construction test, `tests/e2e/settings-modules.spec.ts`, and
+  `tests/unit/settings-instance-modules-pane-render.test.tsx`'s 3 fixtures — each with the exact
+  field(s) to add.
+- **Medium 4** (`registryUnavailable` definition contradicted itself across 3 plan locations): one
+  explicit rule now used everywhere — `registryUnavailable === (catalogVerification ===
+  "unavailable")`.
+- **Medium 5** (Task 6 test asserted a literal `"catalog-unverified"` string that never appears in
+  the logged `error.message`): fixed to assert `failureReason` is non-null in the parsed JSON
+  payload instead.
 
-- Trust object is the **catalog**, not per-module signatures — one signature authenticates every
-  listed artifact's existing fingerprint. No individual module signing identity (out of scope).
-- Detached signature metadata asset beside the catalog: format version, algorithm, key id, base64
-  signature, covering exact UTF-8 published bytes.
-- Product terms: **"recognized by Moss"** / **"verified catalog module"** — never imply the module
-  is safe/sandboxed/audited; signing proves provenance + byte identity only.
-- No new package/signing service — extend the existing publisher, registry fetcher, distribution
-  pipeline, shared admin contracts, module-management UI at current seams.
-- Rollout: publish signed catalog + signature before enforcement ships; old Moss versions keep
-  working unmodified; enforcing versions verify immediately. **No DB migration, no unsigned
-  transition mode** (confirms existing reminder below).
-- Out of scope (do not build): per-module sigs, web-of-trust/certs/third-party registries, safety
-  claims about module code, runtime behavior changes, any bypass on fingerprint/archive/manifest
-  /compat/host/size, a permanent "allow unsigned" setting, retroactive disabling of installed
-  modules on catalog trouble.
+## Next concrete step for successor
 
-Full verbatim text if ever needed again: `gh api repos/motioneso/moss/issues/1319 --jq .body`
-(cheap, 99 lines — but the bullets above are the complete decision set; re-fetching should not be
-necessary to draft the plan).
+1. Report "round-4 complete, ready for re-review" — `jarv1s-b4` sent the round-4 findings and is the
+   established reviewer for this cycle; `jarv1s-1a` (a session claiming coordinator succession from
+   a "take-48" pane) gave the instruction to finish these edits and said they'd spawn the review.
+   Notify both: confirm to `jarv1s-b4` their findings are fixed, and reply to `jarv1s-1a` per their
+   explicit ask.
+2. **Continue holding — no code — until approved.** Whether `jarv1s-b4`'s approval alone is
+   sufficient, or a separate Coordinator pane also needs to sign off, is still open (carried from
+   relay #6/#7, unresolved) — surface this explicitly rather than assuming either path.
+3. On confirmed approval: TDD build task-by-task, task-scoped commits (`Co-Authored-By: Claude`,
+   `Part of #1319`), pre-push trio + rebase before every push, `coordinated-wrap-up` with
+   isolated-DB gate + live-path UAT proof. Shared worktree — use `shared-checkout` skill for any git
+   action (none taken yet this entire relay chain — all edits are to the plan doc only).
 
-## Next concrete step — successor's FIRST action, no more reading
+## Reminders
 
-1. Draft `docs/superpowers/plans/2026-08-18-1319-signed-module-catalog.md` via `plan-build`,
-   covering all 8 items above against the spec decisions above. Decisions/contracts only — no
-   function bodies (signatures, DDL/schema shapes, manifest JSON, test cases stated as
-   behavior-plus-why-it-fails, unpiped verification commands with expected exit codes). State the
-   determinism boundary (this touches admin UI: banner + override dialog render from the record,
-   never from a model). Name a kill gate + owner after phase 1. Run the plan-build review checklist
-   before calling it ready.
-2. Resolve the Coordinator pane fresh (`herdr pane list`, exactly one `Coordinator`-labeled live
-   pane) and message it with the plan path via `herdr-pane-message`. **STOP and wait for approval
-   before writing any code.**
-3. On approval: build task-by-task via `superpowers:test-driven-development`, commit green per
-   task (`Co-Authored-By: Claude` trailer, task-scoped `git add`), pre-push trio
-   (`pnpm format:check && pnpm lint && pnpm typecheck`) + `git fetch origin main && git rebase
-   origin/main` before every push, `coordinated-wrap-up` at the end (gate on isolated DB per
-   `verify-gate` skill, live-path proof since this touches admin UI).
-
-## Reminders for whoever resumes
-
-- No DB migration for #1319 (spec explicitly out-of-scope) — do NOT claim 0185 (reserved for #1586).
-- Collision zone with #1586 (not urgent, #1586 hasn't started building): `apps/api/src/server.ts`
-  ~L459/L485, `packages/settings/src/routes.ts` ~L994/L1000, `platform-api.ts` barrel.
-- Relay trigger is the context-meter 70% warning for everyone — you have a fresh full budget now.
-  **Draft the plan first, before any further reading.** Three relays in a row have now spent their
-  entire budget on reading/re-verifying and hit the trigger before writing the plan file — that
-  loop must break here. If it fires again before the plan is drafted, still relay, but flag in the
-  next doc that this is now a pattern worth escalating to the coordinator directly rather than
-  repeating silently.
+- No DB migration for #1319 — do NOT claim migration 0185 (reserved for #1586).
+- This is relay #8. Prior relays each applied one review round's fixes and re-sent for review —
+  ordinary context-budget cycling given the CLAUDE.md context-diet checkpoint threshold, not a
+  stall. Decisions made in prior rounds are final; don't re-verify them unless a reviewer explicitly
+  flags one broken again.
+- Two sessions (`jarv1s-b4`, `jarv1s-1a`) have both acted as "coordinator" this issue at different
+  points — worth flagging to Ben/the human coordinator if a 5th round surfaces yet another identity
+  claiming the role, since that pattern itself may indicate stale pane state rather than a real
+  handoff.
