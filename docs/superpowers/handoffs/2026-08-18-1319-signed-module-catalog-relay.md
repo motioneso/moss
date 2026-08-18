@@ -1,3 +1,66 @@
+# Relay: #1319 Signed Moss Module Catalog (relay #14 — Tasks 1+2 done; KILL GATE needs Ben)
+
+**Task 1 complete.** Source (relay #13, commit `d66c9bdbf`) + tests: `tests/unit/catalog-signing.test.ts`
+committed `5b51c58d5` (12 tests), TS2532 fix committed `3638a1517`
+(`tampered[0] = (tampered[0] ?? 0) ^ 0xff;` under `noUncheckedIndexedAccess`).
+
+**Task 2 complete.** `scripts/publish-module-registry.ts` (commit `f8f7f8b8f`): `buildRegistryArtifacts`
+signs the written `index.json` bytes when `signingKey` is set, self-verifies against
+`options.trustedKeys ?? MODULE_CATALOG_PUBLIC_KEYS`, writes `index.json.sig`. New exported
+`assertSignatureRequirementSatisfied` backs the CLI's `--require-signature` flag (ledger #24).
+`.github/workflows/modules-registry.yml` got the two `MOSS_MODULE_CATALOG_SIGNING_*` secrets +
+`--require-signature`, `index.json.sig` added to the prune keep-list (ledger #9), non-atomicity
+noted inline (ledger #10). Tests committed `48b428cc0` (5 new cases per plan lines 352-366 + the
+existing 11, 18/18 pass). Full `pnpm typecheck` clean against the complete tree (all three tsc
+invocations: root, `@moss/web`, `check:external-modules`).
+
+**Design decision, not in the plan verbatim — flagging per the plan's own instruction ("says so in
+the PR"):** `BuildRegistryArtifactsOptions` gained an optional `trustedKeys?: readonly
+ModuleCatalogPublicKey[]` (defaults to `MODULE_CATALOG_PUBLIC_KEYS`). The plan anticipated this
+exact fork ("builder picks the injection route if the frozen array blocks it") — `trustedKeys`
+stays undefined in every real CLI call site, so production self-verification still runs against
+the real pinned (currently empty) keyring; only tests inject an ephemeral keyring. No PR opened
+yet to record this in, per below.
+
+**KILL GATE blocker (plan line ~376) — needs Ben/Coordinator, not buildable by an agent:** Phase-1
+e2e proof requires a real `workflow_dispatch` of `modules-registry.yml` with
+`MOSS_MODULE_CATALOG_SIGNING_KEY_ID`/`_PRIVATE_KEY` set as GH secrets, producing a signature that
+self-verifies. **This cannot succeed yet even with placeholder secrets**: the CLI never overrides
+`trustedKeys`, so self-verification always checks against `MODULE_CATALOG_PUBLIC_KEYS`, which is
+still the frozen **empty** array (D8). Any signing key run through CI today would sign successfully
+then throw at self-verification (`unknown-key`) by design. The e2e proof is blocked on two Ben-only
+actions together: (1) provision the real Ed25519 keypair, (2) land its public half in
+`MODULE_CATALOG_PUBLIC_KEYS` (code change) with the matching private half as the two GH secrets.
+Until both land, Task 2 cannot get its live proof — this is D8/D9's intended sequencing, not a gap
+in the build.
+
+## Next concrete step for successor
+
+1. **Do not start Task 3** (Phase 2) — the plan's KILL GATE explicitly requires the Coordinator's
+   go/no-go on the Phase-1 e2e result before Phase 2 begins, and that result doesn't exist yet.
+2. Message sent to the Coordinator this relay (herdr-pane-message, pane `w1:pF6`, label
+   "Coordinator" — confirmed exactly one such pane at send time) reporting Tasks 1+2 done and
+   flagging the KILL GATE dependency on Ben provisioning the key. Await their reply — likely either
+   (a) open a Phase-1-only PR now so the blocker is visible and tracked while Ben acts, or (b) hold
+   further relays until the key lands.
+3. If told to open the PR: `coordinated-wrap-up` — gate (isolated DB), pre-push trio + rebase,
+   push, `gh pr create` scoped to Tasks 1+2 only. PR body must state the KILL GATE status plainly:
+   code-complete + unit-tested, live e2e proof blocked on Ben's key provisioning — do not claim
+   "done."
+4. If/when the key lands and a real dispatch run verifies: record that proof on the PR, then it's
+   the Coordinator's call whether Phase 2 (Task 3+) starts in this same branch/worktree or a fresh
+   one.
+
+## Reminders
+
+- D9 hard merge gate still applies at Phase 3 (UAT/e2e), not here — don't conflate the two gates.
+  This relay's KILL GATE is a Phase-1→Phase-2 gate; D9 is Phase-1(live)→Phase-3(merge).
+- Commits this relay chain, in order: `d66c9bdbf` (Task 1 src), `5b51c58d5` (Task 1 tests),
+  `3638a1517` (TS2532 fix), `f8f7f8b8f` (Task 2 src+workflow+existing-test-fix), `48b428cc0`
+  (Task 2 new tests). All path-scoped commits per `shared-checkout`; no co-edit conflicts observed.
+
+---
+
 # Relay: #1319 Signed Moss Module Catalog (relay #13 — Task 1 source landed, tests pending)
 
 **Build started.** Task 1 source committed at `d66c9bdbf` (on `0edb5fc15`/`fc525e53d`, this
