@@ -87,7 +87,8 @@ Every item below is folded into the tasks; listed so no reviewer re-derives them
     :53-59 and reconcile :271-277 both omit it) — cut it; the internal fetch is the sole snapshot
     source by construction.
 19. New this pass — call sites the prior plan never enumerated: the four existing
-    `downloadAndStageModule` tests (`tests/unit/module-distribution-pipeline.test.ts:134,157,183,195`)
+    `downloadAndStageModule` tests (`tests/unit/module-distribution-pipeline.test.ts`, `it(` at
+    :131,149,167,192; the calls at :134,157,183,195)
     and the module-distribution e2e mock registry serve **no `.sig`**; once enforcement lands they
     all red as `catalog-unverified` unless given a signed-fixture path. This forces the test-key
     seam (Decision D6). The three existing `fetchRegistryIndex` tests (:110,119,125) stay green
