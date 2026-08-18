@@ -24,6 +24,10 @@ export const uatLevel = { level: "admin+data", without: [] } as const;
 
 const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE);
 const POLL_DEADLINE_MS = 60_000;
+// The notes-sync worker cold-loads its embedding model on first use in a fresh UAT container
+// (observed: "dtype not specified for model" landing right as a 60s deadline expired) — give the
+// indexing poll more headroom than the fast provider/model-availability polls above.
+const SYNC_POLL_DEADLINE_MS = 180_000;
 const NOTES_ROOT = `/data/vaults/${UAT_ADMIN_ID}`;
 
 function requireBaseURL(): string {
@@ -141,7 +145,9 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
   page
 }) => {
   test.skip(!REAL_CHAT_CONFIGURED, "needs a real chat-capable provider — #1121");
-  test.setTimeout(300_000);
+  // Raised from 300s alongside SYNC_POLL_DEADLINE_MS — the notes-last-sync poll alone can now
+  // wait up to 180s, leaving too little headroom for the rest of the flow at the old ceiling.
+  test.setTimeout(420_000);
 
   const projectName = requireProjectName();
   const stamp = Date.now();
@@ -167,20 +173,31 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
   });
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
 
-  await expect
-    .poll(
-      async () => {
-        const body = (await readJson(await page.request.get("/api/me/notes-last-sync"))) as {
-          lastSync: { at: string | null; ingested: number; errors: number } | null;
-        };
-        const completedAt = body.lastSync?.at ? Date.parse(body.lastSync.at) : 0;
-        return (
-          completedAt >= syncNotBefore && body.lastSync!.ingested > 0 && body.lastSync!.errors === 0
-        );
-      },
-      { timeout: POLL_DEADLINE_MS, message: "created note was not indexed" }
-    )
-    .toBe(true);
+  let lastSyncBody: unknown;
+  try {
+    await expect
+      .poll(
+        async () => {
+          const body = (await readJson(await page.request.get("/api/me/notes-last-sync"))) as {
+            lastSync: { at: string | null; ingested: number; errors: number } | null;
+          };
+          lastSyncBody = body;
+          const completedAt = body.lastSync?.at ? Date.parse(body.lastSync.at) : 0;
+          return (
+            completedAt >= syncNotBefore &&
+            body.lastSync!.ingested > 0 &&
+            body.lastSync!.errors === 0
+          );
+        },
+        { timeout: SYNC_POLL_DEADLINE_MS, message: "created note was not indexed" }
+      )
+      .toBe(true);
+  } catch (error) {
+    // Distinguish "still syncing" (errors:0, just slow) from a real ingestion failure
+    // (errors>0) — both otherwise read identically as a bare poll timeout.
+    console.log(`notes-last-sync response at poll failure: ${JSON.stringify(lastSyncBody)}`);
+    throw error;
+  }
 
   await composer.fill(
     `Use the notes.edit tool on path "${legitPath}": replace the exact text "baseline" with ` +
