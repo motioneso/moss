@@ -347,7 +347,7 @@ describe("handleNotesSyncJob", () => {
           { actorUserId: jobUserId, requestId: "req:worker-toctou6" },
           (scopedDb) => handleNotesSyncJob(makeJob(isolatedDir), scopedDb, provider, prefsRepo)
         )
-      ).rejects.toThrow("not within allowed root");
+      ).rejects.toThrow("path is not within the linked notes source");
       await expect(readFile(join(outside, "secret6.md"), "utf-8")).resolves.toBe(
         "TOP SECRET worker payload 6"
       );
@@ -389,7 +389,7 @@ describe("handleNotesSyncJob", () => {
           async () => provider,
           prefsRepo
         )
-      ).rejects.toThrow("not within allowed root");
+      ).rejects.toThrow("path is not within the linked notes source");
       await expect(readFile(join(outside, "secret7.md"), "utf-8")).resolves.toBe(
         "TOP SECRET worker payload 7"
       );
