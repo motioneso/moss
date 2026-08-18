@@ -170,7 +170,8 @@ describe("module discovery", () => {
       moduleDirs,
       outDir,
       previousIndex: null,
-      generatedAt: new Date().toISOString()
+      generatedAt: new Date().toISOString(),
+      signingKey: null
     });
 
     expect(index.modules.map((m) => m.id)).toEqual(
