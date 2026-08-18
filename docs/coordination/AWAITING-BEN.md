@@ -18,6 +18,6 @@ pending. Silent waiting is the failure mode this protocol exists to kill.
 ## Nothing open right now
 
 You said go on #1319 and #1586 (2026-08-17, "Spawn yes, let's keep going"). #1319's build agent
-is being spawned now (worktree already created). #1586 still can't start until PR #1654 lands —
-same blocker the in-flight audit-truthfulness lane is already stuck on — so it stays queued, not
-spawned, until that merges. No decision needed from you on either right now.
+is spawned and building now. #1586 still can't start until PR #1654 lands — same blocker the
+in-flight audit-truthfulness lane is already stuck on — so it stays queued, not spawned, until
+that merges. No decision needed from you on either right now.
