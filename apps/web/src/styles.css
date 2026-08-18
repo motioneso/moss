@@ -166,7 +166,9 @@ a {
 }
 
 button {
-  transition: box-shadow 0.1s var(--ease-out), background-color 0.1s var(--ease-out);
+  transition:
+    box-shadow 0.1s var(--ease-out),
+    background-color 0.1s var(--ease-out);
 }
 
 .primary-button,
