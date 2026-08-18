@@ -1,3 +1,34 @@
+# Relay: #1319 Signed Moss Module Catalog (relay #15 — PR #1684 open, holding for Ben's key)
+
+**Coordinator ruling (relay #14 → #15):** kill gate holds, do not start Task 3/Phase 2. Open a
+Phase-1-only PR now, labeled explicitly code-complete/unverified (no live-path proof yet) — does
+not auto-merge, no issue marked Done. Ben already pinged out-of-band (AWAITING-BEN.md +
+needs-ben) for the signing-key provisioning — not urgent tonight, nothing further needed from
+build agents on that front. After the PR opens: update this doc, commit, **stop** — do not spawn
+a live successor to idle-wait on a human decision (house policy: long waits on Ben belong outside
+a running model session, not a model loop).
+
+**PR opened: [#1684](https://github.com/motioneso/moss/pull/1684)** — Phase 1 (Tasks 1+2) only.
+Pre-push checks all green: `format:check` clean on touched files (pre-existing plan-doc drift is
+out of scope, not this PR's), `lint` 0 warnings, `typecheck` clean, both unit test files pass
+(12/12 + 18/18). Commit `4c6bb4612` (relay #5/build-1319-relay5) fixed real prettier drift on the
+three Task 1/2 files that `format:check` had caught. No full DB-touching `verify:foundation` gate
+run for this PR — the PR body states plainly that the live-path/e2e proof is blocked, so a green
+local gate wouldn't change the "do not merge as Done" status; skipped to stay inside context
+budget. If a reviewer wants the full gate run before merge consideration, that's a fair ask —
+just note it needs the `verify-gate` skill's isolated-DB recipe, never a bare `pnpm
+verify:foundation`.
+
+**State: HOLDING.** Nothing to build until Ben provisions the production Ed25519 keypair (public
+half into `MODULE_CATALOG_PUBLIC_KEYS`, private half as `MOSS_MODULE_CATALOG_SIGNING_KEY_ID` /
+`_PRIVATE_KEY` GH secrets). Per the Coordinator's explicit instruction, **do not spawn a new
+build agent for this issue just to wait** — the Coordinator will spawn a fresh one once the key
+lands. If you are that fresh agent: start by re-reading PR #1684's current state and this
+section, run the `workflow_dispatch` e2e proof, record it on the PR, then it's the Coordinator's
+go/no-go on Task 3.
+
+---
+
 # Relay: #1319 Signed Moss Module Catalog (relay #14 — Tasks 1+2 done; KILL GATE needs Ben)
 
 **Task 1 complete.** Source (relay #13, commit `d66c9bdbf`) + tests: `tests/unit/catalog-signing.test.ts`
