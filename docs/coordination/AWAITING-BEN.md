@@ -39,6 +39,19 @@ pre-existing pattern and the merged PR doesn't touch that code path, but two-sam
 the stop-the-line threshold in the CI waiver protocol, so this needs your sign-off rather than a
 unilateral coordinator call.
 
+**Ben asked (2026-08-18): "Why does it flake?"** It's a race condition inside the test itself, not
+a real bug in the app. The test flips between two chat views and checks that a "Start private
+chat" button shows up after the flip. The app does that check in two steps — it asks "is this
+person's info private?" and then updates the button once it gets the answer. The test doesn't
+actually wait for that second step; it just pauses for a fixed, very short moment and then checks
+immediately. Most of the time that's long enough, but when the whole test suite is running at once
+(more CPU contention, slower scheduling), it sometimes isn't, so the check fires before the button
+has updated and the test sees "false" instead of "true." This was already root-caused and written
+up when a different PR hit it back on 2026-08-13 — same file, same line, same assertion, reproduced
+twice, confirmed unrelated to that PR's actual changes too. The real fix is to make the test
+properly wait for the button to update instead of guessing a fixed delay; that's a small,
+low-risk test-only change, tracked as issue #1607, nobody's picked it up yet.
+
 No new build agents are being spawned onto main (including the two new issues below) until this
 is resolved.
 
