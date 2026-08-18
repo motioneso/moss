@@ -5,9 +5,11 @@
 // zero compiler coverage) and bin/claude is a two-line shebang shim that imports this module.
 //
 // This is a deterministic stand-in for the real `claude` CLI, resolved onto PATH via
-// JARVIS_CLI_TOOLS_PREFIX/bin (packages/cli-runner/src/terminal-session.ts:50 prepends
-// `${toolsBinDir}:${PATH}`; packages/cli-runner/src/main.ts:185 sets
-// toolsBinDir = `${toolsPrefix}/bin`). The real bounded/print engine
+// JARVIS_UAT_SCRIPTED_PROVIDER_BIN (#1659 defect 4): tests/uat/provisioner.ts's
+// writeUatEnvFile writes that var when a spec declares chatScript, and Dockerfile:72's
+// profile.d script prepends it ahead of JARVIS_CLI_TOOLS_PREFIX/bin on PATH — deliberately
+// not JARVIS_CLI_TOOLS_PREFIX itself, which the production installer also owns and would
+// otherwise clobber this fixture's bin/claude on every container boot. The real bounded/print engine
 // (packages/chat/src/live/claude-print-chat-engine.ts submit(), ~line 74) spawns the CLI
 // detached with stdio:"ignore" and never inspects stdout or the exit code — it only polls the
 // Anthropic transcript JSONL file for new records. So the only channel that matters to the
@@ -36,6 +38,7 @@ const TOOLS_CALL_TIMEOUT_MS = 170_000; // 20s margin over NATIVE_CONFIRM_TIMEOUT
 // tools/call blocks server-side until ConfirmationRegistry.awaitResolution() settles.
 const TOOLS_LIST_TIMEOUT_MS = 15_000;
 export const FAILURE_LOG_PATH = "/data/cli-auth/uat-scripted-provider-failures.log";
+export const SUCCESS_LOG_PATH = "/data/cli-auth/uat-scripted-provider-success.log";
 
 class ScriptedClaudeFailure extends Error {
   constructor(
@@ -264,6 +267,17 @@ export async function runScriptedClaude(): Promise<void> {
     captures: Object.fromEntries(captures)
   };
   writeCursor(stateDir, sessionFlag.id, cursor);
+
+  // #1659: mirrors FAILURE_LOG_PATH below — a UAT spec can confirm a turn actually ran
+  // (not just that the process exited 0) without the log ever carrying prompt/reply content.
+  try {
+    appendFileSync(
+      SUCCESS_LOG_PATH,
+      `${new Date().toISOString()} scriptId=${scriptId} turnIndex=${effectiveTurnIndex}\n`
+    );
+  } catch {
+    // best-effort only: outside a provisioned container this path does not exist.
+  }
 }
 
 export function main(): void {

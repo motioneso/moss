@@ -9,6 +9,7 @@
 // resolveCaptures/extractCapture and the schema types stay real.
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import * as fsModule from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -33,11 +34,23 @@ import { exampleToolCalls, exampleToolModule } from "./fixtures/example-tool-mod
 import { loadChatScriptFixture } from "../uat/fixtures/scripted-provider/script-schema.js";
 import type * as ScriptSchemaModule from "../uat/fixtures/scripted-provider/script-schema.js";
 import { readCursor } from "../uat/fixtures/scripted-provider/session-state.js";
-import { runScriptedClaude, main } from "../uat/fixtures/scripted-provider/claude-main.js";
+import {
+  runScriptedClaude,
+  main,
+  SUCCESS_LOG_PATH
+} from "../uat/fixtures/scripted-provider/claude-main.js";
 
 vi.mock("../uat/fixtures/scripted-provider/script-schema.js", async (importOriginal) => {
   const actual = await importOriginal<typeof ScriptSchemaModule>();
   return { ...actual, loadChatScriptFixture: vi.fn() };
+});
+
+// #1659: appendFileSync's own ESM export isn't configurable, so vi.spyOn can't wrap it directly
+// (only vi.mock can substitute a module's binding) — wrap with vi.fn(actual) so every call still
+// goes through to the real implementation while staying observable for the SUCCESS_LOG_PATH test.
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  return { ...actual, appendFileSync: vi.fn(actual.appendFileSync) };
 });
 
 const READ_MCP_NAME = "mcp__jarvis__example_read";
@@ -354,5 +367,40 @@ describe("scripted claude fixture executable (#1121 Task 3)", () => {
     expect(written).not.toContain(bearerToken as string);
     expect(written).not.toContain(origin);
     expect(exampleToolCalls).toHaveLength(0);
+  });
+
+  it("(e) successful turn appends a success marker without prompt/reply content", async () => {
+    vi.mocked(loadChatScriptFixture).mockReturnValue({
+      version: 1,
+      turns: [
+        {
+          expectIncludes: ["run-e"],
+          calls: [],
+          reply: "top-secret-reply-e"
+        }
+      ]
+    });
+    const { configPath, sessionId } = writeMcpConfig(["mcp__jarvis__*"]);
+    process.argv = buildArgv({
+      sessionId,
+      configPath,
+      allowedTools: ["mcp__jarvis__*"],
+      promptText: "please run-e now"
+    });
+
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    const appendSpy = vi.mocked(fsModule.appendFileSync);
+    appendSpy.mockClear();
+
+    main();
+    await vi.waitFor(() => expect(exitSpy).toHaveBeenCalled());
+
+    expect(exitSpy).toHaveBeenCalledWith(0);
+    const successCall = appendSpy.mock.calls.find(([path]) => path === SUCCESS_LOG_PATH);
+    expect(successCall).toBeDefined();
+    const line = String(successCall?.[1]);
+    expect(line).toContain("phase1-smoke");
+    expect(line).not.toContain("please run-e now");
+    expect(line).not.toContain("top-secret-reply-e");
   });
 });
