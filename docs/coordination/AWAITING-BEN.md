@@ -29,7 +29,8 @@ module catalog, then provide the private key material for the two GitHub secrets
 public key to commit. Not urgent tonight — build is holding cleanly at the gate, no data at risk —
 but it blocks all of Phase 2 onward, so it should land soon.
 
-Coordinator's call already made (no Ben input needed on this part): a Phase-1-only PR will be
-opened now, explicitly labeled code-complete/unverified per the live-path gate, not merged and not
-marked Done until the key lands and the real e2e proof is posted.
+Update: the Phase-1-only PR is posted — https://github.com/motioneso/moss/pull/1684 — explicitly
+labeled code-complete/unverified per the live-path gate, not merged and not marked Done. The build
+lane has stopped itself (no live session idling on this); Coordinator will spawn a fresh build agent
+for Phase 2 once the key lands.
 
