@@ -4,7 +4,9 @@
   Ben 2026-08-17. Spec doc under `docs/superpowers/specs/` is supplementary.
 - **Provenance:** fresh, non-incremental plan replacing the four-times-patched prior draft, per
   Ben's 2026-08-18 ruling. Authored by Fable 5 (`fable-1319-plan`); review pass by
-  `build-1319-relay3` (Sonnet), then Coordinator-ordered Opus review.
+  `build-1319-relay3` (Sonnet), then Coordinator-ordered Opus review. Revised once to close the
+  round-6 (Opus) blocking findings — ledger #20–24. Per Ben: this revision is final; no further
+  adversarial round follows it.
 - **No DB migration.** Do not claim migration 0185 (reserved for #1586). No schema change anywhere.
 - **Branch:** `build-1319-signed-module-catalog` (shared checkout — every git action via the
   `shared-checkout` skill; never `git add -A`).
@@ -14,17 +16,18 @@
 Ed25519-sign the published module catalog (`index.json`) with a detached `index.json.sig` asset;
 verify at fetch time against a keyring pinned in the Moss binary; surface tri-state
 `catalogVerification` (`"verified" | "unverified" | "unavailable"`) plus a `catalogDigestSha256`
-snapshot identity on the admin registry listing; block downloads from an unverified catalog with a
-409 carrying the current digest; allow a digest-bound, admin-only, one-attempt, non-persisted
-override that bypasses **only** the catalog-signature check. Ensure-at-boot has no override.
-Installed modules are unaffected. No new dependency: `node:crypto` has Ed25519
+snapshot identity on the admin registry listing; block catalog-driven downloads — first install
+and version update alike — from an unverified catalog with a 409 carrying the current digest;
+allow a digest-bound, admin-only, one-attempt, non-persisted override that bypasses **only** the
+catalog-signature check. Ensure-at-boot has no override. Already-installed modules keep running —
+this governs recognition and new downloads, never retroactive disabling. No new dependency: `node:crypto` has Ed25519
 (`generateKeyPairSync("ed25519")`, `sign(null, …)`, `verify(null, …)`); grep confirms zero existing
 Ed25519/tweetnacl/libsodium usage in the tree.
 
 Product language: **"recognized by Moss"** / **"verified catalog module"** / **"unverified"**.
 Never "safe", "sandboxed", or "audited".
 
-## Rulings ledger — facts from review rounds 1–5, all re-verified against the current tree
+## Rulings ledger — facts from review rounds 1–6, all re-verified against the current tree
 
 Every item below is folded into the tasks; listed so no reviewer re-derives them.
 
@@ -60,7 +63,9 @@ Every item below is folded into the tasks; listed so no reviewer re-derives them
     seconds between the two asset updates an enforcing Moss reads a mismatched pair and reports
     `unverified` — fail closed, self-heals on next fetch. Documented, not engineered around.
 11. No local `installedVersion` identifier exists in `module-registry-rows.ts`; the installed test
-    is the expression `(discovery?.version ?? null) === null` (see row literal :105-117).
+    is the expression `(discovery?.version ?? null) === null` (see row literal :105-117). Round 6
+    superseded the field this fact fed: no per-row blocked flag exists anymore (ledger #20), so no
+    such expression is added anywhere.
 12. `additionalProperties: false` + fast-json-stringify silently strips undeclared fields on
     **both** response and request bodies — every new field must be added to the JSON schema and its
     `required` list where appropriate (`packages/shared/src/platform-api-modules.ts`).
@@ -94,6 +99,42 @@ Every item below is folded into the tasks; listed so no reviewer re-derives them
     seam (Decision D6). The three existing `fetchRegistryIndex` tests (:110,119,125) stay green
     because the new result type is a strict superset (`index`, `errors` preserved) and a `.sig`
     fetch failure folds to `"unverified"` without throwing (their `fakeFetch` 404s unknown URLs).
+20. Round 6 (Opus review of this plan) — **update path**: `settings-module-registry-section.tsx`
+    routes Install AND Update through the same `onInstall` → `downloadMutation` (:180-190 — the
+    `"update-available"` branch changes only the confirm copy; the mutation call is identical), so
+    enforcement 409s version updates exactly like first installs. Any blocked-flag formula
+    conditioned on "not installed" (the prior draft's `installBlockedByCatalogVerification`)
+    leaves updates blocked with no override path, making spec stories 3/5 and acceptance outcome 3
+    unreachable for updates. Resolution: **no per-row flag at all** — the UI gates every download
+    action from the envelope's `catalogVerification` (Task 7), which is structurally immune to
+    per-lifecycle-state omissions. Spec story 10 ("installed modules stay usable") governs runtime
+    and enablement of already-installed code; it never exempts new downloads.
+21. Round 6 — **UAT reality**: `tests/uat/specs/module-install.uat.spec.ts:51-56` installs the
+    finance module through the real UI against the REAL GitHub catalog.
+    `JARVIS_MODULE_REGISTRY_URL` appears nowhere under `tests/uat/` (grep exit 1, re-verified this
+    session), and the UAT stack runs `NODE_ENV=production` (`tests/uat/provisioner.ts:205`), where
+    that override is hard-refused (`registry-source.ts:25-27`). Two consequences: (a) Phase 3 must
+    not merge before the live catalog is signed with Ben's pinned key, or this spec reds — now a
+    D9 merge gate; (b) the containerized UAT harness **cannot** serve a mock unverified catalog
+    without weakening a deliberate production refusal — the unverified/override live proof moves
+    to a non-production live dev instance (Task 8). `JARVIS_E2E_MODULE_FETCH_BASE`
+    (provisioner.ts:249-256) is the artifact-fetch seam, not a registry-index seam.
+22. Round 6 — **trust-boundary self-refusal**: `resolveCatalogTrustedKeys` must refuse the test
+    key in production ITSELF (throw when `NODE_ENV === "production"` and the key is set), not
+    borrow `resolveRegistryIndexUrl`'s refusal — the `trustedKeys` injection options on
+    `FetchRegistryIndexOptions`/`DownloadAndStageOptions` make key resolution reachable without
+    the URL resolver ever running. Tested explicitly (Task 1) and grep-asserted to have no
+    production producers (Task 5).
+23. Round 6 — spec story 18's "admin authorization before verification details are returned" had
+    no test. Authorization does run first — `assertAdminUser` inside `loadLocalState`
+    (`routes-module-registry.ts:44,54`), called before any registry fetch on both routes (:88,
+    :123) — but Tasks 4/5 now add explicit non-admin tests proving no `catalogVerification`,
+    `catalogDigestSha256`, or 409 digest ever reaches an unauthorized caller.
+24. Round 6, medium (folded in): `--require-signature` with an absent key gets a unit test
+    (story 13, Task 2). Phase 1's dispatch proof stays manual — it exercises real GH Actions
+    secrets, which no automated test can. Phase 3's Playwright spec is route-mocked and proves
+    rendering only; the 409/override contract is proven at the integration route seam (Tasks 5/8)
+    and the live-path gate, and the plan now says so explicitly.
 
 ## Seams map (current tree, verified this session)
 
@@ -169,17 +210,26 @@ Every item below is folded into the tasks; listed so no reviewer re-derives them
   bypasses only this check — artifact sha256/size, host pinning, safe extraction, manifest
   validation, id/version cross-check, compatibility, staging, drift, enablement all still run.
   Because both admin route and boot reconcile call the same pipeline, direct API = UI policy and
-  ensure-at-boot fails closed with no bypass parameter exposed to it.
+  ensure-at-boot fails closed with no bypass parameter exposed to it. Enforcement and the override
+  apply to **every** catalog-driven download — first install and version update both flow through
+  the same pipeline call and the same UI mutation (`onInstall` → `downloadMutation`,
+  settings-module-registry-section.tsx:180-190; ledger #20). Spec story 10's "installed modules
+  stay usable" is about runtime/enablement of code already on disk, never an exemption for
+  downloading a new version.
 - **D5 — Override is stateless.** Digest travels request→response→confirm→request; nothing
   persisted, no preference, one attempt per confirmation. A digest mismatch at download time
   returns a fresh 409 with the new digest, forcing a new warning.
-- **D6 — Test-key seam, production-refused.** `resolveCatalogTrustedKeys(env)` returns the pinned
-  keyring; when the existing registry-URL test override is active (`JARVIS_MODULE_REGISTRY_URL`
-  set — already refused in production by `resolveRegistryIndexUrl`), it additionally honors
-  `MOSS_MODULE_CATALOG_TEST_PUBLIC_KEY` (PEM, keyId `"test"`). Unit tests inject
-  `trustedKeys` directly (same injection style as `fetchFn`); the e2e harness and UAT stack (real
-  binary, no injection) use the env pair. Without this seam every existing download-path test and
-  all live UAT of the happy path is impossible (ledger #19).
+- **D6 — Test-key seam, production-refused by itself.** `resolveCatalogTrustedKeys(env)` returns
+  the pinned keyring; when the registry-URL test override is active (`JARVIS_MODULE_REGISTRY_URL`
+  set), it additionally honors `MOSS_MODULE_CATALOG_TEST_PUBLIC_KEY` (PEM, keyId `"test"`).
+  Independent of that coupling, the function **throws** when `env.NODE_ENV === "production"` and
+  the test key is set — its own refusal, same posture as `resolveRegistryIndexUrl`
+  (registry-source.ts:23-26), never borrowed from it: the `trustedKeys` injection options make
+  key resolution reachable without the URL resolver ever running (ledger #22). Unit tests inject
+  `trustedKeys` directly (same injection style as `fetchFn`); the integration e2e harness and the
+  non-production live dev instance (Task 8) use the env pair. The `NODE_ENV=production` UAT
+  container can use neither — see ledger #21. Without this seam every existing download-path test
+  and any mock-backed live proof of the verified path is impossible (ledger #19).
 - **D7 — Signing env contract (publish side, CI-only).** `MOSS_MODULE_CATALOG_SIGNING_KEY_ID` +
   `MOSS_MODULE_CATALOG_SIGNING_PRIVATE_KEY` (PKCS#8 PEM) from GitHub Actions secrets. Both-or-
   neither; a half-set pair throws. The CLI signs when the pair is present; the workflow passes
@@ -190,9 +240,14 @@ Every item below is folded into the tasks; listed so no reviewer re-derives them
 - **D8 — The production keypair is provisioned by Ben out-of-band.** No agent generates or prints
   the private key (transcript/log exposure violates "secrets never escape"). The public key lands
   in code via Ben; see Open Questions.
-- **D9 — Rollout ordering.** Phase 1 (publish signing) ships and produces a signed catalog on the
-  live release **before** Phase 3 (enforcement) merges. Older Moss versions ignore the `.sig`;
-  enforcing versions verify immediately. No unsigned transition mode.
+- **D9 — Rollout ordering, now a hard merge gate.** Phase 1 (publish signing) ships and produces
+  a signed catalog on the live release **before** Phase 3 (enforcement) merges. Not just courtesy
+  to older versions: `module-install.uat.spec.ts` runs against the real GitHub catalog
+  (ledger #21), so merging enforcement first reds UAT. Phase 3's PR is **blocked from merging**
+  until (a) Ben's production public key is pinned in `MODULE_CATALOG_PUBLIC_KEYS` and (b) a live
+  release publish has produced an `index.json.sig` that verifies against it (the kill-gate
+  proof). Older Moss versions ignore the `.sig`; enforcing versions verify immediately. No
+  unsigned transition mode.
 
 ## Determinism boundary
 
@@ -265,6 +320,9 @@ Tests — `tests/unit/catalog-signing.test.ts` (new; ledger #13 placement):
 - `resolveCatalogSigningKey`: null on empty env; value on full pair; throws on each half-set pair.
 - `resolveCatalogTrustedKeys`: pinned-only without the URL override; pinned+test key only with the
   override active and the test key set — fails if the test seam leaks into the production path.
+- `resolveCatalogTrustedKeys` with `NODE_ENV=production` and the test key set — with the URL
+  override set and without it — **throws** (ledger #22) — fails if the production refusal is
+  borrowed from `resolveRegistryIndexUrl` instead of being the function's own.
 
 Verify: `pnpm test:unit tests/unit/catalog-signing.test.ts > /tmp/t1.log 2>&1; echo "EXIT=$?"` →
 `EXIT=0`. Also `pnpm typecheck > /tmp/tc1.log 2>&1; echo "EXIT=$?"` → `EXIT=0`.
@@ -279,7 +337,9 @@ Verify: `pnpm test:unit tests/unit/catalog-signing.test.ts > /tmp/t1.log 2>&1; e
   `index.json.sig` (JSON of `ModuleCatalogSignature`).
 - `BuildRegistryArtifactsOptions` gains `readonly signingKey: { keyId: string; privateKeyPem: string } | null`.
 - CLI resolves the key via `resolveCatalogSigningKey(process.env)` and gains
-  `--require-signature`: exit 1 when set and the key pair is absent.
+  `--require-signature`: exit 1 when set and the key pair is absent. The requirement check is
+  factored as an exported function (builder names it) so a unit test drives it without spawning a
+  process (ledger #24).
 
 `.github/workflows/modules-registry.yml`:
 
@@ -295,6 +355,8 @@ Tests — extend `tests/unit/publish-module-registry.test.ts`:
   `ModuleCatalogSignature`, and `verifyCatalogBytes` over the **written** `index.json` bytes
   verifies — fails if signing covers re-serialized rather than written bytes.
 - without a key: no `.sig`, build succeeds (local dev path).
+- the exported require-signature check with an absent key pair → throws (story 13; ledger #24) —
+  fails if `--require-signature` parses but never enforces.
 - byte appended to `index.json` after publish → verification fails (byte-exactness through the
   file round-trip).
 - signing key whose keyId is absent from the pinned keyring → `buildRegistryArtifacts` throws —
@@ -407,46 +469,43 @@ updates to the snapshot type.
 
 - Both GET constructions (ledger #1) and the three post-mutation refetch sites (:157-158,
   :221-222, :261-262) consume the snapshot. Envelope values per ledger #16.
-- `deriveRows` (:60-80) takes the snapshot; `ModuleRegistryDeriveInput` gains
-  `readonly catalogVerification: CatalogVerification`.
-
-`packages/settings/src/module-registry-rows.ts` — row literal gains:
-
-```ts
-installBlockedByCatalogVerification:
-  catalogVerification !== "verified" && (discovery?.version ?? null) === null
-```
-
-(ledger #11 — installed rows are never marked blocked; spec: installed modules unaffected.)
+- **No row-shape change** (ledger #20): `deriveRows`, `ModuleRegistryDeriveInput`,
+  `module-registry-rows.ts`, `ModuleRegistryRowDto`, and the row schema are all untouched. The
+  prior draft's per-row `installBlockedByCatalogVerification` is dropped — a per-lifecycle-state
+  formula is exactly how the update path got missed; download gating derives from the envelope in
+  the UI (Task 7), one rule for every download action.
 
 `packages/shared/src/platform-api-modules.ts` (ledger #12 — schema properties **and** `required`):
 
 - `GetModuleRegistryResponse` += `catalogVerification: "verified" | "unverified" | "unavailable"`
   and `catalogDigestSha256: string | null`; GET 200 schema += both, in `required`.
-- `ModuleRegistryRowDto` += `installBlockedByCatalogVerification: boolean`; row schema += it, in
-  `required`.
 
-Existing call-site updates (ledger #14): the five fixture sites, plus
-`tests/integration/module-distribution.e2e.test.ts:244`'s envelope assertions extended with the
-new fields.
+Existing call-site updates (ledger #14, now envelope-only): the `GetModuleRegistryResponse`
+fixtures — `tests/e2e/settings-modules.spec.ts:25`,
+`tests/unit/settings-instance-modules-pane-render.test.tsx:119,244,298`, and the stale-but-harmless
+dedup fixture — plus `tests/integration/module-distribution.e2e.test.ts:244`'s envelope assertions
+extended with the new fields. `tests/unit/module-registry-rows.test.ts` no longer changes (row
+shape untouched).
 
 Tests:
 
-- extend `tests/unit/module-registry-rows.test.ts`: verified → no row blocked; unverified → only
-  not-installed rows blocked; unavailable → same blocking as unverified — fails if the flag
-  ignores install state or verification.
 - extend `tests/integration/module-registry.test.ts` (route level): the `enabled:false` response
   carries `catalogVerification: "unavailable"`, null digest, `registryUnavailable: false` — fails
   exactly on the round-5 missed call site; the enabled path asserts the ledger-#16 identity; the
   HTTP response body actually contains the new fields — fails if the schema strips them (ledger
   #12).
+- **non-admin GET** (ledger #23, spec story 18): GET `/api/admin/module-registry` as a non-admin
+  actor → rejected by `assertAdminUser` (routes-module-registry.ts:54; builder confirms the exact
+  status it throws — 403 expected — at task start) and the body contains neither
+  `catalogVerification` nor `catalogDigestSha256`; additionally assert the registry fetch was
+  never invoked (spy on `fetchRegistryEntries`) — fails if verification details are computed or
+  returned before authorization.
 - port cache behavior (same integration file): a fetch failure after a cached snapshot keeps
   serving the cached snapshot until TTL and never replaces it with an unavailable one; entries and
   verification in any response always originate from the same snapshot — fails on cross-snapshot
   mixing or unavailable-caching.
 
 Verify:
-`pnpm test:unit tests/unit/module-registry-rows.test.ts > /tmp/t4a.log 2>&1; echo "EXIT=$?"` → `EXIT=0`;
 `pnpm test:integration tests/integration/module-registry.test.ts > /tmp/t4b.log 2>&1; echo "EXIT=$?"` → `EXIT=0`;
 `pnpm typecheck > /tmp/tc4.log 2>&1; echo "EXIT=$?"` → `EXIT=0`.
 
@@ -510,7 +569,13 @@ Tests — extend `tests/unit/module-distribution-pipeline.test.ts` (signed fixtu
 
 Extend `tests/integration/module-registry.test.ts`: the 409 HTTP body contains `code` and
 `digestSha256` (schema-strip check); the two sibling 409s (distribution disabled, purge pending)
-still serialize `{error}` through the same schema.
+still serialize `{error}` through the same schema; **non-admin download** (ledger #23, spec story
+18): POST `…/download` with an `overrideCatalogDigestSha256` body as a non-admin actor → rejected
+by `assertAdminUser` (same status as Task 4's non-admin GET) with no `digestSha256` in the body —
+fails if the override path or the 409 detail is reachable without authorization. Review
+grep-asserts: `trustedKeys` is passed by no production caller — tests only (ledger #22; fails
+structurally if the injection seam leaks into production wiring); `overrideCatalogDigestSha256`
+producer sweep is Task 6's.
 
 Verify: `pnpm test:unit tests/unit/module-distribution-pipeline.test.ts > /tmp/t5a.log 2>&1; echo "EXIT=$?"`
 → `EXIT=0`;
@@ -546,11 +611,18 @@ Verify: `pnpm test:unit <chosen-file> > /tmp/t6.log 2>&1; echo "EXIT=$?"` → `E
 - Unverified banner (sibling of the :236-240 unavailable banner, shown when
   `data.catalogVerification === "unverified"`): the catalog is not verified — listed modules are
   not recognized by Moss.
-- Row marker driven by `installBlockedByCatalogVerification` ("Unverified"); on such rows the
-  Install action opens the override confirmation instead of installing.
+- Row marker derived in the UI (ledger #20 — no per-row DTO field): when
+  `data.catalogVerification === "unverified"`, every row carrying catalog data
+  (`latestVersion !== null`) shows an "Unverified" marker.
+- Download gating covers **both** Install and Update (ledger #20): `onInstall` (:180-190) is the
+  single entry point for both actions; when `data.catalogVerification === "unverified"` it opens
+  the override confirmation instead of the plain confirm — for not-installed and update-available
+  rows alike. When `"unavailable"` no gating is needed: rows have no catalog entry, so no
+  Install/Update action renders (current behavior, unchanged).
 - Override confirmation: `confirm(…, {danger: true})` (purge precedent :203-214; no `requireText`
-  — prior ruling), naming the module id, stating **Moss did not authenticate this catalog** and
-  **installing it may execute untrusted code after restart**; on accept, mutate with
+  — prior ruling), naming the module and the action (install vs update to the target version),
+  stating **Moss did not authenticate this catalog** and **installing it may execute untrusted
+  code after restart**; on accept, mutate with
   `overrideCatalogDigestSha256: data.catalogDigestSha256`. Not a generic dismissible warning.
 - `onError`: when `error.code === "catalog-unverified"`, toast that the catalog changed and needs
   reviewing again (rendered from `error` fields only — determinism boundary) and invalidate the
@@ -558,18 +630,24 @@ Verify: `pnpm test:unit <chosen-file> > /tmp/t6.log 2>&1; echo "EXIT=$?"` → `E
 - Nothing about the acceptance is stored anywhere (D5).
 
 Tests — extend `tests/unit/settings-instance-modules-pane-render.test.tsx` (+ the dedup fixture,
-ledger #14): an unverified fixture renders the banner and row marker and no plain Install action;
-a verified fixture renders neither — fails if the marker keys off the wrong field. The 409-digest
-client passthrough is proven by the Phase-3 Playwright flow, not a unit fetch-mock.
+ledger #14): an unverified fixture renders the banner and per-row markers; a verified fixture
+renders neither — fails if the marker keys off the wrong field. An unverified fixture containing
+BOTH a not-installed row and an update-available row asserts each download action routes to the
+override confirmation copy, never the plain confirm — fails exactly on the ledger-#20 regression
+(update path ungated). The 409-digest client passthrough is proven at the integration seam and
+the live-path gate, not a unit fetch-mock.
 
 Verify: `pnpm test:unit tests/unit/settings-instance-modules-pane-render.test.tsx > /tmp/t7.log 2>&1; echo "EXIT=$?"`
 → `EXIT=0`; root `pnpm typecheck > /tmp/tc7.log 2>&1; echo "EXIT=$?"` → `EXIT=0` (covers the
 client.ts changes; `.tsx` tests are not typechecked — known caveat).
 
 Phase-3 e2e: extend `tests/e2e/settings-modules.spec.ts` — unverified catalog renders banner +
-blocked row; the override path reaches the confirmation copy; a mocked 409 yields the
-changed-digest toast. Builder confirms the repo's real e2e runner command from root `package.json`
-at task start (never a `--filter` variant) and records it with the run.
+gated Install AND gated Update actions; the override path reaches the confirmation copy; a mocked
+409 yields the changed-digest toast. Builder confirms the repo's real e2e runner command from root
+`package.json` at task start (never a `--filter` variant) and records it with the run. Scope
+honesty (ledger #24): this spec is route-mocked — it proves rendering and flow wiring; the
+server-side 409/override contract is proven at the integration route seam (Tasks 5/8) and the
+live-path gate.
 
 ---
 
@@ -581,19 +659,32 @@ at task start (never a `--filter` variant) and records it with the run.
   add route-level cases mirroring Task 5's matrix through the real HTTP route: verified install
   succeeds; missing/tampered/unknown-key signature → 409 and **no files staged** (assert the
   modules dir); exact-digest override installs; catalog changed between 409 and retry → fresh 409;
-  artifact fingerprint mismatch stays blocked under a correct override.
-- New `tests/uat/specs/module-catalog-signing.uat.spec.ts` + trigger-map rows, driving the spec's
-  four acceptance outcomes: verified installs normally; unverified blocked by default; the exact
-  reviewed snapshot installs only after deliberate confirmation; a changed snapshot demands new
-  consent. The UAT stack env gains `MOSS_MODULE_CATALOG_TEST_PUBLIC_KEY` beside its existing
-  registry override (D6), and the UAT mock registry serves a test-key-signed index.
-- **Live-path gate** (process gate): the flow exercised through the real UI on a live dev
-  instance, proof recorded on the PR. Until then the honest status is code-complete, unverified.
+  artifact fingerprint mismatch stays blocked under a correct override. This seam — not the UAT
+  container — is where the unverified/override matrix is exercised automatically (ledger #21).
+- **Verified-path UAT is the existing spec, unchanged**:
+  `tests/uat/specs/module-install.uat.spec.ts:51-56` installs the finance module through the real
+  UI against the real — by then signed — GitHub catalog. Once the D9 merge gate is satisfied it
+  passes via genuine verification with zero harness changes, and its run is recorded as the live
+  verified-path proof (acceptance outcome 1) in the Phase-3 merge-gate evidence.
+- **No mock-catalog UAT spec** — a decision, not an omission (ledger #21): the UAT stack runs
+  `NODE_ENV=production` (provisioner.ts:205), where `JARVIS_MODULE_REGISTRY_URL` and the D6 test
+  key are both hard-refused. Weakening either refusal to make a container test possible would
+  create exactly the production bypass the spec scopes out. Acceptance outcomes 2–4
+  (unverified blocked / deliberate exact-snapshot override / changed snapshot needs new consent)
+  are proven automatically at the integration seam above and live at the live-path gate below.
+- **Live-path gate** (process gate): on a live **dev** instance whose `NODE_ENV` is not
+  `production` (builder verifies this at Task 8 start — Open Question 2; if the host-dev instance
+  also runs production, stop and `needs-ben` rather than weaken a refusal), point
+  `JARVIS_MODULE_REGISTRY_URL` at a local fixture registry serving signed, unsigned, and mutated
+  catalogs, set `MOSS_MODULE_CATALOG_TEST_PUBLIC_KEY`, and exercise through the real UI: verified
+  install; unverified banner + blocked install AND blocked update; deliberate override of the
+  exact snapshot; changed snapshot → fresh warning. Proof (screenshots + digests) recorded on the
+  PR. Until then the honest status is code-complete, unverified.
 
 Verify: `pnpm test:integration tests/integration/module-distribution.e2e.test.ts > /tmp/t8.log 2>&1; echo "EXIT=$?"`
-→ `EXIT=0`; the UAT spec via the repo's UAT runner (builder cites the exact command from the UAT
-harness docs at task start); full gate `pnpm verify:foundation` only via the `verify-gate` skill
-with an isolated DB → `EXIT=0`.
+→ `EXIT=0`; `tests/uat/specs/module-install.uat.spec.ts` via the repo's UAT runner (builder cites
+the exact command from the UAT harness docs at task start) → pass, after the D9 gate; full gate
+`pnpm verify:foundation` only via the `verify-gate` skill with an isolated DB → `EXIT=0`.
 
 ## Open questions (owners named — these are questions, not steps)
 
@@ -602,9 +693,11 @@ with an isolated DB → `EXIT=0`.
    (base64-wrapping the private PEM if the kill-gate probe shows newline mangling). Owner: **Ben**
    — AWAITING-BEN entry + `needs-ben` ping when Phase 1 reaches the secret-dependent dispatch
    proof. Until then Phase-1 tests run on ephemeral in-test keys.
-2. **UAT registry seam location.** Which provisioner env file injects the registry override into
-   the UAT container (this session did not verify it, so it is not cited as fact). Owner: build
-   agent — first action of Task 8, verified in `tests/uat/provisioner.ts`.
+2. **Host-dev instance `NODE_ENV`.** The unverified-path live proof (Task 8) needs a live
+   instance where the test seams are legal (`NODE_ENV !== "production"`). The UAT container is
+   ruled out as fact (ledger #21: provisioner.ts:205); the host-dev instance is expected to
+   qualify but was not verified this session. Owner: build agent — first action of Task 8; if the
+   host-dev instance also runs production, `needs-ben` (never weaken the refusal).
 3. **Task 6 assertion home.** Between the two named candidate files. Owner: build agent — first
    action of Task 6.
 
