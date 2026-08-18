@@ -169,19 +169,21 @@ export function AppearancePane() {
           </Button>
         }
       >
-        <Segmented
-          ariaLabel="Color mode"
-          value={activeMode}
-          onChange={(mode) => modeMutation.mutate({ mode })}
-          options={(["light", "dark"] as const).map((mode) => ({
-            value: mode,
-            label: mode === "light" ? "Light" : "Dark",
-            disabled: !activeIsBuiltIn || modeMutation.isPending,
-            title: activeIsBuiltIn
-              ? undefined
-              : "Custom themes use their saved fixed palette and do not support color mode."
-          }))}
-        />
+        <div className="appearance-theme-mode">
+          <Segmented
+            ariaLabel="Color mode"
+            value={activeMode}
+            onChange={(mode) => modeMutation.mutate({ mode })}
+            options={(["light", "dark"] as const).map((mode) => ({
+              value: mode,
+              label: mode === "light" ? "Light" : "Dark",
+              disabled: !activeIsBuiltIn || modeMutation.isPending,
+              title: activeIsBuiltIn
+                ? undefined
+                : "Custom themes use their saved fixed palette and do not support color mode."
+            }))}
+          />
+        </div>
         {!activeIsBuiltIn ? (
           <Note>Custom themes use their saved fixed palette, so color mode is unavailable.</Note>
         ) : null}
