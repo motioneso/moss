@@ -895,8 +895,11 @@ function registerPlatformRoutes(
     } catch (error) {
       const code =
         (error instanceof Error && (error as Error & { code?: string }).code) || undefined;
-      if (code === "account_pending_approval" || code === "account_deactivated") {
-        return reply.code(403).send({ error: (error as Error).message, code });
+      if (code === "account_pending_approval") {
+        return reply.code(403).send({ error: "Account is pending approval", code });
+      }
+      if (code === "account_deactivated") {
+        return reply.code(403).send({ error: "Account has been deactivated", code });
       }
       return reply.code(401).send({ error: "Session is missing or expired" });
     }
