@@ -1,3 +1,37 @@
+# Relay: #1319 Signed Moss Module Catalog (relay #13 — Task 1 source landed, tests pending)
+
+**Build started.** Task 1 source committed at `d66c9bdbf` (on `0edb5fc15`/`fc525e53d`, this
+branch/HEAD): `packages/module-registry/src/distribution/catalog-signing.ts` (new) +
+`node.ts` barrel export. Implements the plan's exact Task 1 signatures (plan lines 271-305):
+`CATALOG_SIGNATURE_FORMAT_VERSION`, `ModuleCatalogSignature`, `ModuleCatalogPublicKey`,
+`MODULE_CATALOG_PUBLIC_KEYS` (frozen **empty** — no placeholder key; D8 says Ben provisions the
+real one, reserved keyId `"moss-catalog-2026-a"` noted in a comment only), `signCatalogBytes`,
+`verifyCatalogBytes`, `resolveCatalogSigningKey`, `resolveCatalogTrustedKeys`. Root
+`pnpm typecheck` → `EXIT=0` (confirmed this session, not assumed).
+
+Design notes for whoever verifies/extends this:
+- New env vars (`MOSS_MODULE_CATALOG_SIGNING_KEY_ID`, `MOSS_MODULE_CATALOG_SIGNING_PRIVATE_KEY`,
+  `MOSS_MODULE_CATALOG_TEST_PUBLIC_KEY`) are read directly via `env.MOSS_…` — **not** through
+  `resolveMossEnv`, because that helper only derives a `MOSS_*` name from a legacy `JARVIS_*` one
+  and none of these three ever had a `JARVIS_*` name (grep confirmed no other pure-`MOSS_`-only
+  precedent exists yet in the tree; this is the first).
+- `resolveCatalogTrustedKeys` checks the production+test-key refusal (ledger #22) **before and
+  independently of** the override-active check — matches the plan's "own refusal, never borrowed"
+  requirement and the "throws with the URL override set AND without it" test case.
+- `verifyCatalogBytes` malformed-check order: object shape → formatVersion → algorithm → keyId →
+  signatureBase64 base64-charset+64-byte-length check, all before any crypto call, so garbage
+  input never reaches `createPublicKey`/`verify`. Wrapped in try/catch as a second backstop.
+
+**Not done yet — this is the very next step, still Task 1:** the unit test file
+`tests/unit/catalog-signing.test.ts` (plan lines 310-328, 7 bullet points of cases). Write it,
+run `pnpm test:unit tests/unit/catalog-signing.test.ts`, confirm `EXIT=0`, commit, **then continue
+to Task 2** (`scripts/publish-module-registry.ts` signing + workflow wiring, plan lines 330-374).
+Relayed here at the context-meter 70% warning per `coordinated-build` step 3 — this is a context
+checkpoint, not a blocker; no review round pending, build straight through per the prior relay's
+note.
+
+---
+
 # Relay: #1319 Signed Moss Module Catalog (relay #12 — PLAN APPROVED, BUILD-READY)
 
 **Plan is DONE and approved.** Commit `fc525e53d` (on `53ff42bcd`/`755cdcc0a`, this branch/HEAD)
