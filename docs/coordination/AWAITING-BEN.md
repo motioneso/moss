@@ -15,61 +15,20 @@ The 2026-08-05 transcript audit found 216 idle hours blocked on Ben, mostly on q
 never recorded — an overnight coordinator sat 15h on a question while this file said nothing was
 pending. Silent waiting is the failure mode this protocol exists to kill.
 
-## Main CI red, twice, same failure — post1632-queue run
-
-Main went red at commit `cd08ed79c` (PR #1671 merge): `chat-drawer-surface.test.tsx` "resets state
-on a flip in both directions" failed. Coordinator (take 41) reran the failed job to check for the
-known flake pattern (issue #1607 — this exact test fails full-suite-only, passes in isolation,
-unrelated to whatever PR triggered it). The rerun failed again with the identical test, line, and
-assertion. That's two reds at the same commit, not a red-then-green, so it doesn't clear the bar
-the flake theory needs to self-resolve automatically.
-
-**What's blocked:** whether to treat main as green (waive this check) and resume merging new work,
-or hold everything until the flake itself is fixed.
-
-**Options:**
-1. Waive it — the failure signature matches the known flake exactly and PR #1671's own diff
-   (notes/path-guard change) doesn't touch this test or its surface. Record a CI waiver in the
-   run manifest and resume.
-2. Hold — spin up a lane to actually fix the flake (issue #1607) before trusting main's gate again.
-3. Try one more rerun to see if it's simply intermittent enough that two-in-a-row can still happen.
-
-**Coordinator's recommendation:** option 1 (waive) — the evidence strongly matches the documented,
-pre-existing pattern and the merged PR doesn't touch that code path, but two-same-way failures is
-the stop-the-line threshold in the CI waiver protocol, so this needs your sign-off rather than a
-unilateral coordinator call.
-
-**Ben asked (2026-08-18): "Why does it flake?"** It's a race condition inside the test itself, not
-a real bug in the app. The test flips between two chat views and checks that a "Start private
-chat" button shows up after the flip. The app does that check in two steps — it asks "is this
-person's info private?" and then updates the button once it gets the answer. The test doesn't
-actually wait for that second step; it just pauses for a fixed, very short moment and then checks
-immediately. Most of the time that's long enough, but when the whole test suite is running at once
-(more CPU contention, slower scheduling), it sometimes isn't, so the check fires before the button
-has updated and the test sees "false" instead of "true." This was already root-caused and written
-up when a different PR hit it back on 2026-08-13 — same file, same line, same assertion, reproduced
-twice, confirmed unrelated to that PR's actual changes too. The real fix is to make the test
-properly wait for the button to update instead of guessing a fixed delay; that's a small,
-low-risk test-only change, tracked as issue #1607, nobody's picked it up yet.
-
-No new build agents are being spawned onto main (including the two new issues below) until this
-is resolved.
-
 ## Two new specs ready to queue — need your OK before spawning
 
+Main CI is resolved — you waived the flaky test ("Waive is fine", 2026-08-17) and it's recorded as
+a CI waiver in the run manifest. That was the only thing blocking this ask.
+
 Ben approved specs for #1319 (sign and verify the module distribution index) and #1586 (Moss
-self-diagnostics) on 2026-08-17. Neither has a build agent spawned yet. A dependency check turned
-up two things worth flagging before you sign off:
+self-diagnostics) on 2026-08-17. Both now have manifest queue entries (tier, worktree/branch plan)
+— nothing has been spawned yet, still waiting on your go-ahead:
 
-- **#1586's tier is security, not the "likely sensitive" first guess.** It adds a shared field
-  other modules can plug into, and the confirmed action it ships (a news refresh trigger) writes
-  through the same audit-logging code as the audit-truthfulness work already in flight. Combined,
-  that's enough to warrant the stricter security-tier review (adversarial QA, your sign-off before
-  merge) rather than the lighter one. Worth relabeling the issue from "enhancement" to reflect that.
-- **#1586 needs to wait behind PR #1654** (the audit-truthfulness work) because they'd otherwise
-  write through the same logging code at the same time. That's not a new wait — PR #1654 is
-  already the thing the in-flight lane is stuck on, so #1586 just inherits the same blocker.
-  #1319 has no such conflict and can run in parallel with everything else once started.
+- **#1319** — security tier, no blockers, ready to spawn as soon as you say go.
+- **#1586** — security tier (upgraded from the first "likely sensitive" guess — it adds a shared
+  field other modules can plug into, and its news-refresh action writes through the same
+  audit-logging code as the audit-truthfulness work already in flight). Issue relabeled security
+  on GitHub already. Even after you approve it, it can't start building until PR #1654 lands —
+  same blocker the in-flight audit-truthfulness lane is already stuck on, not a new wait.
 
-Once main CI is resolved (see above), the coordinator will add both to the run manifest with tier
-+ worktree/branch plan and present it here for sign-off before spawning either.
+Say go and I'll spawn #1319 immediately and queue #1586 to start the moment PR #1654 lands.
