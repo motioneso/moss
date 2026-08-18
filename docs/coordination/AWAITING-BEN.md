@@ -15,9 +15,25 @@ The 2026-08-05 transcript audit found 216 idle hours blocked on Ben, mostly on q
 never recorded — an overnight coordinator sat 15h on a question while this file said nothing was
 pending. Silent waiting is the failure mode this protocol exists to kill.
 
-## Nothing open right now
+## Open: #1319 plan review — 4th round in a row still red, should the lane pause?
 
-You said go on #1319 and #1586 (2026-08-17, "Spawn yes, let's keep going"). #1319's build agent
-is spawned and building now. #1586 still can't start until PR #1654 lands — same blocker the
-in-flight audit-truthfulness lane is already stuck on — so it stays queued, not spawned, until
-that merges. No decision needed from you on either right now.
+#1319 (signed module catalog) has now been through 4 rounds of plan review. Each time, the build
+agent correctly fixed everything flagged in the prior round — but the fix work itself introduced a
+fresh batch of problems, so the plan has never come back clean. Round 4 fixed all 5 things round 3
+flagged, but review found 4 new blocking issues (the browser-side override flow is still broken by
+a different bug than before, one more missed spot in the server code, and a possible mismatch
+between two data snapshots), plus some smaller stuff.
+
+This isn't a case of the build agent doing sloppy work — the fixes are genuinely correct each
+time. It's more that the plan keeps growing new edges as it gets patched. My read: four rounds of
+"fix what's flagged, find something new" is a pattern, not bad luck, and a 5th round risks the same
+thing happening again.
+
+Options:
+1. Let it run a 5th round anyway (same process, another Opus review after).
+2. Pause the lane and have someone take a fresh, non-incremental pass at the plan instead of
+   patching it round by round — likely faster than another iterative cycle.
+3. Something else you'd prefer.
+
+I'd lean toward option 2, but this is your call. Build agent is holding, not making further
+changes, until I hear back.
