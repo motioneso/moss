@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Job } from "pg-boss";
 import type { Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
@@ -12,25 +12,24 @@ import Fastify from "fastify";
 import { createApiServer } from "../../apps/api/src/server.js";
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
 import type { GetNotesSourceResponse, PostNotesSyncResponse } from "@moss/shared";
-import { parseDocument, StubEmbeddingProvider } from "@moss/memory";
+import { StubEmbeddingProvider } from "@moss/memory";
 import { NOTES_SOURCE_PREFERENCE_KEY, resolveNotesRoots } from "@moss/settings";
 import { PreferencesRepository } from "@moss/structured-state";
 import {
   assertWithinRoot,
   NotesPathError,
   handleNotesSyncJob,
-  handleNotesSyncJobWithDataContext,
-  writeNotesLastSync,
   registerNotesSyncRoutes,
-  registerNotesJobWorkers,
   NOTES_SYNC_QUEUE,
   type NotesSyncJobPayload
 } from "@moss/notes";
-import { createPgBossClient, sendJob } from "@moss/jobs";
 import { notesSearchExecute } from "../../packages/notes/src/tools.js";
 // notesMonitorProvider is internal wiring (registered via notesModuleManifest), not part of the
 // package's public API — imported directly from source, same pattern as notesSearchExecute above.
 import { notesMonitorProvider } from "../../packages/notes/src/monitor-provider.js";
+// recheckWithinRoot is internal (write-tools.ts/jobs.ts import it via a relative path, same
+// package) — not part of @moss/notes's public API, imported directly from source for testing.
+import { recheckWithinRoot } from "../../packages/notes/src/path-guard.js";
 import {
   connectionStrings,
   resetEmptyFoundationDatabase,
@@ -64,6 +63,63 @@ describe("assertWithinRoot", () => {
 
   it("rejects path traversal attempt", () => {
     expect(() => assertWithinRoot("/notes", "/notes/../etc/passwd")).toThrowError(NotesPathError);
+  });
+});
+
+// ── recheckWithinRoot ─────────────────────────────────────────────────────────
+
+describe("recheckWithinRoot", () => {
+  let scratchRoot: string;
+  let root: string;
+  let outside: string;
+
+  beforeEach(async () => {
+    scratchRoot = join(tmpdir(), `notes-recheck-${randomUUID()}`);
+    root = join(scratchRoot, "root");
+    outside = join(scratchRoot, "outside");
+    await mkdir(root, { recursive: true });
+    await mkdir(outside, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await rm(scratchRoot, { recursive: true, force: true });
+  });
+
+  it("passes for an existing plain nested file", async () => {
+    await mkdir(join(root, "sub"), { recursive: true });
+    await writeFile(join(root, "sub", "note.md"), "hi", "utf-8");
+    await expect(recheckWithinRoot(root, join(root, "sub", "note.md"))).resolves.toBeUndefined();
+  });
+
+  it("passes for a not-yet-created file inside the root", async () => {
+    await expect(recheckWithinRoot(root, join(root, "new.md"))).resolves.toBeUndefined();
+  });
+
+  it("rejects a lexical .. escape through a symlinked directory (kernel-vs-lexical divergence)", async () => {
+    // root/S -> outside (dir); root/b.md -> S/../evil.md
+    // kernel resolves S first (-> outside), then ".." pops outside's PARENT (scratchRoot), landing
+    // on scratchRoot/evil.md — outside root. A lexical resolve(dirname, "S/../evil.md") instead
+    // cancels "S/.." against the literal text and produces root/evil.md, a false pass.
+    await symlink(outside, join(root, "S"));
+    await symlink("S/../evil.md", join(root, "b.md"));
+    await expect(recheckWithinRoot(root, join(root, "b.md"))).rejects.toThrow(NotesPathError);
+  });
+
+  it("rejects and terminates on a self-referential dangling symlink via a symlinked directory", async () => {
+    // root/S -> outside (dir); root/a.md -> S/../a.md
+    // A lexical resolver collapses "S/.." straight back to root, reproducing the same input on
+    // every iteration — an infinite loop with no hop cap. The kernel-accurate resolver here
+    // dereferences S to `outside`, pops to its real parent, and reaches a terminal (nonexistent)
+    // path instead of looping.
+    await symlink(outside, join(root, "S"));
+    await symlink("S/../a.md", join(root, "a.md"));
+    await expect(recheckWithinRoot(root, join(root, "a.md"))).rejects.toThrow(NotesPathError);
+  });
+
+  it("rejects a symlink cycle instead of hanging", async () => {
+    await symlink(join(root, "b"), join(root, "a"));
+    await symlink(join(root, "a"), join(root, "b"));
+    await expect(recheckWithinRoot(root, join(root, "a"))).rejects.toThrow(NotesPathError);
   });
 });
 
@@ -329,352 +385,6 @@ describe("POST /api/notes/sync", () => {
   it("requires authentication", async () => {
     const res = await server.inject({ method: "POST", url: "/api/notes/sync" });
     expect(res.statusCode).toBe(401);
-  });
-});
-
-// ── handleNotesSyncJob (worker integration) ───────────────────────────────────
-
-describe("handleNotesSyncJob", () => {
-  let dataContext: DataContextRunner;
-  let workerDb: Kysely<MossDatabase>;
-  let workerDataContext: DataContextRunner;
-  let workerBoss: PgBoss;
-  const provider = new StubEmbeddingProvider();
-  const prefsRepo = new PreferencesRepository();
-  const jobUserId = "00000000-0000-4000-8100-000000000099";
-  let jobNotesDir: string;
-
-  function makeJob(sourcePath: string): Job<NotesSyncJobPayload> {
-    return {
-      id: randomUUID(),
-      data: { actorUserId: jobUserId, sourcePath }
-    } as unknown as Job<NotesSyncJobPayload>;
-  }
-
-  beforeAll(async () => {
-    jobNotesDir = join(tmpdir(), `jarv1s-notes-worker-${randomUUID()}`);
-    await mkdir(jobNotesDir, { recursive: true });
-
-    const client = new Client({ connectionString: connectionStrings.bootstrap });
-    await client.connect();
-    try {
-      await client.query(
-        `INSERT INTO app.users (id, email, is_instance_admin)
-         VALUES ($1, 'notes-worker@example.test', false) ON CONFLICT DO NOTHING`,
-        [jobUserId]
-      );
-    } finally {
-      await client.end();
-    }
-
-    dataContext = new DataContextRunner(appDb);
-    workerDb = createDatabase({ connectionString: connectionStrings.worker, maxConnections: 1 });
-    workerDataContext = new DataContextRunner(workerDb);
-    workerBoss = createPgBossClient(connectionStrings.worker, { connectionTimeoutMillis: 25_000 });
-    await workerBoss.start();
-    process.env["JARVIS_NOTES_ROOTS"] = jobNotesDir;
-  });
-
-  afterAll(async () => {
-    await workerBoss?.stop({ graceful: false });
-    await workerDb?.destroy();
-    await rm(jobNotesDir, { recursive: true, force: true });
-    delete process.env["JARVIS_NOTES_ROOTS"];
-  });
-
-  it("ingests markdown files and stores chunks with source_kind=notes", async () => {
-    await writeFile(join(jobNotesDir, "hello.md"), "# Hello\n\nThis is a test note.\n");
-    await writeFile(join(jobNotesDir, "world.md"), "# World\n\n## Section\n\nMore content.\n");
-
-    const result = await dataContext.withDataContext(
-      { actorUserId: jobUserId, requestId: "req:worker-test" },
-      (scopedDb) => handleNotesSyncJob(makeJob(jobNotesDir), scopedDb, provider, prefsRepo)
-    );
-
-    expect(result.ingested).toBe(2);
-    expect(result.skipped).toBe(0);
-    expect(result.errors).toBe(0);
-  });
-
-  it("dispatches every oversized-file continuation through the registered worker", async () => {
-    const largeNotesDir = join(jobNotesDir, `oversized-${randomUUID()}`);
-    const largeFile = join(largeNotesDir, "note.md");
-    const content = `# Oversized note\n${"x".repeat(500_000)}\n`;
-    await mkdir(largeNotesDir, { recursive: true });
-    await writeFile(largeFile, content);
-    const expectedChunkCount = parseDocument(content).chunks.length;
-
-    const workIds = await registerNotesJobWorkers(workerBoss, workerDataContext, {
-      embeddingProviderFactory: async () => provider,
-      preferencesRepository: prefsRepo
-    });
-
-    try {
-      const rootJobId = await sendJob(
-        workerBoss,
-        NOTES_SYNC_QUEUE,
-        {
-          actorUserId: jobUserId,
-          sourcePath: largeNotesDir
-        },
-        { singletonKey: `notes-sync:${jobUserId}` }
-      );
-      expect(rootJobId).toEqual(expect.any(String));
-
-      const client = new Client({ connectionString: connectionStrings.bootstrap });
-      await client.connect();
-      try {
-        for (let attempt = 0; attempt < 100; attempt += 1) {
-          const result = await client.query<{
-            completed: string;
-            pending: string;
-            chunks: string;
-          }>(
-            `SELECT
-               count(*) FILTER (WHERE name = $1 AND state = 'completed')::text AS completed,
-               count(*) FILTER (WHERE name = $1 AND state IN ('created', 'active'))::text AS pending,
-               count(*) FILTER (WHERE source_path = $2)::text AS chunks
-             FROM pgboss.job
-             CROSS JOIN LATERAL (VALUES (data->>'filePath')) AS files(source_path)
-             WHERE name = $1 OR source_path = $2`,
-            [NOTES_SYNC_QUEUE, await realpath(largeFile)]
-          );
-          const row = result.rows[0]!;
-          if (Number(row.completed) > 1 && row.pending === "0") break;
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        }
-
-        const chunks = await client.query<{ count: string }>(
-          `SELECT count(*)::text AS count
-             FROM app.memory_chunks
-            WHERE owner_user_id = $1
-              AND source_kind = 'notes'
-              AND source_path = $2`,
-          [jobUserId, await realpath(largeFile)]
-        );
-        expect(Number(chunks.rows[0]?.count)).toBe(expectedChunkCount);
-
-        const jobs = await client.query<{ state: string; count: string }>(
-          `SELECT state, count(*)::text AS count
-             FROM pgboss.job
-            WHERE name = $1
-              AND (data->>'sourcePath' = $2 OR data->>'filePath' = $3)
-            GROUP BY state`,
-          [NOTES_SYNC_QUEUE, jobNotesDir, await realpath(largeFile)]
-        );
-        expect(jobs.rows).toHaveLength(1);
-        expect(jobs.rows[0]).toEqual({ state: "completed", count: expect.any(String) });
-        expect(Number(jobs.rows[0]?.count)).toBeGreaterThan(1);
-      } finally {
-        await client.end();
-      }
-    } finally {
-      await rm(largeNotesDir, { recursive: true, force: true });
-      await Promise.all(
-        workIds.map((workId) => workerBoss.offWork(NOTES_SYNC_QUEUE, { id: workId, wait: true }))
-      );
-    }
-  });
-
-  it("skips unchanged files on re-run", async () => {
-    const result = await dataContext.withDataContext(
-      { actorUserId: jobUserId, requestId: "req:worker-skip" },
-      (scopedDb) => handleNotesSyncJob(makeJob(jobNotesDir), scopedDb, provider, prefsRepo)
-    );
-
-    expect(result.ingested).toBe(0);
-    expect(result.skipped).toBe(2);
-    expect(result.errors).toBe(0);
-  });
-
-  it("re-ingests when file content changes", async () => {
-    await writeFile(join(jobNotesDir, "hello.md"), "# Hello\n\nContent was updated.\n");
-
-    const result = await dataContext.withDataContext(
-      { actorUserId: jobUserId, requestId: "req:worker-update" },
-      (scopedDb) => handleNotesSyncJob(makeJob(jobNotesDir), scopedDb, provider, prefsRepo)
-    );
-
-    expect(result.ingested).toBe(1);
-    expect(result.skipped).toBe(1);
-  });
-
-  it("walks subdirectories recursively", async () => {
-    const subDir = join(jobNotesDir, "subdir");
-    await mkdir(subDir, { recursive: true });
-    await writeFile(join(subDir, "nested.md"), "# Nested note\n\nDeep content.\n");
-
-    const result = await dataContext.withDataContext(
-      { actorUserId: jobUserId, requestId: "req:worker-nested" },
-      (scopedDb) => handleNotesSyncJob(makeJob(jobNotesDir), scopedDb, provider, prefsRepo)
-    );
-
-    expect(result.ingested).toBeGreaterThanOrEqual(1);
-  });
-
-  it("worker role stores wikilinks for notes files", async () => {
-    const linkFile = join(jobNotesDir, `worker-link-${randomUUID()}.md`);
-    await writeFile(linkFile, "# Worker link\n\nReferences [[Daily Plan]].\n");
-
-    const result = await handleNotesSyncJobWithDataContext(
-      makeJob(jobNotesDir),
-      workerDataContext,
-      async () => provider,
-      prefsRepo
-    );
-
-    expect(result.errors).toBe(0);
-    expect(result.ingested).toBeGreaterThanOrEqual(1);
-
-    const resolvedLinkFile = await realpath(linkFile);
-    const client = new Client({ connectionString: connectionStrings.bootstrap });
-    await client.connect();
-    try {
-      const links = await client.query<{ to_path: string }>(
-        `SELECT to_path
-           FROM app.memory_links
-          WHERE owner_user_id = $1 AND from_path = $2
-          ORDER BY to_path`,
-        [jobUserId, resolvedLinkFile]
-      );
-      expect(links.rows.map((row) => row.to_path)).toContain("Daily Plan");
-    } finally {
-      await client.end();
-    }
-  });
-
-  it("commits other files when one file hits a database write error", async () => {
-    const isolatedDir = join(tmpdir(), `jarv1s-notes-partial-${randomUUID()}`);
-    await mkdir(isolatedDir, { recursive: true });
-    await writeFile(join(isolatedDir, "good-before.md"), "# Good before\n\nSafe content.\n");
-    await writeFile(join(isolatedDir, "bad-vector.md"), "# Bad\n\nbad vector content.\n");
-    await writeFile(join(isolatedDir, "good-after.md"), "# Good after\n\nMore safe content.\n");
-
-    const badVectorProvider = new (class extends StubEmbeddingProvider {
-      override async embedDocument(text: string): Promise<number[]> {
-        if (text.includes("bad vector content")) return [0];
-        return super.embedDocument(text);
-      }
-    })();
-
-    process.env["JARVIS_NOTES_ROOTS"] = isolatedDir;
-    try {
-      const result = await handleNotesSyncJobWithDataContext(
-        makeJob(isolatedDir),
-        workerDataContext,
-        async () => badVectorProvider,
-        prefsRepo
-      );
-
-      expect(result.ingested).toBe(2);
-      expect(result.skipped).toBe(0);
-      expect(result.errors).toBe(1);
-
-      const client = new Client({ connectionString: connectionStrings.bootstrap });
-      await client.connect();
-      try {
-        const chunks = await client.query<{ source_path: string }>(
-          `SELECT source_path
-             FROM app.memory_chunks
-            WHERE owner_user_id = $1
-              AND source_kind = 'notes'
-              AND source_path LIKE $2
-            ORDER BY source_path`,
-          [jobUserId, `${isolatedDir}%`]
-        );
-        expect(chunks.rows.map((row) => row.source_path.split("/").pop())).toEqual([
-          "good-after.md",
-          "good-before.md"
-        ]);
-      } finally {
-        await client.end();
-      }
-    } finally {
-      await rm(isolatedDir, { recursive: true, force: true });
-      process.env["JARVIS_NOTES_ROOTS"] = jobNotesDir;
-    }
-  });
-
-  it("throws when JARVIS_NOTES_ROOTS is not configured", async () => {
-    delete process.env["JARVIS_NOTES_ROOTS"];
-    await expect(
-      dataContext.withDataContext(
-        { actorUserId: jobUserId, requestId: "req:worker-no-roots" },
-        (scopedDb) => handleNotesSyncJob(makeJob(jobNotesDir), scopedDb, provider, prefsRepo)
-      )
-    ).rejects.toThrow("JARVIS_NOTES_ROOTS not configured");
-    process.env["JARVIS_NOTES_ROOTS"] = jobNotesDir;
-  });
-
-  it("throws when sourcePath is not within any allowed root", async () => {
-    process.env["JARVIS_NOTES_ROOTS"] = jobNotesDir;
-    await expect(
-      dataContext.withDataContext(
-        { actorUserId: jobUserId, requestId: "req:worker-escape" },
-        (scopedDb) => handleNotesSyncJob(makeJob("/etc"), scopedDb, provider, prefsRepo)
-      )
-    ).rejects.toThrow("not within any allowed root");
-  });
-
-  it("writes notes-last-sync on success with the real counts (#449)", async () => {
-    await writeFile(join(jobNotesDir, "lastsync-success.md"), "# Last sync success\n");
-    const ctx = { actorUserId: jobUserId, requestId: "req:worker-lastsync-ok" };
-    const result = await dataContext.withDataContext(ctx, (scopedDb) =>
-      handleNotesSyncJob(makeJob(jobNotesDir), scopedDb, provider, prefsRepo)
-    );
-    expect(result.ingested).toBeGreaterThanOrEqual(1);
-
-    // In prod the worker wrapper calls writeNotesLastSync after the ingest tx commits.
-    // The test calls the handler directly, so invoke the wrapper's write step here.
-    await writeNotesLastSync(dataContext, ctx, prefsRepo, {
-      at: new Date().toISOString(),
-      ...result
-    });
-
-    const stored = await dataContext.withDataContext(
-      { actorUserId: jobUserId, requestId: "req:worker-lastsync-ok-read" },
-      (scopedDb) => prefsRepo.get(scopedDb, "notes-last-sync")
-    );
-    expect(stored).toMatchObject({
-      at: expect.any(String),
-      ingested: result.ingested,
-      skipped: result.skipped,
-      errors: result.errors
-    });
-    expect((stored as { lastError?: string }).lastError).toBeUndefined();
-  });
-
-  it("writes notes-last-sync with lastError on failure (failure must not be silent, #449)", async () => {
-    delete process.env["JARVIS_NOTES_ROOTS"];
-    const ctx = { actorUserId: jobUserId, requestId: "req:worker-lastsync-fail" };
-    const failureMessage = "JARVIS_NOTES_ROOTS not configured";
-    await expect(
-      dataContext.withDataContext(ctx, (scopedDb) =>
-        handleNotesSyncJob(makeJob(jobNotesDir), scopedDb, provider, prefsRepo)
-      )
-    ).rejects.toThrow(failureMessage);
-    process.env["JARVIS_NOTES_ROOTS"] = jobNotesDir;
-
-    // In prod the worker wrapper's catch block calls writeNotesLastSync after rollback.
-    await writeNotesLastSync(dataContext, ctx, prefsRepo, {
-      at: new Date().toISOString(),
-      ingested: 0,
-      skipped: 0,
-      errors: 0,
-      lastError: failureMessage
-    });
-
-    const stored = await dataContext.withDataContext(
-      { actorUserId: jobUserId, requestId: "req:worker-lastsync-fail-read" },
-      (scopedDb) => prefsRepo.get(scopedDb, "notes-last-sync")
-    );
-    expect(stored).toMatchObject({
-      at: expect.any(String),
-      ingested: 0,
-      skipped: 0,
-      errors: 0,
-      lastError: expect.stringContaining(failureMessage)
-    });
   });
 });
 

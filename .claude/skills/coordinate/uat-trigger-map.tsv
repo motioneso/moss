@@ -29,6 +29,7 @@ advisory	packages/chat/**	tests/uat/specs/1089-1090-chat-drawer-private.uat.spec
 blocking	packages/chat/**	tests/uat/specs/1133-chat-attachments.uat.spec.ts
 blocking	packages/chat/**	tests/uat/specs/runtime-context.uat.spec.ts
 blocking	packages/notes/**	tests/uat/specs/notes-default-retrieval.uat.spec.ts
+blocking	packages/notes/**	tests/uat/specs/notes-path-recheck.uat.spec.ts
 blocking	packages/chat/src/live/notes-retrieval.ts	tests/uat/specs/notes-default-retrieval.uat.spec.ts
 blocking	packages/chat/src/live/notes-secret-filter.ts	tests/uat/specs/notes-default-retrieval.uat.spec.ts
 blocking	packages/chat/src/live/engine-text.ts	tests/uat/specs/notes-default-retrieval.uat.spec.ts
