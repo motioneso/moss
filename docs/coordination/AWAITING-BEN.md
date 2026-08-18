@@ -15,3 +15,21 @@ The 2026-08-05 transcript audit found 216 idle hours blocked on Ben, mostly on q
 never recorded — an overnight coordinator sat 15h on a question while this file said nothing was
 pending. Silent waiting is the failure mode this protocol exists to kill.
 
+## #1319 signed module catalog — needs a real Ed25519 signing keypair from Ben (2026-08-18)
+
+Build (relay4) finished Tasks 1-2 of the approved plan (18/18 + 12/12 unit tests, typecheck clean)
+and hit the plan's designed kill gate before Phase 2: it cannot produce the required Phase-1 proof
+(a real CI-produced catalog signature that verifies) because the production public-key list
+(`MODULE_CATALOG_PUBLIC_KEYS`) is still a deliberately-empty placeholder. Only Ben can close this —
+it needs a real Ed25519 keypair with the public half committed in code and the private half landed
+as two GitHub secrets before any `workflow_dispatch` publish can self-verify.
+
+What's needed from Ben: generate (or approve someone generating) an Ed25519 keypair for signing the
+module catalog, then provide the private key material for the two GitHub secrets and confirm the
+public key to commit. Not urgent tonight — build is holding cleanly at the gate, no data at risk —
+but it blocks all of Phase 2 onward, so it should land soon.
+
+Coordinator's call already made (no Ben input needed on this part): a Phase-1-only PR will be
+opened now, explicitly labeled code-complete/unverified per the live-path gate, not merged and not
+marked Done until the key lands and the real e2e proof is posted.
+
