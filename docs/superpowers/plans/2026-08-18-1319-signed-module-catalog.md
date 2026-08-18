@@ -201,7 +201,7 @@ Every item below is folded into the tasks; listed so no reviewer re-derives them
   way; `index: null`). `"unverified"` = valid index whose signature is absent, oversize, malformed,
   unknown-key, or mismatched. `"verified"` = signature verifies over the exact bytes AND the index
   validates. Entries are parsed and listed (visibly marked) when unverified — authenticity gates
-  *trust and downloads*, not display. `digestSha256` = SHA-256 hex of the exact fetched index
+  _trust and downloads_, not display. `digestSha256` = SHA-256 hex of the exact fetched index
   bytes, non-null whenever bytes were fetched (unverified included), null when nothing was fetched.
 - **D4 — Enforcement point is the pipeline.** `downloadAndStageModule` refuses
   (`"catalog-unverified"`, HTTP 409) unless its own internal fetch yields `"verified"`, or the
@@ -286,13 +286,17 @@ export interface ModuleCatalogPublicKey {
 export const MODULE_CATALOG_PUBLIC_KEYS: readonly ModuleCatalogPublicKey[]; // frozen; keyId "moss-catalog-2026-a"
 
 export function signCatalogBytes(
-  bytes: Uint8Array, privateKeyPem: string, keyId: string
+  bytes: Uint8Array,
+  privateKeyPem: string,
+  keyId: string
 ): ModuleCatalogSignature;
 
 export type CatalogSignatureFailure = "malformed" | "unknown-key" | "signature-mismatch";
 
 export function verifyCatalogBytes(
-  bytes: Uint8Array, signatureDocument: unknown, keys: readonly ModuleCatalogPublicKey[]
+  bytes: Uint8Array,
+  signatureDocument: unknown,
+  keys: readonly ModuleCatalogPublicKey[]
 ): { verified: true; keyId: string } | { verified: false; reason: CatalogSignatureFailure };
 
 export function resolveCatalogSigningKey(
@@ -396,9 +400,14 @@ export const REGISTRY_SIGNATURE_MAX_BYTES = 4 * 1024;
 export type CatalogVerification = "verified" | "unverified" | "unavailable";
 
 export type CatalogVerificationFailureReason =
-  | "index-fetch-failed" | "index-too-large" | "index-invalid"
-  | "signature-fetch-failed" | "signature-too-large"
-  | "signature-malformed" | "signature-unknown-key" | "signature-mismatch";
+  | "index-fetch-failed"
+  | "index-too-large"
+  | "index-invalid"
+  | "signature-fetch-failed"
+  | "signature-too-large"
+  | "signature-malformed"
+  | "signature-unknown-key"
+  | "signature-mismatch";
 
 export interface FetchRegistryIndexResult {
   readonly index: ModuleRegistryIndex | null;
