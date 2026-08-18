@@ -49,7 +49,7 @@ vi.mock("../uat/fixtures/scripted-provider/script-schema.js", async (importOrigi
 // (only vi.mock can substitute a module's binding) — wrap with vi.fn(actual) so every call still
 // goes through to the real implementation while staying observable for the SUCCESS_LOG_PATH test.
 vi.mock("node:fs", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("node:fs")>();
+  const actual = await importOriginal<typeof fsModule>();
   return { ...actual, appendFileSync: vi.fn(actual.appendFileSync) };
 });
 
