@@ -221,8 +221,8 @@ chat, succeeding; (b) `rejectSymlinkParent` ancestor-directory refusal live via 
 (c') the symlinked-leaf-file refusal above live via real chat — this is the only live proof of
 #1512's actual guard and is non-optional. The **only** remaining test-only substitute, narrowly
 scoped: the sync-worker's `collectMarkdownFiles` (`jobs.ts:116-128`) uses lstat-based `Dirent`
-info and silently excludes symlinks from its `readdir` walk, so a symlink swapped in *after* the
-walk but *before* the loop reaches that file is a genuine `readdir`→`realpath` TOCTOU race with no
+info and silently excludes symlinks from its `readdir` walk, so a symlink swapped in _after_ the
+walk but _before_ the loop reaches that file is a genuine `readdir`→`realpath` TOCTOU race with no
 deterministic UI trigger — that sliver alone is proven by the existing
 `tests/integration/notes.test.ts` `recheckWithinRoot` unit tests (re-run fresh, output cited in
 the PR comment). State this precisely and narrowly in the PR comment; do not generalize the
