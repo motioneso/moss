@@ -44,8 +44,19 @@ is resolved.
 
 ## Two new specs ready to queue — need your OK before spawning
 
-Ben approved specs for #1319 (sign and verify the module distribution index — security tier) and
-#1586 (Moss self-diagnostics — likely sensitive tier, re-deriving from the spec) on 2026-08-17.
-Neither has a build agent spawned yet. Once main CI is resolved (see above), the coordinator will
-add both to the run manifest with tier + worktree/branch plan and present it here for sign-off
-before spawning either.
+Ben approved specs for #1319 (sign and verify the module distribution index) and #1586 (Moss
+self-diagnostics) on 2026-08-17. Neither has a build agent spawned yet. A dependency check turned
+up two things worth flagging before you sign off:
+
+- **#1586's tier is security, not the "likely sensitive" first guess.** It adds a shared field
+  other modules can plug into, and the confirmed action it ships (a news refresh trigger) writes
+  through the same audit-logging code as the audit-truthfulness work already in flight. Combined,
+  that's enough to warrant the stricter security-tier review (adversarial QA, your sign-off before
+  merge) rather than the lighter one. Worth relabeling the issue from "enhancement" to reflect that.
+- **#1586 needs to wait behind PR #1654** (the audit-truthfulness work) because they'd otherwise
+  write through the same logging code at the same time. That's not a new wait — PR #1654 is
+  already the thing the in-flight lane is stuck on, so #1586 just inherits the same blocker.
+  #1319 has no such conflict and can run in parallel with everything else once started.
+
+Once main CI is resolved (see above), the coordinator will add both to the run manifest with tier
++ worktree/branch plan and present it here for sign-off before spawning either.
