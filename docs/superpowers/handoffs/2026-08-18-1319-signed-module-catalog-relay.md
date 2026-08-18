@@ -2,9 +2,14 @@
 
 - **Issue:** #1319, risk tier `security`. Approved by Ben 2026-08-17.
 - **Branch/worktree:** `build-1319-signed-module-catalog` (this worktree). Clean tree, no commits yet.
-- **Coordinator:** Herdr label `Coordinator`, agent name `coordinator-take44`, session id
-  `3e71acd4-1b49-4a73-8c0d-9adf1e41c447`. Notified of the *previous* relay; **not yet re-notified**
-  of this one (routine relay, no blocker/fork — do so when you message with the plan in step 1).
+- **Coordinator — STALE, re-resolve before messaging.** This doc previously named session
+  `3e71acd4-1b49-4a73-8c0d-9adf1e41c447` (`coordinator-take44`). At last check (`herdr pane list`,
+  2026-08-18) **two** panes held the `Coordinator` label: `3e71acd4-...` with `agent_status:"done"`
+  (that pane's title showed nothing in-progress) and a newer one, `0af0d87c-2a93-4ced-9b55-56dbdfafd9fe`,
+  `agent_status:"working"`, pane title "Boot coordinator take45 brief" — i.e. the coordinator has
+  itself relayed to a `take45` successor. **Do NOT message `3e71acd4` — run `herdr pane list` fresh
+  and confirm exactly one live pane holds the `Coordinator` label before sending anything** (per
+  `coordinated-build`'s red-flag: 0 or >1 matches means halt, don't guess).
 - **Skill to resume under:** `coordinated-build`, step 1 (plan). Step ½ (spec-vs-branch
   verification) is DONE. **Zero code written in this lane across both relays.**
 
