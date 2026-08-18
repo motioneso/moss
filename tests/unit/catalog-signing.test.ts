@@ -85,7 +85,8 @@ describe("resolveCatalogSigningKey", () => {
   it("returns the pair when both env vars are set", () => {
     const result = resolveCatalogSigningKey({
       MOSS_MODULE_CATALOG_SIGNING_KEY_ID: "moss-catalog-2026-a",
-      MOSS_MODULE_CATALOG_SIGNING_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----"
+      MOSS_MODULE_CATALOG_SIGNING_PRIVATE_KEY:
+        "-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----"
     });
     expect(result).toEqual({
       keyId: "moss-catalog-2026-a",

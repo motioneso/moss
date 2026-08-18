@@ -1,5 +1,13 @@
 import { generateKeyPairSync } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  utimesSync,
+  writeFileSync
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -199,7 +207,9 @@ function makeSigningKeyPair(keyId: string): {
       keyId,
       privateKeyPem: privateKey.export({ type: "pkcs8", format: "pem" }).toString()
     },
-    trustedKeys: [{ keyId, publicKeyPem: publicKey.export({ type: "spki", format: "pem" }).toString() }]
+    trustedKeys: [
+      { keyId, publicKeyPem: publicKey.export({ type: "spki", format: "pem" }).toString() }
+    ]
   };
 }
 
@@ -234,7 +244,11 @@ describe("buildRegistryArtifacts signing (#1319 Task 2)", () => {
     const sigPath = join(outDir, "index.json.sig");
     expect(existsSync(sigPath)).toBe(true);
     const signature: unknown = JSON.parse(readFileSync(sigPath, "utf8"));
-    expect(signature).toMatchObject({ formatVersion: 1, algorithm: "ed25519", keyId: "test-catalog-key" });
+    expect(signature).toMatchObject({
+      formatVersion: 1,
+      algorithm: "ed25519",
+      keyId: "test-catalog-key"
+    });
 
     const indexBytes = readFileSync(join(outDir, "index.json"));
     expect(verifyCatalogBytes(indexBytes, signature, trustedKeys)).toEqual({

@@ -183,7 +183,11 @@ export async function buildRegistryArtifacts(
   writeFileSync(join(options.outDir, "index.json"), indexJson);
   if (options.signingKey) {
     const bytes = Buffer.from(indexJson, "utf8");
-    const signature = signCatalogBytes(bytes, options.signingKey.privateKeyPem, options.signingKey.keyId);
+    const signature = signCatalogBytes(
+      bytes,
+      options.signingKey.privateKeyPem,
+      options.signingKey.keyId
+    );
     const trustedKeys = options.trustedKeys ?? MODULE_CATALOG_PUBLIC_KEYS;
     const selfCheck = verifyCatalogBytes(bytes, signature, trustedKeys);
     if (!selfCheck.verified) {
@@ -192,7 +196,10 @@ export async function buildRegistryArtifacts(
           `"${options.signingKey.keyId}" pinned in MODULE_CATALOG_PUBLIC_KEYS?`
       );
     }
-    writeFileSync(join(options.outDir, "index.json.sig"), JSON.stringify(signature, null, 2) + "\n");
+    writeFileSync(
+      join(options.outDir, "index.json.sig"),
+      JSON.stringify(signature, null, 2) + "\n"
+    );
   }
   return index;
 }
