@@ -33,7 +33,7 @@ describe("signCatalogBytes / verifyCatalogBytes", () => {
   it("flips one byte in the signed content -> signature-mismatch", () => {
     const signature = signCatalogBytes(bytes, privateKeyPem, keyId);
     const tampered = new Uint8Array(bytes);
-    tampered[0] = tampered[0] ^ 0xff;
+    tampered[0] = (tampered[0] ?? 0) ^ 0xff;
     const result = verifyCatalogBytes(tampered, signature, keys);
     expect(result).toEqual({ verified: false, reason: "signature-mismatch" });
   });
