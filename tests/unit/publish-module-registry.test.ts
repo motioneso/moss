@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { generateKeyPairSync } from "node:crypto";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,10 +8,13 @@ import * as tar from "tar";
 import { afterAll, describe, expect, it } from "vitest";
 
 import type {
+  ModuleCatalogPublicKey,
   ModuleRegistryArtifactRef,
   ModuleRegistryEntry
 } from "../../packages/module-registry/src/node.js";
+import { verifyCatalogBytes } from "../../packages/module-registry/src/node.js";
 import {
+  assertSignatureRequirementSatisfied,
   buildRegistryArtifacts,
   discoverModuleDirs,
   mergePreviousVersions,
@@ -182,5 +186,106 @@ describe("module discovery", () => {
     for (const module of index.modules) {
       expect(existsSync(join(outDir, module.artifact))).toBe(true);
     }
+  });
+});
+
+function makeSigningKeyPair(keyId: string): {
+  signingKey: { keyId: string; privateKeyPem: string };
+  trustedKeys: readonly ModuleCatalogPublicKey[];
+} {
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+  return {
+    signingKey: {
+      keyId,
+      privateKeyPem: privateKey.export({ type: "pkcs8", format: "pem" }).toString()
+    },
+    trustedKeys: [{ keyId, publicKeyPem: publicKey.export({ type: "spki", format: "pem" }).toString() }]
+  };
+}
+
+describe("buildRegistryArtifacts signing (#1319 Task 2)", () => {
+  const scratchOutDirs: string[] = [];
+  afterAll(() => {
+    for (const dir of scratchOutDirs) rmSync(dir, { recursive: true, force: true });
+  });
+
+  async function publishOneModule(
+    opts: Partial<Parameters<typeof buildRegistryArtifacts>[0]> = {}
+  ): Promise<{ outDir: string }> {
+    const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+    const moduleDirs = discoverModuleDirs(repoRoot).slice(0, 1);
+    const outDir = mkdtempSync(join(tmpdir(), "registry-signing-"));
+    scratchOutDirs.push(outDir);
+    await buildRegistryArtifacts({
+      moduleDirs,
+      outDir,
+      previousIndex: null,
+      generatedAt: new Date().toISOString(),
+      signingKey: null,
+      ...opts
+    });
+    return { outDir };
+  }
+
+  it("with a signing key: writes index.json.sig that verifies over the written index.json bytes", async () => {
+    const { signingKey, trustedKeys } = makeSigningKeyPair("test-catalog-key");
+    const { outDir } = await publishOneModule({ signingKey, trustedKeys });
+
+    const sigPath = join(outDir, "index.json.sig");
+    expect(existsSync(sigPath)).toBe(true);
+    const signature: unknown = JSON.parse(readFileSync(sigPath, "utf8"));
+    expect(signature).toMatchObject({ formatVersion: 1, algorithm: "ed25519", keyId: "test-catalog-key" });
+
+    const indexBytes = readFileSync(join(outDir, "index.json"));
+    expect(verifyCatalogBytes(indexBytes, signature, trustedKeys)).toEqual({
+      verified: true,
+      keyId: "test-catalog-key"
+    });
+  });
+
+  it("without a signing key: no index.json.sig is written", async () => {
+    const { outDir } = await publishOneModule();
+    expect(existsSync(join(outDir, "index.json.sig"))).toBe(false);
+  });
+
+  it("byte tampered after publish fails verification (byte-exactness through the file round-trip)", async () => {
+    const { signingKey, trustedKeys } = makeSigningKeyPair("test-catalog-key");
+    const { outDir } = await publishOneModule({ signingKey, trustedKeys });
+
+    const signature: unknown = JSON.parse(readFileSync(join(outDir, "index.json.sig"), "utf8"));
+    const indexBytes = readFileSync(join(outDir, "index.json"));
+    const tampered = Buffer.concat([indexBytes, Buffer.from("\n")]);
+
+    expect(verifyCatalogBytes(indexBytes, signature, trustedKeys)).toEqual({
+      verified: true,
+      keyId: "test-catalog-key"
+    });
+    expect(verifyCatalogBytes(tampered, signature, trustedKeys)).toEqual({
+      verified: false,
+      reason: "signature-mismatch"
+    });
+  });
+
+  it("signing keyId absent from the trusted keyring: buildRegistryArtifacts throws (D7 self-verification)", async () => {
+    const { signingKey } = makeSigningKeyPair("test-catalog-key");
+    await expect(publishOneModule({ signingKey, trustedKeys: [] })).rejects.toThrow(
+      /self-verification/
+    );
+  });
+});
+
+describe("assertSignatureRequirementSatisfied (#1319 ledger #24)", () => {
+  it("throws when --require-signature is set but no signing key is configured", () => {
+    expect(() => assertSignatureRequirementSatisfied(true, null)).toThrow(/--require-signature/);
+  });
+
+  it("does not throw when --require-signature is set and a signing key is configured", () => {
+    expect(() =>
+      assertSignatureRequirementSatisfied(true, { keyId: "k", privateKeyPem: "pem" })
+    ).not.toThrow();
+  });
+
+  it("does not throw when --require-signature is not set, regardless of signing key", () => {
+    expect(() => assertSignatureRequirementSatisfied(false, null)).not.toThrow();
   });
 });
