@@ -35,21 +35,6 @@ const defaultGatewayLogger: GatewayLogger = {
   error: (event, fields) => console.error(JSON.stringify({ event, ...fields }))
 };
 
-// Reads errorClass/message/statusCode off any thrown value without importing a connector-specific
-// error type — @moss/ai must not depend on @moss/connectors (module isolation). Error subclasses'
-// constructor.name already gives us "GoogleApiError" etc. for free.
-function describeHandlerError(error: unknown): {
-  errorClass: string;
-  message: string | undefined;
-  statusCode: number | undefined;
-} {
-  const errorClass = error instanceof Error ? error.constructor.name : "unknown";
-  const message = error instanceof Error ? error.message : undefined;
-  const rawStatusCode = (error as { statusCode?: unknown } | null)?.statusCode;
-  const statusCode = typeof rawStatusCode === "number" ? rawStatusCode : undefined;
-  return { errorClass, message, statusCode };
-}
-
 export interface AssistantToolGatewayDependencies {
   readonly resolveActiveModules: ActiveModulesResolver;
   readonly repository: AiRepository;
@@ -474,14 +459,13 @@ export class AssistantToolGateway {
           found.tool.externalContent ? found.tool.name : undefined
         )
       };
-    } catch (error) {
-      const { errorClass, message } = describeHandlerError(error);
+    } catch {
+      // #1251: a tool handler (including third-party module handlers) can throw an arbitrary
+      // hostile object. Never touch it — no property access, no instanceof, no prototype walk.
       (this.deps.logger ?? defaultGatewayLogger).error("read_tool_handler_threw", {
         toolName: found.tool.name,
         requestId,
-        actorUserId,
-        errorClass,
-        message
+        errorClass: "handler_error"
       });
       return { ok: false, error: `Tool ${found.tool.name} failed` };
     }
@@ -610,16 +594,13 @@ export class AssistantToolGateway {
         // the engine's MCP stdio channel — never into logs, DB, or job payloads.
         ...(result.media ? { media: result.media } : {})
       };
-    } catch (error) {
-      // never leak internals/secrets from a handler throw
-      const { errorClass, message, statusCode } = describeHandlerError(error);
+    } catch {
+      // #1251: a tool handler (including third-party module handlers) can throw an arbitrary
+      // hostile object. Never touch it — no property access, no instanceof, no prototype walk.
       (this.deps.logger ?? defaultGatewayLogger).error("tool_handler_threw", {
         toolName: found.dto.name,
         requestId: ctx.requestId,
-        actorUserId: ctx.actorUserId,
-        errorClass,
-        message,
-        statusCode
+        errorClass: "handler_error"
       });
       return { ok: false, error: `Tool ${found.dto.name} failed` };
     }

@@ -275,7 +275,17 @@ export function buildCalendarWriteService(deps: CalendarWriteImplDeps): Calendar
       const scopedDb = scopedDbRaw as DataContextDb;
 
       // 1. Resolve the cached row (owner-RLS-scoped; cross-user row is invisible → undefined).
-      const row = await deps.calendarRepository.getById(scopedDb, input.eventId);
+      let row: Awaited<ReturnType<typeof deps.calendarRepository.getById>>;
+      try {
+        row = await deps.calendarRepository.getById(scopedDb, input.eventId);
+      } catch (error) {
+        return {
+          deleted: false,
+          googleDeleted: "skipped-error",
+          cacheMirror: "not-cached",
+          message: error instanceof Error ? error.message : "Couldn't look up that event."
+        };
+      }
       if (!row) {
         return {
           deleted: false,

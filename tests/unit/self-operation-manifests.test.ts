@@ -335,7 +335,7 @@ describe("Sports/News denylist check (#1265)", () => {
 });
 
 describe("Complete built-in self-operation inventory (#1263)", () => {
-  it("classifies every built-in write/destructive tool across exactly the three legal buckets, summing to 48", () => {
+  it("classifies every built-in write/destructive tool across exactly the three legal buckets, summing to 49", () => {
     // People declares its grants in packages/people/src/tools.ts, not a manifest.ts — this
     // walks the real getBuiltInModuleManifests() registry (which resolves that indirection),
     // so it does not undercount the way a manifest.ts-only grep would (34 instead of 38).
@@ -385,7 +385,7 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     // module's first write tools, added on top of #1264's settings-module bump below.
     expect(grantedAtInstall.length).toBe(39);
     expect(confirmAlways.length).toBe(5);
-    expect(userPromotable.length).toBe(4);
+    expect(userPromotable.length).toBe(5);
 
     // Task 12a moved calendar.deleteEvent out of granted_at_install (33 -> ...). PR #1268's
     // security reviews moved two more: Fable moved calendar.createEvent to user_promotable
@@ -400,12 +400,20 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     // weather location, notification preference, and the mandatory undo-apply tool), all
     // granted_at_install — 29 + 1 + 7 = 37 granted. #1265 then added sports.followTeam and
     // sports.unfollowTeam (also granted_at_install) — 37 + 2 = 39 granted, 48 write/destructive
-    // tools total.
-    expect(grantedAtInstall.length + confirmAlways.length + userPromotable.length).toBe(48);
+    // tools total. #1698's calendar lifecycle rebuild added calendar.rescheduleEvent as a new
+    // user_promotable tool (same tier as the existing create/delete calendar tools) — 39 + 5 + 5
+    // = 49 total.
+    expect(grantedAtInstall.length + confirmAlways.length + userPromotable.length).toBe(49);
 
     expect(confirmAlways.sort()).toEqual([...PLANNED_CONFIRM_ALWAYS_TOOL_NAMES].sort());
     expect(userPromotable.sort()).toEqual(
-      ["calendar.deleteEvent", "calendar.createEvent", "tasks.deleteList", "tasks.deleteTag"].sort()
+      [
+        "calendar.deleteEvent",
+        "calendar.createEvent",
+        "calendar.rescheduleEvent",
+        "tasks.deleteList",
+        "tasks.deleteTag",
+      ].sort()
     );
   });
 });
