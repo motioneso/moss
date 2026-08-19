@@ -412,7 +412,7 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
         "calendar.createEvent",
         "calendar.rescheduleEvent",
         "tasks.deleteList",
-        "tasks.deleteTag",
+        "tasks.deleteTag"
       ].sort()
     );
   });
