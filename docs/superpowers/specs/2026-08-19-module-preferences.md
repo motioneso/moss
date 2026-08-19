@@ -94,7 +94,15 @@ Reading a preference that has never been written returns the manifest's declared
 written at install time — an unwritten row and "the user left it at the default" are the same state,
 and keeping them the same avoids a backfill whenever a module changes its default.
 
-Uninstalling a module deletes its `module:<moduleId>:` rows. A module's preferences are its data.
+Uninstalling a module should delete its `module:<moduleId>:` rows — a module's preferences are its
+data. **Not implemented, because there is nothing to attach it to:** the platform has no uninstall
+path. Grepping `apps/` and `packages/` for "uninstall" finds only unrelated comments,
+`packages/module-registry/src/external/reconcile.ts` has no delete logic, and the only
+module-related DELETE routes are the credential ones in
+`packages/settings/src/routes-module-credentials.ts`. A module is removed by deleting its staged
+directory. Left-behind preference rows are inert — nothing reads a key whose module is not active —
+and re-installing restores the user's earlier choice. Building an uninstall path belongs to whoever
+does, and this rule goes in it then.
 
 ### 3. The host renders the page
 
@@ -159,8 +167,8 @@ Each item is an executable assertion. No screenshots.
 3. **Endpoints, integration.** `PATCH` with an undeclared key returns 400. `PATCH` with a string
    value for a boolean preference returns 400. `PATCH` as a different user does not change the
    first user's row.
-4. **Uninstall, integration.** After uninstalling a module, no `module:<moduleId>:` rows remain for
-   any user.
+4. ~~**Uninstall, integration.**~~ Dropped: there is no uninstall path to test. See the storage
+   section above.
 5. **Live path, end to end on a real instance.** Install Food, open Settings, confirm the AI
    estimate switch reads on without anything having been written. Turn it off. Log a meal through
    chat and assert the stored meal carries no estimate. Turn it back on, log another, assert the

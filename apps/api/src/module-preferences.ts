@@ -8,7 +8,9 @@
 //
 // Storage is app.preferences under the namespaced key `module:<moduleId>:<key>`. Nothing
 // is written at install: an absent row means "never touched", which resolves to the
-// manifest default. That is why uninstall only has to delete the namespace.
+// manifest default. There is no uninstall path in the platform today (a module is removed
+// by deleting its staged directory), so nothing cleans this namespace up; a left-behind row
+// is inert, and re-installing the module restores the user's earlier choice.
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { resolveMossEnv, type AccessContext, type DataContextRunner } from "@moss/db";
