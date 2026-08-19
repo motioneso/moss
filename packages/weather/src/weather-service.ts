@@ -1,7 +1,7 @@
 import type { FastifyBaseLogger } from "fastify";
 import type { AccessContext, DataContextRunner, PreferencesPort } from "@moss/db";
 import type { WeatherLocationDto, WeatherTodayDto } from "@moss/shared";
-import { fetchOpenMeteoForecast } from "./open-meteo.js";
+import { fetchOpenMeteoForecast, WeatherUnavailableError } from "./open-meteo.js";
 import { geocodeIp } from "./ip-geocoder.js";
 import { WeatherCache } from "./weather-cache.js";
 import { lookupCityForTimeZone } from "./timezone-city.js";
@@ -55,13 +55,22 @@ export class WeatherService {
     if (cached && sameLocation(cached.resolvedLocation, resolvedLocation)) return cached.data;
     if (cached) this.weatherCache.delete(userId);
 
-    const data = await fetchOpenMeteoForecast(
-      resolvedLocation.location.lat,
-      resolvedLocation.location.lon,
-      "metric",
-      resolvedLocation.location.label,
-      this.fetchFn
-    );
+    let data: WeatherTodayDto;
+    try {
+      data = await fetchOpenMeteoForecast(
+        resolvedLocation.location.lat,
+        resolvedLocation.location.lon,
+        "metric",
+        resolvedLocation.location.label,
+        this.fetchFn
+      );
+    } catch (error) {
+      if (error instanceof WeatherUnavailableError) {
+        this.logger.warn({ step: "open-meteo" }, "weather forecast unavailable");
+        return null;
+      }
+      throw error;
+    }
     this.weatherCache.set(userId, { resolvedLocation, data }, WEATHER_CACHE_TTL_MS);
     return data;
   }
