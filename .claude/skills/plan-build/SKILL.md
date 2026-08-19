@@ -16,6 +16,10 @@ rule without its scar gets argued away.
 
 - An approved design spec in `docs/superpowers/specs/`. Hard process gate.
 - A GitHub `task` issue (`Part of #N`). Hard rule — both gates, not either.
+- **For a new module: agreed front-end mockups of every screen, in that spec.** Settled with Ben
+  before the plan, naming which `jds-*` primitives each screen is built from and what it shows when
+  empty, loading and broken. Food shipped Phase 1 applying zero host classes and rendered as
+  unstyled text; the code was correct, nobody had ever decided what the screen should look like.
 
 ## 1. Seams check — do this BEFORE the plan, not during review
 
