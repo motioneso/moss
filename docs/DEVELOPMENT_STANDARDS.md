@@ -110,6 +110,27 @@ Moss UI must keep the authored design-system shape:
 
 Run `pnpm check:design-tokens` before shipping frontend CSS changes.
 
+### A new module needs its front end designed before it is built
+
+Any new module — built in or installable — must go through a front-end design discussion with Ben,
+producing agreed mockups of every screen it ships, **before** implementation starts. The mockups go
+in the module's design spec under `docs/superpowers/specs/`, and the spec is not approved without
+them. A build plan for a module with no agreed mockups is not ready to execute.
+
+This is a hard gate for the same reason the spec gate is. Food shipped its day view in Phase 1 with
+no design pass at all: the markup used only module-local layout classes and applied not one `jds-*`
+class, so the page rendered as unstyled text on a bare background while Finance — same layout-only
+CSS contract, same platform — looked designed. Nothing in review caught it, because the code was
+correct; there was simply never a moment where anyone decided what the screen should look like.
+
+Two things the discussion must settle, because both were wrong on Food:
+
+- **Which host primitives each screen is built from.** A module's own CSS is layout-only by
+  contract, so all visual identity comes from applying `jds-*` classes in the module's markup.
+  Naming them at design time is what stops a module shipping with none.
+- **What the screen shows when it is empty, loading, or broken.** These are screens, not
+  afterthoughts, and they are the states a new module is most often seen in.
+
 ## Agent Knowledge Tools
 
 Agents working in this repository should keep project knowledge current while they work.
