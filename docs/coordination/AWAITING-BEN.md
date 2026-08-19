@@ -15,6 +15,22 @@ The 2026-08-05 transcript audit found 216 idle hours blocked on Ben, mostly on q
 never recorded — an overnight coordinator sat 15h on a question while this file said nothing was
 pending. Silent waiting is the failure mode this protocol exists to kill.
 
+## #1698 calendar lifecycle (PR #1703) — live-path proof blocked on dev-environment account state (2026-08-19)
+
+Code is complete: create, reschedule, and delete calendar events all work and have tests, PR
+#1703 is up to date. The only thing missing is proving it works end-to-end in the real app, and
+that's blocked by two things on the dev instance that need a person, not more coding:
+
+1. One of the connected Google accounts on the dev instance has stale sign-in details — someone
+   needs to sign back into Google through the browser on that dev instance.
+2. That same account has no real AI provider set up (leftover fake/test ones), so chat won't run
+   for it — someone needs to pick and configure a real AI provider for that account.
+
+Not urgent — the code side is done and safe to sit as "code-complete, unverified" per the
+live-path rule; nothing is at risk overnight. Ben said tonight to ask Fable if I get stuck rather
+than wake him, so I'm pinging Fable rather than his phone for this one. If Fable can't unblock it
+either, this should get a `needs-ben` ping in the morning.
+
 ## #1319 signed module catalog — needs a real Ed25519 signing keypair from Ben (2026-08-18)
 
 Build (relay4) finished Tasks 1-2 of the approved plan (18/18 + 12/12 unit tests, typecheck clean)
