@@ -9,7 +9,12 @@ export function serializeCalendarEvent(event: CalendarEvent): CalendarEventDto {
       ? (event.external_metadata as Record<string, unknown>)
       : {};
 
-  const isMossBlock = JFB_PATTERN.test(event.external_id);
+  // jarvisCreated (written at create time, calendar-write-impl.ts) is the sole authoritative
+  // signal once present — the jfb-prefix regex is a fallback only for rows cached before this
+  // field existed, and must never override an explicit false.
+  const isMossBlock =
+    md.jarvisCreated === true ||
+    (md.jarvisCreated === undefined && JFB_PATTERN.test(event.external_id));
   const allDay = md.allDay === true;
   const attendeeCount =
     typeof md.attendeeCount === "number" && Number.isFinite(md.attendeeCount)
