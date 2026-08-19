@@ -120,6 +120,15 @@ could've been told directly. Say what happened in normal words first; keep exact
 numbers, commit hashes, file paths) available for when he needs to act on one, but don't lead with
 them or stack them. Full guidance: agentmemory `feedback-plain-english.md`.
 
+**Every agent-to-agent message — your escalations, verdicts, reports, relay/reap requests — signs
+off with the sender's own pane id** (`$HERDR_PANE_ID`, or `herdr pane list` matched on the
+sender's session id), e.g. `[pane w1:pFZ]` at the end. Pane numbers reflow on every open/close, so
+this isn't a reply address — it's how you, a successor re-reading the manifest, or Ben tie a given
+message to the exact physical pane that sent it, without cross-referencing a label that may since
+have been reused or reaped. This applies to build agents (`coordinated-build`,
+`coordinated-wrap-up`), QA agents (`coordinated-qa`, Herdr-fallback path), and to you as
+coordinator on every escalation you relay onward.
+
 ## Phase 0a — claim the single-coordinator lock (FIRST, before anything)
 
 There must be **exactly one** coordinator (see incidents: a stale labelled pane once ran a

@@ -102,11 +102,11 @@ coordinator must refuse the merge — so produce it here, not after a rejection.
 gh pr diff <PR> --name-only | .claude/skills/coordinate/resolve-uat-triggers.sh
 ( pnpm test:uat -- "<spec>" > /tmp/cb-uat.log 2>&1; echo "### FINAL test:uat rc=$?" >> /tmp/cb-uat.log ) &
 
-gh pr comment <PR> --body "Live-path proof: <UAT run + rc, screenshots, what was clicked through>"
+gh pr comment <PR> --body "Live-path proof: <UAT run + rc, assertions/evidence, path exercised>"
 ```
 The proof must show the feature **exercised through the real UI on a live dev instance** — owner
-signup → the real Settings/module path → the feature actually running. Screenshots land under
-`test-results/…` (UAT config sets no `screenshot` option, so specs capture frames explicitly).
+signup → the real Settings/module path → the feature actually running. Record the exact assertions
+and bounded DOM, network, or application-log evidence needed to prove that path.
 
 **A passing headless test alone is not the artifact** — it doesn't prove a person can reach the
 path. If you can't produce the proof (no live instance, or a step that needs Ben in person), say
@@ -125,7 +125,12 @@ Via `herdr-pane-message` to your coordinator label:
 > Live-path: <proof comment posted | n/a, no user-facing surface | NOT MET — code-complete,
 > unverified because <reason>>. Branch <b> pushed, rebased on origin/main as of <sha>.
 > Deferred: <none | issue #NN>. Teardown: <instance stopped PIDs … | none started>, <N seed rows
-> deleted | none seeded>, worktree reapable. Ready for QA + merge."
+> deleted | none seeded>, worktree reapable. Ready for QA + merge. [pane <your pane id>]"
+
+Sign off with your own pane id (`$HERDR_PANE_ID`, or `herdr pane list` matched on your session id)
+— pane numbers reflow, so this isn't a return address, it's how the coordinator (or a successor
+reading the manifest later) ties a report to the physical pane that produced it without
+cross-referencing a label that may since have been reused or reaped.
 
 Then stop. **Do not** move the board, close the issue/milestone, or merge — the coordinator owns
 QA, merge order, conflict resolution, and all GitHub bookkeeping.
@@ -177,7 +182,7 @@ or tell the coordinator so it's captured. Don't store secrets.
 | Second gate | `scripts/run-gate.sh start --gate audit:release-hardening` (its own log) |
 | Pre-push trio + rebase | `pnpm format:check && pnpm lint && pnpm typecheck` · `git fetch origin main && git rebase origin/main` |
 | Push + PR | `git push -u origin <b>` · `gh pr create --base main` |
-| Live-path proof (UI-facing) | `resolve-uat-triggers.sh` → `pnpm test:uat -- <spec>` → `gh pr comment` with run + screenshots |
+| Live-path proof (UI-facing) | `resolve-uat-triggers.sh` → `pnpm test:uat -- <spec>` → `gh pr comment` with run + assertions/evidence |
 | Report done | `herdr-pane-message` → coordinator label (PR link + exit codes + live-path status) |
 
 See also: `wrap-up` (the stock skill this scopes down), `coordinated-build`, `relay`.
