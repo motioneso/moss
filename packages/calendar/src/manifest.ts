@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 
-import type { MossModuleManifest } from "@moss/module-sdk";
+import type { MossModuleManifest, ToolRequiresConfirmation } from "@moss/module-sdk";
 import { calendarMonitorProvider } from "./monitor-provider.js";
 import {
   getCalendarBriefingSettingsResponseSchema,
@@ -10,6 +10,9 @@ import {
   deleteCalendarEventResponseSchema
 } from "@moss/shared";
 
+import { requiresCalendarConfirmation } from "./confirmation-policy.js";
+import { resolveCalendarEventRef } from "./event-resolver.js";
+import { CalendarRepository } from "./repository.js";
 import {
   calendarListVisibleEventsExecute,
   calendarToolEventsOutputSchema,
@@ -18,6 +21,30 @@ import {
   calendarDeleteEventExecute,
   summarizeDeleteEvent
 } from "./tools.js";
+
+const calendarConfirmationRepository = new CalendarRepository();
+
+// Resolves the event independently of the tool's own eventId handling so the confirmation
+// decision is provenance-based (spec decision 1), never defaulted from tier alone. A ref that
+// fails to resolve (bad id, RLS mismatch, DB error) fails closed to true — we can't verify
+// provenance, so we ask.
+const deleteEventRequiresConfirmation: ToolRequiresConfirmation = async (scopedDb, input) => {
+  const eventId = typeof input.eventId === "string" ? input.eventId : undefined;
+  if (!eventId) return true;
+
+  const resolved = await resolveCalendarEventRef(
+    scopedDb as never,
+    calendarConfirmationRepository,
+    undefined,
+    eventId
+  );
+  if (!resolved.found) return true;
+
+  const md = resolved.event.external_metadata;
+  const jarvisCreated =
+    md != null && typeof md === "object" && (md as Record<string, unknown>).jarvisCreated === true;
+  return requiresCalendarConfirmation({ jarvisCreated });
+};
 
 export const CALENDAR_MODULE_ID = "calendar";
 export const calendarModuleSqlMigrationDirectory = fileURLToPath(
@@ -282,6 +309,7 @@ export const calendarModuleManifest = {
         }
       },
       outputSchema: deleteCalendarEventResponseSchema,
+      requiresConfirmation: deleteEventRequiresConfirmation,
       execute: calendarDeleteEventExecute,
       summarize: summarizeDeleteEvent
     }

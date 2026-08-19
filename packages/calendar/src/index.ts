@@ -1,3 +1,4 @@
+export * from "./confirmation-policy.js";
 export * from "./event-resolver.js";
 export * from "./manifest.js";
 export * from "./repository.js";
