@@ -3,6 +3,7 @@ import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
 import {
+  MODULE_CATALOG_PUBLIC_KEYS,
   resolveCatalogSigningKey,
   resolveCatalogTrustedKeys,
   signCatalogBytes,
@@ -109,20 +110,23 @@ describe("resolveCatalogSigningKey", () => {
 
 describe("resolveCatalogTrustedKeys", () => {
   it("returns only the pinned keyring when the URL override is not active and no test key is set", () => {
-    expect(resolveCatalogTrustedKeys({})).toEqual([]);
+    expect(resolveCatalogTrustedKeys({})).toEqual(MODULE_CATALOG_PUBLIC_KEYS);
   });
 
   it("adds the test key only when the URL override is active and the test key is set", () => {
     const withoutOverride = resolveCatalogTrustedKeys({
       MOSS_MODULE_CATALOG_TEST_PUBLIC_KEY: "test-pem"
     });
-    expect(withoutOverride).toEqual([]);
+    expect(withoutOverride).toEqual(MODULE_CATALOG_PUBLIC_KEYS);
 
     const withOverride = resolveCatalogTrustedKeys({
       JARVIS_MODULE_REGISTRY_URL: "http://localhost:9999/index.json",
       MOSS_MODULE_CATALOG_TEST_PUBLIC_KEY: "test-pem"
     });
-    expect(withOverride).toEqual([{ keyId: "test", publicKeyPem: "test-pem" }]);
+    expect(withOverride).toEqual([
+      ...MODULE_CATALOG_PUBLIC_KEYS,
+      { keyId: "test", publicKeyPem: "test-pem" }
+    ]);
   });
 
   it("throws in production when the test key is set, with the URL override set", () => {
