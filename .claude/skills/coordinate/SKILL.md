@@ -183,12 +183,23 @@ For each spec cleared to start (serialized specs wait for their predecessor to l
    already exist, be at a shell prompt, and be in the right directory, so **split first, start
    second**:
 
+   **⚠️ `herdr pane split` has no `--tab` flag — it always splits inside the SOURCE pane's own
+   tab.** `<agents-tab-pane>` below MUST already be a pane that lives in the agents tab (`herdr
+   pane list`, check `tab_id`) — never your own coordinator pane. Splitting off yourself silently
+   lands the new pane in your coordinator tab (Ben, 2026-08-19: caught this happening — a build
+   agent spawned straight into the Coordinator's own tab). If no agent pane exists yet to split
+   from (first spawn of a run), split off yourself once, then immediately relocate with `herdr
+   pane move <new-pane> --new-tab --workspace w1 --label "agents"` — **never leave a spawned pane
+   sharing the coordinator's tab, even for one command.**
+
    ```bash
    # 1. make the pane, in the worktree — --cwd lives on split, not on agent start
    herdr pane split <agents-tab-pane> --direction down --cwd $(pwd)/.claude/worktrees/<slug> --no-focus
    # 2. start the agent in that pane; everything after `--` goes to claude
    herdr agent start <name> --kind claude --pane <new-pane> \
      -- --model sonnet --permission-mode bypassPermissions "<boot>"
+   # 3. if step 1 had to split off the coordinator's own pane, relocate now — do not skip this:
+   herdr pane move <new-pane> --tab <existing-agents-tab-id>   # or --new-tab if none exists yet
    ```
 
    Two argument rules, both of which fail loudly and waste a spawn:
