@@ -1,5 +1,7 @@
 import type { WeatherIcon, WeatherTodayDto } from "@moss/shared";
 
+export class WeatherUnavailableError extends Error {}
+
 // WMO Weather interpretation codes → condition label + icon
 // https://open-meteo.com/en/docs#weathervariables
 const WMO_CODE_MAP: Record<number, { condition: string; icon: WeatherIcon }> = {
@@ -63,7 +65,12 @@ export async function fetchOpenMeteoForecast(
   if (!response.ok) {
     throw new Error(`Open-Meteo returned ${response.status}`);
   }
-  const data = (await response.json()) as OpenMeteoResponse;
+  let data: OpenMeteoResponse;
+  try {
+    data = (await response.json()) as OpenMeteoResponse;
+  } catch {
+    throw new WeatherUnavailableError("Open-Meteo returned a non-JSON body");
+  }
   const { condition, icon } = resolveWmoCode(data.current.weather_code);
   return {
     temp: Math.round(data.current.temperature_2m),
