@@ -82,3 +82,18 @@ Ben finds it from the canonical run location too.
 matches the spec literally); otherwise option 1. Pinged via `needs-ben` (see
 `~/.needs-ben/sent/1786483243535565600.msg`). Everything else in #1533 Phase 4 is done — this is
 the only open item. Build agent is waiting event-driven, not polling; coordinator likewise.
+
+## PR #1684 (#1319 signed module catalog) — waiting on merge sign-off
+
+Security-tier change (signing/trust material), so it needs Ben's explicit OK before merge, not
+just green CI. CI is green. The real signature check has now been run for real (published the
+live module list with signing turned on, then checked the signature the way a real install
+would) and it came back verified correctly.
+
+One mistake along the way, already fixed: the first attempt ran the test using the old version of
+the publish process (still on the main branch, before this change), so it published without any
+signature. Low impact — same three modules, just a refreshed timestamp, nothing broken. Re-ran it
+correctly against this pull request's own branch and got a real, verified signature.
+
+Pinged via `needs-ben` (see `~/.needs-ben/sent/1787175512469771082.msg`). Details in
+`docs/coordination/2026-08-19-dogfood-issues-run.md` under "In progress right now: PR #1684".
