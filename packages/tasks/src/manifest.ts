@@ -268,7 +268,8 @@ export const tasksModuleManifest = {
     {
       id: "tasks",
       label: "Tasks",
-      description: "View and manage the active actor's tasks.",
+      description:
+        "View and manage the active actor's tasks: create, update, and complete tasks, organize them into lists and tags, break a task into subtasks, and see them ranked by priority in the do/schedule/delegate/eliminate matrix.",
       path: "/tasks",
       icon: "check-square",
       order: 10,
@@ -279,7 +280,8 @@ export const tasksModuleManifest = {
     {
       id: "tasks.module-settings",
       label: "Tasks",
-      description: "Choose task defaults and assistant task-action permissions.",
+      description:
+        "Choose whether your assistant can create, update, schedule, and complete tasks from chat without asking first.",
       path: "/settings/modules/tasks",
       scope: "user",
       order: 10,

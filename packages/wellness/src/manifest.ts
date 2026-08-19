@@ -64,7 +64,8 @@ export const wellnessModuleManifest = {
     {
       id: "wellness",
       label: "Wellness",
-      description: "Record and review the active actor's wellness check-ins.",
+      description:
+        "Log mood check-ins and medications, track medication-taking streaks and adherence, review history and trends, keep private therapy notes, and export the active actor's wellness data.",
       path: "/wellness",
       icon: "heart-pulse",
       order: 40,
@@ -75,7 +76,8 @@ export const wellnessModuleManifest = {
     {
       id: "wellness.ai-consent",
       label: "Wellness",
-      description: "Choose wellness goals, reminders, and tracking preferences.",
+      description:
+        "Allow or block your assistant from reading your mood check-ins and medication adherence counts, so it can reference them in briefings and answer questions about them.",
       path: "/settings/modules/wellness",
       scope: "user",
       order: 40,
