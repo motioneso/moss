@@ -84,16 +84,13 @@
         "additionalProperties": false,
         "properties": {
           "localDate": {
-            "type": "string",
-            "pattern": "\\d{4}-\\d{2}-\\d{2}"
+            "type": "string"
           },
           "fromLocalDate": {
-            "type": "string",
-            "pattern": "\\d{4}-\\d{2}-\\d{2}"
+            "type": "string"
           },
           "toLocalDate": {
-            "type": "string",
-            "pattern": "\\d{4}-\\d{2}-\\d{2}"
+            "type": "string"
           }
         }
       },
@@ -110,12 +107,10 @@
         "required": ["fromLocalDate", "toLocalDate"],
         "properties": {
           "fromLocalDate": {
-            "type": "string",
-            "pattern": "\\d{4}-\\d{2}-\\d{2}"
+            "type": "string"
           },
           "toLocalDate": {
-            "type": "string",
-            "pattern": "\\d{4}-\\d{2}-\\d{2}"
+            "type": "string"
           }
         }
       },
