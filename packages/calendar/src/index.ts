@@ -1,3 +1,4 @@
+export * from "./event-resolver.js";
 export * from "./manifest.js";
 export * from "./repository.js";
 export * from "./routes.js";
