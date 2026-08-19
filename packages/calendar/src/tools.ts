@@ -1,9 +1,14 @@
-import { assertDataContextDb, resolveMossEnv, type DataContextDb } from "@moss/db";
+import { assertDataContextDb, type DataContextDb } from "@moss/db";
 import type { ToolContext, ToolExecute, ToolResult, ToolServices } from "@moss/module-sdk";
 import { nullableStringSchema } from "@moss/shared";
 
 import type { CalendarWriteService } from "./calendar-write-service.js";
-import { resolveWindow, type FocusBlockInput, type PartOfDay } from "./focus-time.js";
+import {
+  DEFAULT_TIMEZONE,
+  resolveWindow,
+  type FocusBlockInput,
+  type PartOfDay
+} from "./focus-time.js";
 
 export const calendarToolEventsOutputSchema = {
   type: "object",
@@ -129,15 +134,14 @@ function serializeCalendarContextItem(item: CalendarContextItemShape) {
   };
 }
 
-// Configured default timezone for part-of-day band resolution + the card preview. This is
-// the single source of truth for "morning/afternoon/evening" — the impl does NOT make a
+// DEFAULT_TIMEZONE (imported from focus-time.js) is the single source of truth for
+// "morning/afternoon/evening" band resolution + the card preview — the impl does NOT make a
 // Google calendarList.get call to discover the primary-calendar tz (out of scope this slice;
 // see Codex HIGH #4 / spec Open risk #1). resolveWindow maps the band to a concrete UTC
 // instant using THIS tz; the inserted event carries explicit UTC start/end (RFC3339 with a
 // 'Z' offset), so the instant is unambiguous regardless of the user's calendar tz. A future
 // slice may fetch the real calendar tz; this slice accepts the configured default and the
 // card text is only the REQUESTED-window preview.
-const DEFAULT_TIMEZONE = resolveMossEnv(process.env, "JARVIS_DEFAULT_TZ") ?? "America/New_York";
 
 export const calendarListVisibleEventsExecute: ToolExecute = async (
   scopedDb,
