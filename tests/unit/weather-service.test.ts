@@ -29,7 +29,11 @@ describe("WeatherService.getWeatherForUser", () => {
     });
 
     await expect(
-      service.getWeatherForUser({ actorUserId: "00000000-0000-4000-8000-000000000001" }, "1.2.3.4", "UTC")
+      service.getWeatherForUser(
+        { actorUserId: "00000000-0000-4000-8000-000000000001" },
+        "1.2.3.4",
+        "UTC"
+      )
     ).resolves.toBeNull();
   });
 });

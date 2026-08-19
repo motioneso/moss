@@ -91,12 +91,15 @@ lane is building that helper.
 pnpm --filter @moss/weather test > /tmp/weather-test.log 2>&1; echo "EXIT=$?"
 pnpm --filter @moss/jobs test > /tmp/jobs-test.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected exit code: `0` for both, with the new test cases visible and passing in output.
 
 Pre-push trio (per coordinated-build step 3b):
+
 ```bash
 pnpm format:check && pnpm lint && pnpm typecheck
 ```
+
 Expected exit code: `0`.
 
 ## Exit criteria
