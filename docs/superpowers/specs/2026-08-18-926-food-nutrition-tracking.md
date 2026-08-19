@@ -149,8 +149,10 @@ that preceded it. Moss describes chronology only and never claims causation or d
 
 1. As a Moss user, I want Food absent until I install it and to install and enable it independently,
    so that I opt into food tracking without changing unrelated modules.
-2. As a user, I want Food presented alongside health and Wellness settings once installed, so that I
-   can find it where I expect while it remains a separate module.
+2. As a user, I want Food reachable from the main navigation alongside Wellness once installed and
+   enabled, so that I can find it where I expect while it remains a separate module. (Navigation
+   placement only — downloaded modules cannot contribute panes to core Settings, and Food does not
+   need to.)
 3. As a user, I want to type what I ate on the Food page, so that logging a meal is quick.
 4. As a user, I want to tell Moss in Chat what I ate, so that I can log food without navigating away.
 5. As a user, I want to attach a meal photo from Food or Chat, so that Moss can estimate a meal when a
@@ -303,7 +305,8 @@ blocker contract Food consumes.
   treated a symptom.
 - AI estimation uses a Food-owned consent preference and Food-owned per-command/tool gates following
   the Wellness pattern, but defaults off until the user explicitly grants it because meal
-  descriptions and photos are health-adjacent private data. Wellness consent does not grant Food
+  descriptions and photos are health-adjacent private data. The consent toggle lives on the Food
+  page (a module-owned surface), not in core Settings. Wellness consent does not grant Food
   access. Wellness itself enforces its own enabled state and AI-read consent inside the provider port;
   Food never reads the Wellness preference key.
 - Food tables use forced owner-scoped RLS with no administrator private-data bypass. Service and tool
