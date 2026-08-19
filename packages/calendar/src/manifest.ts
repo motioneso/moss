@@ -286,5 +286,21 @@ export const calendarModuleManifest = {
       summarize: summarizeDeleteEvent
     }
   ],
+  features: [
+    {
+      id: "calendar.delete_event_confirmation",
+      description:
+        "Deleting a calendar event asks for confirmation first, then removes it from Google " +
+        "Calendar and notifies attendees. Skips confirmation if automatic deletions are turned " +
+        "on in Calendar settings. One event at a time, not a recurring series."
+    },
+    {
+      id: "calendar.focus_block_scheduling",
+      description:
+        "Holding focus time checks the primary Google Calendar for a free slot and proposes a " +
+        "block for approval. All-day entries like reminders or holidays don't count as conflicts, " +
+        "so they won't block a free day from getting a focus block."
+    }
+  ],
   proactiveMonitor: calendarMonitorProvider
 } satisfies MossModuleManifest;
