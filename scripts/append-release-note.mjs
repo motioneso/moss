@@ -24,7 +24,7 @@ function argument(name) {
 /** Returns null when the pull request body has no usable release note (the normal case). */
 export function parseReleaseNote(body) {
   if (!body) return null;
-  const section = body.match(/^##\s*Release note\s*$([\s\S]*?)(?:^##\s|\Z)/im);
+  const section = body.match(/^##\s*Release note\s*$([\s\S]*?)(?:^##\s|$(?![\s\S]))/im);
   const text = section ? section[1] : body;
 
   const category = text.match(/^Category:\s*(\S.*)$/im)?.[1]?.trim();
