@@ -42,6 +42,40 @@ describe("handleUpgradeCheckJob", () => {
     expect(boss.send).not.toHaveBeenCalled();
   });
 
+  it("passes an AbortSignal timeout to fetch", async () => {
+    process.env.JARVIS_APP_VERSION = "1.0.0";
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ tag_name: "v1.0.0", body: "" })
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const boss = { send: vi.fn() };
+    const { db } = dbWithOwner();
+
+    await handleUpgradeCheckJob(db as never, boss as never);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const options = fetchMock.mock.calls[0][1] as { signal?: unknown };
+    expect(options.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("rejects with a clear error instead of a raw SyntaxError on unparsable JSON", async () => {
+    process.env.JARVIS_APP_VERSION = "1.0.0";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: () => Promise.reject(new SyntaxError("bad json"))
+      }))
+    );
+    const boss = { send: vi.fn() };
+    const { db } = dbWithOwner();
+
+    await expect(handleUpgradeCheckJob(db as never, boss as never)).rejects.toThrow(
+      "Invalid release response: unparsable body"
+    );
+  });
+
   it("caches a newer release and enqueues one owner-scoped notification job", async () => {
     process.env.JARVIS_APP_VERSION = "1.0.0";
     vi.stubGlobal(

@@ -40,7 +40,8 @@ export async function handleUpgradeCheckJob(
     headers: {
       "User-Agent": "Jarvis-Upgrade-Checker",
       Accept: "application/vnd.github.v3+json"
-    }
+    },
+    signal: AbortSignal.timeout(10_000)
   });
 
   if (!res.ok && (res.status === 403 || res.status === 429 || res.status >= 500)) {
@@ -53,7 +54,12 @@ export async function handleUpgradeCheckJob(
     throw new Error(`Failed to fetch latest release: ${res.status}`);
   }
 
-  const release = (await res.json()) as { tag_name: string; body: string };
+  let release: { tag_name: string; body: string };
+  try {
+    release = (await res.json()) as { tag_name: string; body: string };
+  } catch {
+    throw new Error("Invalid release response: unparsable body");
+  }
   if (!release.tag_name) {
     throw new Error("Invalid release response: missing tag_name");
   }
