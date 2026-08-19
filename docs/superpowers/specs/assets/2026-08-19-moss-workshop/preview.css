@@ -1,6 +1,6 @@
 /* Preview-only layout. No colours here - all colour comes from tokens.css. */
 body { margin:0; background:var(--bg); color:var(--text); font-family:var(--font-sans); }
-.pv-page { max-width:1240px; margin:0 auto; padding:var(--space-8) var(--space-7) var(--space-12); }
+.pv-page { max-width:920px; margin:0 auto; padding:var(--space-8) var(--space-6) var(--space-12); }
 .pv-nav { border-bottom:1px solid var(--line); padding:var(--space-3) var(--space-6); display:flex; gap:var(--space-5); align-items:center; }
 .pv-nav a { color:var(--text-muted); text-decoration:none; font-size:var(--text-xs); letter-spacing:.14em; text-transform:uppercase; }
 .pv-nav a.on { color:var(--text); }

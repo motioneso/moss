@@ -329,7 +329,9 @@ Two design rulings a build agent must not undo:
 
 - Only the item that needs a decision is a raised card. Work in progress and live modules are plain
   rows separated by a hairline.
-- Working surfaces use the full width (about 1240px). The narrow reading measure is for prose only.
+- The Workshop and the approval screen sit in a ~920px column, which Ben reviewed and approved. The
+  general standing note that designs often waste horizontal space is a check to run, not a licence to
+  widen these two.
 
 Every style name in the mockups is one the design system already defines. Before changing them, run
 the invented-class audit in the `design-system` skill.
@@ -354,20 +356,68 @@ the invented-class audit in the `design-system` skill.
 
 ## Further Notes
 
-**Open questions a build agent must not silently resolve.** Three are load-bearing and should be
-settled before the work they block:
+**Settled by Ben on 2026-08-19.** The three load-bearing questions this spec originally left open
+are now decided. A build agent implements these as written and raises anything that contradicts them
+rather than reinterpreting.
 
-1. **Where a module's source lives.** A module ships as finished, packed-up code today, not the code
-   someone wrote. This spec requires the code be visible on request and editable in place, so source
-   must live somewhere. Inside the folder means sharing carries it for free but the folder grows;
-   outside means export has to gather it. Blocks: sharing, refining, the "view the code" link.
-2. **What runs the build agent, and with what powers.** Whether it reuses the existing chat session
-   in its per-user scratch directory or is a separate agent run; what it may read and write; and how
-   its output reaches the modules directory. Blocks: the build job, and seam 4.
-3. **Which self-operation rules loosen.** Covered under Implementation Decisions, unresolved in
-   detail. Blocks: the approval surface and the build agent's permitted powers.
+**1. Where a module's source lives — its own directory, beside the modules directory, never inside
+it.**
 
-Remaining open, less load-bearing: what the build screen shows in detail; what a module declares
+An installed module folder contains no source. Publishing strips it deliberately: what ships is the
+manifest, a pre-built worker file, a pre-built web file, the SQL migrations, and a one-line marker
+file (`scripts/publish-module-registry.ts:91-95`). The folder is also fingerprinted at enable time,
+and if its contents change afterwards the module is disabled with "package changed since it was
+enabled" (`scripts/module-reconcile.ts:41` and the drift phase at 396-412).
+
+Two consequences follow, and both are requirements:
+
+- Source is kept in a separate per-module directory on the install, outside the scanned modules
+  directory, so that directory's contract and fingerprint are untouched. Builds happen there too.
+- Refining is never an in-place edit of an installed folder. It is: change the source, rebuild,
+  reinstall, go back through approval. That is also the correct behaviour on its own terms, since a
+  change should be reviewed anyway.
+
+Known limitation to state in the UI, not to solve here: a module shared as a folder carries the
+built version only, so the recipient can run it but cannot ask Moss to change it.
+
+Work in progress goes in a hidden (dot-prefixed) directory. The boot scan skips dot-prefixed names
+(`packages/module-registry/src/node.ts:63`), which is the existing mechanism that keeps a half-written
+module from ever being seen as live.
+
+**2. What runs the build agent — Moss itself, on the user's own configured provider.**
+
+No separate service and no hardcoded provider or model; the existing provider-agnostic routing
+applies unchanged.
+
+The build follows a spec-then-test-then-code shape by default, which the user may wave through:
+Moss writes down what it intends to build — what the module does, what it reaches, what it stores —
+then writes a failing test, then makes it pass. This is a default, not a gate: skipping it skips the
+review step, never the tests.
+
+**3. Which self-operation rules loosen — none.**
+
+All seven categories in `packages/ai/src/gateway/self-operation.ts` stand unchanged. The feature is
+built to fit inside them rather than around them:
+
+- **Moss never installs what it built.** It writes a folder and stops. The human reads the
+  plain-English claims and approves, and the install runs as that human's action. This is what keeps
+  the "Moss may never grant itself authority" rule intact, and it makes the approval screen
+  load-bearing rather than decorative.
+- **Moss never handles the credential.** A module that needs an API key is built with the ability to
+  use one and arrives marked as needing a key from the user. Moss writes code that reads a key it can
+  never itself read. The build does not stop and wait for the key.
+- **A module reaching an outside service is the module, not Moss**, and is governed by the existing
+  module rules once approved.
+- **New tools reaching chat are accepted without a cap or an extra confirmation.** Ben, 2026-08-19:
+  that is the point of modules.
+
+**Still open, and the one that most deserves an early answer: may the build agent fetch things off
+the internet while building** — a library, a package, documentation? The recommendation on the table
+is no for version one: build against what is already in the box. Talking to the AI provider is not at
+issue; that is what every chat message already does. Fetching code nobody has looked at is.
+
+Also still open: whether the written-down plan stops and waits for the user on a first build
+(recommended) or is written down and carried past unless interrupted; what a module declares
 about its tables such that protection can be generated; how a change request finds its module; how
 anyone knows a module works before it is switched on, given there is no preview; what happens when a
 built module breaks at runtime and who fixes it; whether a shared module can be updated by its
