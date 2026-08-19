@@ -63,8 +63,9 @@ export interface SeedOptions {
   readonly jobSearchAiProviderBaseUrl?: string;
   /**
    * #1121: when set, seeds a neutral scripted AI provider/model (see
-   * ./chunks/chat-script.ts) and points JARVIS_CLI_TOOLS_PREFIX at the scripted-provider fixture
-   * binary — the deterministic UAT chat path. Absent by default; default seed behavior is
+   * ./chunks/chat-script.ts) and writes JARVIS_UAT_SCRIPTED_PROVIDER_BIN (#1659 defect 4) so the
+   * scripted-provider fixture's own bin/ lands ahead of the real tools bin on the container's
+   * PATH — the deterministic UAT chat path. Absent by default; default seed behavior is
    * byte-for-byte unchanged.
    */
   readonly chatScript?: UatChatScript;

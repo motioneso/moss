@@ -17,6 +17,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { expect, test, type Page, type Response } from "@playwright/test";
 
 import { moduleChatSurface } from "../../../apps/web/src/shell/chat-surface-key.js";
+import { SUCCESS_LOG_PATH } from "../fixtures/scripted-provider/claude-main.js";
 import { buildUatComposeArgs, restartUatStack } from "../provisioner.js";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 import { execUatSql } from "./job-search-board-sql.js";
@@ -292,5 +293,19 @@ test("chat surface routing: action request renders and settles without reload (#
     );
 
     await shot(page, "04-card-rejected-turn-settled");
+  });
+
+  await test.step("Phase 6: the scripted provider actually ran (#1659 defect 4 live proof)", async () => {
+    // Proves the PATH fix end-to-end: if JARVIS_UAT_SCRIPTED_PROVIDER_BIN had been clobbered
+    // (the defect-4 bug) or never wired onto PATH, bin/claude would resolve to the real Claude
+    // CLI instead of this fixture, which never writes SUCCESS_LOG_PATH — so this file existing
+    // with our scriptId is the live signal the earlier phases' turns were served by the fixture.
+    const projectName = requireProjectName();
+    const successLog = execFileSync(
+      "docker",
+      buildUatComposeArgs(projectName, ["exec", "-T", "jarv1s", "cat", SUCCESS_LOG_PATH]),
+      { encoding: "utf8" }
+    );
+    expect(successLog).toContain("scriptId=1533-surface-probe");
   });
 });

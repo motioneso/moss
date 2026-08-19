@@ -22,15 +22,12 @@ import {
 const TEST_SUBNET = "10.249.0.0/24";
 
 const originalRequestedSubnet = process.env.UAT_DOCKER_SUBNET;
-const originalCliToolsPrefix = process.env.JARVIS_CLI_TOOLS_PREFIX;
 const originalRealChatEnvFile = process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE;
 const originalTmpDir = process.env.TMPDIR;
 
 afterEach(() => {
   if (originalRequestedSubnet === undefined) delete process.env.UAT_DOCKER_SUBNET;
   else process.env.UAT_DOCKER_SUBNET = originalRequestedSubnet;
-  if (originalCliToolsPrefix === undefined) delete process.env.JARVIS_CLI_TOOLS_PREFIX;
-  else process.env.JARVIS_CLI_TOOLS_PREFIX = originalCliToolsPrefix;
   if (originalRealChatEnvFile === undefined) delete process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE;
   else process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE = originalRealChatEnvFile;
   if (originalTmpDir === undefined) delete process.env.TMPDIR;
@@ -41,7 +38,6 @@ describe("provisionForUat setup cleanup", () => {
   it("restores run-scoped state when the requested production subnet is refused", async () => {
     const cleanup = vi.fn();
     process.env.UAT_DOCKER_SUBNET = "10.252.0.0/24";
-    process.env.JARVIS_CLI_TOOLS_PREFIX = "sentinel-original";
     process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE = "sentinel-original-env-file";
 
     await expect(
@@ -59,13 +55,11 @@ describe("provisionForUat setup cleanup", () => {
     ).rejects.toThrow(/10\.252\.0\.0\/24.*production/i);
 
     expect(cleanup).toHaveBeenCalledOnce();
-    expect(process.env.JARVIS_CLI_TOOLS_PREFIX).toBe("sentinel-original");
     expect(process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE).toBe("sentinel-original-env-file");
   });
 
   it("restores run-scoped state when live subnet discovery fails", async () => {
     const cleanup = vi.fn();
-    process.env.JARVIS_CLI_TOOLS_PREFIX = "sentinel-original";
 
     await expect(
       provisionForUat(
@@ -84,13 +78,11 @@ describe("provisionForUat setup cleanup", () => {
     ).rejects.toThrow(/malformed Docker inspect state/i);
 
     expect(cleanup).toHaveBeenCalledOnce();
-    expect(process.env.JARVIS_CLI_TOOLS_PREFIX).toBe("sentinel-original");
   });
 
   it("preserves both setup and credential-cleanup failures", async () => {
     const setupError = new Error("malformed Docker inspect state");
     const cleanupError = new Error("credential cleanup failed");
-    process.env.JARVIS_CLI_TOOLS_PREFIX = "sentinel-original";
     process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE = "sentinel-original-env-file";
 
     const failure = await provisionForUat(
@@ -114,14 +106,12 @@ describe("provisionForUat setup cleanup", () => {
 
     expect(failure).toBeInstanceOf(AggregateError);
     expect((failure as AggregateError).errors).toEqual([setupError, cleanupError]);
-    expect(process.env.JARVIS_CLI_TOOLS_PREFIX).toBe("sentinel-original");
     expect(process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE).toBe("sentinel-original-env-file");
   });
 
   it("restores run-scoped state when the UAT env file cannot be created", async () => {
     const cleanup = vi.fn();
     process.env.TMPDIR = "/definitely-missing-uat-temp-root";
-    process.env.JARVIS_CLI_TOOLS_PREFIX = "sentinel-original";
     process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE = "sentinel-original-env-file";
 
     await expect(
@@ -139,7 +129,6 @@ describe("provisionForUat setup cleanup", () => {
     ).rejects.toThrow();
 
     expect(cleanup).toHaveBeenCalledOnce();
-    expect(process.env.JARVIS_CLI_TOOLS_PREFIX).toBe("sentinel-original");
     expect(process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE).toBe("sentinel-original-env-file");
   });
 });
@@ -264,6 +253,36 @@ describe("writeUatEnvFile", () => {
       expect(contents).toContain(
         "JARVIS_E2E_MODULE_FETCH_BASE=http://uat-1_abcd1234-jsfixture:8080"
       );
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("writes JARVIS_UAT_SCRIPTED_PROVIDER_BIN when a chat script is given", () => {
+    // #1659 defect 4: a dedicated PATH entry, never JARVIS_CLI_TOOLS_PREFIX itself — that var
+    // doubles as the production installer's toolsPrefix, so pointing it at the fixture let
+    // reconcileInstalledProviders() clobber the fixture's own bin/claude with the real CLI on
+    // every container boot.
+    const { path, cleanup } = writeUatEnvFile({
+      webPort: 20080,
+      subnet: TEST_SUBNET,
+      chatScript: "phase1-smoke"
+    });
+    try {
+      const contents = readFileSync(path, "utf8");
+      expect(contents).toContain(
+        "JARVIS_UAT_SCRIPTED_PROVIDER_BIN=/app/tests/uat/fixtures/scripted-provider/bin"
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("omits JARVIS_UAT_SCRIPTED_PROVIDER_BIN when no chat script is given", () => {
+    const { path, cleanup } = writeUatEnvFile({ webPort: 20081, subnet: TEST_SUBNET });
+    try {
+      const contents = readFileSync(path, "utf8");
+      expect(contents).not.toContain("JARVIS_UAT_SCRIPTED_PROVIDER_BIN");
     } finally {
       cleanup();
     }

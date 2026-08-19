@@ -69,7 +69,11 @@ RUN apt-get update \
 # cli-runner PROCESS, but tmux launches each pane as a login shell that re-runs
 # /etc/profile and RESETS PATH — so without this snippet a bare `claude`/`codex` in a
 # pane is "command not found" (login surfaces no OAuth URL; chat can't launch the CLI).
-RUN printf '%s\n' 'export PATH="${JARVIS_CLI_TOOLS_PREFIX:-/data/cli-tools}/bin:$PATH"' \
+# #1659 defect 4: JARVIS_UAT_SCRIPTED_PROVIDER_BIN (when set) is prepended ahead of the
+# real tools bin — a dedicated PATH entry for the UAT scripted-provider fixture, kept
+# deliberately separate from JARVIS_CLI_TOOLS_PREFIX so the production installer's
+# reconcileInstalledProviders() (which also owns that var) can never clobber the fixture.
+RUN printf '%s\n' 'export PATH="${JARVIS_UAT_SCRIPTED_PROVIDER_BIN:+$JARVIS_UAT_SCRIPTED_PROVIDER_BIN:}${JARVIS_CLI_TOOLS_PREFIX:-/data/cli-tools}/bin:$PATH"' \
   > /etc/profile.d/jarvis-cli-path.sh \
   && chmod 0644 /etc/profile.d/jarvis-cli-path.sh
 # The full workspace src + node_modules (tsx, esbuild, workspace symlinks) and the

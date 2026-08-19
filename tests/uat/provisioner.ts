@@ -246,6 +246,14 @@ export function writeUatEnvFile(input: {
         // #1121: absent unless a spec declares uatLevel.chatScript. Omitted rather than written
         // empty so a stack with no scripted chat never hands the provider a "" it would reject.
         ...(input.chatScript ? [`JARVIS_UAT_SEED_CHAT_SCRIPT=${input.chatScript}`] : []),
+        // #1659 defect 4: a dedicated PATH entry for the scripted provider's own bin/claude,
+        // read by Dockerfile:72's profile.d script — deliberately NOT JARVIS_CLI_TOOLS_PREFIX,
+        // which is also the production installer's toolsPrefix (install-service.ts's
+        // reconcileInstalledProviders clobbers whatever sits at ${toolsPrefix}/bin/claude with
+        // the real CLI on every boot). Same absent-unless-set shape as the line above.
+        ...(input.chatScript
+          ? ["JARVIS_UAT_SCRIPTED_PROVIDER_BIN=/app/tests/uat/fixtures/scripted-provider/bin"]
+          : []),
         // #1306 Task 22: absent unless a caller passes jobSearchFixtureBaseUrl — see this
         // function's param doc. JARVIS_RUNTIME_MODE alone (without the base URL) would throw at
         // host boot per resolveE2eFetchOverride's fail-closed guard, so these two are written
@@ -615,8 +623,10 @@ export interface UatProvisionOptions {
   // composeSeedHook below) — both point at the one fixture origin this starts.
   readonly withJobSearchFixture?: boolean;
   /** #1121 Task 4: an id from UAT_CHAT_SCRIPTS (tests/uat/seed/types.ts). Threads to
-   *  composeSeedHook's chatScript ctx field, and (when set) points JARVIS_CLI_TOOLS_PREFIX at the
-   *  scripted-provider fixture binary for the duration of provisioning. */
+   *  composeSeedHook's chatScript ctx field, and (when set) writes JARVIS_UAT_SCRIPTED_PROVIDER_BIN
+   *  (#1659 defect 4) so the container's profile.d script puts the scripted-provider fixture's
+   *  own bin/ ahead of the real tools bin on PATH — never JARVIS_CLI_TOOLS_PREFIX, which the
+   *  production installer also owns. */
   readonly chatScript?: string;
 }
 
@@ -694,22 +704,6 @@ export async function provisionForUat(
   const previousRealChatEnvFile = process.env[REAL_CHAT_ENV_FILE_RESULT_ENV];
   const realChatEnvFile = await (dependencies.writeRealChatEnvFile ?? writeUatRealChatEnvFile)();
 
-  // #1121 Task 4: same whole-function-scoped override shape as realChatEnvFile above — set once
-  // before the retry loop (a port-bind retry reuses it across attempts within this call), restored
-  // in every exit path below so it never leaks into a later provisionForUat call in the same
-  // process (mirrors the REAL_CHAT_ENV_FILE_RESULT_ENV precedent).
-  const previousCliToolsPrefix = process.env.JARVIS_CLI_TOOLS_PREFIX;
-  if (opts?.chatScript) {
-    process.env.JARVIS_CLI_TOOLS_PREFIX = "/app/tests/uat/fixtures/scripted-provider";
-  }
-  const restoreCliToolsPrefix = () => {
-    if (!opts?.chatScript) return;
-    if (previousCliToolsPrefix === undefined) {
-      delete process.env.JARVIS_CLI_TOOLS_PREFIX;
-    } else {
-      process.env.JARVIS_CLI_TOOLS_PREFIX = previousCliToolsPrefix;
-    }
-  };
   let runStateCleaned = false;
   const cleanupRunScopedState = () => {
     if (runStateCleaned) return;
@@ -721,7 +715,6 @@ export async function provisionForUat(
       } else {
         process.env[REAL_CHAT_ENV_FILE_RESULT_ENV] = previousRealChatEnvFile;
       }
-      restoreCliToolsPrefix();
       runStateCleaned = true;
     }
   };
