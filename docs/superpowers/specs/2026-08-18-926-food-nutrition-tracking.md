@@ -1,8 +1,10 @@
 # Food tracking and nutrition estimates (#926)
 
-**Status:** APPROVED by Ben 2026-08-18  
+**Status:** APPROVED by Ben 2026-08-18; revised 2026-08-18 under the product-owner distribution
+ruling (see Module distribution model)  
 **Issue:** #926  
-**Primary verification seam:** log food through Chat or the Food page, inspect the dated estimate, then query the same history through Moss
+**Primary verification seam:** install Food, log food through Chat or the Food page, inspect the
+dated estimate, then query the same history through Moss
 
 ## Problem Statement
 
@@ -15,11 +17,84 @@ The feature must stay honest about uncertainty. A description, voice transcript,
 produce measured nutrition or establish that a food caused someone to feel sick. Moss should provide useful
 estimates and chronological context without presenting either as medical fact.
 
+## Module distribution model (product-owner ruling, 2026-08-18)
+
+Every Moss-authored first-party module is **distributable and not installed by default**, and
+distributable modules may also be third-party. Food is the first module specified under this model:
+it ships as a distributable module package that a user (or instance owner) installs and then
+enables, exactly as a third-party module would. Food must not assume compiled-in, always-installed
+status anywhere in its manifest, lifecycle, or tests.
+
+The purpose of this ruling is bigger than Food: it sets the ground rules for module development
+generally. As Moss grows, users should be able to create their own modules without modifying the
+core platform. Food is therefore the exemplar: it must be buildable using only the public module
+platform contracts an outside author would have. Anywhere Food would need a privileged seam, a core
+edit, or first-party-only access is by definition a platform gap — evidence for a blocker issue,
+not a license for Food to be special.
+
+The platform mechanics of distribution — packaging, installation, the not-installed-by-default
+posture, and how first-party authorship interacts with the existing module platform — are **not
+specified or built here**. They are a core-platform capability with their own issue and spec
+(Blocker P1 below). This spec defines only what Food requires from that contract.
+
+## Planning Constraint (binding)
+
+**#926 and its implementation plan contain only Food module-package work.** That means the Food
+package itself: its manifest and lifecycle declarations, its owned SQL/migrations, application
+services, repositories, UI, assistant tools, export/deletion declarations, and tests.
+
+- Any generic core-platform capability that Food needs and that does not already exist is **not**
+  #926 work. It becomes a **separate issue with its own approved spec**, and that issue **blocks
+  #926**. The Food plan consumes the declared contract; it never carries the core implementation.
+- This applies to capabilities already known missing (the Platform Blockers below) and to any
+  further gap discovered during planning or build. Discovering a new gap mid-build pauses the
+  affected Food work and files a blocker; it does not license a core edit inside the Food plan.
+- Edits to core packages (`packages/ai`, `packages/jobs`, `packages/settings`,
+  `packages/module-sdk`, `packages/module-registry`, `packages/wellness`, the web shell, the
+  composition root) are out of scope for the Food plan, with one narrow exception: the small
+  registration/wiring line a module contract explicitly requires every consumer to add, where the
+  blocker's spec has already defined that seam. Even that exception is a smell under the
+  third-party goal — a true outside author cannot edit core at all — so P1 should prefer
+  declaration-driven registration over per-module core wiring wherever practical.
+
+## Platform Blockers (separate issues; each blocks #926)
+
+- **P1 — Distributable first-party modules.** Packaging, distribution, installation, and the
+  not-installed-by-default posture for Moss-authored modules; how install/enable/disable and the
+  existing first-party lifecycle guarantees (retain on disable, export sections, account-deletion
+  cascade, Settings archive assembly without per-module hand-wiring in core) are delivered for
+  distributable modules. Food requires: install → enable through the real Settings/module path;
+  disable hides surfaces and tools while retaining data; account deletion removes module-owned
+  rows; export sections appear in the user's archive.
+- **P2 — Image input on the structured-AI path.** Image content blocks in the structured provider
+  adapters, model resolution using the existing `vision` capability, and an owner-scoped Vault
+  image read available to estimators. Today no call site resolves `vision` and the structured
+  adapters carry text-only turns; this extension is core `packages/ai` work. Food requires: submit
+  an authorized attachment reference plus a text prompt to the structured path and receive the same
+  schema-validated result contract as text-only estimation, with the user's configured
+  vision-capable model resolved by capability.
+- **P3 — Wellness check-in context port.** A narrow, consent-aware provider interface declared in
+  the module SDK, implemented by Wellness, and wired at the composition root (following the
+  existing provider-port precedents). It returns owner-scoped check-in timestamps with a bounded
+  label derived from existing feeling and sensation fields. Wellness enforces its own enabled state
+  and AI-read consent inside the implementation. Food requires: query the port for check-ins in a
+  bounded window for the active actor; a null/empty result when Wellness is absent, unconsented, or
+  has no matching check-in.
+- **P4 — Job payload allowlist keys.** The jobs package validates durable-job payloads against a
+  closed metadata-only key allowlist. If Food estimation uses a durable job, its payload keys
+  (actor id, meal id, estimate revision, idempotency metadata) must be admitted by the core
+  allowlist. Small, but it is a core `packages/jobs` edit and therefore rides with a blocker
+  (fold into P1's platform spec or file separately at planning time) — never in the Food plan.
+
+Planning for #926 starts only when each blocker's contract is approved; building starts only when
+the contracts Food consumes are on main.
+
 ## Solution
 
-Add an optional Food module alongside Wellness. A user can log a meal from the Food page or by telling
-Moss in Chat, using text, a photo, or voice through the capture capabilities Moss already supports.
-The user may log during a meal, immediately afterward, or for an earlier date and time.
+Add Food as a distributable module alongside Wellness, installed and enabled by the user. Once
+enabled, a user can log a meal from the Food page or by telling Moss in Chat, using text, a photo,
+or voice through the capture capabilities Moss already supports. The user may log during a meal,
+immediately afterward, or for an earlier date and time.
 
 The Food page provides a simple calendar/date view. Each day shows its meals, their estimated
 nutrition, and estimated daily totals. The user can correct the meal description, consumed time, and
@@ -29,15 +104,15 @@ when the input is incomplete; Moss asks for clarification instead of inventing p
 Food owns its records and reporting. Moss can answer bounded natural-language questions such as
 “What did I eat this week?” and “How much protein did I average?” When Wellness is enabled, has an
 already-recorded check-in, and the user has allowed the relevant AI access, Wellness may provide the
-check-in time through a declared module boundary. Food can then return meals that preceded it. Moss
-describes chronology only and never claims causation or diagnosis.
+check-in time through the declared check-in context port (Blocker P3). Food can then return meals
+that preceded it. Moss describes chronology only and never claims causation or diagnosis.
 
 ## User Stories
 
-1. As a Moss user, I want to enable Food independently, so that I can use food tracking without
-   changing unrelated modules.
-2. As a user, I want Food presented alongside health and Wellness settings, so that I can find it
-   where I expect while it remains a separate module.
+1. As a Moss user, I want Food absent until I install it and to install and enable it independently,
+   so that I opt into food tracking without changing unrelated modules.
+2. As a user, I want Food presented alongside health and Wellness settings once installed, so that I
+   can find it where I expect while it remains a separate module.
 3. As a user, I want to type what I ate on the Food page, so that logging a meal is quick.
 4. As a user, I want to tell Moss in Chat what I ate, so that I can log food without navigating away.
 5. As a user, I want to attach a meal photo from Food or Chat, so that Moss can estimate a meal when a
@@ -110,17 +185,22 @@ describes chronology only and never claims causation or diagnosis.
 
 ## Implementation Decisions
 
-- Build Food as a separate optional module using the existing module manifest, navigation, settings,
-  route, tool, permission, and lifecycle contracts. Place Food adjacent to Wellness in user-facing
-  navigation/settings; do not add a speculative manifest grouping system solely for this feature.
-- Food owns its data, application services, UI, assistant tools, export, and deletion behavior.
-  Wellness must not import Food internals or read Food tables, and Food must not import Wellness
-  internals or read Wellness tables.
-- Add Food-owned, owner-scoped storage for meals and their nutrition estimates. A meal stores the
-  consumed timestamp, separately records creation/update timestamps, preserves a bounded original
-  description, records capture kind (`text`, `photo`, or `voice`), and has an explicit estimate state.
-  `voice` is recorded only when the Food-page control can supply that provenance; Chat dictation
-  arrives through the existing composer as `text`.
+All decisions below describe work inside the Food module package unless they explicitly name a
+blocker contract Food consumes.
+
+- Build Food as a distributable module (Blocker P1) using the declared module manifest, navigation,
+  settings, route, tool, permission, and lifecycle contracts. Place Food adjacent to Wellness in
+  user-facing navigation/settings; do not add a speculative manifest grouping system solely for
+  this feature.
+- Food owns its data, application services, UI, assistant tools, export declarations, and deletion
+  declarations. Wellness must not import Food internals or read Food tables, and Food must not
+  import Wellness internals or read Wellness tables. Food's only Wellness contact is the check-in
+  context port contract (Blocker P3).
+- Add Food-owned, owner-scoped storage for meals and their nutrition estimates, with migrations in
+  Food's own module SQL. A meal stores the consumed timestamp, separately records creation/update
+  timestamps, preserves a bounded original description, records capture kind (`text`, `photo`, or
+  `voice`), and has an explicit estimate state. `voice` is recorded only when the Food-page control
+  can supply that provenance; Chat dictation arrives through the existing composer as `text`.
 - Store the normalized estimate with the meal for calories, protein, carbohydrates, fat, fiber,
   sugar, and sodium using one canonical unit per nutrient. Store estimator/model provenance,
   estimate revision, and bounded uncertainty or missing-detail notes. Unknown, pending, and failed
@@ -135,11 +215,11 @@ describes chronology only and never claims causation or diagnosis.
 - Meal photos remain in the existing private attachment/Vault lifecycle. Food stores only the
   authorized attachment reference needed to estimate or display the meal; it does not copy image
   bytes into Food tables, logs, metrics, or job payloads.
-- Text estimation reuses the configured structured-AI/model-resolution path. Photo estimation adds
-  the minimum missing image plumbing to that path: image content blocks in structured provider
-  adapters, resolution using the existing `vision` capability, and an owner-scoped Vault image read
-  for the estimator. Reuse the capability enum, model tagging, Vault authorization, and existing
-  schema-validation/repair loop; do not route Food-page photos through a synthetic Chat turn.
+- Text estimation uses the configured structured-AI/model-resolution path as it exists today. Photo
+  estimation consumes the image-capable structured contract delivered by Blocker P2; Food-package
+  work is limited to invoking that contract with an authorized attachment reference and handling
+  its results. Do not route Food-page photos through a synthetic Chat turn, and do not extend the
+  AI package inside the Food plan.
 - Do not add a nutrition database, barcode catalog, new provider, or bespoke estimation framework
   for this MVP.
 - Text and voice inputs are normalized to bounded meal descriptions. The estimator must return
@@ -149,9 +229,9 @@ describes chronology only and never claims causation or diagnosis.
   complete in the request when practical or through the existing durable job path, but the visible
   contract is the same: `pending`, `needs_details`, `estimated`, or `failed`, with idempotent retry.
 - If estimation uses a durable job, its payload contains only actor id, meal id, estimate revision,
-  and idempotency metadata. Add those exact keys to the jobs package's metadata-only payload
-  allowlist. Workers load private inputs under the actor context. Descriptions, nutrition, photo
-  bytes, and transcripts never enter queue payloads.
+  and idempotency metadata, using keys admitted by the core payload allowlist (Blocker P4). Workers
+  load private inputs under the actor context. Descriptions, nutrition, photo bytes, and
+  transcripts never enter queue payloads.
 - Direct Food-page logging and Chat logging call the same Food application command. The Food module
   exposes module-owned assistant tools for creating, listing/summarizing, updating, and deleting
   meals; Chat does not write Food tables directly.
@@ -173,11 +253,10 @@ describes chronology only and never claims causation or diagnosis.
 - Food exposes bounded read operations for meals and aggregate nutrition over an authorized date
   range. Moss answers historical questions from these structured results rather than unrestricted
   SQL, raw attachments, or chat-memory guesses.
-- For “before I felt sick,” the Wellness module may expose a narrow, consent-aware provider port
-  through the module SDK, implemented by Wellness and wired at the composition root. It returns
-  owner-scoped check-in timestamps with a bounded label derived from existing feeling and sensation
-  fields. Food adds no symptom record and has no direct Wellness dependency. The default preceding
-  window is 24 hours unless the user asks for another range.
+- For “before I felt sick,” Food consumes the Wellness check-in context port (Blocker P3). Food
+  adds no symptom record and has no direct Wellness dependency; the port's interface, Wellness-side
+  implementation, and composition wiring are the blocker's deliverable, not Food-plan work. The
+  default preceding window is 24 hours unless the user asks for another range.
 - Check-in-context answers use chronological language such as “you logged these meals before the
   check-in.” Prompts, tool descriptions, and UI must not say a food caused, triggered, diagnosed, or
   treated a symptom.
@@ -191,28 +270,33 @@ describes chronology only and never claims causation or diagnosis.
 - Logs and metrics contain only bounded identifiers, capture kind, estimate state/revision, duration,
   nutrient-field presence, and error class. They exclude descriptions, transcripts, photos, nutrient
   values, check-in labels, and AI prompt/response bodies.
-- Food declares export sections and account-deletion cascade tables like Wellness, and the Settings
-  archive assembler receives the required explicit Food export wiring. Export copy warns that food
-  history is sensitive. Disabling Food follows the first-party deny-row model: surfaces and tools are
-  hidden while data is retained. Account deletion removes Food-owned rows; meal photos follow the
-  existing Chat-attachment Vault lifecycle and are deleted with the account's Vault. A separate Food
-  purge or per-photo delete operation is not added in this slice.
+- Food declares export sections and account-deletion cascade tables in its own manifest; the
+  platform contract from Blocker P1 assembles them. Export copy warns that food history is
+  sensitive. Disabling Food hides its surfaces and tools while data is retained. Account deletion
+  removes Food-owned rows; meal photos follow the existing Chat-attachment Vault lifecycle and are
+  deleted with the account's Vault. A separate Food purge or per-photo delete operation is not
+  added in this slice.
 
 ## Testing Decisions
 
-- The primary acceptance test exercises external behavior through both supported entry points: log
-  food through Chat or the Food page, observe the dated meal and estimate on Food, query the same
-  history through Moss, and optionally query preceding meals for an already-recorded Wellness
-  check-in. Assert public responses and rendered behavior, not prompts or private helper calls.
+- The primary acceptance test exercises external behavior through both supported entry points,
+  starting from the module's real install path: install and enable Food, log food through Chat or
+  the Food page, observe the dated meal and estimate on Food, query the same history through Moss,
+  and optionally query preceding meals for an already-recorded Wellness check-in. Assert public
+  responses and rendered behavior, not prompts or private helper calls.
 - Run the primary contract with a typed breakfast, photographed lunch, and voice-transcribed dinner.
   Verify consumed dates in the actor's timezone, meal estimates, estimated daily totals, and matching
   historical answers.
+- Lifecycle tests prove Food is absent before install, appears after install and enable, and that
+  disable hides surfaces and tools while retaining data — all through the platform contract, not
+  test-only shortcuts.
 - Module/API integration tests cover text, authorized image, and voice-transcript creation; explicit
   historical timestamps; validation; idempotent retries; estimate state transitions; corrections;
   stale-revision rejection; deletion confirmation; and incomplete totals.
 - Estimator contract tests use deterministic structured-provider fixtures for a complete estimate, an
   ambiguous portion requiring clarification, invalid structured output, unsupported vision, provider
-  failure, and a successful retry. Tests assert state and schema, not model prose.
+  failure, and a successful retry. Tests assert state and schema, not model prose. Image-path
+  fixtures exercise the Blocker P2 contract from the consumer side only.
 - UI tests cover enablement, empty state, date navigation, direct text/photo/voice entry, ordered meal
   rows, estimate/uncertainty labels, incomplete and failed states, retry, edit, delete confirmation,
   daily totals, keyboard behavior, and narrow-width layout.
@@ -221,24 +305,29 @@ describes chronology only and never claims causation or diagnosis.
   confirmation policy.
 - Timezone tests cover a meal near midnight, daylight-saving transitions, late entry, day totals,
   range endpoints, and average calculations without depending on the server timezone.
-- Cross-module tests prove Wellness shares only an authorized check-in timestamp and bounded label,
-  Food returns the configured preceding window, missing module/data/consent produces an honest
-  explanation, and the answer never claims causation. Include Wellness consent unset with Wellness
-  active while Food consent is unset, proving Food estimation remains off independently.
+- Cross-module tests prove Wellness shares only an authorized check-in timestamp and bounded label
+  through the P3 port, Food returns the configured preceding window, missing module/data/consent
+  produces an honest explanation, and the answer never claims causation. Include Wellness consent
+  unset with Wellness active while Food consent is unset, proving Food estimation remains off
+  independently.
 - Privacy tests use two actors and prove neither normal nor administrator context can read, mutate,
   export, or attach another user's Food data. Tests also prove Food cannot read Wellness tables and
   Wellness cannot read Food tables directly.
 - Data-handling tests prove raw photos/audio, meal text, nutrient values, and check-in labels do not
   appear in logs or job payloads; AI routing and explicit Food consent are honored; disable retains
   Food data, and account deletion removes Food rows and the account Vault.
-- The live acceptance run logs typed, photographed, and dictated meals, corrects one estimate, checks
-  daily totals, asks “What did I eat this week?” and “How much protein did I average?”, records a
-  Wellness check-in, asks what preceded it, and verifies chronological/non-medical wording at desktop
-  and narrow widths. Exercise microphone capture on a secure-context instance; otherwise verify the
-  existing transcription endpoint directly and use its returned text in the Food-page flow.
+- The live acceptance run installs Food through the real install path, then logs typed, photographed,
+  and dictated meals, corrects one estimate, checks daily totals, asks “What did I eat this week?”
+  and “How much protein did I average?”, records a Wellness check-in, asks what preceded it, and
+  verifies chronological/non-medical wording at desktop and narrow widths. Exercise microphone
+  capture on a secure-context instance; otherwise verify the existing transcription endpoint
+  directly and use its returned text in the Food-page flow.
 
 ## Out of Scope
 
+- Core-platform implementation of any blocker capability (P1–P4): module distribution/installation
+  mechanics, structured-AI image plumbing, the Wellness port's interface/implementation/wiring, and
+  jobs-allowlist changes are delivered by their own issues, never inside #926.
 - Diagnosing food reactions, allergies, intolerances, illness, or any causal relationship between a
   meal and a Wellness check-in.
 - Medical advice, emergency guidance, treatment recommendations, or clinician workflows.
@@ -262,4 +351,9 @@ describes chronology only and never claims causation or diagnosis.
   estimates are insufficient.
 - Food and Wellness may share neutral platform contracts and communicate through declared ports, but
   they remain separately installable modules with separate private data ownership and consent.
-
+- Food is the first Moss-authored module specified under the distributable, not-installed-by-default
+  ruling, and it doubles as the dogfooding pass for third-party module development: if Food cannot
+  be built against the public platform contracts alone, a future outside author cannot either, and
+  the missing capability belongs in a platform blocker. Where this spec and the P1 platform spec
+  disagree on lifecycle mechanics, P1 wins on mechanism and this spec wins on Food's required
+  user-visible behavior.
