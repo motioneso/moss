@@ -87,6 +87,15 @@ const ESTIMATE_STATE_LABEL: Record<EstimateState, string> = {
   failed: "Estimate failed"
 };
 
+/** Host badge tone per estimate state, so a row's status reads at a glance rather than needing
+ * the label to be parsed. The tones are the design system's own — nothing is defined here. */
+const ESTIMATE_STATE_TONE: Record<EstimateState, string> = {
+  pending: "jds-badge--neutral",
+  needs_details: "jds-badge--amber",
+  estimated: "jds-badge--forest",
+  failed: "jds-badge--red"
+};
+
 type NutrientKey = keyof Nutrients;
 
 const NUTRIENT_FIELDS: ReadonlyArray<{
@@ -113,14 +122,19 @@ function formatNutrientValue(value: number | null, unit: string, decimals: numbe
 
 // ── nutrient list (shared by a meal row and the totals block) ────────────
 
+/**
+ * The seven nutrients as host stat tiles. `jds-stat-tile` is authored for the Today page's
+ * clickable tiles, so `.fud-nutrients` turns the pointer cursor off — these are read-only
+ * figures, and a hand cursor over something that does nothing reads as a broken link.
+ */
 function NutrientList(props: { nutrients: Nutrients | null }): ReactNodeLike {
   const nutrients = props.nutrients;
   return (
     <dl className="fud-nutrients">
       {NUTRIENT_FIELDS.map((field) => (
-        <div className="fud-nutrient" key={field.key}>
-          <dt>{field.label}</dt>
-          <dd>
+        <div className="fud-nutrient jds-stat-tile" key={field.key}>
+          <dt className="jds-stat-tile__label">{field.label}</dt>
+          <dd className="jds-stat-tile__value">
             {formatNutrientValue(
               nutrients ? nutrients[field.key] : null,
               field.unit,
@@ -138,18 +152,22 @@ function NutrientList(props: { nutrients: Nutrients | null }): ReactNodeLike {
 function MealRow(props: { meal: Meal; key?: string }): ReactNodeLike {
   const meal = props.meal;
   return (
-    <li className="fud-meal-row">
+    <li className="fud-meal-row jds-card jds-card--pad-sm">
       <div className="fud-meal-main">
-        <span className="fud-meal-time">
+        <span className="fud-meal-time jds-eyebrow">
           {formatMealTime(meal.consumedAt, meal.timezoneOffset)}
         </span>
-        <span className="fud-meal-desc">
+        <span className="fud-meal-desc jds-card-title">
           {meal.description}
           {meal.servingNote ? ` (${meal.servingNote})` : ""}
         </span>
         <span className="fud-meal-tags">
-          <span className="fud-badge">{CAPTURE_KIND_LABEL[meal.captureKind]}</span>
-          <span className="fud-badge">{ESTIMATE_STATE_LABEL[meal.estimateState]}</span>
+          <span className="jds-badge jds-badge--outline">
+            {CAPTURE_KIND_LABEL[meal.captureKind]}
+          </span>
+          <span className={`jds-badge ${ESTIMATE_STATE_TONE[meal.estimateState]}`}>
+            {ESTIMATE_STATE_LABEL[meal.estimateState]}
+          </span>
         </span>
       </div>
       <NutrientList nutrients={meal.estimateState === "estimated" ? meal.nutrients : null} />
@@ -162,13 +180,13 @@ function MealRow(props: { meal: Meal; key?: string }): ReactNodeLike {
 function TotalsBlock(props: { totals: DailyTotals }): ReactNodeLike {
   const totals = props.totals;
   return (
-    <div className="fud-totals">
+    <div className="fud-totals jds-card jds-card--sunken">
       <div className="fud-totals-row">
-        <span className="fud-badge">Estimated totals</span>
+        <span className="jds-eyebrow jds-eyebrow--accent">Estimated totals for the day</span>
       </div>
       <NutrientList nutrients={totals.nutrients} />
       {totals.incomplete ? (
-        <p className="fud-disclosure" role="note">
+        <p className="fud-disclosure jds-caption" role="note">
           {totals.mealsWithoutEstimate === 1
             ? "1 meal on this day has no completed estimate — totals may be incomplete."
             : `${totals.mealsWithoutEstimate} meals on this day have no completed estimate — totals may be incomplete.`}
@@ -190,7 +208,7 @@ function ConsentBanner(props: { query: QueryState<ConsentResult> }): ReactNodeLi
   if (query.status === "loading") {
     return (
       <div className="fud-consent" role="status">
-        <span className="fud-badge">Consent: checking…</span>
+        <span className="jds-badge jds-badge--neutral">Consent: checking…</span>
       </div>
     );
   }
@@ -198,24 +216,24 @@ function ConsentBanner(props: { query: QueryState<ConsentResult> }): ReactNodeLi
   if (outcome.kind === "disabled") {
     return (
       <div className="fud-consent" role="status">
-        <span className="fud-badge">Food is turned off on the server</span>
+        <span className="jds-badge jds-badge--amber">Food is turned off on the server</span>
       </div>
     );
   }
   if (outcome.kind === "blocked" || outcome.kind === "error") {
     return (
       <div className="fud-consent" role="status">
-        <span className="fud-badge">Consent: unavailable</span>
+        <span className="jds-badge jds-badge--neutral">Consent: unavailable</span>
       </div>
     );
   }
   return (
     <div className="fud-consent" role="status">
-      <span className="fud-badge">
-        {outcome.result.granted
-          ? "AI estimation consent: granted"
-          : "AI estimation consent: not granted"}
-      </span>
+      {outcome.result.granted ? (
+        <span className="jds-badge jds-badge--forest">AI estimation consent: granted</span>
+      ) : (
+        <span className="jds-badge jds-badge--amber">AI estimation consent: not granted</span>
+      )}
     </div>
   );
 }
@@ -239,13 +257,21 @@ export function Root(): ReactNodeLike {
   return (
     <div className="fud-root">
       <header className="fud-header">
-        <span className="fud-badge">Module</span>
+        <span className="jds-eyebrow jds-eyebrow--muted">Module</span>
         <h1>Food</h1>
       </header>
       <ConsentBanner query={consentQuery} />
-      <div className="fud-datebar">
-        <label htmlFor="fud-date-input">Date</label>
-        <input id="fud-date-input" type="date" value={localDate} onChange={onDateChange} />
+      <div className="fud-datebar jds-card jds-card--pad-sm">
+        <label className="jds-eyebrow" htmlFor="fud-date-input">
+          Date
+        </label>
+        <input
+          id="fud-date-input"
+          className="jds-input jds-input--sm"
+          type="date"
+          value={localDate}
+          onChange={onDateChange}
+        />
       </div>
       {renderMealsSection(mealsQuery)}
     </div>
@@ -253,19 +279,22 @@ export function Root(): ReactNodeLike {
 }
 
 function renderMealsSection(query: QueryState<MealsListResult>): ReactNodeLike {
+  // Every state below uses the host's own empty-state pattern (jds-empty__title / __sub inside a
+  // sunken card) rather than bare paragraphs, so "nothing here yet" looks deliberate instead of
+  // looking like the page failed to load.
   if (query.status === "loading") {
     return (
-      <div className="fud-state" role="status">
-        <p>Loading…</p>
+      <div className="fud-state jds-card jds-card--sunken" role="status">
+        <p className="jds-empty__sub">Loading…</p>
       </div>
     );
   }
   const outcome = query.outcome;
   if (outcome.kind === "disabled") {
     return (
-      <div className="fud-state" role="status">
-        <h2>Food is turned off</h2>
-        <p>
+      <div className="fud-state jds-card jds-card--sunken" role="status">
+        <h2 className="jds-empty__title">Food is turned off</h2>
+        <p className="jds-empty__sub">
           This module was disabled on the server. Your data is preserved; an administrator can
           re-enable it under Settings.
         </p>
@@ -274,24 +303,24 @@ function renderMealsSection(query: QueryState<MealsListResult>): ReactNodeLike {
   }
   if (outcome.kind === "blocked") {
     return (
-      <div className="fud-state" role="status">
-        <p>This data needs confirmation in the assistant.</p>
+      <div className="fud-state jds-card jds-card--sunken" role="status">
+        <p className="jds-empty__sub">This data needs confirmation in the assistant.</p>
       </div>
     );
   }
   if (outcome.kind === "error") {
     return (
-      <div className="fud-state" role="alert">
-        <p>{outcome.message}</p>
+      <div className="fud-state jds-card jds-card--sunken" role="alert">
+        <p className="jds-empty__sub">{outcome.message}</p>
       </div>
     );
   }
   const result = outcome.result;
   if (result.meals.length === 0) {
     return (
-      <div className="fud-state" role="status">
-        <h2>No meals logged for this day</h2>
-        <p>Log a meal by talking to the assistant.</p>
+      <div className="fud-state jds-card jds-card--sunken" role="status">
+        <h2 className="jds-empty__title">No meals logged for this day</h2>
+        <p className="jds-empty__sub">Log a meal by talking to the assistant.</p>
       </div>
     );
   }

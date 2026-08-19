@@ -49,6 +49,9 @@ Deliberate decisions, each with a real failure behind it. Violating one is a blo
 
 - **Spec before build.** No new feature or module without an approved design spec in
   `docs/superpowers/specs/`, and a GitHub `task` issue to build against.
+- **Design the front end before building a module.** A new module needs a front-end design
+  discussion with Ben and agreed mockups of every screen, in the spec, before implementation.
+  Full rule in `docs/DEVELOPMENT_STANDARDS.md` → Design System Guardrails.
 - **Live-path gate.** CI-green plus code review does not make a user-facing feature done. It needs
   live end-to-end proof recorded on the PR — installed and exercised through the real UI on a live
   dev instance. Without that the honest status is _code-complete, unverified_: don't merge, don't
