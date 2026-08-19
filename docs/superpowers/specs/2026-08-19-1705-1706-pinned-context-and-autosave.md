@@ -25,8 +25,8 @@ just not wired into live chat:
   (`packages/memory/src/graph-repository.ts:573`).
 - `listCoreFacts()` (same file, `packages/memory/src/graph-repository.ts:485`) already returns up to
   a caller-supplied limit of active facts ordered by `pinned DESC, importance DESC,
-  last_confirmed_at DESC NULLS LAST, updated_at DESC`, filtered to rows where `(pinned = true AND
-  confidence >= 0.70) OR provenance = 'confirmed' OR confidence >= 0.80`. That is precisely the
+last_confirmed_at DESC NULLS LAST, updated_at DESC`, filtered to rows where `(pinned = true AND
+confidence >= 0.70) OR provenance = 'confirmed' OR confidence >= 0.80`. That is precisely the
   "always relevant regardless of query" set #1705 is asking for.
 - Today `listCoreFacts()` is called only from the background distillation job
   (`packages/chat/src/jobs.ts:209`, requesting up to 30 facts to avoid re-extracting facts the
@@ -70,13 +70,13 @@ chooses to call it during the turn. There is no dedicated durable-fact extractio
 
 ## Resolved Decisions
 
-| Decision | Choice | Reason |
-| --- | --- | --- |
-| Pinned-tier source | Reuse `listCoreFacts()` as-is | It already implements the inclusion rule (pinned/confirmed/high-confidence) and ordering #1705 needs; no new query or table. |
-| Live-turn wiring | Call `listCoreFacts()` from `buildEngineText()` alongside the existing passive-retrieval call | Keeps `buildEngineText()` as the single place that assembles hidden context for a turn; avoids a second context-assembly path. |
-| Budget separation | Give the pinned block its own token budget, separate from passive retrieval's existing 1200-token / 8-item cap | Prevents a busy pinned tier from starving query-relevant recall, and vice versa; matches the issue's ask for an independent "always relevant" set. |
+| Decision                  | Choice                                                                                                                             | Reason                                                                                                                                                                             |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pinned-tier source        | Reuse `listCoreFacts()` as-is                                                                                                      | It already implements the inclusion rule (pinned/confirmed/high-confidence) and ordering #1705 needs; no new query or table.                                                       |
+| Live-turn wiring          | Call `listCoreFacts()` from `buildEngineText()` alongside the existing passive-retrieval call                                      | Keeps `buildEngineText()` as the single place that assembles hidden context for a turn; avoids a second context-assembly path.                                                     |
+| Budget separation         | Give the pinned block its own token budget, separate from passive retrieval's existing 1200-token / 8-item cap                     | Prevents a busy pinned tier from starving query-relevant recall, and vice versa; matches the issue's ask for an independent "always relevant" set.                                 |
 | #1706 mechanism direction | Extend `listCoreFacts()`'s confidence-based inclusion rule as the durable-fact bar, rather than building a new extraction pipeline | The pinned tier already defines "important enough to always surface"; a fact durable enough to auto-save is a strong candidate for that same tier, per the issues' own cross-link. |
-| #1706 extraction approach | Not decided in this spec | Open question — see below. |
+| #1706 extraction approach | Not decided in this spec                                                                                                           | Open question — see below.                                                                                                                                                         |
 
 ## Architecture
 
@@ -96,7 +96,7 @@ The pinned block:
   budget (exact numbers left to implementation once real fact volumes are measured; see Open
   Questions).
 - Reuses `listCoreFacts()`'s existing ordering (`pinned DESC, importance DESC, last_confirmed_at DESC
-  NULLS LAST, updated_at DESC`) to decide which facts are kept if the result exceeds the block's
+NULLS LAST, updated_at DESC`) to decide which facts are kept if the result exceeds the block's
   budget, rather than inventing a second ranking.
 
 No schema change is needed: the `pinned` column, `pinFact()`, and `listCoreFacts()` already exist.
