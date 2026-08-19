@@ -53,8 +53,12 @@ Deliberate decisions, each with a real failure behind it. Violating one is a blo
   live end-to-end proof recorded on the PR — installed and exercised through the real UI on a live
   dev instance. Without that the honest status is _code-complete, unverified_: don't merge, don't
   mark Done. Full rule in `docs/DEVELOPMENT_STANDARDS.md` → Live-Path Gate.
-- Every meaningful commit and PR carries a short user-facing summary in release-note language, so it
-  can roll up into "What's new". If the change isn't user-visible, say that plainly.
+- **Every pull request fills in the "Release note" section of the PR template.** If the change is
+  user-facing, give it a Category (Added/Fixed/Changed), a short Title, and a one-sentence plain-English
+  Description — a GitHub Action appends it to `docs/WHATS_NEW.md` automatically when the PR merges to
+  main. If the change isn't user-visible, write `Category: N/A` and leave it there; nothing gets
+  appended. The Description is read by non-technical users — no code names, file paths, or internal
+  jargon.
 
 ## Working in a shared checkout
 
