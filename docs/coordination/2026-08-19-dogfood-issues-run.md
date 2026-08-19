@@ -73,16 +73,34 @@ designs awaiting review/approval, not built yet.
   confirm the #1711 all-day fix is out of scope for that PR is still queued in its input, unsent —
   will land once compaction finishes. No action needed unless it disagrees.
 
+## Update — PR #1717 (#1711 fix) CI failure fixed, Fable spawned for #1703 sign-off
+
+- PR #1717 (#1711 all-day events fix) failed CI on the same trivial Prettier formatting issue as
+  the spec PRs, this time on 3 calendar files. Fixed directly (`npx prettier --write`, commit
+  `9b13125b6`, pushed to branch `1711-allday-events`). Re-running CI now — next step is to check
+  `gh pr checks 1717 --repo motioneso/moss` again once it settles, then merge with
+  `gh pr merge 1717 --squash --auto --repo motioneso/moss` and comment the merged link on #1711.
+- Pane w1:pG2 (#1698 lane) confirmed in plain terms: PR #1703 only touched test files, not the
+  scheduling logic itself, so the #1711 fix is correctly out of scope for that PR. That lane is
+  done for tonight — code-complete, waiting on the live-path proof blocker recorded in
+  AWAITING-BEN.md.
+- Since Ben said to ask Fable rather than wake him if stuck tonight, and PR #1703's live-path
+  proof is blocked on something only a person can fix (stale Google sign-in + no real AI provider
+  on one dev account), spawned a dedicated Fable pane (no existing one was reachable) to review
+  and sign off on leaving that PR parked overnight: pane `w1:pGB`, label "Fable sign-off PR1703",
+  agent name `fable-1703-signoff`, model `claude-fable-5`, boot brief at
+  `/tmp/moss-boot/boot-fable-1703.txt`. It will post its verdict as a plain-English comment on
+  issue #1698. Not yet checked for a reply.
+
 ## Next steps for whoever continues this run
 
-1. Watch pane w1:pGA for PR-open; once open, check CI (watch for the same Prettier-on-docs class
-   of trivial failures — check `gh pr checks` and fix directly rather than bouncing back to the
-   agent if it's just formatting), then merge with `gh pr merge --squash --auto`, comment the
-   link on #1711.
-2. Watch pane w1:pG2 for its post-compaction reply confirming the #1711 scope question, and for
-   PR #1703 reaching mergeable state — that's the #1693/#1710 fix landing.
-3. Nothing else queued. If genuinely stuck on a call only Ben should make, message Fable per his
-   standing instruction ("if you get stuck ask fable").
+1. Recheck `gh pr checks 1717 --repo motioneso/moss` — if green, merge with
+   `gh pr merge 1717 --squash --auto --repo motioneso/moss`, comment the merged link on #1711.
+2. Check pane w1:pGB (bounded `herdr pane read`) for Fable's sign-off comment on issue #1698 (PR
+   #1703's live-path-proof blocker). If Fable disagrees with leaving it parked overnight, that's a
+   genuine surprise — otherwise no action needed until Ben resolves the dev-account issue in the
+   morning.
+3. Nothing else queued for tonight.
 
 ## Coordinator identity (for lock purposes)
 
