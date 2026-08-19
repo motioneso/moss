@@ -44,9 +44,10 @@ describe("handleUpgradeCheckJob", () => {
 
   it("passes an AbortSignal timeout to fetch", async () => {
     process.env.JARVIS_APP_VERSION = "1.0.0";
-    const fetchMock = vi.fn(async () => ({
+    const fetchMock = vi.fn(async (_url: unknown, init?: { signal?: AbortSignal }) => ({
       ok: true,
-      json: async () => ({ tag_name: "v1.0.0", body: "" })
+      json: async () => ({ tag_name: "v1.0.0", body: "" }),
+      _init: init
     }));
     vi.stubGlobal("fetch", fetchMock);
     const boss = { send: vi.fn() };
@@ -55,8 +56,8 @@ describe("handleUpgradeCheckJob", () => {
     await handleUpgradeCheckJob(db as never, boss as never);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const options = fetchMock.mock.calls[0][1] as { signal?: unknown };
-    expect(options.signal).toBeInstanceOf(AbortSignal);
+    const options = fetchMock.mock.calls[0]?.[1];
+    expect(options?.signal).toBeInstanceOf(AbortSignal);
   });
 
   it("rejects with a clear error instead of a raw SyntaxError on unparsable JSON", async () => {
