@@ -354,6 +354,7 @@ export { createCliStructuredAdapterFactory } from "@moss/chat";
 export * from "./external/validate.js";
 export * from "./external/types.js";
 export * from "./external/reconcile.js";
+export * from "./external/preferences.js";
 
 export {
   createActiveModulesResolver,

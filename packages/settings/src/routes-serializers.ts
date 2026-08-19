@@ -30,7 +30,10 @@ export function toMyModuleDto(
     supportsUserDisable: userDisableSupported,
     instanceDisabled,
     userDisabled,
-    active
+    active,
+    // #1725: the flag, not the declarations — the pane fetches those from
+    // /api/modules/:id/preferences when the user actually opens it.
+    hasPreferences: (manifest.preferences?.length ?? 0) > 0
   };
 }
 

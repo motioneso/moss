@@ -29,6 +29,26 @@ export interface MyModuleDto {
   readonly instanceDisabled: boolean;
   readonly userDisabled: boolean;
   readonly active: boolean;
+  /** #1725: module declares host-rendered on/off switches, reachable at /api/modules/:id/preferences. */
+  readonly hasPreferences: boolean;
+}
+
+/** #1725: one declared switch, joined to the actor's stored value (or the manifest default). */
+export interface ModulePreferenceDto {
+  readonly key: string;
+  readonly label: string;
+  readonly description: string | null;
+  readonly type: "boolean";
+  readonly default: boolean;
+  readonly value: boolean;
+}
+
+export interface ListModulePreferencesResponse {
+  readonly preferences: readonly ModulePreferenceDto[];
+}
+
+export interface UpdateModulePreferencesResponse {
+  readonly preferences: Readonly<Record<string, boolean>>;
 }
 
 export interface ListAdminModulesResponse {
@@ -83,7 +103,8 @@ const myModuleSchema = {
     "supportsUserDisable",
     "instanceDisabled",
     "userDisabled",
-    "active"
+    "active",
+    "hasPreferences"
   ],
   properties: {
     id: { type: "string" },
@@ -94,7 +115,8 @@ const myModuleSchema = {
     supportsUserDisable: { type: "boolean" },
     instanceDisabled: { type: "boolean" },
     userDisabled: { type: "boolean" },
-    active: { type: "boolean" }
+    active: { type: "boolean" },
+    hasPreferences: { type: "boolean" }
   }
 } as const;
 

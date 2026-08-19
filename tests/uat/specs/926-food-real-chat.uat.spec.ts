@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Response } from "@playwright/test";
 import { buildUatComposeArgs, restartUatStack } from "../provisioner.js";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 
@@ -26,6 +26,12 @@ import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 // asserts the persisted record through the module's own page. It stays skipped on every
 // default/CI run so the gate remains credential-free.
 export const uatLevel = { level: "solo-admin", without: [] } as const;
+
+// Both tests below drive the same real chat session, as the same seeded admin, against one
+// shared instance, and both log and read the same user's meals. Run in parallel they see each
+// other's rows and each other's turns, which showed up as one test finding no meal at all while
+// the other was mid-turn. Serial is not a slowdown here: the run is dominated by model latency.
+test.describe.configure({ mode: "serial" });
 
 const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE);
 
@@ -133,10 +139,15 @@ async function expectActionStatus(page: Page, id: string, want: string): Promise
     .toBe(want);
 }
 
-// Sends one message through the real chat drawer and returns a promise for the turn POST, which
-// stays in flight while the model works. That in-process waiter is the only thing that lets a
-// confirm-gated tool execute at all (gateway.ts:364, :617).
-async function sendMessage(page: Page, text: string) {
+// Sends one message through the real chat drawer and hands back the still-in-flight turn POST.
+// That in-process waiter is the only thing that lets a confirm-gated tool execute at all
+// (gateway.ts:364, :617), so a caller that needs to approve must NOT wait on it first.
+//
+// #1720: the promise is wrapped in an object on purpose. `await` flattens a promise returned from
+// an async function, so `await sendMessage(...)` used to block until the turn ended — which for a
+// confirm-gated tool means blocking until the 150s approval window expires, guaranteeing the
+// later Approve arrives too late and gets a 409. The wrapper makes that mistake unwriteable.
+async function sendMessage(page: Page, text: string): Promise<{ turnSettled: Promise<Response> }> {
   await page.getByRole("button", { name: /^(Chat with |Open chat$)/ }).click();
   const turnSettled = page.waitForResponse(
     (response) =>
@@ -146,7 +157,7 @@ async function sendMessage(page: Page, text: string) {
   const composer = page.getByRole("textbox", { name: /^Message/ });
   await composer.fill(text);
   await composer.press("Enter");
-  return turnSettled;
+  return { turnSettled };
 }
 
 // For a tool whose family is granted at install (food.meals.log / .correct / .reestimate declare
@@ -154,7 +165,7 @@ async function sendMessage(page: Page, text: string) {
 // The proof of correct behaviour here is that NO card is raised and the turn still settles: the
 // module asked for standing permission up front rather than interrupting every meal.
 async function sendAutoRun(page: Page, text: string): Promise<void> {
-  const turnSettled = await sendMessage(page, text);
+  const { turnSettled } = await sendMessage(page, text);
   const response = await turnSettled;
   expect(response.ok(), `the chat turn must settle for: ${text}`).toBe(true);
   // Count only cards still awaiting a decision — a resolved card from an earlier step stays
@@ -170,7 +181,9 @@ async function sendAutoRun(page: Page, text: string): Promise<void> {
 // tie its assertion to the exact row.
 async function sendAndApprove(page: Page, text: string): Promise<string> {
   const sentAt = Date.now();
-  const turnSettled = await sendMessage(page, text);
+  // Destructured, not awaited through: the turn must still be in flight when Approve is
+  // clicked below, so only the send itself is waited on here.
+  const { turnSettled } = await sendMessage(page, text);
 
   // #926 diagnosis: an Approve is only honoured while the chat turn's in-process waiter is alive
   // (gateway.ts:497, 150s — claude-permission-hook.ts:19). When it is not, the resolve returns 409
@@ -326,14 +339,12 @@ test("a real model logs and corrects meals through Food's granted-at-install too
   });
 });
 
-// The confirm-gated half. Blocked by #1720: a confirm-gated tool's card only reaches the browser
-// after the server's 150s answering window has already closed, so Approve returns 409 and the row
-// stays pending. Reproduced seven times; the server writes and commits the pending row ~22s in and
-// serves the actions endpoint in milliseconds throughout, so this is a delivery defect, not a Food
-// defect. Un-fixme this once #1720 lands — the body below is correct and is the regression test.
-test.fixme("a real model raises and resolves Food's confirm-gated tools (#926, blocked by #1720)", async ({
-  page
-}) => {
+// The confirm-gated half. This was filed as #1720 — "the card reaches the browser only after the
+// answering window closed" — but instrumenting both ends disproved that: the server emitted the
+// card 8-17s in and the browser's stream handler logged receiving it 14ms later. The 150s was the
+// spec's own doing, via `await sendMessage(...)` flattening the in-flight turn promise. See the
+// comment on sendMessage. Product code was never at fault, so nothing outside this file changed.
+test("a real model raises and resolves Food's confirm-gated tools (#926)", async ({ page }) => {
   test.skip(
     !REAL_CHAT_CONFIGURED,
     "no real-chat token configured for this run (JARVIS_UAT_REAL_CHAT_ENV_FILE unset) — #926"
@@ -377,7 +388,20 @@ test.fixme("a real model raises and resolves Food's confirm-gated tools (#926, b
   // Reject rather than approve: that proves the block actually holds, since the meal must
   // survive a refused deletion.
   await test.step("deleting a meal always asks, and rejecting it leaves the meal intact", async () => {
-    const turnSettled = await sendMessage(page, "Delete my oatmeal breakfast from today.");
+    // Count first, and compare counts afterwards. The UAT database is shared and not reset, so
+    // more than one oatmeal row can legitimately be present; asserting a single row is visible
+    // fails on strict mode for a reason that has nothing to do with the deletion.
+    const oatmealRows = page.locator(".fud-meal-row").filter({ hasText: /oatmeal/i });
+    await page.goto(`${baseURL}/m/food`);
+    // Auto-wait before counting: `count()` reads the DOM once with no retry, so counting straight
+    // after goto() races the page's own load and reads zero.
+    await expect(
+      oatmealRows.first(),
+      "the earlier steps should have left at least one oatmeal meal"
+    ).toBeVisible({ timeout: 30_000 });
+    const before = await oatmealRows.count();
+
+    const { turnSettled } = await sendMessage(page, "Delete my oatmeal breakfast from today.");
 
     const card = page.locator(CARD).last();
     await expect(card, "a destructive Food tool must always raise a confirmation").toBeVisible({
@@ -389,10 +413,9 @@ test.fixme("a real model raises and resolves Food's confirm-gated tools (#926, b
     expect((await turnSettled).ok(), "the chat turn must settle after Reject").toBe(true);
 
     await page.goto(`${baseURL}/m/food`);
-    await expect(
-      page.locator(".fud-meal-row").filter({ hasText: /oatmeal/i }),
-      "a rejected deletion must not remove the meal"
-    ).toBeVisible({ timeout: 30_000 });
+    await expect(oatmealRows, "a rejected deletion must not remove the meal").toHaveCount(before, {
+      timeout: 30_000
+    });
   });
 
   // Every Food call must leave an auditable row, and none may sit pending-but-applied.

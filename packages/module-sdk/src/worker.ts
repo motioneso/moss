@@ -63,6 +63,16 @@ export interface ModuleWorkerContext {
    * seeing, for a capability (checking a deadline) `deadlineAt` already provides.
    */
   readonly deadlineAt: number;
+  /**
+   * The current user's answers to the on/off switches this module declared in its manifest
+   * (#1725), already resolved: every declared key is present, and a key the user has never
+   * touched carries the manifest default. Read-only by design — a module can render
+   * behaviour from a switch but can never flip one, because the switch is the user's
+   * statement of intent, not the module's state. Writing is the settings page's job alone.
+   *
+   * Empty for a module that declares no preferences.
+   */
+  readonly preferences: Readonly<Record<string, boolean>>;
   readonly auth: {
     getCredential(authId: string): Promise<string>;
     setCredential(authId: string, value: string): Promise<void>;
@@ -223,7 +233,12 @@ export function defineModuleWorker(input: {
         return;
       }
       if (message.method !== "module.invoke") return;
-      const params = message.params as { handler?: unknown; input?: unknown; deadlineAt?: unknown };
+      const params = message.params as {
+        handler?: unknown;
+        input?: unknown;
+        deadlineAt?: unknown;
+        preferences?: unknown;
+      };
       // Version-skew default (#1286 Task 2e): only a host older than this SDK change
       // would ever omit deadlineAt. 30_000 mirrors the runtime's pre-Task-2e default
       // stall timeout so an old host's behavior doesn't visibly change for a module
@@ -247,6 +262,16 @@ export function defineModuleWorker(input: {
               ? (params.input as Record<string, unknown>)
               : {},
           deadlineAt,
+          // #1725: booleans only, and only what the host sent. A host older than this SDK
+          // change omits the field entirely; {} is the honest answer there, and a module
+          // that reads a key it declared still gets undefined rather than a wrong value.
+          preferences: Object.fromEntries(
+            Object.entries(
+              params.preferences && typeof params.preferences === "object"
+                ? (params.preferences as Record<string, unknown>)
+                : {}
+            ).filter(([, value]) => typeof value === "boolean")
+          ) as Readonly<Record<string, boolean>>,
           auth: {
             getCredential: (authId) =>
               callParent("auth.getCredential", { authId }) as Promise<string>,

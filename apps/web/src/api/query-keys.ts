@@ -8,6 +8,7 @@ export const queryKeys = {
   },
   modules: ["modules"] as const,
   myModules: ["me", "modules"] as const,
+  modulePreferences: (moduleId: string) => ["modules", moduleId, "preferences"] as const,
   settings: {
     providers: ["settings", "providers"] as const,
     adminConnectorAccounts: ["settings", "admin", "connector-accounts"] as const,

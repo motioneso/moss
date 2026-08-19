@@ -15,14 +15,9 @@ The 2026-08-05 transcript audit found 216 idle hours blocked on Ben, mostly on q
 never recorded — an overnight coordinator sat 15h on a question while this file said nothing was
 pending. Silent waiting is the failure mode this protocol exists to kill.
 
-## #1319 signed module catalog — needs a real Ed25519 signing keypair from Ben (2026-08-18)
-
-Build (relay4) finished Tasks 1-2 of the approved plan (18/18 + 12/12 unit tests, typecheck clean)
-and hit the plan's designed kill gate before Phase 2: it cannot produce the required Phase-1 proof
-(a real CI-produced catalog signature that verifies) because the production public-key list
-(`MODULE_CATALOG_PUBLIC_KEYS`) is still a deliberately-empty placeholder. Only Ben can close this —
-it needs a real Ed25519 keypair with the public half committed in code and the private half landed
-as two GitHub secrets before any `workflow_dispatch` publish can self-verify.
+<!-- Resolved 2026-08-19: PR #1703 (calendar rebuild) and PR #1717 (all-day scheduling) both merged.
+Ben ruled "let's just merge all of these, I'll test in prod" — live-path proof on the dev instance
+is no longer the gate for this batch. -->
 
 <!-- Resolved 2026-08-11: #1560 live-path persona cleanup. Ben ruled: "nova is fine for testing,
 yep" — approved leaving `ben@ben.com`'s `assistantName='Nova'` as-is, no restore needed. Ruling
@@ -32,15 +27,10 @@ recorded on issue #1560 (https://github.com/motioneso/moss/issues/1560#issuecomm
 ("feat(chat): thread surface through send routing (#1533)") merged 2026-08-12T03:11:37Z — the
 real-chat-token gap this entry described is moot now that the PR landed. -->
 
-What's needed from Ben: generate (or approve someone generating) an Ed25519 keypair for signing the
-module catalog, then provide the private key material for the two GitHub secrets and confirm the
-public key to commit. Not urgent tonight — build is holding cleanly at the gate, no data at risk —
-but it blocks all of Phase 2 onward, so it should land soon.
-
-Update: the Phase-1-only PR is posted — https://github.com/motioneso/moss/pull/1684 — explicitly
-labeled code-complete/unverified per the live-path gate, not merged and not marked Done. The build
-lane has stopped itself (no live session idling on this); Coordinator will spawn a fresh build agent
-for Phase 2 once the key lands.
+<!-- Resolved 2026-08-19: #1319 signed module catalog. Ben generated the Ed25519 keypair, set the
+two GitHub secrets, and shared the public key. Public half committed to PR #1684
+(commit 851f9ba70). Real publish/verify proof confirmed (verified: true, key moss-catalog-2026-a).
+Ben approved merge; PR #1684 merged. -->
 
 <!-- Resolved 2026-08-05 (PM, via Telegram relay): PR #1379 — Ben ruled delegate the review; QA
 lane dispatched. Overnight Codex coordinator pid 1799977 — Ben ruled kill; killed with its MCP

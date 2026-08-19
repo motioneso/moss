@@ -15,6 +15,7 @@ import type { ExternalBriefingInvoker } from "@moss/briefings";
 import type { AccessContext, DataContextDb, DataContextRunner, MossDatabase } from "@moss/db";
 import {
   createRuntimeEmbeddingProvider,
+  resolveModulePreferences,
   type ExternalModuleDiscovery
 } from "@moss/module-registry";
 import type { CreateNotificationInput } from "@moss/notifications";
@@ -213,6 +214,14 @@ export function createVerifiedExternalModuleInvoker(
       // "constructed with no createFetch key at all" test when this is unset.
       ...(deps.createFetch ? { createFetch: deps.createFetch } : {})
     });
+    // #1725: resolved here, per invocation, inside the ACTOR's data context — never cached
+    // across users and never read by the runtime itself. A module reads these off
+    // ctx.preferences and can only read them.
+    const preferences = await resolveModulePreferences(
+      deps.dataContext,
+      { actorUserId: args.actorUserId, requestId: args.requestId },
+      { id: current.id, preferences: current.manifest.preferences ?? [] }
+    );
     const result = await deps.runtime.invoke(
       current,
       args.handler,
@@ -223,7 +232,7 @@ export function createVerifiedExternalModuleInvoker(
         params: args.params
       },
       rpc,
-      { lane: args.lane, timeoutMs: args.timeoutMs }
+      { lane: args.lane, timeoutMs: args.timeoutMs, preferences }
     );
     return { ok: true, result };
   };

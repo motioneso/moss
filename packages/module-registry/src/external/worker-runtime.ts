@@ -119,7 +119,12 @@ export class ExternalModuleWorkerRuntime {
     handler: string,
     input: Record<string, unknown>,
     rpc: Rpc,
-    options: { readonly lane: WorkerLane; readonly timeoutMs?: number }
+    options: {
+      readonly lane: WorkerLane;
+      readonly timeoutMs?: number;
+      /** #1725: this actor's resolved on/off switches, surfaced to the module as ctx.preferences. */
+      readonly preferences?: Readonly<Record<string, boolean>>;
+    }
   ): Promise<unknown> {
     const key = laneKey(module.id, options.lane);
     const prior = this.queues.get(key) ?? Promise.resolve();
@@ -147,7 +152,12 @@ export class ExternalModuleWorkerRuntime {
     handler: string,
     input: Record<string, unknown>,
     rpc: Rpc,
-    options: { readonly lane: WorkerLane; readonly timeoutMs?: number }
+    options: {
+      readonly lane: WorkerLane;
+      readonly timeoutMs?: number;
+      /** #1725: this actor's resolved on/off switches, surfaced to the module as ctx.preferences. */
+      readonly preferences?: Readonly<Record<string, boolean>>;
+    }
   ): Promise<unknown> {
     const key = laneKey(module.id, options.lane);
     const state = this.states.get(key) ?? this.start(module, options.lane, key);
@@ -202,7 +212,16 @@ export class ExternalModuleWorkerRuntime {
           jsonrpc: "2.0",
           id,
           method: "module.invoke",
-          params: { handler, input, deadlineAt }
+          // #1725: preferences are resolved by the CALLER (which holds the actor's data
+          // context) and passed through here. The runtime never reads them itself — it has
+          // no access context, and inventing one here would be the bypass this whole design
+          // exists to avoid.
+          params: {
+            handler,
+            input,
+            deadlineAt,
+            ...(options.preferences ? { preferences: options.preferences } : {})
+          }
         })}\n`
       );
       return await response;
