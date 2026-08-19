@@ -62,7 +62,12 @@ describe("food manifest contract (#926 plan §4 Task 7)", () => {
   it("storage, database, navigation, and the queue's paramsSchema match the plan", () => {
     const manifest = loadManifest();
     expect(manifest.storage).toEqual([{ namespace: "food.settings", scopes: ["user"] }]);
-    expect(manifest.database).toEqual({ ownedTables: ["app.food_meals", "app.food_estimates"] });
+    // food_estimate_items joined the list in #1737 (the per-food breakdown). An owned table
+    // missing from this list is invisible to the platform's table-ownership checks, so the
+    // assertion is exhaustive on purpose.
+    expect(manifest.database).toEqual({
+      ownedTables: ["app.food_meals", "app.food_estimates", "app.food_estimate_items"]
+    });
     expect(manifest.navigation).toEqual([
       { id: "food", label: "Food", path: "/", icon: "utensils" }
     ]);
