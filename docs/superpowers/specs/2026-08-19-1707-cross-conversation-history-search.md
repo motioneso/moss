@@ -57,13 +57,13 @@ filtering, which depends on the tool over-including rather than precisely boundi
 
 ## Resolved Decisions
 
-| Decision            | Choice                                                                 | Reason                                                                                                          |
-| -------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Approach             | Add a new tool, `chat.searchHistory`, rather than extend the existing tool | Reusing the existing tool's window/cap logic risks the three callers whose day-filtering depends on it.        |
-| Input shape          | Explicit `startDate`, `endDate` (inclusive, local calendar dates) and `timeZone` (IANA) | The current tool has no timezone input at all; explicit input removes the need to over-include and guess.     |
-| Scope                | Requesting actor's own non-incognito threads only                       | Matches the existing tool's actor- and incognito-scoping; no new privacy surface.                              |
-| Caps                 | New, independently-sized scan and result caps, not reused from `chat.listTodaysTurns` | The existing caps (20 threads, 40 turns) assume a 36-hour window; a multi-day range needs its own sizing.       |
-| Relationship to existing tool | `chat.listTodaysTurns` is left as-is; its three callers are out of scope for this change | Isolates this feature from an already-fragile-by-design tool without a full audit of those callers.            |
+| Decision                      | Choice                                                                                   | Reason                                                                                                    |
+| ----------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Approach                      | Add a new tool, `chat.searchHistory`, rather than extend the existing tool               | Reusing the existing tool's window/cap logic risks the three callers whose day-filtering depends on it.   |
+| Input shape                   | Explicit `startDate`, `endDate` (inclusive, local calendar dates) and `timeZone` (IANA)  | The current tool has no timezone input at all; explicit input removes the need to over-include and guess. |
+| Scope                         | Requesting actor's own non-incognito threads only                                        | Matches the existing tool's actor- and incognito-scoping; no new privacy surface.                         |
+| Caps                          | New, independently-sized scan and result caps, not reused from `chat.listTodaysTurns`    | The existing caps (20 threads, 40 turns) assume a 36-hour window; a multi-day range needs its own sizing. |
+| Relationship to existing tool | `chat.listTodaysTurns` is left as-is; its three callers are out of scope for this change | Isolates this feature from an already-fragile-by-design tool without a full audit of those callers.       |
 
 ## Architecture
 
