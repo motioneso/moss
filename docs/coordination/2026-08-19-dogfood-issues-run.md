@@ -92,15 +92,55 @@ designs awaiting review/approval, not built yet.
   `/tmp/moss-boot/boot-fable-1703.txt`. It will post its verdict as a plain-English comment on
   issue #1698. Not yet checked for a reply.
 
+## Update — live-chat investigation with Ben, PR #1703 conflict/lint fixed, PR #1717 rerun
+
+Ben woke up, started chatting directly with the real production assistant, and found real gaps
+("mostly related to security"). He asked me to talk to production directly (not the dev copy) to
+pin down what was actually wrong, using his real login. I did that with careful, bounded probes
+and grounded every claim in the actual source code before reporting anything back to him. Two real
+bugs came out of it, now filed as issues:
+
+- **Issue #1718** — on a brand new or just-recovered chat session, the first message sometimes
+  gets sent before the assistant's tool connection has finished setting up, so tools look
+  unavailable with no "please wait" message shown. There's already a similar "reconnecting"
+  message for a different case (a lost session healing itself) — the fix is to show that same kind
+  of message on an ordinary first-time start, or hold the first message until the connection is
+  ready.
+- **Issue #1719** — sometimes the assistant reaches for its own low-level engine tools (the same
+  kind of raw file/shell tools I use) instead of the correct everyday tool for the job, then
+  reports a false failure. The fix is stronger steering in its instructions toward the right
+  tool, plus a retry with the correct tool before giving up.
+
+One reply from production also surfaced something Ben told the assistant before, about how he's
+been feeling. I paused the technical work, asked him directly how he's doing, and he said he's
+fine and wants me to keep working the issues — which I'm doing, but flagging here for whoever
+reads this next in case it comes up again.
+
+Also fixed, at Fable's recommendation from its sign-off review on issue #1698: PR #1703 had a
+leftover unused test helper that was failing the code-style check, and had fallen behind main with
+a conflict (a pure formatting difference in one spec document, no real content conflict). Both are
+fixed and pushed. GitHub now shows PR #1703 as no longer conflicting — it is still correctly
+blocked from merging until Ben does his two morning account fixes (see AWAITING-BEN.md), not by
+anything code-related.
+
+PR #1717 (#1711 all-day-events fix) hit a third CI failure after the formatting fix — a flaky,
+unrelated test in a different area of the app (chat drawer surface). Confirmed via diff that
+PR #1717 doesn't touch that area at all, so re-ran the failed CI jobs rather than investigating an
+unrelated test. Rerun in progress as of this update.
+
 ## Next steps for whoever continues this run
 
-1. Recheck `gh pr checks 1717 --repo motioneso/moss` — if green, merge with
-   `gh pr merge 1717 --squash --auto --repo motioneso/moss`, comment the merged link on #1711.
+1. Check the result of the PR #1717 CI rerun (triggered via `gh run rerun 32229116640 --repo
+   motioneso/moss --failed`) — if green, merge with `gh pr merge 1717 --squash --auto --repo
+   motioneso/moss`, comment the merged link on #1711.
 2. Check pane w1:pGB (bounded `herdr pane read`) for Fable's sign-off comment on issue #1698 (PR
    #1703's live-path-proof blocker). If Fable disagrees with leaving it parked overnight, that's a
    genuine surprise — otherwise no action needed until Ben resolves the dev-account issue in the
    morning.
-3. Nothing else queued for tonight.
+3. New issues #1718 and #1719 (found via live production chat testing, see above) are filed with
+   root cause and proposed fix but not yet spec'd or built — treat like the other needs-spec work
+   if picking this back up.
+4. Nothing else queued for tonight.
 
 ## Coordinator identity (for lock purposes)
 
