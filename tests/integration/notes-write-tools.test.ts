@@ -713,25 +713,21 @@ describe("notes write assistant tools", () => {
       armEntryBarrier(targetPath);
 
       const [result1, result2] = await Promise.all([
-        concurrentRunner.withDataContext(
-          { actorUserId: ids.userA, requestId: "conc-1a" },
-          (db) =>
-            notesEditExecute(
-              db,
-              { path: "concurrent1.md", oldText: "APPLE", newText: "ORANGE" },
-              { actorUserId: ids.userA, requestId: "conc-1a", chatSessionId: "chat" },
-              { notesSync: service }
-            )
+        concurrentRunner.withDataContext({ actorUserId: ids.userA, requestId: "conc-1a" }, (db) =>
+          notesEditExecute(
+            db,
+            { path: "concurrent1.md", oldText: "APPLE", newText: "ORANGE" },
+            { actorUserId: ids.userA, requestId: "conc-1a", chatSessionId: "chat" },
+            { notesSync: service }
+          )
         ),
-        concurrentRunner.withDataContext(
-          { actorUserId: ids.userA, requestId: "conc-1b" },
-          (db) =>
-            notesEditExecute(
-              db,
-              { path: "concurrent1.md", oldText: "BANANA", newText: "GRAPE" },
-              { actorUserId: ids.userA, requestId: "conc-1b", chatSessionId: "chat" },
-              { notesSync: service }
-            )
+        concurrentRunner.withDataContext({ actorUserId: ids.userA, requestId: "conc-1b" }, (db) =>
+          notesEditExecute(
+            db,
+            { path: "concurrent1.md", oldText: "BANANA", newText: "GRAPE" },
+            { actorUserId: ids.userA, requestId: "conc-1b", chatSessionId: "chat" },
+            { notesSync: service }
+          )
         )
       ]);
       expect(result1.data).toMatchObject({ synced: true });
