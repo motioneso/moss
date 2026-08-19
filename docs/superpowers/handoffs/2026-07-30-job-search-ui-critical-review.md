@@ -19,8 +19,8 @@ Ben's data.
 
 Use live web search and high-trust primary sources. Cite the exact page supporting each claim.
 
-1. **Competitive products.** Study current first-party product pages, help centers, demos, or public
-   screenshots for serious job-search workflows such as Teal, Huntr, Simplify, LinkedIn, and any
+1. **Competitive products.** Study current first-party product pages, help centers, or demos for
+   serious job-search workflows such as Teal, Huntr, Simplify, LinkedIn, and any
    stronger direct comparator you discover. Compare information architecture, job triage, profile
    setup, progress communication, search controls, density, and the handoff between AI assistance and
    direct manipulation. Do not turn this into a feature checklist; identify patterns that make the
@@ -43,8 +43,8 @@ Use live web search and high-trust primary sources. Cite the exact page supporti
 
 - Read `AGENTS.md`, `CLAUDE.md`, and `docs/DEVELOPMENT_STANDARDS.md` first.
 - Use the `research` skill for source discipline and `hallmark audit` for the anti-AI-slop pass.
-- Inspect the live UI at desktop and at least 375 px mobile width. Capture viewport screenshots as
-  evidence; do not use full-page screenshots.
+- Inspect the live UI at desktop and at least 375 px mobile width. Record DOM, computed-style, and
+  layout assertions as evidence.
 - Review at minimum: shell/navigation, Job Search Matches, Overview, Profile, Monitors, one match
   inspector if opening it is read-only, and the chat drawer without sending a message.
 - Inspect the authored tokens and relevant Job Search web source only after forming a live-UI
@@ -66,9 +66,9 @@ Write one report at:
 
 `docs/superpowers/research/2026-07-30-job-search-ui-critical-review.md`
 
-Store screenshots under a gitignored scratch directory and link them by a portable repo-relative
-description in the report; do not commit screenshots unless the existing research convention
-requires it. Commit only the report and any directly required research metadata to your branch.
+Store bounded assertion output under a gitignored scratch directory and link it by a portable
+repo-relative description in the report. Commit only the report and any directly required research
+metadata to your branch.
 
 When finished, send a concise completion message to the Codex pane labeled `perms-1246`, including
 the report path, commit SHA, and your five highest-severity findings. Do not push, open a PR, or edit

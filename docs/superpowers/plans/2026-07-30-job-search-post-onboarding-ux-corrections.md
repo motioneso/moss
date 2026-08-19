@@ -455,7 +455,7 @@ base in the issue. Do not silently omit the #1246 grants.
 
 **Closeout:**
 
-- [ ] Record commands, exit codes, screenshots, and live observations in the issue/PR.
+- [ ] Record commands, exit codes, assertions, and bounded live observations in the issue/PR.
 - [ ] Update relevant Job Search docs if implementation changes a named contract.
 - [ ] Commit any verification documentation explicitly.
 - [ ] Push the build branch and open/update the PR only after all required gates are green.

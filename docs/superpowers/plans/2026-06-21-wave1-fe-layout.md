@@ -8,7 +8,7 @@
 
 **Architecture:** Pure CSS layout fixes (plus, where unavoidable, a class hook in TSX). Each surface gets a deliberate small-width layout. No new components, API, schema, or state. Verified by not regressing existing unit/e2e tests + visual capture at phone widths.
 
-**Tech Stack:** React + Vite + bespoke `jds-*` / kit CSS design system. Verification: `pnpm lint/format:check/check:file-size/typecheck/build:web`, optional `pnpm capture:screens`.
+**Tech Stack:** React + Vite + bespoke `jds-*` / kit CSS design system. Verification: `pnpm lint/format:check/check:file-size/typecheck/build:web`, optional focused browser assertions.
 
 ## Global Constraints
 
@@ -250,7 +250,7 @@ pnpm build:web && echo "build=$?"
 
 Expected: all exit 0. (`check:file-size` confirms no CSS file crossed 1000.)
 
-- [ ] **Step 2: Visual verification** — `pnpm capture:screens` if the harness covers these surfaces, OR document the manual phone-width check per surface. Confirm no desktop regression.
+- [ ] **Step 2: Layout verification** — run focused browser DOM/layout assertions at phone and desktop widths. Confirm no desktop regression.
 
 - [ ] **Step 3: Close out** — invoke `coordinated-wrap-up`: clean tree, pre-push trio + rebase on `origin/main`, push branch, open PR (base `main`) titled `fix: wave1 mobile/shell layout (#389 #390 #384 #388 #391)` with `Fixes #389` … `Fixes #391` in the body. Report PR # + verified exit codes to Coordinator.
 

@@ -143,10 +143,10 @@ Coordinator's explicit instruction this session).
   `dev-preview-recipe.md`) — preview ports :5173/:3000, prod :1533 is off-limits. Ben's dev login:
   `ben@ben.com` / `jarvistest123!` (memory: `dev-instance-lan-spinup-trusted-origins.md`).
 - Drive a real browser (not mocked routes) against that instance, do a real chat turn that invokes
-  `settings.themeMode.set`, screenshot before/after, confirm DOM text/visible state changed with
+  `settings.themeMode.set`, assert before/after DOM state, confirm DOM text/visible state changed with
   no reload.
 - Post `gh pr comment` on PR #1276 with the UAT spec run output (if you ran the blocking specs
-  above) AND the dedicated #1310 live proof (screenshots + description). Without this the PR
+  above) AND the dedicated #1310 live proof (assertions + description). Without this the PR
   cannot merge per the CLAUDE.md Live-Path Gate invariant, at any risk tier.
 
 ### 10. `coordinated-wrap-up`

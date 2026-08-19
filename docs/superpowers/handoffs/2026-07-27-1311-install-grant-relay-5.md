@@ -26,7 +26,7 @@ section only. Task 3 lines 136-154, Task 4 lines 156-163, Task 5 lines 165-177, 
    `/api/chat/action-requests/<id>/resolve` `{"status":"rejected"}` to unblock the held
    `/api/chat/turn` call; final audit row: `web.read | rejected | denied`. No screenshot taken (did
    this via curl, not browser — no browser/MCP tool was available this session; DB evidence is
-   the proof). If the coordinator wants a screenshot too, a browser tool will need to be found/
+   the proof). If the coordinator wants additional evidence, attach bounded DOM/network/log output;
    granted to whichever session does it.
 2. **Finding #1 — DONE, committed `d1e9b1fe`.** Added an explicit boot-time assertion in
    `packages/ai/src/gateway/self-operation.ts` (`assertBuiltInSelfOperationManifests`, right after
@@ -73,11 +73,8 @@ TDD this like finding #1: commit separately from Task 3.
    drift across relays**: API :3099 (confirmed alive this relay, actual PID `1085121` not the
    stale `928691/928754` from relay-4 — `ss -ltnp | grep 3099` to get the current one), web :5175
    (PID `929441` confirmed alive). Login `ben@ben.com` / `jarvistest123!`
-   (`6dc52034-a0ee-4944-9bfc-ef477af4370b`). Log at `/tmp/1311-dev/api.log`. Existing screenshots
-   (03/04/05/06, from relay-3/4) are at
-   `/tmp/claude-1000/-home-ben-Jarv1s--claude-worktrees-1311-install-grant/809cca70-d04d-4481-b916-9c696a8becf4/scratchpad/1311-shots/`
-   — a **different session's** scratchpad dir (still readable, just not yours) — copy/reference
-   from there, don't expect it under your own session's scratchpad path. Use in a `gh pr comment`.
+   (`6dc52034-a0ee-4944-9bfc-ef477af4370b`). Log at `/tmp/1311-dev/api.log`. Record bounded DOM,
+   network, and DB assertions in a `gh pr comment`.
 5. **Task 5**: PR description per plan lines 165-177 — tasks-was-broken correction,
    `grantInstallTimeTrustIfUnset` justification, 6-conditions-to-tests mapping, over-grant-by-design
    note (Path A grants every `granted_at_install` family — correct by design), live-path link, UAT

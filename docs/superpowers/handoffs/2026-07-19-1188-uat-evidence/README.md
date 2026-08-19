@@ -3,16 +3,16 @@
 Manual real-dev-instance UAT (per the #1000 UAT harness rule for UI/UX features), run against
 live API (`:3902`) + web (`:5179`) dev servers and an isolated dev Postgres database
 (`jarv1s_uidemo_1188`, dropped/recreated/migrated clean for this run), on PR #1206
-(HEAD `7986454e`). Checklist item → screenshot:
+(HEAD `7986454e`). Verified checklist:
 
-| Checklist item                                                                             | Screenshot                                    |
-| -------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| Fresh DB → real owner-bootstrap signup flow completes                                        | `00-owner-bootstrap-done.png`                  |
-| Provider picker: Google and IMAP cards render with equal visual weight (`f822d53d`/`fe2a0c6d`) | `01-provider-picker-equal-weight.png`          |
-| Add-account picker does **not** collapse back into the connected summary (`c2f56e66`)        | `02-add-account-picker-not-collapsing.png`     |
-| Connected-account summary after a real seeded account (server-side AES-256-GCM encrypted)    | `02a-connected-summary-after-seed.png`         |
-| Google card: one-click consent popup opens synchronously (`9d077038`)                        | `03-google-consent-popup.png`                  |
-| IMAP path: per-provider setup guide link nested inside the **last** numbered step (`a382c8ac`) | `04-imap-setup-steps-nested-link.png`        |
+- Fresh DB → real owner-bootstrap signup flow completes.
+- Provider picker: Google and IMAP cards render with equal visual weight
+  (`f822d53d`/`fe2a0c6d`).
+- Add-account picker does **not** collapse back into the connected summary (`c2f56e66`).
+- Connected-account summary renders after a real seeded account (server-side AES-256-GCM
+  encrypted).
+- Google card: one-click consent popup opens synchronously (`9d077038`).
+- IMAP path: per-provider setup guide link is nested inside the **last** numbered step (`a382c8ac`).
 
 **Seed-account method:** the add-account-picker-not-collapsing bug only reproduces with an
 existing connected account, and a real IMAP/Google connect both require a live probe/OAuth

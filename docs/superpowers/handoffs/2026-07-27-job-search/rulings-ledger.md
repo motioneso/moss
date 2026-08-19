@@ -1186,7 +1186,7 @@ reported "EXIT=0", which was `tail`'s status, not eslint's — and the probe had
 
 For work touching a user-facing feature, module, or UI surface, CI-green plus review is **not**
 done. It needs a live end-to-end proof posted as a `gh pr comment`: the feature exercised through
-the real UI on a live dev instance, with the UAT run and screenshots.
+the real UI on a live dev instance, with the UAT run and assertions or bounded DOM/network/log evidence.
 
 Resolve which specs with `.claude/skills/coordinate/resolve-uat-triggers.sh`. **The trigger map is
 deliberately incomplete — empty output never means no proof is needed.**

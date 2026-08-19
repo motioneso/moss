@@ -6,7 +6,7 @@
 
 **Architecture:** Visual-only refactor of `apps/web/src/sports/*` and `apps/web/src/styles/sports-*.css`. New `SportsTicker` component replaces the followed-team card grid and the league-chips section; hero and split-grid lose their card containers in favor of `var(--border-subtle)` hairlines. All new layout CSS lives in a new `sports-4-grid.css`; replaced rules are deleted from `sports-1.css` in the same pass (no-stale-concepts rule). Park Press round 1 already landed (PR #788), so current semantic tokens are the final values except fonts (#780 swaps `--font-*` targets later — we bind to the vars, so that flip is free).
 
-**Tech Stack:** React 18 + TanStack Query (frontend only — no API/backend changes), plain CSS with Jarvis tokens, Vitest `renderToString` unit tests (repo pattern: no jsdom/@testing-library), Playwright `capture:screens` harness for visual review.
+**Tech Stack:** React 18 + TanStack Query (frontend only — no API/backend changes), plain CSS with Jarvis tokens, Vitest `renderToString` unit tests, and focused Playwright DOM/layout assertions.
 
 ## Global Constraints
 
@@ -819,18 +819,18 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 5: Regression sweep + visual verification
+### Task 5: Regression sweep + layout verification
 
-Nothing new is built here; this task proves spec §5 and §6 and produces the screenshots for review.
+Nothing new is built here; this task proves spec §5 and §6 with executable layout assertions.
 
 **Files:**
 
-- Test: full suites + `capture:screens` output (no source changes expected; fixes found here fold back into the owning file)
+- Test: full suites + live DOM/computed-style assertions (no source changes expected; fixes found here fold back into the owning file)
 
 **Interfaces:**
 
 - Consumes: everything above.
-- Produces: green `verify:foundation`-equivalent run, light/dark/mobile screenshots, checked-off spec §5 checklist in the PR description.
+- Produces: green `verify:foundation`-equivalent run, light/dark/mobile layout assertions, checked-off spec §5 checklist in the PR description.
 
 - [ ] **Step 1: Functional regression greps (spec §5)**
 
@@ -850,10 +850,9 @@ grep -n "prefers-reduced-motion" apps/web/src/styles/sports-1.css apps/web/src/s
 Run: `pnpm lint && pnpm format:check && pnpm check:file-size && pnpm check:design-tokens && pnpm check:no-ambient-dates && pnpm check:package-deps && pnpm typecheck && pnpm test:unit`
 Expected: exit 0. (Skip `test:integration` unless backend files changed — they must not have; per the multi-agent Postgres-contention rule, frontend-only QA scopes to the frontend gate.)
 
-- [ ] **Step 3: Screenshot sweep**
+- [ ] **Step 3: Browser layout assertion sweep**
 
-Run: `pnpm capture:screens`
-Then review the `/sports` captures in light **and** dark theme. Checklist:
+Run focused Playwright assertions against `/sports` in light **and** dark theme. Checklist:
 
 - Ticker: hairline top rule, blocks separated by vertical hairlines, right-edge fade visible when overflowing, focus ring on tab.
 - Hero: no card box; `--text-5xl` score; 2px bottom rule.
@@ -872,12 +871,12 @@ git add -u  # worktree is exclusively ours; still verify with git status first
 git commit -m "chore(sports): broadsheet skin verification sweep (#829)
 
 No user-visible change beyond the redesign itself — this finalizes
-screenshot-verified polish for the new Sports layout.
+browser-verified polish for the new Sports layout.
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
 
-Open the PR against `main` with: the user-facing summary ("The Sports page has a new dense, newspaper-style layout…"), the spec §5 checklist ticked with evidence links, screenshots (light/dark/mobile), and "Closes #829".
+Open the PR against `main` with: the user-facing summary ("The Sports page has a new dense, newspaper-style layout…"), the spec §5 checklist ticked with assertion evidence links, and "Closes #829".
 
 ---
 

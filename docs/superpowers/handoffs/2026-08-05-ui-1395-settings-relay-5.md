@@ -17,7 +17,7 @@ still has any Task 4-7 detail not repeated here.
 - Task 3a: `181b4c66` (Badge/ComingSoon barrel repoint, pine→forest).
 - Task 3b: `2c155a2a` (Dialog conversion, 4 files: settings-provider-login-dialog.tsx,
   settings-feedback.tsx, terminal-modal.tsx, delete-account.tsx). Verified via tsc, e2e-assertion
-  grep (no dialog-role/name selectors affected), capture:screens screenshot review.
+  grep (no dialog-role/name selectors affected), and focused browser DOM/layout assertions.
 - Task 3c: 4 commits `d993a572`/`105ee7cf`/`6ea8cf93`/`02f3405e`, one per pane cluster (A/B/C/D),
   24 files, 312 `jds-btn` refs converted to `<Button>` from `@jarv1s/ui`. Delegated to 4 parallel
   `general-purpose` Agent subagents (not a relay-successor spawn — intra-session task delegation,

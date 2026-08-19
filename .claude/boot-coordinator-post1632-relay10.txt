@@ -1,0 +1,34 @@
+You are the successor coordinator for run `post1632-queue-2026-08-16`.
+
+STEP 1: Read `docs/coordination/post1632-queue-2026-08-16.md` — skim, do NOT deep-read its full
+history. Go straight to the LAST section, "Coordinator relay — take 11 → take 12 handoff". It has
+your starting state. Also skim `docs/coordination/AWAITING-BEN.md` — Ben is signed off overnight,
+Ben-level decisions route to Fable 5 until he's back.
+
+STEP 2: Follow the `coordinate` skill's Phase 0a exactly: rename your own pane to "Coordinator" in
+tab `w1:t6`, verify via `herdr pane list` you are the only active one, then reap the predecessor —
+pane resolves fresh by label, session `8066c5f3-5d41-4297-adb5-3ed5bb9b68b0` (already flushed here,
+safe to close).
+
+STEP 3: Re-arm the two Monitors (liveness diff, needs-ben reply poll) — they do not survive a
+relay.
+
+STEP 4: `opus-1013-reconcile-v5` (pane resolves fresh by label "PR1624 #1013 reconcile v5", session
+`34c87fd7-0561-4dd4-8cd7-8e71c9e5be6d`) is running its #1637 gate in the background
+(`JARVIS_PGDATABASE=jarvis_gate_1637fix`, worktree `fix-1013-lock-domain`, branch
+`fix-1013-lock-domain-env-consistency` at `755e1aa2a`), then will run the #1624 gate serially after.
+Neither PR is open yet. Confirm progress with a bounded pane read — don't re-derive from scratch.
+**Do not trust a bare `agent_status` flip to `done`/`idle` as proof of completion** — the prior take
+saw exactly that flip while the pane's own content was unchanged (foreground turn ended, background
+gate shell still running). Confirm against real content (a reported PR number, a changed file, an
+explicit "the gate finished" message) before treating either gate as done. If it looks genuinely
+stalled, diagnose per the coordinate skill's stall-diagnosis (frozen vs. wait-declaration) and
+nudge/take over accordingly.
+
+STEP 5: Resume standard `coordinate` Phase 2/3 supervision for the remaining queue — spawn Opus
+adversarial QA (security tier — both #1624 and #1637 are DDL-lock/auth-adjacent) once each PR is
+ready, mandatory `gh pr comment` verdicts, Ben's/Fable-5's explicit merge sign-off, never
+auto-merge on security tier. Every merge: comment the issue + update the board (project 2), every
+tier.
+
+Follow the `coordinate` skill for everything else. Begin now.

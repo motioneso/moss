@@ -85,7 +85,7 @@ from the diff of commit `d44b8505`, no need to re-run the splitter on committed 
 against the *already-split* layout files trivially shows 0/0 since there's nothing left to split;
 the real 199/0 number is the pre-split one already stated in this doc and the commit message);
 statement that CI's "Verify foundation and app" runs the browser suite and the local gate doesn't;
-`capture:screens` is corroboration not proof (one state per section, can't cover
+Browser assertions are corroboration not proof (one state per section, can't cover
 Switch/Segmented/Select/Badge/Avatar/Indicator/ComingSoon); which `#1416` importers this PR closes
 (settings panes) vs. doesn't (six module packages + `apps/web/src/tasks/task-details-dialog.tsx`) —
 post that as a factual comment on #1416, don't re-scope it.

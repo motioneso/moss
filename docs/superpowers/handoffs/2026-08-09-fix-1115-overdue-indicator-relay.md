@@ -44,9 +44,9 @@ by section if you need the "why", not this doc.
 3. Push branch, open PR (`fix(#1115): ...`, reference the issue).
 4. **Live-path proof — the part most likely to get skipped.** This touches a live UI surface with
    no mapped UAT spec. Exercise `/tasks` on a live dev instance with a non-done overdue task,
-   screenshot showing exactly **one** overdue indicator (not badge + pill both), post via
-   `gh pr comment`. Also worth a done-overdue-task screenshot showing the badge is still the sole
-   indicator there (kill-gate condition in the plan). Without this proof the honest status is
+   live DOM assertion showing exactly **one** overdue indicator (not badge + pill both), post via
+   `gh pr comment`. Also assert a done-overdue task still has the badge as its sole indicator
+   (kill-gate condition in the plan). Without this proof the honest status is
    "code-complete, unverified" — say that plainly rather than "done" if you can't produce it.
 5. Report the PR + evidence to the coordinator, then stop. Merge/board/close are the coordinator's.
 

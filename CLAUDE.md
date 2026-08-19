@@ -39,6 +39,11 @@ Deliberate decisions, each with a real failure behind it. Violating one is a blo
   existing install. Add a new file. Module SQL lives in the owning module's `sql/`, never in
   `infra/postgres/migrations/`.
 - **pgvector image.** Compose must use a pgvector-enabled Postgres image, not plain Postgres.
+- **A PR must never break prod.** If a change makes a setting/env var required (a guard that now
+  fails closed without it, a newly-mandatory config key), the same PR must also add it to every
+  deployment config it affects (dev + prod compose/env), not a follow-up. Don't stop and ask Ben
+  which he prefers — add it to the PR by default; only escalate if you can't tell which config
+  file(s) apply. Ben's ruling, 2026-08-16 (#1468): "a pr must never break prod."
 
 ## Process gates
 

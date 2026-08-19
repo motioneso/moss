@@ -59,7 +59,7 @@ since then.
    container, confirmed via `command -v chromium-cli` → not found, and no global/npm package
    either; the `run` skill's playwright fallback pattern applies, which is exactly what #995 did
    too — see its README, "Ran via a throwaway local script"). The script is fully written,
-   captures screenshots numbered `00` through `04` + `02a` into
+   records numbered DOM/state assertions `00` through `04` + `02a` into
    `docs/superpowers/handoffs/2026-07-19-1188-uat-evidence/`, and prints console errors +
    the seed-account API response to stdout. **It has NOT been executed yet.**
 
@@ -73,7 +73,7 @@ since then.
    Watch stdout for `UAT SCRIPT FAILED` — if a selector doesn't match (UI may differ slightly
    from what was read), open `/tmp/cb-web-1188.log` and adjust the script in place; the
    sequence/selectors documented above are accurate as of this relay's reading but the script
-   itself is unverified end-to-end. Confirm all screenshot files actually landed in
+   itself is unverified end-to-end. Confirm all assertion artifacts actually landed in
    `docs/superpowers/handoffs/2026-07-19-1188-uat-evidence/` before moving on. Re-run freely —
    it's idempotent enough (reseeding a second account is harmless; if you want a clean single
    seed, `DROP DATABASE`/recreate/re-migrate first — commands above).
@@ -87,7 +87,7 @@ since then.
 
 4. **Write `docs/superpowers/handoffs/2026-07-19-1188-uat-evidence/README.md`**, modeled
    exactly on `docs/superpowers/handoffs/2026-07-15-995-uat-evidence/README.md`'s structure
-   (ports/DB/PR-HEAD-sha header line, then a checklist-item → screenshot table). Map screenshots
+   (ports/DB/PR-HEAD-sha header line, then a checklist-item → assertion table). Map assertions
    to the actual #1188 checklist (see relay-6 §"Screens to capture" — provider picker equal
    weight, add-account picker not collapsing, Google one-click consent popup attempt, IMAP
    nested help link, console-errors note). Use PR HEAD sha `f1c27cfe` (current tip; re-check
@@ -106,9 +106,8 @@ since then.
    all in this snapshot** — re-check; if still absent, note that plainly to Coordinator rather
    than guessing why.
 
-7. **Link evidence in the PR**: `gh pr comment 1206 --body "..."` with one
-   `https://raw.githubusercontent.com/motioneso/Jarv1s/fix/1188-connector-onboarding-clean/docs/superpowers/handoffs/2026-07-19-1188-uat-evidence/<file>.png`
-   markdown image per screenshot, plus the README table.
+7. **Post evidence in the PR**: `gh pr comment 1206 --body "..."` with the bounded DOM, network,
+   console, and API assertion results.
 
 8. **Report to Coordinator** via `herdr-pane-message` (label `Coordinator`, re-resolve pane
    fresh — never trust a baked-in number): link the PR comment, restate VF_EXIT=0/AUDIT_EXIT=0

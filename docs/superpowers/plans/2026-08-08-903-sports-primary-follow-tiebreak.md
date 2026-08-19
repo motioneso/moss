@@ -149,7 +149,7 @@ failure (i.e. it passes even without Task 1's change), stop and re-derive the bu
 #903 changes user-visible selection behavior on the real Sports surface. At wrap-up: follow two
 competitions via the live dev UI in a way that produces (or is verified against) equal-timestamp
 follows, reload, and confirm the same competition renders as primary across repeated loads. Record
-via UAT run output + screenshot per `coordinated-build` step 4 / `docs/DEVELOPMENT_STANDARDS.md` →
+via UAT run output + live DOM assertions per `coordinated-build` step 4 / `docs/DEVELOPMENT_STANDARDS.md` →
 Live-Path Gate. If no live instance is reachable, report _code-complete, unverified_ explicitly
 rather than claiming done.
 

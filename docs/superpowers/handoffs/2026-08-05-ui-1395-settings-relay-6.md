@@ -91,7 +91,7 @@ because they're easy to get wrong:
   session's conversions, since e2e wasn't checked for them yet.
 - **PR body must state**: CI's "Verify foundation and app" runs the browser suite, the local gate
   does not; the standing split-check result (parse each layout CSS file against its
-  `packages/ui` destination property-by-property, zero shared properties); that `capture:screens`
+  `packages/ui` destination property-by-property, zero shared properties); that browser assertion
   is corroboration not proof (one state per section — `Switch`/`Segmented`/`Select`/`Badge`/
   `Avatar`/`Indicator`/`ComingSoon` need the live-path walk instead, or a second capture per
   Ben's addition #2 in the approval — a dialog shot, since decision 3 carries real visual risk);

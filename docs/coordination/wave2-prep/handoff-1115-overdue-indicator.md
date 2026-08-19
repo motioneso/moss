@@ -29,7 +29,7 @@ message the coordinator, then use the `relay` skill immediately.
 - PR open, rebased on `origin/main`.
 - **Live-path proof required — a real `/tasks` live-path `gh pr comment`.** This lane touches
   `apps/web/src/tasks/task-list-view.tsx`, a live UI surface. Exercise the overdue indicator
-  through the real UI on a live dev instance, screenshot it, post as a `gh pr comment`. Cannot
+  through the real UI on a live dev instance, record the live DOM assertion and run output, and post them as a `gh pr comment`. Cannot
   produce it? Report **code-complete, unverified** — never "done".
   `docs/DEVELOPMENT_STANDARDS.md` → Live-Path Gate.
 

@@ -180,7 +180,7 @@ re-enable), reload the shell, then **assert a nav link with accessible name "Job
 exists in the nav rail, click it, and assert the URL is `/m/job-search` with the module
 root rendered. `page.goto('/m/job-search')` is forbidden anywhere in this UAT** — the
 prior dev-proof passed on `goto` while the nav path was broken. Manual dev proof is
-acceptable until the #1000 harness ships, recorded with screenshots.
+acceptable until the #1000 harness ships, recorded with live DOM assertions and run output.
 
 ## Rollout
 

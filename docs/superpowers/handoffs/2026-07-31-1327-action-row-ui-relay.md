@@ -34,7 +34,7 @@ pane fresh via `herdr pane list`, never reuse a `…-N` number.
    `today-suggested-email.tsx`), commit per task, run the plan's Task 6 phase-gate commands. **Kill
    gate: stop and message the coordinator after Task 6 is green, before starting Task 7** — this is
    a binding condition of the approval, not optional.
-4. Task 7: e2e spec + the real dev-instance live-path artifact (screenshots/video posted via
+4. Task 7: e2e spec + the real dev-instance live-path artifact (assertions/evidence posted via
    `gh pr comment`) — the coordinator explicitly required the live artifact, not e2e-passing alone.
    If genuinely blocked (no live instance/credentials), report **code-complete, unverified**
    plainly; do not simulate or waive it.

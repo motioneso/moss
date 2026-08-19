@@ -51,5 +51,5 @@
 
 - `pnpm vitest run tests/unit/news-mosaic-render.test.ts tests/unit/news-mosaic.test.ts` green.
 - Pre-push trio (`format:check`, `lint`, `typecheck`) green, rebased on `origin/main`.
-- Hand off to the separate visual-QA agent for live `5178` screenshots before the three annotations
+- Hand off to the separate QA agent for live `5178` DOM assertions before the three annotations
   resolve (not this agent's job per collision notes).

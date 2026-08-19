@@ -32,7 +32,7 @@ Execute approved Tasks 1–2 and acceptance Tasks 3–6 from
 - Execute Tasks 3–6 as written. Reuse existing UAT/Webwright provisioner and evidence contract;
   do not create another harness.
 - A user-facing UI PR is code-complete but unproven until live desktop and narrow-path evidence is
-  posted on the PR. Record the required screenshots/run links before wrap-up.
+  posted on the PR. Record the required run links and assertions/evidence before wrap-up.
 - Keep GitHub #988 open and project state unchanged; the coordinator owns merge and bookkeeping.
 
 ## Collision and preservation guardrails

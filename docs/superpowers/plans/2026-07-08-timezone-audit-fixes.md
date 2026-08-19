@@ -89,7 +89,9 @@ Test (vitest, no React needed): a fixture at `2026-07-10T01:40:00Z` (= 6:40 PM P
 - [ ] **Step 1:** `toDateInputValue(value: string | null, timeZone?: string)` → `value ? localDay(value, timeZone) : ""` (import `localDay` from `@jarv1s/shared`). Thread the timezone: `task-details-model.ts` builds the form state — give its builder a `timeZone` param and pass `useUserLocale().timezone` from the component that calls it (trace the caller; it already renders dates so the locale hook is likely in scope). Keep `fromDateInputValue`'s noon-UTC anchor as is (writing is symmetric and DST-safe).
 - [ ] **Step 2:** Failing-first unit test: `toDateInputValue("2026-07-09T04:00:00Z", "America/Los_Angeles") === "2026-07-08"` (9 PM PT on 7/8); with `"UTC"` it returns `"2026-07-09"`.
 - [ ] **Step 3:** In `settings-module-subviews.tsx` `updateDigest` (~390–417), replace `Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"` with the persisted locale timezone already fetched at ~117 (`localeQuery.data?.locale.timezone`), falling back to the briefings pane's existing default pattern. Match how ~148 does it. Also: when PATCHing an existing preference, send the persisted-locale tz instead of blindly echoing `current.scheduleMetadata.timezone` **only if** the stored value is `"UTC"`-default — otherwise preserve the user's stored choice.
-- [ ] **Step 4:** Gates incl. `pnpm check:no-ambient-dates` (your edit REMOVES an ambient call — good) + `pnpm capture:screens` is NOT required. Commit + PR. Release-note summary: "Task due-date editing and email-digest scheduling now follow your selected timezone."
+- [ ] **Step 4:** Gates incl. `pnpm check:no-ambient-dates` (your edit REMOVES an ambient call —
+      good). Commit + PR. Release-note summary: "Task due-date editing and email-digest scheduling now
+      follow your selected timezone."
 
 ### Task D (PHASE 2 — dispatch only after A–C merge): gate hardening + wellness verification — branch `fix/877-gate-hardening`
 

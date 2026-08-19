@@ -14,7 +14,7 @@ next begins.
 
 **Tech Stack:** React 18 + TypeScript (packages/sports/src/web), CSS with the existing
 `--space-*` / `--text-*` token scale (apps/web/src/styles/tokens.css), Playwright for
-`capture:screens`.
+focused browser DOM/layout assertions.
 
 ## Global Constraints
 
@@ -715,9 +715,9 @@ pnpm lint && pnpm format:check && pnpm check:file-size && pnpm check:design-toke
 
 Expected: all green, real exit code 0 (do not pipe through `tail`).
 
-- [ ] **Step 2: Visual check — sp-fc has no existing golden screenshot**
+- [ ] **Step 2: Layout check — sp-fc has no existing focused assertion**
 
-Before relying on `capture:screens` alone: confirm neither existing capture actually exercises the
+Before relying on the broad browser suite alone: confirm neither existing check actually exercises the
 `sp-fc` card. Run:
 
 ```bash
@@ -726,14 +726,13 @@ grep -n "registerMockSportsRoutes\|sportsOverviewFixture" tests/e2e/capture-scre
 
 Expected: no output — the `"capture: today + chat drawer"` test does not mock sports follows, so
 `SportsTodayWidget` renders `null` there today (`data.followed.length === 0` — no mock registered
-means the query never resolves truthy data in that test). This means `pnpm capture:screens` alone
-will NOT visually exercise the tokenized `sp-fc` block. Do not claim visual verification from that
-suite alone — see Step 3 for the actual visual check.
+means the query never resolves truthy data in that test). The broad suite therefore does not
+exercise the tokenized `sp-fc` block. See Step 3 for the focused check.
 
-- [ ] **Step 3: Manual visual check of the tokenized sp-fc card**
+- [ ] **Step 3: Focused DOM/computed-style check of the tokenized sp-fc card**
 
 Add a temporary (uncommitted) Playwright script in the scratchpad directory to render `/today` with
-mocked follows and screenshot it, since no committed capture does this today:
+mocked follows and assert its DOM, computed styles, and layout, since no committed check does this today:
 
 ```ts
 // scratchpad-only, do not commit
@@ -745,17 +744,14 @@ import { registerMockSportsRoutes } from "../../tests/e2e/mock-sports-api.js"; /
 
 In practice: temporarily copy the `"capture: today + chat drawer"` test body, insert
 `await registerMockSportsRoutes(page);` before `await page.goto("/today")`, and run just that one
-test with `CAPTURE=1 playwright test capture-screens --workers=1 -g "today"`. Diff the resulting
-`sp-fc` card region against a mental/visual check of the pre-change rendering (git stash the CSS
-change, re-run, compare, then restore). Discard the temporary test edit afterward — do not commit
-it; note the finding (visually unchanged, or not) in the wrap-up report.
+test with Playwright. Compare the resulting DOM/computed-style metrics before and after the CSS
+change. Discard the temporary test edit afterward — do not commit it; note the result in the wrap-up report.
 
-- [ ] **Step 4: Run the full capture:screens suite for regressions elsewhere**
+- [ ] **Step 4: Run the full browser suite for regressions elsewhere**
 
-Run: `pnpm capture:screens`
-Expected: all captures pass (no crashes, no assertion failures). This confirms nothing else on
-`/sports` or `/today` broke, even though it doesn't cover the specific `sp-fc` pixels (Step 3
-covers that gap).
+Run the existing focused Playwright browser suite.
+Expected: all assertions pass. This confirms nothing else on `/sports` or `/today` broke; Step 3
+covers the specific `sp-fc` gap.
 
 - [ ] **Step 5: Rebase and pre-push trio**
 

@@ -161,7 +161,7 @@ Suggested source types:
 - product design essays
 - HCI trend reports
 - official product launches or design notes from AI products
-- screenshots or public product pages
+- public product pages
 
 Candidate products to inspect:
 

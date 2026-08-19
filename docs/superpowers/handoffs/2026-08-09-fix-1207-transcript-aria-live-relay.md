@@ -17,8 +17,8 @@ Second relay this run (hit the context-meter 70% warning twice). Resume `coordin
   repeat that message, only the final done-report in step 4 below.
 - Coordinator's plan amendments (still governing, already satisfied by commits so far):
   1. Regression test lives in the *existing* `tests/unit/assistant-surface.test.tsx` harness — done.
-  2. Live-path PR comment must show the `aria-live` attribute in **live rendered DOM**, not just a
-     screenshot — **not yet done, this is the remaining work**.
+  2. Live-path PR comment must show the `aria-live` attribute in **live rendered DOM** — **not yet
+     done, this is the remaining work**.
 
 ## Done
 
@@ -61,11 +61,8 @@ Second relay this run (hit the context-meter 70% warning twice). Resume `coordin
 3. Run the 4 blocking UAT specs above against it: `pnpm test:uat -- "<spec>"` per spec, or however
    `verify-gate`/the UAT runner is invoked — capture real exit codes, don't pipe
    (`... > /tmp/1207-uat-<n>.log 2>&1; echo "EXIT=$?"`).
-4. Capture **DOM-level proof** of `aria-live="polite"` on `.assistant-surface__thread` from the
-   *live rendered page* — e.g. a browser devtools Elements-panel screenshot showing the attribute,
-   or an `element.outerHTML` / `getAttribute("aria-live")` snippet pulled from the live page. A
-   plain visual screenshot of the chat UI is explicitly insufficient per the coordinator's
-   amendment (`aria-live` has no visual rendering) — do not substitute one.
+4. Record **DOM-level proof** of `aria-live="polite"` on `.assistant-surface__thread` from the
+   *live rendered page* using `element.outerHTML` or `getAttribute("aria-live")`.
 5. Post `gh pr comment 1479` with the UAT run output (all four passing) and the DOM-level proof.
 6. Report to the coordinator per `coordinated-wrap-up` step 4 format (terse, result-first):
    PR link, VF_EXIT/gate summary (already have this from the 3 runs above — no need to re-run the

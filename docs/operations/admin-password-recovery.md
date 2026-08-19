@@ -13,13 +13,13 @@ it's built on.
 
 A prior incident (#1383) locked out the bootstrap owner's prod login: a scratch script wrote
 `app.auth_accounts` directly, using `@moss/auth`'s `hashPassword` plus a raw DB write, with the
-shell's `JARVIS_PGHOST`/`JARVIS_PGPORT` pointed at prod instead of dev. The script had no way to
+shell's `MOSS_PGHOST`/`MOSS_PGPORT` pointed at prod instead of dev. The script had no way to
 know it was aimed at the wrong instance, so it "worked" — against the wrong database.
 
 Two changes close this off:
 
 - **`packages/db/src/urls.ts`** now refuses to build a default-credentialed connection string
-  (`postgres:postgres@...`) whenever `JARVIS_PGHOST`/`JARVIS_PGPORT` differ from the local dev
+  (`postgres:postgres@...`) whenever `MOSS_PGHOST`/`MOSS_PGPORT` differ from the local dev
   defaults (`localhost:55433`), in any `NODE_ENV`. An explicit `*_DATABASE_URL` is required to
   point anywhere else. A default-credentialed URL silently built against a non-default host is
   exactly what let #1383's script reach prod without an explicit choice to do so.
@@ -43,8 +43,8 @@ credential-reset scripts — use this one.
 - You know the target instance's bootstrap owner email (the account being reset). The script
   queries the target database for its `is_bootstrap_owner = true` row and refuses to proceed
   unless the email you supply matches what it finds — this is the check, not a formality.
-- Correct environment variables for the target instance: either `JARVIS_MIGRATION_DATABASE_URL`
-  set explicitly, or `JARVIS_PGHOST`/`JARVIS_PGPORT` pointed at it (local dev defaults are used
+- Correct environment variables for the target instance: either `MOSS_MIGRATION_DATABASE_URL`
+  set explicitly, or `MOSS_PGHOST`/`MOSS_PGPORT` pointed at it (local dev defaults are used
   if neither is set).
 
 ---
@@ -78,7 +78,7 @@ password reset is always visible in the instance's own audit trail.
 
 ## If the script itself fails to connect
 
-Check `JARVIS_MIGRATION_DATABASE_URL` (or `JARVIS_PGHOST`/`JARVIS_PGPORT`) point at the intended
+Check `MOSS_MIGRATION_DATABASE_URL` (or `MOSS_PGHOST`/`MOSS_PGPORT`) point at the intended
 instance. If you're intentionally targeting a non-default host/port, `getMossDatabaseUrls()`
 now requires every connection URL used (bootstrap/migration/app/auth/worker) to be set
 explicitly — see `packages/db/src/urls.ts`. This is deliberate: it's the fix for #1383.

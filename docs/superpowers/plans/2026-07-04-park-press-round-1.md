@@ -6,7 +6,7 @@
 
 **Architecture:** Approach B from the approved spec (`docs/superpowers/specs/2026-07-03-park-press-design-language-design.md`): introduce `--forest` / `--gold` / oat primitives in `apps/web/src/styles/tokens.css`, keep the semantic alias layer stable, and keep `--pine*` as bridge aliases so the ~30 direct consumers and the custom-theme runtime keep working unchanged. Everything global lands through tokens; only the shell rail and Today hero get component CSS edits.
 
-**Tech Stack:** Plain CSS custom properties, React 18 + Vite (`apps/web`), Fastify + shared TS contracts (`packages/shared/src/themes-api.ts`, `packages/settings/src/themes-routes.ts`), Vitest (`tests/unit/`), Playwright screenshot harness (`pnpm capture:screens`).
+**Tech Stack:** Plain CSS custom properties, React 18 + Vite (`apps/web`), Fastify + shared TS contracts (`packages/shared/src/themes-api.ts`, `packages/settings/src/themes-routes.ts`), Vitest (`tests/unit/`), focused Playwright DOM/layout assertions.
 
 **Epic:** #726. **Spec:** `docs/superpowers/specs/2026-07-03-park-press-design-language-design.md` (approved, PR #720).
 
@@ -254,7 +254,7 @@ Expected: exit 0. `tests/unit/unstyled-surfaces-css.test.ts` reads tokens.css �
 
 - [ ] **Step 8: Visual smoke + commit**
 
-Run `pnpm capture:screens` and eyeball `test-results/design-screens` / `-dark` (oat ground, forest accents, cards ringed not shadowed). Then:
+Run focused Playwright DOM/computed-style assertions in light and dark themes. Then:
 
 ```bash
 git add apps/web/src/styles/tokens.css tests/unit/design-tokens-contrast.test.ts
@@ -809,7 +809,7 @@ Expected: exit 0. `styles.css` starts at 983 lines; this task adds ~12 net. **If
 
 - [ ] **Step 5: Manual verify + capture**
 
-Dev server: forest rail with cream text, gold flat marker on the active item, readable hover states; usermenu/popover in the rail foot still legible (if it renders light-on-light inside the dark rail, log it as a follow-up — don't chase). Switch to Canyon theme — rail re-grounds rust; dark theme — deep charcoal-forest rail. Run `pnpm capture:screens` and eyeball both sets.
+Dev server: forest rail with cream text, gold flat marker on the active item, readable hover states; usermenu/popover in the rail foot still legible (if it renders light-on-light inside the dark rail, log it as a follow-up — don't chase). Switch to Canyon theme — rail re-grounds rust; dark theme — deep charcoal-forest rail. Run focused DOM/computed-style assertions for both themes.
 
 - [ ] **Step 6: Commit**
 
@@ -892,7 +892,7 @@ For each hit using `var(--shadow-xs)`, `var(--shadow-sm)`, or `var(--shadow-cont
 - [ ] **Step 4: Verify + capture**
 
 Run: `pnpm check:design-tokens && pnpm check:file-size && pnpm lint`
-Expected: exit 0. Dev server on `/today`: black Display hero, gold eyebrow, ringed stat fields, no doubled borders, agenda/wellness aside inherits cleanly. `pnpm capture:screens` — eyeball light and dark Today shots.
+Expected: exit 0. Dev server on `/today`: black Display hero, gold eyebrow, ringed stat fields, no doubled borders, agenda/wellness aside inherits cleanly. Assert the light and dark Today DOM/layout.
 
 - [ ] **Step 5: Commit**
 
@@ -914,7 +914,7 @@ git commit -m "feat(design): Today hero type + keyline fields (#726)"
 Run: `pnpm verify:foundation`
 Expected: exit 0 — record the exact exit code and any suite counts in the PR body.
 
-- [ ] **Step 2: Screen sweep** — `pnpm capture:screens`, then review every shot in `test-results/design-screens` and `-dark` against this checklist: oat ground everywhere (no leftover near-white panels); no soft-shadow cards on flat surfaces; no unreadable text (especially on `--surface-2/3` and inside the forest rail); semantic amber/red/steel still read as caution/error/info; empty/loading states still use authored patterns.
+- [ ] **Step 2: Browser assertion sweep** — verify the declared DOM/computed-style properties in both themes: oat ground everywhere (no leftover near-white panels); no soft-shadow cards on flat surfaces; readable text; semantic amber/red/steel remain caution/error/info; empty/loading states use authored patterns.
 
 - [ ] **Step 3: Log follow-up issues** (each "Part of #726", `task` label) for anything found in Step 2 plus these known deferrals:
   - Rename the ~30 direct `var(--pine*)` consumers to `--forest*`, then retire the bridge aliases.

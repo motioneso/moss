@@ -3188,8 +3188,8 @@ ls -la ~/Jarv1s/docs/brand/mockups/
 grep -lE '#[0-9a-fA-F]{3,6}' ~/Jarv1s/docs/brand/mockups/*.html  # hex is fine in mockups (self-contained)
 ```
 
-(Optional, if a headless browser is available, screenshot via the `webwright`/Playwright harness for the
-sign-off message; not required for the gate file itself.)
+(Optional, if a headless browser is available, run DOM/layout assertions via the
+`webwright`/Playwright harness for the sign-off message; not required for the gate file itself.)
 
 - [ ] **Step 3:** No code change needed beyond the HTML files.
 
@@ -3235,7 +3235,7 @@ Expected: PASS (acceptance criterion #11 — the scaffolding restyles nothing, s
 > **What the autonomous build MUST do at this gate:**
 >
 > 1. Stop all design-direction work. Do **not** start Task F6+ (the app-wide restyle).
-> 2. Surface the mockups for review: post the three `docs/brand/mockups/*.html` paths (and screenshots if a
+> 2. Surface the mockups for review: post the three `docs/brand/mockups/*.html` paths (and rendered HTML paths if a
 >    headless browser is available) to Ben via the relay/handoff channel, with a one-line summary of the
 >    direction and a request for sign-off.
 > 3. Record the blocked state in the run manifest/coordination doc so a successor session knows the design

@@ -4,56 +4,21 @@ Moss should deploy like a small self-hosted appliance: one Postgres container fo
 
 The operator-facing path is a commented Docker Compose file. No installer script, host CLI preflight, or UID/GID prompt should be required.
 
-## Target Compose
+## Installation
 
-Copy this into `compose.yml`, change the placeholder values, optionally mount your notes folder, then run `docker compose up -d`.
+Download the production Compose file, generate your unique encryption keys, and start the stack. No installer script or host CLI preflight is required.
 
-```yaml
-services:
-  postgres:
-    image: pgvector/pgvector:pg17
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: jarv1s
-      POSTGRES_USER: jarv1s
-      # Change this before first start. Keep it in sync with JARVIS_DB_PASSWORD below.
-      POSTGRES_PASSWORD: replace-this-postgres-password
-    volumes:
-      - jarv1s-postgres:/var/lib/postgresql/data
+```sh
+mkdir moss && cd moss
 
-  jarv1s:
-    image: ghcr.io/motioneso/moss:stable
-    restart: unless-stopped
-    depends_on:
-      - postgres
-    ports:
-      - "1533:3000"
-    environment:
-      JARVIS_BASE_URL: http://localhost:1533
+# Download the production Compose file
+curl -O https://raw.githubusercontent.com/motioneso/Jarv1s/main/infra/docker-compose.prod.yml
 
-      # Change this before first start. Use a long random value.
-      JARVIS_SECRET: replace-this-jarv1s-secret
+# 1. Generate your boot secrets (creates env.production.local)
+JARVIS_IMAGE_TAG=stable docker compose -f docker-compose.prod.yml --profile setup run --rm setup
 
-      JARVIS_DB_HOST: postgres
-      JARVIS_DB_NAME: jarv1s
-      JARVIS_DB_USER: jarv1s
-      # Must match POSTGRES_PASSWORD above.
-      JARVIS_DB_PASSWORD: replace-this-postgres-password
-
-      # Moss uses this fixed in-container path for notes. Edit only the volume mount below.
-      JARVIS_NOTES_ROOTS: /data/external-notes
-    volumes:
-      - jarv1s-data:/data
-
-      # Optional: uncomment and replace the left side with your Markdown/Obsidian folder.
-      # Use an absolute host path. Examples:
-      # - macOS: /Users/you/Obsidian:/data/external-notes:ro
-      # - Linux: /srv/obsidian:/data/external-notes:ro
-      # - /Users/you/Obsidian:/data/external-notes:ro
-
-volumes:
-  jarv1s-postgres:
-  jarv1s-data:
+# 2. Start the stack
+docker compose -f docker-compose.prod.yml --env-file env.production.local up -d
 ```
 
 Open `http://localhost:1533`.
@@ -117,14 +82,13 @@ The committed production artifact is `infra/docker-compose.prod.yml`. It keeps P
 
 ## Secrets
 
-Moss should not generate secrets for the operator. The compose file carries explicit placeholders. If placeholder values are left unchanged, Moss should fail boot with a clear error.
+Moss does not require you to manually generate secrets. The `setup` service automatically generates `env.production.local` with all the cryptographically secure passwords and keys needed for the stack.
 
-Required user-edited values:
+If you are generating secrets manually or running `setup` via a script, the following environment variables are typically customized:
 
-- `POSTGRES_PASSWORD`
-- `JARVIS_SECRET`
-- `JARVIS_BASE_URL` when not using localhost
-- optional notes bind mount
+- `POSTGRES_PASSWORD` (used by setup to populate the database URLs)
+- `JARVIS_IMAGE_TAG`
+- optional notes bind mount (`JARVIS_NOTES_VAULT_HOST_PATH`)
 
 UID/GID should not be part of the happy path. The Moss image should handle ownership of its managed `/data` volume internally. If writable host bind mounts later need custom ownership, document that under advanced permissions.
 
@@ -144,17 +108,19 @@ Only use `:rw` if a future write-back feature explicitly requires it.
 
 Back up both volumes:
 
-- `jarv1s-postgres`: database
-- `jarv1s-data`: app state, provider CLI auth, caches, and local files
+- `jarv1s-postgres-data`: database
+- `jarv1s-cli-auth`, `jarv1s-vault-data`, `jarv1s-modules`: app state, provider CLI auth, caches, and local files
 
 Stop the stack before raw volume snapshots:
 
 ```sh
 docker compose down
-docker run --rm -v jarv1s-postgres:/data -v "$PWD":/backup alpine \
-  tar czf /backup/jarv1s-postgres.tar.gz -C /data .
-docker run --rm -v jarv1s-data:/data -v "$PWD":/backup alpine \
-  tar czf /backup/jarv1s-data.tar.gz -C /data .
+docker run --rm -v jarv1s-postgres-data:/data -v "$PWD":/backup alpine \
+  tar czf /backup/jarv1s-postgres-data.tar.gz -C /data .
+docker run --rm -v jarv1s-cli-auth:/data -v "$PWD":/backup alpine \
+  tar czf /backup/jarv1s-cli-auth.tar.gz -C /data .
+docker run --rm -v jarv1s-vault-data:/data -v "$PWD":/backup alpine \
+  tar czf /backup/jarv1s-vault-data.tar.gz -C /data .
 docker compose up -d
 ```
 

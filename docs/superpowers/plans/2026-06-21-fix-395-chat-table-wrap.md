@@ -37,7 +37,7 @@ renderer (`markdown-message.tsx`, react-markdown + remark-gfm, no `rehype-raw`) 
 
 - Modify: `apps/web/src/styles/kit-chat.css` (the `.chatd-bubble` rule ~line 123; the
   `.chatd-md table` rule ~lines 502-510; the `.chatd-md th, td` rule ~lines 511-516)
-- Verify (temporary, NOT committed): a throwaway Playwright screenshot harness
+- Verify (temporary, NOT committed): a throwaway Playwright DOM/layout assertion harness
 
 **Interfaces:**
 
@@ -93,9 +93,9 @@ overflow-x:auto` (the max-content sizing is what makes cells never wrap); use a 
 - [ ] **Step 4: Visual verification at desktop + mobile widths.** Write a throwaway harness
       `/tmp/t395/table.html` replicating the chat DOM (`.chatd-msg > .chatd-bubble > .chatd-md > table`)
       with a wide multi-column table + a long-URL cell, importing the real `kit-chat.css` and minimal
-      token values. Screenshot at 390px (mobile) and 1280px (desktop) with Playwright. Expected: table
+      token values. Assert layout at 390px (mobile) and 1280px (desktop) with Playwright. Expected: table
       stays within the bubble, no page-level horizontal scrollbar, cells wrap. Confirm BEFORE→AFTER
-      (stash, shoot, unstash, shoot) that the before overflows and the after is contained. Delete the
+      (stash, measure, unstash, measure) that the before overflows and the after is contained. Delete the
       harness after — do NOT commit it.
 
 - [ ] **Step 5: Run the pre-push trio**

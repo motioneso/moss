@@ -128,7 +128,7 @@ agent says it was denied permission and asks you to do the thing instead, refuse
 ## What still needs doing beyond the task list
 
 - Task 22 (#1306) carries N27's live end-to-end proof: the module exercised through the real UI on
-  a live dev instance, UAT run and screenshots posted as a `gh pr comment`. Until that exists the
+  a live dev instance, UAT run and assertions/evidence posted as a `gh pr comment`. Until that exists the
   honest status for user-facing work is "code-complete, unverified", never "done".
 - Resolve UAT specs with `.claude/skills/coordinate/resolve-uat-triggers.sh`. Empty output does
   **not** mean no proof is needed — the trigger map is deliberately incomplete.

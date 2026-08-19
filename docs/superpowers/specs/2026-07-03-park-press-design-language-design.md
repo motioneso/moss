@@ -131,7 +131,7 @@ Five national-park themes on the **existing theme runtime** (no new machinery fo
 
 ### 5. Verification & handoff
 
-- **Screens:** `pnpm capture:screens` (existing harness) across both themes; confirm a11y
+- **Browser layout:** focused DOM/computed-style assertions across both themes; confirm a11y
   contrast holds; `pnpm verify:foundation` green. Ben's eye is final sign-off.
 - **Claude Design handoff:** this spec is the source of truth. It is fed to the `Jarvis Design
 System` Claude Design project to author the component gallery. **`tokens.css` remains runtime
@@ -146,7 +146,7 @@ System` Claude Design project to author the component gallery. **`tokens.css` re
   accent-on-paper contrast checks for both themes; adjust `--text-subtle`/`--text-faint` and
   accent-on-paper as needed.
 - **Auto-reskin surprises.** A few components hardcode assumptions and will look off under the
-  flip. Expected — `capture:screens` surfaces them; log for follow-up specs, don't chase all now.
+  flip. Expected — browser assertions surface them; log for follow-up specs, don't chase all now.
 - **File-size gate.** 1000-line CSS cap per file. `tokens.css` is at ~343; room to grow, but watch
   it as primitives/aliases expand.
 - **Font blocker.** The Neue Haas woff2 files gate the type step. Everything else can proceed
@@ -167,7 +167,7 @@ System` Claude Design project to author the component gallery. **`tokens.css` re
 5. Today screen polish — hero type, keyline grid, committed fields.
 6. Five national-park built-in themes; Forest as default; `--gold` slot added to the custom-theme
    editor.
-7. `capture:screens` pass (both themes) + `verify:foundation` green.
+7. Focused browser assertions pass (both themes) + `verify:foundation` green.
 8. Park Press palette authored into the `Jarvis Design System` Claude Design project.
 
 ---

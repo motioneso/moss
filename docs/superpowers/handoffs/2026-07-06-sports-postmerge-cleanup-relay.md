@@ -48,7 +48,7 @@
   — 4 tasks, complete before/after code for every CSS/TSX edit, exact nearest-token mapping table
   with tie-break reasoning documented, and a called-out gap (no existing Playwright capture
   actually exercises the `sp-fc` card — `"capture: today + chat drawer"` never mocks sports
-  follows, so `pnpm capture:screens` alone won't visually verify Task 2's tokenization; Task 4
+  follows, so the broad browser suite alone won't verify Task 2's tokenization; Task 4
   Step 3 has a plan for a manual scratch-only capture to close that gap).
 - **NOT yet committed** — plan file is new/untracked in the worktree. Commit it as part of your
   first action (see Next steps).
@@ -74,7 +74,7 @@
    explains exactly how to jury-rig a one-off capture since no committed test exercises this
    component. Don't skip it silently; if you decide it's not worth the scratch-test setup, say so
    explicfunctionicitly in the wrap-up report rather than claiming "visually verified via
-   capture:screens" when the existing suite doesn't actually cover it.
+   browser suite" when the existing suite doesn't actually cover it.
 5. Close out with **`coordinated-wrap-up`** (clean tree, own full gate, pre-push trio +
    rebase, push, open PR, report PR + evidence to the coordinator). Do not merge, touch the board,
    or touch `docs/coordination/` yourself.
@@ -90,6 +90,6 @@
 
 ```bash
 pnpm lint && pnpm format:check && pnpm check:file-size && pnpm check:design-tokens && pnpm typecheck && pnpm test:unit
-pnpm capture:screens
+pnpm test:e2e
 pnpm format:check && pnpm lint && pnpm typecheck && git fetch origin main && git rebase origin/main   # pre-push trio
 ```
