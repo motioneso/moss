@@ -44,6 +44,22 @@ Separate follow-on PR after this one lands: Food drops `food.consent.grant` and 
 declares an `aiEstimates` preference defaulting to on, and the estimator reads it. Deleting
 a meal still confirms.
 
+### Where job A actually stands (later on 2026-08-19)
+
+All five steps including the settings page are COMMITTED on `module-prefs-1725`:
+`13dbf9784` (the feature, 25 files) and `a68feafe1` (prettier). The first gate run failed on
+formatting alone and is re-running; log `/tmp/vf-1725b.log`, read `### FINAL rc=`.
+
+The settings page is `apps/web/src/settings/settings-module-preferences.tsx`, reached from
+the modules list via the existing `?module=<id>` deep link. `MyModuleDto` gained
+`hasPreferences` so the list can offer "Configure" without asking every module in turn;
+that flag rides `MossModuleManifest.preferences`, which `createExternalToolManifests`
+copies across. Known gap worth stating in the PR: only modules with a runtime AND assistant
+tools become tool manifests, so a preferences-only module would not appear yet.
+
+Still owed before the PR: uninstall deletes the `module:<id>:` key namespace, unit tests for
+the two routes, and the live end-to-end proof.
+
 ## Job B — #1720: the permission card reaches the screen too late
 
 Worktree `~/Jarv1s/.claude/worktrees/food-phase1`, branch `fix-1720-card-delivery`.
