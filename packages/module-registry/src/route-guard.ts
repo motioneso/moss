@@ -114,6 +114,12 @@ export const PLATFORM_UNGUARDED_ROUTES: ReadonlySet<RouteKey> = new Set<RouteKey
   routeKey("DELETE", "/api/me/modules/:moduleId/credentials/:credentialId"),
   routeKey("GET", "/api/modules/:moduleId/web/*"),
   routeKey("POST", "/api/modules/:moduleId/queues/:queueName/run"),
+  // #1725: module preferences are a PLATFORM surface addressed by module id, owned by no
+  // module (external modules cannot declare routes[]). Both handlers fail closed on their
+  // own — 401 without a session, 404 when the module is not active for the caller
+  // (apps/api/src/module-preferences.ts).
+  routeKey("GET", "/api/modules/:moduleId/preferences"),
+  routeKey("PATCH", "/api/modules/:moduleId/preferences"),
   // observability sink (#413): unauthenticated platform route the browser fires
   // client errors into. Owned by no module, never stores anything, only logs.
   routeKey("POST", "/api/errors")
