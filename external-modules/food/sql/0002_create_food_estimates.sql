@@ -14,7 +14,6 @@ CREATE TABLE app.food_estimates (
   sodium_mg numeric(9,2),
   missing_details text,
   clarification_question text,
-  estimator_model text,
   created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (owner_user_id, meal_id, revision),
   FOREIGN KEY (owner_user_id, meal_id)

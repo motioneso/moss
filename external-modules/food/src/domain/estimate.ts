@@ -15,7 +15,6 @@ export interface EstimatorOutcome {
   readonly nutrients: Nutrients | null;
   readonly missingDetails: string | null;
   readonly clarificationQuestion: string | null;
-  readonly model: string | null;
 }
 
 /**

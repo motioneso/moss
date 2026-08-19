@@ -35,13 +35,13 @@ export interface FoodDb {
 // ── Row <-> domain mapping ──────────────────────────────────────────────
 
 const MEAL_COLUMNS =
-  "meal_id, consumed_at, local_date, timezone_offset, description, capture_kind, " +
+  "meal_id, consumed_at, local_date, timezone_offset, description, serving_note, capture_kind, " +
   "estimate_state, estimate_revision, idempotency_key";
 
 /** Joined meal + its current-revision estimate (LEFT JOIN, so revision 0 / no estimate yet is fine). */
 const MEAL_JOIN_ESTIMATE = `
   SELECT m.meal_id, m.consumed_at, m.local_date, m.timezone_offset, m.description,
-    m.capture_kind, m.estimate_state, m.estimate_revision,
+    m.serving_note, m.capture_kind, m.estimate_state, m.estimate_revision,
     e.calories_kcal, e.protein_g, e.carbohydrates_g, e.fat_g, e.fiber_g, e.sugar_g,
     e.sodium_mg, e.missing_details
   FROM app.food_meals m
@@ -55,6 +55,7 @@ type MealRow = {
   local_date: string;
   timezone_offset: number;
   description: string;
+  serving_note: string | null;
   capture_kind: CaptureKind;
   estimate_state: EstimateState;
   estimate_revision: number;
@@ -104,6 +105,7 @@ function rowToMeal(row: MealRow): Meal {
     localDate: row.local_date,
     timezoneOffset: row.timezone_offset,
     description: row.description,
+    servingNote: row.serving_note,
     captureKind: row.capture_kind,
     estimateState: row.estimate_state,
     estimateRevision: row.estimate_revision,
@@ -120,6 +122,7 @@ export interface CreateMealInput {
   readonly localDate: string;
   readonly timezoneOffset: number;
   readonly description: string;
+  readonly servingNote: string | null;
   readonly captureKind: CaptureKind;
   readonly idempotencyKey: string;
 }
@@ -129,7 +132,6 @@ export interface RecordEstimateInput {
   readonly nutrients: Nutrients | null;
   readonly missingDetails: string | null;
   readonly clarificationQuestion: string | null;
-  readonly estimatorModel: string | null;
 }
 
 export interface CorrectMealPatch {
@@ -183,16 +185,16 @@ export function sqlStore(db: FoodDb): FoodStore {
         `WITH ins AS (
            INSERT INTO app.food_meals (
              owner_user_id, meal_id, consumed_at, local_date, timezone_offset,
-             description, capture_kind, estimate_state, estimate_revision, idempotency_key
+             description, serving_note, capture_kind, estimate_state, estimate_revision, idempotency_key
            )
            VALUES (
-             app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, 'pending', 0, $7
+             app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7, 'pending', 0, $8
            )
            ON CONFLICT (owner_user_id, idempotency_key) DO NOTHING
            RETURNING ${MEAL_COLUMNS}
          )
          SELECT ins.meal_id, ins.consumed_at, ins.local_date, ins.timezone_offset, ins.description,
-           ins.capture_kind, ins.estimate_state, ins.estimate_revision,
+           ins.serving_note, ins.capture_kind, ins.estimate_state, ins.estimate_revision,
            NULL::numeric AS calories_kcal, NULL::numeric AS protein_g,
            NULL::numeric AS carbohydrates_g, NULL::numeric AS fat_g, NULL::numeric AS fiber_g,
            NULL::numeric AS sugar_g, NULL::numeric AS sodium_mg, NULL::text AS missing_details
@@ -203,6 +205,7 @@ export function sqlStore(db: FoodDb): FoodStore {
           input.localDate,
           input.timezoneOffset,
           input.description,
+          input.servingNote,
           input.captureKind,
           input.idempotencyKey
         ]
@@ -260,9 +263,9 @@ export function sqlStore(db: FoodDb): FoodStore {
       await db.query(
         `INSERT INTO app.food_estimates (
            owner_user_id, meal_id, revision, calories_kcal, protein_g, carbohydrates_g,
-           fat_g, fiber_g, sugar_g, sodium_mg, missing_details, clarification_question, estimator_model
+           fat_g, fiber_g, sugar_g, sodium_mg, missing_details, clarification_question
          )
-         VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+         VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
         [
           mealId,
           newRevision,
@@ -274,8 +277,7 @@ export function sqlStore(db: FoodDb): FoodStore {
           n?.sugarG ?? null,
           n?.sodiumMg ?? null,
           outcome.missingDetails,
-          outcome.clarificationQuestion,
-          outcome.estimatorModel
+          outcome.clarificationQuestion
         ]
       );
 
@@ -337,9 +339,9 @@ export function sqlStore(db: FoodDb): FoodStore {
         await db.query(
           `INSERT INTO app.food_estimates (
              owner_user_id, meal_id, revision, calories_kcal, protein_g, carbohydrates_g,
-             fat_g, fiber_g, sugar_g, sodium_mg, missing_details, clarification_question, estimator_model
+             fat_g, fiber_g, sugar_g, sodium_mg, missing_details, clarification_question
            )
-           VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7, $8, $9, NULL, NULL, NULL)`,
+           VALUES (app.current_actor_user_id(), $1, $2, $3, $4, $5, $6, $7, $8, $9, NULL, NULL)`,
           [
             mealId,
             newRevision,

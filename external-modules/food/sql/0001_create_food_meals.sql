@@ -8,6 +8,10 @@ CREATE TABLE app.food_meals (
   local_date text NOT NULL,
   timezone_offset integer NOT NULL,
   description text NOT NULL,
+  -- The user's own serving qualifier ("a large bowl", "half of it"). Persisted so an
+  -- estimate RETRY reproduces the same input as the original attempt; without it a retry
+  -- silently estimates a different meal from the one the user described.
+  serving_note text,
   capture_kind text NOT NULL,
   estimate_state text NOT NULL,
   estimate_revision integer NOT NULL DEFAULT 0,
@@ -18,5 +22,6 @@ CREATE TABLE app.food_meals (
   UNIQUE (owner_user_id, idempotency_key),
   CHECK (capture_kind IN ('text', 'photo', 'voice')),
   CHECK (estimate_state IN ('pending', 'needs_details', 'estimated', 'failed')),
-  CHECK (char_length(description) BETWEEN 1 AND 2000)
+  CHECK (char_length(description) BETWEEN 1 AND 2000),
+  CHECK (serving_note IS NULL OR char_length(serving_note) BETWEEN 1 AND 500)
 );

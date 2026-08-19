@@ -38,6 +38,8 @@ export interface Meal {
   /** Minutes east of UTC at create time, persisted alongside localDate. */
   readonly timezoneOffset: number;
   readonly description: string;
+  /** The user's serving qualifier, persisted so a retry reproduces the original input. */
+  readonly servingNote: string | null;
   readonly captureKind: CaptureKind;
   readonly estimateState: EstimateState;
   /** Optimistic-lock counter. Guards every mutation to this meal (see store/sql.ts). */
