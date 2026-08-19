@@ -15,34 +15,9 @@ The 2026-08-05 transcript audit found 216 idle hours blocked on Ben, mostly on q
 never recorded — an overnight coordinator sat 15h on a question while this file said nothing was
 pending. Silent waiting is the failure mode this protocol exists to kill.
 
-## #1698 calendar lifecycle (PR #1703) AND #1711 all-day scheduling (PR #1717) — both blocked on the same dev-account problem (2026-08-19)
-
-Code is complete on both: PR #1703 (calendar create/reschedule/delete rebuild) and PR #1717
-(all-day events no longer block scheduling) both pass every automated test. Neither can be merged
-yet because this project's rule says a user-facing fix must be proven working on the live system
-first, not just pass tests — and that proof is blocked by two things on the dev instance that need
-a person, not more coding:
-
-1. One of the connected Google accounts on the dev instance has stale sign-in details — someone
-   needs to sign back into Google through the browser on that dev instance.
-2. The main test account (`ben@ben.com`) currently has no real AI provider configured — confirmed
-   directly tonight by trying to chat with it on the dev instance and getting back "no active
-   chat-capable model is configured." This means chat doesn't work at all for that account right
-   now, which blocks proving ANY chat-based fix live, not just the calendar ones.
-
-Both PRs are safe to sit open overnight as "code-complete, unverified" — nothing is at risk. Ben
-said tonight to ask Fable if I get stuck rather than wake him. If this is still blocking things
-tomorrow, it needs a real AI provider set up on that dev account before any further live-testing
-work can happen.
-
-## #1319 signed module catalog — needs a real Ed25519 signing keypair from Ben (2026-08-18)
-
-Build (relay4) finished Tasks 1-2 of the approved plan (18/18 + 12/12 unit tests, typecheck clean)
-and hit the plan's designed kill gate before Phase 2: it cannot produce the required Phase-1 proof
-(a real CI-produced catalog signature that verifies) because the production public-key list
-(`MODULE_CATALOG_PUBLIC_KEYS`) is still a deliberately-empty placeholder. Only Ben can close this —
-it needs a real Ed25519 keypair with the public half committed in code and the private half landed
-as two GitHub secrets before any `workflow_dispatch` publish can self-verify.
+<!-- Resolved 2026-08-19: PR #1703 (calendar rebuild) and PR #1717 (all-day scheduling) both merged.
+Ben ruled "let's just merge all of these, I'll test in prod" — live-path proof on the dev instance
+is no longer the gate for this batch. -->
 
 <!-- Resolved 2026-08-11: #1560 live-path persona cleanup. Ben ruled: "nova is fine for testing,
 yep" — approved leaving `ben@ben.com`'s `assistantName='Nova'` as-is, no restore needed. Ruling
@@ -52,15 +27,9 @@ recorded on issue #1560 (https://github.com/motioneso/moss/issues/1560#issuecomm
 ("feat(chat): thread surface through send routing (#1533)") merged 2026-08-12T03:11:37Z — the
 real-chat-token gap this entry described is moot now that the PR landed. -->
 
-What's needed from Ben: generate (or approve someone generating) an Ed25519 keypair for signing the
-module catalog, then provide the private key material for the two GitHub secrets and confirm the
-public key to commit. Not urgent tonight — build is holding cleanly at the gate, no data at risk —
-but it blocks all of Phase 2 onward, so it should land soon.
-
-Update: the Phase-1-only PR is posted — https://github.com/motioneso/moss/pull/1684 — explicitly
-labeled code-complete/unverified per the live-path gate, not merged and not marked Done. The build
-lane has stopped itself (no live session idling on this); Coordinator will spawn a fresh build agent
-for Phase 2 once the key lands.
+<!-- Resolved 2026-08-19: #1319 signed module catalog. Ben generated the Ed25519 keypair, set the
+two GitHub secrets, and shared the public key. Public half committed to PR #1684
+(commit 851f9ba70). Next: confirm CI green, then run the real publish/verify proof before merge. -->
 
 <!-- Resolved 2026-08-05 (PM, via Telegram relay): PR #1379 — Ben ruled delegate the review; QA
 lane dispatched. Overnight Codex coordinator pid 1799977 — Ben ruled kill; killed with its MCP
