@@ -33,7 +33,7 @@ steps materially:
    user-facing surface (assistant tool confirm-card behavior) — CI-green + review is NOT enough.
    Before wrap-up, run `.claude/skills/coordinate/resolve-uat-triggers.sh` to see which UAT specs
    apply (empty output ≠ no proof needed — the trigger map is deliberately incomplete; use
-   judgement). Post a live end-to-end proof (real UI on a live dev instance, screenshots) as a
+   judgement). Post a live end-to-end proof (real UI on a live dev instance, assertions/evidence) as a
    `gh pr comment` on your PR. Without it, report status as "code-complete, unverified" — never
    "done". This is also exit criterion #3 from the handoff (Playwright run, zero confirm cards).
 

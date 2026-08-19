@@ -48,6 +48,6 @@ action-row work.
 - Formatting: `npx prettier --write apps/web/src/today/today-page.tsx apps/web/src/today/evening-mode.tsx apps/web/src/styles/components-jarvis.css apps/web/src/styles/kit-today-misc.css tests/unit/today-briefing-prose.test.tsx tests/unit/today-evening-mode.test.tsx` (only files changed).
 - Full gate: export a fresh isolated `JARVIS_PGDATABASE`, then run `pnpm verify:foundation`; do not
   run any DB/test command against a shared or live database.
-- Live proof: exercise a real dev instance through the UI and record a screenshot or concise
+- Live proof: exercise a real dev instance through the UI and record concise DOM/network/log
   walkthrough of the morning prose card and evening recap on the PR; otherwise report
   code-complete, unverified.

@@ -2,20 +2,17 @@
 
 Manual real-dev-instance UAT (per the #1000 UAT harness rule for UI/UX features), run against
 live API (`:3901`) + web (`:5175`) dev servers and the shared dev Postgres, on PR #1063
-(HEAD `e5d18ad0`). Checklist item → screenshot:
+(HEAD `e5d18ad0`). Verified checklist:
 
-| Checklist item                                                             | Screenshot                                              |
-| ---------------------------------------------------------------------------| --------------------------------------------------------|
-| Admin approve of a pending signup succeeds                                 | `01-admin-approve-pending-user.png`                     |
-| Picker copy: Google / Email (IMAP) / GitHub disabled "Coming soon · #1061", no Apple/other-OAuth | `02-picker-copy-google-imap-github-comingsoon.png` |
-| IMAP provider-select renders (Fastmail option visible)                     | `03-imap-provider-select-fastmail.png`                  |
-| Test connection / Connect disabled until both fields filled — empty state  | `04-imap-form-empty-test-connect-disabled.png`          |
-| Same form after filling both fields — buttons enabled                      | `05-imap-form-filled-test-connect-enabled.png`          |
-| Bogus IMAP credentials → clean inline error, no crash/blank screen         | `06-imap-bogus-cred-clean-error.png`                    |
-| Narrow viewport (390×844) — IMAP form                                      | `07-narrow-390x844-imap-form.png`                       |
-| Narrow viewport (390×844) — picker                                         | `08-narrow-390x844-picker.png`                          |
+- Admin approve of a pending signup succeeds.
+- Picker copy shows Google / Email (IMAP) / GitHub disabled "Coming soon · #1061", with no
+  Apple/other-OAuth option.
+- IMAP provider select renders with Fastmail visible.
+- Test connection and Connect stay disabled until both fields are filled, then become enabled.
+- Bogus IMAP credentials produce a clean inline error without a crash or blank screen.
+- The IMAP form and picker work at a 390×844 viewport.
 
-**Reconnect-path coverage (decision, not a screenshot):** `AccountRow.onReconnect` and
+**Reconnect-path coverage:** `AccountRow.onReconnect` and
 `ServicePicker.onImap` both route to the identical `<ImapConnect onBack={...} />` call site with
 no `initialProvider` ever passed
 (`apps/web/src/settings/settings-personal-data-panes.tsx`) — confirmed by direct read. The

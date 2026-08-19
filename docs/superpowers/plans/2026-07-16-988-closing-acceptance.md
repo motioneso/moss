@@ -131,7 +131,7 @@ defect with current evidence.
 
 Use `tests/uat/provisioner.ts` from a local Webwright workspace; generated scripts, logs, and images
 stay under `final_runs/run_<id>/` and are not committed. Each critical point gets an action-log line
-and a sanitized screenshot or explicit text result.
+and a sanitized explicit text result.
 
 Run A — first-time onboarding (`solo-admin`):
 

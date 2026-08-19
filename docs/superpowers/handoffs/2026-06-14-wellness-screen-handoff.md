@@ -12,7 +12,7 @@
 
 - **Full gate before any commit:** `pnpm --filter @jarv1s/web typecheck`, `pnpm lint`, `pnpm format:check` (run `npx prettier --write` on touched files), and **`pnpm check:file-size`**. The last one is enforced and easy to forget: **no source file — CSS included — may exceed 1000 lines.** If a `wellness.css` port is large, split it by section into `wellness-*.css` and import the pieces **in original order** so the cascade is unchanged (that's how `kit.css`/`components.css` were handled → `kit-*.css`, `components-*.css`).
 - **`tokens.css` is the ONLY file with hex/rgb literals.** Swap any `#fff` → `var(--white)`, etc.
-- **Verify without auth via a static harness:** the app needs login, so screenshot the screen by linking the real CSS (`tokens.css`, `components-core/-jarvis.css`, the `kit-*.css` set, your new wellness CSS) + lucide CDN in an HTML harness, shot with Playwright (resolve `@playwright/test` by absolute path; `.cjs`; toggle `data-theme` for light/dark). The chat-drawer session left a working harness pattern at `/tmp/chatd-verify/` (`harness.html` + `shot.cjs`) — copy it.
+- **Verify without auth via a static harness:** the app needs login, so assert the screen's DOM and computed layout using the real CSS (`tokens.css`, `components-core/-jarvis.css`, the `kit-*.css` set, your new wellness CSS) + lucide CDN in an HTML harness with Playwright (resolve `@playwright/test` by absolute path; `.cjs`; toggle `data-theme` for light/dark).
 - Comms: terse, lead with results, no preamble or closing recap+offer.
 
 ## Get the prototype

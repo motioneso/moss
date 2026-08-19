@@ -172,23 +172,6 @@ async function openJobSearch(page: Page): Promise<void> {
 // match data are fetched once on mount with no live refresh — reload is how this spec observes
 // progress made by conversational turns, not merely a persistence check (matches the part file's
 // "assert chip state survives a reload" wording, which is also the only way to see it change).
-// #1306 live-path evidence. The gate wants proof a human can read, and the manual walkthrough doc
-// (docs/superpowers/handoffs/2026-07-27-job-search/MANUAL-TEST.md) is assembled from exactly these
-// frames — so they are written to a stable, predictable directory rather than testInfo.outputPath,
-// whose name changes with the test title. Also attached to the Playwright report, so a run that
-// fails halfway still carries every frame it did manage to capture.
-// Each frame carries its own ordinal rather than an incrementing counter: Phases 3-4 only run when
-// an operator supplies a real model token, and a counter would silently renumber every later frame
-// on those runs — breaking the doc's image links depending on how the suite was invoked. A gap
-// where a phase was skipped is the honest result.
-const SCREENSHOT_DIR = "test-results/job-search-uat-screens";
-
-async function shot(page: Page, name: string): Promise<void> {
-  const file = `${SCREENSHOT_DIR}/${name}.png`;
-  await page.screenshot({ path: file, fullPage: true });
-  await test.info().attach(name, { path: file, contentType: "image/png" });
-}
-
 // `check` MUST auto-wait. page.reload() resolves on "load", which is long before React has booted,
 // fetched the profile list and fetched that profile's data — so anything sampling the DOM the
 // instant reload returns reads the pre-hydration page every single cycle and never recovers, no
@@ -312,7 +295,6 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
     await restartUatStack(projectName, baseURL);
     await page.reload();
     await openJobSearch(page);
-    await shot(page, "01-module-opened");
   });
 
   // --- Phase 2: bootstrap draft handoff (unconditional — no model required) ---
@@ -343,7 +325,6 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
     expect(turnPosted, "openAssistant must never auto-send the starter prompt (ledger H5)").toBe(
       false
     );
-    await shot(page, "02-start-your-job-search-draft");
     void dialog;
     void composer;
   });
@@ -366,7 +347,6 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
       for (const step of ["role", "want", "where", "comp", "sources"]) {
         await expect(page.getByText(step, { exact: true })).toBeVisible();
       }
-      await shot(page, "03-onboarding-screen");
     });
 
     // --- Phase 4: drive the real conversation to completion, asserting chip persistence ---
@@ -405,7 +385,6 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
         const chip = page.getByText(step, { exact: true });
         await expect(chip).toHaveClass(/jds-badge--forest/);
       }
-      await shot(page, "04-onboarding-all-steps-done");
     });
   } else {
     test.info().annotations.push({
@@ -497,7 +476,6 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
     await expect(page.getByRole("tab", { name: "Board" })).toBeVisible();
     await expect(page.getByRole("tab", { name: "Settings" })).toBeVisible();
     await expect(page.getByText("Let's work out what this search is for.")).toHaveCount(0);
-    await shot(page, "05-board-replaces-chat");
   });
 
   // --- Phase 7: wait for matches, then verify Fit/Want sort against deterministicFixtureScore ---
@@ -525,7 +503,6 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
       scoredCount,
       "at least one posting must have been scored (freehire has 3 within budget)"
     ).toBeGreaterThan(0);
-    await shot(page, "06-board-matches");
 
     const titles: string[] = [];
     for (let i = 0; i < scoredCount; i++) {
@@ -549,7 +526,6 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
       );
     }
     expect(actualOrder).toEqual(expectedOrder);
-    await shot(page, "07-board-sorted-by-fit");
 
     // No cell ever blends fit/want into a single percentage (ledger L9: fit/want non-blending).
     const boardText = await page.locator("table.jsm-board").innerText();
@@ -569,7 +545,6 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
     await expect(banner).toContainText("I will not sign in to a job board on your behalf.");
     await expect(banner).toContainText("Turned off");
     await expect(banner).toContainText("Has never completed a search.");
-    await shot(page, "08-linkedin-login-required-banner");
   });
 
   // --- Phase 9: unscored posting opens the Inspector with the "queued, not dropped" status ---
@@ -613,7 +588,6 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
     await expect(inspector.getByRole("status")).toContainText(
       "Not read yet — this posting is queued for scoring, not dropped. Fit and Want will appear here once it's been read."
     );
-    await shot(page, "09-inspector-unscored-posting");
     await inspector.getByRole("button", { name: "Close" }).click();
   });
 
@@ -652,12 +626,10 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
     await page.reload();
     const flaggedRow = page.locator("table.jsm-board tbody tr").filter({ hasText: seededTitle });
     await expect(flaggedRow.getByText("Outside your stated frame")).toBeVisible();
-    await shot(page, "10-outside-frame-board-row");
 
     await flaggedRow.locator("td").first().locator("button").click();
     const inspector = page.locator('aside[role="dialog"]');
     await expect(inspector.getByText("Outside your stated frame")).toBeVisible();
-    await shot(page, "11-outside-frame-inspector");
     await inspector.getByRole("button", { name: "Close" }).click();
   });
 
@@ -711,13 +683,11 @@ test("job search: install, bootstrap, onboarding, crawl, board, inspector, chat 
     await page.reload();
     await page.getByRole("button", { name: "Chat with Jarvis" }).click();
     await expect(page.getByText(MARKER_TEXT, { exact: false })).toBeVisible();
-    await shot(page, "12-drawer-inside-profile");
     await page.keyboard.press("Escape");
 
     await page.goto(`${requireBaseURL()}/tasks`);
     await page.getByRole("button", { name: "Chat with Jarvis" }).click();
     await expect(page.getByText(MARKER_TEXT, { exact: false })).toHaveCount(0);
-    await shot(page, "13-drawer-outside-module-empty");
   });
 
   // Phase 12 (nav badge, #1285) moved out to a standalone test.fixme below: unlike Phase 11, this

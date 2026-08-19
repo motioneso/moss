@@ -36,9 +36,6 @@ criteria, so it does not block this PR. Tracked for a future accessibility pass,
 - `action-log.txt` — the step-by-step action log for the same run (renamed from
   `final_script_log.txt` in the source directory), narrating sign-in, navigation, each checkpoint,
   and the exact dialog copy observed during the install-confirm step.
-- `screenshots/` — the 17 screenshots captured during the run (sign-in, instance-modules pane,
-  library grouping, row controls, install dialog, post-install/toggle/remove/purge states, notes
-  and warnings, 375px mobile viewport, mobile nav).
 
 ## Source run
 

@@ -33,7 +33,7 @@ git commit -m "style(docs): prettier-format the #989 plan doc to unblock format:
 ```
 Then confirm: `pnpm format:check` exits 0.
 
-## Blocker 2 — live-path gate not satisfied: no real dev-instance walkthrough + screenshots
+## Blocker 2 — live-path gate not satisfied: no real dev-instance walkthrough
 
 Per #1000 UAT harness policy (mocked Playwright insufficient alone for user-facing Settings
 PRs — see `e2e-dev-uat-for-ui-features` project memory). Need:
@@ -56,11 +56,10 @@ PRs — see `e2e-dev-uat-for-ui-features` project memory). Need:
 2. Navigate to `/settings?section=modules&module=sports` (verified-correct deep link, see relay-3
    handoff), exercise: search → follow a team → see "Following" state → unfollow; follow-all a
    league → unfollow-all; open "Browse leagues" disclosure; repeat at narrow viewport (~390px).
-3. Screenshot each key state (there's a `pnpm capture:screens` harness referenced in past design
-   review memory — check if it still exists/applies, or use Playwright's own
-   `page.screenshot()` against the REAL dev server, i.e. non-mocked, or a manual browser
-   screenshot).
-4. Post a PR comment on #1009 linking the screenshots/run (attach directly or link an artifact
+3. Assert each key state with live DOM/network evidence (past design
+   review memory — check if it still exists/applies, or use Playwright assertions against the REAL
+   dev server, i.e. non-mocked).
+4. Post a PR comment on #1009 linking the assertions/run (quote directly or link an artifact
    path) describing what was exercised.
 
 ## After both fixed

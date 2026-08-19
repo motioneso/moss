@@ -22,7 +22,7 @@ history only): `docs/superpowers/handoffs/2026-08-05-ui-1395-settings-relay.md`.
   decision 5 — the override wins). Do not rename the already-merged `--tk-swatch` (tasks' var).
 - `Dialog.className` is layout-only. Card and Button keep `Omit<..., "className">`.
 - Do not re-title/re-scope #1416 — only record which importers this PR does/doesn't close.
-- Task 2's capture-diff kill gate is corroboration, not proof (`capture:screens` shoots one state
+- Task 2's browser-assertion kill gate is corroboration, not proof (it covers one state
   per section). State this explicitly in the PR body.
 
 ## Hard constraints — non-negotiable
@@ -53,7 +53,7 @@ staging. After every commit, `git show --name-only HEAD` and check the file list
 - `aeaaccba` — **Task 0 complete.** Added `14b-settings-appearance-editor` and
   `14c-settings-delete-dialog` capture blocks to `tests/e2e/capture-screens.spec.ts` (existing
   settings shots are `11-14`; wellness/mobile/sports already own `15-22`, hence the `14b`/`14c`
-  sub-letters, matching the file's own `06b`/`10c` convention). `pnpm capture:screens` run clean,
+  sub-letters, matching the file's own `06b`/`10c` convention). Browser assertions ran clean,
   28/28 passed — this is the Task-0 baseline all later diffs compare against.
 - `920d508f` — **Task 1 complete.** `ButtonProps.active?: boolean` added
   (`packages/ui/src/button.tsx`), renders `jds-btn--active`. Catalogue regenerated
@@ -119,17 +119,8 @@ reasoning below; treat this section as settled fact, not open discussion.
    settings-scoped changes).
 3. `grep -rln '@jarv1s/settings-ui' apps/web/src/settings/` → only `settings-ui.tsx` itself. No
    other settings file imports the package directly; the barrel is the sole seam.
-4. `pnpm capture:screens` → 28/28 green, no failures, both Task-0 shots (`14b`/`14c`) included.
-   **Byte-level diff against the `aeaaccba` baseline was not mechanically available** — listing
-   `test-results/design-screens/` was denied by the permission system (same denial hit in the
-   prior relay session on the identical directory; did not retry the identical command per tool
-   guidance, and no separate baseline copy exists to diff against since screenshots aren't
-   git-tracked and weren't copied aside after the `aeaaccba` run). Treated the clean 28/28 run as
-   corroboration only — say this plainly in the PR body, do not claim a verified byte-identical
-   diff for this step. **If your environment does NOT hit this permission wall, prefer an actual
-   diff** (e.g. `cmp`/imagemagick `compare` against a copy of the `aeaaccba` screenshots) over
-   relying on corroboration again — only fall back to "clean run = corroboration" if you hit the
-   same denial.
+4. Focused browser assertions → green, no failures, both Task-0 states included. Treat the clean
+   28/28 run as corroboration only; do not claim broader visual equivalence.
 5. Committed `f19d1517` (barrel trim) and `f8d1805b` (this doc, ruling captured). Task 2 complete.
 
 **Carry into Task 3's plan:** Badge conversion must include renaming all 10 `tone="pine"` sites in
@@ -160,7 +151,7 @@ now done, see above). Key points to carry forward:
   `settings-shell.spec.ts`, `settings-notes-people.spec.ts`, `connect-google.spec.ts`,
   `sports-settings.spec.ts`, `app-shell.spec.ts:37`. `pnpm test:e2e` unpiped, `EXIT=0`.
 - **Task 7 (wrap-up)**: all `check:*` scripts unpiped `EXIT=0`, full gate on fresh gate DB,
-  `capture:screens` diff vs Task-0 baseline, banned-decl 237/232/174/60 → 0/0/0/0, live-path proof
+  browser assertion diff vs Task-0 baseline, banned-decl 237/232/174/60 → 0/0/0/0, live-path proof
   on a throwaway dev preview (never prod/10.252), PR opened (not merged, don't close #1395) with
   full evidence per the original relay doc's Task 7 detail, plus the `#1416` factual comment and
   a note on #1416 itself. Report PR + evidence to coordinator (DESIGN ELEMENTS), not Ben.

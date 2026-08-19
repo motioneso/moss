@@ -55,7 +55,7 @@ written and the navigation bugs are fixed, but **the fix has not yet been verifi
 2. Run it: `node tests/uat-scratch/uat-manual.mjs` from the worktree root.
 3. Read stdout (`UAT_OK` / `UAT_FAILED`) plus
    `/tmp/claude-1000/-home-ben-Jarv1s--claude-worktrees-ux-995-connected-accounts-cleanup/*/scratchpad/shots/log.txt`
-   and the screenshots in that same `shots/` dir.
+   and the assertion artifacts in that same evidence dir.
 4. Confirm the full checklist passes: admin approve succeeds, picker copy (Google / Email (IMAP) /
    GitHub disabled "Coming soon · #1061", no Apple/other-OAuth), IMAP provider select renders,
    Test/Connect disabled until both fields filled, bogus-cred "Test connection" shows a clean

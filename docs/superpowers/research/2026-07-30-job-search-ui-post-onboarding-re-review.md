@@ -52,17 +52,17 @@ The pass opened scored and queued match inspectors and the global chat drawer. I
 Search now, Run now, the monitor switch, Save, Pass, the external posting link, or Send. A
 before/after read of profile, criteria, résumé, and portal state was identical.
 
-The reproducible script, action log, and screenshots are in
-`outputs/job-search-active-re-critique/final_runs/run_3/`. The most relevant captures are:
+The reproducible script and action log were kept in the gitignored local output directory. The
+reviewed states were:
 
-- [populated Matches][e-matches]
-- [self-contradictory Strong fit][e-false-positive]
-- [ordinary scored inspector][e-scored]
-- [queued inspector][e-queued]
-- [active Overview][e-overview]
-- [completed Profile][e-profile]
-- [active Monitors][e-monitors]
-- [completed onboarding transcript][e-chat]
+- populated Matches
+- self-contradictory Strong fit
+- ordinary scored inspector
+- queued inspector
+- active Overview
+- completed Profile
+- active Monitors
+- completed onboarding transcript
 
 ## What changed from the first review
 
@@ -91,8 +91,8 @@ The reproducible script, action log, and screenshots are in
 **Evidence.** The Jacobs “Senior Project Architect & Design Manager” row is green and labelled
 Strong fit. Its inspector keeps that label and shows Want 74. The adjacent reasoning says the
 posting is a building/civil role, “a different profession from software/platform architecture,”
-and that “architect” is “a title collision, not a true skill match” ([self-contradictory Strong
-fit][e-false-positive]).
+and that “architect” is “a title collision, not a true skill match” (self-contradictory Strong
+fit).
 
 This is not merely a questionable recommendation. The output contradicts itself on one screen. The
 UI's qualitative band is derived from a score of at least 85
@@ -115,9 +115,9 @@ explicit disqualifying evidence.
 
 **Evidence.** The transcript contains the user's exact confirmation to enable LinkedIn and complete
 onboarding. The next and final assistant message restates the pending write and says “Waiting for
-your confirmation before calling `portal.set-enabled`” ([completed onboarding
-transcript][e-chat]). At the same time, the shell says Monitoring on, Profile is active, and
-Monitors shows LinkedIn enabled ([active Monitors][e-monitors]).
+your confirmation before calling `portal.set-enabled`” (completed onboarding
+transcript). At the same time, the shell says Monitoring on, Profile is active, and
+Monitors shows LinkedIn enabled (active Monitors).
 
 **Why it matters.** Chat is the prescribed correction path for source configuration. A user cannot
 know whether the action happened by reading the conversation that initiated it. This violates the
@@ -149,7 +149,7 @@ inspector. Restore both on Back. Do not replace the existing inspector pattern.
 
 **Evidence.** Matches provides New/Saved/Passed and Fit/Want sorting, but no title, company,
 location, posting-date, source, or score-band filters. Save and Pass remain inside the inspector,
-which triggers the position-loss defect ([populated Matches][e-matches]).
+which triggers the position-loss defect (populated Matches).
 
 **Why it matters.** The board can display volume but cannot efficiently reduce it. The problem is
 now observable rather than hypothetical: the first screen contains many similarly styled Strong
@@ -164,7 +164,7 @@ and Fit band. Add keyboard-operable Save/Pass row actions. Do not start with a K
 
 **Evidence.** The only enabled-source row places a low-emphasis Run now button directly beside an
 unlabelled switch. “Enabled” appears at the far right as status, not as the switch's label
-([active Monitors][e-monitors]). The accessibility tree exposes the switch as a checked checkbox
+(active Monitors). The accessibility tree exposes the switch as a checked checkbox
 with no name. Source confirms the label wraps only decorative track/thumb spans
 (`external-modules/job-search/src/web/screens/settings.tsx:239-252`).
 
@@ -179,7 +179,7 @@ equivalent associated label).
 
 **Severity:** Medium
 
-**Evidence.** Monitors says, “I check them every morning” ([active Monitors][e-monitors]). The
+**Evidence.** Monitors says, “I check them every morning” (active Monitors). The
 module manifest schedules `job-search.crawl-sweep` with cron `17 */6 * * *`—four times per day,
 every six hours (`external-modules/job-search/jarvis.module.json:511-517`). The portal response
 shown by this screen does not contain schedule metadata; even `MonitorRow`'s source notes that
@@ -195,8 +195,8 @@ available. If cadence is exposed, render the actual configured schedule from one
 
 **Severity:** Medium
 
-**Evidence.** Matches shows New 53 ([populated Matches][e-matches]); Overview shows New 47
-([active Overview][e-overview]). The difference is the six queued, unscored postings. Matches maps
+**Evidence.** Matches shows New 53 (populated Matches); Overview shows New 47
+(active Overview). The difference is the six queued, unscored postings. Matches maps
 every state other than seen/dismissed into the New bucket
 (`external-modules/job-search/src/web/screens/board.tsx:165-169`), while Overview counts only rows
 whose literal state is `new`
@@ -214,7 +214,7 @@ rename the figures “Unreviewed 53” and “Scored new 47.”
 
 **Evidence.** The profile is active, LinkedIn has successfully run, and 53 roles exist. Overview
 still leads with “Setup · 5 of 5 complete,” a huge “Your search is ready to run” headline,
-Readiness Gates, and five Done checkpoints ([active Overview][e-overview]).
+Readiness Gates, and five Done checkpoints (active Overview).
 
 **Why it matters.** The dominant hierarchy describes a completed past event instead of current
 operations. It spends the largest type on a stale next step and leaves no strong answer to “What
@@ -231,8 +231,8 @@ Collapse completed setup into a small status line or disclosure.
 **Evidence.** LinkedIn rows do not store posting text, so the left “The role” column contains one
 short disclaimer and then a large empty field. The high-value Fit and Want evidence is forced into
 two narrow columns inside the right half of the screen, producing short, tiring line lengths
-([ordinary scored inspector][e-scored]). The queued state leaves even more of the canvas empty
-([queued inspector][e-queued]).
+(ordinary scored inspector). The queued state leaves even more of the canvas empty
+(queued inspector).
 
 **Why it matters.** The layout reserves most space for content the source never supplies and
 compresses the evidence users must evaluate.
@@ -262,7 +262,7 @@ band.
 **Severity:** Medium
 
 **Evidence.** The completed Profile exposes titles, seniority, location, remote preference, pay
-floor, and narrative ([completed Profile][e-profile]). In a realistically populated profile, long
+floor, and narrative (completed Profile). In a realistically populated profile, long
 removable values render as a tall cloud of variably sized rounded pills. Wrapped labels are centered
 while small × controls sit at the far edge, so sentence-length criteria read as mini-cards rather
 than editable values.
@@ -297,7 +297,7 @@ ordinary navigation buttons. Keep Job Search as `h1` and make inspector titles `
 
 **Evidence.** Overview, Profile, and Monitors repeat an all-caps eyebrow, oversized uppercase
 headline, gold strap, description, and heavy rule despite performing different tasks
-([active Overview][e-overview], [completed Profile][e-profile], [active Monitors][e-monitors]).
+(active Overview, completed Profile, active Monitors).
 Monitors uses most of the viewport to present one source and two actions.
 
 **Why it matters.** The repeated ceremony is the clearest AI-design tell. More importantly, it
@@ -377,18 +377,10 @@ eyebrows where they do not express a genuine sequence.
   re-executed.
 - Background scoring can continue independently; counts are the values observed during the final
   evidence run.
-- Screenshots contain private account content and remain in the gitignored local evidence folder.
+- The report intentionally avoids reproducing private account content.
 - The review does not infer that the visual style proves AI authorship. Hallmark labels are taste
   heuristics; the ranked trust, accessibility, and continuity defects are evidence-based.
 
-[e-matches]: ../../../outputs/job-search-active-re-critique/final_runs/run_3/screenshots/final_execution_01_populated_matches.png
-[e-false-positive]: ../../../outputs/job-search-active-re-critique/final_runs/run_3/screenshots/final_execution_02_false_positive_inspector.png
-[e-scored]: ../../../outputs/job-search-active-re-critique/final_runs/run_3/screenshots/final_execution_03_scored_match_inspector.png
-[e-queued]: ../../../outputs/job-search-active-re-critique/final_runs/run_3/screenshots/final_execution_04_unscored_match_inspector.png
-[e-overview]: ../../../outputs/job-search-active-re-critique/final_runs/run_3/screenshots/final_execution_05_active_overview.png
-[e-profile]: ../../../outputs/job-search-active-re-critique/final_runs/run_3/screenshots/final_execution_06_completed_profile.png
-[e-monitors]: ../../../outputs/job-search-active-re-critique/final_runs/run_3/screenshots/final_execution_07_active_monitors.png
-[e-chat]: ../../../outputs/job-search-active-re-critique/final_runs/run_3/screenshots/final_execution_09_completed_chat_transcript.png
 [ms-hai]: https://www.microsoft.com/en-us/research/project/guidelines-for-human-ai-interaction/
 [nielsen-heuristics]: https://www.nngroup.com/articles/ten-usability-heuristics/
 [nist-ai]: https://doi.org/10.6028/NIST.AI.100-1

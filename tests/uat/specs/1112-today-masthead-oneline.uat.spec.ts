@@ -1,11 +1,5 @@
-import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
-
-// Written to a TRACKED path (test-results/ is gitignored) so the PNGs can be committed and
-// embedded in the PR as durable evidence (docs/evidence/1185-news-live precedent).
-const EVIDENCE_DIR = join(process.cwd(), "docs/evidence/1412-masthead-space");
 
 // #1112: admin+data seeds the onboarding chunk as complete (tests/uat/seed/levels.ts), so a
 // freshly-logged-in owner at this level lands directly on AppShell/Today — no wizard to dismiss.
@@ -75,8 +69,6 @@ test("masthead title and accent are separated by a real space", async ({ page })
     throw new Error("JARVIS_UAT_BASE_URL must be set by run-uat.ts");
   }
 
-  await mkdir(EVIDENCE_DIR, { recursive: true });
-
   await page.goto(baseURL);
   await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
   await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
@@ -91,8 +83,6 @@ test("masthead title and accent are separated by a real space", async ({ page })
   const topText = (await titleEl.locator("> span").first().innerText()).trim();
   const accentText = (await accentEl.innerText()).trim();
   const fullText = (await titleEl.innerText()).trim();
-
-  await page.screenshot({ path: join(EVIDENCE_DIR, "masthead-title-accent-space.png") });
 
   expect(fullText).toBe(`${topText} ${accentText}`);
 });

@@ -37,7 +37,7 @@ message the coordinator, then use the `relay` skill immediately.
 - PR open, rebased on `origin/main`.
 - **Live-path proof posted** if this touches a user-facing feature, module, or UI surface: the
   feature exercised through the real UI on a live dev instance, as a `gh pr comment` with the UAT
-  run and screenshots. Cannot produce it? Report **code-complete, unverified** — never "done".
+  run, exit code, and assertions or bounded DOM/network/log evidence. Cannot produce it? Report **code-complete, unverified** — never "done".
   `docs/DEVELOPMENT_STANDARDS.md` → Live-Path Gate.
 
 ## Run-specific bans (non-negotiable)

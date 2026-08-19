@@ -1,5 +1,3 @@
-import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 
@@ -12,10 +10,6 @@ export const uatLevel = { level: "admin+data", without: [] } as const;
 // real RSS feeds (packages/news/src/source/catalog.ts). The topic prefs + AI→module.news binding
 // are seeded by the admin+data level (seedNewsChunk/seedAiProviderChunk); the headline items,
 // images, and photo/no-photo variance are all live, unmocked feed output — nothing is fabricated.
-
-// Written to a TRACKED path (test-results/ is gitignored) so the PNGs can be committed and embedded
-// in the PR as durable evidence.
-const EVIDENCE_DIR = join(process.cwd(), "docs/evidence/1185-news-live");
 
 // The refresh runs async after the first GET, then RSS fetches take real wall-clock time, so we
 // poll (reloading to force a fresh overview read) well past the 60s config default.
@@ -31,8 +25,6 @@ test("News mosaic renders live photo and no-photo card variants (#1185)", async 
   if (!projectName || !baseURL) {
     throw new Error("JARVIS_UAT_PROJECT_NAME / JARVIS_UAT_BASE_URL must be set by run-uat.ts");
   }
-
-  await mkdir(EVIDENCE_DIR, { recursive: true });
 
   await page.goto(baseURL);
   await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
@@ -72,17 +64,15 @@ test("News mosaic renders live photo and no-photo card variants (#1185)", async 
     );
   }
 
-  // Desktop evidence.
+  // Desktop assertion.
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`${baseURL}/news`);
   await expect(page.locator(MOSAIC_CARD).first()).toBeVisible({ timeout: 15_000 });
-  await page.screenshot({ path: join(EVIDENCE_DIR, "desktop.png"), fullPage: true });
 
-  // Narrow evidence.
+  // Narrow assertion.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${baseURL}/news`);
   await expect(page.locator(MOSAIC_CARD).first()).toBeVisible({ timeout: 15_000 });
-  await page.screenshot({ path: join(EVIDENCE_DIR, "narrow.png"), fullPage: true });
 
   // The literal acceptance proof (#1185): at least one photo card AND at least one text-only card
   // in the live mosaic. If real feeds didn't yield both within the poll window above, this fails

@@ -39,7 +39,7 @@ coordinator concurrence authorizes merge; any RED means no merge.
 - Extend existing `jds-brief`, `loose`, and `loose-row` primitives. No raw colors outside
   `tokens.css`, no mono or serif, and preserve authored loading/empty/stale states and accessibility.
 - Task 7's e2e and the spec's live-path artifact are mandatory. Record the real dev-instance run
-  and screenshots/video on the PR. If credentials or live data block it, report
+  and assertions or bounded DOM/network/log evidence on the PR. If credentials or live data block it, report
   **code-complete, unverified**; never waive or simulate the artifact.
 
 ## Run-specific bans

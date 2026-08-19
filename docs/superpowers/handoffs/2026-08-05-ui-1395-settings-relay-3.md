@@ -115,7 +115,7 @@ into the commit/PR body, verified against merged `main` before writing this doc:
 5. `grep -rn '"pine"' apps/web/src/settings/` → must be empty (confirms nothing missed; `grep
    -rn 'jds-badge"' apps/web/src/settings/` or similar for the raw-class check on
    settings-activity-pane.tsx).
-6. `pnpm capture:screens` → this IS the first visually-different step in the PR (forest tone now
+6. Focused browser assertions → this IS the first visually-different step in the PR (forest tone now
    renders where pine never did). Expect a pixel delta on every settings shot with an affected
    badge — that's the **named, understood cause** the relay-2 kill-gate clarification covers, not
    a trip. Report it as such in the commit body, do not treat it as a failure.

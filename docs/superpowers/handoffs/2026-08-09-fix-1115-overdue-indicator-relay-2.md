@@ -5,14 +5,14 @@ PR **#1478** is open (https://github.com/motioneso/moss/pull/1478), gate-green
 green, rebased on origin/main at push time. Build itself (`f9ac8fe24` + doc `e4c064cd2` +
 format-fix `67abfa8bf`) is done — **only the live-path proof is left**, then report to Coordinator.
 
-## Only remaining task: fix the Playwright sign-in, get the two screenshots, comment on PR
+## Only remaining task: fix the Playwright sign-in, get live DOM proof, comment on PR
 
 Script: `.scratch-livepath/live-path-1115.mjs` (run with cwd = repo root, not `/tmp` — ESM
 resolution needs the workspace `node_modules`). It signs in as `ben@ben.com` / `jarvistest123!`,
 goes to `/tasks`, creates `E2E-1115-<ts> overdue proof task` with a due date 3 days in the past via
-the Details dialog (`#task-due-input`, submit button is `"Add task"` not `"Save"`), screenshots the
-row (expect exactly one "Overdue"), toggles the checkbox done, screenshots again (expect the badge
-still the sole "Overdue").
+the Details dialog (`#task-due-input`, submit button is `"Add task"` not `"Save"`), asserts the row
+has exactly one "Overdue", toggles the checkbox done, and asserts the badge remains the sole
+"Overdue".
 
 **Blocker:** sign-in POSTs 200 (`POST /api/auth/sign-in/email` → 200 in
 `.../scratchpad/devinstance/api.log`) but the browser UI never leaves the sign-in screen —
@@ -46,18 +46,11 @@ unverified** (state the sign-in blocker as the reason) rather than force a false
   (localhost:55433) — **not** an isolated gate DB, this is the real dev-instance DB, same one Ben's
   own dev UI would point at, so clean up any test task you create.
 
-## After the screenshots land
+## After the live proof passes
 
-1. `gh pr comment 1478 --body "..."` with the two screenshots + a one-line description of what each
-   shows (non-done overdue row: exactly one "Overdue"; same task marked done: badge still the sole
-   "Overdue"). Attach via `gh pr comment 1478 --body-file` won't attach images — use
-   `gh pr comment 1478 -F -` is also body-only; upload screenshots by referencing them as normal gh
-   attachments (`gh pr comment 1478 --body "..." ` after uploading via the GitHub web UI is not
-   available headlessly — simplest is to describe the result in the comment body and note the
-   screenshot files live at
-   `.../scratchpad/devinstance/1115-non-done-overdue.png` and `1115-done-overdue.png`; if there's a
-   way to attach inline images to a `gh pr comment` in this environment, use it, otherwise say
-   plainly in the comment that screenshots were captured locally and describe pass/fail).
+1. `gh pr comment 1478 --body "..."` with the two live DOM assertions and their pass/fail results
+   (non-done overdue row: exactly one "Overdue"; same task marked done: badge still the sole
+   "Overdue").
 2. Delete the test task (`E2E-1115-<marker>` — the script logs `MARKER=<value>`) from the dev DB by
    id, note the row count before/after.
 3. Kill dev instance by **explicit PID only**: `kill 405565 405285` (never `pkill -f`).

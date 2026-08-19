@@ -1587,7 +1587,7 @@ User-facing: league news now shows a short blurb per story, a link to read on, a
 
 ## Task 10: Skeleton/empty reconcile + visual QA
 
-Reconcile the loading skeleton and empty state with the new composition (two tickers, masthead, 2-col grid, news band — no scores column), then capture both-theme screenshots to verify the layout.
+Reconcile the loading skeleton and empty state with the new composition (two tickers, masthead, 2-col grid, news band — no scores column), then verify both themes with live DOM/layout assertions.
 
 **Files:**
 
@@ -1663,7 +1663,7 @@ Expected: all pass (lint, format, file-size, design-tokens, typecheck, unit).
 
 - [ ] **Step 8: Visual QA — both themes**
 
-Run: `pnpm capture:screens` (or the scratchpad `shot-sports.mjs`/`shot-fold.mjs` against the local box `:1533`, per the handoff doc). Capture `/sports` in **both light and dark**. Confirm: masthead reads cleanly; both tickers render and the around-ticker arrows appear only when overflowing; hero has no explainer chip; the 2-col grid holds at desktop and collapses below 900px; standings selector lists all leagues; the legend shows when a note is present; the news band shows blurbs + continue-reading; **no serif anywhere**; accent/contrast legible in both themes. Fix any layout defects in `sports-5-editorial.css` (tokens only) and re-run the gate.
+Run focused Playwright DOM/computed-style assertions against `/sports` in **both light and dark**. Confirm: both tickers render; overflow controls appear only when needed; the hero has no explainer chip; the grid holds at desktop and collapses below 900px; the selector lists all leagues; the legend and news band render as specified; typography and contrast assertions pass. Fix any layout defects in `sports-5-editorial.css` and re-run the gate.
 
 - [ ] **Step 9: Commit**
 

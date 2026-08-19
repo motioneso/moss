@@ -47,7 +47,7 @@ this restores already-approved #1263 behavior, so the spec-before-build gate doe
 3. **Kill gate** after Task 2 (before Task 3): live-verify the generic path kills the confirm card
    on a live dev instance. If it doesn't, stop and escalate to the coordinator instead of letting
    Task 3 repeat a wrong design.
-4. **Task 4** — live-path UAT proof, screenshots, `gh pr comment` at wrap-up.
+4. **Task 4** — live-path UAT proof, assertions/evidence, `gh pr comment` at wrap-up.
 5. **Task 5** — PR description (tasks-was-broken correction, `grantInstallTimeTrustIfUnset`
    justification, 6-conditions-to-tests mapping, over-grant-by-design note, live-path link) + UAT
    trigger-map rows for the three touched files.

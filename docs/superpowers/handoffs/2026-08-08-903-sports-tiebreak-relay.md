@@ -46,10 +46,10 @@
    - Sign in as `ben@ben.com` / `jarvistest123!` (dev seed user).
    - Follow two competitions via the real UI. Natural clicks won't produce an exact `created_at`
      tie — force it with a direct `psql` `UPDATE` against the two new follow rows (record both row
-     ids for teardown!), then reload multiple times and screenshot to confirm the **same**
+     ids for teardown!), then reload multiple times and assert the **same**
      competition renders as primary every time (that's the actual regression this fix prevents).
    - Post result as `gh pr comment 1472` per `docs/DEVELOPMENT_STANDARDS.md` → Live-Path Gate
-     format (what was clicked, screenshot, confirms stability across reloads).
+     format (what was clicked and the DOM/API assertion results across reloads).
    - **If any of this can't be completed** (no live instance reachable, tooling unavailable,
      etc.) — the mandatory fallback is to report status explicitly as **"code-complete,
      unverified"**, never "done". Do not fudge this.

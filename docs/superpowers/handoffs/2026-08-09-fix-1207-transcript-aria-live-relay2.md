@@ -90,9 +90,8 @@ discuss instead of the topbar chat icon.
 1. Message coordinator now with a one-line relay notice (pane `w1:p28` / agent
    `coordinator-wave1-r6`) — this hasn't been sent yet for this relay.
 2. Decide option 1 vs 2 above (read `chat-drawer.tsx` in full first, per the note) and get real DOM
-   proof of `aria-live="polite"` on `.assistant-surface__thread` from the live throwaway instance —
-   `outerHTML` snippet or an Elements-panel screenshot, not a plain visual screenshot of the chat
-   UI (has no visual rendering, per the coordinator's standing amendment).
+   proof of `aria-live="polite"` on `.assistant-surface__thread` from the live throwaway instance
+   using an `outerHTML` or `getAttribute("aria-live")` assertion.
 3. Run the 4 blocking UAT specs — **none have been run yet this whole relay chain**:
    `pnpm test:uat -- "<spec>"` for each of:
    - `tests/uat/specs/1089-1090-chat-drawer-private.uat.spec.ts`

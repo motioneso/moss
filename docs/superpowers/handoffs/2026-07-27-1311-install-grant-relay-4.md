@@ -21,13 +21,11 @@ db `jarv1s`) — not the isolated gate DB.
 
 - **Before** (`packages/chat/src/routes.ts` reverted to `bf3e8fd8^`, self-heal absent): confirm
   card appeared for `news.addTopic`, timed out unapproved → audit log
-  `news.addTopic | timeout | denied | 2026-07-27 22:57:49`. Screenshot
-  `1311-shots/04-before-fix-confirm-card.png`.
+  `news.addTopic | timeout | denied | 2026-07-27 22:57:49`.
 - **After** (routes.ts restored to HEAD, self-heal wired): first live dispatch with no prior
   policy row → NO confirm card, real tool execution, audit log
   `news.addTopic | auto | success | 2026-07-27 22:51:14`, `app.preferences` row flipped to
-  `trusted_auto` for key `assistant.action_policy.v1.news.news_personalization`. Screenshot
-  `1311-shots/03-after-response.png`.
+  `trusted_auto` for key `assistant.action_policy.v1.news.news_personalization`.
 - Both confirmed via `docker exec jarv1s-postgres psql -U postgres -d jarv1s` against
   `app.jarvis_action_audit_log` (columns: `tool_name, approval_mode, outcome, occurred_at`,
   filter `owner_user_id`) and `app.preferences` (columns: `key, value_json, updated_at`).
@@ -94,7 +92,7 @@ last open ask before Task 3-5 are reported done.
    `tests/integration/tasks-action-policy-self-heal.test.ts`, 4 tests per plan lines 136-154.
    Pattern reference: `tests/integration/chat-action-policy-self-heal.test.ts` (read in full
    already, not modified).
-5. **Task 4**: live-path UAT proof — reuse before/after screenshots in `1311-shots/` (03, 04, plus
+5. **Task 4**: live-path UAT proof — reuse before/after assertions and logs (03, 04, plus
    05/06 if useful) in a `gh pr comment`.
 6. **Task 5**: PR description per plan lines 165-177 — tasks-was-broken correction,
    `grantInstallTimeTrustIfUnset` justification, 6-conditions-to-tests mapping, over-grant-by-design

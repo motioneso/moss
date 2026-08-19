@@ -49,7 +49,6 @@
     "uat:provision:smoke": "tsx tests/uat/provisioner.ts",
     "test:uat": "tsx tests/uat/run-uat.ts",
     "test:e2e": "playwright test",
-    "capture:screens": "CAPTURE=1 playwright test capture-screens --workers=1",
     "start:worker": "pnpm --filter @moss/worker start",
     "test:unit": "tsx scripts/test-unit.ts",
     "test:uat-seed": "vitest run tests/uat/seed",
