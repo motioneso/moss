@@ -26,8 +26,9 @@ export function createExternalModuleTools(input: {
   readonly settingsRepository: SettingsRepository;
   readonly logger: { warn(data: Record<string, unknown>, message?: string): void };
   // ctx.ai bridge (#932, spec D6): injected from server.ts so module-registry never
-  // imports @moss/ai. Only this synchronous tool-dispatch path gets it — the
-  // queued-jobs handler (apps/worker) is built without it and fails closed.
+  // imports @moss/ai. The queued-jobs path has its own equivalent bridge — see
+  // apps/worker/src/external-module-ai-bridge.ts, wired in apps/worker/src/worker.ts —
+  // so a module can reach structured AI from both a synchronous tool and a queue handler.
   readonly ai?: (
     scopedDb: DataContextDb,
     moduleId: string,
