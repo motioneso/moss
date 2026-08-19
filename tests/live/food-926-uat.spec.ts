@@ -40,7 +40,10 @@ async function signInThroughUi(page: Page, who: { email: string; password: strin
   await page.goto("/");
   await page.getByLabel(/email/i).fill(who.email);
   await page.getByLabel(/password/i).fill(who.password);
-  await page.locator("form").getByRole("button", { name: /sign in/i }).click();
+  await page
+    .locator("form")
+    .getByRole("button", { name: /sign in/i })
+    .click();
   await expect(page.getByRole("navigation").first()).toBeVisible();
 }
 

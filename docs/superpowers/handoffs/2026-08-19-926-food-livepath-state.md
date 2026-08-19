@@ -23,24 +23,30 @@ Food off then on again.
 
 ## Blocker found 2026-08-19: approving a confirmation does not work with a real model
 
-Filed as #1720.
+Filed as #1720. Reproduced seven times.
 
-Reproduced five times. When the assistant asks permission to run a Food tool, the request only
-reaches the screen about three minutes later, and by then the server has stopped listening for the
-answer. Approving returns "This request expired" and the request sits unanswered forever.
-
-The numbers, from the server's own log and the test:
+When the assistant asks permission to run a Food tool, the request only reaches the screen about
+three minutes later, and by then the server has stopped listening for the answer. Approving returns
+"This request expired" and the request sits unanswered forever.
 
 ```
 t+0s     the message is sent
-t+22s    the assistant calls the tool; the server starts waiting for permission
+t+22s    the assistant calls the tool; the server starts waiting for permission,
+         and writes the request to the database, where it is readable immediately
 t+150s   the server gives up waiting (its fixed window)
-t+177s   the request finally appears on screen and in the server's own list
-t+177s   clicking Approve is refused
+t+180s   the request finally appears on screen
+t+180s   clicking Approve is refused
 ```
 
-Ruled out already, do not re-check: two server processes, an uncommitted database write, and a
-slow model. Still unknown: why the waiting request cannot be read while it is being waited on.
+The server is not at fault. Measured during the wait: the request is committed and readable
+straight from the database, the database has spare connections, and the server answers requests
+from outside the browser in milliseconds. What fails is that the browser sends nothing at all for
+the whole three minutes and only catches up once the turn ends.
+
+Ruled out already, do not re-check: two server processes, an uncommitted database write, a slow
+model, and connection-pool exhaustion. Still unknown: why the browser goes silent. Two candidates
+left — the streaming turn plus the event stream using up the browser's connections to that origin,
+or the service worker serialising fetches while a stream is open.
 
 Why nobody caught it: no test anywhere approves one of these requests with a real model. The only
 coverage is a browser test with a fake server.
