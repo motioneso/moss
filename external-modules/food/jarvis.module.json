@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "food",
+  "name": "Food",
+  "version": "0.1.0",
+  "publisher": "Moss Project",
+  "lifecycle": "optional",
+  "compatibility": { "jarv1s": ">=0.1.0" },
+  "description": "Log meals and see estimated nutrition.",
+  "storage": [{ "namespace": "food.settings", "scopes": ["user"] }],
+  "database": { "ownedTables": ["app.food_meals", "app.food_estimates"] },
+  "runtime": { "workerEntrypoint": "dist/worker.js", "workerContractVersion": 1 },
+  "web": { "entrypoint": "dist/web/index.js", "contractVersion": 2 },
+  "navigation": [{ "id": "food", "label": "Food", "path": "/", "icon": "utensils" }],
+  "worker": {
+    "queues": [
+      {
+        "name": "food.estimate-run",
+        "handler": "estimate.run",
+        "retryLimit": 2,
+        "allowManualRun": false,
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "mealId": { "type": "identifier" },
+            "revision": { "type": "integer", "min": 1, "max": 1000000 }
+          }
+        }
+      }
+    ]
+  }
+}
