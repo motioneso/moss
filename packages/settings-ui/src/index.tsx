@@ -1,7 +1,8 @@
-import { ChevronDown, Info, TriangleAlert } from "lucide-react";
-import { useState, type ReactNode, type SelectHTMLAttributes } from "react";
+import { Info, TriangleAlert } from "lucide-react";
+import { useState, type ReactNode } from "react";
 export type { GeneratedSettingsSurface } from "./scanner.js";
 export * from "./router.js";
+export { Select } from "@moss/ui";
 export {
   PrioritySettings,
   priorityDraftValidation,
@@ -144,20 +145,6 @@ export function Indicator(props: {
     <span className={`jds-indicator jds-indicator--${props.status}`}>
       <span className="jds-indicator__dot" />
       {props.label ? <span>{props.label}</span> : null}
-    </span>
-  );
-}
-
-export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
-  const { children, ...rest } = props;
-  return (
-    <span className="jds-selectwrap">
-      <select className="jds-select" {...rest}>
-        {children}
-      </select>
-      <span className="jds-selectwrap__chev">
-        <ChevronDown size={16} aria-hidden="true" />
-      </span>
     </span>
   );
 }
