@@ -184,23 +184,6 @@ describe("Section C — manifest structure + gateway routing", () => {
     return { gateway, tokens, emitted };
   }
 
-  async function waitForCard(
-    emitted: GatewaySessionRecord[],
-    toolName: string,
-    timeoutMs = 2_000
-  ): Promise<Extract<GatewaySessionRecord, { kind: "action_request" }>> {
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-      const card = emitted.find(
-        (r): r is Extract<GatewaySessionRecord, { kind: "action_request" }> =>
-          r.kind === "action_request" && r.toolName === toolName
-      );
-      if (card) return card;
-      await new Promise((r) => setTimeout(r, 10));
-    }
-    throw new Error(`Timeout: no action_request card for ${toolName}`);
-  }
-
   async function seedTrustedAutoAccountAndEvent(opts: {
     externalId: string;
     attendeeCount?: number;
