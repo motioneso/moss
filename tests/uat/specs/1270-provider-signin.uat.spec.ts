@@ -74,6 +74,14 @@ async function addProviderFromPicker(page: Page, label: string): Promise<void> {
   await page.getByRole("button", { name: label, exact: true }).click();
 }
 
+// The Live-Path Gate wants screenshots on the PR, not just a green tick, so this spec captures the
+// decisive frames deliberately rather than relying on Playwright's failure-only artifacts
+// (playwright.uat.config.ts sets no `screenshot` option, so the default is "off"). outputPath keeps
+// them inside the run's own test-results directory.
+async function shot(page: Page, name: string): Promise<void> {
+  await page.screenshot({ path: test.info().outputPath(`${name}.png`), fullPage: true });
+}
+
 function providerCard(page: Page, displayName: string) {
   // The per-card Remove button's aria-label is the only guaranteed-unique handle inside a card.
   return page.locator(".prov").filter({ has: page.getByLabel(`Remove ${displayName}`) });
@@ -97,6 +105,7 @@ test("first-run wizard offers Claude, Codex and Antigravity — not Claude alone
   const providerNames = page.locator(".onb-cli__name");
   await expect(providerNames).toHaveCount(3);
   await expect(providerNames).toHaveText(["Claude", "Codex", "Antigravity"]);
+  await shot(page, "01-wizard-three-cli-providers");
 });
 
 // #1270's Settings half:
@@ -136,6 +145,7 @@ test("Settings offers CLI sign-in per provider and copies terminal text (#1270)"
   const automated = anthropic.getByRole("button", { name: "Re-authenticate" });
   const viaTerminal = anthropic.getByRole("button", { name: "Use terminal to sign in" });
   await expect(automated.or(viaTerminal)).toBeVisible();
+  await shot(page, "02-settings-cli-provider-signin-affordance");
 
   const usesAutomatedLogin = await automated.isVisible();
   if (usesAutomatedLogin) {
@@ -156,6 +166,7 @@ test("Settings offers CLI sign-in per provider and copies terminal text (#1270)"
         .or(loginDialog.getByRole("alert"))
         .first()
     ).toBeVisible({ timeout: 30_000 });
+    await shot(page, "03-provider-login-dialog-started");
     await loginDialog.getByRole("button", { name: "Close" }).click();
     await expect(loginDialog).not.toBeAttached();
   } else {
@@ -220,6 +231,7 @@ test("Settings offers CLI sign-in per provider and copies terminal text (#1270)"
   await page.mouse.up();
 
   await expect(copyButton).toBeEnabled();
+  await shot(page, "04-terminal-copy-enabled-on-selection");
 
   await terminal.getByRole("button", { name: "Close" }).click();
   await expect(terminal).not.toBeAttached();
