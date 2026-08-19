@@ -128,11 +128,23 @@ unrelated test in a different area of the app (chat drawer surface). Confirmed v
 PR #1717 doesn't touch that area at all, so re-ran the failed CI jobs rather than investigating an
 unrelated test. Rerun in progress as of this update.
 
+## Update — PR #1717 CI is green but merge is blocked on the same live-proof problem as #1703
+
+PR #1717's CI rerun finished clean (all checks pass). But it can't be merged yet: this is a
+real change to scheduling behavior, and the rule here is that a user-facing fix needs to be
+proven working on the live system before merging, not just pass automated tests. I tried that
+proof tonight on the dev system and the chat assistant came back with "no active chat-capable
+model is configured" — the main test account has no working AI provider right now, so nothing
+chat-based can be proven live until that's fixed. This is the same account problem already
+blocking PR #1703. Recorded in the awaiting-Ben tracking file. Both PRs are safe to sit open
+overnight as done-but-unproven; nothing is at risk.
+
 ## Next steps for whoever continues this run
 
-1. Check the result of the PR #1717 CI rerun (triggered via `gh run rerun 32229116640 --repo
-   motioneso/moss --failed`) — if green, merge with `gh pr merge 1717 --squash --auto --repo
-   motioneso/moss`, comment the merged link on #1711.
+1. Once someone configures a real AI provider on the dev test account, redo the live proof for
+   PR #1717 (ask the assistant to find a scheduling slot on a day that only has an all-day event,
+   confirm it doesn't get blocked), then merge with `gh pr merge 1717 --squash --auto --repo
+   motioneso/moss` and comment the merged link on #1711.
 2. Check pane w1:pGB (bounded `herdr pane read`) for Fable's sign-off comment on issue #1698 (PR
    #1703's live-path-proof blocker). If Fable disagrees with leaving it parked overnight, that's a
    genuine surprise — otherwise no action needed until Ben resolves the dev-account issue in the
