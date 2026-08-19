@@ -9,7 +9,6 @@ import type {
   ExternalModuleAssistantToolDeclaration,
   ExternalModuleBriefingDeclaration,
   ExternalModuleDatabaseDeclaration,
-  ExternalModuleNavigationEntry,
   ExternalModuleWorkerDeclaration,
   MossActionPermissionTier,
   ModuleAssistantActionFamilyManifest,
