@@ -34,21 +34,3 @@ labeled code-complete/unverified per the live-path gate, not merged and not mark
 lane has stopped itself (no live session idling on this); Coordinator will spawn a fresh build agent
 for Phase 2 once the key lands.
 
-## PR #1691 (#1138 weather SSRF hardening) — security-tier merge sign-off (2026-08-19)
-
-Opus adversarial QA came back GREEN: all four findings (#12, #13, #17, #18) implemented with
-regression tests, CI green, no blocking issues, no new security vulnerability. Verdict posted to
-the PR: https://github.com/motioneso/moss/pull/1691#issuecomment-5336821507
-
-4 non-blocking follow-ups noted (not blockers, worth filing separately): a malformed-but-valid
-upstream JSON shape still returns a generic 500 instead of degrading; two of the three outbound
-fetches (weather lookup, IP geocoding) still lack a timeout — only the background upgrade-check
-has one; the private-IP guard only covers IPv4 dotted-quad forms, misses IPv6 private ranges (not
-an SSRF risk — fixed host — but an info-disclosure gap); and no response-size cap on any of the
-three JSON parses.
-
-What's needed from Ben: this is security tier, so it needs your explicit go-ahead before merge —
-QA green alone doesn't merge it. Recommendation: merge as-is (findings are real hardening, non-
-blocking gaps are pre-existing or narrow) and file a follow-up issue for the 4 non-blocking notes.
-Reply "merge #1691" (or similar) and Coordinator will merge + file the follow-up.
-
