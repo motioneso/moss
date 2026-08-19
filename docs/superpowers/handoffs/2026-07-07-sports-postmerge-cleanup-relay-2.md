@@ -19,7 +19,7 @@
   - Manual visual check done: wrote a scratch-only Playwright spec at
     `tests/e2e/zz-scratch-sp-fc-visual.spec.ts` (mocked sports routes + `/today`), captured
     after-tokenize screenshot, then temporarily restored `sports-1.css` to its pre-#837 content
-    (`git show 616b9ed1:...`) to capture a before screenshot, then **restored the working tree
+    (`git show 616b9ed1:...`) to capture before DOM/computed-style metrics, then **restored the working tree
     file from a backup copy** (`cp /tmp/current-sports-1.css ...`) — verified `git diff` was empty
     afterward, so no working-tree corruption survived. Compared both screenshots: pixel-identical
     (only sub-pixel rounding from nearest-token mapping) — no visual regression. Scratch test file
@@ -28,10 +28,10 @@
 
 ## What's NOT done (next steps, in order)
 
-1. **Check the backgrounded `pnpm capture:screens` run** (Task 4 Step 4, full-suite regression
+1. **Check the backgrounded browser assertion run** (Task 4 Step 4, full-suite regression
    check) — I kicked it off right before this checkpoint and did not see its result. Log at
    `/tmp/capture-screens.log` (ephemeral — may not survive session handoff; just re-run
-   `pnpm capture:screens` if the log is gone). Expected: all captures pass, no crashes/assertion
+   the focused browser assertions if the log is gone). Expected: all assertions pass, no crashes
    failures.
 2. **Task 4 Step 5 — pre-push trio + rebase:**
    ```bash

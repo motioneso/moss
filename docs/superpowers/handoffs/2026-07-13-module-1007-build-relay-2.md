@@ -36,19 +36,17 @@ doc; re-read Task 4 (line ~201) in full since you're mid-write, then Tasks 5-6 w
 ## Next steps (in order)
 
 1. **Finish Task 4** (plan line ~201): write `scripts/uat/job-search-install.spec.ts` exactly per
-   plan Step 2 (script body is fully written out in the plan doc — copy it, but note the plan's
-   `SHOT_DIR` constant points at the Coordinator's own scratchpad
-   (`.../coord-2026-06-30-rfa-fleet/58a78927.../scratchpad/devproof`) — **confirmed correct and
-   writable**, that dir belongs to the live Coordinator session, already has a `screenshots/`
-   subdir with prior devproof shots; the plan's flat `SHOT_DIR` (no `/screenshots` suffix) is fine,
-   `mkdirSync` handles it. Before trusting the plan's inlined selectors verbatim, spot-check
+   plan Step 2 (script body is fully written out in the plan doc — copy it, but keep assertion/log
+   artifacts in the Coordinator's own scratchpad
+   (`.../coord-2026-06-30-rfa-fleet/58a78927.../scratchpad/devproof`). Before trusting the plan's
+   inlined selectors verbatim, spot-check
    against the live stack at `:1545` (owner signup not yet done there) — the plan says these were
    "confirmed by reading the source this session" by your predecessor, should still be accurate
    since no settings/auth code changed, but Playwright selector mismatches are cheap to catch by
    running Step 3 immediately after writing.
 2. Step 3: run it (`UAT_BASE_URL=http://localhost:1545 pnpm dlx tsx
-   scripts/uat/job-search-install.spec.ts run`), expect `RUN OK needsRestart=true`, confirm
-   screenshots 01-06 exist.
+   scripts/uat/job-search-install.spec.ts run`), expect `RUN OK needsRestart=true` and confirm all
+   DOM/API assertions pass.
 3. Step 4: commit `scripts/uat/job-search-install.spec.ts` alone.
 4. Task 5 (plan line ~405): restart stack, resume-mode script run, then `--force-recreate` +
    resume-mode run again — this is the actual #1006/#1007 persistence proof. Use **my** env file

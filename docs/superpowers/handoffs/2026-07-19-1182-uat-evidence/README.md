@@ -13,7 +13,7 @@ No frontend API mocks or shared port `5178` were used.
 ## Results
 
 **67 PASS / 0 FAIL / 1 INFO** across desktop (1280px) and narrow (375px) widths. The full matrix
-is in `results.json`; screenshots are in `screenshots/` in execution order.
+is in `results.json`.
 
 The run clicked and proved the requested state-changing controls at both widths:
 

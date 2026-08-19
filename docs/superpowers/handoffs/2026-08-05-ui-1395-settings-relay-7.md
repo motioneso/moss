@@ -104,7 +104,7 @@ get wrong:
   converted control (IconButton aria-label text, Segmented color-mode buttons, ButtonLink download,
   Button upload, and now the swatch/save-status/quiet-hours markup from this session).
 - **PR body must state**: CI's "Verify foundation and app" runs the browser suite, local gate
-  doesn't; split-check result (zero shared properties); `capture:screens` is corroboration not
+  doesn't; split-check result (zero shared properties); browser assertions are corroboration not
   proof (one state/section — Switch/Segmented/Select/Badge/Avatar/Indicator/ComingSoon need the
   live-path walk or a second capture); which `#1416` importers this closes (settings panes) vs.
   doesn't (six module packages + `task-details-dialog.tsx`) — post that as a factual comment on

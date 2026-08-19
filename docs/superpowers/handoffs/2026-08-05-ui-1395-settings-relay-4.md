@@ -46,7 +46,7 @@ Design worked out by reading all 4 files in full — apply this, don't re-derive
   `jds-dialog__body` div around `children` even if `children` is `null`. Check
   `packages/ui/src/styles/components-jarvis.css:83` (`.jds-dialog__body`) for padding before
   deciding this is a no-op — if it has visible padding, an always-present empty body div is a real
-  visual regression for every plain confirm dialog and needs a capture:screens check on a
+  visual regression for every plain confirm dialog and needs focused browser assertions on a
   no-requireText confirm shot. I hadn't finished checking this when checkpointed.
 - **`terminal-modal.tsx`**: `className="terminal-modal"` via `Dialog.className`. Preserve the
   `isLive` scrim guard by moving it into `onClose={() => { if (!isLive) onClose(); }}` (note: the
@@ -67,7 +67,7 @@ Design worked out by reading all 4 files in full — apply this, don't re-derive
   (!deleteMutation.isPending) close(); }}`.
 
 After writing all 4: `cd apps/web && npx tsc --noEmit`, grep `tests/e2e` for Dialog-keyed assertions
-(none found yet — do the grep, don't skip it), `pnpm capture:screens` (unpiped, check the
+(none found yet — do the grep, don't skip it), focused browser assertions (check the
 delete-account and settings shots specifically — `capture-screens.spec.ts:307` and `:260`), `git
 diff` review, commit with **explicit paths only** (this is a shared worktree — no `git add -A`, no
 bare `git commit`), then `git show --name-only HEAD` to confirm.

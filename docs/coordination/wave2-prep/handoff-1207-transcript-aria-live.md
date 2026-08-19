@@ -29,8 +29,8 @@ message the coordinator, then use the `relay` skill immediately.
 - PR open, rebased on `origin/main`.
 - **Live-path proof required — every blocking UAT plus a real live-path `gh pr comment`.** This
   lane touches the chat transcript surface (`apps/web/src/chat/assistant-surface/surface.tsx`),
-  a live UI surface. Exercise it through the real UI on a live dev instance, screenshot the
-  aria-live behavior working, post as a `gh pr comment`. Cannot produce it? Report
+  a live UI surface. Exercise it through the real UI on a live dev instance, assert the live DOM
+  `aria-live` value, and post the run output and assertion as a `gh pr comment`. Cannot produce it? Report
   **code-complete, unverified** — never "done". `docs/DEVELOPMENT_STANDARDS.md` → Live-Path Gate.
 
 ## Run-specific bans (non-negotiable)

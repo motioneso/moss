@@ -215,7 +215,7 @@ Each section is one task issue and follows the same shape:
 2. Add to `@jarv1s/ui` only what this section needs (D8).
 3. Replace the section's class strings with components; reduce its CSS to layout (D2).
 4. Delete the section's dead selectors in the same PR — no orphan CSS left behind.
-5. `pnpm capture:screens`, diff against the approved list, plus live-path proof on a dev instance.
+5. Focused browser DOM/computed-style assertions against the approved list, plus live-path proof on a dev instance.
 
 Order and size: calendar (789 lines) → **today (2,089: `kit-today.css` 949, `kit-today-feeds.css` 388,
 `kit-today-misc.css` 475, `kit-weather.css` 67, `command-palette.css` 210; 9 TSX files,
@@ -244,7 +244,7 @@ claiming the whole vocabulary was consolidated (D1).
 - **Confinement changes the module web contract** (D9): a module hands over CSS instead of creating a
   `<style>`. That is a breaking change for any module already built, which today means finance only.
   Bumping the contract version is part of foundation.
-- **`capture:screens` coverage is unverified.** If it does not already cover a section's screens, that
+- **Browser assertion coverage is unverified.** If it does not already cover a section's screens, that
   section's first task is adding the capture.
 
 ## Out of scope

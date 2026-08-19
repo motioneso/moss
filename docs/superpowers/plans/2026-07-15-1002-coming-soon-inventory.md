@@ -197,7 +197,7 @@ narrow (390 px) widths, using keyboard navigation as well as pointer input:
 5. **Profile:** create and download a personal export through the real Data export control; then open
    Delete account and confirm the note points to that control. Cancel without deleting the user.
 
-Record pass/fail and viewport for all five surfaces. Screenshots must contain no credentials,
+Record pass/fail, viewport, and DOM assertions for all five surfaces. Evidence must contain no credentials,
 tokens, export contents, or typed destructive-confirmation values.
 
 ## Task 8 — Update the live #1002 inventory (M2, coordinator)

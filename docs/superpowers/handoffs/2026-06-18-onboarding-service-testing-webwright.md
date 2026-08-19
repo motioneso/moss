@@ -86,8 +86,8 @@ Use Webwright against the actual local app:
 2. If the DB has been reset and onboarding appears, create/sign in with a disposable local user.
 3. Navigate through onboarding to the CLI/service testing step.
 4. Run the service tests for Codex and Gemini.
-5. Save screenshots and logs per Webwright's normal `final_runs/run_<id>/` contract.
-6. For each provider, capture:
+5. Save the action log under `final_runs/run_<id>/`.
+6. For each provider, record assertions for:
    - the UI state before clicking test,
    - the live provider pane behavior if visible,
    - the UI result after the request completes,
@@ -98,7 +98,7 @@ Use Webwright against the actual local app:
 Recommended Webwright prompt for the new session:
 
 ```text
-@webwright Test the Jarv1s onboarding service-testing flow at http://localhost:5173. Focus only on the CLI/service provider testing step for Codex and Gemini. Capture screenshots before/after each provider test and verify whether the UI result matches the provider pane/transcript. Do not modify code. Do not resolve Agentation notes unless the live UI and backend behavior are confirmed.
+@webwright Test the Jarv1s onboarding service-testing flow at http://localhost:5173. Focus only on the CLI/service provider testing step for Codex and Gemini. Record before/after DOM state and provider request/result evidence, then verify whether the UI result matches the provider pane/transcript. Do not modify code. Do not resolve Agentation notes unless the live UI and backend behavior are confirmed.
 ```
 
 ## Debugging Plan If Tests Fail

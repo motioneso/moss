@@ -3,26 +3,12 @@
 > **Superseded — kept as the evidence record for the 2026-07-28 13:06 UAT run only.**
 > The module was restructured after this was written. This document still describes a two-tab
 > Board/Settings layout, a Fit/Want column table, and a per-run scoring budget that has since been
-> removed. Every screenshot below predates the restructure.
+> removed.
 > For a current walkthrough use
 > `docs/superpowers/handoffs/2026-07-28-job-search-e2e-checklist.md`.
 
 A script you can follow end to end in about twenty minutes. Each step says what to do, what you
-should see, and the one thing that would make it a fail. Screenshots in `screenshots/` show the
-expected state for every step the automated UAT covers.
-
-The screenshots come from the automated run (`tests/uat/specs/job-search-board.uat.spec.ts`), which
-crawls a fixture standing in for the real job boards. On your dev instance the same screens are
-filled with **real postings from freehire.me**, so the companies and role titles will differ — the
-layout, columns, badges and banners are what to compare against.
-
-Two other things about the screenshots specifically, so they don't send you chasing ghosts:
-
-- The Fit/Want explanations in them read _"UAT fixture: deterministic fit score derived from the
-  posting title…"_. That is the stand-in model talking. On your instance these are real sentences
-  about the actual posting.
-- They are full-page captures, so the fixed sidebar and header sometimes appear part-way down the
-  image instead of pinned. That's the screenshot, not the app.
+should see, and the one thing that would make it a fail.
 
 ## Before you start
 
@@ -45,8 +31,6 @@ Instance → Modules → install **Job Search**, then enable it.
 | Pass | Nav entry present, opens without error |
 | Fail | Module installs but the nav entry never appears |
 
-![Job Search opened from the nav](screenshots/01-module-opened.png)
-
 ---
 
 ## 2. "Start your job search" hands you a draft — it never sends
@@ -60,8 +44,6 @@ Nothing is sent on your behalf; you read it, edit it if you like, and press Ente
 |---|---|
 | Pass | Draft sits unsent in the composer, waiting for you |
 | Fail | A message is sent automatically, or the composer is empty |
-
-![The unsent draft in the composer](screenshots/02-start-your-job-search-draft.png)
 
 ---
 
@@ -89,9 +71,9 @@ stay green. When all five are done the profile goes active on its own.
 | Pass | All five chips complete, and survive a reload |
 | Fail | A chip you clearly answered never completes, or completion resets on reload |
 
-> No screenshot: the automated run skips this phase unless an operator supplies a real model token,
-> because a canned model can't hold a real five-topic interview. **This step is the main reason to do
-> the walkthrough by hand.**
+> The automated run skips this phase unless an operator supplies a real model token, because a
+> canned model can't hold a real five-topic interview. **This step is the main reason to do the
+> walkthrough by hand.**
 
 ---
 
@@ -105,8 +87,6 @@ As soon as the profile goes active, the crawl is queued automatically. You don't
 |---|---|
 | Pass | Board appears without you asking for it |
 | Fail | You have to trigger the search manually |
-
-![Board replaces the onboarding chat](screenshots/05-board-replaces-chat.png)
 
 ---
 
@@ -127,8 +107,6 @@ fit and something you'd hate, and collapsing the two hides exactly the thing you
 | Pass | Two distinct columns, both populated, no blended score anywhere |
 | Fail | A single combined match percentage appears |
 
-![The board with scored matches](screenshots/06-board-matches.png)
-
 ---
 
 ## 6. Sorting
@@ -142,8 +120,6 @@ bottom rather than being mixed in.
 |---|---|
 | Pass | Order changes, unscored rows stay at the bottom |
 | Fail | Unscored rows interleave with scored ones |
-
-![Sorted by Fit](screenshots/07-board-sorted-by-fit.png)
 
 ---
 
@@ -165,11 +141,6 @@ This is the intended behaviour, not a bug: a login-walled or paywalled source is
 | Pass | Banner explains the stop in plain language and names all four facts |
 | Fail | Silent failure, a raw error code, or any attempt to sign in |
 
-![LinkedIn login-required banner](screenshots/08-linkedin-login-required-banner.png)
-
-> The banner sits above the board, so it is visible in every board screenshot in this document —
-> this frame is the same view, captured at the point the automated run checks the wording.
-
 ---
 
 ## 8. An unread posting says so honestly
@@ -187,8 +158,6 @@ dropped. Fit and Want will appear here once it's been read."
 | Pass | Says queued, not dropped |
 | Fail | Blank scores with no explanation, or the posting disappears |
 
-![Inspector on an unscored posting](screenshots/09-inspector-unscored-posting.png)
-
 ---
 
 ## 9. "Outside your stated frame"
@@ -202,9 +171,6 @@ Those are surfaced rather than filtered out, and labelled so you know why they'r
 |---|---|
 | Pass | Badge on both the row and the Inspector |
 | Fail | Such postings are silently dropped, or appear unlabelled |
-
-![Outside-frame badge on the board row](screenshots/10-outside-frame-board-row.png)
-![Outside-frame badge in the Inspector](screenshots/11-outside-frame-inspector.png)
 
 > On your dev instance this depends on what freehire.me actually returns — you may not get one. It
 > isn't a fail if no posting qualifies.
@@ -226,12 +192,6 @@ module.
 |---|---|
 | Pass | Profile thread inside, absent outside |
 | Fail | The drawer is empty inside the profile, or the module thread leaks onto other pages |
-
-![Drawer inside the profile](screenshots/12-drawer-inside-profile.png)
-![Drawer outside the module](screenshots/13-drawer-outside-module-empty.png)
-
-> The single message in the first frame is a marker the automated run plants to prove the drawer is
-> reading the profile's own thread. Yours will hold the onboarding conversation from step 3.
 
 ---
 

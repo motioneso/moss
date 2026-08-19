@@ -53,7 +53,7 @@ pre-check/clear a row for ben@ben.com + news + news_personalization.
 **`chromium-cli` is NOT installed here.** Fallback per the `run` skill's playwright.md: write a
 standalone script using `import { chromium } from "playwright"` (or `@playwright/test`'s
 `chromium`), `chromium.launch({ args: ["--no-sandbox"] })`, `newContext()` → `newPage()` →
-`goto("http://localhost:5175")`. Coordinator requires actual screenshots in the PR proof, not just
+`goto("http://localhost:5175")`. Coordinator requires actual live assertions in the PR proof, not just
 a description.
 
 **Kill-gate steps remaining:**
@@ -62,14 +62,14 @@ a description.
    test user, e.g. `ids.userB` equivalent, or clear it manually with an explicit DELETE you write
    after confirming the table).
 2. Playwright script: log in, open chat, ask to follow news topic "climate policy" (or similar),
-   screenshot before/after, confirm NO confirm-card rendered, confirm the topic was actually added
+   assert before/after DOM state, confirm NO confirm-card rendered, confirm the topic was actually added
    (proves the dispatch executed, not just skipped).
 3. Query DB: row for (ben@ben.com, news, news_personalization) now `trusted_auto`.
 4. **If it fails** (confirm card still appears): STOP. Do not start Task 3. Escalate to
    coordinator with SECURITY or DESIGN-FORK tag, describe exactly what was observed. Do not loosen
    `policy.ts`, `allowedTiers`, or `defaultTier` to force it green — fix the design, not the gate.
-5. **If it passes:** this verification run doubles as Task 4's live-path proof (same screenshots,
-   same dispatch) — no need to repeat it later, just carry the screenshots forward to the PR
+5. **If it passes:** this verification run doubles as Task 4's live-path proof (same assertions,
+   same dispatch) — no need to repeat it later, just carry the assertions/evidence forward to the PR
    comment at wrap-up.
 
 ## Remaining after kill gate
@@ -78,7 +78,7 @@ a description.
   `grantInstallTimeTrustIfUnset`, never assert `trusted_auto` directly (insert-if-absent must not
   clobber an existing `always_confirm`). New `tests/integration/tasks-action-policy-self-heal.test.ts`,
   4 tests per plan lines 136-154.
-- **Task 4**: live-path UAT proof — `gh pr comment` with screenshots at wrap-up (reuse kill-gate
+- **Task 4**: live-path UAT proof — `gh pr comment` with assertions/evidence at wrap-up (reuse kill-gate
   run if it already covers this).
 - **Task 5**: PR description — tasks-was-broken correction, `grantInstallTimeTrustIfUnset`
   justification, 6-conditions-to-tests mapping, over-grant-by-design note (Path A grants *every*
@@ -101,5 +101,5 @@ anything).
 
 Never widen a `defaultTier`, change a grant, edit `allowedTiers`, or loosen `policy.ts` to make a
 test pass — fix the test, never the policy. PR does not merge without a live end-to-end proof
-comment (real UI, live dev instance, UAT run, screenshots) — CI-green or mocked tests alone don't
+comment (real UI, live dev instance, UAT run, DOM/API assertions) — CI-green or mocked tests alone don't
 discharge it.

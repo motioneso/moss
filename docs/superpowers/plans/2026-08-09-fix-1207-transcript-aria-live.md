@@ -72,9 +72,6 @@ comment` with:
 
 - the UAT run output (all four specs passing), and
 - proof the `aria-live="polite"` attribute is present in the **live rendered DOM**, not just a
-  visual screenshot of the chat UI — e.g. a devtools Elements-panel screenshot with the attribute
-  visible on `assistant-surface__thread`, or an `element.outerHTML`/`getAttribute` snippet
-  captured from the live page (coordinator amendment: a plain UI screenshot doesn't prove the
-  attribute exists, since `aria-live` has no visual rendering).
+  source assertion — use an `element.outerHTML`/`getAttribute` snippet captured from the live page.
 
 Per spec exit criteria, #1207 cannot merge without this.

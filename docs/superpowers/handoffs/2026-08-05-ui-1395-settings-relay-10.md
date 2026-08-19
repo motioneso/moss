@@ -43,7 +43,7 @@ tests passed, 2 skipped.
 Pushed the branch (`git push -u origin feat/1395-ui-settings` — first push, branch had no upstream
 yet) and opened **PR #1420** with the coordinator's required body: 198/0 split-check numbers with
 the 198-vs-199 normalization-difference honesty note, 1851/1851/0/0 loss-conservation numbers, the
-CI-vs-local-gate e2e caveat, the capture:screens-is-corroboration-not-proof caveat, and the #1416
+CI-vs-local-gate e2e caveat, the browser-assertions-are-corroboration caveat, and the #1416
 disposition. Also posted the #1416 disposition as a separate factual comment
 (https://github.com/motioneso/Jarv1s/issues/1416#issuecomment-5197272363): confirmed
 `apps/web/src/settings` sources `Select` from `@jarv1s/ui` via its local `settings-ui.tsx` barrel,

@@ -32,7 +32,7 @@ Also noted for own reasoning: this same token-resolution seam is the fix site fo
   grep '### FINAL' /tmp/cb-vf.log
   ```
   DROP the gate DB when done. Never pipe the gate command itself (`| tail`/`| grep` — a blocking hook now rejects this). Stagger vs other agents' gate runs (shared dev Postgres).
-- **Live-path gate is now part of MY finish line.** If work touches a user-facing feature (this does — chat UI refresh), CI-green + review is not enough. Need a live e2e proof posted as `gh pr comment`: feature exercised through the real UI on a live dev instance, with UAT run output + screenshots. Resolve which specs via `.claude/skills/coordinate/resolve-uat-triggers.sh` (map is deliberately incomplete — empty output ≠ no proof needed). Without this, report state is "code-complete, unverified" — never "done".
+- **Live-path gate is now part of MY finish line.** If work touches a user-facing feature (this does — chat UI refresh), CI-green + review is not enough. Need a live e2e proof posted as `gh pr comment`: feature exercised through the real UI on a live dev instance, with UAT run output + assertions or bounded DOM/network/log evidence. Resolve which specs via `.claude/skills/coordinate/resolve-uat-triggers.sh` (map is deliberately incomplete — empty output ≠ no proof needed). Without this, report state is "code-complete, unverified" — never "done".
 - Plan with `plan-build` skill for any NEW plan (this session's existing plan doc stays as-is).
 - Relay strictly at context-meter's 70% warning.
 - Report to Coordinator terse and result-first in **normal English** — caveman/telegraph mode is REMOVED from this skill family (this supersedes `coordinated-build`'s in-skill caveman instruction).
@@ -100,7 +100,7 @@ git fetch origin main && git rebase origin/main
 Use the export-based `JARVIS_PGDATABASE` pattern verbatim. DROP the gate DB after.
 
 ### 9. Live-path UAT proof (new mandatory requirement)
-Run `.claude/skills/coordinate/resolve-uat-triggers.sh` to find applicable specs (empty output does NOT mean skip). Run against a live dev instance. Post `gh pr comment` on PR #1276 with UAT output + screenshots. State the mocked-SSE-e2e gap explicitly in the PR description (condition 4).
+Run `.claude/skills/coordinate/resolve-uat-triggers.sh` to find applicable specs (empty output does NOT mean skip). Run against a live dev instance. Post `gh pr comment` on PR #1276 with UAT output + assertions/evidence. State the mocked-SSE-e2e gap explicitly in the PR description (condition 4).
 
 ### 10. `coordinated-wrap-up`
 Push to PR #1276, update PR description (exit criteria + condition-4 gap statement), report to Coordinator with the live-path proof. PR/board/merge remain the Coordinator's job — do not merge.

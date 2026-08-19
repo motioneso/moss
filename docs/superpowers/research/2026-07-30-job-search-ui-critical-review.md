@@ -47,21 +47,20 @@ context.
 behind and 248 commits ahead of `origin/main` at review time, so the findings are grounded in the
 commit above rather than represented as a review of current `main`.
 
-The reproducible audit script and viewport screenshots are in
-`outputs/ui-critique-1246/final_runs/run_3/`. They are gitignored and intentionally not committed.
-The most relevant captures are:
+The reproducible audit script and action log were kept in the gitignored local output directory.
+The reviewed states were:
 
-- [desktop Matches][e-desktop-matches]
-- [desktop Overview][e-desktop-overview]
-- [desktop Profile][e-desktop-profile]
-- [desktop Monitors][e-desktop-monitors]
-- [desktop match inspector][e-desktop-inspector]
-- [desktop chat drawer][e-desktop-chat]
-- [mobile Matches][e-mobile-matches]
-- [mobile Overview][e-mobile-overview]
-- [mobile Profile][e-mobile-profile]
-- [mobile Monitors][e-mobile-monitors]
-- [mobile match inspector][e-mobile-inspector]
+- desktop Matches
+- desktop Overview
+- desktop Profile
+- desktop Monitors
+- desktop match inspector
+- desktop chat drawer
+- mobile Matches
+- mobile Overview
+- mobile Profile
+- mobile Monitors
+- mobile match inspector
 
 ### Severity
 
@@ -82,7 +81,7 @@ The most relevant captures are:
 **Evidence.** The existing chat transcript shows the user agreeing to start with the proposed
 built-in sources. The following assistant response asks again whether LinkedIn should be enabled.
 The structured state remains “No boards enabled,” and LinkedIn remains “Paused” in
-[desktop Monitors][e-desktop-monitors]. The Profile screen says to “Answer what's left in chat,”
+desktop Monitors. The Profile screen says to “Answer what's left in chat,”
 while Monitors says adding or editing a board happens through chat. Source confirms those are
 deliberate routes: `screens/profile.tsx:190-195` and `screens/settings.tsx:377-382`.
 
@@ -107,7 +106,7 @@ Monitors so chat is an accelerator, not the only repair path.
 
 **Severity:** High
 
-**Evidence.** In [mobile match inspector][e-mobile-inspector], “Back to matches” is almost entirely
+**Evidence.** In mobile match inspector, “Back to matches” is almost entirely
 behind the fixed app header and the job metadata begins under it. The inspector calls
 `scrollIntoView({ block: "start" })` when opened
 (`screens/inspector.tsx:97-110`), but `.jsm-detail` has no scroll offset
@@ -131,7 +130,7 @@ where recovery space is already scarce.
 page to `scrollY = 250`; “Back to matches” returned to `250`, not `2057`. The source explains that
 opening a match intentionally scrolls the inspector root into view (`screens/inspector.tsx:100-110`)
 but retains no origin scroll position. The harm is amplified by the 45-role board visible in
-[desktop Matches][e-desktop-matches].
+desktop Matches.
 
 **Why it matters.** Triage is comparative and repetitive. Losing position after every inspection
 forces users to relocate the item they just examined and reconstruct where they were in the queue.
@@ -149,7 +148,7 @@ when the inspector closes. Preserve the existing inspector design.
 
 **Evidence.** Matches exposes New/Saved/Passed buckets and Fit/Want sorting, but no title, company,
 location, source, or posting-date filter. Save and Pass appear only after opening a full inspector,
-which triggers the position-loss defect above. [Mobile Matches][e-mobile-matches] shows how quickly
+which triggers the position-loss defect above. Mobile Matches shows how quickly
 the list becomes a one-row-at-a-time tunnel.
 
 **Why it matters.** The core task is not merely reading matches; it is reducing a queue into
@@ -189,7 +188,7 @@ text associated with the control is better still.
 **Severity:** Medium
 
 **Evidence.** Matches offers an enabled “Search now” button while Overview and Monitors state that
-no boards are on ([mobile Matches][e-mobile-matches], [mobile Monitors][e-mobile-monitors]).
+no boards are on (mobile Matches, mobile Monitors).
 `SearchNowControl` receives only `profileId` and `refreshBoard`, and disables only while a run is
 starting or running (`screens/board.tsx:251-288`). It has no enabled-portal condition.
 
@@ -209,7 +208,7 @@ error and weak status communication under Nielsen's
 
 **Evidence.** The live state shows every profile checkpoint complete and only job boards missing,
 yet Readiness Gates says “Profile — Still finishing setup” in
-[mobile Overview][e-mobile-overview]. `buildGates()` maps the aggregate
+mobile Overview. `buildGates()` maps the aggregate
 `profile.readyToCrawl` flag directly to a gate labeled “Profile”
 (`screens/overview.tsx:109-118`).
 
@@ -229,7 +228,7 @@ readiness, or derive a separate profile-only readiness value.
 
 **Evidence.** The module repeats “Setup incomplete,” “4 of 5 complete,” a large “Your search is
 getting set up” hero, Readiness Gates, Setup Checkpoints, monitor health, and a “What's missing”
-section. [Mobile Overview][e-mobile-overview] spends the first viewport restating status before
+section. Mobile Overview spends the first viewport restating status before
 showing a direct route to resolution.
 
 **Why it matters.** Repetition here is not reassurance; it is extraneous load. Users need one
@@ -269,7 +268,7 @@ smaller honest choice.
 
 **Severity:** Medium
 
-**Evidence.** [Desktop match inspector][e-desktop-inspector] presents `Want 38` with a calibrated-
+**Evidence.** Desktop match inspector presents `Want 38` with a calibrated-
 looking bar and a confident narrative, but no visible denominator, definition, provenance,
 uncertainty, or timestamp. The source defines a model-authored 0–100 integer and a detailed prompt
 (`domain/score.ts:19-27,61-73`), while the UI renders only the bare number and track
@@ -291,10 +290,10 @@ cannot be calibrated, use qualitative bands and preserve the evidence narrative.
 **Severity:** Medium
 
 **Evidence.** Mobile Profile has a measured document height of 2527 px. Its first 812 px
-([mobile Profile][e-mobile-profile]) contains the module chrome, a two-line uppercase hero,
+(mobile Profile) contains the module chrome, a two-line uppercase hero,
 description, rule, and only three résumé facts. The preferences that actually determine matching
 arrive much later. Desktop Profile also leaves a visibly unbalanced two-column field of sparse
-metadata and long-form criteria ([desktop Profile][e-desktop-profile]).
+metadata and long-form criteria (desktop Profile).
 
 **Why it matters.** The screen's primary purpose is to verify and correct search inputs. Decorative
 hierarchy delays the data users need to compare and edit. Progressive disclosure should defer
@@ -313,8 +312,8 @@ dealbreakers earlier. This is compression, not a new design system.
 
 **Evidence.** Overview, Profile, and Monitors repeat the same all-caps eyebrow, oversized two-line
 uppercase heading, gold strap, description, and heavy rule despite serving different tasks
-([desktop Overview][e-desktop-overview], [desktop Profile][e-desktop-profile],
-[desktop Monitors][e-desktop-monitors]). The cost becomes concrete on mobile, where this repeated
+(desktop Overview, desktop Profile,
+desktop Monitors). The cost becomes concrete on mobile, where this repeated
 ceremony consumes a large share of each first viewport.
 
 **Why it matters.** This is the most defensible “AI-generated feel” in the reviewed UI: not a color
@@ -493,8 +492,7 @@ action that resolves it instead of repeating setup status elsewhere.
 
 - This was one read-only pass against one existing account state. No destructive, state-changing,
   error-recovery, empty-first-use, or completed-search path was exercised.
-- The screenshots contain private live account content and remain only in the gitignored local
-  evidence directory. This report intentionally avoids reproducing that private content.
+- The report intentionally avoids reproducing private live account content.
 - Teal blocked direct retrieval with Cloudflare. Its official page content and Teal-hosted image
   references were read through Jina's public reader rendering, so Teal-specific retrieval confidence
   is moderate.
@@ -528,17 +526,6 @@ All sources were accessed 2026-07-30.
 - U.S. Web Design System, [Card][uswds-cards] and [Tag][uswds-tags].
 - IBM Carbon Design System, [Empty states][carbon-empty].
 
-[e-desktop-matches]: ../../../outputs/ui-critique-1246/final_runs/run_3/screenshots/final_execution_02_desktop_matches.png
-[e-desktop-overview]: ../../../outputs/ui-critique-1246/final_runs/run_3/screenshots/final_execution_03_desktop_overview.png
-[e-desktop-profile]: ../../../outputs/ui-critique-1246/final_runs/run_3/screenshots/final_execution_04_desktop_profile.png
-[e-desktop-monitors]: ../../../outputs/ui-critique-1246/final_runs/run_3/screenshots/final_execution_05_desktop_monitors.png
-[e-desktop-inspector]: ../../../outputs/ui-critique-1246/final_runs/run_3/screenshots/final_execution_06_desktop_match_inspector.png
-[e-desktop-chat]: ../../../outputs/ui-critique-1246/final_runs/run_3/screenshots/final_execution_07_desktop_chat_drawer.png
-[e-mobile-matches]: ../../../outputs/ui-critique-1246/final_runs/run_3/screenshots/final_execution_10_mobile_matches.png
-[e-mobile-overview]: ../../../outputs/ui-critique-1246/final_runs/run_3/screenshots/final_execution_11_mobile_overview.png
-[e-mobile-profile]: ../../../outputs/ui-critique-1246/final_runs/run_3/screenshots/final_execution_12_mobile_profile.png
-[e-mobile-monitors]: ../../../outputs/ui-critique-1246/final_runs/run_3/screenshots/final_execution_13_mobile_monitors.png
-[e-mobile-inspector]: ../../../outputs/ui-critique-1246/final_runs/run_3/screenshots/final_execution_14_mobile_match_inspector.png
 [careerflow]: https://www.careerflow.ai/job-tracker
 [carbon-empty]: https://carbondesignsystem.com/patterns/empty-states-pattern/
 [huntr]: https://huntr.co/product/job-tracker

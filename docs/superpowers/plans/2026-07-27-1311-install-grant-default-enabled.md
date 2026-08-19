@@ -161,9 +161,9 @@ Trigger-map lookup returned empty for the three touched files — using judgemen
 doc: this changes chat confirm-card behavior, a live UI surface, so proof is required regardless.
 Plan: on a live dev instance, dispatch a `granted_at_install` tool on a `defaultEnabled` module
 (e.g. a sports or news content command) with **no prior explicit enable action**, and confirm zero
-confirm card appears; screenshot the dispatch and the resulting `app.preferences` row (or a debug
-view of it). Post as a `gh pr comment` at wrap-up. If no existing Playwright spec covers this
-flow, a manual UAT walkthrough with screenshots is the fallback — record which.
+confirm card appears; record the dispatch plus the resulting `app.preferences` row and bounded
+request/log evidence. Post as a `gh pr comment` at wrap-up. If no existing Playwright spec covers this
+flow, a manual UAT walkthrough with recorded assertions and bounded logs is the fallback — record which.
 
 **Task 5 — PR description + trigger-map row.**
 PR description must state: (a) correction — tasks was also broken, not just settings/news/sports,

@@ -86,11 +86,11 @@ None. A red check stops the lane.
   `pr1207-relay2` (`ae627f40-5e40-48ea-a43e-9e07c92f9f8f`, w1:p2J) confirmed actively driving
   (`run-uat.ts`) before the old pane (w1:p29) was closed.
 - `PR1115 relay2` / `9907b0d5-55ec-4393-ae36-55ae00ba09a6` — relayed after QA posted RED on PR
-  #1478 (narrative-only live-path comment, no attached images). Wrote+committed+pushed continuation
-  doc `docs/superpowers/handoffs/2026-08-09-fix-1115-overdue-indicator-relay-3.md` (fix plan:
-  gist-hosted real screenshots, CI-check reconfirmation, teardown). Successor `pr1115-relay3`
-  (`2601aeeb-0e8f-497a-acee-3d4c0435217b`, w1:p2H) confirmed actively driving (generating real
-  screenshots, e.g. `done-overdue.png`) before the old pane (w1:p2F) was closed.
+  #1478 (narrative-only live-path comment without a durable live DOM assertion). Wrote, committed,
+  and pushed continuation doc `docs/superpowers/handoffs/2026-08-09-fix-1115-overdue-indicator-relay-3.md`
+  (fix plan: live DOM assertion, CI-check reconfirmation, teardown). Successor `pr1115-relay3`
+  (`2601aeeb-0e8f-497a-acee-3d4c0435217b`, w1:p2H) confirmed actively driving before the old pane
+  (w1:p2F) was closed.
 - `PR1207 transcript aria-live (relay2)` / `ae627f40-5e40-48ea-a43e-9e07c92f9f8f` — coordinator
   directed this relay proactively at 9-10% until auto-compact (past the 70% trigger, mid live-path
   UAT run) to avoid an in-context compaction. Committed continuation doc `736a66df1` before

@@ -24,7 +24,9 @@ Bring the **Jarvis Design System prototype** into the real web app (`apps/web`) 
 
 - **`tokens.css` is the ONLY file allowed hex/rgb literals.** Ported CSS swapped `#fff → var(--white)`.
 - **Bake the prototype tweak DEFAULTS as the fixed design — no tweak UI.** From the prototype's `index.html` `TWEAK_DEFAULTS`: `weather=Header`, `taskLayout=Panels`, `taskEffort=Fill` (single dot), `taskDensity=Comfortable`, `heroImages=true`, **`calBlockStyle=Ghost`**, **`calDensity=Comfortable`** (the last two apply when building Calendar).
-- **Verification without auth:** the app needs login, so verify screens with **static harness HTML** in `$CLAUDE_JOB_DIR/tmp` linking the real CSS + lucide CDN, screenshotted via Playwright (resolve `@playwright/test` by absolute path: `PW=$(node -e "console.log(require.resolve('@playwright/test'))")`; require it in a `.cjs`; `data-theme` toggles light/dark). Reuse the harness pattern from this session's tmp.
+- **Verification without auth:** the app needs login, so verify screens with **static harness HTML**
+  in `$CLAUDE_JOB_DIR/tmp` linking the real CSS + lucide CDN. Use Playwright DOM and computed-style
+  assertions; `data-theme` toggles light/dark.
 - Communication: terse, no closing recap+offer (see memory `feedback-concise-dev-agent`).
 
 ## Screens
@@ -68,7 +70,7 @@ Ben drops notes via the agentation MCP (`mcp__agentation__agentation_get_all_pen
 
 1. **Settings** (#4): fetch prototype `ui_kits/jarvis-app/Settings.jsx` + `Knowledge.jsx`; rebuild `apps/web/src/settings/settings-page.tsx` to the prototype — **`jds-perm` permission rows separating data-access (CRUD) from action authority**, switches, form-heavy proof; wired to real settings/connectors/AI data. (Manual weather "Location" field belongs here per #217.) Verify via harness.
 2. **Calendar + Wellness** (#5): Calendar `cal-*` day/month grid with **Ghost** Jarvis blocks + **Comfortable** density; Wellness cards. Real data.
-3. Run `pnpm --filter @jarv1s/web typecheck && lint`, format with prettier, harness-screenshot each.
+3. Run `pnpm --filter @jarv1s/web typecheck && lint`, format with prettier, and assert each harness layout.
 
 ## Environment
 

@@ -58,7 +58,8 @@ what makes context % a *countable* relay trigger).
 Nine slices each closed on CI-green plus code review; not one had been run through the real UI.
 The install path was broken the whole time, so the owner could not use any of it. Green parts,
 dead whole. → The **Live-Path Gate**: a user-facing feature, module, or UI surface merges only
-with a live end-to-end proof posted to the PR (`gh pr comment` with the UAT run and screenshots).
+with a live end-to-end proof posted to the PR (`gh pr comment` with the UAT run, exit code, and
+assertions or bounded DOM/network/log evidence).
 It overrides auto-merge at every tier including `routine`. No proof → the honest status is
 **code-complete, unverified**, and the issue is not Done. Full rule:
 `docs/DEVELOPMENT_STANDARDS.md` → Live-Path Gate.

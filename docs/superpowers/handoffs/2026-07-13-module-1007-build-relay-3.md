@@ -70,17 +70,15 @@ UAT_BASE_URL=http://localhost:1545 pnpm exec tsx scripts/uat/job-search-install.
 **Use `pnpm exec tsx`, not `pnpm dlx tsx`** — `dlx` runs in an isolated dir with no access to this
 workspace's `node_modules` (that's how bug #1 above was first discovered).
 
-Expect `RUN OK needsRestart=true`. If it still fails, read the error + take an ad-hoc screenshot
+Expect `RUN OK needsRestart=true`. If it still fails, read the error and capture bounded DOM/log evidence
 (pattern: throwaway `scripts/uat/_diagN.ts` files, **delete them before committing** — three were
-already made and deleted this relay, don't leave stragglers). Screenshots land in the
-**coordinator's own scratchpad**, not yours:
-`/tmp/claude-1000/-home-ben-Jarv1s--claude-worktrees-coord-2026-06-30-rfa-fleet/58a78927-385c-4b1d-8fa0-94db20255d6f/scratchpad/devproof/` — confirmed writable, already has `01`/`02` from
-earlier runs (stale, will be overwritten).
+already made and deleted this relay, don't leave stragglers). Store bounded assertion/log artifacts
+in the coordinator's scratchpad `devproof/` directory.
 
 ## Next steps (in order)
 
-1. Delete the leftover DB user (above), rerun Step 3, confirm `RUN OK needsRestart=true` and
-   screenshots `01`-`06` (07 won't exist yet — needsRestart=true means enable didn't happen).
+1. Delete the leftover DB user (above), rerun Step 3, confirm `RUN OK needsRestart=true` and the
+   numbered state assertions `01`-`06` (07 is a post-restart assertion).
    If new selector mismatches surface (e.g. the job-search row/install-button text), fix them the
    same way: diagnose with a throwaway script against the live `:1545` stack, don't guess.
 2. Step 4: `git add scripts/uat/job-search-install.spec.ts` (that file only) and commit:

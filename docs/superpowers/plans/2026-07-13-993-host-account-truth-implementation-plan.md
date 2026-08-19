@@ -151,7 +151,7 @@ changes, and re-run the stylesheet file-size and design-token gates.
 - [ ] From the deployed Compose UI, navigate normally to Settings → Advanced host setup, verify all
       five mux states and diagnostic recovery, change the env file, run the exact selector-complete
       `up -d jarv1s` recreation command, refresh, then
-      navigate to Account & preferences and verify one correctly owned email. Record screenshots and
+      navigate to Account & preferences and verify one correctly owned email. Record DOM assertions and
       commands outside `tests/uat/**`.
 
 ## Completion Check

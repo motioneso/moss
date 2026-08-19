@@ -227,9 +227,7 @@ apply"` and state label becomes `"Downloaded — restart to apply"`. Enable/disa
     `external-modules/job-search/src/web/router.ts`): host base path is `/m/job-search`; the
     module root renders `<div className="jsm-root" data-module="job-search">` with header
     `<h1>Job Search</h1>` and nav `aria-label="Job Search sections"`.
-- Produces: screenshots under `/tmp/claude-1000/-home-ben-Jarv1s--claude-worktrees-coord-2026-06-30-rfa-fleet/58a78927-385c-4b1d-8fa0-94db20255d6f/scratchpad/devproof/` (reusing the original
-  handoff's scratchpad dir, since that's where Ben expects to find them per the original report
-  format).
+- Produces: action logs and DOM/network assertions under the run's scratchpad `devproof/` directory.
 
 - [ ] **Step 1: Confirm Playwright is available**
 
@@ -247,30 +245,18 @@ Expected: exits 0 (already installed, or installs cleanly).
 // Settings UI -> enable it -> confirm a real job-search route responds -> (Task 5) survive a
 // container recreate. This is the end-to-end proof Ben asked for; no backend shortcuts.
 import { chromium, type Page } from "playwright";
-import { mkdirSync } from "node:fs";
-
 const BASE_URL = process.env["UAT_BASE_URL"] ?? "http://localhost:1545";
-const SHOT_DIR =
-  "/tmp/claude-1000/-home-ben-Jarv1s--claude-worktrees-coord-2026-06-30-rfa-fleet/58a78927-385c-4b1d-8fa0-94db20255d6f/scratchpad/devproof";
 const OWNER_EMAIL = "uat-owner-1006@example.com";
 const OWNER_PASSWORD = "uat-owner-password-1006";
 const OWNER_NAME = "UAT Owner";
-
-mkdirSync(SHOT_DIR, { recursive: true });
-
-async function shot(page: Page, name: string): Promise<void> {
-  await page.screenshot({ path: `${SHOT_DIR}/${name}.png`, fullPage: true });
-}
 
 async function signUpOwner(page: Page): Promise<void> {
   await page.goto(BASE_URL);
   await page.getByLabel("Name").fill(OWNER_NAME);
   await page.getByLabel("Email").fill(OWNER_EMAIL);
   await page.getByLabel("Password").fill(OWNER_PASSWORD);
-  await shot(page, "01-signup-filled");
   await page.getByRole("button", { name: "Create account" }).click();
   await page.waitForURL(/\/(onboarding|home|today)?/, { timeout: 15_000 });
-  await shot(page, "02-post-signup");
 }
 
 async function skipOnboardingIfPresent(page: Page): Promise<void> {
@@ -288,7 +274,6 @@ async function skipOnboardingIfPresent(page: Page): Promise<void> {
 async function installJobSearch(page: Page): Promise<void> {
   await page.goto(`${BASE_URL}/settings?section=instmods`);
   await page.waitForSelector("text=Available modules", { timeout: 15_000 });
-  await shot(page, "03-instance-modules");
 
   const row = page.locator("li", { has: page.locator("code", { hasText: "job-search" }) });
   await row.scrollIntoViewIfNeeded();
@@ -298,10 +283,8 @@ async function installJobSearch(page: Page): Promise<void> {
 
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: "Download" }).click();
-  await shot(page, "04-download-confirmed");
 
   await row.getByText(/restart to apply/i).waitFor({ timeout: 30_000 });
-  await shot(page, "05-pending-restart");
 }
 
 async function enableJobSearch(page: Page): Promise<void> {
@@ -316,14 +299,12 @@ async function enableJobSearch(page: Page): Promise<void> {
     await toggle.click();
     await page.waitForTimeout(500);
   }
-  await shot(page, "06-enabled");
 }
 
 async function assertJobSearchRouteResponds(page: Page): Promise<void> {
   await page.goto(`${BASE_URL}/m/job-search`);
   await page.waitForSelector('[data-module="job-search"]', { timeout: 15_000 });
   await page.getByRole("heading", { name: "Job Search" }).waitFor({ timeout: 15_000 });
-  await shot(page, "07-job-search-route");
 }
 
 export async function run(): Promise<{ needsRestart: boolean }> {
@@ -390,8 +371,7 @@ UAT_BASE_URL=http://localhost:1545 pnpm dlx tsx scripts/uat/job-search-install.s
 
 Expected: `RUN OK needsRestart=true` (per the original handoff's directive #5, restart-to-activate
 is confirmed by-design — expect `true`; if it prints `false`, that is itself a finding to report,
-not a bug to chase). Confirm screenshots `01`–`06` exist in the scratchpad dir; `07` will not exist
-yet if `needsRestart=true`.
+not a bug to chase). Confirm the script's state and route assertions pass.
 
 - [ ] **Step 4: Commit**
 
@@ -426,8 +406,8 @@ Expected: health check passes again after restart.
 UAT_BASE_URL=http://localhost:1545 pnpm dlx tsx scripts/uat/job-search-install.spec.ts resume
 ```
 
-Expected: `RESUME OK`; screenshot `07-job-search-route.png` exists showing the real job-search
-route. This is the "restart activates it" finding, reported plainly per directive #5 — not treated
+Expected: `RESUME OK`; the live route assertion passes for the real job-search route. This is the
+"restart activates it" finding, reported plainly per directive #5 — not treated
 as a bug.
 
 - [ ] **Step 3: Recreate the container (the #1006 persistence proof) and re-assert**
@@ -474,7 +454,7 @@ plainly (by-design, per `scripts/start-jarv1s.ts` boot sequence and the Instance
 
 - [ ] **Step 4: Final report to Coordinator** covering: VERDICT GREEN/RED; owner login
       (`http://192.168.50.36:1545` or `http://localhost:1545`, email `uat-owner-1006@example.com`,
-      password `uat-owner-password-1006`); restart-was-required = yes (plain finding); screenshot paths
+      password `uat-owner-password-1006`); restart-was-required = yes (plain finding); evidence paths
       under the scratchpad devproof dir; Playwright script path
       `scripts/uat/job-search-install.spec.ts`; leave `jarvis-uat-1006` UP if GREEN, tear down
       (`docker compose -p jarvis-uat-1006 down -v`) if RED.

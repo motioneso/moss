@@ -74,12 +74,12 @@ pnpm --filter @moss/web exec vitest run ../../tests/unit/web-day-classification-
 Expected: `EXIT=0`, all cases in the new `describe` block pass, and fail (non-zero, `showBadge`
 assertion mismatch) if `showBadge` is reverted or removed from `DueInfo`/`dueInfo`.
 
-Full gate + live-path proof per `coordinated-wrap-up` (isolated gate DB; `/tasks` screenshot showing
-one overdue indicator on a non-done overdue task, posted as a `gh pr comment`).
+Full gate + live-path proof per `coordinated-wrap-up` (isolated gate DB; `/tasks` live DOM assertion
+showing one overdue indicator on a non-done overdue task, posted as a `gh pr comment`).
 
 ## Kill gate
 
-Owner: this lane, self-assessed before wrap-up. If the live-path screenshot shows the badge and
+Owner: this lane, self-assessed before wrap-up. If the live-path assertion shows the badge and
 pill still co-rendering for a non-done overdue task, or the done-overdue row loses its only
 indicator, stop — do not open the PR — re-check the `showBadge` branch logic against `:81-83`
 before retrying. Single-phase, single-file change; no further phases planned.

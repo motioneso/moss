@@ -151,7 +151,7 @@ contract proves insufficient.
 **Files:**
 
 - `apps/web/src/styles/kit-chat.css`
-- focused screenshots/assertions in the Task 7 E2E file
+- focused assertions in the Task 7 E2E file
 
 - [ ] **Step 1:** Locate the existing composer styles and define the already-used
       `chatd-skillac`, `__option`, `__name`, `__desc`, `__bound`, and bound-clear classes beside

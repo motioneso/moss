@@ -28,6 +28,11 @@ This is the `start` skill's plan+build stages adapted for coordination mode.
   the tokens it saved were small, and it mangled exactly the messages that need precision — plan
   approvals and `[SECURITY]` escalations.) Commit messages, PR bodies, and code comments keep their
   full conventional form.
+- **Sign off every message to the coordinator with your own pane id** — `[pane <id>]` at the end
+  (get it from `$HERDR_PANE_ID`, or `herdr pane list` matched on your session id). Pane numbers
+  reflow, so this isn't an address to reply to later — it's a timestamp-equivalent: it lets the
+  coordinator (or a successor reading the manifest afterward) tell which physical pane produced a
+  given report without cross-referencing labels that may have since been reused or reaped.
 
 ## Procedure
 
@@ -126,7 +131,8 @@ PR + verified evidence to the coordinator. Then stop. The coordinator owns QA, m
 **⛔ Live-path gate — part of YOUR finish line, not QA's.** If your work adds or changes a
 user-facing feature, module, or UI surface, "green gate + PR open" is not done. The PR needs a
 `gh pr comment` carrying a live end-to-end proof: the feature exercised **through the real UI on a
-live dev instance** (UAT run output + screenshots). Without it the coordinator must refuse the
+live dev instance** (UAT run output, exit code, and path assertions or bounded DOM/network/log
+evidence). Without it the coordinator must refuse the
 merge and send the lane back — so produce it yourself. If you genuinely cannot (no live instance
 reachable, a step that needs Ben in person), say so plainly in the PR body and report the honest
 status: **code-complete, unverified**. Full rule: `docs/DEVELOPMENT_STANDARDS.md` → Live-Path Gate.

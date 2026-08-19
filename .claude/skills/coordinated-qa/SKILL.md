@@ -142,7 +142,12 @@ merge), then report to the coordinator by the appropriate channel, then stop.
 the compact verdict block below as your last message with no trailing text. Do NOT call
 `herdr-pane-message` (there is no coordinator pane to target).
 
-**If invoked as a Herdr pane:** `herdr-pane-message` the compact block to the coordinator label.
+**If invoked as a Herdr pane:** `herdr-pane-message` the compact block to the coordinator label,
+appending `[pane <your pane id>]` (`$HERDR_PANE_ID`, or `herdr pane list` matched on your session
+id) — pane numbers reflow, so this ties the verdict to the exact pane that produced it without
+relying on a label that may since have been reused or reaped. (Not applicable to the native-subagent
+path — your final message returns as a tool result, not a Herdr pane message, so there's no pane to
+sign off with.)
 
 ```bash
 gh pr comment <PR> --body "QA verdict (<tier>): <paste the block below>"

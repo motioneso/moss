@@ -100,12 +100,12 @@ Use two existing mechanisms, each for its actual job:
 1. `pnpm test:uat` / `tests/uat/provisioner.ts` supplies ephemeral, prod-shaped, deterministic
    accounts. Use `solo-admin` for first-time onboarding and `admin+data` or `multi-user` for the
    lived-in walkthrough and disposable destructive-flow proof.
-2. Webwright supplies the one-shot browser action log and sanitized screenshots under its local
+2. Webwright supplies the one-shot browser action log and live DOM/network assertions under its local
    `final_runs/run_<id>/` contract. It drives the UAT URL and, where real configuration is required,
    the authorized deployed test instance. Nothing under `final_runs/` is committed.
 
 The closing run uses desktop `1280x800` and narrow `390x844`. Every proof point records the build
-SHA, environment kind, viewport, action/result, and evidence path. Screenshots must omit passwords,
+SHA, environment kind, viewport, action/result, and evidence path. Evidence must omit passwords,
 tokens, private messages, connector contents, export contents, and deletion confirmation values.
 
 ## Walkthrough contract

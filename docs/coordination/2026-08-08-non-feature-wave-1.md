@@ -76,12 +76,12 @@ None. A red check stops the lane.
   terminal green. Live-path proof is present at
   https://github.com/motioneso/moss/pull/1473#issuecomment-5228515838 with UAT EXIT=0 (2 passed),
   and the ephemeral instance self-tore-down. Independent QA returned RED: the UAT can pass without
-  exercising spacing when the accent is absent, and required screenshot evidence is missing.
+  exercising spacing when the accent is absent, and durable live assertion evidence is missing.
   Durable verdict: https://github.com/motioneso/moss/pull/1473#issuecomment-5228541665. The owner
   closed both proof gaps at clean pushed SHA `5e779538f94a`: the accent must now exist, the live UAT
-  passes 2/2, and a tracked 841073-byte screenshot is embedded in
+  passes 2/2, and live assertion results are recorded in
   https://github.com/motioneso/moss/pull/1473#issuecomment-5228582763. Independent re-review found
-  both blockers closed, valid screenshot proof, blocking UAT EXIT=0 (2/2), and zero blocking review
+  both blockers closed, valid live proof, blocking UAT EXIT=0 (2/2), and zero blocking review
   findings. It returned MERGE-READY NO only because CI remains pending. Durable verdict:
   https://github.com/motioneso/moss/pull/1473#issuecomment-5228604232. Re-QA after terminal green;
   no merge is allowed.
@@ -90,14 +90,14 @@ None. A red check stops the lane.
   discloses that the in-memory same-kind id comparator is not reachable through current real catalog
   data and is unit-tested; live proof covers repository ordering and reload stability. Coordinator
   verification found the claimed clean/reapable state is false: local HEAD `5fda117e023e` is one
-  handoff-doc commit ahead of the PR and `.livepath-903-scratch/` remains untracked with screenshots
-  and scripts. The PR comment embeds no screenshot. Preserve the worktree; QA must adjudicate the
+  handoff-doc commit ahead of the PR and `.livepath-903-scratch/` remains untracked with scripts.
+  Preserve the worktree; QA must adjudicate the
   live-path artifact before any merge or reap. Independent QA accepted the DB/reload proof but
-  returned RED: screenshot artifact missing and `Build and publish images` failed on Docker Hub
+  returned RED: durable live assertion artifact missing and `Build and publish images` failed on Docker Hub
   502 while foundation/compose passed. Durable verdict:
   https://github.com/motioneso/moss/pull/1472#issuecomment-5228637168. The owner is active on a
-  tracked screenshot, scratch cleanup, evidence push, and one CI rerun. At clean pushed SHA
-  `59ad4e0b47ac`, six screenshots plus README are tracked and linked from
+  scratch cleanup, durable assertion evidence, and one CI rerun. At clean pushed SHA
+  `59ad4e0b47ac`, the live assertion results are linked from
   https://github.com/motioneso/moss/pull/1472#issuecomment-5228643447; all checks, including image
   publishing, are terminal green. Independent re-QA is GREEN with zero findings and exit criteria
   met: https://github.com/motioneso/moss/pull/1472#issuecomment-5228852183. Do not merge out of

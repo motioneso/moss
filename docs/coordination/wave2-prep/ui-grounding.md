@@ -21,8 +21,8 @@ superseded.
   `runtime-context.uat.spec.ts`, and `moss-assistant-name.uat.spec.ts`. The existing PR #1204 had
   no #1000 UAT trigger because the map was then incomplete; current map output is not empty.
   Still requires a real live-path proof: owner login → real external-module route → embedded
-  assistant receives/appends a reply (and inspect the resulting live region), with screenshots or
-  run link on the PR. Mocked Playwright alone is insufficient.
+  assistant receives/appends a reply (and inspect the resulting live region), with the run link and
+  live DOM/network assertions on the PR. Mocked Playwright alone is insufficient.
 - **Tier / impact:** routine, user-facing accessibility-only DOM semantics; no data, auth, or
   module-boundary risk. No dependency on the active Wave 1 lanes' files.
 
@@ -36,14 +36,14 @@ superseded.
   One production file. `TaskRow` is called by `TaskListView`, which `TasksPage` renders in list mode.
 - **Regression:** current `tests/e2e/tasks.spec.ts` is the nearest existing task-list surface;
   add one overdue fixture/assertion that the row has exactly one `.jds-drift--overdue` and no
-  `.tk-meta-due--overdue` (or equivalent text count). Existing screenshot fixtures already use
+  `.tk-meta-due--overdue` (or equivalent text count). Existing task fixtures already use
   `Renew passport before the Lisbon trip` with `dueAt: 2026-07-01`, which is overdue on the
   current date.
 - **UAT/live seam and trigger map:** `apps/web/src/tasks/task-list-view.tsx` matches no current
   row in `.claude/skills/coordinate/uat-trigger-map.tsv`, so resolver output is empty. Empty means
   no automated UAT spec, not no gate: live proof remains required. Manual real-dev path is owner
   login → `/tasks` → overdue task row (both themes if practical) → verify one overdue indicator;
-  post screenshots/run link on the PR. A focused mocked `tests/e2e/tasks.spec.ts` check does not
+  post the run link and live DOM assertion on the PR. A focused mocked `tests/e2e/tasks.spec.ts` check does not
   replace that proof.
 - **Tier / impact:** routine cosmetic UI bug; no backend/data/security impact. No collision with
   Wave 1: #1448 owns `vitest.config.ts`, #887 notification integration tests, #1412

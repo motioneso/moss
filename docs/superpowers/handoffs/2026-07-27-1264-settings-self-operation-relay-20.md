@@ -7,7 +7,7 @@ live session in it via `herdr pane list` before any git op)
 before messaging. **NEW as of this relay: Coordinator says the live-path UAT proof (item 9 below)
 is now a hard merge gate, not a nice-to-have** — `coordinate` skill family updated on main
 (`8f1b6d44`). PR #1276 does not merge without a `gh pr comment` posted with real-browser UAT
-proof (screenshots + run output). A mocked-SSE e2e does not discharge it.
+proof (assertions/evidence + run output). A mocked-SSE e2e does not discharge it.
 **Plan doc:** `docs/superpowers/plans/2026-07-27-settings-write-ui-refresh.md` (writing-plans
 format, not plan-build — keep executing as-is per prior relay note).
 **Prior handoff (fuller context, read only if this doc is insufficient):**
@@ -93,7 +93,7 @@ docker exec jarv1s-postgres psql -U postgres -c "DROP DATABASE IF EXISTS $GATEDB
 
 ### 9. Live-path UAT proof — HARD MERGE GATE (coordinator correction this session)
 Run `.claude/skills/coordinate/resolve-uat-triggers.sh` (empty output ≠ skip). Run against a live
-dev instance. Post `gh pr comment` on PR #1276 with UAT output + screenshots — real UI, real
+dev instance. Post `gh pr comment` on PR #1276 with UAT output + assertions/evidence — real UI, real
 browser, chat turn → tool → visible DOM change. Without this the PR literally cannot merge per
 the updated `coordinate` skill family (`8f1b6d44`).
 

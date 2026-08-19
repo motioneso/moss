@@ -24,7 +24,7 @@ what bloated this session's context before any code landed.
 - Do not re-title or re-scope #1416 (duplicate `Select`) — only record the fact of which
   importers this PR does/doesn't close, in the PR body and a comment on #1416.
 - Task 2's capture-diff kill gate is **corroboration, not proof** (per coordinator ruling —
-  `capture:screens` shoots one state per section, doesn't render every primitive) — state this
+  browser assertions cover one state per section and not every primitive — state this
   explicitly in the PR body. Also add a **second** Task 0 baseline capture covering a **dialog**
   (delete-account), not just the appearance/theme-editor capture.
 
@@ -98,7 +98,7 @@ any co-edited file before staging it (this worktree may be shared). After every 
      `16-settings-delete-dialog`). Close it after (click Cancel / backdrop) so later tests in the
      file aren't left with an open dialog if state leaks — check whether the existing test pattern
      already isolates page state per test (likely yes, via `baseState`).
-2. Run `pnpm capture:screens` to establish this as the Task-0 **baseline** (before any Task 3
+2. Run focused browser assertions to establish the Task-0 **baseline** (before any Task 3
    conversions land) — these become the "before" shots that Task 2/Task 7's diffs compare against.
 3. Mark Task 0 complete, move to Task 1.
 
@@ -114,7 +114,7 @@ at once):
   "@jarv1s/settings-ui"` star-export for the same name — don't delete the star-export, 6 module
   packages + `task-details-dialog.tsx` still use `@jarv1s/settings-ui` primitives directly). Verify
   `pnpm typecheck` exit 0, grep confirms no settings pane imports `@jarv1s/settings-ui` directly,
-  diff `capture:screens` vs the Task-0 baseline (expect byte-identical on all 6 settings shots —
+  diff browser assertion results vs the Task-0 baseline (expect identical values —
   **note in the PR this is corroboration not proof**, per the coordinator ruling above).
 - **Task 3**: Convert `jds-btn` (312 refs across 26 files) → `<Button>`, `jds-dialog` (30) →
   `<Dialog>`, `jds-badge` (7), `jds-iconbtn` (4), `jds-segmented` (2). `Dialog.className` (layout
@@ -151,7 +151,7 @@ at once):
   expect `EXIT=0`.
 - **Task 7 (wrap-up)**: `check:design-tokens`, `check:ui-classes`, `check:migrated-sections`,
   `check:ui-catalogue` each unpiped, `EXIT=0`. Full gate via `scripts/run-gate.sh` against a
-  fresh self-exported gate DB. `capture:screens` diff vs Task-0 baseline (settings shots
+  fresh self-exported gate DB. Browser assertion diff vs Task-0 baseline
   byte-identical; blast-radius shots show nothing beyond known live-clock noise). Banned-decl
   count 237/232/174/60 → 0/0/0/0 across the 4 settings CSS files. Live-path proof on a throwaway
   dev preview (**never** prod / 10.252): sign in, toggle a switch and confirm persistence, open

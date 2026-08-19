@@ -88,11 +88,17 @@ should be reading the doc / re-adopting, not stuck on a trust prompt). Answer an
 `herdr pane send-keys <pane> Enter`.
 
 **4. Request reap.** Tell whoever reaps you:
-- **Build agent:** message the **coordinator** "relayed to <successor pane/label>, safe to reap me."
-  The coordinator kills your pane.
+- **Build agent:** message the **coordinator** "relayed to <successor pane/label>, safe to reap me
+  (my pane: <your pane id>)." The coordinator kills your pane.
 - **Coordinator:** the **successor** kills your old pane once it confirms it's driving — it
   **resolves your pane fresh by label + session id and verifies the session id before closing**
   (never a bare `…-N` number from the bootstrap — it reflows). That instruction is in its bootstrap.
+
+**Sign off every message this skill sends — the plan-ready ping, the reap request, the
+coordinator's report to Ben — with your own pane id** (`$HERDR_PANE_ID`, or `herdr pane list`
+matched on your session id). It reflows on the next open/close, so it isn't an address to reply
+to; it's how the reader (coordinator, Ben, or a successor re-reading the manifest) ties the
+message to the exact pane that sent it, at the moment it sent it.
 
 ## Quick reference
 

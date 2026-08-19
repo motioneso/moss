@@ -1,7 +1,9 @@
 # Awaiting Ben
 
 Decisions that need Ben and only Ben. Each entry says what is blocked and what the options are.
-Remove an entry once he rules and the ruling is recorded where the work lives.
+Remove an entry once he rules and the ruling is recorded where the work lives. **This file tracks
+only currently-open questions — not a historical log.** Resolved entries are removed outright; the
+full record survives in git history (`git log -p -- docs/coordination/AWAITING-BEN.md`).
 
 **Protocol (mandatory since 2026-08-05):** no agent idles waiting on Ben without doing BOTH of:
 
@@ -13,10 +15,14 @@ The 2026-08-05 transcript audit found 216 idle hours blocked on Ben, mostly on q
 never recorded — an overnight coordinator sat 15h on a question while this file said nothing was
 pending. Silent waiting is the failure mode this protocol exists to kill.
 
-The two 2026-07-27 entries that lived here before (the live-path gate, and the voice/STT spec
-approval) are both resolved and were removed on main — the live-path gate was adopted and is now a
-hard invariant in `CLAUDE.md`, and the voice/STT spec turned out to be already approved and built
-(#874), only its status line was stale.
+## #1319 signed module catalog — needs a real Ed25519 signing keypair from Ben (2026-08-18)
+
+Build (relay4) finished Tasks 1-2 of the approved plan (18/18 + 12/12 unit tests, typecheck clean)
+and hit the plan's designed kill gate before Phase 2: it cannot produce the required Phase-1 proof
+(a real CI-produced catalog signature that verifies) because the production public-key list
+(`MODULE_CATALOG_PUBLIC_KEYS`) is still a deliberately-empty placeholder. Only Ben can close this —
+it needs a real Ed25519 keypair with the public half committed in code and the private half landed
+as two GitHub secrets before any `workflow_dispatch` publish can self-verify.
 
 <!-- Resolved 2026-08-11: #1560 live-path persona cleanup. Ben ruled: "nova is fine for testing,
 yep" — approved leaving `ben@ben.com`'s `assistantName='Nova'` as-is, no restore needed. Ruling
@@ -26,20 +32,15 @@ recorded on issue #1560 (https://github.com/motioneso/moss/issues/1560#issuecomm
 ("feat(chat): thread surface through send routing (#1533)") merged 2026-08-12T03:11:37Z — the
 real-chat-token gap this entry described is moot now that the PR landed. -->
 
-<!-- Resolved 2026-08-09: `git push origin main` blocked by the auto-mode classifier during Wave 2
-wrap-up. Ben re-ran ("try now") and it went through — pushed 39 commits, `f78992b14..46ec9965d`.
-Note: GitHub reports this repo moved to `motioneso/moss.git`; push still succeeded via the old
-remote URL (auto-redirected), not yet acted on beyond noting it. -->
+What's needed from Ben: generate (or approve someone generating) an Ed25519 keypair for signing the
+module catalog, then provide the private key material for the two GitHub secrets and confirm the
+public key to commit. Not urgent tonight — build is holding cleanly at the gate, no data at risk —
+but it blocks all of Phase 2 onward, so it should land soon.
 
-<!-- Resolved 2026-08-09: CI waiver for PR #1479 (#1207), first in Wave 2 merge order. Ben ruled
-(a) — approved the fable-proxy's scoped waiver (2 UAT specs, pre-existing Moss-rename locator
-break tracked as #1481, unrelated to this diff). Ruling recorded on the manifest row (`gh pr
-comment` stayed blocked by the auto-mode classifier all session, so the paper trail lives in
-`docs/coordination/2026-08-08-non-feature-wave-2.md` instead of on the PR). Separately, `gh pr
-merge`/`git commit` were ALSO blocked by the classifier for this session — Ben granted scoped
-merge permission directly in chat ("you can merge any PR, not just 1479"); all four ready Wave 2
-PRs (#1479/#1207, #1480/#1155, #1478/#1115, #1477/#1433) merged squash, worktrees+branches
-cleaned up, manifest fully updated to `merged`. Wave 2 complete. -->
+Update: the Phase-1-only PR is posted — https://github.com/motioneso/moss/pull/1684 — explicitly
+labeled code-complete/unverified per the live-path gate, not merged and not marked Done. The build
+lane has stopped itself (no live session idling on this); Coordinator will spawn a fresh build agent
+for Phase 2 once the key lands.
 
 <!-- Resolved 2026-08-05 (PM, via Telegram relay): PR #1379 — Ben ruled delegate the review; QA
 lane dispatched. Overnight Codex coordinator pid 1799977 — Ben ruled kill; killed with its MCP
@@ -92,4 +93,3 @@ Ben finds it from the canonical run location too.
 matches the spec literally); otherwise option 1. Pinged via `needs-ben` (see
 `~/.needs-ben/sent/1786483243535565600.msg`). Everything else in #1533 Phase 4 is done — this is
 the only open item. Build agent is waiting event-driven, not polling; coordinator likewise.
-

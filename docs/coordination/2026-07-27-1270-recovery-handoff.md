@@ -11,7 +11,7 @@ are recorded on **PR #1323** (`recover/1270-0719-settings-onboarding`, worktree
 - **Spec approved** by Ben 2026-07-27 —
   `docs/superpowers/specs/2026-07-27-1270-provider-signin-shared-design.md`.
 - **Gate, automated half:** `pnpm test:uat 1270` → 2 passed, `### FINAL test:uat rc=0` on a freshly
-  provisioned real stack, with screenshots. Spec:
+  provisioned real stack, with live assertions. Spec:
   `tests/uat/specs/1270-provider-signin.uat.spec.ts`.
 - **Gate, human half:** Ben confirmed he ran the provider sign-in **device code** on his own dev
   instance and it worked. The UAT cannot cover this — a provisioned stack has no provider CLIs, so

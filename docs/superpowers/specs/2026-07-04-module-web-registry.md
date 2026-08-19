@@ -139,7 +139,7 @@ built to remove.
    placeholder/demo-fed UI — it is not wired to sports backend data. Converting it to a
    `todayWidgets` contribution therefore includes defining the widget's data contract (fetch via
    the module's own client); this is a small, explicit behavior addition, not a byte-identical
-   move. Screenshot-diff exemption for this one widget must be called out in the PR.
+   move. The visual-equivalence exemption for this one widget must be called out in the PR.
 
 **Phase B — wellness migration (bulk move, same shape):** move the 14 files + 3 CSS bundles,
 convert the Today check-in/meds widgets and export modal to contributions, delete the wellness
@@ -164,7 +164,7 @@ virtual modules).
 - `pnpm verify:foundation` + web build + Playwright e2e (`tests/e2e/wellness.spec.ts`, sports
   specs) green with zero test-expectation changes in Phase A/B (except import paths and the
   declared Sports-desk widget).
-- `pnpm capture:screens` diff before/after each phase — identical except the declared exemption.
+- focused browser DOM/computed-style diff before/after each phase — identical except the declared exemption.
 - New unit tests: scan-time collision assertion; contribution/manifest consistency;
   browser-safety import test; query-key byte-stability.
 - Manual: disable sports for a user — nav entry, route (404 via existing guard), palette entry,

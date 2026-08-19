@@ -1,0 +1,19 @@
+You are the successor coordinator for run `post1632-queue-2026-08-16`.
+
+STEP 1: Read `docs/coordination/post1632-queue-2026-08-16.md` in full, especially the last
+section ("Skill fix + #1013 phase-1 kill gate + relay ... take 6"). It has your next steps in
+order. Read `docs/coordination/AWAITING-BEN.md` too — Ben is signed off overnight and delegated
+Ben-level decisions to Fable 5 until he's back.
+
+STEP 2: Follow the `coordinate` skill's Phase 0a exactly: rename your own pane to "Coordinator" in
+tab `w1:t6`, verify via `herdr pane list` you are the only active one, then reap the predecessor —
+pane `w1:pBV`, session `608d8aff-0fb6-4ca7-9329-88b8358db5f1` (it will show as idle/done, already
+flushed, safe to close).
+
+STEP 3: Re-arm the two Monitors (liveness diff on `w1:pBQ`, needs-ben reply poll) — they do not
+survive a relay.
+
+STEP 4: Resume supervising `w1:pBQ` (label "PR1624 #1013 reconcile v4") for its phase-1 report.
+You own that kill gate directly, not Ben — read the manifest section for the full reasoning.
+
+Follow the `coordinate` skill for everything else. Begin now.

@@ -113,6 +113,22 @@ OK. `routine` auto-merges after green; `sensitive` auto-merges + per-merge diges
 a **standing per-merge digest** (what landed, PR link, tier, verified exit codes) so Ben has a
 continuous picture without gating routine work.
 
+**Every Ben-facing message — digests, sign-off asks, needs-ben pings, chat replies — is in plain
+English, not jargon.** Ben flagged this directly (2026-08-16): a dense paragraph full of backticked
+identifiers, commit hashes, and internal vocabulary makes him decode a sentence to get a fact he
+could've been told directly. Say what happened in normal words first; keep exact identifiers (PR
+numbers, commit hashes, file paths) available for when he needs to act on one, but don't lead with
+them or stack them. Full guidance: agentmemory `feedback-plain-english.md`.
+
+**Every agent-to-agent message — your escalations, verdicts, reports, relay/reap requests — signs
+off with the sender's own pane id** (`$HERDR_PANE_ID`, or `herdr pane list` matched on the
+sender's session id), e.g. `[pane w1:pFZ]` at the end. Pane numbers reflow on every open/close, so
+this isn't a reply address — it's how you, a successor re-reading the manifest, or Ben tie a given
+message to the exact physical pane that sent it, without cross-referencing a label that may since
+have been reused or reaped. This applies to build agents (`coordinated-build`,
+`coordinated-wrap-up`), QA agents (`coordinated-qa`, Herdr-fallback path), and to you as
+coordinator on every escalation you relay onward.
+
 ## Phase 0a — claim the single-coordinator lock (FIRST, before anything)
 
 There must be **exactly one** coordinator (see incidents: a stale labelled pane once ran a
@@ -176,12 +192,23 @@ For each spec cleared to start (serialized specs wait for their predecessor to l
    already exist, be at a shell prompt, and be in the right directory, so **split first, start
    second**:
 
+   **⚠️ `herdr pane split` has no `--tab` flag — it always splits inside the SOURCE pane's own
+   tab.** `<agents-tab-pane>` below MUST already be a pane that lives in the agents tab (`herdr
+   pane list`, check `tab_id`) — never your own coordinator pane. Splitting off yourself silently
+   lands the new pane in your coordinator tab (Ben, 2026-08-19: caught this happening — a build
+   agent spawned straight into the Coordinator's own tab). If no agent pane exists yet to split
+   from (first spawn of a run), split off yourself once, then immediately relocate with `herdr
+   pane move <new-pane> --new-tab --workspace w1 --label "agents"` — **never leave a spawned pane
+   sharing the coordinator's tab, even for one command.**
+
    ```bash
    # 1. make the pane, in the worktree — --cwd lives on split, not on agent start
    herdr pane split <agents-tab-pane> --direction down --cwd $(pwd)/.claude/worktrees/<slug> --no-focus
    # 2. start the agent in that pane; everything after `--` goes to claude
    herdr agent start <name> --kind claude --pane <new-pane> \
      -- --model sonnet --permission-mode bypassPermissions "<boot>"
+   # 3. if step 1 had to split off the coordinator's own pane, relocate now — do not skip this:
+   herdr pane move <new-pane> --tab <existing-agents-tab-id>   # or --new-tab if none exists yet
    ```
 
    Two argument rules, both of which fail loudly and waste a spawn:
@@ -220,11 +247,28 @@ For each spec cleared to start (serialized specs wait for their predecessor to l
    says **"Sonnet"** (Opus = herdr default leaked through — respawn with `--model sonnet`).
 6. **Record** label/pane/branch in the manifest; status `building`.
 
-**Messaging agents — preferred path:** `herdr pane run <pane> "<msg>"` (types + submits in one
-command), or `herdr agent prompt <name-or-pane> "<msg>"` when the target is a named agent — then
-verify with a bounded pane read; if the text is still sitting in the input box, send one
-`herdr pane send-keys <pane> Enter`. `send-text` is a fallback only (it leaves text unsubmitted
-without an explicit Enter). There is no `herdr agent send`.
+**Messaging agents — preferred path, and confirmation is MANDATORY, not conditional.** Every send
+is a two-step action: send, then verify. A message you have not verified is not sent — treat it as
+still pending, not delivered. This applies to you as coordinator and is the standard you hold
+every agent you brief to as well.
+
+1. Send: `herdr pane run <pane> "<msg>"` (types + submits in one command), or
+   `herdr agent prompt <name-or-pane> "<msg>"` when the target is a named agent.
+2. **Always** verify with a bounded pane read (`herdr pane read <pane> --source recent
+   --lines 12`) — do this every time, not only when you suspect a problem. Read the actual result:
+   - Input box empty, or your text now appears as agent output/history → delivered.
+   - Your text still sitting at the prompt with a cursor → **not sent**. Send one
+     `herdr pane send-keys <pane> Enter`, then read again to confirm it cleared.
+   - `❯ Press up to edit queued messages` → delivered and queued (the agent was busy); this is
+     success, do not resend.
+3. If step 2's second read still shows unsubmitted text, do not retry blindly — the pane may be in
+   a state that doesn't accept plain Enter (a trust prompt, a different focused control). Read a
+   couple more lines of context before trying again.
+
+`send-text` is a fallback only (it leaves text unsubmitted without an explicit Enter) — never use
+it as the whole send. There is no `herdr agent send`. **Never assume a message landed because the
+command that sent it returned without error** — `herdr pane run`/`send-keys` succeeding only means
+the keystrokes were delivered to the terminal, not that the target processed them.
 
 ## Phase 2 — supervise (resident)
 

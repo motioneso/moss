@@ -25,7 +25,7 @@ starts at a different top offset than Sports.
 ## Scope
 
 - News-local CSS under `~/Jarv1s/packages/news/src/web/styles/`
-- Focused News web tests and the existing screenshot/manual-acceptance path
+- Focused News web tests and the existing live-acceptance path
 
 ## Non-goals
 
@@ -43,5 +43,5 @@ starts at a different top offset than Sports.
 - [ ] Photo cards retain a bounded excerpt and the existing broadsheet rhythm.
 - [ ] News and Sports use the same top-page spacing token/value.
 - [ ] Focused tests cover image and no-image markup/classes without snapshotting incidental text.
-- [ ] Live `5178` desktop and narrow screenshots prove both card variants before resolving the three
+- [ ] Live `5178` desktop and narrow DOM assertions prove both card variants before resolving the three
       annotations.

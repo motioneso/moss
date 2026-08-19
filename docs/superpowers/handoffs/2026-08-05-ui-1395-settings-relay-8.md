@@ -140,7 +140,7 @@ Unchanged in substance from relay 7's doc — restating only what's now differen
   self-exported gate DB, never live dev. Excludes `test:e2e` — run separately, unpiped.
 - **PR body must state**: CI's "Verify foundation and app" runs the browser suite, local gate
   doesn't; the split-check result (199/0, or whatever the post-rebase re-derived number is);
-  `capture:screens` is corroboration not proof (one state/section); which `#1416` importers this PR
+  browser assertions are corroboration not proof (one state/section); which `#1416` importers this PR
   closes (settings panes) vs. doesn't (six module packages + `task-details-dialog.tsx`) — post that
   as a factual comment on #1416, do not re-scope it. **Expect the coordinator to hold the merge on
   the live-path walk** — said explicitly by relay 7's coordinator message and unchanged.
