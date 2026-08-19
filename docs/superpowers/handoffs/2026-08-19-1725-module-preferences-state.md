@@ -60,7 +60,29 @@ tools become tool manifests, so a preferences-only module would not appear yet.
 Still owed before the PR: uninstall deletes the `module:<id>:` key namespace, unit tests for
 the two routes, and the live end-to-end proof.
 
-### Checkpoint 2026-08-19 20:05 — read this first
+### Checkpoint 2026-08-19 21:20 — read THIS first
+
+Both PRs are open with auto-merge armed: **#1730** (this branch, module preferences) and
+**#1729** (the #1720 test fix). Nothing is owed on #1725 itself.
+
+Commit `7aa8a97f4` added `tests/unit/module-preferences-routes.test.ts` (8 tests, all passing)
+and closed the uninstall item as **not applicable** — there is no uninstall path anywhere in the
+platform, so the spec and the route file now say so instead of implying it was built.
+
+**Next job: the Food follow-on**, and it must wait for #1729 to merge, because it has to rewrite
+`tests/uat/specs/926-food-real-chat.uat.spec.ts`, which #1729 is currently changing. The Food PR:
+
+- `external-modules/food/jarvis.module.json` declares one preference, `aiEstimates`, default on;
+  drops the `food.consent.grant` tool and the `food_consent` action family.
+- Both consent gates read `ctx.preferences.aiEstimates` instead of the `food.settings` kv record:
+  `external-modules/food/src/worker/handlers/estimate.ts` (`hasGrantedConsent`, ~line 55) and the
+  synchronous path in `external-modules/food/src/tools/meals.ts`.
+- `external-modules/food/src/tools/consent.ts` and its registry entries go; so does the consent
+  strip in the Food web page (`.fud-consent` in `src/web/styles.ts`).
+- That PR carries the live-path proof for BOTH it and #1730: turn the switch off in Settings, log
+  a meal through real chat, assert no estimate; turn it on, log another, assert the estimate lands.
+
+### Checkpoint 2026-08-19 20:05 (superseded by the one above)
 
 Branch `module-prefs-1725` is pushed, five commits ahead of origin/main. **PR not yet opened**
 (deliberately: finish the two items below first, then open with them included).
