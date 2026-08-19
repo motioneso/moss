@@ -1,4 +1,12 @@
 import { createHash } from "node:crypto";
+import { resolveMossEnv } from "@moss/db";
+
+/**
+ * Configured default timezone for part-of-day band resolution + all-day-interval detection when
+ * no per-request `ToolContext.localTimezone` is available. Single source of truth shared by
+ * tools.ts (band resolution) and calendar-write-impl.ts (all-day busy-interval filtering).
+ */
+export const DEFAULT_TIMEZONE = resolveMossEnv(process.env, "JARVIS_DEFAULT_TZ") ?? "America/New_York";
 
 export type PartOfDay = "morning" | "afternoon" | "evening";
 
@@ -197,6 +205,37 @@ export function focusBlockEventId(input: {
 interface Interval {
   readonly start: number;
   readonly end: number;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * An all-day event (a reminder, a holiday, ...) comes back from Google's freeBusy API as a
+ * busy interval spanning full calendar day(s): start and end both fall exactly on local
+ * midnight in the account's timezone, and the duration is a whole multiple of 24h. That shape
+ * is how it's told apart from a real timed conflict without a second API call — freeBusy alone
+ * doesn't say whether an interval came from an all-day event.
+ */
+export function isAllDayInterval(interval: { start: string; end: string }, tz: string): boolean {
+  const start = new Date(interval.start);
+  const end = new Date(interval.end);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false;
+  const durationMs = end.getTime() - start.getTime();
+  if (durationMs <= 0 || durationMs % DAY_MS !== 0) return false;
+  return isLocalMidnight(start, tz) && isLocalMidnight(end, tz);
+}
+
+function isLocalMidnight(at: Date, tz: string): boolean {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  });
+  const parts = dtf.formatToParts(at);
+  const get = (t: string) => Number(parts.find((p) => p.type === t)!.value);
+  return get("hour") % 24 === 0 && get("minute") === 0 && get("second") === 0;
 }
 
 export function chooseSlot(
