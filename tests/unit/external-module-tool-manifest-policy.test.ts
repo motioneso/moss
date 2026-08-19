@@ -62,9 +62,7 @@ describe("external tool manifest policy mapping (#1246)", () => {
     const [manifest] = createExternalToolManifests([discovery], invoke);
     const requiresConfirmation = manifest?.assistantTools?.[0]?.requiresConfirmation;
 
-    expect(await requiresConfirmation?.({} as never, { status: "active" }, {} as never)).toBe(
-      true
-    );
+    expect(await requiresConfirmation?.({} as never, { status: "active" }, {} as never)).toBe(true);
     expect(await requiresConfirmation?.({} as never, { status: "building" }, {} as never)).toBe(
       false
     );
@@ -77,8 +75,8 @@ describe("external tool manifest policy mapping (#1246)", () => {
     expect(await requiresConfirmation?.({} as never, { vaultEnabled: false }, {} as never)).toBe(
       true
     );
-    expect(
-      await requiresConfirmation?.({} as never, { titles: ["Engineer"] }, {} as never)
-    ).toBe(false);
+    expect(await requiresConfirmation?.({} as never, { titles: ["Engineer"] }, {} as never)).toBe(
+      false
+    );
   });
 });

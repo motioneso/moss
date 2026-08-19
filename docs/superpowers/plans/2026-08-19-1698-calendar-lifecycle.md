@@ -9,33 +9,33 @@ no further Ben sign-off needed on that decision.
 
 ## Seams check
 
-| Assumption | Citation |
-|---|---|
-| `getById` has no UUID pre-check, throws on cast error | `packages/calendar/src/repository.ts:48-56` |
-| `getByExternalId` exists, ready for dual lookup | `packages/calendar/src/repository.ts:58-70` |
-| `upsertCachedEvent` jsonb `\|\|` merge preserves `jarvisCreated` across resync | `packages/calendar/src/repository.ts:72-114` |
-| `deleteEvent` regression site — raw `input.eventId` into `getById` | `packages/chat/src/calendar-write-impl.ts:267` |
-| `mirrorEvent` already writes `jarvisCreated: true` at create time | `packages/chat/src/calendar-write-impl.ts:398` |
-| Google-side fallback tag already written at create time | `packages/chat/src/calendar-write-impl.ts:174` |
-| `isMossBlock` currently derived only from `JFB_PATTERN` on `externalId` | `packages/calendar/src/serialize.ts:14-33` |
-| `isCalendarFollowThroughEvent` already reads `jarvisCreated` | `packages/calendar/src/follow-through.ts` (confirmed this session) |
-| No PATCH method on `GoogleApiClient`; `postJson` is the template (private, POST-only) | `packages/connectors/src/google-api-client.ts:254-291,383-404` |
-| `deleteEvent` on `GoogleApiClient` treats 404/410 as already-gone | `packages/connectors/src/google-api-client.ts:334-353` |
-| `focusBlockEventId` keyed on actor+window+duration+title (not slot) — reuse for reschedule id continuity (id must NOT change on reschedule) | `packages/calendar/src/focus-time.ts` (`focusBlockEventId`, confirmed this session) |
-| `google-sync-phases.ts` hardcodes `calendarId: "primary"`, writes `attendeeCount` but not `calendarId` into `externalMetadata` | `packages/connectors/src/google-sync-phases.ts:172` |
-| `calendar-write-impl.ts` read path already does `external_metadata.calendarId ?? "primary"` | confirmed this session, exact line not re-cited (bounded read) |
-| Gateway catch sites, current fields, no logger dependency | `packages/ai/src/gateway/gateway.ts:563-575` (write path), `~448-459` (read path) |
-| `AssistantToolGatewayDependencies` has no `logger` field | `packages/ai/src/gateway/gateway.ts:30-68` |
-| `ToolRequiresConfirmation` is currently sync, input-only | `packages/module-sdk/src/index.ts:120` |
-| `ToolPreview` is the async precedent (`scopedDb, input, ctx, services?`), called under `withDataContext`, swallow-to-`undefined` on throw | `packages/module-sdk/src/index.ts:145-150`, `packages/ai/src/gateway/gateway.ts:544-553` |
-| `resolvePolicy` — `requiresConfirmation` short-circuits to `"confirm"` BEFORE the tier check, so provenance-based confirm does not need family tier in scope | `packages/ai/src/gateway/policy.ts:29-57` |
-| `resolvePolicy` call site | `packages/ai/src/gateway/gateway.ts:238` |
-| External-module + notes callers of `requiresConfirmation`, both trivially sync-only today | `packages/module-registry/src/external/tool-manifests.ts:18-27,49`, `packages/notes/src/manifest.ts:125` |
-| YOLO path bypasses `resolvePolicy` entirely — provenance rule does not apply under YOLO | `packages/ai/src/gateway/gateway.ts:164-203` (pre-existing gap, named not fixed) |
-| `attendeeCount` already synced into `externalMetadata` at sync time and read at serialize time — no new column/migration needed | `packages/connectors/src/google-sync-phases.ts:172`, `packages/calendar/src/serialize.ts:14-16` |
-| Follow-through worker calls `calendarWrite.proposeAndInsert`/`.deleteEvent` directly, bypassing the gateway entirely (own `trusted_auto` tier check, no confirmation hook involved) | `packages/module-registry/src/index.ts:725-806` (`buildCalendarFollowThroughPort`), `:808-875` (`buildCalendarFollowThroughSideEffects`) |
-| DB row shape (`app.calendar_events`) — no `attendees`/guest column exists; guest data would be JSONB-only (`external_metadata`), consistent with forward-compat requirement | `packages/db/src/types.ts:362-376` |
-| `CalendarEventDto`/`calendarEventDtoSchema` already carry `attendeeCount`; `deleteCalendarEventResponseSchema` shape confirmed for widening description only (no shape change needed) | `packages/shared/src/calendar-api.ts:3-20,38-77,116-141` |
+| Assumption                                                                                                                                                                            | Citation                                                                                                                                 |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `getById` has no UUID pre-check, throws on cast error                                                                                                                                 | `packages/calendar/src/repository.ts:48-56`                                                                                              |
+| `getByExternalId` exists, ready for dual lookup                                                                                                                                       | `packages/calendar/src/repository.ts:58-70`                                                                                              |
+| `upsertCachedEvent` jsonb `\|\|` merge preserves `jarvisCreated` across resync                                                                                                        | `packages/calendar/src/repository.ts:72-114`                                                                                             |
+| `deleteEvent` regression site — raw `input.eventId` into `getById`                                                                                                                    | `packages/chat/src/calendar-write-impl.ts:267`                                                                                           |
+| `mirrorEvent` already writes `jarvisCreated: true` at create time                                                                                                                     | `packages/chat/src/calendar-write-impl.ts:398`                                                                                           |
+| Google-side fallback tag already written at create time                                                                                                                               | `packages/chat/src/calendar-write-impl.ts:174`                                                                                           |
+| `isMossBlock` currently derived only from `JFB_PATTERN` on `externalId`                                                                                                               | `packages/calendar/src/serialize.ts:14-33`                                                                                               |
+| `isCalendarFollowThroughEvent` already reads `jarvisCreated`                                                                                                                          | `packages/calendar/src/follow-through.ts` (confirmed this session)                                                                       |
+| No PATCH method on `GoogleApiClient`; `postJson` is the template (private, POST-only)                                                                                                 | `packages/connectors/src/google-api-client.ts:254-291,383-404`                                                                           |
+| `deleteEvent` on `GoogleApiClient` treats 404/410 as already-gone                                                                                                                     | `packages/connectors/src/google-api-client.ts:334-353`                                                                                   |
+| `focusBlockEventId` keyed on actor+window+duration+title (not slot) — reuse for reschedule id continuity (id must NOT change on reschedule)                                           | `packages/calendar/src/focus-time.ts` (`focusBlockEventId`, confirmed this session)                                                      |
+| `google-sync-phases.ts` hardcodes `calendarId: "primary"`, writes `attendeeCount` but not `calendarId` into `externalMetadata`                                                        | `packages/connectors/src/google-sync-phases.ts:172`                                                                                      |
+| `calendar-write-impl.ts` read path already does `external_metadata.calendarId ?? "primary"`                                                                                           | confirmed this session, exact line not re-cited (bounded read)                                                                           |
+| Gateway catch sites, current fields, no logger dependency                                                                                                                             | `packages/ai/src/gateway/gateway.ts:563-575` (write path), `~448-459` (read path)                                                        |
+| `AssistantToolGatewayDependencies` has no `logger` field                                                                                                                              | `packages/ai/src/gateway/gateway.ts:30-68`                                                                                               |
+| `ToolRequiresConfirmation` is currently sync, input-only                                                                                                                              | `packages/module-sdk/src/index.ts:120`                                                                                                   |
+| `ToolPreview` is the async precedent (`scopedDb, input, ctx, services?`), called under `withDataContext`, swallow-to-`undefined` on throw                                             | `packages/module-sdk/src/index.ts:145-150`, `packages/ai/src/gateway/gateway.ts:544-553`                                                 |
+| `resolvePolicy` — `requiresConfirmation` short-circuits to `"confirm"` BEFORE the tier check, so provenance-based confirm does not need family tier in scope                          | `packages/ai/src/gateway/policy.ts:29-57`                                                                                                |
+| `resolvePolicy` call site                                                                                                                                                             | `packages/ai/src/gateway/gateway.ts:238`                                                                                                 |
+| External-module + notes callers of `requiresConfirmation`, both trivially sync-only today                                                                                             | `packages/module-registry/src/external/tool-manifests.ts:18-27,49`, `packages/notes/src/manifest.ts:125`                                 |
+| YOLO path bypasses `resolvePolicy` entirely — provenance rule does not apply under YOLO                                                                                               | `packages/ai/src/gateway/gateway.ts:164-203` (pre-existing gap, named not fixed)                                                         |
+| `attendeeCount` already synced into `externalMetadata` at sync time and read at serialize time — no new column/migration needed                                                       | `packages/connectors/src/google-sync-phases.ts:172`, `packages/calendar/src/serialize.ts:14-16`                                          |
+| Follow-through worker calls `calendarWrite.proposeAndInsert`/`.deleteEvent` directly, bypassing the gateway entirely (own `trusted_auto` tier check, no confirmation hook involved)   | `packages/module-registry/src/index.ts:725-806` (`buildCalendarFollowThroughPort`), `:808-875` (`buildCalendarFollowThroughSideEffects`) |
+| DB row shape (`app.calendar_events`) — no `attendees`/guest column exists; guest data would be JSONB-only (`external_metadata`), consistent with forward-compat requirement           | `packages/db/src/types.ts:362-376`                                                                                                       |
+| `CalendarEventDto`/`calendarEventDtoSchema` already carry `attendeeCount`; `deleteCalendarEventResponseSchema` shape confirmed for widening description only (no shape change needed) | `packages/shared/src/calendar-api.ts:3-20,38-77,116-141`                                                                                 |
 
 **Open question, no owner needed (informational only):** `packages/calendar/sql/0020_calendar_owner_or_share.sql` exists on disk but is absent from `calendarModuleManifest.database.migrations` in `packages/calendar/src/manifest.ts`. Out of scope for this build — not touched, not investigated further, flagged so it isn't mistaken for something this plan introduced.
 
@@ -89,6 +89,7 @@ Wire into `packages/chat/src/calendar-write-impl.ts` `deleteEvent` (replaces the
 leaking whether a given id string merely doesn't parse vs genuinely doesn't exist).
 
 **Test cases:**
+
 - `parseCalendarEventRef` returns `moss_id` for a well-formed UUID, `external_id` for a Google
   opaque id (e.g. `"7c3f8b2e4d5a6b1c@google.com"`) and for a `jfb`-prefixed compat id. Fails
   against current code because the function doesn't exist yet.
@@ -103,6 +104,7 @@ leaking whether a given id string merely doesn't parse vs genuinely doesn't exis
 ### 1b. Confirmation plumbing (Coordinator-ruled architecture)
 
 `packages/module-sdk/src/index.ts:120` — widen:
+
 ```ts
 export type ToolRequiresConfirmation = (
   scopedDb: unknown,
@@ -114,6 +116,7 @@ export type ToolRequiresConfirmation = (
 
 `packages/ai/src/gateway/policy.ts` — drop the inline `requiresConfirmation` call, take the
 already-resolved result as a parameter instead (keeps this file DB-free):
+
 ```ts
 export async function resolvePolicy(
   tool: ModuleAssistantToolManifest,
@@ -136,6 +139,7 @@ and `packages/notes/src/manifest.ts:125` — widen their function signatures to 
 4-arg shape (both only read `input`, so this is a mechanical signature change, no logic change).
 
 **Test cases:**
+
 - `resolvePolicy` given `confirmOverride: true` returns `"confirm"` even when tier is
   `trusted_auto` and `executionPolicy` is `"auto"`. Fails against current signature (no such
   param).
@@ -149,19 +153,20 @@ and `packages/notes/src/manifest.ts:125` — widen their function signatures to 
 ### 1c. Calendar's own confirmation rule (pure function, module-owned)
 
 New file `packages/calendar/src/confirmation-policy.ts`:
+
 ```ts
-export function requiresCalendarConfirmation(params: {
-  readonly jarvisCreated: boolean;
-}): boolean;
+export function requiresCalendarConfirmation(params: { readonly jarvisCreated: boolean }): boolean;
 // returns !params.jarvisCreated — Moss-created events may skip the card once calendar_management
 // is promoted; a user-created event always confirms, independent of tier (spec decision 1).
 ```
+
 Wired as the `requiresConfirmation` hook on `deleteEvent` and (Phase 3) `rescheduleEvent` in
 `packages/calendar/src/manifest.ts`: resolve the event via `resolveCalendarEventRef` (1a) under the
 supplied `scopedDb`; `found:false` -> `true` (fail closed, can't verify provenance); else
 `requiresCalendarConfirmation({ jarvisCreated: event.external_metadata?.jarvisCreated === true })`.
 
 **Test cases:**
+
 - `requiresCalendarConfirmation({jarvisCreated:true})` -> `false`;
   `requiresCalendarConfirmation({jarvisCreated:false})` -> `true`. Pure unit test, trivial but
   pins the rule so it can't silently invert.
@@ -171,6 +176,7 @@ supplied `scopedDb`; `found:false` -> `true` (fail closed, can't verify provenan
 ### 1d. Gateway logger
 
 `packages/ai/src/gateway/gateway.ts:30-68` (`AssistantToolGatewayDependencies`) — add:
+
 ```ts
 export interface GatewayLogger {
   error(event: string, fields: Record<string, unknown>): void;
@@ -178,6 +184,7 @@ export interface GatewayLogger {
 // ...
 readonly logger?: GatewayLogger;
 ```
+
 Default (constructor, when omitted): `{ error: (event, fields) => console.error(JSON.stringify({ event, ...fields })) }` — preserves today's stdout behavior when no logger is injected.
 
 Both catch sites (`:451` read path, `:563-575` write path) replace the hardcoded literal with:
@@ -189,6 +196,7 @@ no request payload, no secrets — matches the existing status-code-only logging
 used by `postJson` (`packages/connectors/src/google-api-client.ts:383-404`).
 
 **Test cases:**
+
 - A handler that throws a plain `Error("boom")` produces exactly one `this.deps.logger.error(...)`
   call with `errorClass:"Error"`, `message:"boom"`, and the real `actorUserId`/`requestId`. Fails
   against current code (hardcoded `errorClass:"handler_error"`, no actorUserId, no injectable
@@ -205,6 +213,7 @@ is authoritative; the regex is a fallback ONLY for cache rows written before thi
 (never re-derives once `jarvisCreated` is present, even if `false`).
 
 **Test cases:**
+
 - Cached row with `external_metadata.jarvisCreated: false` and a `jfb`-prefixed `externalId`
   (simulating a user who happens to reuse the id shape, or a stale/incorrect tag) serializes
   `isMossBlock: false` — the regex must NOT override an explicit `false`. Fails against a naive
@@ -244,6 +253,7 @@ before reschedule adds a second consumer of the same plumbing.
   rather than break it).
 
 **Test cases:**
+
 - `createEvent` tool manifest entry validates against the module manifest schema (existing
   manifest test suite) with the new name/description.
 - End-to-end: `calendar.createEvent` invoked with a title outside any focus-time framing (e.g. "
@@ -254,6 +264,7 @@ before reschedule adds a second consumer of the same plumbing.
 
 `packages/connectors/src/google-api-client.ts` — new method, same file, mirrors `postJson`'s
 structure (`:383-404`) but PATCH:
+
 ```ts
 async patchEvent(
   accessToken: string,
@@ -267,6 +278,7 @@ async patchEvent(
 ```
 
 `packages/calendar/src/calendar-write-service.ts` — add:
+
 ```ts
 export interface RescheduleEventInput {
   readonly eventRef: string; // moss id or external id, resolved via event-resolver
@@ -279,11 +291,12 @@ export type RescheduleEventResult =
 
 rescheduleEvent(scopedDb, ctx, input: RescheduleEventInput): Promise<RescheduleEventResult>;
 ```
+
 Implementation (`calendar-write-impl.ts`) flow: resolve ref (1a) -> if not found, `not_found` ->
 if `attendeeCount > 0` (read from `external_metadata`, already synced per seams check), `has_
 attendees` **hard refusal, independent of the confirmation card** (spec decision 2 — this is not a
 confirm-vs-auto distinction, the tool refuses outright) -> fresh token + scope check (reuse
-existing pattern from `proposeAndInsert`) -> `googleApiClient.patchEvent` with the *same* external
+existing pattern from `proposeAndInsert`) -> `googleApiClient.patchEvent` with the _same_ external
 event id (never delete-then-create — the id must not change) -> on success, mirror the new
 start/end into the cached row via `upsertCachedEvent` (reuses the existing jsonb-merge upsert, same
 `connectorAccountId`+`externalId` conflict key already in `repository.ts:72-114` — no new
@@ -294,6 +307,7 @@ family (same family as `deleteEvent` — both destructive-shaped, both gated by 
 rule plumbed through 1b), with `requiresConfirmation` wired exactly as `deleteEvent`'s (1c).
 
 **Test cases:**
+
 - Rescheduling a Moss-created event with 0 attendees under `trusted_auto` tier auto-runs (no card).
   Fails against a naive always-confirm implementation.
 - Rescheduling any event (Moss- or user-created) with `attendeeCount > 0` returns
@@ -313,6 +327,7 @@ pnpm --filter @moss/calendar --filter @moss/chat --filter @moss/ai --filter @mos
 pnpm --filter @moss/calendar --filter @moss/chat --filter @moss/ai --filter @moss/module-sdk typecheck > /tmp/1698-tsc.log 2>&1; echo "EXIT=$?"
 # expect 0
 ```
+
 Full-gate (`pnpm verify:foundation`) only via the `verify-gate` skill, per CLAUDE.md — never run
 raw. Live-path proof (delete-by-external-id, reschedule) on a real dev instance is a phase exit
 criterion, not covered by the above.
@@ -330,7 +345,7 @@ criterion, not covered by the above.
   rule — pre-existing gap, named per Coordinator's ruling, not fixed by this plan.
 - `attendeeCount` and eventual `calendarId` are already JSONB fields populated at sync time
   (`google-sync-phases.ts:172`) — no migration required for Phase 1-3. `0020_calendar_owner_or_
-  share.sql` manifest-list discrepancy exists but is untouched/out of scope.
+share.sql` manifest-list discrepancy exists but is untouched/out of scope.
 - `mirrorEvent` already writes both `external_metadata.jarvisCreated: true` (calendar-write-
   impl.ts:398) and the Google-side `extendedPrivateProperties.jarvisCreated` fallback (:174) —
   Phase 1e is a read-side-only change.

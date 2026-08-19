@@ -243,9 +243,7 @@ describe("Calendar self-operation manifest classification", () => {
   it("classifies both createEvent and deleteEvent as user_promotable", () => {
     const tools = calendarModuleManifest.assistantTools ?? [];
 
-    const createEvent = tools.find(
-      (candidate) => candidate.name === "calendar.createEvent"
-    );
+    const createEvent = tools.find((candidate) => candidate.name === "calendar.createEvent");
     expect(createEvent, "expected tool calendar.createEvent to exist").toBeDefined();
     expect(createEvent?.risk).toBe("write");
     expect(createEvent?.actionFamilyId).toBe("calendar_writeback");
@@ -407,12 +405,7 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
 
     expect(confirmAlways.sort()).toEqual([...PLANNED_CONFIRM_ALWAYS_TOOL_NAMES].sort());
     expect(userPromotable.sort()).toEqual(
-      [
-        "calendar.deleteEvent",
-        "calendar.createEvent",
-        "tasks.deleteList",
-        "tasks.deleteTag"
-      ].sort()
+      ["calendar.deleteEvent", "calendar.createEvent", "tasks.deleteList", "tasks.deleteTag"].sort()
     );
   });
 });

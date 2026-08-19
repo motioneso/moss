@@ -36,12 +36,7 @@ describe("gateway policy resolver", () => {
     };
 
     // No familyId set
-    const decision = await resolvePolicy(
-      tool,
-      "mock_module",
-      false,
-      createMockLookup(null, null)
-    );
+    const decision = await resolvePolicy(tool, "mock_module", false, createMockLookup(null, null));
     expect(decision).toBe("confirm");
   });
 

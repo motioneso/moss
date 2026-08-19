@@ -482,7 +482,12 @@ describe("Section D — buildCalendarWriteService.rescheduleEvent", () => {
     const { impl, patchCalls } = buildImpl({});
     const res = await dataContext.withDataContext(
       { actorUserId: ids.userB, requestId: "t" },
-      (db) => impl.rescheduleEvent(db, { ...ctx, actorUserId: ids.userB }, { eventRef: eventId, newStart, newEnd })
+      (db) =>
+        impl.rescheduleEvent(
+          db,
+          { ...ctx, actorUserId: ids.userB },
+          { eventRef: eventId, newStart, newEnd }
+        )
     );
     expect(res.ok).toBe(false);
     expect((res as { reason: string }).reason).toBe("no_scope");
