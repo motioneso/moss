@@ -7,47 +7,32 @@ describe("isAllDayInterval", () => {
   it("is true for a single all-day event (local midnight to local midnight, 24h)", () => {
     // 2026-06-17 00:00 America/New_York = 2026-06-17T04:00:00Z (EDT, UTC-4)
     expect(
-      isAllDayInterval(
-        { start: "2026-06-17T04:00:00Z", end: "2026-06-18T04:00:00Z" },
-        TZ
-      )
+      isAllDayInterval({ start: "2026-06-17T04:00:00Z", end: "2026-06-18T04:00:00Z" }, TZ)
     ).toBe(true);
   });
 
   it("is true for a multi-day all-day event (72h, still midnight-aligned)", () => {
     expect(
-      isAllDayInterval(
-        { start: "2026-06-17T04:00:00Z", end: "2026-06-20T04:00:00Z" },
-        TZ
-      )
+      isAllDayInterval({ start: "2026-06-17T04:00:00Z", end: "2026-06-20T04:00:00Z" }, TZ)
     ).toBe(true);
   });
 
   it("is false for a genuine multi-day timed event that isn't midnight-aligned", () => {
     // Starts mid-afternoon on day 1, ends mid-morning two days later — a real 43h meeting.
     expect(
-      isAllDayInterval(
-        { start: "2026-06-17T18:00:00Z", end: "2026-06-19T13:00:00Z" },
-        TZ
-      )
+      isAllDayInterval({ start: "2026-06-17T18:00:00Z", end: "2026-06-19T13:00:00Z" }, TZ)
     ).toBe(false);
   });
 
   it("is false for a normal timed meeting", () => {
     expect(
-      isAllDayInterval(
-        { start: "2026-06-17T13:00:00Z", end: "2026-06-17T13:30:00Z" },
-        TZ
-      )
+      isAllDayInterval({ start: "2026-06-17T13:00:00Z", end: "2026-06-17T13:30:00Z" }, TZ)
     ).toBe(false);
   });
 
   it("is false when the duration isn't a multiple of 24h even if midnight-aligned at the start", () => {
     expect(
-      isAllDayInterval(
-        { start: "2026-06-17T04:00:00Z", end: "2026-06-17T16:00:00Z" },
-        TZ
-      )
+      isAllDayInterval({ start: "2026-06-17T04:00:00Z", end: "2026-06-17T16:00:00Z" }, TZ)
     ).toBe(false);
   });
 });

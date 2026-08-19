@@ -3,7 +3,12 @@ import type { ToolContext, ToolExecute, ToolResult, ToolServices } from "@moss/m
 import { nullableStringSchema } from "@moss/shared";
 
 import type { CalendarWriteService } from "./calendar-write-service.js";
-import { DEFAULT_TIMEZONE, resolveWindow, type FocusBlockInput, type PartOfDay } from "./focus-time.js";
+import {
+  DEFAULT_TIMEZONE,
+  resolveWindow,
+  type FocusBlockInput,
+  type PartOfDay
+} from "./focus-time.js";
 
 export const calendarToolEventsOutputSchema = {
   type: "object",

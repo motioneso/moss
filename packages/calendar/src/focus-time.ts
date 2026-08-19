@@ -6,7 +6,8 @@ import { resolveMossEnv } from "@moss/db";
  * no per-request `ToolContext.localTimezone` is available. Single source of truth shared by
  * tools.ts (band resolution) and calendar-write-impl.ts (all-day busy-interval filtering).
  */
-export const DEFAULT_TIMEZONE = resolveMossEnv(process.env, "JARVIS_DEFAULT_TZ") ?? "America/New_York";
+export const DEFAULT_TIMEZONE =
+  resolveMossEnv(process.env, "JARVIS_DEFAULT_TZ") ?? "America/New_York";
 
 export type PartOfDay = "morning" | "afternoon" | "evening";
 
