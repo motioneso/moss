@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   assertQualifiedModuleTable,
+  decideEnsureAction,
   decideStagedAcceptance
 } from "../../scripts/module-reconcile.js";
 
@@ -50,5 +51,49 @@ describe("decideStagedAcceptance", () => {
       accept: false,
       reason: "staged package hash abc does not match on-disk package hash <absent>"
     });
+  });
+});
+
+describe("decideEnsureAction", () => {
+  it("stages when a pinned version differs from the on-disk version (#1057)", () => {
+    expect(
+      decideEnsureAction(
+        { id: "job-search", version: "0.2.0" },
+        new Map([["job-search", "0.1.0"]]),
+        new Set()
+      )
+    ).toBe("stage");
+  });
+
+  it("skips when the on-disk version already matches the pin", () => {
+    expect(
+      decideEnsureAction(
+        { id: "job-search", version: "0.2.0" },
+        new Map([["job-search", "0.2.0"]]),
+        new Set()
+      )
+    ).toBe("skip");
+  });
+
+  it("skips an unpinned entry regardless of on-disk version (non-goal guard)", () => {
+    expect(
+      decideEnsureAction(
+        { id: "job-search", version: undefined },
+        new Map([["job-search", "0.1.0"]]),
+        new Set()
+      )
+    ).toBe("skip");
+  });
+
+  it("skips when the id is present but unreadable on disk (no version to compare)", () => {
+    expect(
+      decideEnsureAction({ id: "job-search", version: "0.2.0" }, new Map(), new Set(["job-search"]))
+    ).toBe("skip");
+  });
+
+  it("stages when the id is entirely absent from disk", () => {
+    expect(decideEnsureAction({ id: "job-search", version: "0.2.0" }, new Map(), new Set())).toBe(
+      "stage"
+    );
   });
 });

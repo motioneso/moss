@@ -8,11 +8,11 @@ import { queryKeys } from "./query-keys.js";
 // callers can drop it straight into copy like `Chat with {name}`. The product
 // rename (#1441) landed; this hook remains the one seam for the assistant's
 // display name, distinct from the fixed product name "Moss".
-export function useAssistantName(): string {
+export function useAssistantName(pendingFallback = "Moss"): string {
   const query = useQuery({
     queryKey: queryKeys.settings.persona,
     queryFn: getPersonaSettings,
     retry: false
   });
-  return query.data?.persona.assistantName?.trim() || "Moss";
+  return query.data?.persona.assistantName?.trim() || (query.isLoading ? pendingFallback : "Moss");
 }

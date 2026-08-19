@@ -2,6 +2,8 @@ import { join } from "node:path";
 
 import type { TmuxIo } from "@moss/ai";
 
+import { resolveVaultRoots } from "./vault-allowlist.js";
+
 export const CLAUDE_PERMISSION_SETTINGS_FILENAME = ".jarvis-claude-settings.json";
 export const CLAUDE_PERMISSION_HOOK_FILENAME = ".jarvis-claude-permission-hook.mjs";
 export const CLAUDE_PERMISSION_TOKEN_FILENAME = ".jarvis-claude-permission-token";
@@ -47,6 +49,7 @@ export async function writeClaudePermissionHook(
     `JARVIS_PERM_DEADLINE_S=${HOOK_INTERNAL_DEADLINE_S}`,
     `JARVIS_PERM_URL=${shellQuote(permissionUrl)}`,
     `JARVIS_PERM_TOKEN_FILE=${shellQuote(tokenPath)}`,
+    ...vaultRootsEnvEntry(),
     "node",
     shellQuote(hookPath)
   ].join(" ");
@@ -85,6 +88,13 @@ export async function writeClaudePermissionHook(
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/** #1467: carry the app-validated vault roots to the spawned hook via its command line. */
+function vaultRootsEnvEntry(): string[] {
+  const roots = resolveVaultRoots();
+  if (roots.length === 0) return [];
+  return [`JARVIS_NOTES_ROOTS=${shellQuote(roots.join(","))}`];
 }
 
 export const CLAUDE_PERMISSION_HOOK_SOURCE = `import fs from "node:fs";
@@ -129,8 +139,71 @@ function underRoot(candidate, root) {
   if (typeof candidate !== "string" || !candidate.startsWith("/") || candidate.includes("\\0")) {
     return false;
   }
+  // #1467 QA: a ".." segment must be rejected on the RAW candidate, before normalize() collapses
+  // it. path.resolve/normalize collapse ".." lexically; the kernel resolves ".." only after
+  // expanding each symlink component. A symlink planted inside the root (root/escape -> outside)
+  // makes those two disagree on root/escape/../secret — normalize walks it back inside the root,
+  // but open() walks it out through the symlink target's parent. No legitimate vault path needs a
+  // ".." segment, so refuse it outright rather than trying to reason about where it lexically lands.
+  if (candidate.split("/").includes("..")) return false;
   const normalized = path.posix.normalize(candidate);
   return normalized === root || normalized.startsWith(root + "/");
+}
+
+function realpathOrUndefined(target) {
+  try {
+    // #1467 QA: fs.realpathSync (JS) calls path.resolve() first, collapsing ".." lexically before
+    // any symlink is expanded — it can disagree with the kernel about where a path lands. .native
+    // is realpath(3): it resolves each symlink component before applying "..", matching what
+    // open(2) actually does. The underRoot() ".." rejection above is the primary defense; this
+    // keeps realpath semantics correct in general rather than relying on that check alone.
+    return fs.realpathSync.native(target);
+  } catch {
+    return undefined;
+  }
+}
+
+function lstatExists(target) {
+  try {
+    fs.lstatSync(target);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Fail-closed symlink containment: lexical containment alone isn't enough — a symlink planted
+// inside a root can point anywhere on disk while its own path string still reads as "under root".
+// Resolve the real filesystem location of both root and candidate, walking up to the nearest
+// EXISTING ancestor when the candidate itself doesn't exist yet (a Glob pattern, a not-yet-created
+// file), and require the resolved candidate to still live under the resolved root. Anything that
+// can't be resolved at all (root missing, permission error) fails closed: no pre-approval, falls
+// through to the normal permission card.
+function resolveExistingAncestor(candidate) {
+  let current = candidate;
+  while (true) {
+    const real = realpathOrUndefined(current);
+    if (real !== undefined) return real;
+    // #1467 QA round 2: a realpath failure does NOT mean "this path doesn't exist yet" — a
+    // DANGLING symlink also fails realpath (ENOENT on its target) while still existing as a
+    // filesystem entry. open(O_CREAT) follows that link and creates the file at the link's
+    // target, outside any root the link's own location would suggest. Climbing to the parent as
+    // a "safe proxy" is only valid when "current" genuinely doesn't exist; if lstat finds an
+    // entry there (a dangling symlink), fail closed instead of climbing past it.
+    if (lstatExists(current)) return undefined;
+    const parent = path.posix.dirname(current);
+    if (parent === current) return undefined;
+    current = parent;
+  }
+}
+
+function realUnderRoot(candidate, root) {
+  if (!underRoot(candidate, root)) return false;
+  const rootReal = realpathOrUndefined(root);
+  if (rootReal === undefined) return false;
+  const candidateReal = resolveExistingAncestor(candidate);
+  if (candidateReal === undefined) return false;
+  return candidateReal === rootReal || candidateReal.startsWith(rootReal + "/");
 }
 
 function readCandidate(tool, input) {
@@ -143,7 +216,7 @@ function readCandidate(tool, input) {
 function safeVaultRead(tool, input) {
   if (tool !== "Read" && tool !== "Glob" && tool !== "Grep") return false;
   const candidate = readCandidate(tool, input);
-  return roots().some((root) => underRoot(candidate, root));
+  return roots().some((root) => realUnderRoot(candidate, root));
 }
 
 function stdinText() {
@@ -263,6 +336,7 @@ export async function writeClaudeOneShotPermissionHook(
   const hookPath = join(opts.neutralDir, CLAUDE_PERMISSION_HOOK_FILENAME);
   const command = [
     "JARVIS_SESSION_ROOT=" + shellQuote(opts.neutralDir),
+    ...vaultRootsEnvEntry(),
     "node",
     shellQuote(hookPath)
   ].join(" ");
@@ -297,7 +371,8 @@ export async function writeClaudeOneShotPermissionHook(
   return settingsPath;
 }
 
-export const CLAUDE_ONE_SHOT_PERMISSION_HOOK_SOURCE = `import path from "node:path";
+export const CLAUDE_ONE_SHOT_PERMISSION_HOOK_SOURCE = `import fs from "node:fs";
+import path from "node:path";
 
 const ROOT_PATTERN = /^\\/[\\w.-][\\w./-]*$/;
 
@@ -342,8 +417,70 @@ function underRoot(candidate, root) {
   if (typeof candidate !== "string" || !candidate.startsWith("/") || candidate.includes("\\0")) {
     return false;
   }
+  // #1467 QA: a ".." segment must be rejected on the RAW candidate, before normalize() collapses
+  // it. path.resolve/normalize collapse ".." lexically; the kernel resolves ".." only after
+  // expanding each symlink component. A symlink planted inside the root (root/escape -> outside)
+  // makes those two disagree on root/escape/../secret — normalize walks it back inside the root,
+  // but open() walks it out through the symlink target's parent. No legitimate vault path needs a
+  // ".." segment, so refuse it outright rather than trying to reason about where it lexically lands.
+  if (candidate.split("/").includes("..")) return false;
   const normalized = path.posix.normalize(candidate);
   return normalized === root || normalized.startsWith(root + "/");
+}
+
+function realpathOrUndefined(target) {
+  try {
+    // #1467 QA: fs.realpathSync (JS) calls path.resolve() first, collapsing ".." lexically before
+    // any symlink is expanded — it can disagree with the kernel about where a path lands. .native
+    // is realpath(3): it resolves each symlink component before applying "..", matching what
+    // open(2) actually does. The underRoot() ".." rejection above is the primary defense; this
+    // keeps realpath semantics correct in general rather than relying on that check alone.
+    return fs.realpathSync.native(target);
+  } catch {
+    return undefined;
+  }
+}
+
+function lstatExists(target) {
+  try {
+    fs.lstatSync(target);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Fail-closed symlink containment: lexical containment alone isn't enough — a symlink planted
+// inside a root can point anywhere on disk while its own path string still reads as "under root".
+// Resolve the real filesystem location of both root and candidate, walking up to the nearest
+// EXISTING ancestor when the candidate itself doesn't exist yet (a Glob pattern, a not-yet-created
+// file), and require the resolved candidate to still live under the resolved root. Anything that
+// can't be resolved at all (root missing, permission error) fails closed: no pre-approval.
+function resolveExistingAncestor(candidate) {
+  let current = candidate;
+  while (true) {
+    const real = realpathOrUndefined(current);
+    if (real !== undefined) return real;
+    // #1467 QA round 2: a realpath failure does NOT mean "this path doesn't exist yet" — a
+    // DANGLING symlink also fails realpath (ENOENT on its target) while still existing as a
+    // filesystem entry. open(O_CREAT) follows that link and creates the file at the link's
+    // target, outside any root the link's own location would suggest. Climbing to the parent as
+    // a "safe proxy" is only valid when "current" genuinely doesn't exist; if lstat finds an
+    // entry there (a dangling symlink), fail closed instead of climbing past it.
+    if (lstatExists(current)) return undefined;
+    const parent = path.posix.dirname(current);
+    if (parent === current) return undefined;
+    current = parent;
+  }
+}
+
+function realUnderRoot(candidate, root) {
+  if (!underRoot(candidate, root)) return false;
+  const rootReal = realpathOrUndefined(root);
+  if (rootReal === undefined) return false;
+  const candidateReal = resolveExistingAncestor(candidate);
+  if (candidateReal === undefined) return false;
+  return candidateReal === rootReal || candidateReal.startsWith(rootReal + "/");
 }
 
 function readCandidate(tool, input) {
@@ -360,7 +497,7 @@ function safeVaultRead(tool, input) {
     .map((root) => root.trim())
     .filter((root) => root.length > 0)
     .filter(validRoot)
-    .some((root) => underRoot(candidate, root));
+    .some((root) => realUnderRoot(candidate, root));
 }
 
 function writeCandidate(tool, input) {
@@ -377,7 +514,7 @@ function writeCandidate(tool, input) {
 
 function safeWorkspaceWrite(tool, input) {
   const candidate = writeCandidate(tool, input);
-  return candidate !== undefined && roots().some((root) => underRoot(candidate, root));
+  return candidate !== undefined && roots().some((root) => realUnderRoot(candidate, root));
 }
 
 function stdinText() {

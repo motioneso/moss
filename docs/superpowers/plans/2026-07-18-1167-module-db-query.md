@@ -1119,7 +1119,7 @@ PR body must include: `Closes #1167`, the release-note line "Not user-visible: p
 
 - [ ] **Step 3: Watch checks, merge manually**
 
-NEVER `gh pr merge --auto` (VF is not a required check and would be skipped). Poll `gh pr checks` until ALL checks (including VF) are green, then `gh pr merge --squash`.
+Poll `gh pr checks` until ALL checks (including VF) are green, then `gh pr merge --squash`. (`NEVER --auto` superseded by #895: once the `CI gate` required-status-check ruleset is applied to `main`, `--auto` is safe — `CI gate` aggregates VF and the other conditional jobs, so it's no longer silently skippable. Until the ruleset lands, keep polling manually.)
 
 ---
 

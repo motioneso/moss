@@ -59,11 +59,26 @@ function validateRuntimeValue(entry: RuntimeConfigKeyEntry, value: string): void
       `Invalid runtime config "${entry.key}" value "${display}" (expected one of: ${entry.enumValues?.join(", ") ?? ""})`
     );
   }
-  if (entry.type === "int" && !Number.isInteger(Number(value))) {
-    throw new HttpError(
-      400,
-      `Invalid runtime config "${entry.key}" value "${display}" (expected int)`
-    );
+  if (entry.type === "int") {
+    const n = Number(value);
+    if (!Number.isInteger(n)) {
+      throw new HttpError(
+        400,
+        `Invalid runtime config "${entry.key}" value "${display}" (expected int)`
+      );
+    }
+    if (entry.minValue !== undefined && n < entry.minValue) {
+      throw new HttpError(
+        400,
+        `Invalid runtime config "${entry.key}" value "${display}" (must be >= ${entry.minValue})`
+      );
+    }
+    if (entry.maxValue !== undefined && n > entry.maxValue) {
+      throw new HttpError(
+        400,
+        `Invalid runtime config "${entry.key}" value "${display}" (must be <= ${entry.maxValue})`
+      );
+    }
   }
 }
 

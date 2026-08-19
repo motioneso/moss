@@ -50,6 +50,7 @@ export function createExternalToolManifests(
         return {
           name: tool.name,
           description: tool.description,
+          actionLabel: tool.actionLabel,
           permissionId: tool.permissionId,
           risk: tool.risk,
           actionFamilyId: tool.actionFamilyId,
@@ -57,6 +58,7 @@ export function createExternalToolManifests(
           selfOperationGrant: tool.selfOperationGrant,
           requiresConfirmation,
           inputSchema: tool.inputSchema,
+          isExternal: true,
           outputSchema: tool.outputSchema,
           execute: (_scopedDb, input, context) => invoke(module, tool, input, context)
         };

@@ -237,11 +237,7 @@ function ProviderCard(props: {
             ) : (
               <KeyRound size={12} aria-hidden="true" />
             )}
-            {provider.authMethod === "cli"
-              ? `${provider.displayName} CLI`
-              : provider.hasCredential
-                ? "API key stored"
-                : "No credential"}
+            {provider.authMethod === "cli" ? `${provider.displayName} CLI` : "API key stored"}
           </div>
         </div>
         <div className="prov__acts">
@@ -549,6 +545,11 @@ export function AiProvidersPane() {
   const { toast, confirm } = useFeedback();
   const assistantName = useAssistantName();
   const [pick, setPick] = useState(false);
+  const [credentialFor, setCredentialFor] = useState<(typeof PROVIDER_CATALOG)[number] | null>(
+    null
+  );
+  const [pickBaseUrl, setPickBaseUrl] = useState("");
+  const [pickApiKey, setPickApiKey] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
   const [loginProvider, setLoginProvider] = useState<AutomatedLoginProvider | null>(null);
   const providersQuery = useQuery({
@@ -585,16 +586,25 @@ export function AiProvidersPane() {
     ]);
 
   const createMutation = useMutation({
-    mutationFn: (option: (typeof PROVIDER_CATALOG)[number]) =>
+    mutationFn: (input: {
+      option: (typeof PROVIDER_CATALOG)[number];
+      baseUrl: string;
+      apiKey: string;
+    }) =>
       createAiProvider({
-        providerKind: option.kind,
-        displayName: option.label,
-        authMethod: option.authMethod
+        providerKind: input.option.kind,
+        displayName: input.option.label,
+        authMethod: input.option.authMethod,
+        ...(input.baseUrl ? { baseUrl: input.baseUrl } : {}),
+        ...(input.apiKey ? { credentialPayload: { apiKey: input.apiKey } } : {})
       }),
-    onSuccess: (_data, option) => {
+    onSuccess: (_data, input) => {
       setPick(false);
+      setCredentialFor(null);
+      setPickBaseUrl("");
+      setPickApiKey("");
       void invalidate();
-      toast(`Added ${option.label}`, { icon: <GitCommitHorizontal size={17} /> });
+      toast(`Added ${input.option.label}`, { icon: <GitCommitHorizontal size={17} /> });
     },
     onError: (error) => toast(readError(error), { tone: "drift", icon: <X size={17} /> })
   });
@@ -762,29 +772,88 @@ export function AiProvidersPane() {
         )}
         {pick ? (
           <div className="provpick">
-            <div className="provpick__hd">Add a provider</div>
-            <div className="provpick__grid">
-              {PROVIDER_CATALOG.map((option) => {
-                const has = connected.includes(option.label);
-                return (
-                  <button
-                    key={option.label}
-                    type="button"
-                    className="provpick__item"
-                    disabled={has}
-                    onClick={() => createMutation.mutate(option)}
+            <div className="provpick__hd">
+              {credentialFor ? `${credentialFor.label} credentials` : "Add a provider"}
+            </div>
+            {credentialFor ? (
+              <>
+                <Field label="Base URL" hint="Leave blank to use the provider's default endpoint.">
+                  <input
+                    className="jds-input"
+                    value={pickBaseUrl}
+                    onChange={(e) => setPickBaseUrl(e.target.value)}
+                    placeholder="https://api.anthropic.com"
+                    aria-label="Base URL"
+                  />
+                </Field>
+                <Field label="API key" hint="Stored encrypted. Never shown in briefings or logs.">
+                  <input
+                    className="jds-input"
+                    type="password"
+                    value={pickApiKey}
+                    onChange={(e) => setPickApiKey(e.target.value)}
+                    placeholder="sk-…"
+                    aria-label="API key"
+                  />
+                </Field>
+                <div className="provpick__cred-acts">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={!pickApiKey.trim()}
+                    onClick={() =>
+                      createMutation.mutate({
+                        option: credentialFor,
+                        baseUrl: pickBaseUrl.trim(),
+                        apiKey: pickApiKey.trim()
+                      })
+                    }
                   >
-                    <span className="provpick__dot" />
-                    {option.label}
-                    {has ? <span className="provpick__on">Added</span> : null}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="provpick__foot">
-              {assistantName} reads the available models from the provider automatically when it
-              connects.
-            </div>
+                    Add
+                  </Button>
+                  <Button
+                    variant="quiet"
+                    size="sm"
+                    onClick={() => {
+                      setCredentialFor(null);
+                      setPickBaseUrl("");
+                      setPickApiKey("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="provpick__grid">
+                  {PROVIDER_CATALOG.map((option) => {
+                    const has = connected.includes(option.label);
+                    return (
+                      <button
+                        key={option.label}
+                        type="button"
+                        className="provpick__item"
+                        disabled={has}
+                        onClick={() =>
+                          option.authMethod === "cli"
+                            ? createMutation.mutate({ option, baseUrl: "", apiKey: "" })
+                            : setCredentialFor(option)
+                        }
+                      >
+                        <span className="provpick__dot" />
+                        {option.label}
+                        {has ? <span className="provpick__on">Added</span> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="provpick__foot">
+                  {assistantName} reads the available models from the provider automatically when it
+                  connects.
+                </div>
+              </>
+            )}
           </div>
         ) : null}
       </Group>

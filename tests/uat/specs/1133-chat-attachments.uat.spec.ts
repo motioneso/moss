@@ -60,10 +60,11 @@ test("attaching a file really uploads to the vault and the turn carries its id (
     }
   });
 
-  // Role-scoped to "button" so this never matches the drawer's own dialog with the same
-  // accessible name (see runtime-context.uat.spec.ts).
-  await page.getByRole("button", { name: "Chat with Jarvis" }).click();
-  const drawer = page.getByRole("dialog", { name: "Chat with Jarvis" });
+  // Name-agnostic: the accessible name is `Chat with ${assistantName}` (persona-driven, not a
+  // fixed literal), so these locate by stable DOM handles instead — .topbar-actions holds
+  // exactly one button (the chat toggle), and aside.chatd is the drawer element itself.
+  await page.locator(".topbar-actions button").click();
+  const drawer = page.locator("aside.chatd");
   await expect(drawer).toBeVisible();
 
   // Drive the visually-hidden real <input type=file> directly — the paperclip button only
@@ -97,7 +98,7 @@ test("attaching a file really uploads to the vault and the turn carries its id (
   await expect(chip.locator(".chatd-attach__meta")).toHaveText(`${FILE_BODY.length} B`);
   await expect(chip).not.toHaveClass(/is-error/);
 
-  await drawer.getByRole("textbox", { name: "Message Jarvis" }).fill("Please read this file.");
+  await drawer.locator(".chatd-input textarea").fill("Please read this file.");
   await drawer.getByRole("button", { name: "Send" }).click();
 
   // The turn body carries the server-issued id (never bytes) into the REAL /turn handler.
@@ -108,7 +109,8 @@ test("attaching a file really uploads to the vault and the turn carries its id (
     .poll(() => turnBody)
     .toEqual({
       text: "Please read this file.",
-      attachmentIds: [attachment.id]
+      attachmentIds: [attachment.id],
+      surface: "drawer"
     });
 
   // No chat-capable model is seeded (see file header), so the deterministic terminal state is

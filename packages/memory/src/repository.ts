@@ -18,6 +18,7 @@ export interface RetrievedChunk {
   readonly lineEnd: number;
   readonly text: string;
   readonly similarity: number;
+  readonly updatedAt: Date;
 }
 
 export interface VaultFileChunk {
@@ -51,6 +52,16 @@ function toVectorLiteral(embedding: readonly number[]): string {
   return `[${embedding.join(",")}]`;
 }
 
+/**
+ * Postgres rejects NUL (`U+0000`) in `text` columns outright (#1589). Strip the
+ * rest of the C0 control range too, except `\t`/`\n`/`\r`, which chunk text can
+ * legitimately carry.
+ */
+function sanitizeChunkText(text: string): string {
+  // eslint-disable-next-line no-control-regex -- stripping control chars is the point
+  return text.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "");
+}
+
 export class MemoryRepository {
   async upsertFileChunks(
     scopedDb: DataContextDb,
@@ -59,10 +70,13 @@ export class MemoryRepository {
     chunks: readonly NewChunkData[],
     embedModelName: string,
     embedModelVersion: string,
-    sourceKind: string = "vault"
+    sourceKind: string = "vault",
+    replaceExisting = true
   ): Promise<void> {
     assertDataContextDb(scopedDb);
-    await this.deleteFileChunks(scopedDb, ownerUserId, sourcePath, sourceKind);
+    if (replaceExisting) {
+      await this.deleteFileChunks(scopedDb, ownerUserId, sourcePath, sourceKind);
+    }
 
     for (const chunk of chunks) {
       const vectorLiteral = toVectorLiteral(chunk.embedding);
@@ -72,7 +86,7 @@ export class MemoryRepository {
            embedding, embed_model_name, embed_model_version)
         VALUES
           (${ownerUserId}::uuid, ${sourceKind}, ${chunk.sourcePath}, ${chunk.lineStart},
-           ${chunk.lineEnd}, ${chunk.contentHash}, ${chunk.text}, ${vectorLiteral}::vector,
+           ${chunk.lineEnd}, ${chunk.contentHash}, ${sanitizeChunkText(chunk.text)}, ${vectorLiteral}::vector,
            ${embedModelName}, ${embedModelVersion})
       `.execute(scopedDb.db);
     }
@@ -127,8 +141,9 @@ export class MemoryRepository {
       line_end: number;
       text: string;
       similarity: number;
+      updated_at: Date;
     }>`
-      SELECT id, source_path, line_start, line_end, text,
+      SELECT id, source_path, line_start, line_end, text, updated_at,
              1 - (embedding <=> ${vectorLiteral}::vector) AS similarity
       FROM app.memory_chunks
       WHERE embedding IS NOT NULL
@@ -144,7 +159,8 @@ export class MemoryRepository {
       lineStart: r.line_start,
       lineEnd: r.line_end,
       text: r.text,
-      similarity: r.similarity
+      similarity: r.similarity,
+      updatedAt: r.updated_at
     }));
   }
 
@@ -165,8 +181,9 @@ export class MemoryRepository {
       line_start: number;
       line_end: number;
       text: string;
+      updated_at: Date;
     }>`
-      SELECT c.id, c.source_path, c.line_start, c.line_end, c.text
+      SELECT c.id, c.source_path, c.line_start, c.line_end, c.text, c.updated_at
       FROM app.memory_chunks c
       JOIN app.memory_file_index fi
         ON fi.owner_user_id = c.owner_user_id
@@ -184,7 +201,8 @@ export class MemoryRepository {
       lineStart: r.line_start,
       lineEnd: r.line_end,
       text: r.text,
-      similarity: 0
+      similarity: 0,
+      updatedAt: r.updated_at
     }));
   }
 

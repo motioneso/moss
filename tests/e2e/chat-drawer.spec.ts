@@ -43,7 +43,7 @@ test("opens the live chat drawer from the nav and renders the streamed records o
   // (empty body, never resolved) on reconnect — otherwise the events would replay
   // and the records would render twice.
   let streamServed = false;
-  await page.route("**/api/chat/stream", async (route) => {
+  await page.route("**/api/chat/stream*", async (route) => {
     if (streamServed) {
       // Hold the reconnect open with no data so events don't replay.
       return; // leave the route hanging; the page is about to assert and finish
@@ -124,7 +124,7 @@ test("private activation blocks send until the server confirms, then allows it",
   // The shared mock's SSE stream closes after one heartbeat, which fires EventSource.onerror
   // and would end the private session mid-test. Keep it pending — this test doesn't assert
   // on stream events.
-  await page.route("**/api/chat/stream", () => new Promise<void>(() => {}));
+  await page.route("**/api/chat/stream*", () => new Promise<void>(() => {}));
 
   await page.goto("/");
   await page.getByRole("button", { name: "Chat with Moss" }).click();
@@ -167,7 +167,9 @@ test("reloading the page restores private-mode indication from server truth", as
   );
 });
 
-test("stages next message while response is running and sends it after stop", async ({ page }) => {
+test("queued chat drain stays stable while SSE records arrive, then sends once after stop", async ({
+  page
+}) => {
   await mockApi(page, {
     authenticated: true,
     chatThreads: [],
@@ -199,14 +201,30 @@ test("stages next message while response is running and sends it after stop", as
     });
   });
 
-  await page.route("**/api/chat/turn/cancel", async (route) => {
-    cancelRequests += 1;
-    releaseFirstTurn?.();
-    await route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
-  });
+  // Match by pathname, not the full URL — a ?surface=drawer query string is now appended.
+  await page.route(
+    (url) => url.pathname.endsWith("/api/chat/turn/cancel"),
+    async (route) => {
+      cancelRequests += 1;
+      releaseFirstTurn?.();
+      await route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
+    }
+  );
 
   await page.route("**/api/chat/clear", (route) => route.fulfill({ status: 204, body: "" }));
 
+  // Three SSE reconnects fire while the first turn is held and a second sits queued (#1520).
+  let streamTicks = 0;
+  await page.route("**/api/chat/stream*", async (route) => {
+    const tick = streamTicks++;
+    if (tick >= 3) return;
+    await route.fulfill({
+      status: 200,
+      contentType: "text/event-stream",
+      headers: { "cache-control": "no-cache" },
+      body: `data: ${JSON.stringify({ kind: "reply", text: `Tick ${tick}`, messageId: `tick-${tick}` })}\n\n`
+    });
+  });
   await page.goto("/");
   await page.getByRole("button", { name: "Chat with Moss" }).click();
   const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
@@ -248,11 +266,13 @@ test("stages next message while response is running and sends it after stop", as
   await composerInput.press("Enter");
   await expect(queuedChip).toContainText('Next: "Drained queued"');
 
+  await expect(drawer.getByText("Tick 2")).toBeVisible();
+  await expect(queuedChip).toContainText('Next: "Drained queued"');
   await composerAction.click();
-
   await expect.poll(() => turnTexts).toEqual(["First question", "Drained queued"]);
   expect(cancelRequests).toBe(1);
   await expect(drawer.getByText(/Next:/)).toHaveCount(0);
+  await expect(drawer.getByText("Drained queued", { exact: true })).toHaveCount(1);
 });
 
 test("selecting a History row both opens and activates it — no separate resume step", async ({
@@ -298,21 +318,29 @@ test("selecting a History row both opens and activates it — no separate resume
       })
     });
   });
-  await page.route("**/api/chat/threads/thread-old/messages", async (route) => {
-    await messagesGate;
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ messages: [storedMessage] })
-    });
-    messagesFinished = true;
-  });
-  await page.route("**/api/chat/threads/thread-old/resume", async (route) => {
-    resumeCalledWith = "thread-old";
-    await resumeGate;
-    await route.fulfill({ status: 204, body: "" });
-    resumeFinished = true;
-  });
+  // Match by pathname, not the full URL — a ?surface=drawer query string is now appended.
+  await page.route(
+    (url) => url.pathname.endsWith("/api/chat/threads/thread-old/messages"),
+    async (route) => {
+      await messagesGate;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ messages: [storedMessage] })
+      });
+      messagesFinished = true;
+    }
+  );
+  // Match by pathname, not the full URL — a ?surface=drawer query string is now appended.
+  await page.route(
+    (url) => url.pathname.endsWith("/api/chat/threads/thread-old/resume"),
+    async (route) => {
+      resumeCalledWith = "thread-old";
+      await resumeGate;
+      await route.fulfill({ status: 204, body: "" });
+      resumeFinished = true;
+    }
+  );
   await page.route("**/api/chat/turn", async (route) => {
     await route.fulfill({
       status: 200,
@@ -378,8 +406,10 @@ test("resuming a History thread while private clears the stale privateMode flag"
     // Server truth on mount: a private session is already active (mirrors reload-while-private).
     incognito: true
   });
-  await page.route("**/api/chat/threads/thread-old/resume", (route) =>
-    route.fulfill({ status: 204, body: "" })
+  // Match by pathname, not the full URL — a ?surface=drawer query string is now appended.
+  await page.route(
+    (url) => url.pathname.endsWith("/api/chat/threads/thread-old/resume"),
+    (route) => route.fulfill({ status: 204, body: "" })
   );
   await page.route("**/api/chat/turn", (route) =>
     route.fulfill({
@@ -425,13 +455,17 @@ test("resume failure clears selection and reopens History", async ({ page }) => 
     notifications: [],
     tasks: []
   });
-  await page.route("**/api/chat/threads/thread-old/resume", async (route) => {
-    await route.fulfill({
-      status: 404,
-      contentType: "application/json",
-      body: JSON.stringify({ error: "Chat thread not found" })
-    });
-  });
+  // Match by pathname, not the full URL — a ?surface=drawer query string is now appended.
+  await page.route(
+    (url) => url.pathname.endsWith("/api/chat/threads/thread-old/resume"),
+    async (route) => {
+      await route.fulfill({
+        status: 404,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Chat thread not found" })
+      });
+    }
+  );
 
   await page.goto("/");
   await page.getByRole("button", { name: "Chat with Moss" }).click();
@@ -497,7 +531,7 @@ test("empty History explains that there are no past conversations", async ({ pag
  */
 async function streamReply(page: Page, replyText: string) {
   let streamServed = false;
-  await page.route("**/api/chat/stream", async (route) => {
+  await page.route("**/api/chat/stream*", async (route) => {
     if (streamServed) {
       return; // hold reconnect open; no replay
     }
@@ -622,7 +656,7 @@ test("#638: reopening the drawer scrolls to the newest message, not the top", as
     (_, i) => `data: ${JSON.stringify({ kind: "reply", text: `Message number ${i}` })}\n\n`
   ).join("");
   let streamServed = false;
-  await page.route("**/api/chat/stream", async (route) => {
+  await page.route("**/api/chat/stream*", async (route) => {
     if (streamServed) {
       return; // hold reconnect open; no replay
     }
@@ -666,7 +700,7 @@ test("#664: a sent message renders after the prior turn, not at the top", async 
   // Hold the SSE stream open WITHOUT delivering any records. This isolates the
   // POST-fallback path: props.records stays empty, so records rendered while waiting for
   // the stream come entirely from fallbackRecords + the optimistic pending bubble.
-  await page.route("**/api/chat/stream", (route) =>
+  await page.route("**/api/chat/stream*", (route) =>
     route.fulfill({
       status: 200,
       contentType: "text/event-stream",
@@ -720,6 +754,222 @@ test("#664: a sent message renders after the prior turn, not at the top", async 
     .toEqual(["First message", "Second message"]);
 
   gate.resolve?.();
+});
+
+// #1519 (1139-B): reconcile fallback records by identity (kind + messageId), not by kind + exact
+// text. Two turns sent with identical text produce two same-kind, same-text fallback pairs with
+// distinct ids. The old predicate matched an incoming SSE record against BOTH identical fallbacks
+// by text alone, so the first SSE delivery silently dropped its still-unconfirmed sibling — a
+// visible flicker from 2 bubbles to 1. This locks the fix: each SSE delivery must retire only the
+// fallback that shares its messageId, and the legacy (id-less on both sides) case must still fall
+// back to kind + exact text.
+test("identical fallbacks reconcile by messageId, not by kind+text", async ({ page }) => {
+  await mockApi(page, {
+    authenticated: true,
+    chatThreads: [],
+    connectorAccounts: [],
+    connectorProviders: createMockConnectorProviders(),
+    notifications: [],
+    tasks: []
+  });
+
+  // Three staged SSE connections, one per reconciling delivery, each held open until its gate
+  // resolves so we control exactly when it lands relative to the POST turns already having
+  // populated fallbackRecords. After the third, hold the stream open forever (no replay).
+  function makeGate(): { readonly promise: Promise<void>; readonly resolve: () => void } {
+    let resolve: (() => void) | null = null;
+    const promise = new Promise<void>((r) => {
+      resolve = r;
+    });
+    return { promise, resolve: resolve! };
+  }
+  const gate0 = makeGate();
+  const gate1 = makeGate();
+  const gate2 = makeGate();
+  const connections: ReadonlyArray<{
+    readonly gate: { readonly promise: Promise<void>; readonly resolve: () => void };
+    readonly body: string;
+  }> = [
+    {
+      gate: gate0,
+      body: 'retry: 10\ndata: {"kind":"reply","text":"Reply to Ping","messageId":"turn-1-reply"}\n\n'
+    },
+    {
+      gate: gate1,
+      body: 'retry: 10\ndata: {"kind":"reply","text":"Reply to Ping","messageId":"turn-2-reply"}\n\n'
+    },
+    { gate: gate2, body: 'data: {"kind":"reply","text":"Reply to Legacy ping"}\n\n' }
+  ];
+  let connectionIndex = 0;
+  await page.route("**/api/chat/stream*", async (route) => {
+    const idx = connectionIndex++;
+    const connection = connections[idx];
+    if (!connection) {
+      return; // hold the final reconnect open forever; no replay
+    }
+    await connection.gate.promise;
+    await route.fulfill({
+      status: 200,
+      contentType: "text/event-stream",
+      headers: { "cache-control": "no-cache" },
+      body: connection.body
+    });
+  });
+
+  let turnCount = 0;
+  await page.route("**/api/chat/turn", async (route) => {
+    const body = route.request().postDataJSON() as { readonly text: string };
+    if (body.text === "Legacy ping") {
+      // Simulate a pre-#1482 backend response carrying no ids.
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ reply: "Reply to Legacy ping" })
+      });
+      return;
+    }
+    turnCount++;
+    const n = turnCount;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        reply: "Reply to Ping",
+        userMessageId: `turn-${n}-user`,
+        assistantMessageId: `turn-${n}-reply`
+      })
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Chat with Moss" }).click();
+  const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
+  const composerInput = drawer.getByLabel("Message Moss");
+
+  // Two identical turns land as two same-kind, same-text fallback pairs with distinct ids.
+  await composerInput.fill("Ping");
+  await composerInput.press("Enter");
+  await expect(drawer.getByText("Reply to Ping")).toHaveCount(1);
+  await composerInput.fill("Ping");
+  await composerInput.press("Enter");
+  await expect(drawer.getByText("Reply to Ping")).toHaveCount(2);
+
+  // First matching SSE delivery: only its own fallback must disappear. The old kind+text-only
+  // predicate matched BOTH identical fallbacks against this one SSE record, dropping the count
+  // to 1 — the flicker this test exists to close.
+  gate0.resolve();
+  await expect(drawer.getByText("Reply to Ping")).toHaveCount(2);
+
+  // Second matching SSE delivery: the remaining fallback reconciles too, no duplicate.
+  gate1.resolve();
+  await expect(drawer.getByText("Reply to Ping")).toHaveCount(2);
+
+  // Legacy id-less fixture: neither side has a messageId, so the kind+text fallback still
+  // applies and must not survive its own SSE echo.
+  await composerInput.fill("Legacy ping");
+  await composerInput.press("Enter");
+  await expect(drawer.getByText("Reply to Legacy ping")).toHaveCount(1);
+  gate2.resolve();
+  await expect(drawer.getByText("Reply to Legacy ping")).toHaveCount(1);
+});
+
+// #1519 (1139-B) QA-RED follow-up: the real live-path SSE "kind: user" echo
+// (packages/chat/src/live/chat-session-manager.ts) is emitted synchronously at turn start and
+// NEVER carries a messageId, while the POST-fallback's user record always does (result.userMessageId
+// arrives after the turn completes). The `a.messageId || b.messageId` predicate treated that
+// asymmetry as a real id mismatch (undefined !== '<uuid>') and never retired the fallback — the
+// user's own message rendered twice, permanently. This locks the `a.messageId && b.messageId` fix
+// (strict id compare only when BOTH sides carry one) and, since two identical sends now produce two
+// same-text fallbacks that must each reconcile against only their own idless echo (not both against
+// the first arrival — the general one-to-one `reconcileFallbacks` requirement), also proves that.
+test("user fallback reconciles against an idless live echo, one-to-one across duplicate sends", async ({
+  page
+}) => {
+  await mockApi(page, {
+    authenticated: true,
+    chatThreads: [],
+    connectorAccounts: [],
+    connectorProviders: createMockConnectorProviders(),
+    notifications: [],
+    tasks: []
+  });
+
+  function makeGate(): { readonly promise: Promise<void>; readonly resolve: () => void } {
+    let resolve: (() => void) | null = null;
+    const promise = new Promise<void>((r) => {
+      resolve = r;
+    });
+    return { promise, resolve: resolve! };
+  }
+  const gate0 = makeGate();
+  const gate1 = makeGate();
+  const connections: ReadonlyArray<{
+    readonly gate: { readonly promise: Promise<void>; readonly resolve: () => void };
+    readonly body: string;
+  }> = [
+    { gate: gate0, body: 'retry: 10\ndata: {"kind":"user","text":"Ping"}\n\n' },
+    { gate: gate1, body: 'data: {"kind":"user","text":"Ping"}\n\n' }
+  ];
+  let connectionIndex = 0;
+  await page.route("**/api/chat/stream*", async (route) => {
+    const idx = connectionIndex++;
+    const connection = connections[idx];
+    if (!connection) {
+      return; // hold the final reconnect open forever; no replay
+    }
+    await connection.gate.promise;
+    await route.fulfill({
+      status: 200,
+      contentType: "text/event-stream",
+      headers: { "cache-control": "no-cache" },
+      body: connection.body
+    });
+  });
+
+  let turnCount = 0;
+  await page.route("**/api/chat/turn", async (route) => {
+    turnCount++;
+    const n = turnCount;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        reply: "Reply to Ping",
+        userMessageId: `turn-${n}-user`,
+        assistantMessageId: `turn-${n}-reply`
+      })
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Chat with Moss" }).click();
+  const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
+  const composerInput = drawer.getByLabel("Message Moss");
+  const pingBubbles = drawer.getByText("Ping", { exact: true });
+
+  // Two identical sends: each POST resolves with its own userMessageId, producing two same-kind,
+  // same-text "Ping" fallbacks with distinct ids. Neither live echo will carry one.
+  await composerInput.fill("Ping");
+  await composerInput.press("Enter");
+  await expect(drawer.getByText("Reply to Ping")).toHaveCount(1);
+  await composerInput.fill("Ping");
+  await composerInput.press("Enter");
+  await expect(drawer.getByText("Reply to Ping")).toHaveCount(2);
+  await expect(pingBubbles).toHaveCount(2);
+
+  // First idless echo arrives: under the old `||` predicate this never matches either
+  // id-carrying fallback (undefined !== '<uuid>'), so the echo renders ADDITIONALLY and the count
+  // would grow to 3, permanently duplicating the user's own message. It must retire exactly one
+  // fallback and leave the count unchanged.
+  gate0.resolve();
+  await expect(pingBubbles).toHaveCount(2);
+
+  // Second idless echo: the remaining fallback reconciles too. A non-consuming match (checking
+  // liveness via `.some()` against all fallbacks) would have let the FIRST echo collapse both
+  // fallbacks already-count would already be wrong above; this final check confirms the second
+  // send's fallback survived independently and reconciles on its own turn.
+  gate1.resolve();
+  await expect(pingBubbles).toHaveCount(2);
 });
 
 test("renders a large markdown reply without error", async ({ page }) => {

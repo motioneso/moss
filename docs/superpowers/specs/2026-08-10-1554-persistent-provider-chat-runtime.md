@@ -36,7 +36,7 @@ The spike (2026-08-10, dev box, no prod contact) settled the mechanism questions
   a turn that called no tool. The persistent child: 1 PID, exactly 1 `initialize` across 3 turns,
   MCP tool calls succeeding on turns 1 and 3, graceful SIGTERM exit, no orphan.
 - **The leak is model prose, not a notice.** During a connection-failure window the jarvis tools
-  silently vanish and the model *narrates* their absence in its own words. There is no string to
+  silently vanish and the model _narrates_ their absence in its own words. There is no string to
   filter; the only fix is eliminating the window. This spec therefore contains **no text
   filtering** anywhere.
 - **One-shot is structurally blind to MCP failure:** exit 0, `result.subtype: success`,
@@ -45,7 +45,7 @@ The spike (2026-08-10, dev box, no prod contact) settled the mechanism questions
 - **The persistent path degrades better:** with the MCP server killed mid-session, tools stayed
   exposed, the model reported a transient connection error, and it self-healed on the next turn —
   same process, no relaunch.
-- **Health-signal traps:** `system/init` is emitted *per turn* on the persistent path (stream
+- **Health-signal traps:** `system/init` is emitted _per turn_ on the persistent path (stream
   framing, not lifecycle) and `init.mcp_servers` goes stale after turn 1. Health and tests must
   use per-turn `result` fields and server-side handshake counts, never init events.
 - **Guard traps:** `--allowedTools` is a permission allowlist, not a tool-set restriction (31
@@ -76,7 +76,7 @@ The spike (2026-08-10, dev box, no prod contact) settled the mechanism questions
 ## The provider-neutral contract
 
 Per the binding ruling: product UI, user-facing status, user-facing logs, and acceptance language
-say *Moss / assistant / model / provider*. Vendor names appear only in adapter code, provider
+say _Moss / assistant / model / provider_. Vendor names appear only in adapter code, provider
 settings, operator diagnostics, and provider-specific tests.
 
 The session manager owns a neutral lifecycle contract — the same seam `engine-selection.ts`
@@ -87,7 +87,7 @@ cli-runner RPC, must resolve engines identically):
   (actor, surface); replay window comes from the #1553 contract.
 - `submitTurn(text)` — exactly one in-flight turn per surface, serialized by the manager.
 - `streamEvents()` — deltas for the live UI; a terminal per-turn result closes the turn and is
-  the *only* source of durable assistant content and health fields.
+  the _only_ source of durable assistant content and health fields.
 - `cancel()` — v1: terminally resolve any pending action requests (see lifecycle policy), then
   terminate the child and relaunch with bounded replay.
 - `health()` — derived from per-turn results (`is_error`, stop/terminal reason, latency, usage)
@@ -114,7 +114,7 @@ claude --print --input-format stream-json --output-format stream-json \
   --append-system-prompt-file <persona> --strict-mcp-config
 ```
 
-(The block shows the *fallback* session-identity posture — `--session-id <uuid>`, as the spike
+(The block shows the _fallback_ session-identity posture — `--session-id <uuid>`, as the spike
 ran it. The preferred posture swaps that for `--no-session-persistence`, pending the phase-1
 verification below.)
 
@@ -125,11 +125,11 @@ turn's terminal result frame before accepting the next frame.
 
 **Conversation truth and provider-session identity:** the DB transcript is the sole source of
 conversation truth. A provider-side transcript is never resumed and never adopted; every launch is
-a fresh provider session fed by bounded DB replay (the #1553 replay contract). *Preferred
-posture:* keep `--no-session-persistence`, so no resumable provider transcript is written at all.
+a fresh provider session fed by bounded DB replay (the #1553 replay contract). _Preferred
+posture:_ keep `--no-session-persistence`, so no resumable provider transcript is written at all.
 Whether the CLI supports that flag combined with persistent stream-JSON input is a bounded phase-1
-verification item — the spike dropped the flag without testing that combination. *Fallback
-posture* if it turns out to be unsupported: a fresh random `--session-id` per launch, never
+verification item — the spike dropped the flag without testing that combination. _Fallback
+posture_ if it turns out to be unsupported: a fresh random `--session-id` per launch, never
 reused, with the provider session file purged on every termination path (reap, crash, cancel,
 shutdown).
 

@@ -14,6 +14,7 @@ export {
   listVaultFiles,
   listVaultDirectories,
   listVaultFilesRecursive,
+  listVaultOwnerIds,
   makeVaultDir,
   readVaultFile,
   readVaultFileBytes,

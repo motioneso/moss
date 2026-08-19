@@ -30,6 +30,52 @@ For a containerized install, edit `JARVIS_AUTH_TRUSTED_ORIGINS` in
 to deploy it. Use full origins (`scheme://host[:port]`), not paths or wildcards. Fresh installs set
 this automatically from `JARVIS_PUBLIC_ORIGIN`.
 
+### LAN dev run over tailnet HTTPS
+
+Plain HTTP unlocks LAN reachability but not the browser features gated behind a secure context
+(microphone, PWA install, precise geolocation) — those need `https://`. `tailscale serve` fronts
+the app with a tailnet-scoped HTTPS certificate without any public exposure (no `tailscale funnel`
+is used or needed here).
+
+This topology serves the API and the built web bundle from **one process on one origin** — it does
+not use `vite dev` or a second web process. The vite dev proxy unconditionally rewrites the
+request `Origin` header, which makes `JARVIS_AUTH_TRUSTED_ORIGINS` a no-op under `pnpm dev`, and
+the PWA service worker only registers in a production build (`import.meta.env.PROD`). Build once,
+then serve:
+
+```sh
+pnpm build:web
+
+PORT=3099 \
+HOST=127.0.0.1 \
+JARVIS_TRUST_PROXY=loopback \
+JARVIS_AUTH_TRUSTED_ORIGINS="https://<machine>.<tailnet>.ts.net:<port>" \
+JARVIS_WEB_DIST_DIR="$(pwd)/apps/web/dist" \
+pnpm start:api
+
+tailscale serve --bg --https=<port> http://127.0.0.1:3099
+```
+
+`JARVIS_TRUST_PROXY=loopback` tells Fastify to trust `X-Forwarded-*` from the host-dev `tailscale serve` proxy; without it,
+HSTS is not emitted, Better Auth will not issue the `__Secure-`-prefixed session cookie, and the
+rate limiter keys on the proxy IP instead of the real client. `JARVIS_WEB_DIST_DIR` must be an
+absolute path — `pnpm --filter @moss/api start` runs with its cwd inside `apps/api`, so the
+default (`process.cwd()/apps/web/dist`) resolves to the wrong directory.
+
+**`JARVIS_TRUST_PROXY=loopback` is valid only for the host-dev topology and must stay paired with `HOST=127.0.0.1`; it does not verify arbitrary peers. For the bundled production proxy, set `JARVIS_TRUST_PROXY` to the exact static Caddy IPv4 address, never the Compose bridge CIDR or gateway. Unset it for plain HTTP. Legacy boolean values (`1`, `true`, `yes`, `on`) and malformed values fail at boot with an actionable error.**
+
+`tailscale serve` only publishes within the tailnet (never the public internet), but the
+certificate it issues is logged to public Certificate Transparency logs by the CA — this is
+inherent to how Tailscale's LAN-only HTTPS is issued, not new exposure introduced here, and every
+device that should reach the instance needs its own tailnet sign-in.
+
+The PWA service worker's install-time app-shell caching fetches `/` with an explicit
+`Accept: text/html` header rather than relying on `cache.addAll`'s implicit header-less fetch —
+the API's SPA fallback 404s a header-less request for `/`, which otherwise fails SW install
+silently (registration goes straight to `redundant`). Same-origin fetchers other than the service
+worker can still hit this; tracked as a separate, broader issue:
+[#1487](https://github.com/motioneso/moss/issues/1487).
+
 ## Database / infrastructure
 
 - **Docker Compose uses `pgvector/pgvector:pg17`.** Do not revert to `postgres:17-alpine` — the

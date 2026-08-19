@@ -654,22 +654,6 @@ export class AiRepository {
     return resolved.model ?? undefined;
   }
 
-  /**
-   * #870/H2: legacy read-through. The retired `ai.capability_routes` key is never written again, but
-   * an instance upgraded from a prior release may still carry entries. We surface a legacy route as a
-   * `{ kind: "model" }` binding ONLY when its model is currently active under an active provider —
-   * a stale/disabled/null legacy route is dropped (logged once), never converted, so an upgrade can
-   * never manufacture a needs-config chat outage (the no-outage guarantee).
-   */
-  private async readLegacyCapabilityRoutes(scopedDb: DataContextDb): Promise<AiCapabilityRouteMap> {
-    const row = await scopedDb.db
-      .selectFrom("app.instance_settings")
-      .select("value")
-      .where("key", "=", AI_CAPABILITY_ROUTES_SETTING_KEY)
-      .executeTakeFirst();
-    return parseCapabilityRouteMap(row?.value);
-  }
-
   private loggedStaleLegacyRoutes = new Set<string>();
 
   /**
@@ -684,17 +668,19 @@ export class AiRepository {
   ): Promise<AiServiceBinding | null> {
     assertDataContextDb(scopedDb);
 
-    const row = await scopedDb.db
+    const rows = await scopedDb.db
       .selectFrom("app.instance_settings")
-      .select("value")
-      .where("key", "=", AI_SERVICE_BINDINGS_SETTING_KEY)
-      .executeTakeFirst();
-    const bindings = parseServiceBindingMap(row?.value);
+      .select(["key", "value"])
+      .where("key", "in", [AI_SERVICE_BINDINGS_SETTING_KEY, AI_CAPABILITY_ROUTES_SETTING_KEY])
+      .execute();
+    const bindingRow = rows.find((row) => row.key === AI_SERVICE_BINDINGS_SETTING_KEY);
+    const bindings = parseServiceBindingMap(bindingRow?.value);
     const bound = bindings[service];
     if (bound) return bound;
 
     // Legacy read-through (H2).
-    const legacy = await this.readLegacyCapabilityRoutes(scopedDb);
+    const legacyRow = rows.find((row) => row.key === AI_CAPABILITY_ROUTES_SETTING_KEY);
+    const legacy = parseCapabilityRouteMap(legacyRow?.value);
     const legacyModelId = legacy[service] ?? null;
     if (!legacyModelId) return null;
 
@@ -1054,10 +1040,8 @@ export class AiRepository {
     // dedicated voice branch instead of a service binding. We still want its pin-miss to behave like a
     // user-facing surface (return admin-pin-unavailable, no logNeedsConfig spam on every mic mount).
     const isTranscription = capability === "transcription";
-    const [pinnedModelId, pinnedProviderId] = await Promise.all([
-      this.getAdminPinnedModelId(scopedDb),
-      this.getAdminPinnedProviderId(scopedDb)
-    ]);
+    const { modelId: pinnedModelId, providerId: pinnedProviderId } =
+      await this.readAdminPinnedIds(scopedDb);
 
     // (1a) Model pin (wins over provider pin, M4a).
     if (pinnedModelId) {
@@ -1533,6 +1517,26 @@ export class AiRepository {
     return typeof row?.value_json === "string" ? row.value_json : null;
   }
 
+  private async readAdminPinnedIds(
+    scopedDb: DataContextDb
+  ): Promise<{ modelId: string | null; providerId: string | null }> {
+    assertDataContextDb(scopedDb);
+    const rows = await scopedDb.db
+      .selectFrom("app.preferences")
+      .select(["key", "value_json"])
+      .where("key", "in", [
+        AI_ADMIN_PINNED_MODEL_PREFERENCE_KEY,
+        AI_ADMIN_PINNED_PROVIDER_PREFERENCE_KEY
+      ])
+      .execute();
+    const modelRow = rows.find((row) => row.key === AI_ADMIN_PINNED_MODEL_PREFERENCE_KEY);
+    const providerRow = rows.find((row) => row.key === AI_ADMIN_PINNED_PROVIDER_PREFERENCE_KEY);
+    return {
+      modelId: typeof modelRow?.value_json === "string" ? modelRow.value_json : null,
+      providerId: typeof providerRow?.value_json === "string" ? providerRow.value_json : null
+    };
+  }
+
   async getAdminPinnedModel(scopedDb: DataContextDb): Promise<AiConfiguredModelSafeRow | null> {
     assertDataContextDb(scopedDb);
     const modelId = await this.getAdminPinnedModelId(scopedDb);
@@ -1714,6 +1718,14 @@ export class AiRepository {
     assertDataContextDb(scopedDb);
 
     return this.safeAssistantActionQuery(scopedDb).execute();
+  }
+
+  async getAssistantAction(
+    scopedDb: DataContextDb,
+    actionId: string
+  ): Promise<AiAssistantActionRequestSafeRow | undefined> {
+    assertDataContextDb(scopedDb);
+    return this.safeAssistantActionQuery(scopedDb).where("id", "=", actionId).executeTakeFirst();
   }
 
   async createPendingAssistantAction(

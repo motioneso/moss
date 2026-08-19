@@ -63,6 +63,8 @@ Use `scripts/redeploy-external-module.sh <module-id>`. Do not run the build/reco
 by hand.
 
 Rebuilding a module changes its package hash, which makes `pnpm db:reconcile` disable it by design.
+(#1468: needs `MOSS_RECONCILE_CONFIRM_OWNER_EMAIL` set once your dev target has a bootstrap owner
+— see the module-developer-guide's Dev parity note.)
 Re-enabling it reads the API's **boot-time** discovery cache, so the enable must land on an API
 process running the new code. During a `tsx watch` restart the old process keeps serving and
 answers `/health` with a 200, so a health check does not prove the restart happened — an enable

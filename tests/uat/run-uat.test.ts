@@ -47,7 +47,12 @@ describe("run-uat CLI (#1027/#1047)", () => {
 
     await import("./run-uat.js");
 
-    expect(mocks.provisionForUat).toHaveBeenCalledWith("solo-admin", { excludeChunks: [] });
+    expect(mocks.provisionForUat).toHaveBeenCalledWith("solo-admin", {
+      excludeChunks: [],
+      withoutNewsJsonBinding: false,
+      withJobSearchFixture: false,
+      chatScript: undefined
+    });
     const [command, args] = mocks.spawn.mock.calls[0] ?? [];
     expect(command).toBe("npx");
     expect(args).toEqual([
@@ -64,6 +69,42 @@ describe("run-uat CLI (#1027/#1047)", () => {
 
     await expect(import("./run-uat.js")).rejects.toThrow(
       "tests/uat/specs/future-advisory.uat.spec.ts must export uatLevel per harness spec §5"
+    );
+    expect(mocks.provisionForUat).not.toHaveBeenCalled();
+  });
+
+  it("#1121 Task 4: threads a valid uatLevel.chatScript id through to provisioning", async () => {
+    mocks.readFile.mockResolvedValue(
+      `export const uatLevel = {
+        level: "solo-admin",
+        without: [],
+        chatScript: "phase1-smoke"
+      } as const;`
+    );
+    process.argv = ["node", "tests/uat/run-uat.ts", "future-advisory"];
+
+    await import("./run-uat.js");
+
+    expect(mocks.provisionForUat).toHaveBeenCalledWith("solo-admin", {
+      excludeChunks: [],
+      withoutNewsJsonBinding: false,
+      withJobSearchFixture: false,
+      chatScript: "phase1-smoke"
+    });
+  });
+
+  it("#1121 Task 4: fails clearly on an unknown uatLevel.chatScript id", async () => {
+    mocks.readFile.mockResolvedValue(
+      `export const uatLevel = {
+        level: "solo-admin",
+        without: [],
+        chatScript: "not-a-real-script"
+      } as const;`
+    );
+    process.argv = ["node", "tests/uat/run-uat.ts", "future-advisory"];
+
+    await expect(import("./run-uat.js")).rejects.toThrow(
+      "tests/uat/specs/future-advisory.uat.spec.ts has invalid uatLevel.chatScript: not-a-real-script"
     );
     expect(mocks.provisionForUat).not.toHaveBeenCalled();
   });

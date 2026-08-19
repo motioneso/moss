@@ -845,7 +845,8 @@ export const resolveAiAssistantActionRouteSchema = {
     200: resolveAiAssistantActionResponseSchema,
     400: errorResponseSchema,
     401: errorResponseSchema,
-    404: errorResponseSchema
+    404: errorResponseSchema,
+    409: errorResponseSchema
   }
 } as const;
 

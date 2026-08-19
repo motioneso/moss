@@ -150,6 +150,25 @@ export async function handleNextRecurrenceJob(
   }
 }
 
+/**
+ * A short-lived jarvis_worker_runtime-backed DataContextRunner, mirroring the connection pattern
+ * `handleNextTaskJob` uses. Callers must invoke `close()` once done (typically in a test's
+ * `finally`) — the underlying pool is not otherwise reclaimed.
+ */
+export function workerDataContext(): {
+  dataContext: DataContextRunner;
+  close: () => Promise<void>;
+} {
+  const scopedWorkerDb = createDatabase({
+    connectionString: connectionStrings.worker,
+    maxConnections: 1
+  });
+  return {
+    dataContext: new DataContextRunner(scopedWorkerDb),
+    close: () => scopedWorkerDb.destroy()
+  };
+}
+
 export function userAContext(): AccessContext {
   return {
     actorUserId: ids.userA,

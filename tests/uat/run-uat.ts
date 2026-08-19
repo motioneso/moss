@@ -2,11 +2,13 @@ import { spawn } from "node:child_process";
 import { readFile, readdir } from "node:fs/promises";
 import { basename, join, matchesGlob } from "node:path";
 import { provisionForUat } from "./provisioner.js";
-import type { UatSeedChunk, UatSeedLevel } from "./seed/types.js";
+import type { UatChatScript, UatSeedChunk, UatSeedLevel } from "./seed/types.js";
+import { UAT_CHAT_SCRIPTS } from "./seed/types.js";
 
 const SPEC_DIR = "tests/uat/specs";
 const LEVELS = new Set<UatSeedLevel>(["bare", "solo-admin", "admin+data", "multi-user"]);
 const CHUNKS = new Set<UatSeedChunk>(["news", "sports", "tasks", "calendar", "notes", "finance"]);
+const CHAT_SCRIPTS = new Set<UatChatScript>(UAT_CHAT_SCRIPTS);
 
 async function resolveSpecPaths(filters: readonly string[]): Promise<string[]> {
   const available = (await readdir(SPEC_DIR))
@@ -40,15 +42,19 @@ async function readUatLevel(specPath: string): Promise<{
   // uatLevel literal, parsed by the same regex rather than a second one, so a spec can carry
   // either, both, or neither without this function growing a second code path.
   withJobSearchFixture: boolean;
+  // #1121 Task 4: same trailing-optional-key pattern as withJobSearchFixture above — an id from
+  // UAT_CHAT_SCRIPTS, parsed by the same regex rather than a second one.
+  chatScript: UatChatScript | undefined;
 }> {
   const source = await readFile(specPath, "utf8");
   const match = source.match(
-    /export\s+const\s+uatLevel\s*=\s*\{\s*level:\s*["']([^"']+)["']\s*,\s*without:\s*\[([^\]]*)\]\s*(?:,\s*withoutNewsJsonBinding:\s*(true|false))?\s*(?:,\s*withJobSearchFixture:\s*(true|false))?\s*\}\s+as const/
+    /export\s+const\s+uatLevel\s*=\s*\{\s*level:\s*["']([^"']+)["']\s*,\s*without:\s*\[([^\]]*)\]\s*(?:,\s*withoutNewsJsonBinding:\s*(true|false))?\s*(?:,\s*withJobSearchFixture:\s*(true|false))?\s*(?:,\s*chatScript:\s*["']([a-zA-Z0-9_-]+)["'])?\s*\}\s+as const/
   );
   const level = match?.[1];
   const withoutSource = match?.[2];
   const withoutNewsJsonBindingSource = match?.[3];
   const withJobSearchFixtureSource = match?.[4];
+  const chatScriptSource = match?.[5];
   if (!level || withoutSource === undefined) {
     throw new Error(`${specPath} must export uatLevel per harness spec §5`);
   }
@@ -61,11 +67,15 @@ async function readUatLevel(specPath: string): Promise<{
   if (invalidChunk) {
     throw new Error(`${specPath} has invalid uatLevel.without chunk: ${invalidChunk}`);
   }
+  if (chatScriptSource !== undefined && !CHAT_SCRIPTS.has(chatScriptSource as UatChatScript)) {
+    throw new Error(`${specPath} has invalid uatLevel.chatScript: ${chatScriptSource}`);
+  }
   return {
     level: level as UatSeedLevel,
     without: without as UatSeedChunk[],
     withoutNewsJsonBinding: withoutNewsJsonBindingSource === "true",
-    withJobSearchFixture: withJobSearchFixtureSource === "true"
+    withJobSearchFixture: withJobSearchFixtureSource === "true",
+    chatScript: chatScriptSource as UatChatScript | undefined
   };
 }
 
@@ -74,7 +84,8 @@ async function runSpec(specPath: string): Promise<number> {
   const { baseURL, projectName, teardown } = await provisionForUat(uatLevel.level, {
     excludeChunks: uatLevel.without,
     withoutNewsJsonBinding: uatLevel.withoutNewsJsonBinding,
-    withJobSearchFixture: uatLevel.withJobSearchFixture
+    withJobSearchFixture: uatLevel.withJobSearchFixture,
+    chatScript: uatLevel.chatScript
   });
 
   const onSignal = () => {

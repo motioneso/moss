@@ -1,6 +1,9 @@
-import { pipeline } from "@huggingface/transformers";
+import { Worker } from "node:worker_threads";
+
+import { env as transformersEnv, pipeline } from "@huggingface/transformers";
 
 import type { EmbeddingProvider } from "./embedding-provider.js";
+import { withEmbeddingCacheLoadLock } from "./embedding-cache-lock.js";
 
 const DEFAULT_MODEL_ID = "nomic-ai/nomic-embed-text-v1.5";
 
@@ -48,12 +51,82 @@ interface ExtractPipe {
  */
 const pipeCache = new Map<string, Promise<ExtractPipe>>();
 
+type WorkerResponse = {
+  readonly id: number;
+  readonly embedding?: number[];
+  readonly error?: string;
+};
+
+class EmbeddingWorkerClient {
+  private nextRequestId = 0;
+  private readonly pending = new Map<
+    number,
+    { resolve: (embedding: number[]) => void; reject: (error: Error) => void }
+  >();
+  private readonly worker: Worker;
+
+  constructor(
+    private readonly modelId: string,
+    workerUrl: URL
+  ) {
+    this.worker = new Worker(workerUrl);
+    this.worker.unref();
+    this.worker.on("message", (response: WorkerResponse) => {
+      const request = this.pending.get(response.id);
+      if (!request) return;
+      this.pending.delete(response.id);
+      if (response.error) request.reject(new Error(response.error));
+      else request.resolve(response.embedding ?? []);
+    });
+    this.worker.on("error", (error) => this.rejectPending(error));
+    this.worker.on("exit", (code) => {
+      if (code !== 0) this.rejectPending(new Error(`Embedding worker exited with code ${code}`));
+    });
+  }
+
+  embed(prefix: "search_document" | "search_query", text: string): Promise<number[]> {
+    const id = this.nextRequestId++;
+    return new Promise((resolve, reject) => {
+      this.pending.set(id, { resolve, reject });
+      this.worker.postMessage({ id, modelId: this.modelId, prefix, text });
+    });
+  }
+
+  close(): void {
+    this.rejectPending(new Error("Embedding worker closed"));
+    void this.worker.terminate();
+  }
+
+  private rejectPending(error: unknown): void {
+    const failure = error instanceof Error ? error : new Error(String(error));
+    for (const request of this.pending.values()) request.reject(failure);
+    this.pending.clear();
+  }
+}
+
+const workerClients = new Map<string, EmbeddingWorkerClient>();
+const DEFAULT_EMBEDDING_WORKER_URL = new URL(
+  import.meta.url.endsWith(".ts") ? "./local-embedding-worker.ts" : "./local-embedding-worker.js",
+  import.meta.url
+);
+
+function getEmbeddingWorkerClient(modelId: string, workerUrl: URL): EmbeddingWorkerClient {
+  const key = `${workerUrl.href}:${modelId}`;
+  const cached = workerClients.get(key);
+  if (cached) return cached;
+  const client = new EmbeddingWorkerClient(modelId, workerUrl);
+  workerClients.set(key, client);
+  return client;
+}
+
 function loadPipe(modelId: string): Promise<ExtractPipe> {
   const cached = pipeCache.get(modelId);
   if (cached) return cached;
 
   // pipeline() returns a complex union; we narrow to the callable shape we need.
-  const loading = Promise.resolve(pipeline("feature-extraction", modelId)).then((p) => {
+  const loading = withEmbeddingCacheLoadLock(transformersEnv.cacheDir, modelId, () =>
+    Promise.resolve(pipeline("feature-extraction", modelId))
+  ).then((p) => {
     const pipe = p as unknown as ExtractPipe;
     // #1359: transformers.js FeatureExtractionPipeline._call hardcodes its tokenizer call to
     // `{ padding: true, truncation: true }` and destructures only pooling/normalize/quantize/
@@ -103,5 +176,30 @@ export class LocalEmbeddingProvider implements EmbeddingProvider {
     const pipe = await loadPipe(this.modelName);
     const output = await pipe(`${prefix}: ${text}`, { pooling: "mean", normalize: true });
     return Array.from(output.data);
+  }
+}
+
+/** Embedding provider for queue handlers whose native inference must not share the main loop. */
+export class CpuIsolatedEmbeddingProvider implements EmbeddingProvider {
+  readonly dimensions = 768;
+  readonly modelName: string;
+  readonly modelVersion = "1.5";
+  private readonly client: EmbeddingWorkerClient;
+
+  constructor(modelId: string = DEFAULT_MODEL_ID, workerUrl: URL = DEFAULT_EMBEDDING_WORKER_URL) {
+    this.modelName = modelId;
+    this.client = getEmbeddingWorkerClient(modelId, workerUrl);
+  }
+
+  embedDocument(text: string): Promise<number[]> {
+    return this.client.embed("search_document", text);
+  }
+
+  embedQuery(text: string): Promise<number[]> {
+    return this.client.embed("search_query", text);
+  }
+
+  close(): void {
+    this.client.close();
   }
 }

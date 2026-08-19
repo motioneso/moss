@@ -24,7 +24,8 @@ import {
   type RpcErr,
   type RpcHelloChallenge,
   type RpcOk,
-  type RpcPush
+  type RpcPush,
+  type RpcPushTerminalData
 } from "../../packages/chat/src/live/rpc-contract.js";
 
 afterEach(() => vi.restoreAllMocks());
@@ -109,7 +110,12 @@ function makeStubHost(): CliChatEngineHost {
     pollLogin: unexpected("pollLogin"),
     submitLoginToken: unexpected("submitLoginToken"),
     cancelLogin: unexpected("cancelLogin"),
-    reapStaleLogins: vi.fn().mockResolvedValue(undefined)
+    reapStaleLogins: vi.fn().mockResolvedValue(undefined),
+    // #1554 Decision 2 — serveConnection now unconditionally registers a reap listener on
+    // every connection; the terminal RPC path never triggers a reap, but the stub must still
+    // satisfy the call.
+    addSessionReapedListener: vi.fn().mockReturnValue(() => {}),
+    notifySessionReaped: unexpected("notifySessionReaped")
   } as unknown as CliChatEngineHost;
 }
 
@@ -152,14 +158,14 @@ describe("terminal RPC dispatch (#1059)", () => {
 
       // The PTY echo is async — poll for up to ~2s (matching TerminalSession's ~800ms
       // stable timing, with margin) rather than a single fixed sleep.
-      let pushFrame: RpcPush | undefined;
+      let pushFrame: RpcPushTerminalData | undefined;
       for (let attempt = 0; attempt < 20 && !pushFrame; attempt++) {
         await new Promise((r) => setTimeout(r, 100));
         pushFrame = channel.decodeAll().find((f) => {
           const push = f as RpcPush;
           if (push.t !== "push" || push.channel !== "terminalData" || !push.dataB64) return false;
           return Buffer.from(push.dataB64, "base64").toString("utf8").includes("hi_1059");
-        }) as RpcPush | undefined;
+        }) as RpcPushTerminalData | undefined;
       }
       expect(pushFrame).toBeDefined();
       expect(pushFrame!.bootId).toBe(BOOT_ID);

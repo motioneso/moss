@@ -42,6 +42,15 @@ import { containsSensitiveMemoryText } from "../memory-distillation.js";
 import type { ChatPersistencePort } from "./chat-session-manager.js";
 import type { ChatRepository } from "../repository.js";
 import { normalizeChatSurface } from "./chat-surface.js";
+import { estimateTokens } from "./recall-seed.js";
+import {
+  capSummary,
+  DEFAULT_REPLAY_MESSAGES,
+  REPLAY_TOKEN_CAP,
+  SUMMARY_TOKEN_CAP,
+  selectReplayWindow,
+  type ReplayMessage
+} from "./replay-window.js";
 
 /** Provider-kinds the live CLI runtime can drive (the narrow ProviderKind set). */
 const LIVE_PROVIDER_KINDS: readonly ProviderKind[] = ["anthropic", "openai-compatible", "google"];
@@ -159,7 +168,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
     opts?: { readonly forceReplay?: boolean },
     surface?: ChatSurface
   ): Promise<{
-    recent: readonly { role: "user" | "assistant"; content: string }[];
+    recent: readonly ReplayMessage[];
     oldSummary: string | null;
   }> {
     const chatSurface = normalizeChatSurface(surface);
@@ -167,21 +176,41 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       const thread = await this.chat.getCurrentThread(scopedDb, actorUserId, chatSurface);
       if (!thread) return { recent: [], oldSummary: null };
 
+      // D4: incognito replays nothing, enforced here regardless of caller. No
+      // further window/summary work runs for an incognito thread.
+      if (thread.incognito) {
+        return { recent: [], oldSummary: null };
+      }
+
       const messages = await this.chat.listMessages(scopedDb, thread.id);
-      const turns = messages
+      const turns: ReplayMessage[] = messages
         .filter((m) => m.status === "stored" && (m.role === "user" || m.role === "assistant"))
         .map((m) => ({ role: m.role as "user" | "assistant", content: m.body }));
 
-      const k = opts?.forceReplay ? getSwitchReplayK() : getReplayK();
-      if (k <= 0) {
-        return { recent: [], oldSummary: null };
-      }
-      if (turns.length <= k) {
-        return { recent: turns, oldSummary: null };
-      }
+      const recent = selectReplayWindow(turns, {
+        maxMessages: getReplayK(),
+        maxTokens: getReplayTokenCap()
+      });
+      const oldSummary = thread.conversation_summary
+        ? capSummary(thread.conversation_summary, SUMMARY_TOKEN_CAP)
+        : null;
 
-      const recent = turns.slice(-k);
-      const oldSummary = thread.conversation_summary ?? buildRollingSummary(turns.slice(0, -k));
+      // D8: visibility only — counts and trigger, never message/summary content.
+      // "switch" is a valid trigger value but unreachable in Phase 1: switchProvider
+      // and healAndRelaunch both set forceReplay:true identically, with no signal
+      // that would let this seam tell a provider switch apart from a relaunch.
+      const trigger: "launch" | "relaunch" | "switch" = opts?.forceReplay ? "relaunch" : "launch";
+      console.info(
+        JSON.stringify({
+          event: "chat.replay.injected",
+          threadId: thread.id,
+          messageCount: recent.length,
+          tokenCount: recent.reduce((sum, m) => sum + estimateTokens(`${m.role}: ${m.content}`), 0),
+          summaryTokens: oldSummary ? estimateTokens(oldSummary) : 0,
+          trigger
+        })
+      );
+
       return { recent, oldSummary };
     });
   }
@@ -237,8 +266,9 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         return undefined;
       }
 
-      // Update rolling summary when stored turns exceed the replay window.
-      const k = getReplayK();
+      // Update rolling summary when stored turns exceed the replay window. D3:
+      // the write gate uses the constant, not the (possibly opted-out) env —
+      // summaries keep accruing for long threads regardless of replay overrides.
       const allMessages = await this.chat.listMessages(scopedDb, thread.id);
       const storedTurns = allMessages.filter(
         (m) => m.status === "stored" && (m.role === "user" || m.role === "assistant")
@@ -248,8 +278,8 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         await this.chat.updateThreadTitle(scopedDb, thread.id, deriveChatTitle(userText));
       }
 
-      if (k > 0 && storedTurns.length > k) {
-        const oldTurns = storedTurns.slice(0, -k).map((m) => ({
+      if (storedTurns.length > DEFAULT_REPLAY_MESSAGES) {
+        const oldTurns = storedTurns.slice(0, -DEFAULT_REPLAY_MESSAGES).map((m) => ({
           role: m.role as "user" | "assistant",
           content: m.body
         }));
@@ -354,7 +384,7 @@ export class DataContextChatPersistence implements ChatPersistencePort {
   async getThreadContext(
     actorUserId: string,
     surface?: ChatSurface
-  ): Promise<{ threadTitle: string | null; localTimezone: string | null }> {
+  ): Promise<{ threadTitle: string | null; localTimezone: string | null; incognito: boolean }> {
     const chatSurface = normalizeChatSurface(surface);
     return this.run(actorUserId, "get-thread-context", async (scopedDb) => {
       const [thread, localeRaw] = await Promise.all([
@@ -365,7 +395,8 @@ export class DataContextChatPersistence implements ChatPersistencePort {
       const localTimezone = extractTimezone(localeRaw);
       return {
         threadTitle: title && title !== DEFAULT_CONVERSATION_TITLE ? title : null,
-        localTimezone
+        localTimezone,
+        incognito: thread?.incognito ?? false
       };
     });
   }
@@ -416,16 +447,36 @@ function toLiveProvider(model: AiConfiguredModelSafeRow): ProviderKind {
   );
 }
 
-function getReplayK(): number {
+/**
+ * D1: unset/empty -> DEFAULT_REPLAY_MESSAGES (40); explicit "0" -> 0 (valid
+ * opt-out); non-numeric or negative -> 40 plus one console.warn. Exported so
+ * tests/unit/chat-replay-window.test.ts can unit-test the parsing directly.
+ */
+export function getReplayK(): number {
   const val = resolveMossEnv(process.env, "JARVIS_CHAT_REPLAY_K");
-  if (!val) return 0;
+  if (val === undefined || val === "") return DEFAULT_REPLAY_MESSAGES;
   const parsed = parseInt(val, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    console.warn(
+      `Invalid JARVIS_CHAT_REPLAY_K value "${val}"; defaulting to ${DEFAULT_REPLAY_MESSAGES}.`
+    );
+    return DEFAULT_REPLAY_MESSAGES;
+  }
+  return parsed;
 }
 
-function getSwitchReplayK(): number {
-  const configured = getReplayK();
-  return configured > 0 ? configured : 10;
+/** D1: sibling override for REPLAY_TOKEN_CAP. Same resolver, same parse rules. */
+function getReplayTokenCap(): number {
+  const val = resolveMossEnv(process.env, "JARVIS_CHAT_REPLAY_TOKENS");
+  if (val === undefined || val === "") return REPLAY_TOKEN_CAP;
+  const parsed = parseInt(val, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    console.warn(
+      `Invalid JARVIS_CHAT_REPLAY_TOKENS value "${val}"; defaulting to ${REPLAY_TOKEN_CAP}.`
+    );
+    return REPLAY_TOKEN_CAP;
+  }
+  return parsed;
 }
 
 function deriveChatTitle(userText: string): string {
@@ -440,12 +491,11 @@ function deriveChatTitle(userText: string): string {
 function buildRollingSummary(
   oldTurns: readonly { role: "user" | "assistant"; content: string }[]
 ): string {
-  const assistantContent = oldTurns
-    .filter((m) => m.role === "assistant")
-    .map((m) => m.content.trim())
+  const priorContent = oldTurns
+    .map((m) => `${m.role}: ${m.content.trim()}`)
     .filter(Boolean)
     .join(" ");
-  const raw = `As of turn ${oldTurns.length}: ${assistantContent}`;
-  // Cap to 2000 chars so the column stays bounded on very long conversations.
-  return raw.length > 2000 ? `...${raw.slice(-2000)}` : raw;
+  const raw = `As of turn ${oldTurns.length}: ${priorContent}`;
+  // Cap to 2000 chars so the column stays bounded while retaining the oldest summarized facts.
+  return raw.length > 2000 ? `${raw.slice(0, 1997)}...` : raw;
 }

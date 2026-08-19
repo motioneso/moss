@@ -136,8 +136,9 @@ interface ChatCompletionsRequestBody {
 /**
  * N42: shaped to satisfy extractStructuredResult's "openai-compatible" case
  * (packages/ai/src/adapters/http-api-structured.ts) — `choices[0].message.content` must be a
- * JSON-stringified object matching SCORE_SCHEMA exactly (fit/want/fitReason/wantReason, no extra
- * fields), and `usage.{prompt_tokens,completion_tokens}` must both be present.
+ * JSON-stringified object matching SCORE_SCHEMA exactly
+ * (fit/fitDisposition/want/fitReason/wantReason, no extra fields), and
+ * `usage.{prompt_tokens,completion_tokens}` must both be present.
  */
 export function buildChatCompletionsResponse(requestBodyText: string): {
   readonly status: number;
@@ -160,6 +161,7 @@ export function buildChatCompletionsResponse(requestBodyText: string): {
   const want = deterministicFixtureScore(title, "want");
   const scoreObject = {
     fit,
+    fitDisposition: "supported",
     want,
     fitReason: `UAT fixture: deterministic fit score derived from the posting title "${title}".`,
     wantReason: `UAT fixture: deterministic want score derived from the posting title "${title}".`

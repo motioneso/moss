@@ -116,6 +116,10 @@ function sanitizeToolOutputValue(schema: JsonSchema, value: unknown): unknown {
     }
     return value.map((item) => sanitizeToolOutputValue(itemSchema, item));
   }
+  const nullableBranch = getNullableCompoundBranch(schema);
+  if (nullableBranch) {
+    return value === null ? null : sanitizeToolOutputValue(nullableBranch, value);
+  }
   const scalarTypes = getScalarTypes(schema);
   if (scalarTypes.length > 0) {
     const matches = scalarTypes.some((type) => JSON_SCALAR_TYPE_OF[type]?.(value));
@@ -158,6 +162,18 @@ function getRequiredKeys(schema: JsonSchema): string[] {
   return Array.isArray(schema.required)
     ? schema.required.filter((key): key is string => typeof key === "string")
     : [];
+}
+
+function getNullableCompoundBranch(schema: JsonSchema): JsonSchema | null {
+  if (!Array.isArray(schema.anyOf) || schema.anyOf.length !== 2) return null;
+  const branches = schema.anyOf.filter(isJsonSchema);
+  if (branches.length !== 2) return null;
+  const nullBranch = branches.find((candidate) => candidate.type === "null");
+  const otherBranch = branches.find((candidate) => candidate !== nullBranch);
+  if (!nullBranch || !otherBranch) return null;
+  const isObjectBranch = otherBranch.type === "object" && isPlainObject(otherBranch.properties);
+  const isArrayBranch = otherBranch.type === "array" && isJsonSchema(otherBranch.items);
+  return isObjectBranch || isArrayBranch ? otherBranch : null;
 }
 
 function getScalarTypes(schema: JsonSchema): string[] {

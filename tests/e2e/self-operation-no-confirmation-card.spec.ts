@@ -53,7 +53,7 @@ test("self-operation tool executes with no confirmation card; a tool needing con
   // Same one-shot-then-hold pattern as chat-drawer.spec.ts: EventSource replays a closed
   // stream on reconnect, so serve the two records once and hold the reconnect open.
   let streamServed = false;
-  await page.route("**/api/chat/stream", async (route) => {
+  await page.route("**/api/chat/stream*", async (route) => {
     if (streamServed) return;
     streamServed = true;
     await route.fulfill({

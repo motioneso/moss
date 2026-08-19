@@ -28,6 +28,12 @@ import {
   type ChatEngineFactory,
   type RpcConnection
 } from "@moss/chat";
+import type { CliChatEngine, PersistentRuntimeLaunchConfig, ReapReason } from "@moss/chat/live";
+import {
+  CHAT_PERSISTENT_IDLE_REAP_MINUTES_CONFIG_KEY,
+  CHAT_PERSISTENT_POOL_CAP_CONFIG_KEY,
+  getRuntimeConfigEntry
+} from "@moss/settings";
 
 export interface ChatMultiplexerAvailability {
   readonly tmux: boolean;
@@ -40,7 +46,14 @@ export interface ChatMultiplexerAvailability {
  * may be read this way, and they must never hold secrets (secrets live in the
  * AES-256-GCM credential store, never in instance_settings).
  */
-const PREAUTH_READABLE_SETTING_KEYS = new Set<string>(["chat.multiplexer"]);
+const PREAUTH_READABLE_SETTING_KEYS = new Set<string>([
+  "chat.multiplexer",
+  "chat.persistent_runtime.enabled",
+  // #1554 task #5 — needed so `readPersistentPoolCap`/`createIdleReapMinutesLiveReader` below can
+  // read the Decision 4 registry keys through this same bounded pre-auth exception.
+  CHAT_PERSISTENT_POOL_CAP_CONFIG_KEY,
+  CHAT_PERSISTENT_IDLE_REAP_MINUTES_CONFIG_KEY
+]);
 
 /** Cap a host probe so a slow/hung binary lookup degrades to false instead of stalling a request. */
 async function boundedProbe(p: Promise<boolean>, ms = 1500): Promise<boolean> {
@@ -196,7 +209,7 @@ export function makeProviderConnectionCheckProbe(deps: {
     }
 
     let neutralDir: string | null = null;
-    let engine: ReturnType<ChatEngineFactory> | null = null;
+    let engine: CliChatEngine | null = null;
     try {
       neutralDir = await mkdtemp(join(tmpdir(), "jarv1s-provider-check-"));
       const personaPath = join(neutralDir, "persona.md");
@@ -216,7 +229,7 @@ export function makeProviderConnectionCheckProbe(deps: {
         return await checkGoogleProviderWithAgyAuthStatus(deps.commandIo ?? createRealTmuxIo());
       }
 
-      engine = deps.engineFactory(kind, `onboarding-check-${kind}`);
+      engine = await deps.engineFactory(kind, `onboarding-check-${kind}`);
       await withTimeout(engine.launch({ neutralDir, personaPath }), PROVIDER_CHECK_TIMEOUT_MS);
       await acknowledgeProviderPromptIfNeeded(engine, kind);
       await waitForProviderTranscriptIfNeeded(engine, kind, PROVIDER_CHECK_TIMEOUT_MS);
@@ -281,7 +294,7 @@ async function checkGoogleProviderWithAgyAuthStatus(
 }
 
 async function acknowledgeProviderPromptIfNeeded(
-  engine: ReturnType<ChatEngineFactory>,
+  engine: CliChatEngine,
   kind: OnboardingProviderKind
 ): Promise<void> {
   if (kind === "anthropic" || kind === "google") return;
@@ -290,7 +303,7 @@ async function acknowledgeProviderPromptIfNeeded(
 }
 
 async function waitForProviderTranscriptIfNeeded(
-  engine: ReturnType<ChatEngineFactory>,
+  engine: CliChatEngine,
   kind: OnboardingProviderKind,
   timeoutMs: number
 ): Promise<void> {
@@ -308,7 +321,7 @@ async function waitForProviderTranscriptIfNeeded(
 }
 
 async function waitForProviderReply(
-  engine: ReturnType<ChatEngineFactory>,
+  engine: CliChatEngine,
   kind: OnboardingProviderKind,
   timeoutMs: number
 ): Promise<boolean> {
@@ -394,6 +407,147 @@ async function readMultiplexerChoice(appDb: Kysely<MossDatabase>): Promise<ChatM
 }
 
 /**
+ * Pre-auth read of `chat.persistent_runtime.enabled` (#1557 Phase 1 rollout flag) — same
+ * bounded exception as {@link readMultiplexerChoice} above, same allowlist. Boolean-string
+ * setting; default absent = off (bounded-fallback engine, unchanged behavior).
+ */
+async function readPersistentRuntimeEnabled(appDb: Kysely<MossDatabase>): Promise<boolean> {
+  const key = "chat.persistent_runtime.enabled";
+  if (!PREAUTH_READABLE_SETTING_KEYS.has(key)) {
+    throw new Error(`pre-auth instance-setting read not allowed for key "${key}"`);
+  }
+  const row = await appDb
+    .selectFrom("app.instance_settings")
+    .select("value")
+    .where("key", "=", key)
+    .executeTakeFirst();
+  const raw = (row?.value as { value?: unknown } | undefined)?.value;
+  return raw === "true";
+}
+
+/**
+ * #1557 Finding 2: `chat.persistent_runtime.enabled` must be able to flip off (drain to
+ * bounded-fallback) without an API restart, so the engine factory must re-read it on every
+ * new-session launch rather than close over a boot-time snapshot. Same fail-closed-to-`false`
+ * posture as the one-time boot read above — a transient read failure degrades to the
+ * unchanged bounded-fallback engine, never crashes the turn.
+ */
+function createPersistentRuntimeEnabledLiveReader(
+  appDb: Kysely<MossDatabase>,
+  log?: (msg: string) => void
+): () => Promise<boolean> {
+  return async () => {
+    try {
+      return await readPersistentRuntimeEnabled(appDb);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      log?.(
+        `[chat] could not read chat.persistent_runtime.enabled setting (${reason}) — defaulting to off`
+      );
+      return false;
+    }
+  };
+}
+
+/**
+ * #1554 — read of `chat.persistent_pool_cap`. The in-process root reads it once at pool
+ * construction (Decision 1); the RPC root re-reads it per launch via
+ * {@link createPersistentRuntimeConfigLiveReader}, since its pool outlives any single deploy.
+ * Same bounded pre-auth exception as
+ * {@link readMultiplexerChoice}. Fail-closed to the registry default (never 0 — a 0 cap would
+ * permanently deny every admission) on a missing row, an unparseable value, or a read error.
+ */
+async function readPersistentPoolCap(appDb: Kysely<MossDatabase>): Promise<number> {
+  const key = CHAT_PERSISTENT_POOL_CAP_CONFIG_KEY;
+  const registryDefault = Number(getRuntimeConfigEntry(key)?.defaultValue ?? "4");
+  if (!PREAUTH_READABLE_SETTING_KEYS.has(key)) {
+    throw new Error(`pre-auth instance-setting read not allowed for key "${key}"`);
+  }
+  const row = await appDb
+    .selectFrom("app.instance_settings")
+    .select("value")
+    .where("key", "=", key)
+    .executeTakeFirst();
+  const raw = (row?.value as { value?: unknown } | undefined)?.value;
+  const parsed = typeof raw === "string" ? Number(raw) : NaN;
+  return Number.isFinite(parsed) && parsed >= 1 ? Math.floor(parsed) : registryDefault;
+}
+
+/**
+ * #1554 task #5 — pre-auth read of `chat.persistent_idle_reap_minutes`. Fail-closed to the
+ * registry DEFAULT (30), never 0: a 0-minute threshold would reap every warm child on the very
+ * next tick, which is a dangerous failure mode for a read error, unlike
+ * `readPersistentRuntimeEnabled`'s fail-closed-to-off (off is always safe).
+ */
+async function readIdleReapMinutes(appDb: Kysely<MossDatabase>): Promise<number> {
+  const key = CHAT_PERSISTENT_IDLE_REAP_MINUTES_CONFIG_KEY;
+  const registryDefault = Number(getRuntimeConfigEntry(key)?.defaultValue ?? "30");
+  if (!PREAUTH_READABLE_SETTING_KEYS.has(key)) {
+    throw new Error(`pre-auth instance-setting read not allowed for key "${key}"`);
+  }
+  const row = await appDb
+    .selectFrom("app.instance_settings")
+    .select("value")
+    .where("key", "=", key)
+    .executeTakeFirst();
+  const raw = (row?.value as { value?: unknown } | undefined)?.value;
+  const parsed = typeof raw === "string" ? Number(raw) : NaN;
+  return Number.isFinite(parsed) && parsed >= 1 ? Math.floor(parsed) : registryDefault;
+}
+
+/**
+ * #1554 task #5: `chat.persistent_idle_reap_minutes` must be re-readable live (same
+ * flip-without-restart contract as {@link createPersistentRuntimeEnabledLiveReader}) so an
+ * operator raising/lowering the idle window takes effect on the timer's next tick, not only at
+ * boot. Fail-closed to the registry default (30) on a transient read error — never 0.
+ */
+function createIdleReapMinutesLiveReader(
+  appDb: Kysely<MossDatabase>,
+  log?: (msg: string) => void
+): () => Promise<number> {
+  return async () => {
+    try {
+      return await readIdleReapMinutes(appDb);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      log?.(
+        `[chat] could not read chat.persistent_idle_reap_minutes setting (${reason}) — defaulting to 30`
+      );
+      return 30;
+    }
+  };
+}
+
+/**
+ * #1554 — the RPC/containerized topology's live-reload channel. The cli-runner root has no DB
+ * access, so the api reads all three persistent-runtime settings here on EVERY launch and ships
+ * them inside `RpcLaunchParams` (plan, "Settings & flags": "Values reach the cli-runner root
+ * inside RPC launch params (never via child env)"). Each field keeps the same fail-closed posture
+ * as its in-process counterpart: enabled → `false`, cap → 4, idle-reap → 30, never 0.
+ */
+export function createPersistentRuntimeConfigLiveReader(
+  appDb: Kysely<MossDatabase>,
+  log?: (msg: string) => void
+): () => Promise<PersistentRuntimeLaunchConfig> {
+  const readEnabled = createPersistentRuntimeEnabledLiveReader(appDb, log);
+  const readIdleReap = createIdleReapMinutesLiveReader(appDb, log);
+  return async () => {
+    const [enabled, poolCap, idleReapMinutes] = await Promise.all([
+      readEnabled(),
+      readPersistentPoolCap(appDb).catch((err) => {
+        const reason = err instanceof Error ? err.message : String(err);
+        log?.(
+          `[chat] could not read chat.persistent_pool_cap setting (${reason}) — defaulting to 4`
+        );
+        return 4;
+      }),
+      readIdleReap()
+    ]);
+    return { enabled, poolCap, idleReapMinutes };
+  };
+}
+
+/**
  * Resolve the production chat engine factory at boot: env override > admin setting >
  * auto-detect. On success returns a factory bound to the one shared Multiplexer; if
  * no multiplexer is installed, returns a factory that throws CliChatUnavailableError
@@ -404,6 +558,15 @@ export async function resolveChatEngineFactory(deps: {
   appDb: Kysely<MossDatabase>;
   env?: NodeJS.ProcessEnv;
   log?: (msg: string) => void;
+  /**
+   * #1554 task #6 — closes task #5's documented KNOWN GAP below: the composition root
+   * (`module-registry/src/index.ts`) threads its `SessionTokenRegistry.revokeBySessionId` (built
+   * inside `registerChatRoutes`'s `wiring` closure, reachable here only via index.ts's late-bound
+   * "adopt" seam — `routes.ts`'s `adoptMcpTokenRevoke`) through as this callback, so the pool's
+   * idle-reap/LRU-evict sweep revokes the reaped session's MCP token instead of leaving it live
+   * with no engine behind it.
+   */
+  onPersistentReap?: (sessionKey: string, reason: ReapReason) => void;
 }): Promise<ChatEngineFactory> {
   const env = deps.env ?? process.env;
   const io = createRealTmuxIo();
@@ -420,6 +583,18 @@ export async function resolveChatEngineFactory(deps: {
     const reason = err instanceof Error ? err.message : String(err);
     deps.log?.(`[chat] could not read chat.multiplexer setting (${reason}) — defaulting to auto`);
     configured = "auto";
+  }
+
+  // #1557 Phase 1: same "never crash boot, degrade to off" posture as the multiplexer read
+  // above — a failed read leaves persistent-runtime OFF (bounded-fallback engine, unchanged).
+  let persistentRuntimeEnabled = false;
+  try {
+    persistentRuntimeEnabled = await readPersistentRuntimeEnabled(deps.appDb);
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    deps.log?.(
+      `[chat] could not read chat.persistent_runtime.enabled setting (${reason}) — defaulting to off`
+    );
   }
 
   let resolution;
@@ -439,5 +614,33 @@ export async function resolveChatEngineFactory(deps: {
   deps.log?.(
     `[chat] live CLI chat multiplexer: ${resolution.mux.kind} (source: ${resolution.source})`
   );
-  return createRealEngineFactory({ mux: resolution.mux });
+  if (persistentRuntimeEnabled) {
+    deps.log?.("[chat] persistent provider-runtime adapter: ON (chat.persistent_runtime.enabled)");
+  }
+
+  // #1554 task #5 — construct the real warm pool for the in-process (host-dev) topology. Cap is
+  // read ONCE here (Decision 1: pool-construction-time value); the idle-reap threshold is a live
+  // getter re-read on every timer tick (Decision 3's fresh-read contract), matching
+  // `persistentRuntimeEnabled` above.
+  const persistentPoolCap = await readPersistentPoolCap(deps.appDb).catch((err) => {
+    const reason = err instanceof Error ? err.message : String(err);
+    deps.log?.(
+      `[chat] could not read chat.persistent_pool_cap setting (${reason}) — defaulting to 4`
+    );
+    return 4;
+  });
+
+  return createRealEngineFactory({
+    mux: resolution.mux,
+    persistentRuntimeEnabled: createPersistentRuntimeEnabledLiveReader(deps.appDb, deps.log),
+    persistentPoolCap,
+    readIdleReapMinutes: createIdleReapMinutesLiveReader(deps.appDb, deps.log),
+    // #1554 task #6 — closes task #5's KNOWN GAP (see git history / relay-10 handoff for the prior
+    // state): forwarded straight from this function's own `onPersistentReap` dep, which
+    // `module-registry/src/index.ts` populates via `routes.ts`'s `adoptMcpTokenRevoke` late-bound
+    // "adopt" seam (same pattern as `adoptChatRpcConnection`/`adoptDropSessionsForProvider`). The
+    // pool's idle-reap/LRU-evict sweep now revokes the reaped session's MCP token, not just the
+    // pool slot.
+    onPersistentReap: deps.onPersistentReap
+  });
 }

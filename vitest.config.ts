@@ -30,6 +30,15 @@ export default defineConfig({
         replacement: fileURLToPath(new URL("./apps/web/node_modules/react-router", import.meta.url))
       },
       {
+        // Subpath export (#1274); must precede the bare "@moss/ai" alias below — used by
+        // module-registry's validate.ts (compilePattern), same pairing requirement as the other
+        // subpath/bare alias pairs in this file (host-fetch/policy, module-registry/node, ...).
+        find: "@moss/ai/gateway/input-validation",
+        replacement: fileURLToPath(
+          new URL("./packages/ai/src/gateway/input-validation.ts", import.meta.url)
+        )
+      },
+      {
         find: "@moss/ai",
         replacement: fileURLToPath(new URL("./packages/ai/src/index.ts", import.meta.url))
       },
@@ -301,7 +310,8 @@ export default defineConfig({
       "tests/**/*.test.ts",
       "tests/**/*.test.tsx",
       "packages/people/src/__tests__/**/*.test.ts",
-      "packages/db/src/__tests__/**/*.test.ts"
+      "packages/db/src/__tests__/**/*.test.ts",
+      "packages/chat/src/live/*.test.ts"
     ],
     setupFiles: ["tests/setup-env.ts"],
     hookTimeout: 30_000,

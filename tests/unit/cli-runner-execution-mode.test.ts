@@ -19,7 +19,7 @@ import type { TmuxIo } from "../../packages/ai/src/adapters/tmux-bridge.js";
 import { CliChatEngineHost } from "../../packages/cli-runner/src/engine-host.js";
 import {
   createChatEngine,
-  isOneShotEngine
+  isBoundedFallbackEngine
 } from "../../packages/chat/src/live/engine-selection.js";
 import { ClaudePrintChatEngine } from "../../packages/chat/src/live/claude-print-chat-engine.js";
 import { AgyPrintChatEngine } from "../../packages/chat/src/live/agy-print-chat-engine.js";
@@ -93,7 +93,7 @@ describe("#1350 the shared engine selector", () => {
     expect(
       createChatEngine("openai-compatible", "alice", io, { executionMode: "non_interactive" })
     ).toBeInstanceOf(CliChatEngineImpl);
-    expect(isOneShotEngine("openai-compatible", "non_interactive")).toBe(false);
+    expect(isBoundedFallbackEngine("openai-compatible", "non_interactive")).toBe(false);
   });
 });
 

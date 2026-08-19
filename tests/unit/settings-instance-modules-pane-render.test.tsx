@@ -172,6 +172,17 @@ describe("InstanceModulesPane external-modules group (#1084)", () => {
     }
   );
 
+  // #1042: the in-app restart instruction must not tell the operator to run a no-op
+  // (`docker compose pull && docker compose up -d` is a documented Compose no-op when the
+  // image tag hasn't changed — see tests/uat/provisioner.ts:732 — so a downloaded module
+  // never actually applies). It must name a command that really restarts the container.
+  it("tells the operator to restart, not to run the no-op pull+up instruction (#1042)", () => {
+    const html = renderWithQuery(seedClient("update-pending-restart"));
+    expect(html).toContain("docker compose restart jarv1s");
+    expect(html).not.toContain("docker compose pull");
+    expect(html).not.toContain("docker compose up -d");
+  });
+
   it("does not duplicate a registry-known module into the External-modules group", () => {
     const html = renderWithQuery(seedClient());
     // DECLARED_ID is registry-known (latestVersion set) — filterUndeclaredExternalModules

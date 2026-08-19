@@ -133,7 +133,7 @@ pnpm exec vitest run tests/unit/action-request-card-preview.test.tsx
 After #1449 / PR #1494 merges, use a #1000 ephemeral instance with one real pending action request.
 Sign in through the real login UI, reload, open the default chat drawer, activate Approve twice
 rapidly, and show that the real resolve endpoint reaches one terminal decision and the card settles
-once. Attach the run link plus the state assertions and request evidence to the child PR. Mocked route
+once. Attach the run link plus before/pending/settled screenshots to the child PR. Mocked route
 evidence alone is not completion.
 
 ## Child 1139-B — Reconcile fallbacks by record identity
@@ -154,23 +154,48 @@ Keep `sameTranscriptRecord` private and keep the existing fallback arrays. Tight
 contract:
 
 - kinds must match;
-- when either side has a `messageId`, both sides must have the same `messageId` to match; and
-- only the legacy case where neither side has an id falls back to kind + exact text.
+- **only when BOTH sides have a `messageId`** must the two ids be equal to match — one side having
+  an id and the other not is not a mismatch, it falls through to the text comparison below; and
+- otherwise (either side missing an id, including the legacy case where neither has one) fall back
+  to kind + exact text.
 
-Use that one predicate in both the state cleanup and `visibleFallbackRecords` suppression. Do not
-compare array position, timestamp, rendered DOM text, or object identity. Do not move transcript
-ownership out of the drawer or create a general record store.
+_(2026-08-17 correction, QA-RED on PR #1650: the text above originally read "when either side has
+a `messageId`, both sides must have the same `messageId` to match" — an OR, not an AND. That
+literal spec text was faithfully implemented and shipped a real bug: the live SSE `kind: "user"`
+echo (`packages/chat/src/live/chat-session-manager.ts`) is emitted before the POST `/api/chat/turn`
+response and structurally never carries a `messageId`, while the POST-built fallback for that same
+turn always does. Under the OR predicate that pair reads as `undefined !== '<uuid>'` — a permanent
+mismatch — so the user's own message rendered twice on every non-private turn. The AND predicate
+above is the corrected contract: strict id equality only applies when both sides actually carry an
+id; an id on only one side is exactly the "neither/legacy" case, not a mismatch.)_
+
+Use that one predicate in **all three** reconciliation call sites in the drawer: the
+`props.records`-keyed fallback-cleanup effect, the post-response merge into `fallbackRecords`, and
+the render-time `visibleFallbackRecords` suppression. Do not compare array position, timestamp,
+rendered DOM text, or object identity. Do not move transcript ownership out of the drawer or create
+a general record store.
+
+**Reconciliation must be one-to-one, not existence-based.** A live record may retire at most one
+fallback. Checking "does some live record match this fallback" independently per fallback (e.g. a
+bare `.some()` filter) lets a single live record satisfy the predicate against _every_ fallback that
+shares its match key at once — this is reachable again specifically because `kind: "user"` live
+records never carry a disambiguating id, so two identical-text user turns can collapse together the
+same way #1519's original `kind: "reply"` bug did. Route all three call sites through a single
+consuming-match helper (e.g. `reconcileFallbacks(fallbacks, liveRecords)`) that removes each matched
+live record from its candidate pool as it is consumed.
 
 The required fixture uses two same-kind, same-text fallback records with distinct ids. Deliver the
 first matching SSE record and prove only its fallback disappears; deliver the second and prove the
 remaining fallback disappears. Also retain one id-less legacy fixture so the existing kind + text
-fallback is not accidentally deleted.
+fallback is not accidentally deleted. Additionally cover the asymmetric case directly: a `kind:
+"user"` live record with no `messageId` reconciling against a same-text fallback that does have one,
+across two duplicate sends, proving each fallback retires against only its own live echo.
 
 Focused command:
 
 ```bash
 cd ~/Jarv1s
-pnpm exec playwright test tests/e2e/chat-drawer.spec.ts --grep "identical fallbacks"
+pnpm exec playwright test tests/e2e/chat-drawer.spec.ts --grep "reconciles"
 ```
 
 ### Live-path artifact
@@ -179,7 +204,7 @@ On a real #1000 instance with a configured chat route, send the same text in two
 browser is network-throttled enough to expose POST fallbacks before SSE reconciliation. Record the
 drawer from both fallback rows through both streamed confirmations. Each logical turn must remain
 visible exactly once; the first SSE arrival must not make its identical sibling flicker away. Attach
-the ordered state assertions, event log, and run link to this child PR.
+the video or ordered screenshots and run link to this child PR.
 
 ## Child 1139-C — Stabilize send across SSE ticks
 
@@ -224,7 +249,8 @@ pnpm exec playwright test tests/e2e/chat-drawer.spec.ts --grep "queued chat drai
 
 On a real #1000 instance, start a turn that streams multiple records, queue a second message, stop
 the first, and let the queue drain. The PR artifact must show the second message sent and rendered
-once, plus real backend request evidence showing exactly two `/api/chat/turn` requests total.
+once, plus real backend request evidence showing exactly two `/api/chat/turn` requests total. A
+static screenshot without request evidence does not prove this child.
 
 ## Child 1139-D — Gate private close against focus refetch
 
@@ -275,8 +301,8 @@ pnpm exec playwright test tests/e2e/chat-drawer.spec.ts --grep "private close.*f
 ### Live-path artifact
 
 On a real #1000 instance, start private chat, close it, and force a window blur/focus cycle during
-the close request. Assert the real drawer stays non-private and record the final real privacy response
-reporting `incognito: false`. Attach the run and DOM/network evidence to this child PR.
+the close request. Capture the real drawer staying non-private and the final real privacy response
+reporting `incognito: false`. Attach the run and screenshots/video to this child PR.
 
 ## Child 1139-E — Resume an export after remount
 
@@ -332,7 +358,7 @@ pnpm exec playwright test tests/e2e/settings-shell.spec.ts --grep "export.*remou
 On a real #1000 instance, click `Prepare export`, leave Account & preferences while the real worker
 is pending/building, return, and show the same job resuming through Ready and Download without a
 second POST. Record the job id and job-count check as metadata only; never attach archive contents or
-private exported data. Attach the run link and progress/ready state assertions to this child PR.
+private exported data. Attach the run link and progress/ready screenshots to this child PR.
 
 ## Per-child completion gate
 
@@ -344,7 +370,7 @@ Each child must complete all of the following in its own session and PR:
   `pnpm check:file-size`. Run `pnpm verify:foundation` only through the repository's guarded
   verification procedure.
 - Exercise the child through the real UI on a live #1000 ephemeral instance and post the run link
-  and assertions or bounded DOM/network/log evidence on that child PR.
+  and screenshots/video on that child PR.
 - Obtain independent QA after the branch is rebased and checks are green.
 - Keep `chat-drawer.tsx` below the 1000-line limit; these fixes do not justify a component split or
   an unrelated cleanup.

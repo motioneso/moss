@@ -405,6 +405,9 @@
   display: grid;
   gap: 0.65rem;
 }
+.tk-list--loose {
+  gap: var(--space-4);
+}
 .tk-row-actions {
   display: flex;
   align-items: center;

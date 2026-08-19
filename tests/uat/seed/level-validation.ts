@@ -1,5 +1,5 @@
-import { UAT_SEED_CHUNKS, UAT_SEED_LEVELS } from "./types.js";
-import type { UatSeedChunk, UatSeedLevel } from "./types.js";
+import { UAT_CHAT_SCRIPTS, UAT_SEED_CHUNKS, UAT_SEED_LEVELS } from "./types.js";
+import type { UatChatScript, UatSeedChunk, UatSeedLevel } from "./types.js";
 
 /**
  * #1087 finding 5: JARVIS_UAT_SEED_LEVEL / JARVIS_UAT_SEED_EXCLUDE_CHUNKS were
@@ -37,4 +37,15 @@ export function parseUatExcludeChunks(raw: string): UatSeedChunk[] {
     );
   }
   return chunks as UatSeedChunk[];
+}
+
+export function parseUatChatScript(raw: string): UatChatScript | undefined {
+  if (raw === "") return undefined;
+  if (!(UAT_CHAT_SCRIPTS as readonly string[]).includes(raw)) {
+    throw new Error(
+      `unknown UAT chat script "${raw}" — refusing to seed (fail-closed); ` +
+        `expected one of: ${UAT_CHAT_SCRIPTS.join(", ")}`
+    );
+  }
+  return raw as UatChatScript;
 }

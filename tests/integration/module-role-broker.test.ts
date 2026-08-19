@@ -31,7 +31,7 @@ afterAll(async () => {
   await client.query(
     `REVOKE EXECUTE ON FUNCTION app.current_actor_user_id() FROM ${moduleInstallRoleName(moduleId)}`
   );
-  await dropModuleRolesAtTeardown(client, [
+  await dropModuleRolesAtTeardown([
     moduleInstallRoleName(moduleId),
     moduleRuntimeRoleName(moduleId)
   ]);

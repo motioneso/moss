@@ -127,7 +127,8 @@ export const aiModuleManifest = {
       id: "ai.assistant-actions",
       label: "Confirm assistant actions",
       description:
-        "View and resolve pending risky assistant action requests without executing them.",
+        "View and resolve pending risky assistant action requests. Confirming a request with a " +
+        "live confirmation waiter unblocks the paused tool call, which then executes.",
       scope: "user",
       actions: ["view", "update"]
     }

@@ -125,6 +125,14 @@ export interface AiRoutesDependencies {
   // don't wire a cli-runner — the WS handler degrades gracefully (close code 1011) rather than
   // crashing when this is undefined.
   readonly connectTerminalRpc?: (options: TerminalRpcConnectOptions) => Promise<TerminalRpcHandle>;
+  // #1256 — injected by the composition root so the resolve route can go through the same live
+  // confirmation-registry gate as the chat action-requests resolve path, instead of persisting a
+  // decision directly with no check that a waiter is actually pending on it.
+  readonly resolveActionRequest?: (
+    actorUserId: string,
+    actionRequestId: string,
+    status: "confirmed" | "rejected" | "cancelled"
+  ) => Promise<"resolved" | "expired" | "not_found">;
 }
 
 type IdParams = { readonly id: string };
@@ -537,10 +545,23 @@ export function registerAiRoutes(
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
         const body = parseResolveAssistantActionBody(request.body);
-        const action = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
-          repository.resolveAssistantAction(scopedDb, request.params.id, body)
+        if (!dependencies.resolveActionRequest) {
+          return reply.code(503).send({ error: "Assistant action resolution is not available" });
+        }
+        const outcome = await dependencies.resolveActionRequest(
+          accessContext.actorUserId,
+          request.params.id,
+          body.status
         );
-
+        if (outcome === "expired") {
+          return reply.code(409).send({ error: "This request expired — ask again." });
+        }
+        if (outcome === "not_found") {
+          return reply.code(404).send({ error: "Assistant action request not found" });
+        }
+        const action = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+          repository.getAssistantAction(scopedDb, request.params.id)
+        );
         if (!action) {
           return reply.code(404).send({ error: "Assistant action request not found" });
         }
@@ -689,7 +710,12 @@ export function registerAiRoutes(
 
         // Validate caller-supplied input before execution.
         // Invariant: validateToolInput gates every caller-supplied-input execute call on REST paths.
-        const validatedInput = validateToolInput(manifestTool.inputSchema, body.input ?? {});
+        const validatedInput = await validateToolInput(manifestTool.inputSchema, body.input ?? {}, {
+          // Missing provenance is untrusted: only the registry's explicit false marker gets the
+          // built-in synchronous path.
+          external: manifestTool.isExternal !== false,
+          toolName: selectedTool.name
+        });
         // Read-only services (no write-capable entries) are passed here so read tools can access
         // informational services like featureGrants. The write→confirm floor remains structurally
         // un-bypassable: this path only reaches execute() for read tools (every write/destructive

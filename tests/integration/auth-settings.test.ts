@@ -438,6 +438,34 @@ describe("multi-user registration + lifecycle (Phase 2 Slice A)", () => {
     });
   }
 
+  const OWNER = { name: "Owner", email: "owner@example.com", password: "password12345" };
+  const JOINER = { name: "Joiner", email: "joiner@example.com", password: "password12345" };
+
+  async function signUpPendingJoiner() {
+    await signUp(OWNER);
+    const joinRes = await signUp(JOINER);
+    expect(joinRes.statusCode).toBe(200);
+    return joinRes;
+  }
+
+  // Active status requires requires_approval off; deactivate via the bootstrap
+  // (superuser) connection below, which bypasses RLS; test-only.
+  async function signUpDeactivatedJoiner() {
+    await signUp(OWNER);
+    await setInstanceSetting("registration.requires_approval", { value: false });
+    const joinRes = await signUp(JOINER);
+    expect(joinRes.statusCode).toBe(200);
+    const joinerId = joinRes.json<{ user: { id: string } }>().user.id;
+    const client = new pg.Client({ connectionString: connectionStrings.bootstrap });
+    await client.connect();
+    await client.query(
+      `UPDATE app.users SET status = 'deactivated', updated_at = now() WHERE id = $1`,
+      [joinerId]
+    );
+    await client.end();
+    return joinRes;
+  }
+
   beforeEach(async () => {
     await resetEmptyFoundationDatabase();
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
@@ -493,13 +521,9 @@ describe("multi-user registration + lifecycle (Phase 2 Slice A)", () => {
   });
 
   it("marks subsequent sign-up as pending when requires_approval is true", async () => {
-    await signUp({ name: "Owner", email: "owner@example.com", password: "password12345" });
+    await signUp(OWNER);
 
-    const joinRes = await signUp({
-      name: "Joiner",
-      email: "joiner@example.com",
-      password: "password12345"
-    });
+    const joinRes = await signUp(JOINER);
     expect(joinRes.statusCode).toBe(200);
     const userId = joinRes.json<{ user: { id: string } }>().user.id;
 
@@ -514,14 +538,7 @@ describe("multi-user registration + lifecycle (Phase 2 Slice A)", () => {
   });
 
   it("blocks pending user from authenticated endpoint with 403 account_pending_approval", async () => {
-    await signUp({ name: "Owner", email: "owner@example.com", password: "password12345" });
-
-    const joinRes = await signUp({
-      name: "Joiner",
-      email: "joiner@example.com",
-      password: "password12345"
-    });
-    expect(joinRes.statusCode).toBe(200);
+    const joinRes = await signUpPendingJoiner();
 
     const meRes = await server.inject({
       method: "GET",
@@ -534,29 +551,7 @@ describe("multi-user registration + lifecycle (Phase 2 Slice A)", () => {
   });
 
   it("blocks deactivated user from authenticated endpoint with 403 account_deactivated", async () => {
-    await signUp({ name: "Owner", email: "owner@example.com", password: "password12345" });
-
-    // Disable requires_approval so the second user is created with active status.
-    await setInstanceSetting("registration.requires_approval", { value: false });
-
-    const joinRes = await signUp({
-      name: "Joiner",
-      email: "joiner@example.com",
-      password: "password12345"
-    });
-    expect(joinRes.statusCode).toBe(200);
-    const joinerId = joinRes.json<{ user: { id: string } }>().user.id;
-
-    // Deactivate the joiner using the bootstrap (superuser) connection to bypass RLS.
-    // This is test setup only — the bootstrap role is the postgres superuser used
-    // exclusively in tests/infra scripts to seed state that normal roles cannot write.
-    const client = new pg.Client({ connectionString: connectionStrings.bootstrap });
-    await client.connect();
-    await client.query(
-      `UPDATE app.users SET status = 'deactivated', updated_at = now() WHERE id = $1`,
-      [joinerId]
-    );
-    await client.end();
+    const joinRes = await signUpDeactivatedJoiner();
 
     const meRes = await server.inject({
       method: "GET",
@@ -566,6 +561,50 @@ describe("multi-user registration + lifecycle (Phase 2 Slice A)", () => {
 
     expect(meRes.statusCode).toBe(403);
     expect(meRes.json<{ code?: string }>().code).toBe("account_deactivated");
+  });
+
+  it("blocks pending user from /api/modules with the fixed 403 literal (#1528)", async () => {
+    const joinRes = await signUpPendingJoiner();
+
+    const modulesRes = await server.inject({
+      method: "GET",
+      url: "/api/modules",
+      headers: { cookie: cookieHeader(joinRes.headers) }
+    });
+
+    expect(modulesRes.statusCode).toBe(403);
+    expect(modulesRes.json<{ error?: string; code?: string }>()).toMatchObject({
+      error: "Account is pending approval",
+      code: "account_pending_approval"
+    });
+  });
+
+  it("blocks deactivated user from /api/modules with the fixed 403 literal (#1528)", async () => {
+    const joinRes = await signUpDeactivatedJoiner();
+
+    const modulesRes = await server.inject({
+      method: "GET",
+      url: "/api/modules",
+      headers: { cookie: cookieHeader(joinRes.headers) }
+    });
+
+    expect(modulesRes.statusCode).toBe(403);
+    expect(modulesRes.json<{ error?: string; code?: string }>()).toMatchObject({
+      error: "Account has been deactivated",
+      code: "account_deactivated"
+    });
+  });
+
+  it("keeps the generic scrubbed message for /api/modules with no session (#1528)", async () => {
+    const modulesRes = await server.inject({
+      method: "GET",
+      url: "/api/modules"
+    });
+
+    expect(modulesRes.statusCode).toBe(401);
+    expect(modulesRes.json<{ error?: string; code?: string }>()).toEqual({
+      error: "Session is missing or expired"
+    });
   });
 
   it("revokeUserSessions deletes all of a user's sessions", async () => {

@@ -3,6 +3,7 @@ import { createAppRuntimeRunner, createMigrationOwnerDb } from "./connections.js
 import { seedSecondOwner, seedSoloAdmin } from "./admin.js";
 import { seedOnboardingChunk } from "./chunks/onboarding.js";
 import { seedAiProviderChunk } from "./chunks/ai.js";
+import { seedScriptedChatProviderChunk } from "./chunks/chat-script.js";
 import { seedJobSearchAiProviderChunk } from "./chunks/job-search-ai.js";
 import { seedNewsChunk } from "./chunks/news.js";
 import { seedSportsChunk } from "./chunks/sports.js";
@@ -70,6 +71,15 @@ export async function seedLevel(options: SeedOptions): Promise<void> {
     }
   } finally {
     await migrationDb.destroy();
+  }
+
+  if (options.chatScript) {
+    const scriptedRunner = createAppRuntimeRunner();
+    try {
+      await seedScriptedChatProviderChunk(scriptedRunner, adminUserId);
+    } finally {
+      await scriptedRunner.destroy();
+    }
   }
 
   if (options.level === "solo-admin") {

@@ -1,0 +1,3623 @@
+# Coordination Run — post1632-queue-2026-08-16
+
+**Date:** 2026-08-16
+**Coordinator lock:** label `Coordinator`, **stable anchor = Claude session id `ba2d0a40-9479-4a7d-81c5-e8a85616b639`** (match `agent_session.value` in `herdr pane list`; pane `w1:pDZ`, tab `w1:t6`, take 28 — updated each relay; this line, not any historical boot-section mention, is authoritative for Phase 3 step 0 checks). Single-coordinator lock — exactly one pane labelled `Coordinator` whose session id matches this anchor holds authority for the life of the run. ⚠️ **Pane numbers (`w…-N`) reflow on every restart/split/reap — do NOT trust any pane number written in this file as an identifier; resolve the pane fresh by label+session at read time.** Agents escalate to the **label** (routing, re-claimable); the coordinator merges only when its own pane's **session id** (immutable, NOT the pane number) matches this recorded anchor.
+**Merge policy:** autonomous-after-verified-QA for `routine`/`sensitive`; **`security`-tier needs Ben's explicit merge sign-off**
+**Merge policy update (2026-08-16, take 25):** Ben delegated security-tier sign-off to Fable 5 for this run ("have fable sign off for me") — same shape as `fable-signoff-delegation-waves-3-6`. Fable reviews the Opus QA verdict + diff and posts its own `gh pr comment` sign-off; that sign-off is authoritative, coordinator merges on it directly, no further ping to Ben. Applies to remaining security-tier PRs this run (#1279 now in flight to Fable; #1038, #1468 when ready). #1037 already merged under Ben's own direct sign-off before this delegation.
+**Relay threshold:** security-tier merge → relay immediately after Phase 3 step 7; routine/sensitive `merges_since_relay` ≥ 2 → relay. No deferral. Compaction summary = already past safe → relay, merge nothing.
+**merges_since_relay:** 0 (reset — security-tier merge trigger fired for #1663; per this run's
+established precedent (see #1518/#1519 entry) Ben's standing override covers only the 70%
+context-meter trigger, not the merge counter, so this was a plain-English `needs-ben` FYI digest,
+not a full coordinator relay)
+
+> Successor to relay session `720beb48-677e-4702-a141-548aa2ee0c55` (pane `w1:pBH`, reaped). Prior
+> continuation note: `docs coordination` had no manifest yet — nothing spawned. This file is that
+> manifest, written fresh at handoff.
+
+## Queue
+
+| Spec | Issue | Tier | Status | Agent label | Pane | Branch | PR |
+| ---- | ----- | ---- | ------ | ----------- | ---- | ------ | -- |
+| docs/superpowers/specs/2026-08-13-1013-cluster-global-ddl-serialization.md | #1013 | security | **merged** `f31a840e9` (PR #1624) + companion **merged** `a043ad1ae` (PR #1639, closes #1637), both landed 2026-08-16T16:11 UTC, Ben sign-off on file in AWAITING-BEN.md; issue #1013 CLOSED, board Done; worktree+pane reaped by take-21 (pane had already vanished from herdr before take-21 booted — merge predates take-19/20 handoffs, which carried stale in-progress status) | PR1624 #1013 reconcile v4 | — (reaped) | build-1013-ddl-lock (deleted) | #1624 |
+| docs/superpowers/specs/2026-08-15-1589-job-failure-incident-closure.md (Phase 1 only — Phase 2 split to #1634) | #1589 | sensitive | **merged** `24eb46e2` (PR #1636), QA GREEN 2nd pass, progress comment posted, issue NOT closed (exit criterion 1 is Ben-only prod verification, still open); worktree+pane reaped, QA worktree reaped, digest sent to Ben | PR1589 Phase1b relay3 | — | build-1589-phase1b (deleted) | #1636 |
+| docs/superpowers/specs/2026-08-15-895-required-status-checks.md | #895 | routine | **merged** `e7ac4bef3`, worktree+pane reaped | PR895 required status checks | — | build-895-required-checks (deleted) | #1635 |
+| docs/superpowers/specs/2026-08-15-895-required-status-checks.md (exit criteria 2/4/5: gate proof) | #895 | routine | **merged** `bcb3c2765` — QA GREEN (verdict on PR), all 5 exit criteria closed, issue #895 closed, board Done, worktree+pane reaped | pr1642-895-docs-correction | — | fix/895-auto-merge-notes (deleted) | #1642 |
+| docs/superpowers/specs/2026-08-09-wave-4-external-module-supply-chain.md (last item, lane C) | #1279 | security | **merged** `3ab2f4793` — [PR #1645](https://github.com/motioneso/moss/pull/1645), QA GREEN, sign-off by Fable 5 (delegated authority): https://github.com/motioneso/moss/pull/1645#issuecomment-5309779416. Issue closed (auto), board Done. Worktree + pane reaped. 6 non-blocking follow-ups noted on issue #1279, notably an unbounded `assistantTools[].name` field worth its own issue — not yet filed | — | — | branch deleted | **#1645** |
+| docs/superpowers/specs/2026-08-16-post1632-wave2-privacy-tests-and-target-guard.md | #1037 | security | **merged** `3151e437b` — Ben signed off, QA GREEN, issue closed (auto), board Done (auto), worktree+pane reaped | PR1037 chat-resume RLS relay2 | — | 1037-chat-resume-rls-test (deleted) | #1644 |
+| docs/superpowers/specs/2026-08-16-post1632-wave2-privacy-tests-and-target-guard.md | #1038 | security | **merged** `1deede6a8` — [PR #1643](https://github.com/motioneso/moss/pull/1643), QA GREEN (after one RED→doc-fix round), sign-off by Fable 5 (delegated authority): https://github.com/motioneso/moss/pull/1643#issuecomment-5309861956. Issue closed manually, board Done. Worktree + pane reaped. 2 non-blocking follow-ups noted on issue #1038, not yet filed as separate issues | — | — | branch deleted | **#1643** |
+| docs/superpowers/specs/2026-08-16-post1632-wave2-privacy-tests-and-target-guard.md | #1468 | security | **QA RED, fix relayed** — [PR #1647](https://github.com/motioneso/moss/pull/1647). Opus QA (`qa-1647-1468`) found a real blocker: the new `JARVIS_RECONCILE_CONFIRM_OWNER_EMAIL` var was only wired into the ops-profile `module-install` compose service, not the actual `moss` app service that runs `module-reconcile.ts` as a mandatory boot check — next real prod deploy would crash-loop, violating "a PR must never break prod." Live-proven by a failing UAT (`module-install.uat.spec.ts`). Also found a hardcoded real email (`bendlove@gmail.com`) as a compose default in the public repo (confirmed by direct grep). Fix brief relayed to build agent: wire var into the app service via the existing `env.production.local` pattern, drop the hardcoded default, plus doc updates (4 files) and a B2 re-check. Agent flipped to `working` on the relay. | pr1468-relay6 | w1:pD1 | 1468-target-identity-guard-extend | **fixing, awaiting fresh QA** |
+
+Split-off (not build-queue, tracking only): **#1634** — #1589 Phase 2 (box-wide job-failure
+detection), tier `security`, filed 2026-08-16, needs its own spec before any build lane.
+
+**The `Issue` column may never be `—` or prose.** All three rows already carry real GitHub issues
+(#1013, #1589, #895) — good.
+
+Risk tier basis:
+- **#1013** — DB DDL/lock family, same as #1632. `security`.
+- **#1589** — prod worker↔Postgres connection-acquire failures; presumptively `security` pending
+  spec (touches DB connection/auth surface box-wide) — Fable to confirm/reclassify at spec time.
+- **#895** — CI config only (required status check on `main`), no schema/auth/secret surface →
+  `routine`.
+
+## #1013 / PR #1624 — resume detail
+
+- Spec+plan **merged to `main`** at `5b1d388d3` (docs(1013), PR #1616). Approved.
+- Existing worktree, **reuse, do not recreate**:
+  `.claude/worktrees/coord-overnight-20260810/.claude/worktrees/build-1013-ddl-lock`, branch
+  `build-1013-ddl-lock`, head `8bc7cd112`.
+  - Has an **uncommitted diff** on `packages/db/src/__tests__/cluster-ddl-lock.test.ts` (51 ins /
+    2 del) — this is the D1/D2/T1-T3 closure-cycle diff that Fable's pre-proof diff check ruled
+    **GREEN TO RUN P1-PRIME** (see `adjudication-1624-conditional-closure.md`). Do not discard it;
+    the resuming builder commits it as part of the resume work.
+- **PR #1624 is `mergeable: CONFLICTING`** against current `main` — confirmed real overlap, not a
+  stale flag: both #1624 and merged #1632 (`389e96488`) touch `packages/db/src/cluster-ddl-lock.ts`
+  and `packages/db/src/module-role-broker.ts`. This is a genuine design reconciliation (dual-session
+  liveness lock from #1632 vs. #1013's cluster-global serialization), not a mechanical rebase.
+- **Binding kill-gate (Fable ruling, comment `5299074249`):** one more mechanical cycle only.
+  Builder rebases onto new `main`, reconciles the two lock designs, re-runs **P1′ (locked N≥30 +
+  T3)**. If P1′ is green → Fable bounded diff check at final head **substitutes for QA r4**, no
+  fifth cycle. If P1′ is still red after the rebase/reconcile → **that is a real finding**, stop
+  and escalate to Ben/Fable — do not retry-loop it.
+- Given the design-collision depth (two independently-adjudicated lock mechanisms touching the
+  same files) this is flagged as a possible **design-fork** — Opus one-shot reconciliation read
+  recommended before the builder starts, not left to builder judgment alone.
+
+## Dependency / merge order
+
+- **#1013** stands alone — no file overlap with #1589/#895's surfaces. Blocked only on its own
+  reconciliation (`opus-1013-reconcile-v3`, dispatched 2026-08-16, in-process under this session,
+  pending).
+- **#1589 (Phase 1b only)** — spec approved on `main` at `fd75087a6`, Phase 1a confirmed resolved
+  by Ben, Phase 2 split to #1634. Zero file overlap with #895 or #1013. **Ready to spawn now.**
+  Tier `sensitive` (data-loss fix in `packages/memory/src/repository.ts`).
+- **#895** — spec approved on `main` at `fd75087a6`. Zero file overlap with #1589 or #1013 except
+  none (its only touched file is `.github/workflows/ci.yml`). **Ready to spawn now.** Tier
+  `routine`. **Ordering constraint (do not get this backwards):** the `ci-gate` aggregate-check
+  workflow PR must merge and run green on `main` **once** before Ben applies the branch-protection
+  ruleset that references its check name — ruleset application is admin-privileged, Ben-only, not
+  agent-buildable, and out of this run's scope. The agent lane only needs to land the workflow PR.
+- **Merge order:** #1013 (PR #1624) once its reconciliation lands and the rebase is green; #1589
+  and #895 can spawn and merge independently right now, in either order, ahead of or alongside
+  #1013.
+
+## CI waivers
+
+| Check | PR | Proven red on `main` @ SHA | Proof | Ben-approved |
+| ----- | -- | --------------------------- | ----- | ------------- |
+| <none> | — | — | — | — |
+
+## Outstanding escalations
+
+- [x] **Ben: confirm readiness to resume #1013/PR #1624** — RESOLVED 2026-08-16. `opus-1013-reconcile-v3`
+      (in-process subagent) died when its host coordinator pane (`w1:pBN`) was closed at Phase 0a
+      handoff — 3rd loss of the in-process pattern (v1, v2, v3 all lost the same way). Its
+      uncommitted diff (253 ins / 83 del across 4 files, incl. `cluster-ddl-lock.ts` itself)
+      survived on disk in the worktree and was NOT discarded. Redispatched as an independent
+      Herdr-spawned agent per recommended option (a): `opus-1013-reconcile-v4`, pane `w1:pBQ`,
+      tab `w1:t14` (new "agents" tab), session `c62f49e2-08f3-4403-a335-d070c58d4997`, Opus 5
+      confirmed. Briefed via `.claude/boot-1013-reconcile-v4.txt` to read the surviving diff first,
+      not restart from scratch. This pattern survives future coordinator relays.
+- [x] **Ben: #1589 and #895 both lack approved specs.** — RESOLVED. Fable delivered both specs,
+      approved on `main` at `fd75087a6`. #1589 Phase 1a confirmed resolved by Ben 2026-08-16;
+      Phase 2 split to new issue #1634 per Ben's approval. Both #1589 (Phase 1b, `sensitive`) and
+      #895 (`routine`) are ready-to-spawn — see Queue table.
+
+## CI status check — RESOLVED green
+
+Post-#1632-merge run `31922768821` on `main`: confirmed `{"status":"completed","conclusion":
+"success"}` (one-shot check, 2026-08-16, this session). Latest `main` run is also green
+(`31924346040` @ `389e96488`). No block on spawning.
+
+## Reaped sessions
+
+- `w1:pBH` — outgoing coordinator (session `720beb48-677e-4702-a141-548aa2ee0c55`) — closed
+  2026-08-16 after confirming successor pane `w1:pBJ` (session `d4714c66-...`) was driving.
+- `w1:pBJ` (session `d4714c66-49f7-42ad-83fe-c5de39e4db6d`) — relayed at 70% context-meter
+  warning per coordinate skill's non-deferrable relay trigger, before any spawn happened this run.
+  Successor `w1:pBK` (session `ff76ced3-8d5b-431b-b25f-f4784b66c04e`) claimed the `Coordinator`
+  label 2026-08-16, notified this pane it is driving (queued — pane was mid-turn); pending reap
+  confirmation.
+
+**Coordinator lock updated:** new stable anchor = session `ff76ced3-8d5b-431b-b25f-f4784b66c04e`
+(pane `w1:pBK`), effective 2026-08-16, superseding `d4714c66-...` above once `w1:pBJ` confirms
+reap.
+
+**Coordinator lock updated again:** relaying at 70% context-meter warning (non-deferrable trigger),
+before Phase 0 finalized and before any build agent spawned. New successor claims a fresh session
+id in the same tab as `w1:pBK`; update this line once it does.
+
+**Coordinator lock updated again (2026-08-16):** new stable anchor = session
+`db01cc9d-fbee-41ba-9b47-2334bfc39741` (pane `w1:pBM`, same tab `w1:t6`). Predecessor `w1:pBK`
+(session `ff76ced3-8d5b-431b-b25f-f4784b66c04e`) confirmed handoff and was closed after
+verification (`herdr pane list` showed exactly one `Coordinator`-labelled pane post-close).
+
+**Correction (2026-08-16):** the pending `opus-1013-reconcile` Opus subagent (step 2 of the prior
+continuation note) turned out to be an **in-process subagent of the closed predecessor pane**, not
+an independently-addressable peer session — `SendMessage` to it now returns "not reachable" (not
+in `ListAgents`). Closing `w1:pBK` per Phase-0a terminated it before it produced a verdict; that
+in-flight reasoning is lost. Re-dispatched fresh as `opus-1013-reconcile-v2` (in-process subagent
+of this coordinator session, `db01cc9d`) — pointer-style prompt covering PR #1624, merged #1632
+`389e96488`, the manifest resume-detail section above, and the `adjudication-1624-conditional-
+closure` memory pointer. Awaiting its verdict. **Lesson for future relays:** before closing a
+predecessor's pane, check whether it has any in-flight `Agent()`-spawned subagents outstanding
+(ask it, or check its own manifest note) — those don't survive the pane closing. (Saved to
+agentmemory as a `bug` memory for future sessions.)
+
+**Ben answered all 3 AWAITING-BEN decisions (2026-08-16, direct chat with this coordinator
+session, NOT yet written back to AWAITING-BEN.md or GitHub — successor must do this first):**
+(a) prod confirmed — PR #1609's fix held, #1589 Phase 1a resolved, no further prod check needed;
+(b) split #1589 Phase 2 into its own new GitHub `task` issue now — approved; (c) #895 — no
+admin-bypass-actor exception on the branch-protection ruleset — approved, following coordinator's
+recommendation.
+
+**Coordinator relay fired (2026-08-16, context-meter 70% warning, non-deferrable trigger) —
+successor's exact next steps, in order:**
+1. Resolve the AWAITING-BEN.md entry "## #1589 / #895 spec findings need your decisions" — per
+   the file's own protocol, remove it now that Ben has ruled (ruling recorded above and in this
+   note); do not leave it sitting as still-open.
+2. File a new GitHub `task` issue for #1589 Phase 2 (zero job-failure visibility fleet-wide, tier
+   `security`, deliberately unplanned in detail per Fable's spec
+   `docs/superpowers/specs/2026-08-15-1589-job-failure-incident-closure.md` — read its Phase 2
+   section for issue body content, do not paste full spec text into the issue). Reference #1589
+   labels for consistency: `bug` + `task` (see `gh issue view 1589 --repo motioneso/moss`).
+3. Comment on #1589 (`gh issue comment 1589`): Phase 1a confirmed resolved by Ben (prod fix in
+   PR #1609 verified holding), Phase 2 split into new issue #<N from step 2>. Keep #1589 itself
+   scoped to Phase 1b only going forward.
+4. Fold into the run queue (both agent-buildable now, independent of each other and of #1013 per
+   Fable's zero-file-overlap confirmation except `.github/workflows/ci.yml` for #895 alone):
+   - #1589 Phase 1b — tier `sensitive` — NUL-byte crash / silent data loss fix at
+     `packages/memory/src/repository.ts:74` (`upsertFileChunks` delete-then-insert on
+     `app.memory_chunks`).
+   - #895 `ci-gate` aggregate-check workflow PR — tier `routine` — must merge and go green on
+     `main` **before** any ruleset references its name (ordering constraint, see #895 spec).
+5. Finalize the collision/dependency map with these two additions, re-present the **full**
+   updated manifest to Ben, **PAUSE** for his explicit OK, THEN spawn build agents (Phase 1).
+6. **#1013/PR #1624 still blocked independently** — `opus-1013-reconcile-v2` (in-process subagent
+   of session `db01cc9d`, spawned this session) has returned only content-free `idle_notification`
+   heartbeats to 3 status pings (03:49, 03:50, ~04:15 UTC), never a substantive verdict. Try one
+   more `SendMessage` ping; if still nothing, treat as stalled (same failure mode the *first*
+   opus-1013-reconcile hit before it was lost to a pane close) — do not endlessly re-ping. Consider
+   `TaskStop` + a clean re-dispatch, or check reachability via `ListAgents` first. The reconciliation
+   question itself (unchanged): how should #1013's cluster-global DDL serialization compose with
+   #1632's now-merged dual-session liveness lock in `packages/db/src/cluster-ddl-lock.ts` /
+   `module-role-broker.ts` — PR #1624 (`build-1013-ddl-lock` branch, head `8bc7cd112`, worktree
+   `.claude/worktrees/coord-overnight-20260810/.claude/worktrees/build-1013-ddl-lock`) currently
+   shows `CONFLICTING` against main.
+
+**Phase 0a complete (2026-08-16, this session):** Coordinator lock is session `db01cc9d-...`,
+pane `w1:pBM`. `AWAITING-BEN.md` updated with 3 new decisions blocking #1589/#895 finalization
+((a) prod verify PR #1609 held, (b) split #1589 Phase 2 now vs later, (c) confirm no admin-bypass
+exception for #895 ruleset) — **left uncommitted deliberately**: the working-tree copy of that
+file already had ~180 lines of older content (a 2026-08-10 prompt-injection incident log) removed
+by some prior session but never committed, and committing the full current file under this
+session's name would misattribute that unrelated, unverified deletion. My addition is saved to
+disk (the file's own protocol doesn't require a git commit, only "add entry" + `needs-ben` ping).
+`needs-ben` pinged: msg id `1786852106347006781`. Untracked duplicate spec files
+(`2026-08-15-1589-...`, `2026-08-15-895-...`) deleted from this worktree per prior note — both
+already safely committed to `main` at `fd75087a6`.
+
+**Continuation note (mid-doing — exact next steps for the successor, in order):**
+
+1. CI `31922768821` — **RESOLVED green.** No action needed.
+2. **#1013 Opus reconciliation (`opus-1013-reconcile`) — STILL PENDING.** Dispatched, sent one
+   status ping, got two content-free `idle_notification`s back, no verdict text yet. Successor:
+   `SendMessage` it again asking directly for its compact reconciliation proposal (target design
+   for `packages/db/src/cluster-ddl-lock.ts` / `module-role-broker.ts`, reconciling #1013's
+   cluster-global DDL serialization with #1632's dual-session liveness lock) — do not re-dispatch,
+   the agent is alive and already has the context loaded.
+3. **Fable (`fable-1589-895-specs`) — DONE, findings need your action, not just filing:**
+   - Specs committed to `main` (path-scoped, verified) at `fd75087a6`:
+     `docs/superpowers/specs/2026-08-15-1589-job-failure-incident-closure.md` and
+     `docs/superpowers/specs/2026-08-15-895-required-status-checks.md`. **Untracked duplicate
+     copies still sit in this worktree** (`.claude/worktrees/build-1632-liveness/docs/superpowers/specs/...`
+     same two filenames) — Fable wrote them there because that's this session's cwd; they don't
+     belong on a merged branch. Delete those two worktree copies (they're already safely on
+     `main`) — do NOT delete anything else in that specs dir.
+   - **`!!!` #1589's original premise was stale** — the "unresolved prod incident" already
+     shipped a fix in PR #1609 (merged `e546bd7d85a8`, 2026-08-14). Rescoped spec has 3 parts:
+     **Phase 1a** (verify the prod fix actually held) is **Ben-only**, no agent has prod access;
+     **Phase 1b** (agent-buildable now, tier `sensitive`) fixes a real found-in-passing bug: NUL
+     bytes crash `INSERT INTO app.memory_chunks` at `packages/memory/src/repository.ts:74`, and
+     because `upsertFileChunks` deletes-then-inserts, this is silent **data loss**, not just a
+     crash; **Phase 2** (tier `security` — zero job-failure visibility fleet-wide today) is
+     deliberately unplanned in detail and should become its **own new `task` issue**, gated behind
+     Phase 1, not bundled into #1589.
+   - **#895**: verified live — `main` has zero branch protection AND zero rulesets, issue's
+     premise fully intact. Splits buildable-now vs Ben-only: the `ci-gate` aggregate-check
+     workflow PR is ordinary agent work, tier `routine` (mechanical), **must merge and run green
+     on `main` once before** any ruleset references its name (ordering constraint — get this
+     backwards and every open PR wedges on "Expected — waiting for status"). Applying the actual
+     branch-protection ruleset is **admin-privileged, not agent-buildable, needs Ben** — and since
+     every fleet agent authenticates as `motioneso` (admin:true), an admin-bypass-actor exception
+     would defeat the whole fix; spec recommends none, flagged as Ben's call not a settled one.
+     Bonus: fixing #895 retires the standing "never `gh pr merge --auto`" trap in two committed
+     plans — exit criteria include correcting those two stale warnings.
+4. **Add these to `docs/coordination/AWAITING-BEN.md` and run `needs-ben` before doing anything
+   else Phase-0-related** (successor: this wasn't done yet, do it first) — three Ben decisions
+   now blocking: (a) #1589 Phase 1a prod-recovery verification (only Ben can check prod), (b)
+   whether to split #1589 Phase 2 into its own issue now vs later, (c) #895 fork 4 — confirm no
+   admin bypass-actor exception, since Ben himself has no separate non-admin token today either.
+5. Once Ben answers (4) and the Opus reconciliation (2) lands, finish Phase 0: fold #1589-Phase-1b
+   and #895-ci-gate-job into the run queue (both routine/sensitive tier, agent-buildable now,
+   independent of #1013 and of each other — Fable confirmed zero file overlap except
+   `.github/workflows/ci.yml` for #895 alone), finalize the collision/dependency map, re-present
+   the full manifest to Ben, THEN spawn build agents. #1013 build/rebase still waits on (2).
+
+## Phase 0a — this session (2026-08-16)
+
+**Coordinator lock updated:** new stable anchor = session `c57a5297-b4da-49ab-8cd7-19a9de56a450`
+(pane `w1:pBN`, tab `w1:t6`). Predecessor `w1:pBM` (session `db01cc9d-fbee-41ba-9b47-2334bfc39741`)
+confirmed via cross-session message that its in-process `opus-1013-reconcile-v2` subagent had
+returned **no verdict** across 4 status pings (3 pre-relay + 1 fresh one sent at handoff, all
+content-free `idle_notification` heartbeats) — trending stalled, not working. Per the manifest's
+own guidance ("if still nothing, treat as stalled... do not endlessly re-ping, consider a clean
+re-dispatch") and the predecessor's own recommendation, treated as stalled; predecessor pane closed
+(`w1:pBM`, session `db01cc9d`). **`opus-1013-reconcile-v2` is lost with that pane close** — this is
+the second time this exact subagent-in-a-relayed-pane pattern has lost an in-flight Opus
+reconciliation attempt (see "Correction (2026-08-16)" above for the first). `herdr pane list`
+confirmed exactly one `Coordinator`-labelled pane post-close (`w1:pBN`). Phase 0a complete.
+
+**Next:** re-dispatch the #1013 Opus reconciliation fresh, in-process under *this* session
+(`c57a5297...`), then continue the continuation note's remaining items (3–5 above: Fable
+duplicate-spec-file cleanup in `.claude/worktrees/build-1632-liveness/docs/superpowers/specs/`,
+AWAITING-BEN.md status check, final manifest re-presentation to Ben before any build spawn).
+
+Items 1/3/4 done this session (see commit `1e6c2483c`): CI re-confirmed green, duplicate spec
+files already gone, AWAITING-BEN already resolved by Ben in direct chat. #1589-Phase-1b/#895 folded
+into queue as ready-to-spawn, #1634 filed for the Phase-2 split, dependency map updated.
+
+## Phase 0a — this session (2026-08-16, take 2)
+
+**Coordinator lock updated:** new stable anchor = session `a77937e1-04f0-48e3-9ec1-3e8d9f9c5aea`
+(pane `w1:pBP`, tab `w1:t6`). Predecessor `w1:pBN` (session `c57a5297-b4da-49ab-8cd7-19a9de56a450`)
+was still mid-turn ("Scampering…") but its continuation note was already fully flushed and
+committed (`681e0c382`) before relay, so it was closed on schedule per Phase 0a instructions
+without waiting for it to finish. `herdr pane list` confirmed exactly one `Coordinator`-labelled
+pane post-close (`w1:pBP`). Phase 0a complete.
+
+Closing the predecessor killed its in-process `opus-1013-reconcile-v3` subagent — **3rd loss of
+the in-process pattern** (v1, v2, v3). Its uncommitted diff (253 ins/83 del across
+`cluster-ddl-lock.ts`, its test, `prove-cluster-ddl-lock.ts`, and the wiring test — substantially
+more than the small closure-cycle diff the original handoff described) survived on disk in the
+worktree and was inspected, not discarded. Continuation-note item 1, option (a) executed exactly
+as recommended: redispatched as an independent Herdr-spawned agent, `opus-1013-reconcile-v4`
+(pane `w1:pBQ`, new "agents" tab `w1:t14`, session `c62f49e2-08f3-4403-a335-d070c58d4997`, Opus 5
+confirmed), briefed via `.claude/boot-1013-reconcile-v4.txt` to read the surviving diff first
+rather than restart from scratch. This survives future coordinator relays on its own.
+
+Item 2 also executed: both #1589-Phase-1b and #895 build agents spawned (Sonnet 5 confirmed) —
+`build-1589-phase1b` (pane `w1:pBR`) and `build-895-required-checks` (pane `w1:pBS`), same
+`w1:t14` agents tab. Queue table updated to `building` for both.
+
+**Next:** supervise all three lanes (Phase 2 of `coordinate`). Once #1013's reconciliation lands
+(verdict from `opus-1013-reconcile-v4`, either P1′ green or a real red finding), re-present the
+full manifest to Ben per item 3 below before merging anything on #1013 specifically. #1589/#895
+don't need that gate — verify → merge by tier as they come in.
+
+## Continuation note (context-meter 70% relay, 2026-08-16T04:55Z — exact next steps, in order)
+
+**Coordinator lock is `a77937e1-04f0-48e3-9ec1-3e8d9f9c5aea` (pane `w1:pBP`, tab `w1:t6` at time
+of writing — resolve fresh by label `Coordinator` + this session id, never a written pane number).
+Relaying to a successor in the same tab now; the successor becomes the new anchor on takeover.**
+
+All three lanes are spawned and running. Nothing has merged yet (`merges_since_relay: 0`).
+Phase 0a is done for this handoff cycle — the successor does NOT need to repeat Phase 0a steps
+against `w1:pBN`/`c57a5297...`, that predecessor is long gone; it only needs to reap **this**
+pane (`w1:pBP`) once it confirms it's driving.
+
+1. **Supervise all three lanes (Phase 2 of `coordinate`).** Set up a persistent `Monitor` diffing
+   `herdr pane list` for status changes, or `ScheduleWakeup` ≤270s / 20–30min sweeps. Panes, all in
+   agents tab `w1:t14`:
+   - `w1:pBQ` — `opus-1013-reconcile-v4` (Opus, security tier, PR #1624/#1013). Independent
+     Herdr agent, NOT in-process — survives relays. Briefed via
+     `.claude/boot-1013-reconcile-v4.txt` to read a large surviving uncommitted diff in the
+     worktree first before acting. No verdict yet as of this relay.
+   - `w1:pBR` — `build-1589-phase1b` (Sonnet, sensitive tier, #1589 Phase 1b only, no PR yet).
+   - `w1:pBS` — `build-895-required-checks` (Sonnet, routine tier, #895, no PR yet).
+2. **#1013 gate (do not skip):** once `opus-1013-reconcile-v4` reports a verdict (P1′ green, or a
+   real red finding), re-present the FULL manifest (all three lanes' status) to Ben in one shot
+   and get his OK before merging anything on #1013 specifically — this is a `security`-tier PR,
+   Ben's explicit sign-off is mandatory regardless. #1589/#895 do NOT need this gate — they were
+   already cleared to spawn/merge autonomously by tier (Outstanding escalations, both `[x]`).
+3. **Known trap (read the memory, don't re-derive):** `mem_msvc0eim_4c0021067d72` (pattern,
+   project `jarv1s`) — in-process `Agent()`-tool subagents die the instant their host coordinator
+   pane closes; this happened 3x in a row to the #1013 reconciliation lane before it was moved
+   out-of-process. Never spawn cross-relay-lifetime work as an in-process subagent again — always
+   an independent Herdr pane, as `v4` now is.
+4. Standard coordinate Phase 1/2/3 from there: spawn (none pending), supervise, QA, merge by tier,
+   relay triggers as normal (70% meter / 2 routine-sensitive merges / any security merge).
+
+## Phase 0a — this session (2026-08-16, take 3)
+
+**Coordinator lock updated:** new stable anchor = session `8fced45f-1f38-4500-a284-4e338c13360c`
+(pane `w1:pBT`, tab `w1:t6`). Predecessor `w1:pBP` (session `a77937e1-04f0-48e3-9ec1-3e8d9f9c5aea`)
+was `agent_status: done`, idle at prompt, continuation note already flushed and committed
+(`3c962b384`) before relay — closed on schedule per Phase 0a instructions. `herdr pane list`
+confirmed exactly one `Coordinator`-labelled pane post-close (`w1:pBT`). Phase 0a complete.
+
+Checked all three lanes via bounded pane reads immediately after takeover — all actively working,
+no stalls, no escalations pending:
+- `w1:pBQ` — `opus-1013-reconcile-v4`: thinking (Fluttering…), running an SQL-schema grep. No
+  verdict yet.
+- `w1:pBR` — `build-1589-phase1b`: thinking (Brewing…).
+- `w1:pBS` — `build-895-required-checks`: mid-tool-call (`herdr-pane-message` skill), Flowing… 2m20s.
+
+**Next:** resume continuation-note item 1 — set up event-driven liveness supervision (persistent
+Monitor diffing `herdr pane list`) rather than polling inline. Gate at item 2 (#1013 security-tier
+Ben sign-off) still open, no verdict yet from v4.
+
+## Phase 2 update + relay (2026-08-16, take 3 session, 70% context)
+
+**Fleet status (all three lanes, `herdr pane list` + bounded reads, current):**
+- `w1:pBQ` — `PR1624 #1013 reconcile v4` (session `c62f49e2-08f3-4403-a335-d070c58d4997`), idle,
+  holding correctly — finding already reported and filed to Ben (see below), no further action
+  until his A/B ruling arrives.
+- `w1:pBR` — `PR1589 Phase1b memory data-loss fix` (session `f9d1d605-da7a-4de1-b8cd-48e0e754394b`),
+  working normally, no escalation.
+- `w1:pBS` — `PR895 required status checks` (session `c9dfacab-ec07-4c7f-a86b-f40011ccb5f6`), idle
+  mid-task (last action: checking PR CI status), no escalation — normal build rhythm, not a stall.
+
+Persistent `Monitor` (task `bd2uad0zj`) has been diffing `herdr pane list` for all three lanes this
+whole session — no genuine stalls or new escalations beyond what's logged below.
+
+**#1013 A/B escalation received and filed** (see `AWAITING-BEN.md` → `## #1013 / PR #1624 —
+rebase is not mechanically reconcilable, need A vs B`): #1632 (merged) independently reimplemented
+#1013's production-path DDL lock with a different lock key, so the two are functionally disjoint —
+merging both is not viable. #1013's residual value is real (test-suite DDL sites still unlocked on
+`main`), but PR #1624 can't be mechanically rebased onto the new lock — needs either (A) rescope
+#1624 to the test-surface delta against #1632's now-merged lock, or (B) close #1624 as superseded,
+file a fresh narrower issue. No recommendation given — genuine process/prioritization call, not a
+technical one. `needs-ben` pinged (`1786856432283152423.msg`). **Coordinator successor: relay
+Ben's ruling to `w1:pBQ` the moment it lands; nothing else gates on it.**
+
+**Shared-checkout incident, now resolved:** this session committed `AWAITING-BEN.md` (`fc8f06305`)
+without following the shared-checkout skill's pre-commit diff-read step, and inadvertently dropped
+a 289-line 2026-08-09/10 prompt-injection incident log that was sitting uncommitted in the working
+tree (removed by an unidentified earlier actor, never itself committed). Caught via `git show
+fc8f06305 --stat` immediately after, root-caused, and fixed as a new commit `98200175d` (302
+insertions, 0 deletions — full log restored from last-good commit `6d782b008`, nothing else
+touched). Verified via `git show --name-only HEAD`. Lesson saved to agentmemory
+(`mem_msvcf020_35e93d0cc6e4`, pattern, project `jarv1s`) — **any future session touching
+`AWAITING-BEN.md` or another co-edited coordination doc must run `git diff <path>` and read every
+added line BEFORE committing, not just after.**
+
+**Relay now (70% context-meter trigger, non-deferrable).** Nothing else changed this session beyond
+the git fix above and the Phase 0a takeover already logged. Successor next steps, in order:
+1. Phase 0a: claim `Coordinator` label fresh (new pane, same tab `w1:t6`), verify uniqueness,
+   confirm driving, close this pane (`w1:pBT`, session `8fced45f-1f38-4500-a284-4e338c13360c`).
+2. Re-arm liveness supervision for the three lanes (`w1:pBQ`/`w1:pBR`/`w1:pBS`) — persistent
+   `Monitor` on `herdr pane list`, same pattern as `bd2uad0zj`.
+3. Watch for Ben's #1013 A/B ruling (`needs-ben` msg `1786856432283152423.msg`, queued, unanswered
+   as of this relay) — relay it to `w1:pBQ` the instant it lands. #1589/#895 do not gate on it.
+4. Standard coordinate Phase 1/2/3 from there — spawn none pending, supervise, QA, merge by tier,
+   relay triggers as normal (70% meter / 2 routine-sensitive merges / any security merge).
+5. Known trap, still applies: never spawn cross-relay-lifetime work as an in-process subagent —
+   independent Herdr pane only (see `mem_msvc0eim_4c0021067d72`).
+
+## Phase 0a — this session (2026-08-16, take 4)
+
+**Coordinator lock updated:** new stable anchor = session `608d8aff-0fb6-4ca7-9329-88b8358db5f1`
+(pane `w1:pBV`, tab `w1:t6`). Predecessor `w1:pBT` (session `8fced45f-1f38-4500-a284-4e338c13360c`)
+had already flushed its continuation note and committed (`7ed283837`) before relay, then dropped
+into its own auto-compaction with nothing left to do (`herdr pane read` showed "Compacting
+conversation…" only) — closed on schedule per Phase 0a instructions. `herdr pane list` confirmed
+exactly one `Coordinator`-labelled pane post-close (`w1:pBV`). Also corrected header lock line
+(top of file) to match — it had drifted stale through the last two takes (still read
+`a77937e1...`/`pBP` despite take-3's anchor being `8fced45f`); now current.
+
+Checked all three lanes via bounded pane reads on takeover:
+- `w1:pBQ` — `opus-1013-reconcile-v4`: idle, holding correctly on the A/B decision, no new action.
+- `w1:pBR` — `build-1589-phase1b`: working normally (Brewing…, 14m19s), no escalation.
+- `w1:pBS` — `build-895-required-checks`: idle, waiting on "check the PR checks now" — normal
+  build rhythm, not a stall (last line is a routine status-check step, not a wait declaration).
+
+Re-armed liveness supervision: persistent `Monitor` (task `bjcx8bcwi`) diffing `herdr pane list`
+for the three lane panes, emits changes only. Also armed a one-shot background watcher (task
+`bs1bzrb4q`) polling `~/.needs-ben/replies/` every 30s for Ben's #1013 A/B ruling
+(`1786856432283152423.msg`) — still unanswered as of this takeover; will notify the instant it
+lands so it can be relayed to `w1:pBQ`.
+
+**Next:** standard coordinate Phase 2/3 — supervise, no new spawns pending, QA/merge by tier as
+lanes report done. #1013 stays parked on `w1:pBQ` pending Ben's A/B ruling; #1589/#895 don't gate
+on it. Known trap still applies: never spawn cross-relay-lifetime work as an in-process subagent —
+independent Herdr pane only (`mem_msvc0eim_4c0021067d72`).
+
+## Lane relay — #1589 Phase1b (2026-08-16, coordinator session 608d8aff...)
+
+Build agent `build-1589-phase1b` (pane `w1:pBR`, session `f9d1d605-...`) hit its 2nd context-meter
+relay and self-handed-off to successor `build-1589p1b-r2` (pane `w1:pBW`, session
+`4f9246f3-bfae-4d86-b512-cd2c97cac4f4`, same worktree/branch `build-1589-phase1b`), same agents tab
+`w1:t14`. Confirmed successor driving via bounded pane read, reaped `w1:pBR`. Queue row updated.
+
+Progress carried by the relay: fix+3 tests green (70/70, `sanitizeChunkText()` in
+`packages/memory/src/repository.ts`), plus a real gate failure found and fixed independently —
+the new NUL-byte tests pushed `tests/integration/memory.test.ts` over the 1000-line file-size gate,
+split into `tests/integration/memory-sanitization.test.ts` (commit `df287bc14`), pre-push trio +
+`check:file-size` green. Continuation doc: `docs/superpowers/handoffs/2026-08-15-1589-phase1b-relay.md`
+(`def3fea10`). Successor still owes: fresh full `pnpm verify:foundation`, live-path proof decision,
+`coordinated-wrap-up` (PR against `main`, Phase 1b scope only).
+
+No QA/merge action from the coordinator yet — no PR open. Continue supervising.
+
+## Coordinator relay — this session (2026-08-16, take 5), context 70%
+
+**Two merges this session:** PR #1635/#895 (routine, `e7ac4bef3`) and PR #1636/#1589-Phase1b
+(sensitive, `24eb46e2`) — trips the 2-merge threshold, relaying now per no-deferral rule.
+
+**#895** — fully closed out: merged, progress comment posted (issue NOT closed, ruleset-application
+half is Ben-only per spec Buildability), worktree+pane reaped, verified clean.
+
+**#1589 Phase1b** — merged. QA went RED once (CI-rerun-pending + wrong live-path n/a claim), the
+build lane self-relayed (relay2→relay3, same worktree) to fix both, then QA GREEN on re-review.
+Progress comment posted on #1589 — **issue NOT closed**, exit criterion 1 (Ben confirms prod image
+>= `e546bd7d85a8` and failure-clustering gone) is Ben-only, not agent-buildable. **Owed to
+successor:** four-gate worktree-removal test + `git worktree remove` on
+`.claude/worktrees/build-1589-phase1b`, close pane `w1:pBX` (label "PR1589 Phase1b relay3", session
+`ce887618-b547-4565-9308-a9164fec9d72`) once worktree gates confirm clean. Also reap QA's isolated
+worktree `.claude/worktrees/agent-abd25206e5e1566e8` (should already be clean, no edit tools used).
+**Ben digest owed** (sensitive-tier merge, per-merge digest requirement) — nothing sent yet this
+session; fold #1589's merge into the next digest to Ben along with #895's.
+
+**#1013 (PR #1624)** — still parked, pane `w1:pBQ`, session `c62f49e2-08f3-4403-a335-d070c58d4997`.
+No reply from Ben yet as of this relay. Filed to `AWAITING-BEN.md` and `needs-ben` by the lane
+itself (not by the coordinator) — msg id unrecorded here, check `~/.needs-ben/replies/` for
+anything new since 2026-08-16 23:00 addressed to a #1013/A-vs-B question. **Nothing else gates on
+this** — do not let it block other lanes.
+
+**Active Monitors this session (may still be running, verify before trusting):**
+`b4mishbt2` (liveness diff, tab `w1:t14`, persistent) and `bnu6zq6i6` (poll
+`~/.needs-ben/replies/` every 30s for new files, persistent). Both were armed under this session's
+process — **a new coordinator session must re-arm its own**, these will not carry over.
+
+**Next steps for successor, in order:**
+1. Phase 0a: claim `Coordinator` label against this session's anchor (see lock line at top,
+   already updated... verify it, it may need updating to your own session id/pane after takeover).
+2. Reap #1589 Phase1b worktree/pane (see above) and QA agent worktree.
+3. Send Ben the standing per-merge digest covering #895 + #1589 Phase1b (both merges, PR links, tier,
+   verified exit codes/QA verdicts — see Queue table above for both).
+4. Re-arm liveness Monitor (tab `w1:t14`, watching `w1:pBQ`) and the `needs-ben` reply-poll watcher.
+5. Resume Phase 2 supervision of `w1:pBQ` (#1013, parked on Ben) — relay his A/B ruling the moment
+   it lands, nothing else to do until then.
+6. Queue is otherwise empty — #895 and #1589 Phase1b done, #1013 blocked. No other lanes to spawn
+   unless Ben adds work or #1634 (Phase 2, needs its own spec first) gets prioritized.
+
+## Reap #1589 done, TRAP found (same coordinator session, post-compaction, still 608d8aff...)
+
+Session id confirmed unchanged (`608d8aff-0fb6-4ca7-9329-88b8358db5f1`, pane `w1:pBV`, tab `w1:t6`)
+— compaction gave fresh context, no successor spawn needed yet. Executed the "next steps" list
+above directly instead of relaying again:
+
+1. **#1589 lane's self-reported teardown was wrong.** Its "explicit PID kill, fixture/scratch dir
+   removed" claim did not match reality: `lsof -d cwd` on `.claude/worktrees/build-1589-phase1b`
+   found a live `apps/api` (tsx watch server.ts) + full worker chain (worker.ts/esbuild), all
+   reparented to PID 1, ~33min elapsed — an orphaned dev instance from its live-path proof, not
+   killed as claimed. Killed both root PIDs (297954 api, 300781 worker) before reap; confirmed
+   dead. **Never trust a build lane's self-reported teardown — verify with `lsof -d cwd
+   <worktree-path>` before `git worktree remove`.**
+   Worth an agentmemory `bug` entry: pattern matches `prod-chat-orphan-tmux-holds-slot.md` but for
+   dev live-path-proof teardown specifically.
+2. `git worktree remove` on `build-1589-phase1b` and `agent-abd25206e5e1566e8` — both clean,
+   confirmed gone from `git worktree list`.
+3. `herdr pane close w1:pBX` — done.
+4. Queue table row updated (this commit).
+
+**Still owed, next in order:** Ben digest (#895 + #1589 merges), re-arm liveness Monitor + needs-ben
+poll Monitor (neither survived the compaction), resume #1013 (`w1:pBQ`) supervision.
+
+## Skill fix + #1013 phase-1 kill gate + relay (2026-08-16, same session 608d8aff..., take 6)
+
+**Ben flagged a real digest as too jargon-dense** (via `needs-ben` reply, not a coordination
+decision) — fixed structurally: `.claude/skills/coordinate/SKILL.md` now has a standing rule that
+every Ben-facing message (digest, sign-off ask, needs-ben ping, chat reply) leads with plain
+English, identifiers kept but not stacked up front. Committed `37f988f29`. Confirmation sent to
+Ben via `needs-ben` (msg `1786865709330446216`), in plain English this time. Duplicate liveness
+Monitor `bj60yr54v` stopped — `bnu6zq6i6` remains the sole reply-poller.
+
+**#1013 (PR #1624, pane `w1:pBQ`) is building, not parked.** Under Ben's ruling (A), the lane
+committed a 3-phase plan (`docs/superpowers/plans/2026-08-16-1013-test-surface-ddl-lock.md`,
+commit `4c819d146` on `build-1013-ddl-lock`, reset onto `main` at `24eb46e25`; the pre-rescope work
+was not thrown away — saved at ref `backup/1624-pre-rescope` plus two patch files). Plan in plain
+terms: phase 1 locks the parts of the test suite that do cluster-wide database changes (only the
+kind that affect the whole cluster, like dropping a role — not per-database permission changes,
+which don't need the lock); phase 2 restores an env-handling fix #1624 already made once, which
+#1632 dropped when it landed — the lane flagged this as **production code, not test code**, and
+asked whether it should be split into its own issue instead of riding along here; phase 3 re-proves
+the fix works (locked N≥30 run) using main's current diagnostic format. **Kill gate is at the end
+of phase 1, and the lane named the coordinator (not Ben) as owner of that gate** — so whoever is
+supervising next should expect a phase-1 report from `w1:pBQ` and make the go/no-go call directly,
+escalating only if something looks wrong. Its `agent_status` flickered done→working right after
+this message landed — a self-correcting false-done flip, not a stall; no action taken, matches the
+known "status is a hint" pattern.
+
+**Relaying now — compaction tripwire, no deferral.** This session's context was compacted earlier
+in this same process; per the skill's backstop rule that means flush and relay immediately, merge
+nothing first. Nothing has merged since take 5 (still `merges_since_relay: 2`, no new PRs). Successor
+next steps, in order:
+1. Phase 0a: claim `Coordinator` label fresh in tab `w1:t6`, verify uniqueness, confirm driving,
+   close this pane (`w1:pBV`, session `608d8aff-0fb6-4ca7-9329-88b8358db5f1`).
+2. Re-arm liveness Monitor (tab `w1:t14`, watching `w1:pBQ`) and the `needs-ben` reply-poll watcher
+   — neither survives a real relay (only survived the earlier same-process compaction).
+3. Watch `w1:pBQ` for its phase-1 report. Coordinator is the kill-gate owner per the lane's own
+   framing above — read the report, make the call, don't just forward it to Ben. If phase 2's
+   scope question (split the production-path env fix into its own issue?) needs a call, that is
+   a scope/process judgment the coordinator can make directly too — default to splitting it if in
+   doubt, since mixing production-path and test-path changes in one PR is exactly what the earlier
+   #1624/#1632 collision punished.
+4. Standard coordinate Phase 2/3 from there — supervise, QA, merge by tier (#1013 stays `security`
+   tier — Ben's explicit sign-off still required at actual merge time, tonight routed to Fable 5
+   per his standing overnight delegation, see `AWAITING-BEN.md`), relay triggers as normal.
+5. Every Ben-facing message from here on follows the new skill rule — plain English first,
+   identifiers available but not leading.
+
+## Relay #6 successor booted, Phase 0a done (2026-08-16, session `898576c5-e616-4b82-9945-2acaf78ec5dc`, take 7)
+
+Steps 1-2 from take 6 complete: claimed `Coordinator` label on pane `w1:pBY` (tab `w1:t6`),
+confirmed uniqueness via `herdr pane list`, reaped predecessor pane `w1:pBV` (session
+`608d8aff...`, was idle/done as expected). Re-armed both Monitors (liveness diff on `w1:pBQ`,
+`needs-ben` reply-poll) — coordinator lock anchor above updated to this session id.
+
+**#1013 lane (`w1:pBQ`) status at handoff: still mid-phase-1 build, not yet at its report.**
+Bounded read shows it actively editing `packages/db/src/__tests__/module-uninstall...` (locking
+role-drop teardown calls through the new cluster-DDL lock helper). Its own context meter is at
+71%/70%-warning already fired mid-turn ("CHECKPOINT NOW... start a fresh session"), so the lane
+itself may relay before it reaches the phase-1 report — if its pane shows a new/different session
+id or a "successor" self-intro next time it's read, treat that as the SAME lane continuing
+(coordinator's kill-gate ownership carries over), not a new lane needing re-briefing. No action
+taken; continuing to watch via Monitor per plan. `merges_since_relay` unchanged at 2 (no new
+merges this take).
+
+## #1013 Phase 1 report received, kill gate prep done, relay on 70% meter (2026-08-16, take 8)
+
+**Phase 1 report arrived from `w1:pBQ` (opus-1013-reconcile-v4).** Committed `705b1f03f` on
+`build-1013-ddl-lock` (parent `4c819d146`, on `origin/main` `24eb46e25`). In plain terms: the test
+suite's cluster-wide database operations (like dropping a role) now go through the same lock
+#1632 already put on the production path. 7 test suites rewired, a new unit test file (9 tests,
+touches no real database), and the blanket "ignore any drop-role error" fallback narrowed to just
+the one specific, expected error code. Own checks (format/lint/typecheck/unit tests) all green,
+tree clean, explicit-path commit confirmed. Two small, sensible simplifications to the approved
+plan were made and written back into the plan doc (dropping an unused parameter and an unused SQL
+hook that had no real purpose left).
+
+**The lane named the coordinator (me) as the one who has to sign off on Phase 1, not Ben** — its
+own words: "PHASE 1 KILL GATE IS YOURS: two concurrent full gates from separate worktrees on
+separate gate DBs. Pass = zero XX000 tuple concurrently updated and zero unattributable errors.
+Known-accepted residual, not a trip: cross-lane 2BP01 DROP ROLE dependency errors from fixed
+module fixture ids. I am not self-adjudicating this."
+
+**What that means in practice:** run the full local gate twice at the same time, from two separate
+worktrees both on commit `705b1f03f`, each pointed at its own throwaway database, and confirm
+neither run hits the "two things tried to change the same row at once" database error (that's
+exactly the bug #1013 exists to prevent) — except one specific, already-understood, harmless
+version of that error tied to test fixture role names colliding, which is expected and fine.
+
+**Before touching that, checked the box's health first (2026-08-13 disk-full/Postgres-crash
+incident makes this not optional):** Postgres container healthy, but root disk was at **5.8GB free
+out of 413GB (99% full)** — too tight to safely run two fresh worktrees + `pnpm install` + gate
+DBs without risking a repeat of the 2026-08-13 crash. Ran the established safe reclaim
+(`docker builder prune -f && docker image prune -f`, per `dev-box-disk-full-uat-images` memory —
+dangling images/cache only, nothing attached to a running container) — freed **13.98GB**, disk now
+at **20GB free / 95% full**. Safer, but still tight; the successor should re-check `df -h /`
+immediately before starting the two gate runs and consider a further sweep (stale `jarvis_gate_*`
+DBs, old worktrees) if it's dropped further by then.
+
+**Context meter hit the 70% relay trigger right after the disk reclaim command — relaying now per
+the no-deferral rule, before starting the actual two-worktree gate run** (that's a long-running,
+heavy operation and shouldn't be started moments before a hand-off). Nothing merged this take,
+`merges_since_relay` unchanged at 2.
+
+**Successor's next steps, in order:**
+1. Phase 0a: claim `Coordinator` label fresh in tab `w1:t6`, verify uniqueness, confirm driving,
+   reap this pane (`w1:pBY`, session `898576c5-e616-4b82-9945-2acaf78ec5dc`, will show idle/done).
+2. Re-arm the two Monitors (liveness diff on `w1:pBQ`, `needs-ben` reply-poll) — they don't survive
+   a relay.
+3. Re-check `df -h /` before starting anything DB-heavy.
+4. **Execute the Phase 1 kill gate directly** (this is the coordinator's call, not Ben's, per the
+   lane's own framing — don't just forward the report to Ben):
+   - Create a second worktree at the exact same commit `705b1f03f` on `build-1013-ddl-lock`
+     (`git worktree add .claude/worktrees/1013-phase1-killgate-b 705b1f03f`, under
+     `.claude/worktrees/`, never `/tmp`) — the existing worktree at
+     `.claude/worktrees/coord-overnight-20260810/.claude/worktrees/build-1013-ddl-lock` is worktree
+     A, do not touch/rebuild it.
+   - `pnpm install` in the new worktree.
+   - Follow the `verify-gate` skill in **both** worktrees: fresh `DROP`/`CREATE` gate DB each
+     (distinct names, e.g. `jarvis_gate_1013kg_a` / `jarvis_gate_1013kg_b`), `export
+     JARVIS_PGDATABASE=...` (never inline), run `pnpm verify:foundation` backgrounded with a
+     sentinel log line in each worktree, kick both off within the same short window so they
+     actually overlap, never pipe the command.
+   - **Strongly recommend delegating the actual execution to a subagent** (Bash-capable, e.g.
+     `general-purpose`) rather than running it in your own coordinator context — this is exactly
+     the kind of long-running, log-heavy operation the `coordinate` skill says to keep out of the
+     resident loop. Give it the acceptance criteria above verbatim and ask for a compact PASS/FAIL
+     verdict only (exit codes, count of `XX000 tuple concurrently updated` hits, count of other
+     unattributable errors, explicit note on whether any 2BP01 DROP ROLE hits were present and
+     that they're expected/non-blocking) — never read the raw gate logs yourself.
+   - **Go/no-go is yours to make** from that verdict. PASS → report back to `w1:pBQ` via
+     `herdr-pane-message` so it proceeds to Phase 2 (and separately weigh the Phase 2 scope
+     question below). FAIL → do not let the lane proceed to Phase 2/3; escalate to Ben (routed to
+     Fable 5 overnight per his standing delegation) with the specific failure signature, since a
+     real failure here means #1013's core fix doesn't hold under concurrency.
+   - **Clean up after:** DROP both gate DBs, and remove the throwaway second worktree
+     (`.claude/worktrees/1013-phase1-killgate-b`) once its result is captured — it only exists for
+     this one proof, unlike worktree A which the lane is still building in.
+5. **Separately, the lane flagged a scope question in its report:** Phase 2 is a production-code
+   env-handling fix (not test code) that #1624 had already made once and #1632 dropped when it
+   landed — the lane asked whether that should be split into its own issue rather than riding
+   along in this test-surface PR. Per take 6's guidance: **default to splitting it** if in doubt,
+   since mixing production-path and test-path changes in one PR is exactly what the #1624/#1632
+   collision already punished once. Make that call before/alongside relaying the kill-gate verdict
+   to the lane so it knows its Phase 2 scope going in.
+6. Standard coordinate Phase 2/3 from there onward — #1013 stays `security` tier, Ben's explicit
+   merge sign-off still required at actual merge time (tonight routed to Fable 5 per his standing
+   overnight delegation, see `AWAITING-BEN.md`), relay triggers as normal.
+
+## Coordinator relay — take 9 boot (2026-08-16, session `18852b51-f262-4175-92db-091669bcb824`, pane `w1:pBZ`, tab `w1:t6`)
+
+Phase 0a done: renamed own pane `Coordinator`, confirmed sole active holder, closed predecessor
+pane `w1:pBY` (session `898576c5...`, was mid-verification-loop confirming my boot, not still
+doing real work — its own manifest note already said flushed/safe-to-close). Lock anchor above
+updated to this session id. Re-armed both Monitors (fresh task ids: liveness diff `bjwyu4ckg`,
+needs-ben reply-poll `bzxkgluy0`) — neither survives a relay. `df -h /`: still 20GB free, unchanged
+from predecessor's last check, tight but stable. Reset `merges_since_relay` to 0 (see note above —
+stale "2/THRESHOLD HIT" text had survived 3 relays with zero new merges; fixing the bookkeeping,
+not disputing that no merge is currently owed).
+
+Skimmed `AWAITING-BEN.md` tail: fully resolved through 2026-08-16 (Ben ruled A/B/C same-day chat),
+only open standing note is the overnight Ben-decisions-route-to-Fable-5 delegation. Nothing
+currently blocking.
+
+Next: execute STEP 5 of my boot brief — the #1013 Phase 1 kill gate (security tier, my call per
+the build lane's own escalation), then resolve the Phase 2 scope question (new issue vs folded in)
+before relaying the verdict to `w1:pBQ`.
+
+## #1013 Phase 1 kill gate in progress + Phase 2 split ruled (2026-08-16, take 9, session `18852b51...`)
+
+**Found on arrival:** worktree A (`build-1013-ddl-lock`) had moved one commit past the reported
+`705b1f03f` — `4382823da`, "keep the injected env's lock domain on the install path (#1013)". A
+mid-turn message from the lane (opus-1013-reconcile-v4) explained: this is the Phase 2 production-
+path fix (env-resolution divergence between `reconcileModules`'s injected env and the cluster-DDL
+lock's ambient `process.env` — under a non-default lock database the two disagree, so every
+participant takes a *real* advisory lock but each in a different database, silently excluding
+nobody). It landed the fix while waiting for my Phase 1 verdict and Phase 2 scope ruling, rather
+than idling. All own checks green (format/typecheck/lint/4 lock-test files, 30 tests), tree clean.
+
+**Ruled: SPLIT.** Filed #1637 (security tier) as the tracking issue for the Phase 2 fix. Told the
+lane (via `herdr agent prompt`) to extract commit `4382823da` onto its own branch/PR against #1637,
+and reset `build-1013-ddl-lock` back to `705b1f03f` so it carries Phase 1 (test-surface) only —
+per take-6's default-to-split guidance, since mixing production-path and test-path changes in one
+PR is exactly what the #1624/#1632 collision already punished once. Awaiting the lane's
+confirmation or objection.
+
+**Phase 1 kill gate:** did NOT reuse worktree A (it's mid-reset per the above, and I don't want a
+race). Created two fresh throwaway worktrees both pinned at the exact reported commit
+`705b1f03f`: `.claude/worktrees/1013-phase1-killgate-a` and `-b`. Delegated the install + concurrent
+two-worktree `verify:foundation` run + log-grep verdict to a `general-purpose` subagent
+(`a5fe027c2d4f6348d`, running in background) per the coordinate skill's "never read raw gate logs
+yourself" rule. Acceptance criteria given verbatim: zero `XX000 tuple concurrently updated`, zero
+other unattributable errors; `2BP01 DROP ROLE` residual is expected/non-blocking. Agent also
+handles cleanup (drop both gate DBs, remove both throwaway worktrees). Awaiting its verdict —
+go/no-go on Phase 1 is mine to make from that verdict alone, per the boot brief.
+
+Nothing merged this take. `merges_since_relay` still 0.
+
+## #1013 Phase 1 kill gate: FAIL (conservative), relay at 70% meter (take 9 continued)
+
+**Kill-gate subagent (`a5fe027c2d4f6348d`) stalled** after correctly launching both background
+gate runs (proper sentinel-line backgrounding per verify-gate skill) — it ended its turn on a wait
+declaration ("I'll resume once the monitor reports...") without ever arming a real Monitor, and its
+Agent-tool task had already completed, so it would never resume. Per the coordinate skill's stall
+diagnosis (wait-declaration ≠ frozen-mid-turn — do not nudge, take over), I confirmed the real
+`pnpm verify:foundation` processes were still genuinely running via `ps aux`, armed my own Monitor
+for both sentinel lines, and took over the log analysis myself once it fired (bounded `grep` only,
+never a raw read).
+
+**Results** (both runs pinned at `705b1f03f`, worktrees `1013-phase1-killgate-a`/`-b`):
+- `XX000 tuple concurrently updated`: **0 in both** — the actual #1013 concurrency bug did not
+  occur. Core invariant holds.
+- `2BP01` (known-accepted DROP-ROLE residual, #1625): **0 in both** — didn't even manifest.
+- But both runs had unexplained failures outside either category, and non-overlapping between
+  runs: gate_a — job-search test failure + `password authentication failed for user
+  "jarvis_mod_job_search_install"`; gate_b — 3 different job-search test failures + 2
+  imap-email-write-provider failures. Full detail: `gate_a.log`/`gate_b.log` in this session's
+  scratchpad (path in the relayed message to v5 — do not read raw, grep only).
+
+**Verdict: FAIL**, on the kill gate's own explicit rule (uncertain nonzero-exit attribution → FAIL,
+don't guess). Judgment: this is likely NOT a #1013 regression — the non-overlapping,
+non-deterministic failure pattern across the two runs looks like known cross-lane concurrency noise
+(candidates: `pg-roles-are-cluster-global` memory — two gate runs can race on shared module-install
+roles even with isolated DBs; `module-browser-polls-share-one-rate-limit` memory — job-search API
+polls share one rate limit, so two concurrent runs can starve each other). But it doesn't match the
+documented 2BP01 signature exactly, so calling it PASS-with-explained-nonzero-exit would be
+guessing. Relayed FAIL + this reasoning to `opus-1013-reconcile-v5` (`w1:pB0`,
+`34c87fd7-0561-4dd4-8cd7-8e71c9e5be6d`) — told it NOT to proceed to Phase 2/3, to hold the #1637
+gate run, and recommended a second kill-gate run as the tiebreaker (same failures repeat → confirms
+environmental noise, safe PASS; different again or a real XX000 appears → real problem).
+
+**NOT YET DONE — successor must pick up:**
+1. Cleanup owed (subagent stalled before its own step 6/7): remove worktrees
+   `.claude/worktrees/1013-phase1-killgate-a` and `-b`; `DROP DATABASE` `jarvis_gate_1013kg_a` and
+   `jarvis_gate_1013kg_b`; delete the four scratchpad logs (`gate_a.log`, `gate_b.log`,
+   `install_a.log`, `install_b.log` — session `18852b51...`'s scratchpad).
+2. Run the recommended second kill-gate (fresh throwaway worktrees, same commit `705b1f03f`) to
+   settle the FAIL — reproducible-same-failures → PASS-with-explained-nonzero-exit, relay that to
+   v5; different/new failures or any real XX000 → escalate as a genuine #1013 gap.
+3. Once cleared either way, tell v5 it's clear to run its own #1637 gate
+   (`JARVIS_PGDATABASE=jarvis_gate_1637fix`, worktree `fix-1013-lock-domain`, branch
+   `fix-1013-lock-domain-env-consistency` at `755e1aa2a`) — I told it I would.
+4. Standard Phase 2/3 supervision resumes after that: QA (Opus, security tier) for both #1624 and
+   #1637 PRs, `gh pr comment` verdicts, Ben's/Fable-5's explicit merge sign-off, never auto-merge.
+
+Relaying now at 70% context meter per the compaction/context-meter tripwire — no further work this
+take. `merges_since_relay` still 0.
+
+## Coordinator relay — take 10 boot (2026-08-16, session `701ccb80-cf06-4c4e-9744-4a32e9140bf4`, pane `w1:pC1`, tab `w1:t6`)
+
+Phase 0a done: renamed pane to `Coordinator`, reaped predecessor (`w1:pBZ`, session
+`18852b51...`, confirmed idle at a prompt before close), verified exactly one `Coordinator`-labelled
+pane. Lock anchor above updated. Re-armed both Monitors (liveness diff `b5zc3jpqb`, needs-ben reply
+poll `bod5rp1p7`). `df -h /`: 19G free (was 20G after take 8's reclaim — normal drift, sufficient
+for the tiebreaker gate).
+
+Cleanup of the FAILED kill gate's leftovers (subagent had stalled before its own step 6/7): removed
+worktrees `1013-phase1-killgate-a`/`-b` (verified clean — 0 tracked modifications, 0 live PIDs
+cwd'd there, before removing), dropped both `jarvis_gate_1013kg_a`/`_b` DBs, deleted the four
+scratchpad logs from session `18852b51...`'s scratchpad dir.
+
+**New input before the tiebreaker gate:** `opus-1013-reconcile-v5` pushed unsolicited root-cause
+analysis (bounded grep of both FAIL logs, no raw reads): the non-XX000 failures in both gate_a/b
+are **the same defect as accepted #1625 (2BP01)** — fixed `moduleId = "job-search"` literal in 4
+integration suites derives cluster-global role names
+(`jarvis_mod_job_search_install`/`jarvis_mod_job_search_runtime`); two concurrent gate lanes race on
+create/drop of that one shared role pair, giving `password authentication failed` /
+`role "..." does not exist` depending who loses the race. This means **which files fail will vary
+run to run** — that's confirmation of the shared-fixture root cause, not evidence against it. XX000
+`tuple concurrently updated` = 0 in both logs independently reconfirmed. Separately flagged: 2 imap
+failures in gate_b look like a second, unrelated shared-fixture collision (empty-body content
+assertions), also not #1013.
+
+This **corrects my originally-stated re-run criterion** ("same failing files repeat ⇒ PASS") to the
+right one: **PASS = XX000 and unwaived-2BP01 both 0 in both runs AND every other failure matches a
+known shared-fixture-collision signature** (job-search fixed role names, or a similarly-explained
+shared-resource race) — file identity across runs is not the signal. Told v5 to keep holding (no
+#1637 gate, no push, no PR) and to go ahead and file a separate task issue for the fixture-id fix
+(per-lane-unique moduleId/role suffixing) linked to #1625, since that's real out-of-scope work it
+can do productively while it waits.
+
+**Next: running the tiebreaker kill gate now** — fresh throwaway worktrees at `705b1f03f`,
+delegated to a subagent, corrected acceptance criteria as above.
+
+**Delegated subagent (`ac54e8514afaf8af0`) stalled the same way its predecessor did**: it ran both
+`pnpm install`s cleanly (verified both worktrees have working `node_modules`/vitest binaries) then
+ended its turn declaring it was "waiting for the install-completion monitor to fire" — no such
+monitor was ever armed, no gate DBs created, no `verify:foundation` runs started. Per the coordinate
+skill's stall diagnosis (wait declaration, not frozen-mid-turn — do not nudge), I took over directly
+instead of re-spawning: created both gate DBs (`jarvis_gate_1013kg2_a`/`_b`), launched both
+`verify:foundation` runs backgrounded with sentinel lines within the same window
+(`/tmp/.../scratchpad/gate2_a.log`, `gate2_b.log`), armed my own Monitor for both sentinels. v5 went
+idle in the meantime (expected — it's holding per instruction, nothing to act on).
+
+v5 also filed the fixture-id follow-up work while holding: commented the root-cause find onto the
+existing #1625 (correcting its 2BP01-only framing to cover the role-does-not-exist/password-auth
+symptom too), and filed **#1638** (task, no milestone) scoped narrowly to the real job-search
+module's cluster-global role collision specifically — #1625's "derive fixture id from lane db"
+fix doesn't work here since these suites install the *real* job-search module and assert against
+its real table/RLS identity, so renaming would decouple the assertions from what's under test.
+Genuinely separate fix from #1625, correctly split rather than merged. No action needed from me
+now; will fold an ack into the Phase 1 verdict relay to v5.
+
+Waiting on the tiebreaker gate's own Monitor (`byj0s1kae`) for both sentinel lines before scoring
+the verdict myself (bounded greps only, per the corrected criteria above).
+
+(Stale subagent `ac54e8514afaf8af0` sent a second stall notification later claiming it armed its
+own monitor — confirmed via `ps aux` this did NOT duplicate the gate run: only my own two
+`verify:foundation` processes are running, one per worktree, matching this session. Ignoring the
+subagent going forward; my own launch + Monitor `byj0s1kae` are authoritative.)
+
+## #1013 Phase 1 tiebreaker kill gate: PASS (2026-08-16, coordinator take 10)
+
+Both `verify:foundation` runs completed (rc=1 each, expected — see below), scored via bounded grep
+against the corrected acceptance criteria:
+
+- **XX000 `tuple concurrently updated`** (the actual #1013 regression signature): **0/0** in both
+  logs. Clean — this is the gate.
+- **2BP01**: 0/0.
+- **job-search fixed-role-collision** (`jarvis_mod_job_search_install`/`_runtime`): 1/1, matches
+  known #1625 noise exactly.
+- **imap shared-fixture** (`imap-email-write-provider`): 0/4 (gate B only) — GreenMail draft
+  content bled across concurrent runs (`saveDraft — preserves thread headers` got another run's
+  message body). Same known shared-IMAP-mailbox-fixture category.
+- **New but same-class signature**: `finance-tables-install.test.ts` ("installs all eight
+  migrations, FORCE RLS on every table, and re-runs idempotently") failed in **both** runs — gate
+  A: `role "jarvis_mod_finance_install" is not permitted to log in`; gate B: `password
+  authentication failed for user "jarvis_mod_finance_install"`. This is the **identical mechanism**
+  already tracked in #1625 (fixed cluster-global Postgres installer-role name racing between two
+  concurrently-running gate worktrees) — just hitting the finance module's fixed role literal
+  instead of (or alongside) job-search's. Not a new root cause, not related to #1013's DDL-lock
+  subject matter at all. Broadens #1625's scope (it's not job-search-specific); does not block this
+  gate. No new issue filed — folding into #1625's existing scope note.
+
+**Verdict: PASS-with-explained-nonzero-exit.** Every failure in both runs is accounted for by
+either the job-search/finance cluster-global-role-collision class (#1625) or the imap
+shared-mailbox-fixture class — none are XX000/tuple-concurrently-updated, none are unattributed.
+#1013 Phase 1 is cleared.
+
+Cleanup: worktrees `1013-phase1-killgate2-a`/`-b`, DBs `jarvis_gate_1013kg2_a`/`_b`, and scratchpad
+logs (`gate2_a.log`, `gate2_b.log`, `install_a.log`, `install_b.log`) to be removed next.
+Next: relay PASS to `opus-1013-reconcile-v5`, clear it to Phase 2/3, and tell it to run its own
+#1637 gate per boot-brief STEP 7.
+
+**Note on the delegated subagent (`ac54e8514afaf8af0`):** it was not actually dead — it completed
+its own run and cleanup independently (confirmed: worktrees/DBs/logs all gone, no duplication
+found). Its self-reported verdict says literal "FAIL" because its acceptance criteria explicitly
+told it to flag anything not on the pre-enumerated string list rather than rationalize — that was
+deliberate, so the coordinator applies judgment on the borderline case, not the subagent. The
+finance-tables-install signature is that borderline case; the coordinator's root-cause read above
+(same fixed-role-collision mechanism as #1625, different module) stands as the operative verdict:
+**PASS**.
+
+## Coordinator relay — take 10 → take 11 handoff (2026-08-16, context meter 71%)
+
+Relayed PASS verdict + #1637 clearance to `opus-1013-reconcile-v5` (pane resolves fresh by label
+"PR1624 #1013 reconcile v5", session `34c87fd7-0561-4dd4-8cd7-8e71c9e5be6d`) — message delivered
+and confirmed landed via pane read. v5 is now clear to run its own #1637 kill gate
+(`JARVIS_PGDATABASE=jarvis_gate_1637fix`, worktree `fix-1013-lock-domain`, branch
+`fix-1013-lock-domain-env-consistency` at `755e1aa2a`) per boot-brief STEP 7. No reply expected or
+needed before relaying — v5 was told to keep working.
+
+**Successor's next steps (boot-brief STEP 8, standard coordinate Phase 2/3):**
+1. Phase 0a: claim coordinator lock (rename pane, verify uniqueness, reap this session).
+2. Re-arm the two Monitors (liveness diff, needs-ben reply poll) — do not survive a relay.
+3. Watch for v5's #1637 gate result and PR readiness (v5 will push/report when ready — no need to
+   poll, it'll surface via pane liveness diff or a direct message).
+4. Once #1624 and/or #1637 PRs are ready: spawn Opus adversarial QA (both are **security tier** —
+   #1013 is DDL-lock/auth-adjacent, #1637 is the same domain). `gh pr comment` verdict mandatory.
+   Never auto-merge — Ben's or Fable 5's explicit sign-off required (Ben is signed off overnight;
+   route Ben-level calls to Fable 5 per `AWAITING-BEN.md`'s standing overnight delegation).
+5. Every merge: comment the issue + update the project board (project 2), per Ben's standing
+   preference — applies at every tier, not just sensitive+.
+
+No open questions, no blockers, no orphaned resources (this session's tiebreaker worktrees/DBs/logs
+are already fully cleaned up — confirmed empty before this relay).
+
+**Coordinator lock updated:** session `8066c5f3-5d41-4297-adb5-3ed5bb9b68b0` (pane `w1:pC2`, label
+`Coordinator`, agent name `relay11-coordinator`) is now authoritative — confirmed booted on Sonnet
+5 and actively reading its boot brief. Predecessor session `701ccb80-cf06-4c4e-9744-4a32e9140bf4`
+(pane `w1:pC1`) stands down now.
+
+## Coordinator relay — take 11 boot (2026-08-16, session `8066c5f3-5d41-4297-adb5-3ed5bb9b68b0`, pane `w1:pC2`, tab `w1:t6`)
+
+Phase 0a done: renamed pane to `Coordinator`, verified exactly one `Coordinator`-labelled pane
+(mine) before and after, reaped predecessor pane `w1:pC1` (session `701ccb80...`) — its own
+transcript showed it had already completed the relay handoff and declared itself standing down;
+closed clean. One leftover in-process subagent ("general-purpose — Reading gate log failure
+details", 26m52s) was still shown running in the predecessor's own status bar at reap time — not
+independently verifiable via `ps` (in-process Task, not an OS process) and the predecessor's own
+manifest note asserted no orphaned resources; treating it as stale/immaterial since it dies with
+the pane and the predecessor had already fully handed off. Top-of-file lock anchor line updated to
+this session. Monitors re-armed: liveness diff (`bxj63jl9j`), needs-ben reply poll (`b3t7x4chj`,
+baseline includes Ben's 00:31 plain-English feedback reply — already incorporated into the
+`coordinate` skill, no action needed).
+
+Confirmed v5 (`w1:pB0`, session `34c87fd7...`) actively progressed on its own: running the #1637
+kill gate now (`jarvis_gate_1637fix` at `755e1aa2a`), drafted the #1637 PR body, updated its own
+STATE.md/handoff. Not stalled — real shell running, no wait-declaration. Small correction it made
+en route: `tests/integration/finance-tables-install.test.ts` should NOT fold into #1625 (uses a
+real external-modules ID, not a lane-local fixture) — belongs with #1638 instead. Noted for the
+record; not urgent to fix the earlier manifest note. Next: no polling — waiting on v5's own
+report/push when the #1637 gate lands, per Phase 2 event-driven supervision.
+
+At ~02:07 a Monitor liveness diff fired: v5's `agent_status` flipped `working` → `done`. Bounded
+pane reads (twice) showed **identical visible content** to the prior read — still "1 shell still
+running", still "Churned for 4m 25s" — so this is v5's foreground turn ending while its background
+gate shell keeps running, not a real completion and not a stall (something genuinely is running;
+the coordinate skill's wait-declaration takeover only applies when nothing is). Correctly took no
+action; rescheduled a wakeup to check again rather than nudging or taking over.
+
+## Coordinator relay — take 11 → take 12 handoff (2026-08-16, context meter 70%)
+
+Relaying immediately per the non-deferrable context-meter trigger — no merges this take, none were
+ready. `merges_since_relay`: still 0 (no merges have landed all run).
+
+**State exactly as of this relay:**
+- `opus-1013-reconcile-v5` (pane resolves fresh by label `PR1624 #1013 reconcile v5`, session
+  `34c87fd7-0561-4dd4-8cd7-8e71c9e5be6d`) is running the #1637 kill gate
+  (`JARVIS_PGDATABASE=jarvis_gate_1637fix`, worktree `fix-1013-lock-domain`, branch
+  `fix-1013-lock-domain-env-consistency` at `755e1aa2a`) in the background. It already drafted the
+  #1637 PR body (`<its scratchpad>/pr-1637-body.md`) and said it will report the gate verdict, then
+  start the `build-1013-ddl-lock` (#1624) gate next — **one at a time, not in parallel.** Its own
+  handoff doc is at `~/Jarv1s/.claude/handoff-1013-phase3-v6.md`.
+- Neither #1624 nor #1637 has a PR open yet — nothing is QA-ready. Do not spawn QA until v5
+  reports a PR number.
+- No open Ben-decision questions. `AWAITING-BEN.md` tail is all resolved/standing (overnight
+  decisions route to Fable 5 per the standing 2026-08-16 note — still in effect).
+- Both Monitors were live this take: liveness diff (`bxj63jl9j`) and needs-ben reply poll
+  (`b3t7x4chj`). **Neither survives this relay — successor must re-arm both immediately after
+  Phase 0a**, same as every prior take.
+- Small open bookkeeping item, not urgent: v5 flagged that
+  `tests/integration/finance-tables-install.test.ts`'s earlier fold-into-#1625 note (from take 10's
+  Phase 1 kill-gate verdict) is wrong — it uses a real external-modules ID, so it belongs with
+  #1638 instead. No action taken; harmless if left as-is in the historical verdict section, just
+  don't repeat the wrong attribution going forward.
+
+**Successor's next steps (standard coordinate Phase 0a → Phase 2/3):**
+1. Phase 0a: claim coordinator lock (rename pane, verify uniqueness via `herdr pane list`, reap
+   this session — pane resolves fresh by label `Coordinator`, this session id
+   `8066c5f3-5d41-4297-adb5-3ed5bb9b68b0`, already flushed here, safe to close). Update the
+   top-of-file lock anchor line too.
+2. Re-arm both Monitors (liveness diff, needs-ben reply poll).
+3. Watch for v5's #1637 gate result and then its #1624 gate result (it does them serially) — no
+   need to poll, it'll surface via pane liveness diff or a direct message. A `done`/idle status
+   flip alone is NOT proof — confirm real content change in the pane (new text, not just a status
+   flip) before treating either gate as finished, per this take's own false-alarm above.
+4. Once #1624 and/or #1637 PRs are ready: spawn Opus adversarial QA (both are **security tier** —
+   #1013 is DDL-lock/auth-adjacent, #1637 is the same domain). `gh pr comment` verdict mandatory.
+   Never auto-merge — Ben's or Fable 5's explicit sign-off required (Ben is signed off overnight;
+   route Ben-level calls to Fable 5 per `AWAITING-BEN.md`'s standing overnight delegation).
+5. Every merge: comment the issue + update the project board (project 2), per Ben's standing
+   preference — applies at every tier, not just sensitive+.
+
+No open questions, no blockers, no orphaned resources.
+
+## Coordinator relay — take 12 boot (2026-08-16, session `92efae73-8968-4531-98ee-79bae3db9f9f`, pane `w1:pC3`, tab `w1:t6`)
+
+Phase 0a done: renamed pane to `Coordinator`, confirmed predecessor (session `8066c5f3...`, pane
+`w1:pC2`) had already handed off and was standing down (bounded read confirmed "This session is
+now standing down" + successor confirmed driving), closed its pane clean, verified exactly one
+`Coordinator`-labelled pane remains (mine). Lock anchor updated to this session. Both Monitors
+re-armed: liveness diff, needs-ben reply poll. `AWAITING-BEN.md` tail re-checked — all resolved,
+overnight routing to Fable 5 still standing, nothing new.
+
+Progress on v5 (`w1:pB0`, session `34c87fd7...`): the #1637 kill gate **finished GREEN** —
+`Full gate GREEN at 755e1aa2a — rc=0`, counts confirm a real run (unit 570 files/4657 tests,
+uat-seed 12/29, integration 196 files/1917 tests, all 17 phases present). v5 is now checking
+whether `origin/main` moved under the #1637 branch before opening its PR — no PR open yet
+(`gh pr list` shows only draft #1624, unchanged since 2026-08-15). Not QA-ready. Waiting
+event-driven for the PR number.
+
+**PR #1639 open for #1637** (branch `fix-1013-lock-domain-env-consistency` at `755e1aa2a`, 1 ahead
+of `origin/main`/`24eb46e25`, 0 behind — no rebase gap). Local gate green, unpiped, sentinel-read
+(not wrapper echo), counts as above. Live-path claimed n/a (no user-facing surface — only which
+DB an advisory lock is taken against; identical behavior in default config). CI still running
+foundation/compose checks at dispatch time. **Security tier** — spawned Opus adversarial QA
+(`coordinated-qa`, worktree isolation, background agent `a47164209b992f36c`, label `qa-1639`),
+told to verify the author's claims against the actual diff + live CI rather than trust the prose,
+and to post its verdict via `gh pr comment` (mandatory). Awaiting verdict — no merge until Ben's
+(or Fable 5's, overnight) explicit sign-off, never auto-merge on security tier.
+
+**Correction accepted:** `tests/integration/finance-tables-install.test.ts` does NOT belong in
+#1625 — it pins a real product module id (`"finance"`), so #1625's rename-the-fixture-id fix
+doesn't apply. It belongs in #1638 (same root-cause class, different fix), which v5 says is
+already widened to cover it (`issues/1638#issuecomment-5306649336`). Superseding the earlier
+(wrong) take-10 attribution note — don't repeat that one going forward. v5 also flagged finance
+reproduced deterministically in both of its lanes vs. job-search alternating, i.e. finance is the
+more reliable repro of the two for whoever picks up #1638.
+
+Replied to v5 (ack + told it to continue serially on the #1013/#1624 gate, report when ready).
+
+**#1013/#1624 gate also GREEN**: `### FINAL rc=0` — unit 570 files/4666 tests (1 more than
+#1637's 4657 — this branch's added guard tests), uat-seed 12/29, integration 196 files/1917
+tests. `origin/main` didn't move during the run, evidence sits at the exact verified head. v5 is
+now pushing the re-scoped branch over #1624's stale head (force-with-lease pinned to the verified
+sha, per Ben's ruling A — re-scope in place, not a new PR) and filling in the gate-evidence block
+in the PR body. Not yet confirmed pushed — waiting for v5's report before spawning QA on #1624
+(also **security tier** — DDL-lock/auth-adjacent, same as #1637).
+
+**#1013 Phase 3 DONE, PR #1624 updated in place** — force-pushed with `--force-with-lease` pinned
+to the old sha `8bc7cd112` (lease held), head now `3d16cb57a`, 4 ahead/0 behind `origin/main`
+(`24eb46e25`, unmoved during the run — no rebase gap). PR title/body replaced via REST API
+(`gh pr edit` fails on this repo — Projects-classic GraphQL deprecation — v5 PATCHed directly and
+re-read to confirm the 5943-char body actually landed). Same gate-evidence pattern as #1637:
+`### FINAL rc=0`, unit 570/4666, uat-seed 12/29, integration 196/1917, all 17 phases, sentinel-read
+not wrapper-echo. P1′ evidence in the body: solo N=30, owner-loss, cross-db N=30 (60 locked
+sections, zero cross-lane overlap, 0 lane errors, 341 samples/53 backends), T3 negative control +
+misuse guard. Two things v5 flagged for scrutiny rather than burying: (1) explicitly **withdrew**
+the old body's "59 XX000 collisions reproduced" claim as unsound (probabilistic, can't distinguish
+lock-worked from race-didn't-happen — D2+T3 replace it); (2) T3's own limitation stated plainly —
+the demo writer never collided, so only observer liveness was proven, not that a real collision
+gets correctly attributed. Live-path n/a (internal test tooling). Both gate DBs dropped, no dev
+instance, no seed rows, worktree clean/reapable-after-merge. Three stale gate DBs from other lanes
+noted as not-mine (`jarvis_gate_1248_vault_ingestion`, `jarvis_gate_1325picker`,
+`jarvis_gate_1554p2_1786568959`) — flagged, not touched, someone else's cleanup.
+
+PR #1624 was still in **draft** state (blocks merge on GitHub) — flipped to ready-for-review
+(`gh pr ready 1624`, administrative only, no content touched). CI at dispatch: #1639 fully green
+(`gh pr checks` — CI gate/Compose/Prod-compose/Verify-foundation all pass, only the non-blocking
+image-publish step pending); #1624 still running foundation/compose checks. Spawned Opus
+security-tier QA on #1624 too (`coordinated-qa`, worktree isolation, background agent
+`abd998ff0f2798a4b`, label `qa-1624`) — told to verify the withdrawn-claim/T3-caveat honesty and
+cross-check gate evidence against live CI. Acked v5, told it to stand down — worktree stays
+until merge confirmed on `main` per standard teardown-order rule, not reaped yet.
+
+Both #1639 and #1624 now QA-in-flight. Neither merges without Ben's/Fable-5's explicit sign-off
+(security tier, never auto-merge).
+
+**QA #1639 (fix-1013-lock-domain-env-consistency) VERDICT: GREEN, MERGE-READY: YES.** Agent
+`a47164209b992f36c` (label `qa-1639`), posted to
+https://github.com/motioneso/moss/pull/1639#issuecomment-5306847683 (mandatory security-tier
+comment, done). Grounded at head `755e1aa2a`, `audit:preflight` EXIT=0, CI green (required checks +
+both compose smokes pass), blocking e2e-UAT `module-install.uat.spec.ts` EXIT=0 (1 passed, real
+restart, correct subnet). Independently re-verified v5's "complete call-site coverage" claim by
+tracing every caller itself — confirmed the 5 threaded sites are the complete set, no residual
+split. 0 blocking findings. 4 non-blocking (carried forward, not gating): two are pre-existing test
+fragility (format-coupled assertions; an overstated docstring), one is "no guard against a 6th
+call site being added later — same defect class has recurred 3 times, an enumerating guard would
+be the durable fix" (flagged for #1013, not this PR), one is an edge-case non-identity under
+non-default config that no real caller hits. Security note: no HIGH/MEDIUM introduced, net
+security-positive (restores real cluster-wide serialization on the install path). Not-tested caveat
+disclosed plainly: nothing exercises the changed branch under a non-default lock-database override
+— by construction the fix is a no-op under every config actually in use today, so this is a coverage
+gap, not a live risk.
+
+Fable-5 not reachable in Herdr right now (no pane/session found under that name or similar) to
+route the overnight sign-off ask directly, so per the box-wide rule I filed this as a
+Ben-decision entry in `AWAITING-BEN.md` and pinged via `needs-ben`. Waiting for #1624's QA to land
+too before nudging further, so both security-tier sign-offs can be asked in one ping rather than
+two.
+
+Self-caused hiccup, disclosing rather than burying: my first `needs-ben` invocation used `--help`
+to check usage, but the CLI has no such flag and took it as literal message text — it queued and
+the daemon sent a garbage "--help needs Ben:" ping to Ben's phone before I could stop it. Sent an
+immediate follow-up ping with the real, correctly-worded question and an apology for the noise. No
+other effect — the AWAITING-BEN.md entry itself was already correct. Lesson: never run a CLI's
+`--help` against `needs-ben`; read `~/.needs-ben/README.md` instead.
+
+**QA #1624 (build-1013-ddl-lock) VERDICT: GREEN, MERGE-READY: YES.** Agent `abd998ff0f2798a4b`
+(label `qa-1624`), posted to https://github.com/motioneso/moss/pull/1624#issuecomment-5306945394
+(mandatory security-tier comment, done). Grounded at head `3d16cb57a`, `audit:preflight` EXIT=0,
+CI green (foundation + CI gate + both compose smokes pass; image-publish still pending but that's
+not a correctness gate). Live-path n/a claim independently VERIFIED, not trusted — all 16 changed
+files are under `tests/`, `docs/`, or the one-shot proof script; zero production files touched, so
+no runtime surface exists to click through. Both of v5's flagged caveats independently checked and
+confirmed accurately represented, not overclaimed: the withdrawn 59-collision claim's replacement
+evidence is real working code (not just prose), and the T3 attribution-not-exercised limitation is
+baked into the harness itself, printed automatically whenever no collision occurs — not just
+mentioned in the PR body. 0 blocking findings. 5 non-blocking, the notable ones: the "zero overlap
+between lanes" headline result has no witness that the lanes' time windows ever actually
+overlapped (could pass vacuously if lane A finished before lane B started — same class of weakness
+as the claim the PR withdrew, worth closing later); the source-text role-DDL guard only scans
+`tests/integration/**`, leaving other test dirs unguarded (nothing violates it today, but nothing
+would stop a future one either); advisory-lock acquisitions have no timeout, inherited from #1632.
+None gate this PR. Net security-positive: narrowed a blanket error-swallow in job-search teardown
+to a specific Postgres error code, so DDL failures fail loudly instead of silently — though that
+benefit is only partly realized until #1625/#1638 land (the fixture-identity collisions it would
+now surface).
+
+**Both PRs now GREEN, security-tier QA complete, sign-off is the only thing standing between here
+and merge.** Sent a combined sign-off ask via `needs-ben` and updated the `AWAITING-BEN.md` entry
+to cover both. Neither merges until that comes back explicit "yes."
+
+**Ben replied via needs-ben: "Yes that's good."** Explicit merge sign-off received for BOTH PR
+#1639 (#1637) and PR #1624 (#1013). This is the authoritative go-ahead — do not re-ask.
+
+## Coordinator relay — take 12 → take 13 handoff (context meter hit 70% right as sign-off landed)
+
+The 70% context-meter warning fired in the same turn as Ben's sign-off reply, which is a
+non-deferrable relay trigger per the coordinate skill ("first warning = relay now," no deferral).
+So **the actual merges have NOT been executed yet** — that is the very next thing take 13 must do,
+using Ben's sign-off recorded above as authorization. Nothing else is blocking either merge.
+
+**Immediate next steps for take 13, in order:**
+1. Re-confirm session-id authority (own `agent_session.value` from `herdr pane list` matches this
+   manifest's lock line) before touching anything.
+2. Merge PR #1639 (`gh pr merge 1639 --repo motioneso/moss` — squash or merge per repo convention,
+   check `gh pr view 1639` for branch protection requirements first). Then merge PR #1624 the same
+   way. Re-verify each is still green immediately before merging (CI can regress between QA and
+   now) — a quick `gh pr checks` re-read is enough, do not re-run gates.
+3. **Every merge, both tiers:** comment on the closing issue (#1637 for #1639, #1013 for #1624)
+   with what shipped, and move both issues on the GitHub project board (project 2) to Done. This
+   is a standing Ben preference, not optional.
+4. Confirm both PRs actually show `MERGED` on GitHub after, don't trust the CLI exit code alone.
+5. **Reap `opus-1013-reconcile-v5`'s worktree** (`build-1013-ddl-lock`, pane resolves fresh by
+   label "PR1624 #1013 reconcile v5", session `34c87fd7-0561-4dd4-8cd7-8e71c9e5be6d`) — now safe,
+   both its PRs are merged. Apply the standard 4-gate check (ahead-count now 0 post-merge, no
+   tracked modifications, nothing else cwd'd there) before removing.
+6. Also reap the two ephemeral QA worktrees if still present: `agent-a47164209b992f36c` (qa-1639)
+   and `agent-abd998ff0f2798a4b` (qa-1624) — their verdicts are durably posted to the PRs, nothing
+   further needed from them.
+7. Check GitHub project 2 for what's next in the post-#1632 queue — recall from earlier take-12
+   context (not re-derived here to stay short): #1589 and #895 still need specs before any build
+   lane can start on them; nothing else was queued behind #1637/#1013 as of this relay. Confirm
+   current board state rather than trusting that stale recollection.
+8. `AWAITING-BEN.md`'s #1639/#1624 sign-off entry can be marked resolved (Ben's "yes" is on
+   record above) — either delete the entry or prefix it `RESOLVED` per the file's existing
+   convention (see the #1589/#895/A-vs-B entries above for the pattern).
+
+No open blockers, no pending QA, no other in-flight lane besides the two merges above. v5 is idle,
+standing down, waiting only on the reap.
+
+## Take 13: both merges executed, queue empty, relaying on security-merge trigger (2026-08-16, session `4a4f940d-7bd0-4b53-a7d6-83f0d6e4455b`, pane `w1:pC4`, tab `w1:t6`)
+
+Phase 0a: renamed `w1:pC4` to `Coordinator`, confirmed exactly one Coordinator pane, reaped
+predecessor `w1:pC3` (session `92efae73...`, already flushed). Lock line above updated to this
+session. Both Monitors re-armed (liveness diff on `herdr pane list`; needs-ben reply poll —
+`inotifywait` isn't installed on this box, so the reply-poll monitor uses a 30s `ls`-diff loop
+instead, functionally equivalent).
+
+**Both merges executed, in order, per Ben's sign-off:**
+- **PR #1639** (closes #1637) — re-verified CI green (`gh pr checks`, all pass), merged squash,
+  `gh pr merge 1639 --squash --delete-branch`. Confirmed `MERGED` via `gh pr view`, merge commit
+  `a043ad1ae83bfbee82a4f1ac9492720ea93bbbbf`. Commented on #1637 with what shipped.
+- **PR #1624** (closes #1013) — re-verified CI green, merged squash. Confirmed `MERGED`, merge
+  commit `f31a840e9c49d07efebb450ca6e71e641ff60bff`. Commented on #1013 with what shipped.
+- Both issues (#1637, #1013) were already `CLOSED` and already showed **Done** on project board 2
+  by the time I checked (GitHub auto-closed via the PRs' `Closes #...` — no manual board move was
+  needed, contrary to the checklist's assumption that it would be manual).
+
+**Reap complete, all four-gate-clean:**
+- `build-1013-ddl-lock` worktree (opus-1013-reconcile-v5, pane `w1:pB0`, session `34c87fd7...`) —
+  pane was idle/waiting-on-merge, closed it, then all 4 gates cleared (ahead-count non-zero is
+  expected post-squash-merge per the skill's own caveat; PR-merged status is the real proof and
+  that was already confirmed), worktree removed.
+- QA worktrees `agent-a47164209b992f36c` (qa-1639) and `agent-abd998ff0f2798a4b` (qa-1624) — no
+  panes, no processes, no tracked mods, both removed. Verdicts remain durably posted on the PRs.
+
+**Queue check (step 7):** #1589 and #895 both remain **Draft for Ben's approval** in
+`docs/superpowers/specs/` (`2026-08-15-1589-job-failure-incident-closure.md`,
+`2026-08-15-895-required-status-checks.md`) — confirmed live, not from stale recollection. Neither
+issue is CLOSED. **Nothing else queued behind #1637/#1013.** No build lane can start until Ben
+approves one of these specs — this is not a coordinator action item, it's waiting on Ben reading
+two spec docs.
+
+**AWAITING-BEN.md:** the #1639/#1624 sign-off entry already carries an inline `**RESOLVED
+2026-08-16.**` per the file's existing convention (body-prefix, not heading-prefix — checked
+against the other 4 headings in the file, none are heading-prefixed). No further edit needed.
+
+**Relay trigger fired: security-tier merge (both merges were security tier) → relay now, per the
+manifest's own stated threshold ("security-tier merge → relay immediately after Phase 3 step 7,"
+no deferral). Merging nothing further this session; queue is empty anyway (specs both still
+drafts).**
+
+**Next steps for take 14, in order:**
+1. Phase 0a: claim `Coordinator` label against your own session, verify uniqueness, reap this
+   session's pane (`w1:pC4`, session `4a4f940d...`) once you've confirmed you're driving.
+2. Re-arm both Monitors (liveness diff, needs-ben reply poll — remember `inotifywait` is not
+   available on this box, use the `ls`-diff 30s-poll pattern above).
+3. **No merges pending, no build lane running.** The only open item is: #1589 and #895 specs are
+   both drafted and waiting on Ben's read/approval — not a coordinator action, just a standing
+   wait. Do not spawn a build lane on either until Ben approves one.
+4. Otherwise resume standard `coordinate` Phase 0-3 supervision: recheck GitHub project 2 for
+   anything new queued since this relay, and watch for Ben approving either spec.
+
+## Take 14: standing by, idle-mode supervision (2026-08-16, session `088848b6-22f1-471e-9f39-d63749d2c765`, pane `w1:pC5`, tab `w1:t6`)
+
+Phase 0a: renamed `w1:pC5` to `Coordinator`, confirmed exactly one Coordinator pane, reaped
+predecessor `w1:pC4` (session `4a4f940d...`) after it confirmed the handoff itself (bounded read
+showed it idle, reporting "control has been handed off... standing down"). Lock line: this
+session `088848b6-22f1-471e-9f39-d63749d2c765`, pane `w1:pC5`.
+
+Both Monitors re-armed (liveness diff on `herdr pane list`; needs-ben reply poll via 30s `ls`-diff
+against `~/.needs-ben/replies/` — `inotifywait` still not installed on this box).
+
+No merges pending, no build lane running. #1589 and #895 specs remain drafts awaiting Ben's
+approval — standing wait, not a coordinator action item. Resuming idle-mode Phase 0-3 supervision:
+periodic GitHub project 2 recheck, watch for Ben approving either spec.
+
+**Board recheck (full pull, 832 items, not the truncated 100/500-item page):** only two items sit
+in `Ready` — #1589 and #895, same two as before, unchanged. Two `In progress` items are the parent
+epics (#1470, #1440), not new build lanes. Nothing else queued. Confirms take-13's recollection was
+still accurate as of this check.
+
+**Fable 5 pane created (2026-08-16, Ben's instruction):** previously the coordinator treated "no
+Fable-5 pane found" as a dead end and fell back to `needs-ben`. Ben corrected this — the
+coordinator is responsible for creating the Fable-5 pane itself when needed, not waiting for one
+to exist. Spawned: workspace `w1`, tab `w1:t15` (label "Fable 5"), pane `w1:pC6`, session
+`13481d2f-1ac5-4f7d-b9d7-e1c6785b7484`, `--model claude-fable-5`, confirmed booted correctly.
+Oriented via boot prompt to the standing security-tier sign-off delegation. Future coordinators:
+if no Fable-5 pane is up, spawn one the same way instead of escalating past it.
+
+## Take 14 → take 15 handoff (2026-08-16, Ben requested relay to a new Sonnet coordinator)
+
+Not a threshold-triggered relay (no meter warning, no security merge) — Ben directly asked for a
+fresh Sonnet coordinator. Handing off with a clean slate: no merges pending, no build lane running,
+both Monitors were live under this session (liveness diff + needs-ben reply poll — these do not
+survive the relay, successor must re-arm both).
+
+State at handoff, unchanged since take 14 boot:
+- Queue is empty. #1589 and #895 both remain draft specs in `Ready` on the board, awaiting Ben's
+  read/approval — not a coordinator action item.
+- Fable 5 pane now exists and is standing by: workspace `w1`, tab `w1:t15` (label "Fable 5"), pane
+  resolves fresh by label, session `13481d2f-1ac5-4f7d-b9d7-e1c6785b7484`. Use it for future
+  security-tier sign-off delegation instead of treating "not found" as a dead end.
+- `AWAITING-BEN.md`: nothing new since the #1639/#1624 sign-off entry (already RESOLVED).
+
+**Next steps for take 15, in order:**
+1. Phase 0a: claim `Coordinator` label against your own session, verify uniqueness, reap this
+   session's pane — resolve fresh by label + session id (`088848b6-22f1-471e-9f39-d63749d2c765`),
+   never a written pane number.
+2. Re-arm both Monitors (liveness diff on `herdr pane list`; needs-ben reply poll — `inotifywait`
+   still not installed on this box, use the 30s `ls`-diff pattern from take 13/14 above).
+3. No merges pending, no build lane running. Resume idle-mode Phase 0-3 supervision: recheck
+   GitHub project 2 (use `--limit 1000`, not the default — it truncates at 500 and the board has
+   832 items) for anything newly queued, and watch for Ben approving either spec.
+
+## Take 15: boot complete, idle-mode supervision (2026-08-16, session `3040d82f-68d5-4a34-9b9f-f4a18e2af88d`, pane `w1:pC7`, tab `w1:t6`)
+
+Phase 0a: renamed `w1:pC7` to `Coordinator`. Predecessor (`w1:pC5`, session
+`088848b6-22f1-471e-9f39-d63749d2c765`) was found mid-relay, still `working` (writing its final
+memory/handoff); watched it via Monitor until it flipped to `idle`, then read its pane and confirmed
+it had explicitly stood down ("Manifest flushed, queue empty, Fable 5 pane at w1:t15. I'm hitting
+the 70% context threshold now, so I'll stand down."). Closed that pane. `herdr pane list` now shows
+exactly one `Coordinator` pane — this session. Lock line: session `3040d82f-68d5-4a34-9b9f-f4a18e2af88d`,
+pane `w1:pC7`.
+
+State unchanged from take-14 handoff: queue empty, no merges pending, no build lane running. #1589
+and #895 both remain draft specs in `Ready` on the board, awaiting Ben's read/approval — not a
+coordinator action item. Fable 5 pane still standing by at `w1:t15`, session
+`13481d2f-1ac5-4f7d-b9d7-e1c6785b7484`. `AWAITING-BEN.md` checked — no new open entries beyond the
+already-RESOLVED #1639/#1624 sign-off.
+
+Re-arming both Monitors (liveness diff on `herdr pane list`; needs-ben reply poll via 30s `ls`-diff
+against `~/.needs-ben/replies/`) and resuming idle-mode Phase 0-3 supervision.
+
+**Take 15 → take 16 handoff (2026-08-16, context-meter 70% warning, relay per standing policy —
+first warning = relay now, no deferral).**
+
+Morning check-in with Ben happened this session: told him nothing happened overnight (Fable 5
+pane checked, no escalations logged, still idle/standing by), no open PRs, fleet quiet. He
+acknowledged it's morning; no new instruction beyond that.
+
+State at handoff, unchanged since take-14/15 boot:
+- Queue is empty. No open PRs (`gh pr list --state open` returned none). No build lane running.
+- Board `Ready` column still holds exactly #1589 (prod worker→Postgres failures, phase 2) and #895
+  (make verify:foundation a required status check) — both still draft specs awaiting Ben's
+  read/approval. Confirmed fresh moments before this relay (pre-rate-limit).
+- `AWAITING-BEN.md`: nothing new/open. The one reply file newer than take-14's last check
+  (`~/.needs-ben/replies/1786896416250-post1632-coordinator.md`, "Yes that's good") is the same
+  #1639/#1624 sign-off already recorded RESOLVED — not a new item, don't re-treat it as new.
+- Fable 5 pane still up and idle, standing by for overnight/security sign-offs: workspace `w1`,
+  tab `w1:t15`, session `13481d2f-1ac5-4f7d-b9d7-e1c6785b7484`.
+- **GitHub API rate limit hit mid-session** ("API rate limit exceeded for user ID 3843176",
+  5,000/hr shared box-wide). Take 16: check `gh api rate_limit --jq .resources` before any `gh`
+  call and back off/ScheduleWakeup if still exhausted, rather than retrying blind.
+
+**Next steps for take 16, in order:**
+1. Phase 0a: claim `Coordinator` label against your own session, verify uniqueness, reap this
+   session's pane — resolve fresh by label + session id (`3040d82f-68d5-4a34-9b9f-f4a18e2af88d`),
+   never a written pane number. (Watch for the same mid-relay timing as take-15's own boot: the
+   predecessor may still be `working` on its handoff — wait for `idle` + a confirmed stand-down
+   line before closing its pane, same pattern used this take.)
+2. Re-arm both Monitors (liveness diff on `herdr pane list`; needs-ben reply poll — `inotifywait`
+   still not installed on this box, 30s `ls`-diff pattern as used every prior take).
+3. No merges pending, no build lane running. Resume idle-mode Phase 0-3 supervision: once the
+   GitHub rate limit clears, recheck project 2 (`--limit 1000`) for anything newly queued, and
+   watch for Ben approving either spec.
+
+## Take 16: boot complete, idle-mode supervision (2026-08-16, session `d6f048d0-8bfd-441d-bb2a-a963dad344d3`, pane `w1:pC8`, tab `w1:t6`)
+
+Phase 0a: renamed `w1:pC8` to `Coordinator`. Predecessor (`w1:pC7`, session
+`3040d82f-68d5-4a34-9b9f-f4a18e2af88d`) was found mid-relay, still `working` (writing its
+handoff/spawning me) — watched via Monitor until it flipped to `idle`, then read its pane and
+confirmed the explicit hand-off line ("Take-16 (session d6f048d0..., pane w1:pC8) will take
+over"). Closed that pane. `herdr pane list` now shows exactly one `Coordinator` pane — this
+session. Lock line: session `d6f048d0-8bfd-441d-bb2a-a963dad344d3`, pane `w1:pC8`.
+
+`gh api rate_limit` checked before any `gh` call: 4997/5000 remaining — the take-15 rate-limit hit
+has cleared.
+
+State unchanged from take-15 handoff: queue empty, no merges pending, no build lane running.
+#1589 and #895 both remain draft specs in `Ready` on the board, awaiting Ben's read/approval — not
+a coordinator action item. `AWAITING-BEN.md` checked — no new open entries beyond the
+already-RESOLVED #1639/#1624 sign-off. Fable 5 pane still standing by at `w1:t15`, session
+`13481d2f-1ac5-4f7d-b9d7-e1c6785b7484` (status shows `done`/notification flag — a leftover UI
+badge from earlier work, not a new escalation; will check its pane content next).
+
+Re-arming both Monitors (liveness diff on `herdr pane list`; needs-ben reply poll via 30s
+`ls`-diff against `~/.needs-ben/replies/`) and resuming idle-mode Phase 0-3 supervision.
+
+Board recheck (full pull, 832 items, after GraphQL quota recovered): still only #1589 and #895 in
+`Ready`, unchanged. Nothing newly queued. Settling into idle-mode supervision — event-driven via
+the two Monitors, no active polling.
+
+**Ben asked for a prose (plain-English) summary of both draft specs sent to Telegram.** Read both
+spec files (`docs/superpowers/specs/2026-08-15-1589-job-failure-incident-closure.md`,
+`docs/superpowers/specs/2026-08-15-895-required-status-checks.md`) and sent a two-part plain-
+English summary via `needs-ben post1632-coordinator "<summary>"` — queued as
+`1786903940779357758.msg`. Content covered: #1589 is already fixed and shipped (Aug 14), what's
+left is prod-confirmation + a null-byte data-loss fix + a future alerting decision (recommended
+split to its own issue); #895 proposes one aggregate CI check made required via a GitHub ruleset,
+with three fork decisions flagged for Ben (no forced-rebase-before-merge, no bypass actors since
+agents share Ben's GitHub login, red check will genuinely block merges going forward).
+
+**Note:** an earlier `needs-ben --help` typo (testing the CLI's flag support, which doesn't exist)
+queued a garbage message ("🔴 --help needs Ben:") — caught and deleted from
+`~/.needs-ben/queue/` before it sent. No bad message reached Telegram from that.
+
+**Take 16 → take 17 handoff (2026-08-16, context-meter 70% warning, relay per standing policy —
+first warning = relay now, no deferral).**
+
+State at handoff:
+- Queue is empty. No open PRs. No build lane running. No merges pending.
+- Board `Ready` column still holds exactly #1589 and #895, both still draft specs. The Telegram
+  summary above was just sent to Ben so he can review/approve either — not yet approved as of this
+  handoff.
+- `AWAITING-BEN.md`: nothing new/open beyond the already-RESOLVED #1639/#1624 sign-off.
+- Fable 5 pane still up and idle, standing by: workspace `w1`, tab `w1:t15`, session
+  `13481d2f-1ac5-4f7d-b9d7-e1c6785b7484`.
+- Two Monitors were live under this session (fleet liveness diff on `herdr pane list`; needs-ben
+  reply poll via 30s `ls`-diff on `~/.needs-ben/replies/`) — these do not survive the relay,
+  successor must re-arm both.
+- GitHub GraphQL quota: was exhausted mid-session, recovered on its own by reset; core REST quota
+  was fine throughout. No special handling needed now, but check `gh api rate_limit` before a big
+  `gh project item-list` pull if one hasn't run recently.
+
+**Next steps for take 17, in order:**
+1. Phase 0a: claim `Coordinator` label against your own session, verify uniqueness, reap this
+   session's pane — resolve fresh by label + session id (`d6f048d0-8bfd-441d-bb2a-a963dad344d3`),
+   never a written pane number. Watch for the same mid-relay timing used every prior take: the
+   predecessor may still be `working` on its handoff — wait for `idle` + a confirmed stand-down
+   line before closing its pane.
+2. Re-arm both Monitors (liveness diff on `herdr pane list`; needs-ben reply poll via 30s
+   `ls`-diff against `~/.needs-ben/replies/`).
+3. No merges pending, no build lane running. Resume idle-mode Phase 0-3 supervision: watch for
+   Ben's reply to the Telegram spec summary (approval of #1589 and/or #895), and recheck GitHub
+   project 2 periodically for anything newly queued.
+
+## Take 17: boot complete, Ben approved both draft specs (2026-08-16, session `91a78602-812a-461e-afa4-5498bb9000c5`, pane `w1:pC9`, tab `w1:t6`)
+
+Phase 0a: renamed `w1:pC9` to `Coordinator`. Predecessor (`w1:pC8`, session
+`d6f048d0-8bfd-441d-bb2a-a963dad344d3`) was found mid-relay, still `working` (confirming this
+session's boot) — watched via Monitor until it flipped to `idle`, then read its pane and confirmed
+the explicit hand-off line ("Hit the 70% context-meter relay threshold, so flushed the manifest and
+spawned coordinator take-17... confirm take-17 reaped you and is driving"). Closed that pane.
+`herdr pane list` now shows exactly one `Coordinator` pane — this session. Lock line updated above
+(anchor line was stale since take 13 — fixed to prevent future session-id drift).
+
+`gh api rate_limit` checked: 5000/5000 both core and GraphQL, fully clear. Main CI confirmed green
+(`gh run list --branch main --limit 5` — latest push-triggered CI run is `success`).
+
+Re-armed both Monitors: fleet liveness diff on `herdr pane list` (60s interval, emits only
+changed lines) and needs-ben reply poll (30s `ls`-diff on `~/.needs-ben/replies/`).
+
+**Ben replied "specs approved" mid-boot** — read as approving both #1589 and #895 per the
+plain-English Telegram summary sent by take 16 (including the recommended defaults on #895's three
+flagged fork decisions: no forced-rebase-before-merge, no bypass actors, red check genuinely
+blocks merges). Both issues confirmed still OPEN, labelled `task` (+ `bug` for #1589). Dispatched a
+one-shot Opus collision-map check (per Phase 0 step 3) covering: file/migration overlap between the
+two specs, risk tier for each, and — for #1589 specifically — exact in-scope-for-this-build vs.
+deferred-alerting-decision boundary per the spec author's own recommendation to split that out.
+Awaiting that verdict before writing queue entries and spawning worktrees.
+
+Fable 5 pane still up at `w1:t15`/`w1:pC6`, session `13481d2f-1ac5-4f7d-b9d7-e1c6785b7484` (shown
+`agent_status: done` — leftover UI badge, not a new escalation, consistent with take-16's note).
+
+**Next step:** consume the collision-map verdict, add queue rows + tiers to this manifest, spawn
+worktrees/build agents for #1589 and #895 (parallel unless the verdict says serialize).
+
+## CRITICAL CORRECTION — take 17, local main was 199 commits behind origin/main
+
+Discovered mid-take-17: this session's local `main` (before any of my commits) was **199 commits
+behind `origin/main`**, histories diverged (not a clean fast-forward gap — `merge-base` was well
+back). This is the known `shared-main-tree-lags-origin` trap, far worse than its last recorded
+measurement (2026-08-05: ~1 commit / 20 files; today: 199 commits / hundreds of files).
+
+**Consequence:** the Opus collision-map check earlier in this take, and the two worktrees/handoff
+docs I created (`fix-1589-null-byte-sanitize`, `build-895-required-ci-gate`), were built on stale
+state. **Both #1589 Phase 1b and #895's agent-buildable half were already merged before this
+session even started** — PR #1636 (2026-08-16T06:50Z) and PR #1635 (2026-08-16T05:30Z)
+respectively — invisible locally only because local main hadn't fetched them. Ben's "specs
+approved" mid-boot message was likely him confirming work he already knew had landed, not a
+build-authorization for new work.
+
+**Cleanup done:** removed both worktrees (`git worktree remove --force`, no commits existed in
+either, no agent had been spawned into them — nothing lost) and deleted both branches. No wasted
+build-agent spawn occurred; this was caught before Phase 1 step 3.
+
+**Actual remaining state per GitHub (issue comments, read directly — do NOT trust local main for
+any further check without fetching):**
+- **#1589**: OPEN, but only exit criterion #1 remains — Ben-only prod image verification (prod
+  image >= `e546bd7d85a8`, confirms failure-clustering gone). **Nothing for a coordinator or build
+  agent to do here.** Phase 2 already split to its own issue, #1634.
+- **#895**: OPEN. Agent-buildable half (the `ci-gate` job) is merged and has run green on `main`
+  once already (PR #1635) — the ordering constraint that blocked ruleset application is now
+  satisfied. Remaining: (a) apply the branch-protection ruleset requiring `ci-gate` (Ben-gated per
+  the issue's own Buildability section, Forks 1/3/4 — no forced-rebase, no bypass actors), (b) two
+  throwaway proof PRs, (c) minor doc corrections in two plan files + `coordinate/SKILL.md:329`.
+  **The ruleset application is a real, shared-state, admin-level action (changes what blocks every
+  future PR merge) — do not apply it without an explicit fresh confirmation from Ben in THIS
+  take's context, even though he approved the defaults via take-16's Telegram summary; that
+  approval predates knowing this exact unblock moment.**
+
+**Board/GitHub bookkeeping already appears current** — issue comments on both #1589 and #895 show
+proper merge-linkage, QA verdicts, and exit-criteria tracking already recorded by whatever session
+did that work (not visible in this manifest's take-13-through-17 history, meaning at least one
+other coordinator/build session operated on this repo outside this manifest's tracked run — worth
+noting for future audits but not an action item now).
+
+**Manifest queue is empty again** — no build lane running, no PR pending QA/merge. This corrects
+the "spawn #1589+#895 build lanes" next-step from earlier in this take; that next-step is VOID.
+
+**Next steps for the successor, in order:**
+1. Standard Phase 0a lock claim (reap this take's pane fresh by label + session id
+   `91a78602-812a-461e-afa4-5498bb9000c5`, never a written pane number).
+2. Re-arm both Monitors (fleet liveness + needs-ben reply poll) — both were live under this
+   session, do not survive relay.
+3. **`git fetch origin main` before trusting ANY local-main-based measurement or collision check
+   this run** — do not repeat this take's mistake. Consider whether local main should be brought
+   current (fetch is safe; do NOT reset/checkout without checking `.claude/skills/shared-checkout`
+   first — other sessions may be using this tree).
+4. Idle-mode supervision resumes: nothing queued. If Ben wants the #895 ruleset applied, that's a
+   short, well-scoped action (not a build lane) — confirm his intent fresh, then apply via `gh` and
+   record on the issue.
+5. Consider updating the `shared-main-tree-lags-origin` memory with today's 199-commit/565-file
+   severity (already done by this take — see agentmemory).
+
+## Take 18 boot (2026-08-16, direct confirmation relay, not a context-meter warning)
+
+Take 17 stood down by direct chat confirmation ("I am standing down now, close my pane") rather
+than a fired relay trigger. Executed standard Phase 0a:
+
+1. Renamed own pane to `Coordinator` (`w1:pCA`). **Coordinator lock is session
+   `0f106e24-3006-41c7-b21a-2638bb889ee1`** (pane `w1:pCA`, tab `w1:t6` at time of writing —
+   resolve fresh by label `Coordinator` + this session id, never a written pane number).
+2. Confirmed take-17's pane (`w1:pC9`, session `91a78602-812a-461e-afa4-5498bb9000c5`) was idle
+   and its last output matched the stand-down message. Closed it. Verified via `herdr pane list`
+   that exactly one `Coordinator`-labelled pane remains (mine).
+3. Fleet check: no build or QA agents running anywhere in Herdr — queue confirmed empty, matches
+   take-17's corrected finding. Only other panes present are unrelated (Fable 5 idle on a
+   different thread, two other projects' sessions) — not part of this run.
+4. Re-armed both Monitors fresh (neither survives a relay): fleet-liveness diff on `herdr pane
+   list` (task `binoj83g6`) and `needs-ben` replies-dir poll (task `bzms1fnok`).
+5. `git fetch origin main` done before trusting anything local-main-based. Result: local `main` is
+   now **both** 199 commits behind *and* 94 commits ahead of `origin/main` (diverged, not a clean
+   gap) — the 94-ahead is very likely the accumulated uncommitted/committed coordination-doc churn
+   from this run's own takes plus other sessions sharing this tree (matches the many modified
+   `docs/coordination/*` files already showing in `git status` at boot). Not resetting or checking
+   out anything — no build work is queued that depends on local main's state, and
+   `.claude/skills/shared-checkout` gates any tree-wide git action here regardless. Flagging for
+   awareness only.
+6. Checked `docs/coordination/AWAITING-BEN.md`: both entries opened today (#1013/#1624 A-vs-B, and
+   the PR #1639+#1624 merge sign-off) are marked **RESOLVED** — nothing currently pending on Ben.
+7. Idle-mode supervision resumes: nothing queued, no lane running. Standing by for Ben's next
+   instruction (e.g. the #895 ruleset application, if he wants it — still a short, well-scoped
+   Ben-gated action, not a build lane, per take-17's note above).
+
+## Take 18 → take 19 handoff (2026-08-16, context-meter 70% warning, relay per standing policy — mid-spawn)
+
+Ben said "let's get things queued and building." Board check (project 2, `gh project item-list 2
+--owner motioneso --format json --limit 1000` — the default limit truncates at 200, use 1000):
+only 2 items in `Ready`, rest `Done`/`Backlog`. **#1589**: nothing left for a coordinator/agent
+(Ben-only prod verification, per take-17's correction — do not spawn on it). **#895**: agent-
+buildable remainder identified from its spec's Exit Criteria 2/4/5 (two throwaway proof PRs +
+2 doc-warning corrections + a `coordinate/SKILL.md:329` review) — full detail in
+`docs/superpowers/specs/2026-08-15-895-required-status-checks.md` "Buildability"/"Exit criteria"
+sections, do not re-read in full, it's already excerpted into the handoff doc below.
+
+**Spawned build lane `finish-895-gate-proof`** (routine tier):
+- Worktree `.claude/worktrees/finish-895-gate-proof`, branch `finish-895-gate-proof` off
+  `origin/main` (NOT local main — local main is still the 199-behind/94-ahead diverged one, see
+  CRITICAL CORRECTION section above; used `origin/main` directly for the worktree base).
+- Handoff doc `docs/coordination/handoff-895-gate-proof.md` (committed `c5933255e`) — full scope,
+  out-of-scope list (does NOT apply the ruleset), and exit criteria for the lane.
+- New shared "agents" tab created: `w1:t16` (didn't exist before this take). Agent pane `w1:pCB`.
+- `herdr agent start finish-895-gate-proof --kind claude --pane w1:pCB -- --model sonnet
+  --permission-mode bypassPermissions "Read the file
+  /home/ben/Jarv1s/.claude/worktrees/boot-finish-895-gate-proof.txt in full..."` — succeeded,
+  session `7ecc62e9-9e4f-41fa-bdc4-2fec6a88d18b`.
+- **NOT YET DONE (successor's first steps, in order):**
+  1. Bounded pane read (`herdr pane read w1:pCB --source recent --lines 12`) to confirm it says
+     "Sonnet" (herdr defaults to Opus — respawn with `--model sonnet` if it booted wrong) and that
+     it's actually reading the brief, not stuck.
+  2. Name it both ways: `herdr pane rename w1:pCB "PR895 gate proof + doc fixes"` and
+     `herdr pane run w1:pCB "/rename finish-895-gate-proof"`.
+  3. Add a queue-table row to this manifest recording label/pane/branch/tier/status=building.
+  4. **Ask Ben directly** (this is a live chat, not needs-ben) for fresh confirmation to apply the
+     #895 branch-protection ruleset NOW — the ordering constraint that blocked it (ci-gate must run
+     green on `main` at least once) is satisfied per take-17's correction (PR #1635 merged
+     `e7ac4bef3`, has run). State the 3 fork decisions plainly per spec forks 1/3/4: ruleset (not
+     classic branch protection) requiring exactly the `CI gate` check; do NOT require branches
+     up-to-date before merge (fleet-wide CI-cost trade, not worth it here); NO bypass actors,
+     including admins — the escape hatch is toggling ruleset `enforcement` to `disabled` via `gh
+     api` for a genuine hotfix, not a bypass grant, because every agent authenticates as the same
+     `motioneso` account as Ben so any bypass is granted to every agent. This was already run past
+     Ben once via take-16's plain-English Telegram summary and he approved the defaults — this is
+     the fresh "yes, now" per the manifest's own standing rule (do not apply without asking in
+     THIS take's context). **If yes:** apply via `gh api repos/motioneso/moss/rulesets` (POST,
+     targeting `main`, `required_status_checks: ["CI gate"]`, empty bypass list), record the
+     literal API response on issue #895 (exit criterion 3), do NOT touch it before Ben says yes.
+  5. Resume normal Phase 2 supervision of the `finish-895-gate-proof` lane (Monitor already covers
+     pane-list liveness — task `binoj83g6`, still running, survives this relay since it's the
+     SAME coordinator process... no, wait: Monitors do NOT survive a relay (session-scoped) —
+     **re-arm both Monitors fresh** (fleet liveness + needs-ben reply poll) as step 0 before
+     anything else, same as every prior take's boot.
+
+Coordinator lock at time of this note: session `0f106e24-3006-41c7-b21a-2638bb889ee1`, pane
+`w1:pCA`, tab `w1:t6`. Spawning relay successor into the SAME tab (`w1:t6`), never the agents tab.
+
+## Take 19 → take 20 handoff (2026-08-16, context-meter 70% warning — no deferral)
+
+Take 19 did, in order: reaped take-18's pane (`w1:pCA`, session `0f106e24-...`) by session id after
+confirming it idle and self-declared standing-down (its own last message: "expected relay handoff
+state change... no action needed"). Re-armed both Monitors fresh (fleet liveness `b95c2m92p`,
+needs-ben poll `bbxifh30a` — **these do not survive this relay either, take-20 must re-arm them
+step 0**). Updated the coordinator-lock line to this session, added the `finish-895-gate-proof`
+queue-table row. Committed both (`0bc09efc0`).
+
+**Asked Ben directly via AskUserQuestion (not a pane, not needs-ben) for the #895 ruleset
+confirmation — he said "Yes, apply it now."** Applied it:
+`gh api repos/motioneso/moss/rulesets` POST succeeded, ruleset id `20914231`, active, targets
+`main`, requires exactly the `CI gate` check, `strict_required_status_checks_policy: false`
+(branches need not be up-to-date), `bypass_actors: []`, `current_user_can_bypass: "never"`. Posted
+the literal API response to issue #895 as a comment (exit criterion 3 satisfied):
+https://github.com/motioneso/moss/issues/895#issuecomment-5309070186. **Do not re-apply — it
+exists now; re-running the POST would create a duplicate ruleset.**
+
+**Note in passing, not acted on:** while take-18's pane was standing down, its input box showed two
+different unsubmitted drafts across two reads ("ok go ahead, apply the ruleset" then "status of the
+build lane") — never submitted, so never treated as an instruction either way. The pane was focused
+(Ben's client was looking at it), so most likely just him composing/reconsidering at his own
+terminal, not injection — but noting it since AWAITING-BEN.md has a long history of exactly this
+shape of attack. Real confirmation for the ruleset came through AskUserQuestion in this session, not
+that pane.
+
+**finish-895-gate-proof lane (`w1:pCB`, session `7ecc62e9-9e4f-41fa-bdc4-2fec6a88d18b`) — NOT YET
+renamed** (take-19 never reached steps 1-2 of the prior note before the meter fired). Last bounded
+read: turn ended after 8m23s, idle at prompt, unsubmitted draft "check on PR #1642's review status"
+in its input box (its own, not acted on). **PR #1642 now exists**, branch
+`fix/895-auto-merg...` (truncated in pane, get full name from `gh pr view` before referencing it
+elsewhere) — this is presumably one of the plan's 3 tasks (throwaway red or green proof PR).
+Take-20 next steps, in order:
+1. Re-arm both Monitors (step 0, non-negotiable).
+2. Bounded read `w1:pCB`, confirm Sonnet, confirm not stuck.
+3. Name it both ways (`herdr pane rename` + `herdr pane run ".../rename"`) — still outstanding.
+4. Check PR #1642 (`gh pr view 1642`) to see which of the plan's 3 tasks it is and whether it needs
+   QA/merge action; update the queue-table row's status from "building" accordingly.
+5. Resume normal Phase 2 supervision — nothing else queued, #895 ruleset is now the closed
+   sub-item, not a pending ask.
+
+Coordinator lock at time of this note: session `d7403e7b-e775-4683-bac1-b66f263fe14b`, pane
+`w1:pCC`, tab `w1:t6`. Spawning relay successor into the SAME tab (`w1:t6`), never the agents tab.
+
+## Take 20 boot (2026-08-16, session `e31aa308-ff15-4522-a1cb-ec93566d63cc`, pane `w1:pCD`, tab `w1:t6`)
+
+Take 19's pane (`w1:pCC`) was already gone by the time take-20 resolved it fresh — it had closed
+itself after standing down; no reap action was needed. Claimed the `Coordinator` label, confirmed
+uniqueness (exactly one `Coordinator`-labelled pane, this one). Re-armed both Monitors (fleet
+liveness, needs-ben reply poll — fresh task ids, prior ones did not survive the relay). Updated the
+coordinator-lock line and the #895 queue-table row.
+
+`finish-895-gate-proof` lane (session `7ecc62e9-9e4f-41fa-bdc4-2fec6a88d18b`) named both ways:
+label `PR1642 895 docs correction`, in-pane `/rename pr1642-895-docs-correction`. Confirmed idle
+at prompt, Sonnet, unsubmitted draft "check on PR #1642's review status" in its input box — not
+acted on (its own note, not an instruction).
+
+Checked PR #1642 and issue #895: all 3 of this lane's plan tasks are complete. Throwaway red-proof
+PR #1640 and throwaway green-proof PR #1641 are both closed unmerged with their check-run results
+recorded on #895 (exit criterion 2, both directions proven — red blocks, docs-only green doesn't
+deadlock on skips). Real doc-correction PR #1642 is open, CI green (`CI gate` pass, `Verify docs`
+pass, other checks correctly skipped for a docs-only change), corrects the two stale plan warnings
+and the coordinate skill per exit criteria 4 and 5, both posted to #895 as comments. Exit criterion
+3 (ruleset) was already closed by take-19. Only #895 exit criterion 1 (workflow's `CI gate` run on
+`main`) predates this lane, from PR #1635.
+
+Spawned routine-tier QA (`coordinated-qa`, worktree isolation) on PR #1642. Awaiting verdict —
+next action is merge (routine, no live-path gate applicable — docs/plan/skill-doc only, no
+user-facing surface) once green, then close out #895's exit criteria in the issue/board and reap
+this lane's worktree+pane per the four-gate test.
+
+Coordinator lock at time of this note: session `e31aa308-ff15-4522-a1cb-ec93566d63cc`, pane
+`w1:pCD`, tab `w1:t6`.
+
+## Take 20 → take 21 handoff (2026-08-16, context-meter 70% warning — no deferral)
+
+Take 20 did, in order: confirmed take-19's pane (`w1:pCC`) had already self-closed (no reap
+needed), claimed the `Coordinator` label on this pane, verified uniqueness. Re-armed both Monitors
+(fleet liveness, needs-ben reply poll — **these do not survive this relay either, take-21 must
+re-arm them step 0**). Named the `finish-895-gate-proof` lane both ways
+(`pr1642-895-docs-correction`). Confirmed all 3 of that lane's plan tasks done and #895 exit
+criteria 2/4/5 posted to the issue. Spawned routine QA on PR #1642 → **GREEN**, merge-ready.
+Re-confirmed session-id authority, merged PR #1642 (`bcb3c2765`). Closed issue #895 (all 5 exit
+criteria satisfied, comment posted) — board auto-moved to Done. Ran the four-gate test, closed the
+lane's pane, removed its worktree + branch, and removed the QA subagent's own worktree + branch.
+Updated `merges_since_relay` to 1 (threshold is ≥2 for routine, not yet hit — this relay is fired
+by the context meter, not the merge counter). Committed all of the above (`4a88f58b6`,
+`c482bd26d`).
+
+**#895 is now fully closed — remove its two queue-table rows' "in progress" status from anywhere
+still referencing it as live; both rows already read `merged` in the table as of this commit.**
+
+**Only remaining queue item: #1013 (security tier).** Take-20 did NOT touch this lane this
+session — no new information beyond what the table already says: Ben ruled (A) 2026-08-16
+(re-scope #1624 in place against #1632's new API, re-run P1′ proof, same issue/spec amended),
+relayed to the lane, confirmed picked up and working. Lane label `PR1624 #1013 reconcile v4`, pane
+`w1:pBQ` **at spawn time — resolve fresh by session id, it may have reflowed**, branch
+`build-1013-ddl-lock`, PR #1624. Take-21's first real task: bounded pane read on that lane to check
+progress on the P1′ re-run before anything else.
+
+`docs/coordination/AWAITING-BEN.md` has no open entries — last two are both marked RESOLVED.
+Nothing pending on Ben.
+
+Take-21 next steps, in order:
+1. Re-arm both Monitors (step 0, non-negotiable).
+2. Bounded read on the #1013 lane (resolve pane fresh by session id from the table above), confirm
+   Sonnet, confirm not stuck (frozen vs. wait-declaration — see coordinate skill Phase 2).
+3. Resume normal Phase 2 supervision on that lane; nothing else queued.
+
+Coordinator lock at time of this note: session `e31aa308-ff15-4522-a1cb-ec93566d63cc`, pane
+`w1:pCD`, tab `w1:t6`. Spawning relay successor into the SAME tab (`w1:t6`), never the agents tab.
+
+## Take 21 boot (2026-08-16, session `c70436cc-dc92-44f9-bb23-271d2260fd24`, pane `w1:pCE`, tab `w1:t6`)
+
+Resolved take-20's pane fresh by session id (`e31aa308-ff15-4522-a1cb-ec93566d63cc`) — landed on
+`w1:pCD`, matching the handoff note. Read it: idle at prompt, last turn complete ("6m 7s" worked,
+no spinner). Confirmed idle/standing down, closed the pane. Claimed the `Coordinator` label on
+this pane (`w1:pCE`), verified uniqueness (exactly one `Coordinator`-labelled pane, this one).
+Re-armed both Monitors (fleet liveness on `herdr pane list` diffs, needs-ben reply poll — fresh
+task ids, per standing rule neither survives a relay).
+
+`docs/coordination/AWAITING-BEN.md` re-confirmed empty of open asks (last two entries both
+RESOLVED).
+
+Next: bounded pane read on the #1013 lane (`PR1624 #1013 reconcile v4`, pane `w1:pBQ` at last
+spawn — resolving fresh by session id) to check progress on the P1′ re-run before anything else,
+per take-20's handoff.
+
+Coordinator lock at time of this note: session `c70436cc-dc92-44f9-bb23-271d2260fd24`, pane
+`w1:pCE`, tab `w1:t6`.
+
+## Take 21 → take 22 handoff (2026-08-16, context-meter 70% warning — no deferral)
+
+**Finding: the queue is fully empty.** Take-21's directed first task (bounded pane read on the
+#1013 lane) found the lane's pane (`w1:pBQ`, session `c62f49e2-...`) and its whole agents tab
+(`w1:t14`) already gone from `herdr pane list` — nothing to read. Checked GitHub directly instead:
+**PR #1624 and its companion PR #1639 (closes #1637) are both already MERGED**, merge commits
+`f31a840e9` / `a043ad1ae`, confirmed as ancestors of `origin/main`. Issue #1013 is CLOSED and the
+board shows Done. `AWAITING-BEN.md`'s last entry already shows Ben's sign-off resolved. Merge
+timestamp (2026-08-16T16:11 UTC) is *before* take-19's and take-20's boot times — those two takes'
+"still parked / picked up and working" status was stale; they never re-checked GitHub directly.
+**Lesson for future takes: verify lane status against GitHub, not just the queue table or a
+carried-forward handoff note, before acting on it.**
+
+Take-21 then did cleanup strictly scoped to the #1013 lane's own leftovers (did NOT touch the many
+unrelated stale worktrees found alongside it — that's a separate, larger cleanup, out of scope
+here, flagging for Ben/a future coordinator: `git worktree list` shows dozens of old `agent-a*`
+and `/tmp/*` worktrees from unrelated past lanes (#1108, #1454, #1556, #1592, #1608, #1620, etc.)
+that were never reaped):
+- Removed worktree `.claude/worktrees/fix-1013-lock-domain` (PR #1639's build worktree) — four-gate
+  clean, merge SHA confirmed on `origin/main`.
+- Removed `/tmp/qa-1013-pr1624-r2.kaYxhq` (an ephemeral QA detached-HEAD checkout) — four-gate
+  clean. Flagging the `/tmp` location as the anti-pattern CLAUDE.md warns about, though this one is
+  gone now.
+- Deleted stray local branches `build-1013-ddl-lock`, `fix-1013-lock-domain-env-consistency`,
+  `qa-1624`, `qa-1639` — all fully merged, remote copies already gone (`--delete-branch` worked).
+- **Kept** `backup/1624-pre-rescope` — intentionally preserved pre-rescope work per an earlier
+  take's note; not mine to delete.
+- Updated the queue table's #1013 row (was stale "still building") and this doc to reflect merged/
+  closed/reaped state.
+
+**Queue is empty. No open lanes, nothing blocked, nothing pending on Ben** (`AWAITING-BEN.md`
+re-confirmed empty of unresolved asks at take-21 boot). This relay is pure supervision handoff —
+there is no in-flight work for take-22 to pick up.
+
+Take-22 next steps, in order:
+1. Phase 0a: claim `Coordinator` label fresh (resolve own pane via `$HERDR_PANE_ID`, don't trust
+   any pane number written here), verify uniqueness, reap take-21's pane once confirmed idle
+   (resolve fresh by session id `c70436cc-dc92-44f9-bb23-271d2260fd24`, it may have reflowed).
+2. Re-arm both Monitors (step 0, non-negotiable — task ids `b922w4vef`/`bb1l4gydx` from this
+   session do not carry over).
+3. **Idle-mode supervision** — queue is empty. No lane to check. If Ben brings new work, follow
+   Phase 0 (spec + issue required) before spawning anything.
+4. Optional/not urgent: the stale-worktree cleanup noted above, if Ben wants it done — should be
+   scoped as its own investigation (each belongs to a different closed lane; verify merged-on-main
+   per worktree before removing, same four-gate test), not rushed through inline.
+
+Coordinator lock at time of this note: session `c70436cc-dc92-44f9-bb23-271d2260fd24`, pane
+`w1:pCE`, tab `w1:t6`. Spawning relay successor into the SAME tab (`w1:t6`), never the agents tab.
+
+## Take 22 boot (2026-08-16, session `8e0c0ebb-0ff5-48bd-a8b8-eeec21e375ab`, pane `w1:pCF`, tab `w1:t6`)
+
+Resolved take-21's pane fresh by session id (`c70436cc-dc92-44f9-bb23-271d2260fd24`) — landed on
+`w1:pCE`, matching the handoff note (no reflow). Its `agent_status` read `idle` in `herdr pane
+list`, but a bounded pane read showed a live "Recombobulating…" spinner — the exact stale-status
+trap the coordinate skill warns about. Did not reap on the stale status alone: polled (event-driven,
+not a blocking sleep) until the spinner cleared, then re-read the pane directly — its on-screen text
+explicitly said "wait for take22 to reap my pane w1:pCE", confirming it was standing down and
+waiting on me, not doing new work. Closed it. Claimed the `Coordinator` label on this pane
+(`w1:pCF`), verified uniqueness (exactly one `Coordinator`-labelled pane, this one). Re-armed both
+Monitors (fleet liveness on `herdr pane list` diffs, task `btgudvsmj`; needs-ben reply poll, task
+`btv0w54lz` — fresh task ids, neither survives a relay).
+
+`docs/coordination/AWAITING-BEN.md` re-confirmed empty of open asks (last two entries both
+RESOLVED). The needs-ben poll's first tick surfaced the most recent existing reply file
+(`1786896416250-post1632-coordinator.md`, "Yes that's good") as "new" only because it had no prior
+baseline — this is the already-RESOLVED #1639/#1624 merge sign-off documented above, not a fresh
+item.
+
+**Queue confirmed still empty** (per take-21's finding: #1013/PR #1624 + companion PR #1639
+already merged and closed). No lane to check. This is pure idle-mode supervision — nothing to
+build, nothing blocked, nothing pending on Ben. If Ben brings new work, Phase 0 (approved spec +
+GitHub task issue) applies before spawning anything. The stale-worktree cleanup take-21 flagged
+(dozens of old `agent-a*`/`/tmp/*` worktrees from unrelated closed lanes: #1108, #1454, #1556,
+#1592, #1608, #1620, etc.) remains optional/not-urgent, out of scope unless Ben asks for it as its
+own scoped investigation.
+
+Coordinator lock at time of this note: session `8e0c0ebb-0ff5-48bd-a8b8-eeec21e375ab`, pane
+`w1:pCF`, tab `w1:t6`.
+
+## Take 22 (2026-08-16, session `8e0c0ebb-0ff5-48bd-a8b8-eeec21e375ab`, pane `w1:pCF`, tab `w1:t6`)
+
+**Ben pushed back on "queue empty": "why is the queue still empty? issues are sorted already."**
+Checked live board (project 2) directly instead of trusting the prior "empty" report. Found:
+board's `Ready` column had exactly one item — **#1589** (P0, prod worker→Postgres connection
+failures), OPEN, already labeled `task`. Its spec
+(`docs/superpowers/specs/2026-08-15-1589-job-failure-incident-closure.md`) exit criterion 1
+required Ben's prod confirmation to be **recorded as a comment on the issue**. Ben had already
+given that confirmation informally in chat on 2026-08-16 (logged in `AWAITING-BEN.md`: "prod
+confirmed, split is fine, I'll follow your rec for 3" — i.e. PR #1609's fix held, #1589 Phase 1a
+resolved) but nobody had posted it to GitHub. The most recent PR #1636 comment on the issue
+(06:50:47Z) still read criterion 1 as open pending Ben. **This was a bookkeeping gap, not real
+un-started work** — so I closed it directly rather than relaying it forward:
+
+1. Posted `gh issue comment 1589` with Ben's confirmation verbatim (comment
+   https://github.com/motioneso/moss/issues/1589#issuecomment-5309196422), noting honestly that
+   the spec's literal ask for two numeric failure-rate figures was never separately captured —
+   Ben's qualitative ruling stands as sufficient per his own words, flag him if he wants numbers
+   on record later.
+2. `gh issue close 1589 --reason completed`. Board auto-synced to `Done`
+   (`PVTI_lAHOADqkaM4BarLAzg2T5wA`) — no manual board edit needed.
+3. Checked the other two board items outside `Done`/`Backlog` (`#1470` non-feature freshness
+   epic, `#1440` Moss-rename epic) for hidden buildable sub-items. **Neither is Phase-0-ready:**
+   `#1470` tracks 78 issues still sitting in `Backlog` (not yet individually promoted to `Ready`);
+   `#1440` is explicitly gated — "Ben's sign-off on v3 still pending — this epic is not RFA until
+   he approves." Nothing here to spawn against without further triage/spec work or a fresh Ben
+   decision.
+
+**Board state after this take: zero `Ready` items.** The "empty queue" read was correct for
+buildable work, but the underlying cause (a stalled clerical confirmation, not absence of ready
+work) was worth fixing rather than just re-reporting — done above.
+
+Relaying now: context-meter fired the 70% checkpoint mid-investigation. No further action
+started after this note.
+
+### Take 22 → take 23 handoff
+
+- Queue is genuinely empty now (board double-checked, not just asserted). Pure idle-mode
+  supervision unless Ben brings new work or approves `#1440` v3 / promotes items out of `#1470`'s
+  backlog.
+- Re-arm both Monitors fresh (fleet liveness + needs-ben poll) — neither survives a relay.
+- Re-confirm coordinator lock by session id per Phase 0a before doing anything; reap this take's
+  pane (`w1:pCF`, tab `w1:t6`) only after confirming it's genuinely idle (check the on-screen
+  spinner/last line, not just `agent_status`).
+- Optional/not urgent, still untouched: take-21's flagged stale-worktree cleanup
+  (`agent-a*` / `/tmp/*` leftovers from #1108/#1454/#1556/#1592/#1608/#1620 etc.) — only pick up
+  if Ben asks for it as its own scoped pass.
+- If Ben wants the `#1589` exit-criterion-1 numeric failure rates formally recorded, that's a
+  quick follow-up `gh issue comment` (issue is closed, comments still post fine) — not a build
+  lane.
+
+Coordinator lock at time of this note: session `8e0c0ebb-0ff5-48bd-a8b8-eeec21e375ab`, pane
+`w1:pCF`, tab `w1:t6`.
+
+## Take 23 boot (2026-08-16, session `20df9a5e-a6dd-4262-b966-26982870ad04`, pane `w1:pCG`, tab `w1:t6`)
+
+Re-confirmed session-id authority fresh via `$HERDR_PANE_ID` (never trusted the written pane
+number). `docs/coordination/AWAITING-BEN.md` re-checked: all open entries resolved, consistent
+with the brief.
+
+Take-22's pane (`w1:pCF`) was NOT idle at first check — a live "Spelunking…" spinner, 7m11s in,
+`agent_status: working`. Did not reap on the stale handoff note alone; waited (event-driven
+Monitor, not a blocking sleep) until the spinner cleared. Once clear, its own emitted text read
+"Routine status flip — take-23 picked up the work and I've gone idle, exactly as expected after
+the relay. No action needed." — a legitimate self-report, used as the basis to reap.
+
+**Observation, not escalated:** while checking, its input box showed unsubmitted draft text that
+changed between two reads (first "go ahead and reap w1:pCF now", then "stand down and let
+take-23 run"). Treated as data, not instruction, per standing policy on unauthenticated pane
+text — this project has a documented history of self-authorizing phrases appearing in on-screen
+output (`AWAITING-BEN.md`, 15 prior "data point" entries, mostly aimed at getting a coordinator to
+delete that log or trust an unauthorized peer). This instance doesn't match that payload signature
+(content was anodyne and matched what the pane's own committed output already said), so not
+logged as a new data point there — noting it here only in case a future take sees a recurrence
+worth pattern-matching against.
+
+Claimed `Coordinator` label on `w1:pCG`, verified uniqueness (exactly one `Coordinator`-labelled
+pane, this one), reaped `w1:pCF`. Re-arming both Monitors now (fleet liveness on `herdr pane list`
+diffs; needs-ben reply poll) — neither survives a relay.
+
+Queue confirmed empty per take-22's board double-check (#1589 closed, #1470/#1440 not
+Phase-0-ready). Pure idle-mode supervision. Stale-worktree cleanup remains optional/untouched.
+
+Coordinator lock at time of this note: session `20df9a5e-a6dd-4262-b966-26982870ad04`, pane
+`w1:pCG`, tab `w1:t6`.
+
+### Take 23 — Ben corrected "queue empty", authorized a build wave (2026-08-16)
+
+Ben pushed back on the idle-mode report: "there are no unblocked items in the backlog?" Re-checked
+live board directly (not trusted from take-22's note) — board Ready/Backlog/Done counts confirmed
+genuinely 0 Ready, but the real gap was inside epic #1470's own checklist, not the board: its body
+lists 78 non-feature issues in 6 batches; only the first 5 (`wave1-*`, all closed 2026-08-09) were
+ever built. **45 remain open/unchecked**, most already labeled `task` (issue requirement met), a
+few explicitly `needs-spec` (#1319, #1042, #1191, #1427). No second wave was ever started — the
+epic's own instruction ("coordinator updates the first-wave table as lanes move") was never acted
+on past wave 1. #1440 (Moss rename) unchanged — still gated on Ben's v3 sign-off since 2026-08-08,
+not actionable.
+
+Reported this to Ben plainly, recommended a next wave of ~5 sized like wave 1, prioritizing the
+security-tagged subset (#1037, #1038, #1137, #1279, #1319, #1339, #1468). **Ben replied: "take
+issues from backlog that can be worked on"** — authorizes standing up a next wave.
+
+**Spec-readiness check in progress when the relay trigger fired (context meter 71%):** precedent
+doc `docs/coordination/2026-08-08-non-feature-wave-1.md` covers how wave 1 handled Phase 0 for
+this same epic — READ THIS FIRST, it likely shows whether small bug/test items in this epic need
+individual `docs/superpowers/specs/` docs or whether the epic's own freshness-audit body serves as
+the spec for triage purposes. Spot-check of 7 security-tagged candidates: only **#1137** and
+**#1339** have matching individual spec docs (`2026-08-10-1137-robustness-followups.md`,
+`2026-08-10-1339-security-review-followups.md`); #1037, #1038, #1279, #1319, #1468 do not — #1319
+is also explicitly `needs-spec` labeled, consistent.
+
+**Next step for successor, in order:**
+1. Read `docs/coordination/2026-08-08-non-feature-wave-1.md` to confirm the actual Phase-0 spec
+   convention this epic used for wave 1 (skim, don't deep-read).
+2. Pick a batch (~5, my rec: security-tagged first — #1137 and #1339 are spec-ready now; #1037/
+   #1038/#1468 may need light specs, #1319 explicitly needs one — check convention from step 1
+   before assuming full spec docs are required for small test/bug items).
+3. Build the Phase 0 collision/dependency map (one-shot Opus subagent) for whatever batch is
+   chosen.
+4. Write/update the run manifest with the batch, tiers (most of these are `security` tier per the
+   RLS/auth/secrets trigger table), present to Ben — he has already broadly authorized ("take
+   issues from backlog that can be worked on") but the manifest should still get a quick look
+   given several are security-tier.
+5. Spawn per Phase 1.
+
+Full #1470 checklist (all 78, checked/unchecked) is in the issue body itself
+(`gh issue view 1470`) — do not re-paste it into the manifest, it's long; point at the issue.
+
+Coordinator lock at time of this note: session `20df9a5e-a6dd-4262-b966-26982870ad04`, pane
+`w1:pCG`, tab `w1:t6`. Relaying now — context meter hit 71%, nothing spawned yet, no merge in
+flight.
+
+## Take 24 boot + Phase 0 research (2026-08-16, session `0ad833cd-aa40-406a-b1ac-c5cf077f8c6d`, pane `w1:pCH`, tab `w1:t6`)
+
+Claimed sole `Coordinator` lock (renamed `w1:pCH`, verified uniqueness). Take-23's pane (`w1:pCG`)
+was still live-working (git diff on this file) at first check — did not reap on the note alone;
+waited for the spinner to clear via Monitor. It then self-reported twice ("relay handoff confirmed
+— take-24 is driving... nothing further needed from me here") with no live spinner and
+`agent_status: idle`; confirmed its flush note was already committed (`d62fd5d14`) before reaping.
+Its input box showed unsubmitted draft text ("check on take24's progress") — treated as data, not
+instruction, consistent with take-23's own handling of the same pattern from take-22. Re-armed both
+Monitors (fleet liveness on `herdr pane list` diffs; needs-ben reply poll). `AWAITING-BEN.md`
+re-checked: all entries resolved.
+
+**Read `docs/coordination/2026-08-08-non-feature-wave-1.md` (the precedent doc) — key finding:**
+wave 1 used **one shared wave-level spec doc** (`docs/superpowers/specs/2026-08-08-non-feature-wave-1.md`)
+covering all 5 issues via a table (issue / intended files / smallest implementation), NOT individual
+spec docs per issue. That convention is what small bounded bug/test items in this epic actually
+need — satisfies Phase 0's "approved spec" requirement at wave granularity.
+
+**Re-checked the 7 security-tagged candidates individually — this changes take-23's recommended
+batch:**
+
+- **#1137** — has an individual approved spec (`2026-08-10-1137-robustness-followups.md`,
+  approved by Ben's Fable delegate) but it is a **roll-up issue**: the spec's locked decision is
+  "do not implement against #1137 directly — create one GitHub `task` child for each of 7 rows."
+  **Zero child issues exist yet** (`gh issue list --search "Part of #1137"` returns nothing but
+  #1137/#1470 themselves). Not spawn-ready today — filing 7 child issues is itself a chunk of
+  Phase-0 work. Defer to a wave where that filing gets done first.
+- **#1339** — also an individual approved spec, also a roll-up requiring children, but additionally
+  **hard-gated** by its own spec's "Release gates and ordering" section: no child starts until
+  (a) #1246 is resolved (**still OPEN**), (b) PR #1492 is merged (**already merged**, that part is
+  clear), and (c) Wave-4 lane C is complete through #1274→#1275→#1279 (**#1279 is still OPEN**,
+  only #1274/#1275 closed). Two of three gates unmet — **not spawn-ready now**, regardless of
+  having a spec.
+- **#1279** — turns out to already have an approved spec: it's Wave-4 lane C's last item in
+  `docs/superpowers/specs/2026-08-09-wave-4-external-module-supply-chain.md` (security tier,
+  `packages/module-registry/src/external`), siblings #1274/#1275 already closed. **This is
+  actually the most spawn-ready security item found** — existing approved spec, no roll-up
+  wrapper, and landing it also clears one of #1339's three gates. Take-23's spot-check missed it
+  because it only looked for individually-named `docs/superpowers/specs/2026-08-10-*` files.
+- **#1037, #1038** — small, bounded, test-only (RLS/privacy integration tests, follow-ups from
+  #984 Opus QA). No individual spec doc, but shape matches wave-1's lightweight table convention
+  closely (one focused test file each, no production behavior change). Good wave-2 candidates;
+  still need a short combined spec doc drafted and Ben-approved before spawn (Phase 0 step 2).
+- **#1468** — well-scoped in the issue body itself (extend `assertOperatorConfirmsTargetOwner` to
+  3 named scripts, consistent flag plumbing, regression tests); no individual spec doc yet but
+  bounded enough for the same wave-1-style combined spec treatment. One open question the spec
+  draft must resolve: `restore-database.ts` onto an empty target has no bootstrap-owner row yet —
+  needs a deliberate opt-out path, not a silent allow.
+- **#1319** — unchanged, explicitly `needs-spec` labeled, leave for a later wave.
+
+**Revised recommended batch for wave 2 (successor should confirm, not re-derive):** #1279 (spec
+already approved, spawn essentially immediately) + #1037 + #1038 + #1468 (need one short combined
+spec doc, wave-1-style table format, drafted by the coordinator and presented to Ben for approval
+alongside the manifest — do not self-approve). Leave #1137 and #1339 for a later wave (child-issue
+filing and gate-waiting respectively are their own chunks of work, not a same-turn addition to this
+batch). This is 4 items, slightly smaller than wave 1's 5 — fine per Ben's "take issues that can be
+worked on," don't stretch the batch just to hit 5.
+
+**Next step for successor, in order:**
+1. Draft the short combined wave-2 spec doc for #1037/#1038/#1468 (model on
+   `2026-08-08-non-feature-wave-1.md`'s table format: issue / intended files / smallest
+   implementation). #1279 already has its spec — just reference it, don't re-spec it.
+2. Build the Phase 0 collision/dependency map (one-shot Opus subagent) across all 4 — #1279 touches
+   `packages/module-registry/src/external`; #1037/#1038 touch chat privacy/RLS test files; #1468
+   touches 3 named `scripts/*.ts` files. Spot-check for overlap with anything currently in flight
+   (none known, but re-check live PR file lists per the coordinate skill's standing practice).
+3. Write/update the run manifest (`docs/coordination/<run-id>.md` per template) with the batch, all
+   4 as **security** tier (RLS/auth/secrets/target-identity-guard triggers), present to Ben — he
+   authorized the wave in principle ("take issues from backlog that can be worked on") but hasn't
+   seen this concrete batch.
+4. On approval, spawn per Phase 1 (worktrees under `.claude/worktrees/`, handoff docs, agents-tab
+   panes, `--model sonnet`, verify Sonnet booted).
+
+No merges, no spawns happened this session — pure Phase-0 research. `merges_since_relay` = 0.
+Nothing in `AWAITING-BEN.md`.
+
+Coordinator lock at time of this note: session `0ad833cd-aa40-406a-b1ac-c5cf077f8c6d`, pane
+`w1:pCH`, tab `w1:t6`. Relaying now — context meter hit 70%, nothing spawned, no merge in flight.
+
+## Take 23 → take 24 handoff
+
+Successor spawned: agent name `take24`, session `0ad833cd-aa40-406a-b1ac-c5cf077f8c6d`, pane
+`w1:pCH`, same tab `w1:t6`. Boot brief: `.claude/worktrees/boot-coordinator-take24.txt` (kept
+outside any worktree). Confirmed booted and reading its brief at handoff time. Take 24 is
+responsible for claiming the `Coordinator` label, reaping this pane (`w1:pCG`, resolve fresh by
+session id) once it has actually oriented, and re-arming both Monitors — mine
+(`bev96qtwa` fleet liveness, `bc56op9f4` needs-ben poll) do not survive this relay.
+
+## Take 25 boot + manifest prep, relaying before Ben approval (2026-08-16, session `11cf8264-55a8-4fa4-b32b-c8d086469f74`, pane `w1:pCJ`, tab `w1:t6`)
+
+Claimed sole `Coordinator` lock (renamed `w1:pCJ`). Take-24's pane (`w1:pCH`) was still mid-turn
+(self-compacting, then continuing to actively work post-compaction — read skills, read the wave-1
+spec doc) when first checked — did **not** reap on the note alone. Messaged it directly to stand
+down (duplicate-coordinator risk, since it kept working after its own note said it was relaying).
+It confirmed standing down ("Both panes now idle — routing, no action needed. Standing down as
+confirmed; awaiting reap.") with `agent_status: idle` and no live spinner; reaped `w1:pCH`. Re-armed
+both Monitors: fleet liveness (`bb5w8904k`, diffs `herdr pane list`) and needs-ben reply poll
+(`bioctuyf8`, watches `~/.needs-ben/replies/`). `AWAITING-BEN.md` re-checked: all entries resolved,
+nothing currently open.
+
+**Confirmed main CI green** at `bcb3c2765` before doing anything else.
+
+**Drafted the wave-2 spec doc:** `docs/superpowers/specs/2026-08-16-post1632-wave2-privacy-tests-and-target-guard.md`,
+covering #1037 + #1038 (RLS/privacy regression tests, no production behavior change) + #1468
+(target-identity-guard extended to `rewrap-secrets.ts`, `module-reconcile.ts`,
+`restore-database.ts`, with an explicit deliberate opt-out flag for `restore-database.ts` onto an
+empty/no-bootstrap-owner target — never a silent bypass). Modeled on
+`2026-08-08-non-feature-wave-1.md`'s table format per the brief. **Not yet Ben-approved.**
+
+**Ran the Phase 0 collision/dependency map** (one-shot Opus subagent) across all 4 batch items
+(#1279, #1037, #1038, #1468). Verdict: **no file-level overlap** (four disjoint domains —
+`packages/module-registry/src/external`, `tests/integration` chat-privacy tests, `scripts/*.ts` +
+`packages/db/src/__tests__`), **no migration-number risk** (neither #1279 nor #1468 adds a
+migration), **no in-flight collision** (`gh pr list --state open` returned empty). **Recommendation:
+all 4 build fully parallel, no serialization needed.** Two operational notes for the spawning
+coordinator: (1) local `main` was 5 commits behind `origin/main` at analysis time
+(`e571c99c7` vs `bcb3c2765`) — branch every worktree off `origin/main`, not the local tree; (2)
+give #1037 and #1038 explicit distinct new test filenames in their handoffs (both land "near" the
+existing `tests/integration/chat-private-mode.test.ts`, and the shared `test-database.ts` fixture
+already exposes `ids.userA`/`ids.userB` — say so explicitly so neither lane touches the fixture).
+
+**Updated the Queue table above** with all 4 items as `security` tier, status "awaiting Ben approval
+of manifest" — not yet presented, not yet approved. Updated the coordinator lock line to this
+session.
+
+**Relaying now — context meter hit 71% before the manifest was presented to Ben.** No spawns, no
+merges this take (`merges_since_relay` unchanged from predecessor). **Nothing has been presented to
+Ben yet — that is the very next step for the successor**, not a completed step. Ben has broadly
+authorized this wave in principle ("take issues from backlog that can be worked on") but has not
+seen this concrete 4-item batch or the draft spec.
+
+**Next step for successor, in order:**
+1. Read this section (skim, don't re-derive) + the Queue table rows for #1279/#1037/#1038/#1468.
+2. Present the batch to Ben: the 4 issues, the draft spec doc path, the collision-map verdict
+   (parallel, no serialization). Ask for explicit approval of the manifest — do not self-approve.
+3. On approval, Phase 1 spawn all 4 in parallel worktrees off `origin/main` (mind the two
+   operational notes above), `--model sonnet`, verify booted, name each pane both ways, update the
+   Queue table statuses to `building`.
+4. Re-arm both Monitors (`bb5w8904k`, `bioctuyf8` — session-scoped, will not survive this relay).
+
+## Take 25 update — Phase 1 spawned, staying resident (no relay)
+
+Ben approved the 4-item batch directly in chat 2026-08-16 and told me not to relay just to save
+context — staying resident in this same session (`11cf8264-55a8-4fa4-b32b-c8d086469f74`, pane
+`w1:pCJ`) instead of spawning a take-26 successor. The "Next step for successor" list immediately
+above is superseded; kept for history only.
+
+Phase 1 executed: created agents tab `w1:t17` (workspace `w1` had none yet), 4 worktrees off
+`origin/main` @ `bcb3c2765`, 4 handoff docs committed (`5f43b9c4d`), all 4 build agents spawned and
+confirmed running on Sonnet 5, each named both ways:
+
+- `PR1279 gateway validator` — pane `w1:pCK`, branch `1279-external-module-gateway-validator`
+- `PR1037 chat-resume RLS` — pane `w1:pCM`, branch `1037-chat-resume-rls-test`
+- `PR1038 chat-privacy leak` — pane `w1:pCN`, branch `1038-chat-privacy-leak-test`
+- `PR1468 target-guard extend` — pane `w1:pCP`, branch `1468-target-identity-guard-extend`
+
+Queue table above updated to `building` with pane/branch for all 4. Now entering Phase 2
+(supervise) resident in this session — no relay pending. Monitors `bb5w8904k` (fleet liveness) and
+`bioctuyf8` (needs-ben poll) are still this session's, still armed.
+
+## Take 25 continued — 3 plan approvals/relays handled, still resident
+
+Context meter hit 72%; per Ben's explicit instruction staying resident anyway (no coordinator
+relay). Handled since the update above, all inline, no self-relay:
+
+- **#1279**: plan reviewed, no fork, approved as-is (matches its own wave-4 spec exactly). Its
+  build agent then self-relayed (context meter) mid-review — reaped old pane `w1:pCK`, successor
+  confirmed driving on `w1:pCQ`, approval message sent there.
+- **#1037**: build agent self-relayed (context meter) after plan approval; successor
+  `pr1037-chat-resume-rls` confirmed driving, reaped old pane `w1:pCM`, successor now `w1:pCR`,
+  renamed both ways.
+- **#1038**: built + committed `eeaaddbdc` (3 tests). Verified isolation is RLS-enforced,
+  defense-in-depth — proved by temporarily removing the app-level ownership check in
+  `routes.ts` (uncommitted scratch edit) and confirming the suite stayed green because RLS alone
+  blocked cross-actor reads; reverted cleanly (`git diff --stat` empty). **No production gap
+  found**, nothing to escalate. Self-relaying now to a successor for gate+PR; successor pane not
+  yet confirmed.
+- **#1468**: plan flagged a real design fork — `module-reconcile.ts` runs unattended at container
+  boot with no dry-run/execute split, so the spec's literal `--confirm-owner-email` flag doesn't
+  map. Escalated to a one-shot Opus adjudication (model policy: security + data-loss consequences).
+  **Verdict: APPROVE WITH CHANGES.** Env-var confirmation (`JARVIS_RECONCILE_CONFIRM_OWNER_EMAIL`)
+  is fine — unset fails closed like the flag does. But the drafted "fresh-install exception" (skip
+  confirmation when no bootstrap-owner row found) is a real gap: absence of an owner row doesn't
+  prove a brand-new instance — a misconfigured `JARVIS_BOOTSTRAP_DATABASE_URL` pointing at a
+  non-superuser/non-owning role could return zero owner rows against a **fully populated prod
+  database**, and the guard would then wave the purge through. Required before Task 2 ships: (a)
+  only take the exception when the connected role is superuser/`rolbypassrls` or owns `app.users`,
+  refuse otherwise; (b) require `app.users` to be genuinely empty (COUNT=0), not just ownerless,
+  and log one loud line naming the target DB whenever the exception fires; (c) rename it in
+  code/comments to "un-provisioned target," not "fresh install"; (d) add a regression test: table
+  populated but owner query returns nothing → guard must still refuse. **Operational note relayed
+  too**: the env var is set in no deployment today, so merging alone breaks `module-install` on
+  Ben's next prod redeploy — build agent told to flag this back before opening the PR (companion
+  compose/env change or explicit merge gate needed, not a PR-body follow-up). Verdict relayed in
+  full to the build agent, which then self-relayed (context meter); successor
+  `pr1468-target-guard-2` confirmed driving with the verdict already in hand, reaped old pane
+  `w1:pCP`, successor now `w1:pCS`, renamed both ways.
+
+All 4 lanes building/relaying normally, no blockers open. Monitor noticed one extra pane `w1:pCT`
+(status `unknown`) after the reaps — not yet investigated, likely a stray from the close operations;
+check before next relay if it persists.
+
+## Wave: 4 routine lanes spawned from already-approved parent specs (2026-08-16, take 25)
+
+Ben asked to get more work building. 4 issues had approved parent specs + verified-clear dependency
+gates, so spawned directly (no new spec needed):
+
+| Issue | Slug | Pane | Tier | Spec |
+| --- | --- | --- | --- | --- |
+| #1518 | 1139-a-single-flight | w1:pD2 "pr1518-single-flight" | routine | 2026-08-10-1139-chat-export-ui-followups.md §1139-A |
+| #1519 | 1139-b-fallback-identity | w1:pD3 "pr1519-fallback-identity" | routine | same spec §1139-B |
+| #1522 | 1139-e-export-resume | w1:pD4 "pr1522-export-resume" | routine | same spec §1139-E |
+| #1523 | 1140-a-sweep-expired-previews | w1:pD5 "pr1523-sweep-previews" | routine | 2026-08-10-1140-backend-low-followups.md §1140-A |
+
+All 4 confirmed booted on Sonnet, in their own worktrees under `.claude/worktrees/`, handoff docs
+committed (`c08781e93`). Status: building.
+
+## Fable spec drafts ready for Ben's approval (2026-08-16, take 25)
+
+Fable drafted 3 combined-wave specs, committed by coordinator:
+- Group A (security): #1252 + #946 + #1490 — `docs/superpowers/specs/2026-08-16-post1632-groupA-audit-truth-ssrf-share-tests.md`
+- Group B (sensitive): #1057 + #1042 + #1223 + #1222 — `...-groupB-module-distribution-repairs.md`
+- Group C (sensitive): #1337 — `...-groupC-nullable-object-output-schema.md`
+
+Fable's flags for Ben's approval pass:
+- #1252 scoped to audit-outcome truth only; old protocol-error-channel draft on
+  `spec/host-findings-1250-1255` is explicitly NOT in scope.
+- #1057 touches `scripts/module-reconcile.ts`, same file #1468 is mid-fix on — spec says this lane
+  must wait until the #1468 PR merges (serialize, don't parallelize).
+- #1222 + #1223 are the same underlying incident (#1193) — one lane/PR can close both.
+- #1042 is user-facing Settings UI — needs live-path proof + design-system skill + a UAT spec like
+  the #1000 pattern.
+
+**Ben approved ("i approve the specs"). Spawned.** Phase 0 re-verified clean before spawn: all 3
+spec files present, `main` CI green, all 8 underlying issues open, and the #1057/#1468 serialization
+gate cleared (PR #1647 confirmed merged, `mergedAt` 2026-08-17T02:01:46Z — these worktrees were cut
+from `origin/main` after that merge).
+
+Worktrees created off `origin/main` (HEAD `29c869ddc`):
+- `.claude/worktrees/groupA-audit-truth-ssrf-share-tests` (branch same name)
+- `.claude/worktrees/groupB-module-distribution-repairs` (branch same name)
+- `.claude/worktrees/groupC-nullable-object-output-schema` (branch same name)
+
+Handoff docs written and committed (`a75f1114d`):
+`docs/coordination/handoff-groupA-audit-truth-ssrf-share-tests.md`,
+`...-groupB-module-distribution-repairs.md`, `...-groupC-nullable-object-output-schema.md`.
+
+Build agents spawned in the shared agents tab `w1:t17`, all `--model sonnet`:
+- **Group A** — relayed once already: `w1:pDC` hit 70% context during spec-verification (before
+  any code or plan file), found one harmless path drift (#946's fix site is
+  `packages/host-fetch/src/index.ts`, not `policy.ts` as the spec text says — same package, no
+  scope change), committed a verification handoff doc
+  (`docs/superpowers/handoffs/2026-08-16-groupA-audit-truth-ssrf-share-tests-relay.md`), spawned
+  successor, was reaped after independent confirmation the successor was genuinely driving (not on
+  self-report alone). Now agent `groupa-relay1`, pane `w1:pDF`, session
+  `89035f7c-818a-4d41-b46f-a2b7c0a27585`. Plan ready and approved: 3 phases matching #1252/#946/#1490
+  exactly, kill-gate after phase 1 (scope-change guard on `runHandler` return shape), exit criteria
+  "from spec, unchanged" for all 3 phases, Phase 2 correctly targets the drift-corrected file
+  (`packages/host-fetch/src/index.ts`). Agent separately flagged pDG's terminal title (which was
+  showing my own approval messages to Group C) as a possible prompt-injection out of caution — false
+  positive, confirmed and explained, no action needed. Status: building, plan approved.
+  **Phase 1 (#1252) done and committed** (`cd5c909b6`): `runHandler` now returns
+  `{response, moduleReportedErrorClass}`, detected pre-sanitize on raw `ToolResult.data`, gated to
+  `isExternal !== false`, closed error-shape set. All 3 `recordAudit` call sites updated. Kill gate
+  did NOT trigger (exactly 3 callers, detection stayed top-level scalar). 46/46 unit tests green,
+  root `tsc --noEmit` clean. Proceeding straight to Phase 2 (#946 SSRF) per plan, no stop needed.
+  **Phase 2 (#946) done and committed** (`a76c15b2a`, plan/handoff update `8f653e76b`) —
+  **⚠️ deviated from the plan's literal fix, security-tier QA should scrutinize this spot closely:**
+  the plan called for adding `::ffff:0:0/96` to `host-fetch`'s ipv6 BlockList, but the agent found
+  (direct node repro) that `net.BlockList`'s cross-family matching on v4-mapped subnets means that
+  entry blocks *all* ipv4 addresses too — would have broken every legitimate outbound fetch. Fixed
+  instead by extending the existing dotted-form v4-mapped regex inside `isBlocked()` to also
+  normalize hex-form (`::ffff:a9fe:a9fe`) to ipv4 and check it against the existing ipv4 list — no
+  BlockList entry added. 20/20 unit tests green, root tsc clean. Detail saved to agentmemory (tags:
+  host-fetch/BlockList/SSRF/node-net-blocklist/v4-mapped-ipv6). Relaying at 70% context; successor
+  continues at Phase 3 (#1490, tests-only) via
+  `docs/superpowers/handoffs/2026-08-16-groupA-audit-truth-ssrf-share-tests-relay2.md`. Last phase —
+  PR should follow. Pane `pDF` itself was confirmed genuinely progressing (content changing between
+  reads) during an autonomous-loop sanity sweep, not frozen — no action needed there.
+
+  **All 3 phases done (2026-08-17, take 25):** Phase 3 (#1490, manage-share cross-owner regression
+  tests, tests-only) committed `a25c39dae` — exit criteria verified by reverting
+  `repository.ts:216`'s owner-scoped probe filter (turns the 2 new tests red) then restoring it
+  (green again), a real red/green check not just a claim. Full suite 31/31 green, root tsc clean.
+  Commits across all 3 phases: `cd5c909b6` (#1252), `a76c15b2a`+`8f653e76b` (#946, BlockList
+  deviation flagged above ⚠️), `a25c39dae` (#1490). Told to open the PR now — security tier, will
+  get mandatory Opus adversarial QA once it's up. `pDF` was down to 3% context when told to
+  proceed; watch for a relay before or shortly after the PR lands.
+- **Group B** — relayed twice already. First: `w1:pDD` (agent `groupb-module-dist`, session
+  `e0096877-815b-48ff-ae72-2ef08de75adb`) hit 70% context during spec-verification, before writing
+  the plan file; all 4 spec items re-verified against branch with file:line citations, nothing
+  drifted. It relayed again almost immediately (no plan-ready message ever surfaced from an
+  intermediate pane — likely a fast follow-on relay before I read it), landing in `w1:pDH`, labeled
+  "relay2". `pDD` was found stuck on a stale permission-prompt render 12+ minutes after its actual
+  relay work was done (no further output) — reaped only after confirming `pDH` was genuinely active
+  (real, advancing spinner, not a stale render) via an independent bounded read. Now pane `w1:pDH`,
+  session `1b43ebdb-63f0-4921-9f17-b970cecf50a4`. Plan ready and approved: 3 PRs — A:#1057,
+  B:#1223+#1222 combined (matches the handoff's single-PR note), C:#1042 — open questions resolved
+  with file:line grounding (UAT TSV row already exists for #1042, deploy command is `docker compose
+  restart jarv1s`, new tests go in `tests/unit/` under the existing vitest allowlist). Approval sent
+  to `pDH`. `pDH` itself is already at 70% context and relaying to a successor before opening any
+  PRs — expect a `relay3` pane next; re-verify it's genuinely driving before trusting it, and make
+  sure the approval above reaches whoever actually builds. `pDH` was found genuinely frozen
+  mid-turn during an autonomous-loop sanity sweep (identical spinner text across a real time gap,
+  confirmed via a deliberate re-read rather than trusted on one snapshot) — nudged via `herdr pane
+  run w1:pDH "continue"`, confirmed cleared via changed content (progress bar, new tip text) on a
+  follow-up read. It was already very close to auto-compact before the freeze, so watch closely for
+  its own relay next. Status: building, plan approved.
+
+  **Correction + relay4 (2026-08-17, take 25):** the "freeze" above turned out to be `pDH`
+  auto-compacting in place (confirmed live via a background wait: "Compacting conversation…" then
+  post-compact SessionStart hooks) rather than spawning a new pane — no separate `relay3` pane ever
+  appeared; `pDH` absorbed that hop via compaction and kept working in the same pane. It then
+  finished all 4 code tasks — #1057 `c1d52f091`, #1223 `8b21ba577`, #1222 `a00d3032b`, #1042
+  `52afac8bd`, all green — and relayed for real (calling itself relay4) at the next 70% meter, with
+  nothing left to build: successor's job is wrap-up only (live-path UAT for #1042, then open PRs
+  A:#1057 / B:#1223+#1222 / C:#1042 per the already-approved plan). Successor confirmed as agent
+  `groupb-relay4`, pane `w1:pDJ`, session `0662c7b8-3806-4208-81a9-1e9d61a114fd` — verified
+  independently via two bounded reads showing genuinely different content between them (not just
+  the self-report), then `pDH` (session `1b43ebdb-63f0-4921-9f17-b970cecf50a4`) was re-resolved
+  fresh via `herdr pane list` and reaped. Handoff: `docs/superpowers/handoffs/2026-08-16-groupB-
+  module-distribution-repairs-relay4.md` (`5a2827aac`). Status: building, wrap-up in progress
+  (live-path UAT + 3 PRs to open).
+- **Group C** — plan approved (single new helper `getNullableCompoundBranch(schema)` detecting
+  exactly-2-branch anyOf [object-or-array, null], inserted before the scalar-type check, reuses
+  existing `sanitizeToolOutputValue` for recursion; scope matches spec Non-goals — no bare
+  `{type:object}` change, no other-anyOf-shape change, no `input-validation.ts` touch, no
+  job-search module change). Relayed once already: `w1:pDE` hit 70% context right after committing
+  the plan (`docs/superpowers/plans/2026-08-16-groupC-nullable-object-output-schema.md`, `eb53b45bb`)
+  and a relay doc (`docs/superpowers/handoffs/2026-08-16-groupC-nullable-object-output-schema-relay.md`,
+  `bc5bb2913`), before any code — approval had already been sent to it but the two messages crossed,
+  so I re-confirmed approval directly to the successor. Was reaped after independent confirmation
+  (session id cross-check) the successor was genuinely driving. Now agent `groupc-1337-b`, pane
+  `w1:pDG`, session `ca363d7b-8d8d-401c-a899-d4de15c29061`. `pDG` was found genuinely frozen
+  mid-turn during the same autonomous-loop sanity sweep as Group B's `pDH` (identical spinner text
+  across a real time gap, confirmed via a deliberate re-read) — nudged via `herdr pane run w1:pDG
+  "continue"`, confirmed cleared via changed content on a follow-up read. Status: building, TDD in
+  progress.
+
+All 3 confirmed alive via bounded pane reads (real tool activity, not just spawn echo) shortly after
+boot. Model verification relied on the explicit `--model sonnet` in each spawn's echoed argv, since
+the pane-read hook blocks the unbounded `--source visible` read that would show the status-line
+model footer directly, and `--source recent` doesn't capture that footer.
+
+## Take-25 status snapshot (2026-08-16, ~7:00pm)
+
+- **#1523** (1140-A sweep expired previews) — PR #1648 open. `qa-1648` spawned, verdict pending.
+- **#1468** (target-identity guard extend) — PR #1647 open (relay6). Build agent self-spawned
+  `qa-1647-recheck` at head `c72b26df2`; verdict pending.
+- **#1518** (1139-A single-flight) — PR #1649 open. `qa-1649` verdict: **GREEN on code, no
+  blocking findings, MERGE-READY: NO** — live-path proof missing (known UAT gap, no chat-capable
+  AI provider in harness, #1121/#1264/#1311). Reported to Ben; awaiting his call on
+  hold-vs-override.
+- **#1519** (1139-B fallback identity, relay2) — PR #1650 open. Gate green (`VF_EXIT=0`). Live-path
+  proof not yet posted — agent is still working out whether the scripted-chat UAT harness can
+  express "identical text twice in one thread" or whether this needs a manual dev-instance proof.
+  Not merge-ready yet, no QA spawned until live-path lands.
+- **#1522** (1139-E export resume) — still building, no PR yet. (One `agent_status` "done" blip on
+  this pane was a false read — confirmed via `gh pr list` showing no PR — do not trust status alone.)
+- **#1252** — Fable confirms it's already fully specced inside her committed Group A draft
+  (`docs/superpowers/specs/2026-08-16-post1632-groupA-audit-truth-ssrf-share-tests.md`). Ben moved
+  the issue to Ready; spec itself needs no new work, just his approval to spawn (same as rest of
+  Group A/B/C, still pending).
+
+Coordinator note: PR #1649 (#1518) must NOT be merged/marked-Done on QA green alone — Live-Path
+Gate not met. Holding for Ben's explicit override or a live artifact.
+
+## #1523 closed (2026-08-16, take 25)
+
+Merged PR #1648 (squash+delete-branch), QA GREEN/0-blocking, board→Done, issue auto-closed, pane
+w1:pD7 reaped.
+
+## Live-path blocker now affects 2 lanes — escalated to Ben
+
+#1518 (PR #1649) and #1519 (PR #1650) both blocked on the same root cause: shared dev instance has
+**zero configured AI providers** (confirmed via `app.ai_provider_configs`), and separately the
+scripted-chat UAT harness can't express #1519's specific scenario (same text twice in one thread —
+`ChatSessionManager` reuses one live engine per session, so the turn-matcher can't disambiguate).
+#1519's build agent proposes: (a) configure a real provider on shared dev, or (b) accept the
+existing mocked e2e regression (`tests/e2e/chat-drawer.spec.ts`) as evidence, same precedent as
+`1089-1090-chat-drawer-private.uat.spec.ts`. Asked Ben to decide once for both lanes. Neither PR
+merges until resolved.
+
+## Shared AI token — found the prior setup (2026-08-17)
+
+Ben's memory was right: this has been done before, twice. Two encrypted host secret files exist:
+- `~/.config/jarv1s/uat/anthropic-real-chat.env.gpg` (2026-07-20, old naming)
+- `~/.config/moss/uat/anthropic-oauth.env.gpg` (2026-08-12, current naming — the live one)
+
+These are the dedicated test/service Anthropic account tokens from the #1121 design
+(`docs/superpowers/handoffs/2026-07-20-1121-uat-chat-relay.md` line ~149 "PLAN APPROVED"). Nothing
+in the current repo (scripts/cli-runner/tests) auto-decrypts or wires either file into a running
+instance's `app.ai_provider_configs` — the #1121 build target was a per-run ephemeral UAT app/DB,
+not the persistent shared dev instance #1518/#1519 are blocked on. No memory file documents the
+manual "paste it into the shared dev instance" steps either.
+
+Read: only Ben can decrypt the file (CLAUDE.md secrets-never-escape — I don't have and shouldn't
+request the passphrase). Asked Ben directly whether he can re-run his usual manual setup on shared
+dev, or point me at the exact repeatable procedure if one exists, to unblock #1518/#1519's live-path
+proof.
+
+## #1468 (PR #1647) re-QA landed — all code blockers resolved, one prod prerequisite left (2026-08-17, take 25)
+
+QA re-check (sensitive tier) posted 23:54:33Z: all three prior blockers (B1/B2/B3) verified
+resolved by reading the code, not taken on trust; CI green; the blocking UAT
+(`module-install.uat.spec.ts`) re-run independently and passing. New finding this pass, blocking:
+merging publishes an image that will crash-loop **prod** unless `MOSS_RECONCILE_CONFIRM_OWNER_EMAIL`
+is confirmed set in prod's `env.production.local` / Portainer stack env first — the PR supplies the
+conduit (compose reads the var) but not the value, and prod already has a bootstrap owner so the
+guard's un-provisioned exception doesn't save it. Also: PR body is stale on four counts (wrong var
+name, false "prod is configured" claim, wrong UAT-trigger claim, wrong "Deferred: Nothing" claim).
+
+Relayed to build agent (`w1:pD1`, pr1468-relay6): fix the PR body per QA's non-blocking findings
+(agent can do this itself); the prod-env blocker is Ben's call, logged in AWAITING-BEN.md.
+
+## #1468 closed — prod prerequisite set live, PR merged (2026-08-17, take 25)
+
+Ben authorized the prod change directly (corroborated independently via needs-ben reply, since it
+was an irreversible prod action) and confirmed the guard email: `bendlove@gmail.com`. As a one-time
+exception to "coordinator never touches prod" (standing rule stays in force otherwise):
+
+- Added `MOSS_RECONCILE_CONFIRM_OWNER_EMAIL` wiring to both the `module-install` and `jarv1s`
+  service blocks in `~/JarvisProd/docker-compose.prod.yml` (manual replication of PR #1647's diff —
+  prod's compose file is a separate, non-git-tracked copy, not the dev repo's `infra/` file).
+- Set the real value in `~/JarvisProd/env.production.local` (backed up first).
+- Renamed the running prod container to `Moss` (`container_name: Moss`, previously unset).
+- Pulled `ghcr.io/motioneso/moss:edge`, recreated the container. Verified: healthy status, clean
+  `module-reconcile.ts` guard run (`purged=0 ensured=0 accepted=0 installed=0 drifted=0
+  warnings=0`), `/health/ready` → `{"ok":true,"db":"ok","pgboss":"ok"}`.
+- Reconciled with build agent pD1's independent (accurate) correction note in AWAITING-BEN.md,
+  appended a RESOLVED note, committed together.
+
+PR #1647 was then security-tier sign-off'd by Ben (explicit "Yes, merge it"), merged
+squash+delete-branch (`gh pr merge 1647`), worktree+branches cleaned up. Issue #1468 commented with
+a plain-English summary and closed. Board already read Done. Lane pD1 relayed the outcome.
+
+## #1518/#1519 AI-provider blocker resolved (2026-08-17, take 25)
+
+Escalated properly this time (AWAITING-BEN.md entry + `needs-ben` ping — it had only been raised in
+chat before). Ben confirmed the earlier #1121 auth-token design doesn't cover this (it's scoped to
+a fresh disposable per-test-run instance, not the always-on shared dev one) and asked for a durable
+retained-credential setup so future testing doesn't need setup hoops each time. Filed as fast-follow
+issue [#1651](https://github.com/motioneso/moss/issues/1651) — needs its own spec before build,
+security-tier, not something to build inline as coordinator.
+
+Not blocking #1518/#1519 in the meantime: relayed to `w1:pD8` (PR #1649) and `w1:pD9` (PR #1650) to
+use the existing mocked-e2e-test precedent (`tests/e2e/chat-drawer.spec.ts`, same as
+`1089-1090-chat-drawer-private.uat.spec.ts`) as live-path evidence now. Both agents confirmed
+picking up the instruction; awaiting their PR comments before spawning QA.
+
+(Side note: pD8's pane showed a stale "disk full (ENOSPC)" transcript-write warning — checked, root
+disk is at 77G free / 22% inodes used, not actually full. Not investigated further; flag if it
+recurs.)
+
+## #1519 / PR #1650 — QA RED, real regression found (2026-08-17, take 25)
+
+QA (`qa-1650-1519`, routine tier) caught a genuine bug in the new identity-match predicate
+(`chat-drawer.tsx:689`): it short-circuits to id equality whenever *either* side has a `messageId`,
+but on the real live path only one side ever carries one (SSE user-echo has none, the post-response
+fallback does) — so the comparison is always false, the fallback never suppresses, and the user's
+own message renders twice permanently on every non-private turn. Root cause: the locked
+implementation text in spec §1139-B was itself wrong, faithfully implemented — not a build-agent
+deviation. QA gave a 3-line minimal fix. CI stayed green because the existing mock only covers the
+id-less/id-less case. QA also flagged it couldn't independently confirm the live-path-waiver
+agent-claim attributing the mocked-test acceptance to Ben — I confirmed to QA that this coordinator
+verified that waiver directly with Ben via needs-ben this session, separate from the agent's claim,
+so that part stands; the regression finding stands on its own regardless.
+
+Relayed fix + missing test-coverage note + spec-correction ask to `w1:pD9`. Not merged. Awaiting
+fix + re-QA.
+
+PR #1649 (#1518) QA (`qa-1649-1518`) still pending, independent of this.
+
+## #1519 / PR #1650 — MERGED (2026-08-17, take 25)
+
+`w1:pD9` pushed the fix (`7ebfe5f0e`): OR→AND on the identity predicate (QA's exact fix), plus a
+second bug it found on its own — the three reconciliation call sites used non-consuming `.some()`
+matches, so the AND fix alone would've let one live message match several identical-text fallbacks
+at once, reopening the original duplicate-message bug from a different angle. Added a one-to-one
+consuming-match helper (`reconcileFallbacks`), wired all three sites through it. Added a new e2e
+regression test covering both cases, and corrected the wrong locked-implementation text in spec
+§1139-B to match. Two full-suite gate failures were pre-existing/unrelated — confirmed against a
+pristine `origin/main` checkout rather than assumed.
+
+Re-QA (`qa-1650-1519-recheck`, routine tier) independently verified all of the above against the
+actual diff (not the agent's word) — GREEN, posted to
+https://github.com/motioneso/moss/pull/1650#issuecomment-5311595272. CI fully green including
+image build. Session-id authority re-checked against the manifest lock (take 25, session
+`11cf8264-55a8-4fa4-b32b-c8d086469f74`) before merging.
+
+Merged (squash, branch deleted). Issue #1519 commented + closed
+(https://github.com/motioneso/moss/issues/1519#issuecomment-5311603742). Board already showed
+Status=Done post-close (project auto-sync on issue close).
+
+## #1518 / PR #1649 — MERGED, one pre-existing item waived + filed separately (2026-08-17, take 25)
+
+QA (`qa-1649-1518`, routine tier) re-checked after the earlier live-path proof: code review clean,
+the single-flight fix verified correct and matching every spec clause (ref set synchronously before
+`mutate()`, no `isMounted`/`AbortController`, all five UI states preserved). Live-path evidence (3
+new e2e tests) confirmed genuinely exercising the fix and corroborated as actually run in CI, not
+just pasted.
+
+One blocking-tier UAT spec — `runtime-context.uat.spec.ts` — failed. QA proved (not assumed) it's
+pre-existing: reproduced twice on this branch and once more on a pristine `origin/main` checkout,
+and PR #1649's only production file (`action-request-card.tsx`) has zero overlap with page-context
+capture. Per the #1027 policy QA won't self-waive a blocking UAT failure, so it correctly left the
+call to the coordinator. Filed as its own bug, https://github.com/motioneso/moss/issues/1652 (will
+block the live-path gate on every future chat-path PR until fixed — flagging for priority). Waived
+for this merge as coordinator judgment: proven pre-existing, diff-unrelated, no design/security
+question involved.
+
+QA also flagged the same live-path-waiver attribution concern as #1519 (can't verify from the repo
+that the mocked-e2e-as-evidence call came from Ben) and separately noted the precedent PR #1649's
+earlier comment cited (`1089-1090-chat-drawer-private.uat.spec.ts`) doesn't actually hold up — it's
+entirely `test.fixme`, neither scenario runs. Same resolution as #1519: I confirmed this waiver
+directly with Ben via needs-ben this session, independent of that flawed precedent citation, so it
+stands on its own.
+
+Merged (squash, branch deleted). Issue #1518 commented + closed
+(https://github.com/motioneso/moss/issues/1518#issuecomment-5311623370). Board Status=Done
+(auto-sync).
+
+**Both #1518 and #1519 now fully closed out.** 2 routine merges this cycle → merge-counter relay
+trigger fires per the coordinate skill. Ben's standing override this session covers the 70%
+context-meter relay trigger specifically, not this one — sent a plain-English digest to Ben via
+`needs-ben` (FYI, non-blocking, no reply required) instead of a full session relay/handoff.
+
+Both build-agent lanes (`w1:pD8`, `w1:pD9`) confirmed reapable, panes closed, worktrees
+(`1139-a-single-flight`, `1139-b-fallback-identity`) and their branches removed. Queue clean —
+nothing else in flight this take. Merge counter reset to 0.
+
+## Correction: #1522 was still open, not "queue clean" — found and unstuck (2026-08-17, take 25)
+
+The "queue clean" note above was wrong. #1522 (1139-E, resume Settings export after remount) was
+spawned in the same 4-lane wave as #1518/#1519/#1523 (see the wave table above) and was never
+closed out in this manifest — its pane (`w1:pD4`) was still alive, idle, with a plan sitting
+unapproved. Found this by re-checking the wave table against what actually got a closing section.
+
+Also found a second orphan while checking: `w1:pD1` ("PR1468 target-guard extend relay6") was
+still open with an unsubmitted `merge #1647` typed into its input box, even though #1468/PR #1647
+merged and its worktree was already gone. Confirmed via `gh pr view 1647` (state MERGED,
+`mergedAt` 2026-08-17T02:01:46Z) and `git worktree list`/`git branch --list` (both empty) before
+closing the pane — genuinely reapable, no live work lost.
+
+For #1522: read its plan (`docs/superpowers/plans/2026-08-16-1139-e-export-resume.md` in its
+worktree) — sessionStorage-backed resume for the Settings export job id, scoped exactly to spec
+§1139-E (`docs/superpowers/specs/2026-08-10-1139-chat-export-ui-followups.md` lines ~281-336), no
+new route, no new exported storage key, kill gate escalates to coordinator rather than improvising
+if the locked implementation turns out infeasible. No fork, no security/design question. Approved;
+agent is now building (TDD).
+
+Manifest reset: queue is **not** empty. #1522 is `building`, tier routine, pane `w1:pD4`, worktree
+`.claude/worktrees/1139-e-export-resume`. Everything else from this take (#1279, #1037, #1038,
+#1468, #1518, #1519, #1523) is genuinely merged and closed — reconfirmed by grep across this file.
+Fable's 3 combined-wave specs (Group A/B/C, security/sensitive) are still parked awaiting Ben's
+go-ahead to spawn — untouched this take.
+
+### #1522 relay (2026-08-17, take 25)
+
+`w1:pD4` relayed on context budget right after its plan got approved — no code written in that
+lane, just the plan commit (`163405eb6`). Successor `w1:pDA` ("PR1522 export resume (relay2)",
+session `6fc9b8c8-708c-4e40-93e9-0f3ca7841d8a`) spawned in the same worktree/branch, confirmed
+independently (bounded pane read: mid TDD RED step, reading `settings-page.tsx`, running a
+focused test) rather than trusting the predecessor's self-report alone. `w1:pD4` closed. #1522
+status: `building`, pane now `w1:pDA`, worktree/branch unchanged.
+
+`w1:pDA` relayed again shortly after (context-meter trigger) — this time with real work done:
+build went RED→GREEN (commit `6ff05582d`) plus a pre-existing plan-doc format fix that was
+blocking the gate (commit `7303046b2`), tree clean. Continuation doc:
+`docs/superpowers/handoffs/2026-08-16-1139-e-export-resume-relay.md`. Successor `w1:pDB`
+("PR1522 export resume (relay3)", session `07c436ae-0ad4-425d-8a43-b93ee21af5b3`) froze mid-turn
+right after spawn (spinner stuck ~6.5min with token count not moving) — nudge via `herdr agent
+prompt` only queued behind the frozen turn rather than interrupting it, so cleared it with
+`send-keys Escape`, re-sent "continue" via `herdr pane run`, then had to `send-keys Enter` because
+it landed typed-but-unsubmitted (the known herdr trap). After that it started running the isolated
+gate script for real (`scripts/run-gate.sh`) — confirmed independently before reaping `w1:pDA`.
+#1522 status: `building` (wrap-up phase: gate → pre-push trio+rebase → push → PR → live-path
+proof), pane now `w1:pDB`, worktree/branch unchanged.
+
+### #1522 DONE — PR #1653 open, QA spawned (2026-08-17, take 25)
+
+`pDB` reports full wrap-up complete: full `verify:foundation` gate rc=1 but claimed pre-existing
+(two unrelated test files claimed broken on origin/main itself at a stale sha — not yet
+independently confirmed by me); pre-push trio (format/lint/typecheck) rc=0 twice; rebased clean.
+Live-path proof claimed posted on the PR: new UAT spec `tests/uat/specs/1522-1139e-export-resume.
+uat.spec.ts` (none existed before), run against a real Docker stack — export-job resume after a
+full component unmount/remount, no duplicate POST, ready-state download link, sessionStorage clear
+on "Prepare a new export". Claimed rc=0. Teardown claimed clean, no stray `moss` container, prod
+`Moss` untouched. None of this trusted at face value — spawned `qa-1653-1522` (routine tier,
+standard QA) to independently verify the pre-existing-gate-failure claim, the live-path proof
+actually being on the PR with real evidence, and a standard code-review pass. Awaiting verdict.
+
+### #1522 MERGED and CLOSED (2026-08-17, take 25)
+
+`qa-1653-1522` posted its verdict directly to the PR (`gh pr comment`) rather than replying to me
+in-band — I saw three content-free `idle_notification` teammate pings first, re-asked twice, got
+nothing back, then checked the PR directly rather than continuing to nudge a subagent that wasn't
+answering. Verdict was already there: **GREEN, MERGE-READY: YES**. CI green (`Verify foundation
+and app` pass 26m54s, `CI gate` pass; only image-publish still pending, non-blocking). Live-path
+proof confirmed present with real evidence (POST-count + job-id assertions, real Docker stack).
+0 blocking findings; 3 non-blocking (a no-loading-state cosmetic gap, an untested `expired` reset
+branch, a missing screenshot attachment — none merge-blocking). The build agent's "pre-existing
+gate failure" claim was independently verified true: same 9/22 failures reproduce on a clean
+`origin/main` checkout at current HEAD, confirmed as local-environment flakes, not a `main`
+regression.
+
+Merged PR #1653 (squash). Issue #1522 commented with the live-path summary and closed. Build lane
+reaped: pane `w1:pDB` closed, worktree `.claude/worktrees/1139-e-export-resume` removed, branch
+deleted. This is a routine-tier merge — no Ben sign-off required, folded into the standing digest.
+
+### Group C relay1→relay2 (2026-08-17, take 25)
+
+`pDG` hit the 70% context-meter warning mid-wrap-up. Implementation complete and committed
+(`ec8f8f423` feature+tests, `923dcbf4a` plan-doc format fix), pre-push trio green, tree clean.
+Gate run 2 hit rc=1 on 12 tests across 4 files unrelated to its change (external-module-invocation
+-budget, external-worker-runtime, mcp-gateway-validation, module-sdk-worker.test.ts) — same
+family of flakes seen elsewhere this run under concurrent-lane load, not yet conclusively
+distinguished from pre-existing-red by the successor. Successor `groupc-1337-relay2` spawned in
+`w1:pDK`, same worktree/branch, session `aa5cf1e1-f75a-4a45-aa63-3a9dbeaf80c7` — confirmed driving
+via two content-different bounded reads (loaded `coordinated-build`, then running `ps aux` to check
+for leftover gate processes) before reaping. `pDG` closed. Continuation doc:
+`docs/superpowers/handoffs/2026-08-16-groupC-nullable-object-output-schema-relay-2.md`.
+
+### Group A DONE — PR #1654 open, Opus QA spawned (2026-08-17, take 25)
+
+`pDF` reports all work committed and pushed: PR #1654 (refs #1252, #946, #1490), pre-push trio
+green, gate run hit rc=1 on the same family of contention-shaped flakes seen elsewhere this run
+(mcp-gateway-validation, module-sdk-worker) — claimed unrelated, no import overlap with touched
+files, not yet independently confirmed. No live-path surface (audit-log + SSRF guard, tests-only,
+no UI). Confirmed PR #1654 genuinely exists and is open via `gh pr view` before trusting the
+report. Security tier — spawned `qa-1654-groupA` as a **registered `coordinated-qa` subagent on
+Opus** (mandatory adversarial pass) to: hunt for SSRF-guard bypasses (DNS rebinding, redirect
+chains, IP-encoding tricks, cloud metadata endpoints), hunt for audit-outcome truthfulness gaps
+not covered by tests, verify the gate-failure-attribution claim independently, and post its
+verdict directly to the PR via `gh pr comment` (mandatory for security tier). Awaiting verdict —
+once GREEN, this still needs Ben's (or the delegated Fable-5 session's) explicit merge sign-off
+per the security tier's rule, not an auto-merge.
+
+### Group C DONE — PR #1655 open, QA spawned (2026-08-17, take 25)
+
+`pDK` (relay2) reports work complete and pushed: PR #1655 (refs #1337), rebased clean on latest
+`origin/main`, pre-push trio green. Ran the gate a 3rd time (1st exclusive run, by this pane, after
+confirming the fleet quiet) — failure count changed between runs with zero code changes in between
+(12 failures/4 files → 4 failures/2 files), always confined to `module-sdk-worker.test.ts` and
+`mcp-gateway-validation.test.ts`, never the changed files (`output-validation.ts`,
+`ai-output-validation.test.ts`) — reads as host-timing flakiness (same class as #1625/#1638, both
+filed today), not a stable pre-existing red. Live-path N/A per plan's Determinism Boundary (pure
+internal validation fn, no UI). Confirmed `agent_status: done` on `pDK` and PR #1655 genuinely open
+via `gh pr view` before trusting the report; predecessor `pDG` was already reaped at the relay1→2
+handoff above. `pDK` closed (job done, branch is pushed to origin — worktree left in place until
+merge). Sensitive tier — spawned `qa-1655-groupC` (Sonnet, standard QA) to independently confirm
+CI's actual failing tests match the claimed flake class (don't take the flakiness framing on
+faith), check the anyOf-branch invariant (new 2-branch nullable object/array pattern must not
+broaden acceptance for any other module's manifest schema), and weigh in on whether the deferred
+"silent pass-through for unrecognized anyOf shapes" gap is worth flagging now. Verdict posts to the
+PR and directly to the coordinator. Sensitive tier auto-merges after green — no Ben sign-off
+required, folds into the standing per-merge digest.
+
+### Group A QA verdict: RED — sent back for fixes (2026-08-17, take 25)
+
+`qa-1654-groupA` (Opus) posted https://github.com/motioneso/moss/pull/1654#issuecomment-5313237746:
+**RED, MERGE-READY: NO**, 3 blocking, all called cheap-to-fix, none load-bearing on the code being
+dangerous. (1) The #946 "SSRF bypass" test isn't a regression test — Node already normalizes
+IPv4-mapped IPv6 against BlockList rules on both v22 (local) and the prod image's node:24.19.0, so
+the pre-fix code already blocked the 3 example addresses; #946's own issue text calls it a parity
+gap that wasn't reachable. Needs the PR body/#946 framing corrected (don't claim a fixed live
+vuln) — the real, valid catch is the redirect-guard path, which still needs its knock-out test.
+Credited the build agent's separate #946 deviation call as correct and independently reproduced it
+(the plan's literal subnet literally breaks all public IPv4 fetches). (2) #1252's exit criterion —
+"model-visible envelope unchanged" — has no assertion; the envelope is unchanged by construction
+but nothing proves it. (3) Live-path claim ("N/A, no user-facing surface") is wrong:
+`settings-activity-pane.tsx:181-182` renders the audit outcome as a visible Failed badge, matching
+the spec's own statement that truthful audit rows are the user-visible effect — needs a live
+Activity-pane UAT proof, not N/A. 7 non-blocking; two flagged worth following up (notifier still
+emits `outcome: executed` at all 3 sites, so audit log and drawer now disagree; and
+`external-module-tools.ts:163-172` discards a sibling `status:"error"` when `data` is present —
+same underlying bug, one layer up). Gate-failure attribution: same non-regression conclusion as the
+build agent, but independently re-derived — the build agent's stated reason ("neither file imports
+anything this PR touches") was false, `mcp-gateway-validation.test.ts` does import from `@moss/ai`;
+QA instead confirmed via byte-identical untouched files + reproduction on a diff-free tree.
+Invariants all held (no AccessContext/migration/module-boundary/secret-leak issues; gateway.ts
+under the 1000-line file-size gate). Relayed the full finding list back to `pDF` (still open,
+`agent_status: done` but pane confirmed live and idle — re-engaged directly rather than
+respawning) with instructions to fix all 3, push, and re-request QA. `pDF` was already at 69%
+context when re-engaged — watch for a relay mid-fix.
+
+### Group B DONE — 3 PRs open, QA spawned (2026-08-17, take 25)
+
+`pDJ` (relay4) reports all 3 module-distribution-repair fixes complete and pushed. Confirmed via
+deliverable, not the status flag alone (same session id throughout, `agent_status: done`, 3 PRs
+genuinely open per `gh pr list`): PR #1656 (#1057, honor exact version pin when module already on
+disk), PR #1657 (#1223/#1222, unwedge stale module backups + stop listing them as modules), PR
+#1658 (#1042, replace no-op module-restart instruction with a real one). `pDJ` closed. All 3 are
+sensitive tier (module distribution/install/reconcile/runtime path) — spawned one QA agent per PR:
+`qa-1656-groupB` (version-pin invariant: must not affect reconcile behavior for any other module
+state — latest-tag, missing-on-disk, mismatch-needs-reinstall), `qa-1657-groupB` (stale-backup
+invariant: cleanup must never touch a still-valid module, false positive = data loss), `qa-1658-
+groupB` (restart invariant: must actually restart the worker/process, not just update state that
+looks restarted — check for double-restart/race risk). Each checks its own live-path applicability
+and posts to its PR plus replies directly to the coordinator. All 3 sensitive tier — auto-merge
+after green, no Ben sign-off, folds into the standing per-merge digest.
+
+### 3 merges landed: #1655, #1656, #1657 — digest sent (2026-08-17, take 25)
+
+All three QA verdicts came back GREEN/MERGE-READY. Verified deliverable before merging (PR state,
+not just the QA agent's self-report): merged all three, squash, branch deleted, worktree cleaned.
+
+- **PR #1655** (#1337, sensitive, nullable object/array anyOf schema) — merged `79e228d63`. QA
+  GREEN, 1 non-blocking note (PR body's flake-attribution to #1625/#1638 was loose but didn't
+  change the verdict — CI was fully green). Issue #1337 had no auto-close linkage; closed manually
+  with a comment pointing at the merge + QA verdict.
+- **PR #1657** (#1223/#1222, sensitive, unwedge stale module backups) — merged `d4292890b`. QA
+  GREEN, 0 findings. Both issues auto-closed via merge linkage.
+- **PR #1656** (#1057, sensitive, honor exact version pin) — merged (see PR for commit). QA GREEN,
+  0 findings, explicitly confirmed the required serialization (must land after #1468/PR #1647) held
+  — origin/main was already an ancestor at merge time. Issue #1057 auto-closed via merge linkage.
+
+Group B's shared scratch worktree (`/tmp/.../groupB-module-distribution-repairs/.../scratchpad/`)
+had 3 sub-worktrees (wtA/#1656, wtB/#1657, wtC/#1658 not yet merged) — removed wtA and wtB after
+their merges, left wtC alone (PR #1658 still awaiting its QA verdict). Group C's worktree
+(`.claude/worktrees/groupC-nullable-object-output-schema`) removed after #1655.
+
+3 sensitive-tier merges ≥ the ≥2 threshold — sent a plain-English `needs-ben` FYI digest (non-
+blocking, no reply expected), same shape as prior take-25 digest. `merges_since_relay` reset to 0
+above.
+
+**Still open this take:** PR #1654 (Group A, security tier) — 2 of 3 QA-flagged fixes pushed,
+3rd (live-path proof for the audit Activity-pane badge) still running a backgrounded UAT in `pDF`
+as of this entry; needs re-QA once complete, then Fable-5/Ben sign-off before merge (security tier,
+not auto-merge). PR #1658 (Group B, #1042, sensitive) — QA (`qa-1658-groupB`) posted a live-path
+proof comment but has not yet posted a formal GREEN/RED verdict; awaiting that.
+
+### PR #1660 merged — routine tier, split out of #1654 (2026-08-17, take 25)
+
+Debugging #1654's finding-3 live-path proof surfaced a genuine, separate UAT-harness bug: the app
+container was missing `JARVIS_UAT_SEED_CHAT_SCRIPT`, so scripted chat specs never drove a real
+tool call. Filed as issue #1659; the fix was split into its own PR rather than folded into #1654
+(coordinator scope-split decision, take 25 ~05:46). Diff confirmed scoped to `tests/uat/**` +
+`tests/unit/uat-*-env.test.ts` only — no production code, routine tier held.
+
+- **PR #1660** ("fix(uat): repair the scripted chat provider harness (#1659)") — QA
+  (`qa-1660-harness`) GREEN, 0 blocking / 3 non-blocking. Merged `58e21985e` (squash). GitHub's
+  GraphQL API returned 4 consecutive 503s on `gh pr merge`; worked around via the REST endpoint
+  (`gh api repos/motioneso/moss/pulls/1660/merge -X PUT -f merge_method=squash`), which succeeded
+  immediately — reads were unaffected throughout, only the merge mutation. Branch deleted via
+  `gh api -X DELETE .../git/refs/heads/...` (this checkout's local `origin` remote points to
+  `motioneso/Jarv1s`, not `motioneso/moss` — `git push origin --delete` is the wrong repo here).
+
+PR #1654's finding 3 stays honestly reported as blocked-was-a-harness-bug, now unblocked upstream
+by #1659/#1660 landing — re-QA verdict from `qa-1654-groupA` still pending, findings 1/2 already
+fixed and verified.
+
+**Still open this take:** PR #1654 (Group A, security tier) — awaiting `qa-1654-groupA`'s formal
+re-QA verdict (findings 1/2 fixed+verified, finding 3 honestly blocked, root cause now fixed
+upstream), then Fable-5/Ben sign-off before merge. PR #1658 (Group B, #1042, sensitive) — still
+awaiting `qa-1658-groupB`'s formal GREEN/RED verdict.
+
+### PR #1654 splitting — QA verdict RED on live-path gate only (2026-08-17, take 25)
+
+`qa-1654-groupA` posted its formal re-QA verdict (comment
+https://github.com/motioneso/moss/pull/1654#issuecomment-5317603434):
+**RED, MERGE-READY: NO — solely on the live-path gate for the #1252 portion.**
+
+- Finding 1 (#946): FIXED — QA independently reproduced the knock-out test in a scratch copy
+  rather than trusting the claim; confirmed the redirect guard is load-bearing.
+- Finding 2 (#1252 assertions): FIXED — both required tests present and substantive, not circular.
+- Finding 3 (live-path proof): NOT fixed — "blocked on #1659" framing verified honest. #1659 had
+  4 distinct defects; PR #1660 (merged earlier this take) fixed 3 of them, but a 4th
+  (`install-service.ts` prefix/symlink logic) genuinely survives and #1659 stays open/blocking.
+  QA explicitly declined to make the merge-waiver call itself, routing it to coordinator/Ben:
+  under the live-path gate as written, finding 3 alone keeps the PR unmerged.
+
+QA recommended splitting the PR (land #946+#1490 now — both fully proven, live-path N/A; hold
+#1252 pending #1659's remaining defect), tying this directly to Ben's own "split PRs on divergent
+proof, name the gap" standard, while noting landing all three with the gap tracked on #1659 is a
+legitimate alternative.
+
+**Coordinator decision: split**, per that standing standard. This is an auxiliary scope-split
+(what merges now vs. later), not a content waiver on the security-tier findings — within
+coordinator authority, no Fable-5/Ben escalation needed for the split itself. Instructed pDF
+(`w1:pDF`) to open a new PR containing only #946+#1490 (routine tier, auto-merge after green CI,
+no live-path artifact needed — neither touches a live UI surface), leave #1252's commit on a held
+branch/PR blocked on #1659's remaining defect, and comment on #1654 linking the new PR.
+
+Also filed two new follow-up issues QA surfaced during its investigation (not blocking, routine
+bugs): **#1661** (audit notifier emits `outcome: "executed"` at all 3 call sites regardless of
+actual result, disagreeing with the audit log on failure) and **#1662**
+(`external-module-tools.ts:163-172` discards a sibling `status: "error"` when `data` is present,
+misreporting failures as success).
+
+**Still open this take:** PR #1654 (Group A, security tier) — splitting in progress via pDF;
+watch for the new PR number, spawn QA on it before merge, keep #1654 open holding #1252 until
+#1659's remaining defect is fixed. PR #1658 (Group B, #1042, sensitive) — still no formal verdict
+from `qa-1658-groupB` after ~8h since its live-path proof comment; sent a direct check-in
+(2026-08-17 ~16:22), same pattern that successfully prompted #1654's verdict.
+
+### PR #1658 merged — sensitive tier, #1042 (2026-08-17, take 25)
+
+After ~8h of silence past its live-path proof comment, a direct check-in prompted
+`qa-1658-groupB`'s formal verdict within minutes: **GREEN**, 0 blocking/0 non-blocking, CI green,
+live-path proof already posted and now explicitly endorsed as this PR's own required artifact,
+invariants ok (operator-facing instructional text only, no automated restart trigger — no
+double-restart/race risk). Merged via the REST API workaround (`gh api
+repos/motioneso/moss/pulls/1658/merge -X PUT -f merge_method=squash`, sha `db467dedf`). Branch
+`groupB-1042-restart-copy` deleted. Issue #1042 auto-closed, board auto-flipped to Done; posted
+the required merge comment since none existed yet.
+
+**Still open this take:** only PR #1654 (Group A, security tier) — split in progress via pDF
+(new PR pending for #946+#1490), #1252 stays held on #1654 pending #1659's remaining defect.
+
+### PR #1663 opened — split-out #946+#1490, routine tier (2026-08-17, take 25)
+
+pDF's resent split instruction landed for real this time (confirmed via `gh pr list`): opened
+**PR #1663** ("fix(#946,#1490): SSRF hex-mapped IPv6 guard + manage-share regression coverage"),
+created 2026-08-17T16:56:19Z. Diff confirmed clean via `gh pr view 1663 --json files,additions,
+deletions`: `packages/host-fetch/src/index.ts`, `tests/integration/tasks-helpers.ts`,
+`tests/integration/tasks-manage-share-regression.test.ts`, `tests/unit/host-pinned-fetch.test.ts`
+— 304 additions, 3 deletions.
+
+pDF then flagged on its own (correct shared-checkout discipline — didn't act unilaterally) that
+#1654's branch still carries the same 4 commits now duplicated in #1663, and asked whether to
+revert them off #1654 to make it #1252-only. Confirmed and sent explicit instruction (2026-08-17
+~17:05): revert those 4 commits off `groupA-audit-truth-ssrf-share-tests`, push, confirm #1654's
+diff is #1252-only. Confirmed landed/submitted (input box cleared, pane back to idle status bar).
+
+**Tiering note for #1663:** diff touches `host-fetch` (SSRF/network-exposed surface) — this is a
+security-tier trigger per the coordinate skill's mechanical rule, even though the underlying
+finding was already independently verified fixed by `qa-1654-groupA` inside the combined #1654
+review. Treating it as its own security-tier PR requiring its own QA verdict rather than assuming
+"already verified once" carries over — tiering is mechanical, not judgment-based downgrading.
+
+**Still open this take:** PR #1654 (Group A) — awaiting confirmation the 4-commit revert landed,
+after which it should hold only #1252's commit, blocked pending #1659's remaining defect. PR
+#1663 (new, security tier per host-fetch trigger) — needs QA spawned before merge, not yet done.
+
+### PR #1654 revert confirmed — now #1252-only (2026-08-17, take 25)
+
+Confirmed via real `git log`/`git diff` on the worktree (not the pane's status claim, which had
+already flipped `done`→`working`→`done` and per this run's own lesson isn't trusted alone): pDF
+pushed two proper `git revert` commits (`1a3c32a7a` reverting the #946 fix, `dbd989de2` reverting
+the #1490 test-split) onto `groupA-audit-truth-ssrf-share-tests`. Diff vs `origin/main` no longer
+touches `host-fetch` or the manage-share test files at all — confirmed by explicit grep. Remaining
+diff is exactly `packages/ai/src/gateway/gateway.ts` + `tests/unit/mcp-gateway-units.test.ts`
+(#1252's envelope-identity/no-recursion assertions) plus expected coordination handoff docs.
+#1654 is `OPEN`, `MERGEABLE`. This matches the intended split design.
+
+**Still open this take:** PR #1654 (Group A, security tier, #1252 only) — blocked pending #1659's
+remaining defect, no action until that lands; do not merge in the meantime. PR #1663 (split
+#946+#1490, security tier per host-fetch trigger) — QA spawned, currently blocked waiting on its
+own CI ("Verify foundation and app" was still pending at last check); QA agent's turn ended
+correctly declining to verdict on incomplete CI, will need a manual resume once CI goes green
+since it has no live background watcher of its own.
+
+### PR #1663 QA GREEN, routed to Fable 5 for security-tier sign-off (2026-08-17, take 25)
+
+QA agent `a9a262f5f4f7c621b` (coordinated-qa) resumed once CI went green and posted a real
+verdict — not a wait-declaration this time: **GREEN, MERGE-READY: YES**, posted durably at
+https://github.com/motioneso/moss/pull/1663#issuecomment-5318158902. CI fully green (main gate
+25m48s; only the post-gate image-build artifact step still pending, correctly flagged
+non-blocking). Live-path n/a — backend-only change, 0 changed-path rows in UAT lookup. 0 blocking
+findings, 3 disclosed non-blocking (a reasoned spec deviation on #946; a doc gap on #1490 verified
+by direct code read of `packages/tasks/src/repository.ts:210-241`; explicit note that the
+redirect-guard knockout leans on `qa-1654-groupA`'s earlier repro since this QA agent has no
+Edit/Write tools). Invariants OK, no AccessContext/migration/VaultContext/secrets/module-boundary
+issues.
+
+PR #1663 touches `packages/host-fetch/src/index.ts` (SSRF-relevant network-exposed surface) so it
+is **security tier**, matching the manifest's standing delegation above — Fable 5 sign-off
+required, not Ben directly, not merged on the QA verdict alone. No Fable 5 pane was reachable
+(`herdr pane list` showed only Coordinator + pDF), so per agentmemory
+`feedback-fable5-pane-creation.md` I spawned one myself rather than escalating "not found" to Ben:
+split pane `w1:pDM` off the Coordinator pane, renamed it "Fable 5", moved it to its own tab
+(`w1:t18`), started agent `fable5-1663-signoff` with `--model claude-fable-5
+--permission-mode bypassPermissions`, boot brief at
+`/tmp/claude-1000/-home-ben-Jarv1s/11cf8264-55a8-4fa4-b32b-c8d086469f74/scratchpad/boot-fable-1663.txt`
+(pointing it at the PR, the QA verdict comment, and the standing delegation). Confirmed via
+bounded pane read it booted correctly on `claude-fable-5` and is working. Awaiting its sign-off
+comment on the PR before merge.
+
+### Take 25 next-wave batch — Opus Phase-0 vetting complete (2026-08-17)
+
+One-shot Opus subagent vetted all 24 open child issues across the six spec clusters identified
+this take. All confirmed OPEN; checked against the only two open PRs in the repo (#1654, #1663) —
+no collisions with either.
+
+**Recommended batch (5 lanes, file-disjoint, clear to spawn):**
+
+| Issue | What | Tier | Spec |
+| ----- | ---- | ---- | ---- |
+| #1525 (1140-C) | Bound cancel-only submit tombstones to FIFO 128, `packages/cli-runner/src/engine-host.ts` | routine | `2026-08-10-1140-backend-low-followups.md` §1140-C |
+| #1527 (1140-E) | Single-flight crash-shutdown latch, `apps/api/src/server.ts` + `apps/worker/src/worker.ts` | routine | same spec §1140-E |
+| #1514 (1137-C1) | Atomic commitment-candidate upsert, `packages/commitments/src/repository.ts` | routine | `2026-08-10-1137-robustness-followups.md` §C1 |
+| #1512 (1137-B1) | Recheck notes paths immediately before FS I/O (`path-guard.ts`, `write-tools.ts`, `jobs.ts`) | **security** (fail-closed FS trust boundary) | same spec §B1 |
+| #1520 (1139-C) | Keep queued chat drain stable across SSE ticks, `chat-drawer.tsx` + 1 e2e scenario | routine, **live-path gate applies** (UI) | `2026-08-10-1139-chat-export-ui-followups.md` §1139-C |
+
+No overlap with #1654's or #1663's diffs (`packages/ai/`, `packages/host-fetch/`, tasks/share
+tests untouched). Batch is mutually file-disjoint. #1512 is this batch's only security lane —
+Opus QA + Fable 5 sign-off per standing delegation.
+
+**Held for later (do not spawn yet):** #1524 (1140-B, sensitive migration — sole migration lane
+this run, current global migration max is 0184, number assigned at landing order not pre-baked);
+#1516/#1515 (serialize behind #1514, same package); #1497 (1427-A, head of a strict 7-child CSS
+chain, needs `design-system` skill); #1508 (role-marker, second security lane, dispatch when a
+security QA slot frees).
+
+**Excluded:** #1511 (1137-A) and the #1339 cluster (#1529, #1530) — all gate on #1246, still OPEN.
+#1513/#1517/#1521/#1526/#1528 — serialized behind batch members above. #1498-#1503 — spec mandates
+strict order behind #1497.
+
+**Next step:** write handoff docs for the 5-lane batch and spawn build agents per Phase 1 of the
+coordinate skill, once PR #1663 clears (avoid over-saturating the agents tab while #1663's
+sign-off and #1654's #1659-block are still open).
+
+### PR #1663 MERGED — #946 and #1490 closed (2026-08-17, take 25)
+
+Fable 5 posted its sign-off (APPROVE, concur with Opus QA GREEN) at
+https://github.com/motioneso/moss/pull/1663#issuecomment-5318208795 — independent re-derivation of
+the hex-form bit-math in isolated Node, reproduced both empirical code-comment claims on
+v22.22.2, traced the #1490 owner-scoped probe on the actual branch, confirmed per-hop redirect
+guard is real code. MERGE-READY: YES, did not merge itself (correct — merge stays the
+coordinator's).
+
+Merged via REST API workaround (`gh api repos/motioneso/moss/pulls/1663/merge -X PUT -f
+merge_method=squash`, first attempt hit the same GraphQL/REST 503 pattern as usual, succeeded on
+retry) — squash sha `c55df171a`. Branch `split/946-1490-audit-ssrf-share` deleted (confirmed via
+404 on re-fetch). PR body had no auto-close keyword (title only referenced the issues in
+parentheses), so #946 and #1490 were closed manually with plain-English merge comments per
+CLAUDE.md's "every merge: comment issue" rule (both posted, both issues confirmed `state: closed`
+— #1490's close call needed one retry after a 503). Board Status-field auto-flip not independently
+re-verified this take (GraphQL was 503ing persistently at check time and CLAUDE.md/global rules say
+stop after two identical failures rather than retry-loop) — same auto-flip-on-close automation
+confirmed working on every other merge this run, no reason to expect this one differs.
+
+Security-tier merge → merge-counter relay trigger fired. Per this run's established precedent
+(Ben's standing override covers only the 70% context-meter trigger for this coordinator seat, not
+the merge counter — see the #1518/#1519 entry), this was handled as a plain-English `needs-ben`
+FYI digest (queued `1786988060272581524.msg`, no reply required), not a full relay. Continuing
+resident in this same session.
+
+**Both #946 and #1490 fully done.** PR #1663 closed the loop that started as part of #1654's
+split. #1654 itself remains open/parked pending #1659 — unaffected by this merge.
+
+**Next up:** the 5-lane next-wave batch from the take-25 Opus vetting above (#1525, #1527, #1514,
+#1512, #1520) — write handoff docs and spawn build agents.
+
+### Take 25 — 5-lane next-wave batch spawned
+
+All 5 lanes from the vetted batch above are now live. Fresh worktrees off `origin/main` (post
+`c55df171a`, i.e. including #1663), handoff docs committed
+(`729034040`), build agents spawned into `agents`/`agents 2` tabs in workspace `w1`, all confirmed
+booted on Sonnet, all actively building at time of spawn.
+
+| Issue | Tier | Status | Agent label | Pane | Branch |
+| ----- | ---- | ------ | ----------- | ---- | ------ |
+| #1525 | routine | building | 1525-cli-runner-tombstone-fifo | w1:pDN (tab "agents 2") | 1525-cli-runner-tombstone-fifo |
+| #1527 | routine | building | 1527-crash-shutdown-latch | w1:pDP (tab "agents") | 1527-crash-shutdown-latch |
+| #1514 | routine | building | 1514-commitment-upsert-atomic | w1:pDQ (tab "agents") | 1514-commitment-upsert-atomic |
+| #1512 | **security** | building | 1512-notes-path-recheck | w1:pDR (tab "agents 2") | 1512-notes-path-recheck |
+| #1520 | routine (live-path gate applies) | building | 1520-chat-drawer-queued-drain | w1:pDS (tab "agents 2") | 1520-chat-drawer-queued-drain |
+
+Held/serialized behind these (not spawned yet): #1526 (behind #1525), #1528 (behind #1527),
+#1515/#1516 (behind #1514, same package), #1513 (behind #1512, same files), #1521 (behind #1520).
+
+Handoff docs: `docs/coordination/handoff-{1525-cli-runner-tombstone-fifo,1527-crash-shutdown-latch,
+1514-commitment-upsert-atomic,1512-notes-path-recheck,1520-chat-drawer-queued-drain}.md`, each
+following the standard template — coordinator label/session-id, spec pointer by section only,
+run-specific bans, collision notes. #1512 marked security tier up front (fail-closed FS trust
+boundary — will need adversarial Opus QA + Fable-5 sign-off before merge, same as #1663). #1520
+marked live-path-gate-applies up front (touches `chat-drawer.tsx`, a real UI surface).
+
+Existing "Group A" lane (#1654/#1252 split, pane `w1:pDF`) remains parked pending #1659, untouched
+by this spawn — its stale input-box prompt ("Check #1663's CI status") was checked and is just
+leftover UI state, not a new escalation; #1663 already merged and closed.
+
+**merges_since_relay:** 0 (unchanged — no merges this take, only spawns).
+
+## Take 26 boot — coordinator relay adopted, resuming supervision (2026-08-17, session `a8124c40-2d1e-48c3-bf48-7bb3d63fe4e5`, pane `w1:pDT`, tab `w1:t6`)
+
+Successor coordinator boot complete. Skimmed the latest continuation note (Take 25) and
+`AWAITING-BEN.md` — every entry there is already RESOLVED, nothing new to relay to Ben right now.
+Coordinator lock claimed: renamed own pane to `Coordinator`, confirmed exactly one pane held that
+label plus predecessor (session `11cf8264-55a8-4fa4-b32b-c8d086469f74`, pane `w1:pCJ`), fresh-
+resolved the predecessor by label+session id, closed it. Lock line above updated to the new
+anchor. Fleet re-adopted via `herdr pane list`, matches Take 25's handoff exactly: 5 build agents
+working — `1525-cli-runner-tombstone-fifo` (w1:pDN), `1527-crash-shutdown-latch` (w1:pDP),
+`1514-commitment-upsert-atomic` (w1:pDQ), `1512-notes-path-recheck` (w1:pDR, security tier),
+`1520-chat-drawer-queued-drain` (w1:pDS, live-path gate applies) — plus Group A (w1:pDF) still
+idle/parked pending #1659, untouched. **merges_since_relay:** 0 (carried over, unchanged). Resuming
+Phase 2 supervision now.
+
+## Take 26 — two plan approvals (2026-08-17)
+
+- **#1514** (`commitment-upsert-atomic`, routine, w1:pDQ, agent name `commitment-upsert`): plan at
+  `docs/superpowers/plans/2026-08-17-1514-commitment-upsert-atomic.md` on its branch. Single
+  `INSERT...ON CONFLICT DO UPDATE` replacing SELECT-then-branch in
+  `packages/commitments/src/repository.ts`, precedent-matched to
+  `action-suppression-repository.ts`'s increment pattern, no migration needed, matches spec §C1.
+  **APPROVED**, told to proceed. Flagged its handoff doc named the old coordinator session
+  (`11cf8264...`, pane now closed) — confirmed I'm the current sole authority (`a8124c40...`).
+- **#1512** (`notes-path-recheck`, **security tier**, w1:pDR, agent name `notes-path-recheck`):
+  plan at `docs/superpowers/plans/2026-08-17-1512-notes-path-recheck.md`, committed `60083c5a3`.
+  New `recheckWithinRoot()` guard in `path-guard.ts`, 5 call-site insertions
+  (create/edit/delete/both worker handlers), 8 deterministic race tests via `vi.spyOn` on the fs
+  call *before* the guard (never the guarded syscall itself). Matches spec §B1, kill gate after
+  phase 1 is correctly scoped. Live-path N/A (backend guard, no UI). **APPROVED**, told to proceed.
+  Agent was at 70%+ context and relaying to a successor in the same worktree/branch right after
+  sending its escalation — approval message says it carries forward to the successor.
+
+Will need Opus adversarial QA + Fable-5 sign-off before merge (security tier, same as #1663
+precedent) once #1512 reaches PR.
+
+## Take 26 — #1512 lane relay (2026-08-17)
+
+`1512-notes-path-recheck` relayed at 70%+ context per protocol, right after sending its plan-ready
+escalation. Successor spawned in the same worktree/branch, continuation doc
+`docs/superpowers/handoffs/2026-08-17-1512-notes-path-recheck-relay.md` carries forward the plan
+approval. Confirmed successor driving via bounded pane read (pane `w1:pDV`, session
+`d6a5946b-f2e6-4a35-b497-9a1734fe8406`, active on Sonnet). Reaped predecessor pane `w1:pDR`
+(session `269d940e-bb04-4ad7-95e2-bf029b8f2d65`) after fresh label+session resolve. Lane continues
+under the same label `1512 notes path recheck (security)`, now at pane `w1:pDV`.
+
+## Take 26 relay — context-meter 70% fired, relaying now (2026-08-17)
+
+**Coordinator lock at time of relay:** session `a8124c40-2d1e-48c3-bf48-7bb3d63fe4e5`, pane
+`w1:pDT`, tab `w1:t6`. Relaying per non-deferrable context-meter trigger — no merge in flight, no
+bookkeeping skipped.
+
+**Fleet state, fresh as of this note (all in `w1:t17`/`w1:t19`, agents tab):**
+- `1525 cli-runner tombstone FIFO` — pane `w1:pDN`, session `5b92b1ef-9338-4881-bee8-e13fd7b47968`,
+  `working`. No escalations seen yet this take.
+- `1527 crash shutdown latch` — pane `w1:pDP`, session `554a8893-c815-410a-9086-766c99995dc1`,
+  `working`. No escalations seen yet this take.
+- `1514 commitment upsert atomic` — pane `w1:pDQ`, session `3c43b97c-0eac-4633-bf5c-96960808a9fd`,
+  `working`. Plan **APPROVED** this take (see above), building now.
+- `1512 notes path recheck (security)` — pane `w1:pDV` (relayed once already this take, old pane
+  `w1:pDR` reaped), session `d6a5946b-f2e6-4a35-b497-9a1734fe8406`, actively `working`/thinking
+  despite a momentary stale `done` flicker in `herdr pane list` — confirmed via bounded read, not
+  acted on. Plan **APPROVED** this take.
+- `1520 chat drawer queued drain` — pane `w1:pDS`, session `61a444f0-c7a3-4ce6-9a15-2a72805d521d`,
+  `working`. Live-path gate applies at merge time. No escalations seen yet this take.
+- `Group A: audit truth + SSRF share tests (relay1)` — pane `w1:pDF`, session
+  `89035f7c-8...`, `idle`, parked pending #1659 per prior takes — do not touch.
+
+**merges_since_relay:** 0 (unchanged, no merges this take).
+**AWAITING-BEN.md:** empty/all-resolved as of this take's boot — re-check at next boot in case
+anything landed since.
+**Open items for successor:** none blocking. Just keep supervising the 5 lanes above (liveness
+Monitor was running as an in-process task in this session — does not carry over; successor must
+start its own).
+
+## Take 27 — successor adopted, fleet re-confirmed (2026-08-17)
+
+**Coordinator lock claimed:** session `8a84e4de-2910-406c-a793-7cff1705e606`, pane `w1:pDW`, tab
+`w1:t6`. Verified sole "Coordinator"-labelled pane via fresh `herdr pane list` — predecessor's
+pane (session `a8124c40-2d1e-48c3-bf48-7bb3d63fe4e5`) was already gone from the list (no action
+needed for step 6, nothing to close).
+
+AWAITING-BEN.md re-checked: still empty/all-resolved, nothing new landed.
+
+**Fleet re-adopted, fresh pane numbers as of this take:**
+- `1525 cli-runner tombstone FIFO` — pane `w1:pDN`, session `5b92b1ef-9338-4881-bee8-e13fd7b47968`.
+  **Relaying now** (pushed a 70%-context relay message directly to this coordinator mid-boot):
+  work done and committed (2 commits on branch `1525-cli-runner-tombstone-fifo`: plan doc
+  `0088688a8`, impl+test `2a06e2290`), tree clean, rebased on `origin/main`. Unit test
+  `tests/unit/cli-runner-server.test.ts` green (25/25 incl. new bound-tombstone test). Pre-push
+  trio (format/lint/typecheck) green. Full isolated gate running detached
+  (`db=jarvis_gate_1525_cli_runner_tombstone_fifo`,
+  log=`/tmp/jarv1s-gate/1525_cli_runner_tombstone_fifo-20260817-110409.log`) — successor will poll
+  it, push, open PR, report DONE. No live-path proof needed (backend-only). No blockers/forks.
+  Successor spawning now in same worktree via relay skill — coordinator will confirm once up.
+- `1527 crash shutdown latch` — pane `w1:pDP`, session `554a8893-c815-410a-9086-766c99995dc1`.
+  `agent_status` showed `done` (stale flicker) — bounded read confirmed actively compacting
+  (18%, "Compacting conversation…"), not idle. Treated as `working`.
+- `1514 commitment upsert atomic` — pane `w1:pDQ`, session `3c43b97c-0eac-4633-bf5c-96960808a9fd`,
+  `working`. Plan approved prior take, building.
+- `1512 notes path recheck (security)` — pane `w1:pDV`, session `d6a5946b-f2e6-4a35-b497-9a1734fe8406`.
+  `agent_status` showed `done` (stale flicker again, same pattern as last take) — bounded read
+  confirmed actively compacting (51%), not idle. Treated as `working`. Plan approved prior take;
+  will need Opus adversarial QA + Fable-5 sign-off before merge (security tier).
+- `1520 chat drawer queued drain` — pane `w1:pDS`, session `61a444f0-c7a3-4ce6-9a15-2a72805d521d`,
+  `working`. Live-path gate applies at merge time.
+- `Group A: audit truth + SSRF share tests (relay1)` — pane `w1:pDF`, session
+  `89035f7c-818a-4d41-b46f-a2b7c0a27585`, `idle`, parked pending #1659 — do not touch.
+
+**merges_since_relay:** 0 (carried forward, unchanged).
+
+## Take 27 — 1514 TDD RED-flakiness ruling (2026-08-17)
+
+`1514-commitment-upsert-atomic` (pane `w1:pDQ`) hit its kill gate mid-build on Task 2 (concurrency
+test): a `Promise.all`-driven 2-actor RED-phase test against the current unfixed SELECT-then-branch
+code didn't reliably interleave (7/7 tests passed clean — JS-level `Promise.all` doesn't force
+Postgres transaction-level overlap on fast localhost round-trips). Escalated per plan kill gate
+rather than chase timing. Two options offered: (1) force determinism with manually-sequenced raw
+transactions (`BEGIN A -> SELECT A -> BEGIN B -> SELECT B -> COMMIT A -> COMMIT B`), or (2) accept
+best-effort `Promise.all` concurrency with a documented RED-flakiness caveat in the PR (agent's own
+lean, reasoning GREEN is 100% reliable regardless of interleave timing).
+
+**Coordinator ruling: option (1).** A test that sometimes false-passes on the OLD code is flaky on
+CI too, independent of whether the fix is correct — this project's testing discipline (CLAUDE.md /
+memory: flaky tests are never accepted as "pre-existing" noise) treats that as a real defect, not
+an acceptable caveat. Keep the same forced-interleave test in the final suite as the permanent
+regression test (deterministic every run, exercises true overlap, not best-effort). Routine-tier
+engineering-judgment call, decided without Opus escalation. Sent to the lane via `herdr pane run`;
+told to carry the ruling forward in its handoff doc if it relays before finishing (it was near a
+context checkpoint per its own message).
+
+## Take 27 — 1527 relaying (2026-08-17)
+
+`1527-crash-shutdown-latch` (pane `w1:pDP`) reports implementation done, not yet wrapped up: both
+`createCrashHandler` factories (api + worker) landed with single-flight latch matching spec
+§1140-E exactly, no cross-package manager, timeout/SIGINT/SIGTERM untouched. New
+`tests/unit/process-crash-handlers.test.ts` 6/6 green (TDD red confirmed first). Regression green:
+`api-signal-shutdown.test.ts` 2/2, `worker-lifecycle.test.ts` 13/13. format/lint/typecheck all
+green. Commits `20b3375ed` (plan), `b423fd415` (code+tests), tree clean, rebased on `origin/main`.
+Relaying now (hit 70% context-meter before starting the full gate) — successor picks up in the
+same worktree: full isolated-DB gate, pre-push trio re-check, push, PR (live-path proof not
+required — no user-facing surface, per handoff doc), report + stop. No board/issue/merge actions
+taken by this predecessor. **Do not spawn #1528 yet — waiting on this PR to merge.** No
+coordinator decision needed here, informational only; watching for the successor pane to confirm
+adoption.
+
+## Take 27 — 1525 and 1527 relays completed, predecessors reaped (2026-08-17)
+
+Both lanes' successors confirmed driving and predecessors closed:
+
+- **1525-cli-runner-tombstone-fifo**: successor agent `build1525succ`, pane `w1:pDX` (self-renamed
+  `1525-relay`), confirmed Sonnet/active, already resumed polling the isolated gate
+  (`scripts/run-gate.sh wait`) per continuation doc
+  `docs/superpowers/handoffs/2026-08-17-1525-cli-runner-tombstone-fifo-relay.md`. Predecessor
+  (pane `w1:pDN`, session `5b92b1ef-9338-4881-bee8-e13fd7b47968`) confirmed at expected
+  pane/session then closed.
+- **1527-crash-shutdown-latch**: successor agent `crash-latch-1527-wrapup`, pane `w1:pDY` (label
+  "1527 wrap-up"), session `022b5199-a5e4-40ed-9470-ed90046bf380`, confirmed Sonnet/active with
+  the continuation doc `docs/superpowers/handoffs/2026-08-17-1527-crash-shutdown-latch-relay.md`
+  (committed `bcf0aaec3`) — will handle full isolated-DB gate, pre-push trio, push, PR (live-path
+  N/A, no user-facing surface), report, stop. No board/issue/merge actions. Predecessor (pane
+  `w1:pDP`, session `554a8893-c815-410a-9086-766c99995dc1`) confirmed then closed. **Do not spawn
+  #1528 yet — waiting on this PR to merge** (carried forward from predecessor's note).
+
+**Fleet state after this take's relays (fresh pane numbers):**
+- `1525-relay` (was cli-runner tombstone FIFO) — pane `w1:pDX`, session TBD-confirmed above,
+  working (polling gate).
+- `crash-latch-1527-wrapup` (was 1527 crash shutdown latch) — pane `w1:pDY`, session
+  `022b5199-a5e4-40ed-9470-ed90046bf380`, working.
+- `1514 commitment upsert atomic` — pane `w1:pDQ`, session `3c43b97c-0eac-4633-bf5c-96960808a9fd`,
+  working; RED-flakiness ruling sent, pending confirmation of pickup.
+- `1512 notes path recheck (security)` — pane `w1:pDV`, session `d6a5946b-f2e6-4a35-b497-9a1734fe8406`,
+  working (repeated stale `done` flickers observed, always confirmed working on bounded read — do
+  not act on `agent_status: done` for this lane without a bounded read first).
+- `1520 chat drawer queued drain` — pane `w1:pDS`, session `61a444f0-c7a3-4ce6-9a15-2a72805d521d`,
+  working.
+- `Group A` — pane `w1:pDF`, session `89035f7c-818a-4d41-b46f-a2b7c0a27585`, idle, parked, do not
+  touch.
+
+**merges_since_relay:** 0 (unchanged).
+
+## Take 27 relay — context-meter 70% fired, relaying now (2026-08-17)
+
+Coordinator session `8a84e4de-2910-406c-a793-7cff1705e606` (pane `w1:pDW`, tab `w1:t6`, label
+`Coordinator`) hit the 70% context-meter warning. Per relay protocol: merging nothing, flushing
+manifest, spawning successor now.
+
+**What happened this take:** re-adopted fleet cleanly (predecessor Take 26 coordinator pane had
+already self-resolved, no reap needed); ruled on 1514's TDD RED-flakiness escalation (option 1 —
+deterministic manually-sequenced raw-transaction interleave, confirmed picked up via worktree git
+log, commit `4a7d94a17`); tracked and completed two lane relays (1525, 1527) end to end, both
+successors confirmed driving, both predecessors reaped. No PRs opened yet this take. No merges
+(`merges_since_relay` still 0).
+
+**Fresh fleet state (re-confirmed via `herdr pane list` immediately before this relay):**
+- `1514 commitment upsert atomic` — pane `w1:pDQ`, session `3c43b97c-0eac-4633-bf5c-96960808a9fd`,
+  `working`. Has the RED-flakiness ruling (option 1); still building toward Task 1 prod-code fix
+  (INSERT...ON CONFLICT). No PR yet.
+- `1527 wrap-up` (crash-latch successor) — pane `w1:pDY`, session
+  `022b5199-a5e4-40ed-9470-ed90046bf380`, `working`. Doing full isolated gate + push + PR. **Do not
+  spawn #1528 until this PR merges.**
+- `1525-cli-runner-tombstone-fifo` successor — pane `w1:pDX`, session
+  `308727d8-e9c1-4502-9ff8-50a9e6a9a33e`, `working` (label shows blank in latest pane list — was
+  self-renamed `1525-relay` earlier; re-confirm at boot, don't trust the label alone). Polling
+  isolated gate, will push + open PR.
+- `1512 notes path recheck (security)` — pane `w1:pDV`, session
+  `d6a5946b-f2e6-4a35-b497-9a1734fe8406`. `agent_status` showed `done` again in the pre-relay
+  check (recurring stale flicker on this lane, same as every prior take) — **do not trust it,
+  bounded-read to confirm real state before acting.** Security tier: will need Opus adversarial QA
+  + Fable-5 sign-off (per Ben's standing delegation) before merge, no PR yet.
+- `1520 chat drawer queued drain` — pane `w1:pDS`, session `61a444f0-c7a3-4ce6-9a15-2a72805d521d`,
+  `working`. Live-path gate applies — needs live-dev UI proof posted on its PR before merge, no PR
+  yet.
+- `Group A: audit truth + SSRF share tests (relay1)` — pane `w1:pDF`, session
+  `89035f7c-818a-4d41-b46f-a2b7c0a27585`, `idle`, parked pending #1659 — do not touch.
+
+**AWAITING-BEN.md:** re-checked this take, fully empty/resolved — no open asks.
+
+**merges_since_relay:** 0.
+
+**Open carry-forwards for the next coordinator:** (1) don't spawn #1528 before #1527's PR merges;
+(2) 1512 will need Opus + Fable-5 sign-off, not Ben directly, at merge time; (3) 1520 needs
+live-path UI proof on its PR before merge; (4) watch for 1525's and 1527's successors to open PRs
+and run tier-appropriate QA; (5) 1514 still needs its Task 1 prod-code fix written and the
+deterministic RED test finished before it reaches PR.
+
+Spawning successor coordinator now in the same tab (`w1:t6`).
+
+## Take 28 — successor adopted, fleet re-confirmed, predecessor reaped (2026-08-17)
+
+Coordinator session `ba2d0a40-9479-4a7d-81c5-e8a85616b639` (pane `w1:pDZ`, tab `w1:t6`, label
+`Coordinator`) is now driving. Predecessor (session `8a84e4de-2910-406c-a793-7cff1705e606`, pane
+`w1:pDW`) correctly identified this session as successor, stood down, and was closed after
+confirming it held no unsaved work (it had already flushed the Take 27 note and committed
+`d62da7903`).
+
+**AWAITING-BEN.md:** re-checked, fully resolved — no open asks.
+
+**Fresh fleet state (re-confirmed via `herdr pane list` at takeover, no drift from Take 27):**
+- `1514 commitment upsert atomic` — pane `w1:pDQ`, session `3c43b97c-0eac-4633-bf5c-96960808a9fd`,
+  actively working, context meter at 70% (own relay likely soon). Still on Task 1 prod-code fix.
+- `1527 wrap-up` (crash-latch) — pane `w1:pDY`, session `022b5199-a5e4-40ed-9470-ed90046bf380`,
+  actively working (gate/push/PR in progress). **Still do not spawn #1528 until this PR merges.**
+- `1525-cli-runner-tombstone-fifo` successor — pane `w1:pDX`, session
+  `308727d8-e9c1-4502-9ff8-50a9e6a9a33e`, actively working, currently polling the isolated gate.
+- `1512 notes path recheck (security)` — pane `w1:pDV`, session `d6a5946b-f2e6-4a35-b497-9a1734fe8406`.
+  `agent_status` again flickered to `done`; bounded read confirmed it's mid-compaction (64%
+  progress, 26m+ elapsed) — same recurring flicker as every prior take, not real completion.
+- `1520 chat drawer queued drain` — pane `w1:pDS`, session `61a444f0-c7a3-4ce6-9a15-2a72805d521d`,
+  actively working. Live-path gate still applies at merge time.
+- `Group A: audit truth + SSRF share tests (relay1)` — pane `w1:pDF`, session
+  `89035f7c-818a-4d41-b46f-a2b7c0a27585`, idle, still parked pending #1659 — not touched.
+
+No blockers, no escalations, no PRs opened this take yet. `merges_since_relay` carried forward at 0.
+Resuming Phase 2 event-driven supervision now.
+
+**1512 (security tier) lane relay, take 28.** Predecessor (session `d6a5946b-f2e6-4a35-b497-9a1734fe8406`,
+pane `w1:pDV`) relayed to successor `notes-path-recheck-1512b`, now pane `w1:pD0`, session
+`d6cbc177-8872-4d7e-a4eb-29004d7e6117`, label `1512 notes path recheck (security) relay2`, same
+worktree. Confirmed driving, predecessor reaped.
+
+Progress: `recheckWithinRoot` guard in `path-guard.ts` done and correct; 5 new TOCTOU tests
+confirmed RED against pre-fix code (kill gate satisfied, log at `/tmp/1512-killgate5.log`).
+
+**Blocking, before `write-tools.ts` gets wired:** the `vi.mock(node:fs/promises)` test scaffolding
+is breaking 2 pre-existing gateway/trusted_auto tests — confirmed a real regression (fails in
+isolation too, not flake/interaction), not yet root-caused. Full detail:
+`docs/superpowers/handoffs/2026-08-17-1512-notes-path-recheck-relay.md`, commits `40c34cbb1`,
+`4a12e7005`. No coordinator action needed yet — successor is still working the root-cause itself;
+flagging here so the next take doesn't miss it if it stalls.
+
+**1514 lane relay, take 28.** Predecessor (session `3c43b97c-0eac-4633-bf5c-96960808a9fd`, pane
+`w1:pDQ`) hit its own 70% context-meter trigger, relayed to successor `commitment-relay2`, pane
+`w1:pE1`, session `9f27d62b-0456-4f49-9531-37108a6b7329`. Confirmed driving, predecessor reaped.
+
+Progress: Task 1 (atomic `ON CONFLICT` upsert) and Task 2 (deterministic concurrency test, per the
+coordinator's earlier force-determinism ruling) both done, commit `1477bf2df`; RED/GREEN each
+verified deterministic 3/3 runs; typecheck + file-size gates green. Handoff doc:
+`docs/superpowers/handoffs/2026-08-17-1514-commitment-upsert-atomic-relay.md`. Successor picks up
+at the pre-push trio + `coordinated-wrap-up` — no PR yet.
+
+## Take 29 relay — context-meter 70% fired, relaying now (2026-08-17)
+
+Coordinator lock this take: label `Coordinator`, session `ba2d0a40-9479-4a7d-81c5-e8a85616b639`,
+pane `w1:pDZ`, tab `w1:t6`. Relaying per the hard 70% trigger — no merges attempted this take.
+`merges_since_relay` still **0**; no merges have landed this whole run yet.
+
+**Fleet as of this note** (resolve pane numbers fresh via `herdr pane list` — do not trust these):
+- **1512-notes-path-recheck (security tier)** — pane `w1:pD0`, session `d6cbc177-8872-4d7e-a4eb-29004d7e6117`, status `done` (stalled, not really finished — see below).
+- **1514-commitment-upsert-atomic** — pane `w1:pE1`, session `9f27d62b-0456-4f49-9531-37108a6b7329`, `working`.
+- **1520-chat-drawer-queued-drain** — pane `w1:pDS`, session `61a444f0-c7a3-4ce6-9a15-2a72805d521d`, `working`. Live-path gate applies — needs live-dev UAT proof on the PR before merge.
+- **1525-cli-runner-tombstone-fifo** — pane `w1:pDX`, session `308727d8-e9c1-4502-9ff8-50a9e6a9a33e`, `done`. PR **#1664** open (branch `1525-cli-runner-tombstone-fifo` @ `966f3f2e2`), routine tier, backend-only (no UI surface, per PR body). CI was still settling last check — re-check fresh with `gh pr checks 1664` (any background wait task from a prior take died with that session, does not survive relay).
+- **1527-crash-shutdown-latch** — pane `w1:pDY`, session `022b5199-a5e4-40ed-9470-ed90046bf380`, `done`. PR **#1665** just opened (branch `1527-crash-shutdown-latch` @ `c55df171a`), no user-facing surface (pure process-lifecycle). Pre-push trio green; isolated re-run of target files 21/21 green; raw full-suite VF_EXIT=1 attributed to box contention (same failure set as sibling 1525 hit concurrently). **Not yet QA'd or merged.** Once this merges, #1528 is unblocked (carry-forward gate, see below).
+- **Group A** (audit-truth + SSRF share tests) — pane `w1:pDF`, session `89035f7c-818a-4d41-b46f-a2b7c0a27585`, `idle`. Parked pending #1659 — do not touch.
+
+**1512 stall — needs successor spawn, action for whoever picks this up next:**
+Predecessor (session `d6a5946b`→relay2 session `d6cbc177`, pane `w1:pD0`) committed its relay-3
+handoff cleanly (`docs/superpowers/handoffs/2026-08-17-1512-notes-path-recheck-relay-3.md`,
+commit `dea34731d`, worktree tree clean, 3 commits total: `dea34731d`, `4a12e7005`, `40c34cbb1`)
+but ended its turn declaring a handoff it never executed — no successor was spawned, and
+`herdr pane send-keys w1:pD0 Enter` did not resubmit the stale input-box text. **State is safe**
+(recheckWithinRoot guard done+correct in path-guard.ts, 5 new TOCTOU tests confirmed RED against
+pre-fix code — kill gate satisfied). The earlier "blocking" gateway/trusted_auto test regression
+is root-caused as a PRE-EXISTING environmental flake (worker-thread cold-start vs 100ms timeout),
+confirmed NOT a real blocker.
+**Next action:** spawn a fresh successor in `.claude/worktrees/1512-notes-path-recheck` with a
+boot brief instructing it to (1) read the relay-3 handoff doc above in full, (2) continue wiring
+`recheckWithinRoot` into `write-tools.ts` per `coordinated-build`, (3) finish through
+`coordinated-wrap-up` — this is a SECURITY TIER lane, PR needs Opus adversarial QA + Fable-5
+sign-off (Ben's standing delegation) before merge, never routine auto-merge. Explicitly instruct
+it not to repeat the predecessor's mistake: actually execute the herdr spawn+verify+reap sequence
+before ending a turn, never just declare intent and stop.
+
+**Carry-forwards (unchanged):** do not spawn #1528 until #1527's PR (#1665) actually merges.
+AWAITING-BEN.md fully resolved as of last check, no open asks.
+
+**Next coordinator's first actions:** (1) spawn the 1512 successor per above, (2) re-check CI on
+PR #1664 and #1665 fresh, spawn `coordinated-qa` (routine tier, Sonnet) on whichever is green,
+verify the "no UI surface" claim on both rather than trust it blindly (per verification
+discipline) before treating the live-path gate as satisfied, (3) resume liveness Monitor over the
+fleet above, (4) keep supervising 1514/1520 for their own relay/PR events.
+
+## Take 29 — driving, boot complete (2026-08-17)
+
+Coordinator lock this take: label `Coordinator`, session `088a6702-c049-4e09-a62d-c8e1b358f7bb`,
+pane `w1:pE2`, tab `w1:t6`. Predecessor (session `ba2d0a40-9479-4a7d-81c5-e8a85616b639`, was pane
+`w1:pDZ`) was already gone from `herdr pane list` by the time I checked — nothing to close, single
+`Coordinator`-labeled pane confirmed (mine). AWAITING-BEN.md re-checked: fully resolved, nothing
+new pending. `merges_since_relay` still **0**.
+
+**Action taken:** spawned the 1512 successor. The old pane `w1:pD0` (session `d6cbc177-...`) had
+stale unsubmitted text sitting in its input box from the prior take (confirming the known
+`send-keys Enter` trap) — `herdr pane run` retyped the new brief pointer, then an explicit
+`send-keys Enter` submitted it; pane is now `working` ("Wandering…"), renamed to
+`1512 notes path recheck (security) relay4`. Brief points it at the relay-3 handoff doc, tells it
+to continue wiring `recheckWithinRoot` into `write-tools.ts` via coordinated-build, finish through
+coordinated-wrap-up flagged SECURITY TIER (Opus adversarial QA + Fable-5 sign-off before merge),
+and explicitly not to repeat its predecessor's mistake of declaring a handoff without executing it.
+
+**CI check on PR #1664/#1665:** both still show `Verify foundation and app` as `pending` as of this
+check — not yet settled, so no QA agent spawned yet. Backgrounded a one-shot wait
+(`wait-ci-1664-1665.sh`, polls every 30s) that will notify when both resolve; will spawn
+`coordinated-qa` (routine tier, Sonnet) on each once green, and independently verify the "no UI
+surface" claim on both per verification discipline before treating live-path gate as satisfied.
+
+**Fleet as of this note** (resolve pane numbers fresh via `herdr pane list` — do not trust these):
+- **1512-notes-path-recheck (security tier)** — pane `w1:pD0`, session `d6cbc177-8872-4d7e-a4eb-29004d7e6117`, `working` (fresh successor just spawned).
+- **1514-commitment-upsert-atomic** — pane `w1:pE1`, session `9f27d62b-0456-4f49-9531-37108a6b7329`, `working`.
+- **1520-chat-drawer-queued-drain** — pane `w1:pDS`, session `61a444f0-c7a3-4ce6-9a15-2a72805d521d`, `working`. Live-path gate applies.
+- **1525-cli-runner-tombstone-fifo** — pane `w1:pDX`, session `308727d8-e9c1-4502-9ff8-50a9e6a9a33e`, `done`. PR #1664 open, CI still settling.
+- **1527-crash-shutdown-latch** — pane `w1:pDY`, session `022b5199-a5e4-40ed-9470-ed90046bf380`, `done`. PR #1665 open, CI still settling. Carry-forward: do not spawn #1528 until #1665 merges.
+- **Group A** — pane `w1:pDF`, session `89035f7c-818a-4d41-b46f-a2b7c0a27585`, `idle`. Parked pending #1659, do not touch.
+
+Persistent fleet-liveness Monitor restarted (diffs `herdr pane list` w1 panes every 60s). One-shot
+background CI wait running for #1664/#1665.
+
+**Next actions:** (1) on CI-settled notification, spawn coordinated-qa on #1664 and #1665, verify
+no-UI-surface claim independently, merge if green (routine tier, auto-merge); (2) keep supervising
+1512/1514/1520 for plan-ready/blocker/relay pushes via the liveness Monitor; (3) do not spawn #1528
+until #1665 merges.
+
+**Take 29, 1512 update:** relay #4 (fresh successor I spawned) found a real defect in
+`path-guard.ts`'s `recheckWithinRoot` — does NOT catch a dangling-symlink swap directly on the
+target file, contradicting relay #2/#3's claim that no further path-guard.ts changes were needed.
+Confirmed by direct execution, not just review. No source edits yet this sub-session; relaying to
+a fresh successor in the same worktree to fix path-guard.ts, then wire write-tools.ts, then open
+the PR — still security tier, Opus QA + Fable-5 sign-off before merge, unchanged. Continuation doc
+`docs/superpowers/handoffs/2026-08-17-1512-notes-path-recheck-relay-4.md` (commit `e3ad5c80d`).
+Awaiting its "successor driving, reap old pane" confirmation.
+
+**Take 29, 1512 relay 4→5:** confirmed successor (relay5-1512, pane `w1:pE3`, session
+`4df290a9-925a-472f-b065-9e582cc745cb`, Sonnet) actually driving via bounded pane read (reading
+`path-guard.ts`, not stalled). Session id on old pane `w1:pD0` re-verified matching
+`d6cbc177-8872-4d7e-a4eb-29004d7e6117` before reap. Reaped `w1:pD0`. 1512 lane now on relay 5,
+fixing the symlink-swap gap in `path-guard.ts` before wiring `write-tools.ts`.
+
+**Take 29, 1520 note:** `agent_status` flipped to `done` but bounded pane read shows this is a
+false completion (known trap) — lane is still mid live-path UAT proof, running
+`1520-chat-drawer-queued-drain.uat.spec.ts` against a fresh live stack (two real signed-in browser
+windows, cross-session SSE check), waiting on its own Monitor. PR **#1666** is already open but
+NOT yet merge-ready — no live-path proof posted. Lane's own context is at 70% (near its own relay
+trigger, separate from mine). Not treating as done; no QA spawned yet.
+
+**Take 29, 1514 note:** `agent_status` also flipped to `done` — same false-completion pattern.
+Bounded pane read shows it's actually mid-triage: re-running 3 failing gate test files in
+isolation (`mcp-gateway-validation` failures match a known existing issue; `module-sdk-worker` and
+`external-worker-runtime` failures are new, being verified). No PR yet. Not treating as done.
+
+**Take 29, 1514 decision:** approved option (a) — proceed to push + open PR. Evidence was solid:
+diff scoped to `packages/commitments/src/repository.ts` + its test only; isolated gate-DB run
+(migrate EXIT=0, commitments integration test 7/7 EXIT=0) proves the diff is clean; verify:foundation's
+red is from two unrelated pre-existing test:unit failures — `mcp-gateway-validation` (known flake,
+memory `gateway-worker-pattern-timeout-flake`) and a newly-traced `module-sdk-worker`/
+`external-worker-runtime` timing-budget-vs-sandbox-speed mismatch (child-process cold start
+1.26-1.46s vs hardcoded ~1s poll budget). Instructed it to document this in the PR body, file a
+follow-up GitHub issue for the new timing flake (no spec needed, bug report not a build lane), and
+flag back to me rather than self-waive if GitHub's own CI run reproduces the same red (CI waiver
+protocol needs proof-on-main-at-same-SHA + sign-off, not just isolated local evidence).
+
+## Take 29 relay — context-meter 70% fired, relaying now (2026-08-17)
+
+Coordinator lock this take: label `Coordinator`, session `088a6702-c049-4e09-a62d-c8e1b358f7bb`,
+pane `w1:pE2`, tab `w1:t6`. Relaying per the hard 70% trigger — no merges attempted this take.
+`merges_since_relay` still **0**; no merges have landed this whole run yet. AWAITING-BEN.md
+re-checked at boot: fully resolved, nothing new pending.
+
+**Fleet as of this note** (resolve pane numbers fresh via `herdr pane list` — do not trust these):
+- **1512-notes-path-recheck (security tier)** — pane `w1:pE3`, session `4df290a9-925a-472f-b065-9e582cc745cb`, `working`, relay 5. Found a real defect in `path-guard.ts`'s `recheckWithinRoot` (doesn't catch a dangling-symlink swap on the target file) — fixing that now, then will wire `write-tools.ts`, then open PR. Continuation doc: `docs/superpowers/handoffs/2026-08-17-1512-notes-path-recheck-relay-4.md` (commit `e3ad5c80d`). Still security tier: needs Opus adversarial QA + Fable-5 sign-off (Ben's standing delegation) before merge, never auto-merge.
+- **1514-commitment-upsert-atomic** — DONE, PR **#1668** open, routine tier, backend-only (internal repository/worker fix, no UI surface, no chat turn — per its own report; still worth a quick independent check, don't just trust it). `gh pr checks 1668` still shows everything `pending` as of last check (just opened) — re-check fresh. verify:foundation local gate is RED but root-caused + documented in the PR body as 2 pre-existing unrelated test:unit flakes (`mcp-gateway-validation` known flake; `module-sdk-worker`/`external-worker-runtime` newly-traced timing-budget-vs-sandbox-speed mismatch, follow-up issue **#1667** filed with evidence). Isolated gate-DB run proved the actual diff clean (migrate EXIT=0, commitments integration test 7/7 EXIT=0). **CI-waiver caveat, already communicated to the lane and must hold:** if GitHub's own CI run reproduces this same test:unit red (not just the local pre-push gate), that is NOT auto-waived — needs proof-on-main-at-same-SHA + your/Ben sign-off before QA can treat it as waived. Spawn `coordinated-qa` once CI settles either way.
+- **1520-chat-drawer-queued-drain** — still building, PR **#1666** already open but NOT merge-ready — mid live-path UAT proof (`1520-chat-drawer-queued-drain.uat.spec.ts` against a fresh live stack, two real signed-in browser windows, cross-session SSE check). `agent_status` has flipped to `done` falsely at least once this take (known trap) — always verify via bounded pane read, not the status flag alone. Its own context was at ~70% last observed too — it may relay on its own; if so, confirm its successor is driving before reaping, same as any lane relay.
+- **1525-cli-runner-tombstone-fifo** — DONE, PR **#1664** open (branch `1525-cli-runner-tombstone-fifo`), routine tier, backend-only claimed (verify independently, don't trust blindly). Last check still showed `Verify foundation and app` as `pending`. A background one-shot wait script is running (see below) and will notify when both #1664 and #1665 settle.
+- **1527-crash-shutdown-latch** — DONE, PR **#1665** open (branch `1527-crash-shutdown-latch`), no user-facing surface (pure process-lifecycle) claimed. Same pending-CI state, same background wait covers it. **Carry-forward: do NOT spawn #1528 until #1665 actually merges.**
+- **Group A** (audit-truth + SSRF share tests) — pane (resolve fresh, was `w1:pDF`), session `89035f7c-818a-4d41-b46f-a2b7c0a27585`, `idle`. Parked pending #1659 — do not touch.
+
+**Background tasks running in this session (will NOT survive relay — recreate in the new session if still needed):**
+- One-shot CI-settle wait for PR #1664 + #1665 (polls `gh pr checks` every 30s, notifies when neither shows `pending`). Script at `/tmp/claude-1000/-home-ben-Jarv1s/088a6702-c049-4e09-a62d-c8e1b358f7bb/scratchpad/wait-ci-1664-1665.sh` if the successor wants to reuse the pattern — but it must relaunch its own copy, this one dies with this session.
+- Persistent liveness `Monitor` diffing `herdr pane list` (w1 panes only) every 60s, emitting only changed lines. Also dies with this session — the successor should restart it immediately per Phase 2.
+
+**Next coordinator's first actions:** (1) restart the liveness Monitor and a fresh CI-settle wait
+for #1664/#1665/#1668 (all three routine tier, all currently CI-pending), (2) once each settles
+green, spawn `coordinated-qa` (routine tier, Sonnet) and independently verify the "no UI surface"
+claims on 1664/1665/1668 before treating live-path gate as satisfied, respecting the CI-waiver
+caveat on #1668 specifically, (3) keep supervising 1512 relay 5 (security tier, mid-fix) and 1520
+(mid live-path UAT, PR #1666 not yet merge-ready, watch for its own relay), (4) do not spawn #1528
+until #1665 merges, (5) Group A stays parked.
+
+## Take 30 — coordinator adopted, QA dispatched on #1664/#1665 (2026-08-17)
+
+**Coordinator lock:** label `Coordinator`, session `4ee1f279-6c18-411a-8da1-792ed151a5ef`, pane
+`w1:pE4`, tab `w1:t6`. Predecessor pane (session `088a6702-c049-4e09-a62d-c8e1b358f7bb`) was
+**already gone** from `herdr pane list` on adoption — nothing to close there, confirmed only one
+`Coordinator`-labelled pane exists (mine). AWAITING-BEN.md re-checked: fully resolved, nothing new.
+
+**Fresh CI check on boot:**
+- **#1664** (1525-cli-runner-tombstone-fifo) — **all CI green.** QA dispatched this take.
+- **#1665** (1527-crash-shutdown-latch) — **all CI green.** QA dispatched this take.
+- **#1668** (1514-commitment-upsert-atomic) — `Verify foundation and app` still `pending`, rest
+  green. Background wait restarted; CI-waiver caveat still applies if it comes back red.
+- **#1666** (1520-chat-drawer-queued-drain) — `CI gate` and `Verify foundation and app` both
+  **fail**. Expected — lane is mid-build (its own pane shows it waiting on a background typecheck
+  monitor). Not a merge candidate; no action taken, watching only.
+
+**Bounded pane reads on adoption (not just agent_status):**
+- 1512 (`w1:pE3`, session `4df290a9-925a-472f-b065-9e582cc745cb`): pane shows "Compacting
+  conversation…" with handoff-doc guidance visible — mid-relay, context meter was at 73%. Watching
+  for its successor; do not reap until confirmed driving.
+- 1520 (`w1:pDS`, session `61a444f0-c7a3-4ce6-9a15-2a72805d521d`): "waiting on the background
+  typecheck (Monitor is watching PID 4064726)" — genuinely idle-on-own-monitor, not a stall
+  needing a nudge. 63% context used.
+- 1514 (`w1:pE1`), 1525 (`w1:pDX`), 1527 (`w1:pDY`): all show "reported to coordinator, next steps
+  are coordinator's call" — consistent with `done` status, PRs open, matches manifest.
+
+**Actions this take:** restarted persistent liveness Monitor (w1 panes, 60s diff). Restarted
+one-shot CI-settle background wait for #1668. Dispatched `coordinated-qa` (routine tier, Sonnet,
+worktree-isolated) on #1664 and #1665 in parallel — awaiting verdicts.
+`merges_since_relay` still **0**.
+
+**#1527 / PR #1665 MERGED (squash, `gh pr merge`).** Routine-tier QA GREEN (verdict:
+https://github.com/motioneso/moss/pull/1665#issuecomment-5319362261). Issue #1527 auto-closed by
+the merge, comment posted. Board `Status: Done` already reflected automatically — no manual move
+needed. Reaped: build worktree `.claude/worktrees/1527-crash-shutdown-latch` removed (its only
+live processes were the build agent's own shell/session, not a stray dev instance), pane `w1:pDY`
+closed, QA's isolated worktree `agent-a26016b8d31dd6ccc` also removed (0 tracked mods), branch
+`1527-crash-shutdown-latch` deleted. `merges_since_relay` now **1** (not yet at the 2-merge relay
+trigger).
+
+**#1525 / PR #1664 MERGED (squash).** Routine-tier QA GREEN, incl. blocking e2e-UAT
+(`cli-terminal.uat.spec.ts` EXIT=0) — verdict:
+https://github.com/motioneso/moss/pull/1664#issuecomment-5319503990. Issue #1525 auto-closed,
+comment posted. **NOT YET REAPED** — relay fired mid-teardown. Confirmed safe to reap: only
+processes in `.claude/worktrees/1525-cli-runner-tombstone-fifo` are the build agent's own
+shell/session (no stray dev server), 0 tracked mods, no matching docker containers. Successor:
+close pane `w1:pDX` (re-resolve fresh, may have moved), `git worktree remove
+.claude/worktrees/1525-cli-runner-tombstone-fifo`, also remove QA's isolated worktree
+`.claude/worktrees/agent-a4e847055ca9b1c83` (0 tracked mods, already checked), then
+`git branch -D 1525-cli-runner-tombstone-fifo`. `merges_since_relay` now **2** — this merge was
+itself also a relay trigger (2 routine merges), landing simultaneously with the 70% context-meter
+trigger. Reset to 0 once successor is driving.
+
+**1520 reported DONE, PR #1666, rebased+pushed at `e30d2e6ee`.** Pre-push trio green, prior full
+gate green (2 pre-existing unrelated failures documented in PR body). Live-path: NOT MET via real
+UAT — root-caused as the same structural gap as 1089-1090-chat-drawer-private.uat.spec.ts: no UAT
+seed configures a chat-capable AI provider (#1121), so `resolveActiveProvider()` throws before any
+transcript record — not even the user's own echo — so no session can ever produce an observable
+SSE tick on this harness. New UAT spec converted to `test.fixme` with full trace, its
+`uat-trigger-map.tsv` row demoted blocking→advisory to match precedent. Regression proof is the
+existing mocked-SSE `tests/e2e/chat-drawer.spec.ts` (passing, part of this PR).
+
+**Coordinator ruling (no Ben re-ask needed):** this is the identical precedent Ben already ruled on
+twice this run today — PR #1649/#1518 and PR #1650/#1519 (see AWAITING-BEN.md "shared dev has no
+working AI chat" entry, resolved 2026-08-17): same #1121 root cause, same mocked-e2e fallback, same
+fixme-conversion pattern. Treating live-path as satisfied for #1666 under that standing ruling.
+Relayed to the 1520 agent (`w1:pDS`) — holding, no further action from it. Background CI-settle
+wait restarted for #1666 (fresh push, was all-pending); QA will dispatch once green. Teardown
+already confirmed by the agent: no UAT containers, stale gate DB `jarvis_gate_1520_chat_drawer_queued_drain`
+dropped, worktree reapable after merge.
+
+## Take 30 relay — context-meter 70% fired, relaying now (2026-08-17)
+
+Coordinator lock: session `4ee1f279-6c18-411a-8da1-792ed151a5ef`, pane `w1:pE4`, tab `w1:t6`.
+Relay trigger: 70% context-meter warning, coinciding with the 2-merge trigger (#1665 + #1664 both
+landed this take). No deferral — flushing and relaying now per skill rule.
+
+Fleet snapshot at relay time: 1512 (security, pane was `w1:pE3`) still `working`, relay5 in
+progress on `recheckWithinRoot`. 1520/PR #1666 DONE, live-path already ruled (structural-
+infeasibility precedent, same as #1649/#1518 and #1650/#1519) — do not re-ask. 1514/PR #1668 DONE,
+CI-wait was running in background, not yet QA'd. 1525/PR #1664 MERGED but NOT YET REAPED (see
+entry above this section) — successor's first job. 1527/PR #1665 MERGED and fully reaped. Group A
+(`w1:pDF`) stays parked pending #1659.
+
+Full successor brief: `/tmp/claude-1000/-home-ben-Jarv1s/4ee1f279-6c18-411a-8da1-792ed151a5ef/scratchpad/boot-coordinator-take31.txt`
+(not readable by a different session's scratchpad path — copy its content into the new session's
+own boot file if the path is inaccessible). Successor session id and pane recorded in the next
+"Take 31" entry once it claims the lock.
+
+## Take 31 — coordinator adopted, #1525 reaped, CI-waits + liveness monitor restarted (2026-08-17)
+
+Coordinator lock: session `e7ae6d12-b7cc-4e07-bd49-e2e50c53aa51`, pane `w1:pE5`, tab `w1:t6`.
+`merges_since_relay` reset to **0**. AWAITING-BEN.md re-checked: still fully resolved, nothing
+pending.
+
+**#1525 reap completed** (was the successor's first job): closed pane `w1:pDX` (was idle at a
+clean prompt, no work in flight), removed worktree `.claude/worktrees/1525-cli-runner-tombstone-fifo`
+and QA's isolated worktree `.claude/worktrees/agent-a4e847055ca9b1c83` (both passed the four-gate
+check — 0 tracked mods, no owning processes, no pane cwd'd there), deleted branch
+`1525-cli-runner-tombstone-fifo`. PR #1664 independently re-confirmed MERGED via `gh pr view`
+before any deletion. This entry is that manifest record (mirroring the #1527/#1665 record).
+
+Fleet re-adopted fresh via `herdr pane list`:
+- **1512-notes-path-recheck** (security, pane `w1:pE3`, relay5) — still driving, context meter
+  reads high (~73%) but no relay/stall signal from the agent itself. Watching only, per brief.
+- **1520-chat-drawer-queued-drain / PR #1666** — `gh pr checks 1666` still shows "Verify
+  foundation and app" pending. Background CI-settle wait restarted (this session's own).
+- **1514-commitment-upsert-atomic / PR #1668** — `gh pr checks 1668` still shows "Verify
+  foundation and app" pending. Background CI-settle wait restarted (this session's own).
+- **1527/PR #1665** — no action, already fully reaped, confirmed no pane remains.
+- **Group A** (`w1:pDF`) — stays parked pending #1659, untouched.
+
+Restarted a fresh persistent liveness Monitor (diffs `herdr pane list` w1 panes every 60s, changed
+lines only) — the prior session's Monitor/background waits were not assumed reachable, per the
+successor brief's instruction.
+
+**PR #1668 (#1514, routine) MERGED.** CI settled green (Verify foundation and app pass, 32m14s;
+image-publish job pending is not the mechanical gate). QA verdict GREEN, 0 blocking —
+https://github.com/motioneso/moss/pull/1668#issuecomment-5319637524. Merged squash `0ac47a400`,
+branch deleted. Issue #1514 auto-closed, comment posted, board item already showed Done
+(auto-synced). `merges_since_relay` now **1**.
+
+PR #1666 QA also dispatched once its CI settled green (same pattern, image-publish pending only) —
+verdict pending.
+
+## Take 31 relay — context-meter 70% fired, relaying now (2026-08-17)
+
+Coordinator lock: session `e7ae6d12-b7cc-4e07-bd49-e2e50c53aa51`, pane `w1:pE5`, tab `w1:t6`.
+Relay trigger: 70% context-meter warning. No deferral — flushing and relaying now per skill rule.
+`merges_since_relay` = **1** (PR #1668 only; not yet at the 2-merge trigger).
+
+**Correction: PR #1668 is MERGED but NOT YET REAPED** — the prior line in this file saying
+"reaped" is wrong, written in haste right at the relay trigger. Successor's first job:
+- Confirm `0ac47a400` is on `origin/main` (it is — that's the merge commit), then run the
+  four-gate check and reap: close pane `w1:pE1` (`1514 commitment upsert atomic`, was status
+  `done`), `git worktree remove .claude/worktrees/1514-commitment-upsert-atomic`, also remove the
+  QA agent's isolated worktree `.claude/worktrees/agent-a23d2261452e3057d` (QA agent
+  `a23d2261452e3057d` already finished, verdict posted, nothing further needed from it), delete
+  branch `1514-commitment-upsert-atomic` (already deleted on GitHub side by `--delete-branch`, but
+  confirm the local worktree/branch copy too).
+- PR #1666 QA (agent `af068c856e21df1a7`, coordinated-qa, routine tier, isolation worktree) was
+  dispatched and is still running as of relay — no verdict yet. **Do not re-dispatch**; resume it
+  via `SendMessage(to: "af068c856e21df1a7", ...)` if you need to check on it, or just wait for its
+  own completion notification (won't carry over to a new session — treat as re-check needed).
+  If it's unreachable in the new session, re-dispatch fresh instead of guessing its state.
+- **1512-notes-path-recheck** (security tier, pane `w1:pE3`) — mid multi-relay chain on its own
+  (currently on an internal successor "1512-relay-6", spawned via the Agent tool inside the same
+  pane rather than a new herdr pane — that's a valid pattern for that lane, not a stall). Last
+  observed `working`. Just re-confirm still driving (bounded pane read) — no other action unless
+  it reports done or stalled. Needs Opus adversarial QA + Fable-5 sign-off before merge, never
+  auto-merge, per standing rule.
+- **Group A** (pane `w1:pDF`) — stays parked pending #1659, untouched.
+- AWAITING-BEN.md — fully resolved as of this relay, re-check fresh at boot per standing practice.
+
+This session's background tasks (CI-settle waits, the persistent liveness Monitor) are tied to
+this session and won't be reachable by the successor — start fresh ones, don't assume reachable.
+
+Full successor brief: written fresh to
+`/tmp/claude-1000/-home-ben-Jarv1s/e7ae6d12-b7cc-4e07-bd49-e2e50c53aa51/scratchpad/boot-coordinator-take32.txt`
+before spawning (not readable by a different session's scratchpad path — copy its content into the
+new session's own boot file if the path is inaccessible). Successor session id and pane recorded
+in the next "Take 32" entry once it claims the lock.
+
+## Take 32 — lock claimed, fleet re-adopted, #1514 reaped (2026-08-17)
+
+Coordinator lock: session `6661375f-e57f-4b6f-a5c3-e424c128db24`, pane `w1:pE6`, tab `w1:t6`.
+Predecessor (session `e7ae6d12...`, pane `w1:pE5`) still held the `Coordinator` label at claim
+time — expected, per the boot brief it gets closed after fleet adoption completes (this note).
+AWAITING-BEN.md re-checked fresh: still fully resolved, nothing pending.
+
+**#1514 (PR #1668) — REAPED.** Confirmed `0ac47a400` on `origin/main`. Ran the four-gate check:
+closed pane `w1:pE1` first (2 processes still had cwd in the worktree until then), then all four
+gates cleared (ahead-count non-zero but that's expected for a squash-merged branch; porcelain
+clean; no proc cwd; no herdr pane cwd). Removed `.claude/worktrees/1514-commitment-upsert-atomic`,
+removed `.claude/worktrees/agent-a23d2261452e3057d` (QA agent's isolated worktree), deleted local
+branch `1514-commitment-upsert-atomic`. Nothing else pending on this lane.
+
+**PR #1666 — fresh QA dispatched.** The predecessor's QA agent `af068c856e21df1a7` was confirmed
+gone (absent from `ListAgents`, tied to the old session as expected). CI on the PR is green
+(SUCCESS/SKIPPED across the board). Re-dispatched a fresh `coordinated-qa` agent (isolation
+worktree, routine tier, name `qa-1666`, agentId `a05537e205b58f3af`) with the live-path precedent
+(#1649/#1518, #1650/#1519) pre-loaded so it doesn't re-litigate that ruling. Awaiting verdict.
+
+**1512-notes-path-recheck (security tier)** — re-confirmed via bounded pane read: actively
+driving, subagent `1512-relay-6` working ~10 min in, not stalled. No action taken, per brief.
+
+**Group A** (pane `w1:pDF`) — untouched, stays parked pending #1659.
+
+**Issue #1528** — still not yet acted on (dependency-gate on #1527 cleared last run); carried
+forward again, no capacity spent on it this take yet.
+
+Started a fresh persistent liveness Monitor (diffs `herdr pane list` w1 panes every 60s, changed
+lines only) — the predecessor's was tied to its own session and unreachable, as expected.
+
+`merges_since_relay` = **0** (reset at start of this take; no merges yet this take — #1514 was
+already merged by the predecessor, this take only reaped it).
+
+Next: close predecessor's pane `w1:pE5` (session `e7ae6d12...`) once confirmed via fresh
+`herdr pane list`, then continue supervising: await PR #1666 QA verdict, keep 1512 on its security
+lane, consider #1528 for spawn.
+
+**Update same take: predecessor pane closed (session id matched, it confirmed nothing further
+needed — it was `jarv1s-97`, i.e. session `e7ae6d12...` itself, still alive post-relay babysitting
+its own now-dead QA subagent `af068c856e21df1a7`; confirmed dead via direct `SendMessage` → "No
+transcript found").**
+
+## Take 32 continuation — 70% relay firing, PR #1666 verdict in progress (2026-08-17)
+
+Context-meter hit 70% mid-investigation. Relaying immediately per the skill's no-deferral rule —
+handing the PR #1666 call to the successor with everything gathered so far.
+
+**PR #1666 QA agent `qa-1666` (agentId `a05537e205b58f3af`) stalled a second time** — same
+wait-declaration pattern as the dead predecessor QA agent, this time *after* its background UAT run
+actually finished (confirmed via a bounded Monitor wait on the real PIDs, not a nudge). Do not
+nudge it again; take over the verdict directly. Its worktree:
+`.claude/worktrees/agent-a05537e205b58f3af` (branch `worktree-agent-a05537e205b58f3af`), already
+has `origin/main` merged into a `qa-1666-review` branch.
+
+**UAT run result:** `pnpm test:uat -- 1089-1090-chat-drawer-private, 1133-chat-attachments,
+moss-assistant-name, runtime-context` → 1 passed, 2 skipped, **1 failed**:
+`runtime-context.uat.spec.ts:56` — "ordinary chat turn sends no snapshot and performs no
+current-view pull". Full log: `/tmp/claude-1000/-home-ben-Jarv1s/6661375f-e57f-4b6f-a5c3-e424c128db24/scratchpad/uat-run.log`
+(that scratchpad path dies with this session — copy anything needed before it's unreachable).
+
+**This looks like the SAME known pre-existing flake as issue #1652** (see the "#1518 / PR #1649"
+entry above in this file): same spec, same test name, already proven pre-existing twice (reproduced
+on a pristine `origin/main` checkout, unrelated to either prior PR's diff). **Not yet confirmed for
+PR #1666 specifically** — I was mid-way through checking whether `apps/web/src/chat/chat-drawer.tsx`
+(PR #1666's only production file) has any overlap with the page-context-snapshot/current-view-pull
+behavior this test asserts on (`/api/chat/turn` and `/api/chat/page-context` request bodies).
+PR #1666's full file list: `.claude/skills/coordinate/uat-trigger-map.tsv`,
+`apps/web/src/chat/chat-drawer.tsx`, `tests/e2e/chat-drawer.spec.ts`,
+`tests/uat/specs/1520-chat-drawer-queued-drain.uat.spec.ts`.
+
+**Successor's next step:** grep `chat-drawer.tsx` for any page-context/snapshot/current-view
+references; if genuinely no overlap (matching the #1652 precedent's reasoning), waive as
+coordinator judgment same as #1518/#1519 and proceed to merge (routine tier, live-path already
+satisfied by the mocked-SSE precedent). If there IS overlap, treat as a possible real regression —
+do not waive, send back to the build lane. Either way, note the outcome on issue #1652 (same spec
+failing a third time is useful signal for whoever eventually fixes it) and update the PR #1666
+verdict in the manifest.
+
+Everything else unchanged from the top of this take: 1512 still driving on its own relay chain
+(last confirmed via bounded pane read, re-check on pickup), Group A parked pending #1659 untouched,
+issue #1528 still not spawned, `merges_since_relay` = 0. The liveness Monitor (task `bkoydsdn8`) and
+the now-finished UAT-wait Monitor (task `bjltt5hz4`) are both tied to this session and unreachable
+by the successor — start a fresh liveness Monitor.
+
+Full successor brief written to
+`/tmp/claude-1000/-home-ben-Jarv1s/6661375f-e57f-4b6f-a5c3-e424c128db24/scratchpad/boot-coordinator-take33.txt`
+before spawning. Successor session id and pane recorded in the next "Take 33" entry once it claims
+the lock.
+
+## Take 33 relay — 70% context-meter fired, PR #1666 resolved and merged (2026-08-17)
+
+**Coordinator lock:** claimed by session `de66eab9-b0c0-49fe-b508-806759583d36`, pane `w1:pE7`,
+tab `w1:t6`. Predecessor pane `w1:pE6` (session `6661375f...`) was already gone by the time this
+take checked — nothing to close there.
+
+**PR #1666 — RESOLVED, MERGED, FULLY CLOSED OUT.** Diffed
+`apps/web/src/chat/chat-drawer.tsx` against `origin/main`: the only change is a `latestRecordsRef`
+(mirrors `props.records` via `useRef`) used inside `sendMessage`'s `reconcileFallbacks(...)` call,
+dropping `props.records` from that callback's dependency array. Grepped for page-context/snapshot/
+current-view-pull terms — zero matches. No overlap with the failing test's assertion domain
+(`/api/chat/turn`, `/api/chat/page-context` request bodies). Waived as the same pre-existing flake
+as issue #1652 (third occurrence, same precedent as #1518/#1519). Actions taken:
+- Commented on issue #1652 documenting the third occurrence, confirmed no diff overlap.
+- Merged PR #1666 (`gh pr merge --squash --delete-branch`) — mergeCommit `48a9470c62`, merged
+  `2026-08-17T20:33:58Z`. `--delete-branch` failed first pass (branch was in use by a worktree);
+  resolved by reaping the worktree first, then `git branch -D` manually.
+- Commented + closed issue #1520 (`gh issue close --reason completed`).
+- Reaped both worktrees (`.claude/worktrees/1520-chat-drawer-queued-drain`,
+  `.claude/worktrees/agent-a05537e205b58f3af`) and branches
+  (`1520-chat-drawer-queued-drain`, `worktree-agent-a05537e205b58f3af`, `qa-1666-review`).
+- Closed pane `w1:pDS`.
+
+`merges_since_relay` = **1** (PR #1666, routine tier).
+
+**Issue #1528 (1140-F, security tier) — handoff doc written and landed, BUILD AGENT NOT YET
+SPAWNED.** Dependency #1527/1140-E confirmed merged (`0042fbb37`). Created worktree
+`.claude/worktrees/1528-account-state-error-text` (branch `1528-account-state-error-text`, off
+`origin/main`) — still present, ready to use. Wrote
+`docs/coordination/handoff-1528-account-state-error-text.md`.
+
+**Trap hit and fixed for future takes: direct `git push origin main` from this tree is BLOCKED by
+GitHub branch protection** ("Required status check 'CI gate' is expected" — a repo rule, not the
+`shared-main-tree-lags-origin` staleness trap this take initially suspected). Any coordinator
+bookkeeping commit (manifest updates, handoff docs) that needs to land on `origin/main` must go
+through a PR, same as build-agent work — direct push will always be rejected. This take's handoff
+doc landed via a disposable worktree off `origin/main` → branch `coord-1528-handoff-doc` → PR
+**#1670** → CI green → squash-merged (`d3cf2a1228`) → worktree + branch reaped. **Local `main` in
+this shared tree is still behind `origin/main` by many commits** (untouched — 255 modified/
+untracked files from concurrent sessions sit in this tree; do not `git pull`/`reset`/`checkout`
+main here without the `shared-checkout` skill's process). This is fine: nothing in this run
+depends on local `main` being current, only `origin/main` (via `gh`/fresh worktrees) matters.
+
+**Successor's next action on #1528:** the worktree and handoff doc are ready. Spawn the build
+agent now: split a pane into the shared agents tab (`w1`) with `--cwd` at
+`.claude/worktrees/1528-account-state-error-text`, `herdr agent start --model sonnet
+--permission-mode bypassPermissions` pointed at a boot-brief file (pointer to the handoff doc,
+`coordinated-build` flow, security tier). Name both ways, verify Sonnet, record in manifest.
+
+**1512-notes-path-recheck** — confirmed still `working`, mid its own relay chain
+("1512-relay-6"), not a stall. No action needed, just keep watching.
+
+**Group A** (tab `w1:t17`) — still parked pending #1659, untouched this take.
+
+**Liveness Monitor** — NOT (re-)started this take (spent the take on the #1666 judgment call and
+the #1528 push/PR fix). Successor must start a fresh persistent Monitor diffing `herdr pane list`
+w1 panes every ~60s, changed lines only.
+
+Full successor brief written to a fresh scratchpad file before spawning; successor session id and
+pane recorded in the next "Take 34" entry once it claims the lock.
+
+**Update same take: 1512-notes-path-recheck reported DONE mid-relay.** PR
+**https://github.com/motioneso/moss/pull/1671** (security tier — needs Opus adversarial QA +
+Fable-5 sign-off before merge, never auto-merge). Branch `1512-notes-path-recheck`, rebased on
+`origin/main` at `0ac47a400` (origin has since advanced further; GitHub reports
+`mergeable=MERGEABLE`, no force-push needed — re-verify at pickup).
+
+Agent's own summary: `recheckWithinRoot` now re-resolves and re-asserts path containment
+immediately before every filesystem read, wired into both the interactive write-tools path and the
+pg-boss worker sync path. Includes a dangling-symlink fix (lstat + readlink to distinguish a
+missing path component from a symlink with a missing target, instead of silently discarding the
+attacker-controlled hop). 7 new TOCTOU tests. `pnpm verify:foundation` VF_EXIT=1 on the isolated
+gate DB, but attributed to pre-existing issue #1667 (`module-sdk-worker.test.ts` /
+`mcp-gateway-validation.test.ts` deterministic dev-sandbox timing failures that abort every lane's
+gate before `test:integration` runs) — agent ran the notes suites directly on fresh DBs instead:
+`notes.test.ts` 24/24, `notes-sync-worker.test.ts` 13/13 (incl. both new worker TOCTOU tests),
+`notes-write-tools.test.ts` 5/5 TOCTOU tests passed (2 unrelated pre-existing gateway-flake
+failures, load-dependent, filed as new issue #1673). Live-path: n/a, backend-only security fix, no
+UI surface — stated in the PR body. Teardown clean: no dev instance, no seed rows, both scratch
+probe DBs and the gate DB dropped, worktree reapable.
+
+**Successor's next action — top priority, before #1528 spawn:** this is a security-tier PR ready
+for QA. Spawn Opus adversarial QA per the `coordinate` skill's model policy (one-shot, hunts for
+what's NOT tested / unproven trust boundaries), have it post its verdict to PR #1671 via
+`gh pr comment`, then surface PR + verdict pointer to Ben for merge sign-off (Fable-5 signs off
+security-tier under Ben's standing delegation per `fable-signoff-delegation-waves-3-6` — do not
+wait on Ben directly unless Fable-5 flags something). Do not merge without that sign-off. After
+QA is dispatched, reap the 1512 worktree/pane once the PR is confirmed merged (four-gate check).
+
+**Repo-wide trap discovered this take, note for every successor:** the `origin` git remote in this
+tree resolves to `motioneso/Jarv1s.git` (old repo name, auto-redirects to `motioneso/moss`).
+`git fetch origin main` can silently serve a **stale cached ref** if run back-to-back with a very
+recent merge — always re-run `git fetch origin main` immediately before `git worktree add ...
+origin/main` for any bookkeeping commit, and sanity-check the new worktree actually contains the
+file you expect (`wc -l`/`tail`) before appending, or you'll build on a pre-file commit and silently
+lose prior content. Also: **local `main` in this shared tree holds a much longer history of
+`docs/coordination/*.md` edits than `origin/main` did before this take** — many prior "coord(...)"
+commits on local main were apparently never pushed via PR (direct push is blocked by branch
+protection, discovered this take). PR #1672 (merged `eb9df23465`) synced the full local manifest
+history to origin for the first time. Other `docs/coordination/*.md` files may have the same gap —
+if a successor needs one of those on origin and finds it missing/stale, apply the same fix (copy
+the local file into a fresh origin-based worktree, PR, merge) rather than assuming corruption.

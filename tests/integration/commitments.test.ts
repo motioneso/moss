@@ -81,6 +81,66 @@ describe("CommitmentsRepository", () => {
 
       expect(second.sourceCount).toBe(2);
     });
+
+    it("resolves two concurrent upserts of the same signature to one row with no 23505", async () => {
+      const sig = `test-sig-concurrent-${randomUUID()}`;
+      const input = {
+        ownerUserId: userA,
+        candidateSignature: sig,
+        kind: "promise" as const,
+        title: "Concurrent write test",
+        dueLocalDate: null,
+        counterpartyLabel: null,
+        confidence: "medium" as const,
+        suggestedHandling: null,
+        occurredAt: null
+      };
+
+      // Forced-overlap barrier: naive Promise.all does not reliably make two
+      // withDataContext transactions overlap on fast local Postgres — connection
+      // acquisition + BEGIN + two SET LOCALs can let one transaction fully commit
+      // before the other's first SELECT is even sent, silently missing the race
+      // window the old SELECT-then-branch code was vulnerable to (see
+      // mem_msxjowwt_a55597fb5cc8). Instead, each side signals "ready" only once
+      // its transaction is BEGUN and its actor context is set, and both are
+      // released to call upsertCandidate in the same tick, so neither side's
+      // SELECT can observe the other's write.
+      let resolveAReady: () => void;
+      const aReady = new Promise<void>((resolve) => {
+        resolveAReady = resolve;
+      });
+      let resolveBReady: () => void;
+      const bReady = new Promise<void>((resolve) => {
+        resolveBReady = resolve;
+      });
+      let release: () => void;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+
+      const sideA = dataContext.withDataContext(userAContext(), async (scopedDb) => {
+        resolveAReady();
+        await gate;
+        return repo.upsertCandidate(scopedDb, input);
+      });
+      const sideB = dataContext.withDataContext(userAContext(), async (scopedDb) => {
+        resolveBReady();
+        await gate;
+        return repo.upsertCandidate(scopedDb, input);
+      });
+
+      await Promise.all([aReady, bReady]);
+      release!();
+
+      const [first, second] = await Promise.all([sideA, sideB]);
+
+      expect(first.id).toBe(second.id);
+
+      const settled = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+        repo.getCandidate(scopedDb, userA, first.id)
+      );
+      expect(settled?.sourceCount).toBe(2);
+    });
   });
 
   describe("addEvidenceRow", () => {

@@ -765,7 +765,7 @@ describe("Chat live API — engine factory selection (RPC vs in-process)", () =>
       } as NodeJS.ProcessEnv
     });
     try {
-      const engine = factory("anthropic", ids.userA);
+      const engine = await factory("anthropic", ids.userA);
       expect(engine).toBeInstanceOf(ChatEngineRpcClient);
       expect(engine.provider).toBe("anthropic");
       expect(connection).toBeDefined();

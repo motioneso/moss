@@ -203,6 +203,246 @@ describe("validateExternalModuleManifest (#917)", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("accepts a declared worker tool with a non-empty actionLabel", () => {
+    const result = validateExternalModuleManifest(
+      {
+        ...base,
+        runtime: { workerEntrypoint: "dist/worker.js", workerContractVersion: 1 },
+        assistantTools: [
+          {
+            name: "acme-widgets.lookup",
+            description: "Look up a widget",
+            actionLabel: "Look up a widget for you",
+            permissionId: "acme-widgets.lookup",
+            risk: "read",
+            inputSchema: { type: "object" },
+            handler: "lookup"
+          }
+        ]
+      },
+      "acme-widgets",
+      "0.1.0"
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  // #1274: an inputSchema.pattern that won't compile currently only fails the first time the
+  // tool is actually called (via compilePattern in the gateway). It must be rejected here, at
+  // install time, instead of looking accepted until first use.
+  it("rejects a declared tool inputSchema pattern that does not compile", () => {
+    const result = validateExternalModuleManifest(
+      {
+        ...base,
+        runtime: { workerEntrypoint: "dist/worker.js", workerContractVersion: 1 },
+        assistantTools: [
+          {
+            name: "acme-widgets.lookup",
+            description: "Look up a widget",
+            permissionId: "acme-widgets.lookup",
+            risk: "read",
+            inputSchema: {
+              type: "object",
+              properties: { key: { type: "string", pattern: "[a-z" } }
+            },
+            handler: "lookup"
+          }
+        ]
+      },
+      "acme-widgets",
+      "0.1.0"
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors.join(" ")).toContain("pattern");
+      expect(result.errors.join(" ")).toContain("[a-z");
+    }
+  });
+
+  // The bare-probe step of compilePattern is what catches this: "[a-z]+)|(.*" throws
+  // Unmatched ')' when compiled unanchored, even though the anchored/wrapped form alone would
+  // not have caught it. The install-time lint must run the same bare-probe-then-anchored check,
+  // not just the anchored one.
+  it("rejects a declared tool inputSchema pattern that only the bare-probe compile step catches", () => {
+    const result = validateExternalModuleManifest(
+      {
+        ...base,
+        runtime: { workerEntrypoint: "dist/worker.js", workerContractVersion: 1 },
+        assistantTools: [
+          {
+            name: "acme-widgets.lookup",
+            description: "Look up a widget",
+            permissionId: "acme-widgets.lookup",
+            risk: "read",
+            inputSchema: {
+              type: "object",
+              properties: { key: { type: "string", pattern: "[a-z]+)|(.*" } }
+            },
+            handler: "lookup"
+          }
+        ]
+      },
+      "acme-widgets",
+      "0.1.0"
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.join(" ")).toContain("pattern");
+  });
+
+  it("accepts a declared tool inputSchema pattern that compiles", () => {
+    const result = validateExternalModuleManifest(
+      {
+        ...base,
+        runtime: { workerEntrypoint: "dist/worker.js", workerContractVersion: 1 },
+        assistantTools: [
+          {
+            name: "acme-widgets.lookup",
+            description: "Look up a widget",
+            permissionId: "acme-widgets.lookup",
+            risk: "read",
+            inputSchema: {
+              type: "object",
+              properties: { key: { type: "string", pattern: "[a-z]+" } }
+            },
+            handler: "lookup"
+          }
+        ]
+      },
+      "acme-widgets",
+      "0.1.0"
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("rejects a declared tool inputSchema pattern nested under array items", () => {
+    const result = validateExternalModuleManifest(
+      {
+        ...base,
+        runtime: { workerEntrypoint: "dist/worker.js", workerContractVersion: 1 },
+        assistantTools: [
+          {
+            name: "acme-widgets.lookup",
+            description: "Look up a widget",
+            permissionId: "acme-widgets.lookup",
+            risk: "read",
+            inputSchema: {
+              type: "object",
+              properties: {
+                keys: { type: "array", items: { type: "string", pattern: "(" } }
+              }
+            },
+            handler: "lookup"
+          }
+        ]
+      },
+      "acme-widgets",
+      "0.1.0"
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.join(" ")).toContain("pattern");
+  });
+
+  it("rejects a declared actionLabel that is an empty string", () => {
+    const result = validateExternalModuleManifest(
+      {
+        ...base,
+        runtime: { workerEntrypoint: "dist/worker.js", workerContractVersion: 1 },
+        assistantTools: [
+          {
+            name: "acme-widgets.lookup",
+            description: "Look up a widget",
+            actionLabel: "",
+            permissionId: "acme-widgets.lookup",
+            risk: "read",
+            inputSchema: { type: "object" },
+            handler: "lookup"
+          }
+        ]
+      },
+      "acme-widgets",
+      "0.1.0"
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.join(" ")).toContain("actionLabel");
+  });
+
+  it("rejects a declared actionLabel that is not a string", () => {
+    const result = validateExternalModuleManifest(
+      {
+        ...base,
+        runtime: { workerEntrypoint: "dist/worker.js", workerContractVersion: 1 },
+        assistantTools: [
+          {
+            name: "acme-widgets.lookup",
+            description: "Look up a widget",
+            actionLabel: 42,
+            permissionId: "acme-widgets.lookup",
+            risk: "read",
+            inputSchema: { type: "object" },
+            handler: "lookup"
+          }
+        ]
+      },
+      "acme-widgets",
+      "0.1.0"
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.join(" ")).toContain("actionLabel");
+  });
+
+  it("rejects every forbidden control character in a declared actionLabel", () => {
+    for (const codePoint of [...Array.from({ length: 32 }, (_, index) => index), 0x7f]) {
+      const result = validateExternalModuleManifest(
+        {
+          ...base,
+          runtime: { workerEntrypoint: "dist/worker.js", workerContractVersion: 1 },
+          assistantTools: [
+            {
+              name: "acme-widgets.lookup",
+              description: "Look up a widget",
+              actionLabel: `Look up${String.fromCharCode(codePoint)}now`,
+              permissionId: "acme-widgets.lookup",
+              risk: "read",
+              inputSchema: { type: "object" },
+              handler: "lookup"
+            }
+          ]
+        },
+        "acme-widgets",
+        "0.1.0"
+      );
+      expect(result.ok, `control U+${codePoint.toString(16).padStart(4, "0")}`).toBe(false);
+      if (!result.ok) expect(result.errors.join(" ")).toContain("actionLabel");
+    }
+  });
+
+  it("accepts 80 UTF-16 code units in actionLabel and rejects 81", () => {
+    const validateLabel = (actionLabel: string) =>
+      validateExternalModuleManifest(
+        {
+          ...base,
+          runtime: { workerEntrypoint: "dist/worker.js", workerContractVersion: 1 },
+          assistantTools: [
+            {
+              name: "acme-widgets.lookup",
+              description: "Look up a widget",
+              actionLabel,
+              permissionId: "acme-widgets.lookup",
+              risk: "read",
+              inputSchema: { type: "object" },
+              handler: "lookup"
+            }
+          ]
+        },
+        "acme-widgets",
+        "0.1.0"
+      );
+
+    expect(validateLabel("x".repeat(80)).ok).toBe(true);
+    const overLimit = validateLabel("x".repeat(81));
+    expect(overLimit.ok).toBe(false);
+    if (!overLimit.ok) expect(overLimit.errors.join(" ")).toContain("actionLabel");
+  });
+
   it("rejects tools without a compatible worker", () => {
     const result = validateExternalModuleManifest(
       {

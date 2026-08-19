@@ -172,9 +172,9 @@ but setup fails closed if TLS is requested and the override omits the exact HTTP
 not generate a deployment that starts successfully and then returns 403 on sign-in.
 
 #1486 is a prerequisite, not duplicated here. Its result must let production configure
-`JARVIS_TRUST_PROXY` no broader than the Compose bridge CIDR (`JARVIS_DOCKER_SUBNET`, default
-`10.251.0.0/24`) while retaining a safe loopback value for #1403's host-dev path. A tighter static
-Caddy address is acceptable if #1486 establishes it. A bare boolean `true` is not acceptable. The
+`JARVIS_TRUST_PROXY` to the exact static Caddy `ipv4_address` on the existing Compose network — never
+the bridge CIDR or gateway — while retaining the `loopback` keyword for #1403's host-dev path. A bare
+boolean `true` is not acceptable. The
 #1486 prerequisite check must account for host-local `:1533` traffic potentially sourcing from the
 bridge gateway under Docker's userland proxy; on-box clients must not gain forwarded-header trust.
 
@@ -197,7 +197,7 @@ The opt-in migration is ordered and additive:
 
 1. Back up `env.production.local` and the application data using the existing deploy runbook.
 2. Choose a stable `JARVIS_TLS_HOST` and `internal` or `acme` issuer.
-3. Add the TLS host/issuer and the #1486-approved Compose bridge CIDR trust value to the existing
+3. Add the TLS host/issuer and the #1486-approved exact static Caddy IP trust value to the existing
    env file.
 4. Append the exact HTTPS origin to `JARVIS_AUTH_TRUSTED_ORIGINS`; preserve localhost and every
    working old HTTP/domain origin. Never replace the whole list with the new origin.
@@ -213,7 +213,7 @@ HTTP path remains the recovery route. There is no database migration and no secr
 
 The setup service receives the TLS host and issuer through Child 1's explicit Compose environment
 wiring before it creates `env.production.local`. Child 2 validates and emits those non-secret
-values, adds the exact HTTPS trusted origin, and emits the scoped proxy CIDR. With no TLS host, its
+values, adds the exact HTTPS trusted origin, and emits the exact proxy IP trust value. With no TLS host, its
 current output and localhost-only default remain unchanged. Setup continues to refuse overwriting
 an existing env file.
 
@@ -274,7 +274,7 @@ sized for one agent session.
 ### Prerequisite gate — existing issues, no new child
 
 - #1403 merged with its dev-instance secure-context proof.
-- #1486 merged with an explicit loopback/CIDR proxy-trust contract and tests. If #1486 chooses an
+- #1486 merged with an explicit loopback/exact-IP proxy-trust contract and tests. If #1486 chooses an
   incompatible env name or shape, update this spec before dispatching children 1-2; do not improvise
   two proxy-trust contracts in parallel.
 
@@ -327,7 +327,7 @@ two values to the `setup` service with defaults that do not add profile-free env
 **Deliverables:** accept only a DNS hostname or IPv4 address; reject IPv6, `acme` plus any IPv4
 literal, and every forbidden host class locked above; validate the exact `internal | acme` issuer union; derive and deduplicate
 `https://<host>`; preserve existing origin behavior; fail when an explicit override omits the
-requested HTTPS origin; emit the TLS settings and #1486-approved CIDR trust only when opted in; keep
+requested HTTPS origin; emit the TLS settings and #1486-approved exact proxy-IP trust only when opted in; keep
 setup's no-overwrite guard; and correct `infra/env.production.example` so
 `JARVIS_AUTH_BASE_URL` is documented as the independent in-container URL rather than the public TLS
 origin.
@@ -335,7 +335,7 @@ origin.
 **Acceptance checks:** focused pure-helper cases cover internal and ACME hosts, deduplication, the
 full forbidden-host matrix including `acme` plus IPv4, exact issuer rejection, override omission, no-TLS behavior, and a
 non-default `JARVIS_DOCKER_SUBNET`. Subprocess cases run the real `setup-prod.ts` against a temporary
-directory and prove: valid TLS input writes the host, issuer, exact HTTPS origin, scoped CIDR, and
+directory and prove: valid TLS input writes the host, issuer, exact HTTPS origin, exact proxy IP, and
 independent base URL; invalid input exits non-zero before creating a file; an existing file is never
 replaced; and no-TLS output keeps the prior relevant keys and defaults. The env-example assertion
 must enforce the independent base-URL contract. Then

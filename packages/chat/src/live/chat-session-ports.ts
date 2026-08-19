@@ -73,7 +73,7 @@ export interface ChatPersistencePort {
   getThreadContext(
     actorUserId: string,
     surface?: ChatSurface
-  ): Promise<{ threadTitle: string | null; localTimezone: string | null }>;
+  ): Promise<{ threadTitle: string | null; localTimezone: string | null; incognito: boolean }>;
   /**
    * Make threadId the current thread for actorUserId (for resume). Returns true if
    * the thread was found and touched; false if it does not exist or belongs to another user.

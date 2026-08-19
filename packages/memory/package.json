@@ -12,11 +12,13 @@
   "dependencies": {
     "@huggingface/transformers": "^3.0.0",
     "@moss/db": "workspace:*",
+    "@moss/jobs": "workspace:*",
     "@moss/module-sdk": "workspace:*",
     "@moss/settings": "workspace:*",
     "@moss/shared": "workspace:*",
     "@moss/vault": "workspace:*",
     "fastify": "^5.6.2",
-    "kysely": "^0.29.2"
+    "kysely": "^0.29.2",
+    "pg-boss": "^12.18.2"
   }
 }

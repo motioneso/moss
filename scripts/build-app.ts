@@ -81,44 +81,53 @@ async function buildTarget(target: Target): Promise<void> {
   if (target === "api") {
     execFileSync("pnpm", ["build:app-map"], { cwd: root, stdio: "inherit" });
   }
-  await build({
-    entryPoints: [resolve(root, entry)],
-    outfile: resolve(root, outfile),
-    bundle: true,
-    platform: "node",
-    target: "node24",
-    format: "esm",
-    sourcemap: true,
-    // Resolve @moss/* via the workspace symlinks in node_modules (preferred) or
-    // fall back to the tsconfig path aliases; esbuild follows node resolution by
-    // default through the symlinked workspace packages.
-    external: EXTERNAL,
-    plugins: [externalizeUnusedSqliteDialects],
-    // ESM bundle needs these shims for CJS-style globals used by deps.
-    banner: {
-      js: [
-        "import { createRequire as __jarvisCreateRequire } from 'node:module';",
-        "import { fileURLToPath as __jarvisFileURLToPath } from 'node:url';",
-        "import { dirname as __jarvisDirname } from 'node:path';",
-        "const require = __jarvisCreateRequire(import.meta.url);",
-        "const __filename = __jarvisFileURLToPath(import.meta.url);",
-        "const __dirname = __jarvisDirname(__filename);"
-      ].join("\n")
-    },
-    logLevel: "info"
-  });
-  // Parse-check the produced bundle (QA on PR #816): esbuild can emit invalid JS
-  // when a package cycle forces top-level-await propagation through its lazy
-  // __esm init wrappers (`await init_*()` inside a non-async function — the #357
-  // bundled-artifact trap class). `node --check` fails the build here instead of
-  // shipping a bundle that dies at boot inside the Docker prod smoke.
-  execFileSync(process.execPath, ["--check", resolve(root, outfile)], { stdio: "inherit" });
+  const buildBundle = async (source: string, output: string): Promise<void> => {
+    await build({
+      entryPoints: [resolve(root, source)],
+      outfile: resolve(root, output),
+      bundle: true,
+      platform: "node",
+      target: "node24",
+      format: "esm",
+      sourcemap: true,
+      // Resolve @moss/* via the workspace symlinks in node_modules (preferred) or
+      // fall back to the tsconfig path aliases; esbuild follows node resolution by
+      // default through the symlinked workspace packages.
+      external: EXTERNAL,
+      plugins: [externalizeUnusedSqliteDialects],
+      // ESM bundle needs these shims for CJS-style globals used by deps.
+      banner: {
+        js: [
+          "import { createRequire as __jarvisCreateRequire } from 'node:module';",
+          "import { fileURLToPath as __jarvisFileURLToPath } from 'node:url';",
+          "import { dirname as __jarvisDirname } from 'node:path';",
+          "const require = __jarvisCreateRequire(import.meta.url);",
+          "const __filename = __jarvisFileURLToPath(import.meta.url);",
+          "const __dirname = __jarvisDirname(__filename);"
+        ].join("\n")
+      },
+      logLevel: "info"
+    });
+    execFileSync(process.execPath, ["--check", resolve(root, output)], { stdio: "inherit" });
+  };
+
+  await buildBundle(entry, outfile);
+  if (target === "worker") {
+    await buildBundle(
+      "packages/memory/src/local-embedding-worker.ts",
+      "dist/local-embedding-worker.js"
+    );
+  }
   if (target === "api") {
     const workerSource = resolve(
       dirname(chatRequire.resolve("pdf-parse/worker")),
       "../pdf.worker.mjs"
     );
     copyFileSync(workerSource, resolve(root, dirname(outfile), "pdf.worker.mjs"));
+    copyFileSync(
+      resolve(root, "packages/ai/src/gateway/pattern-worker.mjs"),
+      resolve(root, dirname(outfile), "pattern-worker.mjs")
+    );
   }
   console.log(`built ${outfile} (parse-checked)`);
 }

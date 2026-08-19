@@ -48,7 +48,6 @@ export const MIGRATED_SECTION_PATHS: readonly string[] = [
   "apps/web/src/today/overnight-section.tsx",
   "apps/web/src/today/proactive-cards.tsx",
   "apps/web/src/today/today-page.tsx",
-  "apps/web/src/today/today-suggested-email.tsx",
   "apps/web/src/chat/action-request-card.tsx",
   "apps/web/src/chat/answer-provenance.tsx",
   "apps/web/src/chat/assistant-surface/surface.tsx",

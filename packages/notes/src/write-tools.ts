@@ -16,7 +16,7 @@ import { HttpError, type ToolExecute, type ToolResult, type ToolServices } from 
 import { NOTES_SOURCE_PREFERENCE_KEY, resolveNotesRoots } from "@moss/settings";
 import { PreferencesRepository } from "@moss/structured-state";
 
-import { assertWithinRoot } from "./path-guard.js";
+import { assertWithinRoot, recheckWithinRoot, NotesPathError } from "./path-guard.js";
 
 export interface NotesSyncToolService {
   enqueue(actorUserId: string, sourcePath: string): Promise<string | null>;
@@ -101,6 +101,17 @@ function assertInside(root: string, path: string): void {
   }
 }
 
+async function recheckInside(root: string, path: string): Promise<void> {
+  try {
+    await recheckWithinRoot(root, path);
+  } catch (error) {
+    if (error instanceof NotesPathError) {
+      throw new HttpError(400, "path is not within the linked notes source");
+    }
+    throw error;
+  }
+}
+
 async function resolveExistingFile(root: string, rel: string): Promise<string> {
   const absolutePath = join(root, rel);
   const stat = await lstat(absolutePath);
@@ -125,6 +136,31 @@ async function rejectSymlinkParent(root: string, rel: string): Promise<void> {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
       throw error;
+    }
+  }
+}
+
+const pathLocks = new Map<string, Promise<void>>();
+
+// ponytail: in-process FIFO mutex only — serializes concurrent edits to the same resolved file
+// path within a single API process. Multiple API replicas would each hold their own independent
+// lock map, so this stops being sufficient the moment the API scales beyond one process; replace
+// with a cross-process file/advisory lock if that becomes the deployment shape.
+async function withPathLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  let release!: () => void;
+  const ourLock = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const previous = pathLocks.get(key) ?? Promise.resolve();
+  const ourTail = previous.then(() => ourLock);
+  pathLocks.set(key, ourTail);
+  await previous;
+  try {
+    return await fn();
+  } finally {
+    release();
+    if (pathLocks.get(key) === ourTail) {
+      pathLocks.delete(key);
     }
   }
 }
@@ -171,9 +207,11 @@ export const notesCreateExecute: ToolExecute = async (
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }
+    await recheckInside(root, file);
     await writeFile(file, raw.content, "utf-8");
   } else {
     let handle: FileHandle;
+    await recheckInside(root, file);
     try {
       handle = await open(file, "wx");
     } catch (error) {
@@ -214,13 +252,19 @@ export const notesEditExecute: ToolExecute = async (
     throw new HttpError(400, "oldText must be non-empty");
   }
 
+  const oldText = raw.oldText;
+  const newText = raw.newText;
   const root = await resolveSource(scopedDb);
   const rel = requireMarkdownPath(coerceToRelativePath(raw.path, root));
   const file = await resolveExistingFile(root, rel);
-  const content = await readFile(file, "utf-8");
-  const count = content.split(raw.oldText).length - 1;
-  if (count !== 1) throw new HttpError(409, `oldText appears ${count} times`);
-  await writeFile(file, content.replace(raw.oldText, raw.newText), "utf-8");
+  await withPathLock(file, async () => {
+    await recheckInside(root, file);
+    const content = await readFile(file, "utf-8");
+    const count = content.split(oldText).length - 1;
+    if (count !== 1) throw new HttpError(409, `oldText appears ${count} times`);
+    await recheckInside(root, file);
+    await writeFile(file, content.replace(oldText, newText), "utf-8");
+  });
   return sync(services, ctx.actorUserId, root, rel);
 };
 
@@ -236,6 +280,7 @@ export const notesDeleteExecute: ToolExecute = async (
   const root = await resolveSource(scopedDb);
   const rel = requireMarkdownPath(coerceToRelativePath(raw.path, root));
   const file = await resolveExistingFile(root, rel);
+  await recheckInside(root, file);
   await unlink(file);
   return sync(services, ctx.actorUserId, root, rel);
 };

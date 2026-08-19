@@ -129,7 +129,7 @@ export function BriefingActionRowsSection(props: BriefingActionRowsSectionProps)
         </div>
       )}
       {catchUp && catchUp.itemCount > 0 ? (
-        <div style={{ marginTop: 12 }}>
+        <div className="briefing-catchup">
           <span className="jds-brief__kicker">Catch-up</span>
           <p className="cmd-leadin">{catchUp.summaryText}</p>
         </div>
@@ -151,29 +151,20 @@ function ActionRow(props: {
   const Icon = CATEGORY_ICON[row.category];
 
   return (
-    <div className="loose-row" style={{ cursor: "default" }}>
+    <div className="loose-row">
       <span className="loose-row__ic">
         <Icon size={15} aria-hidden="true" />
       </span>
       <button
         type="button"
         className="loose-row__main"
-        style={{
-          background: "transparent",
-          border: "none",
-          font: "inherit",
-          color: "inherit",
-          cursor: "pointer",
-          textAlign: "left",
-          padding: 0
-        }}
         onClick={() => props.onOpenTask(row.taskId)}
       >
         <div className="loose-row__title">{row.title}</div>
         <div className="loose-row__meta">{row.explanation}</div>
         <div className="loose-row__meta">{metaLabel(row, props.locale)}</div>
       </button>
-      <div className="loose-row__act" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+      <div className="loose-row__act">
         {liveStatus === "suggested" ? (
           <>
             <PrimaryControl
@@ -233,11 +224,11 @@ function PrimaryControl(props: {
     case "needs_action":
     case "time_sensitive_info": {
       // Only the host-supplied href is ever used as a URL — never row text.
-      if (!row.sourceHref) return null;
+      if (row.primaryAction?.kind !== "view") return null;
       return (
         <a
           className="jds-btn jds-btn--sm jds-btn--quiet"
-          href={row.sourceHref}
+          href={row.primaryAction.href}
           target="_blank"
           rel="noopener noreferrer"
         >

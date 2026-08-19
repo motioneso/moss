@@ -1,0 +1,29 @@
+#!/bin/sh
+# tests/uat/fixtures/scripted-provider/bin/claude
+#
+# #1659: a POSIX sh wrapper, not a node script. The previous `#!/usr/bin/env -S node --import
+# tsx/esm` shebang resolved `tsx/esm` against the CWD, and the print engine launches the provider
+# with `cd <neutralDir> && claude ...` from outside the workspace — so node died with
+# ERR_MODULE_NOT_FOUND before any of our code ran. Resolve tsx from this script's own location
+# instead, and hand it a real `.ts` file (tsx cannot parse an extensionless one).
+set -e
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+# #1659 breadcrumb: the print engine spawns us detached with stdio:"ignore", so without this there
+# is no way to tell "the provider ran and failed" from "the provider was never executed at all".
+# Argument COUNT only — the trailing argument is the user's prompt text, which must never be
+# written anywhere (claude-main.ts's header).
+# Guarded as a whole: outside a provisioned container this path does not exist, and an `exec 2>>`
+# onto an unwritable file is a hard shell exit — which would break the fixture for
+# tests/integration/uat-scripted-claude.test.ts, the one place it runs on a bare host.
+log=/data/cli-auth/uat-scripted-provider-failures.log
+# The probe runs in a SUBSHELL because `:` is a POSIX special builtin: a redirection failure on one
+# exits the shell outright, `set -e` or not, so `{ : >>"$log"; }` would take the whole script down.
+if (: >>"$log") 2>/dev/null; then
+  echo "$(date -Is) launch cwd=$PWD argc=$#" >>"$log"
+  exec 2>>"$log"
+fi
+root=$(CDPATH= cd -- "$here/../../../../.." && pwd)
+# --tsconfig is explicit for the same reason: tsx discovers tsconfig.json from the CWD, and without
+# the workspace `paths` map claude-main.ts's `@moss/ai` import is unresolvable. CWD stays as the
+# engine set it — claude-main.ts keys its cursor state off process.cwd().
+exec "$root/node_modules/.bin/tsx" --tsconfig "$root/tsconfig.json" "$here/claude-entry.ts" "$@"

@@ -21,6 +21,7 @@ import {
   registerPeopleRoutes,
   registerPersonIndexWorker,
   registerSyncPersonMemoryWorker,
+  createPeopleVaultIngestProvider,
   PERSON_INDEX_QUEUE,
   SYNC_PERSON_MEMORY_QUEUE
 } from "@moss/people";
@@ -33,11 +34,13 @@ import {
   AiRepository,
   aiModuleManifest,
   aiModuleSqlMigrationDirectory,
+  createUnwiredActionResolver,
   createAiSecretCipher,
   generateStructured,
   ModelDiscoveryService,
   registerAiMaintenanceWorkers,
   registerAiRoutes,
+  type AssistantToolGateway,
   type ProviderKind,
   type TerminalRpcConnectOptions,
   type TerminalRpcHandle
@@ -52,12 +55,16 @@ import {
   memoryModuleManifest,
   memorySqlMigrationDirectory,
   registerMemoryDashboardRoutes,
-  registerMemoryGraphRoutes
+  registerMemoryGraphRoutes,
+  registerVaultIngestRootProvider,
+  registerVaultIngestWorkers,
+  VAULT_INGEST_QUEUE_DEFINITIONS
 } from "@moss/memory";
 import {
   PreferencesRepository,
   structuredStateModuleManifest,
-  structuredStateSqlMigrationDirectory
+  structuredStateSqlMigrationDirectory,
+  createStructuredStateVaultIngestProvider
 } from "@moss/structured-state";
 import { isBehaviorEnabled, type SourceBehaviorPreferencesPort } from "@moss/source-behaviors";
 import {
@@ -271,6 +278,7 @@ import { assertValidFetchHosts, createDatasetClient } from "@moss/datasets";
 import {
   notesModuleManifest,
   notesCommitmentProvider,
+  createNotesRecallPort,
   notesModuleSqlMigrationDirectory,
   NOTES_QUEUE_DEFINITIONS,
   reconcileNotesSchedule,
@@ -307,6 +315,7 @@ import {
   makeChatMultiplexerStatusProbe,
   makeProviderConnectionCheckProbe,
   resolveChatEngineFactory,
+  createPersistentRuntimeConfigLiveReader,
   type LiveChatMultiplexerStatus
 } from "./chat-multiplexer.js";
 import { buildOnboardingInstall } from "./onboarding-install.js";
@@ -433,6 +442,7 @@ export interface BuiltInRouteDependencies {
   readonly chatEngineSelection?: ChatRoutesDependencies["engineSelection"];
   /** Chat-owned passive graph recall seam; no module imports graph internals directly. */
   readonly passiveMemoryRecall?: ChatRoutesDependencies["passiveMemoryRecall"];
+  readonly notesRecall?: ChatRoutesDependencies["notesRecall"];
   /**
    * #342 (§3.4) — the ONE RPC connection to the cli-runner sidecar, when the api runs containerized
    * (JARVIS_CLI_RUNNER_SOCKET set). Owned by the chat runtime (it constructs the connection WITH the
@@ -459,6 +469,34 @@ export interface BuiltInRouteDependencies {
    * a binary-changing reinstall.
    */
   readonly adoptDropSessionsForProvider?: ChatRoutesDependencies["adoptDropSessionsForProvider"];
+  /**
+   * #1256 — same late-bound "adopt" seam as {@link adoptChatRpcConnection}, but publishing the
+   * chat module's live `AssistantToolGateway` so the ai module's assistant-action resolve route
+   * can be wired to `gateway.resolveActionRequest` instead of persisting a decision with no check
+   * that a waiter is actually pending on it.
+   */
+  readonly adoptChatGateway?: ChatRoutesDependencies["adoptChatGateway"];
+  /**
+   * #1256 — per-server getter over the value {@link adoptChatGateway} publishes. Built fresh inside
+   * `registerBuiltInApiRoutes` for each call (mirrors `getRpcConnection`/`getDropSessionsForProvider`
+   * above), so the ai module's resolve route reads the gateway wired for THIS server, not whichever
+   * server registered chat routes most recently. Do not replace with a module-level binding shared
+   * across servers — several integration test files construct multiple `createApiServer` instances
+   * in one process, and a shared binding would let the wrong server's gateway (wrong runner/appDb/
+   * ConfirmationRegistry) answer another server's resolve calls.
+   */
+  readonly getResolveActionRequestFn?: () =>
+    | AssistantToolGateway["resolveActionRequest"]
+    | undefined;
+  /**
+   * #1554 task #6 — set by `registerBuiltInApiRoutes` and consumed inside `registerChatRoutes`:
+   * same late-bound "adopt" seam as {@link adoptChatRpcConnection}/
+   * {@link adoptDropSessionsForProvider}, publishing the wiring closure's
+   * `SessionTokenRegistry.revokeBySessionId` back to the composition root so the in-process boot
+   * path's `resolveChatEngineFactory` call can thread it into the persistent-runtime pool's
+   * `onPersistentReap` (closes task #5's documented gap — see `chat-multiplexer.ts`).
+   */
+  readonly adoptMcpTokenRevoke?: ChatRoutesDependencies["adoptMcpTokenRevoke"];
   readonly resolveEveningInterviewSeed?: ChatRoutesDependencies["resolveEveningInterviewSeed"];
   readonly revokeUserSessions?: (userId: string) => Promise<number>;
   /** Auth-owned current-user session list/revoke service (#237). */
@@ -1318,6 +1356,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     registerRoutes: (server, deps) => {
       const preferencesRepository = new PreferencesRepository();
       const tasksCompatibility = new TasksCompatibilityHelper(preferencesRepository);
+      const unwiredActionResolver = createUnwiredActionResolver({ runner: deps.dataContext });
       return registerAiRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext,
@@ -1345,7 +1384,15 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         // deps.connectTerminalRpc is the TEST-ONLY override (see BuiltInRouteDependencies) —
         // absent in production, where the real TerminalRpcClient.connect is always used.
         connectTerminalRpc:
-          deps.connectTerminalRpc ?? ((options) => TerminalRpcClient.connect(options))
+          deps.connectTerminalRpc ?? ((options) => TerminalRpcClient.connect(options)),
+        // #1256 — late-bound: the chat module's live gateway is adopted below (chat registers
+        // after ai on this pass), so this closure defers the lookup to call time, through the
+        // per-server getter in `deps` (see getResolveActionRequestFn), instead of capturing a
+        // module-level binding that every server sharing this process would contend over.
+        resolveActionRequest: (actorUserId, id, status) => {
+          const fn = deps.getResolveActionRequestFn?.() ?? unwiredActionResolver;
+          return fn(actorUserId, id, status);
+        }
       });
     },
     registerWorkers: (boss, deps) => registerAiMaintenanceWorkers(boss, deps.rootDb)
@@ -1370,6 +1417,13 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         // #1081 H2: same late-bound "adopt" seam as adoptChatRpcConnection above, publishing
         // the manager's dropSessionsForProvider back to the composition root.
         adoptDropSessionsForProvider: deps.adoptDropSessionsForProvider,
+        // #1256 — same late-bound "adopt" seam, publishing the chat module's live
+        // AssistantToolGateway so the ai module's resolve route can reach it.
+        adoptChatGateway: deps.adoptChatGateway,
+        // #1554 task #6: same late-bound "adopt" seam, publishing the wiring closure's
+        // SessionTokenRegistry.revokeBySessionId so onReady's resolveChatEngineFactory call
+        // below can thread it into the persistent-runtime pool's onPersistentReap.
+        adoptMcpTokenRevoke: deps.adoptMcpTokenRevoke,
         resolveActiveModules: deps.resolveActiveModules,
         mcpServerUrl: deps.mcpServerUrl,
         boss: deps.boss,
@@ -1378,6 +1432,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         localePreferences: new PreferencesRepository(),
         agencyPreferences: new PreferencesRepository(),
         priorityPreferences: new PreferencesRepository(),
+        notesRecall: deps.notesRecall,
         googleConnectionService: deps.googleConnectionService,
         googleApiClient: deps.googleApiClient,
         connectorsRepository: deps.connectorsRepository,
@@ -1486,7 +1541,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
   {
     manifest: memoryModuleManifest,
     sqlMigrationDirectories: [memorySqlMigrationDirectory],
-    queueDefinitions: [],
+    queueDefinitions: [...VAULT_INGEST_QUEUE_DEFINITIONS],
     registerRoutes: (server, deps) => {
       registerMemoryGraphRoutes(server, {
         dataContext: deps.dataContext,
@@ -1496,7 +1551,13 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext
       });
-    }
+    },
+    registerWorkers: (boss, deps) =>
+      registerVaultIngestWorkers(boss, deps.dataContext, {
+        vaultRunner: new VaultContextRunner(getVaultBaseDir()),
+        vaultsBaseDir: getVaultBaseDir(),
+        embeddingProviderFactory: createRuntimeEmbeddingProvider
+      })
   },
   {
     manifest: usefulnessFeedbackModuleManifest,
@@ -1540,7 +1601,11 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
   {
     manifest: structuredStateModuleManifest,
     sqlMigrationDirectories: [structuredStateSqlMigrationDirectory],
-    queueDefinitions: []
+    queueDefinitions: [],
+    registerWorkers: async () => {
+      registerVaultIngestRootProvider(createStructuredStateVaultIngestProvider());
+      return [];
+    }
   },
   {
     manifest: wellnessModuleManifest,
@@ -1572,13 +1637,23 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     manifest: weatherModuleManifest,
     sqlMigrationDirectories: [],
     queueDefinitions: [],
-    registerRoutes: (server, deps) =>
+    registerRoutes: (server, deps) => {
+      const preferencesRepository = new PreferencesRepository();
       registerWeatherRoutes(server, {
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext,
-        preferencesRepo: new PreferencesRepository(),
+        preferencesRepo: preferencesRepository,
+        logger: createModuleLogger(server.log, "weather"),
+        resolveRequestTimeZone: (request, accessContext) =>
+          resolveRequestTimeZoneForRoute(
+            request,
+            accessContext,
+            deps.dataContext,
+            preferencesRepository
+          ),
         fetchFn: deps.fetchFn
-      })
+      });
+    }
   },
   {
     // LOADER-SEAM(sports) 1: static import + registration object (manifest, sql dir, routes).
@@ -1668,7 +1743,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       return registerNewsJobWorkers(boss, deps.dataContext, {
         ...discovery,
         logger: {
-          info: (fields) => deps.logger?.info(fields, "news compilation")
+          info: (fields) => deps.logger?.info(fields, "news compilation"),
+          warn: (fields) => deps.logger?.warn(fields, "news compilation")
         },
         // #975 Slice 4: revalidation summary notification honors quiet hours and the
         // owner's per-module notification preference like every other module emitter.
@@ -1780,13 +1856,14 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         dataContext: deps.dataContext,
         boss: deps.boss,
         vaultRunner: new VaultContextRunner(getVaultBaseDir()),
-        peopleNotesService: new PeopleNotesService()
+        peopleNotesService: new PeopleNotesService({ boss: deps.boss })
       }),
     registerWorkers: async (boss, deps) => {
       const indexId = await registerPersonIndexWorker(boss, deps.dataContext, {
         providers: []
       });
       const syncId = await registerSyncPersonMemoryWorker(boss, deps.dataContext);
+      registerVaultIngestRootProvider(createPeopleVaultIngestProvider());
       return [indexId, syncId];
     }
   }
@@ -1982,8 +2059,16 @@ export function getBuiltInModuleRegistrations(): readonly BuiltInModuleRegistrat
   return BUILT_IN_MODULES;
 }
 
+function markBuiltInManifestTrusted(manifest: MossModuleManifest): MossModuleManifest {
+  if (!manifest.assistantTools) return manifest;
+  return {
+    ...manifest,
+    assistantTools: manifest.assistantTools.map((tool) => ({ ...tool, isExternal: false }))
+  };
+}
+
 export function getBuiltInModuleManifests(): readonly MossModuleManifest[] {
-  return BUILT_IN_MODULES.map((module) => module.manifest);
+  return BUILT_IN_MODULES.map((module) => markBuiltInManifestTrusted(module.manifest));
 }
 
 /** Default predicate applied when a `ModuleDeletionTable` omits `countPredicate`. */
@@ -2131,6 +2216,22 @@ export function registerBuiltInApiRoutes(
   const getDropSessionsForProvider = (): ((provider: ProviderKind) => Promise<void>) | undefined =>
     dropSessionsForProvider;
 
+  // #1256: same per-server late-bound-ref pattern as rpcConnection/dropSessionsForProvider above.
+  // The chat module's live AssistantToolGateway is adopted below (via adoptChatGateway, built
+  // inside registerChatRoutes strictly after this function assembles the ai module's dependencies),
+  // so the ai module's resolve route dereferences THIS server's binding at call time through
+  // getResolveActionRequestFn — never a module-level binding shared across every server that
+  // happens to share this Node process (several integration test files construct 2-9 servers each).
+  let resolveActionRequestFn: AssistantToolGateway["resolveActionRequest"] | undefined;
+  const getResolveActionRequestFn = (): AssistantToolGateway["resolveActionRequest"] | undefined =>
+    resolveActionRequestFn;
+  // #1554 task #6: the persistent-runtime pool's onPersistentReap needs
+  // SessionTokenRegistry.revokeBySessionId, which is likewise built INSIDE registerChatRoutes's
+  // `wiring` closure — same late-bound "adopt" seam as dropSessionsForProvider above. Populated
+  // synchronously during the BUILT_IN_MODULES registerRoutes pass below, strictly before the
+  // onReady hook further down that calls resolveChatEngineFactory (the only reader).
+  let revokeMcpTokenBySessionId: ((chatSessionId: string) => void) | undefined;
+
   // Onboarding probes: built synchronously (no boot-time probing) and forwarded to the settings
   // module. Each function probes lazily, per request, bounded by a short timeout. On the RPC path they
   // route through the cli-runner over the socket (§4.8) instead of spawning CLIs in-process; the
@@ -2241,13 +2342,25 @@ export function registerBuiltInApiRoutes(
     // hook, and starts the §5.5 idle reaper. The {method,id,sessionKey,bytes}-only debug logger (§6.4)
     // is intentionally omitted (no frame-body logging). Tests that inject an explicit chatEngineFactory
     // bypass this entirely (no socket selection). Undefined on the in-process / host-dev path.
-    chatEngineSelection: socketConfigured && !dependencies.chatEngineFactory ? { env } : undefined,
+    // #1554: the RPC branch also carries a live read of the persistent-runtime settings, since the
+    // cli-runner has no DB access — it learns `chat.persistent_runtime.*` only from launch params.
+    chatEngineSelection:
+      socketConfigured && !dependencies.chatEngineFactory
+        ? {
+            env,
+            readPersistentRuntimeConfig: createPersistentRuntimeConfigLiveReader(
+              dependencies.rootDb,
+              (msg) => server.log.info(msg)
+            )
+          }
+        : undefined,
     passiveMemoryRecall: {
       async recall(scopedDb, ownerUserId, query, options) {
         const provider = await createRuntimeEmbeddingProvider(scopedDb);
         return new GraphMemoryRecallService(provider).recall(scopedDb, ownerUserId, query, options);
       }
     },
+    notesRecall: createNotesRecallPort(),
     getChatMultiplexerStatus,
     onboardingProbes,
     onboardingInstall,
@@ -2264,6 +2377,20 @@ export function registerBuiltInApiRoutes(
     // function, over getDropSessionsForProvider) can reach it once it exists.
     adoptDropSessionsForProvider: (fn: (provider: ProviderKind) => Promise<void>) => {
       dropSessionsForProvider = fn;
+    },
+    // #1256 — mirrors adoptChatRpcConnection above — publishes the chat module's live
+    // AssistantToolGateway into THIS server's per-server binding, which the ai module's
+    // resolveActionRequest closure reads back out through getResolveActionRequestFn below.
+    adoptChatGateway: (gateway: AssistantToolGateway) => {
+      resolveActionRequestFn = gateway.resolveActionRequest.bind(gateway);
+    },
+    getResolveActionRequestFn,
+    // #1554 task #6: mirrors adoptDropSessionsForProvider immediately above — publishes the chat
+    // wiring closure's SessionTokenRegistry.revokeBySessionId into this per-server binding, which
+    // the onReady hook below reads through onPersistentReap when it resolves the real engine
+    // factory.
+    adoptMcpTokenRevoke: (fn: (chatSessionId: string) => void) => {
+      revokeMcpTokenBySessionId = fn;
     },
     resolveEveningInterviewSeed: async (actorUserId: string, briefingRunId?: string) => {
       const repository = new BriefingsRepository();
@@ -2286,7 +2413,14 @@ export function registerBuiltInApiRoutes(
       resolvedChatFactory = await resolveChatEngineFactory({
         appDb: dependencies.rootDb,
         env,
-        log: (msg) => server.log.info(msg)
+        log: (msg) => server.log.info(msg),
+        // #1554 task #6: threads the wiring closure's SessionTokenRegistry.revokeBySessionId
+        // (adopted above via adoptMcpTokenRevoke, populated synchronously during the
+        // BUILT_IN_MODULES pass above — strictly before this onReady hook fires) into the
+        // persistent-runtime pool's onPersistentReap, closing task #5's documented gap.
+        onPersistentReap: (sessionKey) => {
+          revokeMcpTokenBySessionId?.(sessionKey);
+        }
       });
     });
   }

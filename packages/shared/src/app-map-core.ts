@@ -103,6 +103,13 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     scope: "user"
   },
   {
+    id: "released",
+    label: "Recently Released",
+    description: "See what was added, fixed, and changed in recent Moss releases.",
+    path: "/settings?section=released",
+    scope: "user"
+  },
+  {
     id: "connected",
     label: "Connected accounts",
     description: "Connect external accounts and review their status.",

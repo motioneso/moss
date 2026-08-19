@@ -3,18 +3,20 @@ import { lstat, realpath } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
+import { HttpError } from "@moss/module-sdk";
 import type {
   ActionRequestPreview,
   MossModuleManifest,
   ModuleAssistantToolManifest,
   ToolContext,
   ToolExecute,
+  ToolResult,
   ToolServices
 } from "@moss/module-sdk";
 import type { ActionAuditInputSummary, AiAssistantToolDto } from "@moss/shared";
 
 import { summarizeAssistantToolInput } from "../assistant-tools.js";
-import type { AiRepository, InsertAuditLogInput } from "../repository.js";
+import { AiRepository, type InsertAuditLogInput } from "../repository.js";
 import { AutoRunRateLimiter } from "./auto-run-rate-limit.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
 import { validateToolInput } from "./input-validation.js";
@@ -50,6 +52,13 @@ export interface AssistantToolGatewayDependencies {
    * un-bypassable: write-capable services (calendarWrite, notesSync) are never in this map.
    */
   readonly readToolServices?: ToolServices;
+  /** One prompt-boundary policy for every read-tool execution path. */
+  readonly readToolTrustBoundary?: (args: {
+    readonly scopedDb: DataContextDb;
+    readonly toolName: string;
+    readonly ctx: ToolContext;
+    readonly execute: () => Promise<ToolResult>;
+  }) => Promise<ToolResult>;
   /**
    * Returns the user's configured IANA timezone (e.g. "America/Chicago"), or null if unknown.
    * Injected by the composition root; used to populate ToolContext.localTimezone so tools that
@@ -82,6 +91,24 @@ export interface NativeToolPermissionRequest {
 export interface NativeToolPermissionResponse {
   readonly decision: "allow" | "deny";
   readonly reason: string;
+}
+
+export function createUnwiredActionResolver(deps: {
+  readonly runner: DataContextRunner;
+  readonly repository?: AiRepository;
+}): AssistantToolGateway["resolveActionRequest"] {
+  const repository = deps.repository ?? new AiRepository();
+  return async (actorUserId, actionRequestId, status) => {
+    if (status === "confirmed") {
+      throw new HttpError(503, "Assistant action resolution is not available");
+    }
+
+    const access: AccessContext = { actorUserId, requestId: `unwired_${randomUUID()}` };
+    const resolved = await deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
+      repository.resolveAssistantAction(scopedDb, actionRequestId, { status })
+    );
+    return resolved ? "resolved" : "not_found";
+  };
 }
 
 const NATIVE_TOOL_MODULE_ID = "claude-native";
@@ -154,7 +181,12 @@ export class AssistantToolGateway {
 
     let input: Record<string, unknown>;
     try {
-      input = validateToolInput(found.tool.inputSchema, rawInput);
+      input = await validateToolInput(found.tool.inputSchema, rawInput, {
+        // Missing provenance is untrusted: only the registry's explicit false marker gets the
+        // built-in synchronous path.
+        external: found.tool.isExternal !== false,
+        toolName
+      });
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : "Invalid input" };
     }
@@ -390,7 +422,12 @@ export class AssistantToolGateway {
 
     let input: Record<string, unknown>;
     try {
-      input = validateToolInput(found.tool.inputSchema, rawInput);
+      input = await validateToolInput(found.tool.inputSchema, rawInput, {
+        // Missing provenance is untrusted: only the registry's explicit false marker gets the
+        // built-in synchronous path.
+        external: found.tool.isExternal !== false,
+        toolName
+      });
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : "Invalid input" };
     }
@@ -402,9 +439,7 @@ export class AssistantToolGateway {
 
     const readServices = this.deps.readToolServices ?? {};
     try {
-      const result = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
-        found.execute(scopedDb, input, ctx, readServices)
-      );
+      const result = await this.executeTool(found, input, ctx, readServices, access);
       return {
         ok: true,
         data: renderAndCap(
@@ -414,6 +449,14 @@ export class AssistantToolGateway {
         )
       };
     } catch {
+      console.error(
+        JSON.stringify({
+          event: "read_tool_handler_threw",
+          toolName: found.tool.name,
+          requestId,
+          errorClass: "handler_error"
+        })
+      );
       return { ok: false, error: `Tool ${found.tool.name} failed` };
     }
   }
@@ -427,6 +470,23 @@ export class AssistantToolGateway {
     actionRequestId: string,
     status: "confirmed" | "rejected" | "cancelled"
   ): Promise<"resolved" | "expired" | "not_found"> {
+    const access: AccessContext = { actorUserId, requestId: `mcp_${randomUUID()}` };
+
+    // #1591: ownership before liveness. isAwaiting is a process-local, unscoped map keyed only by
+    // actionRequestId — it can't tell "not mine" from "mine but expired", so checking it first let a
+    // guessed/foreign ID's response (expired vs not_found) leak which state another user's row was
+    // in. Confirm the row is owned-and-pending via the owner-scoped repository read first; only a
+    // legitimate owner reaches the liveness check below, so both outcomes fold into "not_found" for
+    // everyone else.
+    if (status === "confirmed") {
+      const action = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
+        this.deps.repository.getAssistantAction(scopedDb, actionRequestId)
+      );
+      if (!action || action.status !== "pending") {
+        return "not_found";
+      }
+    }
+
     // Confirm-after-timeout guard (fail-closed): a "confirmed" only means anything while the
     // blocked call is still awaiting. After the confirm timeout the waiter is gone, the call
     // already returned "timed out", and the tool can NEVER execute — so persisting 'confirmed'
@@ -438,7 +498,6 @@ export class AssistantToolGateway {
       return "expired";
     }
 
-    const access: AccessContext = { actorUserId, requestId: `mcp_${randomUUID()}` };
     const resolved = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
       this.deps.repository.resolveAssistantAction(scopedDb, actionRequestId, { status })
     );
@@ -482,9 +541,7 @@ export class AssistantToolGateway {
     const access: AccessContext = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
     const services = this.servicesFor(found.tool);
     try {
-      const result = await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
-        found.execute(scopedDb, input, ctx, services)
-      );
+      const result = await this.executeTool(found, input, ctx, services, access);
       const sanitized = sanitizeAssistantToolResult(found.tool.outputSchema, result);
       return {
         ok: true,
@@ -505,8 +562,36 @@ export class AssistantToolGateway {
       };
     } catch {
       // never leak internals/secrets from a handler throw
+      console.error(
+        JSON.stringify({
+          event: "tool_handler_threw",
+          toolName: found.dto.name,
+          requestId: ctx.requestId,
+          errorClass: "handler_error"
+        })
+      );
       return { ok: false, error: `Tool ${found.dto.name} failed` };
     }
+  }
+
+  private executeTool(
+    found: ExecutableTool,
+    input: Record<string, unknown>,
+    ctx: ToolContext,
+    services: ToolServices,
+    access: AccessContext
+  ): Promise<ToolResult> {
+    return this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) => {
+      const execute = () => found.execute(scopedDb, input, ctx, services);
+      return found.tool.risk === "read" && this.deps.readToolTrustBoundary
+        ? this.deps.readToolTrustBoundary({
+            scopedDb,
+            toolName: found.tool.name,
+            ctx,
+            execute
+          })
+        : execute();
+    });
   }
 
   private async confirmAndRun(
@@ -618,12 +703,7 @@ export class AssistantToolGateway {
     if (typeof tool.summarize === "function") {
       return tool.summarize(input, ctx);
     }
-    // A person reads this card, so the fallback is the tool's own human-readable description,
-    // not its wire identifier. A module tool can never supply `summarize` — its manifest is JSON
-    // and `summarize` is a function — so every module write landed here and showed the user
-    // something like "job-search.criteria.set (2 field(s))". The durable audit row still records
-    // the key names via `inputSummary`; this string is display only.
-    return tool.description;
+    return tool.actionLabel ?? tool.name;
   }
 
   private async firstRunNotice(

@@ -2,14 +2,16 @@ import { describe, expect, it } from "vitest";
 import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import pg from "pg";
 
 import {
   RUNTIME_ROLE_PASSWORD_DEFAULTS,
+  applyRolePasswords,
   buildAlterRoleStatement,
   buildRolePasswordPlan,
   getMossDatabaseUrls
 } from "@moss/db";
+
+import { createFakeClusterHarness } from "../../packages/db/src/__tests__/fake-pg-cluster.js";
 
 describe("buildRolePasswordPlan", () => {
   it("derives runtime role passwords from local dev fallback URLs", () => {
@@ -90,8 +92,7 @@ describe("buildRolePasswordPlan", () => {
 
 describe("buildAlterRoleStatement", () => {
   it("escapes the identifier and password literal", () => {
-    const client = new pg.Client();
-    const sql = buildAlterRoleStatement(client, {
+    const sql = buildAlterRoleStatement({
       role: "jarvis_app_runtime",
       password: "a'b\\c"
     });
@@ -99,6 +100,43 @@ describe("buildAlterRoleStatement", () => {
     expect(sql).toContain("WITH LOGIN PASSWORD ");
     // The raw, unescaped password must never appear verbatim in the statement.
     expect(sql).not.toContain("a'b\\c");
+  });
+});
+
+// #1632: ALTER ROLE is cluster-global in effect but must be issued from a session on the target
+// database, so it runs on the lock's DDL session — never on a connection of its own, and never on
+// the lock session, which stays on the maintenance database holding the advisory lock.
+describe("applyRolePasswords under the cluster DDL lock", () => {
+  it("runs every ALTER ROLE on the DDL session and opens no other client", async () => {
+    const harness = createFakeClusterHarness();
+
+    await applyRolePasswords(
+      "postgres://postgres:rootpw@db:5432/moss",
+      [
+        { role: "jarvis_app_runtime", password: "app-secret" },
+        { role: "jarvis_worker_runtime", password: "worker-secret" }
+      ],
+      harness.options
+    );
+
+    const texts = harness.ddl.texts;
+    expect(texts).toContain(`ALTER ROLE "jarvis_app_runtime" WITH LOGIN PASSWORD 'app-secret'`);
+    expect(texts).toContain(
+      `ALTER ROLE "jarvis_worker_runtime" WITH LOGIN PASSWORD 'worker-secret'`
+    );
+    expect(texts.some((t) => t.includes("pg_advisory"))).toBe(false);
+    expect(harness.lock.texts[0]).toContain("pg_advisory_lock");
+    expect(harness.lock.texts.at(-1)).toContain("pg_advisory_unlock");
+    expect(harness.lockClients).toHaveLength(1);
+    expect(harness.ddlClients).toHaveLength(1);
+    expect(harness.lock.connectCalls).toBe(1);
+    expect(harness.ddl.connectCalls).toBe(1);
+    // The lock session takes the maintenance database (advisory-lock tags are per-database, so
+    // cluster-wide exclusion needs one agreed database); the DDL session takes the caller's.
+    expect(harness.connectionStrings).toEqual([
+      "postgres://postgres:rootpw@db:5432/postgres",
+      "postgres://postgres:rootpw@db:5432/moss"
+    ]);
   });
 });
 

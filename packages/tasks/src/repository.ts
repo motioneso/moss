@@ -201,13 +201,19 @@ export class TasksRepository {
     const source = input.source ?? "manual";
 
     // Idempotency: when externalKey is provided, check if a matching task already exists
-    // for this (source, external_key) pair. RLS scopes the query to the current actor.
+    // for this (source, external_key) pair, scoped to the current actor's own rows.
+    // tasks_select RLS is owner-OR-share, so an explicit owner filter is required here — relying
+    // on RLS alone would let a shared task from another owner read as "this actor's existing row"
+    // and skip creating the actor's own copy (#1055). The unique index
+    // tasks_source_external_key_idx (owner_user_id, source, external_key) already scopes
+    // uniqueness per-owner, confirming per-owner idempotency was always the schema's intent.
     if (input.externalKey != null) {
       const existing = await scopedDb.db
         .selectFrom("app.tasks")
         .selectAll()
         .where("source", "=", source)
         .where("external_key", "=", input.externalKey)
+        .where(sql<boolean>`owner_user_id = app.current_actor_user_id()`)
         .executeTakeFirst();
 
       if (existing) {

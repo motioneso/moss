@@ -26,6 +26,7 @@ import {
   MAX_INVOCATION_MS
 } from "@moss/module-sdk";
 import { satisfiesCoreVersion } from "@moss/module-sdk/core-version";
+import { lintAssistantToolInputSchema } from "./input-schema-lint.js";
 
 export type ExternalModuleValidation =
   | { readonly ok: true; readonly manifest: JsonMossModuleManifest }
@@ -652,12 +653,24 @@ export function validateExternalModuleManifest(
         } else permissions.push(tool.permissionId);
         if (!isNonEmptyString(tool.description))
           errors.push("assistant tool description is required");
+        if (
+          tool.actionLabel !== undefined &&
+          (!isNonEmptyString(tool.actionLabel) ||
+            tool.actionLabel.length > 80 ||
+            // eslint-disable-next-line no-control-regex -- approval labels must be plain text.
+            /[\u0000-\u001F\u007F]/.test(tool.actionLabel))
+        ) {
+          errors.push(
+            "assistant tool actionLabel must be non-empty plain text (max 80 UTF-16 code units) when present"
+          );
+        }
         if (tool.risk !== "read" && tool.risk !== "write" && tool.risk !== "destructive") {
           errors.push('assistant tool risk must be "read", "write", or "destructive"');
         }
         validateAssistantToolPolicy(tool, assistantActionFamilies, errors);
         if (!isNonEmptyString(tool.handler)) errors.push("assistant tool handler is required");
         else handlers.push(tool.handler);
+        if (tool.inputSchema !== undefined) lintAssistantToolInputSchema(tool, errors);
       }
       if (new Set(names).size !== names.length) errors.push("assistant tool names must be unique");
       if (new Set(permissions).size !== permissions.length) {

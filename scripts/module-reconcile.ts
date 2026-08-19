@@ -21,7 +21,10 @@ import {
   getMossDatabaseUrls,
   moduleInstallRoleName,
   moduleRuntimeRoleName,
-  resolveMossEnv
+  resolveMossEnv,
+  TargetIdentityMismatchError,
+  withClusterDdlLock,
+  type WithClusterDdlLockOptions
 } from "@moss/db";
 import { CORE_VERSION } from "@moss/module-sdk";
 import { getAllQueueDefinitions } from "@moss/module-registry";
@@ -84,6 +87,28 @@ export function decideStagedAcceptance(input: {
   };
 }
 
+/**
+ * Pure decision for phase 3 (#1057): an exact version pin in `JARVIS_MODULES_ENSURE` must be
+ * honored even when some version of the module is already on disk. `onDiskVersions` comes from
+ * `preScan.discoveries` (readable manifest, real version); `onDiskUnreadable` comes from
+ * `preScan.rejected` (present but no readable manifest — no version to compare, preserve the
+ * prior skip-if-present behavior for this leg, out of #1057's scope).
+ */
+export function decideEnsureAction(
+  entry: { readonly id: string; readonly version?: string },
+  onDiskVersions: Map<string, string>,
+  onDiskUnreadable: Set<string>
+): "skip" | "stage" {
+  const onDiskVersion = onDiskVersions.get(entry.id);
+  if (onDiskVersion !== undefined) {
+    return entry.version === undefined || onDiskVersion === entry.version ? "skip" : "stage";
+  }
+  if (onDiskUnreadable.has(entry.id)) {
+    return "skip";
+  }
+  return "stage";
+}
+
 interface ExternalModuleAdminRow {
   readonly id: string;
   readonly status: "enabled" | "disabled";
@@ -100,9 +125,82 @@ export interface ReconcileModulesOptions {
   readonly fetchFn?: typeof fetch;
 }
 
+/**
+ * #1468: extends #1383's target-identity guard to this boot-time supervisor entrypoint. An
+ * "un-provisioned target" — a database nobody has installed onto yet — is the only state
+ * allowed through without a confirmation email, and only when BOTH hold: the connected role is
+ * trustworthy (superuser, has `rolbypassrls`, or owns `app.users` — so an unprivileged
+ * connection can't forge the exception) AND `app.users` is genuinely empty (`COUNT(*) = 0`, not
+ * merely "no row has `is_bootstrap_owner` set" — a populated table with no flagged owner is a
+ * broken or tampered state, not a fresh install, and must still refuse).
+ */
+export async function assertReconcileTargetIdentity(
+  client: Client,
+  env: NodeJS.ProcessEnv = process.env
+): Promise<void> {
+  const trusted = await isConnectedRoleTrustedForUnprovisionedTarget(client);
+  if (trusted && (await isAppUsersGenuinelyEmpty(client))) {
+    return;
+  }
+
+  const ownerResult = await client.query<{ id: string; email: string }>(
+    "SELECT id, email FROM app.users WHERE is_bootstrap_owner = true LIMIT 1"
+  );
+  const owner = ownerResult.rows[0];
+  const confirmedEmail = resolveMossEnv(env, "JARVIS_RECONCILE_CONFIRM_OWNER_EMAIL");
+
+  if (!owner || !confirmedEmail || confirmedEmail !== owner.email) {
+    throw new TargetIdentityMismatchError();
+  }
+}
+
+async function isConnectedRoleTrustedForUnprovisionedTarget(client: Client): Promise<boolean> {
+  const roleResult = await client.query<{
+    role_name: string;
+    rolsuper: boolean;
+    rolbypassrls: boolean;
+  }>(
+    `SELECT current_user AS role_name, rolsuper, rolbypassrls
+       FROM pg_roles
+      WHERE rolname = current_user`
+  );
+  const role = roleResult.rows[0];
+  if (!role) {
+    return false;
+  }
+  if (role.rolsuper || role.rolbypassrls) {
+    return true;
+  }
+
+  const ownerResult = await client.query<{ tableowner: string }>(
+    `SELECT tableowner
+       FROM pg_tables
+      WHERE schemaname = 'app' AND tablename = 'users'`
+  );
+  return ownerResult.rows[0]?.tableowner === role.role_name;
+}
+
+async function isAppUsersGenuinelyEmpty(client: Client): Promise<boolean> {
+  const schemaCheck = await client.query<{ to_regclass: string | null }>(
+    "SELECT to_regclass('app.users')"
+  );
+  if (schemaCheck.rows[0]?.to_regclass === null) {
+    return true;
+  }
+
+  const countResult = await client.query<{ count: string }>("SELECT COUNT(*) FROM app.users");
+  return countResult.rows[0]?.count === "0";
+}
+
 export async function reconcileModules(options: ReconcileModulesOptions): Promise<ReconcileReport> {
   const env = options.env ?? process.env;
   const urls = getMossDatabaseUrls(env);
+  // The connection strings above come from `env`; the cluster-DDL lock resolves its maintenance
+  // database (JARVIS_CLUSTER_LOCK_DATABASE) from its own options. Handing it anything other than
+  // the same `env` splits the lock domain: every participant still acquires a real advisory lock,
+  // just in a different database, and advisory-lock tags are scoped by database OID — so the lock
+  // succeeds and excludes nobody (#1013).
+  const lock: WithClusterDdlLockOptions = { env };
   const report: ReconcileReport = {
     purged: [],
     ensured: [],
@@ -120,6 +218,8 @@ export async function reconcileModules(options: ReconcileModulesOptions): Promis
   const client = new Client({ connectionString: urls.bootstrap });
   await client.connect();
   try {
+    await assertReconcileTargetIdentity(client, env);
+
     // Phase 0 — one lock for the whole run (sql-runner.ts:199 precedent). Session-level
     // (not xact) because destructive phases intentionally run OUTSIDE one big
     // transaction: a purge is a sequence of DDL + fs operations that cannot roll back
@@ -144,7 +244,7 @@ export async function reconcileModules(options: ReconcileModulesOptions): Promis
     );
     for (const row of purgeRows.rows) {
       try {
-        await purgeModule(client, options.modulesDir, row.id);
+        await purgeModule(client, options.modulesDir, row.id, urls.bootstrap, lock);
         report.purged.push(row.id);
       } catch (error) {
         warn(row.id, "purge", error);
@@ -163,12 +263,10 @@ export async function reconcileModules(options: ReconcileModulesOptions): Promis
       coreVersion: CORE_VERSION,
       reservedQueueNames: new Set(getAllQueueDefinitions().map((queue) => queue.name))
     });
-    const onDisk = new Set([
-      ...preScan.discoveries.map((d) => d.id),
-      ...preScan.rejected.map((r) => r.id)
-    ]);
+    const onDiskVersions = new Map(preScan.discoveries.map((d) => [d.id, d.manifest.version]));
+    const onDiskUnreadable = new Set(preScan.rejected.map((r) => r.id));
     for (const entry of ensure.entries) {
-      if (onDisk.has(entry.id)) continue;
+      if (decideEnsureAction(entry, onDiskVersions, onDiskUnreadable) === "skip") continue;
       try {
         const staged = await downloadAndStageModule({
           moduleId: entry.id,
@@ -265,7 +363,8 @@ export async function reconcileModules(options: ReconcileModulesOptions): Promis
           manifest: discovery.manifest,
           bootstrapConnectionString: urls.bootstrap,
           migrationConnectionString: urls.migration,
-          migrationsDirectory: sqlDir
+          migrationsDirectory: sqlDir,
+          lock
         });
         if (installed.length > 0) report.installed.push(discovery.id);
         // A previous failure heals on successful install: clear the error but do NOT
@@ -328,7 +427,13 @@ export async function reconcileModules(options: ReconcileModulesOptions): Promis
  * any earlier step re-triggers the purge on next boot. Every DROP is idempotent
  * (IF EXISTS) for the same reason.
  */
-async function purgeModule(client: Client, modulesDir: string, moduleId: string): Promise<void> {
+export async function purgeModule(
+  client: Client,
+  modulesDir: string,
+  moduleId: string,
+  bootstrapConnectionString: string,
+  options: WithClusterDdlLockOptions = {}
+): Promise<void> {
   if (!MODULE_ID_RE.test(moduleId)) {
     throw new Error(`invalid module id "${moduleId}" in purge mark`);
   }
@@ -352,36 +457,45 @@ async function purgeModule(client: Client, modulesDir: string, moduleId: string)
   await client.query("DELETE FROM app.module_schema_migrations WHERE module_id = $1", [moduleId]);
   await client.query("DELETE FROM app.module_installs WHERE module_id = $1", [moduleId]);
 
-  // 4. Roles. The install role re-grants schema USAGE + the RLS-predicate function's
-  // EXECUTE onward to the runtime role using its own GRANT OPTION (module-role-broker.ts's
-  // ensureModuleRoles) — those two ACL entries are recorded with grantor = install role, not
-  // this (bootstrap/superuser) connection. A superuser-issued `DROP OWNED BY <runtimeRole>`
-  // only strips ACL entries THIS connection granted; entries granted by a different grantor
-  // survive and block `DROP ROLE` with "some objects depend on it". Revoking the install
-  // role's grant option WITH CASCADE removes those downstream grants first. Must run before
-  // the runtime role is dropped below. Role names are derived, never read from data.
+  // 4. Roles. Roles are cluster-global, so this block — and only this block — runs under the
+  // #1632 cluster-DDL lock, on that lock's guarded DDL session (`lockClient`) rather than the
+  // reconcile run's connection. The install role re-grants schema USAGE + the RLS-predicate
+  // function's EXECUTE onward to the runtime role using its own GRANT OPTION
+  // (module-role-broker.ts's ensureModuleRoles) — those two ACL entries are recorded with
+  // grantor = install role, not a bootstrap/superuser connection. A superuser-issued
+  // `DROP OWNED BY <runtimeRole>` only strips ACL entries THAT connection granted; entries
+  // granted by a different grantor survive and block `DROP ROLE` with "some objects depend on
+  // it". Revoking the install role's grant option WITH CASCADE removes those downstream grants
+  // first. Must run before the runtime role is dropped below. Role names are derived, never
+  // read from data.
   const installRole = moduleInstallRoleName(moduleId);
-  await client.query(
-    `DO $$ BEGIN
+  await withClusterDdlLock(
+    bootstrapConnectionString,
+    async (lockClient) => {
+      await lockClient.query(
+        `DO $$ BEGIN
        IF EXISTS (SELECT FROM pg_roles WHERE rolname = '${installRole}') THEN
          EXECUTE format('REVOKE GRANT OPTION FOR USAGE ON SCHEMA app FROM %I CASCADE', '${installRole}');
          EXECUTE format('REVOKE GRANT OPTION FOR EXECUTE ON FUNCTION app.current_actor_user_id() FROM %I CASCADE', '${installRole}');
        END IF;
      END $$`
-  );
+      );
 
-  // DROP OWNED first releases any remaining grants/objects so DROP ROLE can't fail on
-  // dependencies.
-  for (const role of [moduleRuntimeRoleName(moduleId), moduleInstallRoleName(moduleId)]) {
-    await client.query(
-      `DO $$ BEGIN
+      // DROP OWNED first releases any remaining grants/objects so DROP ROLE can't fail on
+      // dependencies.
+      for (const role of [moduleRuntimeRoleName(moduleId), moduleInstallRoleName(moduleId)]) {
+        await lockClient.query(
+          `DO $$ BEGIN
          IF EXISTS (SELECT FROM pg_roles WHERE rolname = '${role}') THEN
            EXECUTE format('DROP OWNED BY %I', '${role}');
            EXECUTE format('DROP ROLE %I', '${role}');
          END IF;
        END $$`
-    );
-  }
+        );
+      }
+    },
+    options
+  );
 
   // 5. Files. MODULE_ID_RE above already proved the id is a bare slug (no traversal).
   await rm(join(modulesDir, moduleId), { recursive: true, force: true });

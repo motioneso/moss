@@ -9,6 +9,7 @@ import {
 } from "../../packages/db/src/index.js";
 import {
   BRAVE_API_KEY_CONFIG_KEY,
+  CHAT_PERSISTENT_POOL_CAP_CONFIG_KEY,
   EMBED_PROVIDER_CONFIG_KEY
 } from "../../packages/settings/src/runtime-config-keys.js";
 import { registerRuntimeConfigRoutes } from "../../packages/settings/src/runtime-config-routes.js";
@@ -173,6 +174,54 @@ describe("runtime config admin routes", () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toContain("stub");
+    expect(made.upserts).toEqual([]);
+  });
+
+  it("rejects an int value below minValue, leaving the existing value unchanged (#1554)", async () => {
+    const made = makeServer();
+    server = made.server;
+
+    const res = await server.inject({
+      method: "PUT",
+      url: `/api/admin/runtime-config/${CHAT_PERSISTENT_POOL_CAP_CONFIG_KEY}`,
+      payload: { value: "0" }
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(made.upserts).toEqual([]);
+
+    const getRes = await server.inject({
+      method: "GET",
+      url: `/api/admin/runtime-config/${CHAT_PERSISTENT_POOL_CAP_CONFIG_KEY}`
+    });
+    expect(getRes.json()).toEqual({ config: { value: "4", source: "default" } });
+  });
+
+  it("accepts an int value at or above minValue (#1554)", async () => {
+    const made = makeServer();
+    server = made.server;
+
+    const res = await server.inject({
+      method: "PUT",
+      url: `/api/admin/runtime-config/${CHAT_PERSISTENT_POOL_CAP_CONFIG_KEY}`,
+      payload: { value: "8" }
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ config: { value: "8", source: "instance" } });
+  });
+
+  it("still rejects non-integer values for a bounded int key (#1554)", async () => {
+    const made = makeServer();
+    server = made.server;
+
+    const res = await server.inject({
+      method: "PUT",
+      url: `/api/admin/runtime-config/${CHAT_PERSISTENT_POOL_CAP_CONFIG_KEY}`,
+      payload: { value: "3.5" }
+    });
+
+    expect(res.statusCode).toBe(400);
     expect(made.upserts).toEqual([]);
   });
 

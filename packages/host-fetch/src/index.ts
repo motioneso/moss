@@ -374,8 +374,21 @@ async function requestBody(
 }
 
 function isBlocked(address: string, family: 4 | 6): boolean {
-  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(address)?.[1];
-  if (mapped) return BLOCKED.check(mapped, "ipv4");
+  const dotted = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(address)?.[1];
+  if (dotted) return BLOCKED.check(dotted, "ipv4");
+  // Hex-form v4-mapped (e.g. ::ffff:a9fe:a9fe = 169.254.169.254, the cloud-metadata target)
+  // skips the dotted-form regex above, so it must be normalized to ipv4 explicitly. Deliberately
+  // NOT handled by adding an "::ffff:0:0"/96 entry to the ipv6 BLOCKED list: Node's BlockList
+  // treats a v4-mapped ipv6 subnet as covering the corresponding ipv4 address space too, so that
+  // one entry silently blocks every ipv4 "check" call as well (verified empirically) — it would
+  // have broken every legitimate external fetch, not just closed this gap.
+  const hex = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(address);
+  if (hex) {
+    const hi = parseInt(hex[1]!, 16);
+    const lo = parseInt(hex[2]!, 16);
+    const asIpv4 = `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+    return BLOCKED.check(asIpv4, "ipv4");
+  }
   return BLOCKED.check(address, family === 4 ? "ipv4" : "ipv6");
 }
 

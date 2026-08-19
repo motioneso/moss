@@ -3,6 +3,10 @@ import type { AiAuthMethod, AiProviderKind } from "@moss/db";
 
 const CACHE_TTL_MS = 3_600_000; // 1 hour
 
+// Provider create/update calls this inline and soft-fails on error, but an unbounded fetch still
+// blocks the request on a slow/unreachable provider API. Bound the wait, not just the failure.
+const MODEL_DISCOVERY_FETCH_TIMEOUT_MS = 5_000;
+
 interface CacheEntry {
   readonly models: AiProviderDiscoveredModelDto[];
   readonly fromFallback: boolean;
@@ -149,20 +153,23 @@ function readApiKey(credential: unknown): string | null {
 
 function doFetch(input: ModelDiscoveryInput, apiKey: string): Promise<Response> {
   const f = input.fetch ?? globalThis.fetch;
+  const signal = AbortSignal.timeout(MODEL_DISCOVERY_FETCH_TIMEOUT_MS);
   switch (input.providerKind) {
     case "anthropic":
       return f("https://api.anthropic.com/v1/models", {
-        headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01" }
+        headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+        signal
       });
     case "google":
       return f("https://generativelanguage.googleapis.com/v1beta/models", {
-        headers: { "x-goog-api-key": apiKey }
+        headers: { "x-goog-api-key": apiKey },
+        signal
       });
     case "openai-compatible":
     case "ollama":
     case "custom": {
       const base = (input.baseUrl ?? "https://api.openai.com").replace(/\/+$/, "");
-      return f(`${base}/v1/models`, { headers: { authorization: `Bearer ${apiKey}` } });
+      return f(`${base}/v1/models`, { headers: { authorization: `Bearer ${apiKey}` }, signal });
     }
   }
 }

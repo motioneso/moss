@@ -1,9 +1,14 @@
 export { embedChunks, EMBED_CONCURRENCY } from "./embed-chunks.js";
+export {
+  CpuIsolatedEmbeddingProvider,
+  EMBED_MAX_TOKENS,
+  LocalEmbeddingProvider,
+  resetEmbeddingPipelineCacheForTests
+} from "./local-embedding-provider.js";
 export type { EmbeddingProvider } from "./embedding-provider.js";
 export { StubEmbeddingProvider } from "./embedding-provider.js";
 export { IngestionService } from "./ingestion-service.js";
 export type { IngestOptions, IngestStats, IngestFailure } from "./ingestion-service.js";
-export { LocalEmbeddingProvider } from "./local-embedding-provider.js";
 export type {
   EmbeddingProviderConfig,
   EmbeddingRuntimeConfigResolver,
@@ -15,6 +20,30 @@ export {
 } from "./embedding-provider-config.js";
 export { MemoryIngestPipeline } from "./ingest.js";
 export type { IngestFileOptions, IngestFileResult, IngestStatus } from "./ingest.js";
+export {
+  HARD_EXCLUDED_PREFIXES,
+  isPathIngestable,
+  listVaultIngestRootProviders,
+  registerVaultIngestRootProvider,
+  resolveIngestRoots
+} from "./vault-ingest-registry.js";
+export type { VaultIngestRootProvider } from "./vault-ingest-registry.js";
+export {
+  VAULT_INGEST_SWEEP_QUEUE,
+  VAULT_INGEST_NUDGE_QUEUE,
+  VAULT_INGEST_TICK_QUEUE,
+  VAULT_INGEST_QUEUE_DEFINITIONS,
+  runVaultIngestSweep,
+  applyVaultIngestNudge,
+  scheduleVaultIngestNudge,
+  registerVaultIngestWorkers
+} from "./vault-ingest-jobs.js";
+export type {
+  VaultIngestSweepPayload,
+  VaultIngestNudgePayload,
+  VaultIngestSweepStats,
+  VaultIngestWorkerDeps
+} from "./vault-ingest-jobs.js";
 export { memoryModuleManifest, memorySqlMigrationDirectory, MEMORY_MODULE_ID } from "./manifest.js";
 export type {
   MemoryCandidateAction,

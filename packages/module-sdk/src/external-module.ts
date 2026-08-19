@@ -179,6 +179,7 @@ export interface ExternalModuleConfirmWhenClause {
 export interface ExternalModuleAssistantToolDeclaration {
   readonly name: string;
   readonly description: string;
+  readonly actionLabel?: string;
   readonly permissionId: string;
   readonly risk: ModuleAssistantToolRisk;
   readonly actionFamilyId?: string;

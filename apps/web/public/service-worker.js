@@ -5,7 +5,16 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then((cache) => cache.addAll(APP_SHELL_URLS))
+      .then(async (cache) => {
+        // Explicit Accept: text/html for clarity of intent; the server's SPA
+        // fallback also serves "/" without one (see #1487).
+        const shellResponse = await fetch("/", { headers: { Accept: "text/html" } });
+        if (!shellResponse.ok) {
+          throw new Error(`Failed to fetch app shell: ${shellResponse.status}`);
+        }
+        await cache.put("/", shellResponse);
+        await cache.addAll(APP_SHELL_URLS.filter((url) => url !== "/"));
+      })
       .then(() => self.skipWaiting())
   );
 });

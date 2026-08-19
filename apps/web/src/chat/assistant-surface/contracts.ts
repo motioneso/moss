@@ -43,10 +43,18 @@ export interface AssistantSurfaceHandleV1 {
   ): () => void;
   /**
    * #1284 — switch which thread this module owns right now (e.g. the user picked a different
-   * profile). `null` releases the claim and returns the shell to the drawer. Call this BEFORE any
-   * seedContext/submitTurn on the new key: the shell derives "the active surface" from the most
-   * recent setSurfaceKey call, so seeding first would frame the surface the module hasn't claimed
-   * yet (H4 — ordering is the consent boundary here, not just a nicety).
+   * profile). `null` releases the claim and returns the handle to the unclaimed state (NOT the
+   * drawer — see #1495 below). Call this BEFORE any seedContext/submitTurn on the new key: the
+   * shell derives "the active surface" from the most recent setSurfaceKey call, so seeding first
+   * would frame the surface the module hasn't claimed yet (H4 — ordering is the consent boundary
+   * here, not just a nicety).
+   *
+   * #1495 — this ordering is enforced, not just documented, on module-bound handles: calling
+   * seedContext/submitTurn/subscribeRecords before the first setSurfaceKey call (or after a
+   * setSurfaceKey(null) release) no longer falls through to the user's drawer thread.
+   * seedContext/submitTurn reject with an error naming the module and the missing claim;
+   * subscribeRecords returns a no-op subscription and logs a console.error. Drawer-bound handles
+   * (no moduleId) are unaffected — the drawer is their correct surface.
    */
   setSurfaceKey(key: string | null): void;
   /**

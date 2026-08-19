@@ -4,7 +4,11 @@ import { persistProviderToken } from "@moss/cli-runner";
 import { resolveMossEnv } from "@moss/db";
 import { createMigrationOwnerDb } from "./connections.js";
 import { assertTargetIsEphemeral } from "./guard.js";
-import { parseUatExcludeChunks, parseUatSeedLevel } from "./level-validation.js";
+import {
+  parseUatChatScript,
+  parseUatExcludeChunks,
+  parseUatSeedLevel
+} from "./level-validation.js";
 import { seedLevel } from "./levels.js";
 
 // #1121: same fallback chain packages/cli-runner/src/main.ts uses for the cli-auth mount —
@@ -15,7 +19,7 @@ const DEFAULT_CLI_HOME_BASE = "/data/cli-auth";
 
 /**
  * #1121 (Coordinator constraint 1, opt-in only): if the `seed` service's opt-in real-chat env
- * file (infra/docker-compose.prod.yml + tests/uat/provisioner.ts's writeUatRealChatEnvFile)
+ * file (infra/docker-compose.prod.yml + tests/uat/real-chat-env.ts's writeUatRealChatEnvFile)
  * populated CLAUDE_CODE_OAUTH_TOKEN, persist it into the shared cli-auth volume so jarv1s's chat
  * launch can read it back via readProviderCredentialEnv. Absent env var ⇒ no-op — default/CI
  * seed behavior is unchanged. Never logs the token.
@@ -79,8 +83,17 @@ async function main(): Promise<void> {
   // as every other optional docker -e value here.
   const jobSearchAiProviderBaseUrl =
     resolveMossEnv(process.env, "JARVIS_UAT_JOB_SEARCH_AI_BASE_URL") || undefined;
+  const chatScript = parseUatChatScript(
+    resolveMossEnv(process.env, "JARVIS_UAT_SEED_CHAT_SCRIPT") ?? ""
+  );
 
-  await seedLevel({ level, excludeChunks, withoutNewsJsonBinding, jobSearchAiProviderBaseUrl });
+  await seedLevel({
+    level,
+    excludeChunks,
+    withoutNewsJsonBinding,
+    jobSearchAiProviderBaseUrl,
+    chatScript
+  });
   console.log(
     `[uat-seed] seeded level "${level}"${excludeChunks.length ? ` (excluding: ${excludeChunks.join(", ")})` : ""}`
   );

@@ -25,6 +25,8 @@ import {
   readProviderToken
 } from "../../packages/cli-runner/src/provider-token-store.js";
 import { CliChatUnavailableError } from "../../packages/chat/src/live/errors.js";
+import { ClaudePersistentRuntimeEngine } from "../../packages/chat/src/live/persistent-runtime-engine.js";
+import { createChatEngine } from "../../packages/chat/src/live/engine-selection.js";
 import {
   LOGIN_SESSION_PREFIX,
   SESSION_PREFIX,
@@ -557,6 +559,19 @@ describe("§L.6.1 unified exclusivity gate (engine-host)", () => {
     const svc = makeService(f.io, makeProbe({ status: "needs_login" }).fn);
     const host = makeHost(f.io, svc);
     f.live.add(`${SESSION_PREFIX}user-9`); // a live chat session
+    await expect(host.beginLogin("anthropic")).rejects.toBeInstanceOf(CliChatUnavailableError);
+  });
+
+  it("rejects beginLogin while a registry-only persistent runtime is live", async () => {
+    const f = makeLoginIo("https://claude.ai/oauth/authorize?code=abc");
+    const svc = makeService(f.io, makeProbe({ status: "needs_login" }).fn);
+    const host = makeHost(f.io, svc);
+    const persistent = createChatEngine("anthropic", "user-9", f.io, {
+      persistentRuntimeEnabled: true
+    });
+    expect(persistent).toBeInstanceOf(ClaudePersistentRuntimeEngine);
+    (host as unknown as { engines: Map<string, unknown> }).engines.set("user-9", persistent);
+
     await expect(host.beginLogin("anthropic")).rejects.toBeInstanceOf(CliChatUnavailableError);
   });
 });

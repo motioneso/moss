@@ -4,7 +4,42 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { Kysely } from "kysely";
+import type * as NodeFsPromises from "node:fs/promises";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// TOCTOU test support: vi.spyOn cannot patch the "node:fs/promises" namespace directly (ESM
+// module namespaces aren't configurable), so realpath/readFile are routed through these mocks
+// via vi.mock instead. Every other export passes through to the real implementation untouched.
+// vi.hoisted is required (not a plain top-level const) because vi.mock factories are hoisted
+// above all imports, including any plain variable declarations that would otherwise sit below them.
+type FsPromises = typeof NodeFsPromises;
+
+const fsMocks = vi.hoisted(() => ({
+  realpathMock: vi.fn(),
+  readFileFsMock: vi.fn(),
+  actualFs: undefined as unknown
+}));
+const { realpathMock, readFileFsMock } = fsMocks;
+function actualFs(): FsPromises {
+  return fsMocks.actualFs as FsPromises;
+}
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<FsPromises>();
+  fsMocks.actualFs = actual;
+  // Default to a transparent passthrough from the moment the module loads — code that runs
+  // before this file's beforeEach (foundation DB reset/migrations) also goes through these
+  // mocks, so an unconfigured vi.fn() here would return undefined and corrupt unrelated I/O.
+  // Referenced via fsMocks (not the destructured consts below) because this factory is hoisted
+  // above that destructuring statement and would otherwise hit the TDZ.
+  fsMocks.realpathMock.mockImplementation(actual.realpath);
+  fsMocks.readFileFsMock.mockImplementation(actual.readFile);
+  return {
+    ...actual,
+    realpath: (...args: Parameters<FsPromises["realpath"]>) => fsMocks.realpathMock(...args),
+    readFile: (...args: Parameters<FsPromises["readFile"]>) => fsMocks.readFileFsMock(...args)
+  };
+});
 
 import { buildChatToolServices } from "@moss/chat";
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
@@ -30,6 +65,12 @@ describe("notes write assistant tools", () => {
   let service: NotesSyncToolService;
 
   beforeEach(async () => {
+    realpathMock.mockImplementation((p: Parameters<FsPromises["realpath"]>[0]) =>
+      actualFs().realpath(p)
+    );
+    readFileFsMock.mockImplementation((...args: Parameters<FsPromises["readFile"]>) =>
+      actualFs().readFile(...args)
+    );
     await resetFoundationDatabase();
     db = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
     runner = new DataContextRunner(db);
@@ -491,5 +532,248 @@ describe("notes write assistant tools", () => {
       await expect(readFile(join(outside, "bad.md"), "utf-8")).resolves.toBe("outside");
     });
     await rm(outside, { recursive: true, force: true });
+  });
+
+  it("narrows the TOCTOU window: create overwrite, parent swapped to a symlink after the parent check, before writeFile", async () => {
+    const outside = await mkdtemp(join(tmpdir(), `jarv1s-outside-toctou1-${randomUUID()}-`));
+    const parentDir = join(root, "sub1");
+    await mkdir(parentDir, { recursive: true });
+    realpathMock.mockImplementation(async (p: Parameters<FsPromises["realpath"]>[0]) => {
+      const resolved = await actualFs().realpath(p);
+      if (p === parentDir) {
+        await rm(parentDir, { recursive: true, force: true });
+        await symlink(outside, parentDir);
+      }
+      return resolved;
+    });
+    await runner.withDataContext({ actorUserId: ids.userA, requestId: "toctou-1" }, async (db) => {
+      await expect(
+        notesCreateExecute(
+          db,
+          { path: "sub1/note.md", content: "escaped", overwrite: true },
+          { actorUserId: ids.userA, requestId: "toctou-1", chatSessionId: "chat" },
+          { notesSync: service }
+        )
+      ).rejects.toThrow("path is not within the linked notes source");
+    });
+    await expect(readFile(join(outside, "note.md"), "utf-8")).rejects.toThrow();
+    await rm(outside, { recursive: true, force: true });
+  });
+
+  it("narrows the TOCTOU window: create exclusive, parent swapped to a symlink after the parent check, before open", async () => {
+    const outside = await mkdtemp(join(tmpdir(), `jarv1s-outside-toctou2-${randomUUID()}-`));
+    const parentDir = join(root, "sub2");
+    await mkdir(parentDir, { recursive: true });
+    realpathMock.mockImplementation(async (p: Parameters<FsPromises["realpath"]>[0]) => {
+      const resolved = await actualFs().realpath(p);
+      if (p === parentDir) {
+        await rm(parentDir, { recursive: true, force: true });
+        await symlink(outside, parentDir);
+      }
+      return resolved;
+    });
+    await runner.withDataContext({ actorUserId: ids.userA, requestId: "toctou-2" }, async (db) => {
+      await expect(
+        notesCreateExecute(
+          db,
+          { path: "sub2/note2.md", content: "escaped" },
+          { actorUserId: ids.userA, requestId: "toctou-2", chatSessionId: "chat" },
+          { notesSync: service }
+        )
+      ).rejects.toThrow("path is not within the linked notes source");
+    });
+    await expect(readFile(join(outside, "note2.md"), "utf-8")).rejects.toThrow();
+    await rm(outside, { recursive: true, force: true });
+  });
+
+  it("narrows the TOCTOU window: edit, target swapped to a symlink after resolveExistingFile, before readFile", async () => {
+    const outside = await mkdtemp(join(tmpdir(), `jarv1s-outside-toctou3-${randomUUID()}-`));
+    await writeFile(join(outside, "secret.md"), "TOP SECRET");
+    const targetPath = join(root, "note3.md");
+    await writeFile(targetPath, "TOP SECRET");
+    realpathMock.mockImplementation(async (p: Parameters<FsPromises["realpath"]>[0]) => {
+      const resolved = await actualFs().realpath(p);
+      if (p === targetPath) {
+        await rm(targetPath, { force: true });
+        await symlink(join(outside, "secret.md"), targetPath);
+      }
+      return resolved;
+    });
+    await runner.withDataContext({ actorUserId: ids.userA, requestId: "toctou-3" }, async (db) => {
+      await expect(
+        notesEditExecute(
+          db,
+          { path: "note3.md", oldText: "TOP SECRET", newText: "leaked" },
+          { actorUserId: ids.userA, requestId: "toctou-3", chatSessionId: "chat" },
+          { notesSync: service }
+        )
+      ).rejects.toThrow("path is not within the linked notes source");
+    });
+    await expect(readFile(join(outside, "secret.md"), "utf-8")).resolves.toBe("TOP SECRET");
+    await rm(outside, { recursive: true, force: true });
+  });
+
+  it("narrows the TOCTOU window: edit, target swapped to a symlink after readFile succeeds, before writeFile", async () => {
+    const outside = await mkdtemp(join(tmpdir(), `jarv1s-outside-toctou4-${randomUUID()}-`));
+    const targetPath = join(root, "note4.md");
+    await writeFile(targetPath, "hello world");
+    readFileFsMock.mockImplementation(async (...args: Parameters<FsPromises["readFile"]>) => {
+      const result = await actualFs().readFile(...args);
+      if (args[0] === targetPath) {
+        await rm(targetPath, { force: true });
+        await symlink(join(outside, "note4.md"), targetPath);
+      }
+      return result;
+    });
+    await runner.withDataContext({ actorUserId: ids.userA, requestId: "toctou-4" }, async (db) => {
+      await expect(
+        notesEditExecute(
+          db,
+          { path: "note4.md", oldText: "hello", newText: "goodbye" },
+          { actorUserId: ids.userA, requestId: "toctou-4", chatSessionId: "chat" },
+          { notesSync: service }
+        )
+      ).rejects.toThrow("path is not within the linked notes source");
+    });
+    await expect(readFile(join(outside, "note4.md"), "utf-8")).rejects.toThrow();
+    await rm(outside, { recursive: true, force: true });
+  });
+
+  it("narrows the TOCTOU window: delete, parent swapped to a symlink after resolveExistingFile, before unlink", async () => {
+    const outside = await mkdtemp(join(tmpdir(), `jarv1s-outside-toctou5-${randomUUID()}-`));
+    await writeFile(join(outside, "note5.md"), "do not delete me");
+    const parentDir = join(root, "sub5");
+    await mkdir(parentDir, { recursive: true });
+    const targetPath = join(parentDir, "note5.md");
+    await writeFile(targetPath, "delete me");
+    realpathMock.mockImplementation(async (p: Parameters<FsPromises["realpath"]>[0]) => {
+      const resolved = await actualFs().realpath(p);
+      if (p === targetPath) {
+        await rm(parentDir, { recursive: true, force: true });
+        await symlink(outside, parentDir);
+      }
+      return resolved;
+    });
+    await runner.withDataContext({ actorUserId: ids.userA, requestId: "toctou-5" }, async (db) => {
+      await expect(
+        notesDeleteExecute(
+          db,
+          { path: "sub5/note5.md" },
+          { actorUserId: ids.userA, requestId: "toctou-5", chatSessionId: "chat" },
+          { notesSync: service }
+        )
+      ).rejects.toThrow("path is not within the linked notes source");
+    });
+    await expect(readFile(join(outside, "note5.md"), "utf-8")).resolves.toBe("do not delete me");
+    await rm(outside, { recursive: true, force: true });
+  });
+
+  describe("concurrent edits", () => {
+    // The outer `db`/`runner` pair uses maxConnections: 1 — a single withDataContext call
+    // holds the only pool connection for its whole transaction, so two overlapping calls on it
+    // would deadlock on connection acquisition (unrelated to the mutex under test). Use a
+    // dedicated pool of 2 here so both concurrent notesEditExecute calls can each hold their
+    // own transaction while they race for the path lock.
+    let concurrentDb: Kysely<MossDatabase>;
+    let concurrentRunner: DataContextRunner;
+
+    beforeEach(() => {
+      concurrentDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 2 });
+      concurrentRunner = new DataContextRunner(concurrentDb);
+    });
+
+    afterEach(async () => {
+      await concurrentDb.destroy();
+    });
+
+    // Barrier: both concurrent notesEditExecute calls must have genuinely entered
+    // resolveExistingFile's realpath call (write-tools.ts:119) — before either lock/critical-
+    // section code below can possibly run. Gating here (not on readFile) avoids deadlock
+    // regardless of whether the mutex under test is implemented correctly or missing entirely.
+    function armEntryBarrier(targetPath: string): void {
+      let entered = 0;
+      let releaseGate: () => void;
+      const gate = new Promise<void>((resolve) => {
+        releaseGate = resolve;
+      });
+      realpathMock.mockImplementation(async (p: Parameters<FsPromises["realpath"]>[0]) => {
+        const resolved = await actualFs().realpath(p);
+        if (p === targetPath) {
+          entered += 1;
+          if (entered === 2) releaseGate();
+          await gate;
+        }
+        return resolved;
+      });
+    }
+
+    it("disjoint overlapping edits on one file both succeed", async () => {
+      const targetPath = join(root, "concurrent1.md");
+      await writeFile(targetPath, "APPLE and BANANA are fruits");
+      armEntryBarrier(targetPath);
+
+      const [result1, result2] = await Promise.all([
+        concurrentRunner.withDataContext({ actorUserId: ids.userA, requestId: "conc-1a" }, (db) =>
+          notesEditExecute(
+            db,
+            { path: "concurrent1.md", oldText: "APPLE", newText: "ORANGE" },
+            { actorUserId: ids.userA, requestId: "conc-1a", chatSessionId: "chat" },
+            { notesSync: service }
+          )
+        ),
+        concurrentRunner.withDataContext({ actorUserId: ids.userA, requestId: "conc-1b" }, (db) =>
+          notesEditExecute(
+            db,
+            { path: "concurrent1.md", oldText: "BANANA", newText: "GRAPE" },
+            { actorUserId: ids.userA, requestId: "conc-1b", chatSessionId: "chat" },
+            { notesSync: service }
+          )
+        )
+      ]);
+      expect(result1.data).toMatchObject({ synced: true });
+      expect(result2.data).toMatchObject({ synced: true });
+
+      const finalContent = await readFile(targetPath, "utf-8");
+      expect(finalContent).toContain("ORANGE");
+      expect(finalContent).toContain("GRAPE");
+    });
+
+    it("overlapping same-substring edits: exactly one succeeds, the other gets 409", async () => {
+      const targetPath = join(root, "concurrent2.md");
+      await writeFile(targetPath, "hello world");
+      armEntryBarrier(targetPath);
+
+      const outcomes = await Promise.allSettled([
+        concurrentRunner.withDataContext({ actorUserId: ids.userA, requestId: "conc-2a" }, (db) =>
+          notesEditExecute(
+            db,
+            { path: "concurrent2.md", oldText: "hello", newText: "goodbye1" },
+            { actorUserId: ids.userA, requestId: "conc-2a", chatSessionId: "chat" },
+            { notesSync: service }
+          )
+        ),
+        concurrentRunner.withDataContext({ actorUserId: ids.userA, requestId: "conc-2b" }, (db) =>
+          notesEditExecute(
+            db,
+            { path: "concurrent2.md", oldText: "hello", newText: "goodbye2" },
+            { actorUserId: ids.userA, requestId: "conc-2b", chatSessionId: "chat" },
+            { notesSync: service }
+          )
+        )
+      ]);
+
+      const fulfilled = outcomes.filter((o) => o.status === "fulfilled");
+      const rejected = outcomes.filter((o) => o.status === "rejected");
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({
+        message: expect.stringMatching(/appears 0 times/)
+      });
+
+      const finalContent = await readFile(targetPath, "utf-8");
+      const isWinner1 = finalContent === "goodbye1 world";
+      const isWinner2 = finalContent === "goodbye2 world";
+      expect(isWinner1 || isWinner2).toBe(true);
+    });
   });
 });

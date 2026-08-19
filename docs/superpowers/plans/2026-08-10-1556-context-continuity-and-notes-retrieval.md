@@ -269,8 +269,8 @@ pnpm verify:foundation > /tmp/1556-p1-gate.log 2>&1; echo "EXIT=$?"
 
 **e2e (live-path gate, executed and recorded on the PR):** on a live dev instance — seed a
 drawer thread past 40 turns with an early distinctive fact, kill the engine session (forced
-relaunch), then ask a continuity question that only the replayed window can answer; assert and
-record the correct answer text. Same run performs the **no-prose check** (spec AC-5): the forced relaunch
+relaunch), then ask a continuity question that only the replayed window can answer; screenshot
+the correct answer. Same run performs the **no-prose check** (spec AC-5): the forced relaunch
 adds zero visible turns; and a `chat.replay.injected` log line with plausible counts is captured
 from the server log.
 
@@ -346,8 +346,8 @@ pnpm verify:foundation > /tmp/1556-p3-gate.log 2>&1; echo "EXIT=$?"   # verify-g
 **e2e (live-path gate):** live dev — (1) seed a note with a distinctive fact, ask a related
 question **without** naming the note: answer reflects the fact with no explicit search request
 (injection working), `chat.notes_recall.injected` captured; (2) same question in an incognito
-thread: no injection event, `skipped(reason:"incognito")` present; answer assertions + log excerpts
-on the PR.
+thread: no injection event, `skipped(reason:"incognito")` present; screenshot + log excerpts on
+the PR.
 
 ## 4. Rollout
 

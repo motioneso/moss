@@ -92,7 +92,9 @@ const iconMap: Record<string, ComponentType<{ readonly size?: number }>> = {
 
 export function AppShell(props: AppShellProps) {
   usePageContextSync();
-  const assistantName = useAssistantName();
+  // Keep this usable while the cosmetic persona query is pending, without briefly naming a
+  // custom assistant "Moss". All other shell content continues to render immediately.
+  const assistantName = useAssistantName("");
   const queryClient = useQueryClient();
   const location = useLocation();
   const navigate = useNavigate();
@@ -138,12 +140,10 @@ export function AppShell(props: AppShellProps) {
   const activeModuleSurfaceBranded = activeModuleSurface as ChatSurface | null;
   const activeSurface = activeModuleSurfaceBranded ?? DEFAULT_CHAT_SURFACE;
   // Lifted to the shell so the SSE stream + transcript persist while the drawer is closed and as
-  // the user navigates between pages — the chat follows the user. `undefined` (no module surface
-  // claimed) keeps the "nothing active" case on the exact request shape it always had — no
-  // `?surface=` query param — so this is a strict widening of the pre-#1284 behaviour.
-  const { records, clearRecords, streamErrorCount } = useChatStream(
-    activeModuleSurfaceBranded ?? undefined
-  );
+  // the user navigates between pages — the chat follows the user. Always pass the defaulted
+  // `activeSurface`, never the raw `activeModuleSurfaceBranded ?? undefined` — the latter left
+  // useChatStream's rehydration effect permanently gated off for the default drawer (#1449).
+  const { records, clearRecords, streamErrorCount } = useChatStream(activeSurface);
   const assistantRecordListeners = useRef(
     new Set<(records: readonly AssistantRecordV1[]) => void>()
   );
@@ -381,10 +381,10 @@ export function AppShell(props: AppShellProps) {
 
           <div className="topbar-actions">
             <button
-              aria-label={`Chat with ${assistantName}`}
+              aria-label={assistantName ? `Chat with ${assistantName}` : "Open chat"}
               aria-pressed={chatOpen}
               className={`icon-button ${chatOpen ? "active" : ""}`}
-              title={`Ask ${assistantName}`}
+              title={assistantName ? `Ask ${assistantName}` : "Open chat"}
               type="button"
               onClick={() => setChatOpen((open) => !open)}
             >
@@ -442,6 +442,7 @@ export function AppShell(props: AppShellProps) {
         initialText={moduleDraft}
         focusActionRequestId={focusActionRequestId}
         onActionRequestFocused={() => setFocusActionRequestId(null)}
+        surface={activeSurface}
       />
     </div>
   );

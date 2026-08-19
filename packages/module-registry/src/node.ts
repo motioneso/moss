@@ -58,6 +58,9 @@ export function getExternalModuleRegistrations(options: {
     // (also blocks any "." / ".." style trickery the fs might surface).
     const id = entry.name;
     if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+    // #1222: dot-prefixed dirs (.prev-*/.staging-* backups, and dotfiles generally) are
+    // distribution-internal (#964) — skip them outright, never surface in rejected[] either.
+    if (id.startsWith(".")) continue;
     if (!MODULE_ID_RE.test(id)) {
       rejected.push({ id, reason: `directory name "${id}" is not a valid module id slug` });
       continue;

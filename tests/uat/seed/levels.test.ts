@@ -1,6 +1,7 @@
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { AiRepository } from "@moss/ai";
 import { TasksRepository } from "@moss/tasks";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { UAT_ADMIN_EMAIL, UAT_SECOND_OWNER_EMAIL } from "./admin.js";
@@ -152,6 +153,80 @@ describe("seedLevel", () => {
         });
       expect(await financeKvCount(admin.id)).toBeGreaterThan(0);
       expect(await financeKvCount(owner2.id)).toBe(0);
+    } finally {
+      await runner.destroy();
+    }
+  });
+
+  // #1121: without an explicit chatScript, solo-admin still has no usable real assistant chat
+  // engine — same gap chunks/ai.test.ts's #1121 red check proves at admin+data.
+  it("solo-admin without chatScript leaves no chat-capable model", async () => {
+    await seedLevel({ level: "solo-admin" });
+
+    const migrationDb = createMigrationOwnerDb();
+    let adminId: string;
+    try {
+      const admin = await migrationDb
+        .selectFrom("app.users")
+        .select(["id"])
+        .where("email", "=", UAT_ADMIN_EMAIL)
+        .executeTakeFirstOrThrow();
+      adminId = admin.id;
+    } finally {
+      await migrationDb.destroy();
+    }
+
+    const aiRepo = new AiRepository();
+    const runner = createAppRuntimeRunner();
+    try {
+      await runner.withDataContext({ actorUserId: adminId }, async (scopedDb) => {
+        const chatModel = await aiRepo.selectChatModelForUser(scopedDb);
+        expect(chatModel).toBeNull();
+      });
+    } finally {
+      await runner.destroy();
+    }
+  });
+
+  it("solo-admin with chatScript: phase1-smoke resolves the neutral scripted model", async () => {
+    const migrationDb = createMigrationOwnerDb();
+    let adminId: string;
+    try {
+      const admin = await migrationDb
+        .selectFrom("app.users")
+        .select(["id"])
+        .where("email", "=", UAT_ADMIN_EMAIL)
+        .executeTakeFirstOrThrow();
+      adminId = admin.id;
+    } finally {
+      await migrationDb.destroy();
+    }
+
+    const aiRepo = new AiRepository();
+    const runner = createAppRuntimeRunner();
+    try {
+      // #1121: earlier it() blocks in this file (admin+data, multi-user) already seeded an
+      // assistant provider for this same fixed admin id, in the same shared, un-reset gate DB.
+      // resolveDefaultProviderId's un-pinned fallback only resolves when the admin owns exactly
+      // one active assistant provider, so neutralize those before seeding the scripted one —
+      // matches the real deployment shape (a fresh solo-admin container has none), doesn't touch
+      // production seed code, and doesn't affect other test files.
+      await runner.withDataContext({ actorUserId: adminId }, async (scopedDb) => {
+        await scopedDb.db
+          .updateTable("app.ai_provider_configs")
+          .set({ status: "disabled" })
+          .where("purpose", "=", "assistant")
+          .execute();
+      });
+
+      await seedLevel({ level: "solo-admin", chatScript: "phase1-smoke" });
+
+      await runner.withDataContext({ actorUserId: adminId }, async (scopedDb) => {
+        const chatModel = await aiRepo.selectChatModelForUser(scopedDb);
+        expect(chatModel).not.toBeNull();
+        expect(chatModel?.provider_kind).toBe("anthropic");
+        expect(chatModel?.capabilities).toContain("chat");
+      });
     } finally {
       await runner.destroy();
     }

@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { isIP } from "node:net";
 
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
@@ -138,6 +139,22 @@ export interface ApiServerConfig {
   readonly externalModulesDir: string;
 }
 
+const TRUST_PROXY_ERROR =
+  'JARVIS_TRUST_PROXY must be unset, "loopback", or a comma-separated list of exact IP addresses';
+
+export function resolveTrustProxy(value: string | undefined): false | string | string[] {
+  const normalized = value?.trim() ?? "";
+  if (!normalized) return false;
+  if (normalized.toLowerCase() === "loopback") return "loopback";
+
+  const addresses = normalized.split(",").map((address) => address.trim());
+  if (addresses.some((address) => !address || isIP(address) === 0)) {
+    throw new Error(TRUST_PROXY_ERROR);
+  }
+
+  return addresses.length === 1 ? addresses[0]! : addresses;
+}
+
 export function hasAuthMaterial(request: FastifyRequest): boolean {
   const authorization = request.headers.authorization;
   const cookie = request.headers.cookie;
@@ -193,6 +210,7 @@ export function discoverExternalModules(
 }
 
 export function createApiServer(options: CreateApiServerOptions = {}) {
+  const trustProxy = resolveTrustProxy(resolveMossEnv(process.env, "JARVIS_TRUST_PROXY"));
   const apiServerConfig = options.apiServerConfig ?? resolveApiServerConfig();
   const appDb =
     options.appDb ??
@@ -218,7 +236,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     logger: options.logger ?? true,
     // Honor XFF only when an explicit opt-in confirms a trusted reverse proxy is in
     // front. Without this, XFF is attacker-controlled and must not key the rate limiter.
-    trustProxy: !!resolveMossEnv(process.env, "JARVIS_TRUST_PROXY")
+    trustProxy
   });
   const authRuntime =
     options.authRuntime ??
@@ -255,12 +273,13 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     referrerPolicy: { policy: "no-referrer" },
     // Only activate HSTS when we know TLS is in use. Without TLS the header is
     // not just useless — it can lock users out of plain-HTTP LAN access.
-    hsts: resolveMossEnv(process.env, "JARVIS_TRUST_PROXY")
-      ? {
-          maxAge: 31536000,
-          includeSubDomains: true
-        }
-      : false
+    hsts:
+      trustProxy !== false
+        ? {
+            maxAge: 31536000,
+            includeSubDomains: true
+          }
+        : false
   });
 
   // Register rate-limit first, then register all routes inside server.after() so the
@@ -389,7 +408,8 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       resolveAccessContext: authRuntime.resolveAccessContext,
       isModuleActive: async (access, moduleId) =>
         (await getActiveExternalModules(access)).some((module) => module.id === moduleId),
-      rateLimitKey: authPrincipalRateLimitKey
+      rateLimitKey: authPrincipalRateLimitKey,
+      rootDb: appDb
     });
 
     registerClientErrorsRoute(server, {
@@ -685,26 +705,51 @@ export async function shutdownOnSignal(
   exit(0);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
-  const apiServerConfig = resolveApiServerConfig();
-  const server = createApiServer({ apiServerConfig });
-  const port = apiServerConfig.port;
-  const host = apiServerConfig.host;
-
-  const handleCrash = (label: string, err: unknown): void => {
+/**
+ * Crash-handler factory for the api entrypoint (spec §1140-E, #1527). Both
+ * `unhandledRejection` and `uncaughtException` share the closure-local
+ * `crashing` latch below: the first crash notification logs, races a bounded
+ * shutdown, and exits; any later notification in the same window is a no-op,
+ * so a second error can never re-log, re-close, or re-exit.
+ *
+ * Exported (and parameterized with timeout/exit) so it is unit-testable
+ * without spawning the real binary or racing a second real crash.
+ */
+export function createCrashHandler(
+  server: {
+    log: { error(obj: Record<string, unknown>, msg: string): void };
+    close(cb: (err?: Error) => void): void;
+  },
+  opts: { timeoutMs?: number; exit?: (code: number) => never } = {}
+): (label: string, err: unknown) => void {
+  const timeoutMs = opts.timeoutMs ?? 2000;
+  const exit = opts.exit ?? ((code: number) => process.exit(code));
+  let crashing = false;
+  return (label: string, err: unknown): void => {
+    if (crashing) return;
+    crashing = true;
     server.log.error({ err, label }, "Process crash — exiting");
     const drain = Promise.race([
       new Promise<void>((resolve) => {
         server.close(() => resolve());
       }),
       new Promise<void>((resolve) => {
-        setTimeout(resolve, 2000);
+        setTimeout(resolve, timeoutMs);
       })
     ]);
     void drain.then(() => {
-      process.exit(1);
+      exit(1);
     });
   };
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const apiServerConfig = resolveApiServerConfig();
+  const server = createApiServer({ apiServerConfig });
+  const port = apiServerConfig.port;
+  const host = apiServerConfig.host;
+
+  const handleCrash = createCrashHandler(server);
 
   process.on("unhandledRejection", (reason) => {
     handleCrash("unhandledRejection", reason);
@@ -850,8 +895,11 @@ function registerPlatformRoutes(
     } catch (error) {
       const code =
         (error instanceof Error && (error as Error & { code?: string }).code) || undefined;
-      if (code === "account_pending_approval" || code === "account_deactivated") {
-        return reply.code(403).send({ error: (error as Error).message, code });
+      if (code === "account_pending_approval") {
+        return reply.code(403).send({ error: "Account is pending approval", code });
+      }
+      if (code === "account_deactivated") {
+        return reply.code(403).send({ error: "Account has been deactivated", code });
       }
       return reply.code(401).send({ error: "Session is missing or expired" });
     }

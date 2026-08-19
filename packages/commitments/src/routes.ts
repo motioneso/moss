@@ -23,18 +23,26 @@ export function registerCommitmentsRoutes(
   const repo = deps.repository ?? new CommitmentsRepository();
 
   // GET /api/commitments/candidates
+  const candidatesQuerySchema = Type.Object({
+    status: Type.Optional(
+      Type.Union([
+        Type.Literal("pending_review"),
+        Type.Literal("accepted"),
+        Type.Literal("rejected"),
+        Type.Literal("snoozed"),
+        Type.Literal("expired"),
+        Type.Literal("explicit_non_action")
+      ])
+    )
+  });
   app.get(
     "/api/commitments/candidates",
-    { schema: { response: { 200: Type.Array(Type.Any()) } } },
+    { schema: { querystring: candidatesQuerySchema, response: { 200: Type.Array(Type.Any()) } } },
     async (request) => {
       const accessContext = await deps.resolveAccessContext(request);
-      const { status } = request.query as { status?: string };
+      const { status } = request.query as { status?: CommitmentCandidateStatus };
       return deps.dataContext.withDataContext(accessContext, async (scopedDb) => {
-        const candidates = await repo.listCandidates(
-          scopedDb,
-          accessContext.actorUserId,
-          status as CommitmentCandidateStatus | undefined
-        );
+        const candidates = await repo.listCandidates(scopedDb, accessContext.actorUserId, status);
         return candidates.map(safeCandidate);
       });
     }

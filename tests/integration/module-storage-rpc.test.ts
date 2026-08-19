@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { Client } from "pg";
+import { sql } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Kysely } from "kysely";
 
@@ -11,12 +12,15 @@ import {
   ensureModuleRoles,
   generateModuleTableRlsSql,
   ModuleQueryError,
+  moduleRuntimeRoleName,
   type MossDatabase
 } from "@moss/db";
 import {
   connectionStrings,
   dropModuleRolesAtTeardown,
-  resetEmptyFoundationDatabase
+  grantModuleMembershipAtSetup,
+  resetEmptyFoundationDatabase,
+  revokeModuleMembershipAtTeardown
 } from "./test-database.js";
 
 const moduleId = "storage-rpc-fixture";
@@ -41,12 +45,14 @@ describe("createModuleStorageRpc", () => {
       ])) {
         await client.query(statement);
       }
-      await client.query(
-        "GRANT jarvis_mod_storage_rpc_fixture_runtime TO jarvis_app_runtime WITH INHERIT FALSE"
-      );
     } finally {
       await client.end();
     }
+
+    // Membership writes pg_auth_members, which is cluster-global — locked (#1013).
+    await grantModuleMembershipAtSetup([
+      "GRANT jarvis_mod_storage_rpc_fixture_runtime TO jarvis_app_runtime WITH INHERIT FALSE"
+    ]);
 
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 2 });
     dataContext = new DataContextRunner(appDb);
@@ -55,10 +61,15 @@ describe("createModuleStorageRpc", () => {
   afterAll(async () => {
     await appDb.destroy();
 
+    // Cluster-global, and it must precede the per-database revokes below: Postgres refuses to
+    // revoke a grant-option privilege while a dependent downstream grant still exists (#1013).
+    await revokeModuleMembershipAtTeardown([
+      "REVOKE jarvis_mod_storage_rpc_fixture_runtime FROM jarvis_app_runtime"
+    ]);
+
     const client = new Client({ connectionString: connectionStrings.bootstrap });
     await client.connect();
     try {
-      await client.query("REVOKE jarvis_mod_storage_rpc_fixture_runtime FROM jarvis_app_runtime");
       await client.query("DROP TABLE IF EXISTS app.storage_rpc_fixture_items");
       // Revoke the runtime role's grants (sourced from the install role's WITH GRANT OPTION)
       // BEFORE revoking the install role's own — Postgres refuses to revoke a grant-option
@@ -78,7 +89,7 @@ describe("createModuleStorageRpc", () => {
       await client.query(
         "REVOKE EXECUTE ON FUNCTION app.current_actor_user_id() FROM jarvis_mod_storage_rpc_fixture_install"
       );
-      await dropModuleRolesAtTeardown(client, [
+      await dropModuleRolesAtTeardown([
         "jarvis_mod_storage_rpc_fixture_install",
         "jarvis_mod_storage_rpc_fixture_runtime"
       ]);
@@ -108,6 +119,18 @@ describe("createModuleStorageRpc", () => {
       const rpc = createModuleStorageRpc(scopedDb, moduleId);
       const result = await rpc.query("SELECT label FROM app.storage_rpc_fixture_items");
       expect(result.rows).toEqual([]); // RLS hides the other actor's row
+    });
+  });
+
+  it("binds the runtime role during the call and resets it after", async () => {
+    const owner = randomUUID();
+    await dataContext.withDataContext({ actorUserId: owner }, async (scopedDb) => {
+      const rpc = createModuleStorageRpc(scopedDb, moduleId);
+      const bound = await rpc.query<{ current_user: string }>("SELECT current_user");
+      expect(bound.rows[0]?.current_user).toBe(moduleRuntimeRoleName(moduleId));
+
+      const after = await sql<{ current_user: string }>`select current_user`.execute(scopedDb.db);
+      expect(after.rows[0]?.current_user).toBe("jarvis_app_runtime");
     });
   });
 

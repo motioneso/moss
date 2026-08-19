@@ -50,7 +50,8 @@ test("desktop shell renders grouped IA, merged panes, and history-aware mode cha
   for (const group of ["Your account", "Moss", "Connections", "Extensions"]) {
     await expect(nav.getByText(group, { exact: true })).toBeVisible();
   }
-  await expect(nav.getByRole("button")).toHaveCount(10);
+  await expect(nav.getByRole("button")).toHaveCount(11);
+  await expect(nav.getByRole("button", { name: "Recently Released" })).toBeVisible();
   await expect(nav.getByRole("button", { name: "Profile & account" })).toHaveCount(0);
   await expect(nav.getByRole("button", { name: "General" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Account & preferences" })).toBeVisible();
@@ -103,9 +104,9 @@ test("short desktop rail reaches its final destination by keyboard", async ({ pa
 
   const nav = page.getByRole("navigation", { name: "Settings categories" });
   const first = nav.getByRole("button", { name: "Account & preferences" });
-  const last = nav.getByRole("button", { name: "Skills" });
+  const last = nav.getByRole("button").last();
   await first.focus();
-  for (let index = 0; index < 9; index += 1) await page.keyboard.press("Tab");
+  for (let index = 0; index < 10; index += 1) await page.keyboard.press("Tab");
   await expect(last).toBeFocused();
   await expect(last).toBeInViewport();
   await expect(page.getByRole("heading", { name: "Account & preferences" })).toBeVisible();
@@ -216,4 +217,63 @@ test("modules preserve list/detail URL recovery for legacy and contributed setti
     .click();
   await expect(page).toHaveURL(/\?section=modules$/);
   await expect(page.getByRole("heading", { name: "Modules" })).toBeVisible();
+});
+
+test("data export resumes across remount and clears on new/expired job", async ({ page }) => {
+  await mockSettingsApi(page);
+
+  let job1Status: "pending" | "building" | "ready" = "pending";
+  let postCount = 0;
+  await page.route("**/api/me/export", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    postCount += 1;
+    job1Status = "building";
+    await route.fulfill({ json: { jobId: "job-1", status: "pending" } });
+  });
+  await page.route("**/api/me/export/status/job-1", (route) =>
+    route.fulfill({ json: { jobId: "job-1", status: job1Status } })
+  );
+
+  await page.goto("/settings");
+  const nav = page.getByRole("navigation", { name: "Settings categories" });
+
+  // 1. Baseline: start an export, building state renders.
+  await page.getByRole("button", { name: "Prepare export" }).click();
+  await expect(page.getByText("Building your archive…")).toBeVisible();
+  expect(postCount).toBe(1);
+
+  // 2. Remount DataExport by navigating away and back; the job resumes, no second POST.
+  await nav.getByRole("button", { name: "Modules" }).click();
+  await nav.getByRole("button", { name: "Account & preferences" }).click();
+  await expect(page.getByText("Building your archive…")).toBeVisible();
+  expect(postCount).toBe(1);
+
+  // 3. Once ready, the Download link targets the resumed job id.
+  job1Status = "ready";
+  await expect(page.getByRole("link", { name: "Download" })).toHaveAttribute(
+    "href",
+    "/api/me/export/download/job-1"
+  );
+
+  // 4. "Prepare a new export" clears the persisted id, not just in-memory state.
+  await page.getByRole("button", { name: "Prepare a new export" }).click();
+  await nav.getByRole("button", { name: "Modules" }).click();
+  await nav.getByRole("button", { name: "Account & preferences" }).click();
+  await expect(page.getByRole("button", { name: "Prepare export" })).toBeVisible();
+  expect(
+    await page.evaluate(() => window.sessionStorage.getItem("moss.settings.export-job-id"))
+  ).toBeNull();
+
+  // 5. A resumed-but-gone job (404) falls back to idle and clears storage.
+  await page.addInitScript(() => {
+    window.sessionStorage.setItem("moss.settings.export-job-id", "job-2");
+  });
+  await page.route("**/api/me/export/status/job-2", (route) =>
+    route.fulfill({ status: 404, json: { message: "not found" } })
+  );
+  await page.goto("/settings");
+  await expect(page.getByRole("button", { name: "Prepare export" })).toBeVisible();
+  expect(
+    await page.evaluate(() => window.sessionStorage.getItem("moss.settings.export-job-id"))
+  ).toBeNull();
 });

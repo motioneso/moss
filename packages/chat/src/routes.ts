@@ -27,6 +27,7 @@ import {
   type SessionNotifier
 } from "@moss/ai";
 import { PreferencesRepository } from "@moss/structured-state";
+import type { NotesRecallPort } from "@moss/notes";
 import { getConnectorSyncAt } from "@moss/connectors";
 import type {
   ConnectorsRepository,
@@ -101,6 +102,7 @@ export interface ChatRoutesDependencies {
   /** pg-boss for enqueueing embed/extract-facts jobs after each completed turn. */
   readonly boss?: PgBoss;
   readonly passiveMemoryRecall?: PassiveMemoryGraphRecallPort;
+  readonly notesRecall?: NotesRecallPort;
   readonly personaPreferences?: PersonaPreferencesPort;
   readonly chatPreferences?: PreferencesPort;
   readonly localePreferences?: PreferencesPort;
@@ -147,6 +149,22 @@ export interface ChatRoutesDependencies {
   readonly adoptDropSessionsForProvider?: (
     dropSessionsForProvider: (provider: ProviderKind) => Promise<void>
   ) => void;
+  // #1256 — publishes the wiring's live AssistantToolGateway back to the composition root so the
+  // ai module's assistant-action resolve route can go through the same confirmation-registry gate
+  // as this module's own action-requests resolve path, instead of two divergent implementations.
+  readonly adoptChatGateway?: (gateway: AssistantToolGateway) => void;
+  /**
+   * #1554 task #6 — same late-bound "adopt" seam as {@link adoptChatRpcConnection}/
+   * {@link adoptDropSessionsForProvider}, publishing the wiring closure's
+   * `SessionTokenRegistry.revokeBySessionId` (built inside this function, when `wiring` is
+   * constructed) back to the composition root. `module-registry/src/index.ts` forwards it into
+   * `chat-multiplexer.ts`'s `resolveChatEngineFactory` as `onPersistentReap`'s target, so the
+   * persistent-runtime pool's idle-reap/LRU-evict sweep revokes the reaped session's MCP token —
+   * closing task #5's documented gap (that pool is constructed in `runtime.ts`, one layer below
+   * this file, via `resolveChatEngineFactory` → `createRealEngineFactory`). No-op when no gateway
+   * is wired (`wiring === null`, i.e. no `resolveActiveModules`/`mcpServerUrl` supplied).
+   */
+  readonly adoptMcpTokenRevoke?: (revoke: (chatSessionId: string) => void) => void;
   readonly resolveEveningInterviewSeed?: (
     actorUserId: string,
     briefingRunId?: string
@@ -248,6 +266,8 @@ export function registerChatRoutes(
         })()
       : null;
 
+  if (wiring) dependencies.adoptChatGateway?.(wiring.gateway);
+
   const runtime = createChatSessionRuntime({
     rootDb: dependencies.rootDb,
     dataContext: dependencies.dataContext,
@@ -265,6 +285,7 @@ export function registerChatRoutes(
     // #1414 — wire crossToolGateway so cross-tool reads (email, calendar, task, note, person) produce provenance chips
     crossToolGateway: wiring?.gateway,
     passiveMemoryRecall: dependencies.passiveMemoryRecall,
+    notesRecall: dependencies.notesRecall,
     personaPreferences: dependencies.personaPreferences,
     chatPreferences: dependencies.chatPreferences,
     localePreferences: dependencies.localePreferences,
@@ -312,6 +333,16 @@ export function registerChatRoutes(
   dependencies.adoptDropSessionsForProvider?.((provider) =>
     runtime.manager.dropSessionsForProvider(provider)
   );
+
+  // #1554 task #6: same late-bound "adopt" seam as above, publishing the wiring closure's
+  // `SessionTokenRegistry.revokeBySessionId` so the composition root can thread it into the
+  // persistent-runtime pool's `onPersistentReap` (see `adoptMcpTokenRevoke`'s doc comment).
+  // No-op when no gateway is wired (`wiring === null`).
+  if (wiring) {
+    dependencies.adoptMcpTokenRevoke?.((chatSessionId) =>
+      wiring.tokens.revokeBySessionId(chatSessionId)
+    );
+  }
 
   // Wire real notifier now that manager is available.
   realNotifier = new ChatGatewayNotifier(runtime.manager);

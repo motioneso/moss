@@ -269,3 +269,7 @@
 .set2-note code {
   padding: 1px 5px;
 }
+
+.appearance-theme-mode {
+  margin-bottom: var(--space-4);
+}

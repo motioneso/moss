@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
 
-import { resolveMossEnv, type AccessContext } from "@moss/db";
+import { resolveMossEnv, type AccessContext, type MossDatabase } from "@moss/db";
 import { sendModuleControl, sendModuleJob } from "@moss/jobs";
 import type { ExternalModuleDiscovery } from "@moss/module-registry";
 
@@ -16,6 +17,7 @@ export function registerExternalModuleJobRoutes(
     readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
     readonly isModuleActive: (access: AccessContext, moduleId: string) => Promise<boolean>;
     readonly rateLimitKey?: (request: FastifyRequest) => string;
+    readonly rootDb?: Kysely<MossDatabase>;
   }
 ): void {
   server.post(
@@ -78,7 +80,8 @@ export function registerExternalModuleJobRoutes(
           {
             singletonKey: `manual:${moduleId}:${queueName}:${access.actorUserId}`,
             singletonSeconds: MANUAL_RUN_SINGLETON_SECONDS
-          }
+          },
+          deps.rootDb
         );
         return reply.code(202).send({ jobId });
       } catch (error) {

@@ -226,6 +226,25 @@ describe("BriefingActionRowsSection", () => {
     expect(linkless).not.toContain(">View<");
   });
 
+  it("View renders from primaryAction.href, not sourceHref", () => {
+    const html = renderSection({
+      run: run({
+        rows: [
+          actionRow({
+            taskId: "task-suggested",
+            category: "needs_action",
+            sourceHref: null,
+            primaryAction: { kind: "view", href: "https://mail.example.com/thread/99" }
+          })
+        ]
+      }),
+      tasks: [task({ id: "task-suggested", status: "suggested" })]
+    });
+
+    expect(html).toContain('href="https://mail.example.com/thread/99"');
+    expect(html).toContain(">View<");
+  });
+
   it("renders authored loading empty stale and catch-up states", () => {
     const loading = renderSection({ run: null, tasks: [], loading: true });
     expect(loading).toContain("Checking what needs you…");

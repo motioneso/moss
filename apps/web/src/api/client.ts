@@ -340,8 +340,19 @@ export async function putSourceBehavior(
   );
 }
 
+/** Bounded so a hung persona read can never trap the app shell (mirrors ONBOARDING_STATUS_TIMEOUT_MS). */
+const PERSONA_SETTINGS_TIMEOUT_MS = 4000;
+
 export async function getPersonaSettings(): Promise<GetPersonaSettingsResponse> {
-  return requestJson<GetPersonaSettingsResponse>("/api/me/persona");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PERSONA_SETTINGS_TIMEOUT_MS);
+  try {
+    return await requestJson<GetPersonaSettingsResponse>("/api/me/persona", {
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function putPersonaSettings(
@@ -1147,8 +1158,9 @@ export async function putChatModelOverride(
   });
 }
 
-export async function switchChatProvider(): Promise<void> {
-  await requestJson<{ ok: true }>("/api/chat/switch", { method: "POST" });
+export async function switchChatProvider(surface?: ChatSurface): Promise<void> {
+  const query = surface ? `?surface=${encodeURIComponent(surface)}` : "";
+  await requestJson<{ ok: true }>(`/api/chat/switch${query}`, { method: "POST" });
 }
 
 export async function putAdminChatModelOverrideEnabled(

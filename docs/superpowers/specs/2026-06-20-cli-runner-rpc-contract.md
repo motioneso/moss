@@ -422,7 +422,7 @@ those paths are meaningless cross-container). The in-process `CliChatEngineImpl`
 > ON; set `0` only when UID-separation #347 lands). Added error path reusing the existing `unavailable` code
 > — **NO wire-contract change.** Owner: **Lane B** (cli-runner server).
 
-**Liveness is measured on DISK, not in the Map (CRITICAL — this is the property the gate guarantees).** The
+**Liveness is measured from DISK-backed MUX state plus the server's in-memory reservations and engine registry (CRITICAL — this is the property the gate guarantees).** The
 safety property is _no two users' `0600` token dirs co-resident_ under `<JARVIS_CLI_NEUTRAL_BASE>`. The
 in-memory `Map<sessionKey, engine>` is **NOT** a sufficient liveness signal: across an unclean cli-runner
 **restart** the Map is empty while the prior session's `jarv1s-live-*` mux session **and its on-disk `0600`
@@ -430,13 +430,11 @@ token dir survive** (§6.5 cleans dirs only on `kill`/failed-launch, never on re
 `launch` would then pass a Map-only gate while the prior token dir is still resident — exactly the
 co-residency #347 forbids. Therefore the gate is frozen as:
 
-1. **`liveKeys` = the MUX ENUMERATION ∪ the SERVER's in-flight-launch RESERVATION set — never the engine
-   `Map`, never the api's `launching` map.** The api-side `launching` map (§5.4) is **invisible to the
+1. **`liveKeys` = the MUX ENUMERATION ∪ the SERVER's in-flight-launch RESERVATION set ∪ engine-registry keys — never the engine `Map` alone, never the api's `launching` map.** The api-side `launching` map (§5.4) is **invisible to the
    cli-runner server** and MUST NOT be relied on; the server keeps its **own** `Set<sessionKey>` of in-flight
    launches. Admission runs in a **single global async-critical-section** — one server-wide mutex, **NOT** the
    §4.0 per-`sessionKey` queue (which does not serialize _cross_-key launches; §3.4 forbids assuming the client
-   serializes). Holding the mutex, the server computes `liveKeys = listLiveSessions-by-mux (§4.6) ∪
-reservations`; if any key `≠ K` is present it releases the mutex and returns `unavailable`; otherwise it
+   serializes). Holding the mutex, the server computes `liveKeys = listLiveSessions-by-mux (§4.6) ∪ reservations ∪ engine-registry keys`; if any key `≠ K` is present it releases the mutex and returns `unavailable`; otherwise it
    **atomically adds `K` to `reservations`**, releases the mutex, and only THEN creates the mux session outside
    the lock. `K` is removed from `reservations` on mux-create success **or** on any launch failure (a
    `finally`). **The out-of-lock mux-create + launch MUST be bounded by a timeout** (e.g. the existing

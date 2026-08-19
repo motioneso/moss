@@ -94,7 +94,7 @@ jobs:
   verify:
     name: Verify foundation and app
     runs-on: ubuntu-latest
-    timeout-minutes: 35 # stopgap: branch VF runs ~+75% vs main, no hang confirmed (see #1127)
+    timeout-minutes: 45 # #1534: phase deadlines preserve fast failure within this backstop
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
 
@@ -120,7 +120,13 @@ jobs:
         run: pnpm db:up
 
       - name: Verify foundation
-        run: pnpm verify:foundation
+        run: |
+          status=0
+          timeout --verbose --signal=TERM 30m pnpm verify:foundation || status=$?
+          if [ "$status" -eq 124 ]; then
+            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=verify-foundation budget=30m issue=#1534"
+          fi
+          exit "$status"
 
       - name: Verify release hardening
         run: pnpm test:release-hardening
@@ -135,7 +141,13 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Run Playwright smoke tests
-        run: pnpm test:e2e
+        run: |
+          status=0
+          timeout --verbose --signal=TERM 10m pnpm test:e2e || status=$?
+          if [ "$status" -eq 124 ]; then
+            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=playwright budget=10m issue=#1534"
+          fi
+          exit "$status"
 
       - name: Stop database
         if: always()
@@ -239,6 +251,40 @@ jobs:
       - name: Stop prod compose stack
         if: always()
         run: JARVIS_IMAGE_TAG=ci-${{ github.run_id }} JARVIS_ENV_FILE=./env.production.local POSTGRES_PASSWORD=postgres JARVIS_CLI_RUNNER_RPC_SECRET=ci-smoke-only-not-real docker compose -p jarv1s-prod-smoke -f infra/docker-compose.prod.yml down -v
+
+  # #895: the single required status check. `docs-gate`/`verify`/`compose-smoke`/
+  # `prod-compose-smoke` are each conditional on `docs_only`, so exactly one of
+  # `docs-gate` vs. the other three actually runs on any given PR — naming an
+  # individual job as required would deadlock whichever path skips it. This job
+  # aggregates all of them under one name that is correct on both paths and fails
+  # closed on `cancelled` (a 35-minute job timeout in this repo, not a benign skip).
+  ci-gate:
+    name: CI gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [changes, docs-gate, verify, compose-smoke, prod-compose-smoke]
+    if: always()
+
+    steps:
+      - name: Check required job results
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          failed=""
+          for job in changes docs-gate verify compose-smoke prod-compose-smoke; do
+            result=$(echo "$NEEDS_JSON" | jq -r --arg job "$job" '.[$job].result')
+            echo "$job: $result"
+            case "$result" in
+              success|skipped) ;;
+              *) failed="$failed $job=$result" ;;
+            esac
+          done
+          if [ -n "$failed" ]; then
+            echo "::error title=CI gate failed::Required job(s) did not pass:$failed"
+            exit 1
+          fi
+          echo "All required jobs passed or were skipped."
 
   publish:
     name: Build and publish images

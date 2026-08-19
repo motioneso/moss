@@ -1,9 +1,11 @@
 import type { ToolExecute, ToolResult } from "@moss/module-sdk";
+import { assertDataContextDb } from "@moss/db";
 import { CommitmentsRepository } from "./repository.js";
 
 const repo = new CommitmentsRepository();
 
 export const commitmentListExecute: ToolExecute = async (scopedDb, input, ctx) => {
+  assertDataContextDb(scopedDb);
   const candidates = await repo.listCandidates(scopedDb, ctx.actorUserId, "pending_review");
   const items = candidates.map((c) => ({
     id: c.id,
@@ -20,6 +22,7 @@ export const commitmentListExecute: ToolExecute = async (scopedDb, input, ctx) =
 };
 
 export const commitmentGetExecute: ToolExecute = async (scopedDb, input, ctx) => {
+  assertDataContextDb(scopedDb);
   const { candidateId } = input as { candidateId: string };
   const candidate = await repo.getCandidate(scopedDb, ctx.actorUserId, candidateId);
   if (!candidate) return { data: { error: "Not found" } } satisfies ToolResult;
@@ -45,18 +48,21 @@ export const commitmentGetExecute: ToolExecute = async (scopedDb, input, ctx) =>
 };
 
 export const commitmentAcceptExecute: ToolExecute = async (scopedDb, input, ctx) => {
+  assertDataContextDb(scopedDb);
   const { candidateId } = input as { candidateId: string };
   const candidate = await repo.updateStatus(scopedDb, ctx.actorUserId, candidateId, "accepted");
   return { data: { id: candidate.id, status: candidate.status } } satisfies ToolResult;
 };
 
 export const commitmentRejectExecute: ToolExecute = async (scopedDb, input, ctx) => {
+  assertDataContextDb(scopedDb);
   const { candidateId } = input as { candidateId: string };
   const candidate = await repo.updateStatus(scopedDb, ctx.actorUserId, candidateId, "rejected");
   return { data: { id: candidate.id, status: candidate.status } } satisfies ToolResult;
 };
 
 export const commitmentSnoozeExecute: ToolExecute = async (scopedDb, input, ctx) => {
+  assertDataContextDb(scopedDb);
   const { candidateId, snoozedUntil } = input as { candidateId: string; snoozedUntil: string };
   const candidate = await repo.updateStatus(
     scopedDb,

@@ -28,17 +28,20 @@ import type {
   EngineKillOpts,
   TranscriptRecord
 } from "./types.js";
+import type { ReapReason } from "./provider-runtime.js";
+import { applyRemoteReap, countSubscribersFor, delay } from "./session-runtime-helpers.js";
 import type { PriorityModelPreferenceV1 } from "@moss/priority";
+import type { NotesContextRetriever } from "./notes-retrieval.js";
 import {
   DEFAULT_CHAT_SURFACE,
   normalizeChatSurface,
-  parseSurfaceSessionKey,
   surfaceSessionKey,
   type ChatSurface
 } from "./chat-surface.js";
 
 export {
   combineHiddenContextBlocks,
+  renderNotesContextBlock,
   renderReplayBlock,
   renderSummaryBlock
 } from "./chat-context-blocks.js";
@@ -59,7 +62,7 @@ export interface ChatSessionManagerDeps {
     provider: ProviderKind,
     sessionKey: string,
     opts?: { readonly executionMode?: AiProviderExecutionMode }
-  ) => CliChatEngine;
+  ) => CliChatEngine | Promise<CliChatEngine>;
   readonly persistence: ChatPersistencePort;
   readonly personaFs: PersonaFs;
   readonly clock: Clock;
@@ -67,7 +70,9 @@ export interface ChatSessionManagerDeps {
   /** Base dir for renderPersona (per-user neutral dirs are created under it). */
   readonly neutralBase: string;
   /** Persona text (may contain a {{userName}} token). */
-  readonly persona: string | ((actorUserId: string, userName: string) => Promise<string>);
+  readonly persona:
+    | string
+    | ((actorUserId: string, userName: string, surface: ChatSurface) => Promise<string>);
   /** Delay between readNew polls (default 25ms; tests pass 0). */
   readonly pollMs?: number;
   /**
@@ -114,6 +119,7 @@ export interface ChatSessionManagerDeps {
   readonly recall?: RecallPort;
   /** Optional per-turn hidden context retrieval. Empty/failed result submits the raw turn. */
   readonly passiveRetrieval?: PassiveRetrievalPort;
+  readonly notesRetrieval?: Pick<NotesContextRetriever, "retrieveWithItems">;
   readonly crossToolRead?: CrossToolReadRunner;
   readonly priorityModel?: { getModel(actorUserId: string): Promise<PriorityModelPreferenceV1> };
   /**
@@ -213,23 +219,23 @@ export class ChatSessionManager {
     opts: { readonly forceReplay?: boolean } | undefined,
     surface: ChatSurface
   ): Promise<UserSession> {
+    const sessionKey = surfaceSessionKey(actorUserId, surface);
     const { provider, model, executionMode } =
       await this.deps.persistence.resolveActiveProvider(actorUserId);
     const persona =
       typeof this.deps.persona === "string"
         ? this.deps.persona
-        : await this.deps.persona(actorUserId, userName);
+        : await this.deps.persona(actorUserId, userName, surface);
 
     const { neutralDir, personaPath } = await renderPersona(this.deps.personaFs, {
-      userId: actorUserId,
+      sessionKey,
       userName,
       provider,
       baseDir: this.deps.neutralBase,
       persona
     });
 
-    const sessionKey = surfaceSessionKey(actorUserId, surface);
-    const engine = this.deps.engineFactory(provider, sessionKey, { executionMode });
+    const engine = await this.deps.engineFactory(provider, sessionKey, { executionMode });
 
     // Rebuild replay from live state for every launch; recall precedes conversation replay.
     const recallResult = this.deps.recall ? await this.deps.recall.recall(actorUserId) : null;
@@ -413,6 +419,7 @@ export class ChatSessionManager {
         {
           persistence: this.deps.persistence,
           passiveRetrieval: this.deps.passiveRetrieval,
+          notesRetrieval: this.deps.notesRetrieval,
           crossToolRead: this.deps.crossToolRead,
           priorityModel: this.deps.priorityModel
         },
@@ -858,6 +865,13 @@ export class ChatSessionManager {
     });
   }
 
+  /** #1554 Decision 2 — api-side half of a `sessionReaped` push; see `applyRemoteReap`. */
+  async handleRemoteReap(sessionKey: string, _reason: ReapReason): Promise<void> {
+    await this.withMaintenanceLock(async () =>
+      applyRemoteReap(this.sessions, this.deps.revokeMcpToken, sessionKey)
+    );
+  }
+
   /** Wire the production idle reaper. Returns a stop handle that clears the interval. */
   startIdleReaper(intervalMs: number = this.deps.idleMs): () => void {
     const handle = setInterval(() => {
@@ -893,17 +907,7 @@ export class ChatSessionManager {
   }
 
   private countSubscribers(actorUserId: string): number {
-    let count = 0;
-    for (const [sessionKey, subscribers] of this.subscribers) {
-      try {
-        if (parseSurfaceSessionKey(sessionKey).actorUserId === actorUserId) {
-          count += subscribers.size;
-        }
-      } catch {
-        // A malformed external reconciliation key cannot belong to this actor.
-      }
-    }
-    return count;
+    return countSubscribersFor(this.subscribers, actorUserId);
   }
 
   private schedulePrivateEnd(actorUserId: string, surface: ChatSurface): void {
@@ -989,8 +993,4 @@ export class ChatSessionManager {
     }
     return offset;
   }
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

@@ -11,6 +11,7 @@ export { CORE_VERSION, compareMossVersions, satisfiesCoreVersion } from "./core-
 
 export { createModuleLogger } from "./logger.js";
 export * from "./module-params.js";
+export type { VaultIngestRootProvider } from "./vault-ingest-provider.js";
 
 import type { ModuleExternalSourceManifest } from "./external-module.js";
 
@@ -528,10 +529,18 @@ export interface ModuleAssistantToolManifest {
    */
   readonly selfOperationGrant?: ModuleAssistantToolSelfOperationGrant;
   readonly inputSchema?: JsonSchema;
+  /** Set only by the trusted registry boundary; never accepted from an external manifest. */
+  readonly isExternal?: boolean;
   readonly outputSchema?: JsonSchema;
   readonly featureFlagId?: string;
   readonly execute?: ToolExecute;
   readonly summarize?: ToolSummarize;
+  /**
+   * Optional human-authored label for the approval-card summary (e.g. "Update your job search
+   * criteria"), used when the tool declares no `summarize` function. Falls back to the tool's
+   * `name` when unset — see gateway.ts `summaryFor()`.
+   */
+  readonly actionLabel?: string;
   /**
    * Optional per-call override of the run/confirm policy decision (see ToolRequiresConfirmation).
    * Forces "confirm" for calls where it returns true, regardless of actionFamilyId tier — the

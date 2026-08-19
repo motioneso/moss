@@ -176,8 +176,8 @@ after all seven children merge and the final zero-residue measurement is attache
   `pnpm exec vitest run tests/unit/check-design-tokens.test.ts` pass. Child E also runs
   `pnpm exec vitest run tests/unit/check-ui-classes.test.ts` for package-style discovery.
 - For children A–F, the moved selectors retain the same computed visual values at desktop and mobile
-  widths. The PR records before/after computed-style and layout assertions from the real browser
-  path; no intentional pixel change is accepted under this issue. Child G does not move CSS; it owns the focused failing guard
+  widths. The PR records before/after screenshots from the real browser path; no intentional pixel
+  change is accepted under this issue. Child G does not move CSS; it owns the focused failing guard
   fixture and the broad final browser comparison over the accumulated A–F moves.
 - No class, component, markup, token value, or user-facing behavior changes.
 - The package destination and every source CSS file remain below the 1000-line gate.
@@ -195,7 +195,7 @@ Focused browser proof by child:
 - **E:** the Job Search keyline surface plus one full-page texture check, in light and dark mode.
 - **F:** auth, desktop app shell, mobile rail, and one content route in light and dark mode.
 - **G:** the unlisted failing fixture, a green real-tree guard run, and a broad
-  focused Playwright DOM/computed-style comparison in light and dark mode. This is the final proof of the global
+  `pnpm capture:screens` comparison in light and dark mode. This is the final proof of the global
   selectors and the accumulated extraction, not a second CSS-editing session.
 
 The work is intended to be visually inert, but the UI-consolidation D6 gate still applies: CSS
@@ -230,7 +230,7 @@ completion evidence.
 ## Risks and stops
 
 - **Cascade drift:** extracted package styles load through an earlier import. Computed-style or
-  layout-metric drift is a blocker, not permission to tweak values until the values look close.
+  screenshot drift is a blocker, not permission to tweak values until the picture looks close.
 - **Shorthand drift:** moving `border`, `background`, or `font-*` away from related longhands can
   alter the result. Preserve effective order or keep the coupled declarations together in the
   visual destination.

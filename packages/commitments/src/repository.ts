@@ -1,4 +1,5 @@
 import { assertDataContextDb } from "@moss/db";
+import { sql } from "kysely";
 import type {
   CommitmentCandidate,
   CommitmentCandidateSource,
@@ -20,27 +21,6 @@ export class CommitmentsRepository {
     assertDataContextDb(scopedDb);
     const now = new Date();
 
-    const existing = await scopedDb.db
-      .selectFrom("app.commitment_candidates as c")
-      .selectAll()
-      .where("c.owner_user_id", "=", input.ownerUserId)
-      .where("c.candidate_signature", "=", input.candidateSignature)
-      .executeTakeFirst();
-
-    if (existing) {
-      const updated = await scopedDb.db
-        .updateTable("app.commitment_candidates")
-        .set({
-          last_seen_at: now,
-          source_count: existing.source_count + 1,
-          updated_at: now
-        })
-        .where("id", "=", existing.id)
-        .returningAll()
-        .executeTakeFirstOrThrow();
-      return rowToCandidate(updated);
-    }
-
     const row = await scopedDb.db
       .insertInto("app.commitment_candidates")
       .values({
@@ -56,6 +36,13 @@ export class CommitmentsRepository {
         first_seen_at: now,
         last_seen_at: now
       })
+      .onConflict((oc) =>
+        oc.columns(["owner_user_id", "candidate_signature"]).doUpdateSet({
+          source_count: sql<number>`app.commitment_candidates.source_count + 1`,
+          last_seen_at: now,
+          updated_at: now
+        })
+      )
       .returningAll()
       .executeTakeFirstOrThrow();
 
