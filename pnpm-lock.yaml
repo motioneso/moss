@@ -1039,6 +1039,9 @@ importers:
       '@moss/priority':
         specifier: workspace:*
         version: link:../priority
+      '@moss/ui':
+        specifier: workspace:*
+        version: link:../ui
       '@tanstack/react-query':
         specifier: ^5.0.0
         version: 5.101.0(react@19.2.7)
