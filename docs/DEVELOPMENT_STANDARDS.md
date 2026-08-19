@@ -31,6 +31,25 @@ pnpm typecheck
 
 `pnpm verify:foundation` includes these checks before migrations and integration tests.
 
+### Dispatching a subagent
+
+A subagent verifies exactly what its brief names and nothing more, so **the brief must carry the
+gate's own checks** — scoped to the files it touches:
+
+```txt
+npx tsc --noEmit > /tmp/tsc.log 2>&1; echo "TSC=$?"
+npx eslint <files touched> --max-warnings=0 > /tmp/lint.log 2>&1; echo "LINT=$?"
+```
+
+Root `tsc` matters even when the module typechecks: a module's own `tsconfig` does not cover
+`tests/`, so a test file can be green under it and fail the gate. Scoped `eslint` runs in seconds.
+
+Two Food-module subagents (2026-08-19) reported TSC=0, FMT=0 and 39 passing tests, and
+`verify:foundation` still failed at step 1 of 15 — an unused import, an `eslint-disable` for a rule
+not configured under `external-modules/`, and a `possibly undefined` only root `tsc` sees. The
+brief had named vitest and prettier, so the agents did precisely what was asked. A brief naming 2
+of the gate's 15 steps leaves the other 13 to be discovered the expensive way.
+
 ## Live-Path Gate (CI-green is not done)
 
 Do not request, capture, attach, or review screenshots for this gate. Use executable assertions and

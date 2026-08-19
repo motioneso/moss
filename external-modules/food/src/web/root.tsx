@@ -54,7 +54,6 @@ function useToolQuery<T extends Record<string, unknown>>(
     };
     // inputKey stands in for `input` (a fresh object identity every render);
     // `name` is effectively constant per call site.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name, inputKey]);
   return state;
 }

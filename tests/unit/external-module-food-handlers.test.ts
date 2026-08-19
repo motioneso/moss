@@ -24,7 +24,7 @@ import { join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
-import type { CaptureKind, Meal, Nutrients } from "../../external-modules/food/src/domain/meal.js";
+import type { Meal, Nutrients } from "../../external-modules/food/src/domain/meal.js";
 import {
   createMealsListHandler,
   createMealsLogHandler,
@@ -273,7 +273,7 @@ describe("food.meals.log — test 1: meal persists before/despite estimation fai
     await expect(createMealsLogHandler(store)(ctx)).rejects.toThrow("network blip");
     expect(store.meals.size).toBe(1);
     const [meal] = [...store.meals.values()];
-    expect(meal.estimateState).toBe("pending"); // recordEstimate never ran
+    expect(meal?.estimateState).toBe("pending"); // recordEstimate never ran
   });
 });
 
