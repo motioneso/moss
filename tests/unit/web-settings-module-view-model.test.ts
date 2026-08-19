@@ -16,6 +16,7 @@ const moduleRow = (input: Partial<SettingsModule> = {}): SettingsModule => ({
   instanceDisabled: false,
   userDisabled: false,
   active: true,
+  hasPreferences: false,
   ...input
 });
 

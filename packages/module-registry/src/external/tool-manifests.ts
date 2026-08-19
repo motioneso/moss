@@ -42,6 +42,9 @@ export function createExternalToolManifests(
       compatibility: module.manifest.compatibility,
       assistantOnboarding: module.manifest.assistantOnboarding,
       assistantActionFamilies: module.manifest.assistantActionFamilies,
+      // #1725: carried through so the settings list can offer a "Configure" link without
+      // asking every installed module for its preferences one at a time.
+      preferences: module.manifest.preferences,
       availability: {
         defaultEnabled: false,
         supportsUserDisable: module.manifest.lifecycle === "user-toggleable"

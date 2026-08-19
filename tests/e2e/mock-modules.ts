@@ -170,7 +170,8 @@ export const myModulesResponse: ListMyModulesResponse = {
     supportsUserDisable: module.lifecycle === "user-toggleable",
     instanceDisabled: false,
     userDisabled: false,
-    active: true
+    active: true,
+    hasPreferences: false
   }))
 };
 
@@ -263,7 +264,8 @@ export async function mockExternalWebModule(page: Page): Promise<void> {
           supportsUserDisable: true,
           instanceDisabled: false,
           userDisabled: false,
-          active: true
+          active: true,
+          hasPreferences: false
         }
       ]
     };

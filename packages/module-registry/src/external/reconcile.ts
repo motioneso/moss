@@ -29,7 +29,11 @@ export function reconcileExternalModules(
       web: manifest.web ?? null,
       // #1019: default to [] so every reconciled module has a navigation array — downstream
       // code (serializeExternalModule, buildShellNavigation) never needs an undefined check.
-      navigation: manifest.navigation ?? []
+      navigation: manifest.navigation ?? [],
+      // #1725: same default-to-[] reasoning as navigation above — the preferences route
+      // and the settings pane can then treat "declares none" and "declares an empty list"
+      // identically without an undefined check.
+      preferences: manifest.preferences ?? []
     };
     const row = rowsById.get(id);
 

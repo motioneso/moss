@@ -1,6 +1,10 @@
 // Node-free shared types for external module discovery (#917). Kept out of node.ts so
 // the browser entry (index.ts) and the pure reconcile step can import them too.
-import type { ExternalModuleNavigationEntry, JsonMossModuleManifest } from "@moss/module-sdk";
+import type {
+  ExternalModuleNavigationEntry,
+  ExternalModulePreferenceDeclaration,
+  JsonMossModuleManifest
+} from "@moss/module-sdk";
 
 /** A validated, on-disk external module: its metadata-only manifest + content hashes. */
 export interface ExternalModuleDiscovery {
@@ -48,6 +52,10 @@ export interface ReconciledExternalModule {
   // metadata-only module. apps/api/src/server.ts serializeExternalModule maps + prefixes
   // these into the wire-shape ModuleNavigationEntryDto.
   readonly navigation: readonly ExternalModuleNavigationEntry[];
+  // #1725: on/off switches this module offers; always present, [] when it declares none.
+  // The host owns both the rendering and the storage — see the preferences routes in
+  // apps/api/src/routes/module-preferences.ts.
+  readonly preferences: readonly ExternalModulePreferenceDeclaration[];
 }
 
 export interface ExternalReconcileResult {
