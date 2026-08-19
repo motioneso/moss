@@ -43,6 +43,20 @@ export interface DeleteEventResult {
   readonly message?: string;
 }
 
+export interface RescheduleEventInput {
+  readonly eventRef: string; // moss id or external id, resolved via event-resolver
+  readonly newStart: Date;
+  readonly newEnd: Date;
+}
+
+export type RescheduleEventResult =
+  | { readonly ok: true; readonly calendarEventId: string }
+  | {
+      readonly ok: false;
+      readonly reason: "not_found" | "has_attendees" | "no_scope" | "provider_error";
+      readonly message?: string;
+    };
+
 /**
  * The contract the calendar focus-time tool depends on. OWNED BY packages/calendar so no
  * connectors import leaks into the calendar module. The concrete implementation is built
@@ -50,7 +64,7 @@ export interface DeleteEventResult {
  * narrows the injected `services.calendarWrite` to this interface.
  */
 export interface CalendarWriteService {
-  proposeAndInsert(
+  createEvent(
     scopedDb: unknown, // DataContextDb; calendar/impl narrows via assertDataContextDb
     ctx: ToolContext,
     window: FocusBlockWindow,
@@ -61,4 +75,9 @@ export interface CalendarWriteService {
     ctx: ToolContext,
     input: DeleteEventInput
   ): Promise<DeleteEventResult>;
+  rescheduleEvent(
+    scopedDb: unknown,
+    ctx: ToolContext,
+    input: RescheduleEventInput
+  ): Promise<RescheduleEventResult>;
 }

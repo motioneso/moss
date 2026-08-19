@@ -224,7 +224,7 @@ export class GoogleApiClient {
       "calendar"
     );
     // FAIL-CLOSED: if the requested calendar key is absent OR Google reported a per-calendar
-    // error for it, we CANNOT trust an empty busy list as "free". Throw so proposeAndInsert's
+    // error for it, we CANNOT trust an empty busy list as "free". Throw so createEvent's
     // try/catch returns created:false ("couldn't check availability") instead of inserting a
     // focus block into an unverified slot (double-booking guarantee). Log status only — never
     // the body — to keep the existing no-leak posture.
@@ -402,5 +402,51 @@ export class GoogleApiClient {
       throw new GoogleApiError(`Google ${api} returned ${response.status}`, response.status);
     }
     return (await response.json()) as T;
+  }
+
+  private async patchJson<T>(
+    url: string,
+    accessToken: string,
+    body: unknown,
+    api: string
+  ): Promise<T> {
+    const response = await this.fetchFn(url, {
+      method: "PATCH",
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(this.requestTimeoutMs)
+    });
+    if (!response.ok) {
+      // Log status server-side only; NEVER embed the response body in Error.message —
+      // handleRouteError propagates Error.message to HTTP responses (oauth.ts:122).
+      this.logger.error({ statusCode: response.status, api }, "Google API call failed");
+      throw new GoogleApiError(`Google ${api} returned ${response.status}`, response.status);
+    }
+    return (await response.json()) as T;
+  }
+
+  /**
+   * Partial update — only the fields in `patch` are sent, so untouched fields (location,
+   * guests added by hand, etc.) are never clobbered. Uses the SAME externalEventId across the
+   * call, never delete-then-create.
+   */
+  async patchEvent(
+    accessToken: string,
+    calendarId: string,
+    externalEventId: string,
+    patch: {
+      readonly start?: { dateTime: string; timeZone: string };
+      readonly end?: { dateTime: string; timeZone: string };
+    }
+  ): Promise<GoogleCalendarEvent> {
+    return this.patchJson<GoogleCalendarEvent>(
+      `${CALENDAR_BASE}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(externalEventId)}`,
+      accessToken,
+      patch,
+      "calendar"
+    );
   }
 }

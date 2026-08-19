@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 
-import type { MossModuleManifest } from "@moss/module-sdk";
+import type { MossModuleManifest, ToolRequiresConfirmation } from "@moss/module-sdk";
 import { calendarMonitorProvider } from "./monitor-provider.js";
 import {
   getCalendarBriefingSettingsResponseSchema,
@@ -10,14 +10,52 @@ import {
   deleteCalendarEventResponseSchema
 } from "@moss/shared";
 
+import { requiresCalendarConfirmation } from "./confirmation-policy.js";
+import { resolveCalendarEventRef } from "./event-resolver.js";
+import { CalendarRepository } from "./repository.js";
 import {
   calendarListVisibleEventsExecute,
   calendarToolEventsOutputSchema,
   calendarProposeFocusBlockExecute,
   summarizeProposeFocusBlock,
   calendarDeleteEventExecute,
-  summarizeDeleteEvent
+  summarizeDeleteEvent,
+  calendarRescheduleEventExecute,
+  summarizeRescheduleEvent
 } from "./tools.js";
+
+const calendarConfirmationRepository = new CalendarRepository();
+
+// Resolves the event independently of the tool's own eventId handling so the confirmation
+// decision is provenance-based (spec decision 1), never defaulted from tier alone. A ref that
+// fails to resolve (bad id, RLS mismatch, DB error) fails closed to true — we can't verify
+// provenance, so we ask.
+async function resolveProvenanceConfirmation(scopedDb: unknown, ref: string | undefined) {
+  if (!ref) return true;
+
+  const resolved = await resolveCalendarEventRef(
+    scopedDb as never,
+    calendarConfirmationRepository,
+    undefined,
+    ref
+  );
+  if (!resolved.found) return true;
+
+  const md = resolved.event.external_metadata;
+  const jarvisCreated =
+    md != null && typeof md === "object" && (md as Record<string, unknown>).jarvisCreated === true;
+  return requiresCalendarConfirmation({ jarvisCreated });
+}
+
+const deleteEventRequiresConfirmation: ToolRequiresConfirmation = async (scopedDb, input) => {
+  const eventId = typeof input.eventId === "string" ? input.eventId : undefined;
+  return resolveProvenanceConfirmation(scopedDb, eventId);
+};
+
+const rescheduleEventRequiresConfirmation: ToolRequiresConfirmation = async (scopedDb, input) => {
+  const eventRef = typeof input.eventRef === "string" ? input.eventRef : undefined;
+  return resolveProvenanceConfirmation(scopedDb, eventRef);
+};
 
 export const CALENDAR_MODULE_ID = "calendar";
 export const calendarModuleSqlMigrationDirectory = fileURLToPath(
@@ -112,7 +150,7 @@ export const calendarModuleManifest = {
         {
           id: "calendar.planning",
           name: "Use for planning",
-          description: "Your assistant schedules its own focus blocks around your events.",
+          description: "Your assistant schedules its own events around your calendar.",
           default: "coming-soon"
         },
         {
@@ -161,7 +199,7 @@ export const calendarModuleManifest = {
     {
       id: "calendar_writeback",
       label: "Calendar writeback",
-      description: "Create Calendar-owned Moss blocks on the user's calendar.",
+      description: "Create and move Moss-owned events on the user's calendar.",
       defaultTier: "ask_each_time",
       allowedTiers: ["ask_each_time", "trusted_auto", "always_confirm"]
     },
@@ -203,16 +241,18 @@ export const calendarModuleManifest = {
       execute: calendarListVisibleEventsExecute
     },
     {
-      name: "calendar.proposeFocusBlock",
+      name: "calendar.createEvent",
       description:
-        "Propose and (on approval) create a focus-time block on the user's primary Google Calendar, conflict-checked live against their availability.",
+        "Create a calendar event on the user's primary Google Calendar at a time you name (or a " +
+        "part of the day, e.g. tomorrow morning), conflict-checked live against their availability. " +
+        "Works for any event, not just focus time — 'Focus time' is only the default title when none is given.",
       permissionId: "calendar.manage",
       risk: "write",
       executionPolicy: "auto",
       // Wired for auto-run, but NOT granted at install: the proactive follow-through worker
       // (buildCalendarFollowThroughPort.executeAutoActions, module-registry/src/index.ts:711) is a
       // second, un-gated reader of calendar_writeback's tier — on a block_time signal it calls
-      // calendarWrite.proposeAndInsert directly, no card, no chat session, no gateway. Granting
+      // calendarWrite.createEvent directly, no card, no chat session, no gateway. Granting
       // trusted_auto at install would arm unattended background calendar writes the moment the
       // module is enabled. Fable's security review on PR #1268 caught this; the user must promote
       // calendar_writeback to trusted_auto themselves (#1263).
@@ -239,9 +279,9 @@ export const calendarModuleManifest = {
           },
           durationMinutes: {
             type: "number",
-            description: "block length; clamped to 15..480 by the handler"
+            description: "event length in minutes; clamped to 15..480 by the handler"
           },
-          title: { type: "string", description: "block title; defaults to 'Focus time'" }
+          title: { type: "string", description: "event title; defaults to 'Focus time'" }
         }
       },
       execute: calendarProposeFocusBlockExecute,
@@ -282,8 +322,47 @@ export const calendarModuleManifest = {
         }
       },
       outputSchema: deleteCalendarEventResponseSchema,
+      requiresConfirmation: deleteEventRequiresConfirmation,
       execute: calendarDeleteEventExecute,
       summarize: summarizeDeleteEvent
+    },
+    {
+      name: "calendar.rescheduleEvent",
+      description:
+        "Move a single calendar event the user owns to a new start/end time, keeping the same " +
+        "event id (never delete-then-create). Refuses outright, regardless of settings, if the " +
+        "event has any attendees — those moves need to go through Google Calendar directly so " +
+        "attendees are notified correctly. Asks for confirmation by default, unless the user has " +
+        "allowed automatic calendar changes in settings.",
+      permissionId: "calendar.manage",
+      risk: "write",
+      executionPolicy: "auto",
+      selfOperationGrant: "user_promotable",
+      actionFamilyId: "calendar_management",
+      requiresServices: ["calendarWrite"],
+      inputSchema: {
+        type: "object",
+        required: ["eventRef", "newStart", "newEnd"],
+        properties: {
+          eventRef: {
+            type: "string",
+            description: "Moss calendar event id (uuid) or provider event id from listVisibleEvents"
+          },
+          newStart: { type: "string", description: "New start, RFC3339 instant" },
+          newEnd: { type: "string", description: "New end, RFC3339 instant" },
+          displayTitle: {
+            type: "string",
+            description: "Card preview only; eventRef is authoritative"
+          },
+          displayWhen: {
+            type: "string",
+            description: "Card preview only, e.g. 'Fri Jun 28, 14:00–15:00'"
+          }
+        }
+      },
+      requiresConfirmation: rescheduleEventRequiresConfirmation,
+      execute: calendarRescheduleEventExecute,
+      summarize: summarizeRescheduleEvent
     }
   ],
   features: [

@@ -164,7 +164,7 @@ export const calendarListVisibleEventsExecute: ToolExecute = async (
 
 function narrowCalendarWrite(services: ToolServices | undefined): CalendarWriteService {
   const svc = (services ?? {}).calendarWrite as CalendarWriteService | undefined;
-  if (!svc || typeof svc.proposeAndInsert !== "function") {
+  if (!svc || typeof svc.createEvent !== "function") {
     throw new Error("calendarWrite service is not available");
   }
   return svc;
@@ -226,7 +226,7 @@ export const calendarProposeFocusBlockExecute: ToolExecute = async (
   // lockstep with the approval card across the midnight boundary (Codex HIGH round 4).
   freezeRelativeDate(input, new Date(), tz);
   const resolved = resolveWindow(readInput(input), new Date(), tz);
-  const result = await service.proposeAndInsert(scopedDb, ctx, {
+  const result = await service.createEvent(scopedDb, ctx, {
     start: resolved.start,
     end: resolved.end,
     durationMinutes: resolved.durationMinutes, // REQUESTED block length, not the band width
@@ -305,4 +305,46 @@ export function summarizeDeleteEvent(input: Record<string, unknown>, _ctx: ToolC
     `Delete this calendar event? ` +
     `Attendees will be notified of the cancellation. This can't be undone from Moss.`
   );
+}
+
+export const calendarRescheduleEventExecute: ToolExecute = async (
+  scopedDb,
+  input,
+  ctx,
+  services
+): Promise<ToolResult> => {
+  const service = narrowCalendarWrite(services);
+  const eventRef = typeof input.eventRef === "string" ? input.eventRef : undefined;
+  const newStart = typeof input.newStart === "string" ? new Date(input.newStart) : undefined;
+  const newEnd = typeof input.newEnd === "string" ? new Date(input.newEnd) : undefined;
+  if (
+    !eventRef ||
+    !newStart ||
+    !newEnd ||
+    Number.isNaN(newStart.getTime()) ||
+    Number.isNaN(newEnd.getTime())
+  ) {
+    return {
+      data: {
+        ok: false,
+        reason: "not_found",
+        message: "eventRef, newStart and newEnd are required"
+      }
+    };
+  }
+  const result = await service.rescheduleEvent(scopedDb, ctx, { eventRef, newStart, newEnd });
+  return { data: { ...result } };
+};
+
+export function summarizeRescheduleEvent(
+  input: Record<string, unknown>,
+  _ctx: ToolContext
+): string {
+  const title = typeof input.displayTitle === "string" ? input.displayTitle : undefined;
+  const when = typeof input.displayWhen === "string" ? input.displayWhen : undefined;
+  const base = title ? `Move **"${title}"**` : "Move this calendar event";
+  if (when) {
+    return `${base} to ${when}? This can't be undone from Moss.`;
+  }
+  return `${base} to the new time? This can't be undone from Moss.`;
 }

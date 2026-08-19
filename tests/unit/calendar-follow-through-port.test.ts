@@ -15,7 +15,7 @@ describe("Calendar follow-through port", () => {
         ]
       },
       calendarWrite: {
-        proposeAndInsert: async () => {
+        createEvent: async () => {
           writes += 1;
           return { created: true, calendarEventId: "calendar-event-1" };
         }

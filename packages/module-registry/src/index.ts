@@ -727,7 +727,7 @@ export function buildCalendarFollowThroughPort(
     readonly tasksRepository?: Pick<TasksRepository, "create">;
     readonly aiRepository?: Pick<AiRepository, "listActionPolicies">;
     readonly calendarWrite?: {
-      proposeAndInsert(
+      createEvent(
         scopedDb: DataContextDb,
         ctx: {
           readonly actorUserId: string;
@@ -787,7 +787,7 @@ export function buildCalendarFollowThroughPort(
         if (writebackPolicy?.tier === "trusted_auto") {
           const window = calendarFollowThroughWindow(signal);
           if (window) {
-            const result = await calendarWrite.proposeAndInsert(
+            const result = await calendarWrite.createEvent(
               scopedDb,
               { actorUserId, requestId, chatSessionId: "" },
               window,

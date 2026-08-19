@@ -27,6 +27,14 @@ import { isSelfOperationExcluded } from "./self-operation.js";
 import type { SessionTokenRegistry } from "./session-tokens.js";
 import type { ActiveModulesResolver, GatewayToolResponse, SessionNotifier } from "./types.js";
 
+export interface GatewayLogger {
+  error(event: string, fields: Record<string, unknown>): void;
+}
+
+const defaultGatewayLogger: GatewayLogger = {
+  error: (event, fields) => console.error(JSON.stringify({ event, ...fields }))
+};
+
 export interface AssistantToolGatewayDependencies {
   readonly resolveActiveModules: ActiveModulesResolver;
   readonly repository: AiRepository;
@@ -65,6 +73,8 @@ export interface AssistantToolGatewayDependencies {
    * format user-visible date/time strings (e.g. calendar approval cards) use the correct timezone.
    */
   readonly resolveLocalTimezone?: (actorUserId: string) => Promise<string | null>;
+  /** Defaults to a console.error(JSON.stringify(...)) shim when omitted. */
+  readonly logger?: GatewayLogger;
 }
 
 const denyPrefs: AgencyPrefLookup = { get: async () => false };
@@ -235,7 +245,8 @@ export class AssistantToolGateway {
       });
       return result;
     }
-    if ((await resolvePolicy(found.tool, found.dto.moduleId, input, lookup)) === "run") {
+    const confirmOverride = await this.computeConfirmOverride(found, input, ctx);
+    if ((await resolvePolicy(found.tool, found.dto.moduleId, confirmOverride, lookup)) === "run") {
       if (
         found.tool.risk !== "read" &&
         !this.autoRunLimiter.consume(ctx.actorUserId, found.dto.name)
@@ -449,14 +460,13 @@ export class AssistantToolGateway {
         )
       };
     } catch {
-      console.error(
-        JSON.stringify({
-          event: "read_tool_handler_threw",
-          toolName: found.tool.name,
-          requestId,
-          errorClass: "handler_error"
-        })
-      );
+      // #1251: a tool handler (including third-party module handlers) can throw an arbitrary
+      // hostile object. Never touch it — no property access, no instanceof, no prototype walk.
+      (this.deps.logger ?? defaultGatewayLogger).error("read_tool_handler_threw", {
+        toolName: found.tool.name,
+        requestId,
+        errorClass: "handler_error"
+      });
       return { ok: false, error: `Tool ${found.tool.name} failed` };
     }
   }
@@ -533,6 +543,30 @@ export class AssistantToolGateway {
     return subset;
   }
 
+  /**
+   * Resolves the tool's optional `requiresConfirmation` hook (input-shaped, DB-aware — e.g. a
+   * calendar write whose target event isn't Jarv1s-created) BEFORE `resolvePolicy` runs, so the
+   * result can force "confirm" even when the module's family tier is trusted_auto. Unlike the
+   * preview hook above, this MUST fail closed: a throw or a lookup that can't determine safety
+   * resolves to true (confirm), never to auto-run. No hook declared -> false (no override).
+   */
+  private async computeConfirmOverride(
+    found: ExecutableTool,
+    input: Record<string, unknown>,
+    ctx: ToolContext
+  ): Promise<boolean> {
+    const hook = found.tool.requiresConfirmation;
+    if (!hook) return false;
+    const access: AccessContext = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
+    try {
+      return await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
+        Promise.resolve(hook(scopedDb, input, ctx, this.servicesFor(found.tool)))
+      );
+    } catch {
+      return true;
+    }
+  }
+
   private async runHandler(
     found: ExecutableTool,
     input: Record<string, unknown>,
@@ -561,15 +595,13 @@ export class AssistantToolGateway {
         ...(result.media ? { media: result.media } : {})
       };
     } catch {
-      // never leak internals/secrets from a handler throw
-      console.error(
-        JSON.stringify({
-          event: "tool_handler_threw",
-          toolName: found.dto.name,
-          requestId: ctx.requestId,
-          errorClass: "handler_error"
-        })
-      );
+      // #1251: a tool handler (including third-party module handlers) can throw an arbitrary
+      // hostile object. Never touch it — no property access, no instanceof, no prototype walk.
+      (this.deps.logger ?? defaultGatewayLogger).error("tool_handler_threw", {
+        toolName: found.dto.name,
+        requestId: ctx.requestId,
+        errorClass: "handler_error"
+      });
       return { ok: false, error: `Tool ${found.dto.name} failed` };
     }
   }

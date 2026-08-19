@@ -131,7 +131,7 @@ describe("notes write assistant tools", () => {
     expect(tools.get("notes.delete")?.executionPolicy).toBe("auto");
   });
 
-  it("discloses overwrite in notes.create summary and flags it as always-confirm", () => {
+  it("discloses overwrite in notes.create summary and flags it as always-confirm", async () => {
     const tools = new Map<string, NonNullable<MossModuleManifest["assistantTools"]>[number]>(
       (notesModuleManifest.assistantTools ?? []).map((tool) => [tool.name, tool])
     );
@@ -143,8 +143,10 @@ describe("notes write assistant tools", () => {
       "Overwrite note x.md (replaces existing content)."
     );
 
-    expect(create?.requiresConfirmation?.({ path: "x.md" })).toBe(false);
-    expect(create?.requiresConfirmation?.({ path: "x.md", overwrite: true })).toBe(true);
+    expect(await create?.requiresConfirmation?.({} as never, { path: "x.md" }, ctx)).toBe(false);
+    expect(
+      await create?.requiresConfirmation?.({} as never, { path: "x.md", overwrite: true }, ctx)
+    ).toBe(true);
   });
 
   it("chat tool services include notesSync when boss is provided", async () => {

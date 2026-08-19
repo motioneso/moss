@@ -359,7 +359,7 @@ describe("Section C — manifest structure + gateway routing", () => {
 
   it("callTool always emits an action_request card (never auto-runs)", async () => {
     const fakeDelete = {
-      async proposeAndInsert() {
+      async createEvent() {
         throw new Error("should not be called");
       },
       async deleteEvent() {
@@ -393,8 +393,42 @@ describe("Section C — manifest structure + gateway routing", () => {
   });
 
   it("gateway auto-runs calendar.deleteEvent once the user has promoted calendar_management to trusted_auto", async () => {
+    // Provenance-based confirmation (Phase 1c) is fail-closed on an unresolvable ref, so this
+    // auto-run assertion needs a real, jarvisCreated cached row rather than an opaque "some-uuid".
+    const cipher = createConnectorSecretCipher();
+    const connectorsRepo = new ConnectorsRepository();
+    const account = await dataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "seed" },
+      (scopedDb) =>
+        connectorsRepo.upsertGoogleAccount(scopedDb, {
+          scopes: ["https://www.googleapis.com/auth/calendar"],
+          encryptedSecret: cipher.encryptJson({
+            kind: "google-oauth",
+            clientId: "cid",
+            clientSecret: "csecret",
+            accessToken: "atoken",
+            refreshToken: "rtoken",
+            tokenExpiry: new Date(Date.now() + 3_600_000).toISOString(),
+            grantedScopes: ["https://www.googleapis.com/auth/calendar"]
+          })
+        })
+    );
+    const calendarRepo = new CalendarRepository();
+    const event = await dataContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "seed" },
+      (scopedDb) =>
+        calendarRepo.upsertCachedEvent(scopedDb, {
+          connectorAccountId: account.id,
+          externalId: "google-evt-trusted-auto",
+          title: "Board sync",
+          startsAt: new Date("2026-06-28T14:00:00Z"),
+          endsAt: new Date("2026-06-28T15:00:00Z"),
+          externalMetadata: { jarvisCreated: true }
+        })
+    );
+
     const fakeDelete = {
-      async proposeAndInsert() {
+      async createEvent() {
         throw new Error("should not be called");
       },
       async deleteEvent() {
@@ -422,7 +456,7 @@ describe("Section C — manifest structure + gateway routing", () => {
     });
 
     const result = await gateway.callTool(token, "calendar.deleteEvent", {
-      eventId: "some-uuid",
+      eventId: event.id,
       displayTitle: "Board sync"
     });
 
@@ -452,7 +486,7 @@ describe("Section C — manifest structure + gateway routing", () => {
 
     let executed = false;
     const fakeDelete = {
-      async proposeAndInsert() {
+      async createEvent() {
         throw new Error("not called");
       },
       async deleteEvent() {

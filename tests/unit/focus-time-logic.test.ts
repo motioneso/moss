@@ -225,7 +225,7 @@ function readInputForTest(input: Record<string, unknown>): FocusBlockInput {
 describe("CalendarWriteService interface shape", () => {
   it("a fake impl satisfies the interface and returns a ProposeFocusResult", async () => {
     const fake: CalendarWriteService = {
-      async proposeAndInsert(_scopedDb, _ctx, window: FocusBlockWindow) {
+      async createEvent(_scopedDb, _ctx, window: FocusBlockWindow) {
         const result: ProposeFocusResult = {
           created: true,
           resolvedStart: window.start.toISOString(),
@@ -239,9 +239,12 @@ describe("CalendarWriteService interface shape", () => {
       },
       async deleteEvent() {
         return { deleted: false, googleDeleted: "skipped-error", cacheMirror: "not-cached" };
+      },
+      async rescheduleEvent() {
+        return { ok: false, reason: "not_found" };
       }
     };
-    const res = await fake.proposeAndInsert(
+    const res = await fake.createEvent(
       {},
       { actorUserId: "u", requestId: "r", chatSessionId: "s" },
       {

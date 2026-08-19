@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 
-import type { MossModuleManifest } from "@moss/module-sdk";
+import type { MossModuleManifest, ToolRequiresConfirmation } from "@moss/module-sdk";
 import { notesMonitorProvider } from "./monitor-provider.js";
 import {
   notesCreateInputSchema,
@@ -122,7 +122,8 @@ export const notesModuleManifest = {
       // overwrite:true replaces an existing note's entire content — that's a destructive act
       // wearing a "create" label. Disclose it in the summary and force confirmation even if
       // note_changes has been promoted to trusted_auto (never silently auto-run a data-loss call).
-      requiresConfirmation: (input) => input.overwrite === true,
+      requiresConfirmation: ((_scopedDb, input, _ctx) =>
+        input.overwrite === true) as ToolRequiresConfirmation,
       summarize: (input) =>
         input.overwrite === true
           ? `Overwrite note ${String(input.path)} (replaces existing content).`

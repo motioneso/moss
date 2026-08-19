@@ -119,13 +119,17 @@ describe("Notes self-operation manifest classification", () => {
     expect(deleteTool?.selfOperationGrant).toBe("granted_at_install");
   });
 
-  it("keeps overwrite confirmation conditional while ordinary note writes are auto-capable", () => {
+  it("keeps overwrite confirmation conditional while ordinary note writes are auto-capable", async () => {
     const tools = notesModuleManifest.assistantTools ?? [];
     const createTool = tools.find((candidate) => candidate.name === "notes.create");
     expect(createTool, "expected tool notes.create to exist").toBeDefined();
     expect(createTool?.executionPolicy).toBe("auto");
-    expect(createTool?.requiresConfirmation?.({ overwrite: true })).toBe(true);
-    expect(createTool?.requiresConfirmation?.({ overwrite: false })).toBe(false);
+    expect(
+      await createTool?.requiresConfirmation?.({} as never, { overwrite: true }, {} as never)
+    ).toBe(true);
+    expect(
+      await createTool?.requiresConfirmation?.({} as never, { overwrite: false }, {} as never)
+    ).toBe(false);
   });
 });
 
@@ -236,19 +240,17 @@ describe("Email self-operation manifest classification", () => {
 });
 
 describe("Calendar self-operation manifest classification", () => {
-  it("classifies both proposeFocusBlock and deleteEvent as user_promotable", () => {
+  it("classifies both createEvent and deleteEvent as user_promotable", () => {
     const tools = calendarModuleManifest.assistantTools ?? [];
 
-    const proposeFocusBlock = tools.find(
-      (candidate) => candidate.name === "calendar.proposeFocusBlock"
-    );
-    expect(proposeFocusBlock, "expected tool calendar.proposeFocusBlock to exist").toBeDefined();
-    expect(proposeFocusBlock?.risk).toBe("write");
-    expect(proposeFocusBlock?.actionFamilyId).toBe("calendar_writeback");
-    expect(proposeFocusBlock?.executionPolicy).toBe("auto");
+    const createEvent = tools.find((candidate) => candidate.name === "calendar.createEvent");
+    expect(createEvent, "expected tool calendar.createEvent to exist").toBeDefined();
+    expect(createEvent?.risk).toBe("write");
+    expect(createEvent?.actionFamilyId).toBe("calendar_writeback");
+    expect(createEvent?.executionPolicy).toBe("auto");
     // Not granted_at_install: the proactive follow-through worker (module-registry/src/index.ts:711)
     // reads calendar_writeback's tier unattended, so install must not promote it (Fable, PR #1268).
-    expect(proposeFocusBlock?.selfOperationGrant).toBe("user_promotable");
+    expect(createEvent?.selfOperationGrant).toBe("user_promotable");
 
     const deleteEvent = tools.find((candidate) => candidate.name === "calendar.deleteEvent");
     expect(deleteEvent, "expected tool calendar.deleteEvent to exist").toBeDefined();
@@ -333,7 +335,7 @@ describe("Sports/News denylist check (#1265)", () => {
 });
 
 describe("Complete built-in self-operation inventory (#1263)", () => {
-  it("classifies every built-in write/destructive tool across exactly the three legal buckets, summing to 48", () => {
+  it("classifies every built-in write/destructive tool across exactly the three legal buckets, summing to 49", () => {
     // People declares its grants in packages/people/src/tools.ts, not a manifest.ts — this
     // walks the real getBuiltInModuleManifests() registry (which resolves that indirection),
     // so it does not undercount the way a manifest.ts-only grep would (34 instead of 38).
@@ -383,10 +385,10 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     // module's first write tools, added on top of #1264's settings-module bump below.
     expect(grantedAtInstall.length).toBe(39);
     expect(confirmAlways.length).toBe(5);
-    expect(userPromotable.length).toBe(4);
+    expect(userPromotable.length).toBe(5);
 
     // Task 12a moved calendar.deleteEvent out of granted_at_install (33 -> ...). PR #1268's
-    // security reviews moved two more: Fable moved calendar.proposeFocusBlock to user_promotable
+    // security reviews moved two more: Fable moved calendar.createEvent to user_promotable
     // (the proactive follow-through worker is a second unattended reader of calendar_writeback's
     // tier), and Opus moved web.read to confirm_always (no approved spec covers web-research, and
     // an auto-run family would have reopened the v0.1.0 audit's exfiltration finding). #1263
@@ -398,14 +400,17 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     // weather location, notification preference, and the mandatory undo-apply tool), all
     // granted_at_install — 29 + 1 + 7 = 37 granted. #1265 then added sports.followTeam and
     // sports.unfollowTeam (also granted_at_install) — 37 + 2 = 39 granted, 48 write/destructive
-    // tools total.
-    expect(grantedAtInstall.length + confirmAlways.length + userPromotable.length).toBe(48);
+    // tools total. #1698's calendar lifecycle rebuild added calendar.rescheduleEvent as a new
+    // user_promotable tool (same tier as the existing create/delete calendar tools) — 39 + 5 + 5
+    // = 49 total.
+    expect(grantedAtInstall.length + confirmAlways.length + userPromotable.length).toBe(49);
 
     expect(confirmAlways.sort()).toEqual([...PLANNED_CONFIRM_ALWAYS_TOOL_NAMES].sort());
     expect(userPromotable.sort()).toEqual(
       [
         "calendar.deleteEvent",
-        "calendar.proposeFocusBlock",
+        "calendar.createEvent",
+        "calendar.rescheduleEvent",
         "tasks.deleteList",
         "tasks.deleteTag"
       ].sort()
