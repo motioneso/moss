@@ -228,10 +228,10 @@ that preceded it. Moss describes chronology only and never claims causation or d
 All decisions below describe work inside the Food module package unless they explicitly name a
 blocker contract Food consumes.
 
-- Build Food as a Moss-authored module on the existing downloaded-module track, using the declared JSON manifest, navigation,
-  settings, route, tool, permission, and lifecycle contracts. Place Food adjacent to Wellness in
-  user-facing navigation/settings; do not add a speculative manifest grouping system solely for
-  this feature.
+- Build Food as a Moss-authored module on the existing downloaded-module track, using the declared
+  JSON manifest, navigation, web-entrypoint, tool, queue, permission, and lifecycle contracts.
+  Place Food alongside Wellness in main navigation once installed. Keep Food-owned preferences and
+  consent on the Food page; do not require a core Settings pane or speculative grouping field.
 - Food owns its data, application services, UI, assistant tools, export declarations, and deletion
   declarations. Wellness must not import Food internals or read Food tables, and Food must not
   import Wellness internals or read Wellness tables. Food's only Wellness contact is the check-in
