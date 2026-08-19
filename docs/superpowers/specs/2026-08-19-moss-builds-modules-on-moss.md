@@ -411,14 +411,39 @@ built to fit inside them rather than around them:
 - **New tools reaching chat are accepted without a cap or an extra confirmation.** Ben, 2026-08-19:
   that is the point of modules.
 
-**Still open, and the one that most deserves an early answer: may the build agent fetch things off
-the internet while building** — a library, a package, documentation? The recommendation on the table
-is no for version one: build against what is already in the box. Talking to the AI provider is not at
-issue; that is what every chat message already does. Fetching code nobody has looked at is.
+**The build agent may use the internet.** Ben, 2026-08-19: "I don't want to limit Moss accessing the
+internet either when building. If the user says 'hey what are some good widgets out there' Moss
+should be able to go search that." A build agent that cannot look anything up is a worse assistant,
+and the lookup is often the point of the request.
 
-Also still open: whether the written-down plan stops and waits for the user on a first build
-(recommended) or is written down and carried past unless interrupted; what a module declares
-about its tables such that protection can be generated; how a change request finds its module; how
+The accompanying requirement is a record, not a restriction: **what the build fetched is captured and
+shown on the review screen** alongside everything else the module claims. It blocks nothing and costs
+nothing at build time, and it is what makes a misbehaving module diagnosable later.
+
+**How much the build asks is governed by the existing instance-wide "stop asking me" setting, not by
+a new preference.** That setting already has a three-part gate — the admin enables it for the
+instance, the admin allows a specific person, and that person enables it for themselves — and all
+three must be true (`packages/settings/src/yolo-routes.ts:22-24,187-189`).
+
+This is the correct mechanism rather than a new one, for a load-bearing reason: Moss may never turn
+that setting on for itself; it is one of the seven self-operation exclusions (the `settings.yolo.`
+prefix under `self_authority.settings`). So when it is on, the build proceeding without a stop is a
+human's standing configured choice, not Moss electing to skip its own gate. The self-authority rule
+stays exactly as strict.
+
+Behaviour:
+
+- **Off (the default):** the written plan stops and waits for the user on a first build; the finished
+  module waits for approval before it is installed.
+- **On:** Moss plans, builds, installs and reports that it is done.
+
+Ben's reasoning, 2026-08-19: "I don't want the user to have to approve everything... Users of Moss
+will most likely have at least one power AI dork (like me) so we accept the risks." Recorded
+consequence, accepted: with the setting on and the internet open, a module can go from a sentence to
+running without anyone having read it. The three-part gate is what keeps that from ever being true
+for someone who was not asked.
+
+Remaining open, less load-bearing: what a module declares about its tables such that protection can be generated; how a change request finds its module; how
 anyone knows a module works before it is switched on, given there is no preview; what happens when a
 built module breaks at runtime and who fixes it; whether a shared module can be updated by its
 author; and the exact shape of build limits.
