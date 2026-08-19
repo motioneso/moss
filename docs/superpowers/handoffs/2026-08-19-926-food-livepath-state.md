@@ -4,9 +4,9 @@ Plain English, no jargon, in every status update and every agent you spawn from 
 
 ## Where this stands
 
-PR #1716, branch `food-phase1-926`, head `bc9adbdfd` plus uncommitted work on the real-chat test.
-Reading and lifecycle behaviour is proven live. Writing is proven by hand but the test that
-records it is still being stabilised.
+PR #1716, branch `food-phase1-926`, head `f92eeac94`, everything committed and pushed. Live
+results are recorded on the PR. Reading, lifecycle and writing are all proven live with a real
+model. The only gap is the two tools that always ask permission, blocked on #1720.
 
 ## Proven live, 8 of 8 passing
 
@@ -54,7 +54,7 @@ coverage is a browser test with a fake server.
 This blocks the two Food tools that always ask (turning on estimates, deleting a meal). Logging,
 correcting and re-estimating a meal never ask, so they are unaffected.
 
-## Proven by hand, real model, not yet a green test
+## Proven live with a real model — passing
 
 `tests/uat/specs/926-food-real-chat.uat.spec.ts`, run with:
 
@@ -62,9 +62,16 @@ correcting and re-estimating a meal never ask, so they are unaffected.
 moss-real-chat-run npx tsx tests/uat/run-uat.ts 926-food-real-chat
 ```
 
-Observed working in earlier runs: turning on AI estimates raised a confirmation, approving it
-took effect, and logging a meal produced a real nutrition estimate (320 calories, 9g protein,
-and so on). Run 4 is the first with all three test flaws fixed. Logs: `/tmp/food-uat{1..4}.log`.
+The first test passes (run 15, 2.1 minutes, log `~/uat15.log`). A real model logs a meal, then
+corrects it in a second turn. Both are saved and shown on the Food page, neither interrupts the
+user, and neither creates a permission request at all — which is the right behaviour for a tool
+granted at install, and is asserted rather than assumed.
+
+The second test covers the two tools that always ask. It is correct and is the regression test for
+#1720, so it is marked skipped with a pointer to that issue. Un-skip it when #1720 lands.
+
+Do not assert that a granted-at-install tool creates a permission record. It does not. A tool the
+gateway decides to just run never creates one, so the right assertion is that there are none.
 
 ## Things already paid for — do not re-derive
 
