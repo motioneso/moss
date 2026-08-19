@@ -19,7 +19,7 @@
     "ownedTables": ["app.food_meals", "app.food_estimates"]
   },
   "runtime": {
-    "workerEntrypoint": "dist/worker/index.js",
+    "workerEntrypoint": "dist/worker.js",
     "workerContractVersion": 1
   },
   "web": {
