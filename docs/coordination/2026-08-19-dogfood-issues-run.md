@@ -86,3 +86,16 @@ steps.
 Session id 26201b49-079c-409a-b5e0-4a60987ca935, pane w1:pG4, labelled "Coordinator", tab w1:t6.
 This is a plain-English-only project per CLAUDE.md — no jargon in anything Ben reads, including
 whatever picks this checkpoint up next.
+
+## Prod updated 2026-08-19 (this checkpoint)
+
+All three merges from today (#1684 signing phase 1, #1732 release-notes automation, #1735
+release-notes backfill) are now live on prod (~/JarvisProd, edge channel). Pulled the fresh image
+after its build finished (main commit ea5ce0ba7), recreated the Moss container, confirmed
+/health/ready returns ok. No chat-path code changed today, so the chat smoke check wasn't run —
+only docs/tooling and publish-side signing infra changed, nothing in the chat/tool-call path.
+
+Everything from this session is done: #1319 phase 1 merged with real signature verification
+(phase 2 — actually enforcing/checking the signature on install — stays open, tracked via a
+comment on issue #1319), release-notes automation live going forward, backfill caught up through
+today, prod deployed and healthy.
