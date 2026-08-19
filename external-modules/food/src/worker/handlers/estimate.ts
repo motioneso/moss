@@ -97,6 +97,7 @@ export async function runEstimate(
 
   const recorded = await store.recordEstimate(mealId, revision, {
     state: outcome.kind,
+    items: outcome.items,
     nutrients: outcome.nutrients,
     missingDetails: outcome.missingDetails,
     clarificationQuestion: outcome.clarificationQuestion

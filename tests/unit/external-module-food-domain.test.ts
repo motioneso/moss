@@ -13,8 +13,13 @@ import { describe, expect, it } from "vitest";
 
 import { validateNutrients } from "../../external-modules/food/src/domain/estimate.js";
 import { resolveMealLocalDate } from "../../external-modules/food/src/domain/meal.js";
-import type { Meal, Nutrients } from "../../external-modules/food/src/domain/meal.js";
-import { computeDailyTotals } from "../../external-modules/food/src/domain/totals.js";
+import type { Meal, MealItem, Nutrients } from "../../external-modules/food/src/domain/meal.js";
+import {
+  computeDailyTotals,
+  isNutrientComplete,
+  sumItemNutrients
+} from "../../external-modules/food/src/domain/totals.js";
+import { parseEstimateResult } from "../../external-modules/food/src/estimator/schema.js";
 
 const NULL_NUTRIENTS: Nutrients = {
   caloriesKcal: null,
@@ -28,6 +33,7 @@ const NULL_NUTRIENTS: Nutrients = {
 
 function meal(overrides: Partial<Meal>): Meal {
   return {
+    items: [],
     mealId: "meal-1",
     consumedAt: "2026-07-18T12:00:00.000Z",
     localDate: "2026-07-18",
@@ -211,5 +217,104 @@ describe("validateNutrients (plan §3 guard 3 / plan §4 Task 7 test 3's source)
     expect(validateNutrients(null)).toEqual(NULL_NUTRIENTS);
     expect(validateNutrients(undefined)).toEqual(NULL_NUTRIENTS);
     expect(validateNutrients("not an object")).toEqual(NULL_NUTRIENTS);
+  });
+});
+
+// ── #1737: a meal is the sum of its items ────────────────────────────────
+
+function item(label: string, nutrients: Partial<Nutrients>): MealItem {
+  return { label, portionNote: null, nutrients: { ...NULL_NUTRIENTS, ...nutrients } };
+}
+
+describe("sumItemNutrients (#1737)", () => {
+  it("adds each nutrient across items", () => {
+    const total = sumItemNutrients([
+      item("oatmeal", { caloriesKcal: 310, proteinG: 8 }),
+      item("banana", { caloriesKcal: 105, proteinG: 1 })
+    ]);
+    expect(total.caloriesKcal).toBe(415);
+    expect(total.proteinG).toBe(9);
+  });
+
+  it("leaves a nutrient null only when NO item carried it, never zero", () => {
+    // Fails against an implementation that seeds the sum at 0 and returns it: the
+    // meal would read as "0 g fiber" — a claim nothing measured — instead of unknown.
+    const total = sumItemNutrients([
+      item("wings", { caloriesKcal: 700, fiberG: 2 }),
+      item("Coke Zero", { caloriesKcal: 0 })
+    ]);
+    expect(total.caloriesKcal).toBe(700);
+    expect(total.fiberG).toBe(2); // one item knew it; the other contributes nothing, not 0
+    expect(total.sugarG).toBeNull(); // neither item knew it
+  });
+
+  it("returns all-null for an empty breakdown", () => {
+    expect(sumItemNutrients([])).toEqual(NULL_NUTRIENTS);
+  });
+});
+
+describe("isNutrientComplete (#1737)", () => {
+  const items = [item("wings", { caloriesKcal: 700 }), item("Coke Zero", {})];
+
+  it("is false when any item is missing that nutrient", () => {
+    expect(isNutrientComplete(items, "caloriesKcal")).toBe(false);
+  });
+
+  it("is true only when every item carries it", () => {
+    expect(isNutrientComplete([item("wings", { caloriesKcal: 700 })], "caloriesKcal")).toBe(true);
+  });
+
+  it("is false for an empty breakdown", () => {
+    expect(isNutrientComplete([], "caloriesKcal")).toBe(false);
+  });
+});
+
+describe("parseEstimateResult items (#1737)", () => {
+  const oneItem = {
+    label: "oatmeal",
+    portionNote: "1 bowl",
+    caloriesKcal: 310,
+    proteinG: 8,
+    carbohydratesG: 55,
+    fatG: 5,
+    fiberG: 8,
+    sugarG: 2,
+    sodiumMg: 140
+  };
+
+  it("reads the breakdown, keeping nutrient values untouched for guard 3", () => {
+    const parsed = parseEstimateResult({
+      outcome: "estimated",
+      items: [oneItem],
+      missingDetails: null,
+      clarificationQuestion: null
+    });
+    expect(parsed.items).toHaveLength(1);
+    expect(parsed.items[0]!.label).toBe("oatmeal");
+    expect(parsed.items[0]!.nutrientFields["caloriesKcal"]).toBe(310);
+  });
+
+  it("rejects an estimate with no items", () => {
+    // Fails against an implementation that accepts a bare meal-level figure: without
+    // this, "estimated" with an empty breakdown would persist a total nothing explains.
+    expect(() =>
+      parseEstimateResult({
+        outcome: "estimated",
+        items: [],
+        missingDetails: null,
+        clarificationQuestion: null
+      })
+    ).toThrow(/at least one item/);
+  });
+
+  it("rejects an invented field on an item, not only at the top level", () => {
+    expect(() =>
+      parseEstimateResult({
+        outcome: "estimated",
+        items: [{ ...oneItem, brandGuess: "Quaker" }],
+        missingDetails: null,
+        clarificationQuestion: null
+      })
+    ).toThrow(/items\[0\].brandGuess/);
   });
 });

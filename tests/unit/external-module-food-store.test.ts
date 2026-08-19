@@ -18,7 +18,7 @@
 // driver, so toNutrientNumber's coercion is exercised for real rather than trivially skipped.
 import { describe, expect, it } from "vitest";
 
-import type { Nutrients } from "../../external-modules/food/src/domain/meal.js";
+import type { MealItem, Nutrients } from "../../external-modules/food/src/domain/meal.js";
 import type { FoodDb } from "../../external-modules/food/src/store/sql.js";
 import { sqlStore } from "../../external-modules/food/src/store/sql.js";
 
@@ -48,6 +48,21 @@ interface StoredEstimate {
   missing_details: string | null;
 }
 
+interface StoredItem {
+  meal_id: string;
+  revision: number;
+  item_index: number;
+  label: string;
+  portion_note: string | null;
+  calories_kcal: string | null;
+  protein_g: string | null;
+  carbohydrates_g: string | null;
+  fat_g: string | null;
+  fiber_g: string | null;
+  sugar_g: string | null;
+  sodium_mg: string | null;
+}
+
 /**
  * In-memory double for FoodDb that understands exactly the query shapes sql.ts issues.
  * `failNextEstimateInsert` simulates test 13's torn write: the food_meals CAS UPDATE commits,
@@ -57,10 +72,12 @@ interface StoredEstimate {
 function fakeDb(): FoodDb & {
   meals: Map<string, StoredMeal>;
   estimates: Map<string, StoredEstimate>;
+  items: Map<string, StoredItem[]>;
   failNextEstimateInsert: boolean;
 } {
   const meals = new Map<string, StoredMeal>();
   const estimates = new Map<string, StoredEstimate>(); // key: `${meal_id}:${revision}`
+  const items = new Map<string, StoredItem[]>(); // key: `${meal_id}:${revision}`
   const state = { failNextEstimateInsert: false };
 
   function mealRow(m: StoredMeal) {
@@ -89,6 +106,7 @@ function fakeDb(): FoodDb & {
   return {
     meals,
     estimates,
+    items,
     get failNextEstimateInsert() {
       return state.failNextEstimateInsert;
     },
@@ -96,6 +114,77 @@ function fakeDb(): FoodDb & {
       state.failNextEstimateInsert = value;
     },
     async query<T = Record<string, unknown>>(text: string, params: readonly unknown[] = []) {
+      // correctMeal's carry-forward copies (INSERT ... SELECT). Matched first: their
+      // text also contains the literal-VALUES branches' markers below.
+      if (
+        text.includes("INSERT INTO app.food_estimates") &&
+        text.includes("SELECT owner_user_id")
+      ) {
+        const [mealId, newRevision, fromRevision] = params as [string, number, number];
+        const previous = estimates.get(`${mealId}:${fromRevision}`);
+        if (previous)
+          estimates.set(`${mealId}:${newRevision}`, { ...previous, revision: newRevision });
+        return { rows: [] as T[] };
+      }
+      if (
+        text.includes("INSERT INTO app.food_estimate_items") &&
+        text.includes("SELECT owner_user_id")
+      ) {
+        const [mealId, newRevision, fromRevision] = params as [string, number, number];
+        const previous = items.get(`${mealId}:${fromRevision}`);
+        if (previous) {
+          items.set(
+            `${mealId}:${newRevision}`,
+            previous.map((item) => ({ ...item, revision: newRevision }))
+          );
+        }
+        return { rows: [] as T[] };
+      }
+
+      // insertItems' multi-row INSERT: params are [mealId, revision, ...groups of 10].
+      if (text.includes("INSERT INTO app.food_estimate_items")) {
+        const [mealId, revision] = params as [string, number];
+        const rest = params.slice(2);
+        const rows: StoredItem[] = [];
+        for (let at = 0; at < rest.length; at += 10) {
+          const group = rest.slice(at, at + 10);
+          const numeric = (value: unknown) => (value === null ? null : String(value));
+          rows.push({
+            meal_id: mealId,
+            revision,
+            item_index: group[0] as number,
+            label: group[1] as string,
+            portion_note: group[2] as string | null,
+            calories_kcal: numeric(group[3]),
+            protein_g: numeric(group[4]),
+            carbohydrates_g: numeric(group[5]),
+            fat_g: numeric(group[6]),
+            fiber_g: numeric(group[7]),
+            sugar_g: numeric(group[8]),
+            sodium_mg: numeric(group[9])
+          });
+        }
+        items.set(`${mealId}:${revision}`, rows);
+        return { rows: [] as T[] };
+      }
+
+      // loadItemsByMeal: items at each meal's CURRENT revision, item_index ascending.
+      if (text.includes("FROM app.food_estimate_items i")) {
+        const [mealIds] = params as [readonly string[]];
+        const rows = mealIds
+          .flatMap((mealId) => {
+            const meal = meals.get(mealId);
+            return meal ? (items.get(`${mealId}:${meal.estimate_revision}`) ?? []) : [];
+          })
+          .sort((a, b) =>
+            a.meal_id === b.meal_id
+              ? a.item_index - b.item_index
+              : a.meal_id.localeCompare(b.meal_id)
+          )
+          .map((item) => item as unknown as T);
+        return { rows };
+      }
+
       // createMeal: INSERT ... ON CONFLICT (owner_user_id, idempotency_key) DO NOTHING RETURNING ...
       if (text.includes("INSERT INTO app.food_meals") && text.includes("ON CONFLICT")) {
         const [
@@ -288,6 +377,12 @@ function baseNutrients(overrides: Partial<Nutrients> = {}): Nutrients {
   };
 }
 
+/** A one-item breakdown whose sum IS the given nutrients — lets a test that cares about meal
+ * totals state them once, without the item list changing what it asserts. */
+function oneItem(nutrients: Nutrients): MealItem {
+  return { label: "lunch", portionNote: null, nutrients };
+}
+
 describe("sqlStore.createMeal (plan §4 Task 7 test 2: idempotent create)", () => {
   it("same idempotencyKey twice returns the SAME existing row, not a duplicate", async () => {
     const db = fakeDb();
@@ -359,6 +454,7 @@ describe("sqlStore CAS guards (plan §4 Task 7 test 7: stale revision rejected)"
     await store.correctMeal(meal.mealId, meal.estimateRevision, { description: "corrected" });
     const result = await store.recordEstimate(meal.mealId, meal.estimateRevision, {
       state: "estimated",
+      items: [oneItem(baseNutrients())],
       nutrients: baseNutrients(),
       missingDetails: null,
       clarificationQuestion: null
@@ -388,6 +484,7 @@ describe("sqlStore.recordEstimate torn write (plan §4 Task 7 test 13)", () => {
     await expect(
       store.recordEstimate(meal.mealId, meal.estimateRevision, {
         state: "estimated",
+        items: [oneItem(baseNutrients())],
         nutrients: baseNutrients(),
         missingDetails: null,
         clarificationQuestion: null
@@ -417,6 +514,7 @@ describe("sqlStore.recordEstimate torn write (plan §4 Task 7 test 13)", () => {
     // meal and uses its current revision, not the stale pre-CAS one).
     const recovered = await store.recordEstimate(meal.mealId, torn!.estimateRevision, {
       state: "estimated",
+      items: [oneItem(baseNutrients())],
       nutrients: baseNutrients(),
       missingDetails: null,
       clarificationQuestion: null
@@ -441,6 +539,7 @@ describe("sqlStore nutrient round-trip (pg numeric-as-string)", () => {
     });
     await store.recordEstimate(meal.mealId, meal.estimateRevision, {
       state: "estimated",
+      items: [oneItem(baseNutrients({ sodiumMg: null }))],
       nutrients: baseNutrients({ sodiumMg: null }),
       missingDetails: null,
       clarificationQuestion: null
@@ -458,7 +557,7 @@ describe("sqlStore nutrient round-trip (pg numeric-as-string)", () => {
 });
 
 describe("sqlStore.correctMeal nutrient merge", () => {
-  it("merges a partial nutrient patch over the current estimate, never blanking unspecified fields", async () => {
+  it("merges a partial item patch over the current breakdown, never blanking unspecified fields", async () => {
     const db = fakeDb();
     const store = sqlStore(db);
     const meal = await store.createMeal({
@@ -473,17 +572,121 @@ describe("sqlStore.correctMeal nutrient merge", () => {
     });
     const estimated = await store.recordEstimate(meal.mealId, meal.estimateRevision, {
       state: "estimated",
+      items: [oneItem(baseNutrients())],
       nutrients: baseNutrients(),
       missingDetails: null,
       clarificationQuestion: null
     });
     const corrected = await store.correctMeal(meal.mealId, estimated!.estimateRevision, {
-      nutrients: { caloriesKcal: 500 }
+      items: [{ nutrients: { caloriesKcal: 500 } }]
     });
     expect(corrected?.nutrients?.caloriesKcal).toBe(500);
     // Everything else the user didn't touch survives the correction unchanged.
     expect(corrected?.nutrients?.proteinG).toBe(baseNutrients().proteinG);
     expect(corrected?.nutrients?.sodiumMg).toBe(baseNutrients().sodiumMg);
+  });
+});
+
+describe("sqlStore item breakdown (#1737)", () => {
+  const baseMeal = {
+    mealId: "meal-1",
+    consumedAt: new Date("2026-07-18T12:00:00.000Z"),
+    localDate: "2026-07-18",
+    timezoneOffset: 0,
+    description: "wings and a Coke Zero",
+    servingNote: null,
+    captureKind: "text" as const,
+    idempotencyKey: "idem-1"
+  };
+
+  const twoItems: MealItem[] = [
+    { label: "hot wings", portionNote: "6", nutrients: baseNutrients({ caloriesKcal: 430 }) },
+    { label: "Coke Zero", portionNote: "1 can", nutrients: baseNutrients({ caloriesKcal: 0 }) }
+  ];
+
+  it("writes the breakdown and reads it back in order", async () => {
+    const db = fakeDb();
+    const store = sqlStore(db);
+    const meal = await store.createMeal(baseMeal);
+    expect(meal.items).toEqual([]); // nothing has estimated it yet
+
+    await store.recordEstimate(meal.mealId, meal.estimateRevision, {
+      state: "estimated",
+      items: twoItems,
+      nutrients: baseNutrients({ caloriesKcal: 430 }),
+      missingDetails: null,
+      clarificationQuestion: null
+    });
+
+    const read = await store.getMeal(meal.mealId);
+    expect(read?.items.map((entry) => entry.label)).toEqual(["hot wings", "Coke Zero"]);
+    expect(read?.items[0]!.portionNote).toBe("6");
+    expect(read?.items[0]!.nutrients.caloriesKcal).toBe(430);
+  });
+
+  it("re-derives the meal total from a corrected item", async () => {
+    const db = fakeDb();
+    const store = sqlStore(db);
+    const meal = await store.createMeal(baseMeal);
+    const estimated = await store.recordEstimate(meal.mealId, meal.estimateRevision, {
+      state: "estimated",
+      items: twoItems,
+      nutrients: baseNutrients({ caloriesKcal: 430 }),
+      missingDetails: null,
+      clarificationQuestion: null
+    });
+
+    // Correct only the second item; the first is reached by position and left alone.
+    const corrected = await store.correctMeal(meal.mealId, estimated!.estimateRevision, {
+      items: [null as never, { nutrients: { caloriesKcal: 10 } }]
+    });
+    // Fails against an implementation that stores a meal-level figure: the meal would
+    // still read 430 while its own items now add up to 440.
+    expect(corrected?.nutrients?.caloriesKcal).toBe(440);
+    expect(corrected?.items.map((entry) => entry.label)).toEqual(["hot wings", "Coke Zero"]);
+  });
+
+  it("carries the breakdown and the totals through a text-only correction", async () => {
+    const db = fakeDb();
+    const store = sqlStore(db);
+    const meal = await store.createMeal(baseMeal);
+    const estimated = await store.recordEstimate(meal.mealId, meal.estimateRevision, {
+      state: "estimated",
+      items: twoItems,
+      nutrients: baseNutrients({ caloriesKcal: 430 }),
+      missingDetails: null,
+      clarificationQuestion: null
+    });
+
+    const corrected = await store.correctMeal(meal.mealId, estimated!.estimateRevision, {
+      description: "wings and a diet Coke"
+    });
+    // Fails against an implementation that only advances the revision: the estimate is
+    // read at the CURRENT revision, so fixing a typo would blank the whole estimate.
+    expect(corrected?.description).toBe("wings and a diet Coke");
+    expect(corrected?.nutrients?.caloriesKcal).toBe(430);
+    expect(corrected?.items).toHaveLength(2);
+  });
+
+  it("rejects a new item with no label, without advancing anything", async () => {
+    const db = fakeDb();
+    const store = sqlStore(db);
+    const meal = await store.createMeal(baseMeal);
+    const estimated = await store.recordEstimate(meal.mealId, meal.estimateRevision, {
+      state: "estimated",
+      items: twoItems,
+      nutrients: baseNutrients({ caloriesKcal: 430 }),
+      missingDetails: null,
+      clarificationQuestion: null
+    });
+
+    await expect(
+      store.correctMeal(meal.mealId, estimated!.estimateRevision, {
+        items: [null as never, null as never, { nutrients: { caloriesKcal: 90 } }]
+      })
+    ).rejects.toThrow(/needs a label/);
+    const unchanged = await store.getMeal(meal.mealId);
+    expect(unchanged?.estimateRevision).toBe(estimated!.estimateRevision);
   });
 });
 

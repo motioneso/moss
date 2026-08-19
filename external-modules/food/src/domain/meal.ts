@@ -24,6 +24,21 @@ export interface Nutrients {
   readonly sodiumMg: number | null;
 }
 
+/**
+ * One individual food inside a meal (#1737). `label` is the food as identified
+ * ("hot wings"); `portionNote` is the amount as described ("6", "32 oz"), kept
+ * separate so a later database lookup has a quantity to resolve against.
+ *
+ * A meal's nutrients are the SUM of its items (see sumItemNutrients in
+ * totals.ts) — never a separately estimated figure, so the parts and the whole
+ * cannot disagree.
+ */
+export interface MealItem {
+  readonly label: string;
+  readonly portionNote: string | null;
+  readonly nutrients: Nutrients;
+}
+
 export interface Meal {
   readonly mealId: string;
   /** Instant the meal was eaten, as an ISO string. */
@@ -44,8 +59,17 @@ export interface Meal {
   readonly estimateState: EstimateState;
   /** Optimistic-lock counter. Guards every mutation to this meal (see store/sql.ts). */
   readonly estimateRevision: number;
-  /** Null unless estimateState is "estimated". */
+  /**
+   * Null unless estimateState is "estimated". Always the sum of `items` when
+   * items are present (#1737) — nothing writes this from a model value directly.
+   */
   readonly nutrients: Nutrients | null;
+  /**
+   * The individual foods this meal was broken into, in the order they were
+   * identified. Empty for a meal that has not estimated yet, and for meals
+   * logged before the breakdown existed.
+   */
+  readonly items: readonly MealItem[];
   /** Set only when estimateState is "needs_details". */
   readonly missingDetails: string | null;
 }

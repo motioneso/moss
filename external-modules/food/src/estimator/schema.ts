@@ -26,18 +26,7 @@
 export const ESTIMATE_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: [
-    "outcome",
-    "caloriesKcal",
-    "proteinG",
-    "carbohydratesG",
-    "fatG",
-    "fiberG",
-    "sugarG",
-    "sodiumMg",
-    "missingDetails",
-    "clarificationQuestion"
-  ],
+  required: ["outcome", "items", "missingDetails", "clarificationQuestion"],
   properties: {
     outcome: {
       type: "string",
@@ -47,38 +36,75 @@ export const ESTIMATE_SCHEMA = {
         'nutrition; "needs_details" if it is too vague to estimate even roughly (no food named, ' +
         "or food named with no sense of portion)."
     },
-    caloriesKcal: {
-      type: ["number", "null"],
+    items: {
+      type: "array",
       description:
-        "Total energy for this ONE meal, in kilocalories (kcal). Null when outcome is needs_details."
-    },
-    proteinG: {
-      type: ["number", "null"],
-      description: "Protein for this one meal, in grams (g). Null when outcome is needs_details."
-    },
-    carbohydratesG: {
-      type: ["number", "null"],
-      description:
-        "Total carbohydrates for this one meal, in grams (g). Null when outcome is needs_details."
-    },
-    fatG: {
-      type: ["number", "null"],
-      description: "Total fat for this one meal, in grams (g). Null when outcome is needs_details."
-    },
-    fiberG: {
-      type: ["number", "null"],
-      description:
-        "Dietary fiber for this one meal, in grams (g). Null when outcome is needs_details."
-    },
-    sugarG: {
-      type: ["number", "null"],
-      description:
-        "Total sugar for this one meal, in grams (g). Null when outcome is needs_details."
-    },
-    sodiumMg: {
-      type: ["number", "null"],
-      description:
-        "Sodium for this one meal, in milligrams (mg). Null when outcome is needs_details."
+        "One entry per individual food in the meal, in the order described. A meal of one food " +
+        "has one entry. Empty when outcome is needs_details.",
+      items: {
+        type: "object",
+        // Per-ITEM, not just at the top level: a nested schema that only guarded
+        // its root would let an invented field ride in on every item.
+        additionalProperties: false,
+        required: [
+          "label",
+          "portionNote",
+          "caloriesKcal",
+          "proteinG",
+          "carbohydratesG",
+          "fatG",
+          "fiberG",
+          "sugarG",
+          "sodiumMg"
+        ],
+        properties: {
+          label: {
+            type: "string",
+            description:
+              'The food itself, without the amount — "hot wings", "breadsticks", "Coke Zero".'
+          },
+          portionNote: {
+            type: ["string", "null"],
+            description:
+              'The amount as described, without the food — "6", "32 oz", "1 cup cooked". Null if ' +
+              "the description gave no amount for this item."
+          },
+          caloriesKcal: {
+            type: ["number", "null"],
+            description:
+              "Energy for THIS ITEM only, in kilocalories (kcal). Null if you cannot estimate it."
+          },
+          proteinG: {
+            type: ["number", "null"],
+            description: "Protein for this item only, in grams (g). Null if you cannot estimate it."
+          },
+          carbohydratesG: {
+            type: ["number", "null"],
+            description:
+              "Total carbohydrates for this item only, in grams (g). Null if you cannot estimate it."
+          },
+          fatG: {
+            type: ["number", "null"],
+            description:
+              "Total fat for this item only, in grams (g). Null if you cannot estimate it."
+          },
+          fiberG: {
+            type: ["number", "null"],
+            description:
+              "Dietary fiber for this item only, in grams (g). Null if you cannot estimate it."
+          },
+          sugarG: {
+            type: ["number", "null"],
+            description:
+              "Total sugar for this item only, in grams (g). Null if you cannot estimate it."
+          },
+          sodiumMg: {
+            type: ["number", "null"],
+            description:
+              "Sodium for this item only, in milligrams (mg). Null if you cannot estimate it."
+          }
+        }
+      }
     },
     missingDetails: {
       type: ["string", "null"],
@@ -113,13 +139,19 @@ export const ESTIMATE_SCHEMA = {
 export function buildEstimatePrompt(description: string, servingNote: string | null): string {
   const lines = [
     "Estimate the nutrition in one meal from its plain-text description.",
+    "Break the meal into the individual foods it contains, one item per food, and estimate each " +
+      "item on its own. Never return one lump figure for the whole meal.",
     'If it names real food with a rough sense of amount, return outcome "estimated" with your ' +
-      "best-guess value for every nutrient field, in the units the schema field descriptions name.",
-    'If it is too vague to estimate even roughly, return outcome "needs_details", leave every ' +
-      "nutrient field null, and ask one short clarifying question.",
+      "best-guess value for every nutrient field of every item, in the units the schema field " +
+      "descriptions name.",
+    'If it is too vague to estimate even roughly, return outcome "needs_details", an empty items ' +
+      "list, and one short clarifying question.",
     "",
-    'Example: "a bowl of oatmeal with a banana" -> outcome "estimated", caloriesKcal 350, ' +
-      "proteinG 10, carbohydratesG 65, fatG 6, fiberG 8, sugarG 20, sodiumMg 150.",
+    'Example: "a bowl of oatmeal with a banana" -> outcome "estimated", two items: ' +
+      '{label "oatmeal", portionNote "1 bowl", caloriesKcal 310, proteinG 8, carbohydratesG 55, ' +
+      "fatG 5, fiberG 8, sugarG 2, sodiumMg 140} and " +
+      '{label "banana", portionNote "1", caloriesKcal 105, proteinG 1, carbohydratesG 27, ' +
+      "fatG 0, fiberG 3, sugarG 14, sodiumMg 1}.",
     "",
     `Meal description: ${description}`,
     servingNote ? `Serving note: ${servingNote}` : ""
@@ -127,10 +159,16 @@ export function buildEstimatePrompt(description: string, servingNote: string | n
   return lines.filter((line) => line !== "").join("\n");
 }
 
-export interface ParsedEstimateResult {
-  readonly outcome: "estimated" | "needs_details";
+export interface ParsedEstimateItem {
+  readonly label: string;
+  readonly portionNote: string | null;
   /** Raw, still-untrusted nutrient values — validateNutrients (guard 3) runs on this in run.ts. */
   readonly nutrientFields: Record<string, unknown>;
+}
+
+export interface ParsedEstimateResult {
+  readonly outcome: "estimated" | "needs_details";
+  readonly items: readonly ParsedEstimateItem[];
   readonly missingDetails: string | null;
   readonly clarificationQuestion: string | null;
 }
@@ -147,10 +185,13 @@ const NUTRIENT_FIELD_NAMES = [
 
 const KNOWN_FIELDS = new Set<string>([
   "outcome",
-  ...NUTRIENT_FIELD_NAMES,
+  "items",
   "missingDetails",
   "clarificationQuestion"
 ]);
+
+/** Applied per item, not only at the top level — see parseEstimateItem. */
+const KNOWN_ITEM_FIELDS = new Set<string>(["label", "portionNote", ...NUTRIENT_FIELD_NAMES]);
 
 function nullableString(value: unknown, field: string): string | null {
   if (value === null) return null;
@@ -189,7 +230,38 @@ export function parseEstimateResult(raw: unknown): ParsedEstimateResult {
   if (outcome === "needs_details" && (!missingDetails || !clarificationQuestion)) {
     throw new Error("needs_details requires non-empty missingDetails and clarificationQuestion");
   }
+  const rawItems = record["items"];
+  if (!Array.isArray(rawItems)) {
+    throw new Error("items must be an array");
+  }
+  const items = rawItems.map((item, index) => parseEstimateItem(item, index));
+  if (outcome === "estimated" && items.length === 0) {
+    throw new Error("estimated requires at least one item");
+  }
+  return { outcome, items, missingDetails, clarificationQuestion };
+}
+
+/**
+ * The per-item half of the "no invented fields" guard. Applied to every entry,
+ * so an extra key on item 3 of 4 fails the whole result rather than riding in
+ * on a row. Nutrient VALUES are again left untouched for guard 3.
+ */
+function parseEstimateItem(raw: unknown, index: number): ParsedEstimateItem {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error(`items[${index}] must be an object`);
+  }
+  const record = raw as Record<string, unknown>;
+  for (const key of Object.keys(record)) {
+    if (!KNOWN_ITEM_FIELDS.has(key)) {
+      throw new Error(`unexpected field: items[${index}].${key}`);
+    }
+  }
+  const label = record["label"];
+  if (typeof label !== "string" || label.trim() === "") {
+    throw new Error(`items[${index}].label must be a non-empty string`);
+  }
+  const portionNote = nullableString(record["portionNote"], `items[${index}].portionNote`);
   const nutrientFields: Record<string, unknown> = {};
   for (const field of NUTRIENT_FIELD_NAMES) nutrientFields[field] = record[field];
-  return { outcome, nutrientFields, missingDetails, clarificationQuestion };
+  return { label, portionNote, nutrientFields };
 }

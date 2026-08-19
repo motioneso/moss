@@ -8,10 +8,19 @@
 // diffing (guard 4) lives in store/sql.ts's correctMeal. This file is the
 // last line of defence BEFORE anything from a model reaches Postgres.
 
-import type { Nutrients } from "./meal.js";
+import type { MealItem, Nutrients } from "./meal.js";
 
 export interface EstimatorOutcome {
   readonly kind: "estimated" | "needs_details" | "failed";
+  /**
+   * The individual foods, each already through validateNutrients. Empty for
+   * needs_details and failed.
+   */
+  readonly items: readonly MealItem[];
+  /**
+   * Always the sum of `items` (sumItemNutrients) for an estimated meal — never
+   * a figure the model produced for the meal as a whole (#1737).
+   */
   readonly nutrients: Nutrients | null;
   readonly missingDetails: string | null;
   readonly clarificationQuestion: string | null;

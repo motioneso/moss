@@ -18,6 +18,8 @@
 // file's — `run.ts` stays pure: no ctx, no clock, no store.
 
 import { validateNutrients, type EstimatorOutcome } from "../domain/estimate.js";
+import type { MealItem } from "../domain/meal.js";
+import { sumItemNutrients } from "../domain/totals.js";
 import { buildEstimatePrompt, ESTIMATE_SCHEMA, parseEstimateResult } from "./schema.js";
 
 export interface EstimatorAi {
@@ -42,6 +44,7 @@ export interface EstimatorAi {
 
 const FAILED_OUTCOME: EstimatorOutcome = {
   kind: "failed",
+  items: [],
   nutrients: null,
   missingDetails: null,
   clarificationQuestion: null
@@ -105,18 +108,28 @@ export async function estimateFromDescription(
   if (parsed.outcome === "needs_details") {
     return {
       kind: "needs_details",
+      items: [],
       nutrients: null,
       missingDetails: parsed.missingDetails,
       clarificationQuestion: parsed.clarificationQuestion
     };
   }
 
+  const items: MealItem[] = parsed.items.map((item) => ({
+    label: item.label,
+    portionNote: item.portionNote,
+    // Guard 3: the boundary validator, applied per item regardless of what the
+    // schema already constrained — a single bad field degrades to null rather
+    // than discarding an otherwise-good estimate.
+    nutrients: validateNutrients(item.nutrientFields)
+  }));
+
   return {
     kind: "estimated",
-    // Guard 3: the boundary validator, applied here regardless of what the
-    // schema already constrained — a single bad field degrades to null
-    // rather than discarding an otherwise-good estimate.
-    nutrients: validateNutrients(parsed.nutrientFields),
+    items,
+    // Derived, never model-authored (#1737): the meal's numbers are the sum of
+    // the items, so the parts and the whole cannot disagree.
+    nutrients: sumItemNutrients(items),
     missingDetails: null,
     clarificationQuestion: null
   };
