@@ -433,7 +433,7 @@ export function TodayPage(props: {
                 ))}
               </div>
             ) : (
-              <p className="cmd-empty">No events today.</p>
+              <p className="cmd-empty">No events today. Enjoy the free time!</p>
             )}
           </section>
 

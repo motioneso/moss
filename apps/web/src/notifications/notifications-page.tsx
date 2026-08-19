@@ -70,7 +70,7 @@ export function NotificationsPage() {
         />
       </section>
 
-      <section className="tk-list" aria-live="polite">
+      <section className="tk-list tk-list--loose" aria-live="polite">
         {notificationsQuery.isLoading ? (
           <EmptyState
             icon={<LoaderCircle className="spin" size={22} aria-hidden="true" />}

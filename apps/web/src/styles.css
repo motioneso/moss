@@ -161,9 +161,14 @@ summary:focus-visible {
 input,
 select,
 textarea,
-button,
 a {
   transition: box-shadow 0.1s var(--ease-out);
+}
+
+button {
+  transition:
+    box-shadow 0.1s var(--ease-out),
+    background-color 0.1s var(--ease-out);
 }
 
 .primary-button,
@@ -198,10 +203,11 @@ a {
   color: var(--ink);
 }
 
-.secondary-button:hover,
-.ghost-button:hover,
-.icon-button:hover {
+.secondary-button:hover:not(:focus-visible),
+.ghost-button:hover:not(:focus-visible),
+.icon-button:hover:not(:focus-visible) {
   background: var(--panel-subtle);
+  box-shadow: var(--shadow-sm);
 }
 
 .notification-link {
