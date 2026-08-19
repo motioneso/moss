@@ -106,6 +106,22 @@
 .jds-rail--line {
   background: var(--line);
 }
+.jds-rail--danger {
+  background: var(--danger);
+}
+/* Time-of-day rails, off the `--bucket-*` tokens that tokens.css has carried
+   unused since it was authored. A rail is the only place a time-of-day accent
+   belongs — the alternative a module reaches for is a coloured pill or a tinted
+   row background, both of which the idiom above rules out. */
+.jds-rail--morning {
+  background: var(--bucket-morning);
+}
+.jds-rail--afternoon {
+  background: var(--bucket-afternoon);
+}
+.jds-rail--evening {
+  background: var(--bucket-evening);
+}
 .jds-rail-row {
   display: grid;
   grid-template-columns: 3px 1fr;
@@ -162,6 +178,19 @@
 .jds-instrument--unruled {
   border-top: none;
   padding-top: 0;
+}
+/* The figure under an instrument label. The mockup styled this inline, so the
+   primitive shipped with a label and no value — every caller then invented its
+   own, which is how a keyline field starts drifting from screen to screen.
+   Sans (the display face is reserved for headings and hero figures) with
+   tabular numerals, so a column of values stays aligned as digits change. */
+.jds-instrument__value {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
 }
 .jds-instrument__label {
   margin: 0 0 5px;

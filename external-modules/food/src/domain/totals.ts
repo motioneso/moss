@@ -70,6 +70,22 @@ export function sumItemNutrients(items: readonly MealItem[]): Nutrients {
 }
 
 /**
+ * Net carbohydrates: total carbohydrates less fiber (#1737, spec §Derivation).
+ * Computed at display time and never stored — a column for a figure derivable
+ * from two existing columns is a third thing to keep in sync.
+ *
+ * Null unless BOTH inputs carry a number. Treating an unestimated fiber figure
+ * as 0 would report the full carbohydrate count as net, which is the highest
+ * possible answer dressed up as a precise one.
+ */
+export function netCarbsG(nutrients: Nutrients | null): number | null {
+  if (nutrients === null) return null;
+  const { carbohydratesG, fiberG } = nutrients;
+  if (carbohydratesG === null || fiberG === null) return null;
+  return carbohydratesG - fiberG;
+}
+
+/**
  * True when every item carries a number for this nutrient — the test the day
  * view needs to decide whether to disclose that a meal total is partial.
  * An empty item list is not complete for anything.

@@ -17,8 +17,10 @@ import type { Meal, MealItem, Nutrients } from "../../external-modules/food/src/
 import {
   computeDailyTotals,
   isNutrientComplete,
+  netCarbsG,
   sumItemNutrients
 } from "../../external-modules/food/src/domain/totals.js";
+import { occasionForMeal } from "../../external-modules/food/src/domain/occasion.js";
 import { parseEstimateResult } from "../../external-modules/food/src/estimator/schema.js";
 
 const NULL_NUTRIENTS: Nutrients = {
@@ -316,5 +318,51 @@ describe("parseEstimateResult items (#1737)", () => {
         clarificationQuestion: null
       })
     ).toThrow(/items\[0\].brandGuess/);
+  });
+});
+
+describe("netCarbsG (#1737, spec test 7)", () => {
+  it("subtracts fiber from total carbohydrates", () => {
+    expect(netCarbsG({ ...NULL_NUTRIENTS, carbohydratesG: 60, fiberG: 8 })).toBe(52);
+  });
+
+  it("is unknown when either input is unknown, rather than treating fiber as zero", () => {
+    // Fails against `carbs - (fiber ?? 0)`, which would answer 60 here — the largest
+    // possible net figure, presented as if it had been measured.
+    expect(netCarbsG({ ...NULL_NUTRIENTS, carbohydratesG: 60 })).toBeNull();
+    expect(netCarbsG({ ...NULL_NUTRIENTS, fiberG: 8 })).toBeNull();
+    expect(netCarbsG(null)).toBeNull();
+  });
+
+  it("does not floor a fiber figure larger than the carbohydrate figure", () => {
+    // Estimates disagree with each other sometimes. Clamping to 0 would hide that; a
+    // negative number is visibly wrong, which is the honest outcome.
+    expect(netCarbsG({ ...NULL_NUTRIENTS, carbohydratesG: 5, fiberG: 8 })).toBe(-3);
+  });
+});
+
+describe("occasionForMeal (#1737)", () => {
+  /** Builds an instant that reads as `hour` in a zone `offsetMinutes` from UTC. */
+  function atLocalHour(hour: number, offsetMinutes: number): string {
+    return new Date(Date.UTC(2026, 7, 19, hour, 0) - offsetMinutes * 60_000).toISOString();
+  }
+
+  it("buckets by the hour of the meal's own timezone, not the viewer's", () => {
+    // 08:00 in a UTC-7 zone. A viewer in UTC reading the raw instant would see 15:00 and
+    // file breakfast under lunch — the bug this test exists for.
+    expect(occasionForMeal(atLocalHour(8, -420), -420)).toBe("breakfast");
+    expect(occasionForMeal(atLocalHour(13, -420), -420)).toBe("lunch");
+    expect(occasionForMeal(atLocalHour(19, 330), 330)).toBe("dinner");
+  });
+
+  it("puts late-night eating in the snack bucket rather than the next morning's breakfast", () => {
+    expect(occasionForMeal(atLocalHour(23, 0), 0)).toBe("snack");
+    expect(occasionForMeal(atLocalHour(2, 0), 0)).toBe("snack");
+    expect(occasionForMeal(atLocalHour(4, 0), 0)).toBe("breakfast");
+  });
+
+  it("falls back to snack for an unparseable timestamp instead of throwing", () => {
+    // One bad row must not blank out the whole day view.
+    expect(occasionForMeal("not a date", 0)).toBe("snack");
   });
 });
