@@ -15,21 +15,25 @@ The 2026-08-05 transcript audit found 216 idle hours blocked on Ben, mostly on q
 never recorded — an overnight coordinator sat 15h on a question while this file said nothing was
 pending. Silent waiting is the failure mode this protocol exists to kill.
 
-## #1698 calendar lifecycle (PR #1703) — live-path proof blocked on dev-environment account state (2026-08-19)
+## #1698 calendar lifecycle (PR #1703) AND #1711 all-day scheduling (PR #1717) — both blocked on the same dev-account problem (2026-08-19)
 
-Code is complete: create, reschedule, and delete calendar events all work and have tests, PR
-#1703 is up to date. The only thing missing is proving it works end-to-end in the real app, and
-that's blocked by two things on the dev instance that need a person, not more coding:
+Code is complete on both: PR #1703 (calendar create/reschedule/delete rebuild) and PR #1717
+(all-day events no longer block scheduling) both pass every automated test. Neither can be merged
+yet because this project's rule says a user-facing fix must be proven working on the live system
+first, not just pass tests — and that proof is blocked by two things on the dev instance that need
+a person, not more coding:
 
 1. One of the connected Google accounts on the dev instance has stale sign-in details — someone
    needs to sign back into Google through the browser on that dev instance.
-2. That same account has no real AI provider set up (leftover fake/test ones), so chat won't run
-   for it — someone needs to pick and configure a real AI provider for that account.
+2. The main test account (`ben@ben.com`) currently has no real AI provider configured — confirmed
+   directly tonight by trying to chat with it on the dev instance and getting back "no active
+   chat-capable model is configured." This means chat doesn't work at all for that account right
+   now, which blocks proving ANY chat-based fix live, not just the calendar ones.
 
-Not urgent — the code side is done and safe to sit as "code-complete, unverified" per the
-live-path rule; nothing is at risk overnight. Ben said tonight to ask Fable if I get stuck rather
-than wake him, so I'm pinging Fable rather than his phone for this one. If Fable can't unblock it
-either, this should get a `needs-ben` ping in the morning.
+Both PRs are safe to sit open overnight as "code-complete, unverified" — nothing is at risk. Ben
+said tonight to ask Fable if I get stuck rather than wake him. If this is still blocking things
+tomorrow, it needs a real AI provider set up on that dev account before any further live-testing
+work can happen.
 
 ## #1319 signed module catalog — needs a real Ed25519 signing keypair from Ben (2026-08-18)
 
