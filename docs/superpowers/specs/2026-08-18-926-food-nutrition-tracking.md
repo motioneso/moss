@@ -306,8 +306,11 @@ blocker contract Food consumes.
 - AI estimation uses a Food-owned consent preference and Food-owned per-command/tool gates following
   the Wellness pattern, but defaults off until the user explicitly grants it because meal
   descriptions and photos are health-adjacent private data. The consent toggle lives on the Food
-  page (a module-owned surface), not in core Settings. Wellness consent does not grant Food
-  access. Wellness itself enforces its own enabled state and AI-read consent inside the provider port;
+  page (a module-owned surface), not in core Settings — but persisting it is a `kv.set`, which is
+  forbidden from a read-risk tool (`worker-rpc-host.ts:456`), and a module page can invoke only
+  read-risk tools (`routes.ts:667`). **The interactive toggle is therefore gated by #1699 as well.**
+  Until #1699 lands, the Food page renders consent read-only and the user grants it through a
+  write-risk Chat tool. Wellness consent does not grant Food access. Wellness itself enforces its own enabled state and AI-read consent inside the provider port;
   Food never reads the Wellness preference key.
 - Food tables use forced owner-scoped RLS with no administrator private-data bypass. Service and tool
   access must carry the active actor; caller-supplied owner ids are not trusted.
