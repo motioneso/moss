@@ -1,0 +1,29 @@
+/* Preview-only layout. No colours here - all colour comes from tokens.css. */
+body { margin:0; background:var(--bg); color:var(--text); font-family:var(--font-sans); }
+.pv-page { max-width:1240px; margin:0 auto; padding:var(--space-8) var(--space-7) var(--space-12); }
+.pv-nav { border-bottom:1px solid var(--line); padding:var(--space-3) var(--space-6); display:flex; gap:var(--space-5); align-items:center; }
+.pv-nav a { color:var(--text-muted); text-decoration:none; font-size:var(--text-xs); letter-spacing:.14em; text-transform:uppercase; }
+.pv-nav a.on { color:var(--text); }
+.pv-head { margin-bottom:var(--space-7); }
+.pv-lede { max-width:60ch; color:var(--text-muted); font-size:var(--text-md); margin:var(--space-3) 0 0; }
+.pv-stack > * + * { margin-top:var(--space-4); }
+.pv-row { display:flex; gap:var(--space-4); align-items:flex-start; }
+.pv-row--mid { align-items:center; }
+.pv-grow { flex:1; min-width:0; }
+.pv-between { display:flex; justify-content:space-between; align-items:baseline; gap:var(--space-4); }
+.pv-meta { display:flex; gap:var(--space-4); flex-wrap:wrap; align-items:center; font-size:var(--text-xs); color:var(--text-subtle); font-variant-numeric:tabular-nums; }
+.pv-grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:var(--space-5); }
+.pv-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:var(--space-5); }
+.pv-claims > * + * { margin-top:0; }
+.pv-actions { display:flex; gap:var(--space-3); align-items:center; margin-top:var(--space-5); }
+.pv-spacer { flex:1; }
+.pv-note { font-size:var(--text-xs); color:var(--text-subtle); }
+.pv-sect { margin-top:var(--space-9); }
+.pv-log { font-size:var(--text-sm); color:var(--text-muted); font-variant-numeric:tabular-nums; }
+.pv-log > * + * { margin-top:var(--space-2); }
+.pv-log b { color:var(--text); font-weight:var(--weight-medium,600); }
+
+/* Hairline list: rows separated by a rule, no card around each one. */
+.pv-list { margin-top:var(--space-2); }
+.pv-list > .pv-item { padding:var(--space-5) 0; border-top:1px solid var(--line); }
+.pv-open { padding:var(--space-5) 0 var(--space-2); }
