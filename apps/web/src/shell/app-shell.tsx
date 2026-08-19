@@ -16,7 +16,8 @@ import {
   MessageSquare,
   Newspaper,
   Settings,
-  Trophy
+  Trophy,
+  Utensils
 } from "lucide-react";
 import {
   type ComponentType,
@@ -87,7 +88,8 @@ const iconMap: Record<string, ComponentType<{ readonly size?: number }>> = {
   "message-square": MessageSquare,
   newspaper: Newspaper,
   settings: Settings,
-  trophy: Trophy
+  trophy: Trophy,
+  utensils: Utensils
 };
 
 export function AppShell(props: AppShellProps) {

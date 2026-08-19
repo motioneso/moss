@@ -1,0 +1,286 @@
+{
+  "schemaVersion": 1,
+  "id": "food",
+  "name": "Food",
+  "version": "0.1.0",
+  "publisher": "Moss Project",
+  "lifecycle": "optional",
+  "compatibility": {
+    "jarv1s": ">=0.1.0"
+  },
+  "description": "Log meals and see estimated nutrition.",
+  "storage": [
+    {
+      "namespace": "food.settings",
+      "scopes": ["user"]
+    }
+  ],
+  "database": {
+    "ownedTables": ["app.food_meals", "app.food_estimates"]
+  },
+  "runtime": {
+    "workerEntrypoint": "dist/worker.js",
+    "workerContractVersion": 1
+  },
+  "web": {
+    "entrypoint": "dist/web/index.js",
+    "contractVersion": 2
+  },
+  "navigation": [
+    {
+      "id": "food",
+      "label": "Food",
+      "path": "/",
+      "icon": "utensils"
+    }
+  ],
+  "worker": {
+    "queues": [
+      {
+        "name": "food.estimate-run",
+        "handler": "estimate.run",
+        "retryLimit": 2,
+        "allowManualRun": true,
+        "paramsSchema": {
+          "type": "object",
+          "fields": {
+            "mealId": {
+              "type": "identifier"
+            },
+            "revision": {
+              "type": "integer",
+              "min": 1,
+              "max": 1000000
+            }
+          }
+        }
+      }
+    ]
+  },
+  "assistantActionFamilies": [
+    {
+      "id": "meal_logging",
+      "label": "Meal logging",
+      "description": "Log and correct meals and their nutrition estimates.",
+      "defaultTier": "ask_each_time",
+      "allowedTiers": ["ask_each_time", "trusted_auto", "always_confirm"]
+    },
+    {
+      "id": "food_consent",
+      "label": "AI estimation consent",
+      "description": "Grant or revoke AI-based nutrition estimation for logged meals.",
+      "defaultTier": "ask_each_time",
+      "allowedTiers": ["ask_each_time", "trusted_auto", "always_confirm"]
+    }
+  ],
+  "assistantTools": [
+    {
+      "name": "food.meals.list",
+      "permissionId": "food.meals.list",
+      "description": "List meals and daily totals for a local calendar date, or list meals across a date range.",
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "localDate": {
+            "type": "string"
+          },
+          "fromLocalDate": {
+            "type": "string"
+          },
+          "toLocalDate": {
+            "type": "string"
+          }
+        }
+      },
+      "handler": "meals.list"
+    },
+    {
+      "name": "food.meals.summarize",
+      "permissionId": "food.meals.summarize",
+      "description": "Aggregate nutrition totals across a bounded date range.",
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fromLocalDate", "toLocalDate"],
+        "properties": {
+          "fromLocalDate": {
+            "type": "string"
+          },
+          "toLocalDate": {
+            "type": "string"
+          }
+        }
+      },
+      "handler": "meals.summarize"
+    },
+    {
+      "name": "food.consent.get",
+      "permissionId": "food.consent.get",
+      "description": "Read whether AI-based nutrition estimation is currently consented to.",
+      "risk": "read",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "handler": "consent.get"
+    },
+    {
+      "name": "food.meals.log",
+      "permissionId": "food.meals.log",
+      "description": "Log a meal from a description. Saves immediately; nutrition estimation happens separately if consented to.",
+      "risk": "write",
+      "actionFamilyId": "meal_logging",
+      "executionPolicy": "auto",
+      "selfOperationGrant": "granted_at_install",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["description", "idempotencyKey"],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "consumedAt": {
+            "type": "string"
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "captureKind": {
+            "type": "string",
+            "enum": ["text", "photo", "voice"]
+          },
+          "servingNote": {
+            "type": "string"
+          },
+          "idempotencyKey": {
+            "type": "string"
+          }
+        }
+      },
+      "handler": "meals.log"
+    },
+    {
+      "name": "food.meals.reestimate",
+      "permissionId": "food.meals.reestimate",
+      "description": "Retry the nutrition estimate for a meal that is still pending or whose estimate failed.",
+      "risk": "write",
+      "actionFamilyId": "meal_logging",
+      "executionPolicy": "auto",
+      "selfOperationGrant": "granted_at_install",
+      "handler": "meals.reestimate",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["mealId"],
+        "properties": {
+          "mealId": {
+            "type": "string",
+            "description": "Identifier of the meal to re-estimate."
+          }
+        }
+      }
+    },
+    {
+      "name": "food.meals.correct",
+      "permissionId": "food.meals.correct",
+      "description": "Correct a meal's description, consumed time, or nutrients. Revision-guarded.",
+      "risk": "write",
+      "actionFamilyId": "meal_logging",
+      "executionPolicy": "auto",
+      "selfOperationGrant": "granted_at_install",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["mealId", "expectedRevision"],
+        "properties": {
+          "mealId": {
+            "type": "string"
+          },
+          "expectedRevision": {
+            "type": "integer"
+          },
+          "description": {
+            "type": "string"
+          },
+          "consumedAt": {
+            "type": "string"
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "nutrients": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "caloriesKcal": {
+                "type": ["number", "null"]
+              },
+              "proteinG": {
+                "type": ["number", "null"]
+              },
+              "carbohydratesG": {
+                "type": ["number", "null"]
+              },
+              "fatG": {
+                "type": ["number", "null"]
+              },
+              "fiberG": {
+                "type": ["number", "null"]
+              },
+              "sugarG": {
+                "type": ["number", "null"]
+              },
+              "sodiumMg": {
+                "type": ["number", "null"]
+              }
+            }
+          }
+        }
+      },
+      "handler": "meals.correct"
+    },
+    {
+      "name": "food.consent.grant",
+      "permissionId": "food.consent.grant",
+      "description": "Grant or revoke consent for AI-based nutrition estimation.",
+      "risk": "write",
+      "actionFamilyId": "food_consent",
+      "executionPolicy": "confirm",
+      "selfOperationGrant": "confirm_always",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["granted"],
+        "properties": {
+          "granted": {
+            "type": "boolean"
+          }
+        }
+      },
+      "handler": "consent.grant"
+    },
+    {
+      "name": "food.meals.delete",
+      "permissionId": "food.meals.delete",
+      "description": "Delete a meal.",
+      "risk": "destructive",
+      "selfOperationGrant": "confirm_always",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["mealId"],
+        "properties": {
+          "mealId": {
+            "type": "string"
+          }
+        }
+      },
+      "handler": "meals.delete"
+    }
+  ]
+}
