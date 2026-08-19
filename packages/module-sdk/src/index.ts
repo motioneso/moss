@@ -13,7 +13,10 @@ export { createModuleLogger } from "./logger.js";
 export * from "./module-params.js";
 export type { VaultIngestRootProvider } from "./vault-ingest-provider.js";
 
-import type { ModuleExternalSourceManifest } from "./external-module.js";
+import type {
+  ExternalModulePreferenceDeclaration,
+  ModuleExternalSourceManifest
+} from "./external-module.js";
 
 export type ModuleLifecycle = "required" | "optional" | "user-toggleable" | "workspace-toggleable";
 export type ModuleScope = "user" | "admin" | "system";
@@ -589,6 +592,13 @@ export interface MossModuleManifest {
   readonly database?: ModuleDatabaseManifest;
   readonly navigation?: readonly ModuleNavigationEntryManifest[];
   readonly settings?: readonly ModuleSettingsSurfaceManifest[];
+  /**
+   * #1725: on/off switches the HOST renders and stores. Distinct from `settings`, which is a
+   * module-authored React surface and stays unavailable to distributable modules for that
+   * reason. Declaration only — the module reads the resolved values via `ctx.preferences`
+   * and never writes them.
+   */
+  readonly preferences?: readonly ExternalModulePreferenceDeclaration[];
   readonly features?: readonly ModuleFeatureManifest[];
   readonly permissions?: readonly ModulePermissionManifest[];
   readonly featureFlags?: readonly ModuleFeatureFlagManifest[];
@@ -626,6 +636,7 @@ export {
   type ExternalModuleBriefingDeclaration,
   type ExternalModuleDatabaseDeclaration,
   type ExternalModuleNavigationEntry,
+  type ExternalModulePreferenceDeclaration,
   type ExternalModuleQueueDeclaration,
   type ExternalModuleReconcileJobDeclaration,
   type ExternalModuleScheduleDeclaration,

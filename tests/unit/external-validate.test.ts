@@ -545,4 +545,137 @@ describe("validateExternalModuleManifest (#917)", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.errors.join(" ")).toContain("instanceWritePolicy");
   });
+
+  // #1725: `preferences` is the narrow replacement for the still-forbidden `settings` field.
+  // An installed module declares switches; the host owns the page and the write path. Every
+  // rejection below names its own error text, so a validator that skipped the check would fail
+  // the assertion rather than pass on a coincidental error from another rule.
+  describe("preferences (#1725)", () => {
+    const pref = {
+      key: "aiEstimates",
+      label: "AI nutrition estimates",
+      description: "Let Moss estimate calories for meals you log.",
+      type: "boolean",
+      default: true
+    };
+
+    it("accepts a well-formed preferences declaration", () => {
+      const result = validateExternalModuleManifest(
+        { ...base, preferences: [pref] },
+        "acme-widgets",
+        "0.1.0"
+      );
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.manifest.preferences).toEqual([pref]);
+    });
+
+    it("accepts a manifest with no preferences block", () => {
+      const result = validateExternalModuleManifest(base, "acme-widgets", "0.1.0");
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.manifest.preferences).toBeUndefined();
+    });
+
+    it("still rejects the built-in `settings` field", () => {
+      const result = validateExternalModuleManifest(
+        { ...base, settings: [{ id: "x", label: "X", path: "/settings/x" }] },
+        "acme-widgets",
+        "0.1.0"
+      );
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.errors.join(" ")).toContain("settings");
+    });
+
+    it("rejects more than 8 preferences", () => {
+      const many = Array.from({ length: 9 }, (_, i) => ({ ...pref, key: `pref${i}` }));
+      const result = validateExternalModuleManifest(
+        { ...base, preferences: many },
+        "acme-widgets",
+        "0.1.0"
+      );
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.errors.join(" ")).toContain("at most 8");
+    });
+
+    it("rejects a duplicate key", () => {
+      const result = validateExternalModuleManifest(
+        { ...base, preferences: [pref, { ...pref, label: "Other" }] },
+        "acme-widgets",
+        "0.1.0"
+      );
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.errors.join(" ")).toContain("unique");
+    });
+
+    it("rejects a key that is not a lower camel-case identifier", () => {
+      for (const key of ["AiEstimates", "ai-estimates", "1estimates", ""]) {
+        const result = validateExternalModuleManifest(
+          { ...base, preferences: [{ ...pref, key }] },
+          "acme-widgets",
+          "0.1.0"
+        );
+        expect(result.ok, `key ${JSON.stringify(key)} must be rejected`).toBe(false);
+        if (!result.ok) expect(result.errors.join(" ")).toContain("preference key");
+      }
+    });
+
+    it("rejects a non-boolean type", () => {
+      const result = validateExternalModuleManifest(
+        { ...base, preferences: [{ ...pref, type: "number", default: 3 }] },
+        "acme-widgets",
+        "0.1.0"
+      );
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.errors.join(" ")).toContain("preference type");
+    });
+
+    it("rejects a default whose type does not match", () => {
+      const result = validateExternalModuleManifest(
+        { ...base, preferences: [{ ...pref, default: "yes" }] },
+        "acme-widgets",
+        "0.1.0"
+      );
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.errors.join(" ")).toContain("preference default");
+    });
+
+    it("rejects a missing default", () => {
+      const { default: _omitted, ...withoutDefault } = pref;
+      const result = validateExternalModuleManifest(
+        { ...base, preferences: [withoutDefault] },
+        "acme-widgets",
+        "0.1.0"
+      );
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.errors.join(" ")).toContain("preference default");
+    });
+
+    it("rejects unknown fields rather than dropping them", () => {
+      const result = validateExternalModuleManifest(
+        { ...base, preferences: [{ ...pref, permissionId: "acme.manage" }] },
+        "acme-widgets",
+        "0.1.0"
+      );
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.errors.join(" ")).toContain("unknown fields");
+    });
+
+    it("rejects an over-long label or description", () => {
+      const longLabel = validateExternalModuleManifest(
+        { ...base, preferences: [{ ...pref, label: "x".repeat(61) }] },
+        "acme-widgets",
+        "0.1.0"
+      );
+      expect(longLabel.ok).toBe(false);
+      if (!longLabel.ok) expect(longLabel.errors.join(" ")).toContain("preference label");
+
+      const longDescription = validateExternalModuleManifest(
+        { ...base, preferences: [{ ...pref, description: "x".repeat(161) }] },
+        "acme-widgets",
+        "0.1.0"
+      );
+      expect(longDescription.ok).toBe(false);
+      if (!longDescription.ok)
+        expect(longDescription.errors.join(" ")).toContain("preference description");
+    });
+  });
 });

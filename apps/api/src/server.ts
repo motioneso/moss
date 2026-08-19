@@ -84,6 +84,7 @@ import {
   createExternalModuleTools
 } from "./external-module-tools.js";
 import { serializeExternalModule, serializeModule } from "./module-dto.js";
+import { registerModulePreferenceRoutes } from "./module-preferences.js";
 
 // `FastifyRequest.timeZone` is declared in `@moss/module-registry` (#801 Phase A),
 // not here: module-registry is the composition root that both the writer (this
@@ -396,6 +397,13 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     externalWorkerRuntime = externalTools.runtime;
     const externalToolManifests = externalTools.manifests;
     registerPlatformRoutes(server, authRuntime, getActiveExternalModules);
+    // #1725: host-owned on/off switches for installed modules.
+    registerModulePreferenceRoutes(server, {
+      resolveAccessContext: authRuntime.resolveAccessContext,
+      getActiveExternalModules,
+      runner: dataContext,
+      rateLimitKey: authPrincipalRateLimitKey
+    });
     registerExternalModuleWebAssetRoute(
       server,
       authRuntime,

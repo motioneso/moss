@@ -10,6 +10,7 @@ import type {
   ExternalModuleBriefingDeclaration,
   ExternalModuleDatabaseDeclaration,
   ExternalModuleNavigationEntry,
+  ExternalModulePreferenceDeclaration,
   ExternalModuleWorkerDeclaration,
   MossActionPermissionTier,
   ModuleAssistantActionFamilyManifest,
@@ -55,7 +56,8 @@ const LIFECYCLES: readonly ModuleLifecycle[] = [
 // Every field of the compiled MossModuleManifest that carries executable behavior
 // or a UI/data surface. Presence of ANY of these in an external manifest is a
 // rejection. `auth`/`storage`/`web` are first-class as of #918 Slice 2, `database` as
-// of #964, `navigation` as of #1019, and `assistantActionFamilies` as of #1246
+// of #964, `navigation` as of #1019, `preferences` as of #1725 (`settings` itself stays
+// forbidden — it carries a component, `preferences` is data), and `assistantActionFamilies` as of #1246
 // (each validated positively below) and are deliberately absent from this list.
 const FORBIDDEN_FIELDS: readonly string[] = [
   "availability",
@@ -899,6 +901,89 @@ export function validateExternalModuleManifest(
     }
   }
 
+  // #1725: positive validation of the preferences declaration. Same carve-out shape as
+  // #1019 did for navigation: `settings` stays in FORBIDDEN_FIELDS (it carries a React
+  // component the host would execute), while this data-only declaration lets an installed
+  // module have the on/off switches every compiled-in module already has. Booleans only —
+  // see ExternalModulePreferenceDeclaration for why a wider type is a separate design.
+  let preferences: readonly ExternalModulePreferenceDeclaration[] | undefined;
+  if (obj.preferences !== undefined) {
+    if (!Array.isArray(obj.preferences)) {
+      errors.push("preferences must be an array");
+    } else if (obj.preferences.length === 0 || obj.preferences.length > 8) {
+      errors.push("preferences must declare between 1 and at most 8 entries");
+    } else {
+      const keys = new Set<string>();
+      const validated: ExternalModulePreferenceDeclaration[] = [];
+      for (const entry of obj.preferences) {
+        if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+          errors.push("preferences entries must be objects");
+          continue;
+        }
+        const prefEntry = entry as Record<string, unknown>;
+        const unknownKeys = Object.keys(prefEntry).filter(
+          (key) => !["key", "label", "description", "type", "default"].includes(key)
+        );
+        if (unknownKeys.length > 0) {
+          errors.push(`preferences entry contains unknown fields: ${unknownKeys.join(", ")}`);
+        }
+        const { key, label, description, type, default: defaultValue } = prefEntry;
+        let entryValid = unknownKeys.length === 0;
+
+        if (typeof key !== "string" || !/^[a-z][a-zA-Z0-9]{0,39}$/.test(key)) {
+          errors.push(
+            "preference key must be a lower camel-case identifier of at most 40 chars"
+          );
+          entryValid = false;
+        } else if (keys.has(key)) {
+          errors.push(`preference key must be unique: ${key}`);
+          entryValid = false;
+        } else {
+          keys.add(key);
+        }
+
+        if (typeof label !== "string" || label.length === 0 || label.length > 60) {
+          errors.push("preference label must be a non-empty string (max 60 chars)");
+          entryValid = false;
+        }
+
+        if (
+          description !== undefined &&
+          (typeof description !== "string" || description.length > 160)
+        ) {
+          errors.push("preference description must be a string of at most 160 chars");
+          entryValid = false;
+        }
+
+        if (type !== "boolean") {
+          errors.push('preference type must be "boolean"');
+          entryValid = false;
+        }
+
+        // The default is required, not optional: nothing is written to app.preferences at
+        // install time, so an unwritten preference resolves to this value on every read.
+        // A missing default would leave the resolved value undefined at invocation.
+        if (typeof defaultValue !== "boolean") {
+          errors.push("preference default must be a boolean matching the declared type");
+          entryValid = false;
+        }
+
+        if (entryValid) {
+          validated.push({
+            key: key as string,
+            label: label as string,
+            ...(description !== undefined ? { description: description as string } : {}),
+            type: "boolean",
+            default: defaultValue as boolean
+          });
+        }
+      }
+      if (errors.length === 0) {
+        preferences = validated;
+      }
+    }
+  }
+
   // #1282: positive validation of the briefing contribution declaration. Same shape as
   // every other allow-listed surface above: unknown keys rejected outright rather than
   // ignored, bounded strings, and a cross-check that the handler has a worker to run in.
@@ -988,6 +1073,7 @@ export function validateExternalModuleManifest(
       : {}),
     ...(database !== undefined ? { database } : {}),
     ...(navigation !== undefined ? { navigation } : {}),
+    ...(preferences !== undefined ? { preferences } : {}),
     // #1282: this literal is an allow-list — a validated field that is not re-emitted
     // here vanishes from the manifest with validation still returning ok. Omitting this
     // line is silent, and only tests/unit/external-module-briefing-manifest.test.ts

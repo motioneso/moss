@@ -57,6 +57,7 @@ import {
 } from "./settings-module-subviews";
 import { useFeedback } from "./settings-feedback";
 import { resolveModuleSettingsDeepLink } from "./module-settings-deep-link";
+import { ModulePreferencesSettings } from "./settings-module-preferences";
 import {
   settingsModuleControlModel,
   visibleConfigurableModules,
@@ -567,6 +568,9 @@ type ModuleSettingsView = ModuleSub | { readonly moduleId: string };
 function hasImplementedModuleSettings(module: SettingsModule): boolean {
   if (CONFIG_IDS.has(module.id)) return true;
   if (CAT_BY_ID[module.id]) return true;
+  // #1725: declared switches are a settings destination, so a required module that has them
+  // keeps its row (same #986 rule that keeps rows for contributed surfaces below).
+  if (module.hasPreferences) return true;
   return (
     CONTRIBUTED_SETTINGS_MODULE_IDS.has(module.id) &&
     Boolean(findModuleSettingsEntrySurface(module.id, MODULE_SETTINGS_SURFACES))
@@ -578,11 +582,19 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
   const { toast } = useFeedback();
   const assistantName = useAssistantName();
   const [searchParams, setSearchParams] = useSearchParams();
+  const myQuery = useQuery({ queryKey: queryKeys.myModules, queryFn: getMyModules, retry: false });
+  // #1725: a module that only declares preferences has no contributed React surface, so it
+  // needs its own reason to be a valid destination — otherwise the deep link resolves to
+  // null and "Configure" lands back on the list.
+  const declaresPreferences = (moduleId: string): boolean =>
+    myQuery.data?.modules.some((module) => module.id === moduleId && module.hasPreferences) ===
+    true;
   const view: ModuleSettingsView | null = resolveModuleSettingsDeepLink(
     searchParams.get("module"),
-    (moduleId) => Boolean(findModuleSettingsEntrySurface(moduleId, MODULE_SETTINGS_SURFACES))
+    (moduleId) =>
+      Boolean(findModuleSettingsEntrySurface(moduleId, MODULE_SETTINGS_SURFACES)) ||
+      declaresPreferences(moduleId)
   );
-  const myQuery = useQuery({ queryKey: queryKeys.myModules, queryFn: getMyModules, retry: false });
   const modulesQuery = useQuery({ queryKey: queryKeys.modules, queryFn: getModules, retry: false });
   const toggleMutation = useMutation({
     mutationFn: (input: { id: string; disabled: boolean }) =>
@@ -613,6 +625,18 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
       />
     );
   if (view && typeof view === "object") {
+    // #1725: an in-repo module that contributes its own settings surface keeps it; anything
+    // else that got here did so by declaring preferences, which the host renders generically.
+    if (!findModuleSettingsEntrySurface(view.moduleId, MODULE_SETTINGS_SURFACES)) {
+      const target = myQuery.data?.modules.find((module) => module.id === view.moduleId);
+      return (
+        <ModulePreferencesSettings
+          moduleId={view.moduleId}
+          moduleName={target?.name ?? view.moduleId}
+          onBack={closeModule}
+        />
+      );
+    }
     return (
       <ModuleSettingsRouter
         moduleId={view.moduleId}
@@ -677,6 +701,19 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
         </button>
       );
     } else if (contributedSettings) {
+      action = (
+        <button
+          type="button"
+          className="modrow__link"
+          aria-label={`Configure ${module.name}`}
+          onClick={() => openModule(module.id)}
+        >
+          Configure <ArrowRight size={14} aria-hidden="true" />
+        </button>
+      );
+    } else if (module.hasPreferences) {
+      // #1725: an installed module with declared switches gets the same "Configure" link as
+      // a built-in one — from the user's side there is no difference worth showing.
       action = (
         <button
           type="button"

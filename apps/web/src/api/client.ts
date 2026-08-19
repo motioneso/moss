@@ -107,7 +107,9 @@ import type {
   ListExternalModulesResponse,
   ListModuleCredentialsResponse,
   ListModulesResponse,
+  ListModulePreferencesResponse,
   ListMyModulesResponse,
+  UpdateModulePreferencesResponse,
   ListSourceBehaviorsResponse,
   ModuleCredentialStatusDto,
   MyModuleDto,
@@ -392,6 +394,26 @@ export async function setMyModuleDisabled(
     method: "PATCH",
     body: { disabled }
   });
+}
+
+/** #1725: the module's declared on/off switches, joined to this user's stored values. */
+export async function getModulePreferences(
+  moduleId: string
+): Promise<ListModulePreferencesResponse> {
+  return requestJson<ListModulePreferencesResponse>(
+    `/api/modules/${encodeURIComponent(moduleId)}/preferences`
+  );
+}
+
+/** #1725: write one or more switches. Undeclared keys are rejected, not ignored. */
+export async function updateModulePreferences(
+  moduleId: string,
+  updates: Readonly<Record<string, boolean>>
+): Promise<UpdateModulePreferencesResponse> {
+  return requestJson<UpdateModulePreferencesResponse>(
+    `/api/modules/${encodeURIComponent(moduleId)}/preferences`,
+    { method: "PATCH", body: updates }
+  );
 }
 
 /** Admin: enable/disable an optional module instance-wide. */

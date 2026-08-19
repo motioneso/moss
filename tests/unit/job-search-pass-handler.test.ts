@@ -207,6 +207,8 @@ function createFakeCtx(input: {
   };
 
   return {
+    // #1725: job-search declares no preferences, so an empty map is what the host sends.
+    preferences: {},
     input: input.input,
     deadlineAt: input.deadlineAt,
     auth: {

@@ -231,6 +231,31 @@ export interface ExternalModuleNavigationEntry {
 }
 
 /**
+ * One user-facing on/off switch an installed module declares (#1725).
+ *
+ * The compiled-in `settings` field stays forbidden (FORBIDDEN_FIELDS) because it carries
+ * a React component the host would have to execute. This is data only: the host renders
+ * the control, owns the storage (`app.preferences`, key `module:<moduleId>:<key>`, RLS
+ * owner-only) and hands the resolved values to the module read-only at invocation. A
+ * module can never write its own preference, and never sees another user's.
+ *
+ * Booleans only, deliberately. Free-text or enum preferences would put module-authored
+ * strings on a settings page and into stored user data, which needs the four guards from
+ * the determinism boundary — that is a separate design, not a wider type here.
+ */
+export interface ExternalModulePreferenceDeclaration {
+  /** Lower camel-case identifier, unique within the module. Namespaced by moduleId in storage. */
+  readonly key: string;
+  /** The switch label on the settings page. */
+  readonly label: string;
+  /** Optional one-line explanation shown under the label. */
+  readonly description?: string;
+  readonly type: "boolean";
+  /** Applied whenever the user has never touched the switch — nothing is written at install. */
+  readonly default: boolean;
+}
+
+/**
  * How an external module contributes to a daily briefing (#1282).
  *
  * Core modules reach a briefing by registering an in-process assistant tool the
@@ -296,6 +321,12 @@ export interface JsonMossModuleManifest {
    * validated positively in packages/module-registry/src/external/validate.ts.
    */
   readonly navigation?: readonly ExternalModuleNavigationEntry[];
+  /**
+   * On/off switches this module offers on its host-rendered settings page (#1725).
+   * Optional — a module that declares none gets no settings page. 1-8 entries, validated
+   * positively in packages/module-registry/src/external/validate.ts.
+   */
+  readonly preferences?: readonly ExternalModulePreferenceDeclaration[];
   /**
    * Briefing contribution (#1282). External modules cannot register an in-process
    * assistant tool, so the composer reaches them through an injected worker invoker

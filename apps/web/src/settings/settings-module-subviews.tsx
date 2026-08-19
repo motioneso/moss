@@ -67,7 +67,7 @@ const DIGEST_WEEKDAYS = [
 ];
 
 /* Shared takeover chrome for a settings-only module. */
-function ModuleSub(props: {
+export function ModuleSub(props: {
   readonly icon: ReactNode;
   readonly name: string;
   readonly sub: string;
