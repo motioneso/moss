@@ -39,64 +39,24 @@ Every feature above is a module with a manifest — its own database tables, bac
 
 ## Install
 
-One Postgres container and one Moss container. Copy this into `compose.yml`, replace the two placeholder secrets, then start it.
-
-```yaml
-services:
-  postgres:
-    image: pgvector/pgvector:pg17
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: moss
-      POSTGRES_USER: moss
-      # Change this. Keep it in sync with MOSS_DB_PASSWORD below.
-      POSTGRES_PASSWORD: replace-this-postgres-password
-    volumes:
-      - moss-postgres:/var/lib/postgresql/data
-
-  moss:
-    image: ghcr.io/motioneso/moss:stable
-    restart: unless-stopped
-    depends_on:
-      - postgres
-    ports:
-      - "1533:3000"
-    environment:
-      MOSS_BASE_URL: http://localhost:1533
-
-      # Change this. Use a long random value.
-      MOSS_SECRET: replace-this-moss-secret
-
-      MOSS_DB_HOST: postgres
-      MOSS_DB_NAME: moss
-      MOSS_DB_USER: moss
-      # Must match POSTGRES_PASSWORD above.
-      MOSS_DB_PASSWORD: replace-this-postgres-password
-
-      # Fixed in-container path for notes. Edit the volume mount below, not this.
-      MOSS_NOTES_ROOTS: /data/external-notes
-    volumes:
-      - moss-data:/data
-
-      # Optional: mount your notes folder read-only.
-      # - /Users/you/Obsidian:/data/external-notes:ro
-      # - /srv/obsidian:/data/external-notes:ro
-
-volumes:
-  moss-postgres:
-  moss-data:
-```
+Moss is deployed using Docker Compose. The setup process generates your unique encryption keys and database passwords automatically.
 
 ```sh
-docker compose pull
-docker compose up -d
+mkdir moss && cd moss
+
+# Download the production Compose file
+curl -O https://raw.githubusercontent.com/motioneso/Jarv1s/main/infra/docker-compose.prod.yml
+
+# 1. Generate your boot secrets (creates env.production.local)
+JARVIS_IMAGE_TAG=stable docker compose -f docker-compose.prod.yml --profile setup run --rm setup
+
+# 2. Start the stack
+docker compose -f docker-compose.prod.yml --env-file env.production.local up -d
 ```
 
-Open `http://localhost:1533`. To upgrade later, run the same two commands.
+Open `http://localhost:1533`. To upgrade later, run `docker compose pull` then the `up -d` command again.
 
-The Moss container runs the web UI, API, background worker, database migrations, notes indexing, and the provider CLI runtime. Postgres stays in its own container because database lifecycle and durable storage belong in the official image.
-
-Moss refuses to start if the placeholder secrets are left unchanged.
+For detailed configuration (including mounting a notes folder), see the [Deploy Guide](docs/operations/deploy.md).
 
 ## Notes
 

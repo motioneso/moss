@@ -1,6 +1,6 @@
 # Secret-Key Rotation Runbook
 
-Covers rotating `JARVIS_CONNECTOR_SECRET_KEY` and/or `JARVIS_AI_SECRET_KEY` without
+Covers rotating `MOSS_CONNECTOR_SECRET_KEY` and/or `MOSS_AI_SECRET_KEY` without
 downtime or data loss. The cipher uses AES-256-GCM with a versioned key envelope —
 old envelopes stay decryptable while new writes use the new key.
 
@@ -26,12 +26,12 @@ immediate re-encryption of all rows so an old key can be retired promptly.
 
 | Variable                         | Purpose                                                       |
 | -------------------------------- | ------------------------------------------------------------- |
-| `JARVIS_CONNECTOR_SECRET_KEY`    | Current connector key secret (plaintext — hashed to 256 bits) |
-| `JARVIS_CONNECTOR_SECRET_KEY_ID` | Id of the current connector key (default: `"v1"`)             |
-| `JARVIS_CONNECTOR_SECRET_KEYS`   | JSON object of retired connector keys: `{"v1":"old-secret"}`  |
-| `JARVIS_AI_SECRET_KEY`           | Current AI key secret                                         |
-| `JARVIS_AI_SECRET_KEY_ID`        | Id of the current AI key (default: `"v1"`)                    |
-| `JARVIS_AI_SECRET_KEYS`          | JSON object of retired AI keys                                |
+| `MOSS_CONNECTOR_SECRET_KEY`      | Current connector key secret (plaintext — hashed to 256 bits) |
+| `MOSS_CONNECTOR_SECRET_KEY_ID`   | Id of the current connector key (default: `"v1"`)             |
+| `MOSS_CONNECTOR_SECRET_KEYS`     | JSON object of retired connector keys: `{"v1":"old-secret"}`  |
+| `MOSS_AI_SECRET_KEY`             | Current AI key secret                                         |
+| `MOSS_AI_SECRET_KEY_ID`          | Id of the current AI key (default: `"v1"`)                    |
+| `MOSS_AI_SECRET_KEYS`            | JSON object of retired AI keys                                |
 
 ---
 
@@ -57,10 +57,10 @@ still set as current (no new key yet):
 
 ```bash
 # API and worker must be stopped before this step.
-JARVIS_CONNECTOR_SECRET_KEY="<current-old-secret>" \
-JARVIS_CONNECTOR_SECRET_KEY_ID="v1" \
-JARVIS_AI_SECRET_KEY="<current-old-ai-secret>" \
-JARVIS_AI_SECRET_KEY_ID="v1" \
+MOSS_CONNECTOR_SECRET_KEY="<current-old-secret>" \
+MOSS_CONNECTOR_SECRET_KEY_ID="v1" \
+MOSS_AI_SECRET_KEY="<current-old-ai-secret>" \
+MOSS_AI_SECRET_KEY_ID="v1" \
 pnpm tsx scripts/rewrap-secrets.ts
 ```
 
@@ -69,23 +69,23 @@ envelopes. The rotation in the next steps is now safe.
 
 ### Step 3 — Add the old key to the retired-keys map
 
-Add the _current_ key to `JARVIS_*_SECRET_KEYS` before switching. This ensures any
+Add the _current_ key to `MOSS_*_SECRET_KEYS` before switching. This ensures any
 `v1` envelopes that were not rewrapped remain decryptable during the transition.
 
 ```bash
 # Before rotation, current is v1 / "old-secret"
-JARVIS_CONNECTOR_SECRET_KEYS='{"v1":"old-secret"}'
-JARVIS_AI_SECRET_KEYS='{"v1":"old-ai-secret"}'
+MOSS_CONNECTOR_SECRET_KEYS='{"v1":"old-secret"}'
+MOSS_AI_SECRET_KEYS='{"v1":"old-ai-secret"}'
 ```
 
 ### Step 4 — Set the new key as current
 
 ```bash
-JARVIS_CONNECTOR_SECRET_KEY="new-secret-from-step-1"
-JARVIS_CONNECTOR_SECRET_KEY_ID="v2"
+MOSS_CONNECTOR_SECRET_KEY="new-secret-from-step-1"
+MOSS_CONNECTOR_SECRET_KEY_ID="v2"
 
-JARVIS_AI_SECRET_KEY="new-ai-secret-from-step-1"
-JARVIS_AI_SECRET_KEY_ID="v2"
+MOSS_AI_SECRET_KEY="new-ai-secret-from-step-1"
+MOSS_AI_SECRET_KEY_ID="v2"
 ```
 
 ### Step 5 — Deploy
@@ -100,12 +100,12 @@ To retire the old key promptly, run the rewrap script again with both keys in sc
 
 ```bash
 # API and worker should be stopped or traffic frozen for this step.
-JARVIS_CONNECTOR_SECRET_KEY="new-secret" \
-JARVIS_CONNECTOR_SECRET_KEY_ID="v2" \
-JARVIS_CONNECTOR_SECRET_KEYS='{"v1":"old-secret"}' \
-JARVIS_AI_SECRET_KEY="new-ai-secret" \
-JARVIS_AI_SECRET_KEY_ID="v2" \
-JARVIS_AI_SECRET_KEYS='{"v1":"old-ai-secret"}' \
+MOSS_CONNECTOR_SECRET_KEY="new-secret" \
+MOSS_CONNECTOR_SECRET_KEY_ID="v2" \
+MOSS_CONNECTOR_SECRET_KEYS='{"v1":"old-secret"}' \
+MOSS_AI_SECRET_KEY="new-ai-secret" \
+MOSS_AI_SECRET_KEY_ID="v2" \
+MOSS_AI_SECRET_KEYS='{"v1":"old-ai-secret"}' \
 pnpm tsx scripts/rewrap-secrets.ts
 ```
 
@@ -119,12 +119,12 @@ the rotation is complete.
 ### Step 8 — Retire the old key
 
 Once confident all rows have been re-encrypted (either lazily or via step 6), remove
-the old key from `JARVIS_*_SECRET_KEYS` and redeploy.
+the old key from `MOSS_*_SECRET_KEYS` and redeploy.
 
 ```bash
 # No longer needed:
-# JARVIS_CONNECTOR_SECRET_KEYS (remove or set to {})
-# JARVIS_AI_SECRET_KEYS (remove or set to {})
+# MOSS_CONNECTOR_SECRET_KEYS (remove or set to {})
+# MOSS_AI_SECRET_KEYS (remove or set to {})
 ```
 
 ---
@@ -142,7 +142,7 @@ the keyring can authenticate the envelope, `decryptJson` throws
 This happens when all retired keys have been removed before legacy rows were rewrapped.
 
 In both cases, affected users will see an error on their next connector sync or AI
-provider call. Recovery requires restoring the lost key to `JARVIS_*_SECRET_KEYS` and
+provider call. Recovery requires restoring the lost key to `MOSS_*_SECRET_KEYS` and
 running the rewrap script.
 
 ---
