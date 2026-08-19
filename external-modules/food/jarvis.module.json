@@ -62,7 +62,7 @@
       "id": "meal_logging",
       "label": "Meal logging",
       "description": "Log and correct meals and their nutrition estimates.",
-      "defaultTier": "trusted_auto",
+      "defaultTier": "ask_each_time",
       "allowedTiers": ["ask_each_time", "trusted_auto", "always_confirm"]
     },
     {
@@ -171,6 +171,7 @@
     },
     {
       "name": "food.meals.reestimate",
+      "permissionId": "food.meals.reestimate",
       "description": "Retry the nutrition estimate for a meal that is still pending or whose estimate failed.",
       "risk": "write",
       "actionFamilyId": "meal_logging",
@@ -254,8 +255,8 @@
       "description": "Grant or revoke consent for AI-based nutrition estimation.",
       "risk": "write",
       "actionFamilyId": "food_consent",
-      "executionPolicy": "auto",
-      "selfOperationGrant": "granted_at_install",
+      "executionPolicy": "confirm",
+      "selfOperationGrant": "confirm_always",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
