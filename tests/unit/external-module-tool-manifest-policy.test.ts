@@ -58,19 +58,27 @@ describe("external tool manifest policy mapping (#1246)", () => {
     });
   });
 
-  it("confirms only the declared exceptional value", () => {
+  it("confirms only the declared exceptional value", async () => {
     const [manifest] = createExternalToolManifests([discovery], invoke);
     const requiresConfirmation = manifest?.assistantTools?.[0]?.requiresConfirmation;
 
-    expect(requiresConfirmation?.({ status: "active" })).toBe(true);
-    expect(requiresConfirmation?.({ status: "building" })).toBe(false);
+    expect(await requiresConfirmation?.({} as never, { status: "active" }, {} as never)).toBe(
+      true
+    );
+    expect(await requiresConfirmation?.({} as never, { status: "building" }, {} as never)).toBe(
+      false
+    );
   });
 
-  it("confirms when a declared exceptional key is present, including false", () => {
+  it("confirms when a declared exceptional key is present, including false", async () => {
     const [manifest] = createExternalToolManifests([discovery], invoke);
     const requiresConfirmation = manifest?.assistantTools?.[0]?.requiresConfirmation;
 
-    expect(requiresConfirmation?.({ vaultEnabled: false })).toBe(true);
-    expect(requiresConfirmation?.({ titles: ["Engineer"] })).toBe(false);
+    expect(await requiresConfirmation?.({} as never, { vaultEnabled: false }, {} as never)).toBe(
+      true
+    );
+    expect(
+      await requiresConfirmation?.({} as never, { titles: ["Engineer"] }, {} as never)
+    ).toBe(false);
   });
 });

@@ -1,8 +1,7 @@
 import type {
   ModuleAssistantToolManifest,
   ModuleAssistantActionFamilyManifest,
-  MossActionPermissionTier,
-  ToolInput
+  MossActionPermissionTier
 } from "@moss/module-sdk";
 
 export type PolicyDecision = "run" | "confirm";
@@ -22,19 +21,21 @@ export interface AgencyPrefLookup {
 
 /**
  * Reads run. Writes default to confirm unless the owning module explicitly
- * declares auto agency (or tier = trusted_auto) and the user promoted that module. Destructive tools
- * always confirm — as does any write tool whose `requiresConfirmation(input)` hook returns true
- * for this specific call, even when the tool's family has been promoted to trusted_auto.
+ * declares auto agency (or tier = trusted_auto) and the user promoted that module. Destructive
+ * tools always confirm — as does any write tool whose `requiresConfirmation` hook resolved true
+ * for this specific call (`confirmOverride`, computed by the caller before this function runs —
+ * see gateway.ts's `computeConfirmOverride` — so this module stays DB-free), even when the
+ * tool's family has been promoted to trusted_auto.
  */
 export async function resolvePolicy(
   tool: ModuleAssistantToolManifest,
   moduleId: string,
-  input: ToolInput,
+  confirmOverride: boolean,
   lookup: ActionPolicyLookup
 ): Promise<PolicyDecision> {
   if (tool.risk === "read") return "run";
   if (tool.risk === "destructive") return "confirm";
-  if (tool.requiresConfirmation?.(input) === true) return "confirm";
+  if (confirmOverride) return "confirm";
 
   const familyId = tool.actionFamilyId;
   if (!familyId) {

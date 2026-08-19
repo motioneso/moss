@@ -36,7 +36,12 @@ describe("gateway policy resolver", () => {
     };
 
     // No familyId set
-    const decision = await resolvePolicy(tool, "mock_module", {}, createMockLookup(null, null));
+    const decision = await resolvePolicy(
+      tool,
+      "mock_module",
+      false,
+      createMockLookup(null, null)
+    );
     expect(decision).toBe("confirm");
   });
 
@@ -61,7 +66,7 @@ describe("gateway policy resolver", () => {
     const decision = await resolvePolicy(
       tool,
       "mock_module",
-      {},
+      false,
       createMockLookup("trusted_auto", manifest)
     );
     expect(decision).toBe("confirm");
@@ -88,7 +93,7 @@ describe("gateway policy resolver", () => {
     const decision = await resolvePolicy(
       tool,
       "mock_module",
-      {},
+      false,
       createMockLookup("trusted_auto", manifest)
     );
     expect(decision).toBe("confirm");
@@ -115,13 +120,16 @@ describe("gateway policy resolver", () => {
     const decision = await resolvePolicy(
       tool,
       "mock_module",
-      {},
+      false,
       createMockLookup("trusted_auto", manifest)
     );
     expect(decision).toBe("run");
   });
 
-  it("requiresConfirmation overrides trusted_auto for calls it flags as destructive", async () => {
+  it("confirmOverride forces confirm even under trusted_auto with executionPolicy auto", async () => {
+    // The tool's own requiresConfirmation hook is no longer resolvePolicy's concern (it's
+    // resolved by the gateway beforehand — see gateway.ts's computeConfirmOverride — precisely
+    // so this function stays DB-free); resolvePolicy just takes the already-computed boolean.
     const tool: ModuleAssistantToolManifest = {
       name: "mock.tool",
       description: "Mock tool",
@@ -131,8 +139,7 @@ describe("gateway policy resolver", () => {
       executionPolicy: "auto",
       inputSchema: {},
       outputSchema: {},
-      execute: async () => ({ data: {} }),
-      requiresConfirmation: (input) => input["overwrite"] === true
+      execute: async () => ({ data: {} })
     };
 
     const manifest: ModuleAssistantActionFamilyManifest = {
@@ -141,13 +148,11 @@ describe("gateway policy resolver", () => {
     };
     const lookup = createMockLookup("trusted_auto", manifest);
 
-    // Ordinary call: still auto-runs under trusted_auto.
-    await expect(resolvePolicy(tool, "mock_module", {}, lookup)).resolves.toBe("run");
+    // No override: still auto-runs under trusted_auto.
+    await expect(resolvePolicy(tool, "mock_module", false, lookup)).resolves.toBe("run");
 
-    // Flagged call: forced to confirm even though the family is trusted_auto and the tool's
+    // Override set: forced to confirm even though the family is trusted_auto and the tool's
     // own executionPolicy is "auto".
-    await expect(resolvePolicy(tool, "mock_module", { overwrite: true }, lookup)).resolves.toBe(
-      "confirm"
-    );
+    await expect(resolvePolicy(tool, "mock_module", true, lookup)).resolves.toBe("confirm");
   });
 });

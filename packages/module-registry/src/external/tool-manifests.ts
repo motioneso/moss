@@ -3,6 +3,7 @@ import type {
   MossModuleManifest,
   ToolContext,
   ToolInput,
+  ToolRequiresConfirmation,
   ToolResult
 } from "@moss/module-sdk";
 
@@ -17,9 +18,9 @@ export type ExternalToolInvoker = (
 
 function synthesizeRequiresConfirmation(
   tool: ExternalModuleAssistantToolDeclaration
-): ((input: ToolInput) => boolean) | undefined {
+): ToolRequiresConfirmation | undefined {
   if (!tool.confirmWhen?.length && !tool.confirmWhenKeys?.length) return undefined;
-  return (input) =>
+  return (_scopedDb, input) =>
     tool.confirmWhenKeys?.some((key) => Object.hasOwn(input, key)) === true ||
     tool.confirmWhen?.some(
       ({ key, equals }) => Object.hasOwn(input, key) && input[key] === equals

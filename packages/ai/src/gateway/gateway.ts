@@ -235,7 +235,8 @@ export class AssistantToolGateway {
       });
       return result;
     }
-    if ((await resolvePolicy(found.tool, found.dto.moduleId, input, lookup)) === "run") {
+    const confirmOverride = await this.computeConfirmOverride(found, input, ctx);
+    if ((await resolvePolicy(found.tool, found.dto.moduleId, confirmOverride, lookup)) === "run") {
       if (
         found.tool.risk !== "read" &&
         !this.autoRunLimiter.consume(ctx.actorUserId, found.dto.name)
@@ -531,6 +532,30 @@ export class AssistantToolGateway {
       if (key in registry) subset[key] = registry[key];
     }
     return subset;
+  }
+
+  /**
+   * Resolves the tool's optional `requiresConfirmation` hook (input-shaped, DB-aware — e.g. a
+   * calendar write whose target event isn't Jarv1s-created) BEFORE `resolvePolicy` runs, so the
+   * result can force "confirm" even when the module's family tier is trusted_auto. Unlike the
+   * preview hook above, this MUST fail closed: a throw or a lookup that can't determine safety
+   * resolves to true (confirm), never to auto-run. No hook declared -> false (no override).
+   */
+  private async computeConfirmOverride(
+    found: ExecutableTool,
+    input: Record<string, unknown>,
+    ctx: ToolContext
+  ): Promise<boolean> {
+    const hook = found.tool.requiresConfirmation;
+    if (!hook) return false;
+    const access: AccessContext = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
+    try {
+      return await this.deps.runner.withDataContext(access, (scopedDb: DataContextDb) =>
+        Promise.resolve(hook(scopedDb, input, ctx, this.servicesFor(found.tool)))
+      );
+    } catch {
+      return true;
+    }
   }
 
   private async runHandler(

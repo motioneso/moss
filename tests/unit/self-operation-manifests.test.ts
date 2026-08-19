@@ -119,13 +119,17 @@ describe("Notes self-operation manifest classification", () => {
     expect(deleteTool?.selfOperationGrant).toBe("granted_at_install");
   });
 
-  it("keeps overwrite confirmation conditional while ordinary note writes are auto-capable", () => {
+  it("keeps overwrite confirmation conditional while ordinary note writes are auto-capable", async () => {
     const tools = notesModuleManifest.assistantTools ?? [];
     const createTool = tools.find((candidate) => candidate.name === "notes.create");
     expect(createTool, "expected tool notes.create to exist").toBeDefined();
     expect(createTool?.executionPolicy).toBe("auto");
-    expect(createTool?.requiresConfirmation?.({ overwrite: true })).toBe(true);
-    expect(createTool?.requiresConfirmation?.({ overwrite: false })).toBe(false);
+    expect(
+      await createTool?.requiresConfirmation?.({} as never, { overwrite: true }, {} as never)
+    ).toBe(true);
+    expect(
+      await createTool?.requiresConfirmation?.({} as never, { overwrite: false }, {} as never)
+    ).toBe(false);
   });
 });
 
