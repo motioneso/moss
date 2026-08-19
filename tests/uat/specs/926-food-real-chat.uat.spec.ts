@@ -313,13 +313,16 @@ test("a real model logs and corrects meals through Food's granted-at-install too
   // mean the grant is not being honoured.
   await test.step("neither granted-at-install tool interrupted with a card", async () => {
     await expect(page.locator(CARD)).toHaveCount(0);
+    // And no action request exists for them either. "run" means the gateway executes without
+    // ever creating one (policy.ts:29-57) — these calls are audited, not confirmed. Anything in
+    // this list would mean a tool that should be silent asked the user instead.
     const foodActions = (await listActions(page)).filter((a) =>
       (a.toolName ?? "").startsWith("food.")
     );
-    expect(foodActions.length, "Food calls must be recorded as actions").toBeGreaterThan(0);
-    for (const action of foodActions) {
-      expect(["confirmed", "rejected", "cancelled", "expired"]).toContain(action.status);
-    }
+    expect(
+      foodActions,
+      "a granted-at-install tool must not create a confirmation request"
+    ).toHaveLength(0);
   });
 });
 
