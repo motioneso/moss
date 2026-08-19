@@ -53,16 +53,36 @@ path, open a PR, comment the PR link back onto its issue(s), leave the `needs-sp
 whoever picks this up: `herdr pane read w1:pG6 --source recent --lines 12` (and pG7/pG8/pG9),
 confirm each shows "Sonnet" and is progressing, respawn with --model sonnet if any booted Opus.
 
+## Update 07:26 UTC — all 4 spec PRs merged
+
+- PR #1712 (#1707 history search) — merged, commented back on #1707.
+- PR #1713 (#1705+#1706 pinned context/autosave) — merged, commented back on both issues.
+- PR #1714 (#1708 attachment indexing) — merged, commented back on #1708.
+- PR #1715 (#1709 MCP resilience) — merged, commented back on #1709.
+All four had a trivial Prettier formatting failure on first CI run (docs-gate); fixed directly
+and repushed to each branch before merge. `needs-spec` label left on all — these are proposed
+designs awaiting review/approval, not built yet.
+
+## Remaining open lanes
+
+- **Lane A (#1711 all-day events fix)**, pane w1:pGA, branch `1711-allday-events`: still working,
+  currently running its own verification gate script (`gate_1711_allday`, tailing a log file for a
+  `### FINAL` marker). Not yet opened a PR. Check back later.
+- **#1698 calendar-lifecycle lane (PR #1703)**, pane w1:pG2: its background live-path-proof fork
+  just finished (14m45s run) and the pane is mid self-compaction now. My earlier ping asking it to
+  confirm the #1711 all-day fix is out of scope for that PR is still queued in its input, unsent —
+  will land once compaction finishes. No action needed unless it disagrees.
+
 ## Next steps for whoever continues this run
 
-1. Verify all 4 spec agents started correctly (model + activity) via bounded pane reads.
-2. Supervise them to PR-open (routine tier, doc-only, no live-path gate needed).
-3. After each merges, comment the merged spec link back onto its issue(s), leave `needs-spec` on
-   pending approval (Ben's or Fable's call, not mine).
-4. Check on pane w1:pG2 (PR #1703) — confirm it picked up the two calendar fixes I handed it, or
-   spawn a dedicated lane for #1711 and #1693/#1710 if it didn't.
-5. Re-verify main's CI is actually green if spawning anything new (last direct check showed
-   in_progress, not yet confirmed completed — likely resolved by now given time elapsed).
+1. Watch pane w1:pGA for PR-open; once open, check CI (watch for the same Prettier-on-docs class
+   of trivial failures — check `gh pr checks` and fix directly rather than bouncing back to the
+   agent if it's just formatting), then merge with `gh pr merge --squash --auto`, comment the
+   link on #1711.
+2. Watch pane w1:pG2 for its post-compaction reply confirming the #1711 scope question, and for
+   PR #1703 reaching mergeable state — that's the #1693/#1710 fix landing.
+3. Nothing else queued. If genuinely stuck on a call only Ben should make, message Fable per his
+   standing instruction ("if you get stuck ask fable").
 
 ## Coordinator identity (for lock purposes)
 
