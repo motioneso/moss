@@ -89,6 +89,19 @@ the Food page proceed without these):**
   schema-validation/repair contract, and is exposed through the module structured-AI RPC with its
   existing guards.
 
+**Blocks only Food-page write interactions (page logging, correction, and deletion in stories
+1/18/19/20; Chat-based logging/correction/deletion, the page's read/calendar/summary views, and the
+durable estimation job proceed without this):**
+
+- **#1699 — Module page write path.** A downloaded module's page can read (the REST tool-invoke
+  route executes read tools) but cannot execute a write: the invoke route 403s any tool with
+  `risk !== "read"` at the confirmation floor by design, and the manual queue-run endpoint is
+  async-only with a 5-second per-actor singleton and no result channel back to the browser. Food
+  requires: a contract letting a module's own page execute the module's reversible write tools
+  under the install-granted self-operation policy with a synchronous result, and a defined
+  page-originated confirmation flow for destructive tools (delete) — so the Food page and Chat can
+  call the same module-owned commands with visible boundary validation.
+
 **Blocks only the Wellness-correlation feature (stories 29–32):**
 
 - **#1697 — Wellness check-in context port.** No check-in/symptom port exists, and every current
@@ -108,8 +121,11 @@ the Food page proceed without these):**
   Module distribution model above). #1312 (bundled/downloaded rename) is a linked vocabulary
   prerequisite, not a blocker.
 
-Planning for a Food feature path starts only when its blockers' contracts are approved; building a
-path starts only when the contracts it consumes are on main. Unblocked paths may proceed.
+Blockers gate stages, not everything at once: planning for a Food feature path starts when its
+blockers' contracts are approved; Food-package build may proceed against an approved contract
+(e.g. authoring the manifest export declaration #1694 defines); but a path passes the live-path
+gate and its stories count Done only when every core capability it consumes is merged and proven
+live. Unblocked paths may proceed end to end.
 
 ## Solution
 
@@ -258,7 +274,8 @@ blocker contract Food consumes.
   transcripts never enter queue payloads.
 - Direct Food-page logging and Chat logging call the same Food application command. The Food module
   exposes module-owned assistant tools for creating, listing/summarizing, updating, and deleting
-  meals; Chat does not write Food tables directly.
+  meals; Chat does not write Food tables directly. Page reads use the existing read-tool invoke
+  route; page writes use the module page write path from #1699.
 - Assistant tool execution uses the Gateway's active actor and permission policy. Reversible meal
   creation and correction may use the module's install-granted self-operation policy. Deletion is a
   destructive action and requires the existing confirmation flow.
@@ -350,8 +367,9 @@ blocker contract Food consumes.
 ## Out of Scope
 
 - Core-platform implementation of any blocker capability: the export wiring (#1694), the module
-  attachment contract (#1695), structured-AI image plumbing (#1696), and the Wellness port's
-  interface/implementation/wiring (#1697) are delivered by their own issues, never inside #926.
+  attachment contract (#1695), structured-AI image plumbing (#1696), the Wellness port's
+  interface/implementation/wiring (#1697), and the module page write path (#1699) are delivered by
+  their own issues, never inside #926.
 - Diagnosing food reactions, allergies, intolerances, illness, or any causal relationship between a
   meal and a Wellness check-in.
 - Medical advice, emergency guidance, treatment recommendations, or clinician workflows.
