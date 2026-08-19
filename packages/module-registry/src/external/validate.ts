@@ -931,9 +931,7 @@ export function validateExternalModuleManifest(
         let entryValid = unknownKeys.length === 0;
 
         if (typeof key !== "string" || !/^[a-z][a-zA-Z0-9]{0,39}$/.test(key)) {
-          errors.push(
-            "preference key must be a lower camel-case identifier of at most 40 chars"
-          );
+          errors.push("preference key must be a lower camel-case identifier of at most 40 chars");
           entryValid = false;
         } else if (keys.has(key)) {
           errors.push(`preference key must be unique: ${key}`);
