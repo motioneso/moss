@@ -1,0 +1,49 @@
+# Appends each merged pull request's "Release note" section (see PULL_REQUEST_TEMPLATE.md)
+# to docs/WHATS_NEW.md. A pull request with no usable release note (internal/non-user-facing
+# change) is silently skipped — that's the normal case.
+name: release-notes
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-notes
+  cancel-in-progress: false
+
+jobs:
+  append:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Check script
+        run: node scripts/append-release-note.mjs --self-test
+      - name: Append release note
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: node scripts/append-release-note.mjs
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/WHATS_NEW.md
+          if git diff --cached --quiet; then
+            echo "No release note to append"
+          else
+            git commit -m "docs(release-notes): append note for PR #${{ github.event.pull_request.number }}"
+            git pull --rebase origin main
+            git push
+          fi
