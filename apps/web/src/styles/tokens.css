@@ -272,7 +272,7 @@
      forest-ink is a LIGHT tint, unusable as a ground). */
   --rail-bg: var(--forest-ink);
   --rail-fg: #ede5d2;
-  --rail-fg-muted: rgba(237, 229, 210, 0.90);
+  --rail-fg-muted: rgba(237, 229, 210, 0.9);
   --rail-hover-bg: rgba(237, 229, 210, 0.08);
   --rail-active-bg: rgba(0, 0, 0, 0.28);
   --rail-divider: rgba(237, 229, 210, 0.14);
