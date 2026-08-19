@@ -1,0 +1,6 @@
+{
+  "name": "food",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Moss Food downloaded module (#926). Prebuilt artifact package: jarvis.module.json + dist/worker.js."
+}

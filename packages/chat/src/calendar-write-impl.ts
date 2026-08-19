@@ -3,6 +3,8 @@ import {
   chooseSlot,
   focusBlockEventId,
   resolveCalendarEventRef,
+  isAllDayInterval,
+  DEFAULT_TIMEZONE,
   type CalendarWriteService,
   type FocusBlockWindow,
   type ProposeFocusResult,
@@ -35,11 +37,13 @@ export interface CalendarWriteImplDeps {
   readonly enqueueCacheEvict?: (eventId: string, actorUserId: string) => Promise<string | null>;
 }
 
-// No timezone constant is needed here: the resolved window already carries concrete UTC
-// instants (the tool's resolveWindow mapped the part-of-day band to UTC using the configured
-// default tz). freeBusy and insertEvent receive RFC3339 timestamps with a 'Z' offset, so the
-// instant is unambiguous and we deliberately do NOT pass a conflicting `timeZone` field
-// (Codex HIGH #4). Google interprets a 'Z'-suffixed dateTime as the exact UTC instant.
+// The resolved window already carries concrete UTC instants (the tool's resolveWindow mapped
+// the part-of-day band to UTC using the configured default tz). freeBusy and insertEvent
+// receive RFC3339 timestamps with a 'Z' offset, so the instant is unambiguous and we
+// deliberately do NOT pass a conflicting `timeZone` field to Google below (Codex HIGH #4);
+// Google interprets a 'Z'-suffixed dateTime as the exact UTC instant. A tz IS still needed here,
+// though: to tell an all-day freeBusy interval (start/end at local midnight, duration a
+// multiple of 24h) apart from a real timed conflict before it reaches chooseSlot — see step 3.
 
 export function buildCalendarWriteService(deps: CalendarWriteImplDeps): CalendarWriteService {
   return {
@@ -124,7 +128,11 @@ export function buildCalendarWriteService(deps: CalendarWriteImplDeps): Calendar
           timeMax: resolved.end.toISOString(),
           calendarId: "primary"
         });
-        slot = chooseSlot(resolved, fb.busy, resolved.durationMinutes);
+        // All-day events (reminders, holidays, ...) come back from freeBusy as busy too, but
+        // they aren't real time conflicts — drop them before slot-picking runs (#1711).
+        const tz = ctx.localTimezone ?? DEFAULT_TIMEZONE;
+        const timedBusy = fb.busy.filter((b) => !isAllDayInterval(b, tz));
+        slot = chooseSlot(resolved, timedBusy, resolved.durationMinutes);
       } catch {
         return {
           created: false,
