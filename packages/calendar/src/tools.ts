@@ -302,3 +302,30 @@ export function summarizeDeleteEvent(input: Record<string, unknown>, _ctx: ToolC
     `Attendees will be notified of the cancellation. This can't be undone from Moss.`
   );
 }
+
+export const calendarRescheduleEventExecute: ToolExecute = async (
+  scopedDb,
+  input,
+  ctx,
+  services
+): Promise<ToolResult> => {
+  const service = narrowCalendarWrite(services);
+  const eventRef = typeof input.eventRef === "string" ? input.eventRef : undefined;
+  const newStart = typeof input.newStart === "string" ? new Date(input.newStart) : undefined;
+  const newEnd = typeof input.newEnd === "string" ? new Date(input.newEnd) : undefined;
+  if (!eventRef || !newStart || !newEnd || Number.isNaN(newStart.getTime()) || Number.isNaN(newEnd.getTime())) {
+    return { data: { ok: false, reason: "not_found", message: "eventRef, newStart and newEnd are required" } };
+  }
+  const result = await service.rescheduleEvent(scopedDb, ctx, { eventRef, newStart, newEnd });
+  return { data: { ...result } };
+};
+
+export function summarizeRescheduleEvent(input: Record<string, unknown>, _ctx: ToolContext): string {
+  const title = typeof input.displayTitle === "string" ? input.displayTitle : undefined;
+  const when = typeof input.displayWhen === "string" ? input.displayWhen : undefined;
+  const base = title ? `Move **"${title}"**` : "Move this calendar event";
+  if (when) {
+    return `${base} to ${when}? This can't be undone from Moss.`;
+  }
+  return `${base} to the new time? This can't be undone from Moss.`;
+}

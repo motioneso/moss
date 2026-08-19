@@ -19,7 +19,9 @@ import {
   calendarProposeFocusBlockExecute,
   summarizeProposeFocusBlock,
   calendarDeleteEventExecute,
-  summarizeDeleteEvent
+  summarizeDeleteEvent,
+  calendarRescheduleEventExecute,
+  summarizeRescheduleEvent
 } from "./tools.js";
 
 const calendarConfirmationRepository = new CalendarRepository();
@@ -28,15 +30,14 @@ const calendarConfirmationRepository = new CalendarRepository();
 // decision is provenance-based (spec decision 1), never defaulted from tier alone. A ref that
 // fails to resolve (bad id, RLS mismatch, DB error) fails closed to true — we can't verify
 // provenance, so we ask.
-const deleteEventRequiresConfirmation: ToolRequiresConfirmation = async (scopedDb, input) => {
-  const eventId = typeof input.eventId === "string" ? input.eventId : undefined;
-  if (!eventId) return true;
+async function resolveProvenanceConfirmation(scopedDb: unknown, ref: string | undefined) {
+  if (!ref) return true;
 
   const resolved = await resolveCalendarEventRef(
     scopedDb as never,
     calendarConfirmationRepository,
     undefined,
-    eventId
+    ref
   );
   if (!resolved.found) return true;
 
@@ -44,6 +45,16 @@ const deleteEventRequiresConfirmation: ToolRequiresConfirmation = async (scopedD
   const jarvisCreated =
     md != null && typeof md === "object" && (md as Record<string, unknown>).jarvisCreated === true;
   return requiresCalendarConfirmation({ jarvisCreated });
+}
+
+const deleteEventRequiresConfirmation: ToolRequiresConfirmation = async (scopedDb, input) => {
+  const eventId = typeof input.eventId === "string" ? input.eventId : undefined;
+  return resolveProvenanceConfirmation(scopedDb, eventId);
+};
+
+const rescheduleEventRequiresConfirmation: ToolRequiresConfirmation = async (scopedDb, input) => {
+  const eventRef = typeof input.eventRef === "string" ? input.eventRef : undefined;
+  return resolveProvenanceConfirmation(scopedDb, eventRef);
 };
 
 export const CALENDAR_MODULE_ID = "calendar";
@@ -314,6 +325,44 @@ export const calendarModuleManifest = {
       requiresConfirmation: deleteEventRequiresConfirmation,
       execute: calendarDeleteEventExecute,
       summarize: summarizeDeleteEvent
+    },
+    {
+      name: "calendar.rescheduleEvent",
+      description:
+        "Move a single calendar event the user owns to a new start/end time, keeping the same " +
+        "event id (never delete-then-create). Refuses outright, regardless of settings, if the " +
+        "event has any attendees — those moves need to go through Google Calendar directly so " +
+        "attendees are notified correctly. Asks for confirmation by default, unless the user has " +
+        "allowed automatic calendar changes in settings.",
+      permissionId: "calendar.manage",
+      risk: "write",
+      executionPolicy: "auto",
+      selfOperationGrant: "user_promotable",
+      actionFamilyId: "calendar_management",
+      requiresServices: ["calendarWrite"],
+      inputSchema: {
+        type: "object",
+        required: ["eventRef", "newStart", "newEnd"],
+        properties: {
+          eventRef: {
+            type: "string",
+            description: "Moss calendar event id (uuid) or provider event id from listVisibleEvents"
+          },
+          newStart: { type: "string", description: "New start, RFC3339 instant" },
+          newEnd: { type: "string", description: "New end, RFC3339 instant" },
+          displayTitle: {
+            type: "string",
+            description: "Card preview only; eventRef is authoritative"
+          },
+          displayWhen: {
+            type: "string",
+            description: "Card preview only, e.g. 'Fri Jun 28, 14:00–15:00'"
+          }
+        }
+      },
+      requiresConfirmation: rescheduleEventRequiresConfirmation,
+      execute: calendarRescheduleEventExecute,
+      summarize: summarizeRescheduleEvent
     }
   ],
   proactiveMonitor: calendarMonitorProvider

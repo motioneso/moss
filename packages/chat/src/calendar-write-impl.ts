@@ -2,6 +2,7 @@ import { assertDataContextDb, type DataContextDb } from "@moss/db";
 import {
   chooseSlot,
   focusBlockEventId,
+  resolveCalendarEventRef,
   type CalendarWriteService,
   type FocusBlockWindow,
   type ProposeFocusResult,
@@ -9,7 +10,9 @@ import {
   type CalendarRepository,
   type CalendarWriteOptions,
   type DeleteEventInput,
-  type DeleteEventResult
+  type DeleteEventResult,
+  type RescheduleEventInput,
+  type RescheduleEventResult
 } from "@moss/calendar";
 import {
   GoogleApiError,
@@ -363,6 +366,106 @@ export function buildCalendarWriteService(deps: CalendarWriteImplDeps): Calendar
         cacheMirror,
         deletedTitle: row.title
       };
+    },
+
+    async rescheduleEvent(
+      scopedDbRaw: unknown,
+      _ctx: ToolContext,
+      input: RescheduleEventInput
+    ): Promise<RescheduleEventResult> {
+      assertDataContextDb(scopedDbRaw);
+      const scopedDb = scopedDbRaw as DataContextDb;
+
+      // 1. Resolve the ref (moss id or external id) via the shared resolver — owner-RLS-scoped.
+      const active = await deps.connectorsRepository.getActiveGoogleAccountSecret(scopedDb);
+      const resolved = await resolveCalendarEventRef(
+        scopedDb,
+        deps.calendarRepository,
+        active?.id,
+        input.eventRef
+      );
+      if (!resolved.found) {
+        return { ok: false, reason: "not_found" };
+      }
+      const row = resolved.event;
+
+      // 2. Hard refusal on attendees — independent of the confirmation card (spec decision 2).
+      // Read from external_metadata, already synced at sync time (google-sync-phases.ts:172).
+      const md = row.external_metadata as Record<string, unknown> | null;
+      const attendeeCount = typeof md?.attendeeCount === "number" ? md.attendeeCount : 0;
+      if (attendeeCount > 0) {
+        return { ok: false, reason: "has_attendees" };
+      }
+
+      // 3. Scope gate — no Google call without calendar-write scope.
+      const calendarScope = await deps.connectorsRepository.getCalendarWriteScopeState(scopedDb);
+      if (!calendarScope?.hasScope) {
+        return {
+          ok: false,
+          reason: "no_scope",
+          message:
+            "Your Google connection doesn't have calendar-write permission yet — reconnect in Settings to grant it."
+        };
+      }
+      if (!(await isCalendarFeatureGranted(deps, scopedDb, calendarScope.accountId))) {
+        return {
+          ok: false,
+          reason: "no_scope",
+          message: "Calendar access is disabled for this account in Settings."
+        };
+      }
+
+      // 4. Fresh access token.
+      let accessToken: string;
+      try {
+        accessToken = await deps.googleService.getFreshAccessToken(scopedDb);
+      } catch (error) {
+        const message =
+          error instanceof GoogleConnectError
+            ? "Connect Google in Settings first."
+            : "Couldn't refresh your Google access — reconnect in Settings.";
+        return { ok: false, reason: "provider_error", message };
+      }
+
+      // 5. Calendar id: use the row's recorded calendarId, fall back to "primary" (V1 default).
+      const calendarId = ((md?.calendarId as string | undefined) ?? "primary") satisfies string;
+
+      // 6. Patch at Google — SAME external event id, never delete-then-create.
+      try {
+        await deps.googleApiClient.patchEvent(accessToken, calendarId, row.external_id, {
+          start: { dateTime: input.newStart.toISOString(), timeZone: "UTC" },
+          end: { dateTime: input.newEnd.toISOString(), timeZone: "UTC" }
+        });
+      } catch (error) {
+        if (error instanceof GoogleApiError && error.statusCode === 403) {
+          return {
+            ok: false,
+            reason: "provider_error",
+            message: "You don't have permission to reschedule events on that calendar."
+          };
+        }
+        return {
+          ok: false,
+          reason: "provider_error",
+          message: "Couldn't reschedule the event — try again."
+        };
+      }
+
+      // 7. Mirror the new start/end into the cache. Best-effort but reported: on failure the
+      // Google-side move already succeeded, so it's still ok:true — the worker reconciles the
+      // cache on the next sync.
+      try {
+        const mirrored = await deps.calendarRepository.upsertCachedEvent(scopedDb, {
+          connectorAccountId: row.connector_account_id,
+          externalId: row.external_id,
+          title: row.title,
+          startsAt: input.newStart,
+          endsAt: input.newEnd
+        });
+        return { ok: true, calendarEventId: mirrored.id };
+      } catch {
+        return { ok: true, calendarEventId: row.id };
+      }
     }
   };
 }

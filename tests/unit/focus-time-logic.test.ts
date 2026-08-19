@@ -239,6 +239,9 @@ describe("CalendarWriteService interface shape", () => {
       },
       async deleteEvent() {
         return { deleted: false, googleDeleted: "skipped-error", cacheMirror: "not-cached" };
+      },
+      async rescheduleEvent() {
+        return { ok: false, reason: "not_found" };
       }
     };
     const res = await fake.createEvent(
