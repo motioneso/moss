@@ -112,7 +112,7 @@ Decisions embedded above, each deliberate:
   `store/sql.ts` extends rather than being replaced.
 - **Nutrient columns stay nullable**, same as `food_estimates`. A null is "not estimated", never
   zero. Phase 1's rule that a missing nutrient is never coalesced to 0 (`domain/totals.ts`) must
-  survive summation: a meal with any null in a nutrient is incomplete *for that nutrient*, exactly
+  survive summation: a meal with any null in a nutrient is incomplete _for that nutrient_, exactly
   as a day containing an unestimated meal is today.
 - **`food_estimates` keeps its seven nutrient columns.** They become derived — the sum of the item
   rows — written at the same time as the items, inside one transaction. Keeping them denormalised
@@ -133,11 +133,11 @@ identification-plus-estimation call returning an item array.
 export interface EstimateItem {
   readonly label: string;
   readonly portionNote: string | null;
-  readonly nutrientFields: NutrientFields;   // unchanged seven-field shape, nullable members
+  readonly nutrientFields: NutrientFields; // unchanged seven-field shape, nullable members
 }
 
 export interface EstimateResult {
-  readonly outcome: EstimateOutcome;          // unchanged
+  readonly outcome: EstimateOutcome; // unchanged
   readonly items: readonly EstimateItem[];
   readonly missingDetails: string | null;
   readonly clarificationQuestion: string | null;
@@ -191,14 +191,14 @@ per-item breakdown does not depend on it and can ship first.
 `external-modules/food/src/web/root.tsx`, built from the keyline primitives. Module CSS stays
 layout-only by contract — every visual decision is a host class.
 
-| Surface | Primitive |
-|---|---|
-| Day calorie figure | `jds-display jds-display--xl` |
-| Protein / net carbs / fat | `jds-instrument` + `jds-instrument__label` |
-| Occasion headers | `jds-section-head` + `jds-section-head__rule` |
-| Meal row state marker | `jds-rail` + `jds-rail-row` (3px leading band, never a border or pill) |
-| Meta line separators | `jds-meta-sep` (not a bullet, not a slash) |
-| Food and occasion icons | `lucide-react`, already a dependency, 14–18px |
+| Surface                   | Primitive                                                              |
+| ------------------------- | ---------------------------------------------------------------------- |
+| Day calorie figure        | `jds-display jds-display--xl`                                          |
+| Protein / net carbs / fat | `jds-instrument` + `jds-instrument__label`                             |
+| Occasion headers          | `jds-section-head` + `jds-section-head__rule`                          |
+| Meal row state marker     | `jds-rail` + `jds-rail-row` (3px leading band, never a border or pill) |
+| Meta line separators      | `jds-meta-sep` (not a bullet, not a slash)                             |
+| Food and occasion icons   | `lucide-react`, already a dependency, 14–18px                          |
 
 Occasion accents come from the existing unused tokens `--bucket-morning`, `--bucket-afternoon`,
 `--bucket-evening`, with `--gold` for snack. Raw CSS colours belong in `tokens.css` alone; the module
@@ -277,7 +277,7 @@ which this spec brings in scope by product-owner ruling. Additionally out of sco
 - The per-item breakdown is the prerequisite that keeps #1736 possible. A database lookup needs
   individual foods with portions to resolve; without items there is nothing to look up. That is a
   reason to do it now rather than a reason to do #1736 now.
-- Estimating item by item is expected to be *more* accurate than estimating a compound meal in one
+- Estimating item by item is expected to be _more_ accurate than estimating a compound meal in one
   pass, not less. This is an assumption, and test 1 plus the kill gate are how it gets checked.
 - Targets are the first thing in Food that is a user preference rather than a record. If the module
   preferences page (#1725) turns out not to fit, that is a finding about the platform contract and
