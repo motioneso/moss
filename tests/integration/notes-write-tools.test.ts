@@ -667,4 +667,117 @@ describe("notes write assistant tools", () => {
     await expect(readFile(join(outside, "note5.md"), "utf-8")).resolves.toBe("do not delete me");
     await rm(outside, { recursive: true, force: true });
   });
+
+  describe("concurrent edits", () => {
+    // The outer `db`/`runner` pair uses maxConnections: 1 — a single withDataContext call
+    // holds the only pool connection for its whole transaction, so two overlapping calls on it
+    // would deadlock on connection acquisition (unrelated to the mutex under test). Use a
+    // dedicated pool of 2 here so both concurrent notesEditExecute calls can each hold their
+    // own transaction while they race for the path lock.
+    let concurrentDb: Kysely<MossDatabase>;
+    let concurrentRunner: DataContextRunner;
+
+    beforeEach(() => {
+      concurrentDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 2 });
+      concurrentRunner = new DataContextRunner(concurrentDb);
+    });
+
+    afterEach(async () => {
+      await concurrentDb.destroy();
+    });
+
+    // Barrier: both concurrent notesEditExecute calls must have genuinely entered
+    // resolveExistingFile's realpath call (write-tools.ts:119) — before either lock/critical-
+    // section code below can possibly run. Gating here (not on readFile) avoids deadlock
+    // regardless of whether the mutex under test is implemented correctly or missing entirely.
+    function armEntryBarrier(targetPath: string): void {
+      let entered = 0;
+      let releaseGate: () => void;
+      const gate = new Promise<void>((resolve) => {
+        releaseGate = resolve;
+      });
+      realpathMock.mockImplementation(async (p: Parameters<FsPromises["realpath"]>[0]) => {
+        const resolved = await actualFs().realpath(p);
+        if (p === targetPath) {
+          entered += 1;
+          if (entered === 2) releaseGate();
+          await gate;
+        }
+        return resolved;
+      });
+    }
+
+    it("disjoint overlapping edits on one file both succeed", async () => {
+      const targetPath = join(root, "concurrent1.md");
+      await writeFile(targetPath, "APPLE and BANANA are fruits");
+      armEntryBarrier(targetPath);
+
+      const [result1, result2] = await Promise.all([
+        concurrentRunner.withDataContext(
+          { actorUserId: ids.userA, requestId: "conc-1a" },
+          (db) =>
+            notesEditExecute(
+              db,
+              { path: "concurrent1.md", oldText: "APPLE", newText: "ORANGE" },
+              { actorUserId: ids.userA, requestId: "conc-1a", chatSessionId: "chat" },
+              { notesSync: service }
+            )
+        ),
+        concurrentRunner.withDataContext(
+          { actorUserId: ids.userA, requestId: "conc-1b" },
+          (db) =>
+            notesEditExecute(
+              db,
+              { path: "concurrent1.md", oldText: "BANANA", newText: "GRAPE" },
+              { actorUserId: ids.userA, requestId: "conc-1b", chatSessionId: "chat" },
+              { notesSync: service }
+            )
+        )
+      ]);
+      expect(result1.data).toMatchObject({ synced: true });
+      expect(result2.data).toMatchObject({ synced: true });
+
+      const finalContent = await readFile(targetPath, "utf-8");
+      expect(finalContent).toContain("ORANGE");
+      expect(finalContent).toContain("GRAPE");
+    });
+
+    it("overlapping same-substring edits: exactly one succeeds, the other gets 409", async () => {
+      const targetPath = join(root, "concurrent2.md");
+      await writeFile(targetPath, "hello world");
+      armEntryBarrier(targetPath);
+
+      const outcomes = await Promise.allSettled([
+        concurrentRunner.withDataContext({ actorUserId: ids.userA, requestId: "conc-2a" }, (db) =>
+          notesEditExecute(
+            db,
+            { path: "concurrent2.md", oldText: "hello", newText: "goodbye1" },
+            { actorUserId: ids.userA, requestId: "conc-2a", chatSessionId: "chat" },
+            { notesSync: service }
+          )
+        ),
+        concurrentRunner.withDataContext({ actorUserId: ids.userA, requestId: "conc-2b" }, (db) =>
+          notesEditExecute(
+            db,
+            { path: "concurrent2.md", oldText: "hello", newText: "goodbye2" },
+            { actorUserId: ids.userA, requestId: "conc-2b", chatSessionId: "chat" },
+            { notesSync: service }
+          )
+        )
+      ]);
+
+      const fulfilled = outcomes.filter((o) => o.status === "fulfilled");
+      const rejected = outcomes.filter((o) => o.status === "rejected");
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({
+        message: expect.stringMatching(/appears 0 times/)
+      });
+
+      const finalContent = await readFile(targetPath, "utf-8");
+      const isWinner1 = finalContent === "goodbye1 world";
+      const isWinner2 = finalContent === "goodbye2 world";
+      expect(isWinner1 || isWinner2).toBe(true);
+    });
+  });
 });
