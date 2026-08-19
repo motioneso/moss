@@ -20,12 +20,16 @@ export interface ModuleCatalogPublicKey {
 }
 
 /**
- * The keyring the shipping binary trusts. Empty until Ben provisions the real production
- * keypair out-of-band (D8 — no agent generates or prints the private key). Reserved keyId for
- * that key: "moss-catalog-2026-a". Do not add a placeholder entry here; tests that need a
- * non-empty keyring inject one via `trustedKeys` rather than mutating this constant.
+ * The keyring the shipping binary trusts. Populated 2026-08-19 with the real production
+ * keypair Ben provisioned out-of-band (D8 — no agent generated or saw the private key).
  */
-export const MODULE_CATALOG_PUBLIC_KEYS: readonly ModuleCatalogPublicKey[] = Object.freeze([]);
+export const MODULE_CATALOG_PUBLIC_KEYS: readonly ModuleCatalogPublicKey[] = Object.freeze([
+  {
+    keyId: "moss-catalog-2026-a",
+    publicKeyPem:
+      "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEApoGLINdv+F3D1Lsolboa6GoBeNkmJbCDjbUhS6TTtdU=\n-----END PUBLIC KEY-----\n"
+  }
+]);
 
 export function signCatalogBytes(
   bytes: Uint8Array,
