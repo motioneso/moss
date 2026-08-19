@@ -77,7 +77,7 @@ the Food command path to the chat engine and should be rejected.)
 ### B3. Attachment "release on purge" and "retain-or-purge" name lifecycle machinery that does not exist
 
 - Chat attachments have **no delete operation and no reference concept**: upload → optional
-  `markSent` → read. The only deletion is a lazy sweep of *unsent* uploads older than 24 h
+  `markSent` → read. The only deletion is a lazy sweep of _unsent_ uploads older than 24 h
   (`packages/chat/src/attachments-service.ts:273-297`); a sent attachment lives in the actor's
   vault until account deletion. "Releases Food-owned attachment references through the existing
   attachment lifecycle" therefore describes nothing that exists.
@@ -104,7 +104,7 @@ service or a Food-owned purge command — and keep it small.
 There is no reusable per-module AI-consent mechanism: Wellness's is a bespoke preference key
 `wellness.ai_consent_granted` with hand-wired per-tool gates
 (`packages/wellness/src/ai-consent.ts:5-36`, `packages/wellness/src/tools.ts:20,56`). Its
-tri-state default *inherits Wellness-active*, and the tool path passes
+tri-state default _inherits Wellness-active_, and the tool path passes
 `fallbackWellnessActive: true`, so with no explicit choice Wellness AI access is **on**. The
 spec's "explicit, user-scoped Food AI-processing consent" is therefore a deliberate divergence
 from the only precedent, not reuse. Correction: say Food copies the Wellness pattern (a
@@ -166,8 +166,7 @@ async overwrites is already well specified.
   `X-Timezone` per request, and precedence is header → stored → UTC
   (`packages/shared/src/time.ts:34-40`), with `localDay()` as the only sanctioned instant→date
   conversion (enforced by `scripts/check-no-ambient-dates.ts`). `timestamptz` is the standard
-  representation. Wellness additionally denormalizes `local_date`/`timezone_offset` (migration
-  0107) — Food should decide (one line) whether to copy that denormalization for its
+  representation. Wellness additionally denormalizes `local_date`/`timezone_offset` (migration 0107) — Food should decide (one line) whether to copy that denormalization for its
   calendar queries or derive at read time; either is defensible.
 - **L3 — Prompt/log hygiene has no global guard.** There is no pino `redact:` config or lint
   rule keeping prompts out of logs — only convention plus the job-payload allowlist. The spec's

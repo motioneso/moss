@@ -9,10 +9,10 @@
 
 ## Gate 0 — process gates
 
-| Gate                                              | State                                                                                         |
-| ------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Approved design spec in `docs/superpowers/specs/` | ✅ `2026-08-18-926-food-nutrition-tracking.md`                                                |
-| GitHub `task` issue to build against              | ✅ **#1701** — `Part of #926`, board 2 status Ready                                          |
+| Gate                                              | State                                               |
+| ------------------------------------------------- | --------------------------------------------------- |
+| Approved design spec in `docs/superpowers/specs/` | ✅ `2026-08-18-926-food-nutrition-tracking.md`      |
+| GitHub `task` issue to build against              | ✅ **#1701** — `Part of #926`, board 2 status Ready |
 
 **#926 is a Feature issue, not a task issue**, so Phase 1 builds against #1701. Remaining phases get
 their own task issue when the kill gate clears them; none is filed yet:
