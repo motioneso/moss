@@ -9,7 +9,7 @@
 
 The kill-gate authorized "rebase onto new main, reconcile the two lock designs, re-run P1′." The
 rebase is not mechanically reconcilable: **#1632 independently re-implemented #1013's core
-deliverable**, and what remains of #1624 is a *different, smaller* change that must be rebuilt on
+deliverable**, and what remains of #1624 is a _different, smaller_ change that must be rebuilt on
 #1632's API. That is a re-scope decision, which per `coordinated-build` step ½ and the standing
 kill-gate ("excursion ⇒ STOP, spec reopens") is the Coordinator's call, not mine.
 
@@ -20,13 +20,13 @@ settled shape.
 
 `git merge-tree --write-tree HEAD origin/main` → 8 conflicts, **4 of them `add/add`**:
 
-| File | Conflict | Meaning |
-|---|---|---|
-| `packages/db/src/cluster-ddl-lock.ts` | add/add | both branches wrote the lock from scratch |
-| `packages/db/src/__tests__/cluster-ddl-lock.test.ts` | add/add | both wrote its unit tests |
-| `scripts/prove-cluster-ddl-lock.ts` | add/add | both wrote a proof harness |
-| `tests/unit/cluster-ddl-lock-wiring.test.ts` | add/add | both wrote a wiring guard |
-| `module-role-broker.ts`, `role-bootstrap.ts`, `migrate.ts`, `module-reconcile.ts` | content | both wired the same 4 production call sites |
+| File                                                                              | Conflict | Meaning                                     |
+| --------------------------------------------------------------------------------- | -------- | ------------------------------------------- |
+| `packages/db/src/cluster-ddl-lock.ts`                                             | add/add  | both branches wrote the lock from scratch   |
+| `packages/db/src/__tests__/cluster-ddl-lock.test.ts`                              | add/add  | both wrote its unit tests                   |
+| `scripts/prove-cluster-ddl-lock.ts`                                               | add/add  | both wrote a proof harness                  |
+| `tests/unit/cluster-ddl-lock-wiring.test.ts`                                      | add/add  | both wrote a wiring guard                   |
+| `module-role-broker.ts`, `role-bootstrap.ts`, `migrate.ts`, `module-reconcile.ts` | content  | both wired the same 4 production call sites |
 
 `add/add` on every core file is the signature of duplicated work, not divergent history.
 
@@ -48,8 +48,8 @@ which is exactly D1's requirement, reached by a better route.
 
 ## What #1624 still uniquely delivers — and #1632 does NOT
 
-**#1013's actual problem is unsolved on main.** #1632 locked the *production* path. The collisions
-#1013 exists to fix happen on the *test* path, which main leaves bare:
+**#1013's actual problem is unsolved on main.** #1632 locked the _production_ path. The collisions
+#1013 exists to fix happen on the _test_ path, which main leaves bare:
 
 - `tests/integration/test-database.ts:71` — `runSqlFiles(bootstrap, …/bootstrap)`, **unlocked**.
   This is spec **site 3**, ~100+ resets per gate.
@@ -59,8 +59,8 @@ which is exactly D1's requirement, reached by a better route.
 Main's own wiring test states category six, membership grant/revoke, is "not a standalone call
 site" — true for production, false for the test suite, which is where the tuple races occur.
 
-Spec acceptance #3 — *"a concurrent two-worktree proof no longer produces catalog tuple-update
-failures"* — therefore **cannot be met by #1632 alone**. #1624's residual value is real and is the
+Spec acceptance #3 — _"a concurrent two-worktree proof no longer produces catalog tuple-update
+failures"_ — therefore **cannot be met by #1632 alone**. #1624's residual value is real and is the
 part that closes #1013.
 
 Residual set: test-surface locking (`test-database.ts` + ~8 suites, `grantModuleMembershipAtSetup`,
@@ -71,13 +71,13 @@ locked `dropModuleRolesAtTeardown`), the 12-site repo-wide discovery-surface gua
 
 ## Why the residual can't be lifted across mechanically
 
-| Aspect | #1013 (#1624) | #1632 (main) |
-|---|---|---|
-| callback | `fn()` — caller owns its connections | `fn(client)` — helper owns the DDL session; callback must use the **guarded** client |
-| bootstrap helper | `runClusterBootstrapSql(url, dir, opts)` | **absent**; callers use `withClusterDdlLock(url, c => runSqlFilesWithClient(c, dir))` |
+| Aspect                | #1013 (#1624)                                                                                                                     | #1632 (main)                                                                            |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| callback              | `fn()` — caller owns its connections                                                                                              | `fn(client)` — helper owns the DDL session; callback must use the **guarded** client    |
+| bootstrap helper      | `runClusterBootstrapSql(url, dir, opts)`                                                                                          | **absent**; callers use `withClusterDdlLock(url, c => runSqlFilesWithClient(c, dir))`   |
 | options / diagnostics | `ClusterDdlLockOptions.diagnostics`, event `{state, timestamp, database, backendPid, serverAddress, serverPort, applicationName}` | `WithClusterDdlLockOptions.onDiagnostic`, event `{type, ownerPid}` / `{type, released}` |
-| errors | `AcquisitionError(msg, {cause})` | `AcquisitionError(cause)` + `LivenessLost` / `Cleanup` / `Reentrancy` |
-| reentrancy | doc comment only | **enforced** process-global |
+| errors                | `AcquisitionError(msg, {cause})`                                                                                                  | `AcquisitionError(cause)` + `LivenessLost` / `Cleanup` / `Reentrancy`                   |
+| reentrancy            | doc comment only                                                                                                                  | **enforced** process-global                                                             |
 
 Two consequences that need a decision rather than an edit:
 

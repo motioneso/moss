@@ -12,8 +12,8 @@ Six product forks were raised for Ben. All six are resolved; each ruling is bind
 below.
 
 1. **Delete confirmation is split by provenance.** Once the user promotes the `calendar_management`
-   family, Moss may delete an event *it created itself* without a confirmation card. An event the
-   *user* created always requires an explicit confirmation card, whatever the tier. Cleaning up its
+   family, Moss may delete an event _it created itself_ without a confirmation card. An event the
+   _user_ created always requires an explicit confirmation card, whatever the tier. Cleaning up its
    own blocks is the common case; cancelling a user's real meeting notifies attendees and cannot be
    undone.
 
@@ -39,7 +39,7 @@ below.
    provider-specific instance-id work that would dominate this slice; it is the immediate follow-up.
 
 6. **V1 writes only to the primary calendar.** Create and reschedule target `primary`, matching
-   today's behavior. Delete and reschedule must still *read* the stored calendar id so an event that
+   today's behavior. Delete and reschedule must still _read_ the stored calendar id so an event that
    already lives on a secondary calendar can be acted on — today the sync path never records a
    calendar id, so any such event silently falls back to `primary` and the operation fails. Fixing
    that read path is in scope; letting the user choose a write target is not.
@@ -57,8 +57,8 @@ code shows the identifier problem is wider than the issue describes, and that th
 expects is only partly built:
 
 - **The identifier contract is broken on the documented happy path, not just on a caller mistake.**
-  `calendar.deleteEvent` declares `eventId` as "Moss calendar event id (uuid) *from
-  listVisibleEvents*". But `calendar.listVisibleEvents` returns `id` = the *provider* event key
+  `calendar.deleteEvent` declares `eventId` as "Moss calendar event id (uuid) _from
+  listVisibleEvents_". But `calendar.listVisibleEvents` returns `id` = the _provider_ event key
   (`source-context/calendar.ts` returns `event.id` on the live path and `row.external_id` on the
   cache path). So the one tool the schema names as the source of ids never returns the id the delete
   tool accepts. `proposeFocusBlock` returns both `googleEventId` and `calendarEventId` and does not
@@ -77,7 +77,7 @@ expects is only partly built:
   `CalendarWriteService.updateEvent`, and no assistant tool for it. Moving an event is entirely new
   surface.
 - **Create is narrower than it should be.** The only create path is `proposeFocusBlock`, which
-  resolves a part-of-day band, runs a freeBusy search, and may *shift* the event to the next clear
+  resolves a part-of-day band, runs a freeBusy search, and may _shift_ the event to the next clear
   slot. There is no way to create an event at an exact time that the user actually named, and no
   REST write route — `/api/calendar/events` is read-only.
 - **Provenance is recorded three different ways and read inconsistently.** An insert writes Google
@@ -87,7 +87,7 @@ expects is only partly built:
   user-created from Moss-created events on the assistant path at all.
 
 Separately, Ben has observed Moss telling him it "can't create events, only blocks." That is not a
-capability gap — a focus block *is* a calendar event — it is a vocabulary problem, addressed below.
+capability gap — a focus block _is_ a calendar event — it is a vocabulary problem, addressed below.
 
 ## Solution
 
@@ -102,8 +102,8 @@ Three pieces:
 tool accepts an event reference and one shared resolver interprets it: a UUID-shaped value resolves
 against the Moss cache by primary key; anything else resolves as a provider event key scoped to the
 actor's connected account. An unresolvable reference returns an honest "that event isn't on your
-calendar" result — never a thrown database error. Every calendar tool that *returns* events returns
-both identifiers with unambiguous names, and every tool that *accepts* one accepts either.
+calendar" result — never a thrown database error. Every calendar tool that _returns_ events returns
+both identifiers with unambiguous names, and every tool that _accepts_ one accepts either.
 
 **Honest failure.** Tool handlers keep returning structured results rather than throwing, and the
 gateway gains a logger so that when a handler does throw, the failure is recorded server-side with
@@ -148,7 +148,7 @@ must not.
    have to know or paste an identifier.
 8. As a user, I want Moss to be able to delete and move events it created itself, so that it can
    clean up after its own scheduling.
-9. As a user, I want Moss to be able to delete and move events *I* created, so that its usefulness
+9. As a user, I want Moss to be able to delete and move events _I_ created, so that its usefulness
    is not limited to its own blocks.
 10. As a user, I want a confirmation before Moss cancels or moves an event that other people are
     attending, so that no one gets an unexpected cancellation on my behalf.
@@ -163,8 +163,8 @@ must not.
     never loses an event.
 15. As a user, I want Moss to refuse clearly when I ask it to change a recurring series, so that I
     know to do it myself rather than assume it worked.
-16. As a user, I want Moss to describe its capability as creating, moving, and deleting *calendar
-    events*, so that it does not tell me it can only make focus blocks.
+16. As a user, I want Moss to describe its capability as creating, moving, and deleting _calendar
+    events_, so that it does not tell me it can only make focus blocks.
 17. As a user, I want the Calendar page to keep showing which events Moss created, so that I can
     still tell its blocks apart from my own commitments.
 18. As a user, I want a change made through Chat to appear on the Calendar page and in Google
@@ -187,7 +187,7 @@ must not.
   (when one exists), the provider event key, the connector account, and the calendar id.
 - Resolution order: a UUID-shaped reference resolves through `CalendarRepository.getById`; any other
   reference resolves through `getByExternalId` scoped to the actor's active connected account. The
-  UUID shape is checked in TypeScript *before* any query, so a non-UUID string can never reach a
+  UUID shape is checked in TypeScript _before_ any query, so a non-UUID string can never reach a
   `uuid`-typed column and raise a cast error.
 - A reference that resolves to nothing returns the existing structured "that event isn't in your
   calendar" result. Resolution failure is a result, never a throw.
@@ -213,7 +213,7 @@ must not.
   tokens, provider response bodies, or tool input values. Follow the existing `GoogleApiClient`
   precedent, which logs status codes and reason tokens only.
 - Calendar tool handlers keep the established pattern of returning structured outcome results for
-  every *anticipated* failure (missing scope, feature grant disabled, expired connection, event not
+  every _anticipated_ failure (missing scope, feature grant disabled, expired connection, event not
   found, provider permission denied, no clear slot). The gateway log is the backstop for the
   unanticipated.
 - Widen the delete and move result vocabularies so a caller can distinguish "not found", "no
@@ -240,7 +240,7 @@ must not.
 
 ### Forward compatibility: guests
 
-Ben ruled guests out of V1 but explicitly ruled *against* designing them out. These constraints are
+Ben ruled guests out of V1 but explicitly ruled _against_ designing them out. These constraints are
 binding on the create path and on anything it shares with reschedule.
 
 - The create tool's input schema stays an open JSON object with no `additionalProperties: false` and
@@ -249,7 +249,7 @@ binding on the create path and on anything it shares with reschedule.
   rewritten. (The gateway's `validateToolInput` does not enforce `additionalProperties` today, so an
   added field is accepted at the boundary the moment the schema declares it.)
 - V1 handlers simply do not read an attendee field and do not send one to the provider. They must
-  not *reject* the concept — no validation rule, type, or error path may be written in a form that
+  not _reject_ the concept — no validation rule, type, or error path may be written in a form that
   means "this contract can never carry guests".
 - `CalendarWriteService.createEvent` takes an options-object parameter, so an optional `attendees`
   member is added without changing any call site or the interface's arity. Same for the
@@ -261,7 +261,7 @@ binding on the create path and on anything it shares with reschedule.
   work may introduce a column or constraint that would need one.
 - The safety design is already guest-aware rather than guest-blind: decision 2 makes attendee count
   a first-class input to the confirmation and refusal policy, and the confirmation card already
-  states how many people will be notified. Adding guest *creation* later plugs into that same
+  states how many people will be notified. Adding guest _creation_ later plugs into that same
   policy function instead of needing a new one.
 - What a guest slice will still need — and what V1 deliberately does not prejudge — is the trust
   decision about sending invitations on the user's behalf, the action-family tier that governs it,
@@ -309,7 +309,7 @@ binding on the create path and on anything it shares with reschedule.
   fallback for an event that is re-synced into a rebuilt cache, and read it during sync to
   reconstruct `jarvisCreated` when the cache row is new. That closes the case where the cache is
   cleared and every Moss-created block silently becomes "user-created".
-- Retire the `jfb`-prefix regex in `serialize.ts` as the *source* of `isMossBlock`; derive the DTO
+- Retire the `jfb`-prefix regex in `serialize.ts` as the _source_ of `isMossBlock`; derive the DTO
   field from the consolidated metadata signal instead, with the regex retained only as a
   compatibility fallback for rows written before this change. The prefix regex is an identifier
   format doing duty as a data model, and it cannot describe an event created by a future non-focus
@@ -317,7 +317,7 @@ binding on the create path and on anything it shares with reschedule.
 - Expose provenance to the assistant: every event returned by a calendar tool carries a
   `createdByMoss` boolean, so the model can state plainly whose event it is about to change and can
   apply the right confirmation posture.
-- Provenance is a *safety and explanation* signal, never a permission boundary. Ownership and access
+- Provenance is a _safety and explanation_ signal, never a permission boundary. Ownership and access
   are enforced by RLS on `owner_user_id`, exactly as today. A forged or missing provenance marker
   must never grant access to an event the actor does not own.
 
@@ -338,7 +338,7 @@ binding on the create path and on anything it shares with reschedule.
   a confirmation card regardless of tier. Both branches, plus the decision-2 attendee rule, live in
   one policy function that takes provenance, attendee count, and the family tier and returns the
   required confirmation posture — so the rule is stated once, testable in isolation, and cheap to
-  revise. Provenance here decides *how much friction*, never *whether the actor may act*; access is
+  revise. Provenance here decides _how much friction_, never _whether the actor may act_; access is
   RLS, always.
 
 ### Invariant compliance
@@ -455,7 +455,7 @@ binding on the create path and on anything it shares with reschedule.
   that make that class of failure visible rather than silent, and they are worth more than any
   single new capability in this spec.
 - The generic `Tool X failed` message is correct and should stay. The bug was never that the message
-  was generic; it was that the generic message was the *only* artifact the failure produced.
+  was generic; it was that the generic message was the _only_ artifact the failure produced.
 - Recording a calendar id on the sync path is a small change with a real payoff: without it, every
   event on a secondary calendar is addressed as if it lived on `primary`, so delete and reschedule
   will fail for reasons no error message can explain.

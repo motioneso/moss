@@ -44,8 +44,8 @@ declare its output schema honestly today. Related: #1336.
 
 ## Architecture and scope
 
-| Issue | Tier      | Intended files                                                                          | Smallest implementation                                                                                                                                                                                                                                                     |
-| ----- | --------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Issue | Tier      | Intended files                                                                                     | Smallest implementation                                                                                                                                                                                                                                                                                    |
+| ----- | --------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | #1337 | sensitive | `packages/ai/src/gateway/output-validation.ts`; tests in `tests/unit/ai-output-validation.test.ts` | In the `anyOf` handling, before the scalar filter: detect the two-branch nullable pattern (`{type:"null"}` plus exactly one object-or-array schema). If the value is `null`, accept; otherwise recurse `sanitizeToolOutputValue` into the non-null branch. All other `anyOf` shapes keep today's behavior. |
 
 ## Exit criteria

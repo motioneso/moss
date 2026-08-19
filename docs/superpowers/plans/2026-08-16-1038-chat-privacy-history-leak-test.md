@@ -20,7 +20,7 @@
   RLS-only isolation shape.
 - Existing two-user pattern to follow (own new file, not edited) —
   `tests/integration/chat-live-api.test.ts:312-373` (`GET /api/chat/threads/:id/messages returns
-  only the owner's stored thread messages` / `…returns 404 for a shared thread grantee`). Confirms
+only the owner's stored thread messages` / `…returns 404 for a shared thread grantee`). Confirms
   `dataContext.withDataContext(userAContext(), …)` seeding pattern, `server.inject` with
   `Bearer ${ids.sessionA/B}`, and the `userAContext()`/`userBContext()` helpers
   (`tests/integration/chat-live-api.test.ts:786-792`).
@@ -45,6 +45,7 @@ Structure: one `describe` block, `beforeAll` builds `appDb`/`dataContext`/`repos
 `server.close()` / `appDb.destroy()`.
 
 **Seed (in `beforeAll` or a top-of-test setup step):**
+
 - As actor A (`dataContext.withDataContext({ actorUserId: ids.userA, requestId: … }, …)`): open one
   thread via `repository.openNewThread`, record one completed turn via
   `repository.recordCompletedTurn` (question/answer text containing a distinctive marker, e.g.
@@ -52,6 +53,7 @@ Structure: one `describe` block, `beforeAll` builds `appDb`/`dataContext`/`repos
 - As actor B: same, with a distinct marker (`"actor-b-private-question"` / `"actor-b-private-answer"`).
 
 **Test case:** `"chat privacy/history endpoints never return another actor's threads or messages"`
+
 1. `GET /api/chat/threads` as actor A (`Bearer ${ids.sessionA}`) → 200. Assert the thread list
    contains A's thread id and does **not** contain B's thread id (`.map(t => t.id)` /
    `expect(...).not.toContain(threadB.id)`).

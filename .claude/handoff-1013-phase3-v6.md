@@ -39,7 +39,7 @@ Original task brief: `~/Jarv1s/.claude/handoff-1013-phase3-relay.md` — still b
   0 lane errors, 341 samples / 53 backends); T3 demo EXIT=0 (writer captured in 49 samples, all 49
   classified external); guard `--external-writer-demo --mode=solo` EXIT=1, refuses.
   **Honest limitation to carry into every report:** the demo writer never collided, so 0 lane errors
-  occurred and the *attribution* path was not exercised — only observer liveness. The harness prints
+  occurred and the _attribution_ path was not exercised — only observer liveness. The harness prints
   exactly that; do not upgrade the claim.
 - **Phase 3(d)** spec amendment — `3d16cb57a`
 - **Phase 1** — Coordinator's tiebreaker gate returned **PASS** (XX000 = 0 in both lanes). All other

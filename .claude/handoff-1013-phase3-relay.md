@@ -32,9 +32,9 @@ locks also use different keys (`moss:cluster-ddl` vs `jarv1s:cluster-ddl`), whic
 Phase 2 does **not** ride PR #1624. Mixing production-path and test-path changes in one PR is what
 the #1624/#1632 collision already punished once. The split is **done** — do not redo it:
 
-| Branch | Head | Carries | Worktree |
-| --- | --- | --- | --- |
-| `build-1013-ddl-lock` | `705b1f03f` | Phase 1 only (test surface) | this one |
+| Branch                                 | Head        | Carries                                    | Worktree                                          |
+| -------------------------------------- | ----------- | ------------------------------------------ | ------------------------------------------------- |
+| `build-1013-ddl-lock`                  | `705b1f03f` | Phase 1 only (test surface)                | this one                                          |
 | `fix-1013-lock-domain-env-consistency` | `755e1aa2a` | Phase 2 only, on `origin/main` `24eb46e25` | `~/Jarv1s/.claude/worktrees/fix-1013-lock-domain` |
 
 `755e1aa2a` is `4382823da` cherry-picked clean onto main and retargeted at **issue #1637**
@@ -53,9 +53,9 @@ not show either commit. Local is `[ahead 50, behind 2]` of it — the eventual p
 
 ## Done — do not redo
 
-| Commit | What |
-| --- | --- |
-| `705b1f03f` | Phase 1 — test-surface DDL under the lock. 13 files. |
+| Commit      | What                                                                                    |
+| ----------- | --------------------------------------------------------------------------------------- |
+| `705b1f03f` | Phase 1 — test-surface DDL under the lock. 13 files.                                    |
 | `755e1aa2a` | Phase 2 — injected-env lock domain on the install path. 3 files. Now on its own branch. |
 
 **Phase 1** put the integration suite's cluster-global DDL on #1632's guarded DDL session:
@@ -97,7 +97,8 @@ is green, so the shape work looks already done. Run it and check D2 attribution 
 **(d) Amend the #1013 spec** to match what shipped (issue and spec are kept, per the ruling).
 
 **(e) `coordinated-wrap-up`** — clean tree, your own gate via the `verify-gate` skill, pre-push trio
-+ fresh rebase, push, PR, report to the Coordinator. Then stop.
+
+- fresh rebase, push, PR, report to the Coordinator. Then stop.
 
 ## Not yours — hard boundaries
 

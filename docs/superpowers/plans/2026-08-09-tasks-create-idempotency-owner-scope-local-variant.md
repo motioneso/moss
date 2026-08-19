@@ -17,7 +17,7 @@
 - Existing idiom for the fix already used twice in the same file — `packages/tasks/src/repository.ts:191`
   (`hasRecurringSeries`) and `:265` (`create`'s own `parentTaskId` ownership check), both:
   `.where(sql<boolean>\`owner_user_id = app.current_actor_user_id()\`)`. The fix reuses this exact
-  pattern — no new helper, no new import (`sql` already imported at `:3`).
+pattern — no new helper, no new import (`sql`already imported at`:3`).
 - `CreateTaskInput`/return type: `packages/tasks/src/repository.ts:27-42` (`create` returns
   `Promise<Task>`); `Task`/`TasksTable.owner_user_id` exists at `packages/db/src/types.ts:240` —
   available on every row `create()` returns or reads, no type change needed.
@@ -27,7 +27,7 @@
   used identically at `tests/integration/tasks.test.ts:263-271` (view-share grant pattern).
 - Existing same-owner idempotency test to preserve green: `tests/integration/tasks.test.ts:781-813`
   (`"create defaults to Personal list, accepts new fields, and is idempotent on (source,
-  external_key)"`). The fix only narrows the query's row set — this test's own-user
+external_key)"`). The fix only narrows the query's row set — this test's own-user
   create→create-again path is unaffected.
 - Confirmed non-goal from the issue body (`gh issue view 1055`): "Not exploitable for data
   leakage (it's a skip-create, not a cross-write)" — the archived→suggested resurface branch
@@ -51,7 +51,11 @@ idempotency test (after line 813):
 ```ts
 it("does not treat a cross-owner shared task as a duplicate on (source, external_key) collision", async () => {
   const ownedByA = await dataContext.withDataContext(userAContext(), (db) =>
-    repository.create(db, { title: "A's synced item", source: "sync", externalKey: "sync:collide-1" })
+    repository.create(db, {
+      title: "A's synced item",
+      source: "sync",
+      externalKey: "sync:collide-1"
+    })
   );
   await dataContext.withDataContext(userAContext(), (db) =>
     sharesRepository.grant(db, {

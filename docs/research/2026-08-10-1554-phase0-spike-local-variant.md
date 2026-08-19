@@ -8,12 +8,12 @@ The bounded-DB-replay leg is out of scope — it belongs to #1553's regression t
 
 ## Verdicts
 
-| Leg | Claim | Verdict |
-| --- | --- | --- |
-| A | Per-turn process teardown causes a full MCP client re-handshake every turn | **CONFIRMED** |
-| B | One long-lived child serves N turns with a single MCP handshake and working tools throughout | **CONFIRMED**, with one sub-claim refuted |
-| B, sub-claim | "exactly one `system/init` event total" | **REFUTED** — a persistent child emits one `init` per turn |
-| Hypothesis | Lifecycle notices leak into assistant prose | **CONFIRMED but re-explained** — the prose is model-generated, not a CLI notice. See "What actually leaks". |
+| Leg          | Claim                                                                                        | Verdict                                                                                                     |
+| ------------ | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| A            | Per-turn process teardown causes a full MCP client re-handshake every turn                   | **CONFIRMED**                                                                                               |
+| B            | One long-lived child serves N turns with a single MCP handshake and working tools throughout | **CONFIRMED**, with one sub-claim refuted                                                                   |
+| B, sub-claim | "exactly one `system/init` event total"                                                      | **REFUTED** — a persistent child emits one `init` per turn                                                  |
+| Hypothesis   | Lifecycle notices leak into assistant prose                                                  | **CONFIRMED but re-explained** — the prose is model-generated, not a CLI notice. See "What actually leaks". |
 
 ---
 
@@ -32,7 +32,7 @@ config shape `writeClaudeMcpConfig()` writes (`type: "http"`, `Authorization: Be
 
 This is strictly better evidence for the question at hand: it lets me count `initialize` handshakes,
 `tools/list` calls and TCP connections **server-side**, which the real endpoint could not have told
-me. It does mean the spike proves the *CLI-side transport lifecycle*, not the behaviour of Moss's own
+me. It does mean the spike proves the _CLI-side transport lifecycle_, not the behaviour of Moss's own
 MCP handler. Nothing here depends on the server implementation.
 
 The permission-hook settings file is a shape-faithful stand-in for
@@ -55,19 +55,19 @@ serialization only, not process or MCP lifecycle.
 
 **Client-side, per turn:**
 
-| Turn | Session flag | `system/init` events | `mcp_servers` at init | tools exposed | tool call |
-| --- | --- | --- | --- | --- | --- |
-| 1 | `--session-id` | 1 | `[{jarvis, connected}]` | 31 | `mcp__jarvis__moss_ping` |
-| 2 | `--resume` | 1 | `[{jarvis, connected}]` | 31 | none (answered from resumed context) |
-| 3 | `--resume` | 1 | `[{jarvis, connected}]` | 31 | `mcp__jarvis__moss_ping` |
+| Turn | Session flag   | `system/init` events | `mcp_servers` at init   | tools exposed | tool call                            |
+| ---- | -------------- | -------------------- | ----------------------- | ------------- | ------------------------------------ |
+| 1    | `--session-id` | 1                    | `[{jarvis, connected}]` | 31            | `mcp__jarvis__moss_ping`             |
+| 2    | `--resume`     | 1                    | `[{jarvis, connected}]` | 31            | none (answered from resumed context) |
+| 3    | `--resume`     | 1                    | `[{jarvis, connected}]` | 31            | `mcp__jarvis__moss_ping`             |
 
 **Server-side, whole leg (3 claude processes):**
 
-| Metric | Count |
-| --- | --- |
-| `initialize` handshakes | **3** |
-| `tools/list` calls | 3 |
-| distinct TCP connections | 3 |
+| Metric                                 | Count |
+| -------------------------------------- | ----- |
+| `initialize` handshakes                | **3** |
+| `tools/list` calls                     | 3     |
+| distinct TCP connections               | 3     |
 | graceful `DELETE` session terminations | **0** |
 
 Each process ran the complete handshake — `server/discover` → `initialize` →
@@ -86,6 +86,7 @@ One child launched with the `launchStructured()` shape merged with `buildCommand
 fed three user frames over stdin, each awaiting its `result` event before the next.
 
 Merge decisions, all deliberate:
+
 - **dropped `--no-session-persistence`** — the task calls for persistence on, and it is what makes the
   session resumable after a crash.
 - **dropped `--tools ""`** — replaced by `--allowedTools 'mcp__jarvis__*'` from the one-shot path.
@@ -123,19 +124,19 @@ being absent from the top-level `--help` option list (it appears only in prose).
 
 ### Evidence
 
-| Check | Result | Evidence |
-| --- | --- | --- |
-| 1. exactly one child PID for all 3 turns | **PASS** | pid `1232707` (ppid `1232699`) is the only process carrying the session UUID at all five `ps` snapshots: before turn 1, after each turn, before kill |
-| 2. exactly one `system/init` event total | **FAIL** | 3 init events, one per turn |
-| 2′. exactly one MCP handshake total | **PASS** | server-side: **1** `initialize`, **1** `tools/list` for the whole leg |
-| 3. MCP tool call succeeds on turn 1 and turn 3 | **PASS** | `mcp__jarvis__moss_ping` invoked and returned `MCP_PING_OK` on both; server logged 2 `tool_call`s |
-| 4. no lifecycle/disconnect notice in assistant prose | **PASS** | all three replies were exactly the marker string; a regex sweep for disconnect/unavailable/reconnect wording across both legs' streams found zero matches |
-| Context continuity | **PASS** | turn 2 answered from conversation memory without a tool call |
-| Clean teardown | **PASS** | `SIGTERM` to the process group exited gracefully (code 143) within 1.5 s, no `SIGKILL` needed; no process carries the session UUID afterwards; the child's own stderr was empty (0 bytes) |
+| Check                                                | Result   | Evidence                                                                                                                                                                                  |
+| ---------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. exactly one child PID for all 3 turns             | **PASS** | pid `1232707` (ppid `1232699`) is the only process carrying the session UUID at all five `ps` snapshots: before turn 1, after each turn, before kill                                      |
+| 2. exactly one `system/init` event total             | **FAIL** | 3 init events, one per turn                                                                                                                                                               |
+| 2′. exactly one MCP handshake total                  | **PASS** | server-side: **1** `initialize`, **1** `tools/list` for the whole leg                                                                                                                     |
+| 3. MCP tool call succeeds on turn 1 and turn 3       | **PASS** | `mcp__jarvis__moss_ping` invoked and returned `MCP_PING_OK` on both; server logged 2 `tool_call`s                                                                                         |
+| 4. no lifecycle/disconnect notice in assistant prose | **PASS** | all three replies were exactly the marker string; a regex sweep for disconnect/unavailable/reconnect wording across both legs' streams found zero matches                                 |
+| Context continuity                                   | **PASS** | turn 2 answered from conversation memory without a tool call                                                                                                                              |
+| Clean teardown                                       | **PASS** | `SIGTERM` to the process group exited gracefully (code 143) within 1.5 s, no `SIGKILL` needed; no process carries the session UUID afterwards; the child's own stderr was empty (0 bytes) |
 
 **Do not misread the TCP connection count.** Leg B shows 3 TCP connections but only 1 `initialize`.
 Connections 6 and 7 carried a bare `tools/call` with no handshake — that is HTTP keep-alive idle
-expiry recycling the socket underneath a *live* MCP session. TCP connection count is not a churn
+expiry recycling the socket underneath a _live_ MCP session. TCP connection count is not a churn
 metric; `initialize` count is.
 
 ---
@@ -172,11 +173,11 @@ the assistant's prose. Every turn independently rolls this dice.
 **The persistent path degrades far more gracefully.** I killed the MCP server between turns on a live
 persistent child (Leg B2):
 
-| Turn | Server | Tools exposed | Model output |
-| --- | --- | --- | --- |
-| 1 | up | yes | `MCP_PING_OK server=spike-jarvis-mcp` |
-| 2 | **killed** | **yes** | attempted the call, got a connection error, said *"The moss_ping call failed with a connection error, so I can't retrieve the marker string."* |
-| 3 | restarted | yes | `MCP_PING_OK server=spike-jarvis-mcp` — recovered automatically, same process, no relaunch |
+| Turn | Server     | Tools exposed | Model output                                                                                                                                   |
+| ---- | ---------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | up         | yes           | `MCP_PING_OK server=spike-jarvis-mcp`                                                                                                          |
+| 2    | **killed** | **yes**       | attempted the call, got a connection error, said _"The moss_ping call failed with a connection error, so I can't retrieve the marker string."_ |
+| 3    | restarted  | yes           | `MCP_PING_OK server=spike-jarvis-mcp` — recovered automatically, same process, no relaunch                                                     |
 
 The tool never disappeared, so the model reported a **transient tool failure** rather than a missing
 capability, and it self-healed when the server returned. That is a materially better user-facing
@@ -194,13 +195,13 @@ signal — it is accurate only on the first turn.
 - **`--allowedTools` is a permission allowlist, not a tool-set restriction.** Both legs reported
   **31 tools** exposed to the model despite `--allowedTools 'mcp__jarvis__*'`. All the built-in tools
   are visible; only the `PreToolUse` hook stops them being used. If the intent is that Moss chat sees
-  *only* MCP tools, `--allowedTools` does not deliver it and the permission hook is the sole guard.
+  _only_ MCP tools, `--allowedTools` does not deliver it and the permission hook is the sole guard.
 - **`init` per turn is stream framing, not lifecycle.** Any regression test must assert on
   `initialize` count observed by an MCP server (or on process identity), never on `system/init` count
   — that check would have falsely failed the correct design.
 - **No graceful MCP session termination.** Neither path ever sent a `DELETE`. The client just drops
   the socket, so a server-side session store must rely on TTL, not on client teardown.
-- **`--strict-mcp-config` does not fail closed on an unreachable server.** It restricts *which*
+- **`--strict-mcp-config` does not fail closed on an unreachable server.** It restricts _which_
   configs load; a configured-but-dead server yields a silent, successful, tool-less turn.
 - **Useful `result` fields for a persistent runtime**, available per turn on the same process:
   `subtype`, `is_error`, `num_turns`, `duration_ms`, `duration_api_ms`, `ttft_ms`, `stop_reason`,
