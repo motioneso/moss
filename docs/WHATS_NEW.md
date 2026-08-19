@@ -1,6 +1,6 @@
 # What's New in Moss
 
-## Edge channel — 2026-08-14
+## Edge channel — 2026-08-19
 
 Edge builds include the stable history below plus the user-facing changes already available in
 the current edge image. This section is intentionally build-bundled so it never advertises a
@@ -8,25 +8,47 @@ feature that is not present in the image you are running.
 
 ### Added
 
+- **Food tracking (Phase 1).** Log meals, get an estimated nutrition breakdown, and review what
+  you've eaten so far today. [PR #1716](https://github.com/motioneso/moss/pull/1716)
+- **More reliable calendar changes.** Creating, rescheduling, and deleting calendar events now
+  goes through a more reliable lookup step, so the assistant confirms it has the right event
+  before changing it. [PR #1703](https://github.com/motioneso/moss/pull/1703)
 - **Recently Released.** Settings now includes a read-only release history so you can see what
-  Moss has added, fixed, and changed. [PR #1630](https://github.com/motioneso/Jarv1s/pull/1630)
+  Moss has added, fixed, and changed. [PR #1630](https://github.com/motioneso/moss/pull/1630)
 - **Recall relevant notes before answering.** Chat can use relevant notes as context before it
-  answers, making note-backed conversations more useful. [PR #1619](https://github.com/motioneso/Jarv1s/pull/1619)
+  answers, making note-backed conversations more useful. [PR #1619](https://github.com/motioneso/moss/pull/1619)
 - **Threaded chat routing.** Chat sends now preserve the active thread surface so replies stay
-  attached to the conversation you started. [PR #1574](https://github.com/motioneso/Jarv1s/pull/1574)
+  attached to the conversation you started. [PR #1574](https://github.com/motioneso/moss/pull/1574)
 - **Vault ingestion.** Notes and other approved vault content can be ingested through the new
-  allowlisted ingestion path. [PR #1606](https://github.com/motioneso/Jarv1s/pull/1606)
+  allowlisted ingestion path. [PR #1606](https://github.com/motioneso/moss/pull/1606)
 - **Approval-card summaries.** Action cards now prefer a module's user-facing action label when
-  one is available. [PR #1492](https://github.com/motioneso/Jarv1s/pull/1492)
+  one is available. [PR #1492](https://github.com/motioneso/moss/pull/1492)
 
 ### Fixed
 
+- **All-day events no longer block scheduling.** Holidays, reminders, and other all-day calendar
+  entries no longer make the assistant think a day is fully booked. [PR #1717](https://github.com/motioneso/moss/pull/1717)
+- **Clearer, more accurate settings descriptions.** The assistant now gives better answers to
+  "what can I do here" and explains errors more accurately across email, notes, memory, news,
+  goals, tasks, wellness, weather, web research, AI, briefings, calendar, chat, commitments, and
+  connectors settings. [PR #1726](https://github.com/motioneso/moss/pull/1726) · [PR #1727](https://github.com/motioneso/moss/pull/1727) · [PR #1728](https://github.com/motioneso/moss/pull/1728)
+- **Data exports resume correctly.** Navigating away from Account & preferences and back no longer
+  loses track of an in-progress export or starts a duplicate one. [PR #1653](https://github.com/motioneso/moss/pull/1653)
+- **UI polish.** Clearer sidebar contrast, friendlier empty-state messages, improved spacing, and
+  better hover feedback. [PR #1688](https://github.com/motioneso/moss/pull/1688)
+- **Stale module backups no longer get stuck.** Old backup copies of a module are cleaned up
+  properly instead of getting wedged or showing up as if they were real installed modules.
+  [PR #1657](https://github.com/motioneso/moss/pull/1657)
+- **Module version pins are honored exactly.** Updating a module now respects an exact version
+  pin even when a different version is already on disk. [PR #1656](https://github.com/motioneso/moss/pull/1656)
+- **Additional security hardening.** Further tightening of outbound network requests, external
+  module input handling, and chat action validation. [PR #1601](https://github.com/motioneso/moss/pull/1601) · [PR #1613](https://github.com/motioneso/moss/pull/1613) · [PR #1663](https://github.com/motioneso/moss/pull/1663) · [PR #1690](https://github.com/motioneso/moss/pull/1690) · [PR #1691](https://github.com/motioneso/moss/pull/1691)
 - **Safer external-module validation.** Patterned input validation now stays bounded and keeps
-  the host responsive even for hostile input. [PR #1608](https://github.com/motioneso/Jarv1s/pull/1608)
+  the host responsive even for hostile input. [PR #1608](https://github.com/motioneso/moss/pull/1608)
 - **Weather location overrides.** A manually selected weather location now remains authoritative
-  instead of being replaced by an automatic lookup. [PR #1535](https://github.com/motioneso/Jarv1s/pull/1535)
+  instead of being replaced by an automatic lookup. [PR #1535](https://github.com/motioneso/moss/pull/1535)
 - **Chat availability and approval recovery.** Chat now waits for the selected model route and
-  restores approval cards reliably after the drawer is reopened. [PR #1482](https://github.com/motioneso/Jarv1s/pull/1482) · [PR #1494](https://github.com/motioneso/Jarv1s/pull/1494)
+  restores approval cards reliably after the drawer is reopened. [PR #1482](https://github.com/motioneso/moss/pull/1482) · [PR #1494](https://github.com/motioneso/moss/pull/1494)
 
 ## v0.1.16 — 2026-08-05
 
