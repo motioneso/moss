@@ -139,7 +139,7 @@ export const calendarModuleManifest = {
         {
           id: "calendar.planning",
           name: "Use for planning",
-          description: "Your assistant schedules its own focus blocks around your events.",
+          description: "Your assistant schedules its own events around your calendar.",
           default: "coming-soon"
         },
         {
@@ -188,7 +188,7 @@ export const calendarModuleManifest = {
     {
       id: "calendar_writeback",
       label: "Calendar writeback",
-      description: "Create Calendar-owned Moss blocks on the user's calendar.",
+      description: "Create and move Moss-owned events on the user's calendar.",
       defaultTier: "ask_each_time",
       allowedTiers: ["ask_each_time", "trusted_auto", "always_confirm"]
     },
@@ -230,16 +230,18 @@ export const calendarModuleManifest = {
       execute: calendarListVisibleEventsExecute
     },
     {
-      name: "calendar.proposeFocusBlock",
+      name: "calendar.createEvent",
       description:
-        "Propose and (on approval) create a focus-time block on the user's primary Google Calendar, conflict-checked live against their availability.",
+        "Create a calendar event on the user's primary Google Calendar at a time you name (or a " +
+        "part of the day, e.g. tomorrow morning), conflict-checked live against their availability. " +
+        "Works for any event, not just focus time — 'Focus time' is only the default title when none is given.",
       permissionId: "calendar.manage",
       risk: "write",
       executionPolicy: "auto",
       // Wired for auto-run, but NOT granted at install: the proactive follow-through worker
       // (buildCalendarFollowThroughPort.executeAutoActions, module-registry/src/index.ts:711) is a
       // second, un-gated reader of calendar_writeback's tier — on a block_time signal it calls
-      // calendarWrite.proposeAndInsert directly, no card, no chat session, no gateway. Granting
+      // calendarWrite.createEvent directly, no card, no chat session, no gateway. Granting
       // trusted_auto at install would arm unattended background calendar writes the moment the
       // module is enabled. Fable's security review on PR #1268 caught this; the user must promote
       // calendar_writeback to trusted_auto themselves (#1263).
@@ -266,9 +268,9 @@ export const calendarModuleManifest = {
           },
           durationMinutes: {
             type: "number",
-            description: "block length; clamped to 15..480 by the handler"
+            description: "event length in minutes; clamped to 15..480 by the handler"
           },
-          title: { type: "string", description: "block title; defaults to 'Focus time'" }
+          title: { type: "string", description: "event title; defaults to 'Focus time'" }
         }
       },
       execute: calendarProposeFocusBlockExecute,

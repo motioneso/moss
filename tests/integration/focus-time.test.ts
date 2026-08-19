@@ -37,7 +37,7 @@ import {
   RlsRejectingCalendarRepository
 } from "./focus-time-helpers.js";
 
-describe("Group C — calendar.proposeFocusBlock tool wiring", () => {
+describe("Group C — calendar.createEvent tool wiring", () => {
   let appDb: Kysely<MossDatabase>;
   let dataContext: DataContextRunner;
 
@@ -75,7 +75,7 @@ describe("Group C — calendar.proposeFocusBlock tool wiring", () => {
 
   it("summarize renders requested-window card text mentioning the next-clear-slot caveat", () => {
     const tool = calendarModuleManifest.assistantTools!.find(
-      (t) => t.name === "calendar.proposeFocusBlock"
+      (t) => t.name === "calendar.createEvent"
     );
     expect(tool).toBeTruthy();
     expect(tool!.risk).toBe("write");
@@ -89,7 +89,7 @@ describe("Group C — calendar.proposeFocusBlock tool wiring", () => {
     expect(text).toMatch(/next clear slot/i);
   });
 
-  it("calendar.proposeFocusBlock belongs to calendar_writeback and can be trusted_auto", () => {
+  it("calendar.createEvent belongs to calendar_writeback and can be trusted_auto", () => {
     const family = calendarModuleManifest.assistantActionFamilies?.find(
       (f) => f.id === "calendar_writeback"
     );
@@ -99,7 +99,7 @@ describe("Group C — calendar.proposeFocusBlock tool wiring", () => {
     expect(family?.allowedTiers).toEqual(["ask_each_time", "trusted_auto", "always_confirm"]);
 
     const tool = calendarModuleManifest.assistantTools?.find(
-      (t) => t.name === "calendar.proposeFocusBlock"
+      (t) => t.name === "calendar.createEvent"
     );
     expect(tool?.actionFamilyId).toBe("calendar_writeback");
     expect(tool?.executionPolicy).toBe("auto");
@@ -108,7 +108,7 @@ describe("Group C — calendar.proposeFocusBlock tool wiring", () => {
   it("on approve, execute resolves a window and delegates to services.calendarWrite", async () => {
     let captured: { start: Date; end: Date; durationMinutes: number; title: string } | null = null;
     const fakeService = {
-      async proposeAndInsert(
+      async createEvent(
         _db: unknown,
         _ctx: unknown,
         window: { start: Date; end: Date; durationMinutes: number; title: string }
@@ -151,7 +151,7 @@ describe("Group C — calendar.proposeFocusBlock tool wiring", () => {
       allowedToolNames: null
     });
 
-    const res = await callAndApprove(gateway, emitted, token, "calendar.proposeFocusBlock", {
+    const res = await callAndApprove(gateway, emitted, token, "calendar.createEvent", {
       partOfDay: "morning",
       durationMinutes: 120,
       title: "Deep work"
@@ -240,7 +240,7 @@ describe("Group D — CalendarWriteService impl (faked Google fetch)", () => {
     const res = await dataContext.withDataContext(
       { actorUserId: ids.userA, requestId: "t" },
       (scopedDb) =>
-        impl.proposeAndInsert(
+        impl.createEvent(
           scopedDb,
           { actorUserId: ids.userA, requestId: "t", chatSessionId: "s" },
           {
@@ -269,7 +269,7 @@ describe("Group D — CalendarWriteService impl (faked Google fetch)", () => {
     const res = await dataContext.withDataContext(
       { actorUserId: ids.userA, requestId: "t" },
       (scopedDb) =>
-        impl.proposeAndInsert(
+        impl.createEvent(
           scopedDb,
           { actorUserId: ids.userA, requestId: "t", chatSessionId: "s" },
           {
@@ -293,7 +293,7 @@ describe("Group D — CalendarWriteService impl (faked Google fetch)", () => {
     const res = await dataContext.withDataContext(
       { actorUserId: ids.userA, requestId: "t" },
       (scopedDb) =>
-        impl.proposeAndInsert(
+        impl.createEvent(
           scopedDb,
           { actorUserId: ids.userA, requestId: "t", chatSessionId: "s" },
           {
@@ -310,7 +310,7 @@ describe("Group D — CalendarWriteService impl (faked Google fetch)", () => {
 
   it("freeBusy per-calendar errors[] → created:false, NO insert (no double-booking)", async () => {
     // A freeBusy 200 carrying a per-calendar errors[] with empty busy must NOT be read as
-    // "fully free": fail-closed in freeBusy() throws, proposeAndInsert returns created:false,
+    // "fully free": fail-closed in freeBusy() throws, createEvent returns created:false,
     // and the events POST is never reached — so a focus block can't double-book a real event.
     await seedGoogleAccount(ids.userA, ["https://www.googleapis.com/auth/calendar"]);
     let insertCalls = 0;
@@ -341,7 +341,7 @@ describe("Group D — CalendarWriteService impl (faked Google fetch)", () => {
     const res = await dataContext.withDataContext(
       { actorUserId: ids.userA, requestId: "t" },
       (scopedDb) =>
-        impl.proposeAndInsert(
+        impl.createEvent(
           scopedDb,
           { actorUserId: ids.userA, requestId: "t", chatSessionId: "s" },
           {
@@ -363,7 +363,7 @@ describe("Group D — CalendarWriteService impl (faked Google fetch)", () => {
     const res = await dataContext.withDataContext(
       { actorUserId: ids.userB, requestId: "t" },
       (scopedDb) =>
-        impl.proposeAndInsert(
+        impl.createEvent(
           scopedDb,
           { actorUserId: ids.userB, requestId: "t", chatSessionId: "s" },
           {
@@ -393,7 +393,7 @@ describe("Group D — CalendarWriteService impl (faked Google fetch)", () => {
     const res = await dataContext.withDataContext(
       { actorUserId: ids.userA, requestId: "t" },
       (scopedDb) =>
-        impl.proposeAndInsert(
+        impl.createEvent(
           scopedDb,
           { actorUserId: ids.userA, requestId: "t", chatSessionId: "s" },
           {
@@ -419,7 +419,7 @@ describe("Group D — CalendarWriteService impl (faked Google fetch)", () => {
     const res = await dataContext.withDataContext(
       { actorUserId: ids.userA, requestId: "t" },
       (scopedDb) =>
-        impl.proposeAndInsert(
+        impl.createEvent(
           scopedDb,
           { actorUserId: ids.userA, requestId: "t", chatSessionId: "s" },
           {
@@ -440,7 +440,7 @@ describe("Group D — CalendarWriteService impl (faked Google fetch)", () => {
     const res = await dataContext.withDataContext(
       { actorUserId: ids.userA, requestId: "t" },
       (scopedDb) =>
-        impl.proposeAndInsert(
+        impl.createEvent(
           scopedDb,
           { actorUserId: ids.userA, requestId: "t", chatSessionId: "s" },
           {
@@ -495,7 +495,7 @@ describe("Group D — CalendarWriteService impl (faked Google fetch)", () => {
     const res = await dataContext.withDataContext(
       { actorUserId: ids.userA, requestId: "t" },
       (scopedDb) =>
-        impl.proposeAndInsert(
+        impl.createEvent(
           scopedDb,
           { actorUserId: ids.userA, requestId: "t", chatSessionId: "s" },
           {
@@ -544,7 +544,7 @@ describe("Group D — CalendarWriteService impl (faked Google fetch)", () => {
     const res = await dataContext.withDataContext(
       { actorUserId: ids.userA, requestId: "t" },
       (scopedDb) =>
-        impl.proposeAndInsert(
+        impl.createEvent(
           scopedDb,
           { actorUserId: ids.userA, requestId: "t", chatSessionId: "s" },
           {
@@ -568,7 +568,7 @@ describe("Group D — CalendarWriteService impl (faked Google fetch)", () => {
     const res = await dataContext.withDataContext(
       { actorUserId: ids.userA, requestId: "t" },
       (scopedDb) =>
-        impl.proposeAndInsert(
+        impl.createEvent(
           scopedDb,
           { actorUserId: ids.userA, requestId: "t", chatSessionId: "s" },
           {
@@ -712,10 +712,10 @@ describe("Group D — buildChatToolServices wires calendarWrite into the gateway
 
     const list = await mcp(app, token, "tools/list", {});
     const names = (list.result.tools as Array<{ name: string }>).map((t) => t.name);
-    expect(names).toContain("calendar.proposeFocusBlock"); // factory produced calendarWrite ⇒ tool listed
+    expect(names).toContain("calendar.createEvent"); // factory produced calendarWrite ⇒ tool listed
 
     const callP = mcp(app, token, "tools/call", {
-      name: "calendar.proposeFocusBlock",
+      name: "calendar.createEvent",
       arguments: { partOfDay: "morning", durationMinutes: 120 }
     });
     const actionId = await waitForPendingActionId(dataContext, ids.userA);
@@ -740,9 +740,9 @@ describe("Group D — buildChatToolServices wires calendarWrite into the gateway
     });
     const list = await mcp(app, token, "tools/list", {});
     const names = (list.result.tools as Array<{ name: string }>).map((t) => t.name);
-    expect(names).not.toContain("calendar.proposeFocusBlock"); // fail-closed: hidden
+    expect(names).not.toContain("calendar.createEvent"); // fail-closed: hidden
     const call = await mcp(app, token, "tools/call", {
-      name: "calendar.proposeFocusBlock",
+      name: "calendar.createEvent",
       arguments: {}
     });
     // gateway returns ok:false "Tool not available" → MCP surfaces an error, never reaches execute.
@@ -842,7 +842,7 @@ describe("Group D — no write without approval (safety property)", () => {
   function gatewayWithCountingService(confirmTimeoutMs: number) {
     let inserts = 0;
     const service = {
-      async proposeAndInsert(
+      async createEvent(
         _db: unknown,
         _ctx: unknown,
         window: { start: Date; end: Date; durationMinutes: number; title: string }
@@ -881,7 +881,7 @@ describe("Group D — no write without approval (safety property)", () => {
       allowedToolNames: null
     });
     const existing = await snapshotPendingIds(dataContext, ids.userA);
-    const callPromise = gateway.callTool(token, "calendar.proposeFocusBlock", {
+    const callPromise = gateway.callTool(token, "calendar.createEvent", {
       partOfDay: "morning"
     });
     const actionId = await waitForNewPendingActionId(dataContext, ids.userA, existing);
@@ -898,7 +898,7 @@ describe("Group D — no write without approval (safety property)", () => {
       chatSessionId: ids.userA,
       allowedToolNames: null
     });
-    const res = await gateway.callTool(token, "calendar.proposeFocusBlock", {
+    const res = await gateway.callTool(token, "calendar.createEvent", {
       partOfDay: "morning"
     });
     expect(res.ok).toBe(false);
@@ -913,7 +913,7 @@ describe("Group D — no write without approval (safety property)", () => {
       allowedToolNames: null
     });
     const existing = await snapshotPendingIds(dataContext, ids.userA);
-    const callPromise = gateway.callTool(token, "calendar.proposeFocusBlock", {
+    const callPromise = gateway.callTool(token, "calendar.createEvent", {
       partOfDay: "morning"
     });
     const actionId = await waitForNewPendingActionId(dataContext, ids.userA, existing);

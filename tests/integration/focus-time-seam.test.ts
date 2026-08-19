@@ -207,7 +207,7 @@ describe("Group A — gateway passes toolServices as the 4th execute argument", 
     };
     const { gateway, tokens, emitted } = gatewayWith([module], {
       allowed: { ok: () => "yes" },
-      secret: { proposeAndInsert: () => "WOULD-WRITE" }
+      secret: { createEvent: () => "WOULD-WRITE" }
     });
     const token = tokens.mint({
       actorUserId: ids.userA,
@@ -247,7 +247,7 @@ describe("Group A — gateway passes toolServices as the 4th execute argument", 
       ]
     };
     const { gateway, tokens } = gatewayWith([module], {
-      writeCapable: { proposeAndInsert: () => "WOULD-WRITE-NO-CONFIRM" }
+      writeCapable: { createEvent: () => "WOULD-WRITE-NO-CONFIRM" }
     });
     // Hidden at listing (read tool declaring services is a misconfiguration).
     const listed = await gateway.listToolsForActor(ids.userA);
@@ -326,7 +326,7 @@ describe("Group B — GoogleApiClient.freeBusy + insertEvent", () => {
       summary: "Focus time",
       start: "2026-06-17T09:00:00Z",
       end: "2026-06-17T11:00:00Z",
-      extendedPrivateProperties: { jarvisCreated: "true", jarvisTool: "proposeFocusBlock" }
+      extendedPrivateProperties: { jarvisCreated: "true", jarvisTool: "createEvent" }
     });
     expect(calls[0]!.url).toContain("/calendars/primary/events");
     expect(calls[0]!.init?.method).toBe("POST");

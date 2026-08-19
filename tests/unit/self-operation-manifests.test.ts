@@ -240,19 +240,19 @@ describe("Email self-operation manifest classification", () => {
 });
 
 describe("Calendar self-operation manifest classification", () => {
-  it("classifies both proposeFocusBlock and deleteEvent as user_promotable", () => {
+  it("classifies both createEvent and deleteEvent as user_promotable", () => {
     const tools = calendarModuleManifest.assistantTools ?? [];
 
-    const proposeFocusBlock = tools.find(
-      (candidate) => candidate.name === "calendar.proposeFocusBlock"
+    const createEvent = tools.find(
+      (candidate) => candidate.name === "calendar.createEvent"
     );
-    expect(proposeFocusBlock, "expected tool calendar.proposeFocusBlock to exist").toBeDefined();
-    expect(proposeFocusBlock?.risk).toBe("write");
-    expect(proposeFocusBlock?.actionFamilyId).toBe("calendar_writeback");
-    expect(proposeFocusBlock?.executionPolicy).toBe("auto");
+    expect(createEvent, "expected tool calendar.createEvent to exist").toBeDefined();
+    expect(createEvent?.risk).toBe("write");
+    expect(createEvent?.actionFamilyId).toBe("calendar_writeback");
+    expect(createEvent?.executionPolicy).toBe("auto");
     // Not granted_at_install: the proactive follow-through worker (module-registry/src/index.ts:711)
     // reads calendar_writeback's tier unattended, so install must not promote it (Fable, PR #1268).
-    expect(proposeFocusBlock?.selfOperationGrant).toBe("user_promotable");
+    expect(createEvent?.selfOperationGrant).toBe("user_promotable");
 
     const deleteEvent = tools.find((candidate) => candidate.name === "calendar.deleteEvent");
     expect(deleteEvent, "expected tool calendar.deleteEvent to exist").toBeDefined();
@@ -390,7 +390,7 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     expect(userPromotable.length).toBe(4);
 
     // Task 12a moved calendar.deleteEvent out of granted_at_install (33 -> ...). PR #1268's
-    // security reviews moved two more: Fable moved calendar.proposeFocusBlock to user_promotable
+    // security reviews moved two more: Fable moved calendar.createEvent to user_promotable
     // (the proactive follow-through worker is a second unattended reader of calendar_writeback's
     // tier), and Opus moved web.read to confirm_always (no approved spec covers web-research, and
     // an auto-run family would have reopened the v0.1.0 audit's exfiltration finding). #1263
@@ -409,7 +409,7 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     expect(userPromotable.sort()).toEqual(
       [
         "calendar.deleteEvent",
-        "calendar.proposeFocusBlock",
+        "calendar.createEvent",
         "tasks.deleteList",
         "tasks.deleteTag"
       ].sort()

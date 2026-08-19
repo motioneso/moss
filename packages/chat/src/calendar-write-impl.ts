@@ -40,7 +40,7 @@ export interface CalendarWriteImplDeps {
 
 export function buildCalendarWriteService(deps: CalendarWriteImplDeps): CalendarWriteService {
   return {
-    async proposeAndInsert(
+    async createEvent(
       scopedDbRaw: unknown,
       ctx: ToolContext,
       window: FocusBlockWindow,
@@ -171,7 +171,7 @@ export function buildCalendarWriteService(deps: CalendarWriteImplDeps): Calendar
           start: slot.start.toISOString(),
           end: slot.end.toISOString(),
           eventId,
-          extendedPrivateProperties: { jarvisCreated: "true", jarvisTool: "proposeFocusBlock" }
+          extendedPrivateProperties: { jarvisCreated: "true", jarvisTool: "createEvent" }
         });
       } catch (error) {
         // 409 Conflict = an event with this deterministic id already exists, i.e. this exact
@@ -396,7 +396,7 @@ async function mirrorEvent(
       endsAt: slot.end,
       externalMetadata: {
         jarvisCreated: true,
-        source: "proposeFocusBlock",
+        source: "createEvent",
         htmlLink: inserted.htmlLink ?? null,
         ...(options.followThroughTargetRef
           ? { followThroughTargetRef: options.followThroughTargetRef }

@@ -25,7 +25,7 @@ export const CALENDAR_MODE_OPTIONS: ReadonlyArray<{
 ];
 
 // Time blocks' "auto" tier (calendar_writeback) arms two unattended writers, not one: the chat
-// gateway auto-running calendar.proposeFocusBlock, and the background follow-through worker
+// gateway auto-running calendar.createEvent, and the background follow-through worker
 // (buildCalendarFollowThroughPort.executeAutoActions) that reads the same tier and writes without
 // a chat session at all. The shared CALENDAR_MODE_OPTIONS "auto" desc only names the first, so
 // override it here for Time blocks specifically -- Prep tasks has no background writer and must

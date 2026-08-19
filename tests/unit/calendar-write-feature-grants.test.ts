@@ -42,7 +42,7 @@ describe("calendar write feature grants", () => {
       }
     } as never);
 
-    const result = await service.proposeAndInsert(
+    const result = await service.createEvent(
       scopedDb,
       {
         actorUserId: "00000000-0000-0000-0000-000000000001",
@@ -96,7 +96,7 @@ describe("calendar write feature grants", () => {
       }
     } as never);
 
-    const result = await service.proposeAndInsert(
+    const result = await service.createEvent(
       scopedDb,
       {
         actorUserId: "00000000-0000-0000-0000-000000000001",
@@ -141,7 +141,7 @@ describe("calendar write feature grants", () => {
       }
     } as never);
 
-    const result = await service.proposeAndInsert(
+    const result = await service.createEvent(
       scopedDb,
       {
         actorUserId: "00000000-0000-0000-0000-000000000001",

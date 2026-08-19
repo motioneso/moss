@@ -224,7 +224,7 @@ export class GoogleApiClient {
       "calendar"
     );
     // FAIL-CLOSED: if the requested calendar key is absent OR Google reported a per-calendar
-    // error for it, we CANNOT trust an empty busy list as "free". Throw so proposeAndInsert's
+    // error for it, we CANNOT trust an empty busy list as "free". Throw so createEvent's
     // try/catch returns created:false ("couldn't check availability") instead of inserting a
     // focus block into an unverified slot (double-booking guarantee). Log status only — never
     // the body — to keep the existing no-leak posture.

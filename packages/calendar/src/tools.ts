@@ -160,7 +160,7 @@ export const calendarListVisibleEventsExecute: ToolExecute = async (
 
 function narrowCalendarWrite(services: ToolServices | undefined): CalendarWriteService {
   const svc = (services ?? {}).calendarWrite as CalendarWriteService | undefined;
-  if (!svc || typeof svc.proposeAndInsert !== "function") {
+  if (!svc || typeof svc.createEvent !== "function") {
     throw new Error("calendarWrite service is not available");
   }
   return svc;
@@ -222,7 +222,7 @@ export const calendarProposeFocusBlockExecute: ToolExecute = async (
   // lockstep with the approval card across the midnight boundary (Codex HIGH round 4).
   freezeRelativeDate(input, new Date(), tz);
   const resolved = resolveWindow(readInput(input), new Date(), tz);
-  const result = await service.proposeAndInsert(scopedDb, ctx, {
+  const result = await service.createEvent(scopedDb, ctx, {
     start: resolved.start,
     end: resolved.end,
     durationMinutes: resolved.durationMinutes, // REQUESTED block length, not the band width

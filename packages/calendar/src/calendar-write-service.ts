@@ -50,7 +50,7 @@ export interface DeleteEventResult {
  * narrows the injected `services.calendarWrite` to this interface.
  */
 export interface CalendarWriteService {
-  proposeAndInsert(
+  createEvent(
     scopedDb: unknown, // DataContextDb; calendar/impl narrows via assertDataContextDb
     ctx: ToolContext,
     window: FocusBlockWindow,

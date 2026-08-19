@@ -237,7 +237,7 @@ describe("AssistantToolGateway self-operation", () => {
     );
 
     const fakeCalendarWrite = {
-      async proposeAndInsert() {
+      async createEvent() {
         throw new Error("should not be called — deleteEvent must confirm first");
       },
       async deleteEvent() {
@@ -474,9 +474,9 @@ describe("AssistantToolGateway self-operation", () => {
   it("installing calendar does not arm the background follow-through writer", async () => {
     // #1263 Fable security review, PR #1268: buildCalendarFollowThroughPort.executeAutoActions
     // (module-registry/src/index.ts:711) is a second, unattended reader of calendar_writeback's
-    // tier — on a block_time signal it calls calendarWrite.proposeAndInsert directly, no card, no
+    // tier — on a block_time signal it calls calendarWrite.createEvent directly, no card, no
     // chat session, no gateway. Granting trusted_auto at install would arm unattended background
-    // calendar writes the instant the module is enabled. Task 1 moved proposeFocusBlock to
+    // calendar writes the instant the module is enabled. Task 1 moved createEvent to
     // user_promotable so install must not write trusted_auto for calendar_writeback at all.
     const grantManifest: SelfOperationManifestInput = {
       id: calendarModuleManifest.id,
@@ -503,7 +503,7 @@ describe("AssistantToolGateway self-operation", () => {
     );
 
     // Tightened per Coordinator review (PR #1268): grantSelfOperationForModule only inserts rows
-    // for granted_at_install families, and calendar_writeback's only owner (proposeFocusBlock) is
+    // for granted_at_install families, and calendar_writeback's only owner (createEvent) is
     // user_promotable — so install must write no row at all, not merely a non-trusted_auto one.
     expect(writebackTier).toBeNull();
   });
