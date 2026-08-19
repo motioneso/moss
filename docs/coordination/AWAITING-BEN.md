@@ -29,7 +29,8 @@ real-chat-token gap this entry described is moot now that the PR landed. -->
 
 <!-- Resolved 2026-08-19: #1319 signed module catalog. Ben generated the Ed25519 keypair, set the
 two GitHub secrets, and shared the public key. Public half committed to PR #1684
-(commit 851f9ba70). Next: confirm CI green, then run the real publish/verify proof before merge. -->
+(commit 851f9ba70). Real publish/verify proof confirmed (verified: true, key moss-catalog-2026-a).
+Ben approved merge; PR #1684 merged. -->
 
 <!-- Resolved 2026-08-05 (PM, via Telegram relay): PR #1379 — Ben ruled delegate the review; QA
 lane dispatched. Overnight Codex coordinator pid 1799977 — Ben ruled kill; killed with its MCP
@@ -82,18 +83,3 @@ Ben finds it from the canonical run location too.
 matches the spec literally); otherwise option 1. Pinged via `needs-ben` (see
 `~/.needs-ben/sent/1786483243535565600.msg`). Everything else in #1533 Phase 4 is done — this is
 the only open item. Build agent is waiting event-driven, not polling; coordinator likewise.
-
-## PR #1684 (#1319 signed module catalog) — waiting on merge sign-off
-
-Security-tier change (signing/trust material), so it needs Ben's explicit OK before merge, not
-just green CI. CI is green. The real signature check has now been run for real (published the
-live module list with signing turned on, then checked the signature the way a real install
-would) and it came back verified correctly.
-
-One mistake along the way, already fixed: the first attempt ran the test using the old version of
-the publish process (still on the main branch, before this change), so it published without any
-signature. Low impact — same three modules, just a refreshed timestamp, nothing broken. Re-ran it
-correctly against this pull request's own branch and got a real, verified signature.
-
-Pinged via `needs-ben` (see `~/.needs-ben/sent/1787175512469771082.msg`). Details in
-`docs/coordination/2026-08-19-dogfood-issues-run.md` under "In progress right now: PR #1684".
