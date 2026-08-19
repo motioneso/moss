@@ -32,10 +32,13 @@ platform contracts an outside author would have. Anywhere Food would need a priv
 edit, or first-party-only access is by definition a platform gap — evidence for a blocker issue,
 not a license for Food to be special.
 
-The platform mechanics of distribution — packaging, installation, the not-installed-by-default
-posture, and how first-party authorship interacts with the existing module platform — are **not
-specified or built here**. They are a core-platform capability with their own issue and spec
-(Blocker P1 below). This spec defines only what Food requires from that contract.
+Repository verification (2026-08-18) found the platform mechanics **largely already exist** on the
+downloaded-module track: registry publish (`scripts/publish-module-registry.ts`), download → verify
+→ stage pipeline, the four-phase privileged installer, fail-closed discovered→enabled status,
+per-user disable with data retained, and structural account-deletion coverage derived from
+`database.ownedTables`. Food therefore ships as a Moss-authored package on that existing track
+(the `bundled` vs `downloaded` axis of #1312), and this spec does not respecify distribution. Only
+the genuinely missing contracts are blockers, listed below with their filed issues.
 
 ## Planning Constraint (binding)
 
@@ -54,40 +57,59 @@ services, repositories, UI, assistant tools, export/deletion declarations, and t
   composition root) are out of scope for the Food plan, with one narrow exception: the small
   registration/wiring line a module contract explicitly requires every consumer to add, where the
   blocker's spec has already defined that seam. Even that exception is a smell under the
-  third-party goal — a true outside author cannot edit core at all — so P1 should prefer
-  declaration-driven registration over per-module core wiring wherever practical.
+  third-party goal — a true outside author cannot edit core at all — so blocker specs (especially
+  #1694) should prefer declaration-driven registration over per-module core wiring wherever
+  practical.
 
-## Platform Blockers (separate issues; each blocks #926)
+## Platform Blockers (separate issues, verified missing 2026-08-18)
 
-- **P1 — Distributable first-party modules.** Packaging, distribution, installation, and the
-  not-installed-by-default posture for Moss-authored modules; how install/enable/disable and the
-  existing first-party lifecycle guarantees (retain on disable, export sections, account-deletion
-  cascade, Settings archive assembly without per-module hand-wiring in core) are delivered for
-  distributable modules. Food requires: install → enable through the real Settings/module path;
-  disable hides surfaces and tools while retaining data; account deletion removes module-owned
-  rows; export sections appear in the user's archive.
-- **P2 — Image input on the structured-AI path.** Image content blocks in the structured provider
-  adapters, model resolution using the existing `vision` capability, and an owner-scoped Vault
-  image read available to estimators. Today no call site resolves `vision` and the structured
-  adapters carry text-only turns; this extension is core `packages/ai` work. Food requires: submit
-  an authorized attachment reference plus a text prompt to the structured path and receive the same
-  schema-validated result contract as text-only estimation, with the user's configured
-  vision-capable model resolved by capability.
-- **P3 — Wellness check-in context port.** A narrow, consent-aware provider interface declared in
-  the module SDK, implemented by Wellness, and wired at the composition root (following the
-  existing provider-port precedents). It returns owner-scoped check-in timestamps with a bounded
-  label derived from existing feeling and sensation fields. Wellness enforces its own enabled state
-  and AI-read consent inside the implementation. Food requires: query the port for check-ins in a
-  bounded window for the active actor; a null/empty result when Wellness is absent, unconsented, or
-  has no matching check-in.
-- **P4 — Job payload allowlist keys.** The jobs package validates durable-job payloads against a
-  closed metadata-only key allowlist. If Food estimation uses a durable job, its payload keys
-  (actor id, meal id, estimate revision, idempotency metadata) must be admitted by the core
-  allowlist. Small, but it is a core `packages/jobs` edit and therefore rides with a blocker
-  (fold into P1's platform spec or file separately at planning time) — never in the Food plan.
+Blockers are scoped to the Food feature path they gate so text/history work is never serialized
+behind photo or correlation work.
 
-Planning for #926 starts only when each blocker's contract is approved; building starts only when
-the contracts Food consumes are on main.
+**Blocks all of #926:**
+
+- **#1694 — Downloaded-module data export.** The JSON manifest ABI has no export declaration and
+  `readExternalModuleExportRows` exists but is unwired, so a downloaded module's data never reaches
+  the user's archive (deletion coverage, by contrast, is already structural and working). Food
+  requires: its owned-table data in the owner's export with declarable sensitivity copy, assembled
+  declaration-driven rather than by per-module hand-wiring in core Settings.
+
+**Blocks only photo estimation (stories 5, photo parts of 15/23; text/voice logging, history, and
+the Food page proceed without these):**
+
+- **#1695 — Public module attachment contract.** Modules today have only `attachments.readText`
+  (text extraction, null for images); there is no upload contract and no authorized binary/image
+  read. Food requires: platform-level upload from the Food page and owner-scoped bytes+mimeType
+  read for estimation, with Chat's existing Vault-backed behavior unchanged underneath — a declared
+  contract, not a private Chat dependency.
+- **#1696 — Structured-AI image input.** Moss already sends images to models inside Chat (the
+  attachment tool's image content block); the structured path is text-only and no call site resolves
+  the existing `vision` capability. Food requires: the structured contract accepts an authorized
+  image alongside the prompt, resolves the user's vision-capable model by capability, keeps the
+  schema-validation/repair contract, and is exposed through the module structured-AI RPC with its
+  existing guards.
+
+**Blocks only the Wellness-correlation feature (stories 29–32):**
+
+- **#1697 — Wellness check-in context port.** No check-in/symptom port exists, and every current
+  provider port is a function-valued compiled-manifest field a downloaded module cannot consume.
+  Food requires: an SDK-declared port returning owner-scoped check-in timestamps plus a bounded
+  label from existing feeling/sensation fields, implemented by Wellness (which enforces its own
+  enabled state and AI-read consent internally), wired at the composition root, and reachable from
+  a downloaded module's execution context.
+
+**Retired — verified already covered:**
+
+- *Job payload allowlist keys* (formerly P4): the closed metadata-only allowlist already carries
+  generic keys (`actorUserId`, `resourceId`, `idempotencyKey`, `kind`, `version`) that cover Food's
+  estimation payload with zero additions. If planning still finds a missing key, or estimation
+  stays synchronous, no core work exists here; only a genuinely new key would trigger a blocker.
+- *Distribution/install/not-installed-by-default*: exists end-to-end on the downloaded track (see
+  Module distribution model above). #1312 (bundled/downloaded rename) is a linked vocabulary
+  prerequisite, not a blocker.
+
+Planning for a Food feature path starts only when its blockers' contracts are approved; building a
+path starts only when the contracts it consumes are on main. Unblocked paths may proceed.
 
 ## Solution
 
@@ -104,7 +126,7 @@ when the input is incomplete; Moss asks for clarification instead of inventing p
 Food owns its records and reporting. Moss can answer bounded natural-language questions such as
 “What did I eat this week?” and “How much protein did I average?” When Wellness is enabled, has an
 already-recorded check-in, and the user has allowed the relevant AI access, Wellness may provide the
-check-in time through the declared check-in context port (Blocker P3). Food can then return meals
+check-in time through the declared check-in context port (#1697). Food can then return meals
 that preceded it. Moss describes chronology only and never claims causation or diagnosis.
 
 ## User Stories
@@ -188,14 +210,14 @@ that preceded it. Moss describes chronology only and never claims causation or d
 All decisions below describe work inside the Food module package unless they explicitly name a
 blocker contract Food consumes.
 
-- Build Food as a distributable module (Blocker P1) using the declared module manifest, navigation,
+- Build Food as a Moss-authored module on the existing downloaded-module track, using the declared JSON manifest, navigation,
   settings, route, tool, permission, and lifecycle contracts. Place Food adjacent to Wellness in
   user-facing navigation/settings; do not add a speculative manifest grouping system solely for
   this feature.
 - Food owns its data, application services, UI, assistant tools, export declarations, and deletion
   declarations. Wellness must not import Food internals or read Food tables, and Food must not
   import Wellness internals or read Wellness tables. Food's only Wellness contact is the check-in
-  context port contract (Blocker P3).
+  context port contract (#1697).
 - Add Food-owned, owner-scoped storage for meals and their nutrition estimates, with migrations in
   Food's own module SQL. A meal stores the consumed timestamp, separately records creation/update
   timestamps, preserves a bounded original description, records capture kind (`text`, `photo`, or
@@ -216,7 +238,8 @@ blocker contract Food consumes.
   authorized attachment reference needed to estimate or display the meal; it does not copy image
   bytes into Food tables, logs, metrics, or job payloads.
 - Text estimation uses the configured structured-AI/model-resolution path as it exists today. Photo
-  estimation consumes the image-capable structured contract delivered by Blocker P2; Food-package
+  estimation consumes the image-capable structured contract delivered by #1696 and the attachment
+  upload/binary-read contract delivered by #1695; Food-package
   work is limited to invoking that contract with an authorized attachment reference and handling
   its results. Do not route Food-page photos through a synthetic Chat turn, and do not extend the
   AI package inside the Food plan.
@@ -229,7 +252,8 @@ blocker contract Food consumes.
   complete in the request when practical or through the existing durable job path, but the visible
   contract is the same: `pending`, `needs_details`, `estimated`, or `failed`, with idempotent retry.
 - If estimation uses a durable job, its payload contains only actor id, meal id, estimate revision,
-  and idempotency metadata, using keys admitted by the core payload allowlist (Blocker P4). Workers
+  and idempotency metadata, using the existing generic allowlist keys (`actorUserId`, `resourceId`,
+  `idempotencyKey`, `version`, `kind`) so no core allowlist edit is needed. Workers
   load private inputs under the actor context. Descriptions, nutrition, photo bytes, and
   transcripts never enter queue payloads.
 - Direct Food-page logging and Chat logging call the same Food application command. The Food module
@@ -253,7 +277,7 @@ blocker contract Food consumes.
 - Food exposes bounded read operations for meals and aggregate nutrition over an authorized date
   range. Moss answers historical questions from these structured results rather than unrestricted
   SQL, raw attachments, or chat-memory guesses.
-- For “before I felt sick,” Food consumes the Wellness check-in context port (Blocker P3). Food
+- For “before I felt sick,” Food consumes the Wellness check-in context port (#1697). Food
   adds no symptom record and has no direct Wellness dependency; the port's interface, Wellness-side
   implementation, and composition wiring are the blocker's deliverable, not Food-plan work. The
   default preceding window is 24 hours unless the user asks for another range.
@@ -271,7 +295,7 @@ blocker contract Food consumes.
   nutrient-field presence, and error class. They exclude descriptions, transcripts, photos, nutrient
   values, check-in labels, and AI prompt/response bodies.
 - Food declares export sections and account-deletion cascade tables in its own manifest; the
-  platform contract from Blocker P1 assembles them. Export copy warns that food history is
+  export contract from #1694 assembles them declaration-driven. Export copy warns that food history is
   sensitive. Disabling Food hides its surfaces and tools while data is retained. Account deletion
   removes Food-owned rows; meal photos follow the existing Chat-attachment Vault lifecycle and are
   deleted with the account's Vault. A separate Food purge or per-photo delete operation is not
@@ -296,7 +320,7 @@ blocker contract Food consumes.
 - Estimator contract tests use deterministic structured-provider fixtures for a complete estimate, an
   ambiguous portion requiring clarification, invalid structured output, unsupported vision, provider
   failure, and a successful retry. Tests assert state and schema, not model prose. Image-path
-  fixtures exercise the Blocker P2 contract from the consumer side only.
+  fixtures exercise the #1696 contract from the consumer side only.
 - UI tests cover enablement, empty state, date navigation, direct text/photo/voice entry, ordered meal
   rows, estimate/uncertainty labels, incomplete and failed states, retry, edit, delete confirmation,
   daily totals, keyboard behavior, and narrow-width layout.
@@ -306,7 +330,7 @@ blocker contract Food consumes.
 - Timezone tests cover a meal near midnight, daylight-saving transitions, late entry, day totals,
   range endpoints, and average calculations without depending on the server timezone.
 - Cross-module tests prove Wellness shares only an authorized check-in timestamp and bounded label
-  through the P3 port, Food returns the configured preceding window, missing module/data/consent
+  through the #1697 port, Food returns the configured preceding window, missing module/data/consent
   produces an honest explanation, and the answer never claims causation. Include Wellness consent
   unset with Wellness active while Food consent is unset, proving Food estimation remains off
   independently.
@@ -325,9 +349,9 @@ blocker contract Food consumes.
 
 ## Out of Scope
 
-- Core-platform implementation of any blocker capability (P1–P4): module distribution/installation
-  mechanics, structured-AI image plumbing, the Wellness port's interface/implementation/wiring, and
-  jobs-allowlist changes are delivered by their own issues, never inside #926.
+- Core-platform implementation of any blocker capability: the export wiring (#1694), the module
+  attachment contract (#1695), structured-AI image plumbing (#1696), and the Wellness port's
+  interface/implementation/wiring (#1697) are delivered by their own issues, never inside #926.
 - Diagnosing food reactions, allergies, intolerances, illness, or any causal relationship between a
   meal and a Wellness check-in.
 - Medical advice, emergency guidance, treatment recommendations, or clinician workflows.
@@ -354,6 +378,6 @@ blocker contract Food consumes.
 - Food is the first Moss-authored module specified under the distributable, not-installed-by-default
   ruling, and it doubles as the dogfooding pass for third-party module development: if Food cannot
   be built against the public platform contracts alone, a future outside author cannot either, and
-  the missing capability belongs in a platform blocker. Where this spec and the P1 platform spec
-  disagree on lifecycle mechanics, P1 wins on mechanism and this spec wins on Food's required
-  user-visible behavior.
+  the missing capability belongs in a platform blocker. Where this spec and a blocker's platform
+  spec disagree on lifecycle mechanics, the platform spec wins on mechanism and this spec wins on
+  Food's required user-visible behavior.
