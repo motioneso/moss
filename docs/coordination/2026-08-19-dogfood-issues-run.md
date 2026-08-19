@@ -10,17 +10,27 @@ leaving them filed and idle. Plan approved via plan mode (see git history /
 #1709, #1710, #1711, plus #1693) has a comment with concrete file/function pointers and a proposed
 fix or spec direction.
 
-**Calendar bug fixes (#1711, #1693+#1710) — handed off, not built by me.**
-Discovered a live agent already modifying the exact same files (pane w1:pG2, branch
-`1698-calendar-lifecycle`, PR #1703, GitHub issue #1698 "Calendar event lifecycle"). Rather than
-spawn a colliding lane, sent both fix write-ups directly to that agent via its pane, pointing at
-the posted issue comments for full detail, with an explicit escape hatch ("if this doesn't fit
-your current phase, say so and I'll spawn a separate lane once your branch lands").
-**Follow-up needed:** check whether PR #1703 actually folds in the #1711 fix (all-day calendar
-events blocking scheduling — file: packages/calendar/src/focus-time.ts / calendar-write-impl.ts)
-and the #1693/#1710 fix (calendar.deleteEvent swallowing its real error — same file, plus
-packages/calendar/src/manifest.ts). If it lands without them, spawn a fresh lane for these two
-fixes off main.
+**Calendar bug fixes (#1711, #1693+#1710) — split between the #1698 lane and a new lane.**
+Discovered a live agent already modifying calendar-write-impl.ts (pane w1:pG2, branch
+`1698-calendar-lifecycle`, PR #1703, GitHub issue #1698 "Calendar event lifecycle: create,
+reschedule, delete" — a full rebuild of create/reschedule/delete). Handed both fix write-ups to
+that agent. Checked its PR diff directly: the #1693/#1710 fix (deleteEvent's unguarded getById
+call swallowing the real error) IS folded into PR #1703. The #1711 fix (all-day events blocking
+scheduling) is NOT — that agent's own plan states no changes are needed to
+chooseSlot/focus-time.ts, so it's out of scope for that PR. Sent a quick confirm-only ping to
+that pane (queued, agent was mid live-path-proof run, no reply needed to act).
+
+**Spawned a dedicated lane for #1711** since it's fully isolated (only touches
+packages/calendar/src/focus-time.ts and the freeBusy-filtering call site in
+calendar-write-impl.ts's proposeAndInsert — confirmed no overlap with #1698's rebuild, which
+only touches deleteEvent/createEvent/rescheduleEvent, not chooseSlot):
+
+| Lane | Issue | Pane | Worktree / branch |
+|---|---|---|---|
+| A | #1711 (all-day events block scheduling) | w1:pGA | 1711-allday-events |
+
+Boot brief at /tmp/moss-boot/boot-1711.txt. Confirmed main CI green (commit 0888dc4c6, conclusion
+success) before spawning.
 
 **Four spec-writing agents spawned** — this is the last action taken before this checkpoint.
 All four are running now in the "agents" Herdr tab (`w1:t1G`), workspace w1:
