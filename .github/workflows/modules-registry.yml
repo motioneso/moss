@@ -41,19 +41,28 @@ jobs:
           gh release download modules --pattern index.json --dir /tmp/registry-prev \
             || echo "no existing modules release/index — publishing fresh"
       - name: Build registry artifacts
-        run: pnpm tsx scripts/publish-module-registry.ts --out dist/registry --previous-index /tmp/registry-prev/index.json
+        env:
+          MOSS_MODULE_CATALOG_SIGNING_KEY_ID: ${{ secrets.MOSS_MODULE_CATALOG_SIGNING_KEY_ID }}
+          MOSS_MODULE_CATALOG_SIGNING_PRIVATE_KEY: ${{ secrets.MOSS_MODULE_CATALOG_SIGNING_PRIVATE_KEY }}
+        run: pnpm tsx scripts/publish-module-registry.ts --out dist/registry --previous-index /tmp/registry-prev/index.json --require-signature
       - name: Ensure rolling release exists
         run: |
           gh release view modules \
             || gh release create modules --title "Module registry" --latest=false \
                  --notes "Rolling module-distribution release. Assets are managed by the modules-registry workflow — do not edit by hand."
+      # #1319 ledger #10: index.json and index.json.sig upload as separate assets with no
+      # cross-asset atomicity. During the seconds between the two updates an enforcing Moss
+      # instance can read a mismatched pair and report "unverified" — fails closed, self-heals
+      # on the next fetch. Accepted, not engineered around.
       - name: Upload assets (same-version changes are rejected before this step)
         run: gh release upload modules dist/registry/* --clobber
       - name: Prune assets no longer referenced by the index
         run: |
-          # Keep exactly: index.json + every artifact the new index names
+          # Keep exactly: index.json + its signature + every artifact the new index names
           # (current + previousVersions). Retired versions fall off the release here.
-          jq -r '[.modules[] | .artifact, (.previousVersions[]?.artifact)] + ["index.json"] | .[]' \
+          # #1319 ledger #9: index.json.sig must stay in the keep-list or every publish
+          # deletes the signature it just uploaded.
+          jq -r '[.modules[] | .artifact, (.previousVersions[]?.artifact)] + ["index.json", "index.json.sig"] | .[]' \
             dist/registry/index.json > /tmp/keep.txt
           gh api "repos/${{ github.repository }}/releases/tags/modules" \
             --jq '.assets[] | "\(.id)\t\(.name)"' | while IFS=$'\t' read -r id name; do

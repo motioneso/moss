@@ -15,9 +15,14 @@ import * as tar from "tar";
 
 import {
   ARTIFACT_FILENAME_RE,
+  MODULE_CATALOG_PUBLIC_KEYS,
   REGISTRY_INDEX_SCHEMA_VERSION,
+  resolveCatalogSigningKey,
+  signCatalogBytes,
   validateExternalModuleManifest,
   validateRegistryIndex,
+  verifyCatalogBytes,
+  type ModuleCatalogPublicKey,
   type ModuleRegistryArtifactRef,
   type ModuleRegistryEntry,
   type ModuleRegistryIndex
@@ -106,6 +111,30 @@ export interface BuildRegistryArtifactsOptions {
   readonly outDir: string;
   readonly previousIndex: ModuleRegistryIndex | null;
   readonly generatedAt: string;
+  readonly signingKey: { keyId: string; privateKeyPem: string } | null;
+  /**
+   * Keyring the fresh signature self-checks against (D7). Defaults to the real pinned
+   * `MODULE_CATALOG_PUBLIC_KEYS` — production publishes must never override this. Tests inject an
+   * ephemeral keyring here because the pinned array stays empty (D8) until Ben provisions the
+   * real production key.
+   */
+  readonly trustedKeys?: readonly ModuleCatalogPublicKey[];
+}
+
+/**
+ * #1319 ledger #24 / story 13: factored out so a unit test can drive `--require-signature`
+ * without spawning the CLI as a subprocess.
+ */
+export function assertSignatureRequirementSatisfied(
+  requireSignature: boolean,
+  signingKey: { keyId: string; privateKeyPem: string } | null
+): void {
+  if (requireSignature && !signingKey) {
+    throw new Error(
+      "--require-signature was set but no signing key is configured " +
+        "(MOSS_MODULE_CATALOG_SIGNING_KEY_ID / MOSS_MODULE_CATALOG_SIGNING_PRIVATE_KEY)"
+    );
+  }
 }
 
 export async function buildRegistryArtifacts(
@@ -150,7 +179,28 @@ export async function buildRegistryArtifacts(
   if (!check.index || check.errors.length > 0) {
     throw new Error(`generated index fails own schema: ${check.errors.join("; ")}`);
   }
-  writeFileSync(join(options.outDir, "index.json"), JSON.stringify(index, null, 2) + "\n");
+  const indexJson = JSON.stringify(index, null, 2) + "\n";
+  writeFileSync(join(options.outDir, "index.json"), indexJson);
+  if (options.signingKey) {
+    const bytes = Buffer.from(indexJson, "utf8");
+    const signature = signCatalogBytes(
+      bytes,
+      options.signingKey.privateKeyPem,
+      options.signingKey.keyId
+    );
+    const trustedKeys = options.trustedKeys ?? MODULE_CATALOG_PUBLIC_KEYS;
+    const selfCheck = verifyCatalogBytes(bytes, signature, trustedKeys);
+    if (!selfCheck.verified) {
+      throw new Error(
+        `self-verification of the freshly signed catalog failed (${selfCheck.reason}) — is keyId ` +
+          `"${options.signingKey.keyId}" pinned in MODULE_CATALOG_PUBLIC_KEYS?`
+      );
+    }
+    writeFileSync(
+      join(options.outDir, "index.json.sig"),
+      JSON.stringify(signature, null, 2) + "\n"
+    );
+  }
   return index;
 }
 
@@ -163,6 +213,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   };
   const outDir = argValue("--out") ?? "dist/registry";
   const previousIndexPath = argValue("--previous-index");
+  const requireSignature = argv.includes("--require-signature");
   const repoRoot = fileURLToPath(new URL("..", import.meta.url));
   const moduleDirs = discoverModuleDirs(repoRoot);
   let previousIndex: ModuleRegistryIndex | null = null;
@@ -173,11 +224,19 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       console.warn(`previous index invalid, ignoring: ${parsed.errors.join("; ")}`);
     previousIndex = parsed.index;
   }
+  const signingKey = resolveCatalogSigningKey(process.env);
+  try {
+    assertSignatureRequirementSatisfied(requireSignature, signingKey);
+  } catch (error) {
+    console.error(error);
+    process.exit(1);
+  }
   buildRegistryArtifacts({
     moduleDirs,
     outDir,
     previousIndex,
-    generatedAt: new Date().toISOString()
+    generatedAt: new Date().toISOString(),
+    signingKey
   })
     .then((index) => console.log(`published ${index.modules.length} module(s) to ${outDir}`))
     .catch((error) => {
