@@ -60,7 +60,46 @@ tools become tool manifests, so a preferences-only module would not appear yet.
 Still owed before the PR: uninstall deletes the `module:<id>:` key namespace, unit tests for
 the two routes, and the live end-to-end proof.
 
-## Job B — #1720: the permission card reaches the screen too late
+### Checkpoint 2026-08-19 20:05 — read this first
+
+Branch `module-prefs-1725` is pushed, five commits ahead of origin/main. **PR not yet opened**
+(deliberately: finish the two items below first, then open with them included).
+
+Gate `/tmp/vf-1725d.log` ends `### FINAL rc=1`, and that failure is NOT this branch. Three unit
+files fail (`module-sdk-worker`, `mcp-gateway-validation`, `external-worker-runtime`); all three
+reproduce on a worktree that is origin/main plus a test-only commit. Everything before
+`test:unit` in the chain passed, including the file-size check that failed the previous two runs.
+Do not bisect over these — see the agentmemory note "three local-only failing files".
+
+Two commits this round were pure gate repair, no behaviour change: `8ab840ad5` split
+`apps/api/src/better-auth-adapter.ts` out of server.ts and
+`packages/module-registry/src/external/validate-declarations.ts` out of validate.ts (both files had
+crossed the 1000-line limit); `561f1fa1a` dropped the two imports that split left unused.
+
+**Still owed, in order:**
+
+1. Uninstall must delete the `module:<id>:` key namespace from `app.preferences`. Not started —
+   was mid-grep for the uninstall path when this checkpoint fired.
+2. Unit tests for `GET`/`PATCH /api/modules/:moduleId/preferences`. Cover: undeclared key → 400,
+   non-boolean → 400, unknown or inactive module → 404 (never 403), unwritten key resolves to the
+   manifest default.
+3. Live end-to-end proof, then open the PR.
+
+## Job B — #1720: SOLVED, shipped as PR #1729
+
+The issue title was wrong and the product was never at fault. `async function sendMessage()`
+returned the in-flight turn promise, and `await` flattens that, so `await sendMessage(...)` waited
+for the whole chat turn — which for a confirm-gated tool cannot end until someone approves. The
+test therefore blocked for the full 150s approval window, then clicked Approve and got a 409.
+Measured: server emitted the card 8-17s in, browser logged receiving it 14ms later.
+
+Fixed in `tests/uat/specs/926-food-real-chat.uat.spec.ts` alone (commit `b896714cc`, branch
+`fix-1720-card-delivery`): `sendMessage` returns `{ turnSettled }`. Two adjacent test defects fixed
+with it — `locator.count()` does not auto-wait, and the file's two tests ran in parallel as the
+same user against one instance (now serial). Real-model run: approve 204 at 24s, both tests pass,
+`### FINAL rc=0`. All instrumentation reverted. Full detail is in the PR body and agentmemory.
+
+## Job B history — how #1720 was chased (kept only to avoid re-deriving)
 
 Worktree `~/Jarv1s/.claude/worktrees/food-phase1`, branch `fix-1720-card-delivery`.
 Nothing committed. Instrumentation in the tree is TEMPORARY and must come out:
