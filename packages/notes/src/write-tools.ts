@@ -140,6 +140,31 @@ async function rejectSymlinkParent(root: string, rel: string): Promise<void> {
   }
 }
 
+const pathLocks = new Map<string, Promise<void>>();
+
+// ponytail: in-process FIFO mutex only — serializes concurrent edits to the same resolved file
+// path within a single API process. Multiple API replicas would each hold their own independent
+// lock map, so this stops being sufficient the moment the API scales beyond one process; replace
+// with a cross-process file/advisory lock if that becomes the deployment shape.
+async function withPathLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  let release!: () => void;
+  const ourLock = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const previous = pathLocks.get(key) ?? Promise.resolve();
+  const ourTail = previous.then(() => ourLock);
+  pathLocks.set(key, ourTail);
+  await previous;
+  try {
+    return await fn();
+  } finally {
+    release();
+    if (pathLocks.get(key) === ourTail) {
+      pathLocks.delete(key);
+    }
+  }
+}
+
 function getSyncService(services: ToolServices | undefined): NotesSyncToolService {
   const service = services?.["notesSync"] as NotesSyncToolService | undefined;
   if (!service || typeof service.enqueue !== "function") {
@@ -227,15 +252,19 @@ export const notesEditExecute: ToolExecute = async (
     throw new HttpError(400, "oldText must be non-empty");
   }
 
+  const oldText = raw.oldText;
+  const newText = raw.newText;
   const root = await resolveSource(scopedDb);
   const rel = requireMarkdownPath(coerceToRelativePath(raw.path, root));
   const file = await resolveExistingFile(root, rel);
-  await recheckInside(root, file);
-  const content = await readFile(file, "utf-8");
-  const count = content.split(raw.oldText).length - 1;
-  if (count !== 1) throw new HttpError(409, `oldText appears ${count} times`);
-  await recheckInside(root, file);
-  await writeFile(file, content.replace(raw.oldText, raw.newText), "utf-8");
+  await withPathLock(file, async () => {
+    await recheckInside(root, file);
+    const content = await readFile(file, "utf-8");
+    const count = content.split(oldText).length - 1;
+    if (count !== 1) throw new HttpError(409, `oldText appears ${count} times`);
+    await recheckInside(root, file);
+    await writeFile(file, content.replace(oldText, newText), "utf-8");
+  });
   return sync(services, ctx.actorUserId, root, rel);
 };
 
