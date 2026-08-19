@@ -113,11 +113,11 @@ durable estimation job proceed without this):**
 
 **Retired — verified already covered:**
 
-- *Job payload allowlist keys* (formerly P4): the closed metadata-only allowlist already carries
+- _Job payload allowlist keys_ (formerly P4): the closed metadata-only allowlist already carries
   generic keys (`actorUserId`, `resourceId`, `idempotencyKey`, `kind`, `version`) that cover Food's
   estimation payload with zero additions. If planning still finds a missing key, or estimation
   stays synchronous, no core work exists here; only a genuinely new key would trigger a blocker.
-- *Distribution/install/not-installed-by-default*: exists end-to-end on the downloaded track (see
+- _Distribution/install/not-installed-by-default_: exists end-to-end on the downloaded track (see
   Module distribution model above). #1312 (bundled/downloaded rename) is a linked vocabulary
   prerequisite, not a blocker.
 
