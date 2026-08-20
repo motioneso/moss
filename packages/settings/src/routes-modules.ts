@@ -343,10 +343,7 @@ export function registerModuleRoutes(server: FastifyInstance, ctx: ModuleRoutesC
             }
             return manifest
               ? computeMyModuleDto(repository, scopedDb, manifest, accessContext.actorUserId)
-              : toMyModuleDtoFromExternal(
-                  external as InstalledExternalModuleSummary,
-                  disabled
-                );
+              : toMyModuleDtoFromExternal(external as InstalledExternalModuleSummary, disabled);
           }
         );
         return { module: dto };
