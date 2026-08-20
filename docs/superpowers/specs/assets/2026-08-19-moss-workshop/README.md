@@ -38,9 +38,13 @@ cp apps/web/src/styles/tokens.css /tmp/moss-design/css/tokens.css
   Work in progress and live modules are plain rows separated by a hairline. Ben, 2026-08-19: be
   careful of using too many cards. On the plan and draft screens this means one card each: the
   plan, and the draft banner that carries ship it.
-- **Use the width.** Working surfaces run wide (about 1240px), not a narrow reading column. Cap the
-  measure only on genuine prose. Ben, 2026-08-19: designs often waste horizontal space with large
-  side gutters.
+- **Use the width.** Designs here often waste horizontal space with large side gutters, so this is
+  a standing thing to check. It is not a licence to widen these screens: Ben reviewed the workshop
+  at about 920px and said the width was good. Cap the measure only on genuine prose.
+
+- **On a phone the chat stays a pop-up drawer.** `draft.html` stacks the drawer under the page
+  below 900px because a static mockup has no way to overlay one. The real screen keeps the drawer
+  as the app's normal pop-up over the page. Ben, 2026-08-19. Do not copy the stacked layout.
 - **A plan is read before it is agreed.** The dimmed confirmation device (`jds-governor`) drops its
   contents to 70% opacity until confirmed, which is right for a one-line "shall I?" and wrong for a
   five-line plan. Plans use the raised card instead.
