@@ -25,6 +25,7 @@ import {
   assertSignatureRequirementSatisfied,
   buildRegistryArtifacts,
   discoverModuleDirs,
+  artifactIdentityDrift,
   mergePreviousVersions,
   packModuleArtifact,
   REGISTRY_RETAINED_VERSIONS
@@ -75,7 +76,55 @@ describe("mergePreviousVersions", () => {
         ...ref("1.0.0"),
         ...changed
       })
-    ).toThrow(/bump the module version/);
+    ).toThrow(/bump demo-module's version/);
+  });
+
+  // #1747: the message is the whole fix for the "silent at the point of cause" half of this bug.
+  // Whoever reads it is usually the author of an unrelated merge who never opened this module, so
+  // asserting the wording is asserting the behaviour: a message that named only the version sent
+  // people looking for an edit to a released module that nobody had made.
+  it("names the module, the drifted fields, and the shared package that causes this", () => {
+    let message = "";
+    try {
+      mergePreviousVersions(entry("1.0.0", [ref("0.9.0")]), {
+        ...ref("1.0.0"),
+        sha256: "b".repeat(64),
+        sizeBytes: 11
+      });
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toContain("demo-module 1.0.0");
+    expect(message).toContain("sha256, sizeBytes");
+    expect(message).toContain("packages/module-sdk");
+    expect(message).toContain("external-modules/demo-module/jarvis.module.json");
+    // The blast radius is the other half of why this was bad out of proportion to its cause.
+    expect(message).toContain("all-or-nothing");
+  });
+});
+
+describe("artifactIdentityDrift", () => {
+  it("reports no drift for a byte-identical rerun of the same version", () => {
+    expect(artifactIdentityDrift(entry("1.0.0", []), ref("1.0.0"))).toEqual([]);
+  });
+
+  it("reports no drift against a different version — that is a normal release", () => {
+    expect(artifactIdentityDrift(entry("1.0.0", []), ref("1.1.0"))).toEqual([]);
+  });
+
+  it("reports no drift when the module has never been published", () => {
+    expect(artifactIdentityDrift(undefined, ref("1.0.0"))).toEqual([]);
+  });
+
+  it("lists every part of the identity that moved", () => {
+    expect(
+      artifactIdentityDrift(entry("1.0.0", []), {
+        ...ref("1.0.0"),
+        artifact: "demo-module-1.0.0-rebuilt.tgz",
+        sha256: "b".repeat(64),
+        sizeBytes: 11
+      })
+    ).toEqual(["artifact", "sha256", "sizeBytes"]);
   });
 
   it("first publish (no existing entry) has empty previousVersions", () => {

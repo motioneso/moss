@@ -45,6 +45,45 @@ export function discoverModuleDirs(repoRoot: string): string[] {
 }
 
 /**
+ * Which parts of a published artifact's identity a rebuild changed. Empty means the rebuild is
+ * byte-identical to what is already published under that version, so the publish is a no-op rerun.
+ *
+ * #1747: exported because the pre-merge check (`--check`) needs the same comparison the publisher
+ * enforces. A check that re-implemented the rule would drift from it and pass a PR the publisher
+ * then rejects, which is the exact failure mode the check exists to prevent.
+ */
+export function artifactIdentityDrift(
+  existing: ModuleRegistryEntry | undefined,
+  next: ModuleRegistryArtifactRef
+): readonly string[] {
+  if (!existing || existing.version !== next.version) return [];
+  const drift: string[] = [];
+  if (existing.artifact !== next.artifact) drift.push("artifact");
+  if (existing.sha256 !== next.sha256) drift.push("sha256");
+  if (existing.sizeBytes !== next.sizeBytes) drift.push("sizeBytes");
+  return drift;
+}
+
+/**
+ * #1747: the old message named only the version and said "bump the module version", which reads as
+ * "someone edited a released module". The real cause is almost always the opposite — nobody touched
+ * this module at all, and a shared package that gets bundled into every module's `dist/` moved
+ * underneath it. Whoever hits this is usually the author of an unrelated merge, so the message has
+ * to explain a situation they have no context for.
+ */
+function versionConflictMessage(id: string, version: string, drift: readonly string[]): string {
+  return (
+    `refusing to republish ${id} ${version}: the packaged artifact no longer matches the one ` +
+    `already published under that version (${drift.join(", ")} changed).\n` +
+    `If ${id}'s own source did not change, a shared package did — packages/module-sdk is bundled ` +
+    `into every module's dist/, so a change there re-packs every module at once.\n` +
+    `Fix: bump ${id}'s version in external-modules/${id}/jarvis.module.json.\n` +
+    `Note this publish is all-or-nothing: every other module stays stranded at its old version ` +
+    `until this is resolved.`
+  );
+}
+
+/**
  * Fold the previous index entry's current version into previousVersions, newest first,
  * capped so current + previous ≤ REGISTRY_RETAINED_VERSIONS. An identical same-version
  * rerun is idempotent; a changed artifact identity requires a version bump.
@@ -54,15 +93,9 @@ export function mergePreviousVersions(
   next: ModuleRegistryArtifactRef
 ): readonly ModuleRegistryArtifactRef[] {
   if (!existing) return [];
-  if (
-    existing.version === next.version &&
-    (existing.artifact !== next.artifact ||
-      existing.sha256 !== next.sha256 ||
-      existing.sizeBytes !== next.sizeBytes)
-  ) {
-    throw new Error(
-      `refusing to republish ${next.version} with a different artifact, sha256, or sizeBytes; bump the module version`
-    );
+  const drift = artifactIdentityDrift(existing, next);
+  if (drift.length > 0) {
+    throw new Error(versionConflictMessage(existing.id, next.version, drift));
   }
   const chain: ModuleRegistryArtifactRef[] = [
     {
@@ -137,22 +170,58 @@ export function assertSignatureRequirementSatisfied(
   }
 }
 
+/**
+ * Build, validate and pack one module. Factored out (#1747) so the pre-merge check and the real
+ * publish produce the artifact the same way — a check that packed differently would compare the
+ * wrong bytes and clear a PR the publisher then rejects.
+ */
+// Return type is inferred rather than annotated: the validated-manifest type is internal to
+// packages/module-registry and not exported from its node entrypoint.
+async function buildAndPackModule(moduleDir: string, outDir: string) {
+  const id = basename(resolve(moduleDir));
+  await buildExternalModule(moduleDir);
+  const raw: unknown = JSON.parse(readFileSync(join(moduleDir, "jarvis.module.json"), "utf8"));
+  const validation = validateExternalModuleManifest(raw, id);
+  if (!validation.ok) {
+    // Fail the whole publish: a broken manifest must never reach the registry.
+    throw new Error(`manifest invalid for ${id}: ${validation.errors.join("; ")}`);
+  }
+  const manifest = validation.manifest;
+  const ref = await packModuleArtifact(moduleDir, outDir, id, manifest.version);
+  return { id, manifest, ref };
+}
+
+/**
+ * #1747 option 1: answer "would publishing this tree right now be rejected?" for EVERY module,
+ * rather than stopping at the first. The publisher throws on the first conflict, which is right for
+ * a publish and wrong for a check — a PR author needs the full list of versions to bump in one
+ * pass, not one per CI round trip.
+ *
+ * Returns one message per stranded module; empty means the tree is publishable.
+ */
+export async function findVersionConflicts(options: {
+  readonly moduleDirs: readonly string[];
+  readonly outDir: string;
+  readonly previousIndex: ModuleRegistryIndex | null;
+}): Promise<readonly string[]> {
+  mkdirSync(options.outDir, { recursive: true });
+  const conflicts: string[] = [];
+  for (const moduleDir of options.moduleDirs) {
+    const { id, ref } = await buildAndPackModule(moduleDir, options.outDir);
+    const existing = options.previousIndex?.modules.find((m) => m.id === id);
+    const drift = artifactIdentityDrift(existing, ref);
+    if (drift.length > 0) conflicts.push(versionConflictMessage(id, ref.version, drift));
+  }
+  return conflicts;
+}
+
 export async function buildRegistryArtifacts(
   options: BuildRegistryArtifactsOptions
 ): Promise<ModuleRegistryIndex> {
   mkdirSync(options.outDir, { recursive: true });
   const modules: ModuleRegistryEntry[] = [];
   for (const moduleDir of options.moduleDirs) {
-    const id = basename(resolve(moduleDir));
-    await buildExternalModule(moduleDir);
-    const raw: unknown = JSON.parse(readFileSync(join(moduleDir, "jarvis.module.json"), "utf8"));
-    const validation = validateExternalModuleManifest(raw, id);
-    if (!validation.ok) {
-      // Fail the whole publish: a broken manifest must never reach the registry.
-      throw new Error(`manifest invalid for ${id}: ${validation.errors.join("; ")}`);
-    }
-    const manifest = validation.manifest;
-    const ref = await packModuleArtifact(moduleDir, options.outDir, id, manifest.version);
+    const { id, manifest, ref } = await buildAndPackModule(moduleDir, options.outDir);
     const existing = options.previousIndex?.modules.find((m) => m.id === id);
     modules.push({
       ...ref,
@@ -224,23 +293,42 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       console.warn(`previous index invalid, ignoring: ${parsed.errors.join("; ")}`);
     previousIndex = parsed.index;
   }
-  const signingKey = resolveCatalogSigningKey(process.env);
-  try {
-    assertSignatureRequirementSatisfied(requireSignature, signingKey);
-  } catch (error) {
-    console.error(error);
-    process.exit(1);
-  }
-  buildRegistryArtifacts({
-    moduleDirs,
-    outDir,
-    previousIndex,
-    generatedAt: new Date().toISOString(),
-    signingKey
-  })
-    .then((index) => console.log(`published ${index.modules.length} module(s) to ${outDir}`))
-    .catch((error) => {
+  // #1747 `--check`: build and pack everything, compare against the published index, report every
+  // stranded module, write nothing and sign nothing. This runs on pull requests so a change to a
+  // shared package fails on the PR that causes it, instead of on someone else's later merge.
+  if (argv.includes("--check")) {
+    findVersionConflicts({ moduleDirs, outDir, previousIndex })
+      .then((conflicts) => {
+        if (conflicts.length === 0) {
+          console.log(`registry check: ${moduleDirs.length} module(s) publishable`);
+          return;
+        }
+        console.error(conflicts.join("\n\n"));
+        process.exit(1);
+      })
+      .catch((error) => {
+        console.error(error);
+        process.exit(1);
+      });
+  } else {
+    const signingKey = resolveCatalogSigningKey(process.env);
+    try {
+      assertSignatureRequirementSatisfied(requireSignature, signingKey);
+    } catch (error) {
       console.error(error);
       process.exit(1);
-    });
+    }
+    buildRegistryArtifacts({
+      moduleDirs,
+      outDir,
+      previousIndex,
+      generatedAt: new Date().toISOString(),
+      signingKey
+    })
+      .then((index) => console.log(`published ${index.modules.length} module(s) to ${outDir}`))
+      .catch((error) => {
+        console.error(error);
+        process.exit(1);
+      });
+  }
 }

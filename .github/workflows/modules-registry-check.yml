@@ -1,0 +1,48 @@
+# #1747: catch a stranded module registry on the pull request that causes it.
+#
+# The registry publishes a tarball of manifest + dist/** + sql/** per module. `packages/module-sdk`
+# is bundled into every module's dist/, so changing it re-packs all three modules even though none
+# of their own source moved. The publisher then refuses to overwrite an already-published version
+# with different bytes — but that refusal happens on the NEXT unrelated merge that touches
+# external-modules/, attributed to a module the author never opened. On 2026-08-19 that stranded
+# the registry for two merges and users saw no update available and no error.
+#
+# This job runs the publisher's own comparison, without writing or signing anything, and fails the
+# PR that moves the bytes. It reports every stranded module at once so the fix is one round trip.
+name: modules-registry-check
+
+on:
+  pull_request:
+    paths:
+      - "external-modules/**"
+      # Bundled into every module's dist/, so a change here re-packs all of them.
+      - "packages/module-sdk/**"
+      - "scripts/publish-module-registry.ts"
+      - "scripts/build-external-module.ts"
+      - ".github/workflows/modules-registry-check.yml"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.2
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Download the published index (absent before the first publish)
+        run: |
+          mkdir -p /tmp/registry-prev
+          gh release download modules --pattern index.json --dir /tmp/registry-prev \
+            || echo "no existing modules release/index — nothing to conflict with"
+      - name: Would this tree publish?
+        run: |
+          pnpm tsx scripts/publish-module-registry.ts \
+            --check --out /tmp/registry-check \
+            --previous-index /tmp/registry-prev/index.json
