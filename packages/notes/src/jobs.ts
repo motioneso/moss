@@ -29,21 +29,18 @@ import {
 } from "@moss/settings";
 import type { PreferencesRepository } from "@moss/structured-state";
 
+import { NotesSyncFailure, sinkSafeErrorMessage } from "./error-sink.js";
 import { assertWithinRoot, recheckWithinRoot, NotesPathError } from "./path-guard.js";
 import { NOTES_SYNC_QUEUE } from "./manifest.js";
 
 const NOTES_SOURCE_KIND = "notes";
 export const NOTES_SYNC_MAX_CHUNKS_PER_RUN = 100;
 
-// NotesPathError.message embeds the absolute host path and the configured notes root (see
-// assertWithinRoot in path-guard.ts). lastErrorMessage is persisted to the notes-last-sync
-// preference and returned verbatim in the settings API payload, so a raw NotesPathError message
-// would leak host filesystem layout to that payload. Every other error type keeps its message —
-// they are not part of the path-guard's threat surface.
-function sanitizedErrorMessage(err: unknown): string {
-  if (err instanceof NotesPathError) return "path is not within the linked notes source";
-  return err instanceof Error ? err.message : String(err);
-}
+// #1680: redaction for the `lastError` sink lives in error-sink.ts and is applied wherever a
+// string is written to it — including the worker catch below, which previously wrote
+// `error.message` raw. The old guard here keyed off error type ("NotesPathError is unsafe,
+// everything else is fine"), which meant a raw errno message from the #1671 path resolver, which
+// embeds the requested path, passed through untouched.
 
 export interface NotesSyncJobPayload extends ActorScopedJobPayload {
   /**
@@ -311,7 +308,7 @@ export async function handleNotesSyncJob(
         resolvedFile = await realpath(absolutePath);
       } catch (err) {
         errors += 1;
-        lastErrorMessage = sanitizedErrorMessage(err);
+        lastErrorMessage = sinkSafeErrorMessage(err);
         continue;
       }
 
@@ -320,7 +317,7 @@ export async function handleNotesSyncJob(
       } catch (e) {
         if (e instanceof NotesPathError) {
           errors += 1;
-          lastErrorMessage = sanitizedErrorMessage(e);
+          lastErrorMessage = sinkSafeErrorMessage(e);
           continue;
         }
         throw e;
@@ -376,7 +373,7 @@ export async function handleNotesSyncJob(
       }
     } catch (err) {
       errors += 1;
-      lastErrorMessage = sanitizedErrorMessage(err);
+      lastErrorMessage = sinkSafeErrorMessage(err);
     }
   }
 
@@ -385,7 +382,10 @@ export async function handleNotesSyncJob(
   // (some ingested OR some skipped-unchanged) is intentionally NOT thrown — that
   // stays a success with an error count, matching the existing UX.
   if (ingested === 0 && skipped === 0 && errors > 0) {
-    throw new Error(
+    throw new NotesSyncFailure(
+      // #1680: every fragment here is either a count or an already-sink-safe string, so this
+      // composed sentence is safe to show the user, and NotesSyncFailure is how the worker
+      // catch knows that. An Error would have been reduced to a generic line instead.
       `notes sync: all ${errors} file(s) failed; last error: ${lastErrorMessage ?? "unknown"}`
     );
   }
@@ -465,7 +465,7 @@ export async function handleNotesSyncJobWithDataContext(
       resolvedFile = await resolveAndValidateNoteFile(resolvedRoot, absolutePath);
     } catch (err) {
       errors += 1;
-      lastErrorMessage = sanitizedErrorMessage(err);
+      lastErrorMessage = sinkSafeErrorMessage(err);
       continue;
     }
 
@@ -518,12 +518,15 @@ export async function handleNotesSyncJobWithDataContext(
       }
     } catch (err) {
       errors += 1;
-      lastErrorMessage = sanitizedErrorMessage(err);
+      lastErrorMessage = sinkSafeErrorMessage(err);
     }
   }
 
   if (ingested === 0 && skipped === 0 && errors > 0) {
-    throw new Error(
+    throw new NotesSyncFailure(
+      // #1680: every fragment here is either a count or an already-sink-safe string, so this
+      // composed sentence is safe to show the user, and NotesSyncFailure is how the worker
+      // catch knows that. An Error would have been reduced to a generic line instead.
       `notes sync: all ${errors} file(s) failed; last error: ${lastErrorMessage ?? "unknown"}`
     );
   }
@@ -641,7 +644,13 @@ export async function registerNotesJobWorkers(
         }
         return result;
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        // #1680: this is the sink. Everything written here lands in the notes-last-sync
+        // preference and is returned verbatim by GET /settings/notes/last-sync, so it is
+        // user-visible. It used to read `error.message` raw — no redaction at all — which meant
+        // the per-file guard upstream was decorative for every failure raised outside the file
+        // loop. Redaction now happens at the write, so a new error type or a new code path is
+        // covered by default rather than by remembering to add a branch upstream.
+        const message = sinkSafeErrorMessage(error);
         await writeNotesLastSync(dataContext, accessContext, options.preferencesRepository, {
           at: new Date().toISOString(),
           ingested: 0,
