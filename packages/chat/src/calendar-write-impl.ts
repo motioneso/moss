@@ -4,6 +4,7 @@ import {
   focusBlockEventId,
   resolveCalendarEventRef,
   isAllDayInterval,
+  freeBusyQueryWindow,
   DEFAULT_TIMEZONE,
   type CalendarWriteService,
   type FocusBlockWindow,
@@ -122,15 +123,21 @@ export function buildCalendarWriteService(deps: CalendarWriteImplDeps): Calendar
       // 3. Live freeBusy + slot choice.
       let slot;
       try {
+        // Ask about whole local days, not the band we want to schedule in (#1711). Google clips
+        // busy intervals to the query bounds, and the all-day filter below identifies an all-day
+        // event by its endpoints landing on local midnight — a clipped interval has lost exactly
+        // that evidence, so querying the band directly made the filter unable to see the events
+        // it exists to drop. chooseSlot narrows back to the band on its own.
+        const tz = ctx.localTimezone ?? DEFAULT_TIMEZONE;
+        const query = freeBusyQueryWindow(resolved, tz);
         const fb = await deps.googleApiClient.freeBusy({
           accessToken,
-          timeMin: resolved.start.toISOString(),
-          timeMax: resolved.end.toISOString(),
+          timeMin: query.timeMin,
+          timeMax: query.timeMax,
           calendarId: "primary"
         });
         // All-day events (reminders, holidays, ...) come back from freeBusy as busy too, but
         // they aren't real time conflicts — drop them before slot-picking runs (#1711).
-        const tz = ctx.localTimezone ?? DEFAULT_TIMEZONE;
         const timedBusy = fb.busy.filter((b) => !isAllDayInterval(b, tz));
         slot = chooseSlot(resolved, timedBusy, resolved.durationMinutes);
       } catch {

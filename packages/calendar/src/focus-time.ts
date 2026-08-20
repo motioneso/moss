@@ -211,11 +211,52 @@ interface Interval {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
+ * The window to ask freeBusy about, given the window we actually want to schedule inside.
+ *
+ * These are deliberately not the same window (#1711, second pass). `isAllDayInterval` below
+ * recognises an all-day event by its GEOMETRY — both endpoints on local midnight, duration a
+ * whole multiple of 24h — and that shape only survives if the interval arrives whole. Google
+ * clips busy intervals to the query bounds, so asking about a part-of-day band (morning is
+ * 09:00–12:00 local) returns that day's all-day event as 09:00–12:00: not midnight-aligned, not
+ * a multiple of 24h, therefore invisible to the filter, therefore blocking the entire band. That
+ * is the exact symptom #1711 was filed for, and the first fix did not reach it.
+ *
+ * So query whole local days and narrow afterwards: `chooseSlot` already discards busy intervals
+ * that don't overlap its window, so the extra hours cost nothing but a slightly larger response,
+ * and it stays one API call. The alternative — `events.list`, which reports true extents and an
+ * explicit all-day flag — was rejected by the original design because it hands us event titles
+ * and guest lists to answer a question that is only about availability.
+ *
+ * Correct whether or not Google clips: if it doesn't, widening changes nothing. That matters,
+ * because Google's own freeBusy reference documents the response schema and says nothing about
+ * boundary behaviour either way, so relying on unclipped intervals would be relying on
+ * undocumented behaviour.
+ */
+export function freeBusyQueryWindow(
+  window: { start: Date; end: Date },
+  tz: string
+): { timeMin: string; timeMax: string } {
+  const firstDay = localDateString(window.start, tz);
+  // A millisecond back from the end, so a window finishing exactly on local midnight is treated
+  // as belonging to the day it ran through rather than dragging in the next one. Floored at the
+  // start so a zero-length window still resolves to a single day.
+  const lastInstant = new Date(Math.max(window.start.getTime(), window.end.getTime() - 1));
+  const lastDay = localDateString(lastInstant, tz);
+  return {
+    timeMin: localWallClockToUtc(firstDay, 0, tz).toISOString(),
+    timeMax: localWallClockToUtc(addDaysLocal(lastDay, 1), 0, tz).toISOString()
+  };
+}
+
+/**
  * An all-day event (a reminder, a holiday, ...) comes back from Google's freeBusy API as a
  * busy interval spanning full calendar day(s): start and end both fall exactly on local
  * midnight in the account's timezone, and the duration is a whole multiple of 24h. That shape
  * is how it's told apart from a real timed conflict without a second API call — freeBusy alone
  * doesn't say whether an interval came from an all-day event.
+ *
+ * Only meaningful on an UNCLIPPED interval — see `freeBusyQueryWindow`, which is what makes sure
+ * the intervals handed to this function still have their real endpoints.
  */
 export function isAllDayInterval(interval: { start: string; end: string }, tz: string): boolean {
   const start = new Date(interval.start);
