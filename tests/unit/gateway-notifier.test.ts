@@ -138,7 +138,11 @@ describe("ChatGatewayNotifier", () => {
     expect(record.text.length).toBe(160);
   });
 
-  it("renders an allowed outcome as 'Allowed by YOLO'", () => {
+  // #1661: this used to assert "Allowed by YOLO". Unattended mode was once the only thing that
+  // produced this outcome, so the text could name it; a user's own approval of a native tool now
+  // produces it too, and the record carries nothing saying which. Naming a cause the record does
+  // not carry is the drift this issue is about, so the text stops guessing.
+  it("reports an allowed outcome without claiming who allowed it", () => {
     const manager = makeManager();
     const notifier = new ChatGatewayNotifier(manager);
 
@@ -154,7 +158,50 @@ describe("ChatGatewayNotifier", () => {
       TranscriptRecord
     ];
     expect(record.outcome).toBe("allowed");
-    expect(record.text).toContain("Allowed by YOLO");
+    expect(record.text).toBe("Allowed: Read");
+    expect(record.text).not.toContain("YOLO");
+  });
+
+  // #1661: an error used to render with the denial sentence, so a tool that ran and failed was
+  // announced in the same words as one the user refused — while the audit row for that same event
+  // said `failed`. "Not changed" was the second problem: a write that failed part-way did change
+  // things, and the host has no way to know it did not.
+  it("distinguishes a failed call from a refused one", () => {
+    const manager = makeManager();
+    const notifier = new ChatGatewayNotifier(manager);
+
+    notifier.emit("u1", {
+      kind: "action_result",
+      actionRequestId: "ar_1",
+      toolName: "example.write",
+      outcome: "error",
+      reason: "Tool example.write failed"
+    });
+
+    const [, record] = (manager.injectRecord as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      TranscriptRecord
+    ];
+    expect(record.text).toBe("Failed: example.write — Tool example.write failed");
+    expect(record.text).not.toContain("Not changed");
+  });
+
+  it("still names the tool on a failure that carries no reason", () => {
+    const manager = makeManager();
+    const notifier = new ChatGatewayNotifier(manager);
+
+    notifier.emit("u1", {
+      kind: "action_result",
+      actionRequestId: "ar_1",
+      toolName: "example.write",
+      outcome: "error"
+    });
+
+    const [, record] = (manager.injectRecord as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      TranscriptRecord
+    ];
+    expect(record.text).toBe("Failed: example.write");
   });
 
   it("renders denied outcomes as a typed not-changed result", () => {

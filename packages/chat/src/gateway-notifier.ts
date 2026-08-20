@@ -41,13 +41,26 @@ function toTranscriptRecord(record: GatewaySessionRecord): TranscriptRecord | nu
       record.outcome === "executed" && typeof record.result?.statusText === "string"
         ? record.result.statusText.replace(/\s+/g, " ").trim().slice(0, 160)
         : "";
+    // #1661: three separate outcomes used to collapse into two sentences.
+    //
+    // "allowed" said "Allowed by YOLO" because unattended mode was once its only source. It is
+    // not any more — a user approving a native tool now reports "allowed" too, because the
+    // gateway only ever sees the grant and never the run — so the text can no longer name a
+    // cause it does not know.
+    //
+    // "error" fell into the denial sentence, so a tool that ran and failed was announced as
+    // "Not changed", the same words as a refusal. The audit row for that same event says
+    // `failed`, and "not changed" additionally asserts something the host cannot know: a write
+    // that failed part-way did change things.
     const text =
       statusText ||
       (record.outcome === "allowed"
-        ? `Allowed by YOLO: ${record.toolName}`
+        ? `Allowed: ${record.toolName}`
         : record.outcome === "executed"
           ? `Executed: ${record.toolName}`
-          : `Not changed${record.reason ? ` — ${record.reason}` : ""}`);
+          : record.outcome === "error"
+            ? `Failed: ${record.toolName}${record.reason ? ` — ${record.reason}` : ""}`
+            : `Not changed${record.reason ? ` — ${record.reason}` : ""}`);
     return {
       kind: "action_result",
       text,
