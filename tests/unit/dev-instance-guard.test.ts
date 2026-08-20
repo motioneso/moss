@@ -6,6 +6,7 @@ import {
   DevEnvParityError,
   NotDevInstanceError
 } from "../../scripts/dev-instance/guard.js";
+import { runDevInstanceCli } from "../../scripts/dev-instance.js";
 
 const DEV_APP_URL = "postgres://jarvis_app_runtime:pw@localhost:55433/jarv1s";
 
@@ -50,5 +51,35 @@ describe("assertDevEnvParity", () => {
 
   it("passes when NODE_ENV is absent", () => {
     expect(() => assertDevEnvParity({})).not.toThrow();
+  });
+});
+
+// T19 — the CLI's guard ordering. NODE_ENV being set must fail the run before any database
+// handle opens, proven by pointing the connection env at a host nothing is listening on: if the
+// parity check ran after a connection attempt, this test would hang or fail with a connection
+// error instead of returning promptly with the parity message.
+describe("runDevInstanceCli guard ordering", () => {
+  it("fails on the parity error, without opening a connection, when NODE_ENV is set", async () => {
+    const unreachableEnv: NodeJS.ProcessEnv = {
+      NODE_ENV: "test",
+      JARVIS_PGHOST: "192.0.2.1", // TEST-NET-1 (RFC 5737) — reserved, guaranteed unreachable
+      JARVIS_PGPORT: "1"
+    };
+
+    const messages: string[] = [];
+    const originalError = console.error;
+    console.error = (message: string) => {
+      messages.push(message);
+    };
+
+    let exitCode: number;
+    try {
+      exitCode = await runDevInstanceCli(["provision"], unreachableEnv);
+    } finally {
+      console.error = originalError;
+    }
+
+    expect(exitCode).not.toBe(0);
+    expect(messages.some((message) => message.includes("NODE_ENV"))).toBe(true);
   });
 });
