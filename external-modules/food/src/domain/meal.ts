@@ -4,7 +4,13 @@
 // data, no persistence and no AI concerns here — those live in
 // domain/estimate.ts (boundary validation) and store/sql.ts (row mapping).
 // Domain files never import @moss/* (bundler independence, matching
-// external-modules/finance/src/domain/records.ts).
+// external-modules/finance/src/domain/records.ts) — with one exception,
+// @moss/module-sdk, which the bundler already inlines into every module's
+// dist and which every module's worker entry already imports. Sharing code
+// through the SDK is what it is for (#1723); the rule exists to stop a
+// module depending on host packages it does not ship with, and the SDK is
+// not one of those.
+import { resolveLocalDay } from "@moss/module-sdk/time";
 
 export type CaptureKind = "text" | "photo" | "voice";
 export type EstimateState = "pending" | "needs_details" | "estimated" | "failed";
@@ -89,59 +95,12 @@ export interface DailyTotals {
 
 // ── Local-date resolution ───────────────────────────────────────────────
 //
-// Vendored rather than imported from packages/shared/src/time.ts, for the
-// same bundler-independence reason as the rest of this file: this module
-// ships as a single prebuilt artifact and does not depend on @moss/shared.
-// The technique (en-CA Intl formatter for a locale-independent day key,
-// Intl.DateTimeFormat part-diffing for the offset) is copied from
-// localDay/timeZoneOffsetMs in packages/shared/src/time.ts and
-// packages/wellness/src/repository.ts:556-577 respectively. Never derive a
-// day with `.slice(0,10)` on a UTC ISO string or `getUTC*` parts — that is
-// the server's day, not the user's.
-
-function isValidTimeZone(timeZone: string): boolean {
-  if (timeZone.trim().length === 0) return false;
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone }).format(0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** Calendar date key (YYYY-MM-DD) for `date` as observed in `timeZone`. */
-function localDayKey(date: Date, timeZone: string): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  }).format(date);
-}
-
-/** Minutes EAST of UTC for `date` observed in `timeZone` (DST-correct: computed per-instant). */
-function timeZoneOffsetMinutes(date: Date, timeZone: string): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  }).formatToParts(date);
-  const values = new Map(parts.map((part) => [part.type, part.value]));
-  const localAsUtc = Date.UTC(
-    Number(values.get("year")),
-    Number(values.get("month")) - 1,
-    Number(values.get("day")),
-    Number(values.get("hour")),
-    Number(values.get("minute")),
-    Number(values.get("second"))
-  );
-  return Math.round((localAsUtc - date.getTime()) / 60_000);
-}
+// #1723 item 1: this used to be about fifty lines of vendored Intl arithmetic,
+// copied here because packages/shared is not available to a module that ships
+// as a single prebuilt artifact. That reason does not apply to
+// @moss/module-sdk — the SDK is bundled into every module's dist — so the
+// helpers moved there and Food is now the first caller rather than the only
+// owner. See packages/module-sdk/src/time.ts.
 
 /**
  * Resolves the calendar day + UTC offset a meal is PINNED to at create time.
@@ -153,14 +112,16 @@ function timeZoneOffsetMinutes(date: Date, timeZone: string): number {
  * lands on the correct local date (test 6). Falls back to UTC for an
  * invalid timeZone, matching packages/shared/src/time.ts's resolveTimeZone
  * fallback behaviour.
+ *
+ * Kept as a named wrapper rather than re-exporting the SDK's `resolveLocalDay`
+ * directly: the persisted column is `timezone_offset`, and renaming the field
+ * to the SDK's `timezoneOffsetMinutes` across the store, the tools and the web
+ * surface would be a rename with no behaviour behind it.
  */
 export function resolveMealLocalDate(
   consumedAt: Date,
   timeZone: string
 ): { readonly localDate: string; readonly timezoneOffset: number } {
-  const zone = isValidTimeZone(timeZone) ? timeZone : "UTC";
-  return {
-    localDate: localDayKey(consumedAt, zone),
-    timezoneOffset: timeZoneOffsetMinutes(consumedAt, zone)
-  };
+  const { localDate, timezoneOffsetMinutes } = resolveLocalDay(consumedAt, timeZone);
+  return { localDate, timezoneOffset: timezoneOffsetMinutes };
 }

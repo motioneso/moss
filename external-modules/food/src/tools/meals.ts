@@ -20,6 +20,7 @@
 // dispatches only attachments/notify/fetch/embed/db/ai/auth/kv) — Fork A is
 // how Phase 1 gets a real estimate onto a newly-logged meal at all.
 
+import { DEFAULT_LIST_LIMIT, applyListLimit } from "@moss/module-sdk/list-limits";
 import type { ModuleWorkerContext } from "@moss/module-sdk/worker";
 
 import type { CaptureKind, Meal, Nutrients } from "../domain/meal.js";
@@ -101,7 +102,19 @@ function requireDateRange(
 
 // ── food.meals.list ─────────────────────────────────────────────────────
 
-const MEALS_LIST_KEYS = new Set(["localDate", "fromLocalDate", "toLocalDate"]);
+const MEALS_LIST_KEYS = new Set(["localDate", "fromLocalDate", "toLocalDate", "limit"]);
+
+/**
+ * #1723 item 3. `food.meals.list` had a bound on how many *days* it could span but none on how
+ * many *meals* came back, and the range shape can cover 31 days. A heavy logger asking for a month
+ * gets hundreds of rows, and every one of them is pasted into a model context by the assistant-tool
+ * path — so the cost of the missing bound is paid in tokens and latency on a request the user
+ * thought was cheap.
+ *
+ * Both the number and the truncation rule come from the SDK, so the next module listing a user's
+ * records over time inherits the same answer rather than inventing its own.
+ */
+const LIST_MAX_MEALS = DEFAULT_LIST_LIMIT;
 
 export interface MealsListResult {
   readonly meals: readonly Meal[];
@@ -119,6 +132,15 @@ export interface MealsListResult {
    * has set no target, and the day view then shows no progress rather than a zeroed one.
    */
   readonly targets: DailyTargets;
+  /**
+   * #1723 item 3 — true when `limit` cut the list short. A caller that cannot tell the difference
+   * between "these are all the meals" and "these are the first 200" will draw wrong conclusions
+   * from either, so the flag is not optional: it is the only thing that makes a truncated answer
+   * safe to reason about.
+   */
+  readonly truncated: boolean;
+  /** How many meals matched before `limit` was applied. */
+  readonly totalCount: number;
 }
 
 /** `food.meals.list` — read. Exactly one shape: `{localDate}` or `{fromLocalDate, toLocalDate}`.
@@ -132,6 +154,7 @@ export function createMealsListHandler(store: FoodStore) {
     const localDate = optionalLocalDateString(input, "localDate");
     const fromLocalDate = optionalLocalDateString(input, "fromLocalDate");
     const toLocalDate = optionalLocalDateString(input, "toLocalDate");
+    const limit = readInt(input, "limit", { min: 1, max: LIST_MAX_MEALS }) ?? LIST_MAX_MEALS;
     const aiEstimates = aiEstimatesEnabled(ctx);
     const targets = resolveDailyTargets(ctx);
 
@@ -139,8 +162,16 @@ export function createMealsListHandler(store: FoodStore) {
       if (fromLocalDate !== undefined || toLocalDate !== undefined) {
         throw new InputError("localDate cannot be combined with fromLocalDate/toLocalDate");
       }
-      const meals = await store.listMealsForLocalDate(localDate);
-      return { meals, totals: computeDailyTotals(localDate, meals), aiEstimates, targets };
+      const all = await store.listMealsForLocalDate(localDate);
+      return {
+        ...applyLimit(all, limit),
+        // Totalled over every meal of the day, not over the truncated list. A day's totals that
+        // silently omitted the meals past the limit would be a wrong number presented as a right
+        // one — and the user compares it against a target.
+        totals: computeDailyTotals(localDate, all),
+        aiEstimates,
+        targets
+      };
     }
 
     if (fromLocalDate === undefined || toLocalDate === undefined) {
@@ -153,9 +184,22 @@ export function createMealsListHandler(store: FoodStore) {
     if (span > LIST_MAX_RANGE_DAYS) {
       throw new InputError(`date range must not exceed ${LIST_MAX_RANGE_DAYS} days`);
     }
-    const meals = await store.listMealsForDateRange(fromLocalDate, toLocalDate);
-    return { meals, totals: null, aiEstimates, targets };
+    const all = await store.listMealsForDateRange(fromLocalDate, toLocalDate);
+    return { ...applyLimit(all, limit), totals: null, aiEstimates, targets };
   };
+}
+
+/**
+ * Renames the SDK's generic `items` to this tool's `meals`. The truncation rule itself — keep the
+ * most recent, report both flags — belongs to the SDK so every module's list tool answers the same
+ * way; only the field name is Food's.
+ */
+function applyLimit(
+  meals: readonly Meal[],
+  limit: number
+): { meals: readonly Meal[]; truncated: boolean; totalCount: number } {
+  const { items, truncated, totalCount } = applyListLimit(meals, limit);
+  return { meals: items, truncated, totalCount };
 }
 
 // ── food.meals.summarize ────────────────────────────────────────────────

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "food",
   "name": "Food",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": {
@@ -112,7 +112,7 @@
     {
       "name": "food.meals.list",
       "permissionId": "food.meals.list",
-      "description": "List meals and daily totals for a local calendar date, or list meals across a date range.",
+      "description": "List meals and daily totals for a local calendar date, or list meals across a date range. Returns at most 200 meals, most recent first-to-last; when more matched, truncated is true and totalCount says how many there were. Daily totals always cover the whole day, not just the returned meals.",
       "risk": "read",
       "inputSchema": {
         "type": "object",
@@ -126,6 +126,12 @@
           },
           "toLocalDate": {
             "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "description": "Maximum meals to return, keeping the most recent. Defaults to 200, which is also the ceiling."
           }
         }
       },
