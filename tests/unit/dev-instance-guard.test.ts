@@ -55,9 +55,9 @@ describe("assertTargetIsDevInstance", () => {
   });
 
   it("without the migration port allowlist, still rejects port 5432 (default allowlist unchanged)", () => {
-    expect(() =>
-      assertTargetIsDevInstance("postgres://user:pw@localhost:5432/jarv1s")
-    ).toThrow(NotDevInstanceError);
+    expect(() => assertTargetIsDevInstance("postgres://user:pw@localhost:5432/jarv1s")).toThrow(
+      NotDevInstanceError
+    );
   });
 });
 
