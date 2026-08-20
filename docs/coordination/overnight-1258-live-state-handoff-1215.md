@@ -99,8 +99,8 @@ invoke `coordinate`, update the authority line to its own session id, and contin
 
 ## Coordinator continuation — 20 Aug, PR 1775 security finish
 
-Coordinator authority before this relay: Codex session
-`01a020f6-1fd0-7b12-bc33-733b10e06488`, label `Coordinator`. This session adopted the run and
+Coordinator authority after adoption: Codex session
+`01a02192-a96b-7231-99fd-fe3655e6e141`, label `Coordinator`. This session adopted the run and
 reaped the prior coordinator only after resolving its label plus exact session id. A compaction
 summary then fired the coordinate skill's mandatory relay trigger; the successor must replace the
 authority line with its own session id before driving or merging, confirm it is the sole
