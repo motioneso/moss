@@ -27,3 +27,31 @@ body { margin:0; background:var(--bg); color:var(--text); font-family:var(--font
 .pv-list { margin-top:var(--space-2); }
 .pv-list > .pv-item { padding:var(--space-5) 0; border-top:1px solid var(--line); }
 .pv-open { padding:var(--space-5) 0 var(--space-2); }
+
+/* --- Added for plan.html and draft.html ------------------------------------ */
+
+/* The plan: label on the left, the sentence on the right. Rows, not cards -
+   the card is the governor around the whole plan, because the plan is the decision. */
+.pv-plan { margin:var(--space-3) 0 0; }
+.pv-plan > .pv-plan-row { display:grid; grid-template-columns:9.5rem 1fr; gap:var(--space-4); padding:var(--space-3) 0; border-top:1px solid var(--line); }
+.pv-plan > .pv-plan-row:first-child { border-top:none; padding-top:0; }
+.pv-plan-row dt { font-size:var(--text-xs); letter-spacing:.14em; text-transform:uppercase; color:var(--text-subtle); }
+.pv-plan-row dd { margin:0; font-size:var(--text-sm); }
+
+/* Draft page beside the chat drawer. The page keeps a reading measure of its own;
+   the drawer is the same width it is in the app. */
+.pv-frame { display:grid; grid-template-columns:minmax(0,1fr) 360px; min-height:100vh; }
+.pv-main { padding:var(--space-7) var(--space-7) var(--space-12); }
+.pv-main-inner { max-width:720px; margin:0 auto; }
+.pv-drawer { border-left:1px solid var(--line); padding:var(--space-6) var(--space-5); display:flex; flex-direction:column; gap:var(--space-5); position:sticky; top:0; align-self:start; height:100vh; }
+.pv-drawer__scroll { overflow:auto; }
+.pv-drawer textarea { width:100%; box-sizing:border-box; }
+.pv-drawer__scroll { flex:1; }
+.pv-drawer__foot { border-top:1px solid var(--line); padding-top:var(--space-4); }
+
+/* Where a video plays. Layout only - a real embed goes here. */
+.pv-video { aspect-ratio:16/9; border:1px solid var(--line); border-radius:var(--radius-md); display:flex; align-items:center; justify-content:center; margin-top:var(--space-3); }
+.pv-video span { font-size:var(--text-xs); letter-spacing:.14em; text-transform:uppercase; color:var(--text-subtle); }
+.pv-entry { padding:var(--space-6) 0; border-top:1px solid var(--line); }
+/* The plan reads the same in the drawer, on a narrower label column. */
+.pv-drawer .pv-plan > .pv-plan-row { grid-template-columns:5.5rem 1fr; }

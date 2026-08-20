@@ -400,30 +400,65 @@ assistant gateway's self-operation boundary, and the job system's continuation b
 
 ## Interface
 
-Approved mockups live in `assets/2026-08-19-moss-workshop/` (see the README there for how to view
-them). Three screens, reviewed with Ben on 2026-08-19:
+Mockups live in `assets/2026-08-19-moss-workshop/` (see the README there for how to view them).
+Five files: three screens reviewed with Ben on 2026-08-19, two added afterwards to replace the
+rejected one, and one kept only as a record.
 
 - **The Workshop** (`workshop.html`) — the list of modules the user has asked Moss to build, grouped
   **Needs you**, **Building now**, **Live**. "The workshop" is the approved name for this surface.
+- **Starting a build** (`chat.html`) — the chat drawer: the user describes what they want, confirms,
+  and is told later that it is ready.
+- **Agreeing the plan** (`plan.html`) — the approval moment, in the chat drawer. New.
+- **Your draft, running** (`draft.html`) — the finished draft, live for its author, with the drawer
+  beside it. New.
 - **Review and approve** (`approval.html`) — **superseded 2026-08-19 and not to be built.** It put a
   five-section permissions wall in front of a finished module. Ben's objection stands: most people
   will click approve immediately to see the thing, so the wall trains them to click past the one
   screen that would matter on the rare occasion it does. Kept in the repo only as the record of a
-  rejected direction. Its replacement — the plan-approval moment, and the running draft with a way to
-  ask for changes — has not been designed yet.
-- **Starting a build** (`chat.html`) — the chat drawer: the user describes what they want, confirms,
-  and is told later that it is ready.
+  rejected direction.
 
-Two design rulings a build agent must not undo:
+**Agreeing the plan.** Moss answers the request with the plan itself, in five labelled lines — what
+it does, what it reaches, what it keeps, when it runs, and roughly what it costs in time and budget.
+The plan is the only raised card in the thread, because it is the only thing asking for a decision;
+the surrounding conversation is plain messages. Two buttons: build it, or not yet.
 
-- Only the item that needs a decision is a raised card. Work in progress and live modules are plain
-  rows separated by a hairline.
-- The Workshop and the approval screen sit in a ~920px column, which Ben reviewed and approved. The
-  general standing note that designs often waste horizontal space is a check to run, not a licence to
-  widen these two.
+There is no edit form. A plan that came out of a conversation is corrected the same way — the admin
+says what is wrong and Moss reissues the whole plan with the changed line marked. Only one plan is
+ever live: the superseded one is left in the thread as ordinary conversation, not as a second card
+competing for a decision.
+
+With the "stop asking me" setting on, the plan is still written but as a plain message with no
+buttons, and the build starts immediately.
+
+**The running draft.** The draft page is the module's real page, running, with nothing in front of
+it. Above the page content sits one raised card — the only decision on the screen — that says the
+thing is a draft only its author can see, states in one line what it reaches and what it stores, and
+carries the actions: **ship it**, ask for a change, see the code, throw it away.
+
+Ship lives there, on the thing itself, rather than in the chat drawer, for two reasons. It has to be
+reachable when the drawer is closed, and shipping is a judgment about the artifact rather than a
+turn in a conversation. The card also states plainly what shipping costs: the author keeps seeing
+the module either way, and everyone else sees it after the next restart.
+
+**Asking for a change** is the same chat drawer that built it, docked beside the page and scoped to
+this draft — not a second, smaller chat built into the page. A change that only alters how the thing
+looks is simply applied, and Moss says the page beside you is already the new one; the last change
+can be put back. A change that would reach a new outside service raises a small plan card of its own
+first, which is what stops "make it bigger" smuggling in a new service.
+
+Three design rulings a build agent must not undo:
+
+- Only the item that needs a decision is a raised card. Work in progress, live modules and the
+  draft's own content are plain rows separated by a hairline.
+- The Workshop sits in a ~920px column, which Ben reviewed and approved. The general standing note
+  that designs often waste horizontal space is a check to run, not a licence to widen it. The draft
+  screen is wider because it is two panes — a page and the drawer beside it.
+- A plan is read before it is agreed, so it is never rendered in the dimmed confirmation device used
+  for one-line confirmations.
 
 Every style name in the mockups is one the design system already defines. Before changing them, run
-the invented-class audit in the `design-system` skill.
+the invented-class audit in the `design-system` skill, and note that its second grep must cover
+`packages/ui/src/styles/` as well as `apps/web/src/styles/` — most primitives live in the UI package.
 
 ## Delivery stages
 

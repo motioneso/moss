@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Starting a build</title><link rel="stylesheet" href="/css/all.css"><link rel="stylesheet" href="/preview.css"></head><body>
-<div class="pv-nav"><a href="/workshop.html">The workshop</a><a href="/approval.html">Review &amp; approve</a><a href="/chat.html" id="n3">Starting a build</a></div>
+<div class="pv-nav"><a href="/workshop.html">The workshop</a><a href="/chat.html" id="nav">Starting a build</a><a href="/plan.html">Agreeing the plan</a><a href="/draft.html">Your draft, running</a><a href="/approval.html">Rejected: review &amp; approve</a></div>
 <div class="pv-page" style="max-width:620px">
   <div class="pv-head">
     <span class="jds-eyebrow jds-eyebrow--muted">Chat drawer</span>
@@ -18,7 +18,7 @@
   <div class="jds-bubble jds-bubble--user" style="margin-top:var(--space-5)">Own page, and fall back to the last three days</div>
 
   <div style="margin-top:var(--space-5)">
-    <p>Right. Here is what I am going to build:</p>
+    <p>Right. Here is what I am going to build &mdash; the full plan is on "Agreeing the plan":</p>
     <ul style="margin:var(--space-3) 0; padding-left:var(--space-5)">
       <li>A page called Mythical, in your sidebar</li>
       <li>It reaches out to YouTube, and nowhere else</li>
@@ -31,7 +31,7 @@
   <div class="jds-governor" style="margin-top:var(--space-5)">
     <span class="jds-governor__tag">Start building?</span>
     <div class="jds-governor__content">
-      <p style="margin:0">Nothing goes live without you reviewing it first.</p>
+      <p style="margin:0">When it is done it runs for you alone. Nobody else sees it until you ship it.</p>
     </div>
     <div class="jds-governor__actions">
       <button class="jds-btn jds-btn--primary jds-btn--sm">Build it</button>
@@ -42,11 +42,11 @@
   <div class="jds-toast jds-toast--ready" style="margin-top:var(--space-8)">
     <span class="jds-toast__icon"></span>
     <div class="jds-toast__body">
-      <p class="jds-toast__title">Mythical is ready for review</p>
-      <p class="jds-toast__msg">Took 11 minutes. Nothing is running yet.</p>
+      <p class="jds-toast__title">Mythical is running</p>
+      <p class="jds-toast__msg">Took 11 minutes. Only you can see it. Have a look.</p>
     </div>
   </div>
   <p class="pv-note" style="margin-top:var(--space-3)">This is how a finished build reaches you &mdash; a notification, not a message in the conversation. A background job has no way to write into a chat thread today.</p>
 </div>
-<script>document.getElementById('n3').className='on'</script>
+<script>document.getElementById('nav').className='on'</script>
 </body></html>
