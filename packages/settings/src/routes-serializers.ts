@@ -34,7 +34,10 @@ export function toMyModuleDto(
     active,
     // #1725: the flag, not the declarations — the pane fetches those from
     // /api/modules/:id/preferences when the user actually opens it.
-    hasPreferences: (manifest.preferences?.length ?? 0) > 0
+    hasPreferences: (manifest.preferences?.length ?? 0) > 0,
+    // #1759: built-in module manifests have no credential slots at all — only the external
+    // manifest type carries `auth` — so this is constant false rather than a lookup.
+    hasUserCredentials: false
   };
 }
 
@@ -62,7 +65,8 @@ export function toMyModuleDtoFromExternal(
     instanceDisabled: false,
     userDisabled,
     active: !userDisabled,
-    hasPreferences: module.hasPreferences
+    hasPreferences: module.hasPreferences,
+    hasUserCredentials: module.hasUserCredentials
   };
 }
 

@@ -571,6 +571,9 @@ function hasImplementedModuleSettings(module: SettingsModule): boolean {
   // #1725: declared switches are a settings destination, so a required module that has them
   // keeps its row (same #986 rule that keeps rows for contributed surfaces below).
   if (module.hasPreferences) return true;
+  // #1759: credential slots the user fills are a settings destination in their own right. A
+  // module can declare them and no switches at all, and then this is its only reason to have a row.
+  if (module.hasUserCredentials) return true;
   return (
     CONTRIBUTED_SETTINGS_MODULE_IDS.has(module.id) &&
     Boolean(findModuleSettingsEntrySurface(module.id, MODULE_SETTINGS_SURFACES))
@@ -586,14 +589,17 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
   // #1725: a module that only declares preferences has no contributed React surface, so it
   // needs its own reason to be a valid destination — otherwise the deep link resolves to
   // null and "Configure" lands back on the list.
-  const declaresPreferences = (moduleId: string): boolean =>
-    myQuery.data?.modules.some((module) => module.id === moduleId && module.hasPreferences) ===
-    true;
+  // #1759: same rule for user-fillable credentials, so Finance — credentials, no switches —
+  // resolves instead of bouncing back to the list.
+  const hasOwnSettingsPage = (moduleId: string): boolean =>
+    myQuery.data?.modules.some(
+      (module) => module.id === moduleId && (module.hasPreferences || module.hasUserCredentials)
+    ) === true;
   const view: ModuleSettingsView | null = resolveModuleSettingsDeepLink(
     searchParams.get("module"),
     (moduleId) =>
       Boolean(findModuleSettingsEntrySurface(moduleId, MODULE_SETTINGS_SURFACES)) ||
-      declaresPreferences(moduleId)
+      hasOwnSettingsPage(moduleId)
   );
   const modulesQuery = useQuery({ queryKey: queryKeys.modules, queryFn: getModules, retry: false });
   const toggleMutation = useMutation({
@@ -711,9 +717,10 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
           Configure <ArrowRight size={14} aria-hidden="true" />
         </button>
       );
-    } else if (module.hasPreferences) {
+    } else if (module.hasPreferences || module.hasUserCredentials) {
       // #1725: an installed module with declared switches gets the same "Configure" link as
       // a built-in one — from the user's side there is no difference worth showing.
+      // #1759: user-fillable credentials count the same way.
       action = (
         <button
           type="button"

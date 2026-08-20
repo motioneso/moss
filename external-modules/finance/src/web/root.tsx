@@ -37,7 +37,20 @@ export function Root(props: { hostActions: HostActions }): ReactNodeLike {
       <LiveRegion />
       <header className="fnm-header">
         <span className="jds-eyebrow">Module</span>
-        <h1>Finance</h1>
+        <div className="fnm-headrow">
+          <h1>Finance</h1>
+          {/*
+           * #1759 — a way back to this module's own settings, where the bank sign-in lives.
+           * A plain anchor, not a router push: the module runtime hands a web surface React and
+           * nothing else, so there is no host navigate to call (same reasoning as Food's link).
+           */}
+          <a
+            className="jds-btn jds-btn--quiet jds-btn--sm fnm-settings-link"
+            href="/settings?section=modules&module=finance"
+          >
+            Settings
+          </a>
+        </div>
       </header>
       <nav className="fnm-chips" aria-label="Finance sections">
         {TABS.map((tab) => (

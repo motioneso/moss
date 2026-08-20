@@ -220,7 +220,10 @@ export function registerModuleCredentialRoutes(
           const rows = await listModuleCredentialMetadata(scopedDb, moduleId);
           const body: ListModuleCredentialsResponse = {
             moduleId,
-            credentials: declarations.map((d) => toStatusDto(d, rows))
+            credentials: declarations.map((d) => toStatusDto(d, rows)),
+            // #1759: whether an admin also has keys to fill for this module. Read from the
+            // manifest, so it says nothing about what the instance has actually stored.
+            instanceManaged: (declaredCredentials(ctx, moduleId, "instance") ?? []).length > 0
           };
           return body;
         });

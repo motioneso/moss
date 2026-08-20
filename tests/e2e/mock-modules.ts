@@ -171,7 +171,8 @@ export const myModulesResponse: ListMyModulesResponse = {
     instanceDisabled: false,
     userDisabled: false,
     active: true,
-    hasPreferences: false
+    hasPreferences: false,
+    hasUserCredentials: false
   }))
 };
 
@@ -265,7 +266,8 @@ export async function mockExternalWebModule(page: Page): Promise<void> {
           instanceDisabled: false,
           userDisabled: false,
           active: true,
-          hasPreferences: false
+          hasPreferences: false,
+          hasUserCredentials: false
         }
       ]
     };

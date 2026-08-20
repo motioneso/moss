@@ -31,6 +31,12 @@ export interface MyModuleDto {
   readonly active: boolean;
   /** #1725: module declares host-rendered on/off switches, reachable at /api/modules/:id/preferences. */
   readonly hasPreferences: boolean;
+  /**
+   * #1759: module declares credential slots at user scope, reachable at
+   * /api/me/modules/:id/credentials. A module can have these and no switches at all — Finance is
+   * exactly that — so the personal settings page needs its own reason to be reachable.
+   */
+  readonly hasUserCredentials: boolean;
 }
 
 /**
@@ -113,7 +119,8 @@ const myModuleSchema = {
     "instanceDisabled",
     "userDisabled",
     "active",
-    "hasPreferences"
+    "hasPreferences",
+    "hasUserCredentials"
   ],
   properties: {
     id: { type: "string" },
@@ -125,7 +132,8 @@ const myModuleSchema = {
     instanceDisabled: { type: "boolean" },
     userDisabled: { type: "boolean" },
     active: { type: "boolean" },
-    hasPreferences: { type: "boolean" }
+    hasPreferences: { type: "boolean" },
+    hasUserCredentials: { type: "boolean" }
   }
 } as const;
 
@@ -324,6 +332,14 @@ export interface ModuleCredentialStatusDto {
 export interface ListModuleCredentialsResponse {
   readonly moduleId: string;
   readonly credentials: readonly ModuleCredentialStatusDto[];
+  /**
+   * #1759: user surface only — true when this module also declares instance-scope slots that
+   * only an admin can fill. It lets the user's own settings page say so in plain words instead
+   * of leaving a silent gap where half the module's configuration lives. It is a fact about the
+   * manifest, not about the instance's stored secrets: no value, and not even "configured", is
+   * exposed. Absent on the admin surface.
+   */
+  readonly instanceManaged?: boolean;
 }
 
 export interface SetModuleCredentialRequest {
@@ -367,7 +383,9 @@ export const listModuleCredentialsRouteSchema = {
       required: ["moduleId", "credentials"],
       properties: {
         moduleId: { type: "string" },
-        credentials: { type: "array", items: moduleCredentialStatusSchema }
+        credentials: { type: "array", items: moduleCredentialStatusSchema },
+        // #1759: optional, not required — the admin surface omits it entirely.
+        instanceManaged: { type: "boolean" }
       }
     },
     401: errorResponseSchema,

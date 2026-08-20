@@ -15,8 +15,13 @@ import { SlidersHorizontal } from "lucide-react";
 
 import type { ListModulePreferencesResponse } from "@moss/shared";
 
-import { getModulePreferences, updateModulePreferences } from "../api/client";
+import {
+  getModulePreferences,
+  listModuleCredentials,
+  updateModulePreferences
+} from "../api/client";
 import { queryKeys } from "../api/query-keys";
+import { ModuleCredentialsSection } from "./module-credentials-section";
 import { useFeedback } from "./settings-feedback";
 import { ModulePreferenceControl } from "./settings-module-preference-control";
 import { ModuleSub } from "./settings-module-subviews";
@@ -64,6 +69,23 @@ export function ModulePreferencesSettings(props: {
   });
 
   const preferences = preferencesQuery.data?.preferences ?? [];
+  // #1759: a module can have credential slots and no switches at all — Finance is exactly that.
+  // Without this the page would greet that user with "This module has no settings" directly above
+  // the sign-in fields they came here to fill. Same query key as ModuleCredentialsSection below,
+  // so this reads that section's cached response instead of fetching a second time.
+  const credentialsQuery = useQuery({
+    queryKey: ["module-credentials", "me", props.moduleId] as const,
+    queryFn: () => listModuleCredentials("me", props.moduleId),
+    retry: false
+  });
+  const hasCredentialContent =
+    (credentialsQuery.data?.credentials.length ?? 0) > 0 ||
+    credentialsQuery.data?.instanceManaged === true;
+  const hideEmptyOptions =
+    preferences.length === 0 &&
+    !preferencesQuery.isLoading &&
+    !preferencesQuery.isError &&
+    hasCredentialContent;
 
   return (
     <ModuleSub
@@ -72,30 +94,47 @@ export function ModulePreferencesSettings(props: {
       sub="What this module is allowed to do for you"
       onBack={props.onBack}
     >
-      <Group title="Options" desc={`Settings ${props.moduleName} offers.`}>
-        {preferencesQuery.isLoading ? (
-          <Row name="Loading settings" />
-        ) : preferencesQuery.isError ? (
-          <Row name="These settings could not be loaded" desc={readError(preferencesQuery.error)} />
-        ) : preferences.length === 0 ? (
-          <Row name="This module has no settings" desc="Nothing to configure here yet." />
-        ) : (
-          preferences.map((preference) => (
+      {hideEmptyOptions ? null : (
+        <Group title="Options" desc={`Settings ${props.moduleName} offers.`}>
+          {preferencesQuery.isLoading ? (
+            <Row name="Loading settings" />
+          ) : preferencesQuery.isError ? (
             <Row
-              key={preference.key}
-              name={preference.label}
-              desc={preference.description ?? undefined}
-              control={
-                <ModulePreferenceControl
-                  preference={preference}
-                  disabled={mutation.isPending}
-                  onChange={(value) => mutation.mutate({ key: preference.key, value })}
-                />
-              }
+              name="These settings could not be loaded"
+              desc={readError(preferencesQuery.error)}
             />
-          ))
-        )}
-      </Group>
+          ) : preferences.length === 0 ? (
+            <Row name="This module has no settings" desc="Nothing to configure here yet." />
+          ) : (
+            preferences.map((preference) => (
+              <Row
+                key={preference.key}
+                name={preference.label}
+                desc={preference.description ?? undefined}
+                control={
+                  <ModulePreferenceControl
+                    preference={preference}
+                    disabled={mutation.isPending}
+                    onChange={(value) => mutation.mutate({ key: preference.key, value })}
+                  />
+                }
+              />
+            ))
+          )}
+        </Group>
+      )}
+      {/* #1759: the user's own credential slots for this module. The component and its API
+          existed since #918 but nothing ever mounted the user surface, so a slot declared at
+          user scope — Finance's Plaid tokens, for one — could not be set or revoked by the
+          person it belonged to. Renders nothing when the module declares none. */}
+      <ModuleCredentialsSection
+        moduleId={props.moduleId}
+        surface="me"
+        group={{
+          title: "Your sign-ins",
+          desc: `Kept encrypted, visible only to you. ${props.moduleName} uses these on your behalf.`
+        }}
+      />
     </ModuleSub>
   );
 }
