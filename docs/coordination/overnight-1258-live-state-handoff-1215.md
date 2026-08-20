@@ -96,3 +96,56 @@ Mid-doing, in order:
 
 The successor should read only this newest section plus the current queue/state sections it needs,
 invoke `coordinate`, update the authority line to its own session id, and continue item 1.
+
+## Coordinator continuation — 20 Aug, PR 1775 security finish
+
+Coordinator authority before this relay: Codex session
+`01a020f6-1fd0-7b12-bc33-733b10e06488`, label `Coordinator`. This session adopted the run and
+reaped the prior coordinator only after resolving its label plus exact session id. A compaction
+summary then fired the coordinate skill's mandatory relay trigger; the successor must replace the
+authority line with its own session id before driving or merging, confirm it is the sole
+`Coordinator`, and reap this session only after resolving this exact session id fresh.
+
+Mid-doing, in order:
+
+1. PR #1775 is open on `build-1258-dev-instance-provisioning`. Local HEAD is `eaf9f9bdd`, rebased
+   onto current `main`; the security fix is `45cfdaf14`. The remote PR head was still
+   `d349dfa75088d3274c6d80c2c179f47cd3332f50`. No fix push had occurred at checkpoint.
+2. The issue-specific live proof is complete and posted on the PR: reset the persistent dev
+   database, reprovision, sign in through the real UI, open Chat with Moss, send
+   `Reply with exactly LIVE-PATH-1258-OK`, and visibly receive `LIVE-PATH-1258-OK`. Evidence:
+   https://github.com/motioneso/moss/pull/1775#issuecomment-5361674021
+3. Security QA found one blocker: the independently configurable migration-owner database URL
+   needed the same destructive-target guard. The local fix passes typecheck, all 16 focused unit
+   tests, and all 18 fresh-database doctor integration tests. Existing security QA comment:
+   https://github.com/motioneso/moss/pull/1775#issuecomment-5361811765
+4. The adjacent runtime-context browser check made exactly one authorized attempt with a hard
+   20-minute limit. The browser test never started because Docker was still building
+   `ghcr.io/motioneso/moss:uat-smoke`. Do not retry it locally. Ben explicitly agreed to push the
+   safety fix, use normal CI, then have fresh security QA reassess the exact pushed head without
+   repeating that cold image build.
+5. Why Docker is slow: each attempt read/wrote roughly 12 GB; the Dockerfile's `COPY . .` alone
+   took about 209 seconds; build cache grew to 51.12 GB and filled `/`; pruning inactive cache
+   restored 52 GB, but the next cold build consumed about 29 GB and still exceeded 20 minutes.
+   The likely cause is an oversized repository build context admitted by an insufficient
+   `.dockerignore`, including workspace residue/worktrees/untracked artifacts. Confirm cheaply by
+   inspecting `.dockerignore`, tracing the UAT build invocation with the codebase graph, and using
+   bounded `du`; do not rerun UAT. Explain this to Ben in plain English.
+6. The old build agent `build1258-security-finish`, session
+   `76bd7183-12d4-4012-97c6-d74744a40c20`, was interrupted and is idle. Before closing it,
+   re-resolve its pane by exact session id and confirm no push is running.
+7. Reconfirm the tracked tree is clean, branch/HEAD are as above, and the remote branch is still at
+   the expected old head. Then perform the already-authorized mechanical push with an explicit
+   lease, verify the remote head once, and consume normal GitHub CI status without reading raw
+   gate logs.
+8. After CI is green, run fresh Opus security QA against the exact pushed head. It must post its
+   verdict to the PR and honor Ben's ruling not to repeat the cold local runtime-context build.
+   Merge only after fresh QA is green, the live-proof comment remains present, and coordinator
+   session authority is re-confirmed. Ben's explicit agreement is the security-tier sign-off for
+   this push/CI/reassessment path.
+9. After merge: update and close issue #1258/project status, prove the work landed, apply all four
+   worktree-reap gates, stop any recorded dev processes by explicit PID only, clean recorded test
+   data, reap the lane, and relay immediately because every security-tier merge triggers relay.
+10. The shared dev instance is reset/reprovisioned and free for Food work. The account exists and
+    signs in with the configured development admin password; the old familiar password is stale.
+    The Food pane was informed and delivery was verified.
