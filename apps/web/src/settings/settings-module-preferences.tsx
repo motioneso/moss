@@ -17,6 +17,7 @@ import type { ListModulePreferencesResponse } from "@moss/shared";
 
 import { getModulePreferences, updateModulePreferences } from "../api/client";
 import { queryKeys } from "../api/query-keys";
+import { ModuleCredentialsSection } from "./module-credentials-section";
 import { useFeedback } from "./settings-feedback";
 import { ModulePreferenceControl } from "./settings-module-preference-control";
 import { ModuleSub } from "./settings-module-subviews";
@@ -96,6 +97,18 @@ export function ModulePreferencesSettings(props: {
           ))
         )}
       </Group>
+      {/* #1759: the user's own credential slots for this module. The component and its API
+          existed since #918 but nothing ever mounted the user surface, so a slot declared at
+          user scope — Finance's Plaid tokens, for one — could not be set or revoked by the
+          person it belonged to. Renders nothing when the module declares none. */}
+      <ModuleCredentialsSection
+        moduleId={props.moduleId}
+        surface="me"
+        group={{
+          title: "Your sign-ins",
+          desc: `Kept encrypted, visible only to you. ${props.moduleName} uses these on your behalf.`
+        }}
+      />
     </ModuleSub>
   );
 }
