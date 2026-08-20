@@ -139,10 +139,12 @@ describe("host restart routes (#1748)", () => {
     await writeFile(join(harness.controlDir, "watcher-alive"), "", "utf8");
     await writeFile(join(harness.controlDir, "restart-requested"), "", "utf8");
 
-    const body = (await harness.server.inject({
-      method: "GET",
-      url: "/api/admin/host/restart"
-    })).json() as { hostWatcherInstalled: boolean; lastRequestedAt: string | null };
+    const body = (
+      await harness.server.inject({
+        method: "GET",
+        url: "/api/admin/host/restart"
+      })
+    ).json() as { hostWatcherInstalled: boolean; lastRequestedAt: string | null };
 
     expect(body.hostWatcherInstalled).toBe(true);
     expect(body.lastRequestedAt).not.toBeNull();

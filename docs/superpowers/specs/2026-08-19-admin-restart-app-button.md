@@ -39,7 +39,7 @@ risk profile and a different reason to happen; they stay a manual operation.
 `infra/docker-compose.prod.yml`, `moss` service, add:
 
 ```yaml
-      - ./control:/data/control
+- ./control:/data/control
 ```
 
 `infra/control/.gitkeep` is committed so the directory exists on a fresh clone. The `setup`

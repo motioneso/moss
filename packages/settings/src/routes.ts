@@ -45,10 +45,7 @@ import type { HostDiagnosticsProvider } from "./host-diagnostics.js";
 import { registerHostDiagnosticsRoutes } from "./host-diagnostics-routes.js";
 import type { HerdrInstallDependencies } from "./host-install-routes.js";
 import { registerHerdrInstallRoutes } from "./host-install-routes.js";
-import {
-  registerHostRestartRoutes,
-  type HostRestartDependencies
-} from "./host-restart-routes.js";
+import { registerHostRestartRoutes, type HostRestartDependencies } from "./host-restart-routes.js";
 import { registerLocaleRoutes } from "./locale-routes.js";
 import { registerQuietHoursRoutes } from "./quiet-hours-routes.js";
 import { registerWeatherLocationRoutes } from "./weather-location-routes.js";

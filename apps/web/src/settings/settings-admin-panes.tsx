@@ -658,7 +658,7 @@ export function HostPane() {
       if (data.accepted) {
         // The server is about to go away, so this toast is the last thing this page
         // renders from a live connection. Say what happens next, not "success".
-        toast("Restarting — this page will reconnect in about 20 seconds.", { tone: "neutral" });
+        toast("Restarting — this page will reconnect in about 20 seconds.", { tone: "ready" });
         return;
       }
       toast("Nothing is set up on the host to perform the restart, so nothing happened.", {
