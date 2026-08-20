@@ -5,6 +5,7 @@ import {
   createNotificationPreferencePort,
   createRuntimeEmbeddingProvider,
   reconcileExternalModules,
+  resolveModulePreferences,
   type ExternalModuleDiscovery,
   type ReconciledExternalModule
 } from "@moss/module-registry";
@@ -96,6 +97,16 @@ export function createExternalModuleTools(input: {
         // still enforces risk gating, the composition guard, and the call cap.
         ...(input.ai ? { ai: (db, req) => input.ai!(db, module.id, req) } : {})
       });
+      // #1768: resolved per invocation inside the ACTOR's data context, exactly as the
+      // queued path does in apps/worker/src/external-module-invoke.ts. Without this the
+      // synchronous tool path handed the module an empty preference set, so every read
+      // fell back to the manifest default and no saved switch or number the user set in
+      // Settings ever reached the module.
+      const preferences = await resolveModulePreferences(
+        input.appDataContext,
+        { actorUserId: context.actorUserId, requestId: context.requestId },
+        { id: module.id, preferences: module.manifest.preferences ?? [] }
+      );
       // FIN-04 (#1149, spec delta "Host change 2"): hand the worker the
       // host-resolved actor identity in tool input, matching the queue job
       // envelope's actorUserId field. The host value MUST stay spread LAST:
@@ -110,7 +121,7 @@ export function createExternalModuleTools(input: {
           rpc,
           // #1286 Task 2e: an assistant tool call gets its own child process,
           // separate from this module's queue jobs and briefing invocations.
-          { lane: "tool" }
+          { lane: "tool", preferences }
         )
       );
     }
