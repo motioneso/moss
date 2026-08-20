@@ -1,9 +1,19 @@
 #!/usr/bin/env node
-// On every pull request merged to main, pulls the "Release note" section out of the pull
-// request body and appends it to docs/WHATS_NEW.md's edge-channel section. Silently does
-// nothing when a pull request has no release note (internal/non-user-facing change) — that
-// is the normal case, not an error.
+// Pulls the "Release note" section out of a pull request body and appends it to
+// docs/WHATS_NEW.md's edge-channel section. Silently does nothing when a pull request has no
+// release note (internal/non-user-facing change) — that is the normal case, not an error.
+//
+// Run by hand from the pull request's own branch, once the pull request exists and has a number:
+//
+//   node scripts/append-release-note.mjs --pr 1796
+//
+// then commit docs/WHATS_NEW.md onto that same branch. This used to run as a GitHub Action on
+// merge, which pushed straight to main; the "Require CI gate on main" ruleset rejects such a push
+// because a direct push has no pull request and therefore no CI gate run to satisfy the required
+// check. Nothing the bot pushes can pass that rule without a bypass credential, so the note is now
+// written where every other change is written — in the pull request. See #1795.
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -67,11 +77,15 @@ export function appendReleaseNote(markdown, note, { prNumber, prUrl, today }) {
         const sectionEnd = nextHeading === -1 ? edgeSection.length : nextHeading + 1;
         return Math.max(furthest, sectionEnd);
       }, edgeSection.length);
+    // Normalise the blank lines either side of the new section rather than only prepending one.
+    // When the new section lands at the very end of the edge channel, what follows it is the next
+    // top-level heading, which lives outside this slice — so without the trailing newline the new
+    // bullet ran straight into "## v0.1.16" with no blank line between them, and the whitespace
+    // already at the end of the slice produced a doubled blank line above the heading.
+    const before = edgeSection.slice(0, insertAt).replace(/\n+$/, "\n");
+    const after = edgeSection.slice(insertAt);
     edgeSection =
-      edgeSection.slice(0, insertAt) +
-      (edgeSection.slice(insertAt).startsWith("\n") ? "" : "\n") +
-      `${categoryHeading}\n\n${bullet}\n` +
-      edgeSection.slice(insertAt);
+      `${before}\n${categoryHeading}\n\n${bullet}\n` + (after.startsWith("\n") ? "" : "\n") + after;
   } else {
     const afterHeading = categoryIndex + categoryHeading.length + 1;
     edgeSection =
@@ -134,8 +148,26 @@ function selfTest() {
   assert.match(withChanged, /### Changed\n\n- \*\*New behavior\.\*\* It behaves differently now\./);
   assert.ok(withChanged.indexOf("### Changed") > withChanged.indexOf("### Fixed"));
   assert.ok(withChanged.indexOf("### Changed") < withChanged.indexOf("## v0.1.16"));
+  // A new section at the end of the edge channel butts up against the next top-level heading,
+  // which is outside the slice being edited. Exactly one blank line either side of it, or the
+  // file fails `prettier --check` and the bullet reads as part of the older release below it.
+  assert.match(
+    withChanged,
+    /- \*\*Old fix\.\*\* Existing entry\. \[PR #2\]\(url\)\n\n### Changed\n\n- \*\*New behavior\.\*\*[^\n]*\n\n## v0\.1\.16/
+  );
 
   console.log("append-release-note self-test passed");
+}
+
+function readPullRequest(number) {
+  const raw = execFileSync(
+    "gh",
+    ["api", `repos/{owner}/{repo}/pulls/${number}`, "--jq", "{body, number, url: .html_url}"],
+    { encoding: "utf8" }
+  );
+  const pullRequest = JSON.parse(raw);
+  assert.ok(pullRequest.number, `gh returned no pull request for #${number}`);
+  return pullRequest;
 }
 
 async function main() {
@@ -144,11 +176,16 @@ async function main() {
     return;
   }
 
-  const body = argument("--body") ?? process.env.PR_BODY ?? "";
-  const prNumber = argument("--pr-number") ?? process.env.PR_NUMBER;
-  const prUrl = argument("--pr-url") ?? process.env.PR_URL;
-  assert.ok(prNumber, "missing --pr-number / PR_NUMBER");
-  assert.ok(prUrl, "missing --pr-url / PR_URL");
+  // `--pr N` is the everyday path: read the pull request straight from GitHub rather than making
+  // the caller marshal three values by hand. The explicit flags stay for tests and for anyone
+  // without gh on PATH.
+  const fetched = argument("--pr") ? readPullRequest(argument("--pr")) : null;
+
+  const body = fetched?.body ?? argument("--body") ?? process.env.PR_BODY ?? "";
+  const prNumber = fetched?.number ?? argument("--pr-number") ?? process.env.PR_NUMBER;
+  const prUrl = fetched?.url ?? argument("--pr-url") ?? process.env.PR_URL;
+  assert.ok(prNumber, "missing --pr / --pr-number / PR_NUMBER");
+  assert.ok(prUrl, "missing --pr / --pr-url / PR_URL");
 
   const note = parseReleaseNote(body);
   if (!note) {
