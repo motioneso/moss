@@ -190,6 +190,16 @@ const ESTIMATE_STATE_LABEL: Record<EstimateState, string> = {
 };
 
 /**
+ * #1770: a meal logged while estimates are off is `pending` by construction — createMeal inserts
+ * that state and, with the switch off, tools/meals.ts:289-292 returns without ever moving it on.
+ * "Estimating…" would then be a permanent lie about background work that was never started, so
+ * the one state gets two labels depending on whether anything is actually coming.
+ */
+function estimateStateLabel(state: EstimateState, aiEstimates: boolean): string {
+  return state === "pending" && !aiEstimates ? "Not estimated" : ESTIMATE_STATE_LABEL[state];
+}
+
+/**
  * The row's leading 3px rail carries the estimate state — never a border on the row and never a
  * coloured pill, per the keyline idiom. The occasion accent lives on the section head above
  * instead, so the two signals never fight over the same 3 pixels.
@@ -299,10 +309,11 @@ function ItemRow(props: { item: MealItem; key?: string }): ReactNodeLike {
 function MealRow(props: {
   meal: Meal;
   expanded: boolean;
+  aiEstimates: boolean;
   onToggle: (mealId: string) => void;
   key?: string;
 }): ReactNodeLike {
-  const { meal, expanded, onToggle } = props;
+  const { meal, expanded, aiEstimates, onToggle } = props;
   const hasItems = meal.items.length > 0;
   const panelId = `fud-items-${meal.mealId}`;
 
@@ -318,7 +329,7 @@ function MealRow(props: {
   }
   if (meal.estimateState !== "estimated") {
     meta.push(<span className="jds-meta-sep" aria-hidden="true" key="sep-state" />);
-    meta.push(<span key="state">{ESTIMATE_STATE_LABEL[meal.estimateState]}</span>);
+    meta.push(<span key="state">{estimateStateLabel(meal.estimateState, aiEstimates)}</span>);
   }
   if (hasItems) {
     meta.push(<span className="jds-meta-sep" aria-hidden="true" key="sep-items" />);
@@ -424,9 +435,13 @@ export function Root(): ReactNodeLike {
   const [pendingPollMs, setPendingPollMs] = useState<number | null>(null);
   const mealsQuery = useToolQuery<MealsListResult>("food.meals.list", { localDate }, pendingPollMs);
 
+  // #1770: with estimates off nothing is queued, so a meal stays "pending" permanently. Polling
+  // on that would ask the server forever for a result that is never coming — the `aiEstimates`
+  // guard is what makes "still being estimated" mean it, rather than just "has no numbers yet".
   const hasPending =
     mealsQuery.status === "settled" &&
     mealsQuery.outcome.kind === "ok" &&
+    mealsQuery.outcome.result.aiEstimates !== false &&
     mealsQuery.outcome.result.meals.some((meal) => meal.estimateState === "pending");
   useEffect(() => {
     setPendingPollMs(hasPending ? PENDING_POLL_MS : null);
@@ -569,6 +584,9 @@ function MealsSection(props: {
             <MealRow
               meal={meal}
               expanded={expanded[meal.mealId] === true}
+              // Strict !== false, matching EstimatesOffNote: an older module build that predates
+              // the flag omits it, and must not be read as "estimates are off".
+              aiEstimates={result.aiEstimates !== false}
               onToggle={onToggle}
               key={meal.mealId}
             />
