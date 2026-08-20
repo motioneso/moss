@@ -98,11 +98,9 @@ describe("dev-instance provision (#1258)", () => {
     }
   }
 
-  function fakeSignUpOwner(userId: string): (input: {
-    email: string;
-    password: string;
-    name: string;
-  }) => Promise<{ userId: string }> {
+  function fakeSignUpOwner(
+    userId: string
+  ): (input: { email: string; password: string; name: string }) => Promise<{ userId: string }> {
     return async (input) => {
       await insertActiveAdmin(userId, input.email);
       return { userId };
@@ -167,12 +165,22 @@ describe("dev-instance provision (#1258)", () => {
       expect(userRow?.is_bootstrap_owner).toBe(true);
       expect(userRow?.status).toBe("active");
 
-      const accountRow = await migrationDb
-        .selectFrom("app.auth_accounts")
-        .select(["id"])
-        .where("user_id", "=", result.userId)
-        .executeTakeFirst();
-      expect(accountRow).toBeDefined();
+      // app.auth_accounts only grants access to jarvis_auth_runtime (0045_auth_secret_rls.sql) --
+      // the migration role has no grant at all, so the check needs its own connection as that role.
+      const authDb = createDatabase({
+        connectionString: connectionStrings.auth,
+        maxConnections: 1
+      });
+      try {
+        const accountRow = await authDb
+          .selectFrom("app.auth_accounts")
+          .select(["id"])
+          .where("user_id", "=", result.userId)
+          .executeTakeFirst();
+        expect(accountRow).toBeDefined();
+      } finally {
+        await authDb.destroy();
+      }
     });
   });
 
@@ -216,32 +224,40 @@ describe("dev-instance provision (#1258)", () => {
       const providerId = await runner.withDataContext(context, (scopedDb) =>
         repository.resolveDefaultProviderId(scopedDb)
       );
-      const providerBefore = await migrationDb
-        .selectFrom("app.ai_provider_configs")
-        .select(["updated_at"])
-        .where("id", "=", providerId!)
-        .executeTakeFirstOrThrow();
-      const modelBefore = await migrationDb
-        .selectFrom("app.ai_configured_models")
-        .select(["id", "updated_at"])
-        .where("provider_config_id", "=", providerId!)
-        .executeTakeFirstOrThrow();
+      const providerBefore = await runner.withDataContext(context, (scopedDb) =>
+        scopedDb.db
+          .selectFrom("app.ai_provider_configs")
+          .select(["updated_at"])
+          .where("id", "=", providerId!)
+          .executeTakeFirstOrThrow()
+      );
+      const modelBefore = await runner.withDataContext(context, (scopedDb) =>
+        scopedDb.db
+          .selectFrom("app.ai_configured_models")
+          .select(["id", "updated_at"])
+          .where("provider_config_id", "=", providerId!)
+          .executeTakeFirstOrThrow()
+      );
 
       const secondOutcomes = await runProvision(deps({ signUpOwner }));
       for (const outcome of secondOutcomes) {
         expect(outcome.changed).toBe(false);
       }
 
-      const providerAfter = await migrationDb
-        .selectFrom("app.ai_provider_configs")
-        .select(["updated_at"])
-        .where("id", "=", providerId!)
-        .executeTakeFirstOrThrow();
-      const modelAfter = await migrationDb
-        .selectFrom("app.ai_configured_models")
-        .select(["id", "updated_at"])
-        .where("id", "=", modelBefore.id)
-        .executeTakeFirstOrThrow();
+      const providerAfter = await runner.withDataContext(context, (scopedDb) =>
+        scopedDb.db
+          .selectFrom("app.ai_provider_configs")
+          .select(["updated_at"])
+          .where("id", "=", providerId!)
+          .executeTakeFirstOrThrow()
+      );
+      const modelAfter = await runner.withDataContext(context, (scopedDb) =>
+        scopedDb.db
+          .selectFrom("app.ai_configured_models")
+          .select(["id", "updated_at"])
+          .where("id", "=", modelBefore.id)
+          .executeTakeFirstOrThrow()
+      );
 
       expect(providerAfter.updated_at).toEqual(providerBefore.updated_at);
       expect(modelAfter.updated_at).toEqual(modelBefore.updated_at);
@@ -279,11 +295,13 @@ describe("dev-instance provision (#1258)", () => {
       const providerId = await runner.withDataContext(context, (scopedDb) =>
         repository.resolveDefaultProviderId(scopedDb)
       );
-      const providerRow = await migrationDb
-        .selectFrom("app.ai_provider_configs")
-        .select(["encrypted_credential"])
-        .where("id", "=", providerId!)
-        .executeTakeFirstOrThrow();
+      const providerRow = await runner.withDataContext(context, (scopedDb) =>
+        scopedDb.db
+          .selectFrom("app.ai_provider_configs")
+          .select(["encrypted_credential"])
+          .where("id", "=", providerId!)
+          .executeTakeFirstOrThrow()
+      );
 
       const cipher = createAiSecretCipher(process.env);
       const decrypted = cipher.decryptJson(cipher.parseEnvelope(providerRow.encrypted_credential));
@@ -302,11 +320,13 @@ describe("dev-instance provision (#1258)", () => {
       const providerId = await runner.withDataContext(context, (scopedDb) =>
         repository.resolveDefaultProviderId(scopedDb)
       );
-      const providerRow = await migrationDb
-        .selectFrom("app.ai_provider_configs")
-        .select(["encrypted_credential"])
-        .where("id", "=", providerId!)
-        .executeTakeFirstOrThrow();
+      const providerRow = await runner.withDataContext(context, (scopedDb) =>
+        scopedDb.db
+          .selectFrom("app.ai_provider_configs")
+          .select(["encrypted_credential"])
+          .where("id", "=", providerId!)
+          .executeTakeFirstOrThrow()
+      );
 
       const hardenedEnv: NodeJS.ProcessEnv = { ...process.env, NODE_ENV: "production" };
       delete hardenedEnv.JARVIS_AI_SECRET_KEY;
