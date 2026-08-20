@@ -16,6 +16,7 @@ export const MODULE_STYLES = `
 .fud-root { max-width: 48rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
 .fud-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.75rem; }
 .fud-date { flex: none; }
+.fud-settings-link { flex: none; text-decoration: none; }
 .fud-notice { margin: 0 0 1.25rem; }
 
 /* Day headline: calories alone on their line, then the macro fields. */

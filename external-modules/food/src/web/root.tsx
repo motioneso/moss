@@ -415,6 +415,18 @@ export function Root(): ReactNodeLike {
           value={localDate}
           onChange={onDateChange}
         />
+        {/*
+         * A plain anchor, not a router push: the module runtime hands a web surface React and
+         * nothing else (runtime.ts, contract v2), so there is no host navigate to call. The cost
+         * is a full page load on click, which is acceptable for a link out of the module and is
+         * the only option that needs no platform change.
+         */}
+        <a
+          className="jds-btn jds-btn--quiet jds-btn--sm fud-settings-link"
+          href="/settings?section=modules&module=food"
+        >
+          Settings
+        </a>
       </header>
       <EstimatesOffNote query={mealsQuery} />
       <MealsSection query={mealsQuery} expanded={expanded} onToggle={onToggle} />
