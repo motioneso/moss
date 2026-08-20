@@ -399,11 +399,17 @@ export class AssistantToolGateway {
       };
     }
 
+    // #1661: "allowed", not "executed". This method decides a native tool's PERMISSION and returns
+    // `decision: "allow"` — the tool then runs outside the gateway's sight, so nothing here ever
+    // learns whether it worked. Saying "executed" told the user the action completed on the
+    // strength of their own click. The YOLO branch above already got this right and says why
+    // (#1085 F4: observe the grant, never fire-and-forget a fictional success); this sibling
+    // branch, forty lines down and doing the identical thing, was missed.
     this.deps.notifier.emit(chatSessionId, {
       kind: "action_result",
       actionRequestId: action.id,
       toolName,
-      outcome: "executed"
+      outcome: "allowed"
     });
     return { decision: "allow", reason: "Approved by user." };
   }

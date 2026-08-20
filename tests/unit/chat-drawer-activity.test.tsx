@@ -8,13 +8,15 @@ import { Thread, activityVerb } from "../../apps/web/src/chat/message-row.js";
 
 const allowedRecord = {
   kind: "action_result" as const,
-  text: "Allowed by YOLO: Read",
+  text: "Allowed: Read",
   outcome: "allowed" as const
 };
 
 describe("chat drawer activity outcomes", () => {
   it("renders action outcomes outside Behind the scenes", () => {
-    expect(activityVerb(allowedRecord)).toBe("Allowed by YOLO");
+    // #1661: was "Allowed by YOLO". A user's own approval now reports this outcome too, and the
+    // record carries nothing that says which, so the verb stops naming a cause it cannot know.
+    expect(activityVerb(allowedRecord)).toBe("Allowed");
 
     const html = renderToString(
       createElement(Thread, {
@@ -29,6 +31,18 @@ describe("chat drawer activity outcomes", () => {
     expect(html).toContain("LinkedIn monitoring enabled");
     expect(html.indexOf("LinkedIn monitoring enabled")).toBeGreaterThan(
       html.indexOf("I changed that.")
+    );
+  });
+
+  // #1661: an error used to fall through to "Denied", so the activity line told the user a tool
+  // had been refused when the audit row for the same event said the handler failed. Those are
+  // different events with different causes, and only one of them is anybody's decision.
+  it("does not call a failed tool a denied one", () => {
+    expect(
+      activityVerb({ kind: "action_result", text: "Failed: example.write", outcome: "error" })
+    ).toBe("Failed");
+    expect(activityVerb({ kind: "action_result", text: "Not changed", outcome: "denied" })).toBe(
+      "Denied"
     );
   });
 

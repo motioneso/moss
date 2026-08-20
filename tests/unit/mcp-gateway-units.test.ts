@@ -225,6 +225,18 @@ describe("native Claude tool permission bridge", () => {
       decision: "allow",
       reason: "Approved by user."
     });
+
+    // #1661: this used to be "executed". The method decides PERMISSION and returns
+    // `decision: "allow"`; the tool then runs outside the gateway, which never learns the result.
+    // So "executed" announced a completion on the strength of the user's own click. The YOLO
+    // branch already reported "allowed" for exactly this reason; this branch did not.
+    await vi.waitFor(() => expect(emitted).toHaveLength(2));
+    expect(emitted[1]).toMatchObject({
+      kind: "action_result",
+      actionRequestId: "native-action-1",
+      toolName: "Bash",
+      outcome: "allowed"
+    });
   });
 
   it("denies native tool permission on confirmation timeout", async () => {
@@ -575,8 +587,11 @@ describe("native Claude tool permission bridge", () => {
     confirmations.resolve(requestRecord!.actionRequestId, "confirmed");
     const result = await pending;
     expect(result.decision).toBe("allow");
+    // #1661: was "executed". What this test is really checking is that the non-YOLO path still
+    // reaches a normal confirmation and is allowed — and "allowed" is the honest word for it,
+    // since the gateway grants permission here and never sees the tool run.
     expect(emitted).toContainEqual(
-      expect.objectContaining({ kind: "action_result", outcome: "executed" })
+      expect.objectContaining({ kind: "action_result", outcome: "allowed" })
     );
   });
 });

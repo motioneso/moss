@@ -118,11 +118,17 @@ export function ActivityPeek(props: { readonly records: readonly TranscriptRecor
 
 export function activityVerb(record: TranscriptRecord): string {
   if (record.kind === "action_result") {
+    // #1661: "allowed" no longer implies unattended mode (a user's own approval reports it too,
+    // because the gateway sees the grant and not the run), and "error" is not a denial — the
+    // audit row for that event says the handler failed, which is a different thing from the user
+    // or a policy refusing it.
     return record.outcome === "allowed"
-      ? "Allowed by YOLO"
+      ? "Allowed"
       : record.outcome === "executed"
         ? "Executed"
-        : "Denied";
+        : record.outcome === "error"
+          ? "Failed"
+          : "Denied";
   }
   return `${record.kind} ·`;
 }
