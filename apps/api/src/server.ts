@@ -601,7 +601,13 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
           id: module.id,
           name: module.name,
           version: module.version,
-          hasPreferences: module.preferences.length > 0
+          hasPreferences: module.preferences.length > 0,
+          // #1759: read from the boot discovery snapshot rather than the reconciled module,
+          // which does not carry credential declarations. A module with user-scope slots and no
+          // switches still needs a settings page — that is exactly Finance.
+          hasUserCredentials: (
+            externalModuleSnapshot.discoveries.find((d) => d.id === module.id)?.manifest.auth ?? []
+          ).some((declaration) => declaration.scope === "user")
         })),
       moduleDistribution,
       // #1263 Task 15: install-time self-operation grants also apply on (re-)enable. Built here

@@ -232,6 +232,29 @@ describe("module credential routes (#918)", () => {
     });
   });
 
+  it("9. the user surface reports that an admin owns the instance-scope half (#1759)", async () => {
+    // Read from the manifest, not from stored secrets: the flag must be true even when nobody
+    // has filled the instance slot, and it must never imply anything about its value.
+    const meRes = await server.inject({
+      method: "GET",
+      url: "/api/me/modules/creds-fixture/credentials",
+      headers: { cookie: memberCookie }
+    });
+    expect(meRes.json().instanceManaged).toBe(true);
+    // Every returned slot is still user-scope only — the flag adds a fact, not an instance row.
+    for (const credential of meRes.json().credentials as { scope: string }[]) {
+      expect(credential.scope).toBe("user");
+    }
+
+    // The admin surface omits the flag entirely; it is meaningless there.
+    const adminRes = await server.inject({
+      method: "GET",
+      url: "/api/admin/modules/creds-fixture/credentials",
+      headers: { cookie: adminCookie }
+    });
+    expect(adminRes.json().instanceManaged).toBeUndefined();
+  });
+
   it("6. unknown credential id 404s on both surfaces", async () => {
     const adminRes = await server.inject({
       method: "PUT",

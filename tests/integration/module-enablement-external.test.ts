@@ -53,7 +53,13 @@ describe("installed external modules appear in the personal Modules list (#1762)
       // The port the composition root wires in apps/api. Deliberately not filtered by the actor's
       // own deny rows, so a module the user switched off keeps its row — and its switch.
       listInstalledExternalModules: async () => [
-        { id: "ext-fixture", name: "Ext Fixture", version: "0.3.0", hasPreferences: true }
+        {
+          id: "ext-fixture",
+          name: "Ext Fixture",
+          version: "0.3.0",
+          hasPreferences: true,
+          hasUserCredentials: false
+        }
       ]
     });
     await server.ready();

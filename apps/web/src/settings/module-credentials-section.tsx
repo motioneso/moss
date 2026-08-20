@@ -9,7 +9,7 @@ import {
   revokeModuleCredential,
   setModuleCredential
 } from "../api/client.js";
-import { Field } from "./settings-ui.js";
+import { Field, Group, Row } from "./settings-ui.js";
 import { useFeedback } from "./settings-feedback.js";
 import { readError } from "./settings-types.js";
 import { Button } from "@moss/ui";
@@ -25,6 +25,13 @@ import { Button } from "@moss/ui";
 export function ModuleCredentialsSection(props: {
   readonly moduleId: string;
   readonly surface: "admin" | "me";
+  /**
+   * #1759: when set, the fields are wrapped in their own card with this heading, and the card
+   * is skipped entirely when there is nothing to put in it. The admin callers dock the fields
+   * straight under a module row instead and pass nothing, which is why this is opt-in rather
+   * than the default.
+   */
+  readonly group?: { readonly title: string; readonly desc?: string };
 }) {
   const queryClient = useQueryClient();
   const queryKey = ["module-credentials", props.surface, props.moduleId] as const;
@@ -55,11 +62,22 @@ export function ModuleCredentialsSection(props: {
     onError: (error) => toast(readError(error), { tone: "drift" })
   });
 
-  if (query.isLoading || !query.data || query.data.credentials.length === 0) return null;
+  const credentials = query.data?.credentials ?? [];
+  // #1759: the module also has keys only an admin can fill. Worth saying out loud on the user's
+  // own page — otherwise half a module's configuration is simply missing with no explanation.
+  const instanceManaged = query.data?.instanceManaged === true;
+  if (query.isLoading || !query.data) return null;
+  if (credentials.length === 0 && !(props.group && instanceManaged)) return null;
 
-  return (
+  const fields = (
     <>
-      {query.data.credentials.map((credential) => (
+      {instanceManaged ? (
+        <Row
+          name="Some settings are managed for the whole instance"
+          desc="Your administrator sets the connection this module uses. Anything below is yours alone."
+        />
+      ) : null}
+      {credentials.map((credential) => (
         <CredentialField
           key={credential.credentialId}
           credential={credential}
@@ -78,6 +96,13 @@ export function ModuleCredentialsSection(props: {
         />
       ))}
     </>
+  );
+
+  if (!props.group) return fields;
+  return (
+    <Group title={props.group.title} desc={props.group.desc}>
+      {fields}
+    </Group>
   );
 }
 

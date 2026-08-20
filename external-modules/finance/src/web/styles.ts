@@ -7,8 +7,8 @@
 // rule and theme switching are untouched by this module.
 export const MODULE_STYLES = `
 .fnm-root { max-width: 72rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
-.fnm-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
-.fnm-header__ident { display: flex; flex-direction: column; gap: 0.25rem; }
+.fnm-header { display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 1rem; }
+.fnm-headrow { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
 .fnm-settings-link { flex: none; text-decoration: none; }
 .fnm-stack { display: flex; flex-direction: column; gap: 1rem; }
 .fnm-row { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }

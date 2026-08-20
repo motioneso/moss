@@ -39,6 +39,12 @@ export interface InstalledExternalModuleSummary {
   readonly name: string;
   readonly version: string;
   readonly hasPreferences: boolean;
+  /**
+   * #1759: the module declares credential slots the user fills themselves. Separate from
+   * hasPreferences because a module can have one and not the other — Finance declares user
+   * credentials and no switches — and either one on its own is a reason to offer a settings page.
+   */
+  readonly hasUserCredentials: boolean;
 }
 
 /**
