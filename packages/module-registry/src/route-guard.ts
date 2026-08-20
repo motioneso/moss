@@ -79,6 +79,11 @@ export const PLATFORM_UNGUARDED_ROUTES: ReadonlySet<RouteKey> = new Set<RouteKey
   routeKey("GET", "/api/admin/host/diagnostics"),
   // host install: admin-gated platform route owned by no module, fixed-script-only (#993)
   routeKey("POST", "/api/admin/host/install"),
+  // host restart: admin-gated platform route owned by no module (#1748). Fails closed with
+  // 503 when no control directory is bind-mounted, and admin-gated by assertAdminUser —
+  // never module-enablement-gated, since restarting the app is not any module's business.
+  routeKey("GET", "/api/admin/host/restart"),
+  routeKey("POST", "/api/admin/host/restart"),
   routeKey("GET", "/api/admin/audit-events"),
   // onboarding (Phase 2): admin-gated platform routes owned by no module
   routeKey("GET", "/api/onboarding/status"),
