@@ -5,6 +5,7 @@ export {
   NOTES_MODULE_ID,
   NOTES_SYNC_QUEUE
 } from "./manifest.js";
+export { NotesSyncFailure, sinkSafeErrorMessage } from "./error-sink.js";
 export { NotesPathError, assertWithinRoot } from "./path-guard.js";
 export { createNotesRecallPort, type NotesRecallPort, type NotesRecallSnippet } from "./recall.js";
 export {
