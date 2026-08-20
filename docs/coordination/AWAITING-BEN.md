@@ -15,22 +15,6 @@ The 2026-08-05 transcript audit found 216 idle hours blocked on Ben, mostly on q
 never recorded — an overnight coordinator sat 15h on a question while this file said nothing was
 pending. Silent waiting is the failure mode this protocol exists to kill.
 
-## PR #1775 — allow a longer final runtime-context UAT?
-
-The security-QA root-cause fix is committed locally at `45cfdaf14`, rebased onto current `main`.
-Typecheck exits 0; the 16 focused unit tests and 18 fresh-database integration tests pass. Nothing
-has been pushed or merged. The mandatory runtime-context browser UAT never reached its assertions:
-its Docker image build exceeded the agreed 20-minute timeout. Earlier attempts also stopped in the
-image-build phase, first because inactive Docker cache filled `/`; the coordinator reclaimed only
-that disposable cache (51.12 GB), leaving active containers, images, volumes, and source intact.
-
-**Decision:** authorize one single longer UAT (recommended: 45-minute hard timeout), or keep PR
-#1775 blocked and unmerged. The #1027 rule does not permit silently skipping this check.
-
-**Recommendation:** allow the one 45-minute run. The focused code checks are green, the failure is
-entirely before browser execution, and the longer cap matches this box's current cold image-build
-time without opening a retry loop.
-
 <!-- Resolved 2026-08-19: PR #1703 (calendar rebuild) and PR #1717 (all-day scheduling) both merged.
 Ben ruled "let's just merge all of these, I'll test in prod" — live-path proof on the dev instance
 is no longer the gate for this batch. -->
