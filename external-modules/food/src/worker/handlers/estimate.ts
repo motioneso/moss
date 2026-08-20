@@ -21,9 +21,8 @@ import type { ModuleWorkerContext } from "@moss/module-sdk/worker";
 import { estimateFromDescription } from "../../estimator/run.js";
 import { sqlStore } from "../../store/sql.js";
 
-/** food.settings (manifest storage[0].namespace), user scope, key "consent". */
-const CONSENT_NAMESPACE = "food.settings";
-const CONSENT_KEY = "consent";
+/** #1750 — manifest preference key, declared with `default: true` in jarvis.module.json. */
+const AI_ESTIMATES_PREFERENCE = "aiEstimates";
 
 interface EstimateRunParams {
   readonly mealId: string;
@@ -51,16 +50,16 @@ function readParams(input: Record<string, unknown>): EstimateRunParams {
   return { mealId, revision };
 }
 
-async function hasGrantedConsent(ctx: ModuleWorkerContext): Promise<boolean> {
-  const record = await ctx.kv.get("user", CONSENT_NAMESPACE, CONSENT_KEY);
-  return record !== null && record["granted"] === true;
+/** Strict `!== false` so an unresolved key estimates, matching the manifest default. */
+function aiEstimatesEnabled(ctx: ModuleWorkerContext): boolean {
+  return ctx.preferences[AI_ESTIMATES_PREFERENCE] !== false;
 }
 
 /**
  * The estimate.run handler. Every branch that does nothing (meal gone,
- * stale revision, consent not granted) returns a status string rather than
+ * stale revision, estimation switched off) returns a status string rather than
  * throwing — none of these are failures, they are the ordinary outcomes the
- * stale-revision guard (constraint 5) and consent gate (constraint 4) exist
+ * stale-revision guard (constraint 5) and estimation gate (constraint 4) exist
  * to produce.
  */
 export async function runEstimate(
@@ -80,14 +79,14 @@ export async function runEstimate(
     return { status: "no-op", reason: "stale_revision" };
   }
 
-  // Consent gate (constraint 4), checked BEFORE any provider call. The
+  // Estimation gate (constraint 4), checked BEFORE any provider call. The
   // meal's estimate_state is left exactly as it was (createMeal sets
-  // 'pending') — this handler makes no write at all when consent is
-  // ungranted, which is what "no provider call" has to mean structurally:
+  // 'pending') — this handler makes no write at all when estimation is
+  // switched off, which is what "no provider call" has to mean structurally:
   // recordEstimate is what WOULD move estimate_state off 'pending', so
   // simply not calling it is the whole guard.
-  if (!(await hasGrantedConsent(ctx))) {
-    return { status: "no-op", reason: "consent_not_granted" };
+  if (!aiEstimatesEnabled(ctx)) {
+    return { status: "no-op", reason: "ai_estimates_disabled" };
   }
 
   // servingNote is now persisted on Meal (store/sql.ts's CreateMealInput/Meal, team-lead ruling

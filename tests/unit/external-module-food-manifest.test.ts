@@ -31,25 +31,45 @@ describe("food manifest contract (#926 plan §4 Task 7)", () => {
     expect(tools.map((tool) => [tool.name, tool.handler])).toEqual([
       ["food.meals.list", "meals.list"],
       ["food.meals.summarize", "meals.summarize"],
-      ["food.consent.get", "consent.get"],
       ["food.meals.log", "meals.log"],
       ["food.meals.reestimate", "meals.reestimate"],
       ["food.meals.correct", "meals.correct"],
-      ["food.consent.grant", "consent.grant"],
       ["food.meals.delete", "meals.delete"]
     ]);
     const riskOf = Object.fromEntries(tools.map((tool) => [tool.name, tool.risk]));
     expect(riskOf["food.meals.list"]).toBe("read");
     expect(riskOf["food.meals.summarize"]).toBe("read");
-    expect(riskOf["food.consent.get"]).toBe("read");
     expect(riskOf["food.meals.log"]).toBe("write");
     expect(riskOf["food.meals.reestimate"]).toBe("write");
     expect(riskOf["food.meals.correct"]).toBe("write");
-    expect(riskOf["food.consent.grant"]).toBe("write");
     // Behaviour 12 (lifecycle) needs the real platform install/enable/disable contract to
     // fully verify, but this line is the manifest-side guarantee that deleting a meal is
     // gated as destructive, not merely a write — self-operation always confirms.
     expect(riskOf["food.meals.delete"]).toBe("destructive");
+  });
+
+  it("declares aiEstimates as an on-by-default switch and exposes no consent tool (#1750)", () => {
+    const manifest = loadManifest();
+    // Default true is the whole ruling: installing Food is consent for Food's normal
+    // functionality. A declaration defaulting to false would reintroduce the consent prompt
+    // through a different door, and every existing user would silently stop getting estimates.
+    expect(manifest.preferences).toEqual([
+      {
+        key: "aiEstimates",
+        label: "Estimate nutrition with AI",
+        description:
+          "Send meal descriptions to your configured AI model to estimate calories and nutrients. Turn off to log meals without any estimate.",
+        type: "boolean",
+        default: true
+      }
+    ]);
+
+    // Removing the tools from the UI is not enough — a tool left in assistantTools stays
+    // callable by the model, so the prompt comes back the moment the model decides to ask.
+    const tools = manifest.assistantTools as Array<Record<string, unknown>>;
+    expect(tools.filter((tool) => String(tool.name).startsWith("food.consent"))).toEqual([]);
+    const families = manifest.assistantActionFamilies as Array<Record<string, unknown>>;
+    expect(families.map((family) => family.id)).toEqual(["meal_logging"]);
   });
 
   it("food.meals.log requires description and idempotencyKey — the wiring assertion's schema half", () => {

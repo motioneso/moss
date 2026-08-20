@@ -5,7 +5,7 @@
 // the invoke contract carries its payload
 // ({invocation:{blockedReason,...}}) on 403, and requestJson throws away
 // non-2xx bodies. Only risk:read tools are ever invoked from this page
-// (food.meals.list, food.meals.summarize, food.consent.get) — this page
+// (food.meals.list, food.meals.summarize) — this page
 // never calls a write or destructive tool, so there is no manual-run queue
 // helper here (contrast finance's runQueue).
 export type ToolOutcome<T> =

@@ -1,7 +1,7 @@
 // external-modules/food/src/worker/registry.ts
 //
 // Food Phase 1 (#926, #1701): the ONE handler-key -> handler map, serving both the queue job
-// (estimate.run) and every assistant-tool invocation (food.meals.*, food.consent.*) — confirmed
+// (estimate.run) and every assistant-tool invocation (food.meals.*) — confirmed
 // against finance's precedent (external-modules/finance/src/worker/registry.ts:28): one worker
 // subprocess, one defineModuleWorker registry, a manifest assistantTools[].handler key is just
 // another key in the same map a queue handler key lives in. Split out of index.ts because
@@ -14,7 +14,6 @@
 // closure once per process and does not fit a per-call-only store).
 import type { ModuleWorkerContext } from "@moss/module-sdk/worker";
 
-import { consentHandlers } from "../tools/consent.js";
 import {
   createMealsCorrectHandler,
   createMealsDeleteHandler,
@@ -39,6 +38,5 @@ export const HANDLERS: Readonly<Record<string, Handler>> = {
   "meals.log": (ctx) => createMealsLogHandler(storeFrom(ctx))(ctx),
   "meals.correct": (ctx) => createMealsCorrectHandler(storeFrom(ctx))(ctx),
   "meals.reestimate": (ctx) => createMealsReestimateHandler(storeFrom(ctx))(ctx),
-  "meals.delete": (ctx) => createMealsDeleteHandler(storeFrom(ctx))(ctx),
-  ...consentHandlers
+  "meals.delete": (ctx) => createMealsDeleteHandler(storeFrom(ctx))(ctx)
 };

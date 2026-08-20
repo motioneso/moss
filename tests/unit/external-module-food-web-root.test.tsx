@@ -71,22 +71,20 @@ interface ListPayload {
     incomplete: boolean;
     mealsWithoutEstimate: number;
   } | null;
+  aiEstimates?: boolean;
 }
 
-let listPayload: ListPayload = { meals: [], totals: null };
+let listPayload: ListPayload = { meals: [], totals: null, aiEstimates: true };
 let listCalls = 0;
 
 beforeEach(() => {
   listCalls = 0;
-  listPayload = { meals: [], totals: null };
+  listPayload = { meals: [], totals: null, aiEstimates: true };
   mockInvokeTool.mockReset();
   mockInvokeTool.mockImplementation(async (name: string) => {
     if (name === "food.meals.list") {
       listCalls += 1;
       return { kind: "ok", result: listPayload };
-    }
-    if (name === "food.consent.get") {
-      return { kind: "ok", result: { granted: true, grantedAt: "2026-08-19T00:00:00.000Z" } };
     }
     return { kind: "error", message: `unexpected tool ${name}` };
   });
@@ -97,7 +95,7 @@ async function render(): Promise<ReactTestRenderer> {
   await act(async () => {
     renderer = create(createElement(Root));
   });
-  // Two flushes: the meals query and the consent query settle independently.
+  // Several flushes: the meals query settles across more than one microtask tick.
   for (let i = 0; i < 3; i += 1) {
     await act(async () => {
       await Promise.resolve();
@@ -371,5 +369,30 @@ describe("groupByOccasion (#1737)", () => {
     // An empty "Dinner" header above nothing reads as a missing meal rather than as a day that
     // is not over yet.
     expect(groups.map((group) => group.occasion)).toEqual(["breakfast", "snack"]);
+  });
+});
+
+describe("AI-estimates note (#1750)", () => {
+  it("says nothing when estimates are on — a permanent 'on' badge is a nag, not information", async () => {
+    listPayload = { meals: [], totals: null, aiEstimates: true };
+    const text = flatten((await render()).toJSON());
+    expect(text).not.toContain("Nutrition estimates are off");
+  });
+
+  it("explains the missing numbers when estimates are off, and names where to turn them on", async () => {
+    listPayload = { meals: [], totals: null, aiEstimates: false };
+    const text = flatten((await render()).toJSON());
+    // Without this the page shows meals with permanently blank nutrition and no reason why,
+    // which reads as the estimator being broken rather than as a setting the user chose.
+    expect(text).toContain("Nutrition estimates are off");
+    expect(text).toContain("Settings");
+  });
+
+  it("stays silent when the flag is absent, rather than claiming estimates are off", async () => {
+    // An older installed module build returns a list result without the field. Treating that
+    // as "off" would tell every such user their estimates are disabled when they are not.
+    listPayload = { meals: [], totals: null };
+    const text = flatten((await render()).toJSON());
+    expect(text).not.toContain("Nutrition estimates are off");
   });
 });
