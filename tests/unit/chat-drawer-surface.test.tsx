@@ -529,4 +529,62 @@ describe("ChatDrawer surface routing (#1533)", () => {
     expect(findByAriaLabel(rendererB, "Start private chat")).toBeNull();
     expect(findByAriaLabel(rendererB, "Hide chat history")).toBeNull();
   });
+
+  // #1780. The drawer seeds private mode from the server on open, and the toggle sets it from what
+  // the user just did. Nothing ordered the two, so a privacy response still in flight when the user
+  // pressed the button landed second and wrote its stale "not private" over a session that had
+  // already gone private — the drawer then said "not private" about a private session, which is the
+  // one direction this control must never be wrong in.
+  //
+  // The ordering used to depend on which microtask the query happened to settle in, which is why it
+  // failed roughly one CI run in ten and never locally. Here the response is held open deliberately
+  // and released after the click, so a regression fails every run rather than one in ten.
+  it("keeps private mode on when a privacy response arrives after the user turned it on", async () => {
+    let releasePrivacy!: (state: { incognito: boolean }) => void;
+    vi.mocked(getChatPrivacyState).mockImplementationOnce(
+      () =>
+        new Promise<{ incognito: boolean }>((resolve) => {
+          releasePrivacy = resolve;
+        })
+    );
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const renderer = await mountWithClient(client, DEFAULT_CHAT_SURFACE, vi.fn());
+
+    // The user turns private mode on while the privacy fetch is still outstanding.
+    await act(async () => {
+      findByAriaLabel(renderer, "Start private chat")?.props.onClick();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(findByAriaLabel(renderer, "Start private chat")?.props["aria-pressed"]).toBe(true);
+
+    // Now the stale answer comes back saying the session is not private. It must not win.
+    // Flushed with a macrotask, not a couple of microtask drains: react-query notifies through its
+    // own scheduler, so a microtask-only drain returns before the effect that would clobber the flag
+    // has run, and the test would pass without ever exercising the race.
+    await act(async () => {
+      releasePrivacy({ incognito: false });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(findByAriaLabel(renderer, "Start private chat")?.props["aria-pressed"]).toBe(true);
+  });
+
+  // The other half of the same rule: seeding still has to work when the user has done nothing, or a
+  // reload during a private session would come back showing the session as ordinary.
+  it("still seeds private mode from the server when the user has not touched the toggle", async () => {
+    vi.mocked(getChatPrivacyState).mockImplementationOnce(async () => ({ incognito: true }));
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const renderer = await mountWithClient(client, DEFAULT_CHAT_SURFACE, vi.fn());
+    // A macrotask rather than the usual pair of microtask drains: the seeded value has to travel
+    // query -> effect -> re-render, and counting ticks is exactly the guesswork that made this file
+    // flaky in the first place.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(findByAriaLabel(renderer, "Start private chat")?.props["aria-pressed"]).toBe(true);
+  });
 });
