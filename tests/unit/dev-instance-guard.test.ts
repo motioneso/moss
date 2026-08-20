@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   assertDevEnvParity,
   assertTargetIsDevInstance,
+  DEV_INSTANCE_MIGRATION_PORTS,
   DevEnvParityError,
   NotDevInstanceError
 } from "../../scripts/dev-instance/guard.js";
@@ -33,6 +34,30 @@ describe("assertTargetIsDevInstance", () => {
 
   it("accepts the real dev app URL", () => {
     expect(() => assertTargetIsDevInstance(DEV_APP_URL)).not.toThrow();
+  });
+
+  it("with the migration port allowlist, still rejects a database name off the allowlist", () => {
+    expect(() =>
+      assertTargetIsDevInstance(
+        "postgres://jarvis_migration_owner:pw@postgres:5432/some_other_db",
+        DEV_INSTANCE_MIGRATION_PORTS
+      )
+    ).toThrow(NotDevInstanceError);
+  });
+
+  it("with the migration port allowlist, accepts the in-container migration URL on port 5432", () => {
+    expect(() =>
+      assertTargetIsDevInstance(
+        "postgres://jarvis_migration_owner:pw@postgres:5432/jarv1s",
+        DEV_INSTANCE_MIGRATION_PORTS
+      )
+    ).not.toThrow();
+  });
+
+  it("without the migration port allowlist, still rejects port 5432 (default allowlist unchanged)", () => {
+    expect(() =>
+      assertTargetIsDevInstance("postgres://user:pw@localhost:5432/jarv1s")
+    ).toThrow(NotDevInstanceError);
   });
 });
 
@@ -81,5 +106,36 @@ describe("runDevInstanceCli guard ordering", () => {
 
     expect(exitCode).not.toBe(0);
     expect(messages.some((message) => message.includes("NODE_ENV"))).toBe(true);
+  });
+
+  // #1258 QA finding: the app URL was guarded but the migration-owner URL (which runs every
+  // doctor read and the CLI's only DELETE) was not, so a shell with JARVIS_MIGRATION_DATABASE_URL
+  // pointing off-box could pass the app guard and still touch the wrong database. Prove the
+  // migration URL is rejected before any handle opens, using an unreachable host so a hang or a
+  // connection error (rather than a prompt guard rejection) would fail this test.
+  it("rejects a divergent JARVIS_MIGRATION_DATABASE_URL before any database handle opens", async () => {
+    // JARVIS_PGHOST/PGPORT are deliberately left unset so urls.app resolves to the ordinary
+    // localhost:55433 default (passing the app guard) and isolates this test to the migration
+    // guard specifically — only JARVIS_MIGRATION_DATABASE_URL diverges, pointing off-box.
+    const divergentMigrationEnv: NodeJS.ProcessEnv = {
+      JARVIS_MIGRATION_DATABASE_URL:
+        "postgres://jarvis_migration_owner:pw@203.0.113.5:5432/some_other_db"
+    };
+
+    const messages: string[] = [];
+    const originalError = console.error;
+    console.error = (message: string) => {
+      messages.push(message);
+    };
+
+    let exitCode: number;
+    try {
+      exitCode = await runDevInstanceCli(["doctor"], divergentMigrationEnv);
+    } finally {
+      console.error = originalError;
+    }
+
+    expect(exitCode).not.toBe(0);
+    expect(messages.some((message) => message.includes("refusing"))).toBe(true);
   });
 });

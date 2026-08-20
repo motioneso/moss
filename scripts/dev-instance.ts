@@ -16,7 +16,11 @@ import { AiAutoRegisterService, AiRepository, createAiSecretCipher } from "@moss
 import { createDatabase, DataContextRunner, getMossDatabaseUrls } from "@moss/db";
 import { getBuiltInSqlMigrationDirectories } from "@moss/module-registry";
 
-import { assertDevEnvParity, assertTargetIsDevInstance } from "./dev-instance/guard.js";
+import {
+  assertDevEnvParity,
+  assertTargetIsDevInstance,
+  DEV_INSTANCE_MIGRATION_PORTS
+} from "./dev-instance/guard.js";
 import { readDevInstanceConfig } from "./dev-instance/config.js";
 import { readSecretFile, withDecryptedSecret } from "./dev-instance/secrets.js";
 import { formatDoctorReport, runDoctor, type DoctorDeps } from "./dev-instance/doctor.js";
@@ -66,6 +70,7 @@ export async function runDevInstanceCli(
 
   try {
     assertTargetIsDevInstance(urls.app);
+    assertTargetIsDevInstance(urls.migration, DEV_INSTANCE_MIGRATION_PORTS);
   } catch (error) {
     console.error((error as Error).message);
     return 1;

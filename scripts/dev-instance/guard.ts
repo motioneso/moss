@@ -12,6 +12,9 @@
 
 export const DEV_INSTANCE_DATABASE_NAMES: readonly string[] = ["jarv1s"];
 export const DEV_INSTANCE_PORTS: readonly string[] = ["55433"];
+// The migration-owner URL uses the in-container port when the CLI runs inside the dev-instance
+// container itself (see tests/uat/provisioner.ts) rather than the host-mapped port above.
+export const DEV_INSTANCE_MIGRATION_PORTS: readonly string[] = ["55433", "5432"];
 
 export class NotDevInstanceError extends Error {
   constructor(reason: string) {
@@ -30,7 +33,10 @@ export class DevEnvParityError extends Error {
   }
 }
 
-export function assertTargetIsDevInstance(connectionString: string): void {
+export function assertTargetIsDevInstance(
+  connectionString: string,
+  allowedPorts: readonly string[] = DEV_INSTANCE_PORTS
+): void {
   if (!connectionString) {
     throw new NotDevInstanceError("empty connection string");
   }
@@ -47,7 +53,7 @@ export function assertTargetIsDevInstance(connectionString: string): void {
     throw new NotDevInstanceError(`database name "${databaseName}" is not on the allowlist`);
   }
 
-  if (!DEV_INSTANCE_PORTS.includes(url.port)) {
+  if (!allowedPorts.includes(url.port)) {
     throw new NotDevInstanceError(`port "${url.port}" is not on the allowlist`);
   }
 }
