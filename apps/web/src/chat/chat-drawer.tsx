@@ -76,6 +76,20 @@ export function ChatDrawer(props: {
   const [activatingPrivate, setActivatingPrivate] = useState(false);
   const [privateActivationError, setPrivateActivationError] = useState<string | null>(null);
 
+  /**
+   * #1780: two things write `privateMode` — the query below, which seeds it from the server when the
+   * drawer opens, and the local handlers, which set it from what the user just did. Nothing ordered
+   * them. A privacy response still in flight when the user pressed the toggle landed second and wrote
+   * its now-stale `incognito: false` over a session that had already been switched to private, so the
+   * drawer showed "not private" for a session the server considered private. That is the one direction
+   * this flag must never be wrong in.
+   *
+   * The user's action wins. Once anything local has decided the flag for this surface, seeding stops
+   * applying; a surface change clears it, because the new surface has its own server truth to seed
+   * from and none of the old surface's decisions carry over.
+   */
+  const privateModeDecidedLocally = useRef(false);
+
   const privacyStateQuery = useQuery({
     queryKey: queryKeys.chat.privacy(props.surface),
     queryFn: () => getChatPrivacyState(props.surface),
@@ -84,6 +98,7 @@ export function ChatDrawer(props: {
 
   useEffect(() => {
     if (!privacyStateQuery.isSuccess) return;
+    if (privateModeDecidedLocally.current) return;
     setPrivateMode(privacyStateQuery.data.incognito);
   }, [privacyStateQuery.isSuccess, privacyStateQuery.data]);
 
@@ -120,6 +135,7 @@ export function ChatDrawer(props: {
       setShowHistory(false);
       // #1090: resumed threads are always non-incognito (ChatRepository.listThreads filters
       // `incognito = false`) — clear the stale privateMode/privateEnded flags to match server truth.
+      privateModeDecidedLocally.current = true;
       setPrivateMode(false);
       setPrivateEnded(false);
     },
@@ -171,6 +187,8 @@ export function ChatDrawer(props: {
   // #1533: switching surfaces (e.g. drawer <-> module-embedded chat) must not leak state from the
   // previous surface — reset all locally-derived state unconditionally on every surface change.
   useEffect(() => {
+    // #1780: the new surface has its own server truth, so let the privacy query seed it again.
+    privateModeDecidedLocally.current = false;
     setFallbackRecords([]);
     setPendingUser(null);
     setPrivateMode(false);
@@ -365,6 +383,7 @@ export function ChatDrawer(props: {
     setDrainAfterStopText(null);
     setPendingUser(null);
     setFallbackRecords([]);
+    privateModeDecidedLocally.current = true;
     setPrivateMode(false);
     setPrivateEnded(false);
     void clearChat({ surface: props.surface });
@@ -391,6 +410,9 @@ export function ChatDrawer(props: {
     setPrivateEnded(false);
     setPrivateActivationError(null);
     setActivatingPrivate(true);
+    // #1780: claimed at the click, not when the request comes back — the whole point is to outrank a
+    // privacy response that was already in flight before the user asked for a private chat.
+    privateModeDecidedLocally.current = true;
     const initiatingSurface = props.surface;
     void (async () => {
       try {
@@ -416,6 +438,7 @@ export function ChatDrawer(props: {
   };
 
   const closePrivateChat = () => {
+    privateModeDecidedLocally.current = true;
     setPrivateMode(false);
     setPrivateEnded(false);
     props.clearRecords();
