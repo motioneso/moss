@@ -15,6 +15,7 @@ import {
   runDoctor,
   type DoctorDeps
 } from "../../scripts/dev-instance/doctor.js";
+import { runFix } from "../../scripts/dev-instance/fix.js";
 import type { DevInstanceConfig } from "../../scripts/dev-instance/config.js";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID } from "../uat/seed/admin.js";
 import { connectionStrings, resetEmptyFoundationDatabase } from "./test-database.js";
@@ -311,6 +312,81 @@ describe("dev-instance doctor (#1258)", () => {
         const check = report.checks.find((c) => c.id === id);
         expect(check?.ok).toBe(false);
         expect(check?.detail).toContain("active-instance-admin check must pass");
+      }
+    });
+  });
+
+  // T21 — runFix acts only on defects the report actually names.
+  describe("runFix", () => {
+    it("flags exactly one provider default when two active providers exist and none is flagged", async () => {
+      await insertUser(ADMIN_ID, ADMIN_EMAIL, { isInstanceAdmin: true, status: "active" });
+      await runner.withDataContext({ actorUserId: ADMIN_ID }, async (scopedDb) => {
+        await repository.createProvider(scopedDb, {
+          providerKind: "openai-compatible",
+          displayName: "Provider One",
+          encryptedCredential: createAiSecretCipher().encryptJson({ apiKey: "secret-one" })
+        });
+        await repository.createProvider(scopedDb, {
+          providerKind: "openai-compatible",
+          displayName: "Provider Two",
+          encryptedCredential: createAiSecretCipher().encryptJson({ apiKey: "secret-two" })
+        });
+      });
+
+      const report = await runDoctor(deps());
+      const before = report.checks.find((c) => c.id === "single-instance-default-provider");
+      expect(before?.ok).toBe(false);
+
+      const outcomes = await runFix(deps(), report);
+      const flagOutcome = outcomes.find((o) => o.id === "flag-instance-default");
+      expect(flagOutcome?.changed).toBe(true);
+
+      const after = await runDoctor(deps());
+      const afterCheck = after.checks.find((c) => c.id === "single-instance-default-provider");
+      expect(afterCheck?.ok).toBe(true);
+    });
+
+    it("purges UAT fixture rows and clears the check afterward", async () => {
+      await insertUser(UAT_ADMIN_ID, UAT_ADMIN_EMAIL, { isInstanceAdmin: true, status: "active" });
+
+      const report = await runDoctor(deps());
+      const before = report.checks.find((c) => c.id === "no-uat-fixture-rows");
+      expect(before?.ok).toBe(false);
+
+      const outcomes = await runFix(deps(), report);
+      const purgeOutcome = outcomes.find((o) => o.id === "purge-uat-fixture-rows");
+      expect(purgeOutcome?.changed).toBe(true);
+
+      const after = await runDoctor(deps());
+      const afterCheck = after.checks.find((c) => c.id === "no-uat-fixture-rows");
+      expect(afterCheck?.ok).toBe(true);
+    });
+
+    it("writes nothing and reports changed:false for every outcome on a healthy database", async () => {
+      await insertUser(ADMIN_ID, ADMIN_EMAIL, { isInstanceAdmin: true, status: "active" });
+      await runner.withDataContext({ actorUserId: ADMIN_ID }, async (scopedDb) => {
+        const provider = await repository.createProvider(scopedDb, {
+          providerKind: "openai-compatible",
+          displayName: "Provider One",
+          encryptedCredential: createAiSecretCipher().encryptJson({ apiKey: "secret-one" })
+        });
+        await repository.setInstanceDefaultProvider(scopedDb, provider.id);
+        await repository.createModel(scopedDb, {
+          providerConfigId: provider.id,
+          providerModelId: "chat-model",
+          displayName: "Chat Model",
+          capabilities: ["chat"]
+        });
+      });
+
+      const report = await runDoctor(deps());
+      expect(report.checks.find((c) => c.id === "single-instance-default-provider")?.ok).toBe(true);
+      expect(report.checks.find((c) => c.id === "no-uat-fixture-rows")?.ok).toBe(true);
+
+      const outcomes = await runFix(deps(), report);
+      expect(outcomes.length).toBeGreaterThan(0);
+      for (const outcome of outcomes) {
+        expect(outcome.changed).toBe(false);
       }
     });
   });

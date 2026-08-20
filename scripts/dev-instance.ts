@@ -20,6 +20,7 @@ import { assertDevEnvParity, assertTargetIsDevInstance } from "./dev-instance/gu
 import { readDevInstanceConfig } from "./dev-instance/config.js";
 import { readSecretFile, withDecryptedSecret } from "./dev-instance/secrets.js";
 import { formatDoctorReport, runDoctor, type DoctorDeps } from "./dev-instance/doctor.js";
+import { runFix } from "./dev-instance/fix.js";
 import { runProvision, type ProvisionDeps } from "./dev-instance/provision.js";
 import { signUpBootstrapOwner } from "./dev-instance/signup.js";
 import { ensureCliRunnerRunning } from "./dev-instance/cli-runner.js";
@@ -118,8 +119,15 @@ export async function runDevInstanceCli(
         return 0;
       }
 
-      // "fix" is wired in T21, once scripts/dev-instance/fix.ts exists.
-      case "fix":
+      case "fix": {
+        const report = await runDoctor(doctorDeps);
+        const outcomes = await runFix(doctorDeps, report);
+        for (const outcome of outcomes) {
+          console.log(`${outcome.id}: ${outcome.changed ? "changed" : "unchanged"} — ${outcome.detail}`);
+        }
+        return 0;
+      }
+
       case "providers":
       case "reset":
         console.error(`the "${command}" command is deferred to a later phase — not implemented yet`);
