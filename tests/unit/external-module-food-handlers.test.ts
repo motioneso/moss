@@ -1,7 +1,7 @@
 // tests/unit/external-module-food-handlers.test.ts
 //
 // Food Phase 1 (#926, #1701, plan §4 Task 7): the tools/worker handler layer
-// (external-modules/food/src/tools/meals.ts, src/tools/consent.ts,
+// (external-modules/food/src/tools/meals.ts,
 // src/worker/handlers/estimate.ts) exercised against a FakeFoodStore (implements the
 // FoodStore interface's documented CAS/idempotency contract in memory) and fake
 // kv/ai ports matching ModuleWorkerContext's structural shape — no db, no real SQL.
@@ -11,7 +11,7 @@
 //   2  Idempotent create — a retry never re-triggers estimation (handler-level half;
 //      store-level half is in external-module-food-store.test.ts)
 //   7  Stale revision rejected — handler propagates the store's null correctly
-//   8  Consent gate BEFORE any provider call
+//   8  AI-estimates gate BEFORE any provider call (#1750)
 //   9  Two-actor privacy — cannot verify RLS here (needs real Postgres); handlers never
 //      accept a caller-supplied owner id is asserted structurally (no ownerUserId/actorUserId
 //      read anywhere in tools/meals.ts — grep assertion below)
@@ -31,7 +31,6 @@ import {
   createMealsLogHandler,
   createMealsReestimateHandler
 } from "../../external-modules/food/src/tools/meals.js";
-import { getConsent, grantConsent } from "../../external-modules/food/src/tools/consent.js";
 import { runEstimate } from "../../external-modules/food/src/worker/handlers/estimate.js";
 import type {
   CorrectMealItemPatch,
@@ -163,8 +162,8 @@ function nullNutrients(): Nutrients {
   };
 }
 
-/** Fake kv keyed by `${scope}:${namespace}:${key}` — enough for consent.ts + meals.ts's
- * hasGrantedConsent, which are the only kv calls this handler layer makes. */
+/** Fake kv keyed by `${scope}:${namespace}:${key}`. Retained for handlers that still use module
+ * storage; the AI-estimates gate reads ctx.preferences, not kv (#1750). */
 function fakeKv() {
   const store = new Map<string, Record<string, unknown>>();
   const kv = {
@@ -197,9 +196,12 @@ function baseCtx(overrides: {
   input?: Record<string, unknown>;
   kv?: ReturnType<typeof fakeKv>;
   ai?: ReturnType<typeof fakeAi>;
+  /** #1750 — omit to model "user has never touched the switch", which must estimate. */
+  preferences?: Record<string, boolean>;
 }) {
   return {
     input: overrides.input ?? {},
+    preferences: overrides.preferences ?? {},
     deadlineAt: Date.now() + 30_000,
     auth: { getCredential: vi.fn(), setCredential: vi.fn() },
     fetch: vi.fn(),
@@ -212,32 +214,25 @@ function baseCtx(overrides: {
   } as unknown as Parameters<ReturnType<typeof createMealsLogHandler>>[0];
 }
 
-async function grantConsentFor(kv: ReturnType<typeof fakeKv>) {
-  await kv.set("user", "food.settings", "consent", {
-    granted: true,
-    grantedAt: "2026-07-18T00:00:00.000Z"
-  });
-}
-
 // ── Tests ────────────────────────────────────────────────────────────────
 
-describe("food.meals.log — test 8: consent gate before any provider call", () => {
-  it("consent ungranted: meal saves pending, ai.generateStructured is never called", async () => {
+describe("food.meals.log — test 8: AI-estimates gate before any provider call (#1750)", () => {
+  it("switch off: meal saves pending, ai.generateStructured is never called", async () => {
     const store = fakeStore();
     const ai = fakeAi(() => ({ ok: true, object: {} }));
     const ctx = baseCtx({
       input: { description: "a bowl of oatmeal", idempotencyKey: "idem-1" },
-      ai
+      ai,
+      preferences: { aiEstimates: false }
     });
     const result = await createMealsLogHandler(store)(ctx);
     expect(result.meal.estimateState).toBe("pending");
     expect(ai.generateStructured).not.toHaveBeenCalled();
   });
 
-  it("consent granted: the provider is called and the estimate is recorded", async () => {
+  it("switch untouched: the provider is called, because the manifest default is on", async () => {
     const store = fakeStore();
     const kv = fakeKv();
-    await grantConsentFor(kv);
     const ai = fakeAi(() => ({
       ok: true,
       object: {
@@ -275,7 +270,6 @@ describe("food.meals.log — test 1: meal persists before/despite estimation fai
   it("a typed provider error still leaves the meal persisted, now 'failed'", async () => {
     const store = fakeStore();
     const kv = fakeKv();
-    await grantConsentFor(kv);
     const ai = fakeAi(() => ({ ok: false, error: "provider_error" }));
     const ctx = baseCtx({
       input: { description: "a bowl of oatmeal", idempotencyKey: "idem-1" },
@@ -295,7 +289,6 @@ describe("food.meals.log — test 1: meal persists before/despite estimation fai
     // even attempted — so even though this call rejects, the meal is not lost.
     const store = fakeStore();
     const kv = fakeKv();
-    await grantConsentFor(kv);
     const ai = {
       generateStructured: vi.fn(async () => {
         throw new Error("network blip");
@@ -317,7 +310,6 @@ describe("food.meals.log — test 2 (handler half): idempotent create never doub
   it("a retry with the same idempotencyKey returns the existing row and does not call ai again", async () => {
     const store = fakeStore();
     const kv = fakeKv();
-    await grantConsentFor(kv);
     let calls = 0;
     const ai = fakeAi(() => {
       calls += 1;
@@ -373,33 +365,11 @@ describe("food.meals.reestimate / worker estimate.run — test 7: stale revision
       clarificationQuestion: null
     });
     const kv = fakeKv();
-    await grantConsentFor(kv);
     const ai = fakeAi(() => ({ ok: true, object: {} }));
     const ctx = baseCtx({ input: { mealId: "meal-1" }, kv, ai });
     const result = await createMealsReestimateHandler(store)(ctx);
     expect(result.meal.estimateState).toBe("estimated");
     expect(ai.generateStructured).not.toHaveBeenCalled(); // already estimated: no re-roll
-  });
-});
-
-describe("food.consent (test 8's source of truth)", () => {
-  it("consent.get reads what consent.grant wrote", async () => {
-    const kv = fakeKv();
-    const grantCtx = baseCtx({ input: { granted: true }, kv });
-    const granted = await grantConsent(grantCtx);
-    expect(granted.granted).toBe(true);
-    expect(typeof granted.grantedAt).toBe("string");
-
-    const readCtx = baseCtx({ input: {}, kv });
-    const state = await getConsent(readCtx);
-    expect(state).toEqual(granted);
-  });
-
-  it("revoking sets grantedAt back to null", async () => {
-    const kv = fakeKv();
-    await grantConsent(baseCtx({ input: { granted: true }, kv }));
-    const revoked = await grantConsent(baseCtx({ input: { granted: false }, kv }));
-    expect(revoked).toEqual({ granted: false, grantedAt: null });
   });
 });
 
@@ -420,7 +390,7 @@ describe("food.meals.list — test 14: empty day names its date (handler-level)"
 });
 
 describe("worker estimate.run handler (queue retry path)", () => {
-  it("consent gate is checked before any provider call here too", async () => {
+  it("the estimates switch is checked before any provider call here too (#1750)", async () => {
     const store = fakeStore();
     const meal = await store.createMeal({
       mealId: "meal-1",
@@ -432,7 +402,7 @@ describe("worker estimate.run handler (queue retry path)", () => {
       captureKind: "text",
       idempotencyKey: "idem-1"
     });
-    const kv = fakeKv(); // consent NOT granted
+    const kv = fakeKv();
     const ai = fakeAi(() => ({ ok: true, object: {} }));
     const db = {
       query: vi.fn(async (text: string, params: readonly unknown[] = []) => {
@@ -477,10 +447,15 @@ describe("worker estimate.run handler (queue retry path)", () => {
         throw new Error(`unexpected query: ${text}`);
       })
     };
-    const ctx = baseCtx({ input: { mealId: meal.mealId, revision: 1 }, kv, ai });
+    const ctx = baseCtx({
+      input: { mealId: meal.mealId, revision: 1 },
+      kv,
+      ai,
+      preferences: { aiEstimates: false }
+    });
     (ctx as unknown as { db: typeof db }).db = db;
     const result = await runEstimate(ctx);
-    expect(result).toEqual({ status: "no-op", reason: "consent_not_granted" });
+    expect(result).toEqual({ status: "no-op", reason: "ai_estimates_disabled" });
     expect(ai.generateStructured).not.toHaveBeenCalled();
   });
 });

@@ -13,7 +13,6 @@
 // spells them — never the food.-prefixed tool NAME.
 import type { ModuleWorkerContext } from "@moss/module-sdk/worker";
 
-import { consentHandlers } from "./consent.js";
 import {
   createMealsCorrectHandler,
   createMealsDeleteHandler,
@@ -34,6 +33,5 @@ export const FOOD_TOOL_HANDLERS: Readonly<Record<string, CtxHandler>> = {
   "meals.summarize": (ctx) => createMealsSummarizeHandler(storeFrom(ctx))(ctx),
   "meals.log": (ctx) => createMealsLogHandler(storeFrom(ctx))(ctx),
   "meals.correct": (ctx) => createMealsCorrectHandler(storeFrom(ctx))(ctx),
-  "meals.delete": (ctx) => createMealsDeleteHandler(storeFrom(ctx))(ctx),
-  ...consentHandlers
+  "meals.delete": (ctx) => createMealsDeleteHandler(storeFrom(ctx))(ctx)
 };

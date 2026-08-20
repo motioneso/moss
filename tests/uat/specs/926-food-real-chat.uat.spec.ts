@@ -16,9 +16,8 @@ import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 // Food splits its write tools deliberately, and this spec asserts BOTH halves:
 //   - meals.log / .correct / .reestimate declare selfOperationGrant "granted_at_install", so
 //     resolvePolicy returns "run" and they must NOT interrupt with a card (policy.ts:29-57).
-//   - consent.grant and the destructive meals.delete declare "confirm_always", so they must
-//     always raise a card — and for delete no grant or promotion can ever skip it
-//     (policy.ts:36).
+//   - the destructive meals.delete declares "confirm_always", so it must always raise a card,
+//     and no grant or promotion can ever skip it (policy.ts:36).
 //
 // This spec closes that gap the same way real-chat-onboarding.uat.spec.ts does: it runs only
 // when the operator supplied a real Anthropic token (JARVIS_UAT_REAL_CHAT_TOKEN_FILE), drives
@@ -176,73 +175,11 @@ async function sendAutoRun(page: Page, text: string): Promise<void> {
   ).toBe(0);
 }
 
-// For a tool that must always ask (food.consent.grant and food.meals.delete declare
-// selfOperationGrant "confirm_always"). Returns the recorded action-request id so the caller can
-// tie its assertion to the exact row.
-async function sendAndApprove(page: Page, text: string): Promise<string> {
-  const sentAt = Date.now();
-  // Destructured, not awaited through: the turn must still be in flight when Approve is
-  // clicked below, so only the send itself is waited on here.
-  const { turnSettled } = await sendMessage(page, text);
-
-  // #926 diagnosis: an Approve is only honoured while the chat turn's in-process waiter is alive
-  // (gateway.ts:497, 150s — claude-permission-hook.ts:19). When it is not, the resolve returns 409
-  // and the row stays pending by design. Record the elapsed time and the server's actual answer so
-  // a failure says WHICH of those happened instead of only "never reached confirmed".
-  const resolveSeen = page.waitForResponse(
-    (r) => /\/api\/chat\/action-requests\/[^/]+\/resolve/.test(r.url()),
-    { timeout: 60_000 }
-  );
-
-  // Watch the SERVER for the pending row as well as the drawer for the card. If the row shows up
-  // promptly but the card does not, the confirmation is being raised in time and the browser is
-  // simply not being told — a very different defect from a slow model.
-  // Wait on the SERVER's record first, then look at the drawer. Doing it in this order (rather
-  // than polling in the background) is what distinguishes "the model was slow to ask" from "the
-  // server asked promptly and the browser was never told in time".
-  await expect
-    .poll(async () => (await listActions(page)).some((a) => a.status === "pending"), {
-      timeout: 120_000,
-      intervals: [1_000],
-      message: `the server never recorded a pending action for: ${text}`
-    })
-    .toBe(true);
-  const rowAt = Date.now();
-
-  const card = page.locator(CARD).last();
-  const cardVisibleWhenRowAppeared = await card.isVisible();
-  await expect(card, `the model did not raise an action request for: ${text}`).toBeVisible({
-    timeout: 120_000
-  });
-  const actionRequestId = await card.getAttribute("data-action-request-id");
-  expect(actionRequestId, "card must carry an action request id").toEqual(expect.any(String));
-
-  const cardAt = Date.now();
-  await card.getByRole("button", { name: "Approve" }).click();
-
-  const resolveResponse = await resolveSeen;
-  const clickedAt = Date.now();
-  console.log(
-    `[926] ${text}: server row after ${rowAt - sentAt}ms ` +
-      `(card on screen by then: ${cardVisibleWhenRowAppeared}), card after ${cardAt - sentAt}ms, ` +
-      `approve resolved ${resolveResponse.status()} after ${clickedAt - sentAt}ms ` +
-      `(waiter window is 150000ms)`
-  );
-  expect(
-    resolveResponse.status(),
-    `Approve was refused: 409 means the chat turn's waiter was already gone ${clickedAt - sentAt}ms ` +
-      `after the message was sent`
-  ).toBe(204);
-  // Assert the decision landed on the SERVER, not on the card. The card's label is derived from
-  // a client-side mutation state, so a re-render of the transcript resets it to "Needs your
-  // approval" even after a successful approve — checking the label makes this step flaky in one
-  // direction and, worse, silently passable in the other.
-  await expectActionStatus(page, actionRequestId as string, "confirmed");
-
-  const response = await turnSettled;
-  expect(response.ok(), "the chat turn must settle after Approve").toBe(true);
-  return actionRequestId as string;
-}
+// #1750 removed food.consent.grant, which was the only confirm-gated Food tool this spec could
+// drive through a real chat turn. The remaining one, food.meals.delete, is still blocked by #1720
+// (an Approve only counts while the turn's in-process waiter is alive, gateway.ts:497), so the
+// approve-a-card helper that used to live here has no caller and was removed rather than left
+// dead. Recover it from git history when #1720 lands and the delete half becomes provable.
 
 // Setup shared by both tests below: stage the module, enable it through the real admin screen,
 // and bring a real chat-capable model online.
@@ -283,8 +220,8 @@ async function prepareInstance(page: Page): Promise<void> {
 }
 
 // The tools Food grants at install: they must execute inside a real chat turn WITHOUT raising a
-// card. Logging does not depend on consent — consent only adds the AI estimate (meals.ts:202) —
-// so this half stays provable while #1720 blocks every confirm-gated tool on the platform.
+// card. Logging does not depend on the AI-estimates switch — that switch only decides whether an
+// estimate is attached — so this half stays provable while #1720 blocks every confirm-gated tool.
 test("a real model logs and corrects meals through Food's granted-at-install tools (#926)", async ({
   page
 }) => {
@@ -354,21 +291,21 @@ test("a real model raises and resolves Food's confirm-gated tools (#926)", async
   const baseURL = requireBaseURL();
   await prepareInstance(page);
 
-  // Behaviour 3 — consent. The Food page renders consent read-only until #1699 lands, so the
-  // only way to grant it is the write-risk tool, which is exactly what this proves.
-  await test.step("granting AI estimation consent runs food.consent.grant", async () => {
-    await sendAndApprove(page, "Turn on AI nutrition estimates for my food log.");
-
-    // Exact text: the banner's other state is "not granted", which a loose /granted/ match
-    // would happily accept.
+  // Behaviour 3 (#1750) — there is no consent step any more. Installing Food is consent for
+  // Food's normal functionality, so estimation is on by default and its switch lives in host
+  // Settings. The Food page must therefore carry no consent wording and no toggle of its own.
+  await test.step("the Food page asks for no consent and offers no estimation toggle", async () => {
     await page.goto(`${baseURL}/m/food`);
-    await expect(page.locator(".fud-consent")).toHaveText("AI estimation consent: granted");
+    // A regex match, not exact text: the failure this guards is any consent strip coming back,
+    // in any wording, not one specific sentence.
+    await expect(page.getByText(/consent/i)).toHaveCount(0);
+    await expect(page.getByText(/Nutrition estimates are off/i)).toHaveCount(0);
   });
 
-  // Behaviour 4 — the estimate the module attaches once consent is granted. It is the module's
+  // Behaviour 4 — the estimate the module attaches by default. It is the module's
   // own work, not model prose in the transcript: persisted on the record and rendered from it.
   // It can be computed after the turn ends, so reload until it lands.
-  await test.step("a logged meal carries a real nutrition estimate once consent is granted", async () => {
+  await test.step("a logged meal carries a real nutrition estimate, with no consent step", async () => {
     await sendAutoRun(page, `Log that I had ${MEAL_TEXT} for breakfast today.`);
 
     await page.goto(`${baseURL}/m/food`);

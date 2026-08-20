@@ -17,7 +17,7 @@
 // "never coalesce a missing nutrient" rule (domain/totals.ts) has to survive
 // all the way to the pixel or the page quietly under-reports the day.
 //
-// Only risk:read tools are invoked (food.meals.list, food.consent.get). No
+// Only risk:read tools are invoked (food.meals.list). No
 // write or destructive tool is reachable from here; worker-rpc-host.ts throws
 // on one from a read-risk surface.
 import { invokeTool, type ToolOutcome } from "./api";
@@ -373,11 +373,7 @@ export function groupByOccasion(meals: readonly Meal[]): readonly OccasionGroup[
 interface MealsListResult extends Record<string, unknown> {
   meals: Meal[];
   totals: DailyTotals | null;
-}
-
-interface ConsentResult extends Record<string, unknown> {
-  granted: boolean;
-  grantedAt: string | null;
+  aiEstimates?: boolean;
 }
 
 export function Root(): ReactNodeLike {
@@ -388,7 +384,6 @@ export function Root(): ReactNodeLike {
   // finished day is entirely silent on the network.
   const [pendingPollMs, setPendingPollMs] = useState<number | null>(null);
   const mealsQuery = useToolQuery<MealsListResult>("food.meals.list", { localDate }, pendingPollMs);
-  const consentQuery = useToolQuery<ConsentResult>("food.consent.get", {});
 
   const hasPending =
     mealsQuery.status === "settled" &&
@@ -421,33 +416,32 @@ export function Root(): ReactNodeLike {
           onChange={onDateChange}
         />
       </header>
-      <ConsentNote query={consentQuery} />
+      <EstimatesOffNote query={mealsQuery} />
       <MealsSection query={mealsQuery} expanded={expanded} onToggle={onToggle} />
     </div>
   );
 }
 
 /**
- * Consent is read-only here: granting it is a write, and no write tool is reachable from a
- * read-risk surface. The note therefore appears only when estimation is OFF, where it explains
- * why the numbers are missing. When consent is granted there is nothing to say, so nothing is
- * said — a permanent green "consent: granted" badge is a nag, not information.
+ * #1750 — the note appears only when AI estimation is switched OFF, where it explains why the
+ * numbers are missing. Switched on there is nothing to say, so nothing is said: a permanent
+ * green "estimates: on" badge is a nag, not information.
+ *
+ * The flag rides on the meals read result rather than a preference lookup, because a module web
+ * surface has no path to a host preference. Rendering it from the record keeps the determinism
+ * boundary intact — this note is never model output.
  */
-function ConsentNote(props: { query: QueryState<ConsentResult> }): ReactNodeLike {
+function EstimatesOffNote(props: { query: QueryState<MealsListResult> }): ReactNodeLike {
   const query = props.query;
   if (query.status !== "settled") return null;
   const outcome = query.outcome;
-  if (outcome.kind === "disabled") {
-    return (
-      <p className="jds-caption fud-notice" role="status">
-        Food is turned off on the server.
-      </p>
-    );
-  }
-  if (outcome.kind !== "ok" || outcome.result.granted) return null;
+  // Strict `=== false`, matching the gates in tools/meals.ts: an older module build whose
+  // list result predates this field must not make the page claim estimates are off.
+  if (outcome.kind !== "ok" || outcome.result.aiEstimates !== false) return null;
   return (
     <p className="jds-caption fud-notice" role="status">
-      Nutrition estimates are off, so meals are logged without numbers. Turn them on in Settings.
+      Nutrition estimates are off, so meals are logged without numbers. Turn them back on in
+      Settings, under Food.
     </p>
   );
 }

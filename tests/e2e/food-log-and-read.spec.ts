@@ -28,13 +28,13 @@ test.describe("Food module — install, log, read, correct (#926 Live-Path Gate)
     // 2. Nav placement: as a normal actor, confirm "Food" appears in the primary nav
     //    adjacent to "Wellness" (plan's navigation-placement ruling, not a standalone
     //    top-level slot — see docs/superpowers/specs/926-food.md).
-    // 3. Consent: open the Food page, grant AI-estimation consent via its pinned toggle
-    //    (food.consent.grant) — plan requires this gate to be visible and actionable from
-    //    the Food page itself, not buried in global settings.
+    // 3. Estimation switch (#1750): confirm Settings → Food shows "Estimate nutrition with AI"
+    //    already ON. Installing the module is consent for its normal functionality, so there
+    //    is nothing to grant here — the step exists to catch a default that silently flipped.
     // 4. Log via Chat: send "I had a bowl of oatmeal with a banana for breakfast" in the
     //    real Chat surface. Assert the assistant actually invokes food.meals.log (network
     //    tab / server log shows the tool call with a real idempotencyKey — the wiring
-    //    assertion's live half) and that it does not stall on the consent gate given step 3.
+    //    assertion's live half) and that it estimates without any consent prompt.
     // 5. Read: navigate to the Food page. Assert the logged meal's row is present with a
     //    non-null estimate, and that DevTools/network shows the row came from a
     //    food.meals.list response, not a build-time fixture (the unit suite's

@@ -12,7 +12,7 @@
 // inside a per-RPC invocation, not at module load).
 //
 // Fork A (plan §2): food.meals.log estimates SYNCHRONOUSLY via
-// estimateFromDescription (Task 5, ../estimator/run.js) when consent is
+// estimateFromDescription (Task 5, ../estimator/run.js) when AI estimation is
 // granted — this file imports that function but does not edit
 // src/estimator/* or src/worker.ts (both out of this task's scope; see
 // worker.ts's own "estimate.run" queue handler for the retry path this
@@ -38,8 +38,12 @@ import {
   stripEnvelope
 } from "./validate.js";
 
-const CONSENT_NAMESPACE = "food.settings";
-const CONSENT_KEY = "consent";
+/**
+ * #1750 — the manifest preference key gating AI estimation. Declared with `default: true` in
+ * jarvis.module.json, so an absent stored value means "never touched", not "off": installing
+ * Food is consent for Food's normal functionality, and estimating is the functionality.
+ */
+const AI_ESTIMATES_PREFERENCE = "aiEstimates";
 
 const CAPTURE_KINDS: readonly CaptureKind[] = ["text", "photo", "voice"];
 
@@ -102,6 +106,12 @@ export interface MealsListResult {
   readonly meals: readonly Meal[];
   /** Present only for the single-`localDate` shape — a multi-day range has no single day to total. */
   readonly totals: DailyTotals | null;
+  /**
+   * #1750 — whether AI estimation is switched on for this user. Carried on the read result
+   * because a module web surface has no way to read a host preference directly, and without it
+   * the Food page would show meals with permanently missing numbers and no explanation for why.
+   */
+  readonly aiEstimates: boolean;
 }
 
 /** `food.meals.list` — read. Exactly one shape: `{localDate}` or `{fromLocalDate, toLocalDate}`.
@@ -115,13 +125,14 @@ export function createMealsListHandler(store: FoodStore) {
     const localDate = optionalLocalDateString(input, "localDate");
     const fromLocalDate = optionalLocalDateString(input, "fromLocalDate");
     const toLocalDate = optionalLocalDateString(input, "toLocalDate");
+    const aiEstimates = aiEstimatesEnabled(ctx);
 
     if (localDate !== undefined) {
       if (fromLocalDate !== undefined || toLocalDate !== undefined) {
         throw new InputError("localDate cannot be combined with fromLocalDate/toLocalDate");
       }
       const meals = await store.listMealsForLocalDate(localDate);
-      return { meals, totals: computeDailyTotals(localDate, meals) };
+      return { meals, totals: computeDailyTotals(localDate, meals), aiEstimates };
     }
 
     if (fromLocalDate === undefined || toLocalDate === undefined) {
@@ -135,7 +146,7 @@ export function createMealsListHandler(store: FoodStore) {
       throw new InputError(`date range must not exceed ${LIST_MAX_RANGE_DAYS} days`);
     }
     const meals = await store.listMealsForDateRange(fromLocalDate, toLocalDate);
-    return { meals, totals: null };
+    return { meals, totals: null, aiEstimates };
   };
 }
 
@@ -197,13 +208,19 @@ export interface LogMealResult {
   readonly clarificationQuestion: string | null;
 }
 
-async function hasGrantedConsent(ctx: ModuleWorkerContext): Promise<boolean> {
-  const record = await ctx.kv.get("user", CONSENT_NAMESPACE, CONSENT_KEY);
-  return record !== null && record["granted"] === true;
+/**
+ * The host resolves declared preferences against `app.preferences` before every module
+ * invocation and puts the result on `ctx.preferences`, falling back to the manifest default for
+ * anything the user has not set. Reading it strictly (`=== false`) rather than truthily means a
+ * missing key estimates, matching that default — a resolver bug must not silently disable the
+ * feature for everyone.
+ */
+function aiEstimatesEnabled(ctx: ModuleWorkerContext): boolean {
+  return ctx.preferences[AI_ESTIMATES_PREFERENCE] !== false;
 }
 
 /** `food.meals.log` — write. Persists the meal first (always), then — Fork A — estimates
- * synchronously in the same call when consent is granted, so a typed meal gets a real estimate in
+ * synchronously in the same call when estimation is enabled, so a typed meal gets a real estimate in
  * the same request rather than waiting on the manual-run retry queue. `servingNote` is persisted
  * on the meal (store/sql.ts's CreateMealInput/Meal) so a later retry via the queue (worker.ts's
  * estimate.run) still has it, unlike the description-only fields the queue's paramsSchema carries.
@@ -262,7 +279,7 @@ export function createMealsLogHandler(store: FoodStore) {
     });
 
     const isFreshRow = meal.estimateState === "pending" && meal.estimateRevision === 0;
-    if (!isFreshRow || !(await hasGrantedConsent(ctx))) {
+    if (!isFreshRow || !aiEstimatesEnabled(ctx)) {
       return { meal, clarificationQuestion: null };
     }
 
@@ -316,7 +333,7 @@ export function createMealsReestimateHandler(store: FoodStore) {
     if (meal.estimateState !== "pending" && meal.estimateState !== "failed") {
       return { meal, clarificationQuestion: null };
     }
-    if (!(await hasGrantedConsent(ctx))) {
+    if (!aiEstimatesEnabled(ctx)) {
       return { meal, clarificationQuestion: null };
     }
 

@@ -8,7 +8,7 @@
 // SCOPE — read this before trusting a green run.
 //
 // Write-risk module tools (food.meals.log, food.meals.correct, food.meals.reestimate,
-// food.consent.grant) execute ONLY inside a live chat turn: the gateway creates the pending
+// food.meals.delete) execute ONLY inside a live chat turn: the gateway creates the pending
 // action and then BLOCKS on confirmations.awaitResolution (gateway.ts:364, :617), and a
 // confirm is honoured only while that waiter is alive (gateway.ts:497). The REST route
 // POST /assistant-tools/:name/invoke records the pending action and returns 403 without
@@ -19,7 +19,7 @@
 //
 // So this file proves the read and lifecycle halves end-to-end, plus the permission gate
 // itself (write-risk tools must NOT execute without confirmation — asserted positively).
-// It does NOT prove meal logging, correction, re-estimation, consent granting, or the AI
+// It does NOT prove meal logging, correction, re-estimation, or the AI
 // estimator. Those need a real provider on dev and are stated as unproven on the PR rather
 // than papered over with a seeded row.
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
@@ -96,23 +96,19 @@ test("2. Food appears in the primary nav with its own icon", async ({ page }) =>
   await expect(page.getByRole("link", { name: /^food$/i })).toBeVisible();
 });
 
-// Step 3 — consent display. Per the spec (2026-08-18-926): "Until #1699 lands, the Food page
-// renders consent read-only and the user grants it through a write-risk Chat tool." A module
-// page may invoke read-risk tools only, so a toggle here would be a permission defect. The
-// displayed state must come from a live food.consent.get, not from static markup.
-test("3. the Food page shows consent read-only, fed by a live food.consent.get", async ({
-  page
-}) => {
+// Step 3 — #1750: AI estimation is a settings switch, on by default, not an in-chat consent
+// grant. Installing Food is consent for Food's normal functionality. The Food page therefore
+// says nothing about estimation while it is on; a permanent "estimates: on" badge is a nag.
+test("3. the Food page carries no consent prompt and no estimation toggle", async ({ page }) => {
   await signInThroughUi(page, OWNER);
-
-  const consentCall = page.waitForResponse(
-    (r) => r.url().includes("food.consent.get") && r.status() === 200
-  );
   await page.goto("/m/food");
-  await consentCall;
+  await expect(page.locator(".fud-meals, .fud-state")).toBeVisible();
 
-  await expect(page.getByText(/AI estimation consent:/i)).toBeVisible();
+  // The switch lives in Settings, under Food. A toggle here would be a permission defect —
+  // a module page may invoke read-risk tools only, and writing a preference is a write.
+  await expect(page.getByText(/consent/i)).toHaveCount(0);
   await expect(page.getByRole("checkbox", { name: /estimat/i })).toHaveCount(0);
+  await expect(page.getByText(/Nutrition estimates are off/i)).toHaveCount(0);
 });
 
 // Step 4G — the permission gate, asserted positively. Every write-risk Food tool must record
@@ -125,7 +121,7 @@ test("4G. write-risk Food tools are blocked pending confirmation and do not exec
 
   const writeTools = [
     { name: "food.meals.log", input: { description: "oatmeal", idempotencyKey: "uat-926-1" } },
-    { name: "food.consent.grant", input: { granted: true } }
+    { name: "food.meals.delete", input: { mealId: "00000000-0000-0000-0000-000000000000" } }
   ];
 
   for (const tool of writeTools) {
@@ -148,13 +144,6 @@ test("4G. write-risk Food tools are blocked pending confirmation and do not exec
       "oatmeal"
     );
   }
-
-  // And the block held: consent is still not granted.
-  const consent = await request.post(`${API}/api/ai/assistant-tools/food.consent.get/invoke`, {
-    data: { input: {} }
-  });
-  expect(consent.status()).toBe(200);
-  expect(JSON.stringify(await consent.json())).toContain("false");
 });
 
 // Step 5 — the page reads live records through the module worker, not a build-time fixture.
