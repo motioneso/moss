@@ -22,6 +22,19 @@ export class TargetIdentityMismatchError extends Error {
   }
 }
 
+export class AmbiguousBootstrapOwnerError extends Error {
+  constructor(emails: readonly string[]) {
+    super(
+      "[target-identity-guard] refusing: target database has more than one bootstrap owner " +
+        `(${emails.join(", ")}) — the confirmation email cannot prove which instance this is, ` +
+        "and picking one of them arbitrarily would let a destructive script proceed against a " +
+        "database the operator has not actually identified. Resolve the duplicate owner rows " +
+        "before re-running (see #1721)."
+    );
+    this.name = "AmbiguousBootstrapOwnerError";
+  }
+}
+
 /**
  * #1383: proves an operator script is pointed at the instance it thinks it is before a
  * credential-mutating or destructive operation proceeds, by requiring the caller to supply
@@ -43,15 +56,31 @@ export async function assertOperatorConfirmsTargetOwner(
   db: Kysely<MossDatabase>,
   confirmedOwnerEmail: string | undefined
 ): Promise<{ readonly id: string; readonly email: string }> {
-  const owner = await db
+  // #1721: fetch two rows, not one. The old `executeTakeFirst()` had no ORDER BY, so with more
+  // than one flagged row Postgres returned whichever it liked and the guard compared the
+  // operator's email against an arbitrary owner. That fails in both directions: it can refuse a
+  // correctly-identified target, and — worse for a guard protecting destructive operations — it
+  // can accept one, because supplying either owner's email passes on the run where that row
+  // happens to come back first. Ordering makes the choice repeatable; the limit-2 check makes the
+  // ambiguity itself a refusal rather than a coin flip.
+  const owners = await db
     .selectFrom("app.users")
     .select(["id", "email"])
     .where("is_bootstrap_owner", "=", true)
-    .executeTakeFirst();
+    .orderBy("created_at", "asc")
+    .orderBy("id", "asc")
+    .limit(2)
+    .execute();
 
-  if (!owner) {
+  if (owners.length === 0) {
     throw new NoBootstrapOwnerFoundError();
   }
+
+  if (owners.length > 1) {
+    throw new AmbiguousBootstrapOwnerError(owners.map((row) => row.email));
+  }
+
+  const owner = owners[0]!;
 
   if (!confirmedOwnerEmail || confirmedOwnerEmail !== owner.email) {
     throw new TargetIdentityMismatchError();
