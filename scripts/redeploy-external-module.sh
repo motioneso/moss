@@ -22,7 +22,11 @@
 set -euo pipefail
 
 MODULE_ID="${1:?usage: redeploy-external-module.sh <module-id> [api-port]}"
-API_PORT="${2:-3097}"
+# #1722: this used to default to 3097, which nothing listens on. The from-source dev API reads
+# PORT and falls back to 3000 (apps/api/src/server.ts), so read it the same way rather than
+# holding a second opinion about the port — a hardcoded guess fails as a bare connection error
+# that never names the port as the cause.
+API_PORT="${2:-${PORT:-3000}}"
 API="http://127.0.0.1:${API_PORT}"
 SETTLE_SECONDS="${SETTLE_SECONDS:-8}"
 SOURCE_DIR="external-modules/${MODULE_ID}"
