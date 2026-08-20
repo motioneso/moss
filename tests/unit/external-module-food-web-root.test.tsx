@@ -83,8 +83,22 @@ interface ListPayload {
 let listPayload: ListPayload = { meals: [], totals: null, aiEstimates: true };
 let listCalls = 0;
 
+/**
+ * Every draft the page asked the host to open the assistant with (#1787). Recording the actual
+ * string matters more than counting calls: the draft has to name the day being viewed, and a test
+ * that only asserted "the host was called" would pass while the page silently logged a meal to the
+ * wrong day.
+ */
+let openedDrafts: string[] = [];
+const hostActions = {
+  openAssistant: (input: { starterPrompt: string }) => {
+    openedDrafts.push(input.starterPrompt);
+  }
+};
+
 beforeEach(() => {
   listCalls = 0;
+  openedDrafts = [];
   listPayload = { meals: [], totals: null, aiEstimates: true };
   mockInvokeTool.mockReset();
   mockInvokeTool.mockImplementation(async (name: string) => {
@@ -99,7 +113,7 @@ beforeEach(() => {
 async function render(): Promise<ReactTestRenderer> {
   let renderer!: ReactTestRenderer;
   await act(async () => {
-    renderer = create(createElement(Root));
+    renderer = create(createElement(Root, { hostActions }));
   });
   // Several flushes: the meals query settles across more than one microtask tick.
   for (let i = 0; i < 3; i += 1) {
@@ -325,7 +339,15 @@ describe("food day view — meals and their foods (#1737)", () => {
     const renderer = await render();
     // An expander that opens onto nothing is worse than no expander: it reads as data the page
     // is refusing to show.
-    expect(renderer.root.findAllByType("button")).toHaveLength(0);
+    //
+    // #1787 narrowed this from "no buttons anywhere" to "no EXPANDER button". The page now carries
+    // a Log button in its header, so counting every button on the surface would fail for a reason
+    // that has nothing to do with what this test is about. The expander is identified by the
+    // aria-expanded it must carry to be an expander at all.
+    const expanders = renderer.root
+      .findAllByType("button")
+      .filter((node) => node.props["aria-expanded"] !== undefined);
+    expect(expanders).toHaveLength(0);
     expect(text(renderer)).toContain("Estimating…");
   });
 
@@ -468,5 +490,82 @@ describe("a meal with no estimate coming (#1770)", () => {
     // as "off" would tell the user their in-flight estimate was never started.
     listPayload = { meals: [pendingMeal], totals: null };
     expect(text(await render())).toContain("Estimating");
+  });
+});
+
+// ── #1787: the Log button ───────────────────────────────────────────────
+//
+// The page's only way to START logging. It writes nothing itself — it hands the host a draft and
+// the user still sends the turn, which is what keeps this a read-risk surface.
+
+describe("log button", () => {
+  /** Click the first "Log a meal" button rendered, whichever region it is in. */
+  async function clickLog(renderer: ReactTestRenderer): Promise<void> {
+    const button = renderer.root
+      .findAllByType("button")
+      .find((node) => node.props.children === "Log a meal");
+    expect(button).toBeDefined();
+    await act(async () => {
+      (button!.props.onClick as () => void)();
+    });
+  }
+
+  it("offers a way to log from the empty day, not just an instruction to go elsewhere", async () => {
+    // Before #1787 this state read "Log a meal by talking to the assistant" and then offered no
+    // means of doing so, which is what made the page read as missing a feature rather than partial.
+    listPayload = { meals: [], totals: null, aiEstimates: true };
+    const renderer = await render();
+    const buttons = renderer.root
+      .findAllByType("button")
+      .filter((node) => node.props.children === "Log a meal");
+    expect(buttons.length).toBeGreaterThan(0);
+  });
+
+  it("opens the assistant with a draft rather than writing anything itself", async () => {
+    listPayload = { meals: [], totals: null, aiEstimates: true };
+    const renderer = await render();
+    const toolCallsBefore = mockInvokeTool.mock.calls.length;
+    await clickLog(renderer);
+    expect(openedDrafts).toHaveLength(1);
+    // The whole safety argument for putting this on a read-risk surface: clicking invokes no tool.
+    expect(mockInvokeTool.mock.calls.length).toBe(toolCallsBefore);
+  });
+
+  it("does not name a date in the draft when the day being viewed is today", async () => {
+    // Today needs no qualifier — the log tool already defaults there, and a redundant date in the
+    // draft is noise the user has to read past every single time.
+    listPayload = { meals: [], totals: null, aiEstimates: true };
+    await clickLog(await render());
+    expect(openedDrafts[0]).toBe("Log a meal:");
+  });
+
+  it("names the day in the draft when viewing a day other than today", async () => {
+    // The failure this prevents: the page's date picker is invisible to the log tool, which
+    // resolves the day from the message alone. Viewing an earlier day and clicking Log would write
+    // the meal to today, silently, with nothing in the draft for the user to notice.
+    listPayload = { meals: [], totals: null, aiEstimates: true };
+    const renderer = await render();
+    const input = renderer.root.findByProps({ "aria-label": "Date" });
+    await act(async () => {
+      (input.props.onChange as (e: { target: { value: string } }) => void)({
+        target: { value: "2026-08-19" }
+      });
+    });
+    await clickLog(renderer);
+    expect(openedDrafts[0]).toBe("Log a meal on 2026-08-19:");
+  });
+
+  it("sends a draft the host will accept rather than silently reject", async () => {
+    // host-actions.ts sanitizeStarterPrompt fails CLOSED: a blank, over-long or control-character
+    // prompt means the drawer never opens and the button appears dead. Assert the draft clears
+    // those bars here, where a change to the wording would otherwise pass every other test.
+    listPayload = { meals: [], totals: null, aiEstimates: true };
+    await clickLog(await render());
+    const draft = openedDrafts[0]!;
+    expect(draft.trim()).toBe(draft);
+    expect(draft.length).toBeGreaterThan(0);
+    expect(draft.length).toBeLessThan(1000);
+    // eslint-disable-next-line no-control-regex -- mirrors the host's own rejection rule
+    expect(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(draft)).toBe(false);
   });
 });

@@ -429,7 +429,49 @@ interface MealsListResult extends Record<string, unknown> {
   targets?: DailyTargets;
 }
 
-export function Root(): ReactNodeLike {
+/**
+ * The one action the host hands an external web surface (#916,
+ * apps/web/src/external-modules/host-actions.ts). It opens the assistant drawer with an EDITABLE
+ * draft and never submits — so this stays a read-risk surface: nothing here writes, the user
+ * still sends the turn themselves, and the existing food.meals.log tool does the writing exactly
+ * as it does for a typed message. Shape mirrors finance's own declaration rather than importing
+ * one: a module may depend only on @moss/module-sdk, @moss/module-web-sdk and @moss/host-fetch,
+ * never on another module's internals.
+ */
+export type HostActions = { openAssistant: (input: { starterPrompt: string }) => void };
+
+/**
+ * #1787: the page's only way to START logging. Ben, at the #926 kill gate: the page read as
+ * missing a feature, "there should be a log button on the food page even if it just opens up the
+ * drawer".
+ *
+ * The draft names the day being viewed whenever that is not today. Without it, a user looking at
+ * Tuesday who clicks Log would have their meal written to Wednesday — the tool resolves the day at
+ * write time from the message, and the page's date picker is invisible to it. Naming the date is
+ * also honest about what will happen, since the user reads the draft before sending it.
+ */
+function LogMealButton(props: {
+  hostActions: HostActions;
+  localDate: string;
+  className: string;
+}): ReactNodeLike {
+  const { hostActions, localDate, className } = props;
+  const onClick = useCallback(() => {
+    // Trailing colon, not a trailing space: the host trims before inserting, so a space would be
+    // dropped anyway. Kept short deliberately — it is a sentence opener the user finishes, not a
+    // prompt that tries to do the describing for them.
+    const starterPrompt =
+      localDate === todayLocalDate() ? "Log a meal:" : `Log a meal on ${localDate}:`;
+    hostActions.openAssistant({ starterPrompt });
+  }, [hostActions, localDate]);
+  return (
+    <button type="button" className={className} onClick={onClick}>
+      Log a meal
+    </button>
+  );
+}
+
+export function Root(props: { hostActions: HostActions }): ReactNodeLike {
   const [localDate, setLocalDate] = useState<string>(todayLocalDate());
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
@@ -465,28 +507,44 @@ export function Root(): ReactNodeLike {
     <div className="fud-root">
       <header className="fud-header">
         <h1 className="jds-display jds-display--md">Food</h1>
-        <input
-          aria-label="Date"
-          className="jds-input jds-input--sm fud-date"
-          type="date"
-          value={localDate}
-          onChange={onDateChange}
-        />
-        {/*
-         * A plain anchor, not a router push: the module runtime hands a web surface React and
-         * nothing else (runtime.ts, contract v2), so there is no host navigate to call. The cost
-         * is a full page load on click, which is acceptable for a link out of the module and is
-         * the only option that needs no platform change.
-         */}
-        <a
-          className="jds-btn jds-btn--quiet jds-btn--sm fud-settings-link"
-          href="/settings?section=modules&module=food"
-        >
-          Settings
-        </a>
+        {/* Grouped so the three controls travel together at the right edge; without the wrapper
+            the header's space-between spreads four children across the full width and the date
+            picker drifts into the middle of nothing. */}
+        <div className="fud-header-actions">
+          <input
+            aria-label="Date"
+            className="jds-input jds-input--sm fud-date"
+            type="date"
+            value={localDate}
+            onChange={onDateChange}
+          />
+          <LogMealButton
+            hostActions={props.hostActions}
+            localDate={localDate}
+            className="jds-btn jds-btn--primary jds-btn--sm fud-log-btn"
+          />
+          {/*
+           * A plain anchor, not a router push: the module runtime hands a web surface React and
+           * nothing else (runtime.ts, contract v2), so there is no host navigate to call. The cost
+           * is a full page load on click, which is acceptable for a link out of the module and is
+           * the only option that needs no platform change.
+           */}
+          <a
+            className="jds-btn jds-btn--quiet jds-btn--sm fud-settings-link"
+            href="/settings?section=modules&module=food"
+          >
+            Settings
+          </a>
+        </div>
       </header>
       <EstimatesOffNote query={mealsQuery} />
-      <MealsSection query={mealsQuery} expanded={expanded} onToggle={onToggle} />
+      <MealsSection
+        query={mealsQuery}
+        expanded={expanded}
+        onToggle={onToggle}
+        hostActions={props.hostActions}
+        localDate={localDate}
+      />
     </div>
   );
 }
@@ -519,6 +577,8 @@ function MealsSection(props: {
   query: QueryState<MealsListResult>;
   expanded: Record<string, boolean>;
   onToggle: (mealId: string) => void;
+  hostActions: HostActions;
+  localDate: string;
 }): ReactNodeLike {
   const { query, expanded, onToggle } = props;
   if (query.status === "loading") {
@@ -558,9 +618,19 @@ function MealsSection(props: {
   const result = outcome.result;
   if (result.meals.length === 0) {
     return (
+      // #1787: this state used to say "Log a meal by talking to the assistant" and then offer no
+      // way to do it, which is precisely what made the page read as missing a feature. The button
+      // opens the drawer with a draft; the sentence now describes what the button does.
       <div className="fud-state" role="status">
         <h2 className="jds-empty__title">Nothing logged for this day</h2>
-        <p className="jds-empty__sub">Log a meal by talking to the assistant.</p>
+        <p className="jds-empty__sub">
+          Describe what you ate and your assistant estimates the nutrition.
+        </p>
+        <LogMealButton
+          hostActions={props.hostActions}
+          localDate={props.localDate}
+          className="jds-btn jds-btn--primary jds-btn--sm"
+        />
       </div>
     );
   }
