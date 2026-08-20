@@ -1,0 +1,54 @@
+// #1534 gave every long-running CI phase its own deadline so a stuck phase fails fast and names
+// itself in the job summary. #1724 is what happens when one is missed: "Install Playwright
+// browsers" had no wrapper, an Ubuntu mirror stalled inside it for 21 minutes, and the job hit the
+// 45-minute backstop and was cancelled before a single test ran. A cancelled job produces no error
+// annotation, so the cause was only findable by reading the raw log.
+//
+// This test is the thing that was missing — the rule from #1534 written down somewhere that fails.
+// It reads the workflow as text rather than parsed YAML deliberately: the repository has no YAML
+// parser dependency, and adding one to assert a handful of strings would cost more than it earns.
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+
+const CI_WORKFLOW = fileURLToPath(new URL("../../.github/workflows/ci.yml", import.meta.url));
+
+/**
+ * Steps that take minutes and can hang on something outside this repository — a package mirror, a
+ * browser download, a database that never comes up. Each one needs its own `timeout` wrapper.
+ * Add to this list when a new long phase appears; that is the point of the list.
+ */
+const PHASES_NEEDING_A_DEADLINE = [
+  "Verify foundation",
+  "Install Playwright browsers",
+  "Run Playwright smoke tests"
+] as const;
+
+/** Splits the workflow into one chunk per step, keyed by the step's `name:`. */
+function stepBodies(source: string): Map<string, string> {
+  const bodies = new Map<string, string>();
+  const chunks = source.split(/^ *- name: /m);
+  for (const chunk of chunks.slice(1)) {
+    const newline = chunk.indexOf("\n");
+    const name = chunk.slice(0, newline === -1 ? undefined : newline).trim();
+    bodies.set(name, chunk);
+  }
+  return bodies;
+}
+
+describe("CI phase deadlines (#1534, #1724)", () => {
+  const steps = stepBodies(readFileSync(CI_WORKFLOW, "utf8"));
+
+  it.each(PHASES_NEEDING_A_DEADLINE)("%s runs under a timeout", (name) => {
+    const body = steps.get(name);
+    // A renamed step would otherwise silently drop out of this check and pass.
+    expect(body, `no step named "${name}" in ci.yml — rename it here too`).toBeDefined();
+    expect(body).toContain("timeout --verbose");
+  });
+
+  it.each(PHASES_NEEDING_A_DEADLINE)("%s says so in the log when it runs out of time", (name) => {
+    // Without this the failure looks like an ordinary non-zero exit and the reader has to guess
+    // which phase died — exactly the situation #1724 was reported from.
+    expect(steps.get(name)).toContain("CI_PHASE_TIMEOUT phase=");
+  });
+});
