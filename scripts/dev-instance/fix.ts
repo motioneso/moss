@@ -96,6 +96,9 @@ async function purgeUatFixtureRows(deps: DoctorDeps, report: DoctorReport): Prom
  * action still returns an outcome even when its check already passes, so a healthy report
  * yields outcomes that are all `changed: false` with nothing written.
  */
-export async function runFix(deps: DoctorDeps, report: DoctorReport): Promise<readonly FixOutcome[]> {
+export async function runFix(
+  deps: DoctorDeps,
+  report: DoctorReport
+): Promise<readonly FixOutcome[]> {
   return [await flagInstanceDefault(deps, report), await purgeUatFixtureRows(deps, report)];
 }

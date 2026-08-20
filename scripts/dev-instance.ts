@@ -28,7 +28,13 @@ import { persistCliRunnerToken, tokenProviderFor } from "./dev-instance/cli-toke
 
 export type DevInstanceCommand = "doctor" | "provision" | "fix" | "providers" | "reset";
 
-const COMMANDS: readonly DevInstanceCommand[] = ["doctor", "provision", "fix", "providers", "reset"];
+const COMMANDS: readonly DevInstanceCommand[] = [
+  "doctor",
+  "provision",
+  "fix",
+  "providers",
+  "reset"
+];
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -114,7 +120,9 @@ export async function runDevInstanceCli(
         };
         const outcomes = await runProvision(provisionDeps);
         for (const outcome of outcomes) {
-          console.log(`${outcome.id}: ${outcome.changed ? "changed" : "unchanged"} — ${outcome.detail}`);
+          console.log(
+            `${outcome.id}: ${outcome.changed ? "changed" : "unchanged"} — ${outcome.detail}`
+          );
         }
         return 0;
       }
@@ -123,14 +131,18 @@ export async function runDevInstanceCli(
         const report = await runDoctor(doctorDeps);
         const outcomes = await runFix(doctorDeps, report);
         for (const outcome of outcomes) {
-          console.log(`${outcome.id}: ${outcome.changed ? "changed" : "unchanged"} — ${outcome.detail}`);
+          console.log(
+            `${outcome.id}: ${outcome.changed ? "changed" : "unchanged"} — ${outcome.detail}`
+          );
         }
         return 0;
       }
 
       case "providers":
       case "reset":
-        console.error(`the "${command}" command is deferred to a later phase — not implemented yet`);
+        console.error(
+          `the "${command}" command is deferred to a later phase — not implemented yet`
+        );
         return 1;
     }
   } finally {
