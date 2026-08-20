@@ -2,7 +2,6 @@ import { sql } from "kysely";
 
 import { AiRepository } from "@moss/ai";
 import { readMigrationStatus, type DataContextDb } from "@moss/db";
-import { RpcConnection } from "@moss/chat/live";
 import { resolveMossEnv } from "@moss/db";
 
 import {
@@ -11,6 +10,7 @@ import {
   UAT_SECOND_OWNER_EMAIL,
   UAT_SECOND_OWNER_ID
 } from "../../tests/uat/seed/admin.js";
+import { RUN_DIR_REPAIR_COMMAND, probeCliRunner } from "./cli-runner.js";
 import type { DoctorCheck, DoctorDeps } from "./doctor.js";
 
 const repository = new AiRepository();
@@ -163,24 +163,14 @@ const noUatFixtureRows: DoctorCheck = {
 
 const cliRunnerReachable: DoctorCheck = {
   id: "cli-runner-reachable",
-  repair: "pnpm dev:instance provision, or OQ-1's one-time directory setup",
+  repair: `pnpm dev:instance provision (if the socket directory itself is missing: ${RUN_DIR_REPAIR_COMMAND})`,
   async run(deps) {
+    // Delegates to probeCliRunner rather than driving RpcConnection here: that probe carries the
+    // deadline (ensureConnected retries forever, which would hang the checkup) and the
+    // missing-socket-directory message a fresh machine needs.
     const rpcSecret = resolveMossEnv(deps.env, "JARVIS_CLI_RUNNER_RPC_SECRET") ?? "";
-    const connection = new RpcConnection({
-      socketPath: deps.config.cliRunnerSocketPath,
-      rpcSecret
-    });
-    try {
-      await connection.ensureConnected();
-      return { ok: true, detail: `cli-runner reachable at ${deps.config.cliRunnerSocketPath}` };
-    } catch (error) {
-      return {
-        ok: false,
-        detail: `cli-runner not reachable at ${deps.config.cliRunnerSocketPath}: ${(error as Error).message}`
-      };
-    } finally {
-      connection.close();
-    }
+    const status = await probeCliRunner(deps.config.cliRunnerSocketPath, rpcSecret);
+    return { detail: status.detail, ok: status.reachable };
   }
 };
 

@@ -1,3 +1,7 @@
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Kysely } from "kysely";
 import pg from "pg";
@@ -17,6 +21,7 @@ describe("dev-instance provision (#1258)", () => {
   let appDb: Kysely<MossDatabase>;
   let runner: DataContextRunner;
   let originalSecretKey: string | undefined;
+  const cliHomeBases: string[] = [];
 
   beforeAll(() => {
     originalSecretKey = process.env.JARVIS_AI_SECRET_KEY;
@@ -31,7 +36,11 @@ describe("dev-instance provision (#1258)", () => {
   });
 
   afterAll(async () => {
-    await Promise.allSettled([migrationDb?.destroy(), appDb?.destroy()]);
+    await Promise.allSettled([
+      migrationDb?.destroy(),
+      appDb?.destroy(),
+      ...cliHomeBases.map((dir) => rm(dir, { force: true, recursive: true }))
+    ]);
     if (originalSecretKey === undefined) {
       delete process.env.JARVIS_AI_SECRET_KEY;
     } else {
@@ -261,6 +270,129 @@ describe("dev-instance provision (#1258)", () => {
 
       expect(providerAfter.updated_at).toEqual(providerBefore.updated_at);
       expect(modelAfter.updated_at).toEqual(modelBefore.updated_at);
+    });
+  });
+
+  describe("cli-token step (T17)", () => {
+    it("writes the token 0600 where the cli-runner reads it, and is a no-op the second time", async () => {
+      const { persistCliRunnerToken } = await import("../../scripts/dev-instance/cli-token.js");
+      const { providerTokenPath } = await import("@moss/cli-runner");
+
+      const cliHomeBase = await mkdtemp(join(tmpdir(), "dev-instance-cli-token-"));
+      cliHomeBases.push(cliHomeBase);
+      const config = fakeConfig({ cliHomeBase });
+      const token = "sk-ant-oat-sentinel-token-value";
+
+      const firstChanged = await persistCliRunnerToken(config, token);
+      expect(firstChanged).toBe(true);
+
+      const tokenFile = providerTokenPath(cliHomeBase, "anthropic");
+      expect(await readFile(tokenFile, "utf8")).toBe(token);
+      const mode = (await stat(tokenFile)).mode & 0o777;
+      expect(mode).toBe(0o600);
+
+      const secondChanged = await persistCliRunnerToken(config, token);
+      expect(secondChanged).toBe(false);
+    });
+
+    it("rewrites the file when the stored token differs", async () => {
+      const { persistCliRunnerToken } = await import("../../scripts/dev-instance/cli-token.js");
+      const { providerTokenPath } = await import("@moss/cli-runner");
+
+      const cliHomeBase = await mkdtemp(join(tmpdir(), "dev-instance-cli-token-"));
+      cliHomeBases.push(cliHomeBase);
+      const config = fakeConfig({ cliHomeBase });
+
+      await persistCliRunnerToken(config, "first-token-value");
+      const changed = await persistCliRunnerToken(config, "second-token-value");
+
+      expect(changed).toBe(true);
+      expect(await readFile(providerTokenPath(cliHomeBase, "anthropic"), "utf8")).toBe(
+        "second-token-value"
+      );
+    });
+
+    it("refuses a provider that does not authenticate with a stored token", async () => {
+      const { persistCliRunnerToken } = await import("../../scripts/dev-instance/cli-token.js");
+
+      const cliHomeBase = await mkdtemp(join(tmpdir(), "dev-instance-cli-token-"));
+      cliHomeBases.push(cliHomeBase);
+      const config = fakeConfig({ cliHomeBase, providerKind: "ollama" });
+
+      await expect(persistCliRunnerToken(config, "irrelevant-token")).rejects.toThrow(/ollama/);
+    });
+
+    it("never writes the token into any line provision logs", async () => {
+      const { persistCliRunnerToken } = await import("../../scripts/dev-instance/cli-token.js");
+
+      const cliHomeBase = await mkdtemp(join(tmpdir(), "dev-instance-cli-token-"));
+      cliHomeBases.push(cliHomeBase);
+      const token = "sk-ant-oat-never-logged-0123456789";
+      const loggedLines: string[] = [];
+
+      await runProvision(
+        deps({
+          config: fakeConfig({ cliHomeBase }),
+          log: (line) => loggedLines.push(line),
+          persistCliToken: () => persistCliRunnerToken(fakeConfig({ cliHomeBase }), token),
+          signUpOwner: fakeSignUpOwner("88888888-8888-8888-8888-888888888888")
+        })
+      );
+
+      expect(loggedLines.length).toBeGreaterThan(0);
+      for (const line of loggedLines) {
+        expect(line).not.toContain(token);
+      }
+    });
+  });
+
+  describe("provision ends by running doctor (T18)", () => {
+    it("reports every doctor check passing except the ones needing a live cli-runner", async () => {
+      const { runDoctor } = await import("../../scripts/dev-instance/doctor.js");
+
+      const cliHomeBase = await mkdtemp(join(tmpdir(), "dev-instance-cli-token-"));
+      cliHomeBases.push(cliHomeBase);
+      const config = fakeConfig({ cliHomeBase });
+
+      await runProvision(
+        deps({
+          config,
+          signUpOwner: fakeSignUpOwner("99999999-9999-9999-9999-999999999999")
+        })
+      );
+
+      const report = await runDoctor({
+        cipher: createAiSecretCipher(process.env),
+        config,
+        env: process.env,
+        migrationDb,
+        migrationDirectories: [],
+        runner
+      });
+
+      const failing = report.checks.filter((check) => !check.ok).map((check) => check.id);
+      expect(failing).toEqual(["cli-runner-reachable"]);
+      expect(report.ok).toBe(false);
+    });
+
+    it("names a concrete repair for every check it fails", async () => {
+      const { runDoctor } = await import("../../scripts/dev-instance/doctor.js");
+
+      const config = fakeConfig();
+      const report = await runDoctor({
+        cipher: createAiSecretCipher(process.env),
+        config,
+        env: process.env,
+        migrationDb,
+        migrationDirectories: [],
+        runner
+      });
+
+      for (const check of report.checks) {
+        if (!check.ok) {
+          expect(check.repair).toBeTruthy();
+        }
+      }
     });
   });
 
