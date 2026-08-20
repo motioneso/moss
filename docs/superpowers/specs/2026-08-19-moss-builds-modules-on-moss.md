@@ -219,12 +219,12 @@ With it on, Moss plans, builds and ships, and tells the admin it is done.
   surface. It is not a new artifact type and not an interpreted configuration.
 - Full range remains the target: own database tables, scheduled work, settings, assistant tools,
   pages, declared credentials. Nothing is withheld by design. But it is delivered in stages, because
-  the cost of a *draft* running live differs enormously by capability — see "Delivery stages". Ben
+  the cost of a _draft_ running live differs enormously by capability — see "Delivery stages". Ben
   agreed 2026-08-19 that the first stage excludes a draft creating its own database tables.
 - A built module must satisfy the existing module validator unchanged. The validator is the standard;
   no parallel, looser path is created for generated modules. If a generated module cannot pass it,
   that is a build failure, not a reason to relax the validator.
-- The boot-time scan changes for drafts. See "A draft runs live" below. A *finished* module still
+- The boot-time scan changes for drafts. See "A draft runs live" below. A _finished_ module still
   becomes visible at restart; lifting that for everyone is deliberately not in scope.
 
 **Data ownership — the platform writes it, not the machine**
@@ -265,7 +265,7 @@ Four things genuinely block a live draft, in size order:
    process, a rescan trigger (an authenticated endpoint on the API, a new action on the existing
    control queue for the worker), and turning the by-value hand-offs into function calls. The job
    reconciler already takes its discoveries as a function.
-2. **Per-user visibility does not exist.** A module is instance-wide on or off, with a per-user *deny*
+2. **Per-user visibility does not exist.** A module is instance-wide on or off, with a per-user _deny_
    list only (`app.external_modules`, `app.module_enablement`). A draft visible to its author alone
    has to be invented: a draft status plus an owner on the module row, both active-module resolvers
    taught to treat a draft as active only for its owner, and `app.list_active_external_module_users`
@@ -463,7 +463,7 @@ the invented-class audit in the `design-system` skill, and note that its second 
 ## Delivery stages
 
 Each stage is usable on its own, not scaffolding for the next. The split follows the cost of running a
-*draft* live, which differs enormously by capability.
+_draft_ live, which differs enormously by capability.
 
 **Stage 1 — a draft with a page and background work, storing nothing new, adding nothing to chat.**
 This is the videos module: fetch today's videos from two channels, show them with the video embedded.
