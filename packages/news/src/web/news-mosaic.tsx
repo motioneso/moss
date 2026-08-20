@@ -310,7 +310,19 @@ export function SourceRail({ groups }: { readonly groups: readonly NewsSourceGro
   if (groups.length === 0) return null;
   return (
     <section className="nw-rail" aria-label="From your sources">
-      <p className="nw-kicker">From your sources</p>
+      {/*
+       * #1759: every module page links to its own settings page. News only offered that link
+       * from its empty state, so a user who already had sources had no way back to change
+       * them. The head sits on the source list rather than in the masthead — Ben cleared the
+       * masthead folio on the sibling Sports page (2026-07-07) and moved its Manage control
+       * down onto the band it configures; this is the same placement for the same reason.
+       */}
+      <div className="nw-rail__head">
+        <p className="nw-kicker">From your sources</p>
+        <a className="nw-rail__manage" href="/settings?section=modules&module=news">
+          Manage
+        </a>
+      </div>
       {groups.map((group) => (
         <div className="nw-rail__group" key={group.sourceKey}>
           <a className="nw-rail__src" href={group.homepageUrl} target="_blank" rel="noreferrer">

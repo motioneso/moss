@@ -281,6 +281,19 @@ describe("job-search web Root", () => {
     vi.clearAllMocks();
   });
 
+  // #1759: a module page has to lead to its own settings page, or the settings are reachable
+  // only by someone who already knows the URL. Asserted on the masthead, which renders in every
+  // state — a link that only appeared on one screen is the defect this issue is about.
+  it("links to its own settings page from the masthead", async () => {
+    mockUseProfiles.mockReturnValue(empty());
+    const renderer = await renderRoot();
+
+    const hrefs = renderer.root
+      .findAllByType("a")
+      .map((node) => node.props.href as string | undefined);
+    expect(hrefs).toContain("/settings?section=modules&module=job-search");
+  });
+
   it("starts bootstrap immediately with zero profiles", async () => {
     mockUseProfiles.mockReturnValue(empty());
     const renderer = await renderRoot();

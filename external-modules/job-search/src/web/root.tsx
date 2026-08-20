@@ -73,16 +73,29 @@ function ModuleMasthead(props: { profile: Profile | null }): ReactNodeLike {
         <span className="jds-eyebrow">Moss · Module</span>
         <h1 className="jds-section-title">Job Search</h1>
       </div>
-      {status ? (
-        <span
-          className={`jds-indicator jds-indicator--${status.modifier}${
-            status.modifier === "ready" ? " jds-indicator--live" : ""
-          }`}
+      <div className="jsm-masthead__aside">
+        {status ? (
+          <span
+            className={`jds-indicator jds-indicator--${status.modifier}${
+              status.modifier === "ready" ? " jds-indicator--live" : ""
+            }`}
+          >
+            <span className="jds-indicator__dot" />
+            <span className="jds-eyebrow">{status.text}</span>
+          </span>
+        ) : null}
+        {/*
+         * #1759: every module page links to its own settings page. A plain anchor because a
+         * module web surface gets React and nothing else from the runtime — there is no host
+         * navigate to call, so leaving the module costs a full page load. Same trade as Food.
+         */}
+        <a
+          className="jds-btn jds-btn--quiet jds-btn--sm jsm-settings-link"
+          href="/settings?section=modules&module=job-search"
         >
-          <span className="jds-indicator__dot" />
-          <span className="jds-eyebrow">{status.text}</span>
-        </span>
-      ) : null}
+          Settings
+        </a>
+      </div>
     </div>
   );
 }

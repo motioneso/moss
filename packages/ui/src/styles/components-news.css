@@ -230,6 +230,25 @@
 
 /* ------------------------------------------------------------- Source rail */
 
+/* #1759 — the rail's own head: the "From your sources" kicker plus the way to change them.
+   Mirrors .sp-ticker__head on the Sports page, where the same control sits on the band it
+   configures rather than in the masthead. */
+.nw-rail__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.nw-rail__manage {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  color: var(--text-muted);
+}
+.nw-rail__manage:hover {
+  color: var(--text);
+}
+
 .nw-rail__group {
   border-bottom: 1px solid var(--border-subtle);
 }
