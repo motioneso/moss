@@ -1,0 +1,266 @@
+/* Preview-only layout. No colours here - all colour comes from tokens.css. */
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+.pv-page {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-6) var(--space-12);
+}
+.pv-nav {
+  border-bottom: 1px solid var(--line);
+  padding: var(--space-3) var(--space-6);
+  display: flex;
+  gap: var(--space-5);
+  align-items: center;
+}
+.pv-nav a {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: var(--text-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.pv-nav a.on {
+  color: var(--text);
+}
+.pv-head {
+  margin-bottom: var(--space-7);
+}
+.pv-lede {
+  max-width: 60ch;
+  color: var(--text-muted);
+  font-size: var(--text-md);
+  margin: var(--space-3) 0 0;
+}
+.pv-stack > * + * {
+  margin-top: var(--space-4);
+}
+.pv-row {
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-start;
+}
+.pv-row--mid {
+  align-items: center;
+}
+.pv-grow {
+  flex: 1;
+  min-width: 0;
+}
+.pv-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-4);
+}
+.pv-meta {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.pv-grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-5);
+}
+.pv-grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-5);
+}
+.pv-claims > * + * {
+  margin-top: 0;
+}
+.pv-actions {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  margin-top: var(--space-5);
+}
+.pv-spacer {
+  flex: 1;
+}
+.pv-note {
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+}
+.pv-sect {
+  margin-top: var(--space-9);
+}
+.pv-log {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.pv-log > * + * {
+  margin-top: var(--space-2);
+}
+.pv-log b {
+  color: var(--text);
+  font-weight: var(--weight-medium, 600);
+}
+
+/* Hairline list: rows separated by a rule, no card around each one. */
+.pv-list {
+  margin-top: var(--space-2);
+}
+.pv-list > .pv-item {
+  padding: var(--space-5) 0;
+  border-top: 1px solid var(--line);
+}
+.pv-open {
+  padding: var(--space-5) 0 var(--space-2);
+}
+
+/* --- Added for plan.html and draft.html ------------------------------------ */
+
+/* The plan: label on the left, the sentence on the right. Rows, not cards -
+   the card is the governor around the whole plan, because the plan is the decision. */
+.pv-plan {
+  margin: var(--space-3) 0 0;
+}
+.pv-plan > .pv-plan-row {
+  display: grid;
+  grid-template-columns: 9.5rem 1fr;
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--line);
+}
+.pv-plan > .pv-plan-row:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+.pv-plan-row dt {
+  font-size: var(--text-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+.pv-plan-row dd {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+/* Draft page beside the chat drawer. The page keeps a reading measure of its own;
+   the drawer is the same width it is in the app. */
+.pv-frame {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  min-height: 100vh;
+}
+.pv-main {
+  padding: var(--space-7) var(--space-7) var(--space-12);
+}
+.pv-main-inner {
+  max-width: 720px;
+  margin: 0 auto;
+}
+.pv-drawer {
+  border-left: 1px solid var(--line);
+  padding: var(--space-6) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+}
+.pv-drawer__scroll {
+  overflow: auto;
+}
+.pv-drawer textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+.pv-drawer__scroll {
+  flex: 1;
+}
+.pv-drawer__foot {
+  border-top: 1px solid var(--line);
+  padding-top: var(--space-4);
+}
+
+/* Where a video plays. Layout only - a real embed goes here. */
+.pv-video {
+  aspect-ratio: 16/9;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: var(--space-3);
+}
+.pv-video span {
+  font-size: var(--text-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+.pv-entry {
+  padding: var(--space-6) 0;
+  border-top: 1px solid var(--line);
+}
+/* The plan reads the same in the drawer, on a narrower label column. */
+.pv-drawer .pv-plan > .pv-plan-row {
+  grid-template-columns: 5.5rem 1fr;
+}
+
+/* --- Narrow screens ---------------------------------------------------------
+   The drawer is a fixed-width column beside the page on a desktop. On a phone
+   there is no room for two columns, so the page runs full width and the drawer
+   follows underneath it, scrolling with the page rather than pinned. */
+@media (max-width: 900px) {
+  .pv-frame {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+  .pv-main {
+    padding: var(--space-6) var(--space-5) var(--space-8);
+  }
+  .pv-main-inner {
+    max-width: none;
+  }
+  .pv-drawer {
+    border-left: none;
+    border-top: 1px solid var(--line);
+    position: static;
+    height: auto;
+    padding: var(--space-6) var(--space-5) var(--space-10);
+  }
+  .pv-drawer__scroll {
+    overflow: visible;
+  }
+  .pv-page {
+    padding: var(--space-6) var(--space-5) var(--space-10);
+  }
+  .pv-nav {
+    gap: var(--space-4);
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  /* Stacked label-then-value reads better than a 9.5rem column on a phone. */
+  .pv-plan > .pv-plan-row,
+  .pv-drawer .pv-plan > .pv-plan-row {
+    grid-template-columns: 1fr;
+    gap: var(--space-1);
+  }
+  .pv-between {
+    flex-wrap: wrap;
+  }
+  .pv-actions {
+    flex-wrap: wrap;
+  }
+  .pv-spacer {
+    flex-basis: 100%;
+    height: 0;
+  }
+}

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Starting a build</title>
+    <link rel="stylesheet" href="/css/all.css" />
+    <link rel="stylesheet" href="/preview.css" />
+  </head>
+  <body>
+    <div class="pv-nav">
+      <a href="/workshop.html">The workshop</a><a href="/chat.html" id="nav">Starting a build</a
+      ><a href="/plan.html">Agreeing the plan</a><a href="/draft.html">Your draft, running</a
+      ><a href="/approval.html">Rejected: review &amp; approve</a>
+    </div>
+    <div class="pv-page" style="max-width: 620px">
+      <div class="pv-head">
+        <span class="jds-eyebrow jds-eyebrow--muted">Chat drawer</span>
+        <h1 class="jds-display jds-display--sm">Starting a build</h1>
+        <p class="pv-lede">
+          The conversation is where you describe it. The build itself leaves the conversation,
+          because it takes longer than a chat message is allowed to last.
+        </p>
+      </div>
+
+      <div class="jds-bubble jds-bubble--user">
+        Can you build me something that shows the Good Mythical Morning and Good Mythical More
+        videos posted today, with the video embedded?
+      </div>
+
+      <div style="margin-top: var(--space-5)">
+        <p>Yes. Two things I need first.</p>
+        <p>
+          Do you want just today's, or the last few days when they have not posted yet? And should
+          it be on its own page, or on your Today page?
+        </p>
+      </div>
+
+      <div class="jds-bubble jds-bubble--user" style="margin-top: var(--space-5)">
+        Own page, and fall back to the last three days
+      </div>
+
+      <div style="margin-top: var(--space-5)">
+        <p>
+          Right. Here is what I am going to build &mdash; the full plan is on "Agreeing the plan":
+        </p>
+        <ul style="margin: var(--space-3) 0; padding-left: var(--space-5)">
+          <li>A page called Mythical, in your sidebar</li>
+          <li>It reaches out to YouTube, and nowhere else</li>
+          <li>It keeps a list of channels you follow, private to you</li>
+          <li>It checks each morning at 7</li>
+        </ul>
+        <p>
+          It takes about ten minutes and costs roughly 0.60. You do not have to wait here &mdash; I
+          will let you know.
+        </p>
+      </div>
+
+      <div class="jds-governor" style="margin-top: var(--space-5)">
+        <span class="jds-governor__tag">Start building?</span>
+        <div class="jds-governor__content">
+          <p style="margin: 0">
+            When it is done it runs for you alone. Nobody else sees it until you ship it.
+          </p>
+        </div>
+        <div class="jds-governor__actions">
+          <button class="jds-btn jds-btn--primary jds-btn--sm">Build it</button>
+          <button class="jds-btn jds-btn--quiet jds-btn--sm">Not yet</button>
+        </div>
+      </div>
+
+      <div class="jds-toast jds-toast--ready" style="margin-top: var(--space-8)">
+        <span class="jds-toast__icon"></span>
+        <div class="jds-toast__body">
+          <p class="jds-toast__title">Mythical is running</p>
+          <p class="jds-toast__msg">Took 11 minutes. Only you can see it. Have a look.</p>
+        </div>
+      </div>
+      <p class="pv-note" style="margin-top: var(--space-3)">
+        This is how a finished build reaches you &mdash; a notification, not a message in the
+        conversation. A background job has no way to write into a chat thread today.
+      </p>
+    </div>
+    <script>
+      document.getElementById("nav").className = "on";
+    </script>
+  </body>
+</html>
