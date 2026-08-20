@@ -10,7 +10,11 @@ import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
 import { getBuiltInSqlMigrationDirectories } from "@moss/module-registry";
 
 import { DOCTOR_CHECKS } from "../../scripts/dev-instance/doctor-checks.js";
-import { resolveActiveAdminUserId, runDoctor, type DoctorDeps } from "../../scripts/dev-instance/doctor.js";
+import {
+  resolveActiveAdminUserId,
+  runDoctor,
+  type DoctorDeps
+} from "../../scripts/dev-instance/doctor.js";
 import type { DevInstanceConfig } from "../../scripts/dev-instance/config.js";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID } from "../uat/seed/admin.js";
 import { connectionStrings, resetEmptyFoundationDatabase } from "./test-database.js";
@@ -34,7 +38,10 @@ function getCheck(id: string) {
 async function insertUser(
   id: string,
   email: string,
-  options: { readonly isInstanceAdmin?: boolean; readonly status?: "pending" | "active" | "deactivated" } = {}
+  options: {
+    readonly isInstanceAdmin?: boolean;
+    readonly status?: "pending" | "active" | "deactivated";
+  } = {}
 ): Promise<void> {
   const client = new Client({ connectionString: connectionStrings.bootstrap });
   await client.connect();
@@ -89,7 +96,10 @@ describe("dev-instance doctor (#1258)", () => {
   beforeAll(() => {
     originalSecretKey = process.env.JARVIS_AI_SECRET_KEY;
     process.env.JARVIS_AI_SECRET_KEY = "dev-instance-doctor-test-key";
-    migrationDb = createDatabase({ connectionString: connectionStrings.migration, maxConnections: 1 });
+    migrationDb = createDatabase({
+      connectionString: connectionStrings.migration,
+      maxConnections: 1
+    });
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
     runner = new DataContextRunner(appDb);
   });
@@ -201,9 +211,9 @@ describe("dev-instance doctor (#1258)", () => {
         await repository.setInstanceDefaultProvider(scopedDb, provider.id);
         await repository.createModel(scopedDb, {
           providerConfigId: provider.id,
-          providerModelId: "embed-only-model",
-          displayName: "Embed Only",
-          capabilities: ["embedding"]
+          providerModelId: "vision-only-model",
+          displayName: "Vision Only",
+          capabilities: ["vision"]
         });
       });
       const result = await getCheck("chat-model-resolves").run(deps(), ADMIN_ID);

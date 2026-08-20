@@ -40,10 +40,7 @@ export interface DoctorDeps {
 export interface DoctorCheck {
   readonly id: DoctorCheckId;
   readonly repair: string;
-  run(
-    deps: DoctorDeps,
-    adminUserId: string | null
-  ): Promise<{ ok: boolean; detail: string }>;
+  run(deps: DoctorDeps, adminUserId: string | null): Promise<{ ok: boolean; detail: string }>;
 }
 
 export async function resolveActiveAdminUserId(

@@ -5,7 +5,12 @@ import { readMigrationStatus, type DataContextDb } from "@moss/db";
 import { RpcConnection } from "@moss/chat/live";
 import { resolveMossEnv } from "@moss/db";
 
-import { UAT_ADMIN_EMAIL, UAT_ADMIN_ID, UAT_SECOND_OWNER_EMAIL, UAT_SECOND_OWNER_ID } from "../../tests/uat/seed/admin.js";
+import {
+  UAT_ADMIN_EMAIL,
+  UAT_ADMIN_ID,
+  UAT_SECOND_OWNER_EMAIL,
+  UAT_SECOND_OWNER_ID
+} from "../../tests/uat/seed/admin.js";
 import type { DoctorCheck, DoctorDeps } from "./doctor.js";
 
 const repository = new AiRepository();
@@ -78,7 +83,8 @@ const singleInstanceDefaultProvider: DoctorCheck = {
       if (!providerId) {
         return {
           ok: false,
-          detail: "no single instance-default assistant provider resolves (zero providers, or " +
+          detail:
+            "no single instance-default assistant provider resolves (zero providers, or " +
             "more than one active admin-owned provider with none flagged default)"
         };
       }

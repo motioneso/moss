@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
+import { DOCTOR_CHECKS } from "../../scripts/dev-instance/doctor-checks.js";
 import {
-  DOCTOR_CHECKS
-} from "../../scripts/dev-instance/doctor-checks.js";
-import { formatDoctorReport, type DoctorCheckId, type DoctorReport } from "../../scripts/dev-instance/doctor.js";
+  formatDoctorReport,
+  type DoctorCheckId,
+  type DoctorReport
+} from "../../scripts/dev-instance/doctor.js";
 
 const ALL_CHECK_IDS: readonly DoctorCheckId[] = [
   "database-reachable",
