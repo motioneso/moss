@@ -9,12 +9,20 @@ on:
     branches: [main]
     paths:
       - "external-modules/**"
+      # #1747: bundled into every module's dist/, so a change here really does change every
+      # published artifact. Leaving it out of this list is why an SDK change used to strand the
+      # registry silently — no publish ran at all, and the next unrelated module merge inherited
+      # the failure. modules-registry-check.yml forces the version bumps on the PR, so by the time
+      # a change gets here it is publishable.
+      - "packages/module-sdk/**"
       - "scripts/publish-module-registry.ts"
       - ".github/workflows/modules-registry.yml"
   workflow_dispatch:
 
 permissions:
   contents: write
+  # #1747: the failure step files an issue when a publish breaks.
+  issues: write
 
 concurrency:
   group: modules-registry
@@ -71,3 +79,24 @@ jobs:
               gh api -X DELETE "repos/${{ github.repository }}/releases/assets/$id"
             fi
           done
+
+      # #1747: a failed publish used to produce nothing a human sees. The symptom for users is the
+      # absence of something — no update offered, no error — which nobody goes looking for. This
+      # files one issue and reuses it, so a run of failures does not bury the board.
+      - name: File an issue if the publish failed
+        if: failure()
+        run: |
+          TITLE="Module registry publish is failing"
+          EXISTING="$(gh issue list --state open --label bug --search "$TITLE in:title" \
+            --json number --jq '.[0].number // empty')"
+          BODY="Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          Commit: ${{ github.sha }}
+
+          Users are not being offered module updates until this publishes. If the log says an
+          artifact changed without a version bump, see #1747 — a change to a shared package
+          bundled into every module re-packs all of them."
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY"
+          else
+            gh issue create --title "$TITLE" --label bug --body "$BODY"
+          fi

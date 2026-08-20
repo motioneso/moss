@@ -1,6 +1,6 @@
 {
   "name": "job-search",
   "private": true,
-  "version": "0.2.8",
+  "version": "0.2.9",
   "description": "Moss Job Search downloaded module. Prebuilt artifact package: jarvis.module.json + dist/worker.js + dist/web/index.js."
 }
