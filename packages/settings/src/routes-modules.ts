@@ -26,8 +26,13 @@ import { HttpError } from "@moss/module-sdk";
 import type { MossModuleManifest } from "@moss/module-sdk";
 
 import type { SettingsRepository } from "./repository.js";
-import type { SettingsRoutesDependencies } from "./routes.js";
-import { computeMyModuleDto, handleRouteError, toMyModuleDto } from "./routes-serializers.js";
+import type { InstalledExternalModuleSummary, SettingsRoutesDependencies } from "./routes.js";
+import {
+  computeMyModuleDto,
+  handleRouteError,
+  toMyModuleDto,
+  toMyModuleDtoFromExternal
+} from "./routes-serializers.js";
 
 // Only the fields the module routes consume; the composition root passes the full deps object.
 export interface ModuleRoutesContext {
@@ -55,6 +60,14 @@ export function registerModuleRoutes(server: FastifyInstance, ctx: ModuleRoutesC
 
   function findManifest(id: string): MossModuleManifest | undefined {
     return requireManifests().find((m) => m.id === id);
+  }
+
+  // #1762: absent port = no external module support in this composition (tests, and any host that
+  // does not wire it). An empty list is the honest answer there, not an error.
+  async function listInstalledExternalModules(
+    accessContext: AccessContext
+  ): Promise<readonly InstalledExternalModuleSummary[]> {
+    return (await dependencies.listInstalledExternalModules?.(accessContext)) ?? [];
   }
 
   function isRequired(m: MossModuleManifest): boolean {
@@ -256,6 +269,9 @@ export function registerModuleRoutes(server: FastifyInstance, ctx: ModuleRoutesC
   server.get("/api/me/modules", { schema: listMyModulesRouteSchema }, async (request, reply) => {
     try {
       const accessContext = await dependencies.resolveAccessContext(request);
+      // #1762: read the installed external modules before opening the actor's data context — the
+      // port opens one of its own, and nesting two is a deadlock risk on a single-connection pool.
+      const installedExternal = await listInstalledExternalModules(accessContext);
       const modules = await dependencies.dataContext.withDataContext(
         accessContext,
         async (scopedDb) => {
@@ -268,9 +284,16 @@ export function registerModuleRoutes(server: FastifyInstance, ctx: ModuleRoutesC
               .filter((r) => r.scope === "user" && r.user_id === accessContext.actorUserId)
               .map((r) => r.module_id)
           );
-          return requireManifests().map((m) =>
+          const builtIn = requireManifests().map((m) =>
             toMyModuleDto(m, instanceDisabled.has(m.id), userDisabled.has(m.id))
           );
+          // #1762: installed external modules belong in the same list. Before this they were
+          // absent entirely, so a downloaded module could never be configured by its user —
+          // every branch the pane has for one was unreachable.
+          const external = installedExternal.map((m) =>
+            toMyModuleDtoFromExternal(m, userDisabled.has(m.id))
+          );
+          return [...builtIn, ...external];
         }
       );
       return { modules };
@@ -287,27 +310,40 @@ export function registerModuleRoutes(server: FastifyInstance, ctx: ModuleRoutesC
         const accessContext = await dependencies.resolveAccessContext(request);
         const disabled = parseDisabledBody(request.body);
         const manifest = findManifest(request.params.id);
-        if (!manifest) throw new HttpError(404, "Module not found");
-        if (disabled && isRequired(manifest)) {
+        // #1762: an external module has no built-in manifest, so it has to be resolved from the
+        // installed set. Without this the route 404s on every downloaded module, which would make
+        // the switch the list now renders dead on arrival.
+        const external = manifest
+          ? undefined
+          : (await listInstalledExternalModules(accessContext)).find(
+              (m) => m.id === request.params.id
+            );
+        if (!manifest && !external) throw new HttpError(404, "Module not found");
+        if (manifest && disabled && isRequired(manifest)) {
           throw new HttpError(409, "Required modules cannot be disabled");
         }
-        if (disabled && !supportsUserDisable(manifest)) {
+        if (manifest && disabled && !supportsUserDisable(manifest)) {
           throw new HttpError(422, "This module cannot be disabled per-user");
         }
+        const moduleId = manifest?.id ?? request.params.id;
         const dto = await dependencies.dataContext.withDataContext(
           accessContext,
           async (scopedDb) => {
             await repository.setUserModuleDisabled(scopedDb, {
-              moduleId: manifest.id,
+              moduleId,
               disabled,
               actorUserId: accessContext.actorUserId,
               requestId: requireRequestId(accessContext)
             });
             // #1263 Task 15: same install-time grant wiring as the admin enable path above.
-            if (!disabled) {
+            // External modules are skipped: the grant is keyed off a built-in manifest's declared
+            // operations, and an external module's grants are issued by its install instead.
+            if (!disabled && manifest) {
               await dependencies.grantSelfOperationForModule?.(scopedDb, manifest);
             }
-            return computeMyModuleDto(repository, scopedDb, manifest, accessContext.actorUserId);
+            return manifest
+              ? computeMyModuleDto(repository, scopedDb, manifest, accessContext.actorUserId)
+              : toMyModuleDtoFromExternal(external as InstalledExternalModuleSummary, disabled);
           }
         );
         return { module: dto };

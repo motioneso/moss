@@ -143,6 +143,28 @@ export function createActiveExternalModulesResolverForApi(input: {
   };
 }
 
+/**
+ * #1762: the same reconcile, but WITHOUT subtracting the actor's own deny rows.
+ *
+ * The settings Modules pane needs the modules a user *could* use, not the ones they have left
+ * switched on — a module filtered out by its own off switch disappears from the list, and the
+ * switch that turned it off goes with it. Every other caller wants the filtered set, which is why
+ * this is a separate resolver rather than a flag on the one above.
+ */
+export function createInstalledExternalModulesResolverForApi(input: {
+  readonly appDataContext: DataContextRunner;
+  readonly settingsRepository: SettingsRepository;
+  readonly discoveries: readonly ExternalModuleDiscovery[];
+}): (accessContext: AccessContext) => Promise<readonly ReconciledExternalModule[]> {
+  return async (accessContext) => {
+    const states = await input.appDataContext.withDataContext(accessContext, async (scopedDb) =>
+      input.settingsRepository.listExternalModuleStates(scopedDb)
+    );
+    const { modules } = reconcileExternalModules(input.discoveries, states);
+    return modules.filter((module) => module.active);
+  };
+}
+
 export function createExternalActiveModulesResolver(
   resolveEnabledModules: (actorUserId: string) => Promise<readonly MossModuleManifest[]>,
   externalModuleIds: ReadonlySet<string>,

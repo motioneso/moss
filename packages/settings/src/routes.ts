@@ -21,18 +21,13 @@ import {
   putRegistrationSettingsRouteSchema,
   upsertInstanceSettingRouteSchema,
   type AuthProviderStatusDto,
-  // #917: wire DTO for the external-module admin surface. Field-identical to the reconcile
-  // port's output — no local mapper needed (see ExternalModulesDependencies.reconcile). The
-  // module-management route handlers themselves now live in ./routes-modules.js; this type is
-  // still referenced here by ExternalModulesDependencies.reconcile's signature.
-  type ExternalModuleDto,
   type ChatMultiplexerAvailability,
   type ChatMultiplexerChoice,
   type MultiplexerKind,
   type MultiplexerSource,
   type UpsertInstanceSettingRequest
 } from "@moss/shared";
-import type { MossModuleManifest, JsonMossModuleManifest } from "@moss/module-sdk";
+import type { MossModuleManifest } from "@moss/module-sdk";
 import { HttpError } from "@moss/module-sdk";
 
 import type { PgBoss } from "@moss/jobs";
@@ -74,11 +69,10 @@ import {
   registerProactiveMonitoringSettingsRoutes,
   type ReconcileProactiveScheduleFn
 } from "./proactive-monitoring-routes.js";
-import { SettingsRepository, type ExternalModuleState } from "./repository.js";
+import { SettingsRepository } from "./repository.js";
 import { createModuleCredentialSecretCipher } from "./module-credential-crypto.js";
 import { registerModuleCredentialRoutes } from "./routes-module-credentials.js";
 // #917: the module-management route family was extracted here for the 1000-line file-size gate.
-import type { ModuleRegistryEntryLike } from "./module-registry-rows.js";
 import { registerModuleRegistryRoutes } from "./routes-module-registry.js";
 import { registerModuleRoutes } from "./routes-modules.js";
 import {
@@ -102,81 +96,20 @@ export type GetChatMultiplexerStatus = (configured: ChatMultiplexerChoice) => Pr
   readonly envOverride: MultiplexerKind | null;
 }>;
 
-// #917 — LOCAL mirrors of @moss/module-registry's external-module types. Settings does
-// NOT (and must not) depend on @moss/module-registry — that package already depends on
-// @moss/settings, so importing back would create a dependency cycle and violate module
-// isolation. These are structurally identical to the registry's ExternalModuleDiscovery /
-// ExternalModuleRejection; the composition root (apps/api) passes the REAL registry values
-// in and TypeScript's structural typing accepts them. Keep in sync with
-// packages/module-registry/src/external/types.ts if that shape ever changes.
-export interface ExternalModuleDiscovery {
-  readonly id: string;
-  readonly dir: string;
-  readonly manifest: JsonMossModuleManifest;
-  readonly manifestHash: string;
-  readonly packageHash: string;
-}
-
-export interface ExternalModuleRejection {
-  readonly id: string;
-  readonly reason: string;
-}
-
-/**
- * Boot-time external-module discovery snapshot (#917), injected by the composition root.
- * The admin GET route (Task 9) reconciles `discoveries` against app.external_modules;
- * `rejected` is surfaced read-only so admins can see why a mounted dir did not load.
- * Absent / `enabled: false` ⇒ the external-module admin surface reports the feature off.
- */
-export interface ExternalModulesDependencies {
-  readonly enabled: boolean;
-  readonly discoveries: readonly ExternalModuleDiscovery[];
-  readonly rejected: readonly ExternalModuleRejection[];
-  /**
-   * #917 — reconcile port injected by the composition root (apps/api). Settings CANNOT import
-   * @moss/module-registry (reconcileExternalModules lives there; that package already depends
-   * on @moss/settings, so a direct import cycles + breaks module isolation — same discipline as
-   * reconcileNotesSchedule). apps/api closes this over the boot discovery snapshot, so callers pass
-   * only the persisted states. `modules` are already reconciled + DTO-shaped (ReconciledExternalModule
-   * is field-identical to ExternalModuleDto), drift-inactive already applied; `driftDisable` is the
-   * to-persist auto-disable list (the GET route writes it back). reason is DRIFT_DISABLED_REASON,
-   * baked in by reconcile — settings never needs that constant.
-   */
-  readonly reconcile: (states: readonly ExternalModuleState[]) => {
-    readonly modules: readonly ExternalModuleDto[];
-    readonly driftDisable: readonly { readonly id: string; readonly reason: string }[];
-  };
-}
-
-/**
- * #964 — module-distribution port injected by the composition root. Network + filesystem
- * only; all DB writes stay in this package (updateExternalModuleStaging etc.), so the
- * pipeline never needs a database handle and settings never imports module-registry.
- */
-export interface ModuleDistributionDependencies {
-  /**
-   * Pinned-registry index entries, served through the composition root's 10-minute
-   * in-process cache; `refresh: true` busts it. null = registry unreachable/invalid —
-   * the GET degrades to local-only rows, never a 500 (spec §6).
-   */
-  readonly fetchRegistryEntries: (options: {
-    readonly refresh: boolean;
-  }) => Promise<readonly ModuleRegistryEntryLike[] | null>;
-  /** Run download→verify→extract→stage (Task 5 pipeline). Never touches the DB. */
-  readonly download: (input: {
-    readonly moduleId: string;
-    readonly version?: string;
-  }) => Promise<
-    | { readonly ok: true; readonly version: string; readonly packageHash: string }
-    | { readonly ok: false; readonly code: string; readonly message: string }
-  >;
-  /** Delete JARVIS_MODULES_DIR/<id>. Idempotent; missing dir is fine. */
-  readonly removeModuleFiles: (moduleId: string) => Promise<void>;
-  /** LIVE readdir of JARVIS_MODULES_DIR (module dirs only, no dot-dirs). */
-  readonly listOnDiskModuleIds: () => Promise<readonly string[]>;
-  /** Ids declared in JARVIS_MODULES_ENSURE (for declared-not-present rows). */
-  readonly ensureIds: readonly string[];
-}
+// #917/#964/#1762: the external-module and module-distribution dependency types moved to their
+// own file for the 1000-line file-size gate. Re-exported so importers keep using ./routes.js.
+import type {
+  ExternalModulesDependencies,
+  InstalledExternalModuleSummary,
+  ModuleDistributionDependencies
+} from "./routes-external-module-types.js";
+export type {
+  ExternalModuleDiscovery,
+  ExternalModuleRejection,
+  ExternalModulesDependencies,
+  InstalledExternalModuleSummary,
+  ModuleDistributionDependencies
+} from "./routes-external-module-types.js";
 
 export interface SettingsRoutesDependencies {
   // Kysely exemption: only BootstrapHelper uses rootDb before any actor/session exists.
@@ -198,6 +131,19 @@ export interface SettingsRoutesDependencies {
   readonly repository?: SettingsRepository;
   /** #917 external-module discovery snapshot; routes added in Task 9 consume it. */
   readonly externalModules?: ExternalModulesDependencies;
+  /**
+   * #1762 — installed, instance-active external modules for the acting user, injected by the
+   * composition root for the same no-import-cycle reason as `externalModules.reconcile`.
+   *
+   * Deliberately NOT filtered by the actor's own deny rows: this feeds the personal Modules list,
+   * which has to keep showing a module the user switched off so they can switch it back on.
+   *
+   * Only the fields that list needs are in the port. In particular `hasPreferences` is a flag, not
+   * the declarations — the pane fetches those separately when the user opens the module.
+   */
+  readonly listInstalledExternalModules?: (
+    accessContext: AccessContext
+  ) => Promise<readonly InstalledExternalModuleSummary[]>;
   /** #964 module-distribution port; registry routes degrade to enabled:false when absent. */
   readonly moduleDistribution?: ModuleDistributionDependencies;
   readonly reconcileExternalModuleJobs?: (

@@ -80,6 +80,7 @@ import {
 } from "./external-module-jobs.js";
 import {
   createActiveExternalModulesResolverForApi,
+  createInstalledExternalModulesResolverForApi,
   createExternalActiveModulesResolver,
   createExternalModuleTools
 } from "./external-module-tools.js";
@@ -382,6 +383,13 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       discoveries: externalModuleSnapshot.discoveries
     });
 
+    // #1762: the personal Modules list needs the installed set, not the actor-filtered one.
+    const listInstalledExternalModules = createInstalledExternalModulesResolverForApi({
+      appDataContext: dataContext,
+      settingsRepository: externalModulesRepository,
+      discoveries: externalModuleSnapshot.discoveries
+    });
+
     const externalTools = createExternalModuleTools({
       discoveries: externalModuleSnapshot.discoveries,
       workerDataContext,
@@ -579,6 +587,15 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
         rejected: externalModuleSnapshot.rejected,
         reconcile: (states) => reconcileExternalModules(externalModuleSnapshot.discoveries, states)
       },
+      // #1762: narrowed to the four fields the personal Modules list needs, so the settings
+      // package never sees a ReconciledExternalModule (it cannot import that type).
+      listInstalledExternalModules: async (accessContext) =>
+        (await listInstalledExternalModules(accessContext)).map((module) => ({
+          id: module.id,
+          name: module.name,
+          version: module.version,
+          hasPreferences: module.preferences.length > 0
+        })),
       moduleDistribution,
       // #1263 Task 15: install-time self-operation grants also apply on (re-)enable. Built here
       // over the one AiRepository instance this file already owns, so settings never imports
