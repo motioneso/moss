@@ -5,7 +5,10 @@ export {
   type HandleRouteErrorOptions
 } from "./route-errors.js";
 
-export { sessionRateLimitKey, mcpSessionRateLimitKey } from "./rate-limit-key.js";
+// #1120: sessionRateLimitKey / mcpSessionRateLimitKey moved to the ./server subpath
+// (@moss/module-sdk/server) because they import node:crypto (rate-limit-key.ts) — see that
+// file's docstring. The barrel itself must stay free of any node:* import, guarded by
+// tests/unit/module-sdk-barrel-browser-safety.test.ts.
 
 export { CORE_VERSION, compareMossVersions, satisfiesCoreVersion } from "./core-version.js";
 
@@ -433,9 +436,11 @@ export interface ModuleNotificationManifest {
 }
 
 // #1110 regression fix: moved to ./ai-capabilities.ts (a node-clean leaf) so @moss/shared can
-// import the AI_MODEL_CAPABILITIES value via the ./ai-capabilities subpath instead of this barrel,
-// which eagerly re-exports rate-limit-key.js (node:crypto) below and would leak it into the
-// apps/web browser bundle. Re-exported here so existing barrel consumers are unaffected.
+// import the AI_MODEL_CAPABILITIES value via the ./ai-capabilities subpath instead of this barrel.
+// At the time this barrel also eagerly re-exported rate-limit-key.js (node:crypto), which would
+// have leaked into the apps/web browser bundle; #1120 later moved that re-export to the ./server
+// subpath so the barrel itself is node:*-clean too. Re-exported here so existing barrel consumers
+// are unaffected.
 export {
   AI_MODEL_CAPABILITIES,
   type AiModelTier,

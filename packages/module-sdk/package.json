@@ -8,6 +8,7 @@
     "./ai-capabilities": "./src/ai-capabilities.ts",
     "./errors": "./src/errors.ts",
     "./core-version": "./src/core-version.ts",
+    "./server": "./src/server.ts",
     "./worker": "./src/worker.ts"
   },
   "scripts": {
