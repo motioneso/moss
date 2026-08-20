@@ -50,7 +50,7 @@ Before touching anything, read these to ground the edits:
 - `export PATH="$HOME/.local/bin:$PATH"` (corepack pnpm shim) — or use `corepack pnpm <script>`.
 - `pnpm db:up` before any integration test.
 - **Editing an unreleased migration?** You are _adding_ new migrations here, not editing applied
-  ones, so the checksum guard won't fire. But if you must reset, `pnpm db:down && pnpm db:up`
+  ones, so the checksum guard won't fire. But if you must reset, `pnpm db:reset`
   recreates the volume fresh.
 - Gate: `pnpm verify:foundation` (lint, format:check, check:file-size, typecheck, db:migrate,
   test:integration). Must end green.
@@ -417,7 +417,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Reset the database so all migrations apply from scratch**
 
-Run: `export PATH="$HOME/.local/bin:$PATH" && pnpm db:down && pnpm db:up`
+Run: `export PATH="$HOME/.local/bin:$PATH" && pnpm db:reset`
 Expected: `Container jarv1s-postgres  Healthy`.
 
 - [ ] **Step 2: Run the full foundation gate**

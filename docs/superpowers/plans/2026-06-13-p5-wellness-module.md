@@ -5421,7 +5421,7 @@ git diff origin/phase2-portable-deploy...HEAD -- packages/wellness apps/web/src/
 find packages -path '*/sql/*.sql' -printf '%f\n' | sort | tail -6
 ```
 
-Expected: `0066_wellness_checkins.sql`, `0067_wellness_medications.sql`, `0068_wellness_medication_logs.sql` are the wellness files and no OTHER package also claims 0066–0068 (recall `0065_module_enablement.sql` is the Phase-2 seam already on the branch). If a collision appeared (another slice landed), rename the wellness migrations to the next free contiguous global prefixes, update `manifest.ts` `database.migrations`, `pnpm db:down && pnpm db:up && pnpm db:migrate`, and re-run the suite before continuing.
+Expected: `0066_wellness_checkins.sql`, `0067_wellness_medications.sql`, `0068_wellness_medication_logs.sql` are the wellness files and no OTHER package also claims 0066–0068 (recall `0065_module_enablement.sql` is the Phase-2 seam already on the branch). If a collision appeared (another slice landed), rename the wellness migrations to the next free contiguous global prefixes, update `manifest.ts` `database.migrations`, `pnpm db:reset`, and re-run the suite before continuing.
 
 - [ ] **Step 2: Run the full foundation gate**
 

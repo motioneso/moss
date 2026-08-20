@@ -46,7 +46,7 @@ pnpm dev:worker     # pg-boss worker (must be its own process)
 pnpm dev:web        # Vite shell on :5173 (--host for LAN)
 ```
 
-**To get another clean slate** (re-fire onboarding): drop+recreate the `jarv1s` database — or `pnpm db:down && pnpm db:up` — then `pnpm db:migrate`. After that, `GET /api/bootstrap/status` returns `{ needsBootstrap: true }` again.
+**To get another clean slate** (re-fire onboarding): drop+recreate the `jarv1s` database — or `pnpm db:reset` — then `pnpm db:migrate`. After that, `GET /api/bootstrap/status` returns `{ needsBootstrap: true }` again.
 
 ---
 

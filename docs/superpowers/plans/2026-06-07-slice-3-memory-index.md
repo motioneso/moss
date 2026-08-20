@@ -8,7 +8,7 @@
 
 **Tech Stack:** pgvector (via `pgvector/pgvector:pg17` docker image), Kysely raw SQL for vector ops, Node.js `node:crypto` for content hashing; no external markdown parser needed.
 
-**Prerequisite:** Slice 2 (`packages/vault`) must be complete. `pnpm db:down && pnpm db:up` is required after the docker-compose image change.
+**Prerequisite:** Slice 2 (`packages/vault`) must be complete. `pnpm db:reset` is required after the docker-compose image change.
 
 ---
 
@@ -194,9 +194,7 @@ Add to the `JarvisDatabase` interface (alongside the existing table entries):
 - [ ] **Step 5: Restart the database with the new pgvector image**
 
 ```bash
-pnpm db:down
-pnpm db:up
-pnpm db:migrate
+pnpm db:reset
 ```
 
 Expected: `pnpm db:migrate` reports "applied 0001_memory_index.sql" (from the memory module) plus bootstrap runs the extension install. All previously-applied infra and module migrations are skipped.
@@ -1553,7 +1551,7 @@ pnpm verify:foundation              # full gate
 
 ## Notes for Implementer
 
-- `pnpm db:down && pnpm db:up` is required before running any tests if the Postgres container was already running with the old `postgres:17-alpine` image. The new `pgvector/pgvector:pg17` image must be pulled first (`docker pull pgvector/pgvector:pg17`).
+- `pnpm db:reset` is required before running any tests if the Postgres container was already running with the old `postgres:17-alpine` image. The new `pgvector/pgvector:pg17` image must be pulled first (`docker pull pgvector/pgvector:pg17`).
 - The `StubEmbeddingProvider` returns deterministic 384-dim vectors. It is not semantically meaningful — tests verify index correctness, not ranking quality. A real `LocalEmbeddingProvider` (using `@xenova/transformers` or similar) can be added as a separate task once the interface is validated.
 - The `vectorSearch` SQL uses RLS implicitly (the `owner_user_id` condition comes from the RLS policy). The explicit `WHERE` clause in `deleteFileChunks` / `deleteAllForUser` is belt-and-suspenders (RLS enforces the constraint; explicit clauses prevent accidental cross-user writes in future).
 - `content_hash` is stored but not used for deduplication in this slice (full replace strategy). Hash-based skip-unchanged-chunks is a performance optimization for a future slice.

@@ -1480,7 +1480,7 @@ pnpm verify:foundation              # full gate
 
 ## Notes for Implementer
 
-- **`CREATE TYPE IF NOT EXISTS`** syntax requires Postgres 9.5+. If the migration fails with "type already exists", check whether enum types were partially created — drop and recreate cleanly via `pnpm db:down && pnpm db:up`.
+- **`CREATE TYPE IF NOT EXISTS`** syntax requires Postgres 9.5+. If the migration fails with "type already exists", check whether enum types were partially created — drop and recreate cleanly via `pnpm db:reset`.
 - **`app.has_share` in RLS** is the same function installed by `0017_shares.sql`. The policy references the function by name; no JOIN is needed in the application layer — RLS evaluates it for every row automatically.
 - **Write-back does NOT re-index.** The caller (future routes, agent tools, or job handlers) is responsible for calling `MemoryIngestPipeline.ingestFile()` after a write-back so the memory index stays current. This keeps `packages/structured-state` free of a dependency on `packages/memory`.
 - **Preferences `value_json` stores JSON**: calling `repo.get()` returns the already-deserialized value (Kysely returns JSONB columns as parsed JavaScript values). No additional `JSON.parse()` needed.
