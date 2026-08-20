@@ -55,3 +55,24 @@ body { margin:0; background:var(--bg); color:var(--text); font-family:var(--font
 .pv-entry { padding:var(--space-6) 0; border-top:1px solid var(--line); }
 /* The plan reads the same in the drawer, on a narrower label column. */
 .pv-drawer .pv-plan > .pv-plan-row { grid-template-columns:5.5rem 1fr; }
+
+/* --- Narrow screens ---------------------------------------------------------
+   The drawer is a fixed-width column beside the page on a desktop. On a phone
+   there is no room for two columns, so the page runs full width and the drawer
+   follows underneath it, scrolling with the page rather than pinned. */
+@media (max-width: 900px) {
+  .pv-frame { grid-template-columns:1fr; min-height:0; }
+  .pv-main { padding:var(--space-6) var(--space-5) var(--space-8); }
+  .pv-main-inner { max-width:none; }
+  .pv-drawer { border-left:none; border-top:1px solid var(--line); position:static; height:auto;
+               padding:var(--space-6) var(--space-5) var(--space-10); }
+  .pv-drawer__scroll { overflow:visible; }
+  .pv-page { padding:var(--space-6) var(--space-5) var(--space-10); }
+  .pv-nav { gap:var(--space-4); overflow-x:auto; white-space:nowrap; }
+  /* Stacked label-then-value reads better than a 9.5rem column on a phone. */
+  .pv-plan > .pv-plan-row,
+  .pv-drawer .pv-plan > .pv-plan-row { grid-template-columns:1fr; gap:var(--space-1); }
+  .pv-between { flex-wrap:wrap; }
+  .pv-actions { flex-wrap:wrap; }
+  .pv-spacer { flex-basis:100%; height:0; }
+}
