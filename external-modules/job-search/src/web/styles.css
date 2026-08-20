@@ -210,6 +210,21 @@
   min-width: 0;
 }
 
+/* #1759 — status indicator and the way out to this module's settings, kept on one line so the
+   masthead stays a two-part row (identity | controls) rather than gaining a third column that
+   collapses awkwardly when the indicator is absent. */
+.jsm-masthead__aside {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.jsm-settings-link {
+  flex: none;
+  text-decoration: none;
+}
+
 /* K7 — monitors */
 
 /* One KeyRow per watched board — same plain-stack shape as `.jsm-overview__portals` (K3) and
