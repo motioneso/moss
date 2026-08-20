@@ -441,3 +441,32 @@ describe("AI-estimates note (#1750)", () => {
     expect(text).not.toContain("Nutrition estimates are off");
   });
 });
+
+describe("a meal with no estimate coming (#1770)", () => {
+  const pendingMeal = meal({
+    mealId: "m-pending",
+    consumedAt: "2026-08-19T08:00:00.000Z",
+    description: "Two eggs on toast",
+    estimateState: "pending",
+    estimateRevision: 0
+  });
+
+  it("says the meal was not estimated when estimates are off", async () => {
+    // A meal logged with the switch off is `pending` by construction and nothing is queued for
+    // it, so "Estimating…" would be a permanent claim about work that never started.
+    listPayload = { meals: [pendingMeal], totals: null, aiEstimates: false };
+    expect(text(await render())).toContain("Not estimated");
+  });
+
+  it("still says Estimating when an estimate really is on its way", async () => {
+    listPayload = { meals: [pendingMeal], totals: null, aiEstimates: true };
+    expect(text(await render())).toContain("Estimating");
+  });
+
+  it("says Estimating when the flag is absent, rather than assuming nothing is running", async () => {
+    // Same reason as the note above: an older installed build omits the field, and reading that
+    // as "off" would tell the user their in-flight estimate was never started.
+    listPayload = { meals: [pendingMeal], totals: null };
+    expect(text(await render())).toContain("Estimating");
+  });
+});
