@@ -3,6 +3,8 @@ import {
   resolveWindow,
   chooseSlot,
   focusBlockEventId,
+  freeBusyQueryWindow,
+  isAllDayInterval,
   type FocusBlockInput
 } from "../../packages/calendar/src/focus-time.js";
 import { freezeRelativeDate } from "../../packages/calendar/src/tools.js";
@@ -256,6 +258,69 @@ describe("CalendarWriteService interface shape", () => {
     );
     expect(res.created).toBe(true);
     expect(res.calendarMirror).toBe("written");
+  });
+});
+
+describe("freeBusyQueryWindow", () => {
+  // #1711 second pass. The all-day filter reads an interval's endpoints, and Google clips busy
+  // intervals to the query bounds — so the window we ASK about has to be wider than the window we
+  // want to schedule in, or the evidence the filter needs is gone before it runs.
+  it("widens a part-of-day band to the whole local day", () => {
+    const window = resolveWindow({ date: "2026-06-17", partOfDay: "morning" }, NOW, TZ);
+    // The band itself is 09:00–12:00 EDT.
+    expect(window.start.toISOString()).toBe("2026-06-17T13:00:00.000Z");
+    expect(window.end.toISOString()).toBe("2026-06-17T16:00:00.000Z");
+    // Local midnight to local midnight on 2026-06-17, which in EDT is 04:00Z either side.
+    expect(freeBusyQueryWindow(window, TZ)).toEqual({
+      timeMin: "2026-06-17T04:00:00.000Z",
+      timeMax: "2026-06-18T04:00:00.000Z"
+    });
+  });
+
+  it("covers every local day a window touches", () => {
+    // An explicit start can run past local midnight; both days' all-day events have to be visible.
+    const window = {
+      start: new Date("2026-06-18T01:00:00Z"), // 2026-06-17 21:00 EDT
+      end: new Date("2026-06-18T05:00:00Z") // 2026-06-18 01:00 EDT
+    };
+    expect(freeBusyQueryWindow(window, TZ)).toEqual({
+      timeMin: "2026-06-17T04:00:00.000Z",
+      timeMax: "2026-06-19T04:00:00.000Z"
+    });
+  });
+
+  it("does not drag in an extra day for a window ending exactly at local midnight", () => {
+    const window = {
+      start: new Date("2026-06-17T20:00:00Z"), // 16:00 EDT
+      end: new Date("2026-06-18T04:00:00Z") // exactly midnight EDT
+    };
+    expect(freeBusyQueryWindow(window, TZ).timeMax).toBe("2026-06-18T04:00:00.000Z");
+  });
+
+  it("makes an all-day event recognisable that a band-width query would have hidden", () => {
+    const window = resolveWindow({ date: "2026-06-17", partOfDay: "morning" }, NOW, TZ);
+    const allDay = { start: "2026-06-17T04:00:00Z", end: "2026-06-18T04:00:00Z" };
+
+    // What the widened query returns: the interval whole, so the filter can see what it is.
+    const clipTo = (q: { timeMin: string; timeMax: string }) => ({
+      start: new Date(
+        Math.max(new Date(allDay.start).getTime(), new Date(q.timeMin).getTime())
+      ).toISOString(),
+      end: new Date(
+        Math.min(new Date(allDay.end).getTime(), new Date(q.timeMax).getTime())
+      ).toISOString()
+    });
+
+    const widened = clipTo(freeBusyQueryWindow(window, TZ));
+    expect(isAllDayInterval(widened, TZ)).toBe(true);
+
+    // What the old band-width query returned: the same event, clipped to 09:00–12:00 local, with
+    // neither endpoint on midnight. Indistinguishable from a real three-hour meeting.
+    const clipped = clipTo({
+      timeMin: window.start.toISOString(),
+      timeMax: window.end.toISOString()
+    });
+    expect(isAllDayInterval(clipped, TZ)).toBe(false);
   });
 });
 
