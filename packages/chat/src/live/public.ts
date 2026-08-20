@@ -24,6 +24,9 @@
  * here makes it resolvable through the one declared "./live" subpath instead.
  */
 export * from "./cli-chat-engine.js";
+// #1258 — the dev-instance CLI's `cli-runner-reachable` doctor check needs the bare
+// connect-plus-hello primitive (no RPC verb) to probe cli-runner without a chat session.
+export { RpcConnection } from "./chat-engine-rpc-client.js";
 // #1350 — the ONE engine-selection rule. The cli-runner's EngineHost must build its engine
 // through this, not by hand, or `execution_mode` silently means nothing on a containerized deploy.
 export * from "./engine-selection.js";
