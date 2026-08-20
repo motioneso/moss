@@ -12,17 +12,20 @@
 // hardcoded default.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type * as ModuleRegistryModule from "@moss/module-registry";
+import type * as ModuleRegistryNodeModule from "@moss/module-registry/node";
+
 const resolveModulePreferences = vi.fn(async () => ({ aiEstimates: false, calorieTarget: 2200 }));
 
 vi.mock("@moss/module-registry", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@moss/module-registry")>();
+  const actual = await importOriginal<typeof ModuleRegistryModule>();
   return { ...actual, resolveModulePreferences };
 });
 
 const invoke = vi.fn(async () => ({ data: { ok: true } }));
 
 vi.mock("@moss/module-registry/node", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@moss/module-registry/node")>();
+  const actual = await importOriginal<typeof ModuleRegistryNodeModule>();
   return {
     ...actual,
     ExternalModuleWorkerRuntime: class {
@@ -48,7 +51,14 @@ const discovery = {
     runtime: { workerEntrypoint: "dist/worker.js", workerContractVersion: 1 },
     preferences: [
       { key: "aiEstimates", label: "AI estimates", type: "boolean", default: true },
-      { key: "calorieTarget", label: "Calories", type: "integer", min: 500, max: 10000, default: null }
+      {
+        key: "calorieTarget",
+        label: "Calories",
+        type: "integer",
+        min: 500,
+        max: 10000,
+        default: null
+      }
     ],
     assistantTools: [
       {
