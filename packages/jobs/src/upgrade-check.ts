@@ -88,11 +88,29 @@ export async function handleUpgradeCheckJob(
       .execute();
 
     if (!boss) return;
-    const owner = await workerDb
+    // #1721: ordered and limited to two so the recipient is the same user on every run and a
+    // duplicate-owner database is visible in the log. Unlike the destructive-operation guard in
+    // packages/db/src/target-identity-guard.ts, ambiguity here must not refuse: this only decides
+    // who gets told an upgrade is available, and staying silent about upgrades is the worse
+    // outcome. So it notifies the oldest owner and says plainly that it had to choose.
+    const owners = await workerDb
       .selectFrom("app.users")
       .select("id")
       .where("is_bootstrap_owner", "=", true)
-      .executeTakeFirst();
+      .orderBy("created_at", "asc")
+      .orderBy("id", "asc")
+      .limit(2)
+      .execute();
+    const owner = owners[0];
+    if (owners.length > 1) {
+      process.stderr.write(
+        `${JSON.stringify({
+          level: "warn",
+          event: "upgrade_notify_multiple_owners",
+          notifiedUserId: owners[0]!.id
+        })}\n`
+      );
+    }
     if (!owner) {
       process.stderr.write(
         `${JSON.stringify({ level: "warn", event: "upgrade_notify_no_owner" })}\n`
