@@ -1,6 +1,6 @@
 {
   "name": "finance",
   "private": true,
-  "version": "0.5.4",
+  "version": "0.5.5",
   "description": "Moss Finance downloaded module (epic #1144). Prebuilt artifact package: jarvis.module.json + dist/worker.js."
 }
