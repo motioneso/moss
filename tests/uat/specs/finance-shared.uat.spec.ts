@@ -156,7 +156,7 @@ test("Household shared pool: owner shares an account, member sees it attributed"
   await page.reload();
 
   // --- Owner: share Everyday Checking through the real toggle --------------------------
-  await page.locator('nav[aria-label="Modules"]').getByRole("link", { name: "Finance" }).click();
+  await page.locator('nav[aria-label="Main"]').getByRole("link", { name: "Finance" }).click();
   await expect(page.locator('[aria-label="Transaction feed"]')).toBeVisible({ timeout: 30_000 });
 
   // Seed truth: nothing is shared yet, so the owner's own pills carry a Share
@@ -205,7 +205,7 @@ test("Household shared pool: owner shares an account, member sees it attributed"
   await expect(page.locator(".jds-usermenu__trigger")).toBeVisible({ timeout: 30_000 });
 
   // --- Member: merged feed shows the shared account, attributed ------------------------
-  await page.locator('nav[aria-label="Modules"]').getByRole("link", { name: "Finance" }).click();
+  await page.locator('nav[aria-label="Main"]').getByRole("link", { name: "Finance" }).click();
   await expect(page.locator('[aria-label="Transaction feed"]')).toBeVisible({ timeout: 30_000 });
 
   // applyShareFlag writes the flag FIRST and the mirror SECOND, so the owner-side

@@ -318,7 +318,10 @@ export function AppShell(props: AppShellProps) {
           <span className="brand-wordmark">Moss</span>
         </div>
 
-        <nav className="module-nav" aria-label="Modules">
+        {/* #1734: the accessible name is what a screen reader announces on entering this
+            landmark, so "Modules" leaked our packaging word to exactly the users least able to
+            ignore it. "Main" names what the list is for. */}
+        <nav className="module-nav" aria-label="Main">
           {navSections.map((section) => (
             <div className="nav-group" key={section.key}>
               {section.label ? <p className="nav-group__label">{section.label}</p> : null}
@@ -332,7 +335,8 @@ export function AppShell(props: AppShellProps) {
               ))}
             </div>
           ))}
-          {props.modulesLoading ? <span className="nav-loading">Loading modules</span> : null}
+          {/* #1734: "Loading modules" named our packaging; the user is just waiting for the list. */}
+          {props.modulesLoading ? <span className="nav-loading">Loading</span> : null}
         </nav>
 
         <div className="rail-foot">

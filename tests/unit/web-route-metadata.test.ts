@@ -26,7 +26,11 @@ describe("web route metadata", () => {
     ]);
   });
 
-  it("places external-module navigation in a Modules section after You", () => {
+  // #1734: the group still exists and still sits last — what changed is that it renders with no
+  // header. "Modules" is our word for how the software is assembled; to someone using Moss, Food
+  // is just Food. Asserting `label` is null is the whole point: a rename would pass a test that
+  // only checked the grouping.
+  it("keeps installed entries in their own group at the end, with no header", () => {
     const modules: ModuleDto[] = [
       moduleWithNav("tasks", "Tasks", "/tasks", "check-square", 20),
       moduleWithNav("wellness", "Wellness", "/wellness", "heart-pulse", 50),
@@ -34,9 +38,9 @@ describe("web route metadata", () => {
     ];
 
     const sections = buildShellNavigation(modules, []);
-    expect(sections.map((section) => section.key)).toEqual(["__top", "Plan", "You", "Modules"]);
-    const modulesSection = sections.find((section) => section.key === "Modules");
-    expect(modulesSection?.label).toBe("Modules");
+    expect(sections.map((section) => section.key)).toEqual(["__top", "Plan", "You", "__installed"]);
+    const modulesSection = sections.find((section) => section.key === "__installed");
+    expect(modulesSection?.label).toBeNull();
     expect(modulesSection?.items).toEqual([
       {
         id: "demo-module",
@@ -54,7 +58,7 @@ describe("web route metadata", () => {
     ];
     const sections = buildShellNavigation(modules, []);
     const you = sections.find((section) => section.key === "You");
-    const modulesSection = sections.find((section) => section.key === "Modules");
+    const modulesSection = sections.find((section) => section.key === "__installed");
     expect(you).toBeUndefined();
     expect(modulesSection?.items.map((item) => item.id)).toEqual(["wellness"]);
   });

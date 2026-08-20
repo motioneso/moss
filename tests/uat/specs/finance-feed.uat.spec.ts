@@ -155,7 +155,7 @@ test("Finance feed works end-to-end on a docker-cp activated module", async ({ p
   // The manifest contributes nav entry "Finance" → route /m/finance/* (app.tsx
   // externalModuleRoutes). Rendering here proves reconcile re-verified the recorded
   // hashes after the restart (drift would have auto-disabled the module).
-  await page.locator('nav[aria-label="Modules"]').getByRole("link", { name: "Finance" }).click();
+  await page.locator('nav[aria-label="Main"]').getByRole("link", { name: "Finance" }).click();
   await expect(page.locator('[aria-label="Transaction feed"]')).toBeVisible({ timeout: 30_000 });
 
   // Account pills + total, scoped to the pills strip — the account filter buttons lower

@@ -110,7 +110,11 @@ export function webRoutePath(id: WebRouteMeta["id"]): string {
   return route.path;
 }
 
-const MODULES_SECTION = "Modules";
+// #1734: an internal grouping key, deliberately in the same `__`-prefixed shape as TOP_SECTION so
+// it can never be mistaken for a label. It used to be the literal string "Modules" and was
+// rendered as a section header, which told the user how the software is packaged — our word, not
+// theirs. The grouping stays (see D5 below); only the visible header is gone.
+const INSTALLED_SECTION = "__installed";
 
 export function buildShellNavigation(
   modules: readonly ModuleDto[],
@@ -134,10 +138,10 @@ export function buildShellNavigation(
   bySection.set(TOP_SECTION, [todayNavEntry]);
   for (const { entry, external } of entries) {
     // #1019 (D5): an external module's entries NEVER consult SECTION_OF — they always land
-    // in the dedicated "Modules" tail section, even if the manifest id happens to collide
-    // with a built-in section key (the validator's #1019 id-prefix rule makes a real
-    // collision impossible, but the shell doesn't rely on that alone).
-    const section = external ? MODULES_SECTION : (SECTION_OF[entry.id] ?? TOP_SECTION);
+    // in the dedicated tail section, even if the manifest id happens to collide with a
+    // built-in section key (the validator's #1019 id-prefix rule makes a real collision
+    // impossible, but the shell doesn't rely on that alone).
+    const section = external ? INSTALLED_SECTION : (SECTION_OF[entry.id] ?? TOP_SECTION);
     const bucket = bySection.get(section) ?? [];
     bucket.push(entry);
     bySection.set(section, bucket);
@@ -150,7 +154,10 @@ export function buildShellNavigation(
 
   return orderedKeys.map((key) => ({
     key,
-    label: key === TOP_SECTION ? null : key,
+    // Both internal keys render headerless: the top group never had a header, and the installed
+    // group's header was the word "Modules" (#1734). An installed thing is just another entry in
+    // the list, the same way Tasks is.
+    label: key === TOP_SECTION || key === INSTALLED_SECTION ? null : key,
     items: bySection.get(key) ?? []
   }));
 }

@@ -131,7 +131,7 @@ test("Finance reports derive net worth and pairing-excluded spending end-to-end"
   await page.reload();
 
   // --- Reach the Reports tab via real nav ----------------------------------------------
-  await page.locator('nav[aria-label="Modules"]').getByRole("link", { name: "Finance" }).click();
+  await page.locator('nav[aria-label="Main"]').getByRole("link", { name: "Finance" }).click();
   await expect(page.locator('[aria-label="Transaction feed"]')).toBeVisible({ timeout: 30_000 });
   // The in-module router link (root.tsx tabs) — a real pushState nav, not a goto.
   await page.getByRole("link", { name: "Reports", exact: true }).click();

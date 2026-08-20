@@ -78,7 +78,7 @@ async function openInstanceModules(page: Page): Promise<void> {
 }
 
 async function openJobSearch(page: Page): Promise<void> {
-  await page.locator('nav[aria-label="Modules"]').getByRole("link", { name: "Job Search" }).click();
+  await page.locator('nav[aria-label="Main"]').getByRole("link", { name: "Job Search" }).click();
 }
 
 async function shot(page: Page, name: string): Promise<void> {

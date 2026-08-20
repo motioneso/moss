@@ -137,7 +137,7 @@ test("Finance budget derives rollover and applies assignments end-to-end", async
   await page.reload();
 
   // --- Reach the Budget tab via real nav -----------------------------------------------
-  await page.locator('nav[aria-label="Modules"]').getByRole("link", { name: "Finance" }).click();
+  await page.locator('nav[aria-label="Main"]').getByRole("link", { name: "Finance" }).click();
   await expect(page.locator('[aria-label="Transaction feed"]')).toBeVisible({ timeout: 30_000 });
   // The in-module router link (root.tsx tabs) — a real pushState nav, not a goto.
   await page.getByRole("link", { name: "Budget", exact: true }).click();
