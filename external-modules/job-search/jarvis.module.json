@@ -3,7 +3,7 @@
   "id": "job-search",
   "name": "Job Search",
   "version": "0.2.8",
-  "publisher": "Jarvis Project",
+  "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": { "jarv1s": ">=0.1.0" },
   "description": "Finds job postings on public boards and reads each one against what you can do and what you actually want.",

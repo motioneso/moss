@@ -3,7 +3,7 @@
   "id": "finance",
   "name": "Finance",
   "version": "0.5.4",
-  "publisher": "Jarvis Project",
+  "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": { "jarv1s": ">=0.1.0" },
   "description": "Bank accounts, transactions, and budgets via Plaid.",
