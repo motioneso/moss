@@ -22,6 +22,13 @@ export const MODULE_STYLES = `
 .fud-day { margin-bottom: 2.25rem; }
 .fud-day-label { margin-bottom: 0.35rem; }
 .fud-day-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: 1rem 1.25rem; margin-top: 1.5rem; }
+/* Desktop: all six macros on one line. auto-fit alone cannot do this — six 7rem tracks plus
+   gaps exceed the 48rem page, so it silently wraps the last one or two onto a second row and
+   the day's figures stop reading as a single instrument cluster. minmax(0, 1fr) lets the
+   tracks shrink to share the width evenly instead. */
+@media (min-width: 46rem) {
+  .fud-day-fields { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1rem 0.75rem; }
+}
 .fud-day-field { min-width: 0; }
 .fud-disclosure { margin: 1rem 0 0; }
 
