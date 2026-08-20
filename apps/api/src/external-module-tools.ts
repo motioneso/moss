@@ -194,9 +194,43 @@ export function createExternalActiveModulesResolver(
   };
 }
 
-function externalToolResult(value: unknown): ToolResult {
+/**
+ * #1662: a module that handled its own error returns an envelope carrying `status: "error"`
+ * (see `external-modules/finance/src/worker/wrap.ts` — the shape every module's wrapper uses).
+ * A tool's execute has exactly one way to say "this failed": throw. Returning anything at all
+ * means success to the gateway, which then audits the row `success` and tells the user the
+ * action executed. So a module that reported a failure honestly was recorded as having worked.
+ *
+ * Worse when the envelope also carried a `data` field: the branch below returned the whole
+ * envelope as the ToolResult, and every consumer reads only `.data`, so the error status was not
+ * merely mis-audited but invisible — the model got the partial payload with nothing marking it
+ * as partial.
+ *
+ * Throwing hands the failure to the gateway's own catch (`runHandler`), which is what turns the
+ * row into `outcome: "failed"` and the chat event into `outcome: "error"`. The module's `code`
+ * rides along on the thrown error; the gateway deliberately does not read it, so nothing new
+ * reaches the model, but it is there for a log line or a future error channel.
+ *
+ * Top-level `status` is an envelope field by convention across every module in the tree, and
+ * `"error"` is only ever its failure value (`"ok"`, `"no-op"`, `"recorded"`, `"migrated"` are the
+ * successes). A nested `status: "error"` — a bank link in an error state, one failed item in a
+ * sync — is data about the world, not a failed call, and is untouched here.
+ */
+export class ExternalModuleReportedError extends Error {
+  constructor(readonly code: string | undefined) {
+    super("Module reported an error");
+    this.name = "ExternalModuleReportedError";
+  }
+}
+
+export function externalToolResult(value: unknown): ToolResult {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     const record = value as Record<string, unknown>;
+    if (record.status === "error") {
+      throw new ExternalModuleReportedError(
+        typeof record.code === "string" ? record.code : undefined
+      );
+    }
     if (record.data && typeof record.data === "object" && !Array.isArray(record.data)) {
       return value as ToolResult;
     }
