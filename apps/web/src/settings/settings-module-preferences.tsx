@@ -8,7 +8,8 @@
 //
 // Everything below is built from existing settings primitives (ModuleSub / Group / Row /
 // Switch). No new classes, no module-specific styling: two modules with the same
-// declarations render identically.
+// declarations render identically. #1757 widened the schema to whole numbers; the widget
+// choice lives in settings-module-preference-control.tsx and nothing else here changed.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { SlidersHorizontal } from "lucide-react";
 
@@ -17,9 +18,10 @@ import type { ListModulePreferencesResponse } from "@moss/shared";
 import { getModulePreferences, updateModulePreferences } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { useFeedback } from "./settings-feedback";
+import { ModulePreferenceControl } from "./settings-module-preference-control";
 import { ModuleSub } from "./settings-module-subviews";
 import { readError } from "./settings-types";
-import { Group, Row, Switch } from "./settings-ui";
+import { Group, Row } from "./settings-ui";
 
 export function ModulePreferencesSettings(props: {
   readonly moduleId: string;
@@ -36,9 +38,9 @@ export function ModulePreferencesSettings(props: {
   });
 
   const mutation = useMutation({
-    mutationFn: (input: { readonly key: string; readonly value: boolean }) =>
+    mutationFn: (input: { readonly key: string; readonly value: boolean | number | null }) =>
       updateModulePreferences(props.moduleId, { [input.key]: input.value }),
-    // The switch moves the moment the write lands, from the server's own values — never
+    // The control moves the moment the write lands, from the server's own values — never
     // optimistically, so a rejected write can't leave the pane showing a setting the
     // module will not actually see.
     onSuccess: (data) => {
@@ -48,7 +50,12 @@ export function ModulePreferencesSettings(props: {
         return {
           preferences: existing.preferences.map((preference) => ({
             ...preference,
-            value: data.preferences[preference.key] ?? preference.value
+            // #1757: `??` would be wrong — a saved integer of null is the user clearing the
+            // field, and coalescing it would leave the old number on screen after the write.
+            value:
+              preference.key in data.preferences
+                ? data.preferences[preference.key]
+                : preference.value
           }))
         };
       });
@@ -79,11 +86,10 @@ export function ModulePreferencesSettings(props: {
               name={preference.label}
               desc={preference.description ?? undefined}
               control={
-                <Switch
-                  ariaLabel={preference.label}
-                  checked={preference.value}
+                <ModulePreferenceControl
+                  preference={preference}
                   disabled={mutation.isPending}
-                  onChange={(checked) => mutation.mutate({ key: preference.key, value: checked })}
+                  onChange={(value) => mutation.mutate({ key: preference.key, value })}
                 />
               }
             />

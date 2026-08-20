@@ -148,8 +148,8 @@ export function validateModuleNavigation(
 // #1725: positive validation of the preferences declaration. Same carve-out shape as #1019 did
 // for navigation: `settings` stays in FORBIDDEN_FIELDS (it carries a React component the host
 // would execute), while this data-only declaration lets an installed module have the on/off
-// switches every compiled-in module already has. Booleans only — see
-// ExternalModulePreferenceDeclaration for why a wider type is a separate design.
+// switches every compiled-in module already has. #1757 added whole numbers alongside the
+// switches; free text and enums stay out, because both put module-authored strings into host UI.
 //
 // Appends to the caller's `errors` array and returns undefined unless every entry validated,
 // matching how the other declaration blocks in validate.ts behave.
@@ -172,13 +172,15 @@ export function validateModulePreferences(
           continue;
         }
         const prefEntry = entry as Record<string, unknown>;
+        // #1757: min/max are accepted for every entry and only meaningful on an integer, so
+        // that a boolean declaring them fails loudly below rather than having them dropped.
         const unknownKeys = Object.keys(prefEntry).filter(
-          (key) => !["key", "label", "description", "type", "default"].includes(key)
+          (key) => !["key", "label", "description", "type", "default", "min", "max"].includes(key)
         );
         if (unknownKeys.length > 0) {
           errors.push(`preferences entry contains unknown fields: ${unknownKeys.join(", ")}`);
         }
-        const { key, label, description, type, default: defaultValue } = prefEntry;
+        const { key, label, description, type, default: defaultValue, min, max } = prefEntry;
         let entryValid = unknownKeys.length === 0;
 
         if (typeof key !== "string" || !/^[a-z][a-zA-Z0-9]{0,39}$/.test(key)) {
@@ -204,16 +206,64 @@ export function validateModulePreferences(
           entryValid = false;
         }
 
-        if (type !== "boolean") {
-          errors.push('preference type must be "boolean"');
-          entryValid = false;
+        if (type !== "boolean" && type !== "integer") {
+          errors.push('preference type must be "boolean" or "integer"');
+          continue;
         }
 
         // The default is required, not optional: nothing is written to app.preferences at
         // install time, so an unwritten preference resolves to this value on every read.
         // A missing default would leave the resolved value undefined at invocation.
-        if (typeof defaultValue !== "boolean") {
-          errors.push("preference default must be a boolean matching the declared type");
+        if (type === "boolean") {
+          if (min !== undefined || max !== undefined) {
+            errors.push("preference min/max may only be declared on an integer preference");
+            entryValid = false;
+          }
+          if (typeof defaultValue !== "boolean") {
+            errors.push("preference default must be a boolean matching the declared type");
+            entryValid = false;
+          }
+          if (entryValid) {
+            validated.push({
+              key: key as string,
+              label: label as string,
+              ...(description !== undefined ? { description: description as string } : {}),
+              type: "boolean",
+              default: defaultValue as boolean
+            });
+          }
+          continue;
+        }
+
+        // #1757: an integer. Bounds are optional but must be whole numbers in the right
+        // order when present, because the host renders them straight onto the input and a
+        // reversed pair would produce a field nothing can satisfy.
+        const boundsValid = [min, max].every(
+          (bound) =>
+            bound === undefined || (typeof bound === "number" && Number.isSafeInteger(bound))
+        );
+        if (!boundsValid) {
+          errors.push("preference min and max must be whole numbers");
+          entryValid = false;
+        } else if (typeof min === "number" && typeof max === "number" && min > max) {
+          errors.push("preference min must not be greater than max");
+          entryValid = false;
+        }
+
+        // `null` is a real declaration, not a missing field: it says "unset" is a supported
+        // end state for this number, which is what lets a Food target mean "no target" rather
+        // than a target of zero. A numeric default must itself satisfy the declared bounds —
+        // otherwise the very first read hands the module a value the user could never type.
+        if (defaultValue !== null && !Number.isSafeInteger(defaultValue)) {
+          errors.push("preference default must be a whole number or null");
+          entryValid = false;
+        } else if (
+          typeof defaultValue === "number" &&
+          boundsValid &&
+          ((typeof min === "number" && defaultValue < min) ||
+            (typeof max === "number" && defaultValue > max))
+        ) {
+          errors.push("preference default must fall within the declared min and max");
           entryValid = false;
         }
 
@@ -222,8 +272,10 @@ export function validateModulePreferences(
             key: key as string,
             label: label as string,
             ...(description !== undefined ? { description: description as string } : {}),
-            type: "boolean",
-            default: defaultValue as boolean
+            type: "integer",
+            ...(min !== undefined ? { min: min as number } : {}),
+            ...(max !== undefined ? { max: max as number } : {}),
+            default: defaultValue as number | null
           });
         }
       }

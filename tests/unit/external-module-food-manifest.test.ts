@@ -53,16 +53,20 @@ describe("food manifest contract (#926 plan §4 Task 7)", () => {
     // Default true is the whole ruling: installing Food is consent for Food's normal
     // functionality. A declaration defaulting to false would reintroduce the consent prompt
     // through a different door, and every existing user would silently stop getting estimates.
-    expect(manifest.preferences).toEqual([
-      {
-        key: "aiEstimates",
-        label: "Estimate nutrition with AI",
-        description:
-          "Send meal descriptions to your configured AI model to estimate calories and nutrients. Turn off to log meals without any estimate.",
-        type: "boolean",
-        default: true
-      }
-    ]);
+    const preferences = manifest.preferences as Array<Record<string, unknown>>;
+    expect(preferences.find((entry) => entry.key === "aiEstimates")).toEqual({
+      key: "aiEstimates",
+      label: "Estimate nutrition with AI",
+      description:
+        "Send meal descriptions to your configured AI model to estimate calories and nutrients. Turn off to log meals without any estimate.",
+      type: "boolean",
+      default: true
+    });
+    // The only boolean Food declares. #1737 added four integer targets alongside it; a second
+    // switch appearing here would be a behaviour change nobody reviewed.
+    expect(
+      preferences.filter((entry) => entry.type === "boolean").map((entry) => entry.key)
+    ).toEqual(["aiEstimates"]);
 
     // Removing the tools from the UI is not enough — a tool left in assistantTools stays
     // callable by the model, so the prompt comes back the moment the model decides to ask.

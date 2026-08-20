@@ -63,7 +63,13 @@ export function registerModulePreferenceRoutes(
         description: declaration.description ?? null,
         type: declaration.type,
         default: declaration.default,
-        value: values[declaration.key] ?? declaration.default
+        // `??` would be wrong here: a resolved integer of null is the user's own "unset", and
+        // coalescing it back to the manifest default would redraw a target they had cleared.
+        value: declaration.key in values ? values[declaration.key] : declaration.default,
+        // #1757: bounds travel with the value so the pane can constrain the input without a
+        // second call. A switch has none.
+        min: declaration.type === "integer" ? (declaration.min ?? null) : null,
+        max: declaration.type === "integer" ? (declaration.max ?? null) : null
       }))
     };
   });
@@ -93,15 +99,27 @@ export function registerModulePreferenceRoutes(
       if (!body || typeof body !== "object" || Array.isArray(body)) {
         return reply.code(400).send({ error: "Invalid request" });
       }
-      // Only keys the manifest declares, only booleans. An undeclared key is a 400 rather
-      // than a silent drop, so a module update that removes a switch surfaces as an error
-      // in the pane instead of a write that appears to succeed and does nothing.
+      // Only keys the manifest declares, and only a value of the declared type. An undeclared
+      // key is a 400 rather than a silent drop, so a module update that removes a setting
+      // surfaces as an error in the pane instead of a write that appears to succeed and does
+      // nothing. #1757: bounds are enforced here too — the number input is a convenience, not
+      // the guard, and a module reading ctx.preferences must be able to trust its own range.
       const declared = new Map(module.preferences.map((p) => [p.key, p]));
       const updates = Object.entries(body as Record<string, unknown>);
-      if (
-        updates.length === 0 ||
-        updates.some(([key, value]) => !declared.has(key) || typeof value !== "boolean")
-      ) {
+      const acceptable = (key: string, value: unknown): boolean => {
+        const declaration = declared.get(key);
+        if (!declaration) return false;
+        if (declaration.type === "boolean") return typeof value === "boolean";
+        // null is how the user clears the field back to "no answer"; it is accepted only where
+        // the manifest declared that unset is a real end state.
+        if (value === null) return declaration.default === null;
+        if (!Number.isSafeInteger(value)) return false;
+        const numeric = value as number;
+        if (declaration.min !== undefined && numeric < declaration.min) return false;
+        if (declaration.max !== undefined && numeric > declaration.max) return false;
+        return true;
+      };
+      if (updates.length === 0 || updates.some(([key, value]) => !acceptable(key, value))) {
         return reply.code(400).send({ error: "Invalid request" });
       }
 
@@ -109,7 +127,7 @@ export function registerModulePreferenceRoutes(
         deps.runner,
         access,
         module.id,
-        updates as ReadonlyArray<readonly [string, boolean]>
+        updates as ReadonlyArray<readonly [string, boolean | number | null]>
       );
 
       const values = await resolveModulePreferences(deps.runner, access, module);

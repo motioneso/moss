@@ -7,7 +7,11 @@ import {
   type WorkerRpcResponse
 } from "./worker-protocol.js";
 import { EMBED_BATCH_MAX } from "./index.js";
-import type { ModuleFetchRequest, ModuleFetchResponse } from "./index.js";
+import type {
+  ExternalModulePreferenceValue,
+  ModuleFetchRequest,
+  ModuleFetchResponse
+} from "./index.js";
 
 export { MODULE_WORKER_CONTRACT_VERSION } from "./worker-protocol.js";
 export { EMBED_BATCH_MAX } from "./index.js";
@@ -64,15 +68,18 @@ export interface ModuleWorkerContext {
    */
   readonly deadlineAt: number;
   /**
-   * The current user's answers to the on/off switches this module declared in its manifest
+   * The current user's answers to the settings this module declared in its manifest
    * (#1725), already resolved: every declared key is present, and a key the user has never
    * touched carries the manifest default. Read-only by design — a module can render
-   * behaviour from a switch but can never flip one, because the switch is the user's
+   * behaviour from a setting but can never change one, because the setting is the user's
    * statement of intent, not the module's state. Writing is the settings page's job alone.
+   *
+   * #1757: an integer preference can be `null`, which means the user left it unset. That is
+   * not zero and not "use the default" — a module must treat it as no answer at all.
    *
    * Empty for a module that declares no preferences.
    */
-  readonly preferences: Readonly<Record<string, boolean>>;
+  readonly preferences: Readonly<Record<string, ExternalModulePreferenceValue>>;
   readonly auth: {
     getCredential(authId: string): Promise<string>;
     setCredential(authId: string, value: string): Promise<void>;
@@ -262,16 +269,20 @@ export function defineModuleWorker(input: {
               ? (params.input as Record<string, unknown>)
               : {},
           deadlineAt,
-          // #1725: booleans only, and only what the host sent. A host older than this SDK
-          // change omits the field entirely; {} is the honest answer there, and a module
-          // that reads a key it declared still gets undefined rather than a wrong value.
+          // #1725/#1757: booleans, whole numbers and null, and only what the host sent. A host
+          // older than this SDK change omits the field entirely; {} is the honest answer there,
+          // and a module that reads a key it declared still gets undefined rather than a wrong
+          // value. Anything else the host might send is dropped rather than passed through.
           preferences: Object.fromEntries(
             Object.entries(
               params.preferences && typeof params.preferences === "object"
                 ? (params.preferences as Record<string, unknown>)
                 : {}
-            ).filter(([, value]) => typeof value === "boolean")
-          ) as Readonly<Record<string, boolean>>,
+            ).filter(
+              ([, value]) =>
+                typeof value === "boolean" || value === null || Number.isSafeInteger(value)
+            )
+          ) as Readonly<Record<string, ExternalModulePreferenceValue>>,
           auth: {
             getCredential: (authId) =>
               callParent("auth.getCredential", { authId }) as Promise<string>,

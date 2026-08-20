@@ -11,7 +11,10 @@
 // manifest default. Every read runs inside the ACTOR's data context, so RLS (owner-only)
 // is what stops one user seeing another's switches.
 import type { AccessContext, DataContextRunner } from "@moss/db";
-import type { ExternalModulePreferenceDeclaration } from "@moss/module-sdk";
+import type {
+  ExternalModulePreferenceDeclaration,
+  ExternalModulePreferenceValue
+} from "@moss/module-sdk";
 import { PreferencesRepository } from "@moss/structured-state";
 
 export function modulePreferenceKey(moduleId: string, key: string): string {
@@ -28,7 +31,7 @@ export async function writeModulePreferences(
   runner: DataContextRunner,
   access: AccessContext,
   moduleId: string,
-  updates: ReadonlyArray<readonly [string, boolean]>
+  updates: ReadonlyArray<readonly [string, ExternalModulePreferenceValue]>
 ): Promise<void> {
   const repository = new PreferencesRepository();
   await runner.withDataContext(access, async (scopedDb) => {
@@ -45,16 +48,27 @@ export async function resolveModulePreferences(
     readonly id: string;
     readonly preferences: readonly ExternalModulePreferenceDeclaration[];
   }
-): Promise<Record<string, boolean>> {
+): Promise<Record<string, ExternalModulePreferenceValue>> {
   if (module.preferences.length === 0) return {};
   const repository = new PreferencesRepository();
   const stored = await runner.withDataContext(access, (scopedDb) => repository.list(scopedDb));
-  const resolved: Record<string, boolean> = {};
+  const resolved: Record<string, ExternalModulePreferenceValue> = {};
   for (const declaration of module.preferences) {
     const value = stored[modulePreferenceKey(module.id, declaration.key)];
     // A stored value of the wrong type falls back to the default rather than throwing: a
     // module update that changes a key's meaning must not lock the user out of the page.
-    resolved[declaration.key] = typeof value === "boolean" ? value : declaration.default;
+    if (declaration.type === "boolean") {
+      resolved[declaration.key] = typeof value === "boolean" ? value : declaration.default;
+      continue;
+    }
+    // #1757: null is a value here, not an absence — the user cleared the field, and that is
+    // a different statement from never having touched it only in that both mean "no number".
+    // Reading either as the declared default would silently re-impose a target the user removed,
+    // so a stored null wins over the default.
+    resolved[declaration.key] =
+      value === null || Number.isSafeInteger(value)
+        ? (value as number | null)
+        : declaration.default;
   }
   return resolved;
 }

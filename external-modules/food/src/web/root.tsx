@@ -23,6 +23,7 @@
 import { invokeTool, type ToolOutcome } from "./api";
 import type { CaptureKind, DailyTotals, EstimateState, Meal, MealItem } from "../domain/meal.js";
 import { netCarbsG } from "../domain/totals.js";
+import { NO_TARGETS, type DailyTargets } from "../domain/targets.js";
 import {
   OCCASION_LABEL,
   OCCASION_ORDER,
@@ -156,6 +157,25 @@ function formatWithUnit(value: number | null, unit: string, decimals = 0): strin
   return value === null ? "—" : `${formatFigure(value, decimals)} ${unit}`;
 }
 
+/**
+ * The one line under a figure that states its target. Returns null when there is no target, which
+ * is what keeps an unset target from drawing an empty progress affordance.
+ *
+ * A null total with a target set is a real state — a day with a target and nothing estimated yet —
+ * and it says only what the target is. Computing "0 left" there would claim the user has eaten
+ * nothing when the truth is that nothing has been estimated, which is a different statement.
+ */
+function targetNote(total: number | null, target: number | null, unit: string): string | null {
+  if (target === null) return null;
+  const goal = `of ${formatFigure(target)} ${unit}`;
+  if (total === null) return goal;
+  const remaining = target - total;
+  // Past the target, say "over" with a positive figure. A negative amount left is arithmetic,
+  // not a sentence anybody says about their day.
+  if (remaining >= 0) return `${goal} · ${formatWithUnit(remaining, unit)} left`;
+  return `${goal} · ${formatWithUnit(-remaining, unit)} over`;
+}
+
 const CAPTURE_KIND_LABEL: Record<CaptureKind, string> = {
   text: "Typed",
   photo: "Photo",
@@ -193,32 +213,50 @@ const OCCASION_RAIL: Record<Occasion, string> = {
 /**
  * Calories alone at display scale, then the macros as ruled instrument fields.
  *
- * No targets yet: daily targets are declared as module preferences and rendered by the host
- * preferences page (#1725), which has not landed. With no target there is deliberately no
- * progress indicator at all — story 45. An empty bar, a 0%, or a NaN is worse than a plain
- * number, and is the usual shape of this bug.
+ * Targets (#1737 item 4) are declared as integer module preferences and drawn by the host
+ * settings page (#1725/#1757); Food never builds a settings pane. Every target is optional and
+ * unset is a supported end state, so a nutrient with no target shows a plain figure and no
+ * progress at all — story 45. An empty bar, a 0%, or a NaN is worse than a plain number, and is
+ * the usual shape of this bug. A target with nothing logged against it is the same case: the
+ * total is null, so there is nothing to be a fraction of and only the target itself is stated.
  */
-function DayHeadline(props: { totals: DailyTotals }): ReactNodeLike {
+function DayHeadline(props: { totals: DailyTotals; targets: DailyTargets }): ReactNodeLike {
   const { nutrients, incomplete, mealsWithoutEstimate } = props.totals;
-  const fields: ReadonlyArray<{ label: string; value: string }> = [
-    { label: "Protein", value: formatWithUnit(nutrients.proteinG, "g", 1) },
+  const { targets } = props;
+  const fields: ReadonlyArray<{ label: string; value: string; note: string | null }> = [
+    {
+      label: "Protein",
+      value: formatWithUnit(nutrients.proteinG, "g", 1),
+      note: targetNote(nutrients.proteinG, targets.proteinG, "g")
+    },
     // Net carbs is computed here and stored nowhere; null unless both carbohydrates and fiber
     // carry a number, so an unestimated fiber figure never inflates the answer.
-    { label: "Net carbs", value: formatWithUnit(netCarbsG(nutrients), "g", 1) },
-    { label: "Fat", value: formatWithUnit(nutrients.fatG, "g", 1) },
-    { label: "Fiber", value: formatWithUnit(nutrients.fiberG, "g", 1) },
-    { label: "Sugar", value: formatWithUnit(nutrients.sugarG, "g", 1) },
-    { label: "Sodium", value: formatWithUnit(nutrients.sodiumMg, "mg", 0) }
+    {
+      label: "Net carbs",
+      value: formatWithUnit(netCarbsG(nutrients), "g", 1),
+      note: targetNote(netCarbsG(nutrients), targets.netCarbsG, "g")
+    },
+    {
+      label: "Fat",
+      value: formatWithUnit(nutrients.fatG, "g", 1),
+      note: targetNote(nutrients.fatG, targets.fatG, "g")
+    },
+    { label: "Fiber", value: formatWithUnit(nutrients.fiberG, "g", 1), note: null },
+    { label: "Sugar", value: formatWithUnit(nutrients.sugarG, "g", 1), note: null },
+    { label: "Sodium", value: formatWithUnit(nutrients.sodiumMg, "mg", 0), note: null }
   ];
+  const calorieNote = targetNote(nutrients.caloriesKcal, targets.caloriesKcal, "kcal");
   return (
     <section className="fud-day">
       <p className="jds-instrument__label fud-day-label">Calories</p>
       <p className="jds-display jds-display--xl">{formatFigure(nutrients.caloriesKcal)}</p>
+      {calorieNote ? <p className="jds-caption fud-day-target">{calorieNote}</p> : null}
       <div className="fud-day-fields">
         {fields.map((field) => (
           <div className="jds-instrument fud-day-field" key={field.label}>
             <p className="jds-instrument__label">{field.label}</p>
             <p className="jds-instrument__value">{field.value}</p>
+            {field.note ? <p className="jds-caption fud-day-target">{field.note}</p> : null}
           </div>
         ))}
       </div>
@@ -374,6 +412,7 @@ interface MealsListResult extends Record<string, unknown> {
   meals: Meal[];
   totals: DailyTotals | null;
   aiEstimates?: boolean;
+  targets?: DailyTargets;
 }
 
 export function Root(): ReactNodeLike {
@@ -512,7 +551,9 @@ function MealsSection(props: {
   return h(
     Fragment,
     null,
-    result.totals ? <DayHeadline totals={result.totals} /> : null,
+    result.totals ? (
+      <DayHeadline totals={result.totals} targets={result.targets ?? NO_TARGETS} />
+    ) : null,
     groupByOccasion(result.meals).map((group) => (
       <section className="fud-occasion" key={group.occasion}>
         <div className="jds-section-head">

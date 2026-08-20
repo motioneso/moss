@@ -25,6 +25,7 @@ import type { ModuleWorkerContext } from "@moss/module-sdk/worker";
 import type { CaptureKind, Meal, Nutrients } from "../domain/meal.js";
 import { resolveMealLocalDate } from "../domain/meal.js";
 import { computeDailyTotals } from "../domain/totals.js";
+import { resolveDailyTargets, type DailyTargets } from "../domain/targets.js";
 import type { DailyTotals } from "../domain/meal.js";
 import { estimateFromDescription } from "../estimator/run.js";
 import type { CorrectMealItemPatch, CorrectMealPatch, FoodStore } from "../store/sql.js";
@@ -112,6 +113,12 @@ export interface MealsListResult {
    * the Food page would show meals with permanently missing numbers and no explanation for why.
    */
   readonly aiEstimates: boolean;
+  /**
+   * #1737 item 4 — the user's daily targets, carried for the same reason `aiEstimates` is: a
+   * module web surface cannot read a host preference directly. Every field is null when the user
+   * has set no target, and the day view then shows no progress rather than a zeroed one.
+   */
+  readonly targets: DailyTargets;
 }
 
 /** `food.meals.list` — read. Exactly one shape: `{localDate}` or `{fromLocalDate, toLocalDate}`.
@@ -126,13 +133,14 @@ export function createMealsListHandler(store: FoodStore) {
     const fromLocalDate = optionalLocalDateString(input, "fromLocalDate");
     const toLocalDate = optionalLocalDateString(input, "toLocalDate");
     const aiEstimates = aiEstimatesEnabled(ctx);
+    const targets = resolveDailyTargets(ctx);
 
     if (localDate !== undefined) {
       if (fromLocalDate !== undefined || toLocalDate !== undefined) {
         throw new InputError("localDate cannot be combined with fromLocalDate/toLocalDate");
       }
       const meals = await store.listMealsForLocalDate(localDate);
-      return { meals, totals: computeDailyTotals(localDate, meals), aiEstimates };
+      return { meals, totals: computeDailyTotals(localDate, meals), aiEstimates, targets };
     }
 
     if (fromLocalDate === undefined || toLocalDate === undefined) {
@@ -146,7 +154,7 @@ export function createMealsListHandler(store: FoodStore) {
       throw new InputError(`date range must not exceed ${LIST_MAX_RANGE_DAYS} days`);
     }
     const meals = await store.listMealsForDateRange(fromLocalDate, toLocalDate);
-    return { meals, totals: null, aiEstimates };
+    return { meals, totals: null, aiEstimates, targets };
   };
 }
 

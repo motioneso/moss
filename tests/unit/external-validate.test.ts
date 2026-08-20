@@ -678,4 +678,94 @@ describe("validateExternalModuleManifest (#917)", () => {
         expect(longDescription.errors.join(" ")).toContain("preference description");
     });
   });
+
+  // #1757: integer preferences. The host draws a number field from these three facts — the
+  // bounds and whether "unset" is legal — so a manifest that gets them wrong must be refused at
+  // install time rather than producing a control the user can drive into an invalid state.
+  describe("integer preferences (#1757)", () => {
+    const target = {
+      key: "calorieTarget",
+      label: "Daily calorie target",
+      type: "integer",
+      min: 500,
+      max: 10000,
+      default: null
+    };
+    const validate = (preference: Record<string, unknown>) =>
+      validateExternalModuleManifest(
+        { ...base, preferences: [preference] },
+        "acme-widgets",
+        "0.1.0"
+      );
+
+    it("accepts an integer preference and keeps its bounds", () => {
+      const result = validate(target);
+      expect(result.ok, JSON.stringify(!result.ok ? result.errors : [])).toBe(true);
+      // Bounds surviving validation is the point: dropped silently, the host would render an
+      // unbounded field and the API's own bounds check would have nothing to check against.
+      if (result.ok) expect(result.manifest.preferences).toEqual([target]);
+    });
+
+    it("accepts a numeric default and a preference with no bounds at all", () => {
+      const withDefault = validate({ ...target, default: 2000 });
+      expect(withDefault.ok).toBe(true);
+      const { min: _min, max: _max, ...unbounded } = target;
+      const noBounds = validate(unbounded);
+      expect(noBounds.ok).toBe(true);
+    });
+
+    it("rejects a fractional or non-numeric default", () => {
+      for (const value of [12.5, "2000", true]) {
+        const result = validate({ ...target, default: value });
+        expect(result.ok, `default ${JSON.stringify(value)} must be rejected`).toBe(false);
+        if (!result.ok) expect(result.errors.join(" ")).toContain("preference default");
+      }
+    });
+
+    it("rejects fractional bounds", () => {
+      const result = validate({ ...target, min: 1.5 });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.errors.join(" ")).toContain("whole numbers");
+    });
+
+    it("rejects a min greater than its max", () => {
+      const result = validate({ ...target, min: 900, max: 800 });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.errors.join(" ")).toContain("must not be greater than max");
+    });
+
+    it("rejects a default outside the declared bounds", () => {
+      // A default the field itself would reject is unreachable state: the user could never get
+      // back to it after one edit, so it is a manifest bug, not a runtime one.
+      const below = validate({ ...target, default: 100 });
+      expect(below.ok).toBe(false);
+      if (!below.ok) expect(below.errors.join(" ")).toContain("within the declared min and max");
+      const above = validate({ ...target, default: 99999 });
+      expect(above.ok).toBe(false);
+    });
+
+    it("rejects min or max on a boolean preference", () => {
+      const result = validate({
+        key: "aiEstimates",
+        label: "AI nutrition estimates",
+        type: "boolean",
+        default: true,
+        max: 3
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.errors.join(" ")).toContain("only be declared on an integer");
+    });
+
+    it("rejects a null default on a boolean preference", () => {
+      // Null means "unset" and only an integer field has an unset state — a switch is on or off.
+      const result = validate({
+        key: "aiEstimates",
+        label: "AI nutrition estimates",
+        type: "boolean",
+        default: null
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.errors.join(" ")).toContain("preference default");
+    });
+  });
 });
