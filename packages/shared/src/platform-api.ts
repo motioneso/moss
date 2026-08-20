@@ -803,6 +803,69 @@ export const postHerdrInstallRouteSchema = {
   }
 } as const;
 
+// #1748 — admin "Restart app" button. The request carries no body and the response carries no
+// host detail: the app's entire capability here is "create one fixed filename in one bind-mounted
+// directory", and a caller has nothing to choose. Deliberately NOT a Docker-socket route — see
+// docs/superpowers/specs/2026-08-19-admin-restart-app-button.md for why the socket was rejected.
+
+/** Why a restart request was not accepted. Only one cause is expressible today. */
+export type HostRestartRejectionReason = "host-watcher-absent";
+
+export interface HostRestartStatusDto {
+  /**
+   * Whether the host-side unit that actually performs the restart has ever been installed.
+   * A weak signal by design (it proves installation, not that the unit is running right now) —
+   * the strong signal is the restart itself. Used to disable the button with an honest reason
+   * rather than render an enabled button that silently does nothing.
+   */
+  readonly hostWatcherInstalled: boolean;
+  /** ISO timestamp of the pending request, or null when no request is outstanding. */
+  readonly lastRequestedAt: string | null;
+}
+
+export interface HostRestartResultDto {
+  readonly accepted: boolean;
+  readonly reason?: HostRestartRejectionReason;
+}
+
+const hostRestartStatusSchema = {
+  type: "object",
+  required: ["hostWatcherInstalled", "lastRequestedAt"],
+  additionalProperties: false,
+  properties: {
+    hostWatcherInstalled: { type: "boolean" },
+    lastRequestedAt: { type: ["string", "null"] }
+  }
+} as const;
+
+const hostRestartResultSchema = {
+  type: "object",
+  required: ["accepted"],
+  additionalProperties: false,
+  properties: {
+    accepted: { type: "boolean" },
+    reason: { type: "string", enum: ["host-watcher-absent"] }
+  }
+} as const;
+
+export const getHostRestartRouteSchema = {
+  response: {
+    200: hostRestartStatusSchema,
+    401: errorResponseSchema,
+    403: errorResponseSchema,
+    503: errorResponseSchema
+  }
+} as const;
+
+export const postHostRestartRouteSchema = {
+  response: {
+    200: hostRestartResultSchema,
+    401: errorResponseSchema,
+    403: errorResponseSchema,
+    503: errorResponseSchema
+  }
+} as const;
+
 // #917/#918 module admin + credential contracts moved to platform-api-modules.ts
 // (file-size gate). Re-exported so @moss/shared consumers see no change.
 export * from "./platform-api-modules.js";

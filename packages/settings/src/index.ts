@@ -19,6 +19,7 @@ export * from "./source-behavior-routes.js";
 export * from "./bootstrap.js";
 export * from "./host-diagnostics.js";
 export * from "./host-install-routes.js";
+export * from "./host-restart-routes.js";
 export * from "./module-credential-crypto.js";
 export * from "./repository-module-credentials.js";
 export * from "./repository-module-kv.js";

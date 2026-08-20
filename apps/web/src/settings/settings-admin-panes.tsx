@@ -22,7 +22,9 @@ import {
   getChatMultiplexerSettings,
   getHostDiagnostics,
   getRegistrationSettings,
+  getHostRestartStatus,
   installHerdr,
+  requestHostRestart,
   listAdminConnectorAccounts,
   listAdminUsers,
   promoteUser,
@@ -611,6 +613,7 @@ export function HostPane() {
   const { toast } = useFeedback();
   const queryClient = useQueryClient();
   const [ranDiagnostics, setRanDiagnostics] = useState(false);
+  const [confirmingRestart, setConfirmingRestart] = useState(false);
   const muxQuery = useQuery({
     queryKey: queryKeys.settings.chatMultiplexer,
     queryFn: getChatMultiplexerSettings,
@@ -640,6 +643,35 @@ export function HostPane() {
     },
     onError: (error) => toast(readError(error), { tone: "drift" })
   });
+  // #1748 admin "Restart app". Two-click confirm rather than a dialog: this drops every
+  // open session including the one pressing it, so it needs a deliberate second action,
+  // and the codebase has no shared confirm dialog to reach for.
+  const restartQuery = useQuery({
+    queryKey: queryKeys.settings.hostRestart,
+    queryFn: getHostRestartStatus,
+    retry: false
+  });
+  const restartMutation = useMutation({
+    mutationFn: () => requestHostRestart(),
+    onSuccess: (data) => {
+      setConfirmingRestart(false);
+      if (data.accepted) {
+        // The server is about to go away, so this toast is the last thing this page
+        // renders from a live connection. Say what happens next, not "success".
+        toast("Restarting — this page will reconnect in about 20 seconds.", { tone: "ready" });
+        return;
+      }
+      toast("Nothing is set up on the host to perform the restart, so nothing happened.", {
+        tone: "drift"
+      });
+      void restartQuery.refetch();
+    },
+    onError: (error) => {
+      setConfirmingRestart(false);
+      toast(readError(error), { tone: "drift" });
+    }
+  });
+
   const runDiagnostics = () => {
     setRanDiagnostics(true);
     void diagQuery.refetch();
@@ -779,6 +811,47 @@ export function HostPane() {
         />
         {attachHintNote()}
         {installHerdrRow()}
+      </Group>
+      <Group
+        title="Restart"
+        desc="Restarts the app so it picks up new settings or modules. Takes about 20 seconds. Your data is not touched."
+      >
+        {restartQuery.data?.hostWatcherInstalled === false ? (
+          <Row
+            name="Restart app"
+            desc="Not available: the host has no restart helper installed. Run infra/host/install-restart-unit.sh on the server once to enable this."
+            control={
+              <Button variant="secondary" size="sm" disabled>
+                Restart app
+              </Button>
+            }
+          />
+        ) : (
+          <Row
+            name="Restart app"
+            desc={
+              confirmingRestart
+                ? "This signs everyone out for about 20 seconds, including you."
+                : "Ends every open session, then brings the app straight back."
+            }
+            control={
+              <Button
+                variant={confirmingRestart ? "primary" : "secondary"}
+                size="sm"
+                onClick={() =>
+                  confirmingRestart ? restartMutation.mutate() : setConfirmingRestart(true)
+                }
+                disabled={restartMutation.isPending || restartQuery.isLoading}
+              >
+                {restartMutation.isPending
+                  ? "Restarting…"
+                  : confirmingRestart
+                    ? "Confirm restart"
+                    : "Restart app"}
+              </Button>
+            }
+          />
+        )}
       </Group>
       <Group
         title="Check system health"

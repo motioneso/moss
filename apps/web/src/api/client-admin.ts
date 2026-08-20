@@ -5,6 +5,8 @@ import type {
   GetAiAdminUserPinResponse,
   HerdrInstallResultDto,
   HostDiagnosticsDto,
+  HostRestartResultDto,
+  HostRestartStatusDto,
   ListAdminAuditEventsResponse,
   ListAdminConnectorAccountsResponse,
   ListAuthProviderStatusesResponse,
@@ -133,4 +135,14 @@ export async function getHostDiagnostics(): Promise<HostDiagnosticsDto> {
 
 export async function installHerdr(): Promise<HerdrInstallResultDto> {
   return requestJson<HerdrInstallResultDto>("/api/admin/host/install", { method: "POST" });
+}
+
+// #1748 — admin "Restart app". The POST takes no body: the app's only capability is to ask,
+// and there is nothing for a caller to choose (see host-restart-routes.ts).
+export async function getHostRestartStatus(): Promise<HostRestartStatusDto> {
+  return requestJson<HostRestartStatusDto>("/api/admin/host/restart");
+}
+
+export async function requestHostRestart(): Promise<HostRestartResultDto> {
+  return requestJson<HostRestartResultDto>("/api/admin/host/restart", { method: "POST" });
 }

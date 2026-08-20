@@ -29,6 +29,7 @@ export const queryKeys = {
     yolo: ["settings", "yolo"] as const,
     adminYolo: ["settings", "admin", "yolo"] as const,
     hostDiagnostics: ["settings", "host-diagnostics"] as const,
+    hostRestart: ["settings", "host-restart"] as const,
     notesSource: ["settings", "notes-source"] as const,
     quietHours: ["settings", "quiet-hours"] as const,
     notificationPreferences: ["settings", "notification-preferences"] as const,
