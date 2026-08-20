@@ -1,4 +1,6 @@
 // packages/module-web-sdk/src/runtime.ts
+import type { ReactNode } from "react";
+
 // #1388 Foundation: the browser-side React shim every external module's web bundle resolves
 // "react" to (scripts/build-external-module.ts `alias`) and gets injected with for its JSX
 // pragma (`inject`, satisfying esbuild's jsxFactory:"h"/jsxFragment:"Fragment") — the same
@@ -9,7 +11,15 @@
 // (bundle-hygiene test): every export below delegates to the host instance captured on
 // window.__JARVIS_MODULE_RUNTIME__ at module-eval time — safe because the host installs that
 // global at boot, before any module bundle is dynamically imported.
-export type ReactNodeLike = unknown;
+//
+// ReactNodeLike used to be `unknown` (a module never imports real React, so it had no type to
+// borrow). #1418: a module that renders @moss/ui components needs its own JSX expressions to be
+// assignable to @moss/ui's props, which are typed with real React's ReactNode — `unknown` can
+// never satisfy that. Widened to a type-only alias for React's ReactNode instead: no runtime
+// cost (erased at compile time, same as index.ts's own `import type { ReactNode } from "react"`)
+// and no real React added to a module's bundle — only the type checker resolves "react" here,
+// the actual JSX still goes through this file's h()/createElement() shim at runtime.
+export type ReactNodeLike = ReactNode;
 
 type Dispatch<S> = (next: S | ((prev: S) => S)) => void;
 
