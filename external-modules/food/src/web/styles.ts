@@ -13,7 +13,13 @@
 // occasion rail gets an explicit height here. That is a layout fact about this
 // page's arrangement, not a look.
 export const MODULE_STYLES = `
-.fud-root { max-width: 48rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+/* 72rem to match finance (.fnm-root) and job-search (.jsm-root). Food was the only module page at
+   48rem, which put visibly wider gutters either side of it than the other two and made the set
+   look inconsistent as you moved between them. The page frame is a host-level fact, not a
+   per-module choice.
+   Only the width is shared: job-search carries 6rem of bottom padding to clear the floating
+   assistant button, which is a fact about its long board, not about the page frame. */
+.fud-root { max-width: 72rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
 .fud-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.75rem; }
 /* #1787: the header's controls travel as one group at the right edge. Wraps as a unit on a narrow
    screen rather than letting the date picker and the buttons separate onto different rows. */
@@ -27,10 +33,11 @@ export const MODULE_STYLES = `
 .fud-day { margin-bottom: 2.25rem; }
 .fud-day-label { margin-bottom: 0.35rem; }
 .fud-day-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: 1rem 1.25rem; margin-top: 1.5rem; }
-/* Desktop: all six macros on one line. auto-fit alone cannot do this — six 7rem tracks plus
-   gaps exceed the 48rem page, so it silently wraps the last one or two onto a second row and
-   the day's figures stop reading as a single instrument cluster. minmax(0, 1fr) lets the
-   tracks shrink to share the width evenly instead. */
+/* Desktop: all six macros on one line. Still needed after the page widened to 72rem — this
+   breakpoint fires from 46rem up, and between 46rem and roughly 48rem the page is narrower than
+   its cap, so six 7rem tracks plus gaps do not fit and auto-fit silently wraps the last one or
+   two onto a second row, at which point the day's figures stop reading as a single instrument
+   cluster. minmax(0, 1fr) lets the tracks shrink to share the width evenly instead. */
 @media (min-width: 46rem) {
   .fud-day-fields { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1rem 0.75rem; }
 }
