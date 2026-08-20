@@ -3,6 +3,7 @@ import "../styles/wellness-2.css";
 import "../styles/wellness-3.css";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
+import { Link } from "react-router";
 import { Button } from "@moss/ui";
 import {
   localDay,
@@ -225,6 +226,14 @@ export function WellnessPage() {
           <Button variant="quiet" size="sm" onClick={() => setExportOpen(true)}>
             Export
           </Button>
+          {/* #1759: a way into this module's own settings from the module itself, so the two
+              halves of its configuration are not something you have to go hunting for. */}
+          <Link
+            className="jds-btn jds-btn--quiet jds-btn--sm"
+            to="/settings?section=modules&module=wellness"
+          >
+            Settings
+          </Link>
         </div>
       </header>
 
