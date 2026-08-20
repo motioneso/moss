@@ -29,27 +29,40 @@ is the path from a scratch directory to an installed, approved, running module.
 
 ## Solution
 
-An admin describes what they want in the chat drawer. Moss builds it — real code, in the same shape a
-hand-written module has — and the admin gets a working module on their own instance, which they can
-refine by continuing the conversation, and hand to a friend as a folder.
+An admin describes what they want in the chat drawer. Moss writes down what it intends to build and
+the admin approves that plan. Moss then builds it — real code, in the same shape a hand-written module
+has — and **the finished draft runs immediately, visible to its author and nobody else.** The admin
+looks at the actual working thing and changes it by talking to Moss, seeing each change. When they
+are happy, they ship it, and it becomes a real module.
 
-The shape is **chat is the front door, a module is the workshop.**
+The shape is **approve the plan, then judge the thing itself.**
 
-The admin describes the module in chat. Chat cannot hold the build itself: a chat turn is cut off at
-five minutes behind the reference reverse proxy, and building a module with a page, an external
-fetch, settings and tests takes longer than that. So chat starts the work and the build runs as a
-background job that survives the conversation. A build screen — a new first-party module — lists what
-is being built, what state each build is in, what was written, and what happened. From that screen
-the admin reads the module's plain-English claims, looks at the code if they want to, approves it,
-and restarts to bring it live.
+The approval that matters is the one where the admin has an opinion. Nobody has a view on a
+permissions list for a videos module; everybody has a view on the videos module once they can see it.
+A review screen at the end of a build is theatre — most people will click through it to get to the
+thing — so the plan is what gets approved up front, and the working draft is what gets judged.
 
-Refining is a loop, not a one-shot. Nobody gets the videos module right first time; they want bigger
-thumbnails, or the other channel added, or it stops working when YouTube changes something. Saying so
-in chat edits the module in place.
+Chat cannot hold the build itself: a chat turn is cut off at five minutes behind the reference
+reverse proxy, and building a module with a page, an external fetch and tests takes longer than that.
+So chat starts the work and the build runs as a background job that survives the conversation and
+resumes after a restart. A first-party module — **the Workshop** — lists what is being built, what
+state each build is in, and what happened.
+
+Ben's ruling, 2026-08-19, on the earlier design where a finished module waited behind a permissions
+screen: "I think I'd rather have the admin approves the plan, Moss builds it, the admin can take a
+look at it and make changes with Moss directly (live edits). Then once it is finished it can be
+built."
+
+Refining is the point, not an afterthought. Nobody gets the videos module right first time; they want
+bigger thumbnails, or the other channel added. Saying so in chat changes the running draft.
 
 Version one is **admins only**. Every household member building their own module is the next phase.
-That single narrowing removes the restart problem — an admin can restart — and most of the trust
-problem, and it lets the genuinely hard parts get solved with a user who can diagnose them.
+That narrowing removes most of the trust problem and lets the genuinely hard parts get solved with a
+user who can diagnose them.
+
+**How much Moss stops to ask is governed by the existing "stop asking me" setting**, not by a new
+preference — see Further Notes. With it off, the plan waits for approval and shipping is a button.
+With it on, Moss plans, builds and ships, and tells the admin it is done.
 
 ## User Stories
 
@@ -85,82 +98,92 @@ problem, and it lets the genuinely hard parts get solved with a user who can dia
 13. As an instance admin, I want a failed build to tell me plainly what went wrong, so that I can
     decide whether to retry, rephrase, or give up.
 
-**Reviewing and approving**
+**Approving the plan**
 
-14. As an instance admin, I want to see in plain English what a built module can reach and do —
-    which outside services it calls, which tools it adds to chat, what it stores, what pages it adds
-    — so that I can judge it without reading code.
-15. As an instance admin, I want those claims to be the ones the system actually enforces, so that
-    the summary is a guarantee rather than a description.
-16. As an instance admin, I want to read the code if I choose to, so that a module is never a black
+14. As an instance admin, I want to see what Moss intends to build before it starts — what the module
+    does, what it will reach, what it will store — so that ten minutes are not spent building the
+    wrong thing.
+15. As an instance admin, I want to change the plan before agreeing to it, so that correcting a
+    misunderstanding does not mean throwing away a build.
+16. As an instance admin who has turned off being asked, I want Moss to plan, build and ship without
+    stopping, so that the feature matches how I already run the rest of Moss.
+
+**Seeing it and changing it**
+
+17. As an instance admin, I want the finished draft to be running and visible to me the moment it is
+    built, so that I judge the actual thing rather than a description of it.
+18. As an instance admin, I want a draft to be visible to me alone, so that my half-finished
+    experiment never appears in anyone else's sidebar.
+19. As an instance admin, I want to describe a change in chat and see the running draft change, so
+    that refining feels like the conversation that created it.
+20. As an instance admin, I want to see the code if I choose to, so that a module is never a black
     box when I need it not to be.
-17. As an instance admin, I want a module to do nothing at all until I approve it, so that a build
-    finishing is never the same as a build going live.
-18. As an instance admin, I want to reject a built module and say why, so that the refine loop has
-    somewhere to start from.
-19. As an instance admin, I want to be told clearly that a restart is needed and what it will cost —
-    that everyone's in-flight conversation ends and the system is unavailable for a minute or two —
-    so that I can pick a moment.
+21. As an instance admin, I want editing a draft not to switch it off, so that the tamper protection
+    that guards finished modules does not fight me while I am building.
+22. As an instance admin, I want to throw a draft away, so that an experiment that went nowhere
+    leaves nothing behind.
+23. As an instance admin, I want shipping a finished draft to be something I do, so that Moss never
+    puts its own work in front of other people.
 
 **Living with a module**
 
-20. As the admin who built a module, I want it visible only to me until I decide otherwise, so that
+24. As the admin who built a module, I want it visible only to me until I decide otherwise, so that
     my experiment does not put a page in everyone else's sidebar.
-21. As an instance admin, I want to enable a built module for other people once I trust it, so that
+25. As an instance admin, I want to enable a built module for other people once I trust it, so that
     a module that turns out to be good can be shared inside the house.
-22. As a household member, I want a module someone else built to behave exactly like a built-in one,
+26. As a household member, I want a module someone else built to behave exactly like a built-in one,
     so that I do not have to know or care where it came from.
-23. As an instance admin, I want to turn a built module off without deleting it, so that I can stop
+27. As an instance admin, I want to turn a built module off without deleting it, so that I can stop
     something misbehaving without losing the work.
-24. As an instance admin, I want to delete a built module and be told plainly what happens to its
+28. As an instance admin, I want to delete a built module and be told plainly what happens to its
     data, so that removing it is not a guess.
 
 **Refining**
 
-25. As an instance admin, I want to ask for a change to a module I built in plain language, so that
+29. As an instance admin, I want to ask for a change to a module I built in plain language, so that
     refining feels like the conversation that created it.
-26. As an instance admin, I want a change request to find the right module without me naming a file,
+30. As an instance admin, I want a change request to find the right module without me naming a file,
     so that the loop is as easy as the first build.
-27. As an instance admin, I want a change to be reviewed and approved the same way the first build
+31. As an instance admin, I want a change to be reviewed and approved the same way the first build
     was, so that "make the thumbnails bigger" cannot smuggle in a new outside service.
-28. As an instance admin, I want data my module has already collected to survive a change, so that
+32. As an instance admin, I want data my module has already collected to survive a change, so that
     refining does not reset it.
-29. As an instance admin, I want to see the history of what changed, so that I can tell when a
+33. As an instance admin, I want to see the history of what changed, so that I can tell when a
     module started misbehaving.
-30. As an instance admin, I want to go back to the previous working version when a change makes
+34. As an instance admin, I want to go back to the previous working version when a change makes
     things worse, so that refining is not a one-way door.
 
 **Privacy and safety**
 
-31. As a household member, I want a module someone else built to be unable to read my data, so that
+35. As a household member, I want a module someone else built to be unable to read my data, so that
     the house staying private does not depend on generated code being correct.
-32. As an instance admin, I want a module whose data declaration is wrong to be refused rather than
+36. As an instance admin, I want a module whose data declaration is wrong to be refused rather than
     installed unprotected, so that the failure mode is a rejection, not a leak.
-33. As an instance admin, I want a built module to be unable to reach any outside service it did not
+37. As an instance admin, I want a built module to be unable to reach any outside service it did not
     declare, so that its claims are enforced.
-34. As an instance admin, I want a built module to be unable to give the assistant powers over its
+38. As an instance admin, I want a built module to be unable to give the assistant powers over its
     own setup, so that building modules is not a route to Moss expanding its own authority.
-35. As an instance admin, I want everything a build did recorded, so that I can reconstruct what
+39. As an instance admin, I want everything a build did recorded, so that I can reconstruct what
     happened when something goes wrong.
-36. As an instance admin, I want secrets to stay out of built modules and out of build records, so
+40. As an instance admin, I want secrets to stay out of built modules and out of build records, so
     that a shared module cannot carry my credentials to someone else's machine.
 
 **Sharing**
 
-37. As an instance admin, I want to export a module I built as a folder, so that I can give it to
+41. As an instance admin, I want to export a module I built as a folder, so that I can give it to
     someone else.
-38. As an instance admin, I want the exported folder to carry no data and no credentials, so that
+42. As an instance admin, I want the exported folder to carry no data and no credentials, so that
     sharing a module is never sharing my content.
-39. As an instance admin receiving someone else's module folder, I want to install it through the
+43. As an instance admin receiving someone else's module folder, I want to install it through the
     same review and approval path as one I built, so that a gift gets the same scrutiny as a build.
-40. As an instance admin receiving a module, I want to be able to change it by talking to my own
+44. As an instance admin receiving a module, I want to be able to change it by talking to my own
     Moss, so that I can swap their channels for mine.
 
 **Limits**
 
-41. As an instance admin, I want a cap on how much building can happen, so that a runaway loop
+45. As an instance admin, I want a cap on how much building can happen, so that a runaway loop
     cannot consume my AI budget overnight.
-42. As an instance admin, I want to see what a build cost, so that the price of this feature is
+46. As an instance admin, I want to see what a build cost, so that the price of this feature is
     visible rather than a surprise on a bill.
 
 ## Implementation Decisions
@@ -194,12 +217,15 @@ problem, and it lets the genuinely hard parts get solved with a user who can dia
 - A built module is a real module in the existing installed-module shape: a manifest declaring its
   identity and everything it may touch, its own code, optionally its own SQL, optionally its own web
   surface. It is not a new artifact type and not an interpreted configuration.
-- Full range from the start: own database tables, scheduled work, settings, assistant tools, pages,
-  declared credentials. No capability is withheld from version one.
+- Full range remains the target: own database tables, scheduled work, settings, assistant tools,
+  pages, declared credentials. Nothing is withheld by design. But it is delivered in stages, because
+  the cost of a *draft* running live differs enormously by capability — see "Delivery stages". Ben
+  agreed 2026-08-19 that the first stage excludes a draft creating its own database tables.
 - A built module must satisfy the existing module validator unchanged. The validator is the standard;
   no parallel, looser path is created for generated modules. If a generated module cannot pass it,
   that is a build failure, not a reason to relax the validator.
-- Nothing about the boot-time scan changes. A new module becomes visible when the process restarts.
+- The boot-time scan changes for drafts. See "A draft runs live" below. A *finished* module still
+  becomes visible at restart; lifting that for everyone is deliberately not in scope.
 
 **Data ownership — the platform writes it, not the machine**
 
@@ -214,40 +240,92 @@ problem, and it lets the genuinely hard parts get solved with a user who can dia
   account export and deletion remains mandatory, with an explicitly empty list required rather than
   silence.
 
-**Self-operation — loosened deliberately, in one place**
+**A draft runs live — what that costs, from the code**
 
-- The seven server-owned exclusion categories currently prevent the assistant from acting on its own
-  setup, including granting itself more authority. A module declares its own permissions and adds its
-  own tools to chat, so an assistant that writes modules is an assistant that can write itself new
-  tools. This is inside the rule as written.
-- The rule is therefore changed on purpose, in one declared place, naming exactly what loosens and
-  what replaces it. It must not be eroded incrementally by individual build agents.
-- The replacement boundary: a built module may only declare what any module is permitted to declare;
-  it is inert until a human approves it; its declarations are enforced by the platform rather than
-  honoured by convention; and the build path itself may not touch the categories covering
-  credentials, identity and login, consent, or the assistant's own model wiring and persona.
-- This decision blocks the approval surface and the build agent's permitted powers, and should be
-  settled before either is built.
+Most of what is needed already works on a running system, which makes this far cheaper than the
+earlier draft of this spec assumed:
 
-**Review and approval**
+- A module's background code is already a **separate process, spawned on demand** and killed after
+  sixty seconds idle (`packages/module-registry/src/external/worker-runtime.ts`, around line 233).
+  Starting and stopping a module while the server runs is normal steady-state behaviour, not a new
+  capability. Because it is spawned fresh from the folder each time, **edited code is picked up on the
+  next run** with no restart.
+- **Queue and cron registration for a single module is already live**, driven by a control-queue
+  message and `packages/module-registry/src/external/job-reconciler.ts`. That is how enable and
+  disable work today without a restart.
+- **Pages, page files and sidebar entries are already per request.** The web asset route reads bytes
+  from disk on every call with no caching (`apps/api/src/external-module-web-route.ts`), and the
+  frontend re-fetches the module list and rebuilds the page route after a change.
 
-- The approval surface presents the manifest's declarations as plain English, because those
-  declarations are the enforced boundary and are therefore an honest summary rather than a
-  description.
-- The generated code is available behind a link, not on the main path.
-- No second assistant reviews the first assistant's code. A machine vouching for a machine gives an
-  admin false confidence, which is worse than no confidence.
-- Approval captures the package hash as the trusted baseline, reusing the existing behaviour that
-  auto-disables a module whose files change after it was enabled.
+Four things genuinely block a live draft, in size order:
 
-**Going live**
+1. **The discovered module list is read once at boot and frozen** (`apps/api/src/server.ts:376`,
+   `apps/worker/src/worker.ts` around line 190) and handed downstream by value. A folder that appears
+   later is invisible — not refused, just never looked at. The fix is mechanical: a mutable holder per
+   process, a rescan trigger (an authenticated endpoint on the API, a new action on the existing
+   control queue for the worker), and turning the by-value hand-offs into function calls. The job
+   reconciler already takes its discoveries as a function.
+2. **Per-user visibility does not exist.** A module is instance-wide on or off, with a per-user *deny*
+   list only (`app.external_modules`, `app.module_enablement`). A draft visible to its author alone
+   has to be invented: a draft status plus an owner on the module row, both active-module resolvers
+   taught to treat a draft as active only for its owner, and `app.list_active_external_module_users`
+   updated so a draft fans out to its owner alone. Without that last part the background worker would
+   schedule the draft's jobs for everyone.
+3. **Chat tools are fixed at boot** (`apps/api/src/server.ts:399`), so a draft cannot add tools to
+   chat until the same live source replaces that snapshot. Deferrable.
+4. **Database provisioning runs before the servers start**, in a separate script. Pulling role
+   creation and table DDL into a running server is the expensive, genuinely risky part.
 
-- A restart is required and is performed by a person. The system may tell the admin plainly that a
-  restart is needed, what it costs, and how to do it for their deployment, reusing the existing
-  mechanism that surfaces the correct restart command per deploy mode.
-- The app does not restart itself in version one.
-- The cost is stated honestly in the interface: in-flight conversations end, and the instance is
-  unavailable for up to a few minutes.
+One trap: Moss fingerprints a module folder and disables it if the contents change
+(`scripts/module-reconcile.ts`, the drift phase). **Drafts must be exempt**, or every edit would
+switch off the thing being edited.
+
+**Self-operation — nothing loosens**
+
+An earlier version of this spec assumed a rule would have to give. It does not. Ben ruled 2026-08-19
+that all seven categories in `packages/ai/src/gateway/self-operation.ts` stand unchanged, and the
+design fits inside them:
+
+- **Moss never ships its own work.** It builds a draft that runs for its author alone; a human presses
+  ship. Installing and enabling sit under `self_authority.settings`, so this is what keeps that rule
+  intact — and it is why shipping must stay a deliberate action rather than quietly becoming
+  automatic.
+- **Moss never handles a credential.** A module needing an API key is built able to use one and
+  arrives marked as needing a key. Moss writes code that reads a key it can never itself read.
+- **A module reaching an outside service is the module, not Moss**, governed by the existing module
+  rules.
+- **New tools reaching chat are accepted** without a cap or extra confirmation. Ben: that is the point
+  of modules.
+- **How much Moss stops to ask reuses the existing three-part "stop asking me" setting**, which Moss
+  may never turn on for itself — see Further Notes. That is what makes a non-stopping build a human's
+  standing choice rather than Moss skipping its own gate.
+
+**Approving the plan, and shipping**
+
+- What gets approved up front is the **plan**: what the module does, what it will reach, what it will
+  store. Not code — almost nobody reads code, and a design that depends on them reading it is already
+  broken.
+- There is **no permissions wall in front of a finished draft.** The draft runs; the admin judges the
+  running thing. What a module reaches is stated where it is useful, not as a gate people are trained
+  to click past.
+- The generated code is available on request, not on the main path.
+- No second assistant reviews the first assistant's code. A machine vouching for a machine gives false
+  confidence, which is worse than none.
+- **Shipping** — promoting a draft to a real module — captures the package hash as the trusted
+  baseline, reusing the existing auto-disable-on-drift behaviour. From that point the draft exemption
+  in the trap above no longer applies.
+
+**Shipping a finished module**
+
+- Shipping is a human action. Moss may not promote its own draft, except where the admin has turned
+  on the existing "stop asking me" setting, which Moss cannot turn on for itself.
+- A shipped module becomes visible to other people at the next restart. The restart is performed by a
+  person; the system states plainly that one is needed, what it costs — in-flight conversations end,
+  the instance is unavailable for a minute or two — and the correct command for that deployment,
+  reusing the existing per-deploy-mode mechanism.
+- The app does not restart itself.
+- The author keeps seeing their module the whole time, because it was already running as their draft.
+  The restart is about everyone else.
 
 **Refining**
 
@@ -301,9 +379,18 @@ rules, a test asserts the replacement boundary holds: a built module cannot decl
 a module is permitted to be, and the build path cannot touch the categories that remain closed. Prior
 art: the existing build-time assertions over the exclusion table.
 
-**Seam 5 — the two screens.** The build progress view and the approval view, tested at the component
-level against the design system. The approval view specifically must render a module's declarations
-as claims, so a module declaring a new outside service cannot be approved without that appearing.
+**Seam 5 — a draft is visible to its author and to nobody else.** Two users, one builds a draft; the
+other does not see it in their module list, cannot reach its page, and is never scheduled any of its
+background work. The last part is the one most likely to be missed, because the fan-out happens in a
+database function rather than in application code.
+
+**Seam 6 — a module that appears after boot is found without a restart.** Drop a module folder in
+while the server runs, trigger the rescan, and assert it becomes reachable in both the API and the
+worker. Then the inverse: editing a draft's files does not disable it, while editing a shipped
+module's files still does.
+
+**Seam 7 — the screens.** The Workshop, and whatever replaces the rejected approval screen, tested at
+the component level against the design system.
 
 Explicitly not tested: whether generated code is good, and whether a built module does what the
 person meant.
@@ -318,10 +405,12 @@ them). Three screens, reviewed with Ben on 2026-08-19:
 
 - **The Workshop** (`workshop.html`) — the list of modules the user has asked Moss to build, grouped
   **Needs you**, **Building now**, **Live**. "The workshop" is the approved name for this surface.
-- **Review and approve** (`approval.html`) — shown before a finished module is allowed to run. It
-  leads with a panel saying the module is not running yet, then five plain-English sections: what it
-  reaches outside your home, what it adds to chat, what it keeps, what you will see, what it never
-  gets. It ends with approve-and-restart-now, approve-and-restart-later, or send back with a note.
+- **Review and approve** (`approval.html`) — **superseded 2026-08-19 and not to be built.** It put a
+  five-section permissions wall in front of a finished module. Ben's objection stands: most people
+  will click approve immediately to see the thing, so the wall trains them to click past the one
+  screen that would matter on the rare occasion it does. Kept in the repo only as the record of a
+  rejected direction. Its replacement — the plan-approval moment, and the running draft with a way to
+  ask for changes — has not been designed yet.
 - **Starting a build** (`chat.html`) — the chat drawer: the user describes what they want, confirms,
   and is told later that it is ready.
 
@@ -336,11 +425,34 @@ Two design rulings a build agent must not undo:
 Every style name in the mockups is one the design system already defines. Before changing them, run
 the invented-class audit in the `design-system` skill.
 
+## Delivery stages
+
+Each stage is usable on its own, not scaffolding for the next. The split follows the cost of running a
+*draft* live, which differs enormously by capability.
+
+**Stage 1 — a draft with a page and background work, storing nothing new, adding nothing to chat.**
+This is the videos module: fetch today's videos from two channels, show them with the video embedded.
+It needs the rescan path in both processes and the draft-belongs-to-its-author concept, and nothing
+else from the four blockers. Small to medium. Ben agreed 2026-08-19 to leave storage out of this
+stage, accepting that early drafts are read-only.
+
+**Stage 2 — a draft may add tools to chat.** Replaces the boot-time tool snapshot with the same live
+source. Contained.
+
+**Stage 3 — a draft may create its own tables.** Requires database role creation and table DDL from a
+running server. The expensive one, with the real chance of failing quietly, and the reason the stages
+are in this order. Everything already written in this spec about generated ownership rules and
+fail-closed refusal applies here and must not be softened to make the stage cheaper.
+
+Sharing, limits and cost visibility ride along with stage 1 where they are cheap and are otherwise
+sequenced by the build agent's plan.
+
 ## Out of Scope
 
-- **Modules appearing without a restart.** The right long-term answer, and it reverses a deliberate
-  recorded decision that restarting is the only operational action there will ever be. Its own
-  milestone.
+- **Finished modules going live for everyone without a restart.** Drafts are one person, one module,
+  reversible, and watched by the author as it happens. The same mechanism pointed at everyone at once
+  fails on people who did not ask for it. If the draft work makes this free, it is still a separate
+  decision with its own proof, not a side effect.
 - **Non-admins building modules.** The named next phase.
 - **A browsable catalogue of built modules.** A list creates a moderation problem the instance owner
   would then own.
@@ -349,7 +461,6 @@ the invented-class audit in the `design-system` skill.
 - **A second assistant reviewing the first assistant's code at approval time.**
 - **A route from a background job into a chat transcript.** Progress reaches the user through a
   polled status and a notification.
-- **A preview or try-before-live environment.** None exists and building one is a separate effort.
 - **Operating-system or container sandboxing of module code.** The existing posture — starve the
   module of capability and make it ask the host — is inherited unchanged, including its known gap
   that a module's worker process retains filesystem and network capability at the OS level.
