@@ -30,6 +30,8 @@ import {
   occasionForMeal,
   type Occasion
 } from "../domain/occasion.js";
+import { todayLocalDayKey } from "@moss/module-sdk/time";
+
 import { Fragment, h, useCallback, useEffect, useState, type ReactNodeLike } from "./runtime";
 
 // ── local "today" (no ambient ISO-slice) ────────────────────────────────
@@ -37,13 +39,14 @@ import { Fragment, h, useCallback, useEffect, useState, type ReactNodeLike } fro
 /** Browser-local calendar date as YYYY-MM-DD, for the picker's initial value. Uses the device's
  * own timezone (there is no persisted user timezone read from here) — this is a UI default only,
  * not the resolution the store uses to pin a meal to a day (domain/meal.ts's resolveMealLocalDate
- * owns that at write time). */
+ * owns that at write time).
+ *
+ * #1723 item 1: was four lines of hand-assembled getFullYear/getMonth/getDate. Same answer, but
+ * routed through the shared helper so there is one place where a day key is built and one place to
+ * fix if it is ever wrong. The device zone is read explicitly rather than left implicit, which is
+ * what makes it visible that this default is the *device's* day and not the user's configured one. */
 function todayLocalDate(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return todayLocalDayKey(Intl.DateTimeFormat().resolvedOptions().timeZone);
 }
 
 // ── query, with the two refreshes the day view actually needs ────────────

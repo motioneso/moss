@@ -11,7 +11,9 @@
     "skipLibCheck": true,
     "types": ["node"],
     "paths": {
-      "@moss/module-sdk/worker": ["../../packages/module-sdk/src/worker.ts"]
+      "@moss/module-sdk/worker": ["../../packages/module-sdk/src/worker.ts"],
+      "@moss/module-sdk/time": ["../../packages/module-sdk/src/time.ts"],
+      "@moss/module-sdk/list-limits": ["../../packages/module-sdk/src/list-limits.ts"]
     }
   },
   "include": ["src"]

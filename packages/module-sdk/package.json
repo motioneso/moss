@@ -9,6 +9,8 @@
     "./errors": "./src/errors.ts",
     "./core-version": "./src/core-version.ts",
     "./server": "./src/server.ts",
+    "./list-limits": "./src/list-limits.ts",
+    "./time": "./src/time.ts",
     "./worker": "./src/worker.ts"
   },
   "scripts": {

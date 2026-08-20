@@ -31,6 +31,7 @@ import {
   createMealsLogHandler,
   createMealsReestimateHandler
 } from "../../external-modules/food/src/tools/meals.js";
+import { InputError } from "../../external-modules/food/src/tools/validate.js";
 import { runEstimate } from "../../external-modules/food/src/worker/handlers/estimate.js";
 import type {
   CorrectMealItemPatch,
@@ -386,6 +387,110 @@ describe("food.meals.list — test 14: empty day names its date (handler-level)"
       incomplete: false,
       mealsWithoutEstimate: 0
     });
+  });
+});
+
+// #1723 item 3. The range shape can span 31 days, and before this there was no cap on how many
+// meals came back — the assistant-tool path pastes every one of them into a model context, so an
+// ordinary "how did I eat last month" question could quietly cost hundreds of rows.
+describe("food.meals.list — limit (#1723 item 3)", () => {
+  /** Seeds `count` meals on `localDate`, one per minute, so consumed_at order is unambiguous. */
+  function seedMeals(store: ReturnType<typeof fakeStore>, localDate: string, count: number): void {
+    for (let i = 0; i < count; i += 1) {
+      const mealId = `meal-${localDate}-${String(i).padStart(3, "0")}`;
+      store.meals.set(mealId, {
+        items: [],
+        mealId,
+        consumedAt: `${localDate}T${String(Math.floor(i / 60)).padStart(2, "0")}:${String(i % 60).padStart(2, "0")}:00.000Z`,
+        localDate,
+        timezoneOffset: 0,
+        description: `meal ${i}`,
+        servingNote: null,
+        captureKind: "text",
+        estimateState: "pending",
+        estimateRevision: 0,
+        nutrients: null,
+        missingDetails: null
+      });
+    }
+  }
+
+  it("returns everything and says so when the day fits under the limit", async () => {
+    const store = fakeStore();
+    seedMeals(store, "2026-07-20", 3);
+    const result = await createMealsListHandler(store)(
+      baseCtx({ input: { localDate: "2026-07-20" } })
+    );
+    expect(result.meals).toHaveLength(3);
+    // Not merely falsy: a caller reading `truncated` has to be able to trust the negative case.
+    expect(result.truncated).toBe(false);
+    expect(result.totalCount).toBe(3);
+  });
+
+  it("caps the list at the requested limit and reports the true count", async () => {
+    const store = fakeStore();
+    seedMeals(store, "2026-07-20", 10);
+    const result = await createMealsListHandler(store)(
+      baseCtx({ input: { localDate: "2026-07-20", limit: 4 } })
+    );
+    expect(result.meals).toHaveLength(4);
+    expect(result.truncated).toBe(true);
+    // Without this the caller cannot tell how much it is missing, only that it is missing some.
+    expect(result.totalCount).toBe(10);
+  });
+
+  it("keeps the most recent meals, not the oldest", async () => {
+    const store = fakeStore();
+    seedMeals(store, "2026-07-20", 10);
+    const result = await createMealsListHandler(store)(
+      baseCtx({ input: { localDate: "2026-07-20", limit: 3 } })
+    );
+    // Truncating from the front would answer a month-range question with only its oldest days,
+    // which is the opposite of what anyone asking about their eating wants.
+    expect(result.meals.map((m) => m.description)).toEqual(["meal 7", "meal 8", "meal 9"]);
+  });
+
+  it("totals the whole day even when the meal list is truncated", async () => {
+    const store = fakeStore();
+    seedMeals(store, "2026-07-20", 10);
+    const result = await createMealsListHandler(store)(
+      baseCtx({ input: { localDate: "2026-07-20", limit: 2 } })
+    );
+    // The user compares this number against a target. A total computed over two of ten meals is a
+    // wrong number presented as a right one.
+    expect(result.totals?.mealsWithoutEstimate).toBe(10);
+  });
+
+  it("defaults to 200 when no limit is given", async () => {
+    const store = fakeStore();
+    seedMeals(store, "2026-07-20", 205);
+    const result = await createMealsListHandler(store)(
+      baseCtx({ input: { localDate: "2026-07-20" } })
+    );
+    expect(result.meals).toHaveLength(200);
+    expect(result.truncated).toBe(true);
+    expect(result.totalCount).toBe(205);
+  });
+
+  it("applies the limit to the range shape too", async () => {
+    const store = fakeStore();
+    seedMeals(store, "2026-07-20", 3);
+    seedMeals(store, "2026-07-21", 3);
+    const result = await createMealsListHandler(store)(
+      baseCtx({ input: { fromLocalDate: "2026-07-20", toLocalDate: "2026-07-21", limit: 2 } })
+    );
+    expect(result.meals).toHaveLength(2);
+    expect(result.totalCount).toBe(6);
+    // The range shape has no single day to total, limit or no limit.
+    expect(result.totals).toBeNull();
+  });
+
+  it.each([0, -1, 201, 1.5])("refuses the out-of-range limit %o", async (bad) => {
+    const store = fakeStore();
+    // Clamping silently would let the caller believe it had the whole set. Refusing says so.
+    await expect(
+      createMealsListHandler(store)(baseCtx({ input: { localDate: "2026-07-20", limit: bad } }))
+    ).rejects.toThrow(InputError);
   });
 });
 

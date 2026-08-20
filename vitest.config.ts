@@ -197,6 +197,21 @@ export default defineConfig({
         replacement: fileURLToPath(new URL("./packages/module-sdk/src/server.ts", import.meta.url))
       },
       {
+        // Subpath export (#1723 item 1: local-day helpers, imported as values by Food's domain and
+        // web code); must precede the bare "@moss/module-sdk" alias below, same pairing requirement
+        // as core-version/ai-capabilities/errors/server above.
+        find: "@moss/module-sdk/time",
+        replacement: fileURLToPath(new URL("./packages/module-sdk/src/time.ts", import.meta.url))
+      },
+      {
+        // Subpath export (#1723 item 3: the shape a module's list tool returns); must precede the
+        // bare "@moss/module-sdk" alias below, same pairing requirement as the subpaths above.
+        find: "@moss/module-sdk/list-limits",
+        replacement: fileURLToPath(
+          new URL("./packages/module-sdk/src/list-limits.ts", import.meta.url)
+        )
+      },
+      {
         find: "@moss/module-sdk",
         replacement: fileURLToPath(new URL("./packages/module-sdk/src/index.ts", import.meta.url))
       },

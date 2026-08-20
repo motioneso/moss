@@ -13,6 +13,20 @@ export {
 export { CORE_VERSION, compareMossVersions, satisfiesCoreVersion } from "./core-version.js";
 
 export { createModuleLogger } from "./logger.js";
+// #1723 item 1: local-day arithmetic for modules that record dated data. Intl only, no node:*, so
+// the barrel stays browser-safe.
+export {
+  addLocalDays,
+  isValidTimeZone,
+  localDayKey,
+  localDayRange,
+  resolveLocalDay,
+  timeZoneOffsetMinutes,
+  todayLocalDayKey
+} from "./time.js";
+// #1723 item 3: the shape a module's list tool returns, so the next one does not have to decide
+// which end of an over-long list to drop.
+export { DEFAULT_LIST_LIMIT, applyListLimit, type LimitedList } from "./list-limits.js";
 export * from "./module-params.js";
 export type { VaultIngestRootProvider } from "./vault-ingest-provider.js";
 

@@ -25,7 +25,15 @@ export async function buildExternalModule(moduleDir: string): Promise<void> {
     target: "node20",
     sourcemap: false,
     logLevel: "silent",
-    alias: { "@moss/module-sdk/worker": join(repoRoot, "packages/module-sdk/src/worker.ts") }
+    // #1723 item 1: `/time` is aliased alongside `/worker` for the same reason — external-modules/*
+    // sits outside the pnpm workspace, so there is no node_modules symlink to resolve through. It is
+    // a subpath rather than the root barrel deliberately: the barrel carries the whole manifest type
+    // surface plus the logger, and a module that wants two date functions should not pull that in.
+    alias: {
+      "@moss/module-sdk/worker": join(repoRoot, "packages/module-sdk/src/worker.ts"),
+      "@moss/module-sdk/time": join(repoRoot, "packages/module-sdk/src/time.ts"),
+      "@moss/module-sdk/list-limits": join(repoRoot, "packages/module-sdk/src/list-limits.ts")
+    }
   });
   // Web: browser ESM; must stay react-free (JSX compiles to `h`/`Fragment`, either the
   // module's own src/web/runtime.ts, explicitly imported by hand-authored files, or — for
@@ -70,7 +78,11 @@ export async function buildExternalModule(moduleDir: string): Promise<void> {
     alias: {
       react: reactRuntimeShim,
       "react-dom": reactDomRuntimeShim,
-      "@moss/module-web-sdk": moduleWebSdk
+      "@moss/module-web-sdk": moduleWebSdk,
+      // Same alias as the worker build above — a web surface needs the user's day too, and the
+      // helpers are Intl-only precisely so the browser half can share them.
+      "@moss/module-sdk/time": join(repoRoot, "packages/module-sdk/src/time.ts"),
+      "@moss/module-sdk/list-limits": join(repoRoot, "packages/module-sdk/src/list-limits.ts")
     },
     // Task 18 (#1302): job-search's web surface injects its layout CSS via one <style> tag
     // (finance keeps the same string in a .ts constant instead); the `text` loader turns a
