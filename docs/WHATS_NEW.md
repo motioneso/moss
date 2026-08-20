@@ -1,6 +1,6 @@
 # What's New in Moss
 
-## Edge channel — 2026-08-19
+## Edge channel — 2026-08-20
 
 Edge builds include the stable history below plus the user-facing changes already available in
 the current edge image. This section is intentionally build-bundled so it never advertises a
@@ -8,6 +8,8 @@ feature that is not present in the image you are running.
 
 ### Added
 
+- **Log a meal from the Food page.** The Food page now has its own Log a meal button, so you can
+  add a meal without going through chat. [PR #1788](https://github.com/motioneso/moss/pull/1788)
 - **Food tracking (Phase 1).** Log meals, get an estimated nutrition breakdown, and review what
   you've eaten so far today. [PR #1716](https://github.com/motioneso/moss/pull/1716)
 - **More reliable calendar changes.** Creating, rescheduling, and deleting calendar events now
@@ -26,6 +28,12 @@ feature that is not present in the image you are running.
 
 ### Fixed
 
+- **All-day events are seen when checking your calendar.** Availability is now checked a whole day
+  at a time, so all-day entries are no longer missed when the assistant looks for free
+  time. [PR #1786](https://github.com/motioneso/moss/pull/1786)
+- **The assistant no longer says it did something when it only asked permission.** Granting a
+  permission is reported as a permission grant, not as a finished action. [PR #1783](https://github.com/motioneso/moss/pull/1783)
+- **Meals are logged on the right day.** Logging a meal late in the evening no longer files it under the next day. The assistant now uses your own timezone rather than guessing. [PR #1790](https://github.com/motioneso/moss/pull/1790)
 - **All-day events no longer block scheduling.** Holidays, reminders, and other all-day calendar
   entries no longer make the assistant think a day is fully booked. [PR #1717](https://github.com/motioneso/moss/pull/1717)
 - **Clearer, more accurate settings descriptions.** The assistant now gives better answers to
@@ -49,6 +57,10 @@ feature that is not present in the image you are running.
   instead of being replaced by an automatic lookup. [PR #1535](https://github.com/motioneso/moss/pull/1535)
 - **Chat availability and approval recovery.** Chat now waits for the selected model route and
   restores approval cards reliably after the drawer is reopened. [PR #1482](https://github.com/motioneso/moss/pull/1482) · [PR #1494](https://github.com/motioneso/moss/pull/1494)
+
+### Changed
+
+- **The Food page uses the full width.** The Food page now lines up with the Finance and Job Search pages instead of sitting in a narrower column. [PR #1793](https://github.com/motioneso/moss/pull/1793)
 
 ## v0.1.16 — 2026-08-05
 
