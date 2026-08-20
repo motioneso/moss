@@ -7,6 +7,7 @@ import {
   type WorkerRpcResponse
 } from "./worker-protocol.js";
 import { EMBED_BATCH_MAX } from "./index.js";
+import { isValidTimeZone } from "./time.js";
 import type {
   ExternalModulePreferenceValue,
   ModuleFetchRequest,
@@ -80,6 +81,20 @@ export interface ModuleWorkerContext {
    * Empty for a module that declares no preferences.
    */
   readonly preferences: Readonly<Record<string, ExternalModulePreferenceValue>>;
+  /**
+   * The actor's IANA timezone (#1789), resolved by the host from their locale settings —
+   * the same value built-in tools read off ToolContext.localTimezone.
+   *
+   * A module that files anything under a calendar day MUST prefer this over a timezone in
+   * its tool input. The input value is a model's guess; this is a fact about the user. Food
+   * had only the guess, so a meal logged in the evening could be filed under tomorrow and
+   * vanish from the day it was eaten.
+   *
+   * Undefined when the host has no locale for this actor, or is older than this SDK change.
+   * That is not UTC — it means no answer, and a caller that falls back to UTC is choosing a
+   * default rather than reading one.
+   */
+  readonly localTimezone?: string;
   readonly auth: {
     getCredential(authId: string): Promise<string>;
     setCredential(authId: string, value: string): Promise<void>;
@@ -245,6 +260,7 @@ export function defineModuleWorker(input: {
         input?: unknown;
         deadlineAt?: unknown;
         preferences?: unknown;
+        localTimezone?: unknown;
       };
       // Version-skew default (#1286 Task 2e): only a host older than this SDK change
       // would ever omit deadlineAt. 30_000 mirrors the runtime's pre-Task-2e default
@@ -283,6 +299,13 @@ export function defineModuleWorker(input: {
                 typeof value === "boolean" || value === null || Number.isSafeInteger(value)
             )
           ) as Readonly<Record<string, ExternalModulePreferenceValue>>,
+          // #1789: validated here rather than trusted, because a zone that this runtime does
+          // not recognise silently formats as UTC downstream and produces a wrong calendar day
+          // with no error anywhere. Undefined when absent or unrecognised, so a module can tell
+          // "the host had no answer" from "the host said UTC".
+          ...(typeof params.localTimezone === "string" && isValidTimeZone(params.localTimezone)
+            ? { localTimezone: params.localTimezone }
+            : {}),
           auth: {
             getCredential: (authId) =>
               callParent("auth.getCredential", { authId }) as Promise<string>,

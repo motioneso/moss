@@ -109,4 +109,49 @@ describe("assistant-tool invocations carry the actor's module preferences", () =
     const options = invoke.mock.calls[0]?.[4] as { preferences?: unknown } | undefined;
     expect(options?.preferences).toEqual({ aiEstimates: false, calorieTarget: 2200 });
   });
+
+  // #1789: the same class of defect as the preferences one above, and asserted the same way —
+  // about the ARGUMENT, not about a module's reaction to it. The host resolves the actor's
+  // timezone onto ToolContext for every tool call, but nothing carried it across the module
+  // worker boundary, so a module filing anything under a calendar day had to trust whatever
+  // zone the model wrote into the tool input, and fell back to UTC when it wrote none.
+  it("passes the actor's timezone through to the module runtime", async () => {
+    const { manifests } = createExternalModuleTools({
+      discoveries: [discovery],
+      workerDataContext: noopRunner,
+      appDataContext: noopRunner,
+      settingsRepository: { getUserById: async () => null } as never,
+      logger: { warn: () => undefined }
+    });
+
+    await manifests[0]!.assistantTools![0]!.execute!({} as never, {}, {
+      actorUserId: "user-1",
+      requestId: "req-1",
+      localTimezone: "America/Chicago"
+    } as never);
+
+    const options = invoke.mock.calls[0]?.[4] as { localTimezone?: unknown } | undefined;
+    expect(options?.localTimezone).toBe("America/Chicago");
+  });
+
+  it("omits the timezone rather than inventing one when the host has no locale", async () => {
+    const { manifests } = createExternalModuleTools({
+      discoveries: [discovery],
+      workerDataContext: noopRunner,
+      appDataContext: noopRunner,
+      settingsRepository: { getUserById: async () => null } as never,
+      logger: { warn: () => undefined }
+    });
+
+    await manifests[0]!.assistantTools![0]!.execute!({} as never, {}, {
+      actorUserId: "user-1",
+      requestId: "req-1"
+    } as never);
+
+    // Absent, not "UTC". A module has to be able to tell "the host does not know" from "the
+    // host says UTC" — the first is a reason to fall back to the model's guess, the second
+    // is not.
+    const options = invoke.mock.calls[0]?.[4] as Record<string, unknown> | undefined;
+    expect(options && "localTimezone" in options).toBe(false);
+  });
 });

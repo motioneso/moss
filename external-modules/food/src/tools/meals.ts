@@ -237,6 +237,25 @@ export function createMealsSummarizeHandler(store: FoodStore) {
   };
 }
 
+/**
+ * Which timezone decides what calendar day a meal belongs to (#1789).
+ *
+ * Host first, model second, UTC last. `ctx.localTimezone` is the user's own setting, resolved
+ * by the host for this invocation; a `timeZone` in the tool input is whatever the model
+ * decided to put there, which may be nothing at all.
+ *
+ * Order matters and used to be wrong. With only the model's value available, an omitted
+ * timeZone fell through to UTC, so a meal eaten at 9pm somewhere behind UTC was stored under
+ * tomorrow's date and vanished from the day view of the day it was actually eaten.
+ *
+ * UTC remains the final fallback rather than an error: refusing to log a meal because the
+ * user has never opened their locale settings would be a worse failure than filing it a few
+ * hours off.
+ */
+function resolveTimeZone(ctx: ModuleWorkerContext, fromInput: string | undefined): string {
+  return ctx.localTimezone ?? fromInput ?? "UTC";
+}
+
 // ── food.meals.log ──────────────────────────────────────────────────────
 
 const MEALS_LOG_KEYS = new Set([
@@ -296,7 +315,7 @@ export function createMealsLogHandler(store: FoodStore) {
     }
     const idempotencyKey = readString(input, "idempotencyKey", { required: true });
     const consumedAtRaw = readString(input, "consumedAt");
-    const timeZone = readString(input, "timeZone") ?? "UTC";
+    const timeZone = resolveTimeZone(ctx, readString(input, "timeZone"));
     const captureKind = readEnum(input, "captureKind", CAPTURE_KINDS) ?? "text";
     const servingNote =
       readString(input, "servingNote", { maxBytes: SERVING_NOTE_MAX_BYTES }) ?? null;
@@ -533,7 +552,11 @@ export function createMealsCorrectHandler(store: FoodStore) {
       throw new InputError("description must not be blank");
     }
     const consumedAtRaw = readString(input, "consumedAt");
-    const timeZone = readString(input, "timeZone");
+    // #1789: the host's answer outranks the model's here too, but "no zone anywhere" still
+    // has to fall through to the existing meal's stored offset below rather than to UTC —
+    // re-filing a correction under a zone the meal was never logged in would move it to a
+    // different day for no reason the user asked for.
+    const timeZone = ctx.localTimezone ?? readString(input, "timeZone");
     const items = readItemsPatch(input);
 
     let consumedAtFields:

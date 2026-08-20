@@ -128,6 +128,8 @@ export class ExternalModuleWorkerRuntime {
       readonly timeoutMs?: number;
       /** #1725: this actor's resolved on/off switches, surfaced to the module as ctx.preferences. */
       readonly preferences?: Readonly<Record<string, ExternalModulePreferenceValue>>;
+      /** #1789: the actor's IANA zone, surfaced to the module as ctx.localTimezone. */
+      readonly localTimezone?: string;
     }
   ): Promise<unknown> {
     const key = laneKey(module.id, options.lane);
@@ -161,6 +163,8 @@ export class ExternalModuleWorkerRuntime {
       readonly timeoutMs?: number;
       /** #1725: this actor's resolved on/off switches, surfaced to the module as ctx.preferences. */
       readonly preferences?: Readonly<Record<string, ExternalModulePreferenceValue>>;
+      /** #1789: the actor's IANA zone, surfaced to the module as ctx.localTimezone. */
+      readonly localTimezone?: string;
     }
   ): Promise<unknown> {
     const key = laneKey(module.id, options.lane);
@@ -220,11 +224,16 @@ export class ExternalModuleWorkerRuntime {
           // context) and passed through here. The runtime never reads them itself — it has
           // no access context, and inventing one here would be the bypass this whole design
           // exists to avoid.
+          // #1789: the actor's timezone travels the same way and for the same reason. The
+          // runtime cannot look it up — resolving a user's locale needs their data context,
+          // which only the caller holds. Omitted entirely when the caller has none, so the
+          // module can tell "no answer" from a deliberate UTC.
           params: {
             handler,
             input,
             deadlineAt,
-            ...(options.preferences ? { preferences: options.preferences } : {})
+            ...(options.preferences ? { preferences: options.preferences } : {}),
+            ...(options.localTimezone ? { localTimezone: options.localTimezone } : {})
           }
         })}\n`
       );

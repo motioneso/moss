@@ -15,6 +15,7 @@ import type {
   ExternalModulePreferenceDeclaration,
   ExternalModulePreferenceValue
 } from "@moss/module-sdk";
+import { extractTimezone } from "@moss/chat";
 import { PreferencesRepository } from "@moss/structured-state";
 
 export function modulePreferenceKey(moduleId: string, key: string): string {
@@ -39,6 +40,31 @@ export async function writeModulePreferences(
       await repository.upsert(scopedDb, modulePreferenceKey(moduleId, key), value);
     }
   });
+}
+
+/**
+ * The actor's IANA timezone, read from their stored `locale` preference (#1789).
+ *
+ * Lives beside resolveModulePreferences because it is the same shape of problem: a value
+ * that belongs to the user, readable only inside their data context, needed by every module
+ * invocation. The AI gateway already resolves this for built-in tools
+ * (packages/ai/src/gateway/gateway.ts); this is the queued path's equivalent, so a meal
+ * logged by a background job lands on the same calendar day as one logged in chat.
+ *
+ * Null when the user has never set a locale, or stored something this runtime cannot read as
+ * a zone. Null is not UTC — it means no answer, and the caller decides what to do about that.
+ */
+export async function resolveActorTimezone(
+  runner: DataContextRunner,
+  access: AccessContext
+): Promise<string | null> {
+  const repository = new PreferencesRepository();
+  const raw = await runner.withDataContext(access, (scopedDb) =>
+    repository.get(scopedDb, "locale")
+  );
+  // Parsed by the same helper the chat/gateway path uses rather than a second copy of the same
+  // checks, so the two paths cannot disagree about what a stored locale means.
+  return extractTimezone(raw);
 }
 
 export async function resolveModulePreferences(

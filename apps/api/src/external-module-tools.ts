@@ -121,7 +121,15 @@ export function createExternalModuleTools(input: {
           rpc,
           // #1286 Task 2e: an assistant tool call gets its own child process,
           // separate from this module's queue jobs and briefing invocations.
-          { lane: "tool", preferences }
+          // #1789: the actor's zone, already resolved on the ToolContext by the AI gateway
+          // for every tool call. Built-in tools have always read it straight off ctx; an
+          // external module had no way to see it and had to trust whatever timezone the
+          // model put in the tool input.
+          {
+            lane: "tool",
+            preferences,
+            ...(context.localTimezone ? { localTimezone: context.localTimezone } : {})
+          }
         )
       );
     }
