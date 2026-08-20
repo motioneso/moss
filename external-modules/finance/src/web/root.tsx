@@ -3,8 +3,8 @@
 // live region for the whole surface. FIN-03 (#1148) Task 4 adds the in-module
 // router (job-search idiom): Feed at "/", Budget at "/budget"; jds-*
 // primitives + layout-only fnm-* styles.
+import { useSyncExternalStore, type ReactNodeLike } from "@moss/module-web-sdk";
 import { ModuleLink, useModulePath } from "./router";
-import { h, useSyncExternalStore, type ReactNodeLike } from "./runtime";
 import { BudgetScreen } from "./screens/budget";
 import { FeedScreen } from "./screens/feed";
 import { ReportsScreen } from "./screens/reports";
@@ -44,7 +44,8 @@ export function Root(props: { hostActions: HostActions }): ReactNodeLike {
           <ModuleLink
             key={tab.to}
             to={tab.to}
-            className={`jds-btn jds-btn--sm ${path === tab.to ? "jds-btn--secondary" : "jds-btn--quiet"}`}
+            variant={path === tab.to ? "secondary" : "quiet"}
+            size="sm"
             aria-current={path === tab.to ? "page" : undefined}
           >
             {tab.label}

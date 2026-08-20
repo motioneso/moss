@@ -5,8 +5,8 @@
 // (module-scoped by construction) with useSyncExternalStore subscribers.
 // Fetch starts on first subscribe; snapshots are stable object identities so
 // getSnapshot is referentially safe.
+import { useCallback, useSyncExternalStore } from "@moss/module-web-sdk";
 import { invokeTool, type ToolOutcome } from "./api";
-import { useCallback, useSyncExternalStore } from "./runtime";
 
 export type QuerySnapshot<T> =
   | { status: "loading" }

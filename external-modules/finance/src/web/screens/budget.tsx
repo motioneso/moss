@@ -7,6 +7,7 @@
 // optimistic local override (assigned + available + TBB shift in-render) with
 // the feed's delayed invalidate-and-refetch idiom; the refetched state carries
 // the worker's ledger write and the override becomes a harmless same-value.
+import { Badge, Button, Card, useState, type ReactNodeLike } from "@moss/module-web-sdk";
 import { runQueue, type RunOutcome } from "../api";
 import {
   centsToAmountInput,
@@ -16,7 +17,6 @@ import {
   parseAmountToCents,
   shiftMonth
 } from "../format";
-import { h, useState, type ReactNodeLike } from "../runtime";
 import { announce, EmptyState, outcomeGate } from "../states";
 import { invalidateQueries, useToolQuery } from "../store";
 
@@ -82,9 +82,9 @@ function Amount(props: { cents: number; key?: string }): ReactNodeLike {
   // (the module's authored danger token — no new CSS colors).
   if (props.cents < 0) {
     return (
-      <span className="jds-badge jds-badge--amber fnm-amount">
-        {formatCents(props.cents, BUDGET_CURRENCY)}
-      </span>
+      <Badge tone="amber">
+        <span className="fnm-amount">{formatCents(props.cents, BUDGET_CURRENCY)}</span>
+      </Badge>
     );
   }
   return <span className="fnm-amount">{formatCents(props.cents, BUDGET_CURRENCY)}</span>;
@@ -192,47 +192,49 @@ function BudgetBody(props: {
         return (
           <section key={group.id} aria-label={group.label}>
             <h3 className="jds-eyebrow">{group.label}</h3>
-            <table className="fnm-table jds-card jds-card--flush">
-              <thead>
-                <tr>
-                  <th scope="col">Category</th>
-                  <th scope="col" className="fnm-amount">
-                    Assigned
-                  </th>
-                  <th scope="col" className="fnm-amount">
-                    Activity
-                  </th>
-                  <th scope="col" className="fnm-amount">
-                    Available
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((category) => {
-                  const row = rowState(category.id);
-                  return (
-                    <tr key={category.id}>
-                      <th scope="row">{category.name}</th>
-                      <td>
-                        <AssignCell
-                          key={`${props.month}:${category.id}`}
-                          month={props.month}
-                          category={category}
-                          assignedCents={row.assignedCents}
-                          onAssign={props.onAssign}
-                        />
-                      </td>
-                      <td>
-                        <Amount cents={row.activityCents} />
-                      </td>
-                      <td>
-                        <Amount cents={row.availableCents} />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <Card flush>
+              <table className="fnm-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Category</th>
+                    <th scope="col" className="fnm-amount">
+                      Assigned
+                    </th>
+                    <th scope="col" className="fnm-amount">
+                      Activity
+                    </th>
+                    <th scope="col" className="fnm-amount">
+                      Available
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((category) => {
+                    const row = rowState(category.id);
+                    return (
+                      <tr key={category.id}>
+                        <th scope="row">{category.name}</th>
+                        <td>
+                          <AssignCell
+                            key={`${props.month}:${category.id}`}
+                            month={props.month}
+                            category={category}
+                            assignedCents={row.assignedCents}
+                            onAssign={props.onAssign}
+                          />
+                        </td>
+                        <td>
+                          <Amount cents={row.activityCents} />
+                        </td>
+                        <td>
+                          <Amount cents={row.availableCents} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </Card>
           </section>
         );
       })}
@@ -267,23 +269,23 @@ export function BudgetScreen(): ReactNodeLike {
     <section className="fnm-stack" aria-label="Budget">
       <div className="fnm-row">
         <div className="fnm-chips" role="group" aria-label="Month">
-          <button
-            type="button"
-            className="jds-btn jds-btn--quiet jds-btn--sm"
+          <Button
+            variant="quiet"
+            size="sm"
             aria-label="Previous month"
             onClick={() => setMonth(shiftMonth(month, -1))}
           >
             ←
-          </button>
+          </Button>
           <span className="jds-eyebrow">{monthLabel(month)}</span>
-          <button
-            type="button"
-            className="jds-btn jds-btn--quiet jds-btn--sm"
+          <Button
+            variant="quiet"
+            size="sm"
             aria-label="Next month"
             onClick={() => setMonth(shiftMonth(month, 1))}
           >
             →
-          </button>
+          </Button>
         </div>
       </div>
       {outcomeGate(
