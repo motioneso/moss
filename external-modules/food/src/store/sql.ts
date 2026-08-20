@@ -22,7 +22,8 @@
 // on estimate_revision is what keeps a stale writer from clobbering a newer
 // one, not atomicity.
 
-import type { CaptureKind, EstimateState, Meal, Nutrients } from "../domain/meal.js";
+import type { CaptureKind, EstimateState, Meal, MealItem, Nutrients } from "../domain/meal.js";
+import { sumItemNutrients } from "../domain/totals.js";
 
 /** Structural twin of ModuleWorkerContext.db — see the file header. */
 export interface FoodDb {
@@ -82,7 +83,83 @@ function toIsoString(value: unknown): string {
   return Number.isNaN(date.getTime()) ? String(value) : date.toISOString();
 }
 
-function rowToMeal(row: MealRow): Meal {
+type ItemRow = {
+  meal_id: string;
+  item_index: number;
+  label: string;
+  portion_note: string | null;
+  calories_kcal: string | number | null;
+  protein_g: string | number | null;
+  carbohydrates_g: string | number | null;
+  fat_g: string | number | null;
+  fiber_g: string | number | null;
+  sugar_g: string | number | null;
+  sodium_mg: string | number | null;
+};
+
+function rowToItem(row: ItemRow): MealItem {
+  return {
+    label: row.label,
+    portionNote: row.portion_note,
+    nutrients: {
+      caloriesKcal: toNutrientNumber(row.calories_kcal),
+      proteinG: toNutrientNumber(row.protein_g),
+      carbohydratesG: toNutrientNumber(row.carbohydrates_g),
+      fatG: toNutrientNumber(row.fat_g),
+      fiberG: toNutrientNumber(row.fiber_g),
+      sugarG: toNutrientNumber(row.sugar_g),
+      sodiumMg: toNutrientNumber(row.sodium_mg)
+    }
+  };
+}
+
+/**
+ * Items for a set of meals, at each meal's CURRENT revision — the join on
+ * estimate_revision is what keeps a correction from resurrecting the previous
+ * revision's breakdown alongside the new one. Returned keyed by meal id, in
+ * item_index order; a meal with no breakdown (logged before #1737, or not yet
+ * estimated) is simply absent from the map.
+ *
+ * This is a second query rather than a join onto MEAL_JOIN_ESTIMATE because
+ * that query returns one row per meal and items are one-to-many — joining
+ * would multiply every meal row by its item count and force de-duplication in
+ * TypeScript.
+ */
+async function loadItemsByMeal(
+  db: FoodDb,
+  mealIds: readonly string[]
+): Promise<Map<string, MealItem[]>> {
+  const byMeal = new Map<string, MealItem[]>();
+  if (mealIds.length === 0) return byMeal;
+  const { rows } = await db.query<ItemRow>(
+    `SELECT i.meal_id, i.item_index, i.label, i.portion_note, i.calories_kcal, i.protein_g,
+       i.carbohydrates_g, i.fat_g, i.fiber_g, i.sugar_g, i.sodium_mg
+     FROM app.food_estimate_items i
+     JOIN app.food_meals m
+       ON m.owner_user_id = i.owner_user_id AND m.meal_id = i.meal_id
+       AND m.estimate_revision = i.revision
+     WHERE i.meal_id = ANY($1::uuid[])
+     ORDER BY i.meal_id, i.item_index`,
+    [mealIds]
+  );
+  for (const row of rows) {
+    const existing = byMeal.get(row.meal_id);
+    if (existing) existing.push(rowToItem(row));
+    else byMeal.set(row.meal_id, [rowToItem(row)]);
+  }
+  return byMeal;
+}
+
+/** Maps meal rows and attaches each meal's items in one extra round trip. */
+async function rowsToMeals(db: FoodDb, rows: readonly MealRow[]): Promise<Meal[]> {
+  const byMeal = await loadItemsByMeal(
+    db,
+    rows.map((row) => row.meal_id)
+  );
+  return rows.map((row) => rowToMeal(row, byMeal.get(row.meal_id) ?? []));
+}
+
+function rowToMeal(row: MealRow, items: readonly MealItem[]): Meal {
   // Only an "estimated" meal carries nutrients. If the join found no matching
   // food_estimates row (should not happen once recordEstimate has run, but
   // the join is LEFT so this stays defensive), every nutrient maps to null
@@ -110,6 +187,7 @@ function rowToMeal(row: MealRow): Meal {
     estimateState: row.estimate_state,
     estimateRevision: row.estimate_revision,
     nutrients,
+    items,
     missingDetails: row.estimate_state === "needs_details" ? row.missing_details : null
   };
 }
@@ -129,9 +207,23 @@ export interface CreateMealInput {
 
 export interface RecordEstimateInput {
   readonly state: Exclude<EstimateState, "pending">;
+  /** The individual foods. The estimate row's nutrients are written as their sum. */
+  readonly items: readonly MealItem[];
   readonly nutrients: Nutrients | null;
   readonly missingDetails: string | null;
   readonly clarificationQuestion: string | null;
+}
+
+/**
+ * One item of a correction, merged positionally over the meal's current items:
+ * an omitted field keeps the value the item already had (guard 4 — a correction
+ * never blanks something the user did not touch). An entry past the end of the
+ * current list is a new item and must carry a label.
+ */
+export interface CorrectMealItemPatch {
+  readonly label?: string;
+  readonly portionNote?: string | null;
+  readonly nutrients?: Partial<Nutrients>;
 }
 
 export interface CorrectMealPatch {
@@ -139,8 +231,12 @@ export interface CorrectMealPatch {
   readonly consumedAt?: Date;
   readonly localDate?: string;
   readonly timezoneOffset?: number;
-  /** Unspecified nutrient fields keep their current value — never nulled by omission. */
-  readonly nutrients?: Partial<Nutrients>;
+  /**
+   * Corrections are item-level (#1737). There is deliberately no meal-level
+   * nutrient patch: the meal's numbers are always the sum of its items, so a
+   * figure written straight onto the meal would contradict its own breakdown.
+   */
+  readonly items?: readonly CorrectMealItemPatch[];
 }
 
 export interface FoodStore {
@@ -167,8 +263,10 @@ export interface FoodStore {
    * User-authored correction. Same CAS guard as recordEstimate — a stale
    * expectedRevision is rejected with null, no write (plan §4 Task 7 test
    * 7). Nutrient corrections are always trusted (user-authored, not
-   * model-authored) and merged over the current estimate rather than
-   * replacing it, so correcting one field never blanks the rest.
+   * model-authored) and merged over the current breakdown rather than
+   * replacing it, so correcting one field never blanks the rest. Corrections
+   * are per item; the meal's totals are re-derived from the corrected items,
+   * never written directly (#1737).
    */
   correctMeal(
     mealId: string,
@@ -176,6 +274,98 @@ export interface FoodStore {
     patch: CorrectMealPatch
   ): Promise<Meal | null>;
   deleteMeal(mealId: string): Promise<boolean>;
+}
+
+/**
+ * Writes the breakdown for one revision. One multi-row INSERT rather than one
+ * statement per item — the host's db port allows no transaction, so fewer
+ * statements is fewer ways to land half a breakdown. Nothing is deleted first:
+ * item rows are keyed by revision and every write here is at a revision that
+ * did not exist a moment ago.
+ */
+async function insertItems(
+  db: FoodDb,
+  mealId: string,
+  revision: number,
+  items: readonly MealItem[]
+): Promise<void> {
+  if (items.length === 0) return;
+  const params: unknown[] = [mealId, revision];
+  const tuples = items.map((item, index) => {
+    const base = params.length;
+    params.push(
+      index,
+      item.label,
+      item.portionNote,
+      item.nutrients.caloriesKcal,
+      item.nutrients.proteinG,
+      item.nutrients.carbohydratesG,
+      item.nutrients.fatG,
+      item.nutrients.fiberG,
+      item.nutrients.sugarG,
+      item.nutrients.sodiumMg
+    );
+    const p = (offset: number) => `$${base + offset}`;
+    return (
+      `(app.current_actor_user_id(), $1, $2, ${p(1)}, ${p(2)}, ${p(3)}, ${p(4)}, ${p(5)}, ` +
+      `${p(6)}, ${p(7)}, ${p(8)}, ${p(9)}, ${p(10)})`
+    );
+  });
+  await db.query(
+    `INSERT INTO app.food_estimate_items (
+       owner_user_id, meal_id, revision, item_index, label, portion_note, calories_kcal,
+       protein_g, carbohydrates_g, fat_g, fiber_g, sugar_g, sodium_mg
+     )
+     VALUES ${tuples.join(", ")}`,
+    params
+  );
+}
+
+/**
+ * Positional merge of a correction over the meal's current breakdown. Index i
+ * of the patch corrects item i; an omitted field keeps what the item already
+ * had, and an entry past the end of the current list is a new item (which the
+ * caller has already checked carries a label). Items the patch does not reach
+ * are carried forward unchanged.
+ */
+function mergeItems(
+  current: readonly MealItem[],
+  patch: readonly CorrectMealItemPatch[]
+): MealItem[] {
+  const length = Math.max(current.length, patch.length);
+  const merged: MealItem[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const base = current[index];
+    const change = patch[index];
+    if (!change) {
+      if (base) merged.push(base);
+      continue;
+    }
+    const n = change.nutrients;
+    const label = change.label ?? base?.label;
+    if (label === undefined || label.trim() === "") {
+      // A patch entry past the end of the current list is a NEW item, and an
+      // item with no name cannot be rendered or corrected later. Rejected here
+      // rather than at the database, where it would surface as a check-constraint
+      // violation with no useful message.
+      throw new Error(`food.correct: items[${index}] is new and needs a label`);
+    }
+    merged.push({
+      label,
+      portionNote:
+        change.portionNote !== undefined ? change.portionNote : (base?.portionNote ?? null),
+      nutrients: {
+        caloriesKcal: n?.caloriesKcal ?? base?.nutrients.caloriesKcal ?? null,
+        proteinG: n?.proteinG ?? base?.nutrients.proteinG ?? null,
+        carbohydratesG: n?.carbohydratesG ?? base?.nutrients.carbohydratesG ?? null,
+        fatG: n?.fatG ?? base?.nutrients.fatG ?? null,
+        fiberG: n?.fiberG ?? base?.nutrients.fiberG ?? null,
+        sugarG: n?.sugarG ?? base?.nutrients.sugarG ?? null,
+        sodiumMg: n?.sodiumMg ?? base?.nutrients.sodiumMg ?? null
+      }
+    });
+  }
+  return merged;
 }
 
 export function sqlStore(db: FoodDb): FoodStore {
@@ -210,7 +400,9 @@ export function sqlStore(db: FoodDb): FoodStore {
           input.idempotencyKey
         ]
       );
-      if (inserted.rows.length > 0) return rowToMeal(inserted.rows[0]!);
+      // A meal that was inserted a statement ago has no breakdown yet — no
+      // estimator has run — so this one path skips the items round trip.
+      if (inserted.rows.length > 0) return rowToMeal(inserted.rows[0]!, []);
 
       // Conflict on (owner_user_id, idempotency_key): a retry of an already-logged
       // meal. Return the existing row rather than erroring — one row either way
@@ -222,14 +414,14 @@ export function sqlStore(db: FoodDb): FoodStore {
       if (existing.rows.length === 0) {
         throw new Error("food.meals.log: idempotency conflict but no existing row found");
       }
-      return rowToMeal(existing.rows[0]!);
+      return (await rowsToMeals(db, existing.rows))[0]!;
     },
 
     async getMeal(mealId) {
       const result = await db.query<MealRow>(`${MEAL_JOIN_ESTIMATE} WHERE m.meal_id = $1`, [
         mealId
       ]);
-      return result.rows.length === 0 ? null : rowToMeal(result.rows[0]!);
+      return result.rows.length === 0 ? null : (await rowsToMeals(db, result.rows))[0]!;
     },
 
     async listMealsForLocalDate(localDate) {
@@ -237,7 +429,7 @@ export function sqlStore(db: FoodDb): FoodStore {
         `${MEAL_JOIN_ESTIMATE} WHERE m.local_date = $1 ORDER BY m.consumed_at ASC`,
         [localDate]
       );
-      return result.rows.map(rowToMeal);
+      return rowsToMeals(db, result.rows);
     },
 
     async listMealsForDateRange(fromLocalDate, toLocalDate) {
@@ -245,7 +437,7 @@ export function sqlStore(db: FoodDb): FoodStore {
         `${MEAL_JOIN_ESTIMATE} WHERE m.local_date BETWEEN $1 AND $2 ORDER BY m.consumed_at ASC`,
         [fromLocalDate, toLocalDate]
       );
-      return result.rows.map(rowToMeal);
+      return rowsToMeals(db, result.rows);
     },
 
     async recordEstimate(mealId, expectedRevision, outcome) {
@@ -280,11 +472,14 @@ export function sqlStore(db: FoodDb): FoodStore {
           outcome.clarificationQuestion
         ]
       );
+      // After the estimate row, never before: the item rows reference it by
+      // (owner, meal, revision), so the reverse order fails the foreign key.
+      await insertItems(db, mealId, newRevision, outcome.items);
 
       const result = await db.query<MealRow>(`${MEAL_JOIN_ESTIMATE} WHERE m.meal_id = $1`, [
         mealId
       ]);
-      return result.rows.length === 0 ? null : rowToMeal(result.rows[0]!);
+      return result.rows.length === 0 ? null : (await rowsToMeals(db, result.rows))[0]!;
     },
 
     async correctMeal(mealId, expectedRevision, patch) {
@@ -298,9 +493,12 @@ export function sqlStore(db: FoodDb): FoodStore {
       if (current.rows.length === 0 || current.rows[0]!.estimate_revision !== expectedRevision) {
         return null;
       }
-      const currentMeal = rowToMeal(current.rows[0]!);
+      const currentMeal = (await rowsToMeals(db, current.rows))[0]!;
 
-      const nextState: EstimateState = patch.nutrients ? "estimated" : currentMeal.estimateState;
+      // Merged before the CAS UPDATE so a patch that cannot be applied (a new
+      // item with no label) fails without having advanced the revision.
+      const mergedItems = patch.items ? mergeItems(currentMeal.items, patch.items) : null;
+      const nextState: EstimateState = mergedItems ? "estimated" : currentMeal.estimateState;
       const updated = await db.query<{ estimate_revision: number }>(
         `UPDATE app.food_meals
          SET description = COALESCE($3, description),
@@ -324,18 +522,11 @@ export function sqlStore(db: FoodDb): FoodStore {
       );
       if (updated.rows.length === 0) return null; // lost the CAS race between the read above and here
 
-      if (patch.nutrients) {
-        const base = currentMeal.nutrients;
-        const merged: Nutrients = {
-          caloriesKcal: patch.nutrients.caloriesKcal ?? base?.caloriesKcal ?? null,
-          proteinG: patch.nutrients.proteinG ?? base?.proteinG ?? null,
-          carbohydratesG: patch.nutrients.carbohydratesG ?? base?.carbohydratesG ?? null,
-          fatG: patch.nutrients.fatG ?? base?.fatG ?? null,
-          fiberG: patch.nutrients.fiberG ?? base?.fiberG ?? null,
-          sugarG: patch.nutrients.sugarG ?? base?.sugarG ?? null,
-          sodiumMg: patch.nutrients.sodiumMg ?? base?.sodiumMg ?? null
-        };
-        const newRevision = updated.rows[0]!.estimate_revision;
+      const newRevision = updated.rows[0]!.estimate_revision;
+      if (mergedItems) {
+        // Derived, never patched directly (#1737): whatever the user corrected
+        // on an item, the meal's figures are the sum of the items afterwards.
+        const merged: Nutrients = sumItemNutrients(mergedItems);
         await db.query(
           `INSERT INTO app.food_estimates (
              owner_user_id, meal_id, revision, calories_kcal, protein_g, carbohydrates_g,
@@ -354,12 +545,39 @@ export function sqlStore(db: FoodDb): FoodStore {
             merged.sodiumMg
           ]
         );
+        await insertItems(db, mealId, newRevision, mergedItems);
+      } else {
+        // A correction that only touched text or time still advances the
+        // revision, and the estimate is read at the CURRENT revision — so
+        // without this copy an edited description would silently blank the
+        // meal's nutrition. Both statements are no-ops when there is nothing
+        // at the previous revision to carry (a meal that never estimated).
+        await db.query(
+          `INSERT INTO app.food_estimates (
+             owner_user_id, meal_id, revision, calories_kcal, protein_g, carbohydrates_g,
+             fat_g, fiber_g, sugar_g, sodium_mg, missing_details, clarification_question
+           )
+           SELECT owner_user_id, meal_id, $2, calories_kcal, protein_g, carbohydrates_g,
+             fat_g, fiber_g, sugar_g, sodium_mg, missing_details, clarification_question
+           FROM app.food_estimates WHERE meal_id = $1 AND revision = $3`,
+          [mealId, newRevision, expectedRevision]
+        );
+        await db.query(
+          `INSERT INTO app.food_estimate_items (
+             owner_user_id, meal_id, revision, item_index, label, portion_note, calories_kcal,
+             protein_g, carbohydrates_g, fat_g, fiber_g, sugar_g, sodium_mg
+           )
+           SELECT owner_user_id, meal_id, $2, item_index, label, portion_note, calories_kcal,
+             protein_g, carbohydrates_g, fat_g, fiber_g, sugar_g, sodium_mg
+           FROM app.food_estimate_items WHERE meal_id = $1 AND revision = $3`,
+          [mealId, newRevision, expectedRevision]
+        );
       }
 
       const result = await db.query<MealRow>(`${MEAL_JOIN_ESTIMATE} WHERE m.meal_id = $1`, [
         mealId
       ]);
-      return result.rows.length === 0 ? null : rowToMeal(result.rows[0]!);
+      return result.rows.length === 0 ? null : (await rowsToMeals(db, result.rows))[0]!;
     },
 
     async deleteMeal(mealId) {

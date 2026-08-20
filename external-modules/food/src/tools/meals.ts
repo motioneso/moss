@@ -27,7 +27,7 @@ import { resolveMealLocalDate } from "../domain/meal.js";
 import { computeDailyTotals } from "../domain/totals.js";
 import type { DailyTotals } from "../domain/meal.js";
 import { estimateFromDescription } from "../estimator/run.js";
-import type { CorrectMealPatch, FoodStore } from "../store/sql.js";
+import type { CorrectMealItemPatch, CorrectMealPatch, FoodStore } from "../store/sql.js";
 import {
   InputError,
   readEnum,
@@ -187,6 +187,10 @@ const MEALS_LOG_KEYS = new Set([
 
 const DESCRIPTION_MAX_BYTES = 2000;
 const SERVING_NOTE_MAX_BYTES = 500;
+// Matched to the check constraints on app.food_estimate_items, so an over-long
+// correction is rejected with a readable message instead of a constraint error.
+const ITEM_LABEL_MAX_BYTES = 200;
+const ITEM_PORTION_MAX_BYTES = 100;
 
 export interface LogMealResult {
   readonly meal: Meal;
@@ -265,6 +269,7 @@ export function createMealsLogHandler(store: FoodStore) {
     const outcome = await estimateFromDescription(ctx.ai, meal.description, meal.servingNote);
     const recorded = await store.recordEstimate(meal.mealId, meal.estimateRevision, {
       state: outcome.kind,
+      items: outcome.items,
       nutrients: outcome.nutrients,
       missingDetails: outcome.missingDetails,
       clarificationQuestion: outcome.clarificationQuestion
@@ -318,6 +323,7 @@ export function createMealsReestimateHandler(store: FoodStore) {
     const outcome = await estimateFromDescription(ctx.ai, meal.description, meal.servingNote);
     const recorded = await store.recordEstimate(meal.mealId, meal.estimateRevision, {
       state: outcome.kind,
+      items: outcome.items,
       nutrients: outcome.nutrients,
       missingDetails: outcome.missingDetails,
       clarificationQuestion: outcome.clarificationQuestion
@@ -341,8 +347,10 @@ const MEALS_CORRECT_KEYS = new Set([
   "description",
   "consumedAt",
   "timeZone",
-  "nutrients"
+  "items"
 ]);
+
+const CORRECT_ITEM_KEYS = new Set(["label", "portionNote", "nutrients"]);
 
 const NUTRIENT_KEYS = [
   "caloriesKcal",
@@ -366,16 +374,15 @@ function localDateAtFixedOffset(consumedAt: Date, offsetMinutes: number): string
   return shifted.toISOString().slice(0, 10);
 }
 
-function readNutrientsPatch(input: Record<string, unknown>): Partial<Nutrients> | undefined {
-  const raw = input["nutrients"];
+function readNutrientsPatch(raw: unknown, path: string): Partial<Nutrients> | undefined {
   if (raw === undefined) return undefined;
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
-    throw new InputError("nutrients must be an object");
+    throw new InputError(`${path} must be an object`);
   }
   const record = raw as Record<string, unknown>;
   for (const key of Object.keys(record)) {
     if (!(NUTRIENT_KEYS as readonly string[]).includes(key)) {
-      throw new InputError(`unknown key: nutrients.${key}`);
+      throw new InputError(`unknown key: ${path}.${key}`);
     }
   }
   const caloriesKcal = readNutrientValue(record, "caloriesKcal");
@@ -398,6 +405,50 @@ function readNutrientsPatch(input: Record<string, unknown>): Partial<Nutrients> 
   };
 }
 
+/**
+ * Reads an item-level correction (#1737). Entry i of the array corrects item i
+ * of the meal's current breakdown; `null` leaves that item alone, which is how
+ * a caller reaches item 3 without restating items 1 and 2. An entry past the
+ * end of the list adds an item, and the store requires it to carry a label.
+ *
+ * There is deliberately no meal-level `nutrients` patch any more: a meal's
+ * figures are the sum of its items, so a number written straight onto the meal
+ * would contradict the breakdown shown underneath it.
+ */
+function readItemsPatch(input: Record<string, unknown>): CorrectMealItemPatch[] | undefined {
+  const raw = input["items"];
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw)) {
+    throw new InputError("items must be an array");
+  }
+  return raw.map((entry, index) => {
+    if (entry === null) return {};
+    if (typeof entry !== "object" || Array.isArray(entry)) {
+      throw new InputError(`items[${index}] must be an object or null`);
+    }
+    const record = entry as Record<string, unknown>;
+    for (const key of Object.keys(record)) {
+      if (!CORRECT_ITEM_KEYS.has(key)) {
+        throw new InputError(`unknown key: items[${index}].${key}`);
+      }
+    }
+    const label = readString(record, "label", { maxBytes: ITEM_LABEL_MAX_BYTES });
+    if (label !== undefined && label.trim().length === 0) {
+      throw new InputError(`items[${index}].label must not be blank`);
+    }
+    const portionNoteRaw = record["portionNote"];
+    let portionNote: string | null | undefined;
+    if (portionNoteRaw === null) portionNote = null;
+    else portionNote = readString(record, "portionNote", { maxBytes: ITEM_PORTION_MAX_BYTES });
+    const nutrients = readNutrientsPatch(record["nutrients"], `items[${index}].nutrients`);
+    return {
+      ...(label !== undefined ? { label } : {}),
+      ...(portionNote !== undefined ? { portionNote } : {}),
+      ...(nutrients !== undefined ? { nutrients } : {})
+    };
+  });
+}
+
 /** `food.meals.correct` — write. Revision-guarded (CAS on `expectedRevision`); the store rejects a
  * stale or unknown `mealId` identically (returns null either way, see store/sql.ts's correctMeal),
  * so this handler cannot distinguish "not found" from "stale revision" and does not try to. */
@@ -414,7 +465,7 @@ export function createMealsCorrectHandler(store: FoodStore) {
     }
     const consumedAtRaw = readString(input, "consumedAt");
     const timeZone = readString(input, "timeZone");
-    const nutrients = readNutrientsPatch(input);
+    const items = readItemsPatch(input);
 
     let consumedAtFields:
       | { consumedAt: Date; localDate: string; timezoneOffset: number }
@@ -445,7 +496,7 @@ export function createMealsCorrectHandler(store: FoodStore) {
     const patch: CorrectMealPatch = {
       ...(description !== undefined ? { description } : {}),
       ...(consumedAtFields ?? {}),
-      ...(nutrients !== undefined ? { nutrients } : {})
+      ...(items !== undefined ? { items } : {})
     };
 
     const result = await store.correctMeal(mealId, expectedRevision, patch);

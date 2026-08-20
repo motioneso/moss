@@ -16,7 +16,7 @@
     }
   ],
   "database": {
-    "ownedTables": ["app.food_meals", "app.food_estimates"]
+    "ownedTables": ["app.food_meals", "app.food_estimates", "app.food_estimate_items"]
   },
   "runtime": {
     "workerEntrypoint": "dist/worker.js",
@@ -188,7 +188,7 @@
     {
       "name": "food.meals.correct",
       "permissionId": "food.meals.correct",
-      "description": "Correct a meal's description, consumed time, or nutrients. Revision-guarded.",
+      "description": "Correct a meal's description, consumed time, or one of the foods in it. Revision-guarded.",
       "risk": "write",
       "actionFamilyId": "meal_logging",
       "executionPolicy": "auto",
@@ -213,30 +213,46 @@
           "timeZone": {
             "type": "string"
           },
-          "nutrients": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "caloriesKcal": {
-                "type": ["number", "null"]
-              },
-              "proteinG": {
-                "type": ["number", "null"]
-              },
-              "carbohydratesG": {
-                "type": ["number", "null"]
-              },
-              "fatG": {
-                "type": ["number", "null"]
-              },
-              "fiberG": {
-                "type": ["number", "null"]
-              },
-              "sugarG": {
-                "type": ["number", "null"]
-              },
-              "sodiumMg": {
-                "type": ["number", "null"]
+          "items": {
+            "type": "array",
+            "description": "Entry N corrects the Nth food in the meal; null leaves that food alone. The meal's totals are recalculated from the foods afterwards.",
+            "items": {
+              "type": ["object", "null"],
+              "additionalProperties": false,
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "portionNote": {
+                  "type": ["string", "null"]
+                },
+                "nutrients": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "caloriesKcal": {
+                      "type": ["number", "null"]
+                    },
+                    "proteinG": {
+                      "type": ["number", "null"]
+                    },
+                    "carbohydratesG": {
+                      "type": ["number", "null"]
+                    },
+                    "fatG": {
+                      "type": ["number", "null"]
+                    },
+                    "fiberG": {
+                      "type": ["number", "null"]
+                    },
+                    "sugarG": {
+                      "type": ["number", "null"]
+                    },
+                    "sodiumMg": {
+                      "type": ["number", "null"]
+                    }
+                  }
+                }
               }
             }
           }

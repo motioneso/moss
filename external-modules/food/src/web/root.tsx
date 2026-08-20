@@ -1,23 +1,35 @@
 // external-modules/food/src/web/root.tsx
-// Food Phase 1 (#926, #1701, plan §5 Task 6): the module's one screen — a
-// read-only day view. Native <input type="date"> picks a `localDate`; the
-// page invokes exactly three read-risk tools (food.meals.list,
-// food.consent.get — food.meals.summarize is Task 6-adjacent and not wired
-// here since the day view needs only the single-date shape's `totals`,
-// plan §5 Task 6 lists no range/summary UI for this page). No write or
-// destructive tool is ever invoked from here (food.meals.log / .correct /
-// .delete / .reestimate / consent.grant all throw on a read-risk surface
-// per worker-rpc-host.ts) — consent renders read-only with no grant control.
+//
+// Food phase 2 (#1737, spec 2026-08-19 §Web): the day view, rebuilt on the
+// host's keyline primitives (apps/web/src/styles/components-keyline.css) —
+// hairline rules and committed fields, no floating cards. Phase 1's version
+// wrapped every element in a card, which Ben ruled reads as a generic
+// AI-design tell (2026-08-19).
+//
+// Three things this screen owes the user, in order: the day's calories against
+// nothing else on the line, the macros as ruled instrument fields, and the
+// meals grouped the way a day is actually thought about rather than as a flat
+// list. A meal expands into the foods it contained (#1737).
 //
 // Determinism boundary (plan §3): every rendered value is read straight off
 // the tool result record. Nothing here calls the model or interprets model
-// output; the estimator's own output already passed through
-// domain/totals.ts's "never coalesce a missing nutrient to 0" rule before it
-// reached the wire, and this file preserves that by rendering a null
-// nutrient as "—", never 0.
+// output; a null nutrient renders as an em dash, never 0 — the estimator's
+// "never coalesce a missing nutrient" rule (domain/totals.ts) has to survive
+// all the way to the pixel or the page quietly under-reports the day.
+//
+// Only risk:read tools are invoked (food.meals.list, food.consent.get). No
+// write or destructive tool is reachable from here; worker-rpc-host.ts throws
+// on one from a read-risk surface.
 import { invokeTool, type ToolOutcome } from "./api";
-import type { CaptureKind, DailyTotals, EstimateState, Meal, Nutrients } from "../domain/meal.js";
-import { h, useCallback, useEffect, useState, type ReactNodeLike } from "./runtime";
+import type { CaptureKind, DailyTotals, EstimateState, Meal, MealItem } from "../domain/meal.js";
+import { netCarbsG } from "../domain/totals.js";
+import {
+  OCCASION_LABEL,
+  OCCASION_ORDER,
+  occasionForMeal,
+  type Occasion
+} from "../domain/occasion.js";
+import { Fragment, h, useCallback, useEffect, useState, type ReactNodeLike } from "./runtime";
 
 // ── local "today" (no ambient ISO-slice) ────────────────────────────────
 
@@ -33,32 +45,80 @@ function todayLocalDate(): string {
   return `${year}-${month}-${day}`;
 }
 
-// ── tiny per-mount query (no shared cache needed — one page, one query) ──
+// ── query, with the two refreshes the day view actually needs ────────────
+
+/** How often a day still holding an unfinished estimate re-reads itself. */
+const PENDING_POLL_MS = 5_000;
 
 type QueryState<T> = { status: "loading" } | { status: "settled"; outcome: ToolOutcome<T> };
 
+/**
+ * A per-mount query with two refresh triggers (#1737, spec §Web "known
+ * adjacent defect"):
+ *
+ * 1. **Tab becomes visible again.** Phase 1 fetched once per mount and never
+ *    again, so a meal logged in Chat did not appear on this page until a
+ *    manual reload — a day view that silently omits a just-logged meal is
+ *    wrong regardless of how well it computes totals.
+ * 2. **An interval, but only while `refreshMs` is non-null.** The caller
+ *    passes a number only while the day holds a meal whose estimate has not
+ *    landed, so a settled day makes no repeat requests at all.
+ *
+ * Neither trigger shows a loading state: a refresh swaps the settled result
+ * underneath, so the numbers on screen never flash back to "Loading…".
+ */
 function useToolQuery<T extends Record<string, unknown>>(
   name: string,
-  input: Record<string, unknown>
+  input: Record<string, unknown>,
+  refreshMs: number | null = null
 ): QueryState<T> {
   const [state, setState] = useState<QueryState<T>>({ status: "loading" });
   const inputKey = JSON.stringify(input);
+
   useEffect(() => {
     let cancelled = false;
     setState({ status: "loading" });
-    void invokeTool<T>(name, input).then((outcome) => {
-      if (!cancelled) setState({ status: "settled", outcome });
-    });
+
+    const load = (): void => {
+      void invokeTool<T>(name, input).then((outcome) => {
+        if (!cancelled) setState({ status: "settled", outcome });
+      });
+    };
+    load();
+
+    const onVisibilityChange = (): void => {
+      if (!document.hidden) load();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
     // inputKey stands in for `input` (a fresh object identity every render);
-    // `name` is effectively constant per call site.
+    // `name` is effectively constant per call site. Deliberately excludes
+    // refreshMs — the interval below owns that, and re-running this effect on
+    // it would drop the page back to "Loading…" every time an estimate landed.
   }, [name, inputKey]);
+
+  useEffect(() => {
+    if (refreshMs === null) return;
+    let cancelled = false;
+    const timer = setInterval(() => {
+      if (document.hidden) return; // no traffic from a tab nobody is looking at
+      void invokeTool<T>(name, input).then((outcome) => {
+        if (!cancelled) setState({ status: "settled", outcome });
+      });
+    }, refreshMs);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [name, inputKey, refreshMs]);
+
   return state;
 }
 
-// ── formatting helpers ────────────────────────────────────────────────────
+// ── formatting ──────────────────────────────────────────────────────────
 
 /** Meal time in the meal's OWN persisted offset (never the viewer's browser zone — a meal is
  * pinned at create time per domain/meal.ts's resolveMealLocalDate, and re-deriving its clock time
@@ -74,6 +134,28 @@ function formatMealTime(consumedAt: string, timezoneOffsetMinutes: number): stri
   return `${twelveHour}:${minutes} ${period}`;
 }
 
+/** Grouped thousands, written out rather than taken from toLocaleString: the locale form varies
+ * by the machine running it, which would make the rendered output untestable. */
+function groupThousands(whole: string): string {
+  return whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+/**
+ * `null` renders as an em dash — never 0. A "0 g protein" the user never had estimated is the
+ * exact bug the domain's never-coalesce rule guards against (domain/totals.ts).
+ */
+function formatFigure(value: number | null, decimals = 0): string {
+  if (value === null) return "—";
+  const fixed = value.toFixed(decimals);
+  const [whole, fraction] = fixed.split(".");
+  const grouped = groupThousands(whole ?? "0");
+  return fraction === undefined ? grouped : `${grouped}.${fraction}`;
+}
+
+function formatWithUnit(value: number | null, unit: string, decimals = 0): string {
+  return value === null ? "—" : `${formatFigure(value, decimals)} ${unit}`;
+}
+
 const CAPTURE_KIND_LABEL: Record<CaptureKind, string> = {
   text: "Typed",
   photo: "Photo",
@@ -87,204 +169,298 @@ const ESTIMATE_STATE_LABEL: Record<EstimateState, string> = {
   failed: "Estimate failed"
 };
 
-/** Host badge tone per estimate state, so a row's status reads at a glance rather than needing
- * the label to be parsed. The tones are the design system's own — nothing is defined here. */
-const ESTIMATE_STATE_TONE: Record<EstimateState, string> = {
-  pending: "jds-badge--neutral",
-  needs_details: "jds-badge--amber",
-  estimated: "jds-badge--forest",
-  failed: "jds-badge--red"
+/**
+ * The row's leading 3px rail carries the estimate state — never a border on the row and never a
+ * coloured pill, per the keyline idiom. The occasion accent lives on the section head above
+ * instead, so the two signals never fight over the same 3 pixels.
+ */
+const ESTIMATE_STATE_RAIL: Record<EstimateState, string> = {
+  pending: "jds-rail--line",
+  needs_details: "jds-rail--gold",
+  estimated: "jds-rail--accent",
+  failed: "jds-rail--danger"
 };
 
-type NutrientKey = keyof Nutrients;
+const OCCASION_RAIL: Record<Occasion, string> = {
+  breakfast: "jds-rail--morning",
+  lunch: "jds-rail--afternoon",
+  dinner: "jds-rail--evening",
+  snack: "jds-rail--gold"
+};
 
-const NUTRIENT_FIELDS: ReadonlyArray<{
-  key: NutrientKey;
-  label: string;
-  unit: string;
-  decimals: number;
-}> = [
-  { key: "caloriesKcal", label: "Calories", unit: "kcal", decimals: 0 },
-  { key: "proteinG", label: "Protein", unit: "g", decimals: 1 },
-  { key: "carbohydratesG", label: "Carbs", unit: "g", decimals: 1 },
-  { key: "fatG", label: "Fat", unit: "g", decimals: 1 },
-  { key: "fiberG", label: "Fiber", unit: "g", decimals: 1 },
-  { key: "sugarG", label: "Sugar", unit: "g", decimals: 1 },
-  { key: "sodiumMg", label: "Sodium", unit: "mg", decimals: 0 }
-];
-
-/** `null` renders as an em dash — never 0. A real "0g protein" the user never had estimated is
- * the exact bug the domain's "never coalesce" rule guards against (domain/totals.ts). */
-function formatNutrientValue(value: number | null, unit: string, decimals: number): string {
-  if (value === null) return "—";
-  return `${value.toFixed(decimals)} ${unit}`;
-}
-
-// ── nutrient list (shared by a meal row and the totals block) ────────────
+// ── the day's headline figures ──────────────────────────────────────────
 
 /**
- * The seven nutrients as host stat tiles. `jds-stat-tile` is authored for the Today page's
- * clickable tiles, so `.fud-nutrients` turns the pointer cursor off — these are read-only
- * figures, and a hand cursor over something that does nothing reads as a broken link.
+ * Calories alone at display scale, then the macros as ruled instrument fields.
+ *
+ * No targets yet: daily targets are declared as module preferences and rendered by the host
+ * preferences page (#1725), which has not landed. With no target there is deliberately no
+ * progress indicator at all — story 45. An empty bar, a 0%, or a NaN is worse than a plain
+ * number, and is the usual shape of this bug.
  */
-function NutrientList(props: { nutrients: Nutrients | null }): ReactNodeLike {
-  const nutrients = props.nutrients;
+function DayHeadline(props: { totals: DailyTotals }): ReactNodeLike {
+  const { nutrients, incomplete, mealsWithoutEstimate } = props.totals;
+  const fields: ReadonlyArray<{ label: string; value: string }> = [
+    { label: "Protein", value: formatWithUnit(nutrients.proteinG, "g", 1) },
+    // Net carbs is computed here and stored nowhere; null unless both carbohydrates and fiber
+    // carry a number, so an unestimated fiber figure never inflates the answer.
+    { label: "Net carbs", value: formatWithUnit(netCarbsG(nutrients), "g", 1) },
+    { label: "Fat", value: formatWithUnit(nutrients.fatG, "g", 1) },
+    { label: "Fiber", value: formatWithUnit(nutrients.fiberG, "g", 1) },
+    { label: "Sugar", value: formatWithUnit(nutrients.sugarG, "g", 1) },
+    { label: "Sodium", value: formatWithUnit(nutrients.sodiumMg, "mg", 0) }
+  ];
   return (
-    <dl className="fud-nutrients">
-      {NUTRIENT_FIELDS.map((field) => (
-        <div className="fud-nutrient jds-stat-tile" key={field.key}>
-          <dt className="jds-stat-tile__label">{field.label}</dt>
-          <dd className="jds-stat-tile__value">
-            {formatNutrientValue(
-              nutrients ? nutrients[field.key] : null,
-              field.unit,
-              field.decimals
-            )}
-          </dd>
-        </div>
-      ))}
-    </dl>
+    <section className="fud-day">
+      <p className="jds-instrument__label fud-day-label">Calories</p>
+      <p className="jds-display jds-display--xl">{formatFigure(nutrients.caloriesKcal)}</p>
+      <div className="fud-day-fields">
+        {fields.map((field) => (
+          <div className="jds-instrument fud-day-field" key={field.label}>
+            <p className="jds-instrument__label">{field.label}</p>
+            <p className="jds-instrument__value">{field.value}</p>
+          </div>
+        ))}
+      </div>
+      {incomplete ? (
+        <p className="jds-caption fud-disclosure" role="note">
+          {mealsWithoutEstimate === 1
+            ? "1 meal today has no finished estimate, so it is not counted above."
+            : `${mealsWithoutEstimate} meals today have no finished estimate, so they are not counted above.`}
+        </p>
+      ) : null}
+    </section>
   );
 }
 
-// ── one meal row ───────────────────────────────────────────────────────
+// ── one food inside a meal ──────────────────────────────────────────────
 
-function MealRow(props: { meal: Meal; key?: string }): ReactNodeLike {
-  const meal = props.meal;
+function ItemRow(props: { item: MealItem; key?: string }): ReactNodeLike {
+  const { label, portionNote, nutrients } = props.item;
   return (
-    <li className="fud-meal-row jds-card jds-card--pad-sm">
-      <div className="fud-meal-main">
-        <span className="fud-meal-time jds-eyebrow">
-          {formatMealTime(meal.consumedAt, meal.timezoneOffset)}
-        </span>
-        <span className="fud-meal-desc jds-card-title">
-          {meal.description}
-          {meal.servingNote ? ` (${meal.servingNote})` : ""}
-        </span>
-        <span className="fud-meal-tags">
-          <span className="jds-badge jds-badge--outline">
-            {CAPTURE_KIND_LABEL[meal.captureKind]}
-          </span>
-          <span className={`jds-badge ${ESTIMATE_STATE_TONE[meal.estimateState]}`}>
-            {ESTIMATE_STATE_LABEL[meal.estimateState]}
-          </span>
-        </span>
-      </div>
-      <NutrientList nutrients={meal.estimateState === "estimated" ? meal.nutrients : null} />
+    <li className="fud-item">
+      <span className="fud-item-label">
+        {label}
+        {portionNote ? <span className="jds-caption fud-item-portion">{portionNote}</span> : null}
+      </span>
+      <span className="fud-item-figures jds-caption">
+        <span className="fud-item-kcal">{formatWithUnit(nutrients.caloriesKcal, "kcal")}</span>
+        <span className="jds-meta-sep" aria-hidden="true" />
+        <span>P {formatFigure(nutrients.proteinG, 1)}</span>
+        <span className="jds-meta-sep" aria-hidden="true" />
+        <span>C {formatFigure(nutrients.carbohydratesG, 1)}</span>
+        <span className="jds-meta-sep" aria-hidden="true" />
+        <span>F {formatFigure(nutrients.fatG, 1)}</span>
+      </span>
     </li>
   );
 }
 
-// ── daily totals ───────────────────────────────────────────────────────
+// ── one meal ────────────────────────────────────────────────────────────
 
-function TotalsBlock(props: { totals: DailyTotals }): ReactNodeLike {
-  const totals = props.totals;
-  return (
-    <div className="fud-totals jds-card jds-card--sunken">
-      <div className="fud-totals-row">
-        <span className="jds-eyebrow jds-eyebrow--accent">Estimated totals for the day</span>
-      </div>
-      <NutrientList nutrients={totals.nutrients} />
-      {totals.incomplete ? (
-        <p className="fud-disclosure jds-caption" role="note">
-          {totals.mealsWithoutEstimate === 1
-            ? "1 meal on this day has no completed estimate — totals may be incomplete."
-            : `${totals.mealsWithoutEstimate} meals on this day have no completed estimate — totals may be incomplete.`}
-        </p>
-      ) : null}
-    </div>
+function MealRow(props: {
+  meal: Meal;
+  expanded: boolean;
+  onToggle: (mealId: string) => void;
+  key?: string;
+}): ReactNodeLike {
+  const { meal, expanded, onToggle } = props;
+  const hasItems = meal.items.length > 0;
+  const panelId = `fud-items-${meal.mealId}`;
+
+  // The meta line: the time always, then only what is worth saying. "Typed" on every row is
+  // noise, and so is "Estimated" on a row already showing its numbers — a meta line that always
+  // says the same thing stops being read.
+  const meta: ReactNodeLike[] = [
+    <span key="time">{formatMealTime(meal.consumedAt, meal.timezoneOffset)}</span>
+  ];
+  if (meal.captureKind !== "text") {
+    meta.push(<span className="jds-meta-sep" aria-hidden="true" key="sep-capture" />);
+    meta.push(<span key="capture">{CAPTURE_KIND_LABEL[meal.captureKind]}</span>);
+  }
+  if (meal.estimateState !== "estimated") {
+    meta.push(<span className="jds-meta-sep" aria-hidden="true" key="sep-state" />);
+    meta.push(<span key="state">{ESTIMATE_STATE_LABEL[meal.estimateState]}</span>);
+  }
+  if (hasItems) {
+    meta.push(<span className="jds-meta-sep" aria-hidden="true" key="sep-items" />);
+    meta.push(
+      <span key="items">{meal.items.length === 1 ? "1 food" : `${meal.items.length} foods`}</span>
+    );
+  }
+
+  // Direct h() call rather than <>…</>: Fragment is typed unknown (host-provided), which JSX
+  // fragment syntax rejects — the same workaround finance/src/web/states.tsx:86 uses.
+  const body = h(
+    Fragment,
+    null,
+    <span className={`jds-rail ${ESTIMATE_STATE_RAIL[meal.estimateState]}`} aria-hidden="true" />,
+    <span className="fud-meal-body">
+      <span className="fud-meal-head">
+        <span className="fud-meal-desc">
+          {meal.description}
+          {meal.servingNote ? ` (${meal.servingNote})` : ""}
+        </span>
+        <span className="fud-meal-kcal jds-instrument__value">
+          {formatWithUnit(
+            meal.estimateState === "estimated" ? (meal.nutrients?.caloriesKcal ?? null) : null,
+            "kcal"
+          )}
+        </span>
+      </span>
+      <span className="fud-meal-meta jds-caption">{meta}</span>
+    </span>
   );
-}
 
-// ── consent (read-only) ───────────────────────────────────────────────
+  const onClick = useCallback(() => onToggle(meal.mealId), [onToggle, meal.mealId]);
 
-interface ConsentResult extends Record<string, unknown> {
-  granted: boolean;
-  grantedAt: string | null;
-}
-
-function ConsentBanner(props: { query: QueryState<ConsentResult> }): ReactNodeLike {
-  const query = props.query;
-  if (query.status === "loading") {
-    return (
-      <div className="fud-consent" role="status">
-        <span className="jds-badge jds-badge--neutral">Consent: checking…</span>
-      </div>
-    );
-  }
-  const outcome = query.outcome;
-  if (outcome.kind === "disabled") {
-    return (
-      <div className="fud-consent" role="status">
-        <span className="jds-badge jds-badge--amber">Food is turned off on the server</span>
-      </div>
-    );
-  }
-  if (outcome.kind === "blocked" || outcome.kind === "error") {
-    return (
-      <div className="fud-consent" role="status">
-        <span className="jds-badge jds-badge--neutral">Consent: unavailable</span>
-      </div>
-    );
-  }
   return (
-    <div className="fud-consent" role="status">
-      {outcome.result.granted ? (
-        <span className="jds-badge jds-badge--forest">AI estimation consent: granted</span>
+    <li className="fud-meal">
+      {hasItems ? (
+        // A row is only a button when pressing it does something. A meal with no breakdown —
+        // logged before this shipped, or still being estimated — stays inert rather than
+        // offering an expander that opens onto nothing.
+        <button
+          type="button"
+          className="jds-hairline-row jds-rail-row fud-meal-row"
+          aria-expanded={expanded}
+          aria-controls={panelId}
+          onClick={onClick}
+        >
+          {body}
+        </button>
       ) : (
-        <span className="jds-badge jds-badge--amber">AI estimation consent: not granted</span>
+        <div className="jds-hairline-row jds-rail-row fud-meal-row fud-meal-row--inert">{body}</div>
       )}
-    </div>
+      {hasItems && expanded ? (
+        <ul className="fud-items" id={panelId}>
+          {meal.items.map((item, index) => (
+            <ItemRow item={item} key={`${meal.mealId}:${index}`} />
+          ))}
+        </ul>
+      ) : null}
+    </li>
   );
 }
 
-// ── root ───────────────────────────────────────────────────────────────
+// ── occasion grouping ───────────────────────────────────────────────────
+
+interface OccasionGroup {
+  readonly occasion: Occasion;
+  readonly meals: readonly Meal[];
+}
+
+/** Meals bucketed by occasion, in day order, dropping any occasion nothing landed in — an empty
+ * "Dinner" header above nothing reads as a missing meal rather than as a day that is not over. */
+export function groupByOccasion(meals: readonly Meal[]): readonly OccasionGroup[] {
+  const buckets = new Map<Occasion, Meal[]>();
+  for (const meal of meals) {
+    const occasion = occasionForMeal(meal.consumedAt, meal.timezoneOffset);
+    const existing = buckets.get(occasion);
+    if (existing) existing.push(meal);
+    else buckets.set(occasion, [meal]);
+  }
+  const groups: OccasionGroup[] = [];
+  for (const occasion of OCCASION_ORDER) {
+    const bucket = buckets.get(occasion);
+    if (bucket && bucket.length > 0) groups.push({ occasion, meals: bucket });
+  }
+  return groups;
+}
+
+// ── root ────────────────────────────────────────────────────────────────
 
 interface MealsListResult extends Record<string, unknown> {
   meals: Meal[];
   totals: DailyTotals | null;
 }
 
+interface ConsentResult extends Record<string, unknown> {
+  granted: boolean;
+  grantedAt: string | null;
+}
+
 export function Root(): ReactNodeLike {
   const [localDate, setLocalDate] = useState<string>(todayLocalDate());
-  const mealsQuery = useToolQuery<MealsListResult>("food.meals.list", { localDate });
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  // Set only while something on this day is still being estimated, so a
+  // finished day is entirely silent on the network.
+  const [pendingPollMs, setPendingPollMs] = useState<number | null>(null);
+  const mealsQuery = useToolQuery<MealsListResult>("food.meals.list", { localDate }, pendingPollMs);
   const consentQuery = useToolQuery<ConsentResult>("food.consent.get", {});
 
+  const hasPending =
+    mealsQuery.status === "settled" &&
+    mealsQuery.outcome.kind === "ok" &&
+    mealsQuery.outcome.result.meals.some((meal) => meal.estimateState === "pending");
+  useEffect(() => {
+    setPendingPollMs(hasPending ? PENDING_POLL_MS : null);
+  }, [hasPending]);
+
   const onDateChange = useCallback((event: { target: { value: string } }) => {
-    if (event.target.value) setLocalDate(event.target.value);
+    if (event.target.value) {
+      setLocalDate(event.target.value);
+      setExpanded({});
+    }
+  }, []);
+
+  const onToggle = useCallback((mealId: string) => {
+    setExpanded((current) => ({ ...current, [mealId]: !current[mealId] }));
   }, []);
 
   return (
     <div className="fud-root">
       <header className="fud-header">
-        <span className="jds-eyebrow jds-eyebrow--muted">Module</span>
-        <h1>Food</h1>
-      </header>
-      <ConsentBanner query={consentQuery} />
-      <div className="fud-datebar jds-card jds-card--pad-sm">
-        <label className="jds-eyebrow" htmlFor="fud-date-input">
-          Date
-        </label>
+        <h1 className="jds-display jds-display--md">Food</h1>
         <input
-          id="fud-date-input"
-          className="jds-input jds-input--sm"
+          aria-label="Date"
+          className="jds-input jds-input--sm fud-date"
           type="date"
           value={localDate}
           onChange={onDateChange}
         />
-      </div>
-      {renderMealsSection(mealsQuery)}
+      </header>
+      <ConsentNote query={consentQuery} />
+      <MealsSection query={mealsQuery} expanded={expanded} onToggle={onToggle} />
     </div>
   );
 }
 
-function renderMealsSection(query: QueryState<MealsListResult>): ReactNodeLike {
-  // Every state below uses the host's own empty-state pattern (jds-empty__title / __sub inside a
-  // sunken card) rather than bare paragraphs, so "nothing here yet" looks deliberate instead of
-  // looking like the page failed to load.
+/**
+ * Consent is read-only here: granting it is a write, and no write tool is reachable from a
+ * read-risk surface. The note therefore appears only when estimation is OFF, where it explains
+ * why the numbers are missing. When consent is granted there is nothing to say, so nothing is
+ * said — a permanent green "consent: granted" badge is a nag, not information.
+ */
+function ConsentNote(props: { query: QueryState<ConsentResult> }): ReactNodeLike {
+  const query = props.query;
+  if (query.status !== "settled") return null;
+  const outcome = query.outcome;
+  if (outcome.kind === "disabled") {
+    return (
+      <p className="jds-caption fud-notice" role="status">
+        Food is turned off on the server.
+      </p>
+    );
+  }
+  if (outcome.kind !== "ok" || outcome.result.granted) return null;
+  return (
+    <p className="jds-caption fud-notice" role="status">
+      Nutrition estimates are off, so meals are logged without numbers. Turn them on in Settings.
+    </p>
+  );
+}
+
+function MealsSection(props: {
+  query: QueryState<MealsListResult>;
+  expanded: Record<string, boolean>;
+  onToggle: (mealId: string) => void;
+}): ReactNodeLike {
+  const { query, expanded, onToggle } = props;
   if (query.status === "loading") {
     return (
-      <div className="fud-state jds-card jds-card--sunken" role="status">
+      <div className="fud-state" role="status">
         <p className="jds-empty__sub">Loading…</p>
       </div>
     );
@@ -292,46 +468,66 @@ function renderMealsSection(query: QueryState<MealsListResult>): ReactNodeLike {
   const outcome = query.outcome;
   if (outcome.kind === "disabled") {
     return (
-      <div className="fud-state jds-card jds-card--sunken" role="status">
+      <div className="fud-state" role="status">
         <h2 className="jds-empty__title">Food is turned off</h2>
         <p className="jds-empty__sub">
-          This module was disabled on the server. Your data is preserved; an administrator can
-          re-enable it under Settings.
+          This was disabled on the server. Your data is preserved; an administrator can re-enable it
+          under Settings.
         </p>
       </div>
     );
   }
   if (outcome.kind === "blocked") {
     return (
-      <div className="fud-state jds-card jds-card--sunken" role="status">
+      <div className="fud-state" role="status">
         <p className="jds-empty__sub">This data needs confirmation in the assistant.</p>
       </div>
     );
   }
   if (outcome.kind === "error") {
     return (
-      <div className="fud-state jds-card jds-card--sunken" role="alert">
+      <div className="fud-state" role="alert">
         <p className="jds-empty__sub">{outcome.message}</p>
       </div>
     );
   }
+
   const result = outcome.result;
   if (result.meals.length === 0) {
     return (
-      <div className="fud-state jds-card jds-card--sunken" role="status">
-        <h2 className="jds-empty__title">No meals logged for this day</h2>
+      <div className="fud-state" role="status">
+        <h2 className="jds-empty__title">Nothing logged for this day</h2>
         <p className="jds-empty__sub">Log a meal by talking to the assistant.</p>
       </div>
     );
   }
-  return (
-    <div className="fud-stack">
-      <ul className="fud-meals">
-        {result.meals.map((meal) => (
-          <MealRow key={meal.mealId} meal={meal} />
-        ))}
-      </ul>
-      {result.totals ? <TotalsBlock totals={result.totals} /> : null}
-    </div>
+
+  // Direct h(Fragment, …) for the same reason as MealRow's body above.
+  return h(
+    Fragment,
+    null,
+    result.totals ? <DayHeadline totals={result.totals} /> : null,
+    groupByOccasion(result.meals).map((group) => (
+      <section className="fud-occasion" key={group.occasion}>
+        <div className="jds-section-head">
+          <span
+            className={`jds-rail ${OCCASION_RAIL[group.occasion]} fud-occasion-rail`}
+            aria-hidden="true"
+          />
+          <span className="jds-eyebrow">{OCCASION_LABEL[group.occasion]}</span>
+          <span className="jds-section-head__rule" />
+        </div>
+        <ul className="fud-meals">
+          {group.meals.map((meal) => (
+            <MealRow
+              meal={meal}
+              expanded={expanded[meal.mealId] === true}
+              onToggle={onToggle}
+              key={meal.mealId}
+            />
+          ))}
+        </ul>
+      </section>
+    ))
   );
 }

@@ -24,7 +24,8 @@ import { join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
-import type { Meal, Nutrients } from "../../external-modules/food/src/domain/meal.js";
+import type { Meal, MealItem, Nutrients } from "../../external-modules/food/src/domain/meal.js";
+import { sumItemNutrients } from "../../external-modules/food/src/domain/totals.js";
 import {
   createMealsListHandler,
   createMealsLogHandler,
@@ -33,6 +34,7 @@ import {
 import { getConsent, grantConsent } from "../../external-modules/food/src/tools/consent.js";
 import { runEstimate } from "../../external-modules/food/src/worker/handlers/estimate.js";
 import type {
+  CorrectMealItemPatch,
   CorrectMealPatch,
   CreateMealInput,
   FoodStore,
@@ -40,6 +42,30 @@ import type {
 } from "../../external-modules/food/src/store/sql.js";
 
 // ── Fakes ────────────────────────────────────────────────────────────────
+
+/** Positional item merge, mirroring store/sql.ts's mergeItems. */
+function mergeFakeItems(
+  current: readonly MealItem[],
+  patch: readonly CorrectMealItemPatch[]
+): MealItem[] {
+  const length = Math.max(current.length, patch.length);
+  const merged: MealItem[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const base = current[index];
+    const change = patch[index];
+    if (!change) {
+      if (base) merged.push(base);
+      continue;
+    }
+    merged.push({
+      label: change.label ?? base?.label ?? "item",
+      portionNote:
+        change.portionNote !== undefined ? change.portionNote : (base?.portionNote ?? null),
+      nutrients: { ...(base?.nutrients ?? nullNutrients()), ...change.nutrients }
+    });
+  }
+  return merged;
+}
 
 /** In-memory FoodStore double reproducing sql.ts's documented contract: createMeal is
  * idempotent on idempotencyKey (returns the existing row on a retry); recordEstimate and
@@ -54,6 +80,7 @@ function fakeStore(): FoodStore & { meals: Map<string, Meal> } {
       const existingId = byIdempotencyKey.get(input.idempotencyKey);
       if (existingId) return meals.get(existingId)!;
       const meal: Meal = {
+        items: [],
         mealId: input.mealId,
         consumedAt: input.consumedAt.toISOString(),
         localDate: input.localDate,
@@ -99,17 +126,20 @@ function fakeStore(): FoodStore & { meals: Map<string, Meal> } {
     async correctMeal(mealId: string, expectedRevision: number, patch: CorrectMealPatch) {
       const meal = meals.get(mealId);
       if (!meal || meal.estimateRevision !== expectedRevision) return null;
-      const nutrients = patch.nutrients
-        ? ({ ...(meal.nutrients ?? nullNutrients()), ...patch.nutrients } as Nutrients)
-        : meal.nutrients;
+      // Item-level correction (#1737): entry N patches the Nth food, and the meal's
+      // figures are re-derived from the result — this double never stores a
+      // meal-level number the items do not explain.
+      const items = patch.items ? mergeFakeItems(meal.items, patch.items) : meal.items;
+      const nutrients = patch.items ? sumItemNutrients(items) : meal.nutrients;
       const updated: Meal = {
         ...meal,
         description: patch.description ?? meal.description,
         consumedAt: patch.consumedAt ? patch.consumedAt.toISOString() : meal.consumedAt,
         localDate: patch.localDate ?? meal.localDate,
         timezoneOffset: patch.timezoneOffset ?? meal.timezoneOffset,
-        estimateState: patch.nutrients ? "estimated" : meal.estimateState,
+        estimateState: patch.items ? "estimated" : meal.estimateState,
         estimateRevision: meal.estimateRevision + 1,
+        items,
         nutrients
       };
       meals.set(mealId, updated);
@@ -212,13 +242,19 @@ describe("food.meals.log — test 8: consent gate before any provider call", () 
       ok: true,
       object: {
         outcome: "estimated",
-        caloriesKcal: 350,
-        proteinG: 10,
-        carbohydratesG: 65,
-        fatG: 6,
-        fiberG: 8,
-        sugarG: 20,
-        sodiumMg: 150,
+        items: [
+          {
+            label: "oatmeal",
+            portionNote: "1 bowl",
+            caloriesKcal: 350,
+            proteinG: 10,
+            carbohydratesG: 65,
+            fatG: 6,
+            fiberG: 8,
+            sugarG: 20,
+            sodiumMg: 150
+          }
+        ],
         missingDetails: null,
         clarificationQuestion: null
       }
@@ -329,6 +365,9 @@ describe("food.meals.reestimate / worker estimate.run — test 7: stale revision
     });
     await store.recordEstimate("meal-1", 0, {
       state: "estimated",
+      items: [
+        { label: "lunch", portionNote: null, nutrients: { ...nullNutrients(), caloriesKcal: 400 } }
+      ],
       nutrients: { ...nullNutrients(), caloriesKcal: 400 },
       missingDetails: null,
       clarificationQuestion: null
@@ -429,6 +468,11 @@ describe("worker estimate.run handler (queue retry path)", () => {
               }
             ]
           };
+        }
+        // The estimate handler reads the meal back through the real store, which now
+        // also asks for its item breakdown; this fixture's meal has none.
+        if (text.includes("FROM app.food_estimate_items i")) {
+          return { rows: [] };
         }
         throw new Error(`unexpected query: ${text}`);
       })
