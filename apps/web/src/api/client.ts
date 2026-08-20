@@ -109,6 +109,7 @@ import type {
   ListModulesResponse,
   ListModulePreferencesResponse,
   ListMyModulesResponse,
+  ModulePreferenceValue,
   UpdateModulePreferencesResponse,
   ListSourceBehaviorsResponse,
   ModuleCredentialStatusDto,
@@ -405,10 +406,13 @@ export async function getModulePreferences(
   );
 }
 
-/** #1725: write one or more switches. Undeclared keys are rejected, not ignored. */
+/**
+ * #1725: write one or more settings. Undeclared keys are rejected, not ignored, and #1757 the
+ * server also rejects a value of the wrong type or outside the manifest's declared bounds.
+ */
 export async function updateModulePreferences(
   moduleId: string,
-  updates: Readonly<Record<string, boolean>>
+  updates: Readonly<Record<string, ModulePreferenceValue>>
 ): Promise<UpdateModulePreferencesResponse> {
   return requestJson<UpdateModulePreferencesResponse>(
     `/api/modules/${encodeURIComponent(moduleId)}/preferences`,

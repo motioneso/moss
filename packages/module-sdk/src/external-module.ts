@@ -231,29 +231,65 @@ export interface ExternalModuleNavigationEntry {
 }
 
 /**
- * One user-facing on/off switch an installed module declares (#1725).
+ * A resolved preference value as the host hands it to a module (#1757).
+ *
+ * `null` belongs to integer preferences alone and means the user has deliberately left the
+ * number unset. It is not zero, and a module must treat it as "no answer" rather than
+ * substituting one — Food's daily calorie target is the case that forced the distinction.
+ */
+export type ExternalModulePreferenceValue = boolean | number | null;
+
+/** Fields every declared preference carries, whatever its type. */
+interface ExternalModulePreferenceBase {
+  /** Lower camel-case identifier, unique within the module. Namespaced by moduleId in storage. */
+  readonly key: string;
+  /** The control's label on the settings page. */
+  readonly label: string;
+  /** Optional one-line explanation shown under the label. */
+  readonly description?: string;
+}
+
+/** An on/off switch. */
+export interface ExternalModuleBooleanPreference extends ExternalModulePreferenceBase {
+  readonly type: "boolean";
+  /** Applied whenever the user has never touched the switch — nothing is written at install. */
+  readonly default: boolean;
+}
+
+/**
+ * A whole number the user types (#1757).
+ *
+ * Integer only, and no enum or free text: those would put module-authored strings on a
+ * settings page and into stored user data, which needs the four guards from the determinism
+ * boundary. A number has no such problem — the host renders it, bounds it, and the module
+ * never sees a string it did not itself declare.
+ */
+export interface ExternalModuleIntegerPreference extends ExternalModulePreferenceBase {
+  readonly type: "integer";
+  /** Inclusive lower bound. Optional; the host still rejects anything non-integer. */
+  readonly min?: number;
+  /** Inclusive upper bound. */
+  readonly max?: number;
+  /**
+   * The value a user who has never touched the field gets. `null` declares that "unset" is
+   * a supported end state for this preference — the user can also clear the field back to it.
+   * A numeric default means the field always has a number in it.
+   */
+  readonly default: number | null;
+}
+
+/**
+ * One user-facing setting an installed module declares (#1725, widened to numbers in #1757).
  *
  * The compiled-in `settings` field stays forbidden (FORBIDDEN_FIELDS) because it carries
  * a React component the host would have to execute. This is data only: the host renders
  * the control, owns the storage (`app.preferences`, key `module:<moduleId>:<key>`, RLS
  * owner-only) and hands the resolved values to the module read-only at invocation. A
  * module can never write its own preference, and never sees another user's.
- *
- * Booleans only, deliberately. Free-text or enum preferences would put module-authored
- * strings on a settings page and into stored user data, which needs the four guards from
- * the determinism boundary — that is a separate design, not a wider type here.
  */
-export interface ExternalModulePreferenceDeclaration {
-  /** Lower camel-case identifier, unique within the module. Namespaced by moduleId in storage. */
-  readonly key: string;
-  /** The switch label on the settings page. */
-  readonly label: string;
-  /** Optional one-line explanation shown under the label. */
-  readonly description?: string;
-  readonly type: "boolean";
-  /** Applied whenever the user has never touched the switch — nothing is written at install. */
-  readonly default: boolean;
-}
+export type ExternalModulePreferenceDeclaration =
+  | ExternalModuleBooleanPreference
+  | ExternalModuleIntegerPreference;
 
 /**
  * How an external module contributes to a daily briefing (#1282).

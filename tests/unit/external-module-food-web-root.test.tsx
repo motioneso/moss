@@ -72,6 +72,12 @@ interface ListPayload {
     mealsWithoutEstimate: number;
   } | null;
   aiEstimates?: boolean;
+  targets?: {
+    caloriesKcal: number | null;
+    proteinG: number | null;
+    netCarbsG: number | null;
+    fatG: number | null;
+  };
 }
 
 let listPayload: ListPayload = { meals: [], totals: null, aiEstimates: true };
@@ -187,13 +193,52 @@ describe("food day view — headline figures (#1737)", () => {
       }
     };
     const renderer = await render();
-    // Targets ship with the host preferences page (#1725). Until then there is nothing to
-    // measure against, and the usual shape of this bug is a 0%, a NaN, or an empty bar.
+    // With no target there is nothing to measure against, and the usual shape of this bug is a
+    // 0%, a NaN, or an empty bar where the user asked for nothing at all.
     expect(renderer.root.findAllByType("progress")).toHaveLength(0);
     const out = text(renderer);
     expect(out).not.toContain("%");
     expect(out).not.toContain("NaN");
+    expect(out).not.toContain(" of ");
+    expect(out).not.toContain("left");
     expect(out).toContain("1,840");
+  });
+
+  it("shows how much of a target is left, and says over once past it (#1757)", async () => {
+    listPayload = {
+      meals: [meal({ mealId: "m1", consumedAt: "2026-08-19T12:30:00.000Z" })],
+      totals: {
+        localDate: "2026-08-19",
+        nutrients: nutrients({ caloriesKcal: 1840, proteinG: 96 }),
+        incomplete: false,
+        mealsWithoutEstimate: 0
+      },
+      targets: { caloriesKcal: 2200, proteinG: 80, netCarbsG: null, fatG: null }
+    };
+    const out = text(await render());
+    expect(out).toContain("of 2,200 kcal");
+    expect(out).toContain("360 kcal left");
+    // Past a target the remaining figure must not read as a negative amount left — "16 g over"
+    // is the sentence a person would say, and "-16 left" is the bug this catches.
+    expect(out).toContain("16 g over");
+    expect(out).not.toContain("-16");
+  });
+
+  it("leaves a target off entirely when only some are set (#1757)", async () => {
+    listPayload = {
+      meals: [meal({ mealId: "m1", consumedAt: "2026-08-19T12:30:00.000Z" })],
+      totals: {
+        localDate: "2026-08-19",
+        nutrients: nutrients({ caloriesKcal: 1840, proteinG: 96 }),
+        incomplete: false,
+        mealsWithoutEstimate: 0
+      },
+      targets: { caloriesKcal: 2200, proteinG: null, netCarbsG: null, fatG: null }
+    };
+    const out = text(await render());
+    expect(out).toContain("of 2,200 kcal");
+    // Every unset target must stay silent rather than borrowing the calorie one.
+    expect(out.match(/ of /g) ?? []).toHaveLength(1);
   });
 
   it("discloses that a meal without a finished estimate is not counted", async () => {

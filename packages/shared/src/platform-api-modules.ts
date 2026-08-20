@@ -33,14 +33,23 @@ export interface MyModuleDto {
   readonly hasPreferences: boolean;
 }
 
-/** #1725: one declared switch, joined to the actor's stored value (or the manifest default). */
+/**
+ * #1757: a preference value as it crosses the API. `null` belongs to integer preferences and
+ * means the user has left the number unset — never zero, never "use the default".
+ */
+export type ModulePreferenceValue = boolean | number | null;
+
+/** #1725: one declared setting, joined to the actor's stored value (or the manifest default). */
 export interface ModulePreferenceDto {
   readonly key: string;
   readonly label: string;
   readonly description: string | null;
-  readonly type: "boolean";
-  readonly default: boolean;
-  readonly value: boolean;
+  readonly type: "boolean" | "integer";
+  readonly default: ModulePreferenceValue;
+  readonly value: ModulePreferenceValue;
+  /** #1757: inclusive bounds for an integer preference; null on a switch and when undeclared. */
+  readonly min: number | null;
+  readonly max: number | null;
 }
 
 export interface ListModulePreferencesResponse {
@@ -48,7 +57,7 @@ export interface ListModulePreferencesResponse {
 }
 
 export interface UpdateModulePreferencesResponse {
-  readonly preferences: Readonly<Record<string, boolean>>;
+  readonly preferences: Readonly<Record<string, ModulePreferenceValue>>;
 }
 
 export interface ListAdminModulesResponse {

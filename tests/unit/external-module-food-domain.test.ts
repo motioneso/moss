@@ -11,7 +11,10 @@
 // underpins behaviour 3 at its source: an estimator outcome must never coerce undefined -> 0.
 import { describe, expect, it } from "vitest";
 
+import type { ModuleWorkerContext } from "@moss/module-sdk/worker";
+
 import { validateNutrients } from "../../external-modules/food/src/domain/estimate.js";
+import { NO_TARGETS, resolveDailyTargets } from "../../external-modules/food/src/domain/targets.js";
 import { resolveMealLocalDate } from "../../external-modules/food/src/domain/meal.js";
 import type { Meal, MealItem, Nutrients } from "../../external-modules/food/src/domain/meal.js";
 import {
@@ -364,5 +367,37 @@ describe("occasionForMeal (#1737)", () => {
   it("falls back to snack for an unparseable timestamp instead of throwing", () => {
     // One bad row must not blank out the whole day view.
     expect(occasionForMeal("not a date", 0)).toBe("snack");
+  });
+});
+
+// #1757 / #1737 item 4: the four daily targets, read off the preference set the host resolves
+// before every invocation. Food never reads the host's preference store itself.
+describe("resolveDailyTargets (#1737 item 4)", () => {
+  const withPreferences = (preferences: Record<string, unknown>) =>
+    resolveDailyTargets({ preferences } as unknown as ModuleWorkerContext);
+
+  it("reads the four targets under their manifest keys", () => {
+    expect(
+      withPreferences({
+        calorieTarget: 2200,
+        proteinTarget: 150,
+        carbTarget: 100,
+        fatTarget: 70,
+        aiEstimates: true
+      })
+    ).toEqual({ caloriesKcal: 2200, proteinG: 150, netCarbsG: 100, fatG: 70 });
+  });
+
+  it("treats an unset target as no target", () => {
+    expect(withPreferences({ calorieTarget: null })).toEqual(NO_TARGETS);
+    expect(withPreferences({})).toEqual(NO_TARGETS);
+  });
+
+  it("reads zero and anything non-numeric as no target", () => {
+    // A target of zero calories is not a goal anyone holds, and honouring one would put the day
+    // permanently over target. Same for a value the resolver should never produce at all.
+    for (const value of [0, -100, "2000", true, Number.NaN]) {
+      expect(withPreferences({ calorieTarget: value }).caloriesKcal, String(value)).toBeNull();
+    }
   });
 });

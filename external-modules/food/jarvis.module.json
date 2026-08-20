@@ -22,6 +22,39 @@
       "description": "Send meal descriptions to your configured AI model to estimate calories and nutrients. Turn off to log meals without any estimate.",
       "type": "boolean",
       "default": true
+    },
+    {
+      "key": "calorieTarget",
+      "label": "Daily calorie target",
+      "description": "Leave blank for no target. The day view shows how far through it you are.",
+      "type": "integer",
+      "min": 500,
+      "max": 10000,
+      "default": null
+    },
+    {
+      "key": "proteinTarget",
+      "label": "Daily protein target (g)",
+      "type": "integer",
+      "min": 0,
+      "max": 500,
+      "default": null
+    },
+    {
+      "key": "carbTarget",
+      "label": "Daily net carbs target (g)",
+      "type": "integer",
+      "min": 0,
+      "max": 1000,
+      "default": null
+    },
+    {
+      "key": "fatTarget",
+      "label": "Daily fat target (g)",
+      "type": "integer",
+      "min": 0,
+      "max": 500,
+      "default": null
     }
   ],
   "database": {

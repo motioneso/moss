@@ -31,6 +31,9 @@ export const MODULE_STYLES = `
   .fud-day-fields { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1rem 0.75rem; }
 }
 .fud-day-field { min-width: 0; }
+/* #1737: the target line under a figure. Spacing only — jds-caption carries the type, and colour
+   belongs to tokens.css, never to a module stylesheet. */
+.fud-day-target { margin-top: 0.2rem; }
 .fud-disclosure { margin: 1rem 0 0; }
 
 /* Occasion group. */

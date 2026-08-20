@@ -1,7 +1,11 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { join } from "node:path";
 
-import { MAX_INVOCATION_MS, MODULE_WORKER_CONTRACT_VERSION } from "@moss/module-sdk";
+import {
+  MAX_INVOCATION_MS,
+  MODULE_WORKER_CONTRACT_VERSION,
+  type ExternalModulePreferenceValue
+} from "@moss/module-sdk";
 
 import type { ExternalModuleDiscovery } from "./types.js";
 
@@ -123,7 +127,7 @@ export class ExternalModuleWorkerRuntime {
       readonly lane: WorkerLane;
       readonly timeoutMs?: number;
       /** #1725: this actor's resolved on/off switches, surfaced to the module as ctx.preferences. */
-      readonly preferences?: Readonly<Record<string, boolean>>;
+      readonly preferences?: Readonly<Record<string, ExternalModulePreferenceValue>>;
     }
   ): Promise<unknown> {
     const key = laneKey(module.id, options.lane);
@@ -156,7 +160,7 @@ export class ExternalModuleWorkerRuntime {
       readonly lane: WorkerLane;
       readonly timeoutMs?: number;
       /** #1725: this actor's resolved on/off switches, surfaced to the module as ctx.preferences. */
-      readonly preferences?: Readonly<Record<string, boolean>>;
+      readonly preferences?: Readonly<Record<string, ExternalModulePreferenceValue>>;
     }
   ): Promise<unknown> {
     const key = laneKey(module.id, options.lane);
