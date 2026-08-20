@@ -170,6 +170,11 @@ export interface ExternalModuleJobHandlerDeps {
   readonly logger?: {
     readonly warn: (obj: Record<string, unknown>, msg?: string) => void;
   };
+  // #1789: passed straight through to the shared trust gate, which hands the result to the
+  // module as ctx.localTimezone. Optional here for the same reason as the deps above —
+  // existing test callers keep compiling, and an unwired resolver simply means the module
+  // gets no answer rather than a wrong one.
+  readonly resolveLocalTimezone?: (actorUserId: string) => Promise<string | null>;
 }
 
 export function createExternalModuleJobHandler(
@@ -187,6 +192,7 @@ export function createExternalModuleJobHandler(
     postNotification: deps.postNotification,
     readAttachmentText: deps.readAttachmentText,
     logger: deps.logger,
+    resolveLocalTimezone: deps.resolveLocalTimezone,
     ...resolveE2eFetchOverride()
   });
   return async (job) => {

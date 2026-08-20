@@ -199,10 +199,13 @@ function baseCtx(overrides: {
   ai?: ReturnType<typeof fakeAi>;
   /** #1750 — omit to model "user has never touched the switch", which must estimate. */
   preferences?: Record<string, boolean>;
+  /** #1789 — omit to model a host that has no locale for this user, which must not crash. */
+  localTimezone?: string;
 }) {
   return {
     input: overrides.input ?? {},
     preferences: overrides.preferences ?? {},
+    ...(overrides.localTimezone ? { localTimezone: overrides.localTimezone } : {}),
     deadlineAt: Date.now() + 30_000,
     auth: { getCredential: vi.fn(), setCredential: vi.fn() },
     fetch: vi.fn(),
@@ -605,5 +608,83 @@ describe("test 9 (structural half): no handler reads a caller-supplied owner id"
     const source = readFileSync(join(foodSrcDir, "tools/meals.ts"), "utf8");
     expect(source).not.toMatch(/input\["?ownerUserId"?\]|input\.ownerUserId/);
     expect(source).not.toMatch(/input\["?actorUserId"?\]|input\.actorUserId/);
+  });
+});
+
+// ── #1789: which timezone decides the calendar day ───────────────────────
+//
+// The bug these cover: a meal is filed under the localDate computed at log time, and the day
+// view queries by exactly that field. Get the zone wrong and the meal is not merely mislabelled
+// — it disappears from the day the user ate it and shows up on a day they did not.
+//
+// Every case below picks an instant deliberately: 2026-08-19T02:30:00Z is the 19th in UTC and
+// still the 18th anywhere west of it. So "which day did this land on" separates a host-supplied
+// zone from a model-supplied one from the UTC fallback, which a midday instant would not.
+describe("food.meals.log — the user's timezone decides the day (#1789)", () => {
+  const LATE_EVENING_IN_CHICAGO = "2026-08-19T02:30:00Z";
+
+  it("files the meal on the user's day, not the server's", async () => {
+    const store = fakeStore();
+    const ctx = baseCtx({
+      input: {
+        description: "late dinner",
+        idempotencyKey: "idem-tz-1",
+        consumedAt: LATE_EVENING_IN_CHICAGO
+      },
+      localTimezone: "America/Chicago",
+      preferences: { aiEstimates: false }
+    });
+    const result = await createMealsLogHandler(store)(ctx);
+    // 02:30Z on the 19th is 21:30 on the 18th in Chicago. Before this fix the handler had no
+    // way to know that and stored "2026-08-19", so the meal vanished from the 18th.
+    expect(result.meal.localDate).toBe("2026-08-18");
+  });
+
+  it("uses the host's zone over one the model supplied, because the host's is a fact", async () => {
+    const store = fakeStore();
+    const ctx = baseCtx({
+      input: {
+        description: "late dinner",
+        idempotencyKey: "idem-tz-2",
+        consumedAt: LATE_EVENING_IN_CHICAGO,
+        // A model guessing UTC is exactly how the wrong day got stored.
+        timeZone: "UTC"
+      },
+      localTimezone: "America/Chicago",
+      preferences: { aiEstimates: false }
+    });
+    const result = await createMealsLogHandler(store)(ctx);
+    expect(result.meal.localDate).toBe("2026-08-18");
+  });
+
+  it("still honours a model-supplied zone when the host has no answer", async () => {
+    const store = fakeStore();
+    const ctx = baseCtx({
+      input: {
+        description: "late dinner",
+        idempotencyKey: "idem-tz-3",
+        consumedAt: LATE_EVENING_IN_CHICAGO,
+        timeZone: "America/Chicago"
+      },
+      preferences: { aiEstimates: false }
+    });
+    const result = await createMealsLogHandler(store)(ctx);
+    expect(result.meal.localDate).toBe("2026-08-18");
+  });
+
+  it("logs the meal rather than failing when nobody knows the zone", async () => {
+    const store = fakeStore();
+    const ctx = baseCtx({
+      input: {
+        description: "late dinner",
+        idempotencyKey: "idem-tz-4",
+        consumedAt: LATE_EVENING_IN_CHICAGO
+      },
+      preferences: { aiEstimates: false }
+    });
+    const result = await createMealsLogHandler(store)(ctx);
+    // UTC is a last resort, not a preference. Refusing to log because the user never opened
+    // their locale settings would be a worse failure than a few hours of drift.
+    expect(result.meal.localDate).toBe("2026-08-19");
   });
 });

@@ -103,6 +103,17 @@ export interface VerifiedExternalModuleInvokerDeps {
   // createExternalModuleRpcHandler's own `createFetch` seam below — this type has
   // no opinion about what it does, only that it is optional and module-agnostic.
   readonly createFetch?: (allowedHosts: readonly string[]) => typeof fetch;
+  // #1789: the actor's IANA zone, surfaced to the module as ctx.localTimezone.
+  //
+  // Injected rather than read here, exactly as the AI gateway takes it
+  // (packages/ai/src/gateway/gateway.ts:75). This helper has no business knowing that a
+  // timezone is stored inside a "locale" preference blob; the composition root already
+  // holds the preferences repository and can say so in one place.
+  //
+  // A queued job has no ToolContext, which is why the synchronous tool path can read the
+  // zone straight off ctx while this path needs its own resolver. Both must agree: a meal
+  // logged through chat and one logged by a job have to land on the same calendar day.
+  readonly resolveLocalTimezone?: (actorUserId: string) => Promise<string | null>;
   // Optional structured logger for trust-gate REJECTIONS only (never the happy path).
   //
   // Why this exists: every gate below resolves the caller to `undefined`, and a pg-boss
@@ -222,6 +233,9 @@ export function createVerifiedExternalModuleInvoker(
       { actorUserId: args.actorUserId, requestId: args.requestId },
       { id: current.id, preferences: current.manifest.preferences ?? [] }
     );
+    // #1789: resolved per invocation for the same reason preferences are — it belongs to the
+    // actor, so it can never be cached across users.
+    const localTimezone = (await deps.resolveLocalTimezone?.(args.actorUserId)) ?? undefined;
     const result = await deps.runtime.invoke(
       current,
       args.handler,
@@ -232,7 +246,12 @@ export function createVerifiedExternalModuleInvoker(
         params: args.params
       },
       rpc,
-      { lane: args.lane, timeoutMs: args.timeoutMs, preferences }
+      {
+        lane: args.lane,
+        timeoutMs: args.timeoutMs,
+        preferences,
+        ...(localTimezone ? { localTimezone } : {})
+      }
     );
     return { ok: true, result };
   };

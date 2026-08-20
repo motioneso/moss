@@ -32,7 +32,8 @@ import {
   focusSignalProvidersFor,
   getAllQueueDefinitions,
   getBuiltInModuleManifests,
-  registerBuiltInModuleWorkers
+  registerBuiltInModuleWorkers,
+  resolveActorTimezone
 } from "@moss/module-registry";
 import {
   ExternalModuleJobReconciler,
@@ -339,7 +340,15 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
           ai: moduleAiBridge,
           postNotification: postModuleNotification,
           readAttachmentText: readModuleAttachmentText,
-          logger: workerLogger
+          logger: workerLogger,
+          // #1789: so a module running as a background job files things under the user's
+          // calendar day, not the server's. The request id names this read specifically —
+          // it is not the job's own work, it is the host answering "where is this user".
+          resolveLocalTimezone: (actorUserId) =>
+            resolveActorTimezone(dataContext, {
+              actorUserId,
+              requestId: "module-job:resolve-locale-tz"
+            })
         })
       );
     },
