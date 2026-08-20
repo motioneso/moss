@@ -4,7 +4,7 @@
 // no react-router on the runtime global, so the Root owns a minimal pushState
 // router under the fixed /m/finance base; the host's /m/:moduleId/* route
 // keeps matching every internal path and re-renders on popstate.
-import { h, useCallback, useSyncExternalStore, type ReactNodeLike } from "./runtime";
+import { h, useCallback, useSyncExternalStore, type ReactNodeLike } from "@moss/module-web-sdk";
 
 export const MODULE_BASE = "/m/finance";
 
@@ -43,16 +43,23 @@ export function useModulePath(): string {
   return useSyncExternalStore(subscribeToPath, currentPath, currentPath);
 }
 
+export type ModuleLinkButtonVariant = "primary" | "secondary" | "quiet" | "accentSoft" | "danger";
+export type ModuleLinkButtonSize = "sm" | "md" | "lg";
+
 export function ModuleLink(props: {
   to: string;
-  className?: string;
+  // Button-styled nav link: builds its own jds-btn class string, mirroring
+  // @moss/ui's Button/ButtonLink, since neither can be this — Button never
+  // renders <a>, and ButtonLink has no pushState routing of its own.
+  variant?: ModuleLinkButtonVariant;
+  size?: ModuleLinkButtonSize;
   "aria-current"?: string;
   children?: unknown;
   // Accepted at the call site for list rendering; host React extracts it at
   // createElement time, so the component body never sees it.
   key?: string;
 }): ReactNodeLike {
-  const { to, children, ...rest } = props;
+  const { to, children, variant, size = "md", ...rest } = props;
   const onClick = useCallback(
     (event: { preventDefault: () => void; metaKey?: boolean; ctrlKey?: boolean }) => {
       // Let modifier-clicks open a real tab; plain clicks stay in-app.
@@ -62,5 +69,14 @@ export function ModuleLink(props: {
     },
     [to]
   );
-  return h("a", { href: `${MODULE_BASE}${to === "/" ? "" : to}`, onClick, ...rest }, children);
+  const className = variant
+    ? ["jds-btn", `jds-btn--${variant}`, size !== "md" ? `jds-btn--${size}` : null]
+        .filter(Boolean)
+        .join(" ")
+    : undefined;
+  return h(
+    "a",
+    { href: `${MODULE_BASE}${to === "/" ? "" : to}`, onClick, className, ...rest },
+    children
+  );
 }

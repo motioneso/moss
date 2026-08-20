@@ -127,6 +127,10 @@
 .jds-progress--amber .jds-progress__fill {
   background: var(--amber);
 }
+.jds-progress--current .jds-progress__fill {
+  background: currentColor;
+  opacity: 0.35;
+}
 
 /* ---------------------------------------------------------------
    TABS

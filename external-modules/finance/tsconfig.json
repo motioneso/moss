@@ -3,15 +3,16 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "jsx": "react",
-    "jsxFactory": "h",
-    "jsxFragmentFactory": "Fragment",
+    "jsx": "react-jsx",
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
     "types": ["node"],
     "paths": {
-      "@moss/module-sdk/worker": ["../../packages/module-sdk/src/worker.ts"]
+      "@moss/module-sdk/worker": ["../../packages/module-sdk/src/worker.ts"],
+      "@moss/module-web-sdk": ["../../packages/module-web-sdk/src/index.ts"],
+      "react": ["../../packages/module-web-sdk/node_modules/@types/react"],
+      "react/*": ["../../packages/module-web-sdk/node_modules/@types/react/*"]
     }
   },
   "include": ["src"]

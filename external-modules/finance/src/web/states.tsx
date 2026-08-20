@@ -3,15 +3,17 @@
 // states shared by the feed (job-search precedent: every route funnels its
 // query snapshot through one gate so the states stay consistent). Text-only —
 // no icons, no animation, so prefers-reduced-motion needs no special casing.
-import { Fragment, h, type ReactNodeLike } from "./runtime";
+import { Card, type ReactNodeLike } from "@moss/module-web-sdk";
 import type { QuerySnapshot } from "./store";
 
 export function LoadingState(props: { label: string }): ReactNodeLike {
   return (
-    <div className="jds-card jds-card--sunken fnm-state" role="status">
-      <span className="jds-eyebrow">Loading</span>
-      <p>{props.label}…</p>
-    </div>
+    <Card sunken role="status">
+      <div className="fnm-state">
+        <span className="jds-eyebrow">Loading</span>
+        <p>{props.label}…</p>
+      </div>
+    </Card>
   );
 }
 
@@ -21,21 +23,25 @@ export function EmptyState(props: {
   action?: ReactNodeLike;
 }): ReactNodeLike {
   return (
-    <div className="jds-card jds-card--sunken fnm-state">
-      <span className="jds-eyebrow">Nothing here yet</span>
-      <h2>{props.title}</h2>
-      <p>{props.body}</p>
-      {props.action ?? null}
-    </div>
+    <Card sunken>
+      <div className="fnm-state">
+        <span className="jds-eyebrow">Nothing here yet</span>
+        <h2>{props.title}</h2>
+        <p>{props.body}</p>
+        {props.action ?? null}
+      </div>
+    </Card>
   );
 }
 
 export function ErrorState(props: { message: string }): ReactNodeLike {
   return (
-    <div className="jds-card jds-card--sunken fnm-state" role="alert">
-      <span className="jds-eyebrow">Something went wrong</span>
-      <p>{props.message}</p>
-    </div>
+    <Card sunken role="alert">
+      <div className="fnm-state">
+        <span className="jds-eyebrow">Something went wrong</span>
+        <p>{props.message}</p>
+      </div>
+    </Card>
   );
 }
 
@@ -43,23 +49,27 @@ export function ErrorState(props: { message: string }): ReactNodeLike {
 // no assistant handoff from a disabled surface (job-search spec ruling).
 export function DisabledState(): ReactNodeLike {
   return (
-    <div className="jds-card jds-card--sunken fnm-state" role="status">
-      <span className="jds-eyebrow">Module off</span>
-      <h2>Finance is turned off</h2>
-      <p>
-        This module was disabled on the server. Your data is preserved; an administrator can
-        re-enable it under Settings.
-      </p>
-    </div>
+    <Card sunken role="status">
+      <div className="fnm-state">
+        <span className="jds-eyebrow">Module off</span>
+        <h2>Finance is turned off</h2>
+        <p>
+          This module was disabled on the server. Your data is preserved; an administrator can
+          re-enable it under Settings.
+        </p>
+      </div>
+    </Card>
   );
 }
 
 export function DegradedState(props: { detail: string }): ReactNodeLike {
   return (
-    <div className="jds-card jds-card--sunken fnm-state" role="status">
-      <span className="jds-eyebrow">Partially unavailable</span>
-      <p>{props.detail}</p>
-    </div>
+    <Card sunken role="status">
+      <div className="fnm-state">
+        <span className="jds-eyebrow">Partially unavailable</span>
+        <p>{props.detail}</p>
+      </div>
+    </Card>
   );
 }
 
@@ -83,9 +93,7 @@ export function outcomeGate<T extends Record<string, unknown>>(
   if (status === "error") {
     return <DegradedState detail="This section could not load safely. Try again later." />;
   }
-  // Direct h() call: Fragment is typed unknown (host-provided), which JSX
-  // element positions reject; createElement accepts it fine.
-  return h(Fragment, null, render(outcome.result));
+  return <>{render(outcome.result)}</>;
 }
 
 // Tiny aria-live announcer: queue runs and similar async outcomes push a
