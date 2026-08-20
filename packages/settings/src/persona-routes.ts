@@ -7,7 +7,8 @@ import {
   type DataContextRunner,
   type User
 } from "@moss/db";
-import { HttpError, sessionRateLimitKey } from "@moss/module-sdk";
+import { HttpError } from "@moss/module-sdk";
+import { sessionRateLimitKey } from "@moss/module-sdk/server";
 import {
   getPersonaSettingsRouteSchema,
   normalizePersonaSettings,

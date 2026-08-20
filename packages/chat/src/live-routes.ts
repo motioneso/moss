@@ -31,7 +31,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { resolveMossEnv, type AccessContext } from "@moss/db";
-import { sessionRateLimitKey } from "@moss/module-sdk";
+import { sessionRateLimitKey } from "@moss/module-sdk/server";
 import {
   type ChatSurface,
   normalizeChatSurface,
