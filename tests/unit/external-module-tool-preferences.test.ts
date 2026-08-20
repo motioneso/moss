@@ -22,7 +22,10 @@ vi.mock("@moss/module-registry", async (importOriginal) => {
   return { ...actual, resolveModulePreferences };
 });
 
-const invoke = vi.fn(async () => ({ data: { ok: true } }));
+// Typed with a rest parameter rather than no parameters: the assertion below reads the fifth
+// argument out of `invoke.mock.calls`, and a zero-argument mock gives that array an empty tuple
+// type, so indexing it is a compile error even though the call really does carry the argument.
+const invoke = vi.fn(async (..._args: unknown[]) => ({ data: { ok: true } }));
 
 vi.mock("@moss/module-registry/node", async (importOriginal) => {
   const actual = await importOriginal<typeof ModuleRegistryNodeModule>();
@@ -95,9 +98,9 @@ describe("assistant-tool invocations carry the actor's module preferences", () =
       logger: { warn: () => undefined }
     });
 
-    const tool = manifests[0]?.assistantTools?.[0];
-    expect(tool).toBeDefined();
-    await tool!.execute({} as never, { localDate: "2026-08-20" }, {
+    const execute = manifests[0]?.assistantTools?.[0]?.execute;
+    expect(execute).toBeDefined();
+    await execute!({} as never, { localDate: "2026-08-20" }, {
       actorUserId: "user-1",
       requestId: "req-1"
     } as never);
