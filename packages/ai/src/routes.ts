@@ -21,11 +21,11 @@ const AI_TOOLS_MAX = parsePositiveIntEnv(resolveMossEnv(process.env, "JARVIS_RL_
 import {
   HttpError,
   handleRouteError as handleModuleRouteError,
-  sessionRateLimitKey,
   type MossActionPermissionTier,
   type ToolResult,
   type ToolServices
 } from "@moss/module-sdk";
+import { sessionRateLimitKey } from "@moss/module-sdk/server";
 
 import type { ActiveModulesResolver } from "./gateway/types.js";
 import {

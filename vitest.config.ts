@@ -190,6 +190,13 @@ export default defineConfig({
         replacement: fileURLToPath(new URL("./packages/module-sdk/src/errors.ts", import.meta.url))
       },
       {
+        // Subpath export (#1120: sessionRateLimitKey/mcpSessionRateLimitKey moved off the
+        // barrel because they import node:crypto); must precede the bare "@moss/module-sdk"
+        // alias below, same pairing requirement as core-version/ai-capabilities/errors above.
+        find: "@moss/module-sdk/server",
+        replacement: fileURLToPath(new URL("./packages/module-sdk/src/server.ts", import.meta.url))
+      },
+      {
         find: "@moss/module-sdk",
         replacement: fileURLToPath(new URL("./packages/module-sdk/src/index.ts", import.meta.url))
       },

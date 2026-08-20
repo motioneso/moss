@@ -3,7 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { FastifyRequest } from "fastify";
 import { describe, expect, it } from "vitest";
 
-import { mcpSessionRateLimitKey, sessionRateLimitKey } from "@moss/module-sdk";
+import { mcpSessionRateLimitKey, sessionRateLimitKey } from "@moss/module-sdk/server";
 
 // Build a minimal FastifyRequest stand-in carrying only the fields the helpers read.
 function req(opts: { authorization?: string; cookie?: string; ip?: string }): FastifyRequest {

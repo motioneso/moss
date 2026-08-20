@@ -37,6 +37,7 @@
       "@moss/module-sdk/ai-capabilities": ["packages/module-sdk/src/ai-capabilities.ts"],
       "@moss/module-sdk/core-version": ["packages/module-sdk/src/core-version.ts"],
       "@moss/module-sdk/errors": ["packages/module-sdk/src/errors.ts"],
+      "@moss/module-sdk/server": ["packages/module-sdk/src/server.ts"],
       "@moss/module-sdk/worker": ["packages/module-sdk/src/worker.ts"],
       "@moss/module-css-confine": ["packages/module-css-confine/src/index.ts"],
       "@moss/module-web-sdk": ["packages/module-web-sdk/src/index.ts"],

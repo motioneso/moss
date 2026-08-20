@@ -7,7 +7,7 @@ import type {
   SessionTokenRegistry
 } from "@moss/ai";
 import { resolveMossEnv } from "@moss/db";
-import { mcpSessionRateLimitKey } from "@moss/module-sdk";
+import { mcpSessionRateLimitKey } from "@moss/module-sdk/server";
 import { parsePositiveIntEnv, type AiAssistantToolDto } from "@moss/shared";
 
 const MCP_PROTOCOL_VERSION = "2024-11-05";

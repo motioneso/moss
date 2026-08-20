@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import { resolveMossEnv, type AccessContext, type DataContextRunner } from "@moss/db";
-import { HttpError, sessionRateLimitKey } from "@moss/module-sdk";
+import { HttpError } from "@moss/module-sdk";
+import { sessionRateLimitKey } from "@moss/module-sdk/server";
 import {
   ProactiveMonitoringPreferencesRepository,
   validateProactiveMonitoringPreference

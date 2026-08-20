@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import type { AccessContext, DataContextRunner } from "@moss/db";
-import { HttpError, sessionRateLimitKey } from "@moss/module-sdk";
+import { HttpError } from "@moss/module-sdk";
+import { sessionRateLimitKey } from "@moss/module-sdk/server";
 import {
   deleteMyAccountRouteSchema,
   DELETE_MY_ACCOUNT_PHRASE,
