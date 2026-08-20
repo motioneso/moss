@@ -101,7 +101,7 @@ async function openInstanceModules(page: Page): Promise<void> {
 }
 
 async function openJobSearch(page: Page): Promise<void> {
-  await page.locator('nav[aria-label="Modules"]').getByRole("link", { name: "Job Search" }).click();
+  await page.locator('nav[aria-label="Main"]').getByRole("link", { name: "Job Search" }).click();
 }
 
 async function observedProfiles(response: Response): Promise<Array<{ state?: string }> | null> {
@@ -920,7 +920,7 @@ test("nav badge reflects unread matches and clears on mark-read (#1285)", async 
   const baselineResponsePromise = page.waitForResponse(notificationsResponse);
   await signIn(page);
   const navLink = page
-    .getByRole("navigation", { name: "Modules", exact: true })
+    .getByRole("navigation", { name: "Main", exact: true })
     .getByRole("link", { name: "Job Search" });
   const badge = navLink.locator(".jds-badge-count");
   const baseline = (await (await baselineResponsePromise).json()) as {
