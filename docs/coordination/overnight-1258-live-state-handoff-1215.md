@@ -56,10 +56,10 @@ Small, low-risk, mechanical fix. Not done by anyone yet, left for morning.
 
 ## Coordinator continuation — 20 Aug, release-note queue
 
-Coordinator authority at relay: Codex session
-`01a020ba-0bb3-7b73-b386-afe3d4e0d5f8`, label `Coordinator`. Re-resolve its pane from
-`herdr pane list`; pane numbers are not authority. A compaction tripwire fired, so the successor
-must replace this session before doing more implementation or merging.
+Coordinator authority after adoption: Codex session
+`01a020f6-1fd0-7b12-bc33-733b10e06488`, label `Coordinator`. Re-resolve its pane from
+`herdr pane list`; pane numbers are not authority. It replaced relayed session
+`01a020ba-0bb3-7b73-b386-afe3d4e0d5f8` after that session's compaction tripwire fired.
 
 Mid-doing, in order:
 
