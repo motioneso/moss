@@ -45,6 +45,10 @@ import type { HostDiagnosticsProvider } from "./host-diagnostics.js";
 import { registerHostDiagnosticsRoutes } from "./host-diagnostics-routes.js";
 import type { HerdrInstallDependencies } from "./host-install-routes.js";
 import { registerHerdrInstallRoutes } from "./host-install-routes.js";
+import {
+  registerHostRestartRoutes,
+  type HostRestartDependencies
+} from "./host-restart-routes.js";
 import { registerLocaleRoutes } from "./locale-routes.js";
 import { registerQuietHoursRoutes } from "./quiet-hours-routes.js";
 import { registerWeatherLocationRoutes } from "./weather-location-routes.js";
@@ -243,6 +247,11 @@ export interface SettingsRoutesDependencies {
   readonly hostDiagnostics?: HostDiagnosticsProvider;
   /** Fixed-script Herdr install executor port (#993); injected by the composition root. */
   readonly herdrInstall?: HerdrInstallDependencies;
+  /**
+   * #1748 admin restart control directory; injected by the composition root. Absent on a
+   * deployment that has no bind-mounted control dir, which fails the route closed.
+   */
+  readonly hostRestart?: HostRestartDependencies;
   /** pg-boss instance for enqueueing export.build jobs (#431). */
   readonly boss?: PgBoss;
   /**
@@ -890,6 +899,16 @@ export function registerSettingsRoutes(
     repository,
     getChatMultiplexerStatus: dependencies.getChatMultiplexerStatus,
     herdrInstall: dependencies.herdrInstall,
+    assertAdminUser: (scopedDb, userId) => assertAdminUser(repository, scopedDb, userId),
+    requireRequestId,
+    handleRouteError
+  });
+
+  registerHostRestartRoutes(server, {
+    dataContext: dependencies.dataContext,
+    resolveAccessContext: dependencies.resolveAccessContext,
+    repository,
+    hostRestart: dependencies.hostRestart,
     assertAdminUser: (scopedDb, userId) => assertAdminUser(repository, scopedDb, userId),
     requireRequestId,
     handleRouteError

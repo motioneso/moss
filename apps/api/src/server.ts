@@ -517,6 +517,12 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     // file-size cap; options.installHerdr lets tests inject a fake install().
     const herdrInstall = resolveHerdrInstall(server, options);
 
+    // #1748: the bind-mounted control directory the admin "Restart app" button writes its
+    // sentinel into. Absent env var ⇒ dependency undefined ⇒ the route fails closed (503),
+    // which is the right default for a dev checkout with no host unit behind it.
+    const hostControlDir = process.env.JARVIS_HOST_CONTROL_DIR?.trim();
+    const hostRestart = hostControlDir ? { controlDir: hostControlDir } : undefined;
+
     // #917: externalModuleSnapshot is computed above (before registerPlatformRoutes),
     // because the /api/modules provider closes over it. registerBuiltInApiRoutes reuses
     // the same const for the settings module's external-module deps below.
@@ -569,6 +575,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       connectorsRepository,
       hostDiagnostics,
       herdrInstall,
+      hostRestart,
       externalModules: {
         // #996/#860: always-on since the JARVIS_ENABLE_EXTERNAL_MODULES flag removal —
         // packages/settings routes-module-registry.ts / routes-modules.ts gate on this

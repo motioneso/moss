@@ -77,6 +77,9 @@ services:
       MOSS_RECONCILE_CONFIRM_OWNER_EMAIL: ${MOSS_RECONCILE_CONFIRM_OWNER_EMAIL:-}
     volumes:
       - jarv1s-modules:/data/modules
+      # #1748: bind mount (not a named volume) so the host unit and the app see the same
+      # directory. A named volume would hide it under /var/lib/docker.
+      - ./control:/data/control
     depends_on:
       postgres:
         condition: service_healthy
@@ -160,6 +163,11 @@ services:
       JARVIS_CLI_NEUTRAL_BASE: /data/cli-auth/chat
       JARVIS_CHAT_HOME: /data/cli-auth/chat
       JARVIS_CLI_TOOLS_PREFIX: ${JARVIS_CLI_TOOLS_PREFIX:-/data/cli-tools}
+      # #1748: control directory for the admin "Restart app" button. The app only ever
+      # creates a zero-byte sentinel here; the host-side systemd unit (infra/host/) does the
+      # actual restart. Deliberately NOT a Docker socket mount — see
+      # docs/superpowers/specs/2026-08-19-admin-restart-app-button.md.
+      JARVIS_HOST_CONTROL_DIR: /data/control
       NPM_CONFIG_PREFIX: /data/cli-tools
       JARVIS_HOST_UID: "${JARVIS_HOST_UID:-1000}"
       JARVIS_HOST_GID: "${JARVIS_HOST_GID:-1000}"
