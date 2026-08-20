@@ -6,6 +6,7 @@ import type { MossModuleManifest } from "@moss/module-sdk";
 import { handleRouteError as handleModuleRouteError } from "@moss/module-sdk";
 
 import { HttpRepositoryError, type SettingsRepository } from "./repository.js";
+import type { InstalledExternalModuleSummary } from "./routes.js";
 
 export function toMyModuleDto(
   manifest: MossModuleManifest,
@@ -34,6 +35,34 @@ export function toMyModuleDto(
     // #1725: the flag, not the declarations — the pane fetches those from
     // /api/modules/:id/preferences when the user actually opens it.
     hasPreferences: (manifest.preferences?.length ?? 0) > 0
+  };
+}
+
+/**
+ * #1762 — the same DTO for an installed external module.
+ *
+ * An external module is never required and always supports a per-user off switch: the actor-scoped
+ * resolver in apps/api already subtracts the actor's deny rows before anything reads the module's
+ * navigation or tools, so switching it off here genuinely takes it away rather than only hiding a
+ * row. `instanceDisabled` is not a parameter because the caller only ever passes modules that
+ * reconciled as instance-active; a module an admin turned off is absent from the list entirely,
+ * which is the same treatment the admin surface gives it.
+ */
+export function toMyModuleDtoFromExternal(
+  module: InstalledExternalModuleSummary,
+  userDisabled: boolean
+): MyModuleDto {
+  return {
+    id: module.id,
+    name: module.name,
+    version: module.version,
+    lifecycle: "optional",
+    required: false,
+    supportsUserDisable: true,
+    instanceDisabled: false,
+    userDisabled,
+    active: !userDisabled,
+    hasPreferences: module.hasPreferences
   };
 }
 

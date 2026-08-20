@@ -210,6 +210,7 @@ import {
   type OnboardingInstallDependencies,
   type OnboardingLoginDependencies,
   type ExternalModulesDependencies,
+  type SettingsRoutesDependencies,
   type ModuleDistributionDependencies,
   type HerdrInstallDependencies,
   type AppMapReadService,
@@ -557,6 +558,8 @@ export interface BuiltInRouteDependencies {
    * so every existing registerBuiltInApiRoutes call site keeps compiling unchanged.
    */
   readonly externalModules?: ExternalModulesDependencies;
+  /** #1762: forwarded verbatim to the settings routes; see the port's doc comment there. */
+  readonly listInstalledExternalModules?: SettingsRoutesDependencies["listInstalledExternalModules"];
   readonly moduleDistribution?: ModuleDistributionDependencies;
   /** Fixed-script Herdr install executor port (#993), built by the API composition root. */
   readonly herdrInstall?: HerdrInstallDependencies;
@@ -1133,6 +1136,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         onboardingInstall: deps.onboardingInstall,
         onboardingLogin: deps.onboardingLogin,
         externalModules: deps.externalModules, // #917: thread the boot snapshot to settings routes
+        listInstalledExternalModules: deps.listInstalledExternalModules, // #1762
         moduleDistribution: deps.moduleDistribution,
         reconcileExternalModuleJobs: deps.reconcileExternalModuleJobs,
         // #1263: routing extracted to resolveGrantSelfOperationForModule (see its doc comment) so

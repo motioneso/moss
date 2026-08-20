@@ -128,6 +128,18 @@ export interface ExternalModuleRejection {
  * `rejected` is surfaced read-only so admins can see why a mounted dir did not load.
  * Absent / `enabled: false` ⇒ the external-module admin surface reports the feature off.
  */
+/**
+ * #1762 — the slice of an installed external module the personal Modules list needs. Structurally
+ * a subset of module-registry's ReconciledExternalModule, restated here because this package
+ * cannot import that one (see ExternalModulesDependencies.reconcile for the cycle).
+ */
+export interface InstalledExternalModuleSummary {
+  readonly id: string;
+  readonly name: string;
+  readonly version: string;
+  readonly hasPreferences: boolean;
+}
+
 export interface ExternalModulesDependencies {
   readonly enabled: boolean;
   readonly discoveries: readonly ExternalModuleDiscovery[];
@@ -198,6 +210,19 @@ export interface SettingsRoutesDependencies {
   readonly repository?: SettingsRepository;
   /** #917 external-module discovery snapshot; routes added in Task 9 consume it. */
   readonly externalModules?: ExternalModulesDependencies;
+  /**
+   * #1762 — installed, instance-active external modules for the acting user, injected by the
+   * composition root for the same no-import-cycle reason as `externalModules.reconcile`.
+   *
+   * Deliberately NOT filtered by the actor's own deny rows: this feeds the personal Modules list,
+   * which has to keep showing a module the user switched off so they can switch it back on.
+   *
+   * Only the fields that list needs are in the port. In particular `hasPreferences` is a flag, not
+   * the declarations — the pane fetches those separately when the user opens the module.
+   */
+  readonly listInstalledExternalModules?: (
+    accessContext: AccessContext
+  ) => Promise<readonly InstalledExternalModuleSummary[]>;
   /** #964 module-distribution port; registry routes degrade to enabled:false when absent. */
   readonly moduleDistribution?: ModuleDistributionDependencies;
   readonly reconcileExternalModuleJobs?: (
