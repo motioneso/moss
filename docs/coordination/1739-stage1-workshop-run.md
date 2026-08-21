@@ -581,7 +581,9 @@ closed itself cleanly.
 
 Old liveness monitor (task `bf9ro91to`) did not carry over, as expected. Re-armed a fresh one
 (task `bx0zu4jyv`) — it watches every pane in the shared workspace and only speaks up when a
-lane's status actually changes.
+lane's status actually changes. That first version also watched the coordinator's own pane and
+fired noise every time this session's turn ended; replaced it with task `bba0vvw3h`, same
+behavior but excluding the coordinator's own pane.
 
 Checked the two lanes flagged as needing a look:
 - #1752 (finding modules that appear after the server has started), pane `w1:pHV` — still
