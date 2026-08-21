@@ -1480,3 +1480,18 @@ picked up the message and is fixing the inner timeout now. Also separately: the 
 branch ruleset has no admin-bypass path available (confirmed via `gh api repos/motioneso/moss/rulesets`),
 so this PR cannot merge while any check is red regardless of Ben's flake waiver -- a real fix is
 required, not just a waiver, for this PR specifically. Watching for the push.
+
+## Update (coordinator session 4b7627b9, pane w1:pJJ, 2026-08-21 ~5:50pm PDT) — #1526 halted, escalated to Ben
+
+PR 1803's connection-close test has now failed identically three times (same test, same "timed
+out waiting for connection close" error) across two different timeout fixes (outer bound to 15s,
+then inner bound to 13s). Since giving it more time didn't help at all, the connection is very
+likely never closing on CI's machines -- a real bug, not a timing flake, and it may be
+CI-environment-specific. Stopped the lane from trying further timeout changes (two identical
+failures = stop and rethink, and this is now three); asked it instead to investigate why the
+close event might genuinely never fire on CI. Also confirmed mechanically that Ben's flake waiver
+can't actually get this PR merged even if he re-affirms it: the required "CI gate" ruleset has no
+available bypass. Logged in `docs/coordination/AWAITING-BEN.md` with three options (let the lane
+keep digging / Ben looks himself / skip the one test and land the rest, tracked as a separate bug)
+and pinged Ben via `needs-ben`. Watching for his reply; not spawning more timeout attempts in the
+meantime.

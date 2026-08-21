@@ -106,3 +106,32 @@ Ben finds it from the canonical run location too.
 matches the spec literally); otherwise option 1. Pinged via `needs-ben` (see
 `~/.needs-ben/sent/1786483243535565600.msg`). Everything else in #1533 Phase 4 is done — this is
 the only open item. Build agent is waiting event-driven, not polling; coordinator likewise.
+
+## OPEN 2026-08-21 ~5:50pm PDT: #1526 (PR 1803) — same test has now failed 3 times identically, likely a real bug not a flake
+
+Your earlier ruling was "we can just ok with flakes for now" on this test. Since then, the branch
+has tried two different timeout fixes (giving the wait more time) and the test failed the exact
+same way both times, with the exact same error message: "timed out waiting for connection close."
+That pattern -- more time doesn't help at all -- means the connection is very likely never closing
+on GitHub's CI machines, not just closing slowly. That would make this a real bug, not a timing
+flake, and it may only show up in CI because of something about that environment (not reproducible
+on the lane's own machine).
+
+Also found: merging can't skip this check even with your flake waiver. The repository has a rule
+requiring this check to pass before a merge, with no override available to me (the earlier "admin
+merge" bypass is blocked). So this PR is stuck red until the real cause is found and fixed, not
+just waived.
+
+**What I'd like from you:** a decision on how far to let this go. Options:
+1. Let the lane keep digging into the real cause (has been asked to do this now, not to try more
+   timeout numbers) -- could take a while, this is a "why does this only happen in CI" question.
+2. You look at the CI failure yourself.
+3. Set this PR's connection-close test aside for now (skip/mark known-issue) and file a separate
+   bug to track it, so the rest of PR 1803's PTY backpressure fix can still land.
+
+**My recommendation:** option 3 if the connection-close test isn't central to what #1526 is
+actually about (backpressure) -- letting the well-tested main fix land, and tracking a real
+possible bug about connection cleanup separately. But I don't have enough context on whether the
+connection-close behavior matters more here to strongly assert that.
+
+Pinged via `needs-ben`.
