@@ -14,9 +14,9 @@ describe("assertModuleControlPayload", () => {
   });
 
   it("rejects a rescan payload that also carries a moduleId", () => {
-    expect(() =>
-      assertModuleControlPayload({ moduleId: "acme", action: "rescan" })
-    ).toThrow(/invalid/);
+    expect(() => assertModuleControlPayload({ moduleId: "acme", action: "rescan" })).toThrow(
+      /invalid/
+    );
   });
 
   it("rejects a reconcile payload missing moduleId", () => {
