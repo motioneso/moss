@@ -316,6 +316,21 @@ export const setExternalModuleEnablementRouteSchema = {
   }
 } as const;
 
+// #1752: admin-triggered rescan of the modules directory on disk. No request body; the caller
+// just needs to know the rescan was accepted.
+export const rescanExternalModulesRouteSchema = {
+  response: {
+    200: {
+      type: "object",
+      additionalProperties: false,
+      required: ["ok"],
+      properties: { ok: { type: "boolean" } }
+    },
+    401: errorResponseSchema,
+    403: errorResponseSchema
+  }
+} as const;
+
 // #918: module-credential admin/user surface contracts. ModuleCredentialStatusDto is
 // METADATA ONLY by construction — there is no field that could carry plaintext or the
 // ciphertext envelope, and the strict response schema below (additionalProperties: false)

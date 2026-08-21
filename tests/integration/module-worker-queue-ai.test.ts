@@ -119,7 +119,8 @@ function buildHandler(overrides: Partial<ExternalModuleJobHandlerDeps> = {}): {
     workerDb,
     dataContext: new DataContextRunner(workerDb),
     cipher: createModuleCredentialSecretCipher(),
-    discoveryById: new Map([[moduleA.id, moduleA]]),
+    getDiscoveryById: (id: string) => (id === moduleA.id ? moduleA : undefined),
+    listDiscoveredModuleIds: () => [moduleA.id],
     listActiveUserIds: async () => [ids.userA],
     ai: createModuleWorkerAiBridge({
       aiRepository: new AiRepository(),
@@ -182,10 +183,10 @@ describe("external module queue job handler", () => {
     expect(inactive.invocations).toHaveLength(0);
 
     // Discovery hash drift (stale on-disk module vs DB state) must also refuse.
+    const driftedModule = { ...moduleA, manifestHash: `sha256:${"b".repeat(64)}` };
     const drifted = buildHandler({
-      discoveryById: new Map([
-        [moduleA.id, { ...moduleA, manifestHash: `sha256:${"b".repeat(64)}` }]
-      ])
+      getDiscoveryById: (id: string) => (id === moduleA.id ? driftedModule : undefined),
+      listDiscoveredModuleIds: () => [moduleA.id]
     });
     await expect(drifted.handler(jobOf(validPayload))).rejects.toThrow(/declined: hash-mismatch/);
     expect(drifted.invocations).toHaveLength(0);

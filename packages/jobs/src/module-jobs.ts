@@ -13,10 +13,9 @@ export interface ExternalModuleJobPayload {
   readonly params?: Readonly<Record<string, unknown>>;
 }
 
-export interface ModuleControlPayload {
-  readonly moduleId: string;
-  readonly action: "reconcile";
-}
+export type ModuleControlPayload =
+  | { readonly moduleId: string; readonly action: "reconcile" }
+  | { readonly moduleId?: undefined; readonly action: "rescan" };
 
 export function assertModuleControlPayload(
   payload: unknown
@@ -25,14 +24,19 @@ export function assertModuleControlPayload(
     throw new Error("Module control payload must be an object");
   }
   const value = payload as Record<string, unknown>;
+  const keys = Object.keys(value);
   if (
-    Object.keys(value).length !== 2 ||
-    typeof value.moduleId !== "string" ||
-    !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(value.moduleId) ||
-    value.action !== "reconcile"
+    keys.length === 2 &&
+    typeof value.moduleId === "string" &&
+    /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(value.moduleId) &&
+    value.action === "reconcile"
   ) {
-    throw new Error("Module control payload is invalid");
+    return;
   }
+  if (keys.length === 1 && value.action === "rescan") {
+    return;
+  }
+  throw new Error("Module control payload is invalid");
 }
 
 export async function sendModuleControl(

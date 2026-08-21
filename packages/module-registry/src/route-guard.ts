@@ -101,6 +101,9 @@ export const PLATFORM_UNGUARDED_ROUTES: ReadonlySet<RouteKey> = new Set<RouteKey
   // #917 external-module admin surface (settings-owned; settings is required/always-on).
   routeKey("GET", "/api/admin/external-modules"),
   routeKey("POST", "/api/admin/external-modules/:id"),
+  // #1752: admin-triggered rescan of the modules directory — settings-owned, same
+  // platform-route reasoning as the two external-module admin routes just above.
+  routeKey("POST", "/api/admin/modules/rescan"),
   // #964 module-registry distribution surface (settings-owned, admin-gated via
   // assertAdminUser in routes-module-registry.ts — NOT module-enablement-gated; a
   // disabled/not-yet-installed module must still be discoverable/installable here).

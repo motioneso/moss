@@ -21,7 +21,7 @@ import { createModuleCredentialSecretCipher, type SettingsRepository } from "@mo
 import { getVaultBaseDir, VaultContextRunner } from "@moss/vault";
 
 export function createExternalModuleTools(input: {
-  readonly discoveries: readonly ExternalModuleDiscovery[];
+  readonly discoveries: () => readonly ExternalModuleDiscovery[];
   readonly workerDataContext?: DataContextRunner;
   readonly appDataContext: DataContextRunner;
   readonly settingsRepository: SettingsRepository;
@@ -49,7 +49,7 @@ export function createExternalModuleTools(input: {
   // by the recipient's quiet hours any more than the system upgrade notice is.
   const notifications = new NotificationsRepository(undefined, createNotificationPreferencePort());
   const manifests = createExternalToolManifests(
-    input.discoveries,
+    input.discoveries(),
     async (module, tool, toolInput, context) => {
       const rpc = createExternalModuleRpcHandler({
         module,
@@ -146,7 +146,7 @@ export function createExternalModuleTools(input: {
 export function createActiveExternalModulesResolverForApi(input: {
   readonly appDataContext: DataContextRunner;
   readonly settingsRepository: SettingsRepository;
-  readonly discoveries: readonly ExternalModuleDiscovery[];
+  readonly discoveries: () => readonly ExternalModuleDiscovery[];
 }): (accessContext: AccessContext) => Promise<readonly ReconciledExternalModule[]> {
   return async (accessContext) => {
     const { states, denyRows } = await input.appDataContext.withDataContext(
@@ -156,7 +156,7 @@ export function createActiveExternalModulesResolverForApi(input: {
         denyRows: await input.settingsRepository.listModuleDenyRowsForActor(scopedDb)
       })
     );
-    const { modules } = reconcileExternalModules(input.discoveries, states);
+    const { modules } = reconcileExternalModules(input.discoveries(), states);
     const disabled = new Set(denyRows.map((row) => row.module_id));
     return modules.filter((module) => module.active && !disabled.has(module.id));
   };
@@ -173,13 +173,13 @@ export function createActiveExternalModulesResolverForApi(input: {
 export function createInstalledExternalModulesResolverForApi(input: {
   readonly appDataContext: DataContextRunner;
   readonly settingsRepository: SettingsRepository;
-  readonly discoveries: readonly ExternalModuleDiscovery[];
+  readonly discoveries: () => readonly ExternalModuleDiscovery[];
 }): (accessContext: AccessContext) => Promise<readonly ReconciledExternalModule[]> {
   return async (accessContext) => {
     const states = await input.appDataContext.withDataContext(accessContext, async (scopedDb) =>
       input.settingsRepository.listExternalModuleStates(scopedDb)
     );
-    const { modules } = reconcileExternalModules(input.discoveries, states);
+    const { modules } = reconcileExternalModules(input.discoveries(), states);
     return modules.filter((module) => module.active);
   };
 }

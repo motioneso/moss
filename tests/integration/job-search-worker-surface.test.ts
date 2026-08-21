@@ -476,7 +476,8 @@ describe("job-search module through the real API + worker RPC surface (#1305, te
     const scenario = await seedBriefingScenario("count");
     const invoke = createExternalBriefingInvoker({
       workerDb: heavyWorkerDb,
-      discoveryById: new Map([[realModuleId, realDiscovery]]),
+      getDiscoveryById: (id: string) => (id === realModuleId ? realDiscovery : undefined),
+      listDiscoveredModuleIds: () => [realModuleId],
       dataContext: new DataContextRunner(heavyWorkerDb),
       cipher: createModuleCredentialSecretCipher(),
       runtime: workerRuntime,
@@ -499,7 +500,8 @@ describe("job-search module through the real API + worker RPC surface (#1305, te
     const scenario = await seedBriefingScenario("top");
     const invoke = createExternalBriefingInvoker({
       workerDb: heavyWorkerDb,
-      discoveryById: new Map([[realModuleId, realDiscovery]]),
+      getDiscoveryById: (id: string) => (id === realModuleId ? realDiscovery : undefined),
+      listDiscoveredModuleIds: () => [realModuleId],
       dataContext: new DataContextRunner(heavyWorkerDb),
       cipher: createModuleCredentialSecretCipher(),
       runtime: workerRuntime,
@@ -533,7 +535,8 @@ describe("job-search module through the real API + worker RPC surface (#1305, te
     const scenario = await seedBriefingScenario("full");
     const invoke = createExternalBriefingInvoker({
       workerDb: heavyWorkerDb,
-      discoveryById: new Map([[realModuleId, realDiscovery]]),
+      getDiscoveryById: (id: string) => (id === realModuleId ? realDiscovery : undefined),
+      listDiscoveredModuleIds: () => [realModuleId],
       dataContext: new DataContextRunner(heavyWorkerDb),
       cipher: createModuleCredentialSecretCipher(),
       runtime: workerRuntime,
@@ -654,7 +657,8 @@ describe("job-search module through the real API + worker RPC surface (#1305, te
     const briefingScenario = await seedBriefingScenario("full");
     const briefingInvoke = createExternalBriefingInvoker({
       workerDb: heavyWorkerDb,
-      discoveryById: new Map([[realModuleId, realDiscovery]]),
+      getDiscoveryById: (id: string) => (id === realModuleId ? realDiscovery : undefined),
+      listDiscoveredModuleIds: () => [realModuleId],
       dataContext: new DataContextRunner(heavyWorkerDb),
       cipher: createModuleCredentialSecretCipher(),
       runtime: workerRuntime,

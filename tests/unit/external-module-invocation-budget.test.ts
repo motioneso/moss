@@ -452,7 +452,8 @@ function verifiedInvokerDeps(
       manifest_hash: module.manifestHash,
       package_hash: module.packageHash
     }),
-    discoveryById: new Map([[module.id, module]]),
+    getDiscoveryById: (id: string) => (id === module.id ? module : undefined),
+    listDiscoveredModuleIds: () => [module.id],
     // DataContextRunner has a private constructor-bound rootDb; this test only ever
     // exercises the withDataContext contract, so a structural stand-in is cast rather
     // than constructed for real.

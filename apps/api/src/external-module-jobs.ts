@@ -13,7 +13,7 @@ export function registerExternalModuleJobRoutes(
   server: FastifyInstance,
   deps: {
     readonly boss: PgBoss;
-    readonly discoveries: readonly ExternalModuleDiscovery[];
+    readonly discoveries: () => readonly ExternalModuleDiscovery[];
     readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
     readonly isModuleActive: (access: AccessContext, moduleId: string) => Promise<boolean>;
     readonly rateLimitKey?: (request: FastifyRequest) => string;
@@ -47,7 +47,7 @@ export function registerExternalModuleJobRoutes(
         moduleId: string;
         queueName: string;
       };
-      const module = deps.discoveries.find((item) => item.id === moduleId);
+      const module = deps.discoveries().find((item) => item.id === moduleId);
       const queue = module?.manifest.worker?.queues?.find((item) => item.name === queueName);
       if (!module || !queue?.allowManualRun || !(await deps.isModuleActive(access, moduleId))) {
         return reply.code(404).send({ error: "Not found" });

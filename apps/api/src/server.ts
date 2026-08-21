@@ -61,10 +61,9 @@ import { createModuleLogger, CORE_VERSION } from "@moss/module-sdk";
 import { SettingsRepository } from "@moss/settings";
 import {
   type ExternalModuleWorkerRuntime,
-  getExternalModuleRegistrations,
+  createExternalModuleDiscoveryHolder,
   resolveModulesDir
 } from "@moss/module-registry/node";
-import type { ExternalModuleLoadResult } from "@moss/module-registry";
 
 import { createModuleAiBridge } from "./external-module-ai-bridge.js";
 import { createModuleDistributionPort } from "./module-distribution-port.js";
@@ -182,34 +181,6 @@ export function resolveApiServerConfig(env: NodeJS.ProcessEnv = process.env): Ap
     mcpServerUrl: env.JARVIS_MCP_SERVER_URL ?? `http://127.0.0.1:${port}/api/mcp`,
     externalModulesDir: resolveModulesDir(env)
   };
-}
-
-/**
- * Discover external modules ONCE at boot (#996/#860 always-on). Walks the read-only mount
- * and returns validated discoveries + rejections. Rescan requires a process restart (the
- * mount is read-only and changes only across a redeploy). Logs counts + rejection
- * ids/reasons only — never file contents (secrets-never-escape).
- */
-export function discoverExternalModules(
-  config: ApiServerConfig,
-  log: { info: (o: object, m: string) => void; warn: (o: object, m: string) => void }
-): ExternalModuleLoadResult {
-  const snapshot = getExternalModuleRegistrations({
-    modulesDir: config.externalModulesDir,
-    coreVersion: CORE_VERSION,
-    reservedQueueNames: new Set(getAllQueueDefinitions().map((queue) => queue.name))
-  });
-  log.info(
-    { discovered: snapshot.discoveries.length, rejected: snapshot.rejected.length },
-    "external modules discovered (#996 always-on)"
-  );
-  for (const rejection of snapshot.rejected) {
-    log.warn(
-      { moduleId: rejection.id, reason: rejection.reason },
-      "external module rejected (#917)"
-    );
-  }
-  return snapshot;
 }
 
 export function createApiServer(options: CreateApiServerOptions = {}) {
@@ -374,24 +345,31 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
 
     registerBetterAuthRoutes(server, authRuntime, AUTH_MAX);
 
-    const externalModuleSnapshot = discoverExternalModules(apiServerConfig, server.log);
+    // #1752: a live cell, not a one-time snapshot — rescan() lets an admin-triggered
+    // rescan surface a module dropped onto the mount after this process booted.
+    const externalModuleHolder = createExternalModuleDiscoveryHolder({
+      modulesDir: apiServerConfig.externalModulesDir,
+      coreVersion: CORE_VERSION,
+      reservedQueueNames: new Set(getAllQueueDefinitions().map((queue) => queue.name)),
+      log: server.log
+    });
 
     const externalModulesRepository = new SettingsRepository();
     const getActiveExternalModules = createActiveExternalModulesResolverForApi({
       appDataContext: dataContext,
       settingsRepository: externalModulesRepository,
-      discoveries: externalModuleSnapshot.discoveries
+      discoveries: externalModuleHolder.getDiscoveries
     });
 
     // #1762: the personal Modules list needs the installed set, not the actor-filtered one.
     const listInstalledExternalModules = createInstalledExternalModulesResolverForApi({
       appDataContext: dataContext,
       settingsRepository: externalModulesRepository,
-      discoveries: externalModuleSnapshot.discoveries
+      discoveries: externalModuleHolder.getDiscoveries
     });
 
     const externalTools = createExternalModuleTools({
-      discoveries: externalModuleSnapshot.discoveries,
+      discoveries: externalModuleHolder.getDiscoveries,
       workerDataContext,
       appDataContext: dataContext,
       settingsRepository: externalModulesRepository,
@@ -416,12 +394,12 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     registerExternalModuleWebAssetRoute(
       server,
       authRuntime,
-      externalModuleSnapshot.discoveries,
+      externalModuleHolder.getDiscoveries,
       getActiveExternalModules
     );
     registerExternalModuleJobRoutes(server, {
       boss,
-      discoveries: externalModuleSnapshot.discoveries,
+      discoveries: externalModuleHolder.getDiscoveries,
       resolveAccessContext: authRuntime.resolveAccessContext,
       isModuleActive: async (access, moduleId) =>
         (await getActiveExternalModules(access)).some((module) => module.id === moduleId),
@@ -531,9 +509,9 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
     const hostControlDir = process.env.JARVIS_HOST_CONTROL_DIR?.trim();
     const hostRestart = hostControlDir ? { controlDir: hostControlDir } : undefined;
 
-    // #917: externalModuleSnapshot is computed above (before registerPlatformRoutes),
+    // #917: externalModuleHolder is computed above (before registerPlatformRoutes),
     // because the /api/modules provider closes over it. registerBuiltInApiRoutes reuses
-    // the same const for the settings module's external-module deps below.
+    // the same holder for the settings module's external-module deps below.
     registerBuiltInApiRoutes(server, {
       rootDb: appDb,
       resolveAccessContext: authRuntime.resolveAccessContext,
@@ -590,9 +568,13 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
         // field with `if (!ext?.enabled) throw 409`; hardcoding true here means those
         // guards simply never fire, which is correct (verified — no change needed there).
         enabled: true,
-        discoveries: externalModuleSnapshot.discoveries,
-        rejected: externalModuleSnapshot.rejected,
-        reconcile: (states) => reconcileExternalModules(externalModuleSnapshot.discoveries, states)
+        // #1752: pass the live getter, not a called-once snapshot — otherwise an admin who
+        // triggers a rescan still sees the stale list on this exact page until a restart.
+        discoveries: externalModuleHolder.getDiscoveries,
+        rejected: externalModuleHolder.getRejected(),
+        reconcile: (states) =>
+          reconcileExternalModules(externalModuleHolder.getDiscoveries(), states),
+        rescan: () => externalModuleHolder.rescan().then(() => undefined)
       },
       // #1762: narrowed to the four fields the personal Modules list needs, so the settings
       // package never sees a ReconciledExternalModule (it cannot import that type).
@@ -606,7 +588,8 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
           // which does not carry credential declarations. A module with user-scope slots and no
           // switches still needs a settings page — that is exactly Finance.
           hasUserCredentials: (
-            externalModuleSnapshot.discoveries.find((d) => d.id === module.id)?.manifest.auth ?? []
+            externalModuleHolder.getDiscoveries().find((d) => d.id === module.id)?.manifest.auth ??
+            []
           ).some((declaration) => declaration.scope === "user")
         })),
       moduleDistribution,
@@ -622,7 +605,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
         }
         await reconcileExternalModuleUserJobs(
           boss,
-          externalModuleSnapshot.discoveries,
+          externalModuleHolder.getDiscoveries(),
           change.userId
         );
       },

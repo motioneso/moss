@@ -116,7 +116,8 @@ async function seedModuleRow(overrides: {
 function buildInvoker(runtimeResult: unknown = { headline: "Two new leads", items: [] }) {
   return createExternalBriefingInvoker({
     workerDb,
-    discoveryById: new Map([[moduleId, discovery]]),
+    getDiscoveryById: (id: string) => (id === moduleId ? discovery : undefined),
+    listDiscoveredModuleIds: () => [moduleId],
     dataContext: new DataContextRunner(workerDb),
     cipher: createModuleCredentialSecretCipher(),
     runtime: { invoke: async () => runtimeResult },
@@ -183,7 +184,8 @@ describe("createVerifiedExternalModuleInvoker hash gate (#1305)", () => {
   function buildRawInvoker() {
     return createVerifiedExternalModuleInvoker({
       workerDb,
-      discoveryById: new Map([[moduleId, discovery]]),
+      getDiscoveryById: (id: string) => (id === moduleId ? discovery : undefined),
+      listDiscoveredModuleIds: () => [moduleId],
       dataContext: new DataContextRunner(workerDb),
       cipher: createModuleCredentialSecretCipher(),
       runtime: {

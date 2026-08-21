@@ -19,7 +19,7 @@ import { ModuleAssetPathError, resolveModuleAssetPath } from "@moss/module-regis
 export function registerExternalModuleWebAssetRoute(
   server: FastifyInstance,
   authRuntime: MossAuthRuntime,
-  discoveries: readonly ExternalModuleDiscovery[],
+  discoveries: () => readonly ExternalModuleDiscovery[],
   getActiveExternalModules: (
     accessContext: AccessContext
   ) => Promise<readonly ReconciledExternalModule[]>
@@ -34,7 +34,7 @@ export function registerExternalModuleWebAssetRoute(
     const { moduleId } = request.params as { moduleId: string };
     const relPath = (request.params as Record<string, string>)["*"] ?? "";
 
-    const discovery = discoveries.find((d) => d.id === moduleId);
+    const discovery = discoveries().find((d) => d.id === moduleId);
     if (!discovery?.manifest.web) {
       return reply.code(404).send({ error: "Not found" });
     }
