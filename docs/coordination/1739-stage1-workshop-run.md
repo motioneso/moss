@@ -1703,3 +1703,20 @@ squarely a question for Ben, who has not replied yet (still no file newer than
 Letting the current diagnostic run finish since it's not a "third identical retry" -- it changes
 what's being tested, aimed at understanding the cause -- but the lane should stop after this one
 and wait rather than trying further variants on its own.
+
+## Adoption note (coordinator session 415253cb-e521-4a08-b114-415fbd7a91b4, pane w1:pJR, 2026-08-21 ~9:5x PM PDT — relay20)
+
+Confirmed driving, claimed agent name `coordinator` and pane label `Coordinator`, closed predecessor
+pane w1:pJM (it had already confirmed done and was waiting to be reaped). Checked all four watched
+lanes in order:
+- **#1526 (PR 1803):** corrected the record -- see the update note just above this one. Still stuck,
+  not a resolved fix. Told the lane to stop after its current diagnostic run and wait, not try more
+  variants. Message delivered (queued, lane was busy).
+- **#1754:** relay7, pane w1:pJQ, driving normally, mid Task 19 typecheck. No action.
+- **#1756:** pane w1:pH7, had an unsubmitted "check on the gate again" message sitting at its
+  prompt -- resent via `herdr agent prompt`, confirmed delivered (now running again). No other
+  action.
+- **#1571:** pane w1:pJC, idle by design, no action.
+
+Fleet unchanged from prior note otherwise. `merges_since_relay` = 0. Watching PR 1803's in-flight
+diagnostic CI run and fleet status via a background Monitor rather than polling.
