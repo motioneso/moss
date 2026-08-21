@@ -1861,3 +1861,8 @@ Agents tab still a clean 2x2 grid (pHP, pJS, pH7, pJC), no pane count change, no
 this pass.
 
 `merges_since_relay` = 0, no merges this pass. AWAITING-BEN.md confirmed empty.
+
+**#1754 relay:** build-agent-1754-relay8 relayed to a fresh pane, agent name `build1754r9`,
+pane w1:pJW, label "1754 build agent runner (relay9)". Confirmed driving (Sonnet, re-running the
+gate). Old pane w1:pJS reaped. Its report: task 19 done and committed, branch rebased clean on
+main. No merge yet, no action needed beyond watching.
