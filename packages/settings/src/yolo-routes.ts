@@ -158,8 +158,26 @@ async function readSelf(
   const enabled = (await prefs.get(scopedDb, YOLO_ENABLED_PREF_KEY)) === true;
   return {
     instanceEnabled,
-    self: { allowed, enabled, active: instanceEnabled && allowed && enabled }
+    self: { allowed, enabled, active: composeYoloActive(instanceEnabled, allowed, enabled) }
   };
+}
+
+function composeYoloActive(instanceEnabled: boolean, allowed: boolean, enabled: boolean): boolean {
+  return instanceEnabled && allowed && enabled;
+}
+
+/**
+ * The single "stop asking me" gate: instance flag, per-user allow, per-user enable.
+ * Shared so no third consumer (after the routes above) re-composes these three reads itself.
+ */
+export async function isYoloActiveForActor(
+  scopedDb: DataContextDb,
+  prefs: Pick<ProfilePreferencesPort, "get">
+): Promise<boolean> {
+  const instanceEnabled = await readMaster(scopedDb);
+  const allowed = (await prefs.get(scopedDb, YOLO_ALLOWED_PREF_KEY)) === true;
+  const enabled = (await prefs.get(scopedDb, YOLO_ENABLED_PREF_KEY)) === true;
+  return composeYoloActive(instanceEnabled, allowed, enabled);
 }
 
 async function readAdmin(
