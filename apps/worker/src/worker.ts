@@ -51,6 +51,7 @@ import { createModuleWorkerAiBridge } from "./external-module-ai-bridge.js";
 import { buildDiscoveryLookup } from "./external-module-discovery.js";
 import { createExternalBriefingInvoker } from "./external-module-invoke.js";
 import { createExternalModuleJobHandler } from "./external-module-job-handler.js";
+import { createIsModuleEnabled } from "./worker-module-gate.js";
 
 // ---------------------------------------------------------------------------
 // Bounded graceful-shutdown timeout (ms). On SIGINT/SIGTERM the worker waits
@@ -312,20 +313,7 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
     boss,
     discoveries: externalModuleHolder.getDiscoveries,
     reservedQueueNames,
-    isModuleEnabled: async (moduleId) => {
-      const module = getDiscoveryById(moduleId);
-      if (!module) return false;
-      const state = await workerDb
-        .selectFrom("app.external_modules")
-        .select(["status", "manifest_hash", "package_hash"])
-        .where("id", "=", moduleId)
-        .executeTakeFirst();
-      return (
-        state?.status === "enabled" &&
-        state.manifest_hash === module.manifestHash &&
-        state.package_hash === module.packageHash
-      );
-    },
+    isModuleEnabled: createIsModuleEnabled({ db: workerDb, getDiscoveryById }),
     listActiveUserIds,
     registerWorker: async (module, queue) => {
       // Handler body extracted to external-module-job-handler.ts (JS-07
