@@ -1,0 +1,48 @@
+You are the new coordinator for run 1739. Read docs/coordination/1739-stage1-workshop-run.md --
+the LATEST continuation note (session 9674b6c7-87b1-4612-afad-361c7f9070fa, pane w1:pJV, ~9:1xpm
+PDT) plus the current Queue table (skim; do NOT deep-read full history). AWAITING-BEN.md was
+confirmed empty at the start of the previous pass.
+
+Invoke coordinate, re-confirm your own session id via herdr pane list against this pane's own
+agent_session.value, re-adopt the live fleet (herdr pane list + labels), confirm you're driving.
+Claim the coordinator agent name (it's free once you clear the predecessor's, currently named
+"coordinator") and pane label "Coordinator". Reap this pane (your immediate predecessor, pane
+w1:pJV) once you've confirmed you're driving.
+
+Seven lanes are live, all in the agents tab (w1:t1Q):
+
+Top priority: #1039 (pane w1:pJY, agent forcereplay-1039, plan approved, test-only). It relayed at
+70% context mid-pass -- both planned tasks done and committed, green on an isolated gate DB, but it
+had NOT yet spawned a visible successor pane as of the last check. Check pane w1:pJY first: if a
+successor has landed, confirm it's driving and reap the old pane; if not, read the pane and see
+what state it's actually in (mid-relay, frozen, or already progressed further).
+
+Second: #1756 (pane w1:pH7, agent workshop-chat-cards-r2, PR #1799). It had frozen mid-turn earlier
+and was nudged back to work on its checkpoint-doc restart; showed idle in the last fleet snapshot.
+Bounded-read it to confirm it actually finished rather than froze again -- if the progress timer is
+stuck across two reads a few seconds apart, nudge with "continue" again.
+
+Third: #1526 (pane w1:pHP, agent pty-1526-relay3, PR #1803). Ben ruled: skip the flaky
+connection-close test as a known issue (don't delete it), file a separate GitHub issue documenting
+what was tried, push once, confirm CI green, then let the real backpressure fix land. Still waiting
+on its own CI run as of the last check -- if green, spawn QA in its own pane (never the Agent
+tool), and if QA agrees, merge normally. Confirm it actually filed the new "known issue" GitHub
+issue -- don't assume.
+
+Watch, no action expected unless something changes: #1754 (pane w1:pJW, agent build1754r9,
+re-running its gate after a relay), #1571 (pane w1:pJC, agent weather-1571-relay1, waiting on its
+own helper teammate), #1517 (pane w1:pJX, agent escape-commitment-1517, plan approved, building),
+#1572 (pane w1:pJZ, agent sports-news-1572, sensitive tier -- new Sports news-source migration,
+must not assume a migration number, check current highest before it writes one; building, no
+plan-ready escalation yet).
+
+Ben asked for more parallel work this pass and three new lanes (#1517, #1039, #1572) were spawned
+because their dependencies had merged. Still queued behind #1572 landing: #906 (same Sports
+settings area). Other ready-list items remain held on a Ben design call, a spec that needs writing,
+or a Workshop-area lane landing first -- see the "Ready lane" section in the manifest, unchanged.
+
+The agents tab is currently a 3-left/4-right grid (left: pHP, pJW, pJZ; right: pH7, pJX+pJY
+sharing a row, pJC) -- recheck whenever the pane count changes, per the standing rule.
+
+Ben may be chatting in this session's tab. If so, greet him plainly and give a short status in
+plain English, no jargon.
