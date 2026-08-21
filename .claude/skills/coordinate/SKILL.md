@@ -317,12 +317,8 @@ catches silent failures between pushes.
   - Distinguish them by the pane's last line, not by `agent_status`: a wait declaration is prose, a
     freeze is a spinner.
 - **A dispatched `Agent()` QA/build agent that pauses on its own background work is the same failure,
-  one level removed — and it once cost 9 hours overnight (#1755/PR 1804, 2026-08-21).** A QA agent
-  started its e2e-UAT run in the background instead of blocking on it as its skill says to, ended its
-  turn with "I'll finalize once it completes," and went dormant. You get exactly one task-notification
-  when it pauses like that — its own background task's completion does NOT generate a second
-  notification, because nothing is resumed to receive it. It sat done-in-spirit but unreported until a
-  human asked for status and a coordinator resumed it by SendMessage. **Whenever a spawned agent's
+  one level removed.** You get exactly one task-notification when it pauses like that — its own
+  background task's completion does NOT generate a second notification. **Whenever a spawned agent's
   update is a wait declaration rather than a finished verdict, immediately schedule an active recheck**
   (`ScheduleWakeup` a few minutes out, or a bounded `SendMessage` nudge) — do not assume a second
   notification is coming.
