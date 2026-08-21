@@ -11,9 +11,9 @@ finish — merge, close out, spawn the next queued item once its dependency land
 same-night escalation only when Ben is back and says so. This overrides the box-wide CLAUDE.md
 "never idle silently, run needs-ben" rule for the rest of tonight specifically.
 
-Coordinator: Claude session `d2815ae2-dd97-40ea-9eef-08b4f70f6323`, label `Coordinator`, pane
-`w1:pHY` (re-resolve pane fresh by label + session id — pane numbers reflow). Took over from
-session `0cfc3a41-b6cb-4487-aca3-1b4248dc7438` (former pane `w1:pHW`) at 2026-08-20 ~22:5x PDT;
+Coordinator: Claude session `7a4759d1-8ede-4252-b513-372e1d27694b`, label `Coordinator`, pane
+`w1:pHZ` (re-resolve pane fresh by label + session id — pane numbers reflow). Took over from
+session `d2815ae2-dd97-40ea-9eef-08b4f70f6323` (former pane `w1:pHY`) at 2026-08-21 ~05:5x UTC;
 confirmed the old pane saw this one driving before closing it (reaped cleanly).
 Liveness Monitor needs to be re-armed fresh (see latest continuation note) — inherited monitor did
 not carry over, matching the pattern of prior relays in this run.
