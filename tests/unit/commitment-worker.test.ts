@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import type { Job, PgBoss } from "pg-boss";
 
 import type { DataContextDb, DataContextRunner } from "@moss/db";
-import { AiRepository, AiSecretCipher, HttpApiAdapter } from "@moss/ai";
+import { AiRepository, AiSecretCipher, HttpApiAdapter, createAiSecretCipher } from "@moss/ai";
 import { registerCommitmentExtractionWorker } from "@moss/commitments/workers";
 import type { CommitmentExtractionWorkerDeps } from "@moss/commitments/workers";
 import { enqueueCommitmentExtraction } from "@moss/commitments/jobs";
@@ -48,7 +48,7 @@ async function captureHandler(
 
   await registerCommitmentExtractionWorker(boss, dataContext(), {
     aiRepository: deps.aiRepository ?? new AiRepository(),
-    cipher: deps.cipher ?? new AiSecretCipher(),
+    cipher: deps.cipher ?? createAiSecretCipher(),
     repository: deps.repository ?? new CommitmentsRepository(),
     providers: deps.providers,
     logger: deps.logger
