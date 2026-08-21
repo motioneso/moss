@@ -16,7 +16,8 @@ const FIRST_COMMAND_ALLOWLIST: readonly RegExp[] = [
   /^ALTER\s+TABLE\b/i,
   /^DROP\s+INDEX\b/i,
   /^COMMENT\s+ON\b/i,
-  /^UPDATE\b/i
+  /^UPDATE\b/i,
+  /^DELETE\b/i
 ];
 
 export interface ModuleMigrationValidation {
@@ -40,7 +41,7 @@ export function validateModuleMigrationSql(sql: string): ModuleMigrationValidati
   if (!FIRST_COMMAND_ALLOWLIST.some((pattern) => pattern.test(stripped))) {
     errors.push(
       "first command must be one of: CREATE TABLE, CREATE [UNIQUE] INDEX, ALTER TABLE, " +
-        "DROP INDEX, COMMENT ON, UPDATE"
+        "DROP INDEX, COMMENT ON, UPDATE, DELETE"
     );
   }
 
