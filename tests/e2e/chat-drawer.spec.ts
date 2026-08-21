@@ -167,6 +167,97 @@ test("reloading the page restores private-mode indication from server truth", as
   );
 });
 
+test("a focus refetch during a pending private close does not restore the closed banner early, and a failed close is restored afterwards", async ({
+  page
+}) => {
+  await mockApi(page, {
+    authenticated: true,
+    chatThreads: [],
+    connectorAccounts: [],
+    connectorProviders: createMockConnectorProviders(),
+    notifications: [],
+    tasks: [],
+    incognito: true
+  });
+
+  // The server's privacy answer throughout this test: still private, until the test flips it
+  // once the held-open close request is released.
+  let serverIncognito = true;
+  // Match by pathname, not a glob string: the drawer's privacy GET carries a `?surface=...`
+  // query string (see the comment in mock-chat-api.ts), which a plain "**/api/chat/privacy"
+  // glob does not match.
+  await page.route(
+    (url) => url.pathname.endsWith("/api/chat/privacy"),
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ incognito: serverIncognito })
+      });
+    }
+  );
+
+  // Hold the close request open until the test releases it, so a focus event can be dispatched
+  // while the close is still in flight -- the scenario the spec locks in for this child issue.
+  let releaseEnd: ((status: number) => void) | undefined;
+  const endGate = new Promise<number>((resolve) => {
+    releaseEnd = resolve;
+  });
+  await page.route(
+    (url) => url.pathname.endsWith("/api/chat/private/end"),
+    async (route) => {
+      const status = await endGate;
+      if (status >= 200 && status < 300) {
+        await route.fulfill({ status, body: "" });
+        return;
+      }
+      await route.fulfill({
+        status,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Could not end private chat" })
+      });
+    }
+  );
+
+  // The shared mock's SSE stream closes after one heartbeat, which fires EventSource.onerror
+  // and would end the private session before this test gets to the close/refetch it cares
+  // about (see the identical comment on the "private activation blocks send..." test above).
+  await page.route("**/api/chat/stream*", () => new Promise<void>(() => {}));
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Chat with Moss" }).click();
+  const drawer = page.getByRole("dialog", { name: "Chat with Moss" });
+  await expect(drawer).toBeVisible();
+
+  const privateBanner = drawer.locator(".chatd-private").filter({ hasText: "not saved" });
+  await expect(privateBanner).toBeVisible();
+
+  await privateBanner.getByRole("button", { name: "End" }).click();
+
+  // Optimistic UI: the private banner disappears immediately, before the close request settles.
+  await expect(privateBanner).toHaveCount(0);
+
+  // Dispatch a browser focus event while the close is still pending. The closing guard must
+  // keep any refetch this triggers from restoring the banner early -- whether or not the
+  // dispatch itself reaches the network is not asserted here (see the plan's notes on
+  // refetchOnWindowFocus wiring); what matters is that the banner does not come back before the
+  // close settles.
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event("focus"));
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect(privateBanner).toHaveCount(0);
+
+  // Release the close as a failure: the server never actually ended the private session.
+  serverIncognito = true;
+  releaseEnd?.(500);
+
+  // The failure surfaces instead of staying silent, and the invalidate-driven refetch restores
+  // the private banner instead of leaving the UI stuck on the optimistic "closed" state.
+  await expect(drawer.locator(".chatd-private.is-error")).toBeVisible();
+  await expect(privateBanner).toBeVisible();
+});
+
 test("queued chat drain stays stable while SSE records arrive, then sends once after stop", async ({
   page
 }) => {
