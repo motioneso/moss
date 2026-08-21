@@ -1686,3 +1686,20 @@ failed 3 times identically).
 `merges_since_relay` = 0 (no merges this pass). No new reply from Ben. Two open AWAITING-BEN
 entries for #1526, likely to resolve on their own once the lane confirms its CI-green fix is real
 -- don't remove them until confirmed.
+
+## Update (coordinator session 415253cb, pane w1:pJR, 2026-08-21 ~9:4x PM PDT) -- #1526 "CI green" claim was wrong, still stuck
+
+Checked the actual run history for PR 1803's branch directly (`gh run list`), not just a single
+`gh pr checks` snapshot. Every real run has in fact failed: two more timeout-based fix attempts
+after the ones already logged (raise inner wait to 13s, raise vitest timeout) both failed the same
+way. The lane then moved into pure diagnosis: one run with the failing test isolated (still
+failed), and one run in progress right now with two neighboring tests temporarily skipped to
+narrow down the cause (commit message says "temporary, will revert"). The earlier note that CI
+"came back back green" does not hold up -- no run on this branch has gone green. Not spawning QA,
+not touching the two #1526 AWAITING-BEN entries. This matches the second AWAITING-BEN entry
+almost exactly (repeated identical-looking failures, likely a real bug not a flake) and is still
+squarely a question for Ben, who has not replied yet (still no file newer than
+1787077307172-coordinator.md in ~/.needs-ben/replies/). Not re-pinging, per the standing note.
+Letting the current diagnostic run finish since it's not a "third identical retry" -- it changes
+what's being tested, aimed at understanding the cause -- but the lane should stop after this one
+and wait rather than trying further variants on its own.
