@@ -1,5 +1,16 @@
 # Run manifest: Workshop stage 1 (#1739)
 
+## STANDING RULE — overnight, set by Ben 2026-08-20 ~22:0x PDT, applies until he says otherwise
+
+**Do not wake Ben overnight for any reason.** If a lane hits something that would normally need
+his decision (a genuine fork, a blocker only he can rule on), do NOT run `needs-ben` and do NOT
+send a status message expecting a reply. Instead: write a clear note in this manifest (what's
+blocked and why, under a `## Blocked overnight, needs Ben` heading), set that lane aside, and move
+on to the next ready item in the queue. Keep working through the ready lane one by one as things
+finish — merge, close out, spawn the next queued item once its dependency lands. Resume normal
+same-night escalation only when Ben is back and says so. This overrides the box-wide CLAUDE.md
+"never idle silently, run needs-ben" rule for the rest of tonight specifically.
+
 Coordinator: Claude session `8e577192-b2da-4323-b014-238626027729`, label `Coordinator`, pane
 `w1:pHS` (re-resolve pane fresh by label + session id — pane numbers reflow). Took over from
 session `f0b47c3f-4585-46bc-a94a-b8b3361a6d99` (former pane `w1:pHR`) at 2026-08-20 ~21:5x PDT;
@@ -505,3 +516,57 @@ Ben is planning more sports-follows changes and will file a separate, new GitHub
 work rather than folding it into this one -- so #1524 stays open on the board even after its PR
 lands. Skip the "close the issue" step of Phase 3.5 for this one PR only; everything else (squash
 merge, board move, worktree reap) proceeds as normal.
+
+## Continuation note (this coordinator, 2026-08-20 ~22:0x PDT — relaying at context 70%)
+
+**Overnight standing rule added above — read it first, it changes escalation behavior for the rest
+of the night.** Ben signed off, does not want to be woken; stash blockers as manifest notes and
+keep moving through the ready lane instead.
+
+**Coordinator identity:** session `8e577192-b2da-4323-b014-238626027729`, pane `w1:pHS`, label
+`Coordinator`. About to relay to a successor in the same pane's tab.
+
+**Liveness monitor:** task `bf9ro91to`, persistent, still running — check first, likely won't carry
+over into the new session (same pattern as every relay so far this run); re-arm fresh if gone.
+
+**Fleet as of this note, all confirmed by real bounded reads tonight, not just status flips:**
+- #1524 (make whole-league sports follows unique) — pane `w1:pHT`, session on its 2nd relay. Ben's
+  DELETE-migration ruling delivered and confirmed received. Plan reviewed and approved by this
+  coordinator (splits into two migration files, 0185 dedupe + 0186 unique index — correct per the
+  one-statement-per-file rule). Now building. **Do NOT close issue #1524 when its PR merges** — Ben
+  is filing separate follow-on sports work; this is recorded in the plan file itself and in
+  AWAITING-BEN.md's resolved-entry comment, so it should survive even a rushed handoff.
+- #1752 (module discovery after server start) — pane `w1:pHV`, session on its 6th relay. Task 4
+  (live-rescan proof test) done, committed, tree clean. Was waiting on a background verification
+  run before pushing and opening a pull request — check whether that finished and a PR exists now.
+- #1667 (module-sdk-worker test timing) — pane `w1:pHG`, working, plan was already approved earlier
+  this run.
+- #1526 (pass along network backpressure so slow connections don't pile up) — pane `w1:pHP`, on its
+  3rd relay, working.
+- #1515 (warn safely if extracting a commitment fails) — pane `w1:pHM`, on its 2nd relay, working.
+- #1521 (stop private chat reopening itself in the background) — pane `w1:pHN`, on its 2nd relay,
+  working. Has real uncommitted changes in its worktree as of earlier tonight — normal mid-work
+  state, not a problem, but don't reap this worktree without checking the tree is clean first.
+- #1756 (Workshop chat cards) — pane `w1:pH7`, idle on purpose. Real pull request #1799 open, CI
+  was running. Correctly held back from merge until #1755 (the page it plugs into) is far enough
+  along to actually use it. This lane gave two false "done" status flips earlier in the run before
+  a real finish — if it flips again, verify with a real pane read before trusting it.
+- #1755 (the Workshop page itself) — pane `w1:pHA`, on its 3rd relay, working. This is the one
+  #1756 is waiting on.
+- #1739 stage-1 plan pane — pane `w1:pGR`, idle, just the planning session, no action needed.
+
+**Queued, not yet spawned, waiting on #1752 to land first:** #1753 (a draft module that runs for
+its author alone) and #1754 (agree a plan, then build it — the build pipeline). Spawn these once
+#1752's PR is merged, per Ben's "keep going through the ready lane" instruction tonight.
+
+**Merged this run:** #1625 (test data isolation) only, via PR #1798, already reaped clean.
+
+**Awaiting Ben:** nothing blocking as of this note — the only open item (#1524's migration
+question) was resolved earlier tonight. If anything new comes up overnight, follow the standing
+rule above: note it here under a new `## Blocked overnight, needs Ben` heading, don't ping him,
+move on to the next ready item.
+
+**Next steps for the successor:** re-arm the monitor, confirm #1752 actually has a PR open now (or
+is still waiting on its check run), keep supervising all working lanes event-driven, merge anything
+that goes green per its tier, and once #1752 lands spawn #1753 then #1754 from the queue. Don't
+wake Ben for anything tonight per the standing rule.
