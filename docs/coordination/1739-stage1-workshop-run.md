@@ -11,13 +11,19 @@ finish — merge, close out, spawn the next queued item once its dependency land
 same-night escalation only when Ben is back and says so. This overrides the box-wide CLAUDE.md
 "never idle silently, run needs-ben" rule for the rest of tonight specifically.
 
-Coordinator: Claude session `36e8b1c1-0267-404a-aa81-928109e8d05c`, label `Coordinator`, pane
-`w1:pJ7` (re-resolve pane fresh by label + session id — pane numbers reflow). Took over from
-session `351157c3-4cfb-499d-b67f-b366448a8263` (former pane `w1:pJ6`) at 2026-08-21 ~15:3x PDT,
-relaying at its 70% context warning. Old pane's in-flight #1753 QA check finished RED (see "QA
-verdict update" note below) and was relayed to the build lane before handoff; old pane (`w1:pJ6`)
-confirmed idle and was closed by this session, session id verified against this lock line first.
-Liveness Monitor: task `bq5wny309`, persistent, this session only.
+Coordinator: about to relay. Outgoing session `4b4ce051-22f9-49eb-ab60-a79a9d488847`, agent name
+`coordinator-next-1739`, pane `w1:pJD`, tab `w1:t1N`. Successor should claim the `coordinator` name
+(it's currently free — prior coordinator `cac2ffa0-...` at pane `w1:pJ9` already cleared it and
+should be reaped once confirmed idle).
+
+## QA now runs in its own Herdr pane, never the `Agent` tool
+
+Standing rule as of this relay: spawn QA the same way as a build agent (`herdr pane split` into the
+agents tab + `herdr agent start ... --model sonnet`), never via the in-process `Agent` tool —
+that ties up whichever session spawned it until it finishes. `Monitor` for the resulting `gh pr
+comment` verdict is fine (it's a detached background task, doesn't block you). Full text in
+`.claude/skills/coordinate/SKILL.md` Phase 3 step 1 and the Phase 2 liveness bullet — already
+committed.
 
 GraphQL rate limit cleared ~19:33 PDT (verified via `gh api rate_limit`, resource `graphql`, back
 to full 5000). Board queries unblocked.
@@ -64,16 +70,16 @@ Nothing here yet from earlier relays. Entries below added by this coordinator (s
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | #1752 | find modules that appear after the server started | routine | **MERGED** (PR #1806), issue closed — unblocks #1754 | relay-1752-6 (reaped) | - | 1752-module-discovery-holder (deleted) | 1806 |
 | #1753 | a draft module that runs for its author alone | routine | **MERGED** (PR #1808, issue closed) — second leak (personal Modules page endpoint) fixed after re-QA, live e2e passed once disk space freed up. Worktree pending reap (lane confirming no running processes). | lane-1753-draft-module (relay3) | w1:pJ2 | 1753-draft-module-author-only | 1808 |
-| #1754 | the build agent - agree a plan, then build it | sensitive (spawns a build agent/job) | **unblocked** — #1752 merged. Plan already written and sitting on branch plan/1739-stage1-workshop (pane w1:pGR, idle, waiting for a build agent to pick it up and execute) | plan-1739-stage1 | w1:pGR | 1739-stage1-plan | - |
+| #1754 | the build agent - agree a plan, then build it | sensitive (spawns a build agent/job) | plan doc carried forward into a fresh worktree off current main (plan branch itself is stale vs main, do not build off it directly): `.claude/worktrees/1754-build-agent-runner`, branch `1754-build-agent-runner`, plan committed at `docs/superpowers/plans/2026-08-20-1739-stage1-workshop.md` (commit 46a5abe77). **No build agent pane spawned into it yet — next coordinator action.** Write handoff doc + spawn per Phase 1, follow coordinated-build. Planning pane w1:pGR (plan-1739-stage1) can be closed once the build lane is spawned and has the plan — it did its job. | plan-1739-stage1 (pending reap) → needs a build lane spawned | w1:pGR | 1739-stage1-plan / 1754-build-agent-runner (worktree ready, unspawned) | - |
 | #1755 | the Workshop page (front end shell) | routine | **merged** to main (PR #1804, squash), QA re-review GREEN and merge-ready, verdict posted on the PR. Waiting on lane to confirm no running processes before worktree reap. | ws-page-relay5 | w1:pJ4 | 1755-workshop-page | 1804 |
-| #1756 | plan/draft chat cards (front end shell) | routine | rebase finished, pushed, CI fully green. Still does not visually plug into #1755's merged Workshop page yet — stays draft, no urgent action. | 1756-relay2 | w1:pH7 | 1756-workshop-chat-cards | 1799 |
+| #1756 | plan/draft chat cards (front end shell) | routine | rebase finished, pushed, CI fully green, PR #1799 open. Its own issue text says the wiring has two dependencies: the "changing a running draft" moment needs #1753 (now MERGED, unblocked) and the "agreeing the plan" moment needs #1754 (build not yet spawned, see #1754 row). Ben asked directly whether there's a plan to wire this in — yes, this is it; not a stalled/forgotten lane. Next coordinator action: tell this lane #1753 is merged so it can wire the draft-change surface now, and it should wire the plan-approval surface once #1754 lands. | 1756-relay2 | w1:pH7 | 1756-workshop-chat-cards | 1799 |
 | #1515 | [1137-C2] warn safely on commitment extraction failures | routine | **MERGED** (PR #1802, CI all green, issue closed), pane reaped by relay10 | warn-safely-relay2 (reaped) | - | 1515-warn-safely-commitment-extraction | 1802 |
 | #1521 | [1139-D] keep private chat closed during focus refetch | routine | **MERGED** (PR #1801, squash-merged to `main` as 5eb963154, issue closed). QA found one failing live-instance check, confirmed pre-existing on plain main (unrelated to this PR) — merged anyway per Ben's call, no separate bug filed yet. Worktree not yet reaped: has an uncommitted merge-from-main state, lane asked to clean it up first. | lane-1521-relay2 | w1:pHN | 1521-keep-private-chat-closed-refetch | 1801 |
-| #1526 | [1140-D] propagate terminal socket backpressure to the PTY | routine per its own spec (handoff doc had said sensitive — spec wins) | failed CI a second time on the same test (timing-flaky, not a product bug per Fable's review). Per the two-strikes rule, stopped the lane and logged it to AWAITING-BEN + pinged Ben — waiting on his call. | pty-1526-relay3 | w1:pHP | 1526-pty-socket-backpressure | 1803 |
+| #1526 | [1140-D] propagate terminal socket backpressure to the PTY | routine per its own spec (handoff doc had said sensitive — spec wins) | Ben ruled OK to proceed past the flake ("we can just ok with flakes for now") — treat as Ben's explicit waiver. Re-ran the failed CI jobs on the same SHA (`gh run rerun 32449669370 --failed`); **result not yet checked, next coordinator action.** If it comes back green, merge as routine. If it flakes a third time, that's still just the same known-flaky test — merge anyway per Ben's ruling, don't re-open AWAITING-BEN for it. Remove the #1526 AWAITING-BEN entry once merged. | pty-1526-relay3 | w1:pHP | 1526-pty-socket-backpressure | 1803 |
 | #1524 | [1140-B] make whole-league sports follows unique | sensitive (migration; head of a chain — #1572, #906 wait on it) | **MERGED** (PR #1807, squash-merged to `main` as 669b2b913; QA verdict GREEN, posted to PR). Lane self-merged before this coordinator's stop message landed — verified no harm (QA independently agreed), corrected the lane's behavior for future lanes, worktree/pane reaped. Issue #1524 stays OPEN per Ben's ruling; board card moved to Done. Migration numbers landed: **0185 (sports_whole_league_dedupe), 0186 (sports_whole_league_unique)** — #1572/#906 sequence after 0186. | build1524relay2 (reaped) | - | 1524-unique-whole-league-sports-follows (deleted) | 1807 |
 | #1667 | module-sdk-worker test polling budget too tight for real cold start | routine (test-only) | **MERGED** (PR #1805, CI all green, issue closed, board moved to Done, worktree reaped) | build1667 (reaped) | - | 1667-module-sdk-worker-polling-budget (deleted) | 1805 |
 | #1625 | lane-scoped module fixture identities for concurrent integration gates | routine (test-only) | **merged** to main, issue closed, worktree reaped — note: the lane merged its own PR instead of handing back to the coordinator; corrected, no harm (test-only change, CI fully green) | build1625 (reaped) | - | 1625-lane-scoped-module-fixture-identities | #1798 |
-| #1809 | nav bar stays forest green in dark mode instead of following it | routine (isolated CSS/token fix, no spec needed) | new issue filed this cycle after confirming #1425/#1426/#786 don't cover it; lane spawned and building | navbar-1809-fix | w1:pJA | 1809-navbar-dark-mode | - |
+| #1809 | nav bar stays forest green in dark mode instead of following it | routine (isolated CSS/token fix, no spec needed) | build finished, PR #1810 open, CI green. Build lane pane closed (work done, no reason to keep it resident). QA spawned in its own fresh Herdr pane `w1:pJE` (agent name `qa-1809`, worktree `.claude/worktrees/qa-1809`, Sonnet) — **verdict not posted yet, check `gh api repos/motioneso/moss/issues/1810/comments` next**. Merge as routine once green (no live-path proof needed for a pure CSS/token fix per its own tier note — confirm QA agrees). | qa-1809 (QA only; build lane reaped) | w1:pJE | 1809-navbar-dark-mode | 1810 |
 | #1571 | weather settings: place-name location override + global F/C toggle | routine (no migration, reuses existing preferences/Weather service) | approved spec already existed (docs/superpowers/specs/2026-08-17-1571-weather-location-and-units.md), Ben confirmed start; lane spawned and building | weather-1571-relay1 | w1:pJC | 1571-weather-location-units | - |
 
 ## Ready lane (full 29-item list pulled ~19:35 PDT, GraphQL clear)
@@ -1273,3 +1279,38 @@ into the front-end half — watch for that escalation.
 No open questions for Ben beyond #1526 (already pinged). This coordinator is now spawning its
 successor in this same pane's tab and will have it reap this pane once it confirms it is driving.
 [pane w1:pJ9]
+
+## Continuation note (coordinator session 4b4ce051-22f9-49eb-ab60-a79a9d488847, pane w1:pJD, 2026-08-21 ~4:30pm PDT — relaying at context 70%)
+
+Ben wants coordinators to be more actively "project manager" — don't just report a lane is
+"waiting", find out why and unblock it. Applied that this pass: #1754 had no real blocker, it just
+needed a build agent spawned (worktree now ready, see #1754 row); #1756's "waiting" was actually
+two named dependencies, one of which (#1753) is now merged — told the successor to relay that to
+the lane; #1526's flake got Ben's explicit go-ahead rather than sitting parked.
+
+**Immediate next actions, in order:**
+1. Check `gh pr checks 1803` (#1526) — I re-ran the failed jobs, was pending when I relayed.
+   Merge routine if green; if it flakes again, merge anyway per Ben's ruling, don't re-escalate.
+2. Check `gh api repos/motioneso/moss/issues/1810/comments` (#1809 QA verdict from pane `w1:pJE`,
+   agent `qa-1809`). Merge routine if green, reap the QA pane + `.claude/worktrees/qa-1809`
+   immediately after reading the verdict.
+3. Spawn a build agent for #1754 into `.claude/worktrees/1754-build-agent-runner` (branch
+   `1754-build-agent-runner`, plan already committed there at
+   `docs/superpowers/plans/2026-08-20-1739-stage1-workshop.md`). Write the handoff doc first
+   (template at `.claude/skills/coordinate/templates/handoff.md`), tier sensitive. Once spawned and
+   it has the plan, close pane `w1:pGR` (`plan-1739-stage1`) — its job is done.
+4. Message the #1756 lane (pane `w1:pH7`): #1753 merged, it can wire the "changing a running
+   draft" chat-drawer surface now; the "agreeing the plan" surface still waits on #1754.
+5. Remove the #1526 entry from `docs/coordination/AWAITING-BEN.md` once PR 1803 merges.
+
+**Fleet as of this relay** (all in workspace w1, agents tab `w1:t1Q` unless noted):
+- `w1:pJ9` — outgoing prior coordinator, name already cleared, confirm idle and reap.
+- `w1:pJD` (tab `w1:t1N`, this session) — relaying now, will be reaped by successor.
+- `w1:pGR` — plan-1739-stage1, plan written and pushed, close once #1754 build agent is spawned.
+- `w1:pHP` — pty-1526-relay3, PR 1803, waiting on CI re-run result.
+- `w1:pJE` — qa-1809, QA for PR 1810, waiting on verdict.
+- `w1:pH7` — workshop-chat-cards-r2, PR 1799, needs the #1753-merged nudge.
+- `w1:pJC` — weather-1571-relay1, mid-build (its own sub-agent still on phase 1), no action needed.
+
+No merges happened this pass beyond #1753 (already recorded above) — `merges_since_relay` reset to
+0 for the successor.
