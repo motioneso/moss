@@ -40,7 +40,7 @@ unaffected.
 
 | Issue | Title | Tier | Status | Agent | Pane | Branch | PR |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| #1752 | find modules that appear after the server started | routine | Task 4 done and committed — the proof test that a module dropped on disk becomes usable after a rescan without restarting anything is written and passing; the Task-3 route gap is fixed and tested too. Tree clean. Relay6 now waiting on a background check run before pushing and opening the pull request. | relay-1752-6 | w1:pHV | 1752-module-discovery-holder | - |
+| #1752 | find modules that appear after the server started | routine | done, QA in progress (PR #1806, agent a9a058d5949b71c9b) — flags that #1753/#1754 depend on the function names createExternalModuleDiscoveryHolder, getDiscoveries, rescan staying as-is | relay-1752-6 | w1:pHV | 1752-module-discovery-holder | 1806 |
 | #1753 | a draft module that runs for its author alone | routine | blocked on #1752 | - | - | - | - |
 | #1754 | the build agent - agree a plan, then build it | sensitive (spawns a build agent/job) | blocked on #1752 | - | - | - | - |
 | #1755 | the Workshop page (front end shell) | routine | building, on its 4th relay — PR open, still needs live-path proof before it can merge | workshop1755-relay4 | w1:pHX | 1755-workshop-page | 1804 |
