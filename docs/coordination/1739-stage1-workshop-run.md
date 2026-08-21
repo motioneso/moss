@@ -1888,3 +1888,46 @@ Fleet is now 7 lanes total: #1526, #1754(relay9), #1756, #1571, plus the three n
 tab rebalanced from a lopsided 2-left/5-right split to 3-left/4-right so nothing is squeezed.
 
 Still queued behind #1572 landing: #906 (same Sports settings area) — do not spawn yet.
+
+## Continuation note (coordinator session 9674b6c7-87b1-4612-afad-361c7f9070fa, pane w1:pJV, 2026-08-21 ~9:1xpm PDT — relaying at context 72%)
+
+Fleet is 7 build/QA lanes, all in the agents tab (w1:t1Q), currently a 3-left/4-right grid
+(left: pHP, pJW, pJZ; right: pH7, pJX+pJY sharing a row, pJC):
+
+- **#1526** (pane w1:pHP, agent pty-1526-relay3, PR #1803) — still waiting on its own CI run in
+  the background. Next check: once green, spawn QA in its own pane, confirm the separate "known
+  issue" ticket for the flaky connection-close test got filed, then merge normally per Ben's
+  ruling (skip the flaky test, don't delete it).
+- **#1754** (pane w1:pJW, agent build1754r9, "1754 build agent runner (relay9)") — re-running its
+  own gate after picking up from relay8's handoff; task 19 done and committed, branch rebased
+  clean on main as of the last report. Watch for it to finish the gate and report.
+- **#1756** (pane w1:pH7, agent workshop-chat-cards-r2, PR #1799) — was frozen mid-turn earlier
+  this pass (stuck progress timer); nudged with "continue" and it resumed working from its
+  checkpoint file. Shows idle now in the latest fleet snapshot — worth a bounded read next pass to
+  confirm it actually finished rather than froze again.
+- **#1571** (pane w1:pJC, agent weather-1571-relay1) — idle, waiting on its own helper teammate to
+  report back; this is expected, not a stall.
+- **#1517** (pane w1:pJX, agent escape-commitment-1517) — plan approved this pass (backend-only
+  change, no rendered UI surface anywhere in the repo consumes the evidence excerpt, so the spec's
+  own round-trip acceptance criterion is sufficient, no live-path UAT needed). Building.
+- **#1039** (pane w1:pJY, agent forcereplay-1039) — plan approved this pass (test-only, two new
+  test cases, no production code expected). It relayed at 70% context mid-pass: both planned tasks
+  were done and committed (28757b460, 8af58b14e) and green on an isolated gate DB before relaying;
+  remaining before its PR: full gate, rebase, push, open PR. **It had not yet spawned a visible
+  successor pane as of this note — next coordinator action: check pane w1:pJY, and if it's still
+  the same session mid-relay, confirm the successor lands in the same worktree and reap this pane
+  once confirmed driving.**
+- **#1572** (pane w1:pJZ, agent sports-news-1572) — building against its spec; sensitive tier
+  (new Sports news-source table/migration). Its handoff doc already warns it not to assume a
+  migration number — #1524 landed 0185/0186 in the same area, so it must check the current
+  highest migration file before writing its own. No plan-ready escalation from it yet.
+
+**Wave 2 spawn context:** Ben asked for more parallel work this pass. #1517/#1039/#1572 were
+unblocked because their dependencies (#1515, #1521, #1524) merged earlier in the run; all three
+were already collision-cleared by the original Opus triage. Still queued behind #1572 landing:
+#906 (same Sports settings area) — do not spawn yet. Other ready-list items remain held on a Ben
+design call, a spec that needs writing, or another Workshop-area lane landing first — see the
+"Ready lane" section above, unchanged.
+
+`merges_since_relay` = 0 (no merges this pass). AWAITING-BEN.md confirmed empty at the start of
+this pass; no new entries added. This relay is the context-meter trigger only, not a merge trigger.
