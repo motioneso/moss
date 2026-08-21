@@ -19,6 +19,8 @@ export interface MockChatApiState {
   clearGate?: { release: () => void; promise: Promise<void> };
   /** Server-truth privacy state returned by GET /api/chat/privacy. Defaults to false. */
   incognito?: boolean;
+  /** Status code for POST /api/chat/private/end. Defaults to 204 (success). */
+  endPrivateChatStatus?: number;
 }
 
 export async function registerMockChatRoutes(page: Page, state: MockChatApiState): Promise<void> {
@@ -76,6 +78,22 @@ export async function registerMockChatRoutes(page: Page, state: MockChatApiState
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({ incognito: state.incognito ?? false })
+      });
+    }
+  );
+
+  await page.route(
+    (url) => url.pathname.endsWith("/api/chat/private/end"),
+    async (route) => {
+      const status = state.endPrivateChatStatus ?? 204;
+      if (status >= 200 && status < 300) {
+        await route.fulfill({ status, body: "" });
+        return;
+      }
+      await route.fulfill({
+        status,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Could not end private chat" })
       });
     }
   );

@@ -82,6 +82,8 @@ export interface MockApiState
   clearGate?: { release: () => void; promise: Promise<void> };
   /** Server-truth privacy state returned by GET /api/chat/privacy. See MockChatApiState. */
   incognito?: boolean;
+  /** Status code for POST /api/chat/private/end. See MockChatApiState. */
+  endPrivateChatStatus?: number;
 }
 
 function taskListsFor(state: MockApiState): TaskListDto[] {
