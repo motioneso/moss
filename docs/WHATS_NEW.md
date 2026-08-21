@@ -28,6 +28,7 @@ feature that is not present in the image you are running.
 
 ### Fixed
 
+- **Private chat now stays closed correctly if the browser refocuses mid-close.** Fixed a rare case where switching away from the app while closing a private chat, then switching back, could leave the app showing the chat as closed even if the close didn't actually finish on the server. [PR #1801](https://github.com/motioneso/moss/pull/1801)
 - **All-day events are seen when checking your calendar.** Availability is now checked a whole day
   at a time, so all-day entries are no longer missed when the assistant looks for free
   time. [PR #1786](https://github.com/motioneso/moss/pull/1786)
