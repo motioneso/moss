@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { hashCanonicalManifest, hashExternalPackage } from "./hash.js";
-import { validateExternalModuleManifest } from "./validate.js";
+import type { validateExternalModuleManifest } from "./validate.js";
 import { stageModuleDir } from "../distribution/stage.js";
 
 export interface InstallModuleDraftDeps {

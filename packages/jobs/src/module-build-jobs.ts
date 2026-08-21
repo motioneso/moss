@@ -1,5 +1,6 @@
 import type { PgBoss } from "pg-boss";
-import { sendJob, MODULE_BUILD_QUEUE } from "./pg-boss.js";
+import { MODULE_BUILD_QUEUE } from "./pg-boss.js";
+import type { sendJob } from "./pg-boss.js";
 
 export { MODULE_BUILD_QUEUE };
 
