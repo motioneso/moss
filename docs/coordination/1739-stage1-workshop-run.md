@@ -70,7 +70,7 @@ Nothing here yet from earlier relays. Entries below added by this coordinator (s
 | Issue | Title | Tier | Status | Agent | Pane | Branch | PR |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | #1752 | find modules that appear after the server started | routine | done, QA in progress (PR #1806, agent a9a058d5949b71c9b) — flags that #1753/#1754 depend on the function names createExternalModuleDiscoveryHolder, getDiscoveries, rescan staying as-is | relay-1752-6 | w1:pHV | 1752-module-discovery-holder | 1806 |
-| #1753 | a draft module that runs for its author alone | routine | blocked on #1752 | - | - | - | - |
+| #1753 | a draft module that runs for its author alone | routine | #1752 landed on main, spawned — building | lane-1753-draft-module | w1:pH0 | 1753-draft-module-author-only | - |
 | #1754 | the build agent - agree a plan, then build it | sensitive (spawns a build agent/job) | blocked on #1752 | - | - | - | - |
 | #1755 | the Workshop page (front end shell) | routine | live-path proof posted, but CI came back red — sent back to build agent to fix a module-count test mismatch across 7 integration tests before QA | workshop1755-relay4 | w1:pHX | 1755-workshop-page | 1804 |
 | #1756 | plan/draft chat cards (front end shell) | routine | draft PR open, gate green (one documented unrelated local flake), waiting for #1755 to land before final review | 1756-relay2 | w1:pH7 | 1756-workshop-chat-cards | 1799 |
