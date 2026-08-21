@@ -1962,3 +1962,26 @@ Next coordinator action: read the QA verdict on PR 1803 once posted; if green, m
 normally (routine tier, CI already green, no live-path proof needed per its own spec note); then
 reap the QA worktree/pane. Also keep an eye on #1756 to make sure the nudge actually moved it
 forward on the next check.
+
+## Continuation note (coordinator session 4346798b-d43d-4f99-9886-ab2d06c036d7, pane w1:pJ0, 2026-08-21 ~10:0xpm PDT — relay24, context-meter trigger)
+
+QA verdict on PR 1803 landed green (CI green, the real end-to-end terminal test passed live on
+the actual UI, no review issues). Merged #1526 (squash). Closed the QA pane and the build pane,
+removed all three related worktrees (the two expected ones plus one orphaned leftover worktree
+with no pane attached to it, `.claude/worktrees/agent-a625f1b68db885a21`, also on the same
+branch), and deleted the merged branch. `merges_since_relay` = 1 (routine tier; the manifest rule
+only forces a relay after every 2 routine/sensitive merges, but this pass is relaying anyway
+because the context-meter warning fired first).
+
+Also finished a side task Ben asked for directly: any agent working in this repo now gets an
+automatic reminder to recheck the tab layout right after it creates a new pane (splitting a pane,
+moving a pane into a new tab, or starting a new agent). This lives in the committed settings file
+`.claude/settings.json`, not a personal one, so it applies to every agent in the repo, not just
+the coordinator. Tested and confirmed it actually fires, not just written.
+
+After the reap, tab `w1:t10` and tab `w1:t1Q` both sit at 3 panes each (3-in-a-row layout, which
+matches the standing rule for 3 agents) — no rebalance needed this pass.
+
+Next coordinator action: re-check #1756 with a bounded read to confirm the earlier nudge actually
+moved it forward (not re-frozen). Then resume normal watch on #1754, #1571, #1517, #1572 and
+#1039's successor. AWAITING-BEN.md still empty as of this pass, nothing new to flag.

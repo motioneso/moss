@@ -17,6 +17,18 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "c=$(jq -r '.tool_input.command // empty'); if echo \"$c\" | grep -qE 'herdr (pane split|pane move [^|]*--new-tab|agent start)'; then echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"A new pane was just created. Before continuing: check the tab layout is still 4 panes per tab in a 2x2 grid, opening a new tab instead of crowding a 5th pane in. Run herdr tab get on the affected tab and rebalance if it has drifted.\"}}'; fi",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   }
 }
