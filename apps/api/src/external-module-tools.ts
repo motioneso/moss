@@ -158,7 +158,10 @@ export function createActiveExternalModulesResolverForApi(input: {
     );
     const { modules } = reconcileExternalModules(input.discoveries(), states);
     const disabled = new Set(denyRows.map((row) => row.module_id));
-    return modules.filter((module) => module.active && !disabled.has(module.id));
+    // #1753: a draft module is only visible to the actor who built it, until it ships.
+    const visibleToActor = (module: ReconciledExternalModule) =>
+      module.status !== "draft" || module.ownerUserId === accessContext.actorUserId;
+    return modules.filter((module) => module.active && !disabled.has(module.id) && visibleToActor(module));
   };
 }
 
