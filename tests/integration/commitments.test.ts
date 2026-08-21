@@ -183,6 +183,71 @@ describe("CommitmentsRepository", () => {
     });
   });
 
+  describe("addEvidenceRow — excerpt escaping", () => {
+    async function storeAndReadBackExcerpt(excerpt: string): Promise<string> {
+      const sig = `test-sig-escape-${randomUUID()}`;
+      const candidate = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+        repo.upsertCandidate(scopedDb, {
+          ownerUserId: userA,
+          candidateSignature: sig,
+          kind: "obligation",
+          title: "Escaping test candidate",
+          dueLocalDate: null,
+          counterpartyLabel: null,
+          confidence: "low",
+          suggestedHandling: null,
+          occurredAt: null
+        })
+      );
+
+      await dataContext.withDataContext(userAContext(), (scopedDb) =>
+        repo.addEvidenceRow(scopedDb, {
+          candidateId: candidate.id,
+          ownerUserId: userA,
+          sourceKind: "chat",
+          sourceRef: `msg-${randomUUID()}`,
+          sourceVersion: 1,
+          evidenceExcerpt: excerpt,
+          occurredAt: null
+        })
+      );
+
+      const sources = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+        repo.getEvidenceForCandidate(scopedDb, candidate.id)
+      );
+      return sources[0]!.evidenceExcerpt;
+    }
+
+    it("escapes ampersands", async () => {
+      const stored = await storeAndReadBackExcerpt("Ben & Jarv1s");
+      expect(stored).toBe("Ben &amp; Jarv1s");
+    });
+
+    it("escapes angle brackets, preserving a non-script tag as text", async () => {
+      const stored = await storeAndReadBackExcerpt("<b>bold</b> plan");
+      expect(stored).toBe("&lt;b&gt;bold&lt;/b&gt; plan");
+    });
+
+    it("escapes script-like input instead of stripping it", async () => {
+      const stored = await storeAndReadBackExcerpt("<script>alert(1)</script> ok");
+      expect(stored).toBe("&lt;script&gt;alert(1)&lt;/script&gt; ok");
+    });
+
+    it("leaves ordinary text, whitespace, quotes, and non-ASCII unchanged", async () => {
+      const input = 'Réunion at 3pm — "quarterly" review\n\ttab';
+      const stored = await storeAndReadBackExcerpt(input);
+      expect(stored).toBe(input);
+    });
+
+    it("truncates the escaped output to at most 500 characters", async () => {
+      const input = "&".repeat(500);
+      const fullyEscaped = "&amp;".repeat(500);
+      const stored = await storeAndReadBackExcerpt(input);
+      expect(stored.length).toBeLessThanOrEqual(500);
+      expect(fullyEscaped.startsWith(stored)).toBe(true);
+    });
+  });
+
   describe("listCandidates", () => {
     it("filters by status", async () => {
       const sig1 = `test-sig-list-pending-${randomUUID()}`;
