@@ -1,10 +1,14 @@
 # Run manifest: Workshop stage 1 (#1739)
 
-Coordinator: Claude session `fbacd483-baf3-47c8-aacf-66a51c6ebd7b`, label `Coordinator`, pane
-`w1:pH4` (re-resolve pane fresh by label + session id — pane numbers reflow). Took over from
-session `01d11bc2-ed28-440a-9f95-3bf53f0046c7` (former pane `w1:pG0`) at 2026-08-20 ~18:45 PDT;
-old pane confirmed reaped. Liveness Monitor re-armed as task `bb0s7lmk5` (previous task
-`b27fpb9yo` was not inherited/visible to this session).
+Coordinator: Claude session `ff54b7d3-1ff0-4fad-94ce-b8fa9062a3ad`, label `Coordinator`, pane
+`w1:pH9` (re-resolve pane fresh by label + session id — pane numbers reflow). Took over from
+session `fbacd483-baf3-47c8-aacf-66a51c6ebd7b` (former pane `w1:pH4`) at 2026-08-20 ~19:20 PDT;
+old pane confirmed standing down and closed. Liveness Monitor re-armed fresh as task `bv46s1t1w`
+(inherited task `b3iaqyry5` did not carry over, matching the pattern of prior relays in this run —
+history: `bb0s7lmk5`, `b27fpb9yo`, `bkbrgyksx`).
+
+GraphQL rate limit cleared ~19:33 PDT (verified via `gh api rate_limit`, resource `graphql`, back
+to full 5000). Board queries unblocked.
 
 Plan: `docs/superpowers/plans/2026-08-20-1739-stage1-workshop.md` (committed on branch
 `plan/1739-stage1-workshop`, worktree `.claude/worktrees/1739-stage1-plan` — plan-writing agent
@@ -25,20 +29,121 @@ unaffected.
 
 | Issue | Title | Tier | Status | Agent | Pane | Branch | PR |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| #1752 | find modules that appear after the server started | routine | building | relay-1752-3 | w1:pH8 | 1752-module-discovery-holder | - |
+| #1752 | find modules that appear after the server started | routine | building | relay-1752-4 | w1:pHB | 1752-module-discovery-holder | - |
 | #1753 | a draft module that runs for its author alone | routine | blocked on #1752 | - | - | - | - |
 | #1754 | the build agent - agree a plan, then build it | sensitive (spawns a build agent/job) | blocked on #1752 | - | - | - | - |
-| #1755 | the Workshop page (front end shell) | routine | building | workshop-page-r1 | w1:pH5 | 1755-workshop-page | - |
-| #1756 | plan/draft chat cards (front end shell) | routine | building | 1756-relay2 | w1:pH7 | 1756-workshop-chat-cards | - |
+| #1755 | the Workshop page (front end shell) | routine | building | workshop1755c (relay3) | w1:pHA | 1755-workshop-page | - |
+| #1756 | plan/draft chat cards (front end shell) | routine | building (waiting on its own gate rerun) | 1756-relay2 | w1:pH7 | 1756-workshop-chat-cards | - |
+| #1515 | [1137-C2] warn safely on commitment extraction failures | routine | building (check boot-file bug first) | build1515 | w1:pHC | 1515-warn-safely-commitment-extraction | - |
+| #1521 | [1139-D] keep private chat closed during focus refetch | routine | building (boot-file bug fixed, told to proceed) | build1521 | w1:pHD | 1521-keep-private-chat-closed-refetch | - |
+| #1526 | [1140-D] propagate terminal socket backpressure to the PTY | sensitive | building (check boot-file bug first) | build1526 | w1:pHE | 1526-pty-socket-backpressure | - |
+| #1524 | [1140-B] make whole-league sports follows unique | sensitive (migration; head of a chain — #1572, #906 wait on it) | building (check boot-file bug first) | build1524 | w1:pHF | 1524-unique-whole-league-sports-follows | - |
+| #1667 | module-sdk-worker test polling budget too tight for real cold start | routine (test-only) | building (check boot-file bug first) | build1667 | w1:pHG | 1667-module-sdk-worker-polling-budget | - |
+| #1625 | lane-scoped module fixture identities for concurrent integration gates | routine (test-only) | building (check boot-file bug first) | build1625 | w1:pHH | 1625-lane-scoped-module-fixture-identities | - |
 
-## Ready lane (from GitHub project 2, board query before rate limit)
+## Ready lane (full 29-item list pulled ~19:35 PDT, GraphQL clear)
 
-Only #1252 confirmed by direct query before the limit hit (P0, bug: audit log records failed
-external-module tool call as success). Full 29-item Ready list not yet pulled — GraphQL board
-queries paused until reset (~19:29 PDT). Will re-pull and append here once available; do not
-re-derive from memory.
+Full list saved to `/tmp/board-1739.json` (not committed — regenerate with
+`gh project item-list 2 --owner motioneso --format json --limit 950` if needed, must pass
+`--limit` above the total item count, 903 as of this pull, or it silently truncates).
+
+Five of the 29 are the Workshop lanes already in the Queue table above (#1752-1756). A one-shot
+Opus triage agent read the other 24, checked for existing approved specs, and flagged collisions
+against both each other and the active Workshop lanes. Full table is in this run's earlier
+conversation (not re-copied here to keep this doc scannable) — the bottom line:
+
+**Wave 1 spawned (6 lanes, see Queue table below)** — all collision-clear, either an approved spec
+section exists or the issue is a small test/bug-fix where the issue body is the full scope:
+#1515, #1521, #1526, #1524, #1667, #1625.
+
+**Queued behind a dependency (do not spawn yet):**
+- #1517 — after #1515 lands (shares commitment-handling files)
+- #1039 — after #1521 lands (shares private-chat area)
+- #1572 — after #1524 lands (shares Sports migration/settings; #1524 is told to report its landed
+  migration number)
+- #906 — after #1572 lands (same Sports settings area)
+
+**Held pending a Ben call (do not spawn without checking):**
+- #1319, #1106, #948, #1252, #1586 — all touch module discovery/registry/install or the module
+  gateway, which the Workshop lanes (#1752/#1754/#1756) are actively editing. Wait for Workshop
+  stage 1 to land before touching this area, or explicitly confirm no file overlap first.
+- #819 — an epic, not a buildable slice; the referenced spec
+  (`2026-07-08-workflow-layer-pg-boss.md`) is approved at the epic level but needs decomposition
+  into child issues before any lane can build against it.
+- #1425, #1349 — UI-facing with the `design` gate; need agreed mockups with Ben before any build,
+  per CLAUDE.md's "design the front end before building" rule. Not a spec-writing task a build
+  agent can self-serve.
+- #1368 — no owning spec despite being tagged ready; touches chat content leaving the app into
+  Notes files (export path) — check with Ben whether an existing spec covers it before writing a
+  new one.
+
+**Needs a spec written first (small enough a build agent could plausibly do spec+build in one
+lane, but check with Ben on cadence first for the CLI-runner ones):** #1029, #1421, #1422 (share a
+one-shot-spawn call site with 1421, serialize them), #1497 (routine but is the serial head of 7
+CSS-collision children per its spec — hold until confirmed no other CSS-touching lane is live
+before spawning even the head).
+
+**KNOWN BUG, top priority for successor:** the boot files for wave-1 lanes were written with a
+path relative to the main checkout (`docs/coordination/boot-*.txt`), but build agents run in
+worktrees that don't share working-directory files that aren't committed on their branch — so the
+boot file doesn't exist from their cwd. #1521 hit this and self-oriented correctly; it was told to
+use the absolute path `/home/ben/Jarv1s/docs/coordination/handoff-<slug>.md` instead and to
+proceed. **The other five wave-1 lanes (#1515, #1526, #1524, #1667, #1625) likely have the same
+problem and have not been checked or told the fix yet — do this first**, before anything else:
+bounded-read each of their panes, and if they report a missing boot file, send them
+`herdr pane run <pane> "Use the absolute path /home/ben/Jarv1s/docs/coordination/handoff-<slug>.md
+instead — it only exists in the main checkout, not your worktree. Proceed as the build lane for
+#<issue> with that doc."` (swap in the right slug and issue number per the Queue table below).
 
 ## merges_since_relay: 0
+
+## Continuation note (this coordinator, 2026-08-20 ~19:52 PDT — relaying at context 71%)
+
+**Coordinator authority is about to change again.** This session (session id
+`ff54b7d3-1ff0-4fad-94ce-b8fa9062a3ad`, pane `w1:pH9`, label `Coordinator`) hit the 71% context
+warning and is relaying immediately per the coordinate skill's no-deferral rule. A successor is
+being spawned in this same pane's tab now.
+
+**What this session did:** took over from the prior coordinator (confirmed it stood down, closed
+its pane), re-adopted the three Workshop build lanes (which had themselves each relayed to their
+own successors mid-session — followed and reaped each old pane, confirmed each new one driving),
+re-armed the liveness Monitor as task `bv46s1t1w`, waited out the GitHub GraphQL rate limit
+(cleared ~19:33 PDT), pulled the full 29-item Ready lane, ran a one-shot Opus triage on the 24
+items not already in this run, and spawned 6 of them as new build lanes (wave 1). Approved a plan
+for #1752's rescan-action task (widened scope to fix a third stale call site the agent found —
+this was a legitimate scope-discovery approval, not a design fork).
+
+**TOP PRIORITY, do this before anything else:** the wave-1 boot files have a path bug — see the
+"KNOWN BUG" paragraph just above this note in the Ready-lane section. #1521 already hit it, was
+told the fix, and is proceeding. The other five (#1515 pane `w1:pHC`, #1526 pane `w1:pHE`, #1524
+pane `w1:pHF`, #1667 pane `w1:pHG`, #1625 pane `w1:pHH`) have NOT been checked — bounded-read each
+one first; if it's stuck on a missing boot file, send it the absolute-path fix from that
+paragraph.
+
+**Live fleet at handoff (9 build panes + coordinator, all in agents tab `w1:t1P` except
+coordinator):**
+- #1752 module discovery — pane `w1:pHB`, agent `relay-1752-4`, still building (Task 3 plan
+  approved, Task 4 end-to-end proof still to come).
+- #1755 Workshop page — pane `w1:pHA`, agent `workshop1755c` (its 3rd relay), building. Its own
+  handoff doc: `docs/superpowers/handoffs/2026-08-20-1755-workshop-page-relay3.md`. Remaining per
+  its own last report: design-system audit, then live-path proof + PR.
+- #1756 chat cards — pane `w1:pH7`, agent `1756-relay2`, legitimately waiting (has its own
+  Monitor, task `b4i8y203l`) on a `verify:foundation` gate rerun after a commit — this is a real
+  wait, not a stall, do not nudge it.
+- Wave 1 (#1515/#1521/#1526/#1524/#1667/#1625) — panes `w1:pHC/pHD/pHE/pHF/pHG/pHH`, agent names
+  `build1515`/`build1521`/`build1526`/`build1524`/`build1667`/`build1625`, all just past boot,
+  fix the boot-file bug first as above then let them plan and you approve.
+
+**No merges yet this run** (`merges_since_relay` stays 0). No PRs open yet from any lane, including
+wave 1. `docs/coordination/AWAITING-BEN.md` has no open (non-historical) entries — its one
+"RESOLVED" #1533 entry is closed in its own header, nothing needs Ben right now, keep going per his
+standing instruction not to wait on him.
+
+**Next after the boot-file fix:** keep supervising all 9 lanes event-driven (liveness Monitor +
+push escalations), and once GraphQL capacity allows, consider spawning the remaining safe wave-2
+candidates from the triage notes above (#1517 after #1515 lands, #1497 once you've confirmed no
+other CSS-touching lane is live, etc.) — do not re-derive the triage, it's summarized in the
+Ready-lane section above this note.
 
 ## Continuation note (this coordinator, 2026-08-20 ~19:18 PDT — relaying at context 70%)
 
