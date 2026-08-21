@@ -1613,3 +1613,19 @@ Still no reply from Ben on the PR 1803 question.
 
 Both replies needed a follow-up Enter to actually submit (same known issue as #1756's lane) --
 used herdr pane run + send-keys + a bounded read to confirm each one landed.
+
+## Update (coordinator session b09813e6, pane w1:pJM, 2026-08-21 ~6:35pm PDT)
+
+#1754 relayed again (relay6 -> relay7, pane w1:pJQ). Relay6 finished the "a build can't touch
+settings or grant itself new powers" test and found a real gap along the way: the build job type
+was never registered in the list of job queues the app creates on startup, so sending a real build
+job would fail today outside of tests. Relay7 has a plan for the last remaining piece (proving a
+build resumes from where it left off after a crash, not from scratch) that folds in that queue
+registration fix. Approved the plan -- straightforward, no design fork. Also closed the stale
+relay6 pane (w1:pJP), which was mid-self-compaction after already handing off.
+
+#1756's lane needed its stuck "continue" message resubmitted again (third time this run) --
+resolved the same way as before.
+
+No reply from Ben yet on the PR 1803 question. PR 1803 and #1756 both still just waiting on their
+own checks (CI / integration test respectively), no real change.
