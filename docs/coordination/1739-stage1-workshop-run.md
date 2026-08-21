@@ -11,10 +11,11 @@ finish — merge, close out, spawn the next queued item once its dependency land
 same-night escalation only when Ben is back and says so. This overrides the box-wide CLAUDE.md
 "never idle silently, run needs-ben" rule for the rest of tonight specifically.
 
-Coordinator: Claude session `53e8572a-0c01-434a-9f16-5088520ae453`, label `Coordinator`, pane
-`w1:pJ5` (re-resolve pane fresh by label + session id — pane numbers reflow). Took over from
-session `4638f578-9c76-41b8-85dc-37dbfc9cb8d5` (former pane `w1:pJ3`) at 2026-08-21 ~07:4x UTC;
-confirmed the old pane saw this one driving before it closed itself cleanly.
+Coordinator: Claude session `351157c3-4cfb-499d-b67f-b366448a8263`, label `Coordinator`, pane
+`w1:pJ6` (re-resolve pane fresh by label + session id — pane numbers reflow). Took over from
+session `53e8572a-0c01-434a-9f16-5088520ae453` (former pane `w1:pJ5`) at 2026-08-21 ~11:3x PDT;
+old pane confirmed it saw this one driving and was asked to write the just-landed Fable #1526
+verdict into this manifest before closing itself.
 Liveness Monitor: not yet re-armed under this session — next action.
 
 GraphQL rate limit cleared ~19:33 PDT (verified via `gh api rate_limit`, resource `graphql`, back
@@ -75,7 +76,7 @@ Nothing here yet from earlier relays. Entries below added by this coordinator (s
 | #1756 | plan/draft chat cards (front end shell) | routine | draft PR open, gate green (one documented unrelated local flake), waiting for #1755 to land before final review | 1756-relay2 | w1:pH7 | 1756-workshop-chat-cards | 1799 |
 | #1515 | [1137-C2] warn safely on commitment extraction failures | routine | **MERGED** (PR #1802, CI all green, issue closed), pane reaped by relay10 | warn-safely-relay2 (reaped) | - | 1515-warn-safely-commitment-extraction | 1802 |
 | #1521 | [1139-D] keep private chat closed during focus refetch | routine | done, CI green, code-complete but UNVERIFIED — shared dev instance login is broken, live-path proof blocked; see "Blocked overnight" heading | lane-1521-relay2 | w1:pHN | 1521-keep-private-chat-closed-refetch | 1801 |
-| #1526 | [1140-D] propagate terminal socket backpressure to the PTY | routine per its own spec (handoff doc had said sensitive — spec wins) | STOPPED — failed 2nd CI cycle same as 1st (connection-close test still times out); at failure budget, parked for Ben; see "Blocked overnight" heading | pty-1526-relay3 | w1:pHP | 1526-pty-socket-backpressure | 1803 |
+| #1526 | [1140-D] propagate terminal socket backpressure to the PTY | routine per its own spec (handoff doc had said sensitive — spec wins) | Fable reviewed the stuck test: it's a test-timing bug, not a product bug (the test's trigger can be missed under CI load, so it waits for something that already happened and never happens). Product code looks fine. Needs a narrow fix to that one test, not another blind retry. See continuation note below for detail. | pty-1526-relay3 | w1:pHP | 1526-pty-socket-backpressure | 1803 |
 | #1524 | [1140-B] make whole-league sports follows unique | sensitive (migration; head of a chain — #1572, #906 wait on it) | **MERGED** (PR #1807, squash-merged to `main` as 669b2b913; QA verdict GREEN, posted to PR). Lane self-merged before this coordinator's stop message landed — verified no harm (QA independently agreed), corrected the lane's behavior for future lanes, worktree/pane reaped. Issue #1524 stays OPEN per Ben's ruling; board card moved to Done. Migration numbers landed: **0185 (sports_whole_league_dedupe), 0186 (sports_whole_league_unique)** — #1572/#906 sequence after 0186. | build1524relay2 (reaped) | - | 1524-unique-whole-league-sports-follows (deleted) | 1807 |
 | #1667 | module-sdk-worker test polling budget too tight for real cold start | routine (test-only) | **MERGED** (PR #1805, CI all green, issue closed, board moved to Done, worktree reaped) | build1667 (reaped) | - | 1667-module-sdk-worker-polling-budget (deleted) | 1805 |
 | #1625 | lane-scoped module fixture identities for concurrent integration gates | routine (test-only) | **merged** to main, issue closed, worktree reaped — note: the lane merged its own PR instead of handing back to the coordinator; corrected, no harm (test-only change, CI fully green) | build1625 (reaped) | - | 1625-lane-scoped-module-fixture-identities | #1798 |
@@ -982,4 +983,35 @@ from an agent named similarly to `ab9e70cc...` may still be pending in this sess
 lands before handoff completes, otherwise just wait for it; (2) get #1753 through QA and merge if
 green; (3) get #1521's live-path proof run and merge; (4) watch #1756 finish its rebase and get it
 through review; (5) keep the manifest current. No open AWAITING-BEN items beyond #1526 itself.
+[pane w1:pJ5]
+
+## Continuation note (Fable's #1526 verdict, written by the old pane w1:pJ5 at the successor's
+request just before being reaped, 2026-08-21)
+
+Fable finished looking at the stuck #1526 test. Plain-English summary:
+
+The test starts a real terminal, types a command into it, then arms a trap that says "the next
+time the server tries to send output back, pretend the connection broke" — this is checking that
+the server correctly hangs up when a connection genuinely goes bad. The problem is timing: the
+test arms that trap only after confirming the server received the command, but the terminal's own
+echo of that command can arrive back before the trap is armed. When that happens, the echo slips
+through harmlessly, the trap never has anything left to catch, and the test just waits until it
+times out. That race is more likely to lose on a loaded CI machine than on a laptop, which is why
+it passes locally and fails in CI both times, in the same way.
+
+Fable's read: this is a flaw in how the test is written, not a bug in the product. The actual
+product change (pause output when the connection can't keep up, resume when it drains, hang up on
+a truly broken connection) looks sound, and the rest of the new tests for it pass.
+
+Recommended fix: rewrite just that one test so the trap can't be missed — either make it target
+the terminal's real output specifically (not "whatever comes next") and force a second command
+after arming it so there's guaranteed fresh output to catch, or skip the real terminal for this
+one test and feed the connection layer fake output directly, which removes the race entirely. No
+product code needs to change. This is a same-day, one-file fix, not a third blind retry — the
+failing test lives in tests/unit/cli-runner-terminal-rpc.test.ts on the existing branch (worktree
+`.claude/worktrees/1526-pty-socket-backpressure`).
+
+**Next step:** un-park #1526 with a narrow brief telling the lane exactly this fix (one of the two
+options above), rather than just re-running the same test again. Report this to Ben in plain
+English along with the rest of the standing status.
 [pane w1:pJ5]
