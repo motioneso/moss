@@ -16,6 +16,8 @@ function fakeSession(id: string) {
     onExit: (_: (c: number) => void) => {},
     write: vi.fn(),
     resize: vi.fn(),
+    pause: vi.fn(),
+    resume: vi.fn(),
     // #1059: `this` is the fake-session object; only `.killed` is touched.
     kill: vi.fn(function (this: { killed: boolean }) {
       this.killed = true;
@@ -116,5 +118,55 @@ describe("TerminalHost (#1059)", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("a false return from sink.data pauses the live PTY once (#1526)", () => {
+    let made!: FakeSession;
+    const host = new TerminalHost({
+      homeBase: "/tmp",
+      toolsBinDir: "/usr/bin",
+      makeSession: (o) => {
+        made = fakeSession(o.id);
+        return asSession(made);
+      }
+    });
+    const sink = { data: vi.fn().mockReturnValue(false), exit: vi.fn() };
+    host.open({ cols: 80, rows: 24 }, sink);
+    made._emit("out");
+    expect(made.pause).toHaveBeenCalledTimes(1);
+  });
+
+  it("resume() is a no-op for an evicted terminal id (#1526)", () => {
+    const made: FakeSession[] = [];
+    const host = new TerminalHost({
+      homeBase: "/tmp",
+      toolsBinDir: "/usr/bin",
+      makeSession: (o) => {
+        const s = fakeSession(o.id);
+        made.push(s);
+        return asSession(s);
+      }
+    });
+    const sink = { data: vi.fn(), exit: vi.fn() };
+    const { terminalId: firstId } = host.open({ cols: 80, rows: 24 }, sink); // made[0] — evicted
+    host.open({ cols: 80, rows: 24 }, sink); // made[1] — the live session
+    host.resume(firstId);
+    expect(made[0]!.resume).not.toHaveBeenCalled();
+  });
+
+  it("resume() resumes the live terminal by id (#1526)", () => {
+    let made!: FakeSession;
+    const host = new TerminalHost({
+      homeBase: "/tmp",
+      toolsBinDir: "/usr/bin",
+      makeSession: (o) => {
+        made = fakeSession(o.id);
+        return asSession(made);
+      }
+    });
+    const sink = { data: vi.fn(), exit: vi.fn() };
+    const { terminalId } = host.open({ cols: 80, rows: 24 }, sink);
+    host.resume(terminalId);
+    expect(made.resume).toHaveBeenCalledTimes(1);
   });
 });
