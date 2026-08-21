@@ -29,7 +29,7 @@ unaffected.
 
 | Issue | Title | Tier | Status | Agent | Pane | Branch | PR |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| #1752 | find modules that appear after the server started | routine | building (Task 4 proof test written, uncommitted; found+fixed a real gap from Task 3 — new rescan route wasn't on the admin route allow-list; about to relay, currently mid auto-compact) | relay-1752-5 | w1:pHQ | 1752-module-discovery-holder | - |
+| #1752 | find modules that appear after the server started | routine | Task 4 done and committed — the proof test that a module dropped on disk becomes usable after a rescan without restarting anything is written and passing; the Task-3 route gap is fixed and tested too. Tree clean. Relay6 now waiting on a background check run before pushing and opening the pull request. | relay-1752-6 | w1:pHV | 1752-module-discovery-holder | - |
 | #1753 | a draft module that runs for its author alone | routine | blocked on #1752 | - | - | - | - |
 | #1754 | the build agent - agree a plan, then build it | sensitive (spawns a build agent/job) | blocked on #1752 | - | - | - | - |
 | #1755 | the Workshop page (front end shell) | routine | building | workshop1755c (relay3) | w1:pHA | 1755-workshop-page | - |
