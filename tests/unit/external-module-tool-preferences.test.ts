@@ -91,7 +91,7 @@ describe("assistant-tool invocations carry the actor's module preferences", () =
 
   it("passes the resolved preferences through to the module runtime", async () => {
     const { manifests } = createExternalModuleTools({
-      discoveries: [discovery],
+      discoveries: () => [discovery],
       workerDataContext: noopRunner,
       appDataContext: noopRunner,
       settingsRepository: { getUserById: async () => null } as never,
@@ -117,7 +117,7 @@ describe("assistant-tool invocations carry the actor's module preferences", () =
   // zone the model wrote into the tool input, and fell back to UTC when it wrote none.
   it("passes the actor's timezone through to the module runtime", async () => {
     const { manifests } = createExternalModuleTools({
-      discoveries: [discovery],
+      discoveries: () => [discovery],
       workerDataContext: noopRunner,
       appDataContext: noopRunner,
       settingsRepository: { getUserById: async () => null } as never,
@@ -136,7 +136,7 @@ describe("assistant-tool invocations carry the actor's module preferences", () =
 
   it("omits the timezone rather than inventing one when the host has no locale", async () => {
     const { manifests } = createExternalModuleTools({
-      discoveries: [discovery],
+      discoveries: () => [discovery],
       workerDataContext: noopRunner,
       appDataContext: noopRunner,
       settingsRepository: { getUserById: async () => null } as never,

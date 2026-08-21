@@ -174,3 +174,45 @@ export function getExternalModuleRegistrations(options: {
   rejected.sort((a, b) => a.id.localeCompare(b.id));
   return { discoveries, rejected };
 }
+
+/** A live cell over the latest `getExternalModuleRegistrations` result (#1752). Both the API
+ *  and worker processes hold one of these so a module dropped onto the mount after boot is
+ *  visible once `rescan()` runs, without a process restart. */
+export interface ExternalModuleDiscoveryHolder {
+  getDiscoveries(): readonly ExternalModuleDiscovery[];
+  getRejected(): readonly ExternalModuleRejection[];
+  rescan(): Promise<ExternalModuleLoadResult>;
+}
+
+export function createExternalModuleDiscoveryHolder(options: {
+  readonly modulesDir: string;
+  readonly coreVersion?: string;
+  readonly reservedQueueNames?: ReadonlySet<string>;
+  readonly log?: { info: (o: object, m: string) => void; warn: (o: object, m: string) => void };
+}): ExternalModuleDiscoveryHolder {
+  const scan = (): ExternalModuleLoadResult => {
+    const snapshot = getExternalModuleRegistrations(options);
+    options.log?.info(
+      { discovered: snapshot.discoveries.length, rejected: snapshot.rejected.length },
+      "external modules discovered (#996 always-on)"
+    );
+    for (const rejection of snapshot.rejected) {
+      options.log?.warn(
+        { moduleId: rejection.id, reason: rejection.reason },
+        "external module rejected (#917)"
+      );
+    }
+    return snapshot;
+  };
+
+  let current = scan();
+
+  return {
+    getDiscoveries: () => current.discoveries,
+    getRejected: () => current.rejected,
+    rescan: async () => {
+      current = scan();
+      return current;
+    }
+  };
+}

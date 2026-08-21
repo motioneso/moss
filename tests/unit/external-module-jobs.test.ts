@@ -29,7 +29,7 @@ describe("external module run-now route", () => {
     const server = Fastify();
     registerExternalModuleJobRoutes(server, {
       boss,
-      discoveries: [module],
+      discoveries: () => [module],
       resolveAccessContext: async () => ({
         actorUserId: "00000000-0000-4000-8000-000000000001",
         requestId: "request-1"
