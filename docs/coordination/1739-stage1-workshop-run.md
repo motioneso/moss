@@ -28,7 +28,7 @@ unaffected.
 | #1752 | find modules that appear after the server started | routine | building | build-1752-discovery | w1:pH1 | 1752-module-discovery-holder | - |
 | #1753 | a draft module that runs for its author alone | routine | blocked on #1752 | - | - | - | - |
 | #1754 | the build agent - agree a plan, then build it | sensitive (spawns a build agent/job) | blocked on #1752 | - | - | - | - |
-| #1755 | the Workshop page (front end shell) | routine | building | build-1755-workshop-page | w1:pH2 | 1755-workshop-page | - |
+| #1755 | the Workshop page (front end shell) | routine | building | workshop-page-r1 | w1:pH5 | 1755-workshop-page | - |
 | #1756 | plan/draft chat cards (front end shell) | routine | building | build-1756-workshop-cards | w1:pH3 | 1756-workshop-chat-cards | - |
 
 ## Ready lane (from GitHub project 2, board query before rate limit)
@@ -39,6 +39,18 @@ queries paused until reset (~19:29 PDT). Will re-pull and append here once avail
 re-derive from memory.
 
 ## merges_since_relay: 0
+
+## Continuation note (this coordinator, 2026-08-20 ~19:00 PDT)
+
+The Workshop page build lane (#1755) relayed itself at its context warning, before writing any
+code — that pass was research only. It left a continuation doc with the decisions already made
+(how the module screen is scaffolded, how admin-only access is gated, stand-in data shapes for
+backend work that hasn't landed yet, which design-system classes are needed):
+`docs/superpowers/handoffs/2026-08-20-1755-workshop-page-relay.md` (commit 741c1ecc3). Its
+successor is agent `workshop-page-r1`, pane `w1:pH5`, session
+`56464d6d-c662-437b-9c59-65316e7767a3`, confirmed running on Sonnet and working. Old pane
+`w1:pH2` reaped. Liveness watcher re-armed as task `b8pnb0vac` (old task `bb0s7lmk5` stopped —
+it was still watching the now-closed pane).
 
 ## Continuation note (this coordinator, 2026-08-20 ~18:47 PDT)
 
