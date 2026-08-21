@@ -729,3 +729,47 @@ from Ben still in force — do not wake him overnight, park any real blocker und
 
 This coordinator is now spawning its successor into the same pane/tab and will have it reap this
 pane once it confirms it is driving. [pane w1:pHW]
+
+## Continuation note (this coordinator, 2026-08-21 ~05:4x UTC — relaying at context 70%)
+
+This coordinator (session `d2815ae2-dd97-40ea-9eef-08b4f70f6323`, pane `w1:pHY`) took over from
+the previous one, confirmed it was driving, reaped its pane (`w1:pHW`, closed cleanly), and did
+these real things before relaying:
+
+- **#1667 (PR 1805) merged** — squash-merged to main, issue closed, board card moved to Done,
+  worktree reaped (four-gate check clear, pane closed first since it held the only open process).
+  This is the one PR that actually landed on main this relay.
+- **#1526 (PR 1803) STOPPED at its failure budget** — second CI cycle failed the same way as the
+  first (the connection-close test times out under CI load even after the fix). Build agent told
+  to stop and leave the branch/worktree alone. Full detail under the `## Blocked overnight, needs
+  Ben` heading near the top of this file — read that heading, not this note, for the reasoning.
+- **Shared dev instance login is broken** (`ben@ben.com` / `jarvistest123!` gets "Invalid email or
+  password" against `192.168.50.36:3000`). This blocks any lane's live-path browser proof on the
+  shared instance. Also under the `## Blocked overnight, needs Ben` heading.
+- **#1521 (PR 1801)** — code-complete, CI green, but live-path proof blocked by the login problem
+  above. Parked as code-complete-unverified, not merged.
+- **#1755 (PR 1804, Workshop page)** — its live-path proof was posted, but CI is actually red: 7
+  integration tests hardcode a built-in-module count that the new Workshop module bumped by one.
+  Sent back to the build agent (pane `w1:pHX`) with the exact failing test files; message was
+  delivered and confirmed submitted. Watch for it to report done again with CI green before
+  spawning QA — it had NOT had QA spawned on it yet as of this note, same as the prior note said.
+- **#1756 (PR 1799)** — draft PR open, gate green, correctly waiting on #1755 to land before final
+  review. No action needed, this is normal blocking-on-dependency, not a stall.
+- **#1524 (sports follows)** — building normally (relay2), reran its verification gate after the
+  code fix, no PR yet. No action needed.
+
+**Still open / needs the successor's first action:**
+- **#1752 (PR 1806)** — QA gave it a clean pass; its very last CI check ("Build and publish
+  images") was still pending when this note was written. A background watcher task
+  (`bc06vkbs7`, this session only — will NOT carry over) was polling it; the successor should
+  just run `gh pr checks 1806` fresh instead of trying to find that task. **The moment #1752
+  actually lands on main, spawn #1753, then once #1753 lands, spawn #1754** — this has been the
+  standing next action for two relays now and still hasn't happened because #1752 hasn't merged
+  yet.
+- The liveness Monitor (task `b3b70cgi1`, excludes pane `w1:pHY` — this session's pane, now
+  stale) will NOT carry over — re-arm fresh, excluding whichever pane the successor resolves to.
+- No other manifest bookkeeping is outstanding; the `## Blocked overnight, needs Ben` heading and
+  the Queue table are both current as of this commit.
+
+This coordinator is now spawning its successor into the same pane/tab and will have it reap this
+pane once it confirms it is driving. [pane w1:pHY]
