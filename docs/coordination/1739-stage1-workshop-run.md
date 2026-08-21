@@ -1169,3 +1169,46 @@ earlier relay; #1521 no longer blocked). Only #1526 remains on that list, correc
 No new questions for Ben. Standing overnight rule still in effect — not waking him. This
 coordinator is now spawning its successor in this same pane's tab and will have it reap this pane
 once it confirms it is driving. [pane w1:pJ7]
+
+## Continuation note (coordinator session 987db331-f676-489e-8086-5180f5fee5c1, pane w1:pJ8, 2026-08-21 ~12:2x PDT — relaying at context 70%)
+
+Adopted from the previous coordinator (session 36e8b1c1, pane w1:pJ7) after its #1521 QA finished.
+
+**#1521 (PR 1801): fully closed out this cycle.** QA verdict: code correct, live-tested; one
+live-instance check failed but was proven to already fail on a clean copy of plain main (not
+caused by this PR) — Ben said merge anyway, no need to hold. Merged as commit 5eb963154 (squash).
+Issue closed, board card already Done. Both worktrees (build lane + the QA agent's own) and both
+panes closed; branch deleted. No separate bug filed yet for the pre-existing main failure the QA
+agent found — **successor: consider filing that as its own issue**, detail is in the QA verdict
+history on PR #1801 if needed.
+
+Reaped the old coordinator pane (w1:pJ7, session 36e8b1c1) after confirming session id matched.
+
+- **#1753 (PR 1808):** lane pushed a fix for the second gap QA found (personal "my modules" page
+  leaking other users' drafts) and was watching CI on the new commit when I last checked. Not
+  merged. **Successor: check CI result, get a fresh QA pass, do not merge on the lane's own
+  say-so.**
+- **#1756 (PR 1799):** finished its rebase onto main (which now includes #1755's merged Workshop
+  page) and reran tests clean. Confirmed it does NOT yet visually integrate with #1755's Workshop
+  page (that page doesn't mount this PR's chat drawer/cards yet) — live-path status unchanged,
+  still code-complete-unverified. Still draft. No urgent action, but worth a look.
+
+**New request from Ben, not yet actioned — needs an issue filed before any lane starts:** the nav
+bar doesn't follow dark mode — it stays forest green when the rest of the theme's accent colors
+correctly switch to dark. Ben says this is a quick fix, no spec needed (it's a bug fix, not a new
+feature). I searched existing issues for "nav bar dark mode", "forest green", and "dark mode
+theme" — found #1426 (custom themes can't go dark) and #1425 (global light/dark toggle request),
+neither of which is this specific bug. **Successor: confirm no existing issue really covers this
+(maybe search differently, e.g. "sidebar" or "navbar" or check recently closed UI-consolidation
+issues #1388-1396 which touched nav chrome), then file a new bug issue and either fix it directly
+or spin up a small lane** — per CLAUDE.md this still needs a filed GitHub issue before any lane
+starts, even though it's a "no spec needed" bug fix.
+
+Standing overnight rule still in effect — not waking Ben for any of the above unless something
+turns into a real blocker. This coordinator is now spawning its successor in this same pane's tab
+and will have it reap this pane once it confirms it is driving. [pane w1:pJ8]
+
+**Second new request from Ben, also not yet actioned:** prioritize a Fahrenheit/Celsius selector
+in settings. Ben believes an issue already exists for it. **Successor: search for it first
+(try "fahrenheit", "celsius", "temperature unit", "units") before filing a new one** — same
+issue-required rule applies before any lane starts.
