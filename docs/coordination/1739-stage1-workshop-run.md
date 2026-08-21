@@ -491,3 +491,17 @@ backpressure working, #1752 module discovery working (see above).
 
 Next: resume event-driven supervision -- watch the monitor, review any PR that goes green, keep
 merging by tier, don't nudge #1524 (paused on Ben, already pinged).
+
+## Ruling 2026-08-20 ~21:1x PDT: #1524 unblocked, but leave the issue open after merge
+
+Ben ruled: add "delete rows" to the shared migration allow-list
+(`packages/db/src/migrations/module-sql-runner.ts`) so the sports-follows lane (#1524) can clean up
+duplicate rows before adding its uniqueness rule. Lane is unblocked -- resume and finish normally
+(build, QA, merge per its tier, `sensitive` per the collision map since it touches a shared
+migration file).
+
+**Important deviation from the normal merge flow: do NOT close issue #1524 when this PR merges.**
+Ben is planning more sports-follows changes and will file a separate, new GitHub issue for that
+work rather than folding it into this one -- so #1524 stays open on the board even after its PR
+lands. Skip the "close the issue" step of Phase 3.5 for this one PR only; everything else (squash
+merge, board move, worktree reap) proceeds as normal.

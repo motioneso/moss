@@ -51,6 +51,12 @@ as 33b722a0f rather than continuing to block on the missing JARVIS_UAT_REAL_CHAT
 will do the live-path verification himself post-merge; test steps given in the manifest and in
 chat. Entry below kept for the historical record, no longer blocking. -->
 
+<!-- Resolved 2026-08-20: #1524 sports follows migration-runner DELETE question. Ben ruled: add
+"delete rows" to the shared migration allow-list (packages/db/src/migrations/module-sql-runner.ts).
+Lane unblocked. Ben also asked to leave issue #1524 open after merge -- he's planning more sports
+follows work and will file a separate new issue for it rather than folding it into this one. Full
+note in docs/coordination/1739-stage1-workshop-run.md. -->
+
 ## RESOLVED 2026-08-11: #1533 live-path proof blocked — missing real-chat UAT credential
 
 **Draft PR open: https://github.com/motioneso/moss/pull/1574** — code-complete, gate green,
