@@ -1,0 +1,27 @@
+Fix issue #1809: the nav bar stays forest green in dark mode instead of switching, while other
+accent-colored areas of the app correctly switch. This is a small, isolated visual bug fix -- no
+spec needed, no new feature.
+
+STEP 1: pnpm install in this worktree.
+
+STEP 2: find where the nav bar / rail gets its background color. Before touching CSS, use the
+design-system skill (jds-* primitives, tokens.css) to find the correct dark-mode token to use --
+do not invent a new color or hardcode a hex value. The fix should almost certainly be: swap a
+hardcoded/forest-green value for the existing rail background token that other areas already use
+correctly in dark mode.
+
+STEP 3: verify live in the browser (dev instance if reachable, otherwise local dev server) --
+toggle dark mode and confirm the nav bar switches along with the rest of the UI. Screenshot or
+describe what you saw in your PR description as live-path proof; this is a UI-facing fix so the
+live-path gate applies.
+
+STEP 4: open a PR against main. Title referencing #1809. Fill in the "Release note" section
+(Category: Fixed) and run node scripts/append-release-note.mjs --pr <number> then commit the
+docs/WHATS_NEW.md change on this branch.
+
+STEP 5: follow the coordinated-build / coordinated-wrap-up skills for how to report back to the
+coordinator (pane label "Coordinator", agent name "coordinator"). Do not merge your own PR. Do not
+touch docs/coordination/ (coordinator-only) or run repo-wide pnpm format / broad git add.
+
+Keep replies to the coordinator and any status output in plain English, no jargon, no invented
+shorthand terms -- see CLAUDE.md's plain-English rule. Begin now.

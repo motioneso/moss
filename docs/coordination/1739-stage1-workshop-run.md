@@ -73,6 +73,7 @@ Nothing here yet from earlier relays. Entries below added by this coordinator (s
 | #1524 | [1140-B] make whole-league sports follows unique | sensitive (migration; head of a chain — #1572, #906 wait on it) | **MERGED** (PR #1807, squash-merged to `main` as 669b2b913; QA verdict GREEN, posted to PR). Lane self-merged before this coordinator's stop message landed — verified no harm (QA independently agreed), corrected the lane's behavior for future lanes, worktree/pane reaped. Issue #1524 stays OPEN per Ben's ruling; board card moved to Done. Migration numbers landed: **0185 (sports_whole_league_dedupe), 0186 (sports_whole_league_unique)** — #1572/#906 sequence after 0186. | build1524relay2 (reaped) | - | 1524-unique-whole-league-sports-follows (deleted) | 1807 |
 | #1667 | module-sdk-worker test polling budget too tight for real cold start | routine (test-only) | **MERGED** (PR #1805, CI all green, issue closed, board moved to Done, worktree reaped) | build1667 (reaped) | - | 1667-module-sdk-worker-polling-budget (deleted) | 1805 |
 | #1625 | lane-scoped module fixture identities for concurrent integration gates | routine (test-only) | **merged** to main, issue closed, worktree reaped — note: the lane merged its own PR instead of handing back to the coordinator; corrected, no harm (test-only change, CI fully green) | build1625 (reaped) | - | 1625-lane-scoped-module-fixture-identities | #1798 |
+| #1809 | nav bar stays forest green in dark mode instead of following it | routine (isolated CSS/token fix, no spec needed) | new issue filed this cycle after confirming #1425/#1426/#786 don't cover it; lane spawned and building | navbar-1809-fix | w1:pJA | 1809-navbar-dark-mode | - |
 
 ## Ready lane (full 29-item list pulled ~19:35 PDT, GraphQL clear)
 
@@ -1212,3 +1213,26 @@ and will have it reap this pane once it confirms it is driving. [pane w1:pJ8]
 in settings. Ben believes an issue already exists for it. **Successor: search for it first
 (try "fahrenheit", "celsius", "temperature unit", "units") before filing a new one** — same
 issue-required rule applies before any lane starts.
+
+## Continuation note (coordinator session cac2ffa0-60bb-407c-9f3a-1a5fb19d6a9b, pane w1:pJ9, 2026-08-21 ~3:30pm PDT)
+
+Took over from coordinator session 987db331-f676-489e-8086-5180f5fee5c1 (old pane w1:pJ8), which
+relayed at the 70% context warning. Confirmed idle, reaped its pane cleanly.
+
+- **#1753 (PR 1808):** CI came back all green. Dispatched a fresh independent QA agent (not the
+  lane's own say-so) to re-check both leak points -- the chat-facing list and the personal "my
+  modules" page. Waiting on that verdict before any merge decision.
+- **#1756 (PR 1799):** no action needed, matches prior note -- clean rebase, tests green, still
+  correctly not visually wired into the Workshop page yet, stays draft.
+- **Nav bar dark mode bug:** searched further (sidebar, navbar, forest green, accent color dark
+  mode, and the closed UI-consolidation issues #1388-1396) and confirmed nothing existing covers
+  it. Closed issue #786 was a different bug (unreadable text on the rail, not the rail's background
+  color staying stuck). Filed new issue #1809 and spun up a small lane for it (pane w1:pJA,
+  worktree 1809-navbar-dark-mode) rather than fixing it myself directly.
+- **Fahrenheit/Celsius selector:** confirmed it already exists -- issue #1571, "Weather settings:
+  place-name override and global degrees F/C toggle", open. Ben asked to prioritize it; noting it
+  here as next up once the coordinator has headroom (a settings feature like this likely needs the
+  normal spec + front-end design discussion before a lane starts, not a quick fix).
+
+No new questions for Ben beyond what's already visible in this note. Standing overnight rule not
+in effect -- Ben is actively in this session. [pane w1:pJ9]
