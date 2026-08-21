@@ -1,6 +1,6 @@
 # What's New in Moss
 
-## Edge channel — 2026-08-20
+## Edge channel — 2026-08-21
 
 Edge builds include the stable history below plus the user-facing changes already available in
 the current edge image. This section is intentionally build-bundled so it never advertises a
@@ -8,6 +8,7 @@ feature that is not present in the image you are running.
 
 ### Added
 
+- **Workshop page.** Admins now have a Workshop page showing which modules Moss is building, has finished, or has made live, with anything waiting on a decision from you called out first. [PR #1804](https://github.com/motioneso/moss/pull/1804)
 - **Log a meal from the Food page.** The Food page now has its own Log a meal button, so you can
   add a meal without going through chat. [PR #1788](https://github.com/motioneso/moss/pull/1788)
 - **Food tracking (Phase 1).** Log meals, get an estimated nutrition breakdown, and review what

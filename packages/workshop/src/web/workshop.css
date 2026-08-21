@@ -1,0 +1,53 @@
+.workshop-page {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-6) var(--space-11);
+}
+
+.workshop-head {
+  padding-bottom: var(--space-6);
+}
+
+.workshop-lede {
+  margin: var(--space-2) 0 0;
+  max-width: 56ch;
+}
+
+.workshop-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.workshop-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.workshop-row .jds-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.workshop-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.workshop-spacer {
+  flex: 1;
+}
+
+.workshop-log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}

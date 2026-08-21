@@ -17,7 +17,8 @@ import {
   Newspaper,
   Settings,
   Trophy,
-  Utensils
+  Utensils,
+  Wrench
 } from "lucide-react";
 import {
   type ComponentType,
@@ -52,6 +53,7 @@ import { ChatControlsProvider } from "./chat-controls-context";
 import { HeaderWeather } from "../today/header-weather";
 import { applyThemeTokens } from "../theme/theme-runtime";
 import { CommandPalette } from "./command-palette";
+import { WORKSHOP_MODULE_ID } from "@moss/workshop";
 import {
   loadShellColorMode,
   loadShellTheme,
@@ -89,7 +91,8 @@ const iconMap: Record<string, ComponentType<{ readonly size?: number }>> = {
   newspaper: Newspaper,
   settings: Settings,
   trophy: Trophy,
-  utensils: Utensils
+  utensils: Utensils,
+  wrench: Wrench
 };
 
 export function AppShell(props: AppShellProps) {
@@ -252,9 +255,17 @@ export function AppShell(props: AppShellProps) {
     setFocusActionRequestId(actionRequestId);
     setChatOpen(true);
   }, []);
+  const isInstanceAdmin = props.me.user.isInstanceAdmin;
+  const navModules = useMemo(
+    () =>
+      isInstanceAdmin
+        ? props.modules
+        : props.modules.filter((module) => module.id !== WORKSHOP_MODULE_ID),
+    [props.modules, isInstanceAdmin]
+  );
   const navSections = useMemo(
-    () => buildShellNavigation(props.modules, props.disabledModuleIds ?? []),
-    [props.modules, props.disabledModuleIds]
+    () => buildShellNavigation(navModules, props.disabledModuleIds ?? []),
+    [navModules, props.disabledModuleIds]
   );
   const notificationsQuery = useQuery({
     queryKey: queryKeys.notifications.list,

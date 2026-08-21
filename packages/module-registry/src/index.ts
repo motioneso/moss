@@ -257,6 +257,7 @@ import {
   wellnessModuleSqlMigrationDirectory
 } from "@moss/wellness";
 import { registerWeatherRoutes, weatherModuleManifest } from "@moss/weather";
+import { workshopModuleManifest } from "@moss/workshop";
 import {
   configureSportsBriefingService,
   configureSportsChatTools,
@@ -1876,6 +1877,11 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       registerVaultIngestRootProvider(createPeopleVaultIngestProvider());
       return [indexId, syncId];
     }
+  },
+  {
+    manifest: workshopModuleManifest,
+    sqlMigrationDirectories: [],
+    queueDefinitions: []
   }
 ];
 
