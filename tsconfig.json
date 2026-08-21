@@ -53,6 +53,8 @@
       "@moss/shared": ["packages/shared/src/index.ts"],
       "@moss/sports": ["packages/sports/src/index.ts"],
       "@moss/sports/web": ["packages/sports/src/web/index.tsx"],
+      "@moss/workshop": ["packages/workshop/src/index.ts"],
+      "@moss/workshop/web": ["packages/workshop/src/web/index.tsx"],
       "@moss/source-behaviors": ["packages/source-behaviors/src/index.ts"],
       "@moss/tasks": ["packages/tasks/src/index.ts"],
       "@moss/ui": ["packages/ui/src/index.ts"],

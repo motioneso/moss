@@ -1,0 +1,25 @@
+{
+  "name": "@moss/workshop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./web": "./src/web/index.tsx"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@moss/module-sdk": "workspace:*",
+    "@moss/module-web-sdk": "workspace:*",
+    "@moss/shared": "workspace:*",
+    "@moss/ui": "workspace:*",
+    "@tanstack/react-query": "^5.0.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0"
+  }
+}

@@ -186,6 +186,9 @@ importers:
       '@moss/wellness':
         specifier: workspace:*
         version: link:../../packages/wellness
+      '@moss/workshop':
+        specifier: workspace:*
+        version: link:../../packages/workshop
       '@tanstack/react-query':
         specifier: ^5.0.0
         version: 5.101.0(react@19.2.7)
@@ -795,6 +798,9 @@ importers:
       '@moss/wellness':
         specifier: workspace:*
         version: link:../wellness
+      '@moss/workshop':
+        specifier: workspace:*
+        version: link:../workshop
       fastify:
         specifier: ^5.6.2
         version: 5.8.5
@@ -1273,6 +1279,34 @@ importers:
       react:
         specifier: ^19.0.0
         version: 19.2.7
+
+  packages/workshop:
+    dependencies:
+      '@moss/module-sdk':
+        specifier: workspace:*
+        version: link:../module-sdk
+      '@moss/module-web-sdk':
+        specifier: workspace:*
+        version: link:../module-web-sdk
+      '@moss/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@moss/ui':
+        specifier: workspace:*
+        version: link:../ui
+      '@tanstack/react-query':
+        specifier: ^5.0.0
+        version: 5.101.0(react@19.2.7)
+      lucide-react:
+        specifier: ^0.468.0
+        version: 0.468.0(react@19.2.7)
+      react:
+        specifier: ^19.0.0
+        version: 19.2.7
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.17
 
 packages:
 
