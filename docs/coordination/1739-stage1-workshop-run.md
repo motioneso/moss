@@ -1629,3 +1629,15 @@ resolved the same way as before.
 
 No reply from Ben yet on the PR 1803 question. PR 1803 and #1756 both still just waiting on their
 own checks (CI / integration test respectively), no real change.
+
+## Update (coordinator session b09813e6, pane w1:pJM, 2026-08-21 ~6:45pm PDT) — PR 1803 CI went green
+
+Checked PR 1803's CI directly (`gh pr checks 1803`) since its lane's pane looked stuck showing the
+same "checking CI" text across several checks. Result: all required checks now pass, including the
+big test suite that contains the previously-failing connection-close test (27m42s, passed). This is
+the run after the lane's diagnostic push (investigating why the connection wasn't closing, not
+another timeout bump). Told the lane what I saw and asked it to confirm what it found and changed.
+**If this holds, it likely resolves both #1526 AWAITING-BEN entries without needing Ben's
+decision** -- a real fix landed, not a waiver. Not yet spawning QA or merging until the lane
+confirms what changed (want to understand this before trusting a green run on a test that just
+failed 3 times identically).
