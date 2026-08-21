@@ -66,10 +66,18 @@ export function PlanApprovalCard(props: PlanApprovalCardProps) {
         ))}
       </dl>
       <div className="plan-card__actions">
-        <button className="jds-btn jds-btn--primary jds-btn--sm" type="button" onClick={props.onBuildIt}>
+        <button
+          className="jds-btn jds-btn--primary jds-btn--sm"
+          type="button"
+          onClick={props.onBuildIt}
+        >
           Build it
         </button>
-        <button className="jds-btn jds-btn--quiet jds-btn--sm" type="button" onClick={props.onNotYet}>
+        <button
+          className="jds-btn jds-btn--quiet jds-btn--sm"
+          type="button"
+          onClick={props.onNotYet}
+        >
           Not yet
         </button>
       </div>

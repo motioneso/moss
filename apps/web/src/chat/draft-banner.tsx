@@ -32,7 +32,11 @@ export function DraftBanner(props: DraftBannerProps) {
             Reaches {props.whatItReaches} &middot; stores {props.whatItKeeps}
           </p>
           <div className="draft-banner__actions">
-            <button className="jds-btn jds-btn--primary jds-btn--sm" type="button" onClick={props.onShip}>
+            <button
+              className="jds-btn jds-btn--primary jds-btn--sm"
+              type="button"
+              onClick={props.onShip}
+            >
               Ship it
             </button>
             <button
@@ -43,10 +47,18 @@ export function DraftBanner(props: DraftBannerProps) {
               Ask for a change
             </button>
             <span className="draft-banner__spacer" />
-            <button className="jds-btn jds-btn--quiet jds-btn--sm" type="button" onClick={props.onSeeCode}>
+            <button
+              className="jds-btn jds-btn--quiet jds-btn--sm"
+              type="button"
+              onClick={props.onSeeCode}
+            >
               See the code
             </button>
-            <button className="jds-btn jds-btn--quiet jds-btn--sm" type="button" onClick={props.onThrowAway}>
+            <button
+              className="jds-btn jds-btn--quiet jds-btn--sm"
+              type="button"
+              onClick={props.onThrowAway}
+            >
               Throw it away
             </button>
           </div>
