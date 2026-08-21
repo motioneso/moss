@@ -1454,3 +1454,15 @@ Adopted the fleet from predecessor pane w1:pJF (reaped, was "done"). Claimed age
 **Still open:** watch PR 1803 CI, merge as routine once green, then remove the #1526
 AWAITING-BEN entry and do GitHub bookkeeping for #1809 (issue close, board to Done — merged last
 pass but bookkeeping wasn't done yet).
+
+## Update (coordinator session 4b7627b9, pane w1:pJJ, 2026-08-21 ~5:30pm PDT)
+
+PR 1803 CI ran after the timeout fix (commit dd9c8bb18): one job failed again, same test
+(`tests/unit/cli-runner-terminal-rpc.test.ts` — connection-close test), error this time was the
+test's own explicit "timed out waiting for connection close" rather than the generic outer
+timeout message. This confirms the earlier diagnosis (inner 10s wait racing CI's slower runner) —
+the outer-timeout fix just let the real message surface, it didn't remove the underlying flake.
+All other checks (compose smoke, prod compose smoke, detect scope) passed. Per Ben's standing
+waiver on this known flake, reran the failed job on the same SHA
+(`gh run rerun 32525090263 --failed`) rather than treating this as a new failure needing a lane
+fix. Watching for the rerun result.
