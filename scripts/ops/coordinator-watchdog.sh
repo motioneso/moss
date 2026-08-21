@@ -44,9 +44,10 @@ if [ "$idle_seconds" -ge "$IDLE_THRESHOLD_SECONDS" ]; then
   if [ "${COORDINATOR_WATCHDOG_DRY_RUN:-0}" = "1" ]; then
     echo "coordinator-watchdog: DRY RUN, would send to $pane_id: $nudge"
   else
+    # `herdr pane run` sends text and Enter atomically -- works the same regardless of
+    # which agent (Claude, Codex, ...) is running in the pane, since it's a herdr-level
+    # terminal primitive, not agent-specific.
     herdr pane run "$pane_id" "$nudge" >/dev/null
-    sleep 1
-    herdr pane send-keys "$pane_id" Enter >/dev/null
   fi
   last_nudge="$now"
   # Give it a fresh window before nudging again, so a still-stuck coordinator gets
