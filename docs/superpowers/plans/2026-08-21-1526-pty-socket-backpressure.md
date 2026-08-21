@@ -15,10 +15,10 @@
   `IPty` (`this.term`). No `pause`/`resume` today. `node-pty`'s `IPty` type has both natively
   (used elsewhere in the ecosystem; not re-verified here since we're only adding thin wrappers).
 - `packages/cli-runner/src/terminal-host.ts:13-16` — `TerminalSink { data(id, bytes): void;
-  exit(id, code): void }`. `open()` (`:32-59`) wires `session.onData(bytes => { ...; sink.data(id,
-  bytes); })` at line 50, return value discarded.
+exit(id, code): void }`. `open()` (`:32-59`) wires `session.onData(bytes => { ...; sink.data(id,
+bytes); })` at line 50, return value discarded.
 - `packages/cli-runner/src/connection.ts:51-56` — `ByteChannel { write(buf): void; end(): void;
-  on(event: "data"|"close"|"error", ...): void }`. No `drain` in the type today.
+on(event: "data"|"close"|"error", ...): void }`. No `drain` in the type today.
 - `packages/cli-runner/src/connection.ts:102-119` — `pushSink.data`/`pushSink.exit` both call
   `safeWrite(channel, {...})` (`:482-490`), boolean result discarded by both.
 - `packages/cli-runner/src/connection.ts:482-490` — `safeWrite` returns `boolean`: `true` on a
@@ -29,8 +29,8 @@
   only on the "threw" case.
 - Test fakes (`tests/unit/cli-runner-protocol.test.ts:120-161`,
   `tests/unit/cli-runner-terminal-rpc.test.ts:44-76`) each define their own `FakeChannel implements
-  ByteChannel` with `write(buf): void` (always succeeds, never returns `false`) and `on(event:
-  "data"|"close"|"error", ...)` (no `"drain"` overload). Both need a `"drain"` overload added to
+ByteChannel` with `write(buf): void` (always succeeds, never returns `false`) and `on(event:
+"data"|"close"|"error", ...)` (no `"drain"` overload). Both need a `"drain"` overload added to
   their `on()` signature to satisfy the widened `ByteChannel` interface, plus (in the RPC file) a
   way to script one `write()` call returning `false`.
 - `tests/unit/cli-runner-terminal-host.test.ts:10-25` — `fakeSession()` helper has no
@@ -47,6 +47,7 @@
 pause(): void;   // this.term.pause()
 resume(): void;  // this.term.resume()
 ```
+
 Added as two more one-line direct wrappers, same style as `resize`/`kill`.
 
 ### 2. `terminal-host.ts`
@@ -105,11 +106,23 @@ Call-site changes:
 
   ```ts
   data: (terminalId, bytes) => {
-    const outcome = safeWrite(channel, { t: "push", bootId: deps.bootId, channel: "terminalData", terminalId, dataB64: bytes.toString("base64") });
-    if (outcome === "error") { close(); return false; }
-    if (outcome === "backpressure") { backpressureTerminalId = terminalId; return false; }
+    const outcome = safeWrite(channel, {
+      t: "push",
+      bootId: deps.bootId,
+      channel: "terminalData",
+      terminalId,
+      dataB64: bytes.toString("base64")
+    });
+    if (outcome === "error") {
+      close();
+      return false;
+    }
+    if (outcome === "backpressure") {
+      backpressureTerminalId = terminalId;
+      return false;
+    }
     return true;
-  }
+  };
   ```
 
 - `pushSink.exit` (`:111-118`): unchanged shape, just `if (safeWrite(...) === "error") close();` —
@@ -188,11 +201,13 @@ All in the three files already named as owned surface — no new files.
 ```bash
 pnpm vitest run tests/unit/cli-runner-terminal-host.test.ts tests/unit/cli-runner-protocol.test.ts tests/unit/cli-runner-terminal-rpc.test.ts > /tmp/1526-vitest.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`, all three files' suites green, no test added and skipped.
 
 ```bash
 pnpm tsc --noEmit -p packages/cli-runner > /tmp/1526-tsc.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0` — confirms `ByteChannel`/`TerminalSink` widened return types don't break any
 other caller in the package (e.g. the real `net.Socket`-backed production `ByteChannel`
 implementation, wherever it's constructed in `server.ts`/`main.ts`, still satisfies the interface
