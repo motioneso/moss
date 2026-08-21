@@ -57,6 +57,23 @@ Lane unblocked. Ben also asked to leave issue #1524 open after merge -- he's pla
 follows work and will file a separate new issue for it rather than folding it into this one. Full
 note in docs/coordination/1739-stage1-workshop-run.md. -->
 
+## OPEN 2026-08-21: #1526 (PR 1803) — one test keeps failing in CI, not on the lane's own machine
+
+The terminal socket backpressure fix itself looks done and pushed. But one specific test (the one
+that checks the connection closes properly) has now failed the same way twice in a row on GitHub's
+CI, while it passes every time when run locally. A reviewer (Fable) looked at the test and believes
+it is the test itself that's flaky — timing-sensitive, sometimes doesn't notice something happen in
+time — not a real bug in the fix.
+
+**Options:**
+1. Rewrite the flaky test to not depend on timing (the fix the reviewer recommends) — safest, but
+   needs someone to do it and re-run CI.
+2. Ben looks at the CI failure directly and makes the call.
+3. Retry CI a third time — **not recommended**, the standing rule here is two identical failures
+   means stop and think, not try again.
+
+**Recommendation:** option 1. Pinged via `needs-ben`.
+
 ## RESOLVED 2026-08-11: #1533 live-path proof blocked — missing real-chat UAT credential
 
 **Draft PR open: https://github.com/motioneso/moss/pull/1574** — code-complete, gate green,
