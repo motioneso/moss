@@ -107,6 +107,26 @@ matches the spec literally); otherwise option 1. Pinged via `needs-ben` (see
 `~/.needs-ben/sent/1786483243535565600.msg`). Everything else in #1533 Phase 4 is done — this is
 the only open item. Build agent is waiting event-driven, not polling; coordinator likewise.
 
+## UPDATE 2026-08-21 ~10:1x PM PDT: #1526 (PR 1803) — found the likely cause, still your call
+
+New finding since the entry below: the lane temporarily disabled two other tests in the same file
+to isolate the problem, and with those two out of the way, the test that kept failing passed
+immediately and the whole check went green. That points to the real cause being that an earlier
+test in the same file is leaving something behind -- most likely a shell process or a terminal
+slot that doesn't get cleaned up -- which then starves the later test of the thing it's waiting
+for. That fits with why a longer timeout never helped: it was never about waiting long enough.
+
+This is good news in one way: it looks like the actual backpressure fix (the code this PR is
+about) is fine, and the problem is confined to test cleanup, not shipped code. It's not fixed yet
+though -- the two tests are only disabled to prove the theory, not as a real solution, and turning
+them back on would very likely bring the failure back.
+
+The lane has paused and is waiting, not pushing anything further, per the instruction to stop
+after this round. Options below still stand; option 1 now has a concrete lead to chase (fix the
+process/terminal cleanup between tests) rather than being open-ended. Not re-pinging your phone
+again since this is the same open question, just with more information -- flagging it here so you
+see it whenever you next check.
+
 ## OPEN 2026-08-21 ~5:50pm PDT: #1526 (PR 1803) — same test has now failed 3 times identically, likely a real bug not a flake
 
 Your earlier ruling was "we can just ok with flakes for now" on this test. Since then, the branch
