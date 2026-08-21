@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
+import type { Mock } from "vitest";
 
 import { ChatSessionManager } from "../../packages/chat/src/live/chat-session-manager.js";
 import type { ChatSessionManagerDeps } from "../../packages/chat/src/live/chat-session-manager.js";
+import type { ChatPersistencePort } from "../../packages/chat/src/live/chat-session-ports.js";
 import { CliChatUnavailableError } from "../../packages/chat/src/live/errors.js";
 
 /**
@@ -37,8 +39,8 @@ function makeEngine(opts?: { withPurge?: boolean }) {
 
 function makeManager(deps: {
   engine: ReturnType<typeof makeEngine>;
-  listPriorTurns: ReturnType<typeof vi.fn>;
-  getCurrentThreadState: ReturnType<typeof vi.fn>;
+  listPriorTurns: Mock<ChatPersistencePort["listPriorTurns"]>;
+  getCurrentThreadState: Mock<NonNullable<ChatPersistencePort["getCurrentThreadState"]>>;
 }): ChatSessionManager {
   return new ChatSessionManager({
     engineFactory: vi.fn().mockReturnValue(deps.engine),
@@ -67,14 +69,15 @@ function makeManager(deps: {
 describe("forceReplay vs purge do not converge", () => {
   it("a forceReplay relaunch on a normal thread carries retained history into replayBatch", async () => {
     const engine = makeEngine();
-    const listPriorTurns = vi.fn().mockResolvedValue({
+    const listPriorTurns: Mock<ChatPersistencePort["listPriorTurns"]> = vi.fn().mockResolvedValue({
       recent: [
         { role: "user", content: "q1" },
         { role: "assistant", content: "a1" }
       ],
       oldSummary: null
     });
-    const getCurrentThreadState = vi.fn().mockResolvedValue({ id: "t1", incognito: false });
+    const getCurrentThreadState: Mock<NonNullable<ChatPersistencePort["getCurrentThreadState"]>> =
+      vi.fn().mockResolvedValue({ id: "t1", incognito: false });
     const manager = makeManager({ engine, listPriorTurns, getCurrentThreadState });
 
     await manager.ensureSession("user-1", "User");
@@ -91,8 +94,11 @@ describe("forceReplay vs purge do not converge", () => {
     // The D4 guard (persistence.ts:179-183, proven against a real DB by the integration
     // test's T2-e) guarantees an incognito listPriorTurns call always returns nothing --
     // this stub encodes that guarantee rather than re-proving it.
-    const listPriorTurns = vi.fn().mockResolvedValue({ recent: [], oldSummary: null });
-    const getCurrentThreadState = vi.fn().mockResolvedValue({ id: "t-priv", incognito: true });
+    const listPriorTurns: Mock<ChatPersistencePort["listPriorTurns"]> = vi
+      .fn()
+      .mockResolvedValue({ recent: [], oldSummary: null });
+    const getCurrentThreadState: Mock<NonNullable<ChatPersistencePort["getCurrentThreadState"]>> =
+      vi.fn().mockResolvedValue({ id: "t-priv", incognito: true });
     const manager = makeManager({ engine, listPriorTurns, getCurrentThreadState });
 
     await manager.ensureSession("user-1", "User", { forceReplay: true });
@@ -105,8 +111,11 @@ describe("forceReplay vs purge do not converge", () => {
 
   it("an incognito relaunch without engine purge support refuses to launch, regardless of forceReplay", async () => {
     const engine = makeEngine(); // no purgeTranscripts
-    const listPriorTurns = vi.fn().mockResolvedValue({ recent: [], oldSummary: null });
-    const getCurrentThreadState = vi.fn().mockResolvedValue({ id: "t-priv", incognito: true });
+    const listPriorTurns: Mock<ChatPersistencePort["listPriorTurns"]> = vi
+      .fn()
+      .mockResolvedValue({ recent: [], oldSummary: null });
+    const getCurrentThreadState: Mock<NonNullable<ChatPersistencePort["getCurrentThreadState"]>> =
+      vi.fn().mockResolvedValue({ id: "t-priv", incognito: true });
     const manager = makeManager({ engine, listPriorTurns, getCurrentThreadState });
 
     await expect(manager.ensureSession("user-1", "User", { forceReplay: true })).rejects.toThrow(
