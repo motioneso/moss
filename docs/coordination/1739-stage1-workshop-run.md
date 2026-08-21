@@ -11,12 +11,12 @@ finish — merge, close out, spawn the next queued item once its dependency land
 same-night escalation only when Ben is back and says so. This overrides the box-wide CLAUDE.md
 "never idle silently, run needs-ben" rule for the rest of tonight specifically.
 
-Coordinator: Claude session `8e577192-b2da-4323-b014-238626027729`, label `Coordinator`, pane
-`w1:pHS` (re-resolve pane fresh by label + session id — pane numbers reflow). Took over from
-session `f0b47c3f-4585-46bc-a94a-b8b3361a6d99` (former pane `w1:pHR`) at 2026-08-20 ~21:5x PDT;
-old pane confirmed standing down and closed. Liveness Monitor needs to be re-armed fresh (see
-latest continuation note) — inherited monitor did not carry over, matching the pattern of prior
-relays in this run.
+Coordinator: Claude session `0cfc3a41-b6cb-4487-aca3-1b4248dc7438`, label `Coordinator`, pane
+`w1:pHW` (re-resolve pane fresh by label + session id — pane numbers reflow). Took over from
+session `8e577192-b2da-4323-b014-238626027729` (former pane `w1:pHS`) at 2026-08-20 ~22:1x PDT;
+old pane was already gone by the time this session checked `herdr pane list` (no reap needed).
+Liveness Monitor needs to be re-armed fresh (see latest continuation note) — inherited monitor did
+not carry over, matching the pattern of prior relays in this run.
 
 GraphQL rate limit cleared ~19:33 PDT (verified via `gh api rate_limit`, resource `graphql`, back
 to full 5000). Board queries unblocked.
@@ -570,3 +570,34 @@ move on to the next ready item.
 is still waiting on its check run), keep supervising all working lanes event-driven, merge anything
 that goes green per its tier, and once #1752 lands spawn #1753 then #1754 from the queue. Don't
 wake Ben for anything tonight per the standing rule.
+
+## Continuation note (this coordinator, 2026-08-20 ~22:1x PDT — adoption confirmed, relay7)
+
+Took over as sole Coordinator: session `0cfc3a41-b6cb-4487-aca3-1b4248dc7438`, pane `w1:pHW`.
+Confirmed only one pane in the fleet carries the Coordinator label. The previous coordinator's
+pane (session `8e577192-b2da-4323-b014-238626027729`, formerly `w1:pHS`) was already gone from
+`herdr pane list` by the time this session checked — no reap action was needed, it had already
+closed itself cleanly.
+
+Old liveness monitor (task `bf9ro91to`) did not carry over, as expected. Re-armed a fresh one
+(task `bx0zu4jyv`) — it watches every pane in the shared workspace and only speaks up when a
+lane's status actually changes.
+
+Checked the two lanes flagged as needing a look:
+- #1752 (finding modules that appear after the server has started), pane `w1:pHV` — still
+  genuinely working, mid gate-check, not stalled. No pull request yet. Watching for it to open.
+- #1756 (Workshop chat cards), pane `w1:pH7` — idle on purpose as before, correctly held back
+  waiting on #1755 to be far enough along to use it. Its pull request #1799 is open but currently
+  shows a failed check ("Verify foundation and app" / "CI gate" both failed on the latest run) —
+  worth a look once it's back in scope for merge, not urgent while it's intentionally on hold.
+- #1524, pane `w1:pHT` — working normally.
+
+Everything else in the fleet (#1667, #1526, #1515, #1521, #1755) unchanged from the prior note —
+no new information yet, all reported working.
+
+Standing rule from Ben still in force: do not wake him overnight for anything. Any new blocker
+goes under a `## Blocked overnight, needs Ben` heading, not to him directly.
+
+Next: keep supervising event-driven via the new monitor, confirm #1752 gets a pull request and
+push it through QA and merge once green, then spawn #1753 and #1754 from the queue per the
+standing instruction.
