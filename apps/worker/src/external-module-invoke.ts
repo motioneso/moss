@@ -62,7 +62,14 @@ export type VerifiedInvoke = (
 
 export interface VerifiedExternalModuleInvokerDeps {
   readonly workerDb: Kysely<MossDatabase>;
-  readonly discoveryById: ReadonlyMap<string, ExternalModuleDiscovery>;
+  // Recomputed from the live discovery holder on every call (#1752) rather than a `Map`
+  // captured once at boot — the whole point of the holder is that a module dropped in after
+  // boot becomes visible without a restart.
+  readonly getDiscoveryById: (moduleId: string) => ExternalModuleDiscovery | undefined;
+  // Diagnostic-only: which module ids the trust gate CAN currently see, for the
+  // "not-discovered" rejection log below. Empty means the staged package dir itself is
+  // missing or unreadable; populated-without-this-id means the module alone failed to stage.
+  readonly listDiscoveredModuleIds: () => readonly string[];
   readonly dataContext: DataContextRunner;
   readonly cipher: ModuleCredentialCipher;
   // Structural pick so tests can stub invoke while worker.ts passes the real runtime.
@@ -154,10 +161,10 @@ export function createVerifiedExternalModuleInvoker(
     if (!(await deps.listActiveUserIds(args.moduleId)).includes(args.actorUserId)) {
       return reject("not-active", args);
     }
-    const current = deps.discoveryById.get(args.moduleId);
+    const current = deps.getDiscoveryById(args.moduleId);
     if (!current) {
       return reject("not-discovered", args, {
-        discovered: [...deps.discoveryById.keys()]
+        discovered: deps.listDiscoveredModuleIds()
       });
     }
     const state = await deps.workerDb

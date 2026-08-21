@@ -137,7 +137,8 @@ export interface ExternalModuleJobHandlerDeps {
   readonly workerDb: Kysely<MossDatabase>;
   readonly dataContext: DataContextRunner;
   readonly cipher: ModuleCredentialCipher;
-  readonly discoveryById: ReadonlyMap<string, ExternalModuleDiscovery>;
+  readonly getDiscoveryById: (moduleId: string) => ExternalModuleDiscovery | undefined;
+  readonly listDiscoveredModuleIds: () => readonly string[];
   readonly listActiveUserIds: (moduleId: string) => Promise<readonly string[]>;
   // 3-arg app-level bridge (see external-module-ai-bridge.ts); bound to the
   // module id below so the rpc host stays module-agnostic. Optional: only the
@@ -183,7 +184,8 @@ export function createExternalModuleJobHandler(
   const { module, queue } = deps;
   const invoke = createVerifiedExternalModuleInvoker({
     workerDb: deps.workerDb,
-    discoveryById: deps.discoveryById,
+    getDiscoveryById: deps.getDiscoveryById,
+    listDiscoveredModuleIds: deps.listDiscoveredModuleIds,
     dataContext: deps.dataContext,
     cipher: deps.cipher,
     runtime: deps.runtime,

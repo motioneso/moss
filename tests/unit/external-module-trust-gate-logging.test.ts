@@ -91,10 +91,11 @@ function fixture(
         ? overrides.row
         : { status: "enabled", manifest_hash: MANIFEST_HASH, package_hash: PACKAGE_HASH }
     ),
-    discoveryById:
+    getDiscoveryById:
       overrides.discovered === false
-        ? new Map<string, ExternalModuleDiscovery>()
-        : new Map([[module.id, module]]),
+        ? (_id: string) => undefined
+        : (id: string) => (id === module.id ? module : undefined),
+    listDiscoveredModuleIds: () => (overrides.discovered === false ? [] : [module.id]),
     dataContext: {
       withDataContext: async (_access: unknown, fn: (db: DataContextDb) => unknown) =>
         fn({} as DataContextDb)
@@ -188,7 +189,8 @@ describe("external module trust-gate rejection logging", () => {
       module,
       queue,
       workerDb: fakeWorkerDb(undefined),
-      discoveryById: new Map([[module.id, module]]),
+      getDiscoveryById: (id: string) => (id === module.id ? module : undefined),
+      listDiscoveredModuleIds: () => [module.id],
       dataContext: {
         withDataContext: async (_access: unknown, fn: (db: DataContextDb) => unknown) =>
           fn({} as DataContextDb)

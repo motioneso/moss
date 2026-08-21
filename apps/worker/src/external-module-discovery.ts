@@ -1,7 +1,5 @@
-import type {
-  ExternalModuleDiscovery,
-  ExternalModuleDiscoveryHolder
-} from "@moss/module-registry/node";
+import type { ExternalModuleDiscovery } from "@moss/module-registry";
+import type { ExternalModuleDiscoveryHolder } from "@moss/module-registry/node";
 
 /**
  * A lookup rebuilt from the holder's live snapshot on every call (#1752). Deliberately

@@ -38,7 +38,7 @@ import {
 import {
   ExternalModuleJobReconciler,
   ExternalModuleWorkerRuntime,
-  getExternalModuleRegistrations,
+  createExternalModuleDiscoveryHolder,
   resolveModulesDir
 } from "@moss/module-registry/node";
 import { AiRepository } from "@moss/ai";
@@ -48,6 +48,7 @@ import { createModuleCredentialSecretCipher } from "@moss/settings";
 import { getVaultBaseDir, VaultContextRunner } from "@moss/vault";
 
 import { createModuleWorkerAiBridge } from "./external-module-ai-bridge.js";
+import { buildDiscoveryLookup } from "./external-module-discovery.js";
 import { createExternalBriefingInvoker } from "./external-module-invoke.js";
 import { createExternalModuleJobHandler } from "./external-module-job-handler.js";
 
@@ -194,10 +195,10 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   // once here and threading it down avoids a second discovery scan.
   const externalConfig = resolveExternalWorkerConfig();
   const reservedQueueNames = new Set(getAllQueueDefinitions().map((queue) => queue.name));
-  const discoveries = getExternalModuleRegistrations({
+  const externalModuleHolder = createExternalModuleDiscoveryHolder({
     modulesDir: externalConfig.modulesDir,
     reservedQueueNames
-  }).discoveries;
+  });
   const externalRuntime = new ExternalModuleWorkerRuntime({ logger: workerLogger });
   const runtime = externalRuntime;
   const cipher = createModuleCredentialSecretCipher();
@@ -245,7 +246,8 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
         }
       : null;
   };
-  const discoveryById = new Map(discoveries.map((module) => [module.id, module]));
+  const getDiscoveryById = buildDiscoveryLookup(externalModuleHolder);
+  const listDiscoveredModuleIds = () => externalModuleHolder.getDiscoveries().map((module) => module.id);
   const listActiveUserIds = async (moduleId: string): Promise<readonly string[]> =>
     (
       await sql<{
@@ -265,7 +267,8 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   // precedent) — don't let the omission read as an oversight.
   const invokeExternalBriefing = createExternalBriefingInvoker({
     workerDb,
-    discoveryById,
+    getDiscoveryById,
+    listDiscoveredModuleIds,
     dataContext,
     cipher,
     runtime,
@@ -298,16 +301,16 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
     // Pino's Logger is structurally what FastifyBaseLogger wraps at runtime
     // (Fastify uses pino internally). The cast bridges the nominal type gap.
     logger: workerLogger as unknown as FastifyBaseLogger,
-    externalBriefingManifests: discoveries.map((module) => module.manifest),
+    externalBriefingManifests: externalModuleHolder.getDiscoveries().map((module) => module.manifest),
     invokeExternalBriefing
   });
 
   const externalReconciler = new ExternalModuleJobReconciler({
     boss,
-    discoveries: () => discoveries,
+    discoveries: externalModuleHolder.getDiscoveries,
     reservedQueueNames,
     isModuleEnabled: async (moduleId) => {
-      const module = discoveryById.get(moduleId);
+      const module = getDiscoveryById(moduleId);
       if (!module) return false;
       const state = await workerDb
         .selectFrom("app.external_modules")
@@ -335,7 +338,8 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
           workerDb,
           dataContext,
           cipher,
-          discoveryById,
+          getDiscoveryById,
+          listDiscoveredModuleIds,
           listActiveUserIds,
           ai: moduleAiBridge,
           postNotification: postModuleNotification,
