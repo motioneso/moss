@@ -851,3 +851,23 @@ my own tab w1:t1N for status changes.
 
 **Next actions:** keep watching #1753 through to a PR (then QA, then merge, routine tier); once
 #1753 lands, spawn #1754. No blocking issues right now — steady-state supervision. [pane w1:pJ3]
+
+## Update (this coordinator, 2026-08-21 ~07:1x UTC)
+
+- **#1755** relayed cleanly to a 5th successor (new pane w1:pJ4, session
+  `07ba6001-9627-477f-8fbb-a1464fd76973`). Confirmed the successor was driving, then closed the
+  old pane (w1:pHX) on the build agent's request. Renamed the new pane
+  "1755 Workshop page (relay5)".
+- **#1753** looked stuck for about a minute — it had written its relay-3 handoff doc and
+  committed it, but then just sat there with an old unsent message still sitting in its typing
+  box, never actually starting the next task. This was a frozen turn, not the agent choosing to
+  stop, so I sent it a "continue" nudge rather than restarting the lane. That worked: it's now
+  actively committing its in-progress work and rebasing onto the latest main to fix the
+  migration-number collision flagged earlier. No other action needed, watching it finish.
+- **Plan-writing agent** (pane w1:pGR, worktree `1739-stage1-plan`) is genuinely idle and its
+  work (the build plan for all five Workshop stage 1 issues) is done, but its two commits are
+  only on its own branch — nothing has opened a pull request for them and they are not on main.
+  Per the reap rules, a worktree with unmerged commits stays as-is; not reaping this yet. Will
+  ask whether this plan doc is meant to be merged, or is meant to stay a working reference only.
+- Liveness monitor continues to run cleanly, correctly flagging both of the above status changes
+  as they happened. [pane w1:pJ3]
