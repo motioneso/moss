@@ -14,11 +14,10 @@ same-night escalation only when Ben is back and says so. This overrides the box-
 Coordinator: Claude session `36e8b1c1-0267-404a-aa81-928109e8d05c`, label `Coordinator`, pane
 `w1:pJ7` (re-resolve pane fresh by label + session id — pane numbers reflow). Took over from
 session `351157c3-4cfb-499d-b67f-b366448a8263` (former pane `w1:pJ6`) at 2026-08-21 ~15:3x PDT,
-relaying at its 70% context warning. Old pane is not yet reaped: it has an in-flight background
-QA check for #1753 (agent id `a54c911a4dbfbedd9`, tailing a module-install UAT log, ~10min in as
-of handoff) that lives inside its own process, so closing that pane now would kill the check
-mid-run. Waiting for it to finish before reaping.
-Liveness Monitor: to be re-armed under this session once the old pane is reaped.
+relaying at its 70% context warning. Old pane's in-flight #1753 QA check finished RED (see "QA
+verdict update" note below) and was relayed to the build lane before handoff; old pane (`w1:pJ6`)
+confirmed idle and was closed by this session, session id verified against this lock line first.
+Liveness Monitor: task `bq5wny309`, persistent, this session only.
 
 GraphQL rate limit cleared ~19:33 PDT (verified via `gh api rate_limit`, resource `graphql`, back
 to full 5000). Board queries unblocked.
