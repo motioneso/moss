@@ -29,6 +29,13 @@ describe("validateModuleMigrationSql", () => {
     expect(result).toEqual({ ok: true, errors: [] });
   });
 
+  it("accepts one data-only DELETE for an idempotent module-owned migration", () => {
+    const result = validateModuleMigrationSql(
+      "DELETE FROM app.acme_widgets WHERE id IN (SELECT id FROM app.acme_widgets WHERE qty = 0);"
+    );
+    expect(result).toEqual({ ok: true, errors: [] });
+  });
+
   it("rejects two statements", () => {
     const result = validateModuleMigrationSql(
       "CREATE TABLE app.a (id uuid); CREATE TABLE app.b (id uuid);"

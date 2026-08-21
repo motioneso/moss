@@ -59,7 +59,11 @@ export const sportsModuleManifest = {
     supportsUserDisable: true
   },
   database: {
-    migrations: ["sql/0133_sports_follows.sql"],
+    migrations: [
+      "sql/0133_sports_follows.sql",
+      "sql/0185_sports_whole_league_dedupe.sql",
+      "sql/0186_sports_whole_league_unique.sql"
+    ],
     migrationDirectories: ["packages/sports/sql"],
     ownedTables: ["app.sports_follows"]
   },
