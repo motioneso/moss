@@ -1435,3 +1435,22 @@ please do that GitHub bookkeeping (close issue, move board card to Done).
 mandatory relay from that alone -- relaying now because of the context-meter warning, not the
 merge count). No open questions for Ben beyond the existing #1526 AWAITING-BEN entry, which closes
 once PR 1803 merges.
+
+## Continuation note (coordinator session 4b7627b9-1a6f-4801-93af-4c0382b9a06e, pane w1:pJJ, 2026-08-21 ~5:20pm PDT — adoption confirmed, relay18)
+
+Adopted the fleet from predecessor pane w1:pJF (reaped, was "done"). Claimed agent name
+`coordinator` and pane label `Coordinator`.
+
+**Actions taken this pass:**
+1. PR 1803 (#1526): the timeout fix is pushed (commit dd9c8bb18), rebased on main, lane says
+   verified green locally, waiting on CI. CI still pending as of this check — watching.
+2. #1754 (`build-1754b`, pane w1:pJH): actively building, no action needed.
+3. #1756 (`workshop-chat-cards-r2`, pane w1:pH7): was stuck at a plan-approval prompt (waiting on
+   a yes/no to proceed with the draft-change wiring plan, bypass-permissions option already
+   highlighted). Approved it (sent Enter) — lane is now driving again on `wire-draft-backend-1756`.
+4. #1571 (`weather-1571-relay1`, pane w1:pJC): idle, mid-build, user previously asked to be kept
+   posted at Phase 1 — no coordinator action needed.
+
+**Still open:** watch PR 1803 CI, merge as routine once green, then remove the #1526
+AWAITING-BEN entry and do GitHub bookkeeping for #1809 (issue close, board to Done — merged last
+pass but bookkeeping wasn't done yet).
