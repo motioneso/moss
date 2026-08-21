@@ -948,3 +948,38 @@ Checked both active lanes with a bounded read, both are genuinely working, not s
 (pane w1:pJ2) is still mid-wrap-up. No AWAITING-BEN items beyond the two already parked overnight.
 Picking up the successor task list from the previous note verbatim — watching for #1755's next
 green run and #1753's PR. [pane w1:pJ5]
+
+## Continuation note (relay from coordinator session 53e8572a, pane w1:pJ5, 2026-08-21 ~11:2x PDT — context limit, handing off)
+
+Since the last note: merged #1755 (PR 1804) after a genuine green QA re-review, fixed the shared
+dev instance's broken test login (root-caused to a dev-instance spin-up tool overwriting the admin
+account's password; reset via `pnpm admin:reset-password`, the sanctioned script), opened PR 1808
+for #1753 (CI green, awaiting QA), and added a watchdog guardrail to this coordinate skill (a
+spawned agent's "I'll finish once my background task completes" turn-ending needs an active
+recheck scheduled, not an assumption of a second notification).
+
+Also built and installed a standing systemd watchdog (`scripts/ops/coordinator-watchdog.sh` +
+its two unit files, already enabled and running) that checks the Coordinator pane every minute
+and nudges it if its screen hasn't changed in 5 minutes — this runs outside any Claude session, so
+it keeps working even if a coordinator goes fully unresponsive. Works for any herdr-supported
+agent in that pane, not just Claude.
+
+**Current lane status, all four idle (nothing building right now):**
+- #1753 (PR 1808) — code-complete, CI green, needs a QA pass. Its pane had a stale unsent
+  follow-up message; replaced and confirmed delivered.
+- #1526 (PR 1803) — STOPPED, parked for Ben per two failed CI cycles on the same
+  connection-close timing test (see "Blocked overnight" heading above). Ben asked to have the
+  Fable agent look at it; I've dispatched that (agent id in this session only, not written here —
+  successor should just watch for its report or re-dispatch if it never lands. Prompt asked
+  whether this is a real bug vs. a flaky test and what to do next).
+- #1521 (PR 1801) — code-complete, CI green, blocked only on the live-path proof, which can now
+  run since the login is fixed. Nothing else outstanding.
+- #1756 (PR 1799, draft) — was waiting on #1755; that landed, so I just told the lane to rebase
+  onto main and confirm it still plugs in, then report ready for review.
+
+**Successor's task list:** (1) watch for the Fable #1526 report and relay it to Ben — a message
+from an agent named similarly to `ab9e70cc...` may still be pending in this session's queue if it
+lands before handoff completes, otherwise just wait for it; (2) get #1753 through QA and merge if
+green; (3) get #1521's live-path proof run and merge; (4) watch #1756 finish its rebase and get it
+through review; (5) keep the manifest current. No open AWAITING-BEN items beyond #1526 itself.
+[pane w1:pJ5]
