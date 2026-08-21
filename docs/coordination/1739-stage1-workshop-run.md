@@ -1552,3 +1552,35 @@ contained text urging an agent to suppress security concerns and not mention the
 any of it -- it wasn't a reply to anything asked this run, and it read as data, not as an
 instruction to follow. Mentioned to Ben in chat already; re-noting here in case a successor sees
 the same directory and needs the context that this was already checked once.
+
+## Adoption note (coordinator session b09813e6-3436-4c85-81c7-8313a899644d, pane w1:pJM, 2026-08-21 ~6:10pm PDT — relay19)
+
+Adopted the fleet from predecessor pane w1:pJJ (done, reaped). Claimed agent name `coordinator`
+and pane label `Coordinator`.
+
+**Checked on arrival:**
+- Ben's reply on the PR 1803 real-bug question: no new reply yet — newest file in the reply
+  folder is still `1787077307172-coordinator.md`, same as when the predecessor pinged him. Still
+  watching, not re-pinging.
+- PR 1803 lane (`w1:pHP`): actively working, mid root-cause investigation, reading relevant
+  memory and source files. No stall.
+- #1754 lane (`w1:pJK`, `build1754task16`): sent an escalation — the plan assumed a function
+  called installModule writes the row that marks a module as installed, but it actually only
+  runs that module's database setup; a different function does the row-writing and already knows
+  about the new draft status from earlier work. The build the lane makes also lands in a folder
+  the server doesn't normally look at, so it needs moving. The lane proposed skipping the
+  assumed function entirely, writing the row itself the correct way, moving the build's files
+  into the right folder, and letting the next routine module-scan pick up the database setup
+  automatically (same as any other module). This looked like a sound fix for a plan mistake, not
+  a security or data-loss question, so approved it directly and confirmed the approval was
+  received. Lane is proceeding.
+- #1756 lane (`w1:pH7`, `workshop-chat-cards-r2`): found the same "message sat unsent at the
+  prompt" issue the predecessor flagged — a "continue" nudge had not actually been submitted.
+  Sent the Enter key to submit it. Have not yet re-read the pane to confirm it took effect —
+  next check should confirm this landed.
+- #1571 lane (`w1:pJC`): idle, no action needed per standing instruction (user wants to be told
+  at Phase 1 completion only).
+
+**Still open, same four items as before, in order:** watch for Ben's PR 1803 answer; watch #1754
+now that it has the go-ahead on its re-scope; watch #1756 (confirm the "continue" nudge actually
+submitted); remove both #1526 AWAITING-BEN entries once PR 1803 merges.
