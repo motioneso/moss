@@ -11,10 +11,10 @@ finish — merge, close out, spawn the next queued item once its dependency land
 same-night escalation only when Ben is back and says so. This overrides the box-wide CLAUDE.md
 "never idle silently, run needs-ben" rule for the rest of tonight specifically.
 
-Coordinator: Claude session `0cfc3a41-b6cb-4487-aca3-1b4248dc7438`, label `Coordinator`, pane
-`w1:pHW` (re-resolve pane fresh by label + session id — pane numbers reflow). Took over from
-session `8e577192-b2da-4323-b014-238626027729` (former pane `w1:pHS`) at 2026-08-20 ~22:1x PDT;
-old pane was already gone by the time this session checked `herdr pane list` (no reap needed).
+Coordinator: Claude session `d2815ae2-dd97-40ea-9eef-08b4f70f6323`, label `Coordinator`, pane
+`w1:pHY` (re-resolve pane fresh by label + session id — pane numbers reflow). Took over from
+session `0cfc3a41-b6cb-4487-aca3-1b4248dc7438` (former pane `w1:pHW`) at 2026-08-20 ~22:5x PDT;
+confirmed the old pane saw this one driving before closing it (reaped cleanly).
 Liveness Monitor needs to be re-armed fresh (see latest continuation note) — inherited monitor did
 not carry over, matching the pattern of prior relays in this run.
 
@@ -36,6 +36,35 @@ state checks used the REST API instead (not affected). Board status updates (mov
 wait for GraphQL to reset; issue-close and merge via `gh pr merge`/`gh issue close` are REST and
 unaffected.
 
+## Blocked overnight, needs Ben
+
+Nothing here yet from earlier relays. Entries below added by this coordinator (session
+`d2815ae2-dd97-40ea-9eef-08b4f70f6323`, pane `w1:pHY`), ~2026-08-21 05:2x UTC:
+
+- **#1526 (PR 1803, PTY backpressure)** — stopped, at its failure budget. First QA cycle found a
+  real flaky test (only waited up to 2 seconds for a connection-close event). The build agent
+  fixed it to wait for the real event with a 10-second safety timeout, but the second CI run
+  timed out on the exact same test again — the connection-close event still isn't arriving in
+  time under CI load even with the fix. Two failed cycles is this run's limit before a human
+  needs to look at it. The branch and worktree are left alone, untouched, for whoever picks this
+  up. Build agent told to stop and wait. Failing test:
+  `tests/unit/cli-runner-terminal-rpc.test.ts` > "a thrown write on the terminalData push closes
+  the connection and kills the connection-owned terminal (#1526)".
+- **Shared dev instance login is currently rejecting the standard test account.** `ben@ben.com` /
+  `jarvistest123!` against `http://192.168.50.36:3000` returns "Invalid email or password" (401).
+  The instance itself responds (home page loads fine), so this looks like a broken or changed
+  password/account on that instance, not a dead server. This blocks any lane trying to do its
+  live-path browser proof on the shared instance tonight — #1521 hit this directly (see below).
+  Lanes that can stand up their own throwaway instance and database instead (like #1755 did) are
+  not affected. Not investigated further tonight to stay within the standing rule against waking
+  Ben; needs either a password reset on that account or someone to check what changed.
+- **#1521 (PR 1801, keep private chat closed during focus refetch)** — code-complete, CI green
+  (format, lint, typecheck, and all three required checks), but the live-path browser proof could
+  not be done because of the shared dev instance login problem above. The build agent posted a
+  comment on the PR with clear steps for whoever re-checks once login works again. Status:
+  code-complete, unverified — not merged, not marked done. Branch is pushed and rebased on main;
+  worktree is clean and idle, ready to reuse once this unblocks.
+
 ## Queue
 
 | Issue | Title | Tier | Status | Agent | Pane | Branch | PR |
@@ -43,11 +72,11 @@ unaffected.
 | #1752 | find modules that appear after the server started | routine | done, QA in progress (PR #1806, agent a9a058d5949b71c9b) — flags that #1753/#1754 depend on the function names createExternalModuleDiscoveryHolder, getDiscoveries, rescan staying as-is | relay-1752-6 | w1:pHV | 1752-module-discovery-holder | 1806 |
 | #1753 | a draft module that runs for its author alone | routine | blocked on #1752 | - | - | - | - |
 | #1754 | the build agent - agree a plan, then build it | sensitive (spawns a build agent/job) | blocked on #1752 | - | - | - | - |
-| #1755 | the Workshop page (front end shell) | routine | building, on its 4th relay — PR open, still needs live-path proof before it can merge | workshop1755-relay4 | w1:pHX | 1755-workshop-page | 1804 |
+| #1755 | the Workshop page (front end shell) | routine | live-path proof posted, but CI came back red — sent back to build agent to fix a module-count test mismatch across 7 integration tests before QA | workshop1755-relay4 | w1:pHX | 1755-workshop-page | 1804 |
 | #1756 | plan/draft chat cards (front end shell) | routine | building (waiting on its own gate rerun) | 1756-relay2 | w1:pH7 | 1756-workshop-chat-cards | - |
 | #1515 | [1137-C2] warn safely on commitment extraction failures | routine | **MERGED** (PR #1802, CI all green, issue closed) | warn-safely-relay2 | w1:pHM | 1515-warn-safely-commitment-extraction | 1802 |
-| #1521 | [1139-D] keep private chat closed during focus refetch | routine | building (plan-stage, on its 2nd relay; coordinator confirmed scope drift is real — proceed with the fuller 3-part fix) | lane-1521-relay2 | w1:pHN | 1521-keep-private-chat-closed-refetch | - |
-| #1526 | [1140-D] propagate terminal socket backpressure to the PTY | routine per its own spec (handoff doc had said sensitive — spec wins) | fix pushed (commit c86d30d1a) — test now waits for the real close event instead of a fixed timer; re-QA in progress (agent a625f1b68db885a21), 2nd of 2 allowed QA cycles | pty-1526-relay3 | w1:pHP | 1526-pty-socket-backpressure | 1803 |
+| #1521 | [1139-D] keep private chat closed during focus refetch | routine | done, CI green, code-complete but UNVERIFIED — shared dev instance login is broken, live-path proof blocked; see "Blocked overnight" heading | lane-1521-relay2 | w1:pHN | 1521-keep-private-chat-closed-refetch | 1801 |
+| #1526 | [1140-D] propagate terminal socket backpressure to the PTY | routine per its own spec (handoff doc had said sensitive — spec wins) | STOPPED — failed 2nd CI cycle same as 1st (connection-close test still times out); at failure budget, parked for Ben; see "Blocked overnight" heading | pty-1526-relay3 | w1:pHP | 1526-pty-socket-backpressure | 1803 |
 | #1524 | [1140-B] make whole-league sports follows unique | sensitive (migration; head of a chain — #1572, #906 wait on it) | unblocked, building (relay2) — Ben ruled to allow row deletes in the shared migration file; issue must stay open after merge, see today's ruling note | build1524relay2 | w1:pHT | 1524-unique-whole-league-sports-follows | - |
 | #1667 | module-sdk-worker test polling budget too tight for real cold start | routine (test-only) | QA in progress (PR #1805, agent a9ccec6d42112fd9d) | build1667 | w1:pHG | 1667-module-sdk-worker-polling-budget | 1805 |
 | #1625 | lane-scoped module fixture identities for concurrent integration gates | routine (test-only) | **merged** to main, issue closed, worktree reaped — note: the lane merged its own PR instead of handing back to the coordinator; corrected, no harm (test-only change, CI fully green) | build1625 (reaped) | - | 1625-lane-scoped-module-fixture-identities | #1798 |
