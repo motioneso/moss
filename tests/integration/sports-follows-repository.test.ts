@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createMossAuthRuntime, type MossAuthRuntime } from "@moss/auth";
-import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
+import { createDatabase, DataContextRunner, runSqlMigrations, type MossDatabase } from "@moss/db";
 import { createPgBossClient, type PgBoss } from "@moss/jobs";
 import type { Kysely } from "kysely";
+import { Client } from "pg";
 import { createApiServer } from "../../apps/api/src/server.js";
+import { sportsModuleSqlMigrationDirectory } from "../../packages/sports/src/manifest.js";
 import { SportsFollowsRepository } from "../../packages/sports/src/repository.js";
 import {
   connectionStrings,
@@ -212,5 +214,75 @@ describe("sports follows repository RLS", () => {
     );
     expect(bobListed).toHaveLength(1);
     expect(bobListed[0]?.id).toBe(bobFollow.id);
+  });
+});
+
+// Proves the upgrade path for an existing install that already has duplicate whole-league rows:
+// 0185 (dedupe DELETE) and 0186 (partial unique index) must both still apply cleanly and leave
+// exactly the older duplicate standing. Sports is a built-in module (runSqlMigrations against
+// app.schema_migrations), not an external module (installModule/app.module_schema_migrations) —
+// this harness targets the built-in ledger directly.
+describe("sports whole-league dedupe migration upgrade path", () => {
+  const ownerId = "60000000-0000-4000-8000-000000000001";
+  const olderId = "70000000-0000-4000-8000-000000000001";
+  const newerId = "70000000-0000-4000-8000-000000000002";
+
+  it("collapses a pre-existing whole-league duplicate to the older row and restores the ledger/index", async () => {
+    await resetEmptyFoundationDatabase();
+
+    const bootstrap = new Client({ connectionString: connectionStrings.bootstrap });
+    await bootstrap.connect();
+    try {
+      await bootstrap.query(
+        `DELETE FROM app.schema_migrations WHERE version IN ('0185', '0186')`
+      );
+      await bootstrap.query(
+        `DROP INDEX IF EXISTS app.sports_follows_whole_league_unique_idx`
+      );
+
+      await bootstrap.query(
+        `INSERT INTO app.users (id, email, name, is_instance_admin)
+         VALUES ($1, 'sports-upgrade-owner@example.com', 'Upgrade Owner', false)`,
+        [ownerId]
+      );
+      // Older row first, older created_at — the dedupe migration keeps the oldest by
+      // created_at ASC, id ASC, so this one must survive.
+      await bootstrap.query(
+        `INSERT INTO app.sports_follows (id, owner_user_id, competition_key, team_key, created_at)
+         VALUES ($1, $2, 'nfl', NULL, now() - interval '1 day')`,
+        [olderId, ownerId]
+      );
+      await bootstrap.query(
+        `INSERT INTO app.sports_follows (id, owner_user_id, competition_key, team_key, created_at)
+         VALUES ($1, $2, 'nfl', NULL, now())`,
+        [newerId, ownerId]
+      );
+
+      const result = await runSqlMigrations({
+        connectionString: connectionStrings.migration,
+        migrationsDirectory: sportsModuleSqlMigrationDirectory
+      });
+      const appliedVersions = result.applied.map((m) => m.version);
+      expect(appliedVersions).toEqual(["0185", "0186"]);
+
+      const rows = await bootstrap.query<{ id: string }>(
+        `SELECT id FROM app.sports_follows WHERE owner_user_id = $1 AND competition_key = 'nfl' AND team_key IS NULL`,
+        [ownerId]
+      );
+      expect(rows.rows).toHaveLength(1);
+      expect(rows.rows[0]?.id).toBe(olderId);
+
+      const ledger = await bootstrap.query<{ version: string }>(
+        `SELECT version FROM app.schema_migrations WHERE version IN ('0185', '0186') ORDER BY version`
+      );
+      expect(ledger.rows.map((r) => r.version)).toEqual(["0185", "0186"]);
+
+      const index = await bootstrap.query(
+        `SELECT 1 FROM pg_indexes WHERE indexname = 'sports_follows_whole_league_unique_idx'`
+      );
+      expect(index.rows).toHaveLength(1);
+    } finally {
+      await bootstrap.end();
+    }
   });
 });
