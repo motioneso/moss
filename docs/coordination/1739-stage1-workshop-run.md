@@ -1598,3 +1598,18 @@ alarms: PR 1803's lane just pushed a diagnostic change and is waiting on CI to p
 is running its own local checks and waiting on a typecheck monitor. Neither needs action.
 
 Still no reply from Ben on the PR 1803 question.
+
+## Update (coordinator session b09813e6, pane w1:pJM, 2026-08-21 ~6:25pm PDT)
+
+#1754 (`w1:pJP`, relay6, same worktree) asked two things before starting Task 18:
+1. Whether the function it just built (startModuleBuild) is actually used anywhere later in the
+   plan, since nothing calls it yet. Checked the plan: yes -- a later chat-drawer task calls the
+   matching "approve" function to actually start a build, and the two upcoming tests call the new
+   function directly in their own test code rather than through a button, so there's nothing
+   missing. Told it to proceed.
+2. Flagged a stale leftover pane from an earlier relay (labeled relay4, pane w1:pJN) still open
+   and mid-self-compaction even though its successor (relay5/6, pane w1:pJP) already has the
+   handoff. Confirmed and closed w1:pJN. Renamed w1:pJP's label to "relay6" to match.
+
+Both replies needed a follow-up Enter to actually submit (same known issue as #1756's lane) --
+used herdr pane run + send-keys + a bounded read to confirm each one landed.
