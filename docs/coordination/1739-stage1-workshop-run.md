@@ -1584,3 +1584,17 @@ and pane label `Coordinator`.
 **Still open, same four items as before, in order:** watch for Ben's PR 1803 answer; watch #1754
 now that it has the go-ahead on its re-scope; watch #1756 (confirm the "continue" nudge actually
 submitted); remove both #1526 AWAITING-BEN entries once PR 1803 merges.
+
+## Update (coordinator session b09813e6, pane w1:pJM, 2026-08-21 ~6:15pm PDT)
+
+#1754 relayed (4th relay this run) after its context warning. Task 16 design is settled but no
+code committed yet -- only a research handoff document,
+`docs/superpowers/handoffs/2026-08-21-1754-build-agent-runner-relay4.md`. Successor
+`build1754task16r4`, pane w1:pJN, same worktree, confirmed driving on Sonnet. Old pane w1:pJK
+reaped.
+
+PR 1803 and #1756 both briefly flipped to "done" in the fleet status check -- checked both, false
+alarms: PR 1803's lane just pushed a diagnostic change and is waiting on CI to pick it up; #1756
+is running its own local checks and waiting on a typecheck monitor. Neither needs action.
+
+Still no reply from Ben on the PR 1803 question.
