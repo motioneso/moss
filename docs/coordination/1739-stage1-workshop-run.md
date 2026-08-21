@@ -72,7 +72,7 @@ Nothing here yet from earlier relays. Entries below added by this coordinator (s
 | #1752 | find modules that appear after the server started | routine | done, QA in progress (PR #1806, agent a9a058d5949b71c9b) — flags that #1753/#1754 depend on the function names createExternalModuleDiscoveryHolder, getDiscoveries, rescan staying as-is | relay-1752-6 | w1:pHV | 1752-module-discovery-holder | 1806 |
 | #1753 | a draft module that runs for its author alone | routine | building (relay3). Shape note for #1754: the worker's whole-module gate now simply accepts a draft whose files still match (same as a shipped module), no new per-user parameter — coordinator-approved simplification. **Migration collision found and corrected 2026-08-21 ~06:3x UTC:** lane had renumbered its two migrations to 0185/0186 (plan's original 0159/0160 were already taken by the news package on main) — but #1524 merged to main using those exact same numbers for its own migration first. Told the lane to rebase onto main and renumber to the next free number (0187+); not yet confirmed done. | lane-1753-draft-module (relay3) | w1:pJ2 | 1753-draft-module-author-only | - |
 | #1754 | the build agent - agree a plan, then build it | sensitive (spawns a build agent/job) | blocked on #1752 | - | - | - | - |
-| #1755 | the Workshop page (front end shell) | routine | live-path proof posted, but CI came back red — sent back to build agent to fix a module-count test mismatch across 7 integration tests before QA | workshop1755-relay4 | w1:pHX | 1755-workshop-page | 1804 |
+| #1755 | the Workshop page (front end shell) | routine | CI green, QA RED — two blocking findings (in-progress card wrongly styled raised instead of a plain row; no release note) — sent back to build agent to fix | ws-page-relay5 | w1:pJ4 | 1755-workshop-page | 1804 |
 | #1756 | plan/draft chat cards (front end shell) | routine | draft PR open, gate green (one documented unrelated local flake), waiting for #1755 to land before final review | 1756-relay2 | w1:pH7 | 1756-workshop-chat-cards | 1799 |
 | #1515 | [1137-C2] warn safely on commitment extraction failures | routine | **MERGED** (PR #1802, CI all green, issue closed), pane reaped by relay10 | warn-safely-relay2 (reaped) | - | 1515-warn-safely-commitment-extraction | 1802 |
 | #1521 | [1139-D] keep private chat closed during focus refetch | routine | done, CI green, code-complete but UNVERIFIED — shared dev instance login is broken, live-path proof blocked; see "Blocked overnight" heading | lane-1521-relay2 | w1:pHN | 1521-keep-private-chat-closed-refetch | 1801 |
@@ -871,3 +871,21 @@ my own tab w1:t1N for status changes.
   ask whether this plan doc is meant to be merged, or is meant to stay a working reference only.
 - Liveness monitor continues to run cleanly, correctly flagging both of the above status changes
   as they happened. [pane w1:pJ3]
+
+## Update (this coordinator, 2026-08-21 ~07:2x UTC)
+
+- **#1753** finished tasks 8-10, asked whether to proceed to the coordinated wrap-up, was told
+  yes, and is now running it (verify-gate, PR, release note). Watching for its PR.
+- **#1755 (PR 1804)** reported done — CI fully green including the two test fixes from this
+  relay, live-path proof already on the PR from an earlier relay, nothing left running or seeded.
+  Spawned routine-tier QA. **QA came back RED**, two blocking findings, verdict posted to the PR
+  (comment 5366871073):
+  1. The "Building now" card in the Workshop page uses the same raised-card look as the "Needs
+     you" card. The issue for #1755 explicitly said, marked do-not-undo: only the item asking the
+     user to act should look raised, work-in-progress should be a plain row. The approved mockup
+     shows this correctly; the current code doesn't.
+  2. No release note — the PR adds a new admin-visible page and nav entry, which needs one filled
+     in per project rules, and it's missing.
+  QA's worktree was reaped immediately after reading the verdict. Sent both findings back to the
+  build agent (pane w1:pJ4) with the fix instructions and asked for a re-run of verify-gate before
+  the next QA pass; it's already working on it. Not merged. [pane w1:pJ3]
