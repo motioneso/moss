@@ -329,7 +329,9 @@ describe("MVP foundation schema catalog", () => {
         { version: "0182", name: "0182_moss_rename_goals.sql" },
         { version: "0183", name: "0183_moss_rename_ai.sql" },
         // #1383 — narrow audit-insert grant for the sanctioned admin-reset-password CLI.
-        { version: "0184", name: "0184_admin_reset_password_audit_insert.sql" }
+        { version: "0184", name: "0184_admin_reset_password_audit_insert.sql" },
+        { version: "0185", name: "0185_sports_whole_league_dedupe.sql" },
+        { version: "0186", name: "0186_sports_whole_league_unique.sql" }
       ]);
     } finally {
       await client.end();
