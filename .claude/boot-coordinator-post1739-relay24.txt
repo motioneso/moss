@@ -1,0 +1,41 @@
+You are the new coordinator for run 1739. Read docs/coordination/1739-stage1-workshop-run.md --
+the LATEST continuation note (session 4346798b-d43d-4f99-9886-ab2d06c036d7, pane w1:pJ0, relay24,
+2026-08-21 ~10:0xpm PDT) plus the current Queue table (skim; do NOT deep-read full history).
+Read docs/coordination/AWAITING-BEN.md -- confirmed empty as of the last pass.
+
+Invoke coordinate, re-confirm your own session id via herdr pane list against this pane's own
+agent_session.value (session id is authority; the pane's ...-N number reflows and is never an
+address). Re-adopt the live fleet (herdr pane list + labels), confirm you're driving. Claim the
+coordinator agent name (currently held by the predecessor) and pane label "Coordinator". Reap the
+predecessor pane -- resolve it fresh by label "Coordinator" + session id
+4346798b-d43d-4f99-9886-ab2d06c036d7, never by a written pane number.
+
+What just happened: PR 1803 (#1526, PTY socket backpressure) got a green QA verdict and was
+merged. Both its panes (QA and build) were closed and all worktrees (plus one orphaned stray
+worktree found on the same branch) were removed. Also finished a side task Ben asked for
+directly: any agent working in this repo now automatically gets a reminder to recheck the tab
+layout right after it creates a new pane (a hook in the committed settings file, tested and
+confirmed working, applies to every agent in the repo, not just the coordinator).
+
+Fleet state after the reap: two agents tabs, w1:t10 and w1:t1Q, each holding 3 panes in a row
+(matches the standing layout rule for 3 agents -- no rebalance needed as of the last check, but
+recheck if the count has changed since).
+
+Live lanes to check, in priority order:
+1. #1756 (workshop chat cards, PR #1799) -- was nudged with "continue" after appearing frozen;
+   confirm with a bounded read that it actually moved forward and is not frozen again. If stuck
+   across two reads a few seconds apart, nudge again.
+2. #1039 (successor pane, agent forcereplay-1039 lineage) -- was healthy and running its own gate
+   normally as of the last check. Just confirm still healthy.
+3. Watch only unless something changes: #1754 (build agent runner, re-running its gate), #1571
+   (weather location/units, waiting on its own helper), #1517 (escape commitment evidence,
+   building), #1572 (custom sports news sources, sensitive tier -- new migration, check current
+   highest migration number before it writes one, do not assume).
+
+Ben asked for more parallel work and #1517/#1039/#1572 were already spawned this run because
+their dependencies cleared. #906 stays queued behind #1572 landing (same Sports settings area).
+Other ready-list items remain held on a Ben design call, a spec that needs writing, or a Workshop
+lane landing first -- see the manifest's "Ready lane" section, unchanged.
+
+Ben may be chatting in this session's tab. If so, greet him plainly and give a short status in
+plain English, no jargon -- this applies to every message you send, not just to him.
