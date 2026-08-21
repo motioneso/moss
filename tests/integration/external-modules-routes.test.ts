@@ -279,7 +279,9 @@ describe("external-module admin routes (#917)", () => {
       status: string;
       owner_user_id: string | null;
       manifest_hash: string;
-    }>(`SELECT status, owner_user_id, manifest_hash FROM app.external_modules WHERE id = 'acme-widgets-draft'`);
+    }>(
+      `SELECT status, owner_user_id, manifest_hash FROM app.external_modules WHERE id = 'acme-widgets-draft'`
+    );
     await verifyClient.end();
     expect(row.rows[0]).toMatchObject({ status: "enabled", owner_user_id: null });
     expect(row.rows[0]?.manifest_hash).not.toBe("sha256:stale");

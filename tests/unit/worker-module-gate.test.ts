@@ -10,7 +10,12 @@ import type { ExternalModuleDiscovery } from "@moss/module-registry";
 const discovery: ExternalModuleDiscovery = {
   id: "videos-draft",
   dir: "/modules/videos-draft",
-  manifest: { id: "videos-draft", name: "Videos", version: "0.0.1", publisher: "test" } as ExternalModuleDiscovery["manifest"],
+  manifest: {
+    id: "videos-draft",
+    name: "Videos",
+    version: "0.0.1",
+    publisher: "test"
+  } as ExternalModuleDiscovery["manifest"],
   manifestHash: "manifest-hash",
   packageHash: "package-hash"
 };
@@ -35,13 +40,21 @@ describe("createIsModuleEnabled (#1753)", () => {
   });
 
   it("keeps existing enabled-module behaviour: exact hash match required", async () => {
-    const db = buildFakeDb({ status: "enabled", manifest_hash: "manifest-hash", package_hash: "package-hash" });
+    const db = buildFakeDb({
+      status: "enabled",
+      manifest_hash: "manifest-hash",
+      package_hash: "package-hash"
+    });
     const isModuleEnabled = createIsModuleEnabled({ db, getDiscoveryById: () => discovery });
     await expect(isModuleEnabled("videos-draft")).resolves.toBe(true);
   });
 
   it("stays disabled for an enabled module whose package hash drifted", async () => {
-    const db = buildFakeDb({ status: "enabled", manifest_hash: "manifest-hash", package_hash: "different" });
+    const db = buildFakeDb({
+      status: "enabled",
+      manifest_hash: "manifest-hash",
+      package_hash: "different"
+    });
     const isModuleEnabled = createIsModuleEnabled({ db, getDiscoveryById: () => discovery });
     await expect(isModuleEnabled("videos-draft")).resolves.toBe(false);
   });

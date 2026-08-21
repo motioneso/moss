@@ -52,7 +52,15 @@ describe("reconcileExternalModules (#917)", () => {
   it("auto-disables (drift) an enabled row whose hash no longer matches", () => {
     const { modules, driftDisable } = reconcileExternalModules(
       [discovery("a", "sha256:NEW")],
-      [{ id: "a", status: "enabled", packageHash: "sha256:OLD", disabledReason: null, ownerUserId: null }]
+      [
+        {
+          id: "a",
+          status: "enabled",
+          packageHash: "sha256:OLD",
+          disabledReason: null,
+          ownerUserId: null
+        }
+      ]
     );
     expect(modules[0]).toMatchObject({
       id: "a",
@@ -89,7 +97,15 @@ describe("reconcileExternalModules (#917)", () => {
   it("ignores a row whose module is no longer on disk", () => {
     const { modules } = reconcileExternalModules(
       [],
-      [{ id: "ghost", status: "enabled", packageHash: "sha256:1", disabledReason: null, ownerUserId: null }]
+      [
+        {
+          id: "ghost",
+          status: "enabled",
+          packageHash: "sha256:1",
+          disabledReason: null,
+          ownerUserId: null
+        }
+      ]
     );
     expect(modules).toEqual([]);
   });

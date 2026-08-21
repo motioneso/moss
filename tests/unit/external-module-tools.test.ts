@@ -33,7 +33,8 @@ const buildResolver = (actorUserId: string, states: readonly ExternalModuleState
   createActiveExternalModulesResolverForApi({
     discoveries: () => [discovery],
     appDataContext: {
-      withDataContext: async (_accessContext: unknown, run: (db: never) => unknown) => run({} as never)
+      withDataContext: async (_accessContext: unknown, run: (db: never) => unknown) =>
+        run({} as never)
     } as never,
     settingsRepository: {
       listExternalModuleStates: async () => states,
