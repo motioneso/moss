@@ -32,7 +32,9 @@ function meResponse(isInstanceAdmin: boolean): MeResponse {
 function render(me?: MeResponse): string {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   if (me) client.setQueryData(["workshop", "me"], me);
-  return renderToString(createElement(QueryClientProvider, { client }, createElement(WorkshopPage)));
+  return renderToString(
+    createElement(QueryClientProvider, { client }, createElement(WorkshopPage))
+  );
 }
 
 describe("WorkshopPage", () => {

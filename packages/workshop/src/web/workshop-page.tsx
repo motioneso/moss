@@ -38,7 +38,9 @@ export function WorkshopPage() {
       <header className="workshop-head">
         <span className="jds-eyebrow jds-eyebrow--muted">Modules</span>
         <h1 className="jds-display jds-display--md">The workshop</h1>
-        <p className="workshop-lede">See what Moss is building for you, and what's already running.</p>
+        <p className="workshop-lede">
+          See what Moss is building for you, and what's already running.
+        </p>
       </header>
       <WorkshopGroups builds={[]} modules={[]} />
     </div>

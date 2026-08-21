@@ -27,7 +27,9 @@ function NeedsYouCard({ build }: { readonly build: ModuleBuildSummary }) {
       <div className="jds-card jds-card--raised">
         <h3 className="jds-card-title jds-card-title--heavy">{build.title}</h3>
         <span className="jds-badge jds-badge--amber jds-badge--pill">
-          {build.status === "awaiting_plan_approval" ? "Plan ready · needs a look" : "Waiting on you"}
+          {build.status === "awaiting_plan_approval"
+            ? "Plan ready · needs a look"
+            : "Waiting on you"}
         </span>
         <p className="jds-card__meta">{build.description}</p>
         <div className="workshop-actions">
@@ -85,7 +87,8 @@ function BuildingNowCard({ build }: { readonly build: ModuleBuildSummary }) {
           </button>
           <span className="workshop-spacer" />
           <span className="jds-card__meta">
-            Spent so far {formatCents(build.costCents)} of your {formatCents(build.dailyLimitCents)} daily limit
+            Spent so far {formatCents(build.costCents)} of your {formatCents(build.dailyLimitCents)}{" "}
+            daily limit
           </span>
           <button type="button" className="jds-btn jds-btn--quiet jds-btn--sm">
             Stop

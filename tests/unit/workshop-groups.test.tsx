@@ -4,12 +4,22 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 
 import { WorkshopGroups } from "../../packages/workshop/src/web/workshop-groups.js";
-import type { ExternalModuleSummary, ModuleBuildSummary } from "../../packages/workshop/src/web/types.js";
+import type {
+  ExternalModuleSummary,
+  ModuleBuildSummary
+} from "../../packages/workshop/src/web/types.js";
 
-function render(builds: readonly ModuleBuildSummary[], modules: readonly ExternalModuleSummary[]): string {
+function render(
+  builds: readonly ModuleBuildSummary[],
+  modules: readonly ExternalModuleSummary[]
+): string {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return renderToString(
-    createElement(QueryClientProvider, { client }, createElement(WorkshopGroups, { builds, modules }))
+    createElement(
+      QueryClientProvider,
+      { client },
+      createElement(WorkshopGroups, { builds, modules })
+    )
   );
 }
 
