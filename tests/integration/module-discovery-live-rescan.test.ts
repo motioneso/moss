@@ -102,9 +102,7 @@ describe("live rescan picks up a module dropped on disk while both processes are
       headers: { cookie: adminCookie }
     });
     expect(
-      beforeRescan
-        .json()
-        .modules.some((module: { id: string }) => module.id === SECOND_MODULE_ID)
+      beforeRescan.json().modules.some((module: { id: string }) => module.id === SECOND_MODULE_ID)
     ).toBe(false);
 
     const rescanRes = await server.inject({
@@ -120,9 +118,7 @@ describe("live rescan picks up a module dropped on disk while both processes are
       headers: { cookie: adminCookie }
     });
     expect(
-      afterRescan
-        .json()
-        .modules.some((module: { id: string }) => module.id === SECOND_MODULE_ID)
+      afterRescan.json().modules.some((module: { id: string }) => module.id === SECOND_MODULE_ID)
     ).toBe(true);
 
     const enableRes = await server.inject({
