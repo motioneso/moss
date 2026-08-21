@@ -57,22 +57,11 @@ Lane unblocked. Ben also asked to leave issue #1524 open after merge -- he's pla
 follows work and will file a separate new issue for it rather than folding it into this one. Full
 note in docs/coordination/1739-stage1-workshop-run.md. -->
 
-## OPEN 2026-08-21: #1526 (PR 1803) — one test keeps failing in CI, not on the lane's own machine
-
-The terminal socket backpressure fix itself looks done and pushed. But one specific test (the one
-that checks the connection closes properly) has now failed the same way twice in a row on GitHub's
-CI, while it passes every time when run locally. A reviewer (Fable) looked at the test and believes
-it is the test itself that's flaky — timing-sensitive, sometimes doesn't notice something happen in
-time — not a real bug in the fix.
-
-**Options:**
-1. Rewrite the flaky test to not depend on timing (the fix the reviewer recommends) — safest, but
-   needs someone to do it and re-run CI.
-2. Ben looks at the CI failure directly and makes the call.
-3. Retry CI a third time — **not recommended**, the standing rule here is two identical failures
-   means stop and think, not try again.
-
-**Recommendation:** option 1. Pinged via `needs-ben`.
+<!-- Resolved 2026-08-21 ~10:5x PM PDT: #1526 (PR 1803) connection-close test. Ben ruled option 3
+-- skip/mark the test as a known issue rather than keep chasing the cause, file a separate bug for
+it, and let the rest of the PTY backpressure fix land. Lane instructed to do exactly that and
+report back. Full history of what was tried (timeout bumps, cleanup fix, isolating the test) is in
+docs/coordination/1739-stage1-workshop-run.md. -->
 
 ## RESOLVED 2026-08-11: #1533 live-path proof blocked — missing real-chat UAT credential
 
@@ -107,68 +96,5 @@ matches the spec literally); otherwise option 1. Pinged via `needs-ben` (see
 `~/.needs-ben/sent/1786483243535565600.msg`). Everything else in #1533 Phase 4 is done — this is
 the only open item. Build agent is waiting event-driven, not polling; coordinator likewise.
 
-## UPDATE 2026-08-21 ~10:1x PM PDT: #1526 (PR 1803) — found the likely cause, still your call
-
-New finding since the entry below: the lane temporarily disabled two other tests in the same file
-to isolate the problem, and with those two out of the way, the test that kept failing passed
-immediately and the whole check went green. That points to the real cause being that an earlier
-test in the same file is leaving something behind -- most likely a shell process or a terminal
-slot that doesn't get cleaned up -- which then starves the later test of the thing it's waiting
-for. That fits with why a longer timeout never helped: it was never about waiting long enough.
-
-This is good news in one way: it looks like the actual backpressure fix (the code this PR is
-about) is fine, and the problem is confined to test cleanup, not shipped code. It's not fixed yet
-though -- the two tests are only disabled to prove the theory, not as a real solution, and turning
-them back on would very likely bring the failure back.
-
-The lane has paused and is waiting, not pushing anything further, per the instruction to stop
-after this round. Options below still stand; option 1 now has a concrete lead to chase (fix the
-process/terminal cleanup between tests) rather than being open-ended. Not re-pinging your phone
-again since this is the same open question, just with more information -- flagging it here so you
-see it whenever you next check.
-
-## UPDATE 2026-08-21 ~10:4x PM PDT: #1526 (PR 1803) — the cleanup fix was tried and did NOT work; back to square one on the cause
-
-The lane made the real fix the last update suggested: it changed the two earlier tests to properly
-wait for the actual shell process to finish before moving on, instead of just telling it to stop
-and moving on right away. Then it turned both tests back on and pushed, as agreed.
-
-Result: still fails, same test, same error ("timed out waiting for connection close"). So leftover
-processes from those two tests were NOT the real cause after all -- something else about the
-earlier green run (with those tests skipped) explains it, not specifically the cleanup. The commit
-with the cleanup improvement is still on the branch since it's a genuine improvement on its own,
-just not the fix.
-
-The lane has stopped again as instructed -- no further timeout tweaks, no further pushes, just
-waiting. This is the same open question as above, now with the leading theory ruled out. Options
-1-3 from the original entry still stand; option 1 ("someone digs into the real cause") no longer
-has a concrete lead. Pinged via `needs-ben`.
-
-## OPEN 2026-08-21 ~5:50pm PDT: #1526 (PR 1803) — same test has now failed 3 times identically, likely a real bug not a flake
-
-Your earlier ruling was "we can just ok with flakes for now" on this test. Since then, the branch
-has tried two different timeout fixes (giving the wait more time) and the test failed the exact
-same way both times, with the exact same error message: "timed out waiting for connection close."
-That pattern -- more time doesn't help at all -- means the connection is very likely never closing
-on GitHub's CI machines, not just closing slowly. That would make this a real bug, not a timing
-flake, and it may only show up in CI because of something about that environment (not reproducible
-on the lane's own machine).
-
-Also found: merging can't skip this check even with your flake waiver. The repository has a rule
-requiring this check to pass before a merge, with no override available to me (the earlier "admin
-merge" bypass is blocked). So this PR is stuck red until the real cause is found and fixed, not
-just waived.
-
-**What I'd like from you:** a decision on how far to let this go. Options:
-1. Let the lane keep digging into the real cause (has been asked to do this now, not to try more
-   timeout numbers) -- could take a while, this is a "why does this only happen in CI" question.
-2. You look at the CI failure yourself.
-3. Set this PR's connection-close test aside for now (skip/mark known-issue) and file a separate
-   bug to track it, so the rest of PR 1803's PTY backpressure fix can still land.
-
-**My recommendation:** option 3 if the connection-close test isn't central to what #1526 is
-actually about (backpressure) -- letting the well-tested main fix land, and tracking a real
-possible bug about connection cleanup separately. But I don't have enough context on whether the
-connection-close behavior matters more here to strongly assert that.
-
-Pinged via `needs-ben`.
+<!-- The three #1526 updates that led to the option-3 ruling above (likely cause found, cleanup fix
+tried and failed, original 3-times-failed report) are preserved in git history for this file. -->
