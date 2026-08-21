@@ -97,6 +97,76 @@ instead — it only exists in the main checkout, not your worktree. Proceed as t
 
 ## merges_since_relay: 0
 
+## Continuation note (this coordinator, 2026-08-20 ~21:35 PDT — relaying at context 70%)
+
+Coordinator authority: session `78440b71-a4e4-472d-a450-c036c5edab92`, pane `w1:pHK`, label
+`Coordinator`. No merges yet this run (`merges_since_relay` stays 0), so no session-id check is
+needed before your first merge — just re-confirm your own session id against this line before you
+merge anything.
+
+**AWAITING-BEN — the only open item:** #1524 (sports follows migration) is paused. It needs to
+delete duplicate rows before adding a uniqueness rule, but the shared file that validates every
+module's database migrations doesn't allow a delete statement. Full options are in
+`docs/coordination/AWAITING-BEN.md` under "#1524 sports follows migration needs to delete
+duplicate rows" — already pinged via `needs-ben`. Two other pieces of work (#1572, #906) are
+queued behind it. Nothing else is open in that file.
+
+**Fleet — all 9 lanes alive, re-confirm each with a bounded pane read before acting on this list**
+(pane numbers reflow, statuses are mid-flight):
+
+- #1752 (module discovery) — pane `w1:pHQ`, agent `1752 module discovery holder (relay5)`,
+  session `633c6b72-2ca8-493e-a2a4-a518d796a27e`, working. Task 3 (rescan action) done and
+  committed, clean tree, full typecheck/lint/tests green. Now on Task 4: the end-to-end proof that
+  dropping a module in while both server and worker are running becomes visible after a rescan
+  with no restart. No plan submitted yet for Task 4 — expect a plan-ready check soon.
+- #1755 (Workshop page) — pane `w1:pHA`, agent `workshop1755c` (3rd relay), working, tab
+  "agents 3" (`w1:t1R`), alone in its own tab (only 1 pane, that's expected).
+- #1756 (Workshop chat cards) — pane `w1:pH7`, agent `1756-relay2`, legitimately waiting on its
+  own gate rerun — do not nudge, that's the correct state, not a stall.
+- #1515 (warn safely on extraction failures) — pane `w1:pHM`, agent `warn-safely-relay2`,
+  working. 1 of 3 plan tasks done and committed (extractor.ts port + tests). Two left: workers.ts,
+  then module-registry's commitments block.
+- #1521 (keep private chat closed on refetch) — pane `w1:pHN`, agent `lane-1521-relay2`, working.
+  Plan approved with all three parts: (a) a transient closing guard, (b) invalidate the privacy
+  query on settle so success/failure both reach the UI, (c) turn on refetchOnWindowFocus for just
+  that one query (needed for the spec's own regression test to mean anything — this was a real
+  scope question the lane raised, now settled, don't reopen it). Code + new browser test written.
+  Was blocked because this worktree's `node_modules` was actually empty despite being told not to
+  reinstall — told to go ahead and run `pnpm install` in its own worktree (safe, isolated, not a
+  shared-checkout action) and continue to typecheck/lint/tests. Confirm it unblocked.
+- #1526 (PTY backpressure) — pane `w1:pHP`, agent `pty-1526-relay3`, working. Task 1 (pause/resume
+  wiring) committed at `274d72c49`. Task 2 (connection.ts safeWrite + backpressure + drain wiring)
+  mid-edit, tests written and partially red/green. Tier is routine per the spec itself (an earlier
+  handoff doc had said sensitive — the spec is the approved source and wins).
+- #1524 (sports follows unique) — pane `w1:pHF`, agent `build1524`, **paused, blocked on Ben** —
+  see AWAITING-BEN above. Don't nudge it; it's correctly waiting, not stalled.
+- #1667 (module-sdk-worker polling budget) — pane `w1:pHG`, agent `build1667`, working, plan
+  approved, routine/test-only tier.
+- #1625 (lane-scoped module fixture identities) — pane `w1:pHH`, agent `build1625`, working. Its
+  boot file was missing; approved proceeding straight from the GitHub issue + PR discussion as the
+  spec instead. Also hit its own internal plan-approval prompt (separate from the coordinator
+  scope approval) — resolved by selecting "yes, bypass permissions."
+
+**Agents tab layout (cleaned up this session, Ben asked it be kept tidy going forward without
+having to ask each time — now written into the coordinate skill's Tab discipline section):**
+tab "agents" (`w1:t1P`) holds #1752, #1667, #1625, #1524 in a 2x2 grid. Tab "agents 2" (`w1:t1Q`)
+holds #1526, #1521, #1515, #1756 in a 2x2 grid. Tab "agents 3" (`w1:t1R`) holds #1755 alone.
+Re-check this layout stays tidy as lanes finish/relay — panes drift and need periodic
+straightening, not just a one-time fix.
+
+**Operational note for the successor:** several build-lane messages sent via `herdr pane run`
+landed in the pane's input box but did not submit — Ben caught this directly. The fix that worked
+every time: after every `herdr pane run`, do a bounded read; if the text is still sitting at the
+prompt, send one `herdr pane send-keys <pane> Enter` and read again to confirm it cleared. Do not
+assume delivery from the run command alone, even more than the skill already says to.
+
+Liveness Monitor: a persistent Monitor watching all `w1:t1P`/`w1:t1Q`/`w1:t1R` panes for status
+changes is running under this session (task id `bhemvwdzs`) — it will very likely NOT carry over
+to a successor process the way it didn't in prior relays in this run. Re-arm fresh; don't assume
+it followed you.
+
+No merges have happened yet this run. No PRs open yet from this wave.
+
 ## Continuation note (this coordinator, 2026-08-20 ~19:52 PDT — relaying at context 71%)
 
 **Coordinator authority is about to change again.** This session (session id
