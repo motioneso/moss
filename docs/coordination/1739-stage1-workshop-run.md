@@ -11,12 +11,12 @@ finish — merge, close out, spawn the next queued item once its dependency land
 same-night escalation only when Ben is back and says so. This overrides the box-wide CLAUDE.md
 "never idle silently, run needs-ben" rule for the rest of tonight specifically.
 
-Coordinator: Claude session `7a4759d1-8ede-4252-b513-372e1d27694b`, label `Coordinator`, pane
-`w1:pHZ` (re-resolve pane fresh by label + session id — pane numbers reflow). Took over from
-session `d2815ae2-dd97-40ea-9eef-08b4f70f6323` (former pane `w1:pHY`) at 2026-08-21 ~05:5x UTC;
+Coordinator: Claude session `4638f578-9c76-41b8-85dc-37dbfc9cb8d5`, label `Coordinator`, pane
+`w1:pJ3` (re-resolve pane fresh by label + session id — pane numbers reflow). Took over from
+session `7a4759d1-8ede-4252-b513-372e1d27694b` (former pane `w1:pHZ`) at 2026-08-21 ~07:0x UTC;
 confirmed the old pane saw this one driving before closing it (reaped cleanly).
-Liveness Monitor needs to be re-armed fresh (see latest continuation note) — inherited monitor did
-not carry over, matching the pattern of prior relays in this run.
+Liveness Monitor re-armed fresh under this session (task id `bdqzl1cj1`), watching all agent tabs
+plus the coordinator's own tab for status changes.
 
 GraphQL rate limit cleared ~19:33 PDT (verified via `gh api rate_limit`, resource `graphql`, back
 to full 5000). Board queries unblocked.
@@ -811,3 +811,43 @@ these real things before relaying:
 
 This coordinator is now spawning its successor into the same pane/tab and will have it reap this
 pane once it confirms it is driving. [pane w1:pHY]
+
+## Continuation note (coordinator session 4638f578-9c76-41b8-85dc-37dbfc9cb8d5, pane w1:pJ3, 2026-08-21 ~07:0x UTC — adoption confirmed)
+
+Took over from session 7a4759d1-8ede-4252-b513-372e1d27694b (old pane w1:pHZ). Old pane confirmed
+I was driving and closed itself cleanly. `merges_since_relay` reset to 0 (nothing merged yet this
+session).
+
+**Checked and already handled by the outgoing coordinator, no action needed:**
+- #1752's board card is already "Done" (verified directly against the project board) and its
+  GitHub issue is closed. The "move board card" cleanup item from the last note is done.
+- #1524 and #1667 and #1625 are merged, closed, and their panes/worktrees are already gone from
+  the live fleet — consistent with the Queue table.
+
+**Current live fleet (7 panes, re-confirmed by direct read just now):**
+- #1753 (draft module, author-only) — pane w1:pJ2, actively writing code (14+ minutes into an
+  active turn, context 65%). The migration renumbering problem from the last note appears to be
+  behind it (it's now writing an unrelated "ship module" function) but I have not yet seen it
+  explicitly confirm the renumber is done — will check again once its current turn finishes.
+- #1755 (Workshop page) — pane w1:pHX, actively working on the test fixes it was sent back for.
+  Context is at 69%, close to its own relay point — nothing for me to do, its own relay logic
+  will handle that.
+- #1756 (Workshop chat cards) — pane w1:pH7, idle, correctly waiting on #1755 before its final
+  review. Not a stall.
+- #1526 (PTY backpressure) and #1521 (private chat close/focus) — both show as "done" in status
+  but both are the two lanes parked overnight per the standing rule (broken shared-instance
+  login blocking #1521's live-path proof; #1526 at its two-strike CI failure budget). Left alone,
+  no action, per Ben's standing overnight instruction.
+- The plan-writing agent (pane w1:pGR) is idle and reapable once its work is confirmed landed —
+  not urgent, will check before end of session.
+
+**AWAITING-BEN check:** read the file directly — it has no open items for this run right now (the
+#1524 migration-delete question was already resolved by Ben on 2026-08-20 and the entry
+retired). The only overnight-blocked items are the two noted above, both already written up under
+"Blocked overnight, needs Ben" and correctly left alone per the standing rule.
+
+Liveness Monitor re-armed under this session (task `bdqzl1cj1`), watching tabs w1:t1P/t1Q/t1R plus
+my own tab w1:t1N for status changes.
+
+**Next actions:** keep watching #1753 through to a PR (then QA, then merge, routine tier); once
+#1753 lands, spawn #1754. No blocking issues right now — steady-state supervision. [pane w1:pJ3]
