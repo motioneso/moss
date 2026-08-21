@@ -461,8 +461,33 @@ confirmed by reading the pane directly and checking GitHub. Not yet reviewed/mer
 **All other lanes unchanged from the prior note** — still building, no other PRs open, #1524
 (sports follows) still correctly paused on Ben's ruling in AWAITING-BEN.md, do not nudge it.
 
-**Liveness Monitor:** task `bylr5yayi`, persistent, still running — re-arm fresh if it doesn't
-carry over (it's a session-local task, so it almost certainly won't).
+**Liveness Monitor:** task `bylr5yayi` did not carry over (confirmed gone). Re-armed fresh as task
+`bf9ro91to`, persistent, diffing pane labels/status every 60s.
 
 No worktrees are sitting reap-ready-but-unreaped right now — #1625's was reaped in the same pass as
 its merge.
+
+## Continuation note (this coordinator, 2026-08-20 ~21:5x PDT — adoption confirmed, relay6)
+
+Took over from session `f0b47c3f...` (former pane w1:pHR); old pane confirmed standing down,
+message delivered and read back, pane closed. Lock line at top of this file updated to session
+`8e577192-b2da-4323-b014-238626027729`, pane `w1:pHS`. Liveness monitor re-armed (task
+`bf9ro91to`).
+
+Checked the two flagged lanes with real bounded reads, both confirmed:
+- The team working on letting one module discover and offer tools to another (issue #1752, pane
+  w1:pHQ) is still the same session as before, has not relayed yet -- it's mid a real background
+  check (format/lint/typecheck) before it rebases, not frozen. Leaving it running; will check again
+  on the next monitor flip.
+- The team building the chat cards for the Workshop page (issue #1756, pane w1:pH7) really is
+  finished this cycle -- pull request #1799 is open, tests running, correctly held back from merge
+  because the page it plugs into (issue #1755) isn't ready yet. No action needed.
+
+Current fleet snapshot (all working except two idle -- #1739 stage-1 plan pane and #1524 sports
+follows, both paused on purpose, not stalled): plan pane idle, #1755 Workshop page working, #1524
+sports follows idle (paused on the Ben decision above), #1667 worker polling budget working, #1515
+warn-safely-on-failures working, #1521 keep-chat-closed-refetch working, #1526 typing-connection
+backpressure working, #1752 module discovery working (see above).
+
+Next: resume event-driven supervision -- watch the monitor, review any PR that goes green, keep
+merging by tier, don't nudge #1524 (paused on Ben, already pinged).
