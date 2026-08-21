@@ -11,10 +11,9 @@ finish — merge, close out, spawn the next queued item once its dependency land
 same-night escalation only when Ben is back and says so. This overrides the box-wide CLAUDE.md
 "never idle silently, run needs-ben" rule for the rest of tonight specifically.
 
-Coordinator: about to relay. Outgoing session `4b4ce051-22f9-49eb-ab60-a79a9d488847`, agent name
-`coordinator-next-1739`, pane `w1:pJD`, tab `w1:t1N`. Successor should claim the `coordinator` name
-(it's currently free — prior coordinator `cac2ffa0-...` at pane `w1:pJ9` already cleared it and
-should be reaped once confirmed idle).
+Coordinator lock: session `6999e187-9101-4a78-bf9f-05fd8695510e`, agent name `coordinator`, pane
+`w1:pK3`, tab `w1:t1N`. Adopted relay24 (predecessor session `4346798b-d43d-4f99-9886-ab2d06c036d7`
+at pane `w1:pJ0` confirmed idle and reaped 2026-08-21).
 
 ## QA now runs in its own Herdr pane, never the `Agent` tool
 
@@ -1985,3 +1984,23 @@ matches the standing rule for 3 agents) — no rebalance needed this pass.
 Next coordinator action: re-check #1756 with a bounded read to confirm the earlier nudge actually
 moved it forward (not re-frozen). Then resume normal watch on #1754, #1571, #1517, #1572 and
 #1039's successor. AWAITING-BEN.md still empty as of this pass, nothing new to flag.
+
+## Continuation note (coordinator session 6999e187-9101-4a78-bf9f-05fd8695510e, pane w1:pK3, 2026-08-21 ~8:30pm PDT — relay25, adoption confirmed)
+
+Adopted from predecessor (session 4346798b-d43d-4f99-9886-ab2d06c036d7, pane w1:pJ0): confirmed
+idle and stepped aside, claimed agent name `coordinator` and pane label `Coordinator`, closed the
+predecessor pane. `merges_since_relay` carried forward at 1 (routine tier; unchanged this pass, no
+new merges yet).
+
+Checked #1756: still running its own background verify:foundation gate (timer advancing across two
+reads a few seconds apart — genuinely working, not frozen). No nudge needed.
+Checked #1039: actively running its own gate script, spinner advancing. Healthy.
+Watch-only spot check: #1754 idle at a prompt (no active turn, nothing alarming shown in the
+visible tail); #1571 and #1572 both actively working (1571 has its own sub-agent lineage running a
+type check; 1572 is mid typecheck rerun after a code fix). No action needed on any of these four.
+
+Fleet layout unchanged: tabs w1:t10 and w1:t1Q both still at 3 panes each, matches the standing
+rule, no rebalance needed. AWAITING-BEN.md confirmed empty again this pass.
+
+Next coordinator action: normal watch loop — recheck #1756 again next pass to confirm the gate
+actually finished (not just still running), keep an eye on #1039, #1571, #1572, #1754, #1517.
