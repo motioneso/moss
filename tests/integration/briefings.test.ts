@@ -182,7 +182,8 @@ describe("Briefings module M6 read-only scheduled summaries", () => {
       "notes",
       "proactive-monitoring",
       "jarvis.commitments",
-      "people"
+      "people",
+      "workshop"
     ]);
     expect(registration?.manifest.database?.ownedTables).toEqual([
       "app.briefing_definitions",

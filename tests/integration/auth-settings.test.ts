@@ -301,7 +301,8 @@ describe("M3 auth, users, settings", () => {
       "notes",
       "proactive-monitoring",
       "jarvis.commitments",
-      "people"
+      "people",
+      "workshop"
     ]);
     expect(modules.flatMap((module) => module.navigation).map((entry) => entry.path)).toEqual([
       "/settings",
@@ -311,7 +312,8 @@ describe("M3 auth, users, settings", () => {
       "/briefings",
       "/wellness",
       "/sports",
-      "/news"
+      "/news",
+      "/workshop"
     ]);
   });
 

@@ -197,7 +197,8 @@ describe("Connectors encrypted foundation", () => {
       "notes",
       "proactive-monitoring",
       "jarvis.commitments",
-      "people"
+      "people",
+      "workshop"
     ]);
     expect(registrations.map((item) => item.manifest.id)).toEqual([
       "settings",
@@ -221,7 +222,8 @@ describe("Connectors encrypted foundation", () => {
       "notes",
       "proactive-monitoring",
       "jarvis.commitments",
-      "people"
+      "people",
+      "workshop"
     ]);
     expect(manifest?.database?.ownedTables).toEqual([
       "app.connector_definitions",
