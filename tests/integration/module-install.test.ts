@@ -38,9 +38,7 @@ afterEach(async () => {
   await client.query(
     `REVOKE ALL PRIVILEGES ON SCHEMA app FROM ${moduleInstallRoleName(moduleId)} CASCADE`
   );
-  await client.query(
-    `REVOKE ALL PRIVILEGES ON app.users FROM ${moduleInstallRoleName(moduleId)}`
-  );
+  await client.query(`REVOKE ALL PRIVILEGES ON app.users FROM ${moduleInstallRoleName(moduleId)}`);
   await client.query(
     "REVOKE EXECUTE ON FUNCTION app.current_actor_user_id() " +
       `FROM ${moduleInstallRoleName(moduleId)} CASCADE`

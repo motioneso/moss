@@ -22,7 +22,11 @@ import { getExternalModuleRegistrations } from "@moss/module-registry/node";
 import { createApiServer } from "../../apps/api/src/server.js";
 import { packModuleArtifact } from "../../scripts/publish-module-registry.js";
 import { reconcileModules } from "../../scripts/module-reconcile.js";
-import { connectionStrings, laneScopedModuleId, resetEmptyFoundationDatabase } from "./test-database.js";
+import {
+  connectionStrings,
+  laneScopedModuleId,
+  resetEmptyFoundationDatabase
+} from "./test-database.js";
 
 let root: string;
 let modulesDir: string;
@@ -52,7 +56,9 @@ const MANIFEST = {
   lifecycle: "optional",
   compatibility: { jarv1s: ">=0.1.0" },
   runtime: { workerEntrypoint: "dist/worker.js", workerContractVersion: 1 },
-  worker: { queues: [{ name: `${FIXTURE_MODULE_ID}.manual`, handler: "manual", allowManualRun: true }] },
+  worker: {
+    queues: [{ name: `${FIXTURE_MODULE_ID}.manual`, handler: "manual", allowManualRun: true }]
+  },
   database: { ownedTables: [`app.${FIXTURE_TABLE_SLUG}_items`] }
 };
 
@@ -307,7 +313,9 @@ describe("module distribution e2e (#964)", () => {
     );
     await client.end();
     expect(table.rows[0].t).toBe(`app.${FIXTURE_TABLE_SLUG}_items`);
-    expect(roles.rows.some((r) => r.rolname === `jarvis_mod_${FIXTURE_TABLE_SLUG}_runtime`)).toBe(true);
+    expect(roles.rows.some((r) => r.rolname === `jarvis_mod_${FIXTURE_TABLE_SLUG}_runtime`)).toBe(
+      true
+    );
     expect(
       roles.rows.find((r) => r.rolname === `jarvis_mod_${FIXTURE_TABLE_SLUG}_install`)?.rolcanlogin
     ).toBe(false);
@@ -441,7 +449,9 @@ describe("module distribution e2e (#964)", () => {
       url: "/api/admin/module-registry?refresh=1",
       headers: { cookie: adminCookie }
     });
-    expect(list.json().modules.find((m: { id: string }) => m.id === FIXTURE_MODULE_ID)).toMatchObject({
+    expect(
+      list.json().modules.find((m: { id: string }) => m.id === FIXTURE_MODULE_ID)
+    ).toMatchObject({
       state: "update-available",
       installedVersion: "0.2.0",
       latestVersion: "0.3.0"
@@ -483,9 +493,9 @@ describe("module distribution e2e (#964)", () => {
       url: "/api/admin/module-registry",
       headers: { cookie: adminCookie }
     });
-    expect(after.json().modules.find((m: { id: string }) => m.id === FIXTURE_MODULE_ID)).toMatchObject(
-      { state: "installed-enabled", installedVersion: "0.3.0" }
-    );
+    expect(
+      after.json().modules.find((m: { id: string }) => m.id === FIXTURE_MODULE_ID)
+    ).toMatchObject({ state: "installed-enabled", installedVersion: "0.3.0" });
   });
 
   it("remove keeps data; reinstall resumes the migration ledger instead of re-running", async () => {
@@ -531,7 +541,9 @@ describe("module distribution e2e (#964)", () => {
       url: "/api/admin/module-registry",
       headers: { cookie: adminCookie }
     });
-    expect(list.json().modules.find((m: { id: string }) => m.id === FIXTURE_MODULE_ID)).toMatchObject({
+    expect(
+      list.json().modules.find((m: { id: string }) => m.id === FIXTURE_MODULE_ID)
+    ).toMatchObject({
       state: "installed-disabled"
     });
   });

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { moduleInstallRoleName, moduleRuntimeRoleName } from "../../packages/db/src/module-role-broker.js";
+import {
+  moduleInstallRoleName,
+  moduleRuntimeRoleName
+} from "../../packages/db/src/module-role-broker.js";
 import { laneScopedModuleId } from "../integration/test-database.js";
 
 const LANE_A = "postgres://user:pw@localhost:5432/jarvis_test_lane_a";
@@ -16,7 +19,9 @@ describe("laneScopedModuleId (#1625)", () => {
   });
 
   it("is deterministic for the same lane and base name", () => {
-    expect(laneScopedModuleId("acme-widgets", LANE_A)).toBe(laneScopedModuleId("acme-widgets", LANE_A));
+    expect(laneScopedModuleId("acme-widgets", LANE_A)).toBe(
+      laneScopedModuleId("acme-widgets", LANE_A)
+    );
   });
 
   it("keeps every generated role name within Postgres's 63-byte identifier limit even for a long base name", () => {
