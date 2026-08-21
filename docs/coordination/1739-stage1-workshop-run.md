@@ -1237,3 +1237,39 @@ relayed at the 70% context warning. Confirmed idle, reaped its pane cleanly.
 
 No new questions for Ben beyond what's already visible in this note. Standing overnight rule not
 in effect -- Ben is actively in this session. [pane w1:pJ9]
+
+## Continuation note (coordinator session cac2ffa0-60bb-407c-9f3a-1a5fb19d6a9b, pane w1:pJ9, 2026-08-21 ~4:50pm PDT — relaying at context 70%)
+
+Agents tab (w1:t1Q) is now a clean 2x2: top-left #1526 (w1:pHP, paused, see AWAITING-BEN), top-right
+#1756 (w1:pH7, idle, CI green, still not visually wired to Workshop page), bottom-left #1809
+(w1:pJA, idle, PR #1810 open, QA in flight), bottom-right #1571 successor (w1:pJC,
+weather-1571-relay1, working — building the backend half of the plan, approved this cycle).
+Also persisted the "recheck grid on every fleet-size change" rule into coordinate/SKILL.md
+(Ben asked this be durable, not repeated per-session).
+
+**Two QA agents dispatched this cycle, still in flight when this note was written — successor:
+their task-notifications will arrive after I've relayed; watch for them and act on the verdicts:**
+- #1753 (PR 1808): re-QA after the disk-space fix (host was at 478MB free, blocking e2e UAT; freed
+  to 28GB via `docker builder prune -f`). First QA pass already found the code correct with 0
+  blocking findings — this re-run exists only to get the live e2e proof that couldn't execute
+  before. **Do not merge until this verdict lands GREEN.**
+- #1809 (PR 1810): first QA pass on this PR, routine tier — confirm no hardcoded color value was
+  reintroduced (should be a token reference) and that the claimed live dark-mode screenshots
+  actually show the nav bar changing color.
+
+**#1526 (PR 1803) is parked on Ben** — logged in AWAITING-BEN.md, pinged via `needs-ben`, no reply
+yet. Do not nudge or retry CI a third time; the two-strikes rule is why it's stopped.
+
+**#1754** (build agent that plans+builds itself) is unblocked (#1752 merged) but not yet started —
+its plan is on branch plan/1739-stage1-workshop, pane w1:pGR, idle, waiting for someone to pick it
+up and execute. Next actionable item once QA verdicts are handled.
+
+**#1571** plan was approved this cycle (matched spec's locked decisions exactly — no new provider,
+no migration, independent unit/location prefs, explicit ambiguous-match choice, cache-invalidation
+fix included). Named stopping point the lane itself flagged: if place-search doesn't return good
+results, or the cache fix needs more than a small change, it will stop and flag rather than push
+into the front-end half — watch for that escalation.
+
+No open questions for Ben beyond #1526 (already pinged). This coordinator is now spawning its
+successor in this same pane's tab and will have it reap this pane once it confirms it is driving.
+[pane w1:pJ9]

@@ -134,13 +134,19 @@ coordinator on every escalation you relay onward.
 There must be **exactly one** coordinator (see incidents: a stale labelled pane once ran a
 parallel merge loop).
 
-1. `herdr pane rename "$HERDR_PANE_ID" "Coordinator"`.
-2. Verify uniqueness: `herdr pane list` shows **exactly one** `Coordinator` pane (you). If another
+1. Register the agent name and visible pane label separately:
+   ```bash
+   herdr agent rename "$HERDR_PANE_ID" coordinator
+   herdr pane rename "$HERDR_PANE_ID" Coordinator
+   ```
+2. Verify uniqueness: `herdr agent list` and `herdr pane list` show **exactly one** live
+   `Coordinator` agent/pane (you). If another
    **active** pane holds it, you are a DUPLICATE — stand down, message that pane, do NOT run a
    second loop.
 3. Record the lock in the manifest as **Claude session id + label**. Identifier taxonomy (the one
    place it's defined — everything else references it):
-   - **label** (`Coordinator`) = *routing* — what agents address; re-claimable, so NOT authority.
+   - **agent name** (`coordinator`) = *routing* — what agents address; re-claimable, so NOT authority.
+   - **pane label** (`Coordinator`) = display-only; keep it aligned with the coordinator role.
    - **pane number** (`w…-N`) = *ephemeral* — reflows on every restart/split/reap; never trust a
      written pane number; resolve fresh by label+session at read time.
    - **session id** (`agent_session.value` in `herdr pane list`) = *authority* — immutable for
@@ -243,15 +249,20 @@ For each spec cleared to start (serialized specs wait for their predecessor to l
    first with `herdr pane move <pane> --new-tab --workspace w1 --label scratch`, then move it back
    in with `herdr pane move <pane> --tab <target-tab> --split right|down --target-pane <anchor>
    --ratio 0.5` — the empty scratch tab closes itself once the pane leaves it, no separate cleanup
-   needed.
-4. **Name the agent both ways (Ben, 2026-08-06)** — a spawned pane is anonymous in *two* separate
-   namespaces, and Ben has to be able to tell lanes apart at a glance:
+   needed. **Reaffirmed 2026-08-21: this is a standing rule for every coordinator, not a one-off
+   ask** — check the grid every time the pane count in an agents tab changes and re-square it via
+   the pop-out/split-back-in procedure above, without being asked.
+4. **Name the agent in both namespaces before recording it (Ben, 2026-08-06)** — a spawned pane
+   is anonymous in separate agent-name and pane-label namespaces:
    ```bash
-   herdr pane rename <pane> "<PR1437 typecheck fix>"   # the label `herdr pane list` + FleetView show
-   herdr pane run <pane> "/rename pr1437-typecheck-fix" # the header shown inside the agent's own pane
+   herdr agent rename <pane> <pr1437-typecheck-fix> # durable Herdr routing name
+   herdr pane rename <pane> "PR1437 typecheck fix" # visible label in pane list/FleetView
    ```
-   Setting one leaves the other blank. Name for the **work**, not the wave (`PR1437 typecheck fix`,
-   not `build-3`). Record both names in the manifest.
+   `herdr agent start <name>` sets the routing name at spawn, so rename immediately only when the
+   start path did not set it. Name for the **work**, not the wave (`pr1437-typecheck-fix`, not
+   `build-3`). Record both names in the manifest. The coordinator is the exception: every
+   coordinator and coordinator successor must use the registered agent name `coordinator` and
+   visible pane label `Coordinator`.
 5. **Verify it started AND on the right model:** `herdr pane read <pane> --source recent
    --lines 12` — answer trust prompts with `herdr pane send-keys <pane> Enter`; confirm the pane
    says **"Sonnet"** (Opus = herdr default leaked through — respawn with `--model sonnet`).
@@ -262,12 +273,13 @@ is a two-step action: send, then verify. A message you have not verified is not 
 still pending, not delivered. This applies to you as coordinator and is the standard you hold
 every agent you brief to as well.
 
-1. Send: `herdr pane run <pane> "<msg>"` (types + submits in one command), or
-   `herdr agent prompt <name-or-pane> "<msg>"` when the target is a named agent.
-2. **Always** verify with a bounded pane read (`herdr pane read <pane> --source recent
-   --lines 12`) — do this every time, not only when you suspect a problem. Read the actual result:
+1. Send: `herdr agent prompt <agent-name> "<msg>"` for named agents (the normal path), or
+   `herdr pane run <pane> "<msg>"` only for an unnamed/raw terminal target.
+2. **Always** verify with a bounded agent read (`herdr agent read <agent-name>
+   --source recent-unwrapped --lines 12`), or a bounded pane read for raw targets — do this every
+   time, not only when you suspect a problem. Read the actual result:
    - Input box empty, or your text now appears as agent output/history → delivered.
-   - Your text still sitting at the prompt with a cursor → **not sent**. Send one
+   - Your text still sitting at the prompt with a cursor → **not sent**. For raw targets, send one
      `herdr pane send-keys <pane> Enter`, then read again to confirm it cleared.
    - `❯ Press up to edit queued messages` → delivered and queued (the agent was busy); this is
      success, do not resend.
@@ -277,7 +289,7 @@ every agent you brief to as well.
 
 `send-text` is a fallback only (it leaves text unsubmitted without an explicit Enter) — never use
 it as the whole send. There is no `herdr agent send`. **Never assume a message landed because the
-command that sent it returned without error** — `herdr pane run`/`send-keys` succeeding only means
+command that sent it returned without error** — `agent prompt`/`herdr pane run` succeeding only means
 the keystrokes were delivered to the terminal, not that the target processed them.
 
 ## Phase 2 — supervise (resident)
@@ -326,6 +338,11 @@ catches silent failures between pushes.
   in the same worktree and asks to be reaped — confirm the successor is driving (bounded pane
   read), reap the old pane, update the manifest. If YOU spawn the successor, always pass
   `--tab w1:<agents-tab>` and `--model sonnet` — never let it land in your coordinator tab.
+  Build/QA successors get a unique registered role name (`<slug>-relay<n>`). A coordinator
+  successor must transition from a temporary unique name to `coordinator`: start it as
+  `coordinator-next-<run>`, verify it is driving, clear the old coordinator's name, then run
+  `herdr agent rename <successor-pane> coordinator` and align its pane label. Never leave two
+  live agents named `coordinator`.
 - Keep the manifest current after every state change — it is your memory.
 
 ## Phase 3 — verify & merge (you own it all)
@@ -476,13 +493,17 @@ Fired by the relay triggers (Context discipline / Phase 3 step 7):
    - Claude: `claude --model sonnet --permission-mode bypassPermissions`
    - Codex: `codex -s danger-full-access -a never` (never the default/`workspace-write` sandbox —
      it must rename/close panes, push the manifest, and run the gate unprompted)
-   Bootstrap = "you are the new coordinator for run <run-id>; read
+   Start the successor with a temporary unique agent name such as
+   `coordinator-next-<run>` because the current `coordinator` name is still occupied. Bootstrap =
+   "you are the new coordinator for run <run-id>; read
    `docs/coordination/<run-id>.md` — the LATEST continuation note + the current fleet/merge-order
    state (skim; the manifest is long — do NOT deep-read its full history or you bloat on boot),
    invoke `coordinate`, re-adopt the live fleet (`herdr pane list` + labels), confirm you're
    driving, then close my pane."
-3. Confirm the successor is driving (bounded pane read); it reaps you — resolving your pane fresh
-   by label + session id, never a written pane number.
+3. Confirm the successor is driving (bounded pane read). Clear this session's registered name,
+   then have the successor run `herdr agent rename "$HERDR_PANE_ID" coordinator` and
+   `herdr pane rename "$HERDR_PANE_ID" Coordinator`; it reaps you after that. Resolve panes fresh
+   by agent name + session id, never a written pane number.
 
 ## Red flags — STOP
 
@@ -515,7 +536,8 @@ Fired by the relay triggers (Context discipline / Phase 3 step 7):
 | Manifest / handoff templates | `.claude/skills/coordinate/templates/{manifest,handoff}.md` |
 | Isolated worktree | `git worktree add .claude/worktrees/<slug> -b <slug> origin/main` |
 | Spawn build agent | `herdr pane split <pane> --direction down --cwd <worktree> --no-focus` → `herdr agent start <lowercase-name> --kind claude --pane <new-pane> -- --model sonnet --permission-mode bypassPermissions "<one-line pointer to a brief file>"` → confirm pane says "Sonnet" |
-| Name a lane (both namespaces) | `herdr pane rename <pane> "<Human Label>"` **and** `herdr pane run <pane> "/rename <slug>"` |
+| Name a lane (both namespaces) | `herdr agent rename <pane> <lowercase-work-name>` **and** `herdr pane rename <pane> "<Human Label>"` |
+| Name a coordinator | `herdr agent rename "$HERDR_PANE_ID" coordinator` **and** `herdr pane rename "$HERDR_PANE_ID" Coordinator` |
 | Spawn QA agent | `Agent(description, subagent_type: "coordinated-qa", isolation: "worktree", model: opus for security only, prompt)` |
 | Spawn relay coordinator (SAME tab as yours) | `… -- claude --model sonnet --permission-mode bypassPermissions "<boot>"` or `… -- codex -s danger-full-access -a never "<boot>"` |
 | Talk to an agent | `herdr pane run <pane> "<msg>"` → bounded read to verify → `send-keys Enter` if unsubmitted |
