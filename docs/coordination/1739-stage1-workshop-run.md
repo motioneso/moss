@@ -29,7 +29,7 @@ unaffected.
 | #1753 | a draft module that runs for its author alone | routine | blocked on #1752 | - | - | - | - |
 | #1754 | the build agent - agree a plan, then build it | sensitive (spawns a build agent/job) | blocked on #1752 | - | - | - | - |
 | #1755 | the Workshop page (front end shell) | routine | building | workshop-page-r1 | w1:pH5 | 1755-workshop-page | - |
-| #1756 | plan/draft chat cards (front end shell) | routine | building | build-1756-workshop-cards | w1:pH3 | 1756-workshop-chat-cards | - |
+| #1756 | plan/draft chat cards (front end shell) | routine | building | 1756-relay2 | w1:pH7 | 1756-workshop-chat-cards | - |
 
 ## Ready lane (from GitHub project 2, board query before rate limit)
 
@@ -39,6 +39,32 @@ queries paused until reset (~19:29 PDT). Will re-pull and append here once avail
 re-derive from memory.
 
 ## merges_since_relay: 0
+
+## Continuation note (this coordinator, 2026-08-20 ~19:12 PDT)
+
+The chat-cards build lane (#1756) finished all four of its assigned tasks and relayed at its
+context warning: the plan card, the running-draft banner, the docked chat drawer with its change
+classifier, and a clean design-system audit. Full local gate was running in the background
+against an isolated database when it handed off. Two things flagged honestly rather than built
+around: discarding a draft has no backend to call yet (needs #1753's schema for draft status and
+ownership, so it's UI-only for now), and the plan's idea of reusing an existing "park the previous
+version aside" mechanism from module reinstall doesn't exist anywhere in the codebase — flagged,
+not invented. It also correctly has nowhere to be shown live yet, since the backend groups it
+depends on haven't landed, so it's writing this up as code-complete but unverified, not done.
+Handoff doc is in its own worktree:
+`docs/superpowers/handoffs/2026-08-20-1756-workshop-chat-cards-relay.md`.
+
+Successor is agent `1756-relay2`, pane `w1:pH7`, session `125528b1-aef1-49f6-854e-c62bd13d65c0`,
+confirmed running on Sonnet and working. Old pane `w1:pH3` reaped. Liveness watcher re-armed as
+task `bnsp402vg` (old task `bckgbad5i` stopped).
+
+Separately, the module-discovery lane (#1752, pane `w1:pH6`) reported mid-task progress (not yet
+a relay): the worker-side lookup helper is built and tested. It found the stale-lookup problem is
+more tangled than the plan expected — the same frozen-copy issue shows up in two more places (the
+module job handler and the briefing invoker), one of which has an existing test asserting the
+exact shape of a log line, so that needs care. No blocker, no decision needed; it is continuing
+and will relay again at its next context warning or a real blocker. Still watching for its next
+pane in case that relay lands.
 
 ## Continuation note (this coordinator, 2026-08-20 ~19:10 PDT)
 
