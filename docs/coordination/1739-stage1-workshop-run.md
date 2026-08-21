@@ -1034,3 +1034,43 @@ Picking up the outstanding work exactly as the last note listed it:
 5. Keep this document current.
 No new open questions for Ben beyond the #1526 finding above.
 [pane w1:pJ6]
+
+## Continuation note (coordinator session 351157c3-4cfb-499d-b67f-b366448a8263, pane w1:pJ6, 2026-08-21 ~11:5x PDT — relaying at context 70%)
+
+Since adoption: launched a QA check (background agent id a54c911a4dbfbedd9 — this session only,
+not written elsewhere) for #1753 (PR 1808), routine tier — no verdict yet, successor should wait
+for its notification or check `gh pr view 1808`.
+
+Told #1521's lane (pane w1:pHN) to actually run its live-path browser proof now that the shared
+login is fixed and post it to PR 1801 — it acknowledged and went to "working", then flipped to
+"done" just as this note is being written; successor should read that pane fresh and check
+whether the live-path proof comment actually landed on the PR before treating it as ready to
+merge.
+
+Told #1756's lane (pane w1:pH7) to rebase onto main (which now has #1755) and self-check before
+requesting review — it rebased cleanly and was running a post-rebase type check when this note
+was written; pane now shows "done", successor should confirm the push happened and the PR is
+actually ready before reviewing it.
+
+**#1526 (pane w1:pHP, PR 1803) needs care from the successor — do not trust its current state.**
+Gave it Fable's diagnosis (test-timing bug, not a product bug; the fix is to rewrite
+tests/unit/cli-runner-terminal-rpc.test.ts so the timing race can't happen — see the "Fable's
+#1526 verdict" note above for the exact plain-English explanation and the two rewrite options).
+That message did not visibly land: reading the pane afterward showed no trace of it, and instead
+an unrelated, already-unsubmitted line sitting in its input box reading "Go check on the other
+worktrees/panes" (looks like a stray message meant for a coordinator, not this build lane —
+possibly a leftover from before this session's handoff). Attempts to clear that stray text
+(Escape, Ctrl+A/Ctrl+K) did not visibly clear it either. **Before doing anything else with this
+lane:** read the pane fresh with a bounded read, figure out what's actually in its input box now,
+clear it properly if it's still the stray text, and then deliver Fable's fix instructions (repeated
+above) as a fresh message with normal send+verify. Do not submit "Go check on the other
+worktrees/panes" to this pane — it is not a valid instruction for a build lane.
+
+Standing overnight rule (top of this doc) is still in effect — do not wake Ben; keep working
+ready lanes and parking anything that needs him under "Blocked overnight, needs Ben".
+
+Liveness Monitor: task `byy08731w`, persistent, this session only — will not carry over, re-arm
+fresh under the successor's own session.
+
+This coordinator is now spawning its successor in this same pane's tab and will have it reap this
+pane once it confirms it is driving. [pane w1:pJ6]
