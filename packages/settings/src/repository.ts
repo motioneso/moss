@@ -18,11 +18,13 @@ import type {
 import {
   listExternalModuleStates as listExternalModuleStatesImpl,
   setExternalModuleEnabled as setExternalModuleEnabledImpl,
+  setExternalModuleDraft as setExternalModuleDraftImpl,
   writeExternalModuleDisabledRow,
   type ExternalModuleAuditWriter,
   type SetModuleDisabledInput,
   type SetExternalModuleEnabledInput,
   type SetExternalModuleDisabledInput,
+  type SetExternalModuleDraftInput,
   type ExternalModuleState
 } from "./repository-external-modules.js";
 
@@ -140,6 +142,7 @@ export type {
   SetModuleDisabledInput,
   SetExternalModuleEnabledInput,
   SetExternalModuleDisabledInput,
+  SetExternalModuleDraftInput,
   ExternalModuleState
 };
 
@@ -319,6 +322,14 @@ export class SettingsRepository {
     input: SetExternalModuleEnabledInput
   ): Promise<void> {
     await setExternalModuleEnabledImpl(scopedDb, input, this.externalModuleAuditWriter(scopedDb));
+  }
+
+  /** Install a finished build as a draft, owned by its builder (#1754). */
+  async setExternalModuleDraft(
+    scopedDb: DataContextDb,
+    input: SetExternalModuleDraftInput
+  ): Promise<void> {
+    await setExternalModuleDraftImpl(scopedDb, input, this.externalModuleAuditWriter(scopedDb));
   }
 
   /** Admin: explicitly disable an external module; upsert so a discovered module can be pinned off (#917). */

@@ -147,6 +147,67 @@ export async function setExternalModuleEnabled(
   });
 }
 
+export interface SetExternalModuleDraftInput {
+  readonly id: string;
+  readonly manifestHash: string;
+  readonly packageHash: string;
+  readonly ownerUserId: string;
+  readonly actorUserId: string;
+  readonly requestId: string;
+}
+
+/**
+ * Install a finished build as a draft (#1754), owned by the user who built it. Same upsert
+ * shape as setExternalModuleEnabled, but status 'draft' with a real owner_user_id and no
+ * enabled_by/enabled_at — draft rows are exempt from the live drift check and only visible to
+ * their owner (see Task 6/7/8/9). RLS INSERT/UPDATE require current_actor_is_admin(), same gate
+ * as an ordinary enable (Task 16 doc: owner and admin are the same person in stage 1).
+ */
+export async function setExternalModuleDraft(
+  scopedDb: DataContextDb,
+  input: SetExternalModuleDraftInput,
+  writeAudit: ExternalModuleAuditWriter
+): Promise<void> {
+  assertDataContextDb(scopedDb);
+  await scopedDb.db
+    .insertInto("app.external_modules")
+    .values({
+      id: input.id,
+      status: "draft",
+      manifest_hash: input.manifestHash,
+      package_hash: input.packageHash,
+      disabled_reason: null,
+      enabled_by: null,
+      enabled_at: null,
+      owner_user_id: input.ownerUserId,
+      created_at: new Date(),
+      updated_at: new Date()
+    })
+    .onConflict((oc) =>
+      oc.column("id").doUpdateSet({
+        status: "draft",
+        manifest_hash: input.manifestHash,
+        package_hash: input.packageHash,
+        disabled_reason: null,
+        enabled_by: null,
+        enabled_at: null,
+        owner_user_id: input.ownerUserId,
+        updated_at: new Date()
+      })
+    )
+    .execute();
+
+  // Metadata-only audit: { moduleId } ONLY, matching module.external_enable's precedent.
+  await writeAudit({
+    actorUserId: input.actorUserId,
+    action: "module.external_install_draft",
+    targetType: "module",
+    targetId: input.id,
+    metadata: { moduleId: input.id },
+    requestId: input.requestId
+  });
+}
+
 /**
  * Shared disable upsert + audit for both disable entry points (admin disable and drift
  * auto-disable) (#917). Upsert so a never-enabled (virtual 'discovered') module can be pinned
