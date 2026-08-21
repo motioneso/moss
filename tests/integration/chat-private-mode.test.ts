@@ -156,6 +156,67 @@ describe("private chat persistence", () => {
     expect(result.recent).toEqual([]);
     expect(result.oldSummary).toBeNull();
   });
+
+  it("T2-e: forceReplay: true does not override incognito -- purge still wins", async () => {
+    // Same setup as T2-c (an incognito thread with rows inserted directly, bypassing the
+    // repository's write-time no-op), but calls listPriorTurns with forceReplay: true -- the
+    // exact opt switchProvider always passes (chat-session-manager.ts's relaunch path). If the
+    // incognito guard (D4) were ever reordered to run after a forceReplay shortcut, this is the
+    // test that would catch it; T2-c alone would not, since it never sets forceReplay.
+    const thread = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.openNewThread(scopedDb, {
+        title: "private bookkeeping with rows (forceReplay)",
+        incognito: true
+      })
+    );
+    await dataContext.withDataContext(userAContext(), async (scopedDb) => {
+      const now = new Date();
+      for (let i = 1; i <= 25; i++) {
+        await scopedDb.db
+          .insertInto("app.chat_messages")
+          .values([
+            {
+              id: randomUUID(),
+              thread_id: thread.id,
+              owner_user_id: ids.userA,
+              role: "user",
+              status: "stored",
+              body: `q${i}`,
+              model_metadata: {},
+              tool_metadata: {},
+              created_at: now,
+              updated_at: now
+            },
+            {
+              id: randomUUID(),
+              thread_id: thread.id,
+              owner_user_id: ids.userA,
+              role: "assistant",
+              status: "stored",
+              body: `a${i}`,
+              model_metadata: {},
+              tool_metadata: {},
+              created_at: now,
+              updated_at: now
+            }
+          ])
+          .execute();
+      }
+    });
+
+    const persistence = new DataContextChatPersistence({
+      dataContext,
+      chatRepository: repository,
+      aiRepository,
+      boss: {
+        send: async () => "job-id"
+      } as unknown as DataContextChatPersistenceDeps["boss"]
+    });
+
+    const result = await persistence.listPriorTurns(ids.userA, { forceReplay: true });
+    expect(result.recent).toEqual([]);
+    expect(result.oldSummary).toBeNull();
+  });
 });
 
 function userAContext(): AccessContext {
