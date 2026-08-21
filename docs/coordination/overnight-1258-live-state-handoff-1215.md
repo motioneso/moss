@@ -152,10 +152,11 @@ Mid-doing, in order:
 
 ## Coordinator continuation — 20 Aug, PR 1775 merged and security relay
 
-Coordinator authority before this mandatory post-security-merge relay: Codex session
-`01a02192-a96b-7231-99fd-fe3655e6e141`, label `Coordinator`. The successor must replace this
-authority line with its own immutable session id, confirm it is the sole `Coordinator`, then reap
-this session only after resolving the exact old session id fresh.
+Coordinator authority: Claude session `01d11bc2-ed28-440a-9f95-3bf53f0046c7`, label `Coordinator`,
+pane `w1:pG0` (re-resolve pane fresh by label + session id at read time — pane numbers reflow).
+This session adopted authority from the prior Codex coordinator (session
+`01a02192-a96b-7231-99fd-fe3655e6e141`) after confirming it was already waiting to hand off, and
+reaped that session.
 
 Run result:
 
