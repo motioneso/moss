@@ -6,6 +6,31 @@ export type ExtractorGenerateFn = (
   messages: readonly { readonly role: "user" | "assistant"; readonly content: string }[]
 ) => Promise<{ readonly text: string }>;
 
+// #1515: narrow local port, not a shared logger. Fields are a closed set (event, sourceKind,
+// bounded errorName/errorMessage) — never prompt text, model output, or credentials.
+export interface CommitmentExtractionWarnLogger {
+  warn(fields: Record<string, unknown>, message: string): void;
+}
+
+const MAX_WARN_FIELD_LENGTH = 256;
+
+function boundedWarnField(value: string): string {
+  return value.replace(/[\r\n]/g, "").slice(0, MAX_WARN_FIELD_LENGTH);
+}
+
+function warnErrorFields(err: unknown): { errorName: string; errorMessage: string } {
+  if (err instanceof Error) {
+    return {
+      errorName: boundedWarnField(err.name),
+      errorMessage: boundedWarnField(err.message)
+    };
+  }
+  return {
+    errorName: boundedWarnField("UnknownError"),
+    errorMessage: boundedWarnField(String(err))
+  };
+}
+
 const SYSTEM_PROMPT = `You are a commitment extraction assistant. Given a text excerpt, identify all explicit commitments, deadlines, promises, and obligations. Return a JSON object with a "candidates" array. Each candidate:
 - kind: "deadline" | "promise" | "obligation" | "intent"
 - title: ≤100 chars
@@ -21,7 +46,8 @@ export async function extractCommitmentsFromText(
   generate: ExtractorGenerateFn,
   text: string,
   sourceKind: string,
-  occurredAt: string
+  occurredAt: string,
+  warn?: CommitmentExtractionWarnLogger
 ): Promise<ExtractedCommitmentCandidate[]> {
   if (!passesPrefilter(text)) return [];
 
@@ -36,18 +62,34 @@ export async function extractCommitmentsFromText(
       }
     ]);
     responseText = response.text;
-  } catch {
+  } catch (err) {
+    warn?.warn(
+      { event: "commitment-extraction-adapter-error", sourceKind, ...warnErrorFields(err) },
+      "commitment extraction: adapter generation failed"
+    );
     return [];
   }
 
   try {
     const jsonStart = responseText.indexOf("{");
     const jsonEnd = responseText.lastIndexOf("}");
-    if (jsonStart === -1 || jsonEnd === -1) return [];
+    if (jsonStart === -1 || jsonEnd === -1) {
+      warn?.warn(
+        { event: "commitment-extraction-malformed-output", sourceKind },
+        "commitment extraction: malformed model output"
+      );
+      return [];
+    }
     const parsed = JSON.parse(responseText.slice(jsonStart, jsonEnd + 1)) as {
       candidates?: unknown[];
     };
-    if (!Array.isArray(parsed.candidates)) return [];
+    if (!Array.isArray(parsed.candidates)) {
+      warn?.warn(
+        { event: "commitment-extraction-malformed-output", sourceKind },
+        "commitment extraction: malformed model output"
+      );
+      return [];
+    }
     return parsed.candidates.filter(isValidCandidate).map((c) => ({
       kind: c.kind,
       title: String(c.title).slice(0, 100),
@@ -56,7 +98,15 @@ export async function extractCommitmentsFromText(
       evidenceExcerpt: String(c.evidenceExcerpt).slice(0, 500),
       confidence: c.confidence
     }));
-  } catch {
+  } catch (err) {
+    warn?.warn(
+      {
+        event: "commitment-extraction-malformed-output",
+        sourceKind,
+        ...warnErrorFields(err)
+      },
+      "commitment extraction: malformed model output"
+    );
     return [];
   }
 }
