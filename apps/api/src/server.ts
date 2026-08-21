@@ -183,7 +183,6 @@ export function resolveApiServerConfig(env: NodeJS.ProcessEnv = process.env): Ap
   };
 }
 
-
 export function createApiServer(options: CreateApiServerOptions = {}) {
   const trustProxy = resolveTrustProxy(resolveMossEnv(process.env, "JARVIS_TRUST_PROXY"));
   const apiServerConfig = options.apiServerConfig ?? resolveApiServerConfig();
@@ -573,7 +572,8 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
         // triggers a rescan still sees the stale list on this exact page until a restart.
         discoveries: externalModuleHolder.getDiscoveries,
         rejected: externalModuleHolder.getRejected(),
-        reconcile: (states) => reconcileExternalModules(externalModuleHolder.getDiscoveries(), states),
+        reconcile: (states) =>
+          reconcileExternalModules(externalModuleHolder.getDiscoveries(), states),
         rescan: () => externalModuleHolder.rescan().then(() => undefined)
       },
       // #1762: narrowed to the four fields the personal Modules list needs, so the settings

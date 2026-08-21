@@ -247,7 +247,8 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
       : null;
   };
   const getDiscoveryById = buildDiscoveryLookup(externalModuleHolder);
-  const listDiscoveredModuleIds = () => externalModuleHolder.getDiscoveries().map((module) => module.id);
+  const listDiscoveredModuleIds = () =>
+    externalModuleHolder.getDiscoveries().map((module) => module.id);
   const listActiveUserIds = async (moduleId: string): Promise<readonly string[]> =>
     (
       await sql<{
@@ -301,7 +302,9 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
     // Pino's Logger is structurally what FastifyBaseLogger wraps at runtime
     // (Fastify uses pino internally). The cast bridges the nominal type gap.
     logger: workerLogger as unknown as FastifyBaseLogger,
-    externalBriefingManifests: externalModuleHolder.getDiscoveries().map((module) => module.manifest),
+    externalBriefingManifests: externalModuleHolder
+      .getDiscoveries()
+      .map((module) => module.manifest),
     invokeExternalBriefing
   });
 
