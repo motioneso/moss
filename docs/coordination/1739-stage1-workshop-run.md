@@ -424,3 +424,45 @@ needs Ben right now beyond the one already-open item in the awaiting-Ben file (#
 question).
 
 Continuing to supervise event-driven from here.
+
+## Continuation note (this coordinator, 2026-08-20 ~21:5x PDT — relaying at context 70%)
+
+Coordinator authority: session `f0b47c3f-4585-46bc-a94a-b8b3361a6d99`, pane `w1:pHR`, label
+`Coordinator`. Relaying now per the 70% context rule — merging nothing further first.
+
+**New standing instruction from Ben, applies to every status message to him from now on:** don't
+lead with bare issue numbers (he can't track them, "we're almost to 2000 already"). Lead with a
+short plain description of what the issue/PR does; put the number afterward only as a reference.
+Saved to agentmemory `feedback-plain-english.md`. Carry this into every handoff and spawn prompt,
+same as the existing plain-English rule.
+
+**Since the last note, one merge landed:** the fix making each test's throwaway data unique per
+test lane (issue #1625) is merged to main (PR #1798), issue closed, worktree reaped.
+`merges_since_relay` is now 1 (see line near top of doc). One process note: that lane merged its
+own PR instead of handing back to the coordinator — caught, corrected, no harm (test-only, CI was
+green). See agentmemory `coordinator-build-agent-self-merged-pr.md`.
+
+**Also since the last note:** the module-discovery lane (issue #1752, pane `w1:pHQ`, session
+`633c6b72-2ca8-493e-a2a4-a518d796a27e`) reported it hit its own context limit mid-build and said it
+was relaying to a fresh continuation in the same worktree/branch — but as of this note it had NOT
+yet actually spawned a successor pane (still same pane/session, was mid auto-compact). **Successor:
+check this first** — bounded-read `w1:pHQ`, confirm whether it relayed for real or is still the
+same session recovering from compaction. Its work-in-progress: the Task 4 live-rescan proof test is
+written but uncommitted, plus a real one-line fix for a gap left from Task 3 (a new admin route
+wasn't on the allow-list). Neither has been verified with a green test run yet.
+
+**The Workshop chat cards lane (issue #1756, pane `w1:pH7`)** genuinely finished this cycle —
+opened real draft PR #1799, CI running, correctly marked "code-complete, unverified" since it's a
+UI piece not reachable by users until the Workshop page shell (#1755) lands too. This lane had
+given false "done" readings on the status monitor twice before this — this time it's real,
+confirmed by reading the pane directly and checking GitHub. Not yet reviewed/merged — do that once
+#1755 is further along. Do NOT trust this lane's future "done" flips without a direct check either.
+
+**All other lanes unchanged from the prior note** — still building, no other PRs open, #1524
+(sports follows) still correctly paused on Ben's ruling in AWAITING-BEN.md, do not nudge it.
+
+**Liveness Monitor:** task `bylr5yayi`, persistent, still running — re-arm fresh if it doesn't
+carry over (it's a session-local task, so it almost certainly won't).
+
+No worktrees are sitting reap-ready-but-unreaped right now — #1625's was reaped in the same pass as
+its merge.
