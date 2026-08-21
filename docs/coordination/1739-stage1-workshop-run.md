@@ -11,12 +11,14 @@ finish — merge, close out, spawn the next queued item once its dependency land
 same-night escalation only when Ben is back and says so. This overrides the box-wide CLAUDE.md
 "never idle silently, run needs-ben" rule for the rest of tonight specifically.
 
-Coordinator: Claude session `351157c3-4cfb-499d-b67f-b366448a8263`, label `Coordinator`, pane
-`w1:pJ6` (re-resolve pane fresh by label + session id — pane numbers reflow). Took over from
-session `53e8572a-0c01-434a-9f16-5088520ae453` (former pane `w1:pJ5`) at 2026-08-21 ~11:3x PDT;
-old pane confirmed it saw this one driving and was asked to write the just-landed Fable #1526
-verdict into this manifest before closing itself.
-Liveness Monitor: re-armed under this session, watching tabs w1:t1N/t1P/t1Q/t1R/t1K.
+Coordinator: Claude session `36e8b1c1-0267-404a-aa81-928109e8d05c`, label `Coordinator`, pane
+`w1:pJ7` (re-resolve pane fresh by label + session id — pane numbers reflow). Took over from
+session `351157c3-4cfb-499d-b67f-b366448a8263` (former pane `w1:pJ6`) at 2026-08-21 ~15:3x PDT,
+relaying at its 70% context warning. Old pane is not yet reaped: it has an in-flight background
+QA check for #1753 (agent id `a54c911a4dbfbedd9`, tailing a module-install UAT log, ~10min in as
+of handoff) that lives inside its own process, so closing that pane now would kill the check
+mid-run. Waiting for it to finish before reaping.
+Liveness Monitor: to be re-armed under this session once the old pane is reaped.
 
 GraphQL rate limit cleared ~19:33 PDT (verified via `gh api rate_limit`, resource `graphql`, back
 to full 5000). Board queries unblocked.
@@ -1074,3 +1076,44 @@ fresh under the successor's own session.
 
 This coordinator is now spawning its successor in this same pane's tab and will have it reap this
 pane once it confirms it is driving. [pane w1:pJ6]
+
+## Continuation note (coordinator session 36e8b1c1-0267-404a-aa81-928109e8d05c, pane w1:pJ7, 2026-08-21 ~15:3x PDT — adoption confirmed, #1526 pane checked)
+
+Took over from session 351157c3 (pane w1:pJ6). Read this file's latest note and the queue table
+first, per the handoff brief. Confirmed my own session id against `herdr pane list` before
+touching anything (authority is the session id, never a written pane number).
+
+**Checked the #1526 pane (w1:pHP) before anything else, as instructed.** Reading its recent
+history in full shows the real story is already correctly handled: the build agent applied
+Fable's fix (event-driven wait instead of a fixed poll), pushed it, and CI failed again on the
+exact same test — meaning this is the lane's *second* failed attempt. The lane's own last
+coordinator (before this file's latest two relays) already stopped it there under the run's
+two-strikes rule, told it to leave the branch and worktree untouched, and had it save the story to
+memory. The pane's very last real reply is "Saved. Nothing else to do — this stays parked for a
+human decision." That already matches this file's "Blocked overnight, needs Ben" section
+(#1526 row) — nothing further needed on the substance.
+
+The stray unsubmitted line ("Go check on the other worktrees/panes") is still sitting in that
+pane's input box. Tried harder to clear it than the last note describes: Escape, Ctrl+A, Ctrl+K,
+fifty Backspaces, Up (to pull a queued message back for editing), and eight Ctrl+W — none of them
+changed the pane's displayed text or its internal revision counter at all. One probe, Ctrl+C, did
+register (it produced the normal "press again to exit" warning), which confirms keystrokes are
+reaching the pane — the stray text itself just isn't responding to editing keys, which suggests
+it's not normal editable input but some kind of stuck queued-message display. Pressing Ctrl+C a
+second time would actually exit that Claude session, which is destructive to a lane we've been
+told to leave untouched, so I stopped there rather than escalate the attempt. **Decision: leave
+this pane alone.** The stray text has now sat unsubmitted through two coordinator handoffs without
+being acted on, the lane's substantive state is already correct and already recorded, and further
+poking risks doing real damage (accidentally exiting the session) for no benefit. If a successor
+wants another crack at clearing it, that's fine, but it is not blocking anything — do not treat it
+as urgent.
+
+**Reap of the old coordinator pane (w1:pJ6) is paused, not skipped:** it has a background QA
+check for #1753 still running inside its own process (checked PR 1808 directly — CI is all green;
+the QA check itself is a deeper module-install proof, about 10 minutes in when I took over).
+Closing that pane now would kill the check mid-run and lose the work. Set an event-driven wait for
+it to finish (no polling in this transcript) rather than reaping early. Will reap as soon as it's
+clear, and re-arm the liveness monitor under this session at that point.
+
+No new questions for Ben. Standing overnight rule still in effect — not waking him.
+[pane w1:pJ7]
