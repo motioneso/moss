@@ -308,6 +308,13 @@ catches silent failures between pushes.
   ≤270s (stays cache-warm) or space ticks 20–30 min — a wake between those pays a full cold
   re-read of your context for nothing. **Never block on `herdr pane run <pane> 'sleep N'`
   poll-loops** — `ScheduleWakeup` / `Monitor` / a background task are the only sanctioned waits.
+- **Never run a `Monitor` to wait on a QA verdict (Ben, 2026-08-21).** A QA agent's finished
+  verdict is posted as a `gh pr comment` — durable, and readable whenever you next look, by you or
+  a successor. A `Monitor` polling for that comment has to keep the coordinator session open the
+  whole time QA is running, which can be a long time, purely to catch an event that's sitting
+  safely on the PR either way. Just check the PR's comments the next time you're naturally looking
+  at that lane (your regular sweep, or a wakeup you already scheduled for another reason) — don't
+  stand up a dedicated watcher for it.
 - **On a plan-ready escalation:** read the plan pointer. Approve if it stays inside the spec's
   locked decisions; reply via `herdr-pane-message`. A genuine product/architecture fork → model
   policy (Opus subagent), then route to Ben with the verdict framing the options.
