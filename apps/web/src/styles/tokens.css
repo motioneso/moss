@@ -391,8 +391,12 @@
   --accent-soft-border: rgb(62 138 99 / 0.5);
   --accent-soft-border-weak: rgb(62 138 99 / 0.36);
 
-  /* Dark's --forest-ink is a light tint (text duty); the rail needs a ground. */
-  --rail-bg: #182b21;
+  /* Dark's --forest-ink is a light tint (text duty); the rail needs a ground.
+     Use --forest-soft-2, the same dark-mode-correct accent-ground token other
+     forest-toned panels already use (kit-today-feeds, command-palette) --
+     the old hardcoded #182b21 was too close to light's rail-bg to read as a
+     theme switch (#1809). */
+  --rail-bg: var(--forest-soft-2);
 }
 
 /* ------------------------------------------------------------------------- */
