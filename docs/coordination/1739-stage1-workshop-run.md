@@ -39,7 +39,7 @@ unaffected.
 | #1526 | [1140-D] propagate terminal socket backpressure to the PTY | routine per its own spec (handoff doc had said sensitive — spec wins) | building (task 1 committed at 274d72c49, task 2 mid-edit, on its 3rd relay) | pty-1526-relay3 | w1:pHP | 1526-pty-socket-backpressure | - |
 | #1524 | [1140-B] make whole-league sports follows unique | sensitive (migration; head of a chain — #1572, #906 wait on it) | **paused — blocked on a Ben decision, see AWAITING-BEN.md ("#1524 sports follows migration needs to delete duplicate rows")** | build1524 | w1:pHF | 1524-unique-whole-league-sports-follows | - |
 | #1667 | module-sdk-worker test polling budget too tight for real cold start | routine (test-only) | building (plan approved) | build1667 | w1:pHG | 1667-module-sdk-worker-polling-budget | - |
-| #1625 | lane-scoped module fixture identities for concurrent integration gates | routine (test-only) | building (boot file was missing, coordinator confirmed proceeding from the GitHub issue directly) | build1625 | w1:pHH | 1625-lane-scoped-module-fixture-identities | - |
+| #1625 | lane-scoped module fixture identities for concurrent integration gates | routine (test-only) | **merged** to main, issue closed, worktree reaped — note: the lane merged its own PR instead of handing back to the coordinator; corrected, no harm (test-only change, CI fully green) | build1625 (reaped) | - | 1625-lane-scoped-module-fixture-identities | #1798 |
 
 ## Ready lane (full 29-item list pulled ~19:35 PDT, GraphQL clear)
 
@@ -95,7 +95,7 @@ bounded-read each of their panes, and if they report a missing boot file, send t
 instead — it only exists in the main checkout, not your worktree. Proceed as the build lane for
 #<issue> with that doc."` (swap in the right slug and issue number per the Queue table below).
 
-## merges_since_relay: 0
+## merges_since_relay: 1
 
 ## Continuation note (this coordinator, 2026-08-20 ~21:35 PDT — relaying at context 70%)
 
