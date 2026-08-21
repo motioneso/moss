@@ -126,8 +126,8 @@ sender's session id), e.g. `[pane w1:pFZ]` at the end. Pane numbers reflow on ev
 this isn't a reply address — it's how you, a successor re-reading the manifest, or Ben tie a given
 message to the exact physical pane that sent it, without cross-referencing a label that may since
 have been reused or reaped. This applies to build agents (`coordinated-build`,
-`coordinated-wrap-up`), QA agents (`coordinated-qa`, Herdr-fallback path), and to you as
-coordinator on every escalation you relay onward.
+`coordinated-wrap-up`), QA agents (`coordinated-qa`), and to you as coordinator on every
+escalation you relay onward.
 
 ## Phase 0a — claim the single-coordinator lock (FIRST, before anything)
 
@@ -308,13 +308,7 @@ catches silent failures between pushes.
   ≤270s (stays cache-warm) or space ticks 20–30 min — a wake between those pays a full cold
   re-read of your context for nothing. **Never block on `herdr pane run <pane> 'sleep N'`
   poll-loops** — `ScheduleWakeup` / `Monitor` / a background task are the only sanctioned waits.
-- **Never run a `Monitor` to wait on a QA verdict (Ben, 2026-08-21).** A QA agent's finished
-  verdict is posted as a `gh pr comment` — durable, and readable whenever you next look, by you or
-  a successor. A `Monitor` polling for that comment has to keep the coordinator session open the
-  whole time QA is running, which can be a long time, purely to catch an event that's sitting
-  safely on the PR either way. Just check the PR's comments the next time you're naturally looking
-  at that lane (your regular sweep, or a wakeup you already scheduled for another reason) — don't
-  stand up a dedicated watcher for it.
+- **Don't `Monitor` for a QA verdict.** Check the PR's comments on your next natural pass instead.
 - **On a plan-ready escalation:** read the plan pointer. Approve if it stays inside the spec's
   locked decisions; reply via `herdr-pane-message`. A genuine product/architecture fork → model
   policy (Opus subagent), then route to Ben with the verdict framing the options.
@@ -360,44 +354,30 @@ When an agent reports **done** (PR open + its own green evidence — which you d
    your own `agent_session.value` matches the recorded coordinator session id. Mismatch = you are
    not authoritative — **stand down, do not merge**, message the `Coordinator` label.
 
-1. **Spawn an ephemeral QA agent** on the PR branch, passing the risk tier. QA **trusts CI for
-   the mechanical gate** (`gh pr checks`) and re-runs nothing unless CI is red — tokens go to
-   review only.
+1. **Spawn an ephemeral QA agent in its own Herdr pane** on the PR branch, passing the risk tier —
+   never via the `Agent` tool (that runs in-process and ties up the coordinator session until it
+   finishes). QA trusts CI for the mechanical gate (`gh pr checks`) and re-runs nothing unless CI
+   is red — tokens go to review only.
 
-   **Primary path — registered subagent** (`.claude/agents/coordinated-qa.md`; the call returns
-   the agent's final message as the tool result, so only the verdict enters your context):
+   Spawn: `herdr pane split <agents-tab-pane> --direction down --cwd <fresh-qa-worktree>
+   --no-focus` → `herdr agent start <name> --kind claude --pane <new-pane> -- --model sonnet
+   --permission-mode bypassPermissions "<boot pointer>"` (`--model opus` for security tier). Boot
+   the pane with:
    ```
-   Agent(
-     description: "QA: <slug>",
-     subagent_type: "coordinated-qa",
-     isolation: "worktree",
-     model: "opus",        ← security tier only; omit for routine/sensitive (inherits Sonnet)
-     prompt: """
-   JARVIS_PGDATABASE=jarvis_qa_<n>
    PR: <PR number> | Branch: <branch> | Spec: <spec-path> | Tier: <routine|sensitive|security>
-
    Invoke the coordinated-qa skill; its step 3b (live-path gate + e2e-UAT, every tier) and
-   step 4 (tier depth) are authoritative.
-   Return ONLY the compact verdict as your final message.
-   """
-   )
+   step 4 (tier depth) are authoritative. Post your verdict to the PR with `gh pr comment` when
+   done.
    ```
-   **Fallback (Herdr):** if the Agent tool is unavailable, `herdr agent start` with the same
-   prompt **plus `--model sonnet`** (or opus for security tier), collect the verdict via a bounded
-   pane read, and note the fallback in the manifest.
+   Confirm the pane says "Sonnet" (or "Opus" for security tier). Don't wait on it — check the PR's
+   comments on your next pass. By tier: `routine`/`sensitive` = Sonnet QA (`/code-review` +
+   exit-criteria, + invariant walk and coordinated-qa step-4 e2e-UAT gate for sensitive).
+   `security` = Opus adversarial QA — must `gh pr comment` its verdict before you act.
 
-   By tier: `routine`/`sensitive` = Sonnet QA (`/code-review` + exit-criteria, + invariant walk
-   and coordinated-qa step-4 e2e-UAT gate for sensitive). `security` = Opus adversarial QA — must
-   `gh pr comment` its verdict before you act. Consume the compact verdict only — never the body.
-
-   **Reap the QA worktree the moment you've consumed its verdict** — do not wait for Phase 3
-   step 6 or defer it. QA worktrees are disposable by construction: `isolation: "worktree"`'s
-   "auto-remove if unchanged" almost never fires for them, because the QA agent's own screenshots
-   and `test-results/` output count as a change. That gap is exactly how the 2026-08-10 run
-   accumulated ~20 stray `qa-*`/`agent-a*` worktrees under `.claude/worktrees/` and `/tmp` by the
-   next morning. A QA worktree holds no work of its own (it never edits source, only reviews) —
-   `git worktree remove --force <qa-wt>` and delete its branch (if any) unconditionally, no
-   four-gate check needed; that check is for build-agent worktrees which *do* carry unlanded work.
+   **Reap the QA worktree and pane the moment you've consumed its verdict** — do not wait for
+   Phase 3 step 6. A QA worktree holds no work of its own (it never edits source, only reviews):
+   `git worktree remove --force <qa-wt>`, delete its branch if any, close the pane. No four-gate
+   check needed — that check is for build-agent worktrees which do carry unlanded work.
 
 2. **CI waiver protocol (red checks are stop-the-line).** A PR with any red required check does
    NOT merge. Waivable **only** if: (a) proven failing on `origin/main` at the same SHA, (b)
@@ -545,7 +525,7 @@ Fired by the relay triggers (Context discipline / Phase 3 step 7):
 | Spawn build agent | `herdr pane split <pane> --direction down --cwd <worktree> --no-focus` → `herdr agent start <lowercase-name> --kind claude --pane <new-pane> -- --model sonnet --permission-mode bypassPermissions "<one-line pointer to a brief file>"` → confirm pane says "Sonnet" |
 | Name a lane (both namespaces) | `herdr agent rename <pane> <lowercase-work-name>` **and** `herdr pane rename <pane> "<Human Label>"` |
 | Name a coordinator | `herdr agent rename "$HERDR_PANE_ID" coordinator` **and** `herdr pane rename "$HERDR_PANE_ID" Coordinator` |
-| Spawn QA agent | `Agent(description, subagent_type: "coordinated-qa", isolation: "worktree", model: opus for security only, prompt)` |
+| Spawn QA agent | Herdr pane, same as a build agent (never the `Agent` tool) — `--model sonnet`, opus for security tier |
 | Spawn relay coordinator (SAME tab as yours) | `… -- claude --model sonnet --permission-mode bypassPermissions "<boot>"` or `… -- codex -s danger-full-access -a never "<boot>"` |
 | Talk to an agent | `herdr pane run <pane> "<msg>"` → bounded read to verify → `send-keys Enter` if unsubmitted |
 | Bounded pane read (always) | `herdr pane read <pane> --source recent --lines 12` |
