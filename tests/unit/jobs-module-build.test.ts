@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createModuleBuildWorker, MODULE_BUILD_QUEUE } from "../../packages/jobs/src/module-build-jobs";
+import { createModuleBuildWorker, MODULE_BUILD_QUEUE } from "../../packages/jobs/src/module-build-jobs.js";
 
 describe("createModuleBuildWorker", () => {
   const fakeBoss = {} as never;

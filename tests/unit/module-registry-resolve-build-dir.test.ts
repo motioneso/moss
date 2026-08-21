@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   resolveModuleBuildsDir,
   resolveBuildSourceDir
-} from "../../packages/module-registry/src/external/resolve-build-dir";
+} from "../../packages/module-registry/src/external/resolve-build-dir.js";
 
 describe("resolveModuleBuildsDir", () => {
   it("resolves the module builds directory beside, not inside, the modules directory", () => {

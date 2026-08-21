@@ -181,6 +181,34 @@ export interface ExternalModulesTable {
   updated_at: TimestampColumn;
 }
 
+// #1754: a module build in progress — the plan, status, and cost a chat turn writes to
+// start one. Never the generated code itself (that lives on disk, keyed by id).
+export interface ModuleBuildsTable {
+  id: ColumnType<string, string | undefined, never>;
+  owner_user_id: ColumnType<string, string, never>;
+  conversation_id: string | null;
+  status:
+    | "planning"
+    | "awaiting_plan_approval"
+    | "building"
+    | "awaiting_change"
+    | "ready"
+    | "failed"
+    | "cancelled";
+  plan: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >;
+  step: string | null;
+  module_id: string | null;
+  fetched_urls: ColumnType<string[], string[] | undefined, string[]>;
+  cost_cents: ColumnType<number, number | undefined, number>;
+  error: string | null;
+  created_at: TimestampColumn;
+  updated_at: TimestampColumn;
+}
+
 /**
  * Module credential secrets (#918 Slice 2). encrypted_secret is an AES-256-GCM
  * EncryptedSecret envelope, nullable because revoke scrubs it in place
@@ -1098,6 +1126,7 @@ export interface MossDatabase {
   "app.admin_audit_events": AdminAuditEventsTable;
   "app.module_enablement": ModuleEnablementTable;
   "app.external_modules": ExternalModulesTable;
+  "app.module_builds": ModuleBuildsTable;
   "app.module_credentials": ModuleCredentialsTable;
   "app.module_kv": ModuleKvTable;
   "app.rls_probe_items": RlsProbeItemsTable;
