@@ -889,3 +889,49 @@ my own tab w1:t1N for status changes.
   QA's worktree was reaped immediately after reading the verdict. Sent both findings back to the
   build agent (pane w1:pJ4) with the fix instructions and asked for a re-run of verify-gate before
   the next QA pass; it's already working on it. Not merged. [pane w1:pJ3]
+
+## Continuation note (coordinator session 4638f578-9c76-41b8-85dc-37dbfc9cb8d5, pane w1:pJ3, 2026-08-21 ~07:3x UTC — relaying at context 70%)
+
+`merges_since_relay` still 0 — nothing merged yet this session. Relaying on the context-meter
+trigger only.
+
+**What the successor needs to pick up, in order:**
+1. **#1755 (PR 1804)** — sent back to its build agent for two fixes: the "Building now" card
+   needs to go back to a plain hairline row instead of the raised "Needs you" style (an explicit
+   do-not-undo decision in the issue), and it needs a release note (run
+   `node scripts/append-release-note.mjs --pr 1804` on the branch and commit the result). Build
+   agent (pane, resolve fresh by label "1755 Workshop page (relay5)") was actively working on
+   both when I relayed. Once it reports back, spawn a fresh routine QA agent — do not trust its
+   self-report alone, same as before.
+2. **#1753** — asked to proceed into its coordinated wrap-up (verify-gate, PR, release note)
+   after finishing tasks 8-10 (migration renumbering to 0187/0188, ship-route tests). Was
+   actively running the wrap-up when I relayed (pane, resolve fresh by label
+   "1753 draft module (relay3)"). Watch for its PR; once open, QA it (routine tier) same as
+   #1755.
+3. **#1756** — still correctly waiting on #1755 to land before its final review. No action until
+   #1755 merges.
+4. **#1526 and #1521** — both intentionally parked overnight per the standing rule at the top of
+   this doc (broken shared test login blocking #1521's live-path proof; #1526 at its two-strike
+   CI failure budget). Leave alone unless the standing rule's time window has passed — check the
+   heading for its exact conditions.
+5. **Plan-writing agent** (pane, resolve fresh by label "1739 Stage 1 plan", worktree
+   `1739-stage1-plan`) is idle, its work is done, but its two commits are only on its own branch
+   with no open pull request — not reapable per the four-gate check (commits not on main).
+   Nothing urgent; flag it if it comes up, otherwise leave it be.
+
+**One real trap hit this session, worth knowing:** a build agent's pane can show
+`agent_status: done` while it's actually just sitting on stale unsent text in its input box from
+much earlier, with its last real turn having genuinely ended (not frozen, not a wait
+declaration — just ended after a commit). A single "continue" nudge cleared it both times this
+happened (#1753, twice). If a pane looks stuck like this again, try one nudge before assuming a
+real stall.
+
+**AWAITING-BEN:** checked directly — no open items right now beyond the two parked-overnight
+lanes above, both already written up under "Blocked overnight, needs Ben" and correctly left
+alone per the standing rule.
+
+Liveness Monitor (task `bdqzl1cj1`, this session only) will NOT carry over — re-arm fresh,
+watching tabs w1:t1P/t1Q/t1R plus whichever tab the successor's own pane resolves to.
+
+This coordinator is now spawning its successor (pane w1:pJ5, same tab as this one) and will have
+it reap this pane once it confirms it is driving. [pane w1:pJ3]
