@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Nudges the dev-coordinator pane if it goes idle for too long while Ben is away.
+# Runs as a systemd oneshot on a 1-minute timer (see scripts/ops/systemd/).
+set -euo pipefail
+
+IDLE_THRESHOLD_SECONDS="${COORDINATOR_WATCHDOG_IDLE_SECONDS:-300}"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/jarv1s-coordinator-watchdog"
+STATE_FILE="$STATE_DIR/state.json"
+mkdir -p "$STATE_DIR"
+
+pane_list="$(herdr pane list)"
+
+# There must be exactly one Coordinator pane (Phase 0a lock). If none exists, there's
+# nothing to watch right now -- clear any stale state and exit quietly.
+coordinator="$(jq -c '.result.panes[] | select(.label == "Coordinator")' <<<"$pane_list" | head -n1)"
+if [ -z "$coordinator" ]; then
+  rm -f "$STATE_FILE"
+  exit 0
+fi
+
+pane_id="$(jq -r '.pane_id' <<<"$coordinator")"
+revision="$(jq -r '.revision' <<<"$coordinator")"
+now="$(date +%s)"
+
+last_revision=""
+last_change="$now"
+last_nudge=0
+if [ -f "$STATE_FILE" ]; then
+  last_revision="$(jq -r '.revision // ""' "$STATE_FILE" 2>/dev/null || echo "")"
+  last_change="$(jq -r '.last_change // 0' "$STATE_FILE" 2>/dev/null || echo "$now")"
+  last_nudge="$(jq -r '.last_nudge // 0' "$STATE_FILE" 2>/dev/null || echo 0)"
+fi
+
+if [ "$revision" != "$last_revision" ]; then
+  # Pane produced new output since the last check -- it's active, reset the clock.
+  last_change="$now"
+fi
+
+idle_seconds=$(( now - last_change ))
+
+if [ "$idle_seconds" -ge "$IDLE_THRESHOLD_SECONDS" ]; then
+  echo "coordinator-watchdog: pane $pane_id idle for ${idle_seconds}s, nudging"
+  nudge="Watchdog: no activity for ${IDLE_THRESHOLD_SECONDS}s. Check the run manifest and the fleet's pane statuses, then continue supervising -- if a lane needs a decision only Ben can make, log it and ping him rather than sitting idle."
+  if [ "${COORDINATOR_WATCHDOG_DRY_RUN:-0}" = "1" ]; then
+    echo "coordinator-watchdog: DRY RUN, would send to $pane_id: $nudge"
+  else
+    herdr pane run "$pane_id" "$nudge" >/dev/null
+    sleep 1
+    herdr pane send-keys "$pane_id" Enter >/dev/null
+  fi
+  last_nudge="$now"
+  # Give it a fresh window before nudging again, so a still-stuck coordinator gets
+  # re-nudged every IDLE_THRESHOLD_SECONDS instead of every single poll.
+  last_change="$now"
+fi
+
+jq -n --arg revision "$revision" --argjson last_change "$last_change" --argjson last_nudge "$last_nudge" \
+  '{revision: $revision, last_change: $last_change, last_nudge: $last_nudge}' > "$STATE_FILE"
