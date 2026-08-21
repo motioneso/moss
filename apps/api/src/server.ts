@@ -569,9 +569,12 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
         // field with `if (!ext?.enabled) throw 409`; hardcoding true here means those
         // guards simply never fire, which is correct (verified — no change needed there).
         enabled: true,
-        discoveries: externalModuleHolder.getDiscoveries(),
+        // #1752: pass the live getter, not a called-once snapshot — otherwise an admin who
+        // triggers a rescan still sees the stale list on this exact page until a restart.
+        discoveries: externalModuleHolder.getDiscoveries,
         rejected: externalModuleHolder.getRejected(),
-        reconcile: (states) => reconcileExternalModules(externalModuleHolder.getDiscoveries(), states)
+        reconcile: (states) => reconcileExternalModules(externalModuleHolder.getDiscoveries(), states),
+        rescan: () => externalModuleHolder.rescan().then(() => undefined)
       },
       // #1762: narrowed to the four fields the personal Modules list needs, so the settings
       // package never sees a ReconciledExternalModule (it cannot import that type).

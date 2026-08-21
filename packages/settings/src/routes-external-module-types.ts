@@ -55,8 +55,19 @@ export interface InstalledExternalModuleSummary {
  */
 export interface ExternalModulesDependencies {
   readonly enabled: boolean;
-  readonly discoveries: readonly ExternalModuleDiscovery[];
+  /**
+   * #1752 — a live read, not a boot-time array: the composition root passes the discovery
+   * holder's getter directly, so a rescan (see `rescan` below) is visible on the very next
+   * call without a process restart.
+   */
+  readonly discoveries: () => readonly ExternalModuleDiscovery[];
   readonly rejected: readonly ExternalModuleRejection[];
+  /**
+   * #1752 — re-scan the modules directory on disk and refresh the discovery snapshot
+   * `discoveries()` reads from. Optional so deployments that never wired the live holder
+   * degrade to "rescan does nothing" rather than crashing.
+   */
+  readonly rescan?: () => Promise<void>;
   /**
    * #917 — reconcile port injected by the composition root (apps/api). Settings CANNOT import
    * @moss/module-registry (reconcileExternalModules lives there; that package already depends

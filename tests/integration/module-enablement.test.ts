@@ -532,7 +532,7 @@ describe("module enable routes grant self-operation policy (#1263 Task 15)", () 
 
   const externalModules: ExternalModulesDependencies = {
     enabled: true,
-    discoveries: [
+    discoveries: () => [
       {
         id: "ext-fixture",
         dir: "/tmp/ext-fixture",

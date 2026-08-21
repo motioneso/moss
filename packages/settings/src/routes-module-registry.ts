@@ -66,7 +66,7 @@ export function registerModuleRegistryRoutes(
     const onDiskIds = dist ? await dist.listOnDiskModuleIds() : [];
     return deriveModuleRegistryRows({
       registryEntries: entries,
-      discoveries: (ext?.discoveries ?? []).map((d) => ({
+      discoveries: (ext?.discoveries() ?? []).map((d) => ({
         id: d.id,
         name: d.manifest.name,
         version: d.manifest.version,

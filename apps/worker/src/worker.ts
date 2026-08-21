@@ -362,6 +362,11 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   await boss.work<ModuleControlPayload>(PLATFORM_MODULE_CONTROL_QUEUE, async ([job]) => {
     if (!job) throw new Error("module control worker received no job");
     assertModuleControlPayload(job.data);
+    if (job.data.action === "rescan") {
+      await externalModuleHolder.rescan();
+      await reconciler.reconcileAll();
+      return;
+    }
     await reconciler.reconcileModule(job.data.moduleId);
   });
   await externalReconciler.reconcileAll();

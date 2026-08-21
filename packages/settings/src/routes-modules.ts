@@ -18,12 +18,14 @@ import {
   listExternalModulesRouteSchema,
   listMyModulesRouteSchema,
   patchModuleEnablementRouteSchema,
+  rescanExternalModulesRouteSchema,
   setExternalModuleEnablementRouteSchema,
   type AdminModuleDto,
   type ExternalModuleDto
 } from "@moss/shared";
 import { HttpError } from "@moss/module-sdk";
 import type { MossModuleManifest } from "@moss/module-sdk";
+import { sendModuleControl } from "@moss/jobs";
 
 import type { SettingsRepository } from "./repository.js";
 import type { InstalledExternalModuleSummary, SettingsRoutesDependencies } from "./routes.js";
@@ -220,7 +222,7 @@ export function registerModuleRoutes(server: FastifyInstance, ctx: ModuleRoutesC
             if (!ext || !ext.enabled) {
               throw new HttpError(409, "External modules are not enabled on this instance");
             }
-            const discovery = ext.discoveries.find((d) => d.id === request.params.id);
+            const discovery = ext.discoveries().find((d) => d.id === request.params.id);
             if (!discovery) throw new HttpError(404, "External module not found");
 
             if (enable) {
@@ -260,6 +262,29 @@ export function registerModuleRoutes(server: FastifyInstance, ctx: ModuleRoutesC
           );
         }
         return { module: dto };
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  // #1752: admin-triggered rescan of the modules directory on disk. Refreshes the discovery
+  // snapshot in THIS process, then signals the worker process to do the same and reconcile —
+  // this is what makes a module dropped onto the mount visible without a restart.
+  server.post(
+    "/api/admin/modules/rescan",
+    { schema: rescanExternalModulesRouteSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
+          await assertAdminUser(repository, scopedDb, accessContext.actorUserId);
+        });
+        await dependencies.externalModules?.rescan?.();
+        if (dependencies.boss) {
+          await sendModuleControl(dependencies.boss, { action: "rescan" });
+        }
+        return { ok: true };
       } catch (error) {
         return handleRouteError(error, reply);
       }

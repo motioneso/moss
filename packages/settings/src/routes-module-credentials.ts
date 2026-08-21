@@ -55,7 +55,7 @@ function declaredCredentials(
 ): readonly ModuleAuthDeclaration[] | null {
   const ext = ctx.dependencies.externalModules;
   if (!ext?.enabled) return null;
-  const discovery = ext.discoveries.find((d) => d.id === moduleId);
+  const discovery = ext.discoveries().find((d) => d.id === moduleId);
   if (!discovery) return null;
   return (discovery.manifest.auth ?? []).filter((a) => a.scope === scope);
 }
