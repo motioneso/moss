@@ -1345,3 +1345,93 @@ Actions taken this pass:
 
 No open questions for Ben beyond what AWAITING-BEN.md already has (the #1526 entry, about to
 close once that PR merges). [pane w1:pJF]
+
+## Continuation note (coordinator session d4bf2ae0-eb8f-4def-a85a-132e054020be, pane w1:pJF, 2026-08-21 ~5:10pm PDT — relaying at context 70%)
+
+**Immediate next actions, in order:**
+1. **PR 1810 (#1809 nav bar dark mode):** everything green except "Build and publish images",
+   still building an image, watched by background Monitor (task bfds6w4t4, will notify when done).
+   Merge as routine the moment it's green -- Ben already authorized this explicitly (ignore any
+   stray RED PR comment; that was a duplicate/mistaken verdict from the old coordinator running an
+   in-process QA check, already explained to Ben and confirmed fine).
+2. **PR 1803 (#1526 PTY backpressure):** the flaky test failed a third time. Diagnosed the real
+   cause (not asked to fix code myself, per the no-hand-editing rule -- sent it to the owning
+   lane instead): the test at `tests/unit/cli-runner-terminal-rpc.test.ts` line 317 races an inner
+   10-second "wait for the real close event" timeout against vitest's own outer 10-second per-test
+   timeout, so on a loaded CI runner the outer one can fire first with a generic "test timed out"
+   instead of the inner one's clearer message ever getting a chance -- that's the actual flake, not
+   a real regression, matching Fable's earlier read. Told the lane (agent name `pty-1526-relay3`,
+   pane w1:pHP, currently idle) to raise the outer per-test timeout to something safely above the
+   inner one (e.g. 15_000) and push. **Successor: watch for it to report the fix pushed, then
+   trigger CI (it may need a fresh push, not just a rerun) and merge once green.** Ben's standing
+   waiver on this specific known flake still applies if it somehow flakes again after this fix.
+3. **#1754 build agent lane:** relayed at ~77% context after grounding the plan against the real
+   branch (found real drift beyond what was already flagged, notably: this repo centralizes unit
+   tests under `tests/unit/<package>-<topic>.test.ts`, only a short allow-list of packages may keep
+   colocated tests, and module-registry/jobs/settings/ai are NOT on that list -- successor lane
+   told to follow the centralized convention). No code committed yet. **Successor coordinator:
+   confirm its relay successor pane is up and driving** (was mid-spawn when this note was written,
+   agent name will still be `build-1754` or a `-relay1` suffix, same worktree
+   `.claude/worktrees/1754-build-agent-runner`).
+4. **#1756 lane** (agent `workshop-chat-cards-r2`, pane w1:pH7): told #1753 merged, it was actively
+   working on wiring the "changing a running draft" surface last checked. Its own context was at
+   71% at last check -- may relay soon too, nothing to do but watch.
+5. Remove the #1526 entry from `docs/coordination/AWAITING-BEN.md` once PR 1803 actually merges.
+
+**Fleet as of this relay** (all in workspace w1, agents tab `w1:t1Q` unless noted):
+- `w1:pJF` (tab `w1:t1N`, this session) -- relaying now, will be reaped by successor.
+- `w1:pHP` -- pty-1526-relay3, PR 1803, just given the real fix to make (see item 2).
+- `w1:pJG` -- build-1754 (or its relay successor once spawned), worktree
+  `.claude/worktrees/1754-build-agent-runner`, mid-relay when this note was written.
+- `w1:pH7` -- workshop-chat-cards-r2, PR 1799, working, context was 71%.
+- `w1:pJC` -- weather-1571-relay1, mid-build, idle when last checked, no action needed.
+
+Also done this pass: reaped the qa-1809 pane/worktree after reading its verdict; updated the
+`relay` skill so build/QA agents also keep the shared screen layout square when they hand off to a
+successor (Ben asked for this).
+
+`merges_since_relay` = 0 for the successor (no merges landed yet this pass -- both pending on the
+items above). No open questions for Ben beyond the existing #1526 AWAITING-BEN entry, which closes
+once PR 1803 merges.
+
+## Continuation note (coordinator session d4bf2ae0-eb8f-4def-a85a-132e054020be, pane w1:pJF, 2026-08-21 ~5:15pm PDT — relaying at context 70%)
+
+**Merged this pass:** PR 1810 (#1809, nav bar dark mode) -- fully green, squash-merged, worktree
+and branch `1809-navbar-dark-mode` cleaned up. Issue #1809 / board still need closing -- successor,
+please do that GitHub bookkeeping (close issue, move board card to Done).
+
+**Still open, in order:**
+1. **PR 1803 (#1526 PTY backpressure):** flaky test failed a third time. Diagnosed the real cause
+   myself (did not hand-edit code, sent it to the owning lane per the no-hand-editing rule): the
+   test at `tests/unit/cli-runner-terminal-rpc.test.ts` line 317 races an inner 10-second
+   "wait for the real close event" timeout against vitest's own outer 10-second per-test timeout --
+   on a loaded CI runner the outer one can fire first with a generic "test timed out" instead of
+   the inner one's clearer message ever getting a chance. That's the actual flake, not a real
+   regression (matches Fable's earlier read). Told the lane (agent `pty-1526-relay3`, pane w1:pHP)
+   to raise the outer per-test timeout to something safely above the inner one (e.g. 15_000) and
+   push. **Successor: watch for that fix, confirm CI comes back green, then merge as routine.**
+   Ben's standing waiver on this specific known flake still applies if it somehow flakes again.
+2. **#1754 build agent lane relayed again** (this is now the second relay): successor pane w1:pJH,
+   agent name `build-1754b`, same worktree `.claude/worktrees/1754-build-agent-runner`, confirmed
+   on Sonnet and driving. Old pane w1:pJG reaped. Its own handoff doc (written by the relaying
+   agent) is at `docs/superpowers/handoffs/2026-08-21-1754-build-agent-runner-relay.md` if the
+   successor needs the branch-vs-plan drift details (migration number, RLS pattern,
+   generateStructured shape, YOLO gate location, module id pattern name, test file locations) --
+   don't read it yourself unless something looks wrong, the lane already has it.
+3. **#1756 lane** (agent `workshop-chat-cards-r2`, pane w1:pH7): told #1753 merged, was working on
+   wiring the draft-change surface, context was around 71-77% last checked -- may relay soon,
+   nothing to do but watch.
+4. Remove the #1526 entry from `docs/coordination/AWAITING-BEN.md` once PR 1803 actually merges.
+
+**Fleet as of this relay** (all in workspace w1, agents tab `w1:t1Q` unless noted):
+- `w1:pJF` (tab `w1:t1N`, this session) -- relaying now, will be reaped by successor.
+- `w1:pHP` -- pty-1526-relay3, PR 1803, making the real timeout fix.
+- `w1:pJH` -- build-1754b, worktree `.claude/worktrees/1754-build-agent-runner`, just started,
+  driving.
+- `w1:pH7` -- workshop-chat-cards-r2, PR 1799, working.
+- `w1:pJC` -- weather-1571-relay1, mid-build, idle when last checked, no action needed.
+
+`merges_since_relay` = 1 for the successor (PR 1810 merged this pass, not a security tier so no
+mandatory relay from that alone -- relaying now because of the context-meter warning, not the
+merge count). No open questions for Ben beyond the existing #1526 AWAITING-BEN entry, which closes
+once PR 1803 merges.
