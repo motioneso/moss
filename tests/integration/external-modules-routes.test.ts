@@ -62,6 +62,25 @@ beforeAll(async () => {
     })
   );
 
+  // #1753 Task 10: a second on-disk discovery, kept row-less ('discovered') until a given
+  // test inserts a draft row for it directly — the ship route needs a real discovery to
+  // capture manifestHash/packageHash from, exactly like the enable route above.
+  const draftDir = join(modulesDir, "acme-widgets-draft");
+  mkdirSync(join(draftDir, "dist"), { recursive: true });
+  writeFileSync(join(draftDir, "dist", "worker.js"), "// fixture worker\n");
+  writeFileSync(
+    join(draftDir, "jarvis.module.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      id: "acme-widgets-draft",
+      name: "Acme Widgets (draft)",
+      version: "0.1.0",
+      publisher: "Acme, Inc.",
+      lifecycle: "optional",
+      compatibility: { jarv1s: ">=0.1.0" }
+    })
+  );
+
   appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
   server = createApiServer({
     appDb,
@@ -99,12 +118,14 @@ describe("external-module admin routes (#917)", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.enabled).toBe(true);
-    expect(body.modules).toHaveLength(1);
-    expect(body.modules[0]).toMatchObject({
-      id: "acme-widgets",
-      status: "discovered",
-      active: false
-    });
+    expect(body.modules).toHaveLength(2);
+    expect(body.modules).toContainEqual(
+      expect.objectContaining({
+        id: "acme-widgets",
+        status: "discovered",
+        active: false
+      })
+    );
   });
 
   it("enables the module, then /api/modules includes it with external:true", async () => {
@@ -230,6 +251,131 @@ describe("external-module admin routes (#917)", () => {
       headers: { cookie: memberCookie }
     });
     expect(res.statusCode).toBe(403);
+  });
+
+  // #1753 Task 10: shipping ends a draft's author-only exemption. All four cases share one
+  // inserted draft row, owned by the admin — a fresh row per test keeps them independent.
+  it("ships the admin's own draft: flips it to enabled, clears the owner", async () => {
+    const client = new Client({ connectionString: connectionStrings.bootstrap });
+    await client.connect();
+    await client.query(
+      `INSERT INTO app.external_modules (id, status, manifest_hash, package_hash, owner_user_id, created_at, updated_at)
+       VALUES ('acme-widgets-draft', 'draft', 'sha256:stale', 'sha256:stale', $1, now(), now())`,
+      [adminUserId]
+    );
+    await client.end();
+
+    const res = await server.inject({
+      method: "POST",
+      url: "/api/admin/modules/acme-widgets-draft/ship",
+      headers: { cookie: adminCookie }
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ shipped: true, restartRequired: true });
+
+    const verifyClient = new Client({ connectionString: connectionStrings.bootstrap });
+    await verifyClient.connect();
+    const row = await verifyClient.query<{
+      status: string;
+      owner_user_id: string | null;
+      manifest_hash: string;
+    }>(
+      `SELECT status, owner_user_id, manifest_hash FROM app.external_modules WHERE id = 'acme-widgets-draft'`
+    );
+    await verifyClient.end();
+    expect(row.rows[0]).toMatchObject({ status: "enabled", owner_user_id: null });
+    expect(row.rows[0]?.manifest_hash).not.toBe("sha256:stale");
+  });
+
+  it("returns 404 shipping another user's draft (ownership, not existence)", async () => {
+    const client = new Client({ connectionString: connectionStrings.bootstrap });
+    await client.connect();
+    await client.query(
+      `INSERT INTO app.external_modules (id, status, manifest_hash, package_hash, owner_user_id, created_at, updated_at)
+       VALUES ('acme-widgets-draft', 'draft', 'sha256:stale', 'sha256:stale', $1, now(), now())
+       ON CONFLICT (id) DO UPDATE SET status = 'draft', owner_user_id = $1`,
+      [memberUserId]
+    );
+    await client.end();
+
+    const res = await server.inject({
+      method: "POST",
+      url: "/api/admin/modules/acme-widgets-draft/ship",
+      headers: { cookie: adminCookie }
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("denies a non-admin ship attempt with 403", async () => {
+    const res = await server.inject({
+      method: "POST",
+      url: "/api/admin/modules/acme-widgets-draft/ship",
+      headers: { cookie: memberCookie }
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("returns 404 shipping an unknown module id", async () => {
+    const res = await server.inject({
+      method: "POST",
+      url: "/api/admin/modules/ghost/ship",
+      headers: { cookie: adminCookie }
+    });
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+// #1808 QA follow-up: the personal Modules pane (GET/PATCH /api/me/modules) reads through a
+// second resolver (createInstalledExternalModulesResolverForApi) that the original #1753 fix
+// missed. Before this, any logged-in user's own module list showed the name and version of
+// every other user's in-progress draft, and the same PATCH route would toggle one on or off.
+describe("the personal Modules pane hides a draft from everyone but its owner (#1753)", () => {
+  it("does not list another user's draft, and 404s trying to toggle it", async () => {
+    const client = new Client({ connectionString: connectionStrings.bootstrap });
+    await client.connect();
+    await client.query(
+      `INSERT INTO app.external_modules (id, status, manifest_hash, package_hash, owner_user_id, created_at, updated_at)
+       VALUES ('acme-widgets-draft', 'draft', 'sha256:stale', 'sha256:stale', $1, now(), now())
+       ON CONFLICT (id) DO UPDATE SET status = 'draft', owner_user_id = $1`,
+      [memberUserId]
+    );
+    await client.end();
+
+    const list = await server.inject({
+      method: "GET",
+      url: "/api/me/modules",
+      headers: { cookie: adminCookie }
+    });
+    expect(list.statusCode).toBe(200);
+    const modules = (list.json() as { modules: { id: string }[] }).modules;
+    expect(modules.map((module) => module.id)).not.toContain("acme-widgets-draft");
+
+    const patch = await server.inject({
+      method: "PATCH",
+      url: "/api/me/modules/acme-widgets-draft",
+      headers: { cookie: adminCookie, "content-type": "application/json" },
+      payload: { disabled: true }
+    });
+    expect(patch.statusCode).toBe(404);
+  });
+
+  it("lists the owner's own draft and lets them toggle it", async () => {
+    const list = await server.inject({
+      method: "GET",
+      url: "/api/me/modules",
+      headers: { cookie: memberCookie }
+    });
+    expect(list.statusCode).toBe(200);
+    const modules = (list.json() as { modules: { id: string }[] }).modules;
+    expect(modules.map((module) => module.id)).toContain("acme-widgets-draft");
+
+    const patch = await server.inject({
+      method: "PATCH",
+      url: "/api/me/modules/acme-widgets-draft",
+      headers: { cookie: memberCookie, "content-type": "application/json" },
+      payload: { disabled: true }
+    });
+    expect(patch.statusCode).toBe(200);
   });
 });
 

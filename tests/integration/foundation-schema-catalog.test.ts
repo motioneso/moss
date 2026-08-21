@@ -331,7 +331,11 @@ describe("MVP foundation schema catalog", () => {
         // #1383 — narrow audit-insert grant for the sanctioned admin-reset-password CLI.
         { version: "0184", name: "0184_admin_reset_password_audit_insert.sql" },
         { version: "0185", name: "0185_sports_whole_league_dedupe.sql" },
-        { version: "0186", name: "0186_sports_whole_league_unique.sql" }
+        { version: "0186", name: "0186_sports_whole_league_unique.sql" },
+        // #1753 — draft status + owner on external_modules, and the fan-out that gives a
+        // draft's owner alone an active row from list_active_external_module_users.
+        { version: "0187", name: "0187_external_modules_draft_owner.sql" },
+        { version: "0188", name: "0188_list_active_external_module_users_draft.sql" }
       ]);
     } finally {
       await client.end();

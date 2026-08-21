@@ -147,4 +147,68 @@ describe("SettingsRepository external-module state (app.external_modules, #917)"
     );
     expect(asUserB.some((s) => s.id === "visible-to-all")).toBe(true);
   });
+
+  it("allows a draft row with an owner, and rejects a draft row without one (#1753)", async () => {
+    await expect(
+      runner.withDataContext({ actorUserId: ids.adminUser, requestId: "ext-8" }, (db) =>
+        db.db
+          .insertInto("app.external_modules")
+          .values({
+            id: "videos-draft",
+            status: "draft",
+            manifest_hash: "sha256:m",
+            package_hash: "sha256:p",
+            disabled_reason: null,
+            enabled_by: null,
+            enabled_at: null,
+            owner_user_id: ids.userA,
+            created_at: new Date(),
+            updated_at: new Date()
+          })
+          .execute()
+      )
+    ).resolves.toBeDefined();
+
+    await expect(
+      runner.withDataContext({ actorUserId: ids.adminUser, requestId: "ext-9" }, (db) =>
+        db.db
+          .insertInto("app.external_modules")
+          .values({
+            id: "videos-draft-2",
+            status: "draft",
+            manifest_hash: "sha256:m",
+            package_hash: "sha256:p",
+            disabled_reason: null,
+            enabled_by: null,
+            enabled_at: null,
+            owner_user_id: null,
+            created_at: new Date(),
+            updated_at: new Date()
+          })
+          .execute()
+      )
+    ).rejects.toThrow();
+  });
+
+  it("rejects an enabled row that carries an owner (#1753)", async () => {
+    await expect(
+      runner.withDataContext({ actorUserId: ids.adminUser, requestId: "ext-10" }, (db) =>
+        db.db
+          .insertInto("app.external_modules")
+          .values({
+            id: "videos-owned-enabled",
+            status: "enabled",
+            manifest_hash: "sha256:m",
+            package_hash: "sha256:p",
+            disabled_reason: null,
+            enabled_by: ids.adminUser,
+            enabled_at: new Date(),
+            owner_user_id: ids.userA,
+            created_at: new Date(),
+            updated_at: new Date()
+          })
+          .execute()
+      )
+    ).rejects.toThrow();
+  });
 });
