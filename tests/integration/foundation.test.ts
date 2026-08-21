@@ -146,6 +146,42 @@ describe("MVP foundation scaffold", () => {
     }
   });
 
+  it("fans a draft module out to its owner alone, not to every enabled-module user (#1753)", async () => {
+    const client = new Client({ connectionString: connectionStrings.bootstrap });
+    await client.connect();
+    try {
+      await client.query(
+        `INSERT INTO app.external_modules
+           (id, status, manifest_hash, package_hash, owner_user_id)
+         VALUES ('fixture-draft', 'draft', 'sha256:manifest', 'sha256:package', $1::uuid)`,
+        [ids.userA]
+      );
+
+      const rows = await sql<{ user_id: string }>`
+        SELECT user_id FROM app.list_active_external_module_users('fixture-draft')
+      `.execute(workerDb);
+      expect(rows.rows.map((row) => row.user_id)).toEqual([ids.userA]);
+      expect(rows.rows.map((row) => row.user_id)).not.toContain(ids.userB);
+
+      // The owner has no deny row and yet still sees only themselves — a draft's own
+      // author cannot be excluded by the enabled-module deny list, because that list
+      // never applies to drafts in the first place.
+      await client.query(
+        `INSERT INTO app.module_enablement (scope, module_id, user_id)
+         VALUES ('user', 'fixture-draft', $1::uuid)`,
+        [ids.userA]
+      );
+      const stillOwnerOnly = await sql<{ user_id: string }>`
+        SELECT user_id FROM app.list_active_external_module_users('fixture-draft')
+      `.execute(workerDb);
+      expect(stillOwnerOnly.rows.map((row) => row.user_id)).toEqual([ids.userA]);
+    } finally {
+      await client.query(`DELETE FROM app.module_enablement WHERE module_id = 'fixture-draft'`);
+      await client.query(`DELETE FROM app.external_modules WHERE id = 'fixture-draft'`);
+      await client.end();
+    }
+  });
+
   it("keeps runtime roles from owning protected tables or bypassing RLS", async () => {
     const client = new Client({ connectionString: connectionStrings.bootstrap });
 
