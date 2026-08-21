@@ -40,6 +40,17 @@ re-derive from memory.
 
 ## merges_since_relay: 0
 
+## Continuation note (this coordinator, 2026-08-20 ~19:10 PDT)
+
+`holder-relay2` (#1752) reports the worker-side piece was already put in the shared package
+location by the first session, so that part of the plan is done early. It also found a real gap
+the plan missed: the admin's own module list page currently reads a snapshot taken once at server
+start, not the live rescannable object — so even after the rescan button is wired up, an admin
+clicking it wouldn't see new modules without restarting the server, which defeats the feature for
+the person meant to use it. It's folding that fix into the rescan-action task rather than treating
+it as separate scope, which is the right call — it's required for the feature to actually work,
+not an addition. No coordinator action needed; noted for the record.
+
 ## Continuation note (this coordinator, 2026-08-20 ~19:05 PDT)
 
 The module-discovery build lane (#1752) finished its first piece and relayed at its context
