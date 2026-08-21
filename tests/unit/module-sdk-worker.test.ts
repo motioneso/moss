@@ -39,7 +39,11 @@ async function spawnWorker(body: string): Promise<{
     }
   });
   const next = async () => {
-    for (let attempt = 0; messages.length === 0 && attempt < 200; attempt += 1) {
+    // #1667: bounded by wall-clock deadline, not attempt count -- a fixed
+    // 200*5ms (~1s) budget was shorter than this sandbox's real child-process/tsx
+    // cold start (measured ~1.3-1.5s), so the first message never arrived in time.
+    const deadline = Date.now() + 5_000;
+    while (messages.length === 0 && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 5));
     }
     if (messages.length === 0) throw new Error("worker produced no protocol message");
