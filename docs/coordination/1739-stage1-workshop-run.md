@@ -1866,3 +1866,25 @@ this pass.
 pane w1:pJW, label "1754 build agent runner (relay9)". Confirmed driving (Sonnet, re-running the
 gate). Old pane w1:pJS reaped. Its report: task 19 done and committed, branch rebased clean on
 main. No merge yet, no action needed beyond watching.
+
+## Wave 2 spawned (coordinator session 9674b6c7-87b1-4612-afad-361c7f9070fa, pane w1:pJV, 2026-08-21 ~8:4xpm PDT)
+
+Ben asked for more parallel work. Checked the ready list's dependency-blocked items: their
+blockers (#1515, #1521, #1524) have all since merged, so three lanes unblocked and collision-clear
+per the earlier Opus triage. Confirmed main CI green before spawning. Spawned all three as Sonnet
+build agents in the agents tab:
+
+| Issue | What it is | Tier | Agent name | Pane | Worktree/Branch |
+| --- | --- | --- | --- | --- | --- |
+| #1517 | escape commitment evidence ampersand/angle-bracket chars, truncate to 500 chars | routine | escape-commitment-1517 | w1:pJX | 1517-escape-commitment-evidence |
+| #1039 | test coverage distinguishing forceReplay from purge on private chat history | routine (test-only) | forcereplay-1039 | w1:pJY | 1039-forcereplay-vs-purge-coverage |
+| #1572 | Sports: custom public news sources by team/league (new table, migration) | sensitive | sports-news-1572 | w1:pJZ | 1572-custom-sports-news-sources |
+
+Handoff docs: `docs/coordination/handoff-<slug>.md` for each. #1572's handoff explicitly warns it
+must not assume a migration number — #1524 already landed 0185/0186 in the same area, so it must
+check the current highest migration file before writing its own.
+
+Fleet is now 7 lanes total: #1526, #1754(relay9), #1756, #1571, plus the three new ones. Agents
+tab rebalanced from a lopsided 2-left/5-right split to 3-left/4-right so nothing is squeezed.
+
+Still queued behind #1572 landing: #906 (same Sports settings area) — do not spawn yet.
