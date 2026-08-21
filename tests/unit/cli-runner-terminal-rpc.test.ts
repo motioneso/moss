@@ -52,6 +52,7 @@ class FakeChannel implements ByteChannel {
    * backpressured socket still accepted and buffered the write), "throw" throws (bytes NOT
    * recorded — a real thrown write never made it to the wire). */
   private nextWriteOutcome: "backpressure" | "throw" | undefined;
+  private closeWaiters: Array<() => void> = [];
 
   write(buf: Buffer): boolean {
     if (this.closed) return true;
@@ -69,6 +70,15 @@ class FakeChannel implements ByteChannel {
   end(): void {
     this.closed = true;
     this.closeListener?.();
+    const waiters = this.closeWaiters;
+    this.closeWaiters = [];
+    for (const waiter of waiters) waiter();
+  }
+  /** Resolves the instant end() is called (or immediately if already closed) — event-driven,
+   * so callers don't need to poll on a fixed interval/attempt budget. */
+  waitForClose(): Promise<void> {
+    if (this.closed) return Promise.resolve();
+    return new Promise((resolve) => this.closeWaiters.push(resolve));
   }
   on(event: "data" | "close" | "error" | "drain", listener: (chunk: Buffer) => void): void {
     if (event === "data") this.dataListener = listener;
@@ -341,11 +351,15 @@ describe("terminal RPC dispatch (#1059)", () => {
       expect(writeOk).toBeDefined();
       channel.scriptNextWrite("throw");
 
-      // Poll for the connection closing rather than a fixed sleep — the throw happens on the
-      // async PTY echo, whenever the real shell gets around to it.
-      for (let attempt = 0; attempt < 20 && !channel.closed; attempt++) {
-        await new Promise((r) => setTimeout(r, 100));
-      }
+      // Wait for the actual close event rather than polling on a fixed budget — the throw
+      // happens on the async PTY echo, whenever the real shell gets around to it. The outer
+      // timeout is just a backstop so a real regression still fails the test instead of hanging.
+      await Promise.race([
+        channel.waitForClose(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("timed out waiting for connection close")), 10_000)
+        )
+      ]);
       expect(channel.closed).toBe(true);
 
       // The connection-owned terminal must be dead too — a further write is a no-op, proven by
