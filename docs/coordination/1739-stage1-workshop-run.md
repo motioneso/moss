@@ -22,11 +22,11 @@ unaffected.
 
 | Issue | Title | Tier | Status | Agent | Pane | Branch | PR |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| #1752 | find modules that appear after the server started | routine | queued | - | - | - | - |
+| #1752 | find modules that appear after the server started | routine | building | build-1752-discovery | w1:pH1 | 1752-module-discovery-holder | - |
 | #1753 | a draft module that runs for its author alone | routine | blocked on #1752 | - | - | - | - |
 | #1754 | the build agent - agree a plan, then build it | sensitive (spawns a build agent/job) | blocked on #1752 | - | - | - | - |
-| #1755 | the Workshop page (front end shell) | routine | queued | - | - | - | - |
-| #1756 | plan/draft chat cards (front end shell) | routine | queued | - | - | - | - |
+| #1755 | the Workshop page (front end shell) | routine | building | build-1755-workshop-page | w1:pH2 | 1755-workshop-page | - |
+| #1756 | plan/draft chat cards (front end shell) | routine | building | build-1756-workshop-cards | w1:pH3 | 1756-workshop-chat-cards | - |
 
 ## Ready lane (from GitHub project 2, board query before rate limit)
 
