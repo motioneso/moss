@@ -61,6 +61,7 @@ class FakeChannel implements ByteChannel {
       throw new Error("simulated EPIPE");
     }
     this.written.push(buf);
+    this.checkExitWaiters(buf);
     if (this.nextWriteOutcome === "backpressure") {
       this.nextWriteOutcome = undefined;
       return false;
@@ -84,6 +85,31 @@ class FakeChannel implements ByteChannel {
     if (event === "data") this.dataListener = listener;
     else if (event === "drain") this.drainListener = listener as () => void;
     else this.closeListener = listener as () => void;
+  }
+  private exitWaiters: Array<{ terminalId: string; resolve: () => void }> = [];
+  /** Resolves once a "terminalExit" push frame for this terminalId has actually been written —
+   * the real signal that the underlying OS process (not just our JS-side kill() call) is gone.
+   * Cleanup should wait on this, not just call kill() and move on, or the next test's PTY can
+   * spawn while the prior test's shell process is still holding a pty device slot. */
+  waitForExit(terminalId: string): Promise<void> {
+    return new Promise((resolve) => this.exitWaiters.push({ terminalId, resolve }));
+  }
+  private checkExitWaiters(buf: Buffer): void {
+    if (this.exitWaiters.length === 0) return;
+    const res = decodeFrame(buf);
+    if (res.kind !== "frame") return;
+    const frame = JSON.parse(res.body.toString("utf8")) as {
+      t?: string;
+      channel?: string;
+      terminalId?: string;
+    };
+    if (frame.t !== "push" || frame.channel !== "terminalExit") return;
+    const remaining: typeof this.exitWaiters = [];
+    for (const waiter of this.exitWaiters) {
+      if (waiter.terminalId === frame.terminalId) waiter.resolve();
+      else remaining.push(waiter);
+    }
+    this.exitWaiters = remaining;
   }
   feed(buf: Buffer): void {
     this.dataListener?.(buf);
@@ -109,6 +135,18 @@ class FakeChannel implements ByteChannel {
 }
 
 /** Drive the client side of the §3.6 handshake against a FakeChannel until authed. */
+function waitForTerminalExit(channel: FakeChannel, terminalId: string): Promise<void> {
+  return Promise.race([
+    channel.waitForExit(terminalId),
+    new Promise<void>((_, reject) =>
+      setTimeout(
+        () => reject(new Error(`timed out waiting for terminal ${terminalId} to exit`)),
+        5_000
+      )
+    )
+  ]);
+}
+
 function authenticate(channel: FakeChannel): void {
   const clientNonce = randomBytes(32).toString("hex");
   channel.feed(encodeFrame({ t: "hello", clientNonce }));
@@ -153,7 +191,7 @@ function makeStubHost(): CliChatEngineHost {
 }
 
 describe("terminal RPC dispatch (#1059)", () => {
-  it.skip("open -> write(echo) -> real PTY -> terminalData push frame carrying the echoed bytes", async () => {
+  it("open -> write(echo) -> real PTY -> terminalData push frame carrying the echoed bytes", async () => {
     const terminalHost = new TerminalHost({ homeBase: os.tmpdir(), toolsBinDir: "/usr/bin" });
     const channel = new FakeChannel();
     const deps: ConnectionDeps = {
@@ -162,6 +200,7 @@ describe("terminal RPC dispatch (#1059)", () => {
       secret: RPC_SECRET,
       terminalHost
     };
+    let terminalId: string | undefined;
 
     try {
       serveConnection(channel, deps);
@@ -175,7 +214,7 @@ describe("terminal RPC dispatch (#1059)", () => {
       const openOk = channel.decodeAll().find((f) => (f as RpcOk).id === 1) as RpcOk;
       expect(openOk).toBeDefined();
       expect(openOk.t).toBe("ok");
-      const terminalId = (openOk.result as { terminalId: string }).terminalId;
+      terminalId = (openOk.result as { terminalId: string }).terminalId;
       expect(typeof terminalId).toBe("string");
       expect(terminalId.length).toBeGreaterThan(0);
 
@@ -215,6 +254,10 @@ describe("terminal RPC dispatch (#1059)", () => {
     } finally {
       // Belt-and-suspenders: ensure no orphan PTY survives this test regardless of assertion outcome.
       terminalHost.killAll();
+      // Wait for the real OS process to actually exit, not just our kill() call to return --
+      // otherwise the next test's PTY can spawn while this one's shell still holds a pty device
+      // slot, starving its output. Best-effort: a cleanup hang here shouldn't fail this test.
+      if (terminalId) await waitForTerminalExit(channel, terminalId).catch(() => {});
     }
   }, 10_000);
 
@@ -246,7 +289,7 @@ describe("terminal RPC dispatch (#1059)", () => {
     }
   });
 
-  it.skip("a false write on the terminalData push does not close the connection or drop bytes, and a later drain does not throw (#1526)", async () => {
+  it("a false write on the terminalData push does not close the connection or drop bytes, and a later drain does not throw (#1526)", async () => {
     const terminalHost = new TerminalHost({ homeBase: os.tmpdir(), toolsBinDir: "/usr/bin" });
     const channel = new FakeChannel();
     const deps: ConnectionDeps = {
@@ -255,6 +298,7 @@ describe("terminal RPC dispatch (#1059)", () => {
       secret: RPC_SECRET,
       terminalHost
     };
+    let terminalId: string | undefined;
 
     try {
       serveConnection(channel, deps);
@@ -265,7 +309,7 @@ describe("terminal RPC dispatch (#1059)", () => {
       );
       await new Promise((r) => setTimeout(r, 50));
       const openOk = channel.decodeAll().find((f) => (f as RpcOk).id === 1) as RpcOk;
-      const terminalId = (openOk.result as { terminalId: string }).terminalId;
+      terminalId = (openOk.result as { terminalId: string }).terminalId;
 
       channel.feed(
         encodeFrame({
@@ -311,6 +355,7 @@ describe("terminal RPC dispatch (#1059)", () => {
       expect(killOk.t).toBe("ok");
     } finally {
       terminalHost.killAll();
+      if (terminalId) await waitForTerminalExit(channel, terminalId).catch(() => {});
     }
   }, 10_000);
 
