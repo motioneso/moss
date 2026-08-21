@@ -1,8 +1,8 @@
 # Run manifest: Workshop stage 1 (#1739)
 
-Coordinator: Claude session `f0b47c3f-4585-46bc-a94a-b8b3361a6d99`, label `Coordinator`, pane
-`w1:pHR` (re-resolve pane fresh by label + session id — pane numbers reflow). Took over from
-session `78440b71-a4e4-472d-a450-c036c5edab92` (former pane `w1:pHK`) at 2026-08-20 ~21:5x PDT;
+Coordinator: Claude session `8e577192-b2da-4323-b014-238626027729`, label `Coordinator`, pane
+`w1:pHS` (re-resolve pane fresh by label + session id — pane numbers reflow). Took over from
+session `f0b47c3f-4585-46bc-a94a-b8b3361a6d99` (former pane `w1:pHR`) at 2026-08-20 ~21:5x PDT;
 old pane confirmed standing down and closed. Liveness Monitor needs to be re-armed fresh (see
 latest continuation note) — inherited monitor did not carry over, matching the pattern of prior
 relays in this run.
