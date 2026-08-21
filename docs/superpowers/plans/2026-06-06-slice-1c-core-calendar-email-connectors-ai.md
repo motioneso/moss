@@ -59,7 +59,7 @@
 ## Environment
 
 - `export PATH="$HOME/.local/bin:$PATH"` (corepack pnpm shim) — or `corepack pnpm <script>`.
-- `pnpm db:up` before any integration test. `pnpm db:down && pnpm db:up` for a clean reset.
+- `pnpm db:up` before any integration test. `pnpm db:reset` for a clean reset.
 - **Run a single test file directly** — `pnpm test:integration -- <path>` does NOT filter (it runs
   all files). Use: `npx vitest run tests/integration/<file>.test.ts` (add `-t "<name>"` to filter by
   test name within the file).
@@ -529,7 +529,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Reset the database so all migrations apply from scratch**
 
-Run: `export PATH="$HOME/.local/bin:$PATH" && pnpm db:down && pnpm db:up`
+Run: `export PATH="$HOME/.local/bin:$PATH" && pnpm db:reset`
 Expected: `Container jarv1s-postgres  Healthy`.
 
 - [ ] **Step 2: Run the full foundation gate**

@@ -93,7 +93,7 @@ full, reviewed design is in the spec; the headlines:
   required edit to `packages/notes/sql/0007` — see caveats), `b55f36d` (ai-tools + auth-settings
   test fallout). Plan: `docs/superpowers/plans/2026-06-06-slice-1b-tasks-owner-or-share.md`.
   **Caveats:** (1) editing the already-applied `notes/0007` to drop its stale `tasks_update`
-  redefinition changes that migration's checksum — any pre-1b DB must `pnpm db:down && pnpm db:up`
+  redefinition changes that migration's checksum — any pre-1b DB must `pnpm db:reset`
   (fresh CI is unaffected); (2) `app.resource_grants` is now **inert for tasks** (and the probe) —
   the admin resource-grants API still records grants but they confer no task access; the dead
   helpers/columns/API path are retired in Slice 1f.

@@ -143,9 +143,7 @@ pnpm check:file-size
 If the API is restarted for code changes, reset the DB before handing back to the user:
 
 ```bash
-pnpm db:down
-pnpm db:up
-pnpm db:migrate
+pnpm db:reset
 pnpm dev:api
 pnpm dev:web
 ```
