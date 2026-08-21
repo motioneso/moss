@@ -33,7 +33,7 @@ their focused unit tests, and only the commitments `registerWorkers` block in
   or configure another logger"): `SyncLogger` in `packages/connectors/src/sync-jobs.ts:170-173`
   (`warn(data: Record<string, unknown>, message: string): void`), with a
   `NOOP_SYNC_LOGGER` fallback at `:175-179`. Same shape, new instance — the spec forbids reusing
-  connectors' own logger, not the *pattern*.
+  connectors' own logger, not the _pattern_.
 - Test precedent for unit-testing a `registerDataContextWorker`-wrapped job handler without a real
   pg-boss/DB: `tests/unit/news-jobs.test.ts:14-29` — a fake `PgBoss` whose `.work` captures the
   handler function, and a fake `DataContextRunner.withDataContext` that just calls the handler with
@@ -52,7 +52,7 @@ This is a backend logging change with no UI and no model-authored value crossing
 data — the determinism-boundary section of the planning skill does not add new obligations here.
 The applicable boundary is the spec's own: warning fields are a closed, stable set
 (`event`, `sourceKind`, `errorName`, `errorMessage`), never free text from a prompt, model output,
-or credential. `errorName`/`errorMessage` are the *only* fields sourced from a caught exception, and
+or credential. `errorName`/`errorMessage` are the _only_ fields sourced from a caught exception, and
 they are bounded (256 chars, CR/LF stripped) before they reach the logger call.
 
 ## Live-path applicability
@@ -104,7 +104,7 @@ export async function extractCommitmentsFromText(
   sourceKind: string,
   occurredAt: string,
   warn?: CommitmentExtractionWarnLogger
-): Promise<ExtractedCommitmentCandidate[]>
+): Promise<ExtractedCommitmentCandidate[]>;
 ```
 
 Emission points (both existing `return []` sites become `warn?.(...); return [];` — no change to
@@ -122,7 +122,7 @@ New cases, each asserting on a spy `{ warn: vi.fn() }`:
 1. Prefilter miss → `warn` not called (already covered by existing test; add the assertion).
 2. Valid `{"candidates":[]}` → `warn` not called.
 3. `generate` throws `new Error("boom")` → `warn` called once with `event:
-   "commitment-extraction-adapter-error"`, `sourceKind`, bounded `errorName`/`errorMessage`; assert
+"commitment-extraction-adapter-error"`, `sourceKind`, bounded `errorName`/`errorMessage`; assert
    the exact literal `"boom"` string never appears truncated/mangled but stays ≤256 chars and has no
    `\n`.
 4. `generate` throws an object with a message containing `\r\n` and > 256 chars → assert output
@@ -147,12 +147,12 @@ Import `CommitmentExtractionWarnLogger` from `./extractor.js`.
 
 At each of the four existing early-return sites, before `return;`, call `deps.logger?.warn(...)`:
 
-| Site | event | message |
-| --- | --- | --- |
-| `!provider` (`:35-36`) | `commitment-extraction-source-provider-missing` | `commitment extraction: source provider missing` |
-| `!model` (`:44`) | `commitment-extraction-no-model` | `commitment extraction: no configured economy summarization model` |
-| `!aiProvider?.encrypted_credential` (`:50`) | `commitment-extraction-credential-missing` | `commitment extraction: selected provider or encrypted credential missing` |
-| `!credential` (`:55`) | `commitment-extraction-credential-invalid` | `commitment extraction: decrypted credential invalid` |
+| Site                                        | event                                           | message                                                                    |
+| ------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------- |
+| `!provider` (`:35-36`)                      | `commitment-extraction-source-provider-missing` | `commitment extraction: source provider missing`                           |
+| `!model` (`:44`)                            | `commitment-extraction-no-model`                | `commitment extraction: no configured economy summarization model`         |
+| `!aiProvider?.encrypted_credential` (`:50`) | `commitment-extraction-credential-missing`      | `commitment extraction: selected provider or encrypted credential missing` |
+| `!credential` (`:55`)                       | `commitment-extraction-credential-invalid`      | `commitment extraction: decrypted credential invalid`                      |
 
 All four fields object is exactly `{ event, sourceKind }` — no error object exists at these sites
 (they're `if (!x) return`, not catches), so no `errorName`/`errorMessage` to bound.
@@ -171,7 +171,7 @@ pattern:
 2. `aiRepository.selectModelForCapability` resolves `null` → one warn,
    `commitment-extraction-no-model`.
 3. `aiRepository.selectProviderWithCredential` resolves an object with `encrypted_credential:
-   null` → one warn, `commitment-extraction-credential-missing`.
+null` → one warn, `commitment-extraction-credential-missing`.
 4. `parseAiApiKeyCredential` path returns falsy (stub `cipher.decryptJson` to return a shape that
    fails `parseAiApiKeyCredential`) → one warn, `commitment-extraction-credential-invalid`.
 5. Full happy path (all deps resolve, `provider.getTextBoundaries` returns one boundary, generate
@@ -194,7 +194,7 @@ registerWorkers: async (boss, deps) =>
     repository: new CommitmentsRepository(),
     providers: [chatCommitmentProvider, notesCommitmentProvider],
     logger: deps.logger ? createModuleLogger(deps.logger, "commitments") : undefined
-  })
+  });
 ```
 
 `createModuleLogger` is already imported at `:169`. No new import needed.
@@ -222,19 +222,22 @@ pnpm --filter @moss/module-registry typecheck > /tmp/1515-registry-typecheck.log
 pnpm --filter @moss/commitments typecheck > /tmp/1515-commitments-typecheck.log 2>&1; echo "EXIT=$?"
 pnpm check:file-size > /tmp/1515-file-size.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected exit code for all four: `0`.
 
 Final gate before wrap-up (per `verify-gate` skill, isolated gate DB — not run ad hoc):
+
 ```bash
 pnpm verify:foundation > /tmp/1515-verify-foundation.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `0`.
 
 ## Rulings ledger
 
 - Spec's "define the port locally... do not create or configure another logger" — read as: define
-  a *new* `CommitmentExtractionWarnLogger` interface local to `extractor.ts` (not import
-  connectors' `SyncLogger` or build a shared cross-module logging package), and thread the *one*
+  a _new_ `CommitmentExtractionWarnLogger` interface local to `extractor.ts` (not import
+  connectors' `SyncLogger` or build a shared cross-module logging package), and thread the _one_
   existing `deps.logger` (the worker-path `FastifyBaseLogger` already wired into
   `BuiltInWorkerDependencies`) through it — not stand up a second, independent logger instance.
   Confirmed against the existing `chat`/`news` wiring at
