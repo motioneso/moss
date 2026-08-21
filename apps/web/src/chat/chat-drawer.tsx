@@ -60,6 +60,12 @@ export function ChatDrawer(props: {
   readonly focusActionRequestId?: string | null;
   readonly onActionRequestFocused?: () => void;
   readonly surface: ChatSurface;
+  /**
+   * #1756: docks the drawer beside a running draft's page instead of opening as the global
+   * overlay. Desktop-width only — the CSS falls back to the ordinary overlay at the mobile
+   * breakpoint, since the phone chat always stays the app's normal pop-up drawer.
+   */
+  readonly docked?: boolean;
 }) {
   const queryClient = useQueryClient();
   const assistantName = useAssistantName("");
@@ -459,7 +465,7 @@ export function ChatDrawer(props: {
 
   return (
     <aside
-      className="chatd"
+      className={props.docked ? "chatd chatd--docked" : "chatd"}
       role="dialog"
       aria-label={assistantName ? `Chat with ${assistantName}` : "Chat"}
     >

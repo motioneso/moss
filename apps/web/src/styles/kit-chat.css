@@ -12,6 +12,23 @@
   animation: chatd-in 0.26s cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 
+/* #1756: docked beside a running draft's page, in the document flow, at desktop width.
+   Falls back to the ordinary overlay under the mobile breakpoint — a docked two-pane layout
+   would leave no room for the draft on a phone, so the drawer stays the app's normal pop-up
+   there instead of copying the mockup's always-stacked layout. */
+@media (min-width: 721px) {
+  .chatd--docked {
+    position: static;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    width: 380px;
+    max-width: none;
+    height: 100%;
+    animation: none;
+  }
+}
+
 @keyframes chatd-in {
   from {
     opacity: 0;
