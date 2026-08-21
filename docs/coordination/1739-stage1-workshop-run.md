@@ -11,12 +11,11 @@ finish — merge, close out, spawn the next queued item once its dependency land
 same-night escalation only when Ben is back and says so. This overrides the box-wide CLAUDE.md
 "never idle silently, run needs-ben" rule for the rest of tonight specifically.
 
-Coordinator: Claude session `4638f578-9c76-41b8-85dc-37dbfc9cb8d5`, label `Coordinator`, pane
-`w1:pJ3` (re-resolve pane fresh by label + session id — pane numbers reflow). Took over from
-session `7a4759d1-8ede-4252-b513-372e1d27694b` (former pane `w1:pHZ`) at 2026-08-21 ~07:0x UTC;
-confirmed the old pane saw this one driving before closing it (reaped cleanly).
-Liveness Monitor re-armed fresh under this session (task id `bdqzl1cj1`), watching all agent tabs
-plus the coordinator's own tab for status changes.
+Coordinator: Claude session `53e8572a-0c01-434a-9f16-5088520ae453`, label `Coordinator`, pane
+`w1:pJ5` (re-resolve pane fresh by label + session id — pane numbers reflow). Took over from
+session `4638f578-9c76-41b8-85dc-37dbfc9cb8d5` (former pane `w1:pJ3`) at 2026-08-21 ~07:4x UTC;
+confirmed the old pane saw this one driving before it closed itself cleanly.
+Liveness Monitor: not yet re-armed under this session — next action.
 
 GraphQL rate limit cleared ~19:33 PDT (verified via `gh api rate_limit`, resource `graphql`, back
 to full 5000). Board queries unblocked.
@@ -935,3 +934,17 @@ watching tabs w1:t1P/t1Q/t1R plus whichever tab the successor's own pane resolve
 
 This coordinator is now spawning its successor (pane w1:pJ5, same tab as this one) and will have
 it reap this pane once it confirms it is driving. [pane w1:pJ3]
+
+## Continuation note (coordinator session 53e8572a-0c01-434a-9f16-5088520ae453, pane w1:pJ5, 2026-08-21 ~07:4x UTC — adoption confirmed)
+
+Took over from session `4638f578-9c76-41b8-85dc-37dbfc9cb8d5` (pane w1:pJ3): confirmed exactly one
+`Coordinator`-labeled pane before renaming myself, messaged the old pane that I was driving
+(delivered after one Enter to submit — it was mid-turn), it closed itself cleanly, `herdr pane
+list` now shows only w1:pJ5. Lock line at the top of this doc updated. Liveness monitor re-armed
+fresh (task `biartn2ps`), watching tabs w1:t1N/t1P/t1Q/t1R/t1K.
+
+Checked both active lanes with a bounded read, both are genuinely working, not stalled: #1755
+(pane w1:pJ4) is running its verify gate again after the card-style + release-note fixes; #1753
+(pane w1:pJ2) is still mid-wrap-up. No AWAITING-BEN items beyond the two already parked overnight.
+Picking up the successor task list from the previous note verbatim — watching for #1755's next
+green run and #1753's PR. [pane w1:pJ5]
