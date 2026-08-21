@@ -1127,3 +1127,45 @@ again -- do not merge without a fresh QA pass on the new commit.
 
 QA's disposable worktree/branch already cleaned up (removed right after reading the verdict, per
 the coordinate skill's rule for QA worktrees).
+
+## Continuation note (coordinator session 36e8b1c1-0267-404a-aa81-928109e8d05c, pane w1:pJ7, 2026-08-21 ~16:0x PDT — relaying at context 70%)
+
+Since adoption: reaped the old coordinator pane (w1:pJ6, session 351157c3) after confirming its
+background #1753 QA check had finished and its result was written to this file — closed cleanly,
+verified only one Coordinator pane remains. Re-armed the liveness monitor under this session (task
+`bq5wny309`, persistent, watching all panes via `herdr pane list` diffing).
+
+Checked the #1526 pane (w1:pHP) carefully per the handoff brief. Its real work is fine and already
+correctly parked (two failed CI attempts on the same test, stopped per the run's own two-strikes
+rule, already recorded under "Blocked overnight, needs Ben" above) — nothing more to do there. The
+stray unsubmitted text in its input box ("Go check on the other worktrees/panes") is still there;
+tried harder to clear it than the last several notes describe (several different key combinations),
+confirmed keystrokes really do reach that pane, but the text itself will not clear or respond to
+editing keys. Pressing the interrupt key a second time would exit that whole session, which is too
+risky for a lane we've been told to leave untouched, so I stopped rather than push further. It is
+not blocking anything — leave it alone, it's not urgent.
+
+Checked in on the three lanes the last note flagged as needing a look:
+- **#1521 (PR 1801):** the shared dev instance's login is fixed now, and the lane already ran a
+  real browser walkthrough against it that passed every check for this issue, including a capture
+  of the actual network calls proving the fix works end to end. CI is green. I dispatched an
+  independent QA check to confirm before merging (background agent id `a70a83dfa30ef6eae` — this
+  session only, not written elsewhere; **successor should wait for its notification** and then
+  merge if green, following the merge+reap steps in the coordinate skill).
+- **#1756 (PR 1799):** still mid-rebase, not a problem. It already passed its own type check after
+  the rebase and is now rerunning the full test suite once more (checking whether a fix that
+  landed elsewhere also cleared an unrelated flaky test) before it force-pushes. The red CI
+  currently showing on the PR is left over from before the rebase and will be replaced once it
+  pushes. No action needed — it's actively working, just check back later.
+- **#1753 (PR 1808):** QA found a real gap — the fix only covers one of two places that decide
+  which draft modules a user can see; the other one (the personal "my modules" page) would still
+  show other people's in-progress drafts. Full detail already in the "QA verdict update" section
+  above. Fix instructions already sent to the lane (pane w1:pJ2), which is working on it now.
+  **Successor: re-QA once it reports green again — do not merge without a fresh QA pass.**
+
+Removed the two now-resolved "Blocked overnight, needs Ben" entries (shared login was fixed by an
+earlier relay; #1521 no longer blocked). Only #1526 remains on that list, correctly.
+
+No new questions for Ben. Standing overnight rule still in effect — not waking him. This
+coordinator is now spawning its successor in this same pane's tab and will have it reap this pane
+once it confirms it is driving. [pane w1:pJ7]
