@@ -1804,3 +1804,35 @@ covered by the above. Will mention it to Ben directly in this session too, in ca
 
 No merges this pass yet. `merges_since_relay` stays 0. AWAITING-BEN still has the same two open
 #1526 entries and no reply on the messaging-protocol question — not re-pinging, already recorded.
+
+## Continuation note (coordinator session ab887029-7155-4f11-bf44-caaf8f6c0f98, pane w1:pJT, 2026-08-21 ~8:3xpm PDT — relaying at context 70%)
+
+**Next action, top of the list:** #1756 (pane w1:pH7, agent `workshop-chat-cards-r2`, PR #1799).
+Its finished work just got silently thrown away: another Claude session on this machine (also
+working issue #1258, unrelated to this run) pushed new commits to the same shared branch first,
+so this lane's own commit was backed out rather than pushed, and the shared branch never got its
+work. Full details are in `/tmp/1756-draft-wiring-state.md` inside that pane's own environment
+(not this repo). The lane has already been told to start a fresh session from that checkpoint doc
+and is doing so now — watch it land, and separately figure out why two sessions were writing to
+the same branch (likely a naming collision or a second unrelated coordination run sharing this
+box) so it doesn't happen again.
+
+**Ben ruled on #1526 this pass: option 3.** Skip/mark the connection-close test as a known issue
+(don't delete it), file a separate GitHub issue documenting what was tried and ruled out, push
+once, confirm CI green, then land the real backpressure fix. The lane (pane w1:pHP, agent
+`pty-1526-relay3`) was told this and is working on it — **no verdict yet, this is the next thing
+to check.** Once it reports green: spawn QA in its own pane (never the Agent tool), and if QA
+agrees, merge normally and make sure the new "known issue" GitHub issue for the connection-close
+test gets filed/linked (check the lane actually did this, don't assume). AWAITING-BEN.md has been
+fully cleared of #1526 entries — do not re-add unless a new blocker appears.
+
+Other lanes, unchanged from last check: #1754 (pane w1:pJS, `build-agent-1754-relay8`) running its
+own gate, working normally, no action. #1571 (pane w1:pJC, `weather-1571-relay1`) has its own
+helper doing Phase 1 work, watch for it to report, no action yet.
+
+Fixed the agents tab layout this pass — it had drifted into three uneven columns (two panes
+stacked in one column, two full-height singles); now a clean 2x2 grid. Re-check this whenever the
+pane count in the tab changes.
+
+`merges_since_relay` = 0 still (no merges landed this pass). AWAITING-BEN.md is now empty of open
+entries except the general protocol boilerplate at the top — good, nothing silently pending.
