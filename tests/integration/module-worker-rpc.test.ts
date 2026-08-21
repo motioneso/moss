@@ -6,6 +6,8 @@ import {
   DataContextRunner,
   ensureModuleRoles,
   generateModuleTableRlsSql,
+  moduleInstallRoleName,
+  moduleRuntimeRoleName,
   type MossDatabase
 } from "@moss/db";
 import { HostPinningViolationError } from "@moss/host-fetch";
@@ -23,6 +25,7 @@ import {
   dropModuleRolesAtTeardown,
   grantModuleMembershipAtSetup,
   ids,
+  laneScopedModuleId,
   resetFoundationDatabase,
   revokeModuleMembershipAtTeardown
 } from "./test-database.js";
@@ -716,7 +719,7 @@ describe("ai.generateStructured", () => {
 });
 
 describe("db.query (#1167)", () => {
-  const dbModuleId = "acme-db";
+  const dbModuleId = laneScopedModuleId("acme-db");
   const moduleDb = {
     id: dbModuleId,
     dir: "/unused",
@@ -756,7 +759,7 @@ describe("db.query (#1167)", () => {
     // jarvis_worker_runtime at ensureModuleRoles time — this explicit grant is idempotent and
     // keeps the test self-documenting. Membership is cluster-global, so it is locked (#1013).
     await grantModuleMembershipAtSetup([
-      "GRANT jarvis_mod_acme_db_runtime TO jarvis_worker_runtime WITH INHERIT FALSE"
+      `GRANT ${moduleRuntimeRoleName(dbModuleId)} TO jarvis_worker_runtime WITH INHERIT FALSE`
     ]);
   });
 
@@ -767,23 +770,32 @@ describe("db.query (#1167)", () => {
     // does not implicitly strip these on DROP TABLE/DROP ROLE). Membership is cluster-global and
     // goes first, under the lock (#1013); the per-database revokes below stay on this connection.
     await revokeModuleMembershipAtTeardown([
-      "REVOKE jarvis_mod_acme_db_runtime FROM jarvis_worker_runtime"
+      `REVOKE ${moduleRuntimeRoleName(dbModuleId)} FROM jarvis_worker_runtime`
     ]);
 
     const client = new Client({ connectionString: connectionStrings.bootstrap });
     await client.connect();
     try {
       await client.query("DROP TABLE IF EXISTS app.acme_db_items");
-      await client.query("REVOKE ALL PRIVILEGES ON SCHEMA app FROM jarvis_mod_acme_db_runtime");
       await client.query(
-        "REVOKE EXECUTE ON FUNCTION app.current_actor_user_id() FROM jarvis_mod_acme_db_runtime"
+        `REVOKE ALL PRIVILEGES ON SCHEMA app FROM ${moduleRuntimeRoleName(dbModuleId)}`
       );
-      await client.query("REVOKE ALL PRIVILEGES ON SCHEMA app FROM jarvis_mod_acme_db_install");
-      await client.query("REVOKE ALL PRIVILEGES ON app.users FROM jarvis_mod_acme_db_install");
       await client.query(
-        "REVOKE EXECUTE ON FUNCTION app.current_actor_user_id() FROM jarvis_mod_acme_db_install"
+        `REVOKE EXECUTE ON FUNCTION app.current_actor_user_id() FROM ${moduleRuntimeRoleName(dbModuleId)}`
       );
-      await dropModuleRolesAtTeardown(["jarvis_mod_acme_db_install", "jarvis_mod_acme_db_runtime"]);
+      await client.query(
+        `REVOKE ALL PRIVILEGES ON SCHEMA app FROM ${moduleInstallRoleName(dbModuleId)}`
+      );
+      await client.query(
+        `REVOKE ALL PRIVILEGES ON app.users FROM ${moduleInstallRoleName(dbModuleId)}`
+      );
+      await client.query(
+        `REVOKE EXECUTE ON FUNCTION app.current_actor_user_id() FROM ${moduleInstallRoleName(dbModuleId)}`
+      );
+      await dropModuleRolesAtTeardown([
+        moduleInstallRoleName(dbModuleId),
+        moduleRuntimeRoleName(dbModuleId)
+      ]);
     } finally {
       await client.end();
     }

@@ -7,12 +7,19 @@ import { Client } from "pg";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { installModule } from "../../scripts/module-install.js";
-import { moduleRuntimeRoleName } from "../../packages/db/src/module-role-broker.js";
+import {
+  moduleInstallRoleName,
+  moduleRuntimeRoleName
+} from "../../packages/db/src/module-role-broker.js";
 import { getMossDatabaseUrls } from "../../packages/db/src/urls.js";
-import { dropModuleRolesAtTeardown, resetEmptyFoundationDatabase } from "./test-database.js";
+import {
+  dropModuleRolesAtTeardown,
+  laneScopedModuleId,
+  resetEmptyFoundationDatabase
+} from "./test-database.js";
 
 const urls = getMossDatabaseUrls();
-const moduleId = "install-fixture";
+const moduleId = laneScopedModuleId("install-fixture");
 let dir: string;
 
 beforeAll(async () => {
@@ -29,16 +36,18 @@ afterEach(async () => {
   // option — so revoking the install role's own grant needs CASCADE to also strip the runtime
   // role's dependent grant, or Postgres refuses both the revoke and the later DROP ROLE.
   await client.query(
-    "REVOKE ALL PRIVILEGES ON SCHEMA app FROM jarvis_mod_install_fixture_install CASCADE"
+    `REVOKE ALL PRIVILEGES ON SCHEMA app FROM ${moduleInstallRoleName(moduleId)} CASCADE`
   );
-  await client.query("REVOKE ALL PRIVILEGES ON app.users FROM jarvis_mod_install_fixture_install");
+  await client.query(
+    `REVOKE ALL PRIVILEGES ON app.users FROM ${moduleInstallRoleName(moduleId)}`
+  );
   await client.query(
     "REVOKE EXECUTE ON FUNCTION app.current_actor_user_id() " +
-      "FROM jarvis_mod_install_fixture_install CASCADE"
+      `FROM ${moduleInstallRoleName(moduleId)} CASCADE`
   );
   await dropModuleRolesAtTeardown([
-    "jarvis_mod_install_fixture_install",
-    "jarvis_mod_install_fixture_runtime"
+    moduleInstallRoleName(moduleId),
+    moduleRuntimeRoleName(moduleId)
   ]);
   await client.query("DELETE FROM app.module_installs WHERE module_id = $1", [moduleId]);
   await client.query("DELETE FROM app.module_schema_migrations WHERE module_id = $1", [moduleId]);

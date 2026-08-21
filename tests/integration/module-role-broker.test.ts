@@ -9,10 +9,14 @@ import {
   moduleRuntimeRoleName
 } from "../../packages/db/src/module-role-broker.js";
 import { getMossDatabaseUrls } from "../../packages/db/src/urls.js";
-import { dropModuleRolesAtTeardown, resetEmptyFoundationDatabase } from "./test-database.js";
+import {
+  dropModuleRolesAtTeardown,
+  laneScopedModuleId,
+  resetEmptyFoundationDatabase
+} from "./test-database.js";
 
 const urls = getMossDatabaseUrls();
-const moduleId = "role-broker-fixture";
+const moduleId = laneScopedModuleId("role-broker-fixture");
 
 // ensureModuleRoles now grants schema/table-level ACLs on schema app (#914 Task 7), so this
 // suite needs the app schema to exist regardless of file run order — it can no longer piggyback
@@ -41,7 +45,7 @@ afterAll(async () => {
 describe("module role broker", () => {
   it("creates both roles NOLOGIN, then flips and unflips the installer role's login", async () => {
     const roles = await ensureModuleRoles(urls.bootstrap, moduleId);
-    expect(roles.runtimeRole).toBe("jarvis_mod_role_broker_fixture_runtime");
+    expect(roles.runtimeRole).toBe(moduleRuntimeRoleName(moduleId));
 
     const check = new Client({ connectionString: urls.bootstrap });
     await check.connect();
