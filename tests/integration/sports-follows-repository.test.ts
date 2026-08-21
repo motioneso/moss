@@ -233,12 +233,8 @@ describe("sports whole-league dedupe migration upgrade path", () => {
     const bootstrap = new Client({ connectionString: connectionStrings.bootstrap });
     await bootstrap.connect();
     try {
-      await bootstrap.query(
-        `DELETE FROM app.schema_migrations WHERE version IN ('0185', '0186')`
-      );
-      await bootstrap.query(
-        `DROP INDEX IF EXISTS app.sports_follows_whole_league_unique_idx`
-      );
+      await bootstrap.query(`DELETE FROM app.schema_migrations WHERE version IN ('0185', '0186')`);
+      await bootstrap.query(`DROP INDEX IF EXISTS app.sports_follows_whole_league_unique_idx`);
 
       await bootstrap.query(
         `INSERT INTO app.users (id, email, name, is_instance_admin)

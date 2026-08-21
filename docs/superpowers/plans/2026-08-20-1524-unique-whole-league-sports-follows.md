@@ -4,6 +4,7 @@ Spec: `docs/superpowers/specs/2026-08-10-1140-backend-low-followups.md`, section
 Issue: #1524 (task issue, open).
 
 **Ben's rulings (already given, do not re-ask):**
+
 1. Add DELETE support to the shared migration file-format checker, then finish the migration and
    uniqueness fix as planned.
 2. After this merges, do NOT close #1524 — Ben will file separate follow-on work. Say so in the
@@ -23,14 +24,14 @@ covered by Ben's "finish it as planned."
 - `packages/sports/src/repository.ts:37-63` — current `create()` still does read-then-insert (the
   race the spec describes).
 - `packages/sports/sql/0133_sports_follows.sql:15` — plain `UNIQUE (owner_user_id, competition_key,
-  team_key)`; Postgres treats `team_key IS NULL` as distinct per row, so it never dedupes
+team_key)`; Postgres treats `team_key IS NULL` as distinct per row, so it never dedupes
   whole-league follows.
 - `packages/db/src/migrations/module-sql-runner.ts:13-19` — `FIRST_COMMAND_ALLOWLIST` has no
   `DELETE` entry today.
 - `packages/db/src/migrations/module-sql-runner.ts:40` (`FIRST_COMMAND_ALLOWLIST.some(...)`) is
   anchored with `^` in every pattern, so a statement opening with `WITH` (a CTE) will never match
   `/^DELETE\b/i` even after the fix — the dedupe migration must be a plain `DELETE ... WHERE id IN
-  (subquery)`, not `WITH dupes AS (...) DELETE ...`.
+(subquery)`, not `WITH dupes AS (...) DELETE ...`.
 - `tests/integration/test-database.ts:71-98` (`resetEmptyFoundationDatabase`) runs
   `packages/sports/sql` through `runSqlMigrations` (`packages/db/src/migrations/sql-runner.ts:34`)
   into the plain `app.schema_migrations` ledger — sports is a built-in module, not an
@@ -60,7 +61,7 @@ Add one entry to `FIRST_COMMAND_ALLOWLIST` (line 13-19), immediately after the e
 entry, same shape:
 
 ```ts
-/^DELETE\b/i
+/^DELETE\b/i;
 ```
 
 **File:** `tests/unit/module-sql-runner.test.ts`
@@ -80,9 +81,11 @@ it("accepts one data-only DELETE for an idempotent module-owned migration", () =
 Do not touch the existing "rejects a disallowed first command" test (`DROP TABLE`, unaffected).
 
 **Verification:**
+
 ```bash
 pnpm vitest run tests/unit/module-sql-runner.test.ts > /tmp/t1.log 2>&1; echo "EXIT=$?"
 ```
+
 Expect `EXIT=0`, all cases including the new one passing.
 
 ## Task 2 — the two migrations, manifest, and catalog ledger
@@ -90,6 +93,7 @@ Expect `EXIT=0`, all cases including the new one passing.
 **Files (new):**
 
 `packages/sports/sql/0185_sports_whole_league_dedupe.sql`:
+
 ```sql
 -- packages/sports/sql/0185_sports_whole_league_dedupe.sql
 -- Collapses pre-existing whole-league duplicate follows (team_key IS NULL) before 0186 makes them
@@ -112,6 +116,7 @@ WHERE team_key IS NULL
 ```
 
 `packages/sports/sql/0186_sports_whole_league_unique.sql`:
+
 ```sql
 -- packages/sports/sql/0186_sports_whole_league_unique.sql
 -- Partial unique index: Postgres treats NULL as distinct in a plain UNIQUE constraint, so
@@ -144,16 +149,19 @@ Update the `toEqual` assertion to the three-entry array above.
 **File:** `tests/integration/foundation-schema-catalog.test.ts`
 
 Append two rows after the `0184` entry (line 332), same object shape as neighboring entries:
+
 ```ts
 { version: "0185", name: "0185_sports_whole_league_dedupe.sql" },
 { version: "0186", name: "0186_sports_whole_league_unique.sql" }
 ```
 
 **Verification:**
+
 ```bash
 pnpm vitest run tests/unit/sports-manifest.test.ts > /tmp/t2a.log 2>&1; echo "EXIT=$?"
 pnpm vitest run tests/integration/foundation-schema-catalog.test.ts > /tmp/t2b.log 2>&1; echo "EXIT=$?"
 ```
+
 Both expect `EXIT=0`. The catalog test requires a live migrated DB — use `verify-gate`, never a
 bare `pnpm vitest run` against integration tests outside that skill's procedure.
 
@@ -205,9 +213,11 @@ transaction, retry loop, lock, or second method, per the spec.
   `repo.list()` shows their own row (the partial index is scoped per `owner_user_id`, not global).
 
 **Verification:**
+
 ```bash
 pnpm vitest run tests/integration/sports-follows-repository.test.ts > /tmp/t3.log 2>&1; echo "EXIT=$?"
 ```
+
 Expect `EXIT=0` — via `verify-gate`, real DB required.
 
 ## Task 4 — upgrade-path harness test
@@ -229,10 +239,10 @@ Pattern, built on the seam confirmed above (sports is a built-in module through
    to still be absent (spec: "do not simulate cleanup after the index already exists").
 4. Seed two duplicate `team_key IS NULL` rows directly (bootstrap client, bypassing RLS) for one
    owner/competition, with distinct `created_at` values (older one must sort first by `created_at
-   ASC, id ASC`) — this is only possible because step 3 removed the index that would otherwise
+ASC, id ASC`) — this is only possible because step 3 removed the index that would otherwise
    reject the second insert.
 5. Call `runSqlMigrations({ connectionString: connectionStrings.migration, migrationsDirectory:
-   "packages/sports/sql" })` (same helper `test-database.ts` uses internally) — asserts it applies
+"packages/sports/sql" })` (same helper `test-database.ts` uses internally) — asserts it applies
    exactly `0185` and `0186` (both were stripped from the ledger; 0133 is already there and skips).
 6. Assert: exactly one row remains for that owner/competition/`team_key IS NULL`, and its `id`
    matches the older seeded row's `id` (the deterministic `created_at ASC, id ASC` survivor).
@@ -240,9 +250,11 @@ Pattern, built on the seam confirmed above (sports is a built-in module through
    (`SELECT 1 FROM pg_indexes WHERE indexname = 'sports_follows_whole_league_unique_idx'`).
 
 **Verification:**
+
 ```bash
 pnpm vitest run tests/integration/sports-follows-repository.test.ts > /tmp/t4.log 2>&1; echo "EXIT=$?"
 ```
+
 Expect `EXIT=0` — via `verify-gate`.
 
 ## Task 5 — wrap-up
