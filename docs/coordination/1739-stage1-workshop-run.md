@@ -25,7 +25,7 @@ unaffected.
 
 | Issue | Title | Tier | Status | Agent | Pane | Branch | PR |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| #1752 | find modules that appear after the server started | routine | building | holder-relay2 | w1:pH6 | 1752-module-discovery-holder | - |
+| #1752 | find modules that appear after the server started | routine | building | relay-1752-3 | w1:pH8 | 1752-module-discovery-holder | - |
 | #1753 | a draft module that runs for its author alone | routine | blocked on #1752 | - | - | - | - |
 | #1754 | the build agent - agree a plan, then build it | sensitive (spawns a build agent/job) | blocked on #1752 | - | - | - | - |
 | #1755 | the Workshop page (front end shell) | routine | building | workshop-page-r1 | w1:pH5 | 1755-workshop-page | - |
@@ -39,6 +39,51 @@ queries paused until reset (~19:29 PDT). Will re-pull and append here once avail
 re-derive from memory.
 
 ## merges_since_relay: 0
+
+## Continuation note (this coordinator, 2026-08-20 ~19:18 PDT — relaying at context 70%)
+
+**Coordinator authority is about to change.** This session hit its own 70% context warning and is
+relaying now, per the coordinate skill's rule: no deferral, flush and hand off immediately, no
+more merges or bookkeeping first. A successor coordinator is being spawned in this same pane's
+tab; once it confirms driving, it will update the "Coordinator:" line at the top of this file with
+its own session id, label, and pane — do not trust the current top-of-file line once you read
+this note, re-resolve fresh via `herdr pane list`.
+
+**Fleet status right now, all three lanes alive and moving, no blockers:**
+- **#1752** (module discovery): on its third relay, pane `w1:pH8`, agent `relay-1752-3`, session
+  `2cda8cc5-7e64-4a88-9176-bdb20fc09fa0`, confirmed driving on Sonnet, just started reading its
+  continuation doc. Handoff doc:
+  `docs/superpowers/handoffs/2026-08-20-1752-module-discovery-holder-relay3.md` (commit
+  `791f9d135`). What's left: worker wiring (three places reference the old cached lookup and need
+  to change), two existing tests need updating, and a fix so the admin's own module list page
+  reads live data instead of a startup snapshot (needed for the rescan button to actually work for
+  the person clicking it — already agreed as in-scope, not a new ask).
+- **#1755** (Workshop page): pane `w1:pH5`, agent `workshop-page-r1`, session
+  `56464d6d-c662-437b-9c59-65316e7767a3`, working normally, no relay yet.
+- **#1756** (chat cards): pane `w1:pH7`, agent `1756-relay2`, session
+  `125528b1-aef1-49f6-854e-c62bd13d65c0`. **Its `agent_status` shows "done" but this is a known
+  false flip** — confirmed by reading the pane directly: it is correctly waiting on its own
+  background verification gate via a Monitor it started itself (task `bafwe2x74` inside that
+  agent's own session, not yours). Do not nudge it and do not treat "done" as proof; re-read the
+  pane before acting on it. All four of its assigned tasks are done and committed; the two open
+  items (draft-discard has no backend yet, and a "restore previous version" mechanism the plan
+  assumed exists does not) are written up honestly in its PR as code-complete-but-unverified.
+
+Liveness watcher: task `b3iaqyry5`, watching panes `w1:pH8`, `w1:pH5`, `w1:pH7`.
+
+**GitHub board work not yet started.** GraphQL rate limit was exhausted most of this session
+(reset was ~19:29 PDT / unix 1787279388 — should be clear by the time you read this). Ben's
+instruction, still standing: once available, pull the Ready lane (Ben said 29 items), tier each,
+and start spawning build agents down it — don't stop for anything short of catastrophic failure,
+don't wait on Ben for decisions (stash and move to the next item if something needs a call only
+Ben or the Fable agent's auth-delegation authority can make). This has not been done yet by any
+coordinator session — it is the top priority once you're driving.
+
+**Cleanup already done this session, no action needed:** epic #1470 tracking table refreshed to
+reflect its five items are closed; epic #1440 (Jarvis-to-Moss rename) closed as complete.
+
+**Plain-English rule stands for every message you or any agent you spawn sends** — no stacked
+identifiers or jargon in anything Ben reads, per CLAUDE.md and the box-wide rule.
 
 ## Continuation note (this coordinator, 2026-08-20 ~19:12 PDT)
 
