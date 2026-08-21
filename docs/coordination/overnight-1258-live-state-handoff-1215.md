@@ -149,3 +149,38 @@ Mid-doing, in order:
 10. The shared dev instance is reset/reprovisioned and free for Food work. The account exists and
     signs in with the configured development admin password; the old familiar password is stale.
     The Food pane was informed and delivery was verified.
+
+## Coordinator continuation — 20 Aug, PR 1775 merged and security relay
+
+Coordinator authority before this mandatory post-security-merge relay: Codex session
+`01a02192-a96b-7231-99fd-fe3655e6e141`, label `Coordinator`. The successor must replace this
+authority line with its own immutable session id, confirm it is the sole `Coordinator`, then reap
+this session only after resolving the exact old session id fresh.
+
+Run result:
+
+1. PR #1775 merged to `main` as squash commit `cb3552f9022c0f3a8ec9100faa4eb653719a6a59`.
+2. Issue #1258 is closed and its Project 2 card is `Done`.
+3. Exact pushed head before merge was `0970e05c0cc1b0f319e9c58f72b84180879ddb74`.
+4. GitHub CI run `32430970873` was fully green: foundation/app 27m42s, compose smoke 3m12s,
+   production compose smoke 2m11s, image build 15m36s, and the aggregate CI gate passed.
+5. Real-UI live proof remains at
+   https://github.com/motioneso/moss/pull/1775#issuecomment-5361674021.
+6. Fresh Opus security QA was GREEN and merge-ready at
+   https://github.com/motioneso/moss/pull/1775#issuecomment-5363758205.
+7. Ben's scoped instruction not to repeat the cold runtime-context Docker/browser build is
+   durably recorded at https://github.com/motioneso/moss/pull/1775#issuecomment-5363767423.
+8. Docker cause, confirmed without rerunning UAT: production compose builds from the repository
+   root, while `.dockerignore` does not exclude `.claude/`; the checkout had 80 worktrees, so
+   Docker repeatedly packed roughly 12 GB before `COPY . .` and consumed tens of GB of cache.
+9. No dev PID or seeded-row identifier was recorded in the newest handoff, so nothing was killed
+   or deleted by guess. The shared dev instance was already recorded reset/reprovisioned and free.
+10. The temporary QA pane/worktree/branch were reaped immediately after consuming the verdict.
+11. The CI-fix agent pane is closed. Its worktree `~/Jarv1s/.claude/worktrees/pr1775-ci-fix`
+    remains intentionally because the four-gate result was: ahead=27, tracked modifications=0,
+    processes cwd=0, Herdr panes cwd=0. Policy says an ahead count after squash merge is still
+    `keep`; do not delete it casually. Branch `pr1775-ci-fix` points at the exact pre-merge head.
+
+This security-tier merge fires the mandatory relay trigger. The run itself is complete; the
+successor's only immediate bookkeeping is to adopt authority, confirm this state, preserve the
+ahead worktree unless a later authorized cleanup procedure clears it, and reap the old coordinator.
