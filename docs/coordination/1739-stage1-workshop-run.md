@@ -1781,3 +1781,26 @@ before treating it as the new standard. **No reply yet on that question either.*
 
 `merges_since_relay` = 0 (no merges this pass). Two open AWAITING-BEN entries for #1526 (original
 + the new update), no new reply from Ben on either that or the messaging-protocol question.
+
+## Adoption note (coordinator session ab887029-7155-4f11-bf44-caaf8f6c0f98, pane w1:pJT, 2026-08-21 ~10:3x PM PDT — relay21)
+
+Adopted the run: session id confirmed against `herdr pane list`, claimed agent name `coordinator`
+and pane label `Coordinator` (predecessor's name freed first), reaped predecessor pane w1:pJR.
+Checked all four watched lanes:
+- #1526 (PR 1803, pane w1:pHP, `pty-1526-relay3`): actively working mid-turn (reading its own test
+  file, comparing parsing patterns) — driving normally, not stuck. No action, just watching.
+- #1754 (pane w1:pJS, `build-agent-1754-relay8`): running its own lint/typecheck gate via a
+  background monitor, actively working. What looked like a stuck unsubmitted message in the input
+  box turned out to be a ghost-text suggestion (the wording changed between two reads seconds
+  apart) — not a real stuck message, no resend needed.
+- #1756 (PR 1799, pane w1:pH7, `workshop-chat-cards-r2`): same ghost-text false alarm, actually
+  still running its integration test suite via its own monitor. No stuck message this check.
+- #1571 (pane w1:pJC): idle by design, no action, matches note.
+
+Also found: the old coordinator pane had an unsent question from Ben sitting in its input box
+("check on 1803") — never delivered anywhere since it's a human typing directly into a terminal,
+not an agent-to-agent message. It lines up with this run's own next action (checking #1526), so
+covered by the above. Will mention it to Ben directly in this session too, in case he's still here.
+
+No merges this pass yet. `merges_since_relay` stays 0. AWAITING-BEN still has the same two open
+#1526 entries and no reply on the messaging-protocol question — not re-pinging, already recorded.
