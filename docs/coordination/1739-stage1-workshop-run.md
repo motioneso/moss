@@ -1641,3 +1641,48 @@ another timeout bump). Told the lane what I saw and asked it to confirm what it 
 decision** -- a real fix landed, not a waiver. Not yet spawning QA or merging until the lane
 confirms what changed (want to understand this before trusting a green run on a test that just
 failed 3 times identically).
+
+## Continuation note (coordinator session b09813e6-3436-4c85-81c7-8313a899644d, pane w1:pJM, 2026-08-21 ~6:50pm PDT — relaying at context 70%)
+
+**Still open, in order:**
+1. **PR 1803 (#1526):** CI just came back fully green (checked directly via `gh pr checks 1803`),
+   including the test suite that has the previously-failing connection-close test. This is the run
+   after the lane investigated the real cause instead of adjusting timeouts again. Pinged the lane
+   (`pty-1526-relay3`, pane w1:pHP) to confirm what it actually found/changed before trusting a
+   green run on a test that failed identically three times before -- it just started replying
+   (status flipped to "working" right as this relay fired), reply not yet read. **Successor: read
+   that reply first.** If it holds up, this likely resolves BOTH #1526 AWAITING-BEN entries without
+   needing Ben's decision (a real fix, not a waiver) -- but confirm before treating it as resolved,
+   spawn QA in its own pane once confirmed (never via the Agent tool), and only then remove both
+   #1526 entries from `docs/coordination/AWAITING-BEN.md` and merge. Still no reply from Ben as of
+   this relay (newest file in `~/.needs-ben/replies/` is still `1787077307172-coordinator.md`) --
+   keep watching but don't re-ping; a real fix may make his ruling moot anyway.
+2. **#1754 build agent runner:** now on relay7, pane w1:pJQ, agent name whatever herdr shows
+   (worktree `.claude/worktrees/1754-build-agent-runner`). Working on Task 19 (restart-survival
+   proof, last task in Group C) with an approved plan that also fixes a real gap found along the
+   way (the build job's queue was never registered on app startup, so a real build job would fail
+   today). This run has relayed 7 times on this one lane -- each relay found the predecessor's pane
+   mid-self-compaction after already spawning its successor and handing off; the pattern has been:
+   confirm successor driving, close the stale predecessor pane, no worktree/data loss. Nothing to
+   do right now but watch for the next relay or for Task 19 completion.
+3. **#1756 lane** (`workshop-chat-cards-r2`, pane w1:pH7): running its own local gate, last seen on
+   `test:integration` (usually takes several minutes). This lane's sent messages keep landing
+   unsubmitted at its prompt (now happened 3 times this run) -- always verify delivery with a
+   bounded read after `herdr agent prompt`, and resend via `herdr agent prompt` again (not
+   send-keys, which didn't reliably work here) if it's still sitting there.
+4. **#1571 lane** (pane w1:pJC): idle, mid-build, user wants to be told only when it finishes
+   Phase 1. No action needed.
+5. Remove the #1526 AWAITING-BEN entries from `docs/coordination/AWAITING-BEN.md` (there are two,
+   both should go together) once PR 1803 actually merges -- see item 1.
+
+**Fleet as of this relay** (all in workspace w1, agents tab `w1:t1Q` unless noted):
+- `w1:pJM` (tab `w1:t1N`, this session) -- relaying now, will be reaped by successor.
+- `w1:pHP` -- pty-1526-relay3, PR 1803, just replied to the "CI is green, what changed?" question
+  -- read this first.
+- `w1:pJQ` -- 1754 relay7, Task 19, driving.
+- `w1:pH7` -- workshop-chat-cards-r2, PR 1799, running its own gate (test:integration step).
+- `w1:pJC` -- weather-1571-relay1, idle, no action needed.
+
+`merges_since_relay` = 0 (no merges this pass). No new reply from Ben. Two open AWAITING-BEN
+entries for #1526, likely to resolve on their own once the lane confirms its CI-green fix is real
+-- don't remove them until confirmed.
