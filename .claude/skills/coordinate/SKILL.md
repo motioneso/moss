@@ -234,6 +234,16 @@ For each spec cleared to start (serialized specs wait for their predecessor to l
    you may spawn there is your own relay successor). If the agents tab doesn't exist, create it:
    `herdr pane move <first-pane> --new-tab --workspace w1 --label "agents"`. At 4+ panes, open an
    `"agents 2"` overflow tab. Grid: 2×2 for 4-agent waves, 3×1 for 3.
+
+   **Keep the grid tidy as the fleet changes size, not just at spawn (Ben, 2026-08-20): "make
+   sure this is written down so I don't have to ask for it every time."** Whenever the lane count
+   in the agents tab(s) changes — a wave spawns, a lane finishes and gets reaped — re-check the
+   layout and fix it if it's drifted into a lopsided stack; don't wait to be asked. `herdr pane
+   move` refuses to re-split a pane within its own current tab (`reason: "same_tab"`); pop it out
+   first with `herdr pane move <pane> --new-tab --workspace w1 --label scratch`, then move it back
+   in with `herdr pane move <pane> --tab <target-tab> --split right|down --target-pane <anchor>
+   --ratio 0.5` — the empty scratch tab closes itself once the pane leaves it, no separate cleanup
+   needed.
 4. **Name the agent both ways (Ben, 2026-08-06)** — a spawned pane is anonymous in *two* separate
    namespaces, and Ben has to be able to tell lanes apart at a glance:
    ```bash
@@ -306,6 +316,16 @@ catches silent failures between pushes.
     the successor with "do not end your turn between steps."
   - Distinguish them by the pane's last line, not by `agent_status`: a wait declaration is prose, a
     freeze is a spinner.
+- **A dispatched `Agent()` QA/build agent that pauses on its own background work is the same failure,
+  one level removed — and it once cost 9 hours overnight (#1755/PR 1804, 2026-08-21).** A QA agent
+  started its e2e-UAT run in the background instead of blocking on it as its skill says to, ended its
+  turn with "I'll finalize once it completes," and went dormant. You get exactly one task-notification
+  when it pauses like that — its own background task's completion does NOT generate a second
+  notification, because nothing is resumed to receive it. It sat done-in-spirit but unreported until a
+  human asked for status and a coordinator resumed it by SendMessage. **Whenever a spawned agent's
+  update is a wait declaration rather than a finished verdict, immediately schedule an active recheck**
+  (`ScheduleWakeup` a few minutes out, or a bounded `SendMessage` nudge) — do not assume a second
+  notification is coming.
 - **On an agent relay** (its meter warned or it saw a compaction summary): it spawns its successor
   in the same worktree and asks to be reaped — confirm the successor is driving (bounded pane
   read), reap the old pane, update the manifest. If YOU spawn the successor, always pass
