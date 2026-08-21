@@ -391,3 +391,36 @@ Mid-doing, in order:
 
 No merges have happened in this run yet (`merges_since_relay` stays 0). No PRs open yet from this
 wave. Nothing is currently red or blocked in a way that needs Ben.
+
+## Continuation note (this coordinator, 2026-08-20 ~21:55 PDT — adoption complete)
+
+Coordinator authority: session `f0b47c3f-4585-46bc-a94a-b8b3361a6d99`, pane `w1:pHR`, label
+`Coordinator`. Took over from session `78440b71-a4e4-472d-a450-c036c5edab92` (pane `w1:pHK`),
+confirmed standing down, closed. Exactly one `Coordinator`-labeled pane exists now.
+
+Liveness Monitor re-armed fresh (task `bylr5yayi`, persistent) — the inherited one did not carry
+over, as expected. It already caught two real flips.
+
+Checked the two items the boot brief flagged:
+- **#1756 (Workshop chat cards):** the monitor's "done" reading was false, again. A pane read
+  showed it mid-way through checking its test results, waiting to see if some failing tests are
+  flaky or a real problem — no pull request exists yet (checked directly on GitHub). Left it
+  running, not treated as finished.
+- **#1524 (unique whole-league sports follows):** correctly paused, waiting on Ben's ruling
+  recorded in the awaiting-Ben file. Left alone, not nudged.
+
+#1752 (module discovery holder) needed a fix: the previous coordinator's plan approval message was
+still sitting unsent in that pane's input box, never actually delivered. Sent it properly (a plain
+Enter submitted it) and confirmed on the next read that the lane picked it up and started building
+against the approved plan. This is the exact "message not verified" failure mode the coordinate
+process warns about — worth remembering that a queued-looking line in a pane read can mean
+undelivered, not delivered.
+
+Fleet status snapshot at adoption: 9 build lanes plus the planning lane, all on Sonnet, all in
+their own folders under `.claude/worktrees/`. One pull request open so far this wave — #1798 for
+issue #1625 (making test fixture ids unique per test lane) — its automatic checks are still
+running, not yet ready to review. No merges yet, so `merges_since_relay` stays 0. Nothing else
+needs Ben right now beyond the one already-open item in the awaiting-Ben file (#1524's migration
+question).
+
+Continuing to supervise event-driven from here.
