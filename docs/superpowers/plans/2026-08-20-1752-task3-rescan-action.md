@@ -37,8 +37,8 @@ Scope: only Task 3 (rescan action, plus the settings staleness gap found in rela
   - `packages/settings/src/routes-modules.ts:223` (`ext.discoveries.find(...)`)
   - `packages/settings/src/routes-module-registry.ts:69` (`(ext?.discoveries ?? []).map(...)`)
   - `packages/settings/src/routes-module-credentials.ts:58` (`ext.discoveries.find(...)`)
-  All three must move to calling `ext.discoveries()` once the field becomes a function, or the
-  package fails to typecheck.
+    All three must move to calling `ext.discoveries()` once the field becomes a function, or the
+    package fails to typecheck.
 - The only producer of `ExternalModulesDependencies` is `apps/api/src/server.ts:572`
   (`discoveries: externalModuleHolder.getDiscoveries()` — called once, frozen). This is the one
   production wiring line to fix.
@@ -62,12 +62,13 @@ export type ModuleControlPayload =
 ```
 
 `assertModuleControlPayload`: accept exactly one shape —
+
 - `{ moduleId, action: "reconcile" }` with `moduleId` matching the existing slug pattern
   (2 keys), OR
 - `{ action: "rescan" }` with no `moduleId` key at all (1 key).
-Reject anything else (extra keys, `moduleId` present with `action: "rescan"`, unknown action,
-non-object). This is exactly what `tests/unit/module-control-payload.test.ts` (already committed
-in `ef20ea006`) asserts.
+  Reject anything else (extra keys, `moduleId` present with `action: "rescan"`, unknown action,
+  non-object). This is exactly what `tests/unit/module-control-payload.test.ts` (already committed
+  in `ef20ea006`) asserts.
 
 Test: `npx vitest run tests/unit/module-control-payload.test.ts` — all 6 cases pass.
 Commit: own commit, `git add packages/jobs/src/module-jobs.ts` (test file already committed).
@@ -77,6 +78,7 @@ Commit: own commit, `git add packages/jobs/src/module-jobs.ts` (test file alread
 Extend the existing `boss.work<ModuleControlPayload>(PLATFORM_MODULE_CONTROL_QUEUE, ...)` handler
 (current body: `assertModuleControlPayload(job.data); await reconciler.reconcileModule(job.data.moduleId);`)
 to branch on `job.data.action`:
+
 - `"reconcile"` → existing behavior unchanged (`reconciler.reconcileModule(job.data.moduleId)`).
 - `"rescan"` → `await externalModuleHolder.rescan(); await reconciler.reconcileAll();` (both
   already exist; call in that order so reconciliation sees the fresh discovery list).
@@ -154,6 +156,7 @@ export const rescanExternalModulesRouteSchema = {
 
 At the `externalModules: { ... }` block passed into `registerBuiltInApiRoutes` (currently around
 line 566-576):
+
 - `discoveries: externalModuleHolder.getDiscoveries()` → `discoveries: externalModuleHolder.getDiscoveries` (pass the function, drop the call).
 - add `rescan: () => externalModuleHolder.rescan().then(() => undefined)`.
 
