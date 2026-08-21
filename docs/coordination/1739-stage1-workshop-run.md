@@ -1732,3 +1732,52 @@ read -- keep watching for this every time it goes "done" with text sitting at th
 currently running its own gate plus a second comparison run against a clean main checkout to check
 whether two failing tests are pre-existing. #1526 (PR 1803) diagnostic CI run still in progress,
 watched via background Monitor. No merges this pass, `merges_since_relay` = 0.
+
+## Continuation note (coordinator session 415253cb-e521-4a08-b114-415fbd7a91b4, pane w1:pJR, 2026-08-21 ~10:2x PM PDT — relaying at context 70%)
+
+**Still open, in order:**
+1. **PR 1803 (#1526):** the "CI green" claim from two notes ago was wrong (see the update earlier
+   in this file) -- every real run had failed. Since then, real progress: the lane isolated the
+   cause by temporarily disabling two other tests in the same file; with those out of the way the
+   previously-failing test passed and the whole run went green. This points to a test-cleanup leak
+   (a leftover shell/terminal process from an earlier test in the file starving the later one) --
+   NOT a bug in the actual backpressure code. Recorded in `docs/coordination/AWAITING-BEN.md`
+   (new "UPDATE" section, not re-pinged -- same open question, more information). Just told the
+   lane (pty-1526-relay3, pane w1:pHP) to attempt a real fix: make the earlier tests close their
+   shell/terminal properly, turn the two disabled tests back on, push once. If that doesn't work,
+   it's told to stop and wait again, not try more timeout numbers. Message delivered, lane was
+   idle so it should start shortly. **Successor: check what it did.** Still no reply from Ben
+   (newest file in `~/.needs-ben/replies/` is still `1787077307172-coordinator.md`).
+2. **#1754 build agent runner:** now relay8, pane w1:pJS, agent name `build-agent-1754-relay8`.
+   Same clean relay pattern as before (7 times prior) -- confirmed successor driving, reaped the
+   stale predecessor pane w1:pJQ. Currently running its own gate (format/lint/typecheck) on Task
+   19. No action needed beyond watching.
+3. **#1756 lane** (`workshop-chat-cards-r2`, pane w1:pH7): this run its messages have landed
+   unsubmitted at its prompt **six separate times** (not just the one from the prior note) --
+   every single reply from it needs a bounded read to check for stray unsubmitted text, then a
+   resend via `herdr agent prompt` if so. It found one pre-existing-on-main failing test (sports
+   RLS isolation, confirmed unrelated to its branch) and is still waiting on its own
+   `test:integration` gate to finish (many files, still running).
+4. **#1571 lane** (pane w1:pJC): idle, mid-build, no action needed, per the user's own instruction
+   to only be told when it finishes Phase 1.
+5. Once PR 1803 actually merges, remove both #1526 entries from `docs/coordination/AWAITING-BEN.md`
+   together (still applies).
+
+**Fleet as of this relay** (all in workspace w1, agents tab `w1:t1Q` unless noted):
+- `w1:pJR` (tab `w1:t1N`, this session) -- relaying now, will be reaped by successor.
+- `w1:pHP` -- pty-1526-relay3, PR 1803, just told to attempt a real fix, check what happened.
+- `w1:pJS` -- build-agent-1754-relay8, Task 19, driving, running its own gate.
+- `w1:pH7` -- workshop-chat-cards-r2, PR 1799, running test:integration, unsubmitted-message issue
+  keeps recurring -- always verify delivery.
+- `w1:pJC` -- weather-1571-relay1, idle, no action needed.
+
+Ben asked mid-session why a handoff message appeared in this pane's input box (answered: normal
+predecessor handoff, already actioned) and whether a messaging-protocol change from this morning
+applies -- there's an **uncommitted** edit to `docs/agents/herdr-pane-message.md` describing a
+slightly different way to send messages (same core method, plus an optional wait-for-settle flag,
+plus a note that a pane stuck on a yes/no prompt needs a different key-send than a normal message).
+Told him it's unclear if that file is finished or still being edited, and asked him to confirm
+before treating it as the new standard. **No reply yet on that question either.**
+
+`merges_since_relay` = 0 (no merges this pass). Two open AWAITING-BEN entries for #1526 (original
++ the new update), no new reply from Ben on either that or the messaging-protocol question.
