@@ -1,7 +1,10 @@
 # Run manifest: Workshop stage 1 (#1739)
 
-Coordinator: Claude session `01d11bc2-ed28-440a-9f95-3bf53f0046c7`, label `Coordinator`, pane
-`w1:pG0` (re-resolve pane fresh by label + session id — pane numbers reflow).
+Coordinator: Claude session `fbacd483-baf3-47c8-aacf-66a51c6ebd7b`, label `Coordinator`, pane
+`w1:pH4` (re-resolve pane fresh by label + session id — pane numbers reflow). Took over from
+session `01d11bc2-ed28-440a-9f95-3bf53f0046c7` (former pane `w1:pG0`) at 2026-08-20 ~18:45 PDT;
+old pane confirmed reaped. Liveness Monitor re-armed as task `bb0s7lmk5` (previous task
+`b27fpb9yo` was not inherited/visible to this session).
 
 Plan: `docs/superpowers/plans/2026-08-20-1739-stage1-workshop.md` (committed on branch
 `plan/1739-stage1-workshop`, worktree `.claude/worktrees/1739-stage1-plan` — plan-writing agent
@@ -36,6 +39,21 @@ queries paused until reset (~19:29 PDT). Will re-pull and append here once avail
 re-derive from memory.
 
 ## merges_since_relay: 0
+
+## Continuation note (this coordinator, 2026-08-20 ~18:47 PDT)
+
+Cleanup from the prior note's item 3, done via REST (GraphQL still exhausted):
+- **#1470** (non-feature backlog epic): confirmed all five first-wave issues (#1448, #887, #1412,
+  #903, #1272) closed; refreshed the epic's tracking table to say so. Did not pick a next wave —
+  that is separate work from this run (#1739) and Ben's instruction was to prioritize the Ready
+  lane once GraphQL resets.
+- **#1440** (Jarvis-to-Moss rename epic): the one remaining required item, #1463, was already
+  closed; the other open item, #1461, is explicitly non-blocking per the epic's own text. Closed
+  the epic with a comment explaining why.
+
+GraphQL rate limit still exhausted as of this note (3 of 5000 remaining, resets ~19:29 PDT /
+unix 1787279388). Waiting on that reset before pulling the Ready lane, per the prior note's
+instruction — will not retry-poll, using a scheduled wakeup instead.
 
 ## Continuation note (relay at context 70%, 2026-08-20 ~18:43 PDT)
 
