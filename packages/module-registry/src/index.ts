@@ -1852,7 +1852,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         aiRepository: new AiRepository(),
         cipher: createAiSecretCipher(),
         repository: new CommitmentsRepository(),
-        providers: [chatCommitmentProvider, notesCommitmentProvider]
+        providers: [chatCommitmentProvider, notesCommitmentProvider],
+        logger: deps.logger ? createModuleLogger(deps.logger, "commitments") : undefined
       })
   },
   {
