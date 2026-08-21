@@ -78,7 +78,7 @@ Nothing here yet from earlier relays. Entries below added by this coordinator (s
 | #1521 | [1139-D] keep private chat closed during focus refetch | routine | done, CI green, code-complete but UNVERIFIED — shared dev instance login is broken, live-path proof blocked; see "Blocked overnight" heading | lane-1521-relay2 | w1:pHN | 1521-keep-private-chat-closed-refetch | 1801 |
 | #1526 | [1140-D] propagate terminal socket backpressure to the PTY | routine per its own spec (handoff doc had said sensitive — spec wins) | STOPPED — failed 2nd CI cycle same as 1st (connection-close test still times out); at failure budget, parked for Ben; see "Blocked overnight" heading | pty-1526-relay3 | w1:pHP | 1526-pty-socket-backpressure | 1803 |
 | #1524 | [1140-B] make whole-league sports follows unique | sensitive (migration; head of a chain — #1572, #906 wait on it) | unblocked, building (relay2) — Ben ruled to allow row deletes in the shared migration file; issue must stay open after merge, see today's ruling note | build1524relay2 | w1:pHT | 1524-unique-whole-league-sports-follows | - |
-| #1667 | module-sdk-worker test polling budget too tight for real cold start | routine (test-only) | QA in progress (PR #1805, agent a9ccec6d42112fd9d) | build1667 | w1:pHG | 1667-module-sdk-worker-polling-budget | 1805 |
+| #1667 | module-sdk-worker test polling budget too tight for real cold start | routine (test-only) | **MERGED** (PR #1805, CI all green, issue closed, board moved to Done, worktree reaped) | build1667 (reaped) | - | 1667-module-sdk-worker-polling-budget (deleted) | 1805 |
 | #1625 | lane-scoped module fixture identities for concurrent integration gates | routine (test-only) | **merged** to main, issue closed, worktree reaped — note: the lane merged its own PR instead of handing back to the coordinator; corrected, no harm (test-only change, CI fully green) | build1625 (reaped) | - | 1625-lane-scoped-module-fixture-identities | #1798 |
 
 ## Ready lane (full 29-item list pulled ~19:35 PDT, GraphQL clear)
@@ -135,7 +135,7 @@ bounded-read each of their panes, and if they report a missing boot file, send t
 instead — it only exists in the main checkout, not your worktree. Proceed as the build lane for
 #<issue> with that doc."` (swap in the right slug and issue number per the Queue table below).
 
-## merges_since_relay: 1
+## merges_since_relay: 1 (this coordinator: #1667/PR 1805 merged 2026-08-21 ~05:36 UTC)
 
 ## Continuation note (this coordinator, 2026-08-20 ~21:35 PDT — relaying at context 70%)
 
