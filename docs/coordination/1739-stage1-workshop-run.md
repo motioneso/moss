@@ -603,3 +603,65 @@ goes under a `## Blocked overnight, needs Ben` heading, not to him directly.
 Next: keep supervising event-driven via the new monitor, confirm #1752 gets a pull request and
 push it through QA and merge once green, then spawn #1753 and #1754 from the queue per the
 standing instruction.
+
+## Continuation note (this coordinator, 2026-08-20 ~22:4x PDT — relaying at context 70%)
+
+Session `0cfc3a41-b6cb-4487-aca3-1b4248dc7438`, pane `w1:pHW`, relaying now per the context-meter
+trigger. Spawning a successor into the same pane/tab (never the agents tab).
+
+**Live liveness monitor:** task `bba0vvw3h` — watches every pane in the shared workspace except
+the coordinator's own, only speaks up on a real status change. Does NOT carry over automatically;
+the successor must re-arm it fresh (same pattern as every relay before this one in this run).
+
+**Three background CI watchers currently running (also will not carry over — re-arm or just check
+directly with `gh pr checks <PR>` if they're gone):**
+- task `bohm8kztj` — watching PR #1802 (#1515, warn safely on commitment extraction failures)
+- task `b9786te4o` — watching PR #1805 (#1667, worker test polling budget)
+- task `brti200k2` — watching PR #1806 (#1752, modules found after server start)
+
+**What's actually ready to merge right now, pending only the last CI check finishing green:**
+- **#1515** (PR 1802) — QA verdict GREEN on everything (review, invariants, exit-criteria, the
+  claimed pre-existing test flake confirmed real and unrelated). The only thing not yet confirmed
+  is the main "Verify foundation and app" CI check and the live-database module-install check,
+  both still running as of the last look. Run `gh pr checks 1802` — if green, this is a routine-tier
+  merge, no further QA needed.
+- **#1667** (PR 1805) — QA verdict GREEN. Same situation: only the main CI check was still running
+  at last check. Run `gh pr checks 1805` — if green, merge, routine tier.
+- **#1752** (PR 1806) — QA verdict GREEN, and it independently confirmed the three function names
+  #1753/#1754 will depend on (`createExternalModuleDiscoveryHolder`, `getDiscoveries`, `rescan`)
+  are present exactly as named. Only the main CI check was still running at last check. Run
+  `gh pr checks 1806` — if green, merge, routine tier. **Once this one lands: spawn #1753, then
+  once #1753 lands, spawn #1754** — both were queued behind #1752 specifically and this is the
+  next concrete action in the standing instruction.
+
+**In QA cycle 2 (do not re-merge without seeing this land):**
+- **#1526** (PR 1803) — first QA pass found real CI red: the PR's own new test only polled up to
+  2 seconds for a connection-close event, which sometimes wasn't enough under load. The build
+  agent fixed it to wait for the actual close event instead (commit `c86d30d1a`), reran the test
+  file and the full type check clean. Second QA pass is in progress, agent `a625f1b68db885a21` —
+  not yet returned. This is the 2nd of 2 allowed QA cycles for this lane before it would need to
+  stop-the-line and escalate (won't be needed if this pass comes back green, which is expected).
+
+**Just reported done, QA not yet spawned — do this first:**
+- **#1755** (PR 1804, the Workshop page front-end shell) — build agent reports full gate green
+  (format/lint/typecheck), the same known pre-existing worker-timing test flake as everyone else
+  tonight (confirmed against green main CI, not this branch), AND a real live-path proof already
+  posted on the pull request: it stood up its own isolated copy of the app on its own throwaway
+  database and ports, logged in as an admin and confirmed the Workshop page shows up and renders,
+  then logged in as an ordinary member and confirmed the page correctly refuses access — both with
+  real screenshots, not just component tests. It also confirms it tore down its isolated instance
+  and dropped its throwaway database, so nothing was left running. This is ready for a QA agent to
+  be spawned on PR 1804, routine tier, spec is `docs/superpowers/specs/2026-08-19-moss-builds-modules-on-moss.md`
+  (or check nearby specs — search for "Workshop" if that one doesn't match) — next concrete action.
+
+**Everything else unchanged from the prior note:** #1521, #1524 building normally. #1756 idle on
+purpose, waiting on #1755 (which just landed its own PR — worth checking whether #1756 should be
+un-paused now that #1755's shell exists). #1625 already merged and reaped, no action needed.
+
+Standing rule from Ben still in force: do not wake him overnight for anything. Any new blocker
+goes under a `## Blocked overnight, needs Ben` heading, not to him directly.
+
+**Reap check:** no build-agent worktrees confirmed landed-on-main yet this relay (nothing has
+actually merged since adoption) — nothing to reap on that front. Two QA agent worktrees were
+already reaped immediately after their verdicts were consumed, per the QA-worktree-disposal rule
+(no exceptions needed, they held no source changes).
