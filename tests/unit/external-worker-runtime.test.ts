@@ -178,7 +178,13 @@ describe("ExternalModuleWorkerRuntime", () => {
       },
       { lane: "queue" }
     );
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    // #1667: the flushed log and the child's stderr write ("leak=...") arrive over two
+    // independent OS pipes, so a fixed short sleep here races real delivery on a slower
+    // sandbox. Poll until the log actually shows up, bounded by a 2s deadline.
+    const deadline = Date.now() + 2_000;
+    while (logs.length === 0 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
     expect(JSON.stringify(logs)).toContain("[REDACTED]");
     expect(JSON.stringify(logs)).not.toContain("runtime-secret");
     await runtime.close();
