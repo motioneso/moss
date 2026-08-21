@@ -1836,3 +1836,28 @@ pane count in the tab changes.
 
 `merges_since_relay` = 0 still (no merges landed this pass). AWAITING-BEN.md is now empty of open
 entries except the general protocol boilerplate at the top — good, nothing silently pending.
+
+## Continuation note (coordinator session 9674b6c7-87b1-4612-afad-361c7f9070fa, pane w1:pJV, 2026-08-21 ~8:3xpm PDT)
+
+Took over as coordinator (relay22). Confirmed the waiting-on-Ben list is still empty. Reaped the
+previous coordinator's pane — it had finished its work and had nothing left pending.
+
+#1756 (pane w1:pH7, agent workshop-chat-cards-r2, PR #1799): its instruction to start a fresh
+session from the checkpoint file was sitting in the pane unsent — its progress timer was stuck at
+the same number across two checks a few seconds apart, a sign the session was frozen rather than
+genuinely idle. Nudged it with "continue" and it started actively working again. Watch for it to
+report back.
+
+#1526 (pane w1:pHP, agent pty-1526-relay3, PR #1803): still waiting on its own GitHub Actions run
+to finish; the lane is correctly waiting in the background, no action needed yet. Still the next
+thing to check once that run completes — spawn QA in its own pane if green, confirm the new
+"known issue" ticket for the flaky test got filed.
+
+#1754 (pane w1:pJS, build-agent-1754-relay8) and #1571 (pane w1:pJC, weather-1571-relay1):
+unchanged, both still working normally on their own tasks. #1571 is waiting on its own helper to
+report back, which is expected, not a stall.
+
+Agents tab still a clean 2x2 grid (pHP, pJS, pH7, pJC), no pane count change, no layout fix needed
+this pass.
+
+`merges_since_relay` = 0, no merges this pass. AWAITING-BEN.md confirmed empty.
