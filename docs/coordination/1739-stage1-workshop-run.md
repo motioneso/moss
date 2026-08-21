@@ -25,7 +25,7 @@ unaffected.
 
 | Issue | Title | Tier | Status | Agent | Pane | Branch | PR |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| #1752 | find modules that appear after the server started | routine | building | build-1752-discovery | w1:pH1 | 1752-module-discovery-holder | - |
+| #1752 | find modules that appear after the server started | routine | building | holder-relay2 | w1:pH6 | 1752-module-discovery-holder | - |
 | #1753 | a draft module that runs for its author alone | routine | blocked on #1752 | - | - | - | - |
 | #1754 | the build agent - agree a plan, then build it | sensitive (spawns a build agent/job) | blocked on #1752 | - | - | - | - |
 | #1755 | the Workshop page (front end shell) | routine | building | workshop-page-r1 | w1:pH5 | 1755-workshop-page | - |
@@ -39,6 +39,26 @@ queries paused until reset (~19:29 PDT). Will re-pull and append here once avail
 re-derive from memory.
 
 ## merges_since_relay: 0
+
+## Continuation note (this coordinator, 2026-08-20 ~19:05 PDT)
+
+The module-discovery build lane (#1752) finished its first piece and relayed at its context
+warning. What landed and is committed (`70bbf6d4e`): a live, rescannable holder object for
+external modules that the API server reads from, replacing the old one-time module list — every
+place the API used to read that list now goes through this live object instead. It ended up in a
+different file than the plan named (`packages/module-registry/src/node.ts`) to avoid a circular
+import, and tests went under the repo's real convention (`tests/unit/`, not next to the source
+file) rather than the plan's layout. The shape other pieces (#1753, #1754) depend on is unchanged.
+Typecheck and targeted tests green.
+
+Remaining for #1752: wiring the worker side to the same object, adding the rescan action
+end-to-end (job queue plus an admin route), and live proof that a module dropped in after the
+server starts shows up without a restart.
+
+Successor is agent `holder-relay2`, pane `w1:pH6`, session
+`e386b3f7-f549-4d2e-90d3-953d5cb90b31`, confirmed running on Sonnet and working. Old pane
+`w1:pH1` reaped. Liveness watcher re-armed as task `bckgbad5i` (old task `b8pnb0vac` stopped —
+it was watching the now-closed pane).
 
 ## Continuation note (this coordinator, 2026-08-20 ~19:00 PDT)
 
