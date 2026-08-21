@@ -127,6 +127,23 @@ process/terminal cleanup between tests) rather than being open-ended. Not re-pin
 again since this is the same open question, just with more information -- flagging it here so you
 see it whenever you next check.
 
+## UPDATE 2026-08-21 ~10:4x PM PDT: #1526 (PR 1803) — the cleanup fix was tried and did NOT work; back to square one on the cause
+
+The lane made the real fix the last update suggested: it changed the two earlier tests to properly
+wait for the actual shell process to finish before moving on, instead of just telling it to stop
+and moving on right away. Then it turned both tests back on and pushed, as agreed.
+
+Result: still fails, same test, same error ("timed out waiting for connection close"). So leftover
+processes from those two tests were NOT the real cause after all -- something else about the
+earlier green run (with those tests skipped) explains it, not specifically the cleanup. The commit
+with the cleanup improvement is still on the branch since it's a genuine improvement on its own,
+just not the fix.
+
+The lane has stopped again as instructed -- no further timeout tweaks, no further pushes, just
+waiting. This is the same open question as above, now with the leading theory ruled out. Options
+1-3 from the original entry still stand; option 1 ("someone digs into the real cause") no longer
+has a concrete lead. Pinged via `needs-ben`.
+
 ## OPEN 2026-08-21 ~5:50pm PDT: #1526 (PR 1803) — same test has now failed 3 times identically, likely a real bug not a flake
 
 Your earlier ruling was "we can just ok with flakes for now" on this test. Since then, the branch
