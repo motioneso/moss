@@ -25,7 +25,10 @@ function warnErrorFields(err: unknown): { errorName: string; errorMessage: strin
       errorMessage: boundedWarnField(err.message)
     };
   }
-  return { errorName: boundedWarnField("UnknownError"), errorMessage: boundedWarnField(String(err)) };
+  return {
+    errorName: boundedWarnField("UnknownError"),
+    errorMessage: boundedWarnField(String(err))
+  };
 }
 
 const SYSTEM_PROMPT = `You are a commitment extraction assistant. Given a text excerpt, identify all explicit commitments, deadlines, promises, and obligations. Return a JSON object with a "candidates" array. Each candidate:

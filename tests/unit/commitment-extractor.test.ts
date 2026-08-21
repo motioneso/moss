@@ -70,7 +70,10 @@ describe("extractCommitmentsFromText", () => {
     expect(result).toEqual([]);
     expect(warn).toHaveBeenCalledTimes(1);
     const [fields, message] = warn.mock.calls[0]!;
-    expect(fields).toMatchObject({ event: "commitment-extraction-malformed-output", sourceKind: "chat" });
+    expect(fields).toMatchObject({
+      event: "commitment-extraction-malformed-output",
+      sourceKind: "chat"
+    });
     expect(message).toBe("commitment extraction: malformed model output");
   });
 
