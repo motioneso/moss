@@ -201,7 +201,7 @@ export interface ExternalModuleDto {
   readonly name: string;
   readonly version: string;
   readonly publisher: string;
-  readonly status: "discovered" | "enabled" | "disabled";
+  readonly status: "discovered" | "enabled" | "disabled" | "draft";
   readonly active: boolean;
   readonly drifted: boolean;
   readonly disabledReason: string | null;

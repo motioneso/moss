@@ -29,13 +29,14 @@ export interface ExternalModuleLoadResult {
 /** One persisted app.external_modules row, narrowed to what reconcile needs (#917). */
 export interface ExternalModuleStateInput {
   readonly id: string;
-  readonly status: "enabled" | "disabled";
+  readonly status: "enabled" | "disabled" | "draft";
   readonly packageHash: string | null;
   readonly disabledReason: string | null;
+  readonly ownerUserId: string | null;
 }
 
-/** 'discovered' is virtual — it means "on disk, no DB row". Only enabled/disabled persist. */
-export type ExternalModuleStatus = "discovered" | "enabled" | "disabled";
+/** 'discovered' is virtual — it means "on disk, no DB row". Only enabled/disabled/draft persist. */
+export type ExternalModuleStatus = "discovered" | "enabled" | "disabled" | "draft";
 
 export interface ReconciledExternalModule {
   readonly id: string;
@@ -46,6 +47,7 @@ export interface ReconciledExternalModule {
   readonly active: boolean;
   readonly drifted: boolean;
   readonly disabledReason: string | null;
+  readonly ownerUserId: string | null;
   /** Web contribution declared by the manifest, or null when the module has no web surface (#918). */
   readonly web: { readonly entrypoint: string; readonly contractVersion: number } | null;
   // #1019: nav-menu entries this module contributes; always present, defaults to [] for a

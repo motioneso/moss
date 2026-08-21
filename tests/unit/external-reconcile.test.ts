@@ -35,7 +35,15 @@ describe("reconcileExternalModules (#917)", () => {
   it("marks an enabled row with matching hash as active", () => {
     const { modules, driftDisable } = reconcileExternalModules(
       [discovery("a", "sha256:1")],
-      [{ id: "a", status: "enabled", packageHash: "sha256:1", disabledReason: null }]
+      [
+        {
+          id: "a",
+          status: "enabled",
+          packageHash: "sha256:1",
+          disabledReason: null,
+          ownerUserId: null
+        }
+      ]
     );
     expect(modules[0]).toMatchObject({ id: "a", status: "enabled", active: true, drifted: false });
     expect(driftDisable).toEqual([]);
@@ -44,7 +52,7 @@ describe("reconcileExternalModules (#917)", () => {
   it("auto-disables (drift) an enabled row whose hash no longer matches", () => {
     const { modules, driftDisable } = reconcileExternalModules(
       [discovery("a", "sha256:NEW")],
-      [{ id: "a", status: "enabled", packageHash: "sha256:OLD", disabledReason: null }]
+      [{ id: "a", status: "enabled", packageHash: "sha256:OLD", disabledReason: null, ownerUserId: null }]
     );
     expect(modules[0]).toMatchObject({
       id: "a",
@@ -64,7 +72,8 @@ describe("reconcileExternalModules (#917)", () => {
           id: "a",
           status: "disabled",
           packageHash: "sha256:1",
-          disabledReason: "admin turned it off"
+          disabledReason: "admin turned it off",
+          ownerUserId: null
         }
       ]
     );
@@ -80,9 +89,49 @@ describe("reconcileExternalModules (#917)", () => {
   it("ignores a row whose module is no longer on disk", () => {
     const { modules } = reconcileExternalModules(
       [],
-      [{ id: "ghost", status: "enabled", packageHash: "sha256:1", disabledReason: null }]
+      [{ id: "ghost", status: "enabled", packageHash: "sha256:1", disabledReason: null, ownerUserId: null }]
     );
     expect(modules).toEqual([]);
+  });
+
+  it("does not disable a draft module whose package hash no longer matches (#1753)", () => {
+    const { modules, driftDisable } = reconcileExternalModules(
+      [discovery("videos-draft", "sha256:NEW")],
+      [
+        {
+          id: "videos-draft",
+          status: "draft",
+          packageHash: "sha256:OLD",
+          disabledReason: null,
+          ownerUserId: "user-a"
+        }
+      ]
+    );
+    expect(modules[0]).toMatchObject({
+      id: "videos-draft",
+      status: "draft",
+      active: true,
+      drifted: false,
+      disabledReason: null,
+      ownerUserId: "user-a"
+    });
+    expect(driftDisable).toEqual([]);
+  });
+
+  it("still disables a shipped module whose package hash no longer matches", () => {
+    const { modules } = reconcileExternalModules(
+      [discovery("videos", "sha256:NEW")],
+      [
+        {
+          id: "videos",
+          status: "enabled",
+          packageHash: "sha256:OLD",
+          disabledReason: null,
+          ownerUserId: null
+        }
+      ]
+    );
+    expect(modules[0]).toMatchObject({ id: "videos", status: "disabled", active: false });
   });
 
   it("sorts output modules by id", () => {
