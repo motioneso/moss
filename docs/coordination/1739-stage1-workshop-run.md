@@ -1720,3 +1720,15 @@ lanes in order:
 
 Fleet unchanged from prior note otherwise. `merges_since_relay` = 0. Watching PR 1803's in-flight
 diagnostic CI run and fleet status via a background Monitor rather than polling.
+
+## Update (coordinator session 415253cb, pane w1:pJR, 2026-08-21 ~10:0x PM PDT)
+
+#1754 relayed again (now relay8, pane w1:pJS, agent name build-agent-1754-relay8) -- same clean
+pattern as its prior 7 relays: predecessor (pane w1:pJQ) was mid-self-compaction after already
+spawning and handing off to the successor. Confirmed successor driving, closed the stale
+predecessor pane. #1756 (pane w1:pH7) has now had three separate messages land unsubmitted at its
+prompt this run; each time resent via `herdr agent prompt` and confirmed delivered on the next
+read -- keep watching for this every time it goes "done" with text sitting at the prompt. It's
+currently running its own gate plus a second comparison run against a clean main checkout to check
+whether two failing tests are pre-existing. #1526 (PR 1803) diagnostic CI run still in progress,
+watched via background Monitor. No merges this pass, `merges_since_relay` = 0.
