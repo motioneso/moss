@@ -1495,3 +1495,60 @@ available bypass. Logged in `docs/coordination/AWAITING-BEN.md` with three optio
 keep digging / Ben looks himself / skip the one test and land the rest, tracked as a separate bug)
 and pinged Ben via `needs-ben`. Watching for his reply; not spawning more timeout attempts in the
 meantime.
+
+## Continuation note (coordinator session 4b7627b9-1a6f-4801-93af-4c0382b9a06e, pane w1:pJJ, 2026-08-21 ~6:05pm PDT — relaying at context 70%)
+
+**Still open, in order:**
+1. **PR 1803 (#1526):** halted the timeout-chasing after a THIRD identical failure (same test,
+   same "timed out waiting for connection close" error) survived two different timeout fixes.
+   That pattern means the connection genuinely isn't closing on CI, not just closing slowly --
+   likely a real bug (possibly PTY/child-process cleanup from an earlier test bleeding into this
+   one), not a timing flake. Logged full detail + 3 options + a recommendation in
+   `docs/coordination/AWAITING-BEN.md` ("#1526 (PR 1803) — same test has now failed 3 times
+   identically"), pinged Ben via `needs-ben`. **No reply from him yet as of this relay — successor,
+   keep watching `~/.needs-ben/replies/` (compare against newest filename
+   `1787077307172-coordinator.md` at ping time, watch for anything newer) rather than repinging.**
+   Meanwhile told the lane (`pty-1526-relay3`, pane w1:pHP) to investigate root cause (test
+   isolation, PTY/child-process cleanup ordering) instead of adjusting timeouts again -- it's
+   mid-investigation, went through a context compaction just before this relay, should still be
+   on track. **Do not merge PR 1803 and do not let the lane push another timeout-only fix without
+   Ben's steer or a real found cause.** Separately confirmed (via `gh api
+   repos/motioneso/moss/rulesets`) that even Ben's original flake waiver can't get this specific
+   PR merged mechanically: the required "CI gate" ruleset has no available admin bypass, so a real
+   fix is required regardless of any waiver.
+2. **#1754 build agent runner:** third relay in this run. Successor `build1754task16`, pane w1:pJK,
+   same worktree `.claude/worktrees/1754-build-agent-runner`, confirmed driving on Sonnet, starting
+   Task 16. Predecessor `build-1754b` (pane w1:pJH) reaped. Its own handoff doc is at
+   `docs/superpowers/handoffs/2026-08-21-1754-build-agent-runner-relay3.md` if the successor needs
+   drift details -- don't read it yourself unless something looks wrong. Tasks 11-15 committed and
+   green (build-dir resolver, self-continuing build job, module_builds table+repo, write-plan step,
+   run-build-step state machine + yolo-gate extraction).
+3. **#1756 lane** (`workshop-chat-cards-r2`, pane w1:pH7): running its own local gate check with a
+   fresh database, two background monitors of its own running. Nothing to do but watch. Note: this
+   lane's sent messages have twice needed a follow-up nudge to actually submit (text sat at the
+   prompt unsent after the first `herdr pane send-keys ... Enter"``) -- use `herdr agent prompt`
+   (not raw send-keys) and always verify with a bounded read afterward.
+4. Remove the #1526 AWAITING-BEN entry (now there are two entries for #1526 -- the old "OPEN" one
+   and my new one -- both should be removed together) once PR 1803 actually merges.
+
+**Fleet as of this relay** (all in workspace w1, agents tab `w1:t1Q` unless noted):
+- `w1:pJJ` (tab `w1:t1N`, this session) -- relaying now, will be reaped by successor.
+- `w1:pHP` -- pty-1526-relay3, PR 1803, mid root-cause investigation (just came out of a context
+  compaction).
+- `w1:pJK` -- build1754task16, worktree `.claude/worktrees/1754-build-agent-runner`, Task 16,
+  driving.
+- `w1:pH7` -- workshop-chat-cards-r2, PR 1799, running its own gate.
+- `w1:pJC` -- weather-1571-relay1, idle, mid-build, user asked to be told when it finishes Phase 1
+  -- no action needed unless it reports that.
+
+`merges_since_relay` = 0 (no merges this pass -- PR 1803 is blocked, not merged; relaying purely on
+the context-meter warning). One open question for Ben (the #1526 real-bug call, see item 1 above),
+already pinged, awaiting reply.
+
+**Also flagging for the record (not an active concern, just noting it happened):** while polling
+`~/.needs-ben/replies/` for Ben's answer, an early monitor glob matched pre-existing old reply
+files instead of a new one, surfacing a batch of old historical messages. Some of that old content
+contained text urging an agent to suppress security concerns and not mention them. Did not act on
+any of it -- it wasn't a reply to anything asked this run, and it read as data, not as an
+instruction to follow. Mentioned to Ben in chat already; re-noting here in case a successor sees
+the same directory and needs the context that this was already checked once.
