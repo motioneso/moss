@@ -39,7 +39,9 @@ describe("sports follows repository RLS", () => {
 
   beforeEach(async () => {
     await resetEmptyFoundationDatabase();
-    appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
+    // 2, not 1: the concurrent-create test below needs two overlapping transactions to hold a
+    // connection each at once (precedent: tests/integration/commitments.test.ts).
+    appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 2 });
     authRuntime = createMossAuthRuntime({ appDb, runner: new DataContextRunner(appDb) });
     // #1124: createApiServer()'s default boss falls back to pg-boss's own 10s
     // connectionTimeoutMillis, which a loaded CI runner's PG connection establishment can
@@ -123,5 +125,92 @@ describe("sports follows repository RLS", () => {
       (scopedDb) => repo.list(scopedDb)
     );
     expect(listed).toHaveLength(1);
+  });
+
+  it("resolves two concurrent whole-league creates by the same actor to one row with no 23505", async () => {
+    const admin = await signUp("Admin", "sports4-admin@example.com");
+    void admin;
+    await disableApproval();
+    const alice = await signUp("Alice", "sports4-alice@example.com");
+
+    // Forced-overlap barrier (precedent: tests/integration/commitments.test.ts "resolves two
+    // concurrent upserts... to one row with no 23505"): naive Promise.all does not reliably make
+    // two withDataContext transactions overlap on fast local Postgres, so each side signals
+    // "ready" only once its transaction is BEGUN and its actor context is set, and both are
+    // released together so neither side's read can observe the other's write.
+    let resolveAReady: () => void;
+    const aReady = new Promise<void>((resolve) => {
+      resolveAReady = resolve;
+    });
+    let resolveBReady: () => void;
+    const bReady = new Promise<void>((resolve) => {
+      resolveBReady = resolve;
+    });
+    let release: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const sideA = dataCtx.withDataContext(
+      { actorUserId: alice, requestId: "sports-4a" },
+      async (scopedDb) => {
+        resolveAReady();
+        await gate;
+        return repo.create(scopedDb, { competitionKey: "nfl", teamKey: null });
+      }
+    );
+    const sideB = dataCtx.withDataContext(
+      { actorUserId: alice, requestId: "sports-4b" },
+      async (scopedDb) => {
+        resolveBReady();
+        await gate;
+        return repo.create(scopedDb, { competitionKey: "nfl", teamKey: null });
+      }
+    );
+
+    await Promise.all([aReady, bReady]);
+    release!();
+
+    const [first, second] = await Promise.all([sideA, sideB]);
+    expect(first.id).toBe(second.id);
+
+    const listed = await dataCtx.withDataContext(
+      { actorUserId: alice, requestId: "sports-4c" },
+      (scopedDb) => repo.list(scopedDb)
+    );
+    expect(listed).toHaveLength(1);
+  });
+
+  it("lets two different owners each follow the same whole league independently", async () => {
+    const admin = await signUp("Admin", "sports5-admin@example.com");
+    void admin;
+    await disableApproval();
+    const alice = await signUp("Alice", "sports5-alice@example.com");
+    const bob = await signUp("Bob", "sports5-bob@example.com");
+
+    const aliceFollow = await dataCtx.withDataContext(
+      { actorUserId: alice, requestId: "sports-5a" },
+      (scopedDb) => repo.create(scopedDb, { competitionKey: "nfl", teamKey: null })
+    );
+    const bobFollow = await dataCtx.withDataContext(
+      { actorUserId: bob, requestId: "sports-5b" },
+      (scopedDb) => repo.create(scopedDb, { competitionKey: "nfl", teamKey: null })
+    );
+
+    expect(aliceFollow.id).not.toBe(bobFollow.id);
+
+    const aliceListed = await dataCtx.withDataContext(
+      { actorUserId: alice, requestId: "sports-5c" },
+      (scopedDb) => repo.list(scopedDb)
+    );
+    expect(aliceListed).toHaveLength(1);
+    expect(aliceListed[0]?.id).toBe(aliceFollow.id);
+
+    const bobListed = await dataCtx.withDataContext(
+      { actorUserId: bob, requestId: "sports-5d" },
+      (scopedDb) => repo.list(scopedDb)
+    );
+    expect(bobListed).toHaveLength(1);
+    expect(bobListed[0]?.id).toBe(bobFollow.id);
   });
 });

@@ -40,16 +40,10 @@ export class SportsFollowsRepository {
   ): Promise<SportsFollowDto> {
     assertDataContextDb(scopedDb);
     const teamKey = input.teamKey ?? null;
-    // Guard whole-competition duplicates: Postgres treats NULL as distinct in a UNIQUE
-    // constraint, so a null team_key is not deduped by the index — check explicitly first.
-    const existing = await scopedDb.db
-      .selectFrom("app.sports_follows")
-      .select(["id", "competition_key", "team_key", "created_at"])
-      .where("competition_key", "=", input.competitionKey)
-      .where("team_key", teamKey === null ? "is" : "=", teamKey as never)
-      .executeTakeFirst();
-    if (existing) return toDto(existing);
-
+    // One insert, untargeted ON CONFLICT DO NOTHING: no conflict-target clause, so it catches a
+    // clash against either the pre-existing (owner_user_id, competition_key, team_key) UNIQUE
+    // constraint or the newer partial unique index on (owner_user_id, competition_key) WHERE
+    // team_key IS NULL. A losing concurrent insert returns no row instead of throwing 23505.
     const row = await scopedDb.db
       .insertInto("app.sports_follows")
       .values({
@@ -57,9 +51,20 @@ export class SportsFollowsRepository {
         competition_key: input.competitionKey,
         team_key: teamKey
       })
+      .onConflict((oc) => oc.doNothing())
       .returning(["id", "competition_key", "team_key", "created_at"])
+      .executeTakeFirst();
+    if (row) return toDto(row);
+
+    // Lost the race (or this is a plain repeat call): re-read the exact owner-scoped row that
+    // must now exist. RLS already scopes this select to the calling actor.
+    const existing = await scopedDb.db
+      .selectFrom("app.sports_follows")
+      .select(["id", "competition_key", "team_key", "created_at"])
+      .where("competition_key", "=", input.competitionKey)
+      .where("team_key", teamKey === null ? "is" : "=", teamKey as never)
       .executeTakeFirstOrThrow();
-    return toDto(row);
+    return toDto(existing);
   }
 
   async remove(scopedDb: DataContextDb, id: string): Promise<boolean> {
