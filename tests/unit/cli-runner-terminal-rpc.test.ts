@@ -315,6 +315,9 @@ describe("terminal RPC dispatch (#1059)", () => {
   }, 10_000);
 
   it("a thrown write on the terminalData push closes the connection and kills the connection-owned terminal (#1526)", async () => {
+    // Explicit per-test timeout above the inner 10s wait-for-close race below — otherwise
+    // vitest's default per-test timeout can also be ~10s, and on a slow CI runner the outer
+    // timeout can fire first with a generic "test timed out" instead of the inner, clearer one.
     const terminalHost = new TerminalHost({ homeBase: os.tmpdir(), toolsBinDir: "/usr/bin" });
     const channel = new FakeChannel();
     const deps: ConnectionDeps = {
@@ -374,5 +377,5 @@ describe("terminal RPC dispatch (#1059)", () => {
     } finally {
       terminalHost.killAll();
     }
-  }, 10_000);
+  }, 15_000);
 });
