@@ -11,7 +11,9 @@ import type {
 } from "@moss/chat/live";
 
 export interface TerminalSink {
-  data(terminalId: string, bytes: Buffer): void;
+  // #1526 — a `false` return means the connection's socket write hit backpressure;
+  // TerminalHost pauses the PTY until the caller reports a drain via `resume()`.
+  data(terminalId: string, bytes: Buffer): boolean | void;
   exit(terminalId: string, code: number): void;
 }
 export interface TerminalHostDeps {
@@ -47,7 +49,10 @@ export class TerminalHost {
       // successor's timeout alive forever. Bytes still forward unconditionally —
       // they belong to this terminalId regardless of liveness.
       if (this.session?.id === id) this.touch();
-      sink.data(id, bytes);
+      const outcome = sink.data(id, bytes);
+      // #1526 — only the LIVE session may be paused by a stale/evicted callback's outcome,
+      // same liveness guard as touch() above.
+      if (outcome === false && this.session?.id === id) this.session.pause();
     });
     session.onExit((code) => {
       sink.exit(id, code);
@@ -70,6 +75,11 @@ export class TerminalHost {
   }
   resize(params: RpcResizeTerminalParams): void {
     this.forId(params.terminalId)?.resize(params.cols, params.rows);
+  }
+  // #1526 — a drain for an evicted/killed terminal is a no-op: forId() only returns the
+  // session whose id is still the current live one.
+  resume(terminalId: string): void {
+    this.forId(terminalId)?.resume();
   }
   kill(params: RpcKillTerminalParams): void {
     this.clear(params.terminalId);

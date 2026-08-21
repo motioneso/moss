@@ -74,6 +74,12 @@ export class TerminalSession {
   resize(cols: number, rows: number): void {
     this.term.resize(cols, rows);
   }
+  pause(): void {
+    this.term.pause();
+  }
+  resume(): void {
+    this.term.resume();
+  }
   kill(): void {
     try {
       this.term.kill();

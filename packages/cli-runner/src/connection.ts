@@ -49,10 +49,13 @@ import type { TerminalHost, TerminalSink } from "./terminal-host.js";
 
 /** A duplex byte sink/source — `net.Socket` satisfies this; tests inject a fake. */
 export interface ByteChannel {
-  write(buf: Buffer): void;
+  // #1526 — real sockets return boolean (false = backpressure); existing fakes may still
+  // return void. Only an exact `false` means backpressure — never inferred from `void`.
+  write(buf: Buffer): boolean | void;
   end(): void;
   on(event: "data", listener: (chunk: Buffer) => void): void;
   on(event: "close" | "error", listener: () => void): void;
+  on(event: "drain", listener: () => void): void;
 }
 
 export interface ConnectionDeps {
@@ -94,28 +97,46 @@ export function serveConnection(channel: ByteChannel, deps: ConnectionDeps): voi
   const recordTerminal = (id: string): void => {
     ownedTerminalId = id;
   };
+  // #1526 — the terminalId whose data push last saw `write() === false`, or null if none is
+  // currently backpressured. Cleared by the matching "drain" event, which resumes only this id.
+  let backpressureTerminalId: string | null = null;
 
   // #1059 — per-connection push sink: PTY output/exit arrive on TerminalHost's own async
   // callbacks (node-pty read events), NOT inside a request/response turn, so they must be
   // written to THIS connection's channel directly via safeWrite rather than returned from
   // `invoke`. base64 keeps raw (possibly non-UTF-8) PTY bytes JSON-safe on the wire (§3.2).
   const pushSink: TerminalSink = {
-    data: (terminalId, bytes) =>
-      safeWrite(channel, {
+    data: (terminalId, bytes) => {
+      const outcome = safeWrite(channel, {
         t: "push",
         bootId: deps.bootId,
         channel: "terminalData",
         terminalId,
         dataB64: bytes.toString("base64")
-      }),
-    exit: (terminalId, exitCode) =>
-      safeWrite(channel, {
-        t: "push",
-        bootId: deps.bootId,
-        channel: "terminalExit",
-        terminalId,
-        exitCode
-      })
+      });
+      if (outcome === "error") {
+        close();
+        return false;
+      }
+      if (outcome === "backpressure") {
+        backpressureTerminalId = terminalId;
+        return false;
+      }
+      return true;
+    },
+    exit: (terminalId, exitCode) => {
+      if (
+        safeWrite(channel, {
+          t: "push",
+          bootId: deps.bootId,
+          channel: "terminalExit",
+          terminalId,
+          exitCode
+        }) === "error"
+      ) {
+        close();
+      }
+    }
   };
 
   // #1554 Decision 2 — the persistent runtime pool's `onReap` fires host-side (the pool is
@@ -156,6 +177,12 @@ export function serveConnection(channel: ByteChannel, deps: ConnectionDeps): voi
 
   channel.on("close", close);
   channel.on("error", close);
+  channel.on("drain", () => {
+    if (backpressureTerminalId) {
+      deps.terminalHost.resume(backpressureTerminalId);
+      backpressureTerminalId = null;
+    }
+  });
 
   channel.on("data", (chunk: Buffer) => {
     if (closed) return;
@@ -247,13 +274,13 @@ async function dispatchFrame(
     // typed error (§4.7) instead of seeing a silent reconnect.
     if (frameExceedsCap(ok)) {
       const tooBig = toErrFrame(req.id, deps.bootId, new Error("response frame too large"));
-      if (!safeWrite(channel, tooBig)) close();
+      if (safeWrite(channel, tooBig) === "error") close();
       return;
     }
-    if (!safeWrite(channel, ok)) close();
+    if (safeWrite(channel, ok) === "error") close();
   } catch (err) {
     const errFrame = toErrFrame(req.id, deps.bootId, err);
-    if (!safeWrite(channel, errFrame)) close();
+    if (safeWrite(channel, errFrame) === "error") close();
   }
 }
 
@@ -479,13 +506,12 @@ function errorCode(err: unknown): RpcErrorCode {
   return "internal";
 }
 
-function safeWrite(channel: ByteChannel, frame: RpcFrame): boolean {
+function safeWrite(channel: ByteChannel, frame: RpcFrame): "sent" | "backpressure" | "error" {
   try {
-    channel.write(encodeFrame(frame));
-    return true;
+    return channel.write(encodeFrame(frame)) === false ? "backpressure" : "sent";
   } catch {
     // EPIPE / oversize-encode / half-open peer — the caller closes.
-    return false;
+    return "error";
   }
 }
 
