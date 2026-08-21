@@ -22,7 +22,11 @@ import { getExternalModuleRegistrations } from "@moss/module-registry/node";
 import { createApiServer } from "../../apps/api/src/server.js";
 import { packModuleArtifact } from "../../scripts/publish-module-registry.js";
 import { reconcileModules } from "../../scripts/module-reconcile.js";
-import { connectionStrings, resetEmptyFoundationDatabase } from "./test-database.js";
+import {
+  connectionStrings,
+  laneScopedModuleId,
+  resetEmptyFoundationDatabase
+} from "./test-database.js";
 
 let root: string;
 let modulesDir: string;
@@ -36,17 +40,26 @@ let server: ReturnType<typeof createApiServer>;
 let adminCookie: string;
 let memberCookie: string;
 
+// #1625: derived from this test lane's own database identity, so two concurrent
+// integration-test lanes never fight over the same cluster-global module roles for
+// this fixture. FIXTURE_TABLE_SLUG is the underscore form module-reconcile.ts requires
+// for this fixture's owned table name.
+const FIXTURE_MODULE_ID = laneScopedModuleId("acme-widgets");
+const FIXTURE_TABLE_SLUG = FIXTURE_MODULE_ID.replace(/-/g, "_");
+
 const MANIFEST = {
   schemaVersion: 1,
-  id: "acme-widgets",
+  id: FIXTURE_MODULE_ID,
   name: "Acme Widgets",
   version: "0.2.0",
   publisher: "Acme, Inc.",
   lifecycle: "optional",
   compatibility: { jarv1s: ">=0.1.0" },
   runtime: { workerEntrypoint: "dist/worker.js", workerContractVersion: 1 },
-  worker: { queues: [{ name: "acme-widgets.manual", handler: "manual", allowManualRun: true }] },
-  database: { ownedTables: ["app.acme_widgets_items"] }
+  worker: {
+    queues: [{ name: `${FIXTURE_MODULE_ID}.manual`, handler: "manual", allowManualRun: true }]
+  },
+  database: { ownedTables: [`app.${FIXTURE_TABLE_SLUG}_items`] }
 };
 
 function buildServer(): ReturnType<typeof createApiServer> {
@@ -97,7 +110,7 @@ beforeAll(async () => {
     // owner_user_id is required on every database.ownedTables entry — module-install's
     // generateModuleTableRlsSql (packages/db/src/module-rls-emitter.ts) always emits an
     // owner-only RLS policy keyed on this column (Private-by-default hard invariant).
-    "CREATE TABLE IF NOT EXISTS app.acme_widgets_items (id bigint PRIMARY KEY, owner_user_id uuid NOT NULL);\n"
+    `CREATE TABLE IF NOT EXISTS app.${FIXTURE_TABLE_SLUG}_items (id bigint PRIMARY KEY, owner_user_id uuid NOT NULL);\n`
   );
   writeFileSync(join(srcDir, "jarvis.module.json"), JSON.stringify(MANIFEST));
   // Pack BOTH versions with the REAL Task 4 packer (writes <id>-<version>.tgz into
@@ -106,16 +119,16 @@ beforeAll(async () => {
   // 0.3.0 adds a second migration — the update test asserts only NEW migrations run.
   const outDir = join(root, "registry-out");
   mkdirSync(outDir, { recursive: true });
-  const ref020 = await packModuleArtifact(srcDir, outDir, "acme-widgets", "0.2.0");
+  const ref020 = await packModuleArtifact(srcDir, outDir, FIXTURE_MODULE_ID, "0.2.0");
   writeFileSync(
     join(srcDir, "sql", "0002_labels.sql"),
-    "ALTER TABLE app.acme_widgets_items ADD COLUMN IF NOT EXISTS label text;\n"
+    `ALTER TABLE app.${FIXTURE_TABLE_SLUG}_items ADD COLUMN IF NOT EXISTS label text;\n`
   );
   writeFileSync(
     join(srcDir, "jarvis.module.json"),
     JSON.stringify({ ...MANIFEST, version: "0.3.0" })
   );
-  const ref030 = await packModuleArtifact(srcDir, outDir, "acme-widgets", "0.3.0");
+  const ref030 = await packModuleArtifact(srcDir, outDir, FIXTURE_MODULE_ID, "0.3.0");
   refs = { "0.2.0": ref020, "0.3.0": ref030 };
 
   // Mock registry on an ephemeral port. The index is built PER REQUEST from the
@@ -128,7 +141,7 @@ beforeAll(async () => {
         generatedAt: "2026-07-12T00:00:00Z",
         modules: [
           {
-            id: "acme-widgets",
+            id: FIXTURE_MODULE_ID,
             name: "Acme Widgets",
             description: "Fixture module",
             version: latestVersion,
@@ -144,7 +157,7 @@ beforeAll(async () => {
               permissions: [],
               fetchHosts: [],
               tools: [],
-              ownsTables: ["app.acme_widgets_items"]
+              ownsTables: [`app.${FIXTURE_TABLE_SLUG}_items`]
             },
             previousVersions:
               latestVersion === "0.3.0"
@@ -212,9 +225,9 @@ describe("module distribution e2e (#964)", () => {
     // this test pass for the wrong reason (not proving authz is enforced).
     for (const [method, url, payload] of [
       ["GET", "/api/admin/module-registry", undefined],
-      ["POST", "/api/admin/external-modules/acme-widgets/download", {}],
-      ["POST", "/api/admin/external-modules/acme-widgets/remove", { purgeData: false }],
-      ["DELETE", "/api/admin/external-modules/acme-widgets/purge", undefined]
+      ["POST", `/api/admin/external-modules/${FIXTURE_MODULE_ID}/download`, {}],
+      ["POST", `/api/admin/external-modules/${FIXTURE_MODULE_ID}/remove`, { purgeData: false }],
+      ["DELETE", `/api/admin/external-modules/${FIXTURE_MODULE_ID}/purge`, undefined]
     ] as const) {
       const res = await server.inject({
         method,
@@ -242,11 +255,11 @@ describe("module distribution e2e (#964)", () => {
     const body = res.json();
     expect(body.enabled).toBe(true);
     expect(body.registryUnavailable).toBe(false);
-    const row = body.modules.find((m: { id: string }) => m.id === "acme-widgets");
+    const row = body.modules.find((m: { id: string }) => m.id === FIXTURE_MODULE_ID);
     // Every DTO field must survive fast-json-stringify (additionalProperties:false
     // drops undeclared fields SILENTLY — the recurring trap; assert them all).
     expect(row).toEqual({
-      id: "acme-widgets",
+      id: FIXTURE_MODULE_ID,
       name: "Acme Widgets",
       description: "Fixture module",
       state: "not-installed",
@@ -258,7 +271,7 @@ describe("module distribution e2e (#964)", () => {
         permissions: [],
         fetchHosts: [],
         tools: [],
-        ownsTables: ["app.acme_widgets_items"]
+        ownsTables: [`app.${FIXTURE_TABLE_SLUG}_items`]
       },
       lastInstallError: null,
       purgePending: false
@@ -268,41 +281,43 @@ describe("module distribution e2e (#964)", () => {
   it("downloads + stages via the admin route → pending-restart, files on disk", async () => {
     const res = await server.inject({
       method: "POST",
-      url: "/api/admin/external-modules/acme-widgets/download",
+      url: `/api/admin/external-modules/${FIXTURE_MODULE_ID}/download`,
       headers: { cookie: adminCookie, "content-type": "application/json" },
       payload: {}
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().module).toMatchObject({ state: "pending-restart", stagedVersion: "0.2.0" });
-    expect(existsSync(join(modulesDir, "acme-widgets", "jarvis.module.json"))).toBe(true);
-    expect(existsSync(join(modulesDir, "acme-widgets", "sql", "0001_items.sql"))).toBe(true);
+    expect(existsSync(join(modulesDir, FIXTURE_MODULE_ID, "jarvis.module.json"))).toBe(true);
+    expect(existsSync(join(modulesDir, FIXTURE_MODULE_ID, "sql", "0001_items.sql"))).toBe(true);
   });
 
   it("boot reconcile accepts the staged download and installs the module schema", async () => {
     const report = await reconcileModules({ modulesDir });
-    expect(report.accepted).toEqual(["acme-widgets"]);
-    expect(report.installed).toEqual(["acme-widgets"]);
+    expect(report.accepted).toEqual([FIXTURE_MODULE_ID]);
+    expect(report.installed).toEqual([FIXTURE_MODULE_ID]);
     expect(report.warnings).toEqual([]);
 
     // 4-phase install evidence (spec §12): table created, both module roles exist,
     // the installer role's login is disabled after phase D, migration ledger recorded.
     const client = new Client({ connectionString: connectionStrings.bootstrap });
     await client.connect();
-    const table = await client.query("SELECT to_regclass('app.acme_widgets_items') AS t");
+    const table = await client.query(`SELECT to_regclass('app.${FIXTURE_TABLE_SLUG}_items') AS t`);
     const roles = await client.query<{ rolname: string; rolcanlogin: boolean }>(
-      "SELECT rolname, rolcanlogin FROM pg_roles WHERE rolname LIKE 'jarvis_mod_acme_widgets_%' ORDER BY rolname"
+      `SELECT rolname, rolcanlogin FROM pg_roles WHERE rolname LIKE 'jarvis_mod_${FIXTURE_TABLE_SLUG}_%' ORDER BY rolname`
     );
     const ledger = await client.query<{ n: number }>(
-      "SELECT count(*)::int AS n FROM app.module_schema_migrations WHERE module_id = 'acme-widgets'"
+      `SELECT count(*)::int AS n FROM app.module_schema_migrations WHERE module_id = '${FIXTURE_MODULE_ID}'`
     );
     const baseline = await client.query<{ manifest_hash: string; package_hash: string }>(
-      "SELECT manifest_hash, package_hash FROM app.external_modules WHERE id = 'acme-widgets'"
+      `SELECT manifest_hash, package_hash FROM app.external_modules WHERE id = '${FIXTURE_MODULE_ID}'`
     );
     await client.end();
-    expect(table.rows[0].t).toBe("app.acme_widgets_items");
-    expect(roles.rows.some((r) => r.rolname === "jarvis_mod_acme_widgets_runtime")).toBe(true);
+    expect(table.rows[0].t).toBe(`app.${FIXTURE_TABLE_SLUG}_items`);
+    expect(roles.rows.some((r) => r.rolname === `jarvis_mod_${FIXTURE_TABLE_SLUG}_runtime`)).toBe(
+      true
+    );
     expect(
-      roles.rows.find((r) => r.rolname === "jarvis_mod_acme_widgets_install")?.rolcanlogin
+      roles.rows.find((r) => r.rolname === `jarvis_mod_${FIXTURE_TABLE_SLUG}_install`)?.rolcanlogin
     ).toBe(false);
     expect(ledger.rows[0]!.n).toBe(1);
     const discovery = getExternalModuleRegistrations({ modulesDir }).discoveries[0]!;
@@ -319,7 +334,7 @@ describe("module distribution e2e (#964)", () => {
       url: "/api/admin/module-registry",
       headers: { cookie: adminCookie }
     });
-    const row = list.json().modules.find((m: { id: string }) => m.id === "acme-widgets");
+    const row = list.json().modules.find((m: { id: string }) => m.id === FIXTURE_MODULE_ID);
     expect(row).toMatchObject({ state: "installed-enabled", installedVersion: "0.2.0" });
   });
 
@@ -327,7 +342,7 @@ describe("module distribution e2e (#964)", () => {
     // Mark remove+purge first…
     const remove = await server.inject({
       method: "POST",
-      url: "/api/admin/external-modules/acme-widgets/remove",
+      url: `/api/admin/external-modules/${FIXTURE_MODULE_ID}/remove`,
       headers: { cookie: adminCookie, "content-type": "application/json" },
       payload: { purgeData: true }
     });
@@ -336,7 +351,7 @@ describe("module distribution e2e (#964)", () => {
     // …then a download attempt must not clear or race the mark.
     const download = await server.inject({
       method: "POST",
-      url: "/api/admin/external-modules/acme-widgets/download",
+      url: `/api/admin/external-modules/${FIXTURE_MODULE_ID}/download`,
       headers: { cookie: adminCookie, "content-type": "application/json" },
       payload: {}
     });
@@ -346,7 +361,7 @@ describe("module distribution e2e (#964)", () => {
   it("cancel purge restores the removable state without touching data", async () => {
     const res = await server.inject({
       method: "DELETE",
-      url: "/api/admin/external-modules/acme-widgets/purge",
+      url: `/api/admin/external-modules/${FIXTURE_MODULE_ID}/purge`,
       headers: { cookie: adminCookie }
     });
     expect(res.statusCode).toBe(200);
@@ -356,36 +371,38 @@ describe("module distribution e2e (#964)", () => {
   it("remove+purge then reconcile destroys tables, roles, journal, files, and the row", async () => {
     await server.inject({
       method: "POST",
-      url: "/api/admin/external-modules/acme-widgets/remove",
+      url: `/api/admin/external-modules/${FIXTURE_MODULE_ID}/remove`,
       headers: { cookie: adminCookie, "content-type": "application/json" },
       payload: { purgeData: true }
     });
     const report = await reconcileModules({ modulesDir });
-    expect(report.purged).toEqual(["acme-widgets"]);
+    expect(report.purged).toEqual([FIXTURE_MODULE_ID]);
 
     const client = new Client({ connectionString: connectionStrings.bootstrap });
     await client.connect();
-    const table = await client.query("SELECT to_regclass('app.acme_widgets_items') AS t");
+    const table = await client.query(`SELECT to_regclass('app.${FIXTURE_TABLE_SLUG}_items') AS t`);
     const role = await client.query(
-      "SELECT 1 FROM pg_roles WHERE rolname = 'jarvis_mod_acme_widgets_runtime'"
+      `SELECT 1 FROM pg_roles WHERE rolname = 'jarvis_mod_${FIXTURE_TABLE_SLUG}_runtime'`
     );
     const journal = await client.query(
-      "SELECT 1 FROM app.module_installs WHERE module_id = 'acme-widgets'"
+      `SELECT 1 FROM app.module_installs WHERE module_id = '${FIXTURE_MODULE_ID}'`
     );
-    const row = await client.query("SELECT 1 FROM app.external_modules WHERE id = 'acme-widgets'");
+    const row = await client.query(
+      `SELECT 1 FROM app.external_modules WHERE id = '${FIXTURE_MODULE_ID}'`
+    );
     await client.end();
     expect(table.rows[0].t).toBeNull();
     expect(role.rowCount).toBe(0);
     expect(journal.rowCount).toBe(0);
     expect(row.rowCount).toBe(0);
-    expect(existsSync(join(modulesDir, "acme-widgets"))).toBe(false);
+    expect(existsSync(join(modulesDir, FIXTURE_MODULE_ID))).toBe(false);
 
     const list = await server.inject({
       method: "GET",
       url: "/api/admin/module-registry",
       headers: { cookie: adminCookie }
     });
-    const listed = list.json().modules.find((m: { id: string }) => m.id === "acme-widgets");
+    const listed = list.json().modules.find((m: { id: string }) => m.id === FIXTURE_MODULE_ID);
     expect(listed).toMatchObject({ state: "not-installed", purgePending: false });
   });
 
@@ -398,17 +415,17 @@ describe("module distribution e2e (#964)", () => {
   it("compose-ensure downloads and installs a missing module in one boot", async () => {
     const report = await reconcileModules({
       modulesDir,
-      env: { ...process.env, JARVIS_MODULES_ENSURE: "acme-widgets" }
+      env: { ...process.env, JARVIS_MODULES_ENSURE: FIXTURE_MODULE_ID }
     });
-    expect(report.ensured).toEqual(["acme-widgets"]);
-    expect(report.accepted).toEqual(["acme-widgets"]);
-    expect(report.installed).toEqual(["acme-widgets"]);
+    expect(report.ensured).toEqual([FIXTURE_MODULE_ID]);
+    expect(report.accepted).toEqual([FIXTURE_MODULE_ID]);
+    expect(report.installed).toEqual([FIXTURE_MODULE_ID]);
 
     const client = new Client({ connectionString: connectionStrings.bootstrap });
     await client.connect();
-    const table = await client.query("SELECT to_regclass('app.acme_widgets_items') AS t");
+    const table = await client.query(`SELECT to_regclass('app.${FIXTURE_TABLE_SLUG}_items') AS t`);
     await client.end();
-    expect(table.rows[0].t).toBe("app.acme_widgets_items");
+    expect(table.rows[0].t).toBe(`app.${FIXTURE_TABLE_SLUG}_items`);
   });
 
   it("registry outage during ensure → boot completes with a warning, not a failure", async () => {
@@ -432,7 +449,9 @@ describe("module distribution e2e (#964)", () => {
       url: "/api/admin/module-registry?refresh=1",
       headers: { cookie: adminCookie }
     });
-    expect(list.json().modules.find((m: { id: string }) => m.id === "acme-widgets")).toMatchObject({
+    expect(
+      list.json().modules.find((m: { id: string }) => m.id === FIXTURE_MODULE_ID)
+    ).toMatchObject({
       state: "update-available",
       installedVersion: "0.2.0",
       latestVersion: "0.3.0"
@@ -440,7 +459,7 @@ describe("module distribution e2e (#964)", () => {
 
     const download = await server.inject({
       method: "POST",
-      url: "/api/admin/external-modules/acme-widgets/download",
+      url: `/api/admin/external-modules/${FIXTURE_MODULE_ID}/download`,
       headers: { cookie: adminCookie, "content-type": "application/json" },
       payload: {}
     });
@@ -451,15 +470,15 @@ describe("module distribution e2e (#964)", () => {
     });
 
     const report = await reconcileModules({ modulesDir });
-    expect(report.accepted).toEqual(["acme-widgets"]);
+    expect(report.accepted).toEqual([FIXTURE_MODULE_ID]);
 
     const client = new Client({ connectionString: connectionStrings.bootstrap });
     await client.connect();
     const ledger = await client.query<{ n: number }>(
-      "SELECT count(*)::int AS n FROM app.module_schema_migrations WHERE module_id = 'acme-widgets'"
+      `SELECT count(*)::int AS n FROM app.module_schema_migrations WHERE module_id = '${FIXTURE_MODULE_ID}'`
     );
     const column = await client.query(
-      "SELECT 1 FROM information_schema.columns WHERE table_schema = 'app' AND table_name = 'acme_widgets_items' AND column_name = 'label'"
+      `SELECT 1 FROM information_schema.columns WHERE table_schema = 'app' AND table_name = '${FIXTURE_TABLE_SLUG}_items' AND column_name = 'label'`
     );
     await client.end();
     // 0001 was applied before the update and is NOT re-run; only 0002 is added.
@@ -474,55 +493,57 @@ describe("module distribution e2e (#964)", () => {
       url: "/api/admin/module-registry",
       headers: { cookie: adminCookie }
     });
-    expect(after.json().modules.find((m: { id: string }) => m.id === "acme-widgets")).toMatchObject(
-      { state: "installed-enabled", installedVersion: "0.3.0" }
-    );
+    expect(
+      after.json().modules.find((m: { id: string }) => m.id === FIXTURE_MODULE_ID)
+    ).toMatchObject({ state: "installed-enabled", installedVersion: "0.3.0" });
   });
 
   it("remove keeps data; reinstall resumes the migration ledger instead of re-running", async () => {
     const remove = await server.inject({
       method: "POST",
-      url: "/api/admin/external-modules/acme-widgets/remove",
+      url: `/api/admin/external-modules/${FIXTURE_MODULE_ID}/remove`,
       headers: { cookie: adminCookie, "content-type": "application/json" },
       payload: { purgeData: false }
     });
     expect(remove.statusCode).toBe(200);
     await reconcileModules({ modulesDir });
-    expect(existsSync(join(modulesDir, "acme-widgets"))).toBe(false);
+    expect(existsSync(join(modulesDir, FIXTURE_MODULE_ID))).toBe(false);
 
     const client = new Client({ connectionString: connectionStrings.bootstrap });
     await client.connect();
-    const kept = await client.query("SELECT to_regclass('app.acme_widgets_items') AS t");
-    expect(kept.rows[0].t).toBe("app.acme_widgets_items"); // data preserved
+    const kept = await client.query(`SELECT to_regclass('app.${FIXTURE_TABLE_SLUG}_items') AS t`);
+    expect(kept.rows[0].t).toBe(`app.${FIXTURE_TABLE_SLUG}_items`); // data preserved
 
     // Reinstall: download again + reconcile — ledger resumes, nothing re-runs.
     const download = await server.inject({
       method: "POST",
-      url: "/api/admin/external-modules/acme-widgets/download",
+      url: `/api/admin/external-modules/${FIXTURE_MODULE_ID}/download`,
       headers: { cookie: adminCookie, "content-type": "application/json" },
       payload: {}
     });
     expect(download.statusCode).toBe(200);
     const report = await reconcileModules({ modulesDir });
-    expect(report.accepted).toEqual(["acme-widgets"]);
+    expect(report.accepted).toEqual([FIXTURE_MODULE_ID]);
     const ledger = await client.query<{ n: number }>(
-      "SELECT count(*)::int AS n FROM app.module_schema_migrations WHERE module_id = 'acme-widgets'"
+      `SELECT count(*)::int AS n FROM app.module_schema_migrations WHERE module_id = '${FIXTURE_MODULE_ID}'`
     );
     await client.end();
     expect(ledger.rows[0]!.n).toBe(2); // unchanged — 0001/0002 skipped as already applied
   });
 
   it("tampered on-disk package → drift-disabled at the next boot", async () => {
-    writeFileSync(join(modulesDir, "acme-widgets", "dist", "worker.js"), "// tampered\n");
+    writeFileSync(join(modulesDir, FIXTURE_MODULE_ID, "dist", "worker.js"), "// tampered\n");
     const report = await reconcileModules({ modulesDir });
-    expect(report.drifted).toEqual(["acme-widgets"]);
+    expect(report.drifted).toEqual([FIXTURE_MODULE_ID]);
 
     const list = await server.inject({
       method: "GET",
       url: "/api/admin/module-registry",
       headers: { cookie: adminCookie }
     });
-    expect(list.json().modules.find((m: { id: string }) => m.id === "acme-widgets")).toMatchObject({
+    expect(
+      list.json().modules.find((m: { id: string }) => m.id === FIXTURE_MODULE_ID)
+    ).toMatchObject({
       state: "installed-disabled"
     });
   });

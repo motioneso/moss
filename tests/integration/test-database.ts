@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -60,6 +61,33 @@ export function assertIsolatedTestDatabase(connectionString: string): void {
         "which provisions an isolated database automatically, or set JARVIS_PGDATABASE yourself."
     );
   }
+}
+
+// jarvis_mod_ (11 chars) + slug + _runtime (8 chars, the longer of _runtime/_install) must
+// stay within Postgres's 63-byte identifier limit after module-role-broker.ts's
+// moduleSlugForRole() maps hyphens to underscores 1:1 (length-preserving) — so the slug
+// budget is 63 - 11 - 8 = 44.
+const ROLE_SLUG_MAX = 44;
+
+/**
+ * Derive a module id that is unique to this test lane's database, so two concurrent
+ * integration-test lanes (separate JARVIS_PGDATABASE values) never generate the same
+ * cluster-global jarvis_mod_<slug>_runtime/_install role names for the same fixture (#1625).
+ */
+export function laneScopedModuleId(
+  base: string,
+  connectionString: string = connectionStrings.bootstrap
+): string {
+  const { pathname } = new URL(connectionString);
+  const laneIdentity = pathname.replace(/^\//, "");
+  const laneHash = createHash("sha256").update(laneIdentity).digest("hex").slice(0, 8);
+  const candidate = `${base}-${laneHash}`;
+  if (candidate.length <= ROLE_SLUG_MAX) return candidate;
+  // Deterministic collision-resistant shortening: hash the full candidate rather than
+  // naive-truncate, so two long base names sharing a 44-char prefix don't collide.
+  const shortHash = createHash("sha256").update(candidate).digest("hex").slice(0, 8);
+  const budget = ROLE_SLUG_MAX - shortHash.length - 1;
+  return `${base.slice(0, budget)}-${shortHash}`;
 }
 
 export async function resetFoundationDatabase(): Promise<void> {

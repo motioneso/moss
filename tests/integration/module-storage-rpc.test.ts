@@ -12,6 +12,7 @@ import {
   ensureModuleRoles,
   generateModuleTableRlsSql,
   ModuleQueryError,
+  moduleInstallRoleName,
   moduleRuntimeRoleName,
   type MossDatabase
 } from "@moss/db";
@@ -19,11 +20,12 @@ import {
   connectionStrings,
   dropModuleRolesAtTeardown,
   grantModuleMembershipAtSetup,
+  laneScopedModuleId,
   resetEmptyFoundationDatabase,
   revokeModuleMembershipAtTeardown
 } from "./test-database.js";
 
-const moduleId = "storage-rpc-fixture";
+const moduleId = laneScopedModuleId("storage-rpc-fixture");
 
 describe("createModuleStorageRpc", () => {
   let appDb: Kysely<MossDatabase>;
@@ -51,7 +53,7 @@ describe("createModuleStorageRpc", () => {
 
     // Membership writes pg_auth_members, which is cluster-global — locked (#1013).
     await grantModuleMembershipAtSetup([
-      "GRANT jarvis_mod_storage_rpc_fixture_runtime TO jarvis_app_runtime WITH INHERIT FALSE"
+      `GRANT ${moduleRuntimeRoleName(moduleId)} TO jarvis_app_runtime WITH INHERIT FALSE`
     ]);
 
     appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 2 });
@@ -64,7 +66,7 @@ describe("createModuleStorageRpc", () => {
     // Cluster-global, and it must precede the per-database revokes below: Postgres refuses to
     // revoke a grant-option privilege while a dependent downstream grant still exists (#1013).
     await revokeModuleMembershipAtTeardown([
-      "REVOKE jarvis_mod_storage_rpc_fixture_runtime FROM jarvis_app_runtime"
+      `REVOKE ${moduleRuntimeRoleName(moduleId)} FROM jarvis_app_runtime`
     ]);
 
     const client = new Client({ connectionString: connectionStrings.bootstrap });
@@ -75,23 +77,23 @@ describe("createModuleStorageRpc", () => {
       // BEFORE revoking the install role's own — Postgres refuses to revoke a grant-option
       // privilege while a dependent downstream grant still exists.
       await client.query(
-        "REVOKE ALL PRIVILEGES ON SCHEMA app FROM jarvis_mod_storage_rpc_fixture_runtime"
+        `REVOKE ALL PRIVILEGES ON SCHEMA app FROM ${moduleRuntimeRoleName(moduleId)}`
       );
       await client.query(
-        "REVOKE EXECUTE ON FUNCTION app.current_actor_user_id() FROM jarvis_mod_storage_rpc_fixture_runtime"
+        `REVOKE EXECUTE ON FUNCTION app.current_actor_user_id() FROM ${moduleRuntimeRoleName(moduleId)}`
       );
       await client.query(
-        "REVOKE ALL PRIVILEGES ON SCHEMA app FROM jarvis_mod_storage_rpc_fixture_install"
+        `REVOKE ALL PRIVILEGES ON SCHEMA app FROM ${moduleInstallRoleName(moduleId)}`
       );
       await client.query(
-        "REVOKE ALL PRIVILEGES ON app.users FROM jarvis_mod_storage_rpc_fixture_install"
+        `REVOKE ALL PRIVILEGES ON app.users FROM ${moduleInstallRoleName(moduleId)}`
       );
       await client.query(
-        "REVOKE EXECUTE ON FUNCTION app.current_actor_user_id() FROM jarvis_mod_storage_rpc_fixture_install"
+        `REVOKE EXECUTE ON FUNCTION app.current_actor_user_id() FROM ${moduleInstallRoleName(moduleId)}`
       );
       await dropModuleRolesAtTeardown([
-        "jarvis_mod_storage_rpc_fixture_install",
-        "jarvis_mod_storage_rpc_fixture_runtime"
+        moduleInstallRoleName(moduleId),
+        moduleRuntimeRoleName(moduleId)
       ]);
     } finally {
       await client.end();
