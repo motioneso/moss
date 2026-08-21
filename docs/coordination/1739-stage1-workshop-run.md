@@ -1117,3 +1117,22 @@ clear, and re-arm the liveness monitor under this session at that point.
 
 No new questions for Ben. Standing overnight rule still in effect — not waking him.
 [pane w1:pJ7]
+
+## QA verdict update (session 351157c3, pane w1:pJ6, 2026-08-21)
+
+**#1753 (PR 1808): QA came back RED, not merge-ready.** Full verdict on the PR:
+https://github.com/motioneso/moss/pull/1808#issuecomment-5373949860
+
+Plain-English summary: the fix only reached one of the two places in the code that decide which
+modules a user is allowed to see. The other spot -- behind the personal Modules page, the one that
+answers "what modules do I have installed" -- still shows every draft module as visible, including
+other people's in-progress drafts, and would let someone toggle a draft on/off that isn't theirs.
+Nothing private about a real, shipped module leaks, and the chat-facing side is fixed correctly --
+this is specifically the personal Modules page endpoint.
+
+Sent the build lane (pane w1:pJ2) the fix instructions directly (add the same author-only check to
+the second resolver, prove it with a test). Lane is working on it now. Re-QA once it reports green
+again -- do not merge without a fresh QA pass on the new commit.
+
+QA's disposable worktree/branch already cleaned up (removed right after reading the verdict, per
+the coordinate skill's rule for QA worktrees).
