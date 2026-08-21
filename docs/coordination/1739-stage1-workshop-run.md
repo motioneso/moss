@@ -1466,3 +1466,17 @@ All other checks (compose smoke, prod compose smoke, detect scope) passed. Per B
 waiver on this known flake, reran the failed job on the same SHA
 (`gh run rerun 32525090263 --failed`) rather than treating this as a new failure needing a lane
 fix. Watching for the rerun result.
+
+## Update (coordinator session 4b7627b9, pane w1:pJJ, 2026-08-21 ~5:40pm PDT)
+
+PR 1803: reran CI once per Ben's flake waiver, but it failed the exact same way a second time
+post-fix (same test, same "timed out waiting for connection close" error) -- two identical
+failures, so stopped rerunning and looked at the actual cause instead of retrying blindly. Found
+it: the earlier fix only raised the OUTER vitest test timeout (line 380, now 15_000) but left the
+INNER race timeout that produces this exact error message still hardcoded at 10_000 (line 363,
+tests/unit/cli-runner-terminal-rpc.test.ts) -- that inner one is what's actually firing. Sent this
+diagnosis to the owning lane (pty-1526-relay3, pane w1:pHP) rather than hand-editing it myself; it
+picked up the message and is fixing the inner timeout now. Also separately: the required "CI gate"
+branch ruleset has no admin-bypass path available (confirmed via `gh api repos/motioneso/moss/rulesets`),
+so this PR cannot merge while any check is red regardless of Ben's flake waiver -- a real fix is
+required, not just a waiver, for this PR specifically. Watching for the push.
