@@ -122,6 +122,7 @@ class FakeChannel implements ByteChannel {
   closed = false;
   private dataListener?: (chunk: Buffer) => void;
   private closeListener?: () => void;
+  private drainListener?: () => void;
 
   write(buf: Buffer): void {
     if (this.closed) return;
@@ -131,13 +132,18 @@ class FakeChannel implements ByteChannel {
     this.closed = true;
     this.closeListener?.();
   }
-  on(event: "data" | "close" | "error", listener: (chunk: Buffer) => void): void {
+  on(event: "data" | "close" | "error" | "drain", listener: (chunk: Buffer) => void): void {
     if (event === "data") this.dataListener = listener;
+    else if (event === "drain") this.drainListener = listener as () => void;
     else this.closeListener = listener as () => void;
   }
   /** Push bytes "from the client". */
   feed(buf: Buffer): void {
     this.dataListener?.(buf);
+  }
+  /** Simulate the underlying socket firing "drain" after backpressure clears. */
+  triggerDrain(): void {
+    this.drainListener?.();
   }
   // #1059 [N2] — simulate the underlying socket firing "close" (e.g. the peer disconnected),
   // as distinct from `end()` which is the SERVER voluntarily ending the channel. serveConnection

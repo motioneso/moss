@@ -776,9 +776,9 @@ class FakeChannel implements ByteChannel {
     this.closed = true;
     this.closeListener?.();
   }
-  on(event: "data" | "close" | "error", listener: (chunk: Buffer) => void): void {
+  on(event: "data" | "close" | "error" | "drain", listener: (chunk: Buffer) => void): void {
     if (event === "data") this.dataListener = listener;
-    else this.closeListener = listener as () => void;
+    else if (event === "close" || event === "error") this.closeListener = listener as () => void;
   }
   feed(buf: Buffer): void {
     this.dataListener?.(buf);
