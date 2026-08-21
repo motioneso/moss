@@ -45,7 +45,7 @@ unaffected.
 | #1754 | the build agent - agree a plan, then build it | sensitive (spawns a build agent/job) | blocked on #1752 | - | - | - | - |
 | #1755 | the Workshop page (front end shell) | routine | building | workshop1755c (relay3) | w1:pHA | 1755-workshop-page | - |
 | #1756 | plan/draft chat cards (front end shell) | routine | building (waiting on its own gate rerun) | 1756-relay2 | w1:pH7 | 1756-workshop-chat-cards | - |
-| #1515 | [1137-C2] warn safely on commitment extraction failures | routine | building (2 of 3 tasks left, on its 2nd relay) | warn-safely-relay2 | w1:pHM | 1515-warn-safely-commitment-extraction | - |
+| #1515 | [1137-C2] warn safely on commitment extraction failures | routine | QA in progress (PR #1802, agent ada80d3c550c64d9b) | warn-safely-relay2 | w1:pHM | 1515-warn-safely-commitment-extraction | 1802 |
 | #1521 | [1139-D] keep private chat closed during focus refetch | routine | building (plan-stage, on its 2nd relay; coordinator confirmed scope drift is real — proceed with the fuller 3-part fix) | lane-1521-relay2 | w1:pHN | 1521-keep-private-chat-closed-refetch | - |
 | #1526 | [1140-D] propagate terminal socket backpressure to the PTY | routine per its own spec (handoff doc had said sensitive — spec wins) | building (task 1 committed at 274d72c49, task 2 mid-edit, on its 3rd relay) | pty-1526-relay3 | w1:pHP | 1526-pty-socket-backpressure | - |
 | #1524 | [1140-B] make whole-league sports follows unique | sensitive (migration; head of a chain — #1572, #906 wait on it) | unblocked, building (relay2) — Ben ruled to allow row deletes in the shared migration file; issue must stay open after merge, see today's ruling note | build1524relay2 | w1:pHT | 1524-unique-whole-league-sports-follows | - |
