@@ -153,16 +153,20 @@ export interface ModuleEnablementTable {
 }
 
 // External trusted-operator module enablement (#917). Instance-global, admin-managed.
-// `'discovered'` is virtual (no row); only enabled/disabled modules have a row.
-// Backed by migration 0152_external_modules.sql; distribution columns by 0162 (#964).
+// `'discovered'` is virtual (no row); only enabled/disabled/draft modules have a row.
+// Backed by migration 0152_external_modules.sql; distribution columns by 0162 (#964);
+// draft status + owner by 0159 (#1753).
 export interface ExternalModulesTable {
   id: string;
-  status: "enabled" | "disabled";
+  status: "enabled" | "disabled" | "draft";
   manifest_hash: string;
   package_hash: string;
   disabled_reason: string | null;
   enabled_by: string | null;
   enabled_at: NullableTimestampColumn;
+  // #1753: NULL for every enabled/disabled row, NOT NULL for every draft row (DB CHECK
+  // enforces the pairing). The one admin-author a draft runs for alone.
+  owner_user_id: string | null;
   // #964 distribution: staged-download intent (accepted by the boot reconcile),
   // purge marks (executed by the boot reconcile), and the last install failure.
   staged_version: string | null;

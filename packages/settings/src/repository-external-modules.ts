@@ -46,9 +46,11 @@ export interface SetExternalModuleDisabledInput {
  */
 export interface ExternalModuleState {
   readonly id: string;
-  readonly status: "enabled" | "disabled";
+  readonly status: "enabled" | "disabled" | "draft";
   readonly packageHash: string | null;
   readonly disabledReason: string | null;
+  /** #1753: NULL unless status is 'draft', in which case it is the one user this row runs for. */
+  readonly ownerUserId: string | null;
 }
 
 /**
@@ -78,14 +80,15 @@ export async function listExternalModuleStates(
   assertDataContextDb(scopedDb);
   const rows = await scopedDb.db
     .selectFrom("app.external_modules")
-    .select(["id", "status", "package_hash", "disabled_reason"])
+    .select(["id", "status", "package_hash", "disabled_reason", "owner_user_id"])
     .orderBy("id")
     .execute();
   return rows.map((r) => ({
     id: r.id,
     status: r.status,
     packageHash: r.package_hash,
-    disabledReason: r.disabled_reason
+    disabledReason: r.disabled_reason,
+    ownerUserId: r.owner_user_id
   }));
 }
 
@@ -111,6 +114,7 @@ export async function setExternalModuleEnabled(
       disabled_reason: null,
       enabled_by: input.actorUserId,
       enabled_at: new Date(),
+      owner_user_id: null,
       created_at: new Date(),
       updated_at: new Date()
     })
@@ -165,6 +169,7 @@ export async function writeExternalModuleDisabledRow(
       disabled_reason: input.reason,
       enabled_by: null,
       enabled_at: null,
+      owner_user_id: null,
       created_at: new Date(),
       updated_at: new Date()
     })
@@ -229,6 +234,7 @@ export async function updateExternalModuleStaging(
       disabled_reason: null,
       enabled_by: null,
       enabled_at: null,
+      owner_user_id: null,
       staged_version: input.stagedVersion,
       staged_package_hash: input.stagedPackageHash,
       staged_at: new Date(),
@@ -305,7 +311,7 @@ export async function setExternalModulePurgeRequested(
 /** Full admin-facing distribution state per row (#964). Superset of ExternalModuleState. */
 export interface ExternalModuleAdminState {
   readonly id: string;
-  readonly status: "enabled" | "disabled";
+  readonly status: "enabled" | "disabled" | "draft";
   readonly packageHash: string | null;
   readonly disabledReason: string | null;
   readonly stagedVersion: string | null;
@@ -313,6 +319,7 @@ export interface ExternalModuleAdminState {
   readonly stagedSource: "admin-download" | "compose-ensure" | null;
   readonly purgeRequestedAt: Date | null;
   readonly lastInstallError: string | null;
+  readonly ownerUserId: string | null;
 }
 
 export async function listExternalModuleAdminStates(
@@ -330,7 +337,8 @@ export async function listExternalModuleAdminStates(
       "staged_package_hash",
       "staged_source",
       "purge_requested_at",
-      "last_install_error"
+      "last_install_error",
+      "owner_user_id"
     ])
     .orderBy("id")
     .execute();
@@ -343,7 +351,8 @@ export async function listExternalModuleAdminStates(
     stagedPackageHash: r.staged_package_hash,
     stagedSource: r.staged_source,
     purgeRequestedAt: r.purge_requested_at,
-    lastInstallError: r.last_install_error
+    lastInstallError: r.last_install_error,
+    ownerUserId: r.owner_user_id
   }));
 }
 
