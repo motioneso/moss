@@ -1,7 +1,7 @@
 import type { PgBoss } from "pg-boss";
-import { sendJob } from "./pg-boss.js";
+import { sendJob, MODULE_BUILD_QUEUE } from "./pg-boss.js";
 
-export const MODULE_BUILD_QUEUE = "module-build";
+export { MODULE_BUILD_QUEUE };
 
 export interface ModuleBuildPayload {
   readonly actorUserId: string;
