@@ -764,3 +764,31 @@
   margin: 0 0 var(--space-2);
   line-height: var(--leading-normal);
 }
+
+.draft-banner__body {
+  min-width: 0;
+  flex: 1;
+}
+
+.draft-banner__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.draft-banner__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.draft-banner__spacer {
+  flex: 1;
+}
+
+.draft-banner__note {
+  margin: var(--space-3) 0 0;
+  color: var(--text-subtle);
+}
