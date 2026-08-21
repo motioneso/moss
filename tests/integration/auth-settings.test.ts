@@ -834,7 +834,6 @@ describe("multi-user registration + lifecycle (Phase 2 Slice A)", () => {
     // The UPDATE must have passed the 0055 trigger under the GUC set by withDataContext.
     expect(promoted.is_instance_admin).toBe(true);
     expect(promoted.id).toBe(targetId);
-
     // Confirm the row was actually persisted (defends against a silent GUC fail-open regression).
     const verify = new pg.Client({ connectionString: connectionStrings.bootstrap });
     await verify.connect();
@@ -858,7 +857,6 @@ describe("multi-user registration + lifecycle (Phase 2 Slice A)", () => {
 
     // Disable approval so the second sign-up lands as active.
     await setInstanceSetting("registration.requires_approval", { value: false });
-
     const nonAdminRes = await signUp({
       name: "Non-Admin Escalator",
       email: "deny-path-escalator@example.com",
