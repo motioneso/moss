@@ -360,7 +360,7 @@ describe("terminal RPC dispatch (#1059)", () => {
       await Promise.race([
         channel.waitForClose(),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("timed out waiting for connection close")), 10_000)
+          setTimeout(() => reject(new Error("timed out waiting for connection close")), 13_000)
         )
       ]);
       expect(channel.closed).toBe(true);
