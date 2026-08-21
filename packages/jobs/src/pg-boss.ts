@@ -118,7 +118,9 @@ export const ALLOWED_PAYLOAD_KEYS: ReadonlySet<string> = new Set([
   "emailUpserted",
   "emailFailures",
   "escalations",
-  "errors"
+  "errors",
+  "buildId",
+  "step"
 ]);
 
 export function assertMetadataOnlyPayload(payload: unknown): void {
