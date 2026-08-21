@@ -43,7 +43,7 @@ unaffected.
 | #1752 | find modules that appear after the server started | routine | Task 4 done and committed — the proof test that a module dropped on disk becomes usable after a rescan without restarting anything is written and passing; the Task-3 route gap is fixed and tested too. Tree clean. Relay6 now waiting on a background check run before pushing and opening the pull request. | relay-1752-6 | w1:pHV | 1752-module-discovery-holder | - |
 | #1753 | a draft module that runs for its author alone | routine | blocked on #1752 | - | - | - | - |
 | #1754 | the build agent - agree a plan, then build it | sensitive (spawns a build agent/job) | blocked on #1752 | - | - | - | - |
-| #1755 | the Workshop page (front end shell) | routine | building | workshop1755c (relay3) | w1:pHA | 1755-workshop-page | - |
+| #1755 | the Workshop page (front end shell) | routine | building, on its 4th relay — PR open, still needs live-path proof before it can merge | workshop1755-relay4 | w1:pHX | 1755-workshop-page | 1804 |
 | #1756 | plan/draft chat cards (front end shell) | routine | building (waiting on its own gate rerun) | 1756-relay2 | w1:pH7 | 1756-workshop-chat-cards | - |
 | #1515 | [1137-C2] warn safely on commitment extraction failures | routine | QA in progress (PR #1802, agent ada80d3c550c64d9b) | warn-safely-relay2 | w1:pHM | 1515-warn-safely-commitment-extraction | 1802 |
 | #1521 | [1139-D] keep private chat closed during focus refetch | routine | building (plan-stage, on its 2nd relay; coordinator confirmed scope drift is real — proceed with the fuller 3-part fix) | lane-1521-relay2 | w1:pHN | 1521-keep-private-chat-closed-refetch | - |
