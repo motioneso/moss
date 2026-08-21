@@ -20,6 +20,7 @@ import {
   patchModuleEnablementRouteSchema,
   rescanExternalModulesRouteSchema,
   setExternalModuleEnablementRouteSchema,
+  shipExternalModuleRouteSchema,
   type AdminModuleDto,
   type ExternalModuleDto
 } from "@moss/shared";
@@ -29,6 +30,7 @@ import { sendModuleControl } from "@moss/jobs";
 
 import type { SettingsRepository } from "./repository.js";
 import type { InstalledExternalModuleSummary, SettingsRoutesDependencies } from "./routes.js";
+import { shipExternalModule } from "./repository-external-modules.js";
 import {
   computeMyModuleDto,
   handleRouteError,
@@ -285,6 +287,45 @@ export function registerModuleRoutes(server: FastifyInstance, ctx: ModuleRoutesC
           await sendModuleControl(dependencies.boss, { action: "rescan" });
         }
         return { ok: true };
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  // #1753 Task 10: shipping — the human action that ends a draft's author-only exemption.
+  // Same shape as the rescan route above: authorize first, 409 if the feature is off, 404 if
+  // the id isn't a current on-disk discovery OR isn't the caller's own draft (shipExternalModule
+  // can't tell those two apart on purpose — see its doc-comment).
+  server.post<{ Params: { id: string } }>(
+    "/api/admin/modules/:id/ship",
+    { schema: shipExternalModuleRouteSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const ext = dependencies.externalModules;
+        await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
+          await assertAdminUser(repository, scopedDb, accessContext.actorUserId);
+          if (!ext || !ext.enabled) {
+            throw new HttpError(409, "External modules are not enabled on this instance");
+          }
+          const discovery = ext.discoveries().find((d) => d.id === request.params.id);
+          if (!discovery) throw new HttpError(404, "External module not found");
+
+          const shipped = await shipExternalModule(
+            scopedDb,
+            {
+              id: discovery.id,
+              manifestHash: discovery.manifestHash,
+              packageHash: discovery.packageHash,
+              actorUserId: accessContext.actorUserId,
+              requestId: requireRequestId(accessContext)
+            },
+            repository.externalModuleAuditWriter(scopedDb)
+          );
+          if (!shipped) throw new HttpError(404, "External module not found");
+        });
+        return { shipped: true, restartRequired: true };
       } catch (error) {
         return handleRouteError(error, reply);
       }

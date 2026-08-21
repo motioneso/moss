@@ -27,6 +27,7 @@ const adminState = {
   status: "enabled" as const,
   packageHash: "sha256:aaaa",
   disabledReason: null,
+  ownerUserId: null,
   stagedVersion: null,
   stagedPackageHash: null,
   stagedSource: null,

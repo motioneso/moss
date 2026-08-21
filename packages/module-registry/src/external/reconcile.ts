@@ -44,7 +44,8 @@ export function reconcileExternalModules(
         status: "discovered",
         active: false,
         drifted: false,
-        disabledReason: null
+        disabledReason: null,
+        ownerUserId: null
       });
       continue;
     }
@@ -56,7 +57,23 @@ export function reconcileExternalModules(
         status: "disabled",
         active: false,
         drifted: false,
-        disabledReason: row.disabledReason
+        disabledReason: row.disabledReason,
+        ownerUserId: null
+      });
+      continue;
+    }
+
+    // Draft → always active for its author, exempt from drift detection. Drafts are edited
+    // live by their author, so a changed package hash is expected, not a signal to disable.
+    // Only shipping (Task 10) ends this exemption, by moving status to 'enabled'.
+    if (row.status === "draft") {
+      modules.push({
+        ...base,
+        status: "draft",
+        active: true,
+        drifted: false,
+        disabledReason: null,
+        ownerUserId: row.ownerUserId
       });
       continue;
     }
@@ -68,7 +85,8 @@ export function reconcileExternalModules(
         status: "enabled",
         active: true,
         drifted: false,
-        disabledReason: null
+        disabledReason: null,
+        ownerUserId: null
       });
       continue;
     }
@@ -80,7 +98,8 @@ export function reconcileExternalModules(
       status: "disabled",
       active: false,
       drifted: true,
-      disabledReason: DRIFT_DISABLED_REASON
+      disabledReason: DRIFT_DISABLED_REASON,
+      ownerUserId: null
     });
     driftDisable.push({ id, reason: DRIFT_DISABLED_REASON });
   }

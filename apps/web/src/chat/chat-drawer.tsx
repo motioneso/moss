@@ -95,18 +95,36 @@ export function ChatDrawer(props: {
    * from and none of the old surface's decisions carry over.
    */
   const privateModeDecidedLocally = useRef(false);
+  /**
+   * #1521: transient, unlike `privateModeDecidedLocally` above. True only while a
+   * `closePrivateChat` end-request is in flight, so the privacy-query effect below stays
+   * silent for that window but resumes writing server truth once the request settles —
+   * a failed close reverts instead of leaving the UI permanently claiming "closed".
+   */
+  const closingPrivateChatRef = useRef(false);
 
   const privacyStateQuery = useQuery({
     queryKey: queryKeys.chat.privacy(props.surface),
     queryFn: () => getChatPrivacyState(props.surface),
-    enabled: props.open
+    enabled: props.open,
+    // "always" (not just `true`): the global QueryClient has a 15s staleTime, so a plain `true`
+    // would skip the refetch whenever focus follows a recent fetch (e.g. right after this same
+    // query was just invalidated by closePrivateChat) -- exactly the window #1521 needs a real
+    // focus event to be able to reach.
+    refetchOnWindowFocus: "always"
   });
 
   useEffect(() => {
     if (!privacyStateQuery.isSuccess) return;
     if (privateModeDecidedLocally.current) return;
+    if (closingPrivateChatRef.current) return;
     setPrivateMode(privacyStateQuery.data.incognito);
-  }, [privacyStateQuery.isSuccess, privacyStateQuery.data]);
+    // `dataUpdatedAt` (not just `data`) is required: TanStack Query's default structural
+    // sharing keeps the same `data` reference when a refetch's content is unchanged (e.g. a
+    // repeat `incognito: true` after a failed close), so depending on `data` alone would miss
+    // exactly the case #1521 needs to catch — a refetch confirming the close never really
+    // happened.
+  }, [privacyStateQuery.isSuccess, privacyStateQuery.data, privacyStateQuery.dataUpdatedAt]);
 
   // #633: autoscroll by default; pause on manual scroll-away, resume (jump to latest) on demand.
   const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -195,6 +213,7 @@ export function ChatDrawer(props: {
   useEffect(() => {
     // #1780: the new surface has its own server truth, so let the privacy query seed it again.
     privateModeDecidedLocally.current = false;
+    closingPrivateChatRef.current = false;
     setFallbackRecords([]);
     setPendingUser(null);
     setPrivateMode(false);
@@ -445,11 +464,34 @@ export function ChatDrawer(props: {
 
   const closePrivateChat = () => {
     privateModeDecidedLocally.current = true;
+    closingPrivateChatRef.current = true;
     setPrivateMode(false);
     setPrivateEnded(false);
     props.clearRecords();
     setFallbackRecords([]);
-    void endPrivateChat(props.surface);
+    const initiatingSurface = props.surface;
+    void (async () => {
+      try {
+        await endPrivateChat(initiatingSurface);
+      } catch (caught) {
+        if (surfaceRef.current === initiatingSurface) {
+          // The close never reached the server, so this was never really "decided" — let the
+          // privacy-query effect apply server truth again once the invalidated query refetches,
+          // instead of permanently pinning the optimistic (wrong) "closed" state.
+          privateModeDecidedLocally.current = false;
+          setPrivateActivationError(
+            caught instanceof Error ? caught.message : "Could not end private chat"
+          );
+        }
+      } finally {
+        if (surfaceRef.current === initiatingSurface) {
+          closingPrivateChatRef.current = false;
+          void queryClient.invalidateQueries({
+            queryKey: queryKeys.chat.privacy(initiatingSurface)
+          });
+        }
+      }
+    })();
   };
 
   /** #456 — stop the in-flight turn. The backend kills the engine + emits 'Stopped by user.' over
