@@ -1877,7 +1877,7 @@ build agents in the agents tab:
 | Issue | What it is | Tier | Agent name | Pane | Worktree/Branch |
 | --- | --- | --- | --- | --- | --- |
 | #1517 | escape commitment evidence ampersand/angle-bracket chars, truncate to 500 chars | routine | escape-commitment-1517 | w1:pJX | 1517-escape-commitment-evidence |
-| #1039 | test coverage distinguishing forceReplay from purge on private chat history | routine (test-only) | forcereplay-1039 | w1:pJY | 1039-forcereplay-vs-purge-coverage |
+| #1039 | test coverage distinguishing forceReplay from purge on private chat history | routine (test-only) | f1039frv2 (relay1) | w1:pK1 | 1039-forcereplay-vs-purge-coverage |
 | #1572 | Sports: custom public news sources by team/league (new table, migration) | sensitive | sports-news-1572 | w1:pJZ | 1572-custom-sports-news-sources |
 
 Handoff docs: `docs/coordination/handoff-<slug>.md` for each. #1572's handoff explicitly warns it
@@ -1931,3 +1931,34 @@ design call, a spec that needs writing, or another Workshop-area lane landing fi
 
 `merges_since_relay` = 0 (no merges this pass). AWAITING-BEN.md confirmed empty at the start of
 this pass; no new entries added. This relay is the context-meter trigger only, not a merge trigger.
+
+## Continuation note (coordinator session 4346798b-d43d-4f99-9886-ab2d06c036d7, pane w1:pJ0, 2026-08-21 ~9:2xpm PDT — adoption confirmed, relay23)
+
+Adopted the run. Predecessor pane w1:pJV was mid auto-compact (not a manual relay handoff) and
+had already closed its own #1039 pane (w1:pJY) after that lane's successor (agent f1039frv2, pane
+w1:pK1) landed — confirmed the successor is alive and running its own gate normally. Reaped the
+predecessor pane. Claimed the `coordinator` name and `Coordinator` label cleanly (no collision).
+
+Checked the three priority lanes:
+- **#1039**: healthy, successor pane w1:pK1 running its gate script normally. No action needed.
+- **#1756**: pane showed the same "waiting on a background helper" screen across two reads eight
+  seconds apart with no ticking timer, so nudged it with "continue" — it picked back up right
+  away (thinking/working again). Not stalled, just needed the nudge.
+- **#1526** (PR 1803): CI is green (all required checks pass). Confirmed the "known issue" ticket
+  was actually filed — issue #1812, "cli-runner-terminal-rpc: connection-close test times out in
+  CI only" — before spawning QA. Spawned a QA agent in its own pane (agent name `qa-1526`, pane
+  w1:pK2, worktree `.claude/worktrees/qa-1526`, Sonnet, routine tier) to confirm the skip is
+  scoped narrowly and #1812 documents things accurately. Verdict pending — check
+  `gh pr view 1803 --repo motioneso/moss --json comments` next pass.
+
+Watch lanes (#1754, #1571, #1517, #1572) all checked with bounded reads — all show live, ticking
+progress (a 22-minute gate run, a background lint run at 16 minutes, normal mid-build state).
+Nothing frozen, no action taken.
+
+`merges_since_relay` = 0 (no merges this pass). AWAITING-BEN.md checked — still empty, no new
+entries added. This is an adoption pass, not a relay trigger.
+
+Next coordinator action: read the QA verdict on PR 1803 once posted; if green, merge #1526
+normally (routine tier, CI already green, no live-path proof needed per its own spec note); then
+reap the QA worktree/pane. Also keep an eye on #1756 to make sure the nudge actually moved it
+forward on the next check.
