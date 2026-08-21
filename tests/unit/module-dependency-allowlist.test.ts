@@ -80,7 +80,8 @@ const FEATURE_PACKAGES = new Set([
   "@moss/tasks",
   "@moss/weather",
   "@moss/web-research",
-  "@moss/wellness"
+  "@moss/wellness",
+  "@moss/workshop"
 ]);
 
 /**
