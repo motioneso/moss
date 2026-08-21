@@ -51,32 +51,24 @@ Nothing here yet from earlier relays. Entries below added by this coordinator (s
   up. Build agent told to stop and wait. Failing test:
   `tests/unit/cli-runner-terminal-rpc.test.ts` > "a thrown write on the terminalData push closes
   the connection and kills the connection-owned terminal (#1526)".
-- **Shared dev instance login is currently rejecting the standard test account.** `ben@ben.com` /
-  `jarvistest123!` against `http://192.168.50.36:3000` returns "Invalid email or password" (401).
-  The instance itself responds (home page loads fine), so this looks like a broken or changed
-  password/account on that instance, not a dead server. This blocks any lane trying to do its
-  live-path browser proof on the shared instance tonight — #1521 hit this directly (see below).
-  Lanes that can stand up their own throwaway instance and database instead (like #1755 did) are
-  not affected. Not investigated further tonight to stay within the standing rule against waking
-  Ben; needs either a password reset on that account or someone to check what changed.
-- **#1521 (PR 1801, keep private chat closed during focus refetch)** — code-complete, CI green
-  (format, lint, typecheck, and all three required checks), but the live-path browser proof could
-  not be done because of the shared dev instance login problem above. The build agent posted a
-  comment on the PR with clear steps for whoever re-checks once login works again. Status:
-  code-complete, unverified — not merged, not marked done. Branch is pushed and rebased on main;
-  worktree is clean and idle, ready to reuse once this unblocks.
+- ~~Shared dev instance login was rejecting the standard test account~~ — **RESOLVED**, a prior
+  relay fixed it. #1521's live-path proof ran against it successfully (2026-08-21 ~18:36 UTC);
+  removed from this list, no longer blocking anything.
+- ~~#1521 (PR 1801, keep private chat closed during focus refetch) — live-path proof blocked~~ —
+  **RESOLVED**, proof now posted on the PR with passing assertions and real network evidence. QA
+  dispatched to confirm before merge; see Queue table.
 
 ## Queue
 
 | Issue | Title | Tier | Status | Agent | Pane | Branch | PR |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | #1752 | find modules that appear after the server started | routine | done, QA in progress (PR #1806, agent a9a058d5949b71c9b) — flags that #1753/#1754 depend on the function names createExternalModuleDiscoveryHolder, getDiscoveries, rescan staying as-is | relay-1752-6 | w1:pHV | 1752-module-discovery-holder | 1806 |
-| #1753 | a draft module that runs for its author alone | routine | PR #1808 open against main, CI running, local gate already clean (one known unrelated flake). Shape note for #1754: the worker's whole-module gate now simply accepts a draft whose files still match (same as a shipped module), no new per-user parameter — coordinator-approved simplification. Migration collision (0185/0186 clash with #1524) was corrected during the previous coordinator's watch. | lane-1753-draft-module (relay3) | w1:pJ2 | 1753-draft-module-author-only | 1808 |
+| #1753 | a draft module that runs for its author alone | routine | QA came back red: the fix covers the chat-facing check but misses a second spot behind the personal Modules page, which would still show other people's draft modules. Fix instructions sent to the lane, it is working on it now — needs a fresh QA pass once it reports green again, do not merge yet. Shape note for #1754 and migration-collision fix from earlier still stand. | lane-1753-draft-module (relay3) | w1:pJ2 | 1753-draft-module-author-only | 1808 |
 | #1754 | the build agent - agree a plan, then build it | sensitive (spawns a build agent/job) | blocked on #1752 | - | - | - | - |
 | #1755 | the Workshop page (front end shell) | routine | **merged** to main (PR #1804, squash), QA re-review GREEN and merge-ready, verdict posted on the PR. Waiting on lane to confirm no running processes before worktree reap. | ws-page-relay5 | w1:pJ4 | 1755-workshop-page | 1804 |
-| #1756 | plan/draft chat cards (front end shell) | routine | draft PR open, gate green (one documented unrelated local flake), waiting for #1755 to land before final review | 1756-relay2 | w1:pH7 | 1756-workshop-chat-cards | 1799 |
+| #1756 | plan/draft chat cards (front end shell) | routine | mid-rebase onto latest main: typecheck already passed, lane is rerunning the full test suite once more (checking whether a just-landed fix elsewhere also cleared an unrelated known-flaky test) before force-pushing. Not pushed yet — the red CI currently showing on the PR is from the pre-rebase commit and will be replaced once it pushes. No action needed, it is actively working. | 1756-relay2 | w1:pH7 | 1756-workshop-chat-cards | 1799 |
 | #1515 | [1137-C2] warn safely on commitment extraction failures | routine | **MERGED** (PR #1802, CI all green, issue closed), pane reaped by relay10 | warn-safely-relay2 (reaped) | - | 1515-warn-safely-commitment-extraction | 1802 |
-| #1521 | [1139-D] keep private chat closed during focus refetch | routine | done, CI green, code-complete but UNVERIFIED — shared dev instance login is broken, live-path proof blocked; see "Blocked overnight" heading | lane-1521-relay2 | w1:pHN | 1521-keep-private-chat-closed-refetch | 1801 |
+| #1521 | [1139-D] keep private chat closed during focus refetch | routine | shared dev instance login is fixed now; a real browser walkthrough on it passed every check, including the exact scenario this issue fixes, with network evidence, and is posted on the PR. CI green. QA dispatched to confirm before merge. | lane-1521-relay2 | w1:pHN | 1521-keep-private-chat-closed-refetch | 1801 |
 | #1526 | [1140-D] propagate terminal socket backpressure to the PTY | routine per its own spec (handoff doc had said sensitive — spec wins) | Fable reviewed the stuck test: it's a test-timing bug, not a product bug (the test's trigger can be missed under CI load, so it waits for something that already happened and never happens). Product code looks fine. Needs a narrow fix to that one test, not another blind retry. See continuation note below for detail. | pty-1526-relay3 | w1:pHP | 1526-pty-socket-backpressure | 1803 |
 | #1524 | [1140-B] make whole-league sports follows unique | sensitive (migration; head of a chain — #1572, #906 wait on it) | **MERGED** (PR #1807, squash-merged to `main` as 669b2b913; QA verdict GREEN, posted to PR). Lane self-merged before this coordinator's stop message landed — verified no harm (QA independently agreed), corrected the lane's behavior for future lanes, worktree/pane reaped. Issue #1524 stays OPEN per Ben's ruling; board card moved to Done. Migration numbers landed: **0185 (sports_whole_league_dedupe), 0186 (sports_whole_league_unique)** — #1572/#906 sequence after 0186. | build1524relay2 (reaped) | - | 1524-unique-whole-league-sports-follows (deleted) | 1807 |
 | #1667 | module-sdk-worker test polling budget too tight for real cold start | routine (test-only) | **MERGED** (PR #1805, CI all green, issue closed, board moved to Done, worktree reaped) | build1667 (reaped) | - | 1667-module-sdk-worker-polling-budget (deleted) | 1805 |
