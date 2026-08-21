@@ -1,11 +1,11 @@
 # Run manifest: Workshop stage 1 (#1739)
 
-Coordinator: Claude session `ff54b7d3-1ff0-4fad-94ce-b8fa9062a3ad`, label `Coordinator`, pane
-`w1:pH9` (re-resolve pane fresh by label + session id — pane numbers reflow). Took over from
-session `fbacd483-baf3-47c8-aacf-66a51c6ebd7b` (former pane `w1:pH4`) at 2026-08-20 ~19:20 PDT;
-old pane confirmed standing down and closed. Liveness Monitor re-armed fresh as task `bv46s1t1w`
-(inherited task `b3iaqyry5` did not carry over, matching the pattern of prior relays in this run —
-history: `bb0s7lmk5`, `b27fpb9yo`, `bkbrgyksx`).
+Coordinator: Claude session `78440b71-a4e4-472d-a450-c036c5edab92`, label `Coordinator`, pane
+`w1:pHK` (re-resolve pane fresh by label + session id — pane numbers reflow). Took over from
+session `ff54b7d3-1ff0-4fad-94ce-b8fa9062a3ad` (former pane `w1:pH9`) at 2026-08-20 ~21:10 PDT;
+old pane confirmed standing down and closed. Liveness Monitor needs to be re-armed fresh (see
+latest continuation note) — inherited monitor did not carry over, matching the pattern of prior
+relays in this run.
 
 GraphQL rate limit cleared ~19:33 PDT (verified via `gh api rate_limit`, resource `graphql`, back
 to full 5000). Board queries unblocked.
@@ -34,12 +34,12 @@ unaffected.
 | #1754 | the build agent - agree a plan, then build it | sensitive (spawns a build agent/job) | blocked on #1752 | - | - | - | - |
 | #1755 | the Workshop page (front end shell) | routine | building | workshop1755c (relay3) | w1:pHA | 1755-workshop-page | - |
 | #1756 | plan/draft chat cards (front end shell) | routine | building (waiting on its own gate rerun) | 1756-relay2 | w1:pH7 | 1756-workshop-chat-cards | - |
-| #1515 | [1137-C2] warn safely on commitment extraction failures | routine | building (check boot-file bug first) | build1515 | w1:pHC | 1515-warn-safely-commitment-extraction | - |
-| #1521 | [1139-D] keep private chat closed during focus refetch | routine | building (boot-file bug fixed, told to proceed) | build1521 | w1:pHD | 1521-keep-private-chat-closed-refetch | - |
-| #1526 | [1140-D] propagate terminal socket backpressure to the PTY | sensitive | building (check boot-file bug first) | build1526 | w1:pHE | 1526-pty-socket-backpressure | - |
-| #1524 | [1140-B] make whole-league sports follows unique | sensitive (migration; head of a chain — #1572, #906 wait on it) | building (check boot-file bug first) | build1524 | w1:pHF | 1524-unique-whole-league-sports-follows | - |
-| #1667 | module-sdk-worker test polling budget too tight for real cold start | routine (test-only) | building (check boot-file bug first) | build1667 | w1:pHG | 1667-module-sdk-worker-polling-budget | - |
-| #1625 | lane-scoped module fixture identities for concurrent integration gates | routine (test-only) | building (check boot-file bug first) | build1625 | w1:pHH | 1625-lane-scoped-module-fixture-identities | - |
+| #1515 | [1137-C2] warn safely on commitment extraction failures | routine | building (2 of 3 tasks left, on its 2nd relay) | warn-safely-relay2 | w1:pHM | 1515-warn-safely-commitment-extraction | - |
+| #1521 | [1139-D] keep private chat closed during focus refetch | routine | building (plan-stage, on its 2nd relay; coordinator confirmed scope drift is real — proceed with the fuller 3-part fix) | lane-1521-relay2 | w1:pHN | 1521-keep-private-chat-closed-refetch | - |
+| #1526 | [1140-D] propagate terminal socket backpressure to the PTY | routine per its own spec (handoff doc had said sensitive — spec wins) | building (task 1 committed at 274d72c49, task 2 mid-edit, on its 2nd relay) | (successor pending, same pane) | w1:pHJ | 1526-pty-socket-backpressure | - |
+| #1524 | [1140-B] make whole-league sports follows unique | sensitive (migration; head of a chain — #1572, #906 wait on it) | **paused — blocked on a Ben decision, see AWAITING-BEN.md ("#1524 sports follows migration needs to delete duplicate rows")** | build1524 | w1:pHF | 1524-unique-whole-league-sports-follows | - |
+| #1667 | module-sdk-worker test polling budget too tight for real cold start | routine (test-only) | building (plan approved) | build1667 | w1:pHG | 1667-module-sdk-worker-polling-budget | - |
+| #1625 | lane-scoped module fixture identities for concurrent integration gates | routine (test-only) | building (boot file was missing, coordinator confirmed proceeding from the GitHub issue directly) | build1625 | w1:pHH | 1625-lane-scoped-module-fixture-identities | - |
 
 ## Ready lane (full 29-item list pulled ~19:35 PDT, GraphQL clear)
 
