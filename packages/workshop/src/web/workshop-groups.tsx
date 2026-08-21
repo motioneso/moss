@@ -62,7 +62,7 @@ function BuildingNowCard({ build }: { readonly build: ModuleBuildSummary }) {
   return (
     <div className="jds-rail-row workshop-row">
       <span className="jds-rail jds-rail--accent" />
-      <div className="jds-card jds-card--raised">
+      <div className="jds-card">
         <h3 className="jds-card-title jds-card-title--heavy">{build.title}</h3>
         <span className="jds-indicator jds-indicator--ready jds-indicator--live">
           <span className="jds-indicator__dot" />
