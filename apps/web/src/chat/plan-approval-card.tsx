@@ -44,7 +44,7 @@ export function PlanApprovalCard(props: PlanApprovalCardProps) {
 
   if (props.superseded) {
     return (
-      <div className="plan-card plan-card--superseded">
+      <div className="plan-card plan-card--superseded jds-caption">
         {lines.map((line) => (
           <p key={line.label} className="plan-card__superseded-line">
             <strong>{line.label}:</strong> {line.value}
@@ -60,7 +60,7 @@ export function PlanApprovalCard(props: PlanApprovalCardProps) {
       <dl className="plan-card__rows">
         {lines.map((line) => (
           <div className="plan-card__row" key={line.label}>
-            <dt>{line.label}</dt>
+            <dt className="jds-eyebrow">{line.label}</dt>
             <dd>{line.value}</dd>
           </div>
         ))}

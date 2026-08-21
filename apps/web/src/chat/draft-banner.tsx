@@ -62,7 +62,7 @@ export function DraftBanner(props: DraftBannerProps) {
               Throw it away
             </button>
           </div>
-          <p className="draft-banner__note">{props.restartRequired}</p>
+          <p className="draft-banner__note jds-caption">{props.restartRequired}</p>
         </div>
       </div>
     </div>

@@ -755,13 +755,6 @@
   padding-top: 0;
 }
 
-.plan-card__row dt {
-  font-size: var(--text-xs);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-subtle);
-}
-
 .plan-card__row dd {
   margin: 0;
 }
@@ -771,10 +764,6 @@
   gap: var(--space-3);
   align-items: center;
   margin-top: var(--space-5);
-}
-
-.plan-card--superseded {
-  color: var(--text-muted);
 }
 
 .plan-card__superseded-line {
@@ -807,5 +796,4 @@
 
 .draft-banner__note {
   margin: var(--space-3) 0 0;
-  color: var(--text-subtle);
 }
