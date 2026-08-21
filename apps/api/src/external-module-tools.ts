@@ -185,7 +185,12 @@ export function createInstalledExternalModulesResolverForApi(input: {
       input.settingsRepository.listExternalModuleStates(scopedDb)
     );
     const { modules } = reconcileExternalModules(input.discoveries(), states);
-    return modules.filter((module) => module.active);
+    // #1753: a draft module is only visible to the actor who built it, until it ships.
+    // Same rule as createActiveExternalModulesResolverForApi above — this resolver skips the
+    // deny-row subtraction but must not skip the draft-ownership check.
+    const visibleToActor = (module: ReconciledExternalModule) =>
+      module.status !== "draft" || module.ownerUserId === accessContext.actorUserId;
+    return modules.filter((module) => module.active && visibleToActor(module));
   };
 }
 

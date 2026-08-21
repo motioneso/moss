@@ -325,6 +325,60 @@ describe("external-module admin routes (#917)", () => {
   });
 });
 
+// #1808 QA follow-up: the personal Modules pane (GET/PATCH /api/me/modules) reads through a
+// second resolver (createInstalledExternalModulesResolverForApi) that the original #1753 fix
+// missed. Before this, any logged-in user's own module list showed the name and version of
+// every other user's in-progress draft, and the same PATCH route would toggle one on or off.
+describe("the personal Modules pane hides a draft from everyone but its owner (#1753)", () => {
+  it("does not list another user's draft, and 404s trying to toggle it", async () => {
+    const client = new Client({ connectionString: connectionStrings.bootstrap });
+    await client.connect();
+    await client.query(
+      `INSERT INTO app.external_modules (id, status, manifest_hash, package_hash, owner_user_id, created_at, updated_at)
+       VALUES ('acme-widgets-draft', 'draft', 'sha256:stale', 'sha256:stale', $1, now(), now())
+       ON CONFLICT (id) DO UPDATE SET status = 'draft', owner_user_id = $1`,
+      [memberUserId]
+    );
+    await client.end();
+
+    const list = await server.inject({
+      method: "GET",
+      url: "/api/me/modules",
+      headers: { cookie: adminCookie }
+    });
+    expect(list.statusCode).toBe(200);
+    const modules = (list.json() as { modules: { id: string }[] }).modules;
+    expect(modules.map((module) => module.id)).not.toContain("acme-widgets-draft");
+
+    const patch = await server.inject({
+      method: "PATCH",
+      url: "/api/me/modules/acme-widgets-draft",
+      headers: { cookie: adminCookie, "content-type": "application/json" },
+      payload: { disabled: true }
+    });
+    expect(patch.statusCode).toBe(404);
+  });
+
+  it("lists the owner's own draft and lets them toggle it", async () => {
+    const list = await server.inject({
+      method: "GET",
+      url: "/api/me/modules",
+      headers: { cookie: memberCookie }
+    });
+    expect(list.statusCode).toBe(200);
+    const modules = (list.json() as { modules: { id: string }[] }).modules;
+    expect(modules.map((module) => module.id)).toContain("acme-widgets-draft");
+
+    const patch = await server.inject({
+      method: "PATCH",
+      url: "/api/me/modules/acme-widgets-draft",
+      headers: { cookie: memberCookie, "content-type": "application/json" },
+      payload: { disabled: true }
+    });
+    expect(patch.statusCode).toBe(200);
+  });
+});
+
 async function signUp(
   target: ReturnType<typeof createApiServer>,
   email: string,
