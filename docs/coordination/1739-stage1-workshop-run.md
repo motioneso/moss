@@ -135,14 +135,52 @@ bounded-read each of their panes, and if they report a missing boot file, send t
 instead — it only exists in the main checkout, not your worktree. Proceed as the build lane for
 #<issue> with that doc."` (swap in the right slug and issue number per the Queue table below).
 
-## merges_since_relay: 1 (this coordinator: #1667/PR 1805 merged 2026-08-21 ~05:36 UTC)
+## merges_since_relay: 2 (this coordinator, session 7a4759d1-8ede-4252-b513-372e1d27694b: #1752/PR 1806 merged 2026-08-21 ~06:1x UTC, #1524/PR 1807 merged ~06:3x UTC) — RELAY TRIGGERED, flushing now
 
-## Continuation note (this coordinator, 2026-08-20 ~21:35 PDT — relaying at context 70%)
+## Continuation note (coordinator session 7a4759d1-8ede-4252-b513-372e1d27694b, pane w1:pHZ, 2026-08-21 ~06:4x UTC — relaying after 2 merges, mandatory trigger)
 
-Coordinator authority: session `78440b71-a4e4-472d-a450-c036c5edab92`, pane `w1:pHK`, label
-`Coordinator`. No merges yet this run (`merges_since_relay` stays 0), so no session-id check is
-needed before your first merge — just re-confirm your own session id against this line before you
-merge anything.
+Re-confirm your own session id against this line before your first merge. Reset the counter to 0
+once you've re-confirmed you're driving.
+
+**What happened since the last relay (session d2815ae2..., pane w1:pHY):**
+- #1752 merged (PR 1806, squash, issue closed). Board move to Done for #1752's card is still
+  outstanding — do this first, it's a two-minute cleanup, GraphQL quota is fine now
+  (~4979/5000 last checked).
+- #1524 merged (PR 1807) — the build lane merged its own PR before my stop message landed. I
+  checked it over: independent QA had already given it a clean pass, and the merge itself was
+  correct, so I let it stand and told the lane plainly that merging is always the coordinator's
+  call from here on. Issue #1524 stays open on purpose (Ben wants to file more sports-follows work
+  against a fresh issue later) but its board card is now Done.
+- Found a real problem: #1753's lane and #1524 had independently picked the exact same two
+  migration numbers (0185 and 0186) for unrelated changes. Caught it by comparing #1524's QA
+  writeup against a note I'd logged for #1753 about 30 minutes earlier. Since #1524 landed on
+  main first, I told #1753's lane (pane w1:pJ2, relay3) to rebase onto latest main and renumber
+  its two migration files to whatever's actually free (0187 or higher, checked fresh after
+  rebasing, not assumed). **Confirmed delivered and the lane is actively working on it** (bounded
+  read at ~06:4x UTC showed 53% context used, status "working," not idle) — but no confirmation
+  yet that the rename is actually done. Check this first thing.
+
+**Standing queue, unchanged from the table below:**
+- #1753 — building (relay3, pane w1:pJ2), doing the migration renumbering above right now.
+- #1754 — still blocked on #1753 landing; spawn it once #1753's PR is up and merged.
+- #1755 — sent back to its build agent to fix a module-count mismatch across 7 integration
+  tests; has its own pane and its own internal monitor, no action needed unless it asks.
+- #1756 — draft PR open, checks green, waiting on #1755 before final review.
+- #1521 and #1526 — both parked for Ben overnight (broken shared-instance login; PTY test still
+  flaky after 2 fix cycles). Leave them alone per the standing overnight rule — no more escalation
+  tonight.
+
+**Immediate next actions for the next coordinator, in order:**
+1. Re-confirm you're driving (session id above matches your own; old pane w1:pHZ has been told
+   you're driving and reaped).
+2. Move #1752's board card to Done (GraphQL is fine now).
+3. Check on #1753 (pane w1:pJ2) — has it confirmed the migration renumbering is done? If yes,
+   let it continue building. If it's stuck, help it find the actual next-free migration number.
+4. Keep watching #1753 through to a PR, then QA it, then merge (routine tier, standard QA, no
+   live-path proof needed unless the plan's Group B section says there's a UI surface).
+5. Once #1753 lands, spawn #1754.
+6. Reset `merges_since_relay` to 0 once you've made your first merge decision as the new
+   coordinator (or leave at 0 if you haven't merged anything yet).
 
 **AWAITING-BEN — the only open item:** #1524 (sports follows migration) is paused. It needs to
 delete duplicate rows before adding a uniqueness rule, but the shared file that validates every
