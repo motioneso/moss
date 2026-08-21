@@ -1314,3 +1314,34 @@ the lane; #1526's flake got Ben's explicit go-ahead rather than sitting parked.
 
 No merges happened this pass beyond #1753 (already recorded above) — `merges_since_relay` reset to
 0 for the successor.
+
+## Continuation note (coordinator session d4bf2ae0-eb8f-4def-a85a-132e054020be, pane w1:pJF, 2026-08-21 ~4:35pm PDT)
+
+Took over from relay16/relay17 chain. Ben reaped the old coordinator pane (w1:pJ9) himself mid-turn
+-- it had wrongly run an in-process QA check (against the rule: QA must run in its own Herdr pane,
+never in-process) which posted a stale, wrong RED verdict on PR 1810 testing an old/incorrect color
+value. Ben authorized treating PR 1810 as green regardless of that stray comment; the real verdict
+(from the dedicated QA pane, agent name qa-1809) was GREEN. That QA pane and its worktree are now
+reaped -- verdict was read first.
+
+Actions taken this pass:
+- Claimed the coordinator name/label cleanly (I'm now the only session named `coordinator`).
+- Spawned the #1754 build agent (agent name `build-1754`, pane w1:pJG, in worktree
+  `.claude/worktrees/1754-build-agent-runner`) with a handoff doc at
+  `docs/coordination/1754-build-agent-runner-handoff.md`. Confirmed on Sonnet, in the agents tab.
+- Closed the now-done planning pane (was w1:pGR).
+- Told the #1756 lane (agent `workshop-chat-cards-r2`, pane w1:pH7) that #1753 merged so it can
+  wire the "changing a running draft" surface now; it's already working on it, context around 71%
+  though (close to its own relay point).
+- Updated the relay skill so build/QA agents also keep the shared agents-tab grid square when they
+  replace themselves on relay, not just the coordinator (Ben asked for this).
+- Two CI checks were still pending when this note was written, watched via background Monitor
+  (not polled in-context): PR 1810 (#1809, nav bar dark mode) waiting on "Build and publish
+  images"; PR 1803 (#1526, PTY backpressure) waiting on the re-run of "Verify foundation and app".
+  **Successor: when those monitors fire (or on your own check), merge both as routine once green**
+  -- PR 1810 already has Ben's go-ahead regardless of the stray RED comment; PR 1803 already has
+  Ben's standing waiver for this test's known flakiness ("we can just ok with flakes for now").
+  Remove the #1526 entry from AWAITING-BEN.md once PR 1803 merges.
+
+No open questions for Ben beyond what AWAITING-BEN.md already has (the #1526 entry, about to
+close once that PR merges). [pane w1:pJF]
