@@ -118,12 +118,14 @@ describe("external-module admin routes (#917)", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.enabled).toBe(true);
-    expect(body.modules).toHaveLength(1);
-    expect(body.modules[0]).toMatchObject({
-      id: "acme-widgets",
-      status: "discovered",
-      active: false
-    });
+    expect(body.modules).toHaveLength(2);
+    expect(body.modules).toContainEqual(
+      expect.objectContaining({
+        id: "acme-widgets",
+        status: "discovered",
+        active: false
+      })
+    );
   });
 
   it("enables the module, then /api/modules includes it with external:true", async () => {
@@ -249,6 +251,75 @@ describe("external-module admin routes (#917)", () => {
       headers: { cookie: memberCookie }
     });
     expect(res.statusCode).toBe(403);
+  });
+
+  // #1753 Task 10: shipping ends a draft's author-only exemption. All four cases share one
+  // inserted draft row, owned by the admin — a fresh row per test keeps them independent.
+  it("ships the admin's own draft: flips it to enabled, clears the owner", async () => {
+    const client = new Client({ connectionString: connectionStrings.bootstrap });
+    await client.connect();
+    await client.query(
+      `INSERT INTO app.external_modules (id, status, manifest_hash, package_hash, owner_user_id, created_at, updated_at)
+       VALUES ('acme-widgets-draft', 'draft', 'sha256:stale', 'sha256:stale', $1, now(), now())`,
+      [adminUserId]
+    );
+    await client.end();
+
+    const res = await server.inject({
+      method: "POST",
+      url: "/api/admin/modules/acme-widgets-draft/ship",
+      headers: { cookie: adminCookie }
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ shipped: true, restartRequired: true });
+
+    const verifyClient = new Client({ connectionString: connectionStrings.bootstrap });
+    await verifyClient.connect();
+    const row = await verifyClient.query<{
+      status: string;
+      owner_user_id: string | null;
+      manifest_hash: string;
+    }>(`SELECT status, owner_user_id, manifest_hash FROM app.external_modules WHERE id = 'acme-widgets-draft'`);
+    await verifyClient.end();
+    expect(row.rows[0]).toMatchObject({ status: "enabled", owner_user_id: null });
+    expect(row.rows[0]?.manifest_hash).not.toBe("sha256:stale");
+  });
+
+  it("returns 404 shipping another user's draft (ownership, not existence)", async () => {
+    const client = new Client({ connectionString: connectionStrings.bootstrap });
+    await client.connect();
+    await client.query(
+      `INSERT INTO app.external_modules (id, status, manifest_hash, package_hash, owner_user_id, created_at, updated_at)
+       VALUES ('acme-widgets-draft', 'draft', 'sha256:stale', 'sha256:stale', $1, now(), now())
+       ON CONFLICT (id) DO UPDATE SET status = 'draft', owner_user_id = $1`,
+      [memberUserId]
+    );
+    await client.end();
+
+    const res = await server.inject({
+      method: "POST",
+      url: "/api/admin/modules/acme-widgets-draft/ship",
+      headers: { cookie: adminCookie }
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("denies a non-admin ship attempt with 403", async () => {
+    const res = await server.inject({
+      method: "POST",
+      url: "/api/admin/modules/acme-widgets-draft/ship",
+      headers: { cookie: memberCookie }
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("returns 404 shipping an unknown module id", async () => {
+    const res = await server.inject({
+      method: "POST",
+      url: "/api/admin/modules/ghost/ship",
+      headers: { cookie: adminCookie }
+    });
+    expect(res.statusCode).toBe(404);
   });
 });
 
