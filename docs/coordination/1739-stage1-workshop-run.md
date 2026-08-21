@@ -16,7 +16,7 @@ Coordinator: Claude session `351157c3-4cfb-499d-b67f-b366448a8263`, label `Coord
 session `53e8572a-0c01-434a-9f16-5088520ae453` (former pane `w1:pJ5`) at 2026-08-21 ~11:3x PDT;
 old pane confirmed it saw this one driving and was asked to write the just-landed Fable #1526
 verdict into this manifest before closing itself.
-Liveness Monitor: not yet re-armed under this session — next action.
+Liveness Monitor: re-armed under this session, watching tabs w1:t1N/t1P/t1Q/t1R/t1K.
 
 GraphQL rate limit cleared ~19:33 PDT (verified via `gh api rate_limit`, resource `graphql`, back
 to full 5000). Board queries unblocked.
@@ -1015,3 +1015,22 @@ failing test lives in tests/unit/cli-runner-terminal-rpc.test.ts on the existing
 options above), rather than just re-running the same test again. Report this to Ben in plain
 English along with the rest of the standing status.
 [pane w1:pJ5]
+
+## Continuation note (coordinator session 351157c3-4cfb-499d-b67f-b366448a8263, pane w1:pJ6, 2026-08-21 ~11:4x PDT — adoption confirmed)
+
+Took over from session 53e8572a (pane w1:pJ5). Before reaping it, asked it to write down what a
+background helper agent ("Fable") had just found about the stuck #1526 test, since that report was
+sitting in the old pane's own memory and would have been lost otherwise. It wrote that up above
+(plain-English version) and confirmed it was safe to close. Checked the session ID matched what
+this handoff said to expect, then closed that pane. `herdr pane list` now shows exactly one
+Coordinator pane (this one). Liveness watch restarted under this session.
+
+Picking up the outstanding work exactly as the last note listed it:
+1. Tell Ben about the #1526 finding (plain English, already written above) and hand it a narrow
+   fix brief instead of another blind retry.
+2. Get #1753 through review and merge if it checks out.
+3. Run #1521's real-browser proof now that the shared test login is fixed, then merge.
+4. Watch #1756 finish lining up with the latest main and get it reviewed.
+5. Keep this document current.
+No new open questions for Ben beyond the #1526 finding above.
+[pane w1:pJ6]
