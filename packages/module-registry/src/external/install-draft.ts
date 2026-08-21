@@ -21,7 +21,9 @@ export interface InstallModuleDraftDeps {
   }) => Promise<void>;
 }
 
-export type InstallModuleDraftResult = { readonly ok: true } | { readonly ok: false; readonly errors: readonly string[] };
+export type InstallModuleDraftResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly errors: readonly string[] };
 
 /**
  * `buildSourceDir` (Task 11's `module-builds/<id>`) is NOT scanned by the server's normal disk

@@ -37,7 +37,10 @@ describe("runModuleBuildStep", () => {
 
   it("skips spec and tests when the plan says to", async () => {
     const fakeLaunchLiveAgent = vi.fn(
-      async (): Promise<LaunchLiveAgentResult> => ({ wroteFiles: ["module.ts"], testsPassing: true })
+      async (): Promise<LaunchLiveAgentResult> => ({
+        wroteFiles: ["module.ts"],
+        testsPassing: true
+      })
     );
     const deps = {
       launchLiveAgent: fakeLaunchLiveAgent,

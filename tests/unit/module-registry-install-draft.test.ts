@@ -31,10 +31,7 @@ const validManifest = {
 };
 
 /** Write a fake generated build's output dir, valid or with a validator-rejected manifest. */
-function writeFakeGeneratedModule(
-  root: string,
-  opts: { id: string; valid: boolean }
-): string {
+function writeFakeGeneratedModule(root: string, opts: { id: string; valid: boolean }): string {
   const dir = join(root, opts.id);
   mkdirSync(dir, { recursive: true });
   const manifest = opts.valid
@@ -48,7 +45,12 @@ function makeDeps(modulesDir: string): {
   deps: InstallModuleDraftDeps;
   rows: Array<{ id: string; manifestHash: string; packageHash: string; ownerUserId: string }>;
 } {
-  const rows: Array<{ id: string; manifestHash: string; packageHash: string; ownerUserId: string }> = [];
+  const rows: Array<{
+    id: string;
+    manifestHash: string;
+    packageHash: string;
+    ownerUserId: string;
+  }> = [];
   return {
     deps: {
       modulesDir,

@@ -26,7 +26,10 @@ afterAll(() => {
  * namespace prefix that belongs to another module (the "sneaky" attempt: naming yourself
  * something else while trying to declare a tool starting with "settings.").
  */
-function writeFakeGeneratedModule(root: string, opts: { id: string; declaresTool?: string }): string {
+function writeFakeGeneratedModule(
+  root: string,
+  opts: { id: string; declaresTool?: string }
+): string {
   const dir = join(root, opts.id);
   mkdirSync(dir, { recursive: true });
   const manifest = {
@@ -88,7 +91,9 @@ describe("self-operation boundary — seam 4 (#1754)", () => {
 
   it("the build step never imports a module-credential read helper", () => {
     const runBuildStepSource = readFileSync(
-      fileURLToPath(new URL("../../packages/ai/src/module-build/run-build-step.ts", import.meta.url)),
+      fileURLToPath(
+        new URL("../../packages/ai/src/module-build/run-build-step.ts", import.meta.url)
+      ),
       "utf8"
     );
     expect(runBuildStepSource).not.toMatch(/module_credentials|readModuleCredential/);

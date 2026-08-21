@@ -1,6 +1,9 @@
 import type { DataContextDb } from "@moss/db";
 
-import type { generateStructured, GenerateStructuredDeps } from "../structured/generate-structured.js";
+import type {
+  generateStructured,
+  GenerateStructuredDeps
+} from "../structured/generate-structured.js";
 
 const MODULE_BUILD_PLAN_SERVICE = "module.moss.workshop-build-plan" as const;
 

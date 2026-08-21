@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createModuleBuildWorker, MODULE_BUILD_QUEUE } from "../../packages/jobs/src/module-build-jobs.js";
+import {
+  createModuleBuildWorker,
+  MODULE_BUILD_QUEUE
+} from "../../packages/jobs/src/module-build-jobs.js";
 
 describe("createModuleBuildWorker", () => {
   const fakeBoss = {} as never;
@@ -10,7 +13,10 @@ describe("createModuleBuildWorker", () => {
     const handler = createModuleBuildWorker({
       sendJob: sendJobSpy,
       boss: fakeBoss,
-      runStep: async () => ({ deferred: true, continuation: { buildId: "b1", step: "writing_tests" } })
+      runStep: async () => ({
+        deferred: true,
+        continuation: { buildId: "b1", step: "writing_tests" }
+      })
     });
 
     await handler([{ data: { actorUserId: "u1", buildId: "b1" } }]);

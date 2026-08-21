@@ -14,7 +14,7 @@ Single task, no phases — this is the last task in Group C.
   (`:63`, only sets `ownerUserId`/`conversationId`, always inserts `status: "planning"`),
   `getModuleBuild` (`:80`), `updateModuleBuildStatus` (`:113`, takes `status`, optional `step`).
 - The resume logic — `packages/ai/src/module-build/run-build-step.ts:32` `runModuleBuildStep(deps,
-  build)`. It reads `build.step` (the persisted row), not the incoming job payload, which is what
+build)`. It reads `build.step` (the persisted row), not the incoming job payload, which is what
   makes restart survival provable. `deps.launchLiveAgent` (`:23`) is the one piece this test fakes.
 - Queue registration gap — `MODULE_BUILD_QUEUE` is missing from `FOUNDATION_QUEUES`
   (`packages/jobs/src/pg-boss.ts:37-70`, four entries, no module-build one). This is a real bug:
@@ -67,33 +67,33 @@ Import `MODULE_BUILD_QUEUE` from `./module-build-jobs.js`.
 New file: `tests/integration/module-build-restart.e2e.test.ts`
 
 - `beforeAll`: `resetFoundationDatabase()`, `createDatabase({ connectionString:
-  connectionStrings.worker, maxConnections: 2 })`, `new DataContextRunner(appDb)`,
+connectionStrings.worker, maxConnections: 2 })`, `new DataContextRunner(appDb)`,
   `createPgBossClient(connectionStrings.worker)`, `boss.start()`.
 - `afterAll`: `boss.stop()`, `appDb.destroy()`.
 - Test body, inside `dataContext.withDataContext({ actorUserId: ids.userA, requestId: "req-1" },
-  async (scopedDb) => { ... })`:
+async (scopedDb) => { ... })`:
   1. `const build = await createModuleBuild(scopedDb, { ownerUserId: ids.userA })`
   2. `await updateModuleBuildStatus(scopedDb, build.id, { status: "building", step:
-     "writing_tests" })`
+"writing_tests" })`
   3. A local adapter `realRunModuleBuildStep = async (payload: ModuleBuildPayload) => { const row
-     = await getModuleBuild(scopedDb, payload.buildId); const result = await runModuleBuildStep({
-     launchLiveAgent: fakeLaunchLiveAgent, resolveWorkingDir: () => "/tmp/fake", recordFetchedUrl:
-     async () => {} }, row!); if (result.continuation) { await updateModuleBuildStatus(scopedDb,
-     result.continuation.buildId, { status: "building", step: result.continuation.step }); }
-     return result; }` — this is the "wiring" the earlier relay identified as missing everywhere
+= await getModuleBuild(scopedDb, payload.buildId); const result = await runModuleBuildStep({
+launchLiveAgent: fakeLaunchLiveAgent, resolveWorkingDir: () => "/tmp/fake", recordFetchedUrl:
+async () => {} }, row!); if (result.continuation) { await updateModuleBuildStatus(scopedDb,
+result.continuation.buildId, { status: "building", step: result.continuation.step }); }
+return result; }` — this is the "wiring" the earlier relay identified as missing everywhere
      else; it lives only in the test, matching how the spec says the real caller (Task 12-15,
      already built) is expected to compose these pieces.
   4. `fakeLaunchLiveAgent` returns `{ wroteFiles: [], testsPassing: true }` — the one faked piece.
   5. `await sendJob(boss, MODULE_BUILD_QUEUE, { actorUserId: ids.userA, buildId: build.id, step:
-     "writing_tests" })`.
+"writing_tests" })`.
   6. Register a worker on `boss` via `createModuleBuildWorker({ sendJob, boss, runStep:
-     realRunModuleBuildStep })`, `boss.work(MODULE_BUILD_QUEUE, worker)`, and wait on a resolvable
+realRunModuleBuildStep })`, `boss.work(MODULE_BUILD_QUEUE, worker)`, and wait on a resolvable
      promise that the handler resolves after `runStep` returns (same pattern as
-     `connectors-google-schedule-root.test.ts:104-118`) — this proves the *first* step ran.
+     `connectors-google-schedule-root.test.ts:104-118`) — this proves the _first_ step ran.
   7. `await boss.stop()`; create `restartedBoss = createPgBossClient(connectionStrings.worker)`,
      `await restartedBoss.start()`.
   8. Register a second worker on `restartedBoss` the same way, `await
-     restartedBoss.work(MODULE_BUILD_QUEUE, worker2)`, wait for it to fire (this is the "restart":
+restartedBoss.work(MODULE_BUILD_QUEUE, worker2)`, wait for it to fire (this is the "restart":
      a fresh pg-boss connection, same database, picks up the job the first step's continuation
      re-sent).
   9. `const row = await getModuleBuild(scopedDb, build.id); expect(row!.step).toBe("writing_code")`
@@ -125,4 +125,5 @@ pnpm format:check > /tmp/fmt.log 2>&1; echo "EXIT=$?"
 pnpm lint > /tmp/lint.log 2>&1; echo "EXIT=$?"
 pnpm typecheck > /tmp/tc.log 2>&1; echo "EXIT=$?"
 ```
+
 Each expected exit 0. Full gate at wrap-up only, via the `verify-gate` skill, never run directly.

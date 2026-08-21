@@ -17,11 +17,7 @@ import {
   type ModuleBuildStepResult,
   type PgBoss
 } from "@moss/jobs";
-import {
-  createModuleBuild,
-  getModuleBuild,
-  updateModuleBuildStatus
-} from "@moss/settings";
+import { createModuleBuild, getModuleBuild, updateModuleBuildStatus } from "@moss/settings";
 import { runModuleBuildStep } from "../../packages/ai/src/module-build/run-build-step.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
