@@ -7,6 +7,7 @@ import type { CommitmentExtractionProvider } from "@moss/module-sdk";
 import { COMMITMENT_EXTRACTION_QUEUE } from "./manifest.js";
 import type { CommitmentsRepository } from "./repository.js";
 import { extractCommitmentsFromText } from "./extractor.js";
+import type { CommitmentExtractionWarnLogger } from "./extractor.js";
 import { buildCandidateSignature } from "./signature.js";
 import type { CommitmentExtractionJobPayload } from "./jobs.js";
 
@@ -17,6 +18,7 @@ export interface CommitmentExtractionWorkerDeps {
   readonly cipher: AiSecretCipher;
   readonly repository: CommitmentsRepository;
   readonly providers: readonly CommitmentExtractionProvider[];
+  readonly logger?: CommitmentExtractionWarnLogger;
 }
 
 export async function registerCommitmentExtractionWorker(
@@ -33,7 +35,13 @@ export async function registerCommitmentExtractionWorker(
       const { actorUserId, sourceKind } = job.data;
 
       const provider = deps.providers.find((p) => p.sourceKind === sourceKind);
-      if (!provider) return;
+      if (!provider) {
+        deps.logger?.warn(
+          { event: "commitment-extraction-source-provider-missing", sourceKind },
+          "commitment extraction: source provider missing"
+        );
+        return;
+      }
 
       // Resolve AI model (economy tier)
       const model = await deps.aiRepository.selectModelForCapability(
@@ -41,18 +49,36 @@ export async function registerCommitmentExtractionWorker(
         "summarization",
         "economy"
       );
-      if (!model) return;
+      if (!model) {
+        deps.logger?.warn(
+          { event: "commitment-extraction-no-model", sourceKind },
+          "commitment extraction: no configured economy summarization model"
+        );
+        return;
+      }
 
       const aiProvider = await deps.aiRepository.selectProviderWithCredential(
         scopedDb,
         model.provider_config_id
       );
-      if (!aiProvider?.encrypted_credential) return;
+      if (!aiProvider?.encrypted_credential) {
+        deps.logger?.warn(
+          { event: "commitment-extraction-credential-missing", sourceKind },
+          "commitment extraction: selected provider or encrypted credential missing"
+        );
+        return;
+      }
 
       const credential = parseAiApiKeyCredential(
         deps.cipher.decryptJson(aiProvider.encrypted_credential)
       );
-      if (!credential) return;
+      if (!credential) {
+        deps.logger?.warn(
+          { event: "commitment-extraction-credential-invalid", sourceKind },
+          "commitment extraction: decrypted credential invalid"
+        );
+        return;
+      }
 
       const adapter = new HttpApiAdapter(
         model.provider_kind as ProviderKind,
@@ -84,7 +110,8 @@ export async function registerCommitmentExtractionWorker(
           generate,
           boundary.text,
           sourceKind,
-          boundary.occurredAt
+          boundary.occurredAt,
+          deps.logger
         );
 
         for (const extracted of candidates) {
