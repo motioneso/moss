@@ -1,0 +1,14 @@
+Build issue #1571: Weather settings, a free-text place name field (instead of coordinates) plus a
+global Fahrenheit/Celsius toggle.
+
+STEP 1: pnpm install in this worktree.
+
+STEP 2: read your handoff doc /home/ben/Jarv1s/docs/coordination/handoff-1571-weather-location-units.md
+(absolute path, coordinator's own checkout, not this worktree) and follow the coordinated-build
+skill. Read the spec at docs/superpowers/specs/2026-08-17-1571-weather-location-and-units.md BY
+SECTION for your current task only -- never in full.
+
+STEP 3: plan with plan-build, get coordinator approval before writing code, then build with TDD,
+then coordinated-wrap-up for the PR and live-path proof.
+
+Reading is not progress: BUILD, commit per task, relay only after real work past ~80%. Begin now.
