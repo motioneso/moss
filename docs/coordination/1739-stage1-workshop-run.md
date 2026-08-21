@@ -665,3 +665,38 @@ goes under a `## Blocked overnight, needs Ben` heading, not to him directly.
 actually merged since adoption) — nothing to reap on that front. Two QA agent worktrees were
 already reaped immediately after their verdicts were consumed, per the QA-worktree-disposal rule
 (no exceptions needed, they held no source changes).
+
+## Continuation note (this coordinator, 2026-08-20 ~22:5x PDT — relay8, spawning successor now)
+
+Since the note above was written, this coordinator (session `0cfc3a41-b6cb-4487-aca3-1b4248dc7438`,
+pane `w1:pHW`) did one more real thing before relaying: **#1515's PR 1802 finished CI all green
+and was merged and closed** (squash-merged, branch and worktree cleaned up, queue row updated
+above). That is the one PR that actually landed on main this relay.
+
+Two more PRs are QA-confirmed merge-ready and only waiting on their own last CI check to finish:
+- **#1667** (PR 1805, worker polling budget fix) — QA verdict is a clean pass, posted on the pull
+  request. Background watcher task `b9786te4o` is still running and will report when CI finishes.
+- **#1752** (PR 1806, modules discovered after server start) — QA verdict is also a clean pass,
+  and specifically confirms the function names #1753 and #1754 depend on
+  (`createExternalModuleDiscoveryHolder`, `getDiscoveries`, `rescan`) are exactly as expected.
+  Background watcher task `brti200k2` is still running. **The moment this one lands on main, spawn
+  #1753, then once #1753 lands, spawn #1754** — this is still the standing next action.
+
+Neither watcher task will carry over to the successor's session — re-arm a plain `gh pr checks`
+check (or a fresh background watcher) for both 1805 and 1806 instead of waiting on the old task ids.
+
+**#1755** (PR 1804, the Workshop page) went from "building" to "done" per the fleet monitor just
+before this relay — its full report with live-path proof is described in the section just above
+this note. QA has still not been spawned on it. This remains the single most concrete next action
+for whoever picks this up.
+
+The fleet monitor task (`bba0vvw3h`) also will not carry over — re-arm it, excluding whatever pane
+the new coordinator resolves to.
+
+Nothing else has changed: #1526 still waiting on its second QA pass (agent `a625f1b68db885a21`,
+not yet returned), #1521/#1524 building normally, #1756 still paused pending #1755. Standing rule
+from Ben still in force — do not wake him overnight, park any real blocker under a
+`## Blocked overnight, needs Ben` heading instead.
+
+This coordinator is now spawning its successor into the same pane/tab and will have it reap this
+pane once it confirms it is driving. [pane w1:pHW]
