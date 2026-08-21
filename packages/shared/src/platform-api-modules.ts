@@ -331,6 +331,28 @@ export const rescanExternalModulesRouteSchema = {
   }
 } as const;
 
+// #1753 Task 10: shipping only flips the database row (draft -> enabled, owner cleared).
+// Making the now-enabled module visible to everyone else still needs the restart a person
+// performs — restartRequired always true, mirrored back so the caller can say so plainly.
+export const shipExternalModuleRouteSchema = {
+  params: adminModuleParamsSchema,
+  response: {
+    200: {
+      type: "object",
+      additionalProperties: false,
+      required: ["shipped", "restartRequired"],
+      properties: {
+        shipped: { type: "boolean" },
+        restartRequired: { type: "boolean" }
+      }
+    },
+    401: errorResponseSchema,
+    403: errorResponseSchema,
+    404: errorResponseSchema,
+    409: errorResponseSchema
+  }
+} as const;
+
 // #918: module-credential admin/user surface contracts. ModuleCredentialStatusDto is
 // METADATA ONLY by construction — there is no field that could carry plaintext or the
 // ciphertext envelope, and the strict response schema below (additionalProperties: false)

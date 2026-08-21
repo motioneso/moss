@@ -124,6 +124,10 @@ export async function setExternalModuleEnabled(
         manifest_hash: input.manifestHash,
         package_hash: input.packageHash,
         disabled_reason: null,
+        // #1753: an enabled row must never carry an owner (the DB check constraint that
+        // enforces this exists precisely because a leftover owner_user_id from a prior
+        // draft row would be meaningless once the module is instance-wide).
+        owner_user_id: null,
         enabled_by: input.actorUserId,
         enabled_at: new Date(),
         updated_at: new Date()
@@ -393,6 +397,65 @@ export async function markExternalModuleRemoved(
     actorUserId: input.actorUserId,
     action: "module.external_remove",
     targetType: "external_module",
+    targetId: input.id,
+    metadata: { moduleId: input.id },
+    requestId: input.requestId
+  });
+  return true;
+}
+
+export interface ShipExternalModuleInput {
+  readonly id: string;
+  /** Current on-disk hashes (from the discovery, sourced by the route the same way
+   *  setExternalModuleEnabled's caller already does), captured as the new trusted drift
+   *  baseline — same hash-capture an ordinary enable performs. */
+  readonly manifestHash: string;
+  readonly packageHash: string;
+  readonly actorUserId: string;
+  readonly requestId: string;
+}
+
+/**
+ * Shipping (#1753 Task 10): the human action that ends the draft exemption. Flips a draft to
+ * enabled, clears its owner, and re-captures the current on-disk hashes so drift detection
+ * (exempt while it was a draft, per reconcile.ts) resumes from this moment.
+ *
+ * Update-only, scoped to `status = 'draft' AND owner_user_id = actorUserId` — that WHERE
+ * clause is simultaneously the "does this draft exist" and "is it yours" guard, so a caller
+ * who isn't the owner gets the same `false` as a caller who names an id that was never a
+ * draft (the route maps `false` to 404 — no way to distinguish the two, same non-leak
+ * discipline as assertAdminUser). The route runs assertAdminUser first, so actorUserId is
+ * already confirmed to be an instance admin; the ownership check on top of that is what
+ * stops one admin from shipping another admin's draft.
+ */
+export async function shipExternalModule(
+  scopedDb: DataContextDb,
+  input: ShipExternalModuleInput,
+  writeAudit: ExternalModuleAuditWriter
+): Promise<boolean> {
+  assertDataContextDb(scopedDb);
+  const result = await scopedDb.db
+    .updateTable("app.external_modules")
+    .set({
+      status: "enabled",
+      manifest_hash: input.manifestHash,
+      package_hash: input.packageHash,
+      disabled_reason: null,
+      owner_user_id: null,
+      enabled_by: input.actorUserId,
+      enabled_at: new Date(),
+      updated_at: new Date()
+    })
+    .where("id", "=", input.id)
+    .where("status", "=", "draft")
+    .where("owner_user_id", "=", input.actorUserId)
+    .executeTakeFirst();
+  if ((result.numUpdatedRows ?? 0n) === 0n) return false;
+
+  await writeAudit({
+    actorUserId: input.actorUserId,
+    action: "module.external_ship",
+    targetType: "module",
     targetId: input.id,
     metadata: { moduleId: input.id },
     requestId: input.requestId

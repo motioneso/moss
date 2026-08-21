@@ -62,6 +62,25 @@ beforeAll(async () => {
     })
   );
 
+  // #1753 Task 10: a second on-disk discovery, kept row-less ('discovered') until a given
+  // test inserts a draft row for it directly — the ship route needs a real discovery to
+  // capture manifestHash/packageHash from, exactly like the enable route above.
+  const draftDir = join(modulesDir, "acme-widgets-draft");
+  mkdirSync(join(draftDir, "dist"), { recursive: true });
+  writeFileSync(join(draftDir, "dist", "worker.js"), "// fixture worker\n");
+  writeFileSync(
+    join(draftDir, "jarvis.module.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      id: "acme-widgets-draft",
+      name: "Acme Widgets (draft)",
+      version: "0.1.0",
+      publisher: "Acme, Inc.",
+      lifecycle: "optional",
+      compatibility: { jarv1s: ">=0.1.0" }
+    })
+  );
+
   appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
   server = createApiServer({
     appDb,
