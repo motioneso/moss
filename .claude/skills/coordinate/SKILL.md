@@ -308,7 +308,10 @@ catches silent failures between pushes.
   ≤270s (stays cache-warm) or space ticks 20–30 min — a wake between those pays a full cold
   re-read of your context for nothing. **Never block on `herdr pane run <pane> 'sleep N'`
   poll-loops** — `ScheduleWakeup` / `Monitor` / a background task are the only sanctioned waits.
-- **Don't `Monitor` for a QA verdict.** Check the PR's comments on your next natural pass instead.
+- **QA verdicts: `Monitor` is fine, an in-process `Agent`-tool QA agent is not.** A `Monitor`
+  polling `gh pr comment`s runs as a detached background task and doesn't block you. A QA agent
+  spawned via the `Agent` tool runs in-process and ties up whichever session spawned it until it
+  finishes — spawn QA in its own Herdr pane instead (see Phase 3 step 1).
 - **On a plan-ready escalation:** read the plan pointer. Approve if it stays inside the spec's
   locked decisions; reply via `herdr-pane-message`. A genuine product/architecture fork → model
   policy (Opus subagent), then route to Ben with the verdict framing the options.
