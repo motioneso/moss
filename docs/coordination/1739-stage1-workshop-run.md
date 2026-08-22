@@ -2715,3 +2715,19 @@ version), then merge if that comes back green, re-checking mergeability right be
 `merges_since_relay` = 0 (reset for this relay - no merges done yet this pass).
 
 [pane w1:pKN]
+
+## relay30 coordinator: PR 1825 all checks green, spawned final independent tester
+
+All of pull request 1825's automated checks finished green (the last one, "Verify foundation and
+app", took about 30 minutes; two more checks I hadn't seen before, image building and a general
+gate check, also appeared and passed). The branch is clean and mergeable against the current main
+branch.
+
+Spawned a fresh independent tester on this exact rebased code (pane w1:pKQ, agent name
+qa-1825-relay4, tab w1:t2N) - confirmed it started on the right model. Waiting for its verdict,
+which it will post as a comment on the pull request. Once that comes back green, re-check
+mergeability one more time right before merging (main has moved twice already during this same
+pull request's life), then merge, close issue #1572, and confirm the project board moves it to
+Done.
+
+[pane w1:pKN]
