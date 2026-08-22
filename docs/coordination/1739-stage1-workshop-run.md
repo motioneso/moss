@@ -2645,3 +2645,44 @@ Waiting for that now. Once it is done this branch will need one more fresh look 
 since a rebase changes the actual commit even if the tester already saw the code once.
 
 [pane w1:pKK]
+
+## Relay: context meter hit 70%, handing off now (relay29 coordinator, pane w1:pKK)
+
+**Merged this pass:**
+- Weather settings (#1571, pull request 1826): merged as commit f0e771256. Issue closed, board
+  moved to Done automatically. Both its build worktree and tester worktree removed, panes closed.
+- Workshop chat cards (#1756, pull request 1799): Ben gave explicit approval directly in chat
+  (2026-08-22) to merge past the one required check that failed once and passed on re-run. Merged
+  just now. **Still needs cleanup**: its build worktree/pane
+  (`.claude/worktrees/1756-workshop-chat-cards`, pane w1:pH7, agent name workshop-chat-cards-r2)
+  has not been checked or reaped yet - do the four-gate check (confirm the merge commit is on
+  main, no live server or unsaved changes) before removing it. Also close issue #1756 and confirm
+  the board moved it to Done (or move it by hand if not).
+
+**Still in progress:**
+- Sports news sources (#1572, pull request 1825): this one has been difficult - it got a green
+  verdict from a fresh independent tester on the rebased code, but by the time I went to merge,
+  main had moved a second time (my own weather-settings merge caused it) and the pull request hit
+  a second conflict. Sent it back to its own build lane (pane w1:pKB, agent name sports1572relay3)
+  a second time. It rebased again - this time the conflict was only in a documentation list, no
+  code or database change - and pushed. Checks were still finishing (3 passed, 1 still running)
+  as of this handoff. **Once checks are green, this needs one more fresh look before merging** -
+  a rebase changes the actual code that ships even if a tester already saw an earlier version of
+  it, per the standing rule. Do not skip that step just because this rebase looks trivial.
+
+**Caught and stopped, no harm done:** while checking on the sports news sources build lane, I found
+a queued message in its pane telling it to merge the pull request itself, which nobody should ever
+do - only the coordinator merges, after independent testing. I do not know who sent it. I
+confirmed directly with the build lane that it had not acted on it and the pull request was still
+open. I told it plainly never to merge its own work. Worth a future coordinator keeping an eye on
+that lane in case it happens again.
+
+`merges_since_relay` = 2 (one sensitive tier - weather settings - and one routine tier - workshop
+chat cards). That is the relay-trigger count for 2 routine/sensitive merges, on top of the context
+meter warning, so this handoff is doubly due.
+
+**Nothing currently needs Ben** beyond what he already answered (chat cards check waiver, done).
+
+Relaying now per the box-wide rule: never let this session keep going once the meter warns.
+
+[pane w1:pKK]
