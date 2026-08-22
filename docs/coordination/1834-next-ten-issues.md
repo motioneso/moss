@@ -914,3 +914,14 @@ background live-test run). No QA tab currently open (last QA pane was reaped aft
 
 Nothing is currently blocked on Ben beyond the already-standing "approved 1838" (which just needs
 mechanical follow-through) - no open question needs him right now.
+
+## Continuation note - 2026-08-22, fourteenth coordinator taking over
+
+Took over from pane w1:pMH (thirteenth coordinator, done handing off, pane closed). Now driving
+from pane w1:pMK, agent name `coordinator`, session `5d197913-c589-4043-8b10-6d432a4fc164` - that
+is the new lock.
+
+Have not yet re-checked the two open lanes (pull request 1838 and pull request 1654) myself -
+next step is to read their current state before doing anything else. Nothing new from Ben; the
+one open item for him is still the standing ask on pull request 1838 (his merge sign-off) recorded
+in the awaiting-Ben file.
