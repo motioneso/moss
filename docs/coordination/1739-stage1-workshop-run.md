@@ -2409,3 +2409,12 @@ Not merging. Waiting on the check re-run, and separately waiting on the dependen
 live proof possible.
 
 [pane w1:pKE]
+
+## Update, relay27 coordinator: Docker image shrink (pull request 1824) merged by its own lane
+
+Not mine to merge - that lane reports directly to Ben and merged it themselves. Image dropped from
+3.7 GB to 1.7 GB, build context from over 666 MB down to 8.5 MB. The production deployment check
+that failed earlier was a missing configuration file; fixed, and the same check now passes. All
+other checks green. Merged to main at commit 856da80799.
+
+[pane w1:pKE]
