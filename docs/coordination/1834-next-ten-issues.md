@@ -71,3 +71,90 @@ another lane touching the same config.
 | others | - | - | - | queued behind the above |
 
 Merges since the last coordinator handover: 1 (pull request 1831, documentation only).
+
+## Continuation note - 2026-08-22, coordinator handing off at its context limit
+
+Written by the coordinator in pane w1:pKV (session `f0d75fbb-74dd-45ab-89fe-b9acbd4fc293`).
+Handing off because my own context filled to 70 percent. Routine, nothing is wrong.
+
+### The one thing that needs judgement, not just watching
+
+**Ben delegated the sign-off on pull request 1654 to the coordinator and went to sleep.** His
+words: "Please review 1654 in my place, I am going to sleep." That authority passes to you. It
+covers pull request 1654 and nothing else. Treat it as a reason to be more careful, not less. If
+the review turns up anything genuinely worrying, leave it unmerged with a short written reason
+and let Ben decide when he wakes. Delegated authority is not permission to wave something through.
+
+Before 1654 can merge, all of these must be true:
+1. The build agent (pane w1:pKT, "1654 live proof") has finished proving the fix in a live copy
+   of the app and posted the evidence on the pull request. It was on its fifth run, capturing the
+   app's own server-side logs as well as the test result.
+2. The adversarial reviewer (pane w1:pKZ, agent `qa1654-adversarial`, running on the stronger
+   model) has posted its verdict on the pull request. Its brief is at
+   `/home/ben/.coord-briefs/boot-qa-1654.txt` if you need to know what it was asked to attack.
+3. The branch is rebased on main (it was 2 commits behind) and re-checked after rebasing.
+
+**Already chased down and cleared, do not re-investigate:** the branch reverts a fix for an
+address-spoofing hole in outbound network requests. That looked alarming on a pull request meant
+to harden exactly that. It is legitimate: the fix was split into pull request #1663, which merged,
+and the protection is confirmed present on main including the hex form that reaches a cloud
+provider's internal metadata address. This is written up in a comment on pull request 1654.
+
+### Lanes running right now
+
+| Issue | Agent name | Pane | State |
+|-------|-----------|------|-------|
+| 1654 | `pr1654-live-proof` | w1:pKT | proving in a live app, run 5 |
+| #1498 command palette styling | `pr1498-command-palette-css` | w1:pKW | plan approved by me, building |
+| #1529 dispatch and self-heal proof | `pr1529-composed-dispatch` | w1:pKX | doing the pre-flight contract check the spec demands |
+| #1336 job-search data checking | `pr1336-jobsearch-validation` | w1:pKY | plan approved by me, building |
+| 1654 hostile review | `qa1654-adversarial` | w1:pKZ (qa tab) | just started |
+
+Build lanes share tab w1:t2P in a 2x2. The reviewer is in its own qa tab. Keep both squared up as
+lanes come and go - Ben has asked for that repeatedly and it is a standing rule, not a one-off.
+
+### Approvals I already gave, so you do not second-guess them
+
+- **#1498**: approved. I warned it that the shared style entry and the checker registration are
+  also in scope, so "single file" was slightly wrong but harmless.
+- **#1336**: approved, with a condition I want held to: dropped rows must be VISIBLY counted on
+  screen, not silently discarded, and no job content may go into logs. I also told it to open a
+  real GitHub issue for the match-detail follow-up rather than leave it as a sentence in a plan.
+
+### Queue and blockers
+
+The full queue of ten is in `docs/coordination/1834-next-ten-issues.md` (merged). Short version:
+the styling cleanup is a strict chain #1498 then #1499, #1500, #1501, #1502, #1503 - they all
+register with the same checker so two at once collide. #1529 must merge before #1530. **#1511 is
+blocked** and must not be started: its design document requires tasks-sharing work to clear, and
+1654 is touching that now. Use #1335 for that slot instead, but not beside anything else touching
+shared check configuration.
+
+### Housekeeping state
+
+- Local main is clean and level with origin.
+- Pull requests 1831, 1833, 1834 merged (all documentation).
+- **Pull request 1832 is still open** - it ignores 72 leftover agent startup files and commits
+  five stranded coordination documents. It is set to merge itself when checks pass. Check it.
+- Pushing straight to main is blocked now; a required check must run, so even documentation goes
+  through a pull request.
+- Agent briefs live in `/home/ben/.coord-briefs/`, deliberately outside the repo so they do not
+  red anyone's checks.
+- Merges since last handover: 3, all documentation only.
+
+### Traps I hit, so you do not
+
+- A helper agent I dispatched in-process went silent and only emitted idle pings, never doing the
+  work. I stopped it and did the job myself. If a delegated helper goes quiet, check it early
+  rather than waiting.
+- Checking whether an issue has a design document by searching for its number alone gives false
+  negatives. Several slices are covered by a parent document that never names the child number.
+- There is stray unsubmitted text sitting in pane w1:pKX's input box that I did not write. I left
+  it alone rather than pressing Enter on words that are not mine. Do the same.
+
+### Plain English, always
+
+Every message to Ben, every handoff, every brief you write for an agent must be plain English. He
+reads status to know whether things are going well, not to review code. No jargon, no coined
+shorthand, keep exact names only where he must act on one. PASS THIS ON to every agent and every
+successor.
