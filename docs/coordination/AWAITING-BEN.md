@@ -83,3 +83,27 @@ Ben finds it from the canonical run location too.
 matches the spec literally); otherwise option 1. Pinged via `needs-ben` (see
 `~/.needs-ben/sent/1786483243535565600.msg`). Everything else in #1533 Phase 4 is done — this is
 the only open item. Build agent is waiting event-driven, not polling; coordinator likewise.
+
+## Pull request 1654 — security fix cannot get its required live proof, real bug in the way
+
+The security fix itself (audit-logging honesty plus outbound-network safety) hasn't changed since
+it was last checked over, and every automated check passes. But before it can merge, the rule is
+it must be proven working end-to-end in a real running copy of the app, and that proof keeps
+failing for a reason unrelated to this fix: when the live test tries to have a conversation with
+the app's AI assistant, the assistant program never actually starts, so the conversation times out
+before it ever reaches the code this pull request is supposed to prove. The lane tried running that
+same start-up command by hand outside the app, and it worked fine — so it's something in how the
+app itself launches that program, not a broken command. This is the same underlying problem as
+open issue #1252.
+
+Options:
+1. Pause pull request 1654 until #1252 (the assistant program not starting) is understood and
+   fixed, then re-run the live proof. Safest, but 1654 stays unmerged with no clear timeline.
+2. Have a lane specifically chase down #1252 now, in parallel, since it's now blocking a
+   security fix and not just a general bug.
+3. Ben decides some other form of live proof is acceptable for 1654 given the code hasn't changed
+   and only the automated test harness is failing — but this needs to be his call since it means
+   accepting less than the usual live-path evidence on a security-tier change.
+
+My recommendation: option 2 — this bug is now blocking a security fix, not just a general
+annoyance, so it's worth a dedicated lane rather than waiting for it to come up naturally.
