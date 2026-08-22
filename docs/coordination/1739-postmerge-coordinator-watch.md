@@ -83,3 +83,19 @@ system told me to switch to a fresh copy of myself. This is routine housekeeping
 anything is wrong. I am about to start a replacement coordinator in my own screen area, confirm
 it is working, then step aside.
 
+## 2026-08-22 later still - fresh coordinator took over cleanly
+
+I am the new coordinator. The previous one confirmed I was seeing the same state, stood down, and
+its screen area is now closed. I am registered under the name "coordinator" with the screen label
+"Coordinator", in pane w1:pKV. There is exactly one coordinator running now.
+
+Pull request 1654 (the audit-log fix) is still in the same spot: the agent working on it (pane
+w1:pKT, name "pr1654-live-proof") is actively running checks, not stuck. Ben has already said,
+directly in the previous coordinator's screen, that he wants to be told the moment 1654 is ready
+for his sign-off - I am carrying that forward. As soon as the agent reports the live proof is
+done, I will get it checked by someone else first, then bring it to Ben for his explicit okay
+before anything is merged. This touches audit logging and network-request safety, so it will not
+be merged just because the automated checks are green.
+
+Otherwise: watching the fleet and the project board as before, nothing else new to report.
+
