@@ -2147,3 +2147,14 @@ Watchdog fired on 300s of no activity. Checked the fleet -- #1517 and QA-1754 bo
 not idle), and QA-1754 is correctly waiting on CI and two live end-to-end tests to finish before
 giving its verdict, and already noted to itself not to poll again. No lane needs a Ben decision.
 Nothing added to AWAITING-BEN.md; nothing pinged.
+
+## Update (same coordinator session, ~10:2x PM PDT)
+
+**#1039 reported done, PR #1820** (routine tier, test-only, no production code, no live-path
+proof needed). Confirmed the PR is real and mergeable on GitHub (branch
+1039-forcereplay-vs-purge-coverage, head 52ca3adc5). Spawned QA in a fresh pane: worktree
+.claude/worktrees/qa-1039, agent qa-1039, on Sonnet. Its home tab (agents, w1:t10) was already at
+4 panes, so this would have made 5 -- moved it out to a new overflow tab ("agents 2", w1:t24)
+rather than crowd the grid, per the standing layout rule. Told QA to independently confirm the
+diff really is test-only before accepting that claim, and to treat the same tracked #1673 flake
+as known rather than blocking. Not yet reaped -- waiting on QA verdict.
