@@ -509,3 +509,27 @@ closed by hand if it's still showing.
 
 A background liveness watch (diffing `herdr pane list` every 30 seconds) was running when I handed
 off - it will not survive into the successor's session; the successor should start its own.
+
+## Continuation note - 2026-08-22, ninth coordinator (took over from pane w1:pMB)
+
+Driving from pane w1:pMC, agent name `coordinator`, session
+`46ddc119-6a9f-4a5e-8924-7ace3936dfdb` - that is the current lock. Old pane w1:pMB closed.
+
+The eighth coordinator's handoff notes had been sitting in an unmerged pull request, number 1851
+(docs only) - merged it first so this file matches reality.
+
+**Pull request 1844 (job search board) - merged and fully cleaned up.** Checks were all green,
+live proof was already posted. Merged, branch deleted, its lane's pane and workspace copy removed
+and confirmed nothing was left running there.
+
+**Pull request 1838 (#1529, security tier) - still waiting on its automated checks.** The lane
+(pane w1:pKX, agent name pr1529-composed-dispatch) re-ran the previously-failing tests and is
+waiting on the result. Not green yet. Once green: this needs a fresh, separate tough review before
+merge (Opus, verdict posted on the pull request), then Ben's explicit sign-off - it touches
+sign-in and permissions.
+
+**Pull request 1654 (security fix) - unchanged, still blocked on issue #1252, logged for Ben.**
+Nothing new to do.
+
+**Pane layout:** Builders tab has two lanes left (1529 and 1654), correctly laid out. The QA tab
+closed itself as expected.
