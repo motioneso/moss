@@ -35,6 +35,10 @@ export const ids = {
   userA: "00000000-0000-4000-8000-000000000001",
   userB: "00000000-0000-4000-8000-000000000002",
   adminUser: "00000000-0000-4000-8000-000000000003",
+  /** Untouched by any other integration test's preference writes — safe for tests that assert
+   * a preference key is absent before they run. */
+  userC: "00000000-0000-4000-8000-000000000004",
+  userD: "00000000-0000-4000-8000-000000000005",
   sessionA: "40000000-0000-4000-8000-000000000001",
   sessionB: "40000000-0000-4000-8000-000000000002",
   sessionAdmin: "40000000-0000-4000-8000-000000000003",
@@ -177,9 +181,11 @@ async function seedProbeData(): Promise<void> {
         VALUES
           ($1, 'user-a@example.test', false),
           ($2, 'user-b@example.test', false),
-          ($3, 'admin@example.test', true)
+          ($3, 'admin@example.test', true),
+          ($4, 'user-c@example.test', false),
+          ($5, 'user-d@example.test', false)
       `,
-      [ids.userA, ids.userB, ids.adminUser]
+      [ids.userA, ids.userB, ids.adminUser, ids.userC, ids.userD]
     );
 
     await client.query(
