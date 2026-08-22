@@ -608,3 +608,63 @@ reply in between. Same two open items, both unchanged:
 
 Both lanes' panes still idle and correctly waiting. Will hold off pinging again for another
 hour or so unless something changes.
+
+## Continuation note - 2026-08-22, eleventh coordinator handing off at context limit
+
+Handing off at 70 percent context. Was driving from pane w1:pME, agent name `coordinator`,
+session `834e0e9d-4b17-4e6b-8021-a7a827b8aa1e` - check `herdr agent list` for the new pane once
+the successor claims the name.
+
+**Ben replied at 1:10pm: "go with your rec" for both open questions.** That is a real ruling and
+should be acted on, but I found the picture on one of the two items had gone stale since it was
+last written up - read carefully before acting.
+
+**Pull request 1838 (#1529, sign-in fix) - Ben's ruling applies cleanly here. Next step: fresh
+security review, not yet started.** Ben approved treating the current failing check as an
+already-known unrelated flaky test, not a real problem, so this pull request should go on to
+security review without waiting for a clean run. Two things to know before doing that:
+- There IS a red security review already sitting on the pull request, posted at 10:56am today -
+  but I checked and it was run against an OLDER version of this branch (commit `bd12d604`), one
+  that still had the real, already-fixed collision bug (two test accounts reusing ID numbers
+  already claimed elsewhere). The fix for that landed in a later commit
+  (`e6686ebdf`, "fix: avoid test user id collision with other integration test files"), which is
+  the current version of the pull request. So that red verdict is stale and does not apply to
+  what is actually up for review now.
+- **Next coordinator: spawn a fresh security-tier review (Opus) against the CURRENT commit
+  (`e6686ebdf`)** - the QA tab doesn't currently exist, you'll need to open one. Once that verdict
+  is posted, this still needs Ben's explicit sign-off before merge (sign-in and permissions
+  change).
+
+**Pull request 1654 (security fix) - DO NOT spawn a lane to chase issue #1252. That was the wrong
+issue number and it's already closed. Ben's ruling on this item needs to be re-asked with the
+real picture, not acted on as originally written.** Here is what actually happened, checked
+directly against the pull request's own comments and logs, not the older handoff notes:
+- The write-up Ben was replying to said this fix was blocked by issue #1252 ("assistant program
+  doesn't start"). That issue number is wrong - #1252 is a completely unrelated audit-log bug.
+  The real issue about the assistant program not starting was #1659, and it was already fixed and
+  closed on 2026-08-19, well before today.
+- Since then, the picture has moved on twice, both visible on the pull request itself: (1) a
+  security review found that merging this branch as-is would silently remove an already-shipped
+  fix (the one stopping outside requests from reaching the cloud's internal metadata address) plus
+  five safety tests - a real regression, not a false alarm; (2) after that was flagged, a live
+  end-to-end test run against the current version still failed, but for a new and different
+  reason: sending a message that should make the app show the user an "action needs approval"
+  card doesn't make that card appear at all, and the app produces no reply. That is a real,
+  currently-reproducing problem, not old news about a program failing to start.
+- **This means the question Ben just answered ("go with your rec" = chase #1252) does not match
+  what is actually blocking this pull request today.** Nothing has been started on this pull
+  request as a result of his reply - it would have been the wrong action.
+- **Next coordinator: write up the real current picture (the two findings above) as a fresh entry
+  in `docs/coordination/AWAITING-BEN.md`, ping him again, and make clear the earlier answer doesn't
+  apply here.** The lane's pane (`w1:pKT`, agent name `pr1654-live-proof`) already reported this
+  same finding honestly and stopped without merging or investigating further - it did the right
+  thing, just needs new instructions.
+
+**`docs/coordination/AWAITING-BEN.md` was already edited this session** (both old entries replaced
+with a short "resolved, see manifest" note) but that edit is sitting locally, uncommitted, on a
+new branch `coord-1834-relay11-handoff` alongside this note - the successor should push it as part
+of finishing this handoff, then add the fresh 1654 entry described above before pinging Ben again.
+
+**Pane layout:** Builders tab (`w1:t2P`) unchanged - two lanes, `pr1529-composed-dispatch` (pane
+w1:pKX) and `pr1654-live-proof` (pane w1:pKT), both idle. No QA tab open yet - the successor needs
+to open one for the fresh 1838 review.
