@@ -2462,3 +2462,19 @@ entry in that file is already marked resolved and just needs tidying, not urgent
 Relaying now per the box-wide rule: never let this session hit 70 percent and keep going.
 
 [pane w1:pKE]
+
+## Update, relay28 coordinator (pane w1:pKH, session 11c572fa-e549-4fe4-b9a9-f7c3147f2bca)
+
+Took over cleanly. The previous coordinator's pane (w1:pKE) had already written its handoff in
+full, so its work was safe; closed that pane.
+
+Checked the one open question left behind: the re-run of the failing check on workshop chat cards
+(pull request 1799). It is still running (about 21 minutes in, on the main verification step).
+Set up a background watcher instead of checking by hand, so I will be told the moment it finishes
+without spending time polling.
+
+Other three testers (sports news sources #1825, build agent runner #1816, weather settings #1826)
+are all still running with no verdict yet, same as when the previous coordinator left off. Nothing
+needs a decision right now.
+
+[pane w1:pKH]
