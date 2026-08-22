@@ -1,4 +1,4 @@
-import type { PgBoss } from "pg-boss";
+import type { Job, PgBoss } from "pg-boss";
 import { MODULE_BUILD_QUEUE } from "./pg-boss.js";
 import type { sendJob } from "./pg-boss.js";
 
@@ -15,12 +15,16 @@ export interface ModuleBuildStepResult {
   readonly continuation?: { readonly buildId: string; readonly step: string };
 }
 
+type ModuleBuildJob = Pick<Job<ModuleBuildPayload>, "data">;
+
 export function createModuleBuildWorker(deps: {
   sendJob: typeof sendJob;
   boss: PgBoss;
   runStep: (payload: ModuleBuildPayload) => Promise<ModuleBuildStepResult>;
 }) {
-  return async ([job]: [{ data: ModuleBuildPayload }]) => {
+  return async (jobs: ModuleBuildJob[]) => {
+    const job = jobs[0];
+    if (!job) throw new Error("module build worker received no job");
     const result = await deps.runStep(job.data);
     if (result.deferred && result.continuation) {
       await deps.sendJob(
