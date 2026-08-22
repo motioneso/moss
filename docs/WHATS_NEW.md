@@ -1,5 +1,28 @@
 # What's New in Moss
 
+## 2026-08-21
+
+### Added
+
+- **A more useful Food day view.** See calories and macros at a glance, browse meals by time of day, and expand a meal to see the foods behind its estimate. Meals logged in Chat now appear here without a manual refresh. [PR #1744](https://github.com/motioneso/moss/pull/1744)
+- **Food estimates you can control.** Nutrition estimates now run automatically, with a simple switch in Settings and no extra consent question in Chat. [PR #1751](https://github.com/motioneso/moss/pull/1751)
+- **Daily targets and richer module settings.** Food can show daily targets, while module settings can include whole-number values as well as on/off switches. [PR #1767](https://github.com/motioneso/moss/pull/1767)
+- **Settings for installed modules.** Your installed modules now appear in your personal settings, where you can manage your own sign-ins and jump straight to a module's settings when available. [PR #1764](https://github.com/motioneso/moss/pull/1764) · [PR #1765](https://github.com/motioneso/moss/pull/1765)
+
+### Fixed
+
+- **Food looks at home in Moss.** The Food day view now uses the same cards, totals, and visual building blocks as the rest of the app. [PR #1733](https://github.com/motioneso/moss/pull/1733)
+- **No more phantom nutrition estimates.** When AI estimates are turned off, logging a meal no longer says an estimate is on the way. [PR #1771](https://github.com/motioneso/moss/pull/1771)
+- **Private chat respects your latest choice.** A stale response can no longer undo the privacy setting you just selected. [PR #1781](https://github.com/motioneso/moss/pull/1781)
+- **Chat actions are harder to double-submit.** Approve and reject cards now handle quick repeated clicks safely, and expired actions explain what happened more clearly. [PR #1649](https://github.com/motioneso/moss/pull/1649)
+- **Clearer module error messages.** When a module input is rejected, the error now says which action needs attention so the problem is easier to understand. [PR #1645](https://github.com/motioneso/moss/pull/1645)
+- **More resilient note memory.** Moss can now remember notes containing unusual characters that used to stop the process. [PR #1636](https://github.com/motioneso/moss/pull/1636)
+- **Downloaded modules restart properly.** The Settings prompt now gives a command that actually applies a downloaded module update. [PR #1658](https://github.com/motioneso/moss/pull/1658)
+
+### Changed
+
+- **Settings are closer to where you need them.** Finance, Job Search, and News pages now link to their own settings, so changing a connection or preference takes fewer clicks. [PR #1772](https://github.com/motioneso/moss/pull/1772)
+
 ## Edge channel — 2026-08-21
 
 Edge builds include the stable history below plus the user-facing changes already available in
