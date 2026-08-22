@@ -319,3 +319,34 @@ line.
 
 Nothing in `docs/coordination/AWAITING-BEN.md` - still empty, nothing needs Ben's decision right
 now.
+
+## Fifth coordinator, taking over, 2026-08-22
+
+Took over from the fourth coordinator, which had already spawned me and confirmed I was up and
+running on the right model. I am driving from pane w1:pM7, agent name `coordinator`, session
+`2aa2933e-426f-4ea7-b1af-6b40e971e829` - that session id is the new lock. The old pane (w1:pM5)
+has been closed. The fleet-watching background check that the fourth coordinator had running lived
+in that same pane, so it stopped when the pane closed - I started a fresh one the same way (a
+script that checks pane states every so often and only speaks up when something changes).
+
+**Pull request 1654 - still not ready, this is the one thing that needs real judgement, not just
+watching.** The build lane already fixed the problem a tough outside review found earlier
+(rebased on the current shared history, the two bad commits removed, the security guard and the
+deleted test files both restored). It is now running its own proof on a live copy of the app. Do
+not merge until: that proof finishes and is posted on the pull request, and a fresh tough outside
+review of this corrected version says it is fine (the earlier reviewer already finished and was
+shut down, so a new one has to be started once the proof is posted). This sign-off was delegated
+to the coordinator by Ben directly - be careful, not fast.
+
+**#1498 (styling cleanup):** has pull request 1841 open. Reported done with checks green and
+screenshots attached; still need to confirm directly that the checks are actually green (they were
+not, last time anyone checked), and still owed a plain answer on which model this lane is running
+on (it has twice started on the wrong, more expensive one by accident). Do not merge until both are
+confirmed.
+
+**#1529:** unchanged - pull request 1838 open, the tough outside review is still running, watching
+for its verdict.
+
+**#1336:** unchanged - still building.
+
+Nothing in `docs/coordination/AWAITING-BEN.md` - still empty.
