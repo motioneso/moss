@@ -1054,3 +1054,22 @@ Actions taken:
 Next: once the third security review posts its verdict, if clean, take pull request 1654 to Ben
 for his required sign-off, then merge. Once #1530 opens a pull request, run it through normal
 security-tier review. #1511 waits on #1246.
+
+## Update - 2026-08-22, fifteenth coordinator (cont.)
+
+Pull request 1654: third security review came back clean (zero blocking findings, confirmed exact
+by 22 near-miss tests plus tracing the real production path). It also surfaced a separate,
+pre-existing gap unrelated to this fix - filed as new issue #1860 - the part of the system that
+builds installed modules doesn't clean its settings the same way chat now does, so the same trick
+still works there. Not a blocker for 1654. Pinged Ben for merge sign-off; asked but no reply yet.
+QA pane/worktree already reaped.
+
+Issue #1530 build lane relayed at its context-meter warning. Code change and its test are done and
+committed (commit ac217d2a2 the fix plus test, rebased on origin/main, unit tests and the two
+named database-backed checks all pass, formatting/lint/type-check clean). The one open thread: the
+full local gate stalled for over ten minutes with no CPU activity partway through, after migrations
+and seeding finished - the outgoing agent stopped it rather than let it hang, and does not yet know
+if that stall is caused by this change or is a pre-existing flake (their diff is nowhere near the
+code path where it stalled). Handoff notes for the successor:
+docs/coordination/1530-relay-state.md. Successor confirmed driving as
+`pr1530-permission-repair-relay`, pane w1:pMR, same worktree. Old pane w1:pMP reaped.
