@@ -2686,3 +2686,32 @@ meter warning, so this handoff is doubly due.
 Relaying now per the box-wide rule: never let this session keep going once the meter warns.
 
 [pane w1:pKK]
+
+## relay30 coordinator: took over, closed out workshop chat cards, watching sports news sources
+
+Claimed the coordinator name and pane label (my pane is w1:pKN, session
+1f22b3a4-9d3f-4ff9-84cf-60311328a3a6 - I had to fix an early naming mistake where I renamed the
+outgoing pane instead of my own; both are corrected now). Closed the outgoing pane once my own
+identity was confirmed.
+
+Finished the workshop chat cards cleanup (#1756, pull request 1799):
+- Confirmed the merge commit (adc1194e) is on the main branch.
+- Checked the old build pane's copy of the code - no unsaved work, no live server running, just
+  the agent's own idle processes - and removed it along with its pane and branch.
+- Closed issue #1756. The project board had already moved it to Done on its own once the issue
+  closed.
+
+Sports news sources (#1572, pull request 1825) - the last check ("Verify foundation and app") was
+still pending when I took over. Set up a background watch for it to finish instead of polling by
+hand. Also checked the build lane's pane: there is an unsubmitted, unexplained line sitting in its
+prompt ("check when the coordinator's tests finish") but it has not been acted on and does not ask
+the lane to merge anything itself, so no action needed - just noting it in case a pattern is
+forming with the earlier queued "merge yourself" message relay29 caught.
+
+Next: once the check finishes green, spawn one more fresh independent tester on this exact
+rebased code (per standing rule - a rebase changes what ships even if a tester saw an earlier
+version), then merge if that comes back green, re-checking mergeability right before merging.
+
+`merges_since_relay` = 0 (reset for this relay - no merges done yet this pass).
+
+[pane w1:pKN]
