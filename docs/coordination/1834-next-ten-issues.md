@@ -965,3 +965,46 @@ failure). Reaped the second QA review's pane and worktree, verdict is posted on 
 
 Pull request 1838's one remaining check is still running. Nothing needs Ben yet beyond the
 standing merge sign-off already logged for pull request 1838.
+
+## Continuation note - 2026-08-22, fourteenth coordinator handing off at context limit
+
+Handing off at 70 percent context, right after a security-tier merge (both relay triggers fired
+together). Was driving from pane w1:pMK, agent name `coordinator`, session
+`5d197913-c589-4043-8b10-6d432a4fc164` - check `herdr agent list` for the new pane once the
+successor claims the name.
+
+**Pull request 1838 is MERGED** (Ben replied "Yes merge" via the phone ping, merged
+2026-08-22T23:02:23Z). Squash-merge succeeded on GitHub; the automatic branch delete failed only
+because the local branch is still checked out in the pull request 1529 worktree (pane w1:pKX,
+branch `1529-composed-dispatch-proof`) - harmless, GitHub-side branch is gone either way.
+**Successor: do the bookkeeping I did not get to** - close the linked issue if one exists (I did
+not find an auto-close reference in the PR body, so check the spec/manifest queue table for which
+issue number 1838 was for), move its board item to Done, add it to Ben's merge digest, and once
+you've confirmed on `main` that the commits landed, reap pane w1:pKX and remove worktree
+`.claude/worktrees/1529-composed-dispatch-proof` (run the four-gate check first - it's shown
+`idle` with nothing else pointed at it, should be clean).
+
+**Pull request 1654 (security fix) - NOT ready for Ben yet, do not merge.** Two security reviews
+have now run: the first found a real gap (a test-only setting could reach production and let
+someone swap in their own program for the real AI tool) and the second confirmed the first fix for
+that gap was incomplete (the new safety switch could be flipped the same way as the original
+setting). The lane fixed it a third time - commit `3e97cdf27` on the branch, posted as a comment
+on the PR just now: this time it's a strict equality check against one fixed known-good path
+instead of a marker, which should actually close the gap for good, plus the same three live tests
+re-passing. **This third fix has NOT been reviewed by anyone yet.** Its automated checks are still
+finishing (`Verify foundation and app` was pending on commit `3e97cdf27` at handoff time - I had a
+Monitor watching for it, which dies with this session). **Successor: check `gh pr checks 1654`;
+once green, spawn a THIRD Opus security review (same pattern as the last two - fresh worktree at
+the current commit, `--model opus`, boot pointer naming the exact prior finding: verify the new
+equality check actually only accepts the one baked-in test path and rejects everything else,
+including in the production container's actual code paths, don't take the commit message on
+trust) before this can go to Ben.** It is security tier - Ben's explicit sign-off is required no
+matter what the review finds.
+
+**Pane layout:** Builders tab (`w1:t2P`) has `pr1529-composed-dispatch` (pane w1:pKX, idle,
+reapable per above) and `pr1654-live-proof` (pane w1:pKT, idle, done with its third fix, waiting).
+No QA tab currently open - the second QA review's pane/worktree were already reaped after its
+verdict posted.
+
+Nothing else is currently blocked on Ben. The AWAITING-BEN file's pull request 1838 entry should
+be removed now that it's merged and Ben has ruled - do that as part of the bookkeeping above.
