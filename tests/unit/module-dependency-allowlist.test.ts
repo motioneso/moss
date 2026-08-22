@@ -101,7 +101,10 @@ const SANCTIONED_FEATURE_COUPLINGS = [
   "@moss/connectors -> @moss/email",
   // #975 Slice 4: revalidation writes its one owner-facing summary through the
   // Notifications public boundary (same shape as briefings -> notifications above).
-  "@moss/news -> @moss/notifications"
+  "@moss/news -> @moss/notifications",
+  // #1572: custom sports news sources reuse News's URL-preview/confirm helpers
+  // (NEWS_MAX_CUSTOM_SOURCES, discovery types) rather than duplicating them.
+  "@moss/sports -> @moss/news"
 ].sort();
 
 interface PackageManifest {

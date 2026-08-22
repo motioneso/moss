@@ -4,11 +4,18 @@ import { sportsModuleManifest } from "../../packages/sports/src/manifest.js";
 
 describe("sports manifest", () => {
   it("declares owner-only table + nav + settings + routes", () => {
-    expect(sportsModuleManifest.database.ownedTables).toEqual(["app.sports_follows"]);
+    expect(sportsModuleManifest.database.ownedTables).toEqual([
+      "app.sports_follows",
+      "app.sports_custom_sources",
+      "app.sports_source_assignments",
+      "app.sports_policy_verdicts",
+      "app.sports_headline_prefs"
+    ]);
     expect(sportsModuleManifest.database.migrations).toEqual([
       "sql/0133_sports_follows.sql",
       "sql/0185_sports_whole_league_dedupe.sql",
-      "sql/0186_sports_whole_league_unique.sql"
+      "sql/0186_sports_whole_league_unique.sql",
+      "sql/0189_sports_custom_sources.sql"
     ]);
     expect(sportsModuleManifest.navigation[0]?.path).toBe("/sports");
     expect(sportsModuleManifest.settings[0]?.path).toBe("/settings/modules/sports");
