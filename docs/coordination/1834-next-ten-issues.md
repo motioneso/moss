@@ -65,12 +65,26 @@ another lane touching the same config.
 
 | Issue | Lane name | Pane | Branch | Status |
 |-------|-----------|------|--------|--------|
-| #1498 | - | - | - | not started |
-| #1529 | - | - | - | not started |
-| #1336 | - | - | - | not started |
+| #1498 | pr1498-command-palette-css | w1:pKW | 1498-command-palette-css | building |
+| #1529 | pr1529-composed-dispatch | w1:pKX | 1529-composed-dispatch-proof | building |
+| #1336 | pr1336-jobsearch-validation | w1:pKY | 1336-jobsearch-wire-validation | building, handing off to a fresh copy of itself now (normal, not stuck) |
 | others | - | - | - | queued behind the above |
 
 Merges since the last coordinator handover: 1 (pull request 1831, documentation only).
+
+## Third coordinator, 2026-08-22
+
+Took over from the coordinator in pane w1:pKV after it handed off (its context filled up, nothing
+was wrong). Confirmed the fleet directly rather than trusting the status flags: all five lanes
+were actively working, not stuck. Now driving as pane w1:pK0, agent name `coordinator`, session
+`4341efcc-6c00-4ba9-8fd7-10730ef4feb9` - that session id is the new lock.
+
+Pull request 1832 (documentation only) is open, waiting on one automated check, set to merge
+itself once green - matches what the last note said, still just waiting.
+
+Job-search lane (#1336) is handing off to a fresh copy of itself in the same folder mid-turn; its
+own message said this is a normal handoff, not a blocker. Nothing needed from the coordinator for
+that.
 
 ## Continuation note - 2026-08-22, coordinator handing off at its context limit
 
