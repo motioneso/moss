@@ -208,6 +208,8 @@ function renderLedger(pullRequests) {
 
 function renderReport({ repo, start, end, merged, open, stylesheet }) {
   const counts = Map.groupBy(merged, (pullRequest) => categoryFor(pullRequest.title));
+  const featureCount = counts.get("Feature")?.length ?? 0;
+  const fixCount = counts.get("Fix")?.length ?? 0;
   const categoryStats = CATEGORIES.map(
     (category) =>
       `<div class="stat"><span class="stat-number">${counts.get(category)?.length ?? 0}</span><span class="stat-label">${category} PRs</span></div>`
@@ -237,16 +239,16 @@ function renderReport({ repo, start, end, merged, open, stylesheet }) {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Jarv1s weekly release record: ${merged.length} merged pull requests and ${open.length} open lanes." />
-    <title>Jarv1s Weekly · ${escapeHtml(endLabel)}</title>
+    <meta name="description" content="Moss weekly release record: ${merged.length} merged pull requests and ${open.length} open lanes." />
+    <title>Moss Weekly · ${escapeHtml(endLabel)}</title>
     <link rel="stylesheet" href="${escapeHtml(stylesheet)}" />
   </head>
   <body>
     <header class="masthead">
       <p class="issue">Release record · UTC window ${escapeHtml(startLabel)} to ${escapeHtml(endLabel)}</p>
-      <p class="wordmark">JARV1S WEEKLY</p>
+      <p class="wordmark">MOSS WEEKLY</p>
       <nav class="nav" aria-label="Release sections">
-        <a href="#open">Open lanes</a><a href="#ledger">Full ledger</a><a href="https://github.com/${escapeHtml(repo)}">Source</a>
+        <a href="#summary">The short version</a><a href="#open">Open lanes</a><a href="#ledger">Full ledger</a><a href="https://github.com/${escapeHtml(repo)}">Source</a>
       </nav>
     </header>
     <main>
@@ -257,6 +259,11 @@ function renderReport({ repo, start, end, merged, open, stylesheet }) {
           <p class="lede">Every merged pull request is counted from GitHub. Open work is listed separately with its current check state.</p>
         </div>
         <p class="snapshot">This is a generated delivery snapshot. “Merged” means present on main. Open, validating, ready, and blocked work is excluded from the shipped count.</p>
+      </section>
+      <section class="open" id="summary" aria-labelledby="summary-title">
+        <p class="kicker">In plain English</p>
+        <h2 class="section-title" id="summary-title">A week of making Moss more useful.</h2>
+        <p class="section-intro">This week Moss shipped ${featureCount} feature PR${featureCount === 1 ? "" : "s"}, smoothed ${fixCount} rough edge${fixCount === 1 ? "" : "s"}, and kept the rest of the house in shape. The full ledger below is the source of record, with every merged pull request counted exactly once.</p>
       </section>
       <section class="stats" aria-label="Release totals">
         <div class="stat"><span class="stat-number">${merged.length}</span><span class="stat-label">Merged PRs</span></div>
@@ -276,22 +283,22 @@ function renderReport({ repo, start, end, merged, open, stylesheet }) {
         ${renderLedger(merged)}
       </section>
     </main>
-    <footer class="colophon"><p>JARV1S WEEKLY · WINDOW ${escapeHtml(start.toISOString())} TO ${escapeHtml(end.toISOString())} · GENERATED ${escapeHtml(generatedLabel)} · SOURCE <a href="https://github.com/${escapeHtml(repo)}/pulls">GITHUB PULL REQUESTS</a></p></footer>
+    <footer class="colophon"><p>MOSS WEEKLY · WINDOW ${escapeHtml(start.toISOString())} TO ${escapeHtml(end.toISOString())} · GENERATED ${escapeHtml(generatedLabel)} · SOURCE <a href="https://github.com/${escapeHtml(repo)}/pulls">GITHUB PULL REQUESTS</a></p></footer>
   </body>
 </html>\n`;
 }
 
-function renderLatestRedirect(reportDate) {
-  const destination = `${reportDate}-weekly/`;
+function renderLatestRedirect(reportDate, prefix = "") {
+  const destination = `${prefix}${reportDate}-weekly/`;
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta http-equiv="refresh" content="0; url=${destination}" />
-    <title>Jarv1s Weekly</title>
+    <title>Moss Weekly</title>
   </head>
-  <body><p><a href="${destination}">Open the latest Jarv1s weekly release report</a></p></body>
+  <body><p><a href="${destination}">Open the latest Moss weekly release report</a></p></body>
 </html>\n`;
 }
 
@@ -357,7 +364,13 @@ async function main() {
     path.join(archiveDirectory, "index.html"),
     renderReport({ repo, start, end, merged, open, stylesheet: "../weekly-release.css" })
   );
-  await writeFile(path.join(outputRoot, "index.html"), renderLatestRedirect(reportDate));
+  const latestRedirect = renderLatestRedirect(reportDate);
+  await writeFile(path.join(outputRoot, "index.html"), latestRedirect);
+  await mkdir(path.join(outputRoot, "weekly"), { recursive: true });
+  await writeFile(
+    path.join(outputRoot, "weekly", "index.html"),
+    renderLatestRedirect(reportDate, "../")
+  );
   console.log(
     `Generated ${reportDate}: ${merged.length} merged, ${open.length} open → ${archiveDirectory}`
   );
