@@ -1,12 +1,24 @@
+import { randomUUID } from "node:crypto";
+
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { buildChatGatewayDependencies } from "../../packages/chat/src/routes.js";
 import { AiRepository } from "../../packages/ai/src/repository.js";
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
-import type { ConfirmationRegistry, SessionNotifier, SessionTokenRegistry } from "@moss/ai";
+import {
+  AssistantToolGateway,
+  ConfirmationRegistry,
+  SessionTokenRegistry,
+  type GatewaySessionRecord,
+  type SessionNotifier
+} from "@moss/ai";
 import type { MossModuleManifest, ModuleAssistantToolManifest } from "@moss/module-sdk";
 import { PreferencesRepository } from "@moss/structured-state";
-import { LEGACY_AGENCY_AUTO_EXECUTE_KEY } from "../../packages/tasks/src/action-policy.js";
+import { tasksModuleManifest } from "../../packages/tasks/src/manifest.js";
+import {
+  LEGACY_AGENCY_AUTO_EXECUTE_KEY,
+  TASK_CHANGES_POLICY_KEY
+} from "../../packages/tasks/src/action-policy.js";
 import type { Kysely } from "kysely";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
@@ -171,5 +183,82 @@ describe("chat action policy self-heal (getFamilyTier, real DB via buildChatGate
     });
     const tier = await policy.getFamilyTier("tasks", "task_changes");
     expect(tier).toBe("ask_each_time");
+  });
+
+  it("composed path: a real chat tool call through the real gateway self-heals the real tasks module, and never touches a bystander actor", async () => {
+    // ids.userC/userD are never referenced by the getFamilyTier-only tests above, so this
+    // test's "absent before dispatch" assertion never depends on suite execution order.
+    const dispatchedActorId = ids.userC;
+    const bystanderActorId = ids.userD;
+
+    async function readPreference(actorUserId: string, key: string): Promise<unknown> {
+      return runner.withDataContext(
+        { actorUserId, requestId: `req-read-${randomUUID()}` },
+        (scopedDb) => new PreferencesRepository().get(scopedDb, key)
+      );
+    }
+
+    // Read storage directly — no gateway, no getFamilyTier, no self-heal resolver in the path.
+    expect(await readPreference(dispatchedActorId, TASK_CHANGES_POLICY_KEY)).toBeNull();
+    expect(await readPreference(dispatchedActorId, LEGACY_AGENCY_AUTO_EXECUTE_KEY)).toBeNull();
+    expect(await readPreference(bystanderActorId, TASK_CHANGES_POLICY_KEY)).toBeNull();
+    expect(await readPreference(bystanderActorId, LEGACY_AGENCY_AUTO_EXECUTE_KEY)).toBeNull();
+
+    const records: GatewaySessionRecord[] = [];
+    const notifier: SessionNotifier = {
+      emit(_chatSessionId, record) {
+        records.push(record);
+      }
+    };
+    const tokens = new SessionTokenRegistry();
+    const confirmations = new ConfirmationRegistry();
+
+    const deps = buildChatGatewayDependencies({
+      resolveActiveModules: async () => [tasksModuleManifest],
+      repository,
+      runner,
+      tokens,
+      confirmations,
+      notifier,
+      agencyPreferences: new PreferencesRepository(),
+      collaborators: {}
+    });
+    const gateway = new AssistantToolGateway(deps);
+
+    const chatSessionId = randomUUID();
+    const token = tokens.mint({
+      actorUserId: dispatchedActorId,
+      chatSessionId,
+      allowedToolNames: null
+    });
+
+    const result = await gateway.callTool(token, "tasks.create", {
+      title: "Composed self-heal proof"
+    });
+    expect(result.ok).toBe(true);
+
+    // Exactly one action_result, never an action_request: this is an auto-run tool and the
+    // actor was never asked for confirmation.
+    expect(records.map((record) => record.kind)).toEqual(["action_result"]);
+
+    // Read storage directly again — the dispatch healed the canonical key...
+    expect(await readPreference(dispatchedActorId, TASK_CHANGES_POLICY_KEY)).toBe("trusted_auto");
+    // ...without manufacturing the legacy key...
+    expect(await readPreference(dispatchedActorId, LEGACY_AGENCY_AUTO_EXECUTE_KEY)).toBeNull();
+    // ...and the generic action-policy reader (used by the settings UI) agrees with the direct
+    // preference read above: one row, tasks/task_changes, trusted_auto.
+    const dispatchedActorPolicies = await runner.withDataContext(
+      { actorUserId: dispatchedActorId, requestId: `req-check-${randomUUID()}` },
+      (scopedDb) => repository.listActionPolicies(scopedDb)
+    );
+    expect(
+      dispatchedActorPolicies.find(
+        (p) => p.moduleId === "tasks" && p.actionFamilyId === "task_changes"
+      )
+    ).toEqual({ moduleId: "tasks", actionFamilyId: "task_changes", tier: "trusted_auto" });
+
+    // The bystander actor, who was never dispatched against, still has neither key.
+    expect(await readPreference(bystanderActorId, TASK_CHANGES_POLICY_KEY)).toBeNull();
+    expect(await readPreference(bystanderActorId, LEGACY_AGENCY_AUTO_EXECUTE_KEY)).toBeNull();
   });
 });
