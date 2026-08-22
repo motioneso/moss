@@ -99,3 +99,26 @@ be merged just because the automated checks are green.
 
 Otherwise: watching the fleet and the project board as before, nothing else new to report.
 
+
+## 2026-08-22 - Ben delegated the 1654 sign-off to me before going to sleep
+
+Ben's exact words: "Please review 1654 in my place, I am going to sleep."
+
+So the normal rule that he must personally approve this merge is lifted for this one pull
+request, and I hold that decision instead. I am treating that as a reason to be more careful,
+not less. Before this merges it needs all of:
+
+- the agent's live proof finished and posted on the pull request,
+- a genuinely independent adversarial review by a separate, stronger reviewer, whose written
+  verdict is posted on the pull request so it survives any handoff,
+- my own read of that verdict.
+
+If anything about it looks genuinely risky, the right answer is to leave it unmerged with a
+short note explaining why, and let Ben decide when he is awake. Delegated authority is not
+permission to wave something through.
+
+He also asked to be told when 1654 was ready for sign-off; that request is superseded by the
+delegation above, but the standing habit of leaving him a clear written trail still applies.
+
+Ben has NOT delegated anything beyond this one pull request. Anything else that would normally
+need his decision still waits for him or goes in the awaiting-Ben list.
