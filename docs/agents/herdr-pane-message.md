@@ -67,14 +67,14 @@ no registered name, ask it to re-resolve your pane from a fresh `herdr pane list
 
 ## Quick reference
 
-| Need | Command |
-| --- | --- |
-| Resolve agents | `herdr agent list` |
-| Resolve panes | `herdr pane list` |
-| Send to an agent | `herdr agent prompt <name-or-pane-id> "<text>" [--wait]` |
-| Run a raw-pane command | `herdr pane run <pane_id> "<command>"` |
-| Read an agent | `herdr agent read <name-or-pane-id> --source recent-unwrapped --lines N` |
-| Send intentional keys | `herdr agent send-keys <name-or-pane-id> <key> [key ...]` |
+| Need                   | Command                                                                  |
+| ---------------------- | ------------------------------------------------------------------------ |
+| Resolve agents         | `herdr agent list`                                                       |
+| Resolve panes          | `herdr pane list`                                                        |
+| Send to an agent       | `herdr agent prompt <name-or-pane-id> "<text>" [--wait]`                 |
+| Run a raw-pane command | `herdr pane run <pane_id> "<command>"`                                   |
+| Read an agent          | `herdr agent read <name-or-pane-id> --source recent-unwrapped --lines N` |
+| Send intentional keys  | `herdr agent send-keys <name-or-pane-id> <key> [key ...]`                |
 
 > Scope: spawning a new agent is separate (`herdr agent start`). This guide covers messaging
 > existing agents.
