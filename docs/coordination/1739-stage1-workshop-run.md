@@ -2092,3 +2092,14 @@ the lane to skip the stash-verify step, push, open the PR, and note the pre-exis
 failures in the PR body. Confirmed delivered (queued, lane was mid-command).
 
 AWAITING-BEN.md still empty — both of the above were supervision calls, not Ben decisions.
+
+## Update (same coordinator session, ~9:4x PM PDT)
+
+Checked the two priority watch items from the relay24 brief:
+- **#1756**: its background dependency-install step had been running about 90 minutes with no
+  progress shown — nudged it to check whether that step was actually hung. After the nudge it
+  moved on to a database-migration step, so it wasn't fully dead, just very slow; kept watching.
+- **#1039**: healthy, working normally, no action needed.
+
+#1754's build lane confirmed done (report: PR #1816, gate green apart from the known #1673 flake).
+QA is already running against it in its own pane. #1571, #1517, #1572 unchanged, watch only.
