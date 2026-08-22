@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { lazy, Suspense, useEffect, useMemo, type ComponentType, type ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router";
 import { MODULE_WEB_CONTRIBUTIONS, MODULE_WEB_ROUTES } from "virtual:moss-module-web";
@@ -11,12 +11,14 @@ import {
   getModules,
   getMyModules,
   getOnboardingStatus,
-  getPersonaSettings
+  getPersonaSettings,
+  shipExternalModule
 } from "./api/client";
 import { webRoutePath } from "./app-route-metadata";
 import { queryKeys } from "./api/query-keys";
 import { AuthScreen } from "./auth/auth-screen";
 import { createAssistantSurfaceHandle, useAssistantSurfaceHost } from "./chat/assistant-surface";
+import { DraftBanner } from "./chat/draft-banner";
 import {
   installModuleHostRuntime,
   loadExternalModuleContribution,
@@ -104,6 +106,10 @@ export function App() {
         .map((m) => ({
           moduleId: m.id,
           path: `/m/${m.id}/*`,
+          // #1756: true only for the caller's own still-running draft (ModuleDto.draft — see
+          // apps/api/src/module-dto.ts's serializeExternalModule, which only ever sets this for
+          // a draft the caller owns; #1753's active-module resolver already hides anyone else's).
+          isDraft: m.draft === true,
           // D9 (#1388): the module's Root and its raw css load together; wrap Root in the
           // host-owned ModuleCssScope here (not inside ExternalModuleMount) so the css that
           // travels with THIS lazy load is the css that gets scoped — no separate state to
@@ -302,6 +308,7 @@ export function App() {
                     moduleId={route.moduleId}
                     Component={route.Component}
                     actorScopeKey={meQuery.data.user.id}
+                    isDraft={route.isDraft}
                   />
                 }
               />
@@ -360,9 +367,21 @@ function ExternalModuleMount(props: {
   readonly Component: ComponentType<ExternalWebContributionProps>;
   /** #1213: opaque actor token passed through hostActions only for client-side namespacing. */
   readonly actorScopeKey: string;
+  /** #1756: true only for the caller's own still-running draft (see externalModuleRoutes above). */
+  readonly isDraft: boolean;
 }) {
-  const { openAssistantWithDraft } = useChatControls();
+  const { openAssistantWithDraft, openChat } = useChatControls();
   const { subscribeRecords, seedComposer } = useAssistantSurfaceHost();
+  const queryClient = useQueryClient();
+  // #1756: ships the draft for real — POST /api/admin/modules/:id/ship (packages/settings/src/
+  // routes-modules.ts). Success flips the DB row from draft to enabled and clears its owner;
+  // refetching /api/modules is what makes ModuleDto.draft disappear and the banner unmount.
+  const shipMutation = useMutation({
+    mutationFn: () => shipExternalModule(props.moduleId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.modules });
+    }
+  });
   const hostActions = useMemo(
     () => createModuleHostActions(props.moduleId, openAssistantWithDraft, props.actorScopeKey),
     [props.moduleId, props.actorScopeKey, openAssistantWithDraft]
@@ -381,7 +400,29 @@ function ExternalModuleMount(props: {
     return () => assistantSurface.setSurfaceKey(null);
   }, [assistantSurface]);
   const Component = props.Component;
-  return <Component hostActions={hostActions} assistantSurface={assistantSurface} />;
+  const page = <Component hostActions={hostActions} assistantSurface={assistantSurface} />;
+  if (!props.isDraft) return page;
+  // #1756: a running draft gets the banner + its page, with the chat drawer docked beside it —
+  // AppShell keys the docking off this same module's ModuleDto.draft, matched by the route.
+  return (
+    <div className="draft-workshop-page">
+      <DraftBanner
+        moduleId={props.moduleId}
+        whatItReaches="only you, until you ship it"
+        whatItKeeps="its own data, same as any module that's already shipped"
+        restartRequired={
+          shipMutation.isSuccess
+            ? "Shipped. Everyone else can see it once the app restarts."
+            : "Shipping makes it visible to everyone, once the app restarts."
+        }
+        onShip={() => shipMutation.mutate()}
+        onAskForChange={openChat}
+        seeCodeUnavailableReason="Viewing the code isn't wired up yet."
+        throwAwayUnavailableReason="Deleting a draft isn't wired up yet."
+      />
+      <div className="draft-workshop-page__body">{page}</div>
+    </div>
+  );
 }
 
 const moduleCssRefCounts = new Map<string, number>();

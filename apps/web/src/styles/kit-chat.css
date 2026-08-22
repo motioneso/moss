@@ -797,3 +797,16 @@
 .draft-banner__note {
   margin: var(--space-3) 0 0;
 }
+
+/* #1756: a running draft's page — the banner stacked above the module's own content. Layout
+   only; the module's content keeps its own styling untouched. */
+.draft-workshop-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.draft-workshop-page__body {
+  min-width: 0;
+}

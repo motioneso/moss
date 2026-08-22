@@ -447,6 +447,20 @@ export async function setExternalModuleEnabled(
   );
 }
 
+/**
+ * Admin: ship a running draft — flips it from draft to enabled for everyone and clears its
+ * owner. `restartRequired` is always true: the row change alone doesn't make the module visible
+ * to other users, a restart still does that (#1753 Task 10).
+ */
+export async function shipExternalModule(
+  id: string
+): Promise<{ shipped: boolean; restartRequired: boolean }> {
+  return requestJson<{ shipped: boolean; restartRequired: boolean }>(
+    `/api/admin/modules/${encodeURIComponent(id)}/ship`,
+    { method: "POST" }
+  );
+}
+
 /** Admin: registry-backed module list — install/update/remove states (#964). */
 export async function getModuleRegistry(refresh: boolean): Promise<GetModuleRegistryResponse> {
   return requestJson<GetModuleRegistryResponse>(

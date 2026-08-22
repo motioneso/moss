@@ -11,8 +11,14 @@ export interface DraftBannerProps {
   readonly restartRequired: string;
   readonly onShip: () => void;
   readonly onAskForChange: () => void;
-  readonly onSeeCode: () => void;
-  readonly onThrowAway: () => void;
+  /** Absent (not just a no-op) until there's a real "see the code" surface to open. */
+  readonly onSeeCode?: () => void;
+  /** Absent until there's a real delete-draft action wired up. */
+  readonly onThrowAway?: () => void;
+  /** Shown as the disabled button's title when onSeeCode is absent. */
+  readonly seeCodeUnavailableReason?: string;
+  /** Shown as the disabled button's title when onThrowAway is absent. */
+  readonly throwAwayUnavailableReason?: string;
 }
 
 export function DraftBanner(props: DraftBannerProps) {
@@ -50,6 +56,8 @@ export function DraftBanner(props: DraftBannerProps) {
             <button
               className="jds-btn jds-btn--quiet jds-btn--sm"
               type="button"
+              disabled={!props.onSeeCode}
+              title={props.onSeeCode ? undefined : props.seeCodeUnavailableReason}
               onClick={props.onSeeCode}
             >
               See the code
@@ -57,6 +65,8 @@ export function DraftBanner(props: DraftBannerProps) {
             <button
               className="jds-btn jds-btn--quiet jds-btn--sm"
               type="button"
+              disabled={!props.onThrowAway}
+              title={props.onThrowAway ? undefined : props.throwAwayUnavailableReason}
               onClick={props.onThrowAway}
             >
               Throw it away

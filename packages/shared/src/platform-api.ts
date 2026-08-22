@@ -68,6 +68,13 @@ export interface ModuleDto {
   readonly external?: boolean;
   /** #918: web contribution declaration. Absent for built-ins and modules without one. */
   readonly web?: ModuleWebDto;
+  /**
+   * #1756: true when this module is still a running draft owned by the caller (#1753's
+   * draft status). /api/modules only ever returns a draft row to its own owner (the active-module
+   * resolver filters everyone else's out), so seeing this true here always means "your own,
+   * still-being-built module" — never someone else's. Absent once the module has shipped.
+   */
+  readonly draft?: boolean;
 }
 
 export interface InstanceSettingDto {
@@ -221,7 +228,9 @@ const moduleSchema = {
     // but existing producers/fixtures that omit it stay valid.
     external: { type: "boolean" },
     // #918: web contribution declaration. NOT in `required` — absent for built-ins.
-    web: moduleWebSchema
+    web: moduleWebSchema,
+    // #1756: present-and-true only for the caller's own still-running draft; absent otherwise.
+    draft: { type: "boolean" }
   }
 } as const;
 
