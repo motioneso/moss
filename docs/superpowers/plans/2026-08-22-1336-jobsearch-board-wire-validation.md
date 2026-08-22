@@ -113,6 +113,7 @@ early return and the `truncated: true` fallthrough at the end of the loop.
 
 **Test file:** `tests/unit/job-search-web-board.test.tsx` (existing `matches.list` mocking already
 present at line ~139 and ~664) — add cases:
+
 1. A response with one row missing `url` (string field absent) — asserts the returned `items`
    array excludes that row, and `invalidCount` is 1. Fails today because the row currently passes
    through with `url: undefined`.
@@ -131,7 +132,7 @@ present at line ~139 and ~664) — add cases:
   rendered when `matchesState.invalidCount > 0`, reusing the same `jsm-queue-notice`/`role="status"`
   pattern:
   `${invalidCount} role(s) couldn't be shown — the server sent something the board didn't
-  recognize.` (singular/plural handled the same way the existing "new role(s)" search-finished
+recognize.` (singular/plural handled the same way the existing "new role(s)" search-finished
   copy already does at `runNotice`'s `"finished"` case, `board.tsx` ~line 215).
 
 **Test file:** `tests/unit/job-search-web-board.test.tsx` — one case asserting the notice text
@@ -142,6 +143,7 @@ renders when `readWholeBoard` reports `invalidCount > 0`, and does not render wh
 ```bash
 pnpm --filter <job-search-web-test-target-or-root> vitest run tests/unit/job-search-web-board.test.tsx > /tmp/1336-unit.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`, including the new cases.
 
 ```bash
@@ -149,6 +151,7 @@ pnpm format:check > /tmp/1336-format.log 2>&1; echo "EXIT=$?"
 pnpm lint > /tmp/1336-lint.log 2>&1; echo "EXIT=$?"
 pnpm typecheck > /tmp/1336-typecheck.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0` on all three.
 
 Full gate before wrap-up per the `verify-gate` skill (not run ad hoc).
