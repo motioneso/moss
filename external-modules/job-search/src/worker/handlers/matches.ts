@@ -127,6 +127,19 @@ function truncateText(value: string, max: number): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }
 
+const REQUIRED_NONEMPTY_FIELDS = ["id", "title", "company", "url", "location", "source"] as const;
+const KNOWN_STATES: ReadonlySet<string> = new Set(["unscored", "new", "seen", "dismissed"]);
+
+/** Field names only — never call this with anything that logs the item itself. */
+function malformedBoardMatchFields(item: BoardMatch): string[] {
+  const bad: string[] = [];
+  for (const field of REQUIRED_NONEMPTY_FIELDS) {
+    if (typeof item[field] !== "string" || item[field].length === 0) bad.push(field);
+  }
+  if (!KNOWN_STATES.has(item.state)) bad.push("state");
+  return bad;
+}
+
 function requireProfileId(input: Record<string, unknown>): string {
   const value = input.profileId;
   if (typeof value !== "string" || value.length === 0) {
@@ -215,7 +228,7 @@ export function createMatchesListHandler(store: JobSearchStore) {
       // `getPostings`) — skipped here, the same "no posting, no item" rule
       // `domain/surface.ts`'s `matchItem` already applies to the briefing.
       if (posting === undefined) continue;
-      items.push({
+      const item: BoardMatch = {
         id: match.id,
         title: truncateText(posting.title, TITLE_MAX_CHARS),
         company: truncateText(posting.company, COMPANY_MAX_CHARS),
@@ -227,7 +240,17 @@ export function createMatchesListHandler(store: JobSearchStore) {
         location: truncateText(posting.location, LOCATION_MAX_CHARS),
         source: truncateText(labelFor(posting.sourceId), SOURCE_LABEL_MAX_CHARS),
         postedAt: posting.postedAt
-      });
+      };
+      const badFields = malformedBoardMatchFields(item);
+      if (badFields.length > 0) {
+        // #1336: field names only, never posting/job content (title, company, url, etc) — the
+        // point of this log is diagnosing which field drifted, not a second copy of private data.
+        console.error(
+          `job-search matches.list: dropping match ${item.id} — invalid fields: ${badFields.join(", ")}`
+        );
+        continue;
+      }
+      items.push(item);
     }
 
     // `items.length` can be short of `limit` on a page that is NOT the last one: a match whose

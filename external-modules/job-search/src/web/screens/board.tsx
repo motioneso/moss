@@ -367,7 +367,7 @@ export function BoardScreen(props: BoardScreenProps): ReactNodeLike {
         status: "ready",
         items: reconcilePendingStates(items),
         truncated,
-        invalidCount,
+        invalidCount
       });
       hasRowsRef.current = true;
       setReadError(null);

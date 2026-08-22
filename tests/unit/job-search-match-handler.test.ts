@@ -438,6 +438,36 @@ describe("createMatchesListHandler", () => {
     expect(result.items).toEqual([]);
   });
 
+  it("drops a row whose posting has an empty location, logs the match id and the field name, never the posting content", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const match = makeMatch({ id: "match-1", postingId: "post-1" });
+      const posting = makePosting("post-1", {
+        title: "Confidential Role Title",
+        company: "Confidential Co",
+        location: "",
+        url: "https://example.com/confidential-posting"
+      });
+      const store = createFakeStore({ matches: [match], postings: [posting] });
+      const handler = createMatchesListHandler(store);
+
+      const result = (await handler(toolCtx({ profileId: "profile-1", limit: 10 }))) as {
+        items: unknown[];
+      };
+
+      expect(result.items).toEqual([]);
+      expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+      const message = consoleErrorSpy.mock.calls[0]![0] as string;
+      expect(message).toContain("match-1");
+      expect(message).toContain("location");
+      expect(message).not.toContain("Confidential Role Title");
+      expect(message).not.toContain("Confidential Co");
+      expect(message).not.toContain("confidential-posting");
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
   it("worst case render-survival: MATCHES_LIST_MAX_LIMIT matches with every field maxed stay <=80% of the tool-result render cap", async () => {
     // packages/ai/src/routes.ts's boundedAssistantToolResultData substitutes {text: "…truncated"}
     // past 16 000 RENDERED characters — and `renderToolResult` (module-sdk) renders a uniform
