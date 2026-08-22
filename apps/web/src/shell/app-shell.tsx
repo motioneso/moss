@@ -310,6 +310,16 @@ export function AppShell(props: AppShellProps) {
     }
   });
 
+  // #1756: dock the chat drawer beside the page only while the visible route is the caller's
+  // own running draft (ModuleDto.draft — set only for a draft the caller owns; see
+  // apps/api/src/module-dto.ts's serializeExternalModule). Everywhere else the drawer stays the
+  // ordinary floating overlay.
+  const dockChat = useMemo(() => {
+    if (!location.pathname.startsWith("/m/")) return false;
+    const moduleId = location.pathname.slice("/m/".length).split("/")[0];
+    return props.modules.some((module) => module.id === moduleId && module.draft === true);
+  }, [location.pathname, props.modules]);
+
   const locale = useUserLocale();
   const { title, subtitle } = resolvePageHeading(
     location.pathname,
@@ -318,6 +328,35 @@ export function AppShell(props: AppShellProps) {
     props.modules
   );
   const closeMobileNav = () => setMobileNavOpen(false);
+
+  // #1756: exactly one ChatDrawer element, rendered in one of two spots below (docked beside
+  // the page, or in its ordinary floating overlay spot) depending on dockChat — never both at
+  // once, and never a second instance.
+  const chatDrawer = (
+    <ChatDrawer
+      open={chatOpen}
+      docked={dockChat}
+      onClose={() => {
+        setChatOpen(false);
+        setFocusActionRequestId(null);
+        // #916: starters are one-shot — a later manual open starts from a blank composer.
+        setModuleDraft(undefined);
+      }}
+      // #1332 — the drawer renders whichever surface is LIVE, which is what makes opening the
+      // header control inside a profile give you that profile's thread (job-search spec §7)
+      // instead of an empty panel. Outside a module `activeSurface` is DEFAULT_CHAT_SURFACE, so
+      // this is the ordinary drawer thread; no module content can survive the exit, because the
+      // surface key is also the history lookup key all the way down to the repository.
+      records={recordsForSurface(activeSurface)}
+      clearRecords={clearRecords}
+      streamErrorCount={streamErrorCount}
+      isFounder={props.me.user.isBootstrapOwner}
+      initialText={moduleDraft}
+      focusActionRequestId={focusActionRequestId}
+      onActionRequestFocused={() => setFocusActionRequestId(null)}
+      surface={activeSurface}
+    />
+  );
 
   return (
     <div className="app-frame">
@@ -410,26 +449,30 @@ export function AppShell(props: AppShellProps) {
           </div>
         </header>
 
-        <main className="content-surface">
-          <AssistantSurfaceHostProvider value={assistantSurfaceHost}>
-            <ChatControlsProvider
-              value={{
-                openChat,
-                openChatWith,
-                openAssistantWithDraft,
-                pendingNotesDelete: pendingNotesDelete
-                  ? {
-                      actionRequestId: pendingNotesDelete.actionRequestId!,
-                      summary: pendingNotesDelete.summary ?? pendingNotesDelete.text
-                    }
-                  : null,
-                openActionRequest
-              }}
-            >
-              {props.children}
-            </ChatControlsProvider>
-          </AssistantSurfaceHostProvider>
-        </main>
+        <div className={`workspace-body ${dockChat && chatOpen ? "workspace-body--docked" : ""}`}>
+          <main className="content-surface">
+            <AssistantSurfaceHostProvider value={assistantSurfaceHost}>
+              <ChatControlsProvider
+                value={{
+                  openChat,
+                  openChatWith,
+                  openAssistantWithDraft,
+                  pendingNotesDelete: pendingNotesDelete
+                    ? {
+                        actionRequestId: pendingNotesDelete.actionRequestId!,
+                        summary: pendingNotesDelete.summary ?? pendingNotesDelete.text
+                      }
+                    : null,
+                  openActionRequest
+                }}
+              >
+                {props.children}
+              </ChatControlsProvider>
+            </AssistantSurfaceHostProvider>
+          </main>
+
+          {dockChat ? chatDrawer : null}
+        </div>
       </div>
 
       <CommandPalette
@@ -439,28 +482,7 @@ export function AppShell(props: AppShellProps) {
         navigate={navigate}
       />
 
-      <ChatDrawer
-        open={chatOpen}
-        onClose={() => {
-          setChatOpen(false);
-          setFocusActionRequestId(null);
-          // #916: starters are one-shot — a later manual open starts from a blank composer.
-          setModuleDraft(undefined);
-        }}
-        // #1332 — the drawer renders whichever surface is LIVE, which is what makes opening the
-        // header control inside a profile give you that profile's thread (job-search spec §7)
-        // instead of an empty panel. Outside a module `activeSurface` is DEFAULT_CHAT_SURFACE, so
-        // this is the ordinary drawer thread; no module content can survive the exit, because the
-        // surface key is also the history lookup key all the way down to the repository.
-        records={recordsForSurface(activeSurface)}
-        clearRecords={clearRecords}
-        streamErrorCount={streamErrorCount}
-        isFounder={props.me.user.isBootstrapOwner}
-        initialText={moduleDraft}
-        focusActionRequestId={focusActionRequestId}
-        onActionRequestFocused={() => setFocusActionRequestId(null)}
-        surface={activeSurface}
-      />
+      {dockChat ? null : chatDrawer}
     </div>
   );
 }

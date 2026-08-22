@@ -68,6 +68,11 @@ export function serializeExternalModule(m: ReconciledExternalModule): ModuleDto 
     external: true,
     // #918: ModuleDto.web is optional — omit rather than emit null when the module
     // declares no web surface (ReconciledExternalModule.web itself IS nullable).
-    ...(m.web ? { web: m.web } : {})
+    ...(m.web ? { web: m.web } : {}),
+    // #1756: the caller's own module list only ever contains someone else's draft never —
+    // apps/api/src/external-module-tools.ts's active-module resolver already drops any draft
+    // that isn't owned by the caller — so a "draft" status reaching this mapper always means
+    // "this is the caller's own, still-running draft".
+    ...(m.status === "draft" ? { draft: true } : {})
   };
 }

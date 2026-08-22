@@ -12,6 +12,23 @@
   animation: chatd-in 0.26s cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 
+/* #1756: docked beside a running draft's page, in the document flow, at desktop width.
+   Falls back to the ordinary overlay under the mobile breakpoint — a docked two-pane layout
+   would leave no room for the draft on a phone, so the drawer stays the app's normal pop-up
+   there instead of copying the mockup's always-stacked layout. */
+@media (min-width: 721px) {
+  .chatd--docked {
+    position: static;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    width: 380px;
+    max-width: none;
+    height: 100%;
+    animation: none;
+  }
+}
+
 @keyframes chatd-in {
   from {
     opacity: 0;
@@ -718,4 +735,78 @@
 .source-tray__snippet {
   margin: var(--space-3) 0 0;
   line-height: var(--leading-normal);
+}
+
+/* Plan-approval card (#1756) — label/value rows inside the jds-card--raised wrapper. */
+.plan-card__rows {
+  margin: var(--space-3) 0 0;
+}
+
+.plan-card__row {
+  display: grid;
+  grid-template-columns: 8rem 1fr;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.plan-card__row:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.plan-card__row dd {
+  margin: 0;
+}
+
+.plan-card__actions {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  margin-top: var(--space-5);
+}
+
+.plan-card__superseded-line {
+  margin: 0 0 var(--space-2);
+  line-height: var(--leading-normal);
+}
+
+.draft-banner__body {
+  min-width: 0;
+  flex: 1;
+}
+
+.draft-banner__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.draft-banner__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.draft-banner__spacer {
+  flex: 1;
+}
+
+.draft-banner__note {
+  margin: var(--space-3) 0 0;
+}
+
+/* #1756: a running draft's page — the banner stacked above the module's own content. Layout
+   only; the module's content keeps its own styling untouched. */
+.draft-workshop-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.draft-workshop-page__body {
+  min-width: 0;
 }

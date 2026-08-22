@@ -537,6 +537,27 @@ button.module-link {
   padding: var(--space-7) var(--space-6);
 }
 
+/* #1756: wraps the page + (when open on the caller's own running draft) the docked chat drawer.
+   Plain block by default — identical to `.content-surface` filling the row on its own. */
+.workspace-body {
+  min-width: 0;
+}
+
+@media (min-width: 721px) {
+  .workspace-body--docked {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 380px;
+    align-items: stretch;
+    height: calc(100dvh - var(--topbar-h));
+    overflow: hidden;
+  }
+
+  .workspace-body--docked .content-surface {
+    overflow-y: auto;
+    height: 100%;
+  }
+}
+
 /* Today editorial empty-state line */
 .cmd-empty {
   margin: 8px 0 0;
