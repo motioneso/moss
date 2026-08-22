@@ -73,3 +73,14 @@ back for review. -->
 
 <!-- Resolved 2026-08-22 23:02: Ben replied "Yes merge" to the phone ping. Pull request 1838
 merged. -->
+
+**Pull request 1654 (security fix) — ready for your merge sign-off.** Third independent security
+review just finished (fresh copy of the code, strongest review model, adversarial pass) and found
+zero blocking problems — the fix genuinely closes the gap: it pins one setting to the single
+correct value and rejects everything else, tested against 22 near-miss attempts, verified on the
+real production code path, not just in tests. It also surfaced a separate, pre-existing hole (the
+part of the system that builds installed modules can still be pointed at a fake AI program the
+same way, because it does not clean up its settings first) — that is NOT part of this pull request,
+was already open on the main branch before it, and is filed as its own new issue, #1860.
+Recommendation: sign off and merge 1654 now; #1860 can be picked up separately.
+Full verdict: https://github.com/motioneso/moss/pull/1654 (last comment).
