@@ -2211,3 +2211,12 @@ the PR's own description doesn't mention this gap. QA is still finishing (waitin
 foundation check and two live end-to-end tests) before giving its real verdict. Not treating this
 as final or looping in Ben yet -- if the final verdict confirms this as a blocking gap, the normal
 path is QA posts it on the PR and the build lane fixes it, not a design question for Ben.
+
+## Update (same coordinator session, ~11:0x PM PDT)
+
+**#1572** relayed after a context compaction. Predecessor (pane w1:pJZ) committed the live-path
+test file and its trigger-map rows plus a continuation doc before handing off; task 1's code
+(schema, REST routes, settings page) and its unit tests were already committed by an earlier
+session. Successor "sports-sources-relay" is now running in the same worktree/branch (pane
+w1:pK7), confirmed reading the handoff doc and actively working on Sonnet. Predecessor pane
+closed and reaped. Agents tab back to 4 panes, grid still fine, no rebalance needed.
