@@ -6,6 +6,7 @@ import type { ToolExecute, ToolResult } from "@moss/module-sdk";
 import { PreferencesRepository } from "@moss/structured-state";
 import type { WeatherLocationDto } from "@moss/shared";
 
+import { searchOpenMeteoLocations } from "@moss/weather";
 import { settingsUndoStack } from "./undo-stack.js";
 
 // Matches weather-location-routes.ts's WEATHER_LOCATION_PREFERENCE_KEY exactly.
@@ -15,20 +16,46 @@ const preferences = new PreferencesRepository();
 
 export const weatherLocationSetInputSchema = {
   type: "object",
-  properties: {
-    lat: { type: "number" },
-    lon: { type: "number" },
-    label: { type: "string", minLength: 1 }
-  },
-  required: ["lat", "lon", "label"],
+  properties: { query: { type: "string", minLength: 1 } },
+  required: ["query"],
   additionalProperties: false
 } as const;
 
 export const weatherLocationOutputSchema = {
-  type: "object",
-  properties: { lat: { type: "number" }, lon: { type: "number" }, label: { type: "string" } },
-  required: ["lat", "lon", "label"],
-  additionalProperties: false
+  oneOf: [
+    {
+      type: "object",
+      properties: {
+        status: { type: "string", enum: ["saved"] },
+        lat: { type: "number" },
+        lon: { type: "number" },
+        label: { type: "string" }
+      },
+      required: ["status", "lat", "lon", "label"],
+      additionalProperties: false
+    },
+    {
+      type: "object",
+      properties: {
+        status: { type: "string", enum: ["ambiguous"] },
+        candidates: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              lat: { type: "number" },
+              lon: { type: "number" },
+              label: { type: "string" }
+            },
+            required: ["lat", "lon", "label"],
+            additionalProperties: false
+          }
+        }
+      },
+      required: ["status", "candidates"],
+      additionalProperties: false
+    }
+  ]
 } as const;
 
 export const weatherLocationSetExecute: ToolExecute = async (
@@ -37,10 +64,12 @@ export const weatherLocationSetExecute: ToolExecute = async (
   ctx
 ): Promise<ToolResult> => {
   assertDataContextDb(scopedDb);
-  const { lat, lon, label } = input as { lat: number; lon: number; label: string };
-  if (lat < -90 || lat > 90) throw new HttpError(400, "Latitude out of range");
-  if (lon < -180 || lon > 180) throw new HttpError(400, "Longitude out of range");
-  const next: WeatherLocationDto = { lat, lon, label: label.trim().slice(0, 200) };
+  const { query } = input as { query: string };
+  const candidates = await searchOpenMeteoLocations(query.trim());
+  if (candidates.length === 0) throw new HttpError(404, "No weather location matched that place");
+  if (candidates.length > 1) return { data: { status: "ambiguous", candidates } };
+
+  const next: WeatherLocationDto = candidates[0]!;
   const current = await preferences.getWithRevision(scopedDb, WEATHER_LOCATION_PREFERENCE_KEY);
   const currentValue = current?.value as WeatherLocationDto | undefined;
   if (
@@ -49,7 +78,7 @@ export const weatherLocationSetExecute: ToolExecute = async (
     currentValue.lon === next.lon &&
     currentValue.label === next.label
   ) {
-    return { data: { ...next } };
+    return { data: { status: "saved", ...next } };
   }
   const written = await preferences.upsertWithRevision(
     scopedDb,
@@ -65,5 +94,5 @@ export const weatherLocationSetExecute: ToolExecute = async (
     resultingRevision: written.revision,
     appliedAt: Date.now()
   });
-  return { data: { ...next } };
+  return { data: { status: "saved", ...next } };
 };

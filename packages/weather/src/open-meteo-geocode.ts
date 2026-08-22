@@ -34,17 +34,21 @@ export async function searchOpenMeteoLocations(
 
   const response = await fetchFn(url);
   if (!response.ok) {
-    throw new WeatherLocationSearchUnavailableError(`Open-Meteo geocoding returned ${response.status}`);
+    throw new WeatherLocationSearchUnavailableError(
+      `Open-Meteo geocoding returned ${response.status}`
+    );
   }
 
-  let data: OpenMeteoGeocodeResponse;
+  let data: OpenMeteoGeocodeResponse | null;
   try {
     data = (await response.json()) as OpenMeteoGeocodeResponse;
   } catch {
-    throw new WeatherLocationSearchUnavailableError("Open-Meteo geocoding returned a non-JSON body");
+    throw new WeatherLocationSearchUnavailableError(
+      "Open-Meteo geocoding returned a non-JSON body"
+    );
   }
 
-  const results = data.results ?? [];
+  const results = Array.isArray(data?.results) ? data.results : [];
   return results.slice(0, limit).map((result) => ({
     lat: result.latitude,
     lon: result.longitude,

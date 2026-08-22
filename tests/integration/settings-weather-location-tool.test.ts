@@ -45,7 +45,13 @@ describe("settings.weatherLocation.set tool", () => {
 
   it("saves the single matching place and returns its coordinates", async () => {
     stubGeocodeResponse([
-      { latitude: 39.7392, longitude: -104.9903, name: "Denver", admin1: "Colorado", country: "United States" }
+      {
+        latitude: 39.7392,
+        longitude: -104.9903,
+        name: "Denver",
+        admin1: "Colorado",
+        country: "United States"
+      }
     ]);
 
     const result = await dataContext.withDataContext(
@@ -73,13 +79,26 @@ describe("settings.weatherLocation.set tool", () => {
 
   it("returns candidates without writing when the place name is ambiguous", async () => {
     stubGeocodeResponse([
-      { latitude: 39.8, longitude: -89.6, name: "Springfield", admin1: "Illinois", country: "United States" },
-      { latitude: 37.2, longitude: -93.3, name: "Springfield", admin1: "Missouri", country: "United States" }
+      {
+        latitude: 39.8,
+        longitude: -89.6,
+        name: "Springfield",
+        admin1: "Illinois",
+        country: "United States"
+      },
+      {
+        latitude: 37.2,
+        longitude: -93.3,
+        name: "Springfield",
+        admin1: "Missouri",
+        country: "United States"
+      }
     ]);
 
     const result = await dataContext.withDataContext(
       { actorUserId: ids.userB, requestId: "req:weather-ambiguous" },
-      (scopedDb) => weatherLocationSetExecute(scopedDb, { query: "Springfield" }, toolCtx(ids.userB))
+      (scopedDb) =>
+        weatherLocationSetExecute(scopedDb, { query: "Springfield" }, toolCtx(ids.userB))
     );
     expect(result.data).toEqual({
       status: "ambiguous",
@@ -93,7 +112,7 @@ describe("settings.weatherLocation.set tool", () => {
       { actorUserId: ids.userB, requestId: "req:weather-ambiguous-read" },
       (scopedDb) => preferences.getWithRevision(scopedDb, WEATHER_LOCATION_PREFERENCE_KEY)
     );
-    expect(stored).toBeUndefined();
+    expect(stored).toBeNull();
   });
 
   it("throws and writes nothing when no place matches the query", async () => {
@@ -102,7 +121,8 @@ describe("settings.weatherLocation.set tool", () => {
     await expect(
       dataContext.withDataContext(
         { actorUserId: ids.adminUser, requestId: "req:weather-no-match" },
-        (scopedDb) => weatherLocationSetExecute(scopedDb, { query: "Nowhereville" }, toolCtx(ids.adminUser))
+        (scopedDb) =>
+          weatherLocationSetExecute(scopedDb, { query: "Nowhereville" }, toolCtx(ids.adminUser))
       )
     ).rejects.toThrow();
 
@@ -110,7 +130,7 @@ describe("settings.weatherLocation.set tool", () => {
       { actorUserId: ids.adminUser, requestId: "req:weather-no-match-read" },
       (scopedDb) => preferences.getWithRevision(scopedDb, WEATHER_LOCATION_PREFERENCE_KEY)
     );
-    expect(stored).toBeUndefined();
+    expect(stored).toBeNull();
   });
 
   it("scopes the saved location to the acting user only", async () => {
@@ -126,6 +146,6 @@ describe("settings.weatherLocation.set tool", () => {
       { actorUserId: ids.userB, requestId: "req:weather-scope-b-read" },
       (scopedDb) => preferences.getWithRevision(scopedDb, WEATHER_LOCATION_PREFERENCE_KEY)
     );
-    expect(otherUser).toBeUndefined();
+    expect(otherUser).toBeNull();
   });
 });

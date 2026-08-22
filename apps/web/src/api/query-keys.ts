@@ -114,7 +114,8 @@ export const queryKeys = {
   },
   weather: {
     today: ["weather", "today"] as const,
-    location: ["weather", "location"] as const
+    location: ["weather", "location"] as const,
+    unit: ["weather", "unit"] as const
   },
   wellness: {
     checkins: ["wellness", "checkins"] as const,

@@ -227,6 +227,51 @@ describe("weather integration", () => {
       await srv.close();
     });
 
+    it("requests the selected unit and refreshes after unit or location changes", async () => {
+      const fakeFetch = vi.fn((_input: RequestInfo | URL) =>
+        Promise.resolve(makeOpenMeteoResponse(18, 15, 0))
+      );
+      const srv = createApiServer({
+        appDb,
+        boss,
+        logger: false,
+        fetchFn: fakeFetch as typeof fetch
+      });
+      await srv.ready();
+      const cookie = await signUp(srv, "UnitUser", "wx.unit@example.test");
+
+      const saveLocation = async (location: { lat: number; lon: number; label: string }) => {
+        const response = await srv.inject({
+          method: "PUT",
+          url: "/api/me/weather-location",
+          headers: { cookie, "content-type": "application/json" },
+          payload: location
+        });
+        expect(response.statusCode).toBe(200);
+      };
+      const getToday = () =>
+        srv.inject({ method: "GET", url: "/api/weather/today", headers: { cookie } });
+
+      await saveLocation({ lat: 37.77, lon: -122.42, label: "San Francisco, US" });
+      expect((await getToday()).json<GetWeatherTodayResponse>().data?.unit).toBe("metric");
+      expect(String(fakeFetch.mock.calls[0]?.[0] ?? "")).toContain("temperature_unit=celsius");
+
+      await srv.inject({
+        method: "PUT",
+        url: "/api/me/weather-unit",
+        headers: { cookie, "content-type": "application/json" },
+        payload: { unit: "imperial" }
+      });
+      expect((await getToday()).json<GetWeatherTodayResponse>().data?.unit).toBe("imperial");
+      expect(String(fakeFetch.mock.calls[1]?.[0] ?? "")).toContain("temperature_unit=fahrenheit");
+
+      await saveLocation({ lat: 51.5074, lon: -0.1278, label: "London, UK" });
+      expect((await getToday()).json<GetWeatherTodayResponse>().data?.location).toBe("London, UK");
+      expect(fakeFetch).toHaveBeenCalledTimes(3);
+
+      await srv.close();
+    });
+
     it("refreshes cached weather after a location is saved, changed, or cleared", async () => {
       const fakeFetch = vi.fn((_input: RequestInfo | URL) =>
         Promise.resolve(makeOpenMeteoResponse(18, 15, 0))

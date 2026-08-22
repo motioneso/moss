@@ -523,7 +523,7 @@ export const settingsModuleManifest: MossModuleManifest = {
     },
     {
       name: "settings.weatherLocation.set",
-      description: "Set the user's saved weather location (latitude, longitude, and label).",
+      description: "Save the user's weather location by resolving a place name.",
       permissionId: "settings.write",
       risk: "write",
       selfOperationGrant: "granted_at_install",

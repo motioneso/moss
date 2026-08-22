@@ -16,6 +16,8 @@ interface WeatherRoutesDependencies {
   readonly fetchFn?: typeof fetch;
 }
 
+type WeatherRequest = FastifyRequest & { readonly timeZone?: string };
+
 async function resolveRouteTimeZone(
   dependencies: WeatherRoutesDependencies,
   request: FastifyRequest,
@@ -23,7 +25,7 @@ async function resolveRouteTimeZone(
 ): Promise<string> {
   return (
     (await dependencies.resolveRequestTimeZone?.(request, accessContext)) ??
-    request.timeZone ??
+    (request as WeatherRequest).timeZone ??
     "UTC"
   );
 }

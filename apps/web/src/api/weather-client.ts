@@ -1,8 +1,12 @@
 import type {
   GetWeatherLocationResponse,
   GetWeatherTodayResponse,
+  GetWeatherUnitResponse,
   PutWeatherLocationRequest,
-  PutWeatherLocationResponse
+  PutWeatherLocationResponse,
+  PutWeatherUnitRequest,
+  PutWeatherUnitResponse,
+  SearchWeatherLocationsResponse
 } from "@moss/shared";
 
 import { requestJson } from "./client.js";
@@ -21,5 +25,26 @@ export async function putWeatherLocationSettings(
   return requestJson<PutWeatherLocationResponse>("/api/me/weather-location", {
     method: "PUT",
     body
+  });
+}
+
+export async function searchWeatherLocations(
+  query: string
+): Promise<SearchWeatherLocationsResponse> {
+  return requestJson<SearchWeatherLocationsResponse>(
+    `/api/me/weather-location/search?query=${encodeURIComponent(query)}`
+  );
+}
+
+export async function getWeatherUnitSettings(): Promise<GetWeatherUnitResponse> {
+  return requestJson<GetWeatherUnitResponse>("/api/me/weather-unit");
+}
+
+export async function putWeatherUnitSettings(
+  unit: PutWeatherUnitRequest["unit"]
+): Promise<PutWeatherUnitResponse> {
+  return requestJson<PutWeatherUnitResponse>("/api/me/weather-unit", {
+    method: "PUT",
+    body: { unit }
   });
 }

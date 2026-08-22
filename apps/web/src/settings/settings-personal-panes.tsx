@@ -4,7 +4,8 @@ import type {
   MeResponse,
   PutWeatherLocationRequest,
   QuietHoursSettingsDto,
-  WeatherLocationDto
+  WeatherLocationDto,
+  WeatherUnit
 } from "@moss/shared";
 import { Button } from "@moss/ui";
 import { Check, LoaderCircle } from "lucide-react";
@@ -17,7 +18,13 @@ import {
   putQuietHoursSettings,
   updateMyProfile
 } from "../api/client";
-import { getWeatherLocationSettings, putWeatherLocationSettings } from "../api/weather-client";
+import {
+  getWeatherLocationSettings,
+  getWeatherUnitSettings,
+  putWeatherLocationSettings,
+  putWeatherUnitSettings,
+  searchWeatherLocations
+} from "../api/weather-client";
 import { queryKeys } from "../api/query-keys";
 import { useAssistantName } from "../api/use-assistant-name";
 import { DeleteAccount } from "./delete-account";
@@ -49,14 +56,6 @@ interface WeatherLocationFields {
   readonly label: string;
   readonly lat: string;
   readonly lon: string;
-}
-
-const EMPTY_WEATHER_LOCATION_FIELDS: WeatherLocationFields = { label: "", lat: "", lon: "" };
-
-function toWeatherLocationFields(location: WeatherLocationDto | null): WeatherLocationFields {
-  return location
-    ? { label: location.label, lat: String(location.lat), lon: String(location.lon) }
-    : EMPTY_WEATHER_LOCATION_FIELDS;
 }
 
 export function parseWeatherLocationFields(
@@ -199,23 +198,28 @@ export function ProfilePane({ me }: PaneProps) {
     },
     onError: (error) => toast(readError(error), { tone: "drift" })
   });
-  const [weatherLocationFields, setWeatherLocationFields] = useState<WeatherLocationFields>(() =>
-    toWeatherLocationFields(weatherLocation)
-  );
-  const weatherLocationLoaded = useRef(weatherLocationQuery.data !== undefined);
-  useEffect(() => {
-    if (weatherLocationLoaded.current || weatherLocationQuery.data === undefined) return;
-    weatherLocationLoaded.current = true;
-    setWeatherLocationFields(toWeatherLocationFields(weatherLocation));
-  }, [weatherLocationQuery.data, weatherLocation]);
-  const weatherLocationParsed = parseWeatherLocationFields(weatherLocationFields);
-  const saveWeatherLocation = () => {
-    if (weatherLocationParsed) weatherLocationMutation.mutate(weatherLocationParsed);
-  };
+  const [weatherLocationSearch, setWeatherLocationSearch] = useState("");
+  const weatherLocationSearchMutation = useMutation({
+    mutationFn: searchWeatherLocations,
+    onError: (error) => toast(readError(error), { tone: "drift" })
+  });
   const clearWeatherLocation = () => {
-    setWeatherLocationFields(EMPTY_WEATHER_LOCATION_FIELDS);
     weatherLocationMutation.mutate(null);
   };
+  const weatherUnitQuery = useQuery({
+    queryKey: queryKeys.weather.unit,
+    queryFn: getWeatherUnitSettings,
+    retry: false
+  });
+  const weatherUnit: WeatherUnit = weatherUnitQuery.data?.unit ?? "metric";
+  const weatherUnitMutation = useMutation({
+    mutationFn: putWeatherUnitSettings,
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.weather.unit, data);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.weather.today });
+    },
+    onError: (error) => toast(readError(error), { tone: "drift" })
+  });
 
   return (
     <>
@@ -325,49 +329,55 @@ export function ProfilePane({ me }: PaneProps) {
 
       <Group
         title="Weather location"
-        desc="Automatic timezone-based detection is approximate. Override it with exact coordinates."
+        desc="Search for a place to use instead of approximate timezone-based detection."
       >
-        <Field label="Label" hint='A short name for this location, e.g. "Home".'>
+        <Field
+          label="Search for a place"
+          hint="Choose a result to save it as your weather location."
+        >
           <input
             className="jds-input"
-            value={weatherLocationFields.label}
-            aria-label="Weather location label"
-            disabled={weatherLocationQuery.isLoading || weatherLocationMutation.isPending}
+            value={weatherLocationSearch}
+            aria-label="Search for a weather location"
+            placeholder="City, region, or country"
+            disabled={weatherLocationSearchMutation.isPending || weatherLocationMutation.isPending}
             onChange={(event) => {
-              const value = event.currentTarget.value;
-              setWeatherLocationFields((fields) => ({ ...fields, label: value }));
+              setWeatherLocationSearch(event.currentTarget.value);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && weatherLocationSearch.trim()) {
+                weatherLocationSearchMutation.mutate(weatherLocationSearch.trim());
+              }
             }}
           />
         </Field>
-        <div className="fld">
-          <div className="fld__lbl">Coordinates</div>
-          <div className="fld__row">
-            <input
-              className="jds-input"
-              type="number"
-              value={weatherLocationFields.lat}
-              aria-label="Weather location latitude"
-              disabled={weatherLocationQuery.isLoading || weatherLocationMutation.isPending}
-              onChange={(event) => {
-                const value = event.currentTarget.value;
-                setWeatherLocationFields((fields) => ({ ...fields, lat: value }));
-              }}
-              style={{ flex: "0 0 130px", minWidth: 0 }}
-            />
-            <input
-              className="jds-input"
-              type="number"
-              value={weatherLocationFields.lon}
-              aria-label="Weather location longitude"
-              disabled={weatherLocationQuery.isLoading || weatherLocationMutation.isPending}
-              onChange={(event) => {
-                const value = event.currentTarget.value;
-                setWeatherLocationFields((fields) => ({ ...fields, lon: value }));
-              }}
-              style={{ flex: "0 0 130px", minWidth: 0 }}
-            />
-          </div>
-        </div>
+        <Row
+          name="Search"
+          control={
+            <Button
+              size="sm"
+              disabled={!weatherLocationSearch.trim() || weatherLocationSearchMutation.isPending}
+              onClick={() => weatherLocationSearchMutation.mutate(weatherLocationSearch.trim())}
+            >
+              Search
+            </Button>
+          }
+        />
+        {weatherLocationSearchMutation.data?.candidates.map((candidate) => (
+          <Row
+            key={`${candidate.lat}:${candidate.lon}`}
+            name={candidate.label}
+            control={
+              <Button
+                size="sm"
+                disabled={weatherLocationMutation.isPending}
+                onClick={() => weatherLocationMutation.mutate(candidate)}
+              >
+                Use this place
+              </Button>
+            }
+          />
+        ))}
         <Row
           name="Manual override"
           desc={
@@ -378,13 +388,6 @@ export function ProfilePane({ me }: PaneProps) {
           control={
             <div style={{ display: "flex", gap: 8 }}>
               <Button
-                size="sm"
-                disabled={!weatherLocationParsed || weatherLocationMutation.isPending}
-                onClick={saveWeatherLocation}
-              >
-                Save
-              </Button>
-              <Button
                 variant="quiet"
                 size="sm"
                 disabled={!weatherLocation || weatherLocationMutation.isPending}
@@ -393,6 +396,21 @@ export function ProfilePane({ me }: PaneProps) {
                 Clear override
               </Button>
             </div>
+          }
+        />
+      </Group>
+
+      <Group title="Temperature">
+        <Row
+          name="Use Fahrenheit"
+          desc={`Weather temperatures are shown in ${weatherUnit === "imperial" ? "Fahrenheit" : "Celsius"}.`}
+          control={
+            <Switch
+              ariaLabel="Use Fahrenheit"
+              checked={weatherUnit === "imperial"}
+              disabled={weatherUnitQuery.isLoading || weatherUnitMutation.isPending}
+              onChange={(enabled) => weatherUnitMutation.mutate(enabled ? "imperial" : "metric")}
+            />
           }
         />
       </Group>
