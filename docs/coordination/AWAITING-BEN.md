@@ -56,6 +56,35 @@ merge this, tell me how to test there" and did live-path verification himself po
 section stayed in the file as a live-looking entry past its resolution; removed by the eighth
 coordinator on 2026-08-22 once confirmed done. -->
 
+## Pull request 1838 (issue #1529, security-sensitive fix) — automated checks have now failed twice
+
+This is a sign-in and permissions fix, so it needs to be extra careful before it merges. Its
+automated checks failed once already (two new fake test accounts had ID numbers already used by
+other test files, which is not a security problem, just a collision) - that got fixed and
+re-checked. The re-check has now also come back failed. The rule for a change this sensitive is
+that a second failed check means stop and get a ruling rather than trying a third time.
+
+Update: the team reported back, and I checked their claim myself against the real logs. Both
+failures are the exact same browser test, failing at the exact same line - a chat window test
+waiting for the text "Tick 2" to appear on screen. I found that same test failing, at that same
+line, on a totally unrelated change that had just landed on the main line of the project, with
+nobody's work involved. This pull request only ever changed two ID numbers in a database test
+helper file - nothing to do with chat or that test. The very next change after that one passed
+fine, so this looks like a test that fails on its own sometimes (flaky), not one that is always
+broken, and not one this pull request has any hand in.
+
+Options:
+1. Treat this failure as unrelated noise and let this pull request go on to its security review
+   without waiting for a fully green run - I'd log the exact failing run as the proof for skipping
+   it, so anyone reading the pull request later can see why.
+2. Have the team (or someone else) fix the flaky test itself first, then re-run, even though it's
+   outside the scope of this fix.
+3. Your call.
+
+My recommendation: option 1. The evidence is solid - same test, same line, failing on an unrelated
+change, self-recovering on the very next run - and pinning down the fix would be entirely separate
+work.
+
 ## Pull request 1654 — security fix cannot get its required live proof, real bug in the way
 
 The security fix itself (audit-logging honesty plus outbound-network safety) hasn't changed since
