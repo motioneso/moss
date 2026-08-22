@@ -76,7 +76,7 @@ export const sportsModuleManifest = {
       "sql/0133_sports_follows.sql",
       "sql/0185_sports_whole_league_dedupe.sql",
       "sql/0186_sports_whole_league_unique.sql",
-      "sql/0189_sports_custom_sources.sql"
+      "sql/0190_sports_custom_sources.sql"
     ],
     migrationDirectories: ["packages/sports/sql"],
     ownedTables: [

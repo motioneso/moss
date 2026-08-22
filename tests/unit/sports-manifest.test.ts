@@ -15,7 +15,7 @@ describe("sports manifest", () => {
       "sql/0133_sports_follows.sql",
       "sql/0185_sports_whole_league_dedupe.sql",
       "sql/0186_sports_whole_league_unique.sql",
-      "sql/0189_sports_custom_sources.sql"
+      "sql/0190_sports_custom_sources.sql"
     ]);
     expect(sportsModuleManifest.navigation[0]?.path).toBe("/sports");
     expect(sportsModuleManifest.settings[0]?.path).toBe("/settings/modules/sports");

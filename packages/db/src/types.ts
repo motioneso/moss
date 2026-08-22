@@ -1112,7 +1112,7 @@ export interface NewsPolicyVerdictsTable {
   expires_at: TimestampColumn;
 }
 
-// #1572 Sports custom news source tables (0189_sports_custom_sources.sql). Owner-only under
+// #1572 Sports custom news source tables (0190_sports_custom_sources.sql). Owner-only under
 // FORCE RLS; no worker grants — headlines are fetched synchronously, not by a background job.
 export type SportsSourceHealthState =
   | "pending"

@@ -1,5 +1,5 @@
 // #1572 Custom public news sources — persistence for app.sports_custom_sources,
-// app.sports_source_assignments, app.sports_policy_verdicts (0189_sports_custom_sources.sql).
+// app.sports_source_assignments, app.sports_policy_verdicts (0190_sports_custom_sources.sql).
 import { sql } from "kysely";
 
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
