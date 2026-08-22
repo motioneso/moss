@@ -2622,3 +2622,26 @@ is flagged in the awaiting-Ben file - its required check passed on a re-run and 
 count.
 
 [pane w1:pKK]
+
+## relay29 coordinator: PR 1825 fresh QA green, but caught a near-miss, sent back a second time
+
+Spawned a new independent tester on the rebased version of sports news sources (#1572, pull
+request 1825) since the earlier green verdict was from before the rebase. Verdict: green again,
+checked the renamed migration file carefully and confirmed no leftover references to the old
+number, re-ran all four affected browser tests live. Closed that tester's pane and its copy of the
+code.
+
+Before merging, I re-checked whether the pull request could still merge cleanly, which is
+standing procedure. It could not - main had moved again because I had just merged the weather
+settings pull request. While checking on the build lane, I found a queued message in its pane
+telling it to go ahead and merge the pull request itself, which nobody should do since only the
+coordinator merges after independent testing. I do not know who sent that. I confirmed with the
+build lane directly that it had not acted on it and the pull request was still open and unmerged -
+no harm done, but flagging it as something to watch for. Told the build lane clearly not to merge
+its own work under any circumstance.
+
+Sent the build lane back a second time to rebase onto the newer main, run checks again, and push.
+Waiting for that now. Once it is done this branch will need one more fresh look before merging,
+since a rebase changes the actual commit even if the tester already saw the code once.
+
+[pane w1:pKK]
