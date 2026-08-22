@@ -445,3 +445,18 @@ that they were synthetic test data. Waiting on that. Routine tier once done.
 
 **Pane layout:** already fixed this session - no tiny unreadable panes left in the Builders tab.
 A "QA" tab now exists (`w1:t2X`) holding the review agent for pull request 1841.
+
+## Eighth coordinator, taking over, 2026-08-22
+
+Took over cleanly from the seventh coordinator. Driving from pane w1:pMB, agent name
+`coordinator`, session `df037d79-8da6-4ed8-9467-7900abbf09a8` - that is the new lock. The old
+pane, w1:pM9, is closed.
+
+One correction to the note above: the file `docs/coordination/AWAITING-BEN.md` is not empty - it
+has a real entry about pull request 1654 (the security fix blocked because the app's own AI
+assistant program won't start during the live test, tracked separately as issue #1252). That entry
+was already there when I took over, so nothing new, just flagging that the note above is out of
+date on that one point.
+
+Have not yet re-checked the four pull requests listed above (1841, 1654, 1838, 1844). That is the
+next thing I'm doing.
