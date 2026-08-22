@@ -2060,3 +2060,13 @@ slowing each other's gates down under load. Not a Ben decision at this point; wa
 escalate if it stalls outright rather than just running long.
 
 All other lanes still working. AWAITING-BEN.md still empty.
+
+## Update (coordinator session 6999e187-9101-4a78-bf9f-05fd8695510e, pane w1:pK3, 2026-08-21 ~9:2x PM PDT)
+
+#1756's gate timer reads 1h20m+ but checked the actual OS processes directly: the real test run
+started about 26 minutes ago and is actively spawning fresh worker processes (newest one 4 seconds
+old at check time) — genuinely running, not hung. The pane's own elapsed timer likely counts from
+an earlier restart. No escalation needed.
+
+#1571 unchanged from last pass, still correctly waiting on its own verified-real typecheck.
+All other lanes still working. AWAITING-BEN.md still empty, nothing needs Ben this pass.
