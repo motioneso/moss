@@ -56,3 +56,10 @@ scratchpad/
 # reads it (the 70% warning comes from the PostToolUse hook, not this file), and tracking
 # it guarantees meaningless merge conflicts across parallel branches.
 .claude/context-meter.log
+
+# Spawn briefs handed to agents at launch. They are one-shot scratch prompts consumed at
+# boot and never read again, but they accumulate in the shared checkout — 70+ of them at
+# one point — where they show up as untracked noise in every agent's `git status` and red
+# any gate run from inside a worktree that contains them.
+.claude/boot-*.txt
+docs/coordination/boot-*.txt
