@@ -692,3 +692,14 @@ Two open items carried forward unchanged:
 
 Pane layout: Builders tab (`w1:t2P`) unchanged - two lanes, `pr1529-composed-dispatch` (pane
 w1:pKX) and `pr1654-live-proof` (pane w1:pKT), both idle. No QA tab open yet.
+
+## Continuation note - 2026-08-22, twelfth coordinator, Ben ruled on 1654
+
+Ben replied "yes fix" to the corrected 1654 write-up. Sent the pull request 1654 lane
+(`pr1654-live-proof`, pane w1:pKT) instructions to: restore the safeguard and its five tests that
+the current branch would remove, fix the bug where the "needs your approval" prompt does not
+appear, re-run the live test itself, and post fresh proof on the pull request before reporting
+back - not to merge. Lane confirmed receipt and is working.
+
+Still open: pull request 1838 (#1529, sign-in fix) needs a fresh security review against the
+current commit - not yet started, no QA tab open.

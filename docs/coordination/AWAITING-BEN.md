@@ -66,28 +66,7 @@ for a fully green run.
 Pull request 1654 — spinning up a dedicated lane to chase issue #1252 (the app's assistant
 program not starting during the live test) now that it's blocking a security fix. -->
 
-## Pull request 1654 (security fix) — the earlier story was wrong, here is what's actually blocking it
-
-Your "go with your rec" reply on 2026-08-22 answered an out-of-date write-up (it pointed at issue
-#1252, which is a different, unrelated bug, and which is closed anyway). Nothing has been done off
-that reply — acting on it would have chased the wrong problem. The real picture, checked directly
-against the pull request today:
-
-1. **A security review found this fix would remove protection that's already live.** As currently
-   written, merging this branch would silently take out a safeguard the app already has — the one
-   that stops outside requests from reaching the cloud's internal address — along with five tests
-   that check for it. That is a real step backward, not a false alarm.
-2. **A live test on the current version found a second, different bug.** Sending a message that
-   should make the app show the user a "this needs your approval" prompt does not make that prompt
-   appear at all, and the app gives no reply. This is a bug reproducing right now, not old news
-   about the assistant failing to start (that one was already fixed days ago).
-
-**Recommendation:** send this pull request back to the build lane to fix both problems — restore
-the removed protection and its tests, and find out why the approval prompt isn't showing — before
-any review or merge. No merge should happen until both are fixed and re-verified live.
-
-Options:
-- **Fix both, then re-review.** (Recommended.) Keeps the safeguard intact and the approval flow
-  working before this reaches sign-off.
-- **Merge now, fix after.** Not recommended — this is a security-tier pull request and one of the
-  two problems is a live regression of an existing protection.
+<!-- Resolved 2026-08-22: Ben ruled "yes fix" on pull request 1654's two real problems (the
+security regression and the missing approval prompt). The pull request 1654 lane has been sent
+back with instructions to fix both, re-run the live test, and post fresh proof before it comes
+back for review. -->
