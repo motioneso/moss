@@ -71,19 +71,23 @@ regex-strip implementation:
 ```bash
 pnpm --filter @moss/commitments typecheck > /tmp/1517-typecheck.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`.
 
 Integration test run uses the guarded gate DB procedure (per `verify-gate` skill) — not run ad
 hoc against the shared dev DB:
+
 ```bash
 # via verify-gate skill's isolated gate DB, focused to this file
 pnpm vitest run tests/integration/commitments.test.ts > /tmp/1517-commitments-test.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`, all `CommitmentsRepository` cases pass including the 5 new excerpt cases.
 
 ```bash
 pnpm check:file-size > /tmp/1517-filesize.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`.
 
 Final full gate at wrap-up: `pnpm verify:foundation` on an isolated gate DB per `coordinated-wrap-up`.
