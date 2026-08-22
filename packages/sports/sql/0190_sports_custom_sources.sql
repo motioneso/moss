@@ -1,4 +1,4 @@
--- packages/sports/sql/0189_sports_custom_sources.sql
+-- packages/sports/sql/0190_sports_custom_sources.sql
 -- #1572 Custom public news sources by team and league.
 -- RLS classification: owner-only (FORCE — applies to every actor including admins) for all
 -- four tables. No jarvis_worker_runtime grants: this feature has no background worker path,
