@@ -281,3 +281,41 @@ remaining check is a long one that runs sixteen steps and is currently partway t
 right on the kind of timing that check normally takes. Nothing to do here but keep waiting.
 
 Nothing new in `docs/coordination/AWAITING-BEN.md` - still empty.
+
+## Fourth coordinator, handing off at context limit, 2026-08-22
+
+My own working memory hit the point where I need to hand off. Nothing is wrong, this is routine.
+Handing off from pane w1:pM5 (agent name `coordinator`, session
+`7eb106c9-6111-4749-8c13-ffb3d7a01445`). A background check that watches the fleet's pane states
+is running and will keep notifying whoever holds this session about changes - a successor should
+either keep it or start its own the same way (a script that snapshots pane states every so often
+and only speaks up when something changes).
+
+**Pull request 1654 - still the one thing that needs judgement, not just watching.** Same as
+before: the build lane already fixed the problem the tough reviewer found (it is rebased on the
+current shared history, the two bad commits are gone, the security fix and the deleted tests are
+back). It is still running its real-in-app proof - I watched it cycle through several rounds of
+work without yet posting anything new to the pull request, which is normal for this kind of check,
+not stuck. Still needed before merge: that proof needs to finish and get posted, and then a fresh
+tough outside review of this corrected version (the old reviewer already finished and was closed
+down, so a new one needs to be started once the proof is posted). Do not merge before both of
+those happen.
+
+**#1498 (styling cleanup) - now has its own pull request, 1841.** The lane reported it as finished
+with all checks green and live screenshots attached, but when I checked directly the automated
+checks were still running, not actually green yet. I told the lane this (no action needed from it,
+I said I would watch and merge once they pass) and separately asked it directly which model it is
+running on, since this lane was flagged twice now for accidentally starting on the expensive model.
+Waiting on that reply. Do not merge 1841 until the checks are confirmed actually green and the
+model question is answered.
+
+**#1529:** unchanged - pull request 1838 open, the tough outside review is still running.
+
+**#1336:** unchanged - still building, running its full check suite.
+
+**Pull request 1832 merged while I was driving** (documentation cleanup, the one that had been
+sitting on one long check across three handovers). No action needed, already landed on the shared
+line.
+
+Nothing in `docs/coordination/AWAITING-BEN.md` - still empty, nothing needs Ben's decision right
+now.
