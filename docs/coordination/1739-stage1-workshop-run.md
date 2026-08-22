@@ -2070,3 +2070,25 @@ an earlier restart. No escalation needed.
 
 #1571 unchanged from last pass, still correctly waiting on its own verified-real typecheck.
 All other lanes still working. AWAITING-BEN.md still empty, nothing needs Ben this pass.
+
+## Update (coordinator session 6999e187-9101-4a78-bf9f-05fd8695510e, pane w1:pK3, 2026-08-21 ~9:3x PM PDT)
+
+**#1754 (build agent runner) reported done, PR #1816.** Sensitive tier per its queue row. Spawned
+QA in its own fresh Herdr pane: worktree `.claude/worktrees/qa-1754`, agent name `qa-1754`, pane
+`w1:pK4` (tab `w1:t10`, now 4 panes, matches 2x2 grid, no rebalance needed), confirmed on Sonnet.
+Flagged a discrepancy to QA: the build agent's own report cited rebase commit `bbbf3cca5`, but the
+PR's actual head on GitHub is `592c6b3fa` (confirmed via `gh pr view 1816`) — told QA to double
+check nothing was left unpushed before trusting the reported gate result. Live-path claimed n/a
+(no UI screen of its own, tracked separately as #1755 which already merged) — QA to confirm that
+holds. Not yet reaped: waiting on QA verdict.
+
+**#1517 (escape commitment evidence) hit its context-relay trigger before opening a PR**, mid
+writing its own handoff doc — not yet spawned a successor. It found 3 deterministic failures in
+`tests/unit/mcp-gateway-validation.test.ts`, out of scope for its change (didn't touch that file),
+and asked whether this blocks the PR. Ruled: this matches tracked issue #1673 exactly (a known
+100ms-timeout flake, load-dependent) — #1754 hit the identical 3 failures in the same file this
+same pass, consistent with several lanes sharing the box right now, not a real regression. Told
+the lane to skip the stash-verify step, push, open the PR, and note the pre-existing/tracked
+failures in the PR body. Confirmed delivered (queued, lane was mid-command).
+
+AWAITING-BEN.md still empty — both of the above were supervision calls, not Ben decisions.
