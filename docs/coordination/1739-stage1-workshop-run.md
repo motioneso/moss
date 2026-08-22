@@ -2478,3 +2478,25 @@ are all still running with no verdict yet, same as when the previous coordinator
 needs a decision right now.
 
 [pane w1:pKH]
+
+## Update, relay28 coordinator: build agent runner (#1754, pull request 1816) merged
+
+Its tester gave a clean pass: traced by hand that the fix genuinely starts a real coding session
+through the same official channel the regular chat feature already uses in production, not a
+stand-in. All required checks green, and all four browser checks that this change triggers passed
+against a live instance. One thing worth watching later, not blocking now: after it launches a
+build step it never checks whether anything actually got produced before marking the step
+finished - harmless today because nothing can yet trigger a real build from the chat screen (that
+part is separate, tracked as issue #1755), but whoever builds that trigger should close this gap
+first.
+
+Merged to main (commit 49c90a8b0c). Closed both its build pane and its tester's pane, and removed
+both worktrees after confirming nothing was left in progress in either one.
+
+While cleaning up I also found two worktrees left over from a much earlier pass that had nothing
+running in them and no unmerged changes - removed those too. Separately, I ran a full worktree
+listing and found roughly a hundred other stale-looking worktrees scattered across `.claude/worktrees`
+and `/tmp` from past runs. That is a repo-wide cleanup job of its own, out of scope for this run;
+flagging it here rather than touching it now.
+
+[pane w1:pKH]
