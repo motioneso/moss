@@ -70,3 +70,14 @@ program not starting during the live test) now that it's blocking a security fix
 security regression and the missing approval prompt). The pull request 1654 lane has been sent
 back with instructions to fix both, re-run the live test, and post fresh proof before it comes
 back for review. -->
+
+## Pull request 1838 — ready for your merge sign-off (security tier)
+
+This is test-only work (two test files plus docs, no real production code) that proves a missing
+permission gets automatically granted correctly, rather than a sign-in change as first thought.
+An independent security reviewer already read the actual permission-granting code and found
+nothing wrong with it. The one automated check that had failed looked like an unrelated flaky
+test, so we re-ran it rather than skip it - it has now passed. Every automated check is green.
+
+Because this touches permissions it is treated as security tier, so it needs your explicit OK
+before it merges, even though the review is clean. Recommendation: approve merge.
