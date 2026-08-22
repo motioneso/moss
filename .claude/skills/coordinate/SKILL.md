@@ -193,28 +193,30 @@ For each spec cleared to start (serialized specs wait for their predecessor to l
    Each worktree costs ~2 GB once `pnpm install` runs; the box hit 97% disk.
 2. **Write the handoff doc** from `templates/handoff.md` (spec, worktree/branch, tier, coordinator
    label + session id, collision notes) → commit it so the agent can read it.
-3. **Spawn the build agent** into the run's shared **"Agents" tab**. `herdr agent start` takes
-   **only** `--kind`, `--pane` and `--timeout` — there is no `--cwd` and no `--tab`. The pane must
-   already exist, be at a shell prompt, and be in the right directory, so **split first, start
-   second**:
+3. **Spawn the build agent** into the run's shared **"Builders" tab** (QA agents get their own
+   **"QA" tab** — see `coordinated-qa`; same rules, just two tabs by role instead of one shared
+   tab). `herdr agent start` takes **only** `--kind`, `--pane` and `--timeout` — there is no
+   `--cwd` and no `--tab`. The pane must already exist, be at a shell prompt, and be in the right
+   directory, so **split first, start second**:
 
    **⚠️ `herdr pane split` has no `--tab` flag — it always splits inside the SOURCE pane's own
-   tab.** `<agents-tab-pane>` below MUST already be a pane that lives in the agents tab (`herdr
-   pane list`, check `tab_id`) — never your own coordinator pane. Splitting off yourself silently
-   lands the new pane in your coordinator tab (Ben, 2026-08-19: caught this happening — a build
-   agent spawned straight into the Coordinator's own tab). If no agent pane exists yet to split
-   from (first spawn of a run), split off yourself once, then immediately relocate with `herdr
-   pane move <new-pane> --new-tab --workspace w1 --label "agents"` — **never leave a spawned pane
-   sharing the coordinator's tab, even for one command.**
+   tab.** `<builders-tab-pane>` below MUST already be a pane that lives in the Builders tab
+   (`herdr pane list`, check `tab_id`) — never your own coordinator pane, and never the QA tab.
+   Splitting off yourself silently lands the new pane in your coordinator tab (Ben, 2026-08-19:
+   caught this happening — a build agent spawned straight into the Coordinator's own tab). If no
+   builder pane exists yet to split from (first spawn of a run), split off yourself once, then
+   immediately relocate with `herdr pane move <new-pane> --new-tab --workspace w1 --label
+   "builders"` — **never leave a spawned pane sharing the coordinator's tab, even for one
+   command.**
 
    ```bash
    # 1. make the pane, in the worktree — --cwd lives on split, not on agent start
-   herdr pane split <agents-tab-pane> --direction down --cwd $(pwd)/.claude/worktrees/<slug> --no-focus
+   herdr pane split <builders-tab-pane> --direction down --cwd $(pwd)/.claude/worktrees/<slug> --no-focus
    # 2. start the agent in that pane; everything after `--` goes to claude
    herdr agent start <name> --kind claude --pane <new-pane> \
      -- --model sonnet --permission-mode bypassPermissions "<boot>"
    # 3. if step 1 had to split off the coordinator's own pane, relocate now — do not skip this:
-   herdr pane move <new-pane> --tab <existing-agents-tab-id>   # or --new-tab if none exists yet
+   herdr pane move <new-pane> --tab <existing-builders-tab-id>   # or --new-tab if none exists yet
    ```
 
    Two argument rules, both of which fail loudly and waste a spawn:
@@ -235,23 +237,28 @@ For each spec cleared to start (serialized specs wait for their predecessor to l
    > bloat a fresh context and trigger premature relays. Reading is not progress: BUILD, commit per
    > task, relay only after real work past ~80%. Begin now.
 
-   **Tab discipline (Ben, 2026-06-10/27):** ALL build + QA agents share one agents tab, which must
-   live in Jarvis workspace `w1`; your coordinator window stays coordinator-only (the ONLY thing
-   you may spawn there is your own relay successor). If the agents tab doesn't exist, create it:
-   `herdr pane move <first-pane> --new-tab --workspace w1 --label "agents"`. At 4+ panes, open an
-   `"agents 2"` overflow tab. Grid: 2×2 for 4-agent waves, 3×1 for 3.
+   **Tab discipline (Ben, 2026-06-10/27; split into role tabs 2026-08-21):** build agents live in
+   a **"Builders" tab** and QA agents live in a separate **"QA" tab**, both in Jarvis workspace
+   `w1`; your coordinator window stays coordinator-only (the ONLY thing you may spawn there is
+   your own relay successor). Same rules apply to each tab independently — grid limits, overflow
+   tabs, rebalancing — they just now sort by role instead of sharing one tab. If a role's tab
+   doesn't exist yet, create it: `herdr pane move <first-pane> --new-tab --workspace w1 --label
+   "builders"` (or `"qa"`). At 4+ panes in a tab, open an overflow tab for that same role (e.g.
+   `"builders 2"` / `"qa 2"`) rather than crowd it. Grid: 2×2 for 4-agent waves, 3×1 for 3 — per
+   tab.
 
-   **Keep the grid tidy as the fleet changes size, not just at spawn (Ben, 2026-08-20): "make
-   sure this is written down so I don't have to ask for it every time."** Whenever the lane count
-   in the agents tab(s) changes — a wave spawns, a lane finishes and gets reaped — re-check the
-   layout and fix it if it's drifted into a lopsided stack; don't wait to be asked. `herdr pane
-   move` refuses to re-split a pane within its own current tab (`reason: "same_tab"`); pop it out
-   first with `herdr pane move <pane> --new-tab --workspace w1 --label scratch`, then move it back
-   in with `herdr pane move <pane> --tab <target-tab> --split right|down --target-pane <anchor>
-   --ratio 0.5` — the empty scratch tab closes itself once the pane leaves it, no separate cleanup
-   needed. **Reaffirmed 2026-08-21: this is a standing rule for every coordinator, not a one-off
-   ask** — check the grid every time the pane count in an agents tab changes and re-square it via
-   the pop-out/split-back-in procedure above, without being asked.
+   **Keep each tab's grid tidy as its fleet changes size, not just at spawn (Ben, 2026-08-20):
+   "make sure this is written down so I don't have to ask for it every time."** Whenever the lane
+   count in a Builders or QA tab changes — a wave spawns, a lane finishes and gets reaped — re-
+   check that tab's layout and fix it if it's drifted into a lopsided stack; don't wait to be
+   asked. `herdr pane move` refuses to re-split a pane within its own current tab (`reason:
+   "same_tab"`); pop it out first with `herdr pane move <pane> --new-tab --workspace w1 --label
+   scratch`, then move it back in with `herdr pane move <pane> --tab <target-tab> --split
+   right|down --target-pane <anchor> --ratio 0.5` — the empty scratch tab closes itself once the
+   pane leaves it, no separate cleanup needed. **Reaffirmed 2026-08-21: this is a standing rule
+   for every coordinator, not a one-off ask** — check the grid every time the pane count in a
+   Builders or QA tab changes and re-square it via the pop-out/split-back-in procedure above,
+   without being asked.
 4. **Name the agent in both namespaces before recording it (Ben, 2026-08-06)** — a spawned pane
    is anonymous in separate agent-name and pane-label namespaces:
    ```bash
