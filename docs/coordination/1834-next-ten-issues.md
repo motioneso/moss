@@ -460,3 +460,52 @@ date on that one point.
 
 Have not yet re-checked the four pull requests listed above (1841, 1654, 1838, 1844). That is the
 next thing I'm doing.
+
+## Continuation note - 2026-08-22, eighth coordinator handing off at context limit
+
+Handing off at 70 percent context, routine, nothing wrong. Driving from pane w1:pMB, agent name
+`coordinator`, session `df037d79-8da6-4ed8-9467-7900abbf09a8` - that is the lock to check.
+
+**Pull request 1841 (#1498 styling) - done.** Merged. Its build lane (pane w1:pM6) and worktree
+are fully cleaned up - pane closed, worktree removed, branch deleted. The review pane and its
+worktree (`w1:pMA`, `.claude/worktrees/qa-1841-css`) are also cleaned up. Nothing left to do here.
+
+**Pull request 1844 (#1336, job-search board) - proof done, cleanup done, ready to merge, one
+check still finishing.** The lane (pane `w1:pM8`, agent name `pr1336-jobsearch-validation3`)
+posted live proof on the pull request, deleted its 5 test rows and test profile (confirmed zero
+left), and put the shared dev computer's job-search add-on back on the official published version
+(confirmed stable after the app's own safety check briefly and correctly turned it off, then back
+on, when it first noticed the swap). Routine tier - auto-merge once green. As of hand-off, one
+check ("Build and publish images") was still running; I started a background wait for it
+(command still running when I handed off - a fresh `gh pr checks 1844` will show current state).
+**Next coordinator: check it, and if green, merge it** (`gh pr merge 1844 --squash --delete-branch`),
+then confirm the pull request is actually merged, then close pane `w1:pM8` and remove
+`.claude/worktrees/1336-jobsearch-wire-validation` (ask the lane first if any dev server/process is
+still running there, same as was done for #1498).
+
+**Pull request 1654 (security-tier fix) - still blocked, logged for Ben, do not chase yourself.**
+No change since the note above. Still waiting on issue #1252 (the app's own AI assistant program
+not starting during the live test) or a ruling from Ben. Already in
+`docs/coordination/AWAITING-BEN.md` and he's been pinged. I did clean up a stale, already-resolved
+entry that had been left in that file since 2026-08-11 (the #1533 one) - that was just filing
+hygiene, nothing new to report from it.
+
+**Pull request 1838 (#1529, security tier) - a real automated-check failure, lane is fixing it.**
+Two brand-new test users in the new test reused ID numbers already claimed by two other test
+files, so those two other files broke (`duplicate key value violates unique constraint
+"users_pkey"`). Not a security problem - a genuine ID collision. The lane (pane `w1:pKX`, agent
+name `pr1529-composed-dispatch`) pushed a fix and was re-running the previously-failing tests as
+of hand-off, self-described as changing only the ID values in the test-seeding file, nothing in
+chat-rendering code. **Next coordinator: check back on this pane, confirm CI is actually green on
+its current head commit (not just its own local rerun) before doing anything else** - CI showed
+red on this same pull request once already, so treat a second red as stop-the-line per the failure
+budget. Once genuinely green, this still needs a fresh, separate, tough review before merge (the
+reviewer that found the first collision is gone) - security tier: Opus review, verdict posted to
+the pull request, then Ben's explicit sign-off before merging.
+
+**Pane layout:** Builders tab (`w1:t2P`) has 3 lanes, correctly laid out. The QA tab (`w1:t2X`) is
+now empty (its one pane was closed after #1841's review finished) and should self-close, or can be
+closed by hand if it's still showing.
+
+A background liveness watch (diffing `herdr pane list` every 30 seconds) was running when I handed
+off - it will not survive into the successor's session; the successor should start its own.
