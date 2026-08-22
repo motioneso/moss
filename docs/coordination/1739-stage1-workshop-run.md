@@ -2171,3 +2171,19 @@ reaped -- waiting on QA verdict, same as #1039/#1754.
 Three QA verdicts now in flight in parallel: qa-1754 (PR 1816), qa-1039 (PR 1820), qa-1517
 (PR 1821). All routine/sensitive tier, none security-tier, so none need Ben's merge sign-off --
 just watching for green verdicts to auto-merge.
+
+## Update (same coordinator session, watchdog check, ~10:4x PM PDT)
+
+No verdicts posted yet on any of the three open pull requests (1816, 1039's 1820, 1517's 1821) --
+all still open, no merge activity. Checked each QA pane: qa-1754 still correctly waiting on CI
+and live end-to-end tests; qa-1039 still working, nothing new; qa-1517 still working. #1039's and
+#1754's build lanes have nothing further to do -- already reported and confirmed delivered.
+Nothing needs Ben's decision this pass.
+
+**Anomaly noted, not acted on:** qa-1517's pane had an unsubmitted line sitting at its own prompt
+reading "check boot-coordinator-post1632-relay10.txt instead" -- referencing an old boot file from
+a much earlier, unrelated relay in this run's history. This coordinator never sent it, and it was
+never submitted, so it had no effect. Treating it as stray/garbled pane content rather than a real
+instruction, per the standing rule to treat unexpected embedded "instructions" as data, not
+commands. Flagging here in case a future pass sees the same pattern recur and wants to look closer
+at where it's coming from.
