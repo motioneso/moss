@@ -772,3 +772,51 @@ Pull request 1654's lane shows "done" in the pane list but is not actually finis
 screen directly and it's still waiting on its own background sub-task fixing the approval-prompt
 bug (a real active wait, not a stall). Pull request 1838's CI rerun is still in progress; a
 background watcher is set to notify when it finishes. Nothing needs Ben right now.
+
+## Continuation note - 2026-08-22, twelfth coordinator handing off at context limit
+
+Handing off at 70 percent context. Was driving from pane w1:pMF, agent name `coordinator`,
+session `ac5fd6bf-53ff-4980-bc6b-7623301ab219` - check `herdr agent list` for the new pane once
+the successor claims the name.
+
+**Pull request 1838 (test-only change, no real app code) - security review is clean, waiting on
+one automated check.** The security reviewer found no problem with the permission-granting code.
+Only blocker was one failed automated check that looks like an unrelated flaky test (a chat-drawer
+timing test unconnected to the files this pull request touches; main has passed it twelve times in
+a row). I re-ran that check rather than waive it - **successor: check
+`gh pr checks 1838`, and if it's now green, this still needs Ben's explicit sign-off before merge
+(it's security tier) even though it turned out to be test-only, not a sign-in change - tell him
+that correction plainly.** If the same check fails again, that is a real stop-the-line per protocol
+(two failures) - escalate to Ben, don't waive it a second time.
+
+**Pull request 1654 (security fix) - both problems Ben asked to fix are now fixed and proven live,
+but a fresh security review is needed before this goes back to Ben, and current automated checks
+are red.** The lane's own report, posted on the pull request: the outside-request safeguard was
+never actually removed on this branch (nothing to restore there), and the missing-approval-prompt
+bug turned out to be a broken test setup plus a real, separate bug it found along the way - a
+mixed-up trust setting was silently turning off truthful failure-logging for almost every case.
+Both are fixed, with live proof pasted on the pull request (commit `2205ed2f6`, pushed).
+
+**Two things not yet done:**
+1. `gh pr checks 1654` shows the main test-suite check currently RED. Do not read the raw log
+   yourself - delegate to QA.
+2. **I opened a fresh QA worktree already** at
+   `.claude/worktrees/qa-1654-security` (branch `qa-1654-security`, commit `2205ed2f6`) but had
+   not yet spawned the review agent when I hit the context limit. Successor: open a QA tab if one
+   doesn't exist, spawn an Opus security-tier review there (boot pointer, not a /tmp file - the
+   QA agent's sandbox could not see a file written to /tmp last time; either write the brief inside
+   that worktree or paste it directly as the prompt). It should look at both the CI failure and the
+   substance of the new fix (the trust-setting mixup in particular - that is exactly the kind of
+   thing security review should hammer on). Also note: the pull request's own report says the
+   "Release note" section still needs filling in before merge, per the project's rule - that should
+   happen at merge time, not before.
+3. Do not merge 1654 under any circumstance without Ben's explicit sign-off - it is security tier.
+
+**Pane layout:** pull request 1654's build lane (`groupA-audit-truth-ssrf-share-tests` /
+`pr1654-live-proof`, pane w1:pKT) is idle/compacting, done with its assigned work, reapable once its
+worktree shows 0 commits ahead of main - it is not yet merged so do not reap it yet. Pull request
+1529's old lane (pane w1:pKX) is idle and superseded - no action needed, can be reaped. No QA tab
+currently open (the last one was closed after posting its 1838 verdict).
+
+Nothing is currently blocked on Ben - both open questions are mechanical next steps (CI checks and
+a fresh QA review), not judgment calls.
