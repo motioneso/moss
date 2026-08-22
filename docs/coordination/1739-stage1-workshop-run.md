@@ -47,15 +47,10 @@ unaffected.
 Nothing here yet from earlier relays. Entries below added by this coordinator (session
 `d2815ae2-dd97-40ea-9eef-08b4f70f6323`, pane `w1:pHY`), ~2026-08-21 05:2x UTC:
 
-- **#1526 (PR 1803, PTY backpressure)** — stopped, at its failure budget. First QA cycle found a
-  real flaky test (only waited up to 2 seconds for a connection-close event). The build agent
-  fixed it to wait for the real event with a 10-second safety timeout, but the second CI run
-  timed out on the exact same test again — the connection-close event still isn't arriving in
-  time under CI load even with the fix. Two failed cycles is this run's limit before a human
-  needs to look at it. The branch and worktree are left alone, untouched, for whoever picks this
-  up. Build agent told to stop and wait. Failing test:
-  `tests/unit/cli-runner-terminal-rpc.test.ts` > "a thrown write on the terminalData push closes
-  the connection and kills the connection-owned terminal (#1526)".
+- ~~#1526 (PR 1803, PTY backpressure) — stopped, connection-close test flaky in CI only~~ —
+  **RESOLVED**, Ben ruled 2026-08-21 ~10:5x PM PDT: skip/mark the test as a known issue, file a
+  separate bug, let the rest of the fix land. PR 1803 merged. See resolved entry in
+  AWAITING-BEN.md history for the full ruling.
 - ~~Shared dev instance login was rejecting the standard test account~~ — **RESOLVED**, a prior
   relay fixed it. #1521's live-path proof ran against it successfully (2026-08-21 ~18:36 UTC);
   removed from this list, no longer blocking anything.
