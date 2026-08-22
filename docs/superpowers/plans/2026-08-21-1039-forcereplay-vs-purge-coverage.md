@@ -22,7 +22,7 @@
   future refactor, be reached with an incognito thread and would need the D4 guard to hold.
 - Existing coverage already in the tree, confirmed by reading each file in full:
   - `tests/integration/chat-token-budgets.test.ts:267-288` ("T2-d") — proves `forceReplay: true`
-    and plain launch return an *identical* window on a **non-incognito** thread with 25 retained
+    and plain launch return an _identical_ window on a **non-incognito** thread with 25 retained
     turns. This is the "re-render from retained history" half.
   - `tests/integration/chat-private-mode.test.ts:97-158` ("T2-c") — proves a plain (no
     `forceReplay` opt) `listPriorTurns` call against an **incognito** thread with 25 stored rows
@@ -50,6 +50,7 @@ N/A — no user-facing UI or model-authored content. Pure backend test coverage.
 `describe("private chat persistence")` block, after the current last test).
 
 **New test:** `"T2-e: forceReplay: true does not override incognito — purge still wins"`
+
 - Reuses the existing pattern at `chat-private-mode.test.ts:97-144` (open an incognito thread,
   insert 25 stored message rows directly via `scopedDb.db.insertInto("app.chat_messages")`,
   bypassing the repository no-op).
@@ -72,6 +73,7 @@ with a `launch` spy, stub `ChatSessionManagerDeps.persistence`), but asserts on 
 argument `engine.launch` actually receives, not just the `listPriorTurns` call args.
 
 **Test A — `"forceReplay relaunch on a normal thread carries retained history into replayBatch"`**
+
 - `persistence.listPriorTurns` mock returns `{ recent: [{ role: "user", content: "q1" }, { role: "assistant", content: "a1" }], oldSummary: null }` for any call.
 - `persistence.getCurrentThreadState` mock returns `{ id: "t1", incognito: false }`.
 - Call `manager.ensureSession("user-1", "User")`, then `manager.switchProvider("user-1", "User")`
@@ -80,6 +82,7 @@ argument `engine.launch` actually receives, not just the `listPriorTurns` call a
   `"q1"` and `"a1"` (i.e., the retained turns were rendered into the replay block).
 
 **Test B — `"an incognito relaunch renders no replayBatch even when forceReplay: true is passed"`**
+
 - `persistence.listPriorTurns` mock returns `{ recent: [], oldSummary: null }` unconditionally
   (this is what the real D4 guard guarantees per Task 1 — the unit test stubs that guarantee
   rather than re-proving it, since Task 1 already proves it against the real DB).
@@ -92,6 +95,7 @@ argument `engine.launch` actually receives, not just the `listPriorTurns` call a
   recent turns — proving `forceReplay: true` cannot resurrect content purge already removed.
 
 **Test C — `"an incognito relaunch without engine purge support refuses to launch, regardless of forceReplay"`**
+
 - Same as Test B but the engine stub has no `purgeTranscripts` method.
 - Assert `manager.ensureSession("user-1", "User", { forceReplay: true })` rejects with
   `CliChatUnavailableError` (imported from `packages/chat/src/live/types.js` or wherever it's
@@ -109,6 +113,7 @@ passing — which is exactly the "silently converge" failure mode the issue name
 ```bash
 pnpm --filter @moss/chat exec vitest run ../../tests/unit/chat-force-replay-vs-purge.test.ts > /tmp/1039-unit.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`. (If the workspace filter doesn't resolve root `tests/`, fall back to
 `pnpm vitest run tests/unit/chat-force-replay-vs-purge.test.ts` from repo root — confirm whichever
 resolves during Task 2 and use it for both tasks.)
@@ -116,6 +121,7 @@ resolves during Task 2 and use it for both tasks.)
 ```bash
 pnpm test:integration > /tmp/1039-integration.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`. (Full integration run rather than a single-file filter — the file uses a
 shared `resetFoundationDatabase()` `beforeAll` other tests in the same file depend on; run under
 the `verify-gate` skill's isolated gate DB, not the live dev DB.)
@@ -126,7 +132,7 @@ run unscoped).
 ## Kill gate
 
 None needed — this is a single-phase, test-only addition with no architectural fork. If Task 1 or
-Task 2 turns up that the current code *does* let `forceReplay` leak purged content (i.e., a real
+Task 2 turns up that the current code _does_ let `forceReplay` leak purged content (i.e., a real
 bug, not a coverage gap), stop and escalate to the coordinator before writing any production-code
 fix — that would take this lane outside "test-only" and the coordinator needs to decide scope.
 
