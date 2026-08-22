@@ -712,12 +712,16 @@ describe("gateway audit outcome truth (#1252)", () => {
     expect(audit).toEqual({ outcome: "success", errorClass: null });
   });
 
-  it("does not apply module-reported detection to a first-party tool (isExternal: false)", async () => {
+  it("applies module-reported detection to a first-party tool too (isExternal: false)", async () => {
+    // isExternal only decides whether a tool's INPUT is trusted (input-validation.ts); it must
+    // not also decide whether its OUTPUT can be taken at face value. A built-in module (e.g.
+    // tasks) reporting its own failure inside an ok:true result is exactly what this audit exists
+    // to catch, and most modules in this codebase are first-party.
     const audit = await runYoloAndCaptureAudit({
       isExternal: false,
       execute: async (): Promise<ToolResult> => ({ data: { status: "error" } })
     });
-    expect(audit).toEqual({ outcome: "success", errorClass: null });
+    expect(audit).toEqual({ outcome: "failed", errorClass: "module_reported" });
   });
 
   it("does not recurse into a nested schema-declared key that itself looks like an error shape (#1252)", async () => {

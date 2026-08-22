@@ -604,10 +604,12 @@ export class AssistantToolGateway {
       // Detection must run on the raw pre-sanitize payload: sanitizeAssistantToolResult
       // allow-lists to schema-declared keys, so an undeclared status/ok/error field would
       // already be stripped from structuredData by the time we could inspect it.
-      const moduleReportedErrorClass =
-        found.tool.isExternal !== false && isModuleReportedError(result.data)
-          ? "module_reported"
-          : null;
+      // Applies to every module, built-in or external: isExternal only decides whether a
+      // module's INPUT is trusted (validateToolInput above), not whether its output can be
+      // taken at face value. Gating this on isExternal used to mean a built-in module's
+      // self-reported error (e.g. tasks.updateStatus returning {error: "Task not found"} inside
+      // an ok:true result) never got flagged and was recorded as a plain "success" (#1252 finding).
+      const moduleReportedErrorClass = isModuleReportedError(result.data) ? "module_reported" : null;
       return {
         response: {
           ok: true,

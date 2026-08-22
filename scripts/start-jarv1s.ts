@@ -51,7 +51,16 @@ const CLI_ENV_KEYS = new Set([
   // deploy (resolveVaultRoots() -> vaultRootsEnvEntry() in claude-permission-hook.ts) and needs
   // the app-validated vault roots to do it; without these, that fix is inert in this topology.
   "JARVIS_NOTES_ROOTS",
-  "MOSS_NOTES_ROOTS"
+  "MOSS_NOTES_ROOTS",
+  // UAT-only, non-secret: this supervisor spawns the cli-runner as a separate child process
+  // with its OWN filtered env (this allowlist), one layer above packages/cli-runner/src/
+  // sanitized-env.ts's own allowlist for the CLI subprocess it spawns in turn. Without the name
+  // here, the cli-runner process never sees these vars at all, so the second allowlist has
+  // nothing to pass through no matter how it's configured — the scripted "claude" fixture is
+  // never selected, PATH falls through to the real CLI, and the turn times out with no
+  // transcript ever written.
+  "JARVIS_UAT_SEED_CHAT_SCRIPT",
+  "JARVIS_UAT_SCRIPTED_PROVIDER_BIN"
 ]);
 
 const CLI_ENV_PREFIXES = ["LC_"];

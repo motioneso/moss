@@ -104,7 +104,9 @@ describe("start-jarv1s startup plan", () => {
       TMPDIR: "/tmp",
       LC_ALL: "C.UTF-8",
       DISABLE_AUTOUPDATER: "1",
-      JARVIS_CLI_RUNNER_RPC_SECRET: "rpc-secret"
+      JARVIS_CLI_RUNNER_RPC_SECRET: "rpc-secret",
+      JARVIS_UAT_SEED_CHAT_SCRIPT: "1252-audit-truth-livepath",
+      JARVIS_UAT_SCRIPTED_PROVIDER_BIN: "/app/tests/uat/fixtures/scripted-provider/bin"
     } as NodeJS.ProcessEnv;
 
     const expectedForCli = buildSanitizedCliEnv(source);

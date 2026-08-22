@@ -11,9 +11,14 @@
 // UI surface: apps/web/src/settings/settings-activity-pane.tsx renders exactly this audit row
 // with a red "Failed" badge.
 //
-// tasks.updateStatus is risk:"write" under the "task_changes" family, whose defaultTier is
-// "ask_each_time" (packages/tasks/src/manifest.ts) — so this spec does not assume auto-run. It
-// approves the real confirmation card, same as tests/uat/specs/926-food-real-chat.uat.spec.ts.
+// tasks.updateStatus is risk:"write" under the "task_changes" family. That family's manifest
+// default is "ask_each_time", but tasks is a required, always-on module, so it never runs the
+// install-time enable step that would otherwise set that preference. Instead, the very first use
+// of any task-changes tool grants it standing trust automatically, without ever asking the user
+// (packages/tasks/src/action-policy.ts TasksCompatibilityHelper, wired into #1311's install-grant
+// system). tests/uat/specs/1311-install-grant.uat.spec.ts already proves this is the intended,
+// shipped behaviour — a confirmation card must NOT appear here. This spec waits for the
+// assistant's reply text instead, then checks the audit trail.
 import { expect, test, type Page } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 
@@ -80,18 +85,15 @@ test("a module-reported tool failure is recorded and shown as Failed, not Succes
     await composer.press("Enter");
   });
 
-  await test.step("approve the real confirmation card for tasks.updateStatus", async () => {
-    const card = page.locator(CARD).last();
-    await expect(card, "tasks.updateStatus must raise a confirmation card").toBeVisible({
-      timeout: 60_000
-    });
-    await card.getByRole("button", { name: "Approve" }).click();
-    // The module handler runs and reports its own error; the card must still resolve, it must
-    // not hang or throw client-side. Exact text per action-request-card.tsx: the label reads
-    // "Approved" once resolved (unless the user themselves rejected it, which never happens here).
-    await expect(card.locator(".action-request-preview__label")).toHaveText("Approved", {
-      timeout: 30_000
-    });
+  await test.step("the call runs on standing trust, with no confirmation card, and replies", async () => {
+    // task_changes carries standing trust from first use (see the file header), so
+    // tasks.updateStatus must run straight through. Asserting the card's absence, not just the
+    // reply's presence, is what would catch a regression that started asking again.
+    await expect(page.locator(CARD)).toHaveCount(0);
+    await expect(
+      page.getByText("I tried to mark that task done."),
+      "the assistant's reply must reach the chat transcript"
+    ).toBeVisible({ timeout: 60_000 });
   });
 
   await test.step("the audit log records this call as failed, not success", async () => {
