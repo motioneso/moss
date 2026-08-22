@@ -925,3 +925,23 @@ Have not yet re-checked the two open lanes (pull request 1838 and pull request 1
 next step is to read their current state before doing anything else. Nothing new from Ben; the
 one open item for him is still the standing ask on pull request 1838 (his merge sign-off) recorded
 in the awaiting-Ben file.
+
+## Continuation note - 2026-08-22, fourteenth coordinator, corrected a stalled lane and started 1654's second security pass
+
+Pull request 1654's build lane had stopped itself saying it was waiting on a background live-test
+run. I checked the machine directly - nothing was actually running, and a test log showed the run
+had already finished successfully 36 minutes earlier without being posted. Told the lane plainly
+what I found and to finish in one continuous turn instead of waiting again. It did: posted fresh
+live-test proof (three real end-to-end tests, including this fix's own test, all passing against
+a freshly built container) and confirmed formatting and rebase are both fixed. All automated
+checks are now green against the actual latest commit (checked the commit hash matches, not a
+stale run this time).
+
+Started a second, independent Opus security review (agent name qa1654-security-2, pane w1:pMM, new
+qa tab) on the integrated result, specifically checking whether the earlier security gap (a
+test-only setting that could reach the production container) is really closed, and whether the
+fresh live-test proof is genuine. It will post its verdict as a comment on the pull request.
+
+Pull request 1838 - the one automated check still running is now on "Verify foundation and app";
+watching for it to finish. Nothing needs Ben yet beyond the standing merge sign-off already asked
+for on pull request 1838.
