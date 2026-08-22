@@ -2138,3 +2138,12 @@ Bounded-read every live pane and checked actual deliverables, not just status la
 
 Nothing needs Ben right now -- no new blockers, no security-tier sign-off pending, no design
 questions. AWAITING-BEN.md remains empty of open items.
+
+## Update (same coordinator session, watchdog-triggered check, ~10:1x PM PDT)
+
+Watchdog fired on 300s of no activity. Checked the fleet -- #1517 and QA-1754 both showed
+"done"/"needs attention" in the pane list, but reading them showed neither is actually stuck:
+#1517 is mid re-run of its pre-push checks in the background (waiting on the next check cycle,
+not idle), and QA-1754 is correctly waiting on CI and two live end-to-end tests to finish before
+giving its verdict, and already noted to itself not to poll again. No lane needs a Ben decision.
+Nothing added to AWAITING-BEN.md; nothing pinged.
