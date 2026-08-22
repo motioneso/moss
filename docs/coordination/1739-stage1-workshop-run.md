@@ -2044,3 +2044,19 @@ next pass to confirm it produced a real update rather than repeating the idle pa
 
 All other lanes (#1517, #1756, #1039, #1572, #1754) confirmed still working this pass.
 AWAITING-BEN.md confirmed empty.
+
+## Update (coordinator session 6999e187-9101-4a78-bf9f-05fd8695510e, pane w1:pK3, 2026-08-21 ~9:1x PM PDT)
+
+#1571's earlier fix held: this time it actually verified its helper agent's real process (found
+the live typecheck by process id, not just trusting the helper's report), correctly decided not to
+interrupt a genuinely running check, and said it'll look again if not done soon. This is the right
+behavior — no further nudge needed. Note: herdr showed its status as "done" even though it's still
+actively working — confirms the skill's warning that the status field alone isn't proof; always
+check the actual pane content.
+
+#1756's own gate has now been running about 1h 10m. Long, but the lane is actively rechecking it on
+its own loop (not frozen, not a stopped turn) — most likely several lanes sharing the box are
+slowing each other's gates down under load. Not a Ben decision at this point; watching, will
+escalate if it stalls outright rather than just running long.
+
+All other lanes still working. AWAITING-BEN.md still empty.
