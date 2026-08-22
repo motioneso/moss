@@ -2103,3 +2103,14 @@ Checked the two priority watch items from the relay24 brief:
 
 #1754's build lane confirmed done (report: PR #1816, gate green apart from the known #1673 flake).
 QA is already running against it in its own pane. #1571, #1517, #1572 unchanged, watch only.
+
+## Update (same coordinator session, ~9:5x PM PDT)
+
+**#1039** finished its three test commits (forceReplay/purge coverage verified individually),
+fixed one real gate-blocking issue along the way (two mocks typed too loosely, broke
+type-check, fixed in 65dd0bfec), then hit the same known #1673 flake in
+mcp-gateway-validation.test.ts that #1754 and #1517 also hit this pass -- inconsistent failure
+counts between runs, one failure missing a timing cutoff by ~1ms, file untouched by its branch.
+Ruled the same way as the other two lanes: leave the file alone, don't chase a clean gate run,
+note the known/pre-existing failures in the PR body, and open the PR. Delivered (queued, lane
+was busy).
