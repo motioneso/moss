@@ -2372,3 +2372,19 @@ Watching for the two pending tester verdicts and the weather pull request number
 watcher rather than checking by hand. Nothing has needed my decision yet.
 
 [pane w1:pKE]
+
+## Update, relay27 coordinator: weather pull request landed, QA re-squared
+
+Weather settings (#1571) opened pull request 1826, mergeable, on branch
+1571-weather-location-units. Routine tier but touches a real settings screen, so it needs live
+proof of someone actually clicking through it, not just green checks. Started a tester on it
+(agent name qa-1826).
+
+Now four testers running at once: qa-1799 (workshop chat cards), qa-1825 (sports news sources),
+qa-1816 (build agent runner, checking specifically whether its wiring is now real), qa-1826
+(weather settings). Re-squared the QA tab into a clean 2x2 grid after adding the third and fourth
+tester.
+
+Watching all four for a verdict comment with a background watcher. Nothing needs a decision yet.
+
+[pane w1:pKE]

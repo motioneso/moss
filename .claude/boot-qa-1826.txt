@@ -1,0 +1,13 @@
+PR: 1826 | Branch: 1571-weather-location-units | Spec:
+docs/superpowers/specs/2026-08-17-1571-weather-location-and-units.md | Tier: routine
+
+Invoke the coordinated-qa skill; its step 3b (live-path gate + e2e-UAT, every tier) and step 4
+(tier depth) are authoritative.
+
+This adds a real screen a person uses (a place search and a temperature unit toggle in weather
+settings), so it needs live proof, not just green checks: install it and click through it on a
+live copy of the app, the same way a real user would, and capture what you saw.
+
+Write your findings in plain English, no jargon-heavy sentences, so a non-technical reader can
+follow what you found. Post your verdict to the pull request with a GitHub comment when done, and
+sign off with your pane id.
