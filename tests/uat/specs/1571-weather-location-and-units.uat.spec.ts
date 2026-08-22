@@ -39,6 +39,7 @@ async function searchAndChoose(page: Page, query: string, expectedLabel: string)
   await page.getByRole("button", { name: "Search" }).click();
   await expect(page.getByText(expectedLabel, { exact: true })).toBeVisible({ timeout: 20_000 });
   await page.getByRole("button", { name: "Use this place" }).first().click();
+  await expect(page.getByText(`Weather location saved: ${expectedLabel}.`)).toBeVisible();
   await expect(page.getByText(`Currently using ${expectedLabel}.`)).toBeVisible();
 }
 

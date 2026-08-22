@@ -193,8 +193,13 @@ export function ProfilePane({ me }: PaneProps) {
     mutationFn: (next: PutWeatherLocationRequest) => putWeatherLocationSettings(next),
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.weather.location, data);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.weather.location });
       void queryClient.invalidateQueries({ queryKey: queryKeys.weather.today });
+      toast(
+        data.location
+          ? `Weather location saved: ${data.location.label}.`
+          : "Weather location reset to automatic detection.",
+        { tone: "ready" }
+      );
     },
     onError: (error) => toast(readError(error), { tone: "drift" })
   });
