@@ -83,8 +83,9 @@ RUN printf '%s\n' 'export PATH="${JARVIS_UAT_SCRIPTED_PROVIDER_BIN:+$JARVIS_UAT_
 # stage at their real repo-relative paths, so `tsx scripts/migrate.ts` resolves the
 # workspace and every module's import.meta.url-relative ../sql correctly. The
 # .dockerignore must NOT exclude packages, apps, scripts, or infra/postgres (Task 4).
-# Writable mount points for an arbitrary runtime uid (the prod Compose runs as the
-# host operator uid, which may differ from the image node uid — High UID finding).
+# Only runtime-write paths receive ownership/mode changes. Do not recursively chown
+# /app: application files are read-only, and changing their metadata duplicates the
+# ~1.4 GB tree in a new layer. The HF cache is the one writable path under /app.
 RUN mkdir -p "$HF_HOME" /data/vaults /data/cli-tools /data/cli-auth /run/jarv1s \
   && chown -R node:node /data /run/jarv1s \
   && chmod -R 0777 "$HF_HOME" /data/vaults /data/cli-tools /data/cli-auth \
