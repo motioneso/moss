@@ -119,7 +119,7 @@ Report **terse and result-first** — lead with the outcome, no recap, no option
 normal English (caveman/telegraph style was removed from this family on 2026-07-27; it saved few
 tokens and mangled the messages that need precision). The PR body stays conventional.
 
-Via `herdr-pane-message` to your coordinator label:
+Via `herdr agent prompt coordinator` through `herdr-pane-message`:
 
 > "<slug> DONE. PR: <link>. VF_EXIT=0 AUDIT_EXIT=0 (full suite, gate DB jarvis_gate_<slug>).
 > Live-path: <proof comment posted | n/a, no user-facing surface | NOT MET — code-complete,
@@ -183,6 +183,6 @@ or tell the coordinator so it's captured. Don't store secrets.
 | Pre-push trio + rebase | `pnpm format:check && pnpm lint && pnpm typecheck` · `git fetch origin main && git rebase origin/main` |
 | Push + PR | `git push -u origin <b>` · `gh pr create --base main` |
 | Live-path proof (UI-facing) | `resolve-uat-triggers.sh` → `pnpm test:uat -- <spec>` → `gh pr comment` with run + assertions/evidence |
-| Report done | `herdr-pane-message` → coordinator label (PR link + exit codes + live-path status) |
+| Report done | `herdr agent prompt coordinator` through `herdr-pane-message` (PR link + exit codes + live-path status) |
 
 See also: `wrap-up` (the stock skill this scopes down), `coordinated-build`, `relay`.

@@ -13,10 +13,11 @@ This is the `start` skill's plan+build stages adapted for coordination mode.
 
 **Key differences from stock `start`:**
 - The plan approval gate is the **coordinator**, not a human. You message it and wait.
-- You **escalate** blockers / forks / reviews / done to the coordinator's **unique Herdr label**
-  (from your handoff — e.g. `Coordinator`) via `herdr-pane-message` — you do not sit silently and
-  you do not decide product/architecture forks. **Before messaging, run `herdr pane list` and
-  confirm EXACTLY ONE pane holds that label.** If 0 or >1, do NOT guess a pane and do NOT message a
+- You **escalate** blockers / forks / reviews / done to the coordinator's unique Herdr agent name
+  (normally the registered name `coordinator`, with visible pane label `Coordinator`) via
+  `herdr-pane-message` — you do not sit silently and you do not decide
+  product/architecture forks. **Before messaging, run `herdr agent list` and confirm EXACTLY ONE
+  live agent has that name.** If 0 or >1, do NOT guess a pane and do NOT message a
   different one — halt and wait (a mis-routed escalation once woke a stale duplicate coordinator).
   Never escalate by a raw `…-N` pane-id alone; those reflow when panes close.
 - You **self-monitor context** and relay before you degrade.
@@ -46,7 +47,8 @@ This is the `start` skill's plan+build stages adapted for coordination mode.
   toward the relay threshold before you write any code, which forces a premature relay with zero
   progress (a real failure mode this run: lanes that spent hours emitting only handoff docs, no
   code). Reading is not progress — BUILD and commit per task; your relay trigger is the meter's
-  70% warning (step 3), not a felt %. Note your worktree/branch, the coordinator label, your
+  70% warning (step 3), not a felt %. Note your worktree/branch, the coordinator agent name
+  (normally `coordinator`), your
   **risk tier**, and any collision notes. A `security`-tier spec ships to a higher bar
   (cross-model QA + Ben merge sign-off) — build defensively and document trust boundaries.
 - **Confirm your handoff names a GitHub task issue** (`#NN`, not "live feedback" / "—"). No issue

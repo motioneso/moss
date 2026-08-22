@@ -12,11 +12,12 @@ pane_list="$(herdr pane list)"
 
 # There must be exactly one Coordinator pane (Phase 0a lock). If none exists, there's
 # nothing to watch right now -- clear any stale state and exit quietly.
-coordinator="$(jq -c '.result.panes[] | select(.label == "Coordinator")' <<<"$pane_list" | head -n1)"
-if [ -z "$coordinator" ]; then
+coordinator_rows="$(jq -c '[.result.panes[] | select(.label == "Coordinator")]' <<<"$pane_list")"
+if [ "$(jq 'length' <<<"$coordinator_rows")" -ne 1 ]; then
   rm -f "$STATE_FILE"
   exit 0
 fi
+coordinator="$(jq -c '.[0]' <<<"$coordinator_rows")"
 
 pane_id="$(jq -r '.pane_id' <<<"$coordinator")"
 revision="$(jq -r '.revision' <<<"$coordinator")"
@@ -44,10 +45,15 @@ if [ "$idle_seconds" -ge "$IDLE_THRESHOLD_SECONDS" ]; then
   if [ "${COORDINATOR_WATCHDOG_DRY_RUN:-0}" = "1" ]; then
     echo "coordinator-watchdog: DRY RUN, would send to $pane_id: $nudge"
   else
-    # `herdr pane run` sends text and Enter atomically -- works the same regardless of
-    # which agent (Claude, Codex, ...) is running in the pane, since it's a herdr-level
-    # terminal primitive, not agent-specific.
-    herdr pane run "$pane_id" "$nudge" >/dev/null
+    # Prefer the agent API: it routes by the durable agent name and submits atomically.
+    # Fall back to the pane API only when Herdr has not registered the occupant as an agent.
+    agent_name="$(herdr agent list | jq -r --arg pane "$pane_id" \
+      '.result.agents[] | select(.pane_id == $pane) | .name // empty' | head -n1)"
+    if [ -n "$agent_name" ]; then
+      herdr agent prompt "$agent_name" "$nudge" >/dev/null
+    else
+      herdr pane run "$pane_id" "$nudge" >/dev/null
+    fi
   fi
   last_nudge="$now"
   # Give it a fresh window before nudging again, so a still-stuck coordinator gets
