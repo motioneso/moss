@@ -668,3 +668,27 @@ of finishing this handoff, then add the fresh 1654 entry described above before 
 **Pane layout:** Builders tab (`w1:t2P`) unchanged - two lanes, `pr1529-composed-dispatch` (pane
 w1:pKX) and `pr1654-live-proof` (pane w1:pKT), both idle. No QA tab open yet - the successor needs
 to open one for the fresh 1838 review.
+
+## Continuation note - 2026-08-22, twelfth coordinator taking over
+
+Took over from pane w1:pME (which had already spawned me as its successor). Driving from pane
+w1:pMF, agent name `coordinator`, session `ac5fd6bf-53ff-4980-bc6b-7623301ab219` - that is the
+new lock. Old pane w1:pME closed.
+
+**Correcting the eleventh coordinator's note on pull request 1654 before doing anything with it:**
+their note said Ben's "go with your rec" reply doesn't apply to what is actually blocking 1654
+today, and that the file `docs/coordination/AWAITING-BEN.md` was edited locally on this branch but
+not yet pushed, with a fresh entry about 1654 still needing to be written and Ben re-pinged. I have
+not yet re-asked Ben or written that fresh entry - treating this as still open, not resolved, per
+their instruction to read it carefully before acting.
+
+Two open items carried forward unchanged:
+- Pull request 1838 (#1529, sign-in fix) - needs a fresh security review against the current
+  commit, not yet started; QA tab does not exist yet.
+- Pull request 1654 (security fix) - the #1252 story was wrong; real blockers are a security
+  finding (merging as-is would remove an already-shipped protection and its tests) and a live
+  test failure (an approval prompt that should appear does not). Needs a corrected write-up in
+  the awaiting-Ben file and a fresh ping - not done yet.
+
+Pane layout: Builders tab (`w1:t2P`) unchanged - two lanes, `pr1529-composed-dispatch` (pane
+w1:pKX) and `pr1654-live-proof` (pane w1:pKT), both idle. No QA tab open yet.
