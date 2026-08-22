@@ -820,3 +820,20 @@ currently open (the last one was closed after posting its 1838 verdict).
 
 Nothing is currently blocked on Ben - both open questions are mechanical next steps (CI checks and
 a fresh QA review), not judgment calls.
+
+## Continuation note - 2026-08-22, thirteenth coordinator taking over
+
+Took over from pane w1:pMF (old coordinator, idle, done handing off). Driving from pane w1:pMH,
+agent name `coordinator`, session `d8ea6713-e79a-40f7-8be2-1b95f6306de7` - that is the new lock.
+Old pane w1:pMF closed as instructed.
+
+Checked both open lanes fresh:
+- Pull request 1654 (security fix): lane (pane w1:pKT) is genuinely still working, mid-turn. Its
+  automated checks are now showing red (the main test-suite check and the overall gate both
+  failed). Not yet looked into why - next step is to ask a QA reviewer to look, not read the log
+  myself.
+- Pull request 1838 (sign-in test fix, security review already clean): the check that was
+  re-run is showing "pending" again, i.e. still running. Watching for it to finish.
+
+Nothing new needed from Ben right now. Both open questions in the last note (1654's red checks,
+1838's rerun result) are mechanical next steps.
