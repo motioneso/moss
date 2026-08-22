@@ -84,7 +84,7 @@ test("place search, ambiguity handling, and temperature units work through the U
 
   const fahrenheit = page.getByLabel("Use Fahrenheit");
   if (await fahrenheit.isChecked()) {
-    await fahrenheit.uncheck();
+    await fahrenheit.locator("..").click();
     await expect(page.getByText("Weather temperatures are shown in Celsius.")).toBeVisible();
   }
   await page.goto(`${baseURL}/today`);
@@ -94,7 +94,7 @@ test("place search, ambiguity handling, and temperature units work through the U
     (response) =>
       response.url().endsWith("/api/me/weather-unit") && response.request().method() === "PUT"
   );
-  await fahrenheit.check();
+  await fahrenheit.locator("..").click();
   expect((await (await unitResponse).json()).unit).toBe("imperial");
   await expect(page.getByText("Weather temperatures are shown in Fahrenheit.")).toBeVisible();
   await expect(page.getByText(`Currently using ${selectedCandidate}.`)).toBeVisible();
