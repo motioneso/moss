@@ -2187,3 +2187,27 @@ never submitted, so it had no effect. Treating it as stray/garbled pane content 
 instruction, per the standing rule to treat unexpected embedded "instructions" as data, not
 commands. Flagging here in case a future pass sees the same pattern recur and wants to look closer
 at where it's coming from.
+
+## Update (same coordinator session, watchdog check, ~10:5x PM PDT)
+
+**Found and fixed a real problem:** qa-1039 and qa-1517 were both stuck since spawn -- their
+brief files live only in the main checkout's .claude folder (untracked, so invisible inside a
+separate worktree, which is its own directory on disk), so both agents asked for the correct
+filename instead of finding it and then sat idle waiting for an answer nobody gave. This is the
+same mistake already made and fixed once before for qa-1754 (same run, earlier pass) -- should
+have applied the absolute-path fix to the boot instruction from the start instead of repeating a
+known mistake. Sent both the correct absolute path
+(/home/ben/Jarv1s/.claude/boot-qa-<n>.txt), confirmed delivered by reading the prompt clear
+after Enter. Both should now actually start their reviews.
+
+**Worth remembering for future spawns in this run:** point QA/build agents at the boot file's
+absolute path in the main checkout from the first message, not a worktree-relative path -- this
+has now cost three lanes a stuck restart.
+
+**Real finding surfaced by qa-1754 mid-review (not yet a final verdict):** PR #1816's core
+feature -- actually starting a coding session for the build agent runner -- is only a placeholder,
+not working logic. The build can plan work but can't actually write any module's code yet, and
+the PR's own description doesn't mention this gap. QA is still finishing (waiting on the
+foundation check and two live end-to-end tests) before giving its real verdict. Not treating this
+as final or looping in Ben yet -- if the final verdict confirms this as a blocking gap, the normal
+path is QA posts it on the PR and the build lane fixes it, not a design question for Ben.
