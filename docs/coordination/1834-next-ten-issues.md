@@ -945,3 +945,23 @@ fresh live-test proof is genuine. It will post its verdict as a comment on the p
 Pull request 1838 - the one automated check still running is now on "Verify foundation and app";
 watching for it to finish. Nothing needs Ben yet beyond the standing merge sign-off already asked
 for on pull request 1838.
+
+## Continuation note - 2026-08-22, fourteenth coordinator, second review found the security gap not fully closed
+
+The second security review came back RED. Two of the three earlier problems are genuinely fixed
+(formatting, and the stale-branch/release-notes clash - both independently confirmed). The third,
+the real security one, is not: the new on/off switch meant to gate the test-only setting travels
+into the production container the exact same way the setting itself does, so the same person who
+could exploit the original gap can still do it - it just now takes two settings instead of one.
+Reviewer verified this by reading the actual production configuration and code, not by trusting
+the commit message, and re-ran all three live tests themselves rather than trusting the posted
+results (all passed, genuinely).
+
+Reviewer's suggested fix is small: the test harness only ever needs one specific, known folder
+path, so check for that exact value instead of just checking "is a marker present". Sent this back
+to the lane (pane w1:pKT) with the exact finding and the suggested fix, plus two small non-blocking
+notes (a filter that's unsafe to apply twice in one place, and a wrong-but-harmless refresh hint on
+failure). Reaped the second QA review's pane and worktree, verdict is posted on the pull request.
+
+Pull request 1838's one remaining check is still running. Nothing needs Ben yet beyond the
+standing merge sign-off already logged for pull request 1838.
