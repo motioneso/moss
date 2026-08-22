@@ -27,7 +27,6 @@ path:docs/superpowers/spikes/**
 path:docs/coordination/**
 path:docs/audits/**
 path:docs/audit/**
-path:docs/releases/**
 path:docs/architecture/**
 path:docs/archive/**
 path:docs/evidence/**
