@@ -853,3 +853,28 @@ previously-silent logging bug). It will post its verdict as a comment on the pul
 
 Pull request 1838's rerun check is still in progress. Watching both with a background monitor
 instead of checking by hand. Nothing needs Ben yet.
+
+## Continuation note - 2026-08-22, thirteenth coordinator, real security finding on 1654
+
+The security review on pull request 1654 came back RED with a real, non-trivial finding, not
+just the red build. Worth knowing plainly: the branch added a setting so its live test could swap
+in a fake AI tool. That setting was let through into the same allow-list the real production
+system uses, and the production container already puts a particular folder first in its command
+search path at startup - so together, anyone who can set that one setting on a running production
+container could make the app run their own program instead of the real AI tool. The reviewer
+confirmed the original security fix this pull request is actually for (the outside-request
+safeguard) is untouched and fine, and the core bug fix is correct - this new problem is something
+the branch introduced along the way, not the thing it was trying to fix.
+
+Also found: the branch's newest file fails the project's formatting check (real, not the known
+flaky test), and it is 21 commits behind main with a conflict in the release-notes file.
+
+Sent all of this back to the pull request 1654 lane (pane w1:pKT) with exact instructions: fix the
+formatting, rebase, close the production security gap (only allow that test setting when the app
+is actually in test mode, not just a code comment), then re-run the live tests and post fresh
+proof. Told it not to merge either way. Lane confirmed and is working.
+
+Reaped the security review's pane and worktree (verdict is posted on the pull request, nothing
+more needed from it).
+
+Pull request 1838's rerun check is still pending. Watching both with a background monitor.
