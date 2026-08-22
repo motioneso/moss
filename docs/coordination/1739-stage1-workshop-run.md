@@ -2114,3 +2114,27 @@ counts between runs, one failure missing a timing cutoff by ~1ms, file untouched
 Ruled the same way as the other two lanes: leave the file alone, don't chase a clean gate run,
 note the known/pre-existing failures in the PR body, and open the PR. Delivered (queued, lane
 was busy).
+
+## Update (same coordinator session, ~10:0x PM PDT) - full lane sweep
+
+Bounded-read every live pane and checked actual deliverables, not just status labels:
+
+- **#1756**: verified at the OS process level, not just the pane text. The full local gate
+  (`verify:foundation`) is genuinely running -- found an active formatting-check process using
+  real CPU and a log file being actively written to, currently partway through a long pipeline
+  (lint done, now on format-check, with build/tests/migrate/integration still ahead). Not hung.
+  No action needed.
+- **#1517**: working normally, running a background push-preparation check. No action needed.
+- **#1039**: actively running its own format/lint/typecheck gate, normal. No action needed.
+- **#1572**: running background type-check commands for two areas, about 1h12m in. Its own
+  context usage is getting high (near its own auto-compact point) -- not a coordinator action
+  item, just noting in case it needs a relay soon. Otherwise healthy, watch only.
+- **QA for #1816 (#1754)**: running normally, about 8 minutes into independently verifying the
+  pull request.
+- **#1754 build lane**: confirmed finished -- its own status message says the pull request is
+  open with a green gate, handed off, now just waiting on QA and merge. No action needed.
+- **#1571**: confirmed via its own OS process check that it's genuinely blocked on a real,
+  still-running type-check process (not idle, not stuck). No action needed.
+
+Nothing needs Ben right now -- no new blockers, no security-tier sign-off pending, no design
+questions. AWAITING-BEN.md remains empty of open items.
