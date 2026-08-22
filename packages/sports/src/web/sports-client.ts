@@ -1,10 +1,17 @@
 import type {
+  ConfirmSportsSourceRequest,
+  ConfirmSportsSourceResponse,
   CreateSportsFollowRequest,
+  PreviewSportsSourceRequest,
+  PreviewSportsSourceResponse,
   SportsCatalogResponse,
+  SportsCustomSourceDto,
+  SportsCustomSourcesResponse,
   SportsFollowDto,
   SportsFollowsResponse,
   SportsOverviewResponse,
-  SportsStandingsResponse
+  SportsStandingsResponse,
+  UpdateSportsSourceAssignmentsRequest
 } from "@moss/shared";
 
 import { requestJson } from "@moss/module-web-sdk";
@@ -40,6 +47,46 @@ export async function createSportsFollow(
 
 export async function deleteSportsFollow(id: string): Promise<{ ok: boolean }> {
   return requestJson<{ ok: boolean }>(`/api/sports/follows/${encodeURIComponent(id)}`, {
+    method: "DELETE"
+  });
+}
+
+// #1572: custom public news sources by team and league.
+
+export async function listSportsSources(): Promise<SportsCustomSourcesResponse> {
+  return requestJson<SportsCustomSourcesResponse>("/api/sports/sources");
+}
+
+export async function previewSportsSource(
+  input: PreviewSportsSourceRequest
+): Promise<PreviewSportsSourceResponse> {
+  return requestJson<PreviewSportsSourceResponse>("/api/sports/sources/preview", {
+    method: "POST",
+    body: input
+  });
+}
+
+export async function confirmSportsSource(
+  input: ConfirmSportsSourceRequest
+): Promise<ConfirmSportsSourceResponse> {
+  return requestJson<ConfirmSportsSourceResponse>("/api/sports/sources", {
+    method: "POST",
+    body: input
+  });
+}
+
+export async function updateSportsSourceAssignments(
+  id: string,
+  input: UpdateSportsSourceAssignmentsRequest
+): Promise<{ source: SportsCustomSourceDto }> {
+  return requestJson<{ source: SportsCustomSourceDto }>(
+    `/api/sports/sources/${encodeURIComponent(id)}/assignments`,
+    { method: "PATCH", body: input }
+  );
+}
+
+export async function deleteSportsSource(id: string): Promise<{ deleted: boolean }> {
+  return requestJson<{ deleted: boolean }>(`/api/sports/sources/${encodeURIComponent(id)}`, {
     method: "DELETE"
   });
 }

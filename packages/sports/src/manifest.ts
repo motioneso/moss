@@ -1,16 +1,21 @@
 import { fileURLToPath } from "node:url";
 
-import type { MossModuleManifest } from "@moss/module-sdk";
+import type { MossModuleManifest, ModuleAiRequirementManifest } from "@moss/module-sdk";
 import {
+  confirmSportsSourceSchema,
   createSportsFollowRequestSchema,
   createSportsFollowResponseSchema,
+  deleteSportsCustomSourceSchema,
   deleteSportsFollowResponseSchema,
+  previewSportsSourceSchema,
   sportsCatalogResponseSchema,
+  sportsCustomSourcesResponseSchema,
   sportsFollowsResponseSchema,
   sportsLeagueTeamsResponseSchema,
   sportsOverviewResponseSchema,
   sportsStandingsResponseSchema,
-  sportsTeamSearchResponseSchema
+  sportsTeamSearchResponseSchema,
+  updateSportsSourceAssignmentsSchema
 } from "@moss/shared";
 
 import { sportsFollowedFactsTodayExecute } from "./briefing-tool.js";
@@ -44,6 +49,14 @@ const CATALOG_KEY_PATTERN = "^[a-z0-9.]{1,100}$";
 
 export const sportsModuleSqlMigrationDirectory = fileURLToPath(new URL("../sql", import.meta.url));
 
+// #1572: same AI-availability gate shape as News' newsAddSourceRequirement, reused by
+// module-registry's composition root to build the `availability.hasJsonModel` check.
+export const sportsAddSourceRequirement = {
+  service: "module.sports",
+  capability: "json",
+  tier: "economy"
+} as const satisfies ModuleAiRequirementManifest;
+
 export const sportsModuleManifest = {
   id: SPORTS_MODULE_ID,
   name: "Sports",
@@ -62,10 +75,17 @@ export const sportsModuleManifest = {
     migrations: [
       "sql/0133_sports_follows.sql",
       "sql/0185_sports_whole_league_dedupe.sql",
-      "sql/0186_sports_whole_league_unique.sql"
+      "sql/0186_sports_whole_league_unique.sql",
+      "sql/0189_sports_custom_sources.sql"
     ],
     migrationDirectories: ["packages/sports/sql"],
-    ownedTables: ["app.sports_follows"]
+    ownedTables: [
+      "app.sports_follows",
+      "app.sports_custom_sources",
+      "app.sports_source_assignments",
+      "app.sports_policy_verdicts",
+      "app.sports_headline_prefs"
+    ]
   },
   navigation: [
     {
@@ -104,6 +124,14 @@ export const sportsModuleManifest = {
       description: "Create and delete the active actor's own sports follows.",
       scope: "user",
       actions: ["create", "delete"]
+    },
+    {
+      id: "sports.sources",
+      label: "Manage custom sports news sources",
+      description:
+        "Add, assign, and remove the active actor's own custom public news sources for sports.",
+      scope: "user",
+      actions: ["create", "update", "delete"]
     }
   ],
   routes: [
@@ -155,6 +183,39 @@ export const sportsModuleManifest = {
       path: "/api/sports/follows/:id",
       responseSchema: deleteSportsFollowResponseSchema,
       permissionId: "sports.follow"
+    },
+    {
+      method: "GET",
+      path: "/api/sports/sources",
+      responseSchema: sportsCustomSourcesResponseSchema,
+      permissionId: "sports.view"
+    },
+    {
+      method: "POST",
+      path: "/api/sports/sources/preview",
+      requestSchema: previewSportsSourceSchema.body,
+      responseSchema: previewSportsSourceSchema,
+      permissionId: "sports.sources"
+    },
+    {
+      method: "POST",
+      path: "/api/sports/sources",
+      requestSchema: confirmSportsSourceSchema.body,
+      responseSchema: confirmSportsSourceSchema,
+      permissionId: "sports.sources"
+    },
+    {
+      method: "PATCH",
+      path: "/api/sports/sources/:id/assignments",
+      requestSchema: updateSportsSourceAssignmentsSchema.body,
+      responseSchema: updateSportsSourceAssignmentsSchema,
+      permissionId: "sports.sources"
+    },
+    {
+      method: "DELETE",
+      path: "/api/sports/sources/:id",
+      responseSchema: deleteSportsCustomSourceSchema,
+      permissionId: "sports.sources"
     }
   ],
   assistantActionFamilies: [
@@ -248,7 +309,13 @@ export const sportsModuleManifest = {
     exportSections: [],
     deletion: {
       strategy: "cascade",
-      tables: [{ table: "app.sports_follows" }]
+      tables: [
+        { table: "app.sports_follows" },
+        { table: "app.sports_custom_sources" },
+        { table: "app.sports_source_assignments" },
+        { table: "app.sports_policy_verdicts" },
+        { table: "app.sports_headline_prefs" }
+      ]
     }
   },
   externalSources: [

@@ -217,7 +217,17 @@ function buildApp(overrides: Partial<SportsRoutesDependencies> & { repo?: FakeRe
     } as unknown as DataContextRunner,
     resolveAccessContext: overrides.resolveAccessContext ?? (async () => userA),
     repository: repo,
-    now: () => new Date("2026-07-01T18:00:00.000Z")
+    now: () => new Date("2026-07-01T18:00:00.000Z"),
+    availability: overrides.availability ?? { hasJsonModel: async () => false },
+    discovery:
+      overrides.discovery ??
+      ({
+        fetch: async () => ({ ok: false, reason: "network" }),
+        ai: {
+          generateJson: async () => ({ ok: false, error: "needs_config" }),
+          fingerprint: async () => null
+        }
+      } as SportsRoutesDependencies["discovery"])
   };
   registerSportsRoutes(app, deps);
   return { app, repo };

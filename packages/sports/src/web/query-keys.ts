@@ -15,5 +15,7 @@ export const sportsQueryKeys = {
   leagueTeams: (competitionKey: string) => ["sports", "league-teams", competitionKey] as const,
   // Normalized so "Arsenal" and "arsenal " share one cache entry — the server lowercases/trims
   // before matching, so case/padding variants are always the same result set (#907 review).
-  teamSearch: (query: string) => ["sports", "team-search", query.trim().toLowerCase()] as const
+  teamSearch: (query: string) => ["sports", "team-search", query.trim().toLowerCase()] as const,
+  // #1572: the actor's own custom public news sources.
+  sources: ["sports", "sources"] as const
 };

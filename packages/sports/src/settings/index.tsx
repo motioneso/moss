@@ -15,7 +15,9 @@ import type {
 import { requestJson } from "@moss/module-web-sdk";
 
 import { sportsQueryKeys } from "../web/query-keys.js";
+import { SportsSourcesSection } from "./sources.js";
 import "./sports-2.css";
+import "./sports-sources.css";
 
 const CATALOG_KEY = sportsQueryKeys.catalog;
 const FOLLOWS_KEY = sportsQueryKeys.follows;
@@ -759,6 +761,12 @@ export default function SportsSettings() {
       {catalogQuery.isError || followsQuery.isError ? (
         <Note>Could not load sports follows. Try again.</Note>
       ) : null}
+
+      <SportsSourcesSection
+        follows={follows}
+        competitionsByKey={competitionsByKey}
+        teamsByCompetition={teamsByCompetition}
+      />
     </>
   );
 }
