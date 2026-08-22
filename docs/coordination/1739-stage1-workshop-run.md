@@ -2388,3 +2388,24 @@ tester.
 Watching all four for a verdict comment with a background watcher. Nothing needs a decision yet.
 
 [pane w1:pKE]
+
+## Update, relay27 coordinator: workshop chat cards (#1756, pull request 1799) tester verdict RED
+
+Its tester found no code problems - independent review found nothing blocking, and it traced the
+one real server change by hand (the "ship a running draft" button) and confirmed it is genuinely
+wired to a real, already-protected address, not just faked for a test.
+
+Two things still stop it from merging:
+1. One of GitHub's required checks is failing, on a chat-drawer test this change does not touch.
+   The tester thinks it is an unrelated flaky test, not something this change broke, and the same
+   failure has shown up on other pull requests recently. I re-ran that failing check once to test
+   that theory - result pending.
+2. Nobody has clicked through this feature on a running copy of the app yet, and the pull request
+   itself says there is nowhere to do that today, because the screen this depends on (building a
+   module) is not reachable yet. That is a real, expected blocker, not a mistake - it has to wait
+   for that dependency to land before it can be shown working live.
+
+Not merging. Waiting on the check re-run, and separately waiting on the dependency that would make
+live proof possible.
+
+[pane w1:pKE]
