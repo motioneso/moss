@@ -8,11 +8,17 @@ import {
   AssistantToolGateway,
   ConfirmationRegistry,
   InvalidSessionTokenError,
+  renderAndCap,
   resolvePolicy,
   SessionTokenRegistry,
   type ActionPolicyLookup
 } from "@moss/ai";
-import type { ModuleAssistantToolManifest, ToolContext, ToolResult } from "@moss/module-sdk";
+import type {
+  ModuleAssistantToolManifest,
+  MossModuleManifest,
+  ToolContext,
+  ToolResult
+} from "@moss/module-sdk";
 
 describe("module-sdk tool contract", () => {
   it("lets a module declare a tool with an execute handler", async () => {
@@ -593,5 +599,189 @@ describe("native Claude tool permission bridge", () => {
     expect(emitted).toContainEqual(
       expect.objectContaining({ kind: "action_result", outcome: "allowed" })
     );
+  });
+});
+
+describe("gateway audit outcome truth (#1252)", () => {
+  function manifestWithTool(
+    toolOverrides: Partial<ModuleAssistantToolManifest> & {
+      execute: ModuleAssistantToolManifest["execute"];
+    }
+  ): MossModuleManifest {
+    return {
+      id: "acme",
+      name: "Acme",
+      version: "1.0.0",
+      publisher: "Acme",
+      lifecycle: "optional",
+      compatibility: { jarv1s: ">=0.0.0" },
+      assistantTools: [
+        {
+          name: "acme.write",
+          description: "Write",
+          permissionId: "acme.write",
+          risk: "write",
+          ...toolOverrides
+        }
+      ]
+    };
+  }
+
+  async function runYoloAndCaptureAudit(
+    toolOverrides: Partial<ModuleAssistantToolManifest> & {
+      execute: ModuleAssistantToolManifest["execute"];
+    }
+  ): Promise<{ outcome: string; errorClass: string | null }> {
+    const { audit } = await runYoloAndCaptureAuditAndResponse(toolOverrides);
+    return audit;
+  }
+
+  async function runYoloAndCaptureAuditAndResponse(
+    toolOverrides: Partial<ModuleAssistantToolManifest> & {
+      execute: ModuleAssistantToolManifest["execute"];
+    }
+  ): Promise<{
+    audit: { outcome: string; errorClass: string | null };
+    response: Awaited<ReturnType<AssistantToolGateway["callTool"]>>;
+  }> {
+    const audits: { outcome: string; errorClass: string | null }[] = [];
+    const tokens = new SessionTokenRegistry();
+    const confirmations = new ConfirmationRegistry();
+    const gateway = new AssistantToolGateway({
+      resolveActiveModules: async () => [manifestWithTool(toolOverrides)],
+      repository: {
+        insertActionAuditLog: async (
+          _db: unknown,
+          input: { outcome: string; errorClass: string | null }
+        ) => {
+          audits.push({ outcome: input.outcome, errorClass: input.errorClass });
+        }
+      } as never,
+      runner: {
+        withDataContext: async (_access: unknown, work: (db: unknown) => Promise<unknown>) =>
+          work({})
+      } as never,
+      tokens,
+      confirmations,
+      notifier: { emit: () => {} },
+      confirmTimeoutMs: 50,
+      yoloMode: async () => true
+    });
+    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+    const response = await gateway.callTool(token, "acme.write", {});
+    await vi.waitFor(() => expect(audits).toHaveLength(1));
+    return { audit: audits[0]!, response };
+  }
+
+  it.each([
+    ["status: error", { status: "error" }],
+    ["ok: false", { ok: false }],
+    ["error: <string>", { error: "boom" }]
+  ])(
+    "audits a %s handler payload as failed/module_reported (external tool)",
+    async (_label, data) => {
+      const audit = await runYoloAndCaptureAudit({
+        execute: async (): Promise<ToolResult> => ({ data })
+      });
+      expect(audit).toEqual({ outcome: "failed", errorClass: "module_reported" });
+    }
+  );
+
+  it("leaves the model-visible envelope byte-identical to pre-change rendering when auditing a module-reported error (#1252)", async () => {
+    const data = { status: "error", message: "insufficient funds" };
+    const { audit, response } = await runYoloAndCaptureAuditAndResponse({
+      execute: async (): Promise<ToolResult> => ({ data })
+    });
+    expect(audit).toEqual({ outcome: "failed", errorClass: "module_reported" });
+    // The audit row now reflects the module-reported error, but callTool's actual return value —
+    // what the model sees — must be exactly what runHandler would have produced without this
+    // change: an ok:true envelope rendering the handler's payload verbatim, computed here via the
+    // same renderAndCap the gateway calls internally, so this fails if detection ever starts
+    // altering (rather than just observing) the response.
+    expect(response).toEqual({
+      ok: true,
+      data: renderAndCap(undefined, { data }),
+      structuredData: data
+    });
+  });
+
+  it("audits a normal success payload as success/null (external tool)", async () => {
+    const audit = await runYoloAndCaptureAudit({
+      execute: async (): Promise<ToolResult> => ({ data: { written: true } })
+    });
+    expect(audit).toEqual({ outcome: "success", errorClass: null });
+  });
+
+  it("tells the chat window the same outcome the audit log records for a module-reported error", async () => {
+    // The audit log and the chat window used to disagree on this exact case: the audit row
+    // said "failed" (module_reported) while the chat window still said "executed", because the
+    // chat-facing notifier only looked at the raw handler ok/false, not at whether the module's
+    // own payload reported a failure. Both must agree.
+    const notified: { outcome?: string }[] = [];
+    const tokens = new SessionTokenRegistry();
+    const confirmations = new ConfirmationRegistry();
+    const gateway = new AssistantToolGateway({
+      resolveActiveModules: async () => [
+        manifestWithTool({
+          execute: async (): Promise<ToolResult> => ({ data: { status: "error" } })
+        })
+      ],
+      repository: {
+        insertActionAuditLog: async () => {}
+      } as never,
+      runner: {
+        withDataContext: async (_access: unknown, work: (db: unknown) => Promise<unknown>) =>
+          work({})
+      } as never,
+      tokens,
+      confirmations,
+      notifier: {
+        emit: (_sessionId, record) => {
+          notified.push(record as { outcome?: string });
+        }
+      },
+      confirmTimeoutMs: 50,
+      yoloMode: async () => true
+    });
+    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+    await gateway.callTool(token, "acme.write", {});
+
+    const actionResult = notified.find((record) => record.outcome !== undefined);
+    expect(actionResult?.outcome).toBe("error");
+  });
+
+  it("applies module-reported detection to a first-party tool too (isExternal: false)", async () => {
+    // isExternal only decides whether a tool's INPUT is trusted (input-validation.ts); it must
+    // not also decide whether its OUTPUT can be taken at face value. A built-in module (e.g.
+    // tasks) reporting its own failure inside an ok:true result is exactly what this audit exists
+    // to catch, and most modules in this codebase are first-party.
+    const audit = await runYoloAndCaptureAudit({
+      isExternal: false,
+      execute: async (): Promise<ToolResult> => ({ data: { status: "error" } })
+    });
+    expect(audit).toEqual({ outcome: "failed", errorClass: "module_reported" });
+  });
+
+  it("does not recurse into a nested schema-declared key that itself looks like an error shape (#1252)", async () => {
+    // Detection matches the closed set only against the top-level raw payload (data.status /
+    // data.ok / data.error). `data.result.ok === false` here is nested under a schema-declared
+    // key, not top-level — proving detection doesn't recurse into declared sub-objects.
+    const audit = await runYoloAndCaptureAudit({
+      outputSchema: {
+        type: "object",
+        properties: { result: { type: "object", properties: { ok: { type: "boolean" } } } }
+      },
+      execute: async (): Promise<ToolResult> => ({ data: { result: { ok: false } } })
+    });
+    expect(audit).toEqual({ outcome: "success", errorClass: null });
+  });
+
+  it("still audits a handler throw as failed/handler_error", async () => {
+    const audit = await runYoloAndCaptureAudit({
+      execute: async (): Promise<ToolResult> => {
+        throw new Error("boom");
+      }
+    });
+    expect(audit).toEqual({ outcome: "failed", errorClass: "handler_error" });
   });
 });

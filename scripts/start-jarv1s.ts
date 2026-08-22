@@ -51,7 +51,14 @@ const CLI_ENV_KEYS = new Set([
   // deploy (resolveVaultRoots() -> vaultRootsEnvEntry() in claude-permission-hook.ts) and needs
   // the app-validated vault roots to do it; without these, that fix is inert in this topology.
   "JARVIS_NOTES_ROOTS",
-  "MOSS_NOTES_ROOTS"
+  "MOSS_NOTES_ROOTS",
+  // UAT-only carve-out for JARVIS_UAT_SEED_CHAT_SCRIPT / JARVIS_UAT_SCRIPTED_PROVIDER_BIN lives
+  // in buildChildEnv below, gated on JARVIS_UAT_SEED_CONFIRM — never unconditional here. See the
+  // comment at that gate for why: this same set is compiled into the production image, and
+  // JARVIS_UAT_SCRIPTED_PROVIDER_BIN names a folder the Dockerfile puts first on PATH for every
+  // login shell, so passing it through unconditionally would let anyone who can set an env var
+  // on a running production container swap in their own program for the real AI provider CLI.
+  "JARVIS_UAT_SEED_CONFIRM"
 ]);
 
 const CLI_ENV_PREFIXES = ["LC_"];
@@ -105,6 +112,25 @@ export function buildChildEnv(
   next.JARVIS_CLI_PER_USER_UID = env.JARVIS_CLI_PER_USER_UID ?? "0";
   next.JARVIS_MULTIPLEXER = resolveMossEnv(env, "JARVIS_MULTIPLEXER") ?? "tmux";
   next.JARVIS_MCP_SERVER_URL = env.JARVIS_MCP_SERVER_URL ?? "http://127.0.0.1:3000/api/mcp";
+
+  // JARVIS_UAT_SEED_CHAT_SCRIPT / JARVIS_UAT_SCRIPTED_PROVIDER_BIN select and PATH-inject a fake
+  // "claude" CLI binary for the UAT live-test fixture. JARVIS_UAT_SCRIPTED_PROVIDER_BIN in
+  // particular names a folder the Dockerfile puts first on the login-shell PATH used to launch
+  // the real AI provider CLI — the same image runs in production, so passing this through
+  // unconditionally would let anyone who can set an env var on a running production container
+  // substitute their own program for the real AI provider. JARVIS_UAT_SEED_CONFIRM=1 is the same
+  // "this is a real UAT run" marker packages/module-registry/src/index.ts already trusts for its
+  // own UAT-only carve-out (never renamed to MOSS_*, per that file's Tier C comment) — only when
+  // it is set do these two vars reach the cli-runner child at all.
+  if (env.JARVIS_UAT_SEED_CONFIRM === "1") {
+    if (env.JARVIS_UAT_SEED_CHAT_SCRIPT !== undefined) {
+      next.JARVIS_UAT_SEED_CHAT_SCRIPT = env.JARVIS_UAT_SEED_CHAT_SCRIPT;
+    }
+    if (env.JARVIS_UAT_SCRIPTED_PROVIDER_BIN !== undefined) {
+      next.JARVIS_UAT_SCRIPTED_PROVIDER_BIN = env.JARVIS_UAT_SCRIPTED_PROVIDER_BIN;
+    }
+  }
+
   return next;
 }
 

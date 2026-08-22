@@ -104,7 +104,10 @@ describe("start-jarv1s startup plan", () => {
       TMPDIR: "/tmp",
       LC_ALL: "C.UTF-8",
       DISABLE_AUTOUPDATER: "1",
-      JARVIS_CLI_RUNNER_RPC_SECRET: "rpc-secret"
+      JARVIS_CLI_RUNNER_RPC_SECRET: "rpc-secret",
+      JARVIS_UAT_SEED_CONFIRM: "1",
+      JARVIS_UAT_SEED_CHAT_SCRIPT: "1252-audit-truth-livepath",
+      JARVIS_UAT_SCRIPTED_PROVIDER_BIN: "/app/tests/uat/fixtures/scripted-provider/bin"
     } as NodeJS.ProcessEnv;
 
     const expectedForCli = buildSanitizedCliEnv(source);
@@ -117,6 +120,35 @@ describe("start-jarv1s startup plan", () => {
       }
       expect(cliRunnerServerEnv[key]).toBe(value);
     }
+  });
+
+  it("never forwards the UAT scripted-provider vars to cli-runner without the UAT confirm marker", () => {
+    // The production case: JARVIS_UAT_SEED_CONFIRM is never set outside a real UAT run, so
+    // these two vars — JARVIS_UAT_SCRIPTED_PROVIDER_BIN in particular, which the Dockerfile
+    // puts first on the CLI subprocess's own PATH — must not reach the cli-runner child even
+    // if somehow present on the supervisor's own env.
+    const env = buildChildEnv("cli-runner", {
+      PATH: "/usr/bin:/bin",
+      JARVIS_UAT_SEED_CHAT_SCRIPT: "1252-audit-truth-livepath",
+      JARVIS_UAT_SCRIPTED_PROVIDER_BIN: "/app/tests/uat/fixtures/scripted-provider/bin"
+    } as NodeJS.ProcessEnv);
+
+    expect(env.JARVIS_UAT_SEED_CHAT_SCRIPT).toBeUndefined();
+    expect(env.JARVIS_UAT_SCRIPTED_PROVIDER_BIN).toBeUndefined();
+  });
+
+  it("forwards the UAT scripted-provider vars to cli-runner only with JARVIS_UAT_SEED_CONFIRM=1", () => {
+    const env = buildChildEnv("cli-runner", {
+      PATH: "/usr/bin:/bin",
+      JARVIS_UAT_SEED_CONFIRM: "1",
+      JARVIS_UAT_SEED_CHAT_SCRIPT: "1252-audit-truth-livepath",
+      JARVIS_UAT_SCRIPTED_PROVIDER_BIN: "/app/tests/uat/fixtures/scripted-provider/bin"
+    } as NodeJS.ProcessEnv);
+
+    expect(env.JARVIS_UAT_SEED_CHAT_SCRIPT).toBe("1252-audit-truth-livepath");
+    expect(env.JARVIS_UAT_SCRIPTED_PROVIDER_BIN).toBe(
+      "/app/tests/uat/fixtures/scripted-provider/bin"
+    );
   });
 
   it("puts installed provider tools on the cli-runner PATH", () => {

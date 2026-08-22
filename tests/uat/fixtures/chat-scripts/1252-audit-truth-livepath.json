@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "turns": [
+    {
+      "expectIncludes": ["UAT-1252-AUDIT-TRUTH"],
+      "calls": [
+        {
+          "tool": "tasks.updateStatus",
+          "arguments": {
+            "taskId": "99999999-9999-4999-8999-999999999252",
+            "status": "done"
+          }
+        }
+      ],
+      "reply": "I tried to mark that task done."
+    }
+  ]
+}
