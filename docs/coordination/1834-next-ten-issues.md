@@ -597,3 +597,14 @@ that's been about an hour before pinging again, per the previous coordinator's n
 
 **Pane layout:** Builders tab (`w1:t2P`) unchanged - two lanes, `pr1529-composed-dispatch` (pane
 w1:pKX) and `pr1654-live-proof` (pane w1:pKT). No QA tab open.
+
+## Continuation note - 2026-08-22, eleventh coordinator, second ping sent
+
+Sent Ben a fresh reminder around 12:02pm - about an hour since the previous ping (11:03am), no
+reply in between. Same two open items, both unchanged:
+
+- **Pull request 1838** (#1529, security tier) - still stuck on the same known flaky chat test.
+- **Pull request 1654** (security fix) - still blocked on issue #1252.
+
+Both lanes' panes still idle and correctly waiting. Will hold off pinging again for another
+hour or so unless something changes.
