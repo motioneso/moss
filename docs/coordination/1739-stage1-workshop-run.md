@@ -2583,3 +2583,18 @@ stopped by its exact process ids before removing anything.
 Will re-test once the build lane reports the fixes pushed.
 
 [pane w1:pKH]
+
+## relay29 coordinator takeover confirmed (pane w1:pKK)
+
+Claimed the coordinator name and label, confirmed driving, closed the predecessor's pane.
+Checked all three open items, nothing has a verdict yet:
+- Weather settings (#1571, pull request 1826): independent tester (qa-1826-recheck, pane w1:pKJ)
+  is still working, no verdict posted.
+- Sports news sources (#1572, pull request 1825): its build lane (sports1572relay3, pane w1:pKB)
+  is running the full checks on an isolated database because this change touches the database
+  schema, will push once that finishes.
+- Workshop chat cards (#1756, pull request 1799): the GitHub check re-run is still going.
+
+Watching for all three to finish. Nothing needs Ben right now.
+
+[pane w1:pKK]
