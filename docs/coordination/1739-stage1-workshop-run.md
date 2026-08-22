@@ -15,6 +15,20 @@ Coordinator lock: session `6999e187-9101-4a78-bf9f-05fd8695510e`, agent name `co
 `w1:pK3`, tab `w1:t1N`. Adopted relay24 (predecessor session `4346798b-d43d-4f99-9886-ab2d06c036d7`
 at pane `w1:pJ0` confirmed idle and reaped 2026-08-21).
 
+## STANDING RULE — check-in cadence, set by Ben 2026-08-21 ~8:5x PM PDT, applies until he says otherwise
+
+**Check the fleet every 15 minutes, not every ~5.** Each pass of reading every pane costs tokens;
+5 minutes was tighter than needed since a stalled lane doesn't need catching within minutes.
+Applies to this coordinator and every relay successor — schedule the next wakeup 900 seconds out
+(`ScheduleWakeup`), not the shorter default.
+
+## STANDING RULE — relay cadence, set by Ben 2026-08-21 ~8:3x PM PDT, applies until he says otherwise
+
+**Do not relay on the first context-meter warning.** Let it fire three times and keep working
+through them; relay on the fourth firing. Applies to this coordinator and every relay successor —
+carry the current warning count forward in each continuation note so a successor knows where it
+stands.
+
 ## QA now runs in its own Herdr pane, never the `Agent` tool
 
 Standing rule as of this relay: spawn QA the same way as a build agent (`herdr pane split` into the
