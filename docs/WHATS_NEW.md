@@ -23,7 +23,7 @@
 
 - **Settings are closer to where you need them.** Finance, Job Search, and News pages now link to their own settings, so changing a connection or preference takes fewer clicks. [PR #1772](https://github.com/motioneso/moss/pull/1772)
 
-## Edge channel — 2026-08-21
+## Edge channel — 2026-08-22
 
 Edge builds include the stable history below plus the user-facing changes already available in
 the current edge image. This section is intentionally build-bundled so it never advertises a
@@ -88,6 +88,7 @@ feature that is not present in the image you are running.
 
 ### Changed
 
+- **A new look for the weekly What's New page.** The weekly summary of what shipped now has a new design and is published again every Friday morning. [PR #1830](https://github.com/motioneso/moss/pull/1830)
 - **The Food page uses the full width.** The Food page now lines up with the Finance and Job Search pages instead of sitting in a narrower column. [PR #1793](https://github.com/motioneso/moss/pull/1793)
 
 ## v0.1.16 — 2026-08-05
