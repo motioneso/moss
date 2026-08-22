@@ -401,3 +401,47 @@ before spawning anything else into that tab.
 Nothing in `docs/coordination/AWAITING-BEN.md` - still empty; nothing has needed Ben's decision
 yet, but if #1498's freezing pattern repeats a fourth time, or #1654's proof stalls again after
 being nudged, that is worth flagging to him rather than nudging forever.
+
+## Continuation note - 2026-08-22, seventh coordinator handing off at context limit
+
+Handing off at 70 percent context, routine, nothing wrong. Driving from pane w1:pM9, agent name
+`coordinator`, session `2113fc26-911e-43d7-9ebc-4b13cc17fb97` - that is the lock to check.
+
+**Pull request 1841 (#1498 styling) - one step from merging, do this first.** An independent
+review agent gave it a clean pass: checks all green, screenshots for real, no security or data
+concerns, routine tier so it can auto-merge once green. That review agent also rebased the branch
+onto current `main` itself (4 commits, no conflicts) while checking it. Before merging: re-run
+`gh pr checks 1841` and confirm green against the branch's current head commit - I saw a mismatch
+between the commit hash the reviewer quoted and the pull request's actual current head commit and
+did not get to resolve it before running out of context, so re-check fresh rather than trusting
+either number. Once confirmed green, merge it (routine tier, no sign-off needed), then close the
+review agent's pane and worktree: pane `w1:pMA` in a tab labelled "QA", worktree at
+`.claude/worktrees/qa-1841-css` - confirm the pull request is actually merged first, then remove
+both.
+
+**Pull request 1654 (security-tier fix) - blocked, logged for Ben, do not chase this yourself.**
+The fix hasn't changed and every automated check passes, but the required live-in-app proof keeps
+failing because the app's own AI assistant program isn't starting during the test - a separate bug
+(open issue #1252), not a problem with this fix. This is already written up in
+`docs/coordination/AWAITING-BEN.md` and Ben has been pinged on his phone. Nothing to do here but
+wait for his ruling - do not merge, do not start chasing #1252 yourself unless he says to.
+
+**Pull request 1838 (#1529, security tier) - fix pushed, needs a fresh check and then re-review.**
+The earlier failing review was a false alarm (two new fake test users reused ID numbers already
+used elsewhere; not a real security problem). The lane fixed the collision and pushed. Re-run
+`gh pr checks 1838` - one check was still finishing as of the last look. Once green, this needs a
+fresh, separate tough review before merge (the reviewer that found the false alarm has already
+finished and is gone) - because this touches sign-in and permissions, it is security tier: Opus
+review, verdict posted to the pull request, then Ben's explicit sign-off before merging.
+
+**Pull request 1844 (#1336, job-search board) - waiting on a specific ask, not yet done.** The
+board's own dev-site instance has never had a real job search run on it, so there was no data to
+prove the fix against. I told the lane (pane `w1:pM8`, agent name `pr1336-jobsearch-validation3`)
+not to run a real search (too big a side job) but instead to seed a handful of rows directly into
+the database itself - some normal, some deliberately malformed - to show on screen that the board
+displays the good rows, tells the user how many it skipped, and that the server log names the bad
+field without printing the job content; then clean the seeded rows up and note in the pull request
+that they were synthetic test data. Waiting on that. Routine tier once done.
+
+**Pane layout:** already fixed this session - no tiny unreadable panes left in the Builders tab.
+A "QA" tab now exists (`w1:t2X`) holding the review agent for pull request 1841.
