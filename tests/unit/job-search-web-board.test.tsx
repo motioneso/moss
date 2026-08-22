@@ -22,7 +22,8 @@ import { setLatched } from "../../external-modules/job-search/src/web/latch";
 import {
   EMPTY_BOARD_FILTERS,
   filterBoardMatches,
-  matchBucket
+  matchBucket,
+  type BoardMatch
 } from "../../external-modules/job-search/src/web/board-types";
 import { activeFilterCount } from "../../external-modules/job-search/src/web/screens/board-filters";
 // The search poll's tick, so the one test that has to reach a poll-driven board read advances by
@@ -134,6 +135,39 @@ describe("job-search web BoardScreen", () => {
 
     expect(text(renderer)).toMatch(/filters and counts apply to the first 1,000 loaded roles/i);
     expect(text(renderer)).not.toMatch(/all roles|whole board/i);
+  });
+
+  it("drops a row missing url and reports it in invalidCount, without blanking the rest of the board", async () => {
+    fixtures.matchesItems = [
+      match({ id: "good" }),
+      { ...match({ id: "bad" }), url: undefined } as unknown as BoardMatch
+    ];
+    const renderer = await renderBoard();
+    await flush(renderer);
+
+    expect(rowTitles(renderer)).toEqual(["Senior Engineer"]);
+    expect(text(renderer)).toMatch(/1 role couldn't be shown/i);
+  });
+
+  it("drops a row with an unrecognized state and reports it in invalidCount", async () => {
+    fixtures.matchesItems = [
+      match({ id: "good" }),
+      { ...match({ id: "bad" }), state: "archived" } as unknown as BoardMatch
+    ];
+    const renderer = await renderBoard();
+    await flush(renderer);
+
+    expect(rowTitles(renderer)).toEqual(["Senior Engineer"]);
+    expect(text(renderer)).toMatch(/1 role couldn't be shown/i);
+  });
+
+  it("shows no dropped-row notice when every row is well-formed", async () => {
+    fixtures.matchesItems = [match({ id: "m1" }), match({ id: "m2", title: "Other Role" })];
+    const renderer = await renderBoard();
+    await flush(renderer);
+
+    expect(rowTitles(renderer)).toEqual(["Senior Engineer", "Other Role"]);
+    expect(text(renderer)).not.toMatch(/couldn't be shown/i);
   });
 
   it("reads matches via job-search.matches.list with explicit profileId and limit", async () => {
