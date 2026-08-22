@@ -703,3 +703,15 @@ back - not to merge. Lane confirmed receipt and is working.
 
 Still open: pull request 1838 (#1529, sign-in fix) needs a fresh security review against the
 current commit - not yet started, no QA tab open.
+
+## Continuation note - 2026-08-22, twelfth coordinator, watchdog check
+
+Explained pull request 1654 to Ben in plain terms (what the fix does, what it almost silently
+removed and why, per the independent reviewer's verdict already on the pull request).
+
+Checked the fleet: pull request 1654's lane is working on the fix I sent it. Pull request 1838's
+lane was sitting idle waiting on a security review nobody had started - that was my own backlog,
+not a Ben decision, so I started it rather than leaving it idle. Opened a new worktree at the
+pull request's current commit (`e6686ebdf`), opened a QA tab, and am spawning an Opus security
+review there (agent name `qa1838-security`, pane w1:pMG) - spawn is running, confirming it landed
+on the right model next.
