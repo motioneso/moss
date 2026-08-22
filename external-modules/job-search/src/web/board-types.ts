@@ -34,6 +34,31 @@ export interface BoardMatch {
   postedAt: string | null;
 }
 
+const MATCH_STATES: ReadonlySet<string> = new Set(["unscored", "new", "seen", "dismissed"]);
+
+/** True only when `value` has every field BoardMatch claims, with the right runtime type (#1336).
+ * This is the board's one check on job-search.matches.list's wire shape — every field is required
+ * and type-checked, and nothing here substitutes a default for a missing field, because a
+ * substituted default would hide the exact drift this check exists to catch. */
+export function isBoardMatch(value: unknown): value is BoardMatch {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.id === "string" &&
+    typeof v.title === "string" &&
+    typeof v.company === "string" &&
+    (typeof v.fit === "number" || v.fit === null) &&
+    (typeof v.want === "number" || v.want === null) &&
+    typeof v.outsideFrame === "boolean" &&
+    typeof v.state === "string" &&
+    MATCH_STATES.has(v.state) &&
+    typeof v.url === "string" &&
+    typeof v.location === "string" &&
+    typeof v.source === "string" &&
+    (typeof v.postedAt === "string" || v.postedAt === null)
+  );
+}
+
 // #1330: mirrors worker/handlers/matches.ts's MatchDetail — the untruncated record behind
 // job-search.match.get, fetched by board.tsx when a row is selected and handed to the inspector
 // as its own prop (never fetched by the inspector itself; see that file's header for why). A

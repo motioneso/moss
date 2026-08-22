@@ -37,7 +37,7 @@ import { useSearchRun, type SearchRunState } from "../use-search-run";
 type MatchesState =
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "ready"; items: BoardMatch[]; truncated: boolean };
+  | { status: "ready"; items: BoardMatch[]; truncated: boolean; invalidCount: number };
 
 type SortKey = "fit" | "want";
 interface SortState {
@@ -362,8 +362,13 @@ export function BoardScreen(props: BoardScreenProps): ReactNodeLike {
     try {
       // Every page, not the first one — see web/read-board.ts for why the board is paged at all
       // and why 25 is a page size rather than the size of the board.
-      const { items, truncated } = await readWholeBoard(profileId);
-      setMatchesState({ status: "ready", items: reconcilePendingStates(items), truncated });
+      const { items, truncated, invalidCount } = await readWholeBoard(profileId);
+      setMatchesState({
+        status: "ready",
+        items: reconcilePendingStates(items),
+        truncated,
+        invalidCount
+      });
       hasRowsRef.current = true;
       setReadError(null);
     } catch (error) {
@@ -854,6 +859,14 @@ export function BoardScreen(props: BoardScreenProps): ReactNodeLike {
           {matchesState.truncated ? (
             <p className="jsm-queue-notice" role="status">
               Filters and counts apply to the first 1,000 loaded roles.
+            </p>
+          ) : null}
+          {matchesState.invalidCount > 0 ? (
+            <p className="jsm-queue-notice" role="status">
+              {matchesState.invalidCount === 1
+                ? "1 role couldn't be shown"
+                : `${matchesState.invalidCount} roles couldn't be shown`}{" "}
+              — the server sent something the board didn't recognize.
             </p>
           ) : null}
 

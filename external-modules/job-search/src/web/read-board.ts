@@ -12,7 +12,7 @@
 // (a match whose posting has since been removed is skipped server-side), which is also why the
 // offset advances by the requested page size and never by the number of rows that came back.
 import { invokeTool } from "./api";
-import type { BoardMatch } from "./board-types";
+import { isBoardMatch, type BoardMatch } from "./board-types";
 import { MATCHES_LIST_MAX_LIMIT } from "../domain/records.js";
 
 // 40 pages × 25 = 1000 rows. Not a taste limit: it is the point past which the sequential round
@@ -25,10 +25,13 @@ export interface BoardPageResult {
   readonly items: BoardMatch[];
   /** True when the board really does have more rows than MAX_BOARD_PAGES could carry. */
   readonly truncated: boolean;
+  /** Rows the server sent that didn't have the shape a match row requires — dropped rather than
+   * rendered broken (#1336). Zero on every normal read. */
+  readonly invalidCount: number;
 }
 
 interface MatchesListResponse {
-  items?: BoardMatch[];
+  items?: unknown[];
   hasMore?: boolean;
 }
 
@@ -41,6 +44,7 @@ interface MatchesListResponse {
  */
 export async function readWholeBoard(profileId: string): Promise<BoardPageResult> {
   const items: BoardMatch[] = [];
+  let invalidCount = 0;
   let offset = 0;
   for (let page = 0; page < MAX_BOARD_PAGES; page++) {
     const result = (await invokeTool("job-search.matches.list", {
@@ -48,10 +52,17 @@ export async function readWholeBoard(profileId: string): Promise<BoardPageResult
       limit: MATCHES_LIST_MAX_LIMIT,
       offset
     })) as MatchesListResponse | null;
-    const batch = Array.isArray(result?.items) ? (result!.items as BoardMatch[]) : [];
+    const rawBatch = Array.isArray(result?.items) ? result!.items : [];
+    // #1336: matches.list's response is never trusted at face value — every row is checked
+    // against the shape the board actually needs before it's rendered. A row that fails is
+    // dropped, not rendered with gaps, and counted so the board can say plainly that something
+    // was left off (board.tsx's invalidCount notice) rather than showing a smaller board with no
+    // explanation.
+    const batch = rawBatch.filter(isBoardMatch);
+    invalidCount += rawBatch.length - batch.length;
     items.push(...batch);
-    if (result?.hasMore !== true) return { items, truncated: false };
+    if (result?.hasMore !== true) return { items, truncated: false, invalidCount };
     offset += MATCHES_LIST_MAX_LIMIT;
   }
-  return { items, truncated: true };
+  return { items, truncated: true, invalidCount };
 }
