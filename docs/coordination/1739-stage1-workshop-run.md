@@ -2220,3 +2220,39 @@ test file and its trigger-map rows plus a continuation doc before handing off; t
 session. Successor "sports-sources-relay" is now running in the same worktree/branch (pane
 w1:pK7), confirmed reading the handoff doc and actively working on Sonnet. Predecessor pane
 closed and reaped. Agents tab back to 4 panes, grid still fine, no rebalance needed.
+
+## Relay: Builders/QA tab split (context hit 70%, relaying immediately per box-wide rule)
+
+Ben's rule change: split the shared "agents" tab into two role tabs -- "Builders" and "QA" --
+same grid/overflow rules as before, just sorted by role now. Skill doc already updated and
+committed (commit 1708f2722, .claude/skills/coordinate/SKILL.md) -- read that diff for the new
+wording, don't re-derive it.
+
+**Not yet done: the physical pane moves for the current fleet.** Current actual layout (as of
+this note):
+
+- Tab w1:t1Q (mislabeled, holds build agents): w1:pJX (1517 build), w1:pH7 (1756 build),
+  w1:pK1 (1039 build)
+- Tab w1:t10 ("agents", old shared tab): w1:pK7 (1572 build), w1:pK4 (qa-1754, QA!), w1:pJW
+  (1754 build), w1:pJC (1571 build) -- mixed roles, needs splitting
+- Tab w1:t24 ("agents 2"): w1:pK5 (qa-1039), w1:pK6 (qa-1517) -- already QA-only, just needs
+  relabeling to "QA" role naming
+
+**Target end state:** one "Builders" tab (2x2, overflow "Builders 2" if needed) holding all 6
+build panes (pJX, pH7, pK1, pK7, pJW, pJC -- that's 6, so Builders will need the overflow tab from
+the start, 4 + 2 split however lands cleanest), and one "QA" tab (pK4, pK5, pK6 -- 3 panes, fits
+one 3x1 or 2x2 tab) relabeled from "agents 2".
+
+**How to do the move (per the updated skill, "pop-out/split-back-in" procedure):**
+```bash
+herdr pane move <pane> --new-tab --workspace w1 --label scratch   # pop out first, same-tab moves are refused
+herdr pane move <pane> --tab <target-tab-id> --split right|down --target-pane <anchor> --ratio 0.5
+```
+Rename each destination tab's label to "Builders" / "QA" (not "agents") once populated:
+`herdr pane rename` is for panes; tab label is set via the `--label` on `--new-tab`, or check
+`herdr tab` subcommands for renaming an existing tab if one exists (verify command exists before
+assuming).
+
+Do the moves, verify each tab's grid (`herdr tab get <tab>`), fix any tab left lopsided, then
+resume normal supervision (three PRs -- 1816/1820/1821 -- waiting on QA verdicts; #1756 and #1572
+still building; #1571 done waiting). AWAITING-BEN.md is empty, nothing currently blocked on Ben.
