@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1-labs
 
 # ---------------------------------------------------------------------------
 # Moss image (ghcr.io/motioneso/moss).
@@ -13,7 +13,7 @@ ENV PNPM_HOME=/pnpm
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable && corepack prepare pnpm@10.6.2 --activate
 # Install from manifests before copying source so source-only edits reuse this layer.
-COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json .npmrc ./
 COPY --parents apps/*/package.json packages/*/package.json ./
 # onlyBuiltDependencies (onnxruntime-node, sharp, node-pty) in pnpm-workspace.yaml
 # ensures the embedding native binaries are fetched (the worker needs them, §3) and
