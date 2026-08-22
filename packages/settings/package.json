@@ -19,6 +19,7 @@
     "@moss/source-behaviors": "workspace:*",
     "@moss/structured-state": "workspace:*",
     "@moss/vault": "workspace:*",
+    "@moss/weather": "workspace:*",
     "fastify": "^5.6.2",
     "kysely": "^0.29.2",
     "@moss/proactive-monitoring": "workspace:*"

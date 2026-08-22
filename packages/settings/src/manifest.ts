@@ -180,6 +180,21 @@ export const settingsModuleManifest: MossModuleManifest = {
     },
     {
       method: "GET",
+      path: "/api/me/weather-location/search",
+      permissionId: "settings.view"
+    },
+    {
+      method: "GET",
+      path: "/api/me/weather-unit",
+      permissionId: "settings.view"
+    },
+    {
+      method: "PUT",
+      path: "/api/me/weather-unit",
+      permissionId: "settings.write"
+    },
+    {
+      method: "GET",
       path: "/api/me/themes",
       permissionId: "settings.view"
     },
@@ -508,7 +523,7 @@ export const settingsModuleManifest: MossModuleManifest = {
     },
     {
       name: "settings.weatherLocation.set",
-      description: "Set the user's saved weather location (latitude, longitude, and label).",
+      description: "Save the user's weather location by resolving a place name.",
       permissionId: "settings.write",
       risk: "write",
       selfOperationGrant: "granted_at_install",

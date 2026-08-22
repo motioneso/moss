@@ -40,20 +40,20 @@ describe("ProfilePane merged Account & preferences", () => {
     expect(html).toContain("Quiet hours");
     expect(html).toContain("Location");
     expect(html).toContain("Weather location");
-    expect(html).toContain("Automatic timezone-based detection is approximate.");
+    expect(html).toContain(
+      "Search for a place to use instead of approximate timezone-based detection."
+    );
+    expect(html).toContain("Temperature");
     expect(html).toContain(">Member<");
     expect(html).not.toContain(">Active<");
     expect(html).not.toContain(">Role<");
     expect(html).not.toContain("Auth provider configuration");
   });
 
-  it("reflects a primed weather location override in the rendered inputs", async () => {
+  it("reflects a primed weather location override in the current-location row", async () => {
     const html = await renderProfilePane({
       location: { label: "Home", lat: 51.5072, lon: -0.1276 }
     });
-    expect(html).toContain('value="Home"');
-    expect(html).toContain('value="51.5072"');
-    expect(html).toContain('value="-0.1276"');
     expect(html).toContain("Currently using Home.");
   });
 
@@ -90,6 +90,7 @@ async function renderProfilePane(
     quietHours: { enabled: false, start: "22:00", end: "07:00", timezone: null }
   });
   client.setQueryData(queryKeys.weather.location, weatherLocation);
+  client.setQueryData(queryKeys.weather.unit, { unit: "metric" });
   const { FeedbackProvider } = await import("../../apps/web/src/settings/settings-feedback.js");
   const { ProfilePane } = await import("../../apps/web/src/settings/settings-personal-panes.js");
   return renderToString(

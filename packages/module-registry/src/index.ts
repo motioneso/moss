@@ -1165,7 +1165,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
           : undefined,
         reconcileProactiveSchedule: deps.boss
           ? buildReconcileProactiveSchedule(deps.boss)
-          : undefined
+          : undefined,
+        fetchFn: deps.fetchFn
       });
       // Instance-wide Brave Search key: dedicated admin routes (the key is AES-256-GCM
       // encrypted at rest, never returned). The web-research module stays db-free; this

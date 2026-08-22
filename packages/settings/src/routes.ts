@@ -44,6 +44,8 @@ import { registerHostRestartRoutes, type HostRestartDependencies } from "./host-
 import { registerLocaleRoutes } from "./locale-routes.js";
 import { registerQuietHoursRoutes } from "./quiet-hours-routes.js";
 import { registerWeatherLocationRoutes } from "./weather-location-routes.js";
+import { registerWeatherLocationSearchRoutes } from "./weather-location-search-routes.js";
+import { registerWeatherUnitRoutes } from "./weather-unit-routes.js";
 import { registerThemeRoutes } from "./themes-routes.js";
 import { registerYoloRoutes } from "./yolo-routes.js";
 import { registerNotesSourceRoutes, type ReconcileNotesScheduleFn } from "./notes-source-routes.js";
@@ -217,6 +219,8 @@ export interface SettingsRoutesDependencies {
     scopedDb: DataContextDb,
     manifest: MossModuleManifest
   ) => Promise<void>;
+  /** Overrides the global fetch for outbound calls made by settings routes (tests only). */
+  readonly fetchFn?: typeof fetch;
 }
 
 interface SettingParams {
@@ -241,6 +245,11 @@ export function registerSettingsRoutes(
   registerLocaleRoutes(server, { ...dependencies, preferencesRepository });
   registerQuietHoursRoutes(server, { ...dependencies, preferencesRepository });
   registerWeatherLocationRoutes(server, { ...dependencies, preferencesRepository });
+  registerWeatherLocationSearchRoutes(server, {
+    resolveAccessContext: dependencies.resolveAccessContext,
+    fetchFn: dependencies.fetchFn
+  });
+  registerWeatherUnitRoutes(server, { ...dependencies, preferencesRepository });
   registerThemeRoutes(server, { ...dependencies, preferencesRepository });
   registerNotesSourceRoutes(server, { ...dependencies, preferencesRepository });
   registerMeSessionsRoutes(server, {

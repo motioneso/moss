@@ -1,12 +1,14 @@
 import type { FastifyBaseLogger } from "fastify";
 import type { AccessContext, DataContextRunner, PreferencesPort } from "@moss/db";
-import type { WeatherLocationDto, WeatherTodayDto } from "@moss/shared";
+import type { WeatherLocationDto, WeatherTodayDto, WeatherUnit } from "@moss/shared";
 import { fetchOpenMeteoForecast, WeatherUnavailableError } from "./open-meteo.js";
 import { geocodeIp } from "./ip-geocoder.js";
 import { WeatherCache } from "./weather-cache.js";
 import { lookupCityForTimeZone } from "./timezone-city.js";
 
 const WEATHER_LOCATION_KEY = "weather-location";
+const WEATHER_UNIT_KEY = "weather-unit";
+const DEFAULT_WEATHER_UNIT: WeatherUnit = "metric";
 const WEATHER_CACHE_TTL_MS = 30 * 60 * 1000;
 const GEO_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
@@ -19,6 +21,7 @@ interface WeatherServiceDependencies {
 
 interface CachedWeather {
   readonly resolvedLocation: ResolvedLocation;
+  readonly unit: WeatherUnit;
   readonly data: WeatherTodayDto;
 }
 
@@ -50,9 +53,12 @@ export class WeatherService {
     const userId = accessContext.actorUserId;
     const resolvedLocation = await this.resolveLocation(accessContext, requestIp, timeZone);
     if (!resolvedLocation) return null;
+    const unit = await this.resolveUnit(accessContext);
 
     const cached = this.weatherCache.get(userId);
-    if (cached && sameLocation(cached.resolvedLocation, resolvedLocation)) return cached.data;
+    if (cached && cached.unit === unit && sameLocation(cached.resolvedLocation, resolvedLocation)) {
+      return cached.data;
+    }
     if (cached) this.weatherCache.delete(userId);
 
     let data: WeatherTodayDto;
@@ -60,7 +66,7 @@ export class WeatherService {
       data = await fetchOpenMeteoForecast(
         resolvedLocation.location.lat,
         resolvedLocation.location.lon,
-        "metric",
+        unit,
         resolvedLocation.location.label,
         this.fetchFn
       );
@@ -71,8 +77,15 @@ export class WeatherService {
       }
       throw error;
     }
-    this.weatherCache.set(userId, { resolvedLocation, data }, WEATHER_CACHE_TTL_MS);
+    this.weatherCache.set(userId, { resolvedLocation, unit, data }, WEATHER_CACHE_TTL_MS);
     return data;
+  }
+
+  private async resolveUnit(accessContext: AccessContext): Promise<WeatherUnit> {
+    const raw = await this.dataContext.withDataContext(accessContext, (scopedDb) =>
+      this.preferencesRepo.get(scopedDb, WEATHER_UNIT_KEY)
+    );
+    return raw === "imperial" ? "imperial" : DEFAULT_WEATHER_UNIT;
   }
 
   private async resolveLocation(
