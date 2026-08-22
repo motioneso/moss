@@ -712,6 +712,44 @@ describe("gateway audit outcome truth (#1252)", () => {
     expect(audit).toEqual({ outcome: "success", errorClass: null });
   });
 
+  it("tells the chat window the same outcome the audit log records for a module-reported error", async () => {
+    // The audit log and the chat window used to disagree on this exact case: the audit row
+    // said "failed" (module_reported) while the chat window still said "executed", because the
+    // chat-facing notifier only looked at the raw handler ok/false, not at whether the module's
+    // own payload reported a failure. Both must agree.
+    const notified: { outcome?: string }[] = [];
+    const tokens = new SessionTokenRegistry();
+    const confirmations = new ConfirmationRegistry();
+    const gateway = new AssistantToolGateway({
+      resolveActiveModules: async () => [
+        manifestWithTool({
+          execute: async (): Promise<ToolResult> => ({ data: { status: "error" } })
+        })
+      ],
+      repository: {
+        insertActionAuditLog: async () => {}
+      } as never,
+      runner: {
+        withDataContext: async (_access: unknown, work: (db: unknown) => Promise<unknown>) =>
+          work({})
+      } as never,
+      tokens,
+      confirmations,
+      notifier: {
+        emit: (_sessionId, record) => {
+          notified.push(record as { outcome?: string });
+        }
+      },
+      confirmTimeoutMs: 50,
+      yoloMode: async () => true
+    });
+    const token = tokens.mint({ actorUserId: "u1", chatSessionId: "c1", allowedToolNames: null });
+    await gateway.callTool(token, "acme.write", {});
+
+    const actionResult = notified.find((record) => record.outcome !== undefined);
+    expect(actionResult?.outcome).toBe("error");
+  });
+
   it("applies module-reported detection to a first-party tool too (isExternal: false)", async () => {
     // isExternal only decides whether a tool's INPUT is trusted (input-validation.ts); it must
     // not also decide whether its OUTPUT can be taken at face value. A built-in module (e.g.
