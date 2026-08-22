@@ -56,55 +56,12 @@ merge this, tell me how to test there" and did live-path verification himself po
 section stayed in the file as a live-looking entry past its resolution; removed by the eighth
 coordinator on 2026-08-22 once confirmed done. -->
 
-## Pull request 1838 (issue #1529, security-sensitive fix) — automated checks have now failed twice
+<!-- Resolved 2026-08-22 13:10: Ben ruled "go with your rec" for both open questions below.
 
-This is a sign-in and permissions fix, so it needs to be extra careful before it merges. Its
-automated checks failed once already (two new fake test accounts had ID numbers already used by
-other test files, which is not a security problem, just a collision) - that got fixed and
-re-checked. The re-check has now also come back failed. The rule for a change this sensitive is
-that a second failed check means stop and get a ruling rather than trying a third time.
+Pull request 1838 — treating the failing check as unrelated flaky-test noise (proof: same test,
+same line, also failing on an unrelated main-line change, self-recovering the very next run).
+Waiver logged in the run manifest. Proceeding straight to security-tier review without waiting
+for a fully green run.
 
-Update: the team reported back, and I checked their claim myself against the real logs. Both
-failures are the exact same browser test, failing at the exact same line - a chat window test
-waiting for the text "Tick 2" to appear on screen. I found that same test failing, at that same
-line, on a totally unrelated change that had just landed on the main line of the project, with
-nobody's work involved. This pull request only ever changed two ID numbers in a database test
-helper file - nothing to do with chat or that test. The very next change after that one passed
-fine, so this looks like a test that fails on its own sometimes (flaky), not one that is always
-broken, and not one this pull request has any hand in.
-
-Options:
-1. Treat this failure as unrelated noise and let this pull request go on to its security review
-   without waiting for a fully green run - I'd log the exact failing run as the proof for skipping
-   it, so anyone reading the pull request later can see why.
-2. Have the team (or someone else) fix the flaky test itself first, then re-run, even though it's
-   outside the scope of this fix.
-3. Your call.
-
-My recommendation: option 1. The evidence is solid - same test, same line, failing on an unrelated
-change, self-recovering on the very next run - and pinning down the fix would be entirely separate
-work.
-
-## Pull request 1654 — security fix cannot get its required live proof, real bug in the way
-
-The security fix itself (audit-logging honesty plus outbound-network safety) hasn't changed since
-it was last checked over, and every automated check passes. But before it can merge, the rule is
-it must be proven working end-to-end in a real running copy of the app, and that proof keeps
-failing for a reason unrelated to this fix: when the live test tries to have a conversation with
-the app's AI assistant, the assistant program never actually starts, so the conversation times out
-before it ever reaches the code this pull request is supposed to prove. The lane tried running that
-same start-up command by hand outside the app, and it worked fine — so it's something in how the
-app itself launches that program, not a broken command. This is the same underlying problem as
-open issue #1252.
-
-Options:
-1. Pause pull request 1654 until #1252 (the assistant program not starting) is understood and
-   fixed, then re-run the live proof. Safest, but 1654 stays unmerged with no clear timeline.
-2. Have a lane specifically chase down #1252 now, in parallel, since it's now blocking a
-   security fix and not just a general bug.
-3. Ben decides some other form of live proof is acceptable for 1654 given the code hasn't changed
-   and only the automated test harness is failing — but this needs to be his call since it means
-   accepting less than the usual live-path evidence on a security-tier change.
-
-My recommendation: option 2 — this bug is now blocking a security fix, not just a general
-annoyance, so it's worth a dedicated lane rather than waiting for it to come up naturally.
+Pull request 1654 — spinning up a dedicated lane to chase issue #1252 (the app's assistant
+program not starting during the live test) now that it's blocking a security fix. -->
