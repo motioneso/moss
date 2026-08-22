@@ -125,6 +125,11 @@ describe("dataLifecycle cascade-truth (#801 Phase A)", () => {
         "app.medication_logs",
         "app.wellness_therapy_notes",
         "app.sports_follows",
+        // #1572 custom sports news sources by team and league.
+        "app.sports_custom_sources",
+        "app.sports_source_assignments",
+        "app.sports_policy_verdicts",
+        "app.sports_headline_prefs",
         "app.news_prefs",
         // #953 News Slice 1 personalization tables — all owner-keyed to app.users cascade.
         "app.news_custom_sources",

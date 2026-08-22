@@ -6,6 +6,7 @@ export type { SportsRoutesDependencies } from "./routes.js";
 export type { SportsFollowsWriter } from "./sports-service.js";
 export {
   SPORTS_MODULE_ID,
+  sportsAddSourceRequirement,
   sportsModuleManifest,
   sportsModuleSqlMigrationDirectory
 } from "./manifest.js";

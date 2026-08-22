@@ -263,6 +263,7 @@ import {
   configureSportsChatTools,
   createEspnDatasetAdapter,
   registerSportsRoutes,
+  sportsAddSourceRequirement,
   sportsModuleManifest,
   sportsModuleSqlMigrationDirectory
 } from "@moss/sports";
@@ -694,6 +695,53 @@ function buildNewsDiscoveryPorts(
       async fingerprint(scopedDb: DataContextDb) {
         const model = (
           await repository.resolveModelForService(scopedDb, "module.news", {
+            capability: "json",
+            tierHint: "economy"
+          })
+        ).model;
+        if (!model) return null;
+        return createHash("sha256").update(`${model.provider_kind}\0${model.id}`).digest("hex");
+      }
+    }
+  };
+}
+
+const sportsRobotsGate = createRobotsGate();
+const sportsHostRateLimiter = createHostRateLimiter();
+
+/** #1572: Sports' own discovery ports — URL-only, so no `search` (unlike News). */
+function buildSportsDiscoveryPorts(logger?: Pick<FastifyBaseLogger, "info" | "warn">) {
+  const repository = new AiRepository();
+  const cipher = createAiSecretCipher();
+  return {
+    fetch: (url: string) =>
+      fetchWebResource(url, {
+        requireHttps: true,
+        robots: sportsRobotsGate,
+        rateLimiter: sportsHostRateLimiter
+      }),
+    ai: {
+      generateJson: (
+        scopedDb: DataContextDb,
+        input: {
+          schema: Record<string, unknown>;
+          prompt: string;
+          maxOutputTokens?: number;
+        }
+      ) =>
+        generateStructured(
+          scopedDb,
+          { service: "module.sports", ...input },
+          {
+            repository,
+            cipher,
+            logger,
+            createCliStructuredAdapter: createCliStructuredAdapterFactory()
+          }
+        ),
+      async fingerprint(scopedDb: DataContextDb) {
+        const model = (
+          await repository.resolveModelForService(scopedDb, "module.sports", {
             capability: "json",
             tierHint: "economy"
           })
@@ -1694,7 +1742,23 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       registerSportsRoutes(server, {
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext,
-        datasetClient
+        datasetClient,
+        discovery: buildSportsDiscoveryPorts(createModuleLogger(server.log, "sports")),
+        // #953: same capability-boolean-only seam as News' availability gate — no model
+        // identity or key material crosses this seam.
+        availability: {
+          hasJsonModel: async (scopedDb) =>
+            (
+              await new AiRepository().resolveModelForService(
+                scopedDb,
+                sportsAddSourceRequirement.service,
+                {
+                  capability: sportsAddSourceRequirement.capability,
+                  tierHint: sportsAddSourceRequirement.tier
+                }
+              )
+            ).model !== null
+        }
       });
     }
   },

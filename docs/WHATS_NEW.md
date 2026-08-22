@@ -9,6 +9,7 @@ feature that is not present in the image you are running.
 ### Added
 
 - **Choose your weather place and temperature units.** You can choose the place used for your weather and switch temperatures between Celsius and Fahrenheit. [PR #1826](https://github.com/motioneso/moss/pull/1826)
+- **Custom sports news sources.** You can now add your own sports news sources by URL in Sports settings, preview what Moss found, and assign them to your followed teams and leagues. [PR #1825](https://github.com/motioneso/moss/pull/1825)
 - **Workshop page.** Admins now have a Workshop page showing which modules Moss is building, has finished, or has made live, with anything waiting on a decision from you called out first. [PR #1804](https://github.com/motioneso/moss/pull/1804)
 - **Log a meal from the Food page.** The Food page now has its own Log a meal button, so you can
   add a meal without going through chat. [PR #1788](https://github.com/motioneso/moss/pull/1788)

@@ -1,0 +1,146 @@
+/* #1572 custom sports news sources (packages/sports/src/settings/sources.tsx). Tokens only —
+   raw colors live in apps/web/src/styles/tokens.css. Mirrors packages/news/src/settings/news-settings.css's
+   .nw-set__* family, prefixed sp-src to stay scoped to this section. */
+
+.sp-src {
+  margin-top: var(--space-5);
+}
+
+.sp-src__kicker {
+  margin: 0 0 var(--space-3);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+
+.sp-src__hint {
+  margin: calc(-1 * var(--space-2)) 0 var(--space-3);
+  line-height: 1.5;
+}
+
+.sp-src__hint--tight {
+  margin: calc(-1 * var(--space-1)) 0 var(--space-2);
+}
+
+.sp-src__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.sp-src__item {
+  padding: var(--space-2) var(--space-3);
+}
+
+.sp-src__item-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.sp-src__item-meta {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sp-src__item-row > button {
+  margin-left: auto;
+}
+.sp-src__item-row > button:last-child {
+  margin-left: 0;
+}
+
+.sp-src__addrow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.sp-src__addflow {
+  margin-top: var(--space-2);
+}
+
+.sp-src__form {
+  margin: 0 0 var(--space-3);
+}
+
+.sp-src__label {
+  display: block;
+  margin: 0 0 var(--space-2);
+}
+
+.sp-src__row {
+  display: flex;
+  gap: var(--space-2);
+  max-width: 28rem;
+}
+
+.sp-src__row .jds-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.sp-src__err {
+  margin: calc(-1 * var(--space-2)) 0 var(--space-3);
+}
+
+.sp-src__candidate {
+  margin: var(--space-2) 0 0;
+}
+
+.sp-src__candidate-label {
+  margin: 0;
+}
+
+.sp-src__assign {
+  margin-top: var(--space-2);
+}
+
+.sp-src__assign-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  list-style: none;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.sp-src__assign-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sp-src__assign-item input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+
+@media (max-width: 40rem) {
+  .sp-src__item-row {
+    flex-wrap: wrap;
+  }
+
+  .sp-src__item-meta {
+    order: 3;
+    flex-basis: 100%;
+    overflow: visible;
+    white-space: normal;
+  }
+
+  .sp-src__item-row > button {
+    margin-left: 0;
+  }
+
+  .sp-src__item-row > button:first-of-type {
+    margin-left: auto;
+  }
+}

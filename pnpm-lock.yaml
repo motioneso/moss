@@ -1100,6 +1100,9 @@ importers:
       '@moss/module-web-sdk':
         specifier: workspace:*
         version: link:../module-web-sdk
+      '@moss/news':
+        specifier: workspace:*
+        version: link:../news
       '@moss/settings-ui':
         specifier: workspace:*
         version: link:../settings-ui
@@ -1112,6 +1115,9 @@ importers:
       fastify:
         specifier: ^5.6.2
         version: 5.8.5
+      htmlparser2:
+        specifier: ^10.1.0
+        version: 10.1.0
       kysely:
         specifier: ^0.29.2
         version: 0.29.2

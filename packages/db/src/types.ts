@@ -1112,6 +1112,63 @@ export interface NewsPolicyVerdictsTable {
   expires_at: TimestampColumn;
 }
 
+// #1572 Sports custom news source tables (0190_sports_custom_sources.sql). Owner-only under
+// FORCE RLS; no worker grants — headlines are fetched synchronously, not by a background job.
+export type SportsSourceHealthState =
+  | "pending"
+  | "healthy"
+  | "failing"
+  | "unsupported"
+  | "auth_required"
+  | "disabled";
+
+export interface SportsCustomSourcesTable {
+  id: ColumnType<string, string | undefined, string>;
+  owner_user_id: string;
+  label: string;
+  canonical_domain: string;
+  homepage_url: string;
+  feed_url: string | null;
+  retrieval_method: "feed" | "scrape";
+  enabled: ColumnType<boolean, boolean | undefined, boolean>;
+  health_state: ColumnType<
+    SportsSourceHealthState,
+    SportsSourceHealthState | undefined,
+    SportsSourceHealthState
+  >;
+  health_reason_code: string | null;
+  health_message: string | null;
+  last_checked_at: TimestampColumn | null;
+  last_success_at: TimestampColumn | null;
+  validation_fingerprint: string;
+  validated_at: TimestampColumn;
+  created_at: TimestampColumn;
+  updated_at: TimestampColumn;
+}
+
+export interface SportsSourceAssignmentsTable {
+  id: ColumnType<string, string | undefined, string>;
+  owner_user_id: string;
+  source_id: string;
+  follow_id: string;
+  created_at: TimestampColumn;
+}
+
+export interface SportsPolicyVerdictsTable {
+  owner_user_id: string;
+  canonical_domain: string;
+  fingerprint: string;
+  verdict: "approved" | "rejected";
+  decided_at: TimestampColumn;
+  expires_at: TimestampColumn;
+}
+
+export interface SportsHeadlinePrefsTable {
+  owner_user_id: string;
+  espn_headlines_enabled: ColumnType<boolean, boolean | undefined, boolean>;
+  updated_at: TimestampColumn;
+}
+
 export interface MossDatabase {
   "app.schema_migrations": SchemaMigrationsTable;
   "app.users": UsersTable;
@@ -1166,6 +1223,10 @@ export interface MossDatabase {
   "app.preferences": PreferencesTable;
   "app.wellness_checkins": WellnessCheckinsTable;
   "app.sports_follows": SportsFollowsTable;
+  "app.sports_custom_sources": SportsCustomSourcesTable;
+  "app.sports_source_assignments": SportsSourceAssignmentsTable;
+  "app.sports_policy_verdicts": SportsPolicyVerdictsTable;
+  "app.sports_headline_prefs": SportsHeadlinePrefsTable;
   "app.news_prefs": NewsPrefsTable;
   "app.news_custom_sources": NewsCustomSourcesTable;
   "app.news_custom_topics": NewsCustomTopicsTable;
