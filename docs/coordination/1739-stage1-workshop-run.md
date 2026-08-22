@@ -2418,3 +2418,47 @@ that failed earlier was a missing configuration file; fixed, and the same check 
 other checks green. Merged to main at commit 856da80799.
 
 [pane w1:pKE]
+
+## Relay: context meter hit 70%, handing off now (relay27 coordinator, pane w1:pKE)
+
+**Live fleet right now:**
+- Weather settings (#1571, pull request 1826): build lane done, self-reports full local check and
+  a real browser walkthrough passed (place search, ambiguous place names, Fahrenheit). Hosted
+  checks were still running last I looked. Tester qa-1826 (pane w1:pKG) is running - I had to
+  correct its brief path once (told it to read a file that only existed in the main folder, not
+  its own copy of the code); it is reading the correct one now. No verdict yet.
+- Sports news sources (#1572, pull request 1825): tester qa-1825 (pane w1:pKD) still running, no
+  verdict posted yet.
+- Workshop chat cards (#1756, pull request 1799): tester's verdict is RED, already posted on the
+  pull request and durable. Two blockers: one required GitHub check is failing on a chat-drawer
+  test this change does not touch (tester believes it is an unrelated flaky test); and live proof
+  is genuinely impossible right now because the screen this depends on is not reachable in the
+  running app yet. I re-ran the failing check once to test the flake theory - **rerun 32547415397
+  still in_progress as of this note, not resolved**. Next coordinator: check
+  `gh run view 32547415397` - if it now passes, that confirms flake (still need Ben's OK per the
+  CI-waiver rule before merging past a flaky required check); if it fails again, that is two
+  failures on the same check = stop-the-line, escalate to Ben instead of re-running again.
+  Tester's own pane was already closed (its verdict is durable on the pull request, so this was
+  safe).
+- Build agent runner (#1754, pull request 1816): build lane claims the wiring problem the earlier
+  coordinator flagged is now genuinely fixed. Tester qa-1816 (pane w1:pKF) is running to check that
+  claim independently - I had to correct its brief path too (same mistake as above); it is reading
+  the correct brief now. No verdict yet.
+- Docker image shrink (pull request 1824): already merged by its own lane (reports to Ben
+  directly, not mine to merge) at commit 856da80799d0078c791df1d4350518df278d932f. Nothing further
+  needed.
+
+**A mistake I made this pass, so the next coordinator doesn't repeat it:** when you write a task
+brief file for a tester and tell it to "read the file at <path>", remember each tester runs in its
+own separate copy of the code (a worktree), not a subfolder of the main one. A brief written into
+the main folder is invisible from inside a worktree unless you give the full path starting from
+`/home/ben/Jarv1s/...`. I used a short path both times at first and both testers got stuck asking
+where their instructions were. Always give the full path.
+
+**Nothing needs Ben's decision right now** except the possible flaky-check waiver above, which
+isn't confirmed yet. AWAITING-BEN.md has no new open entries from this pass (the one existing
+entry in that file is already marked resolved and just needs tidying, not urgent).
+
+Relaying now per the box-wide rule: never let this session hit 70 percent and keep going.
+
+[pane w1:pKE]
