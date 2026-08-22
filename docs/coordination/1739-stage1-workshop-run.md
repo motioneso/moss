@@ -2598,3 +2598,27 @@ Checked all three open items, nothing has a verdict yet:
 Watching for all three to finish. Nothing needs Ben right now.
 
 [pane w1:pKK]
+
+## relay29 coordinator: merged weather settings (#1571, pull request 1826)
+
+A fresh independent tester gave it a green verdict, this time with its own real browser proof
+(not just trusting the build lane's self-report): a plain install worked cleanly, the real
+browser test passed picking a place and switching units, and the save-confirmation bug from the
+earlier red verdict is now fixed and shown live in the test. Sensitive tier (touches settings
+storage), so no separate sign-off needed from Ben - just this note.
+
+Re-checked that the pull request could still merge cleanly right before merging (main can move
+between a verdict and a merge). It could. Merged as commit f0e771256, closed issue #1571 (project
+board moved it to Done automatically). Cleaned up both leftover copies of the code - the one the
+build agent was working in and the one the tester used - after checking neither had a live server
+or unsaved changes left behind.
+
+`merges_since_relay` = 1 (sensitive tier; relay rule is every 2 routine/sensitive merges, so not
+due yet from this alone).
+
+Still open: sports news sources (#1572, pull request 1825) waiting on its remaining check to
+finish before a fresh look at the merged-in result. Workshop chat cards (#1756, pull request 1799)
+is flagged in the awaiting-Ben file - its required check passed on a re-run and needs his OK to
+count.
+
+[pane w1:pKK]
