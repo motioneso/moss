@@ -552,3 +552,28 @@ awaiting-Ben file. Nothing new to do until Ben rules.
 Nothing new to do.
 
 **Pane layout:** Builders tab has two lanes left (1529 and 1654), unchanged, correctly laid out.
+
+## Continuation note - 2026-08-22, tenth coordinator handing off at context limit
+
+Handing off at 70 percent context, routine, nothing wrong. Was driving from pane w1:pMD, agent
+name `coordinator`, session `8225dbea-da98-41d1-a157-a942bf59fbe6` - check `herdr agent list` for
+the new pane once the successor claims the name.
+
+**Nothing changed this shift.** Both open items are still exactly as the ninth coordinator left
+them - no new work landed, nothing merged. Spent this whole session watching and waiting:
+
+- **Pull request 1838** (#1529, security tier) - still stuck on the same already-known flaky chat
+  test, unrelated to the fix itself. Waiting on Ben's ruling (see AWAITING-BEN.md).
+- **Pull request 1654** (security fix) - still blocked on issue #1252 (the app's own assistant
+  program not starting during the live test). Waiting on Ben's ruling (see AWAITING-BEN.md).
+
+Sent Ben a fresh reminder ping around 11:03am (over an hour of silence since the previous one) -
+still no reply as of this handoff. Do not re-ping again until it's been a good while since that
+one (roughly an hour), so his phone isn't getting spammed.
+
+**Pane layout:** unchanged - Builders tab (`w1:t2P`) has the same two lanes,
+`pr1529-composed-dispatch` (pane w1:pKX) and `pr1654-live-proof` (pane w1:pKT), both idle and
+correctly waiting. No QA tab open. Nothing needs rebalancing.
+
+The successor's job is the same as mine was: keep watching for Ben's replies on these two
+questions and act promptly once they land. Nothing else is queued for this run.
