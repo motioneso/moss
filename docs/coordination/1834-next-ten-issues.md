@@ -737,3 +737,31 @@ Checked pull request 1654's lane (pane w1:pKT) too - it is genuinely busy, runni
 background sub-task and waiting on it, not stalled.
 
 Both lanes healthy. Nothing needs Ben right now.
+
+## Continuation note - 2026-08-22, twelfth coordinator, PR 1838 security review is in
+
+The security review posted. Good news on the substance: the reviewer read the permission-granting
+code directly and found nothing that lets someone grant themselves or anyone else a permission they
+shouldn't have. One thing worth knowing before this reaches you for sign-off: this pull request
+turned out not to be a sign-in change at all - it's two test files (plus docs), no real production
+code changed.
+
+The only reason it's not marked ready is one automated check failed, and the reviewer showed good
+evidence it's an unrelated flaky test (a chat drawer timing test that has nothing to do with the
+files this pull request touches, and the main line has passed the same check twelve times in a
+row). Re-running that check now rather than waiving it outright - a Monitor is watching for the
+result.
+
+The reviewer did flag some real gaps worth carrying into any future work here (not blockers for
+this pull request, since it's pre-existing behavior, not something this pull request broke):
+- The "does it correctly refuse" side of this feature is only tested against a fake stand-in, not
+  the real database - so that side isn't actually proven.
+- If a future module ever declares two "grant on install" permission groups instead of one, the
+  quiet-grant code would currently hand out both instead of just the one asked for. Not a problem
+  today since no module does that yet.
+- Nothing is recorded anywhere when a permission gets quietly granted this way - you'd only see it
+  by opening the settings screen yourself.
+
+Reaped the review's pane and worktree (its verdict is posted, nothing more needed from it).
+
+Pull request 1654's lane still working normally on its fix.
