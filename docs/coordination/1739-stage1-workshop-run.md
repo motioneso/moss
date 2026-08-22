@@ -2347,3 +2347,28 @@ lost from the pull request, but that tester's own reasoning is gone.
 
 **No pane gets closed until its output exists somewhere durable - a pull request comment, a commit,
 or a handoff doc - or Ben has said to close it.** "I already know what it found" is not good enough.
+
+## Update, relay27 coordinator (pane w1:pKE, session 31fb7585-34e9-4cea-ab85-3dbbf06138c1)
+
+Took over cleanly from the previous coordinator (pane w1:pK8, session c1b72fb7...). It had
+finished writing its handoff, confirmed nothing was left unsaved, and its run log commit
+bd7ca5eae is in the history. Its pane is closed.
+
+Checked every lane on takeover:
+- Weather settings (#1571): still working in its own pane, no pull request yet, mid rebase and
+  re-check.
+- Sports news sources (#1572): pull request 1825 open, its tester still reviewing, no verdict
+  posted yet.
+- Workshop chat cards (#1756): pull request 1799 open, its tester still reviewing, no verdict
+  posted yet.
+- Build agent runner (#1754): now reports done. Pull request 1816 is open, rebased on the current
+  main, and its author says the wiring problem the previous coordinator flagged is now fixed for
+  real - the queue registers at startup, loads builds, picks the right provider, and saves
+  progress. Checks report green. I am not taking that on faith: started an independent tester in
+  its own pane (agent name qa-1816) checking specifically whether the wiring is real, not just
+  test-covered. It is running now.
+
+Watching for the two pending tester verdicts and the weather pull request number with a background
+watcher rather than checking by hand. Nothing has needed my decision yet.
+
+[pane w1:pKE]

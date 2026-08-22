@@ -1,0 +1,16 @@
+PR: 1816 | Branch: 1754-build-agent-runner | Spec: docs/superpowers/specs/ (issue #1754, build agent
+runner for module builds) | Tier: sensitive
+
+Invoke the coordinated-qa skill; its step 3b (live-path gate + e2e-UAT, every tier) and step 4
+(tier depth) are authoritative.
+
+Background: an earlier coordinator posted a blocking verdict on this PR saying the feature's
+central piece was never actually connected to anything that runs in production, even though every
+test passed because the tests supplied their own stand-in. The build lane says it has now fixed
+that and wired it for real - check that claim carefully, don't take it on faith. It has no
+user-facing screen, so live-path proof does not apply the normal way; instead confirm the wiring
+itself is real: something that runs in production actually calls the new code, not just tests.
+
+Write your findings in plain English, no jargon-heavy sentences, so a non-technical reader can
+follow what you found. Post your verdict to the pull request with a GitHub comment when done, and
+sign off with your pane id.
