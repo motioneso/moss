@@ -1,6 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { lstat, realpath } from "node:fs/promises";
-import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import { HttpError } from "@moss/module-sdk";
@@ -23,6 +21,13 @@ import { validateToolInput } from "./input-validation.js";
 import { renderAndCap, sanitizeAssistantToolResult } from "./output-validation.js";
 import { resolvePolicy } from "./policy.js";
 import type { AgencyPrefLookup, ActionPolicyLookup } from "./policy.js";
+import {
+  gatewayFailureReason,
+  nativeToolRisk,
+  nativeToolSummary,
+  nativeYoloCanAutoAllow,
+  safeNativeToolName
+} from "./native-tool-guard.js";
 import { isSelfOperationExcluded } from "./self-operation.js";
 import type { SessionTokenRegistry } from "./session-tokens.js";
 import type { ActiveModulesResolver, GatewayToolResponse, SessionNotifier } from "./types.js";
@@ -144,9 +149,6 @@ export function createUnwiredActionResolver(deps: {
 
 const NATIVE_TOOL_MODULE_ID = "claude-native";
 const NATIVE_TOOL_MODULE_NAME = "Claude Native Tools";
-// Bash and Task stay permanently gated: YOLO removes confirmation only for these mutation-only
-// tools, and unknown/future native capabilities fail closed to the normal confirmation path.
-const NATIVE_YOLO_AUTO_ALLOW = new Set(["Edit", "Write", "NotebookEdit"]);
 // #1158: read-only native META-tools that must never require a user confirmation.
 // Claude Code loads its MCP tool schemas lazily via the native ToolSearch tool; gating it
 // behind the confirm flow deadlocks the permission hook (150s confirm wait == 150s hook
@@ -156,19 +158,6 @@ const NATIVE_YOLO_AUTO_ALLOW = new Set(["Edit", "Write", "NotebookEdit"]);
 // anything, so a row per call is audit spam. Keep this set minimal: anything unlisted
 // (including read-only tools like Grep/Read) stays on the confirm path.
 const NATIVE_READONLY_AUTO_ALLOW = new Set(["ToolSearch"]);
-const NATIVE_CONFIG_FILE_NAMES = new Set([
-  "settings.json",
-  "settings.local.json",
-  "CLAUDE.md",
-  ".mcp.json",
-  "keybindings.json",
-  // #1085 F2: these cwd-root files enforce the native permission boundary; auto-allowing a
-  // rewrite would let later Bash/Task hooks bypass the gateway and every audit row.
-  ".jarvis-claude-permission-hook.mjs",
-  ".jarvis-claude-settings.json",
-  ".jarvis-claude-permission-token",
-  ".claude.json"
-]);
 
 /**
  * The single chokepoint between Jarvis and every module's real operations. Lists
@@ -922,94 +911,4 @@ export class AssistantToolGateway {
       opts
     );
   }
-}
-
-function gatewayFailureReason(result: Extract<GatewayToolResponse, { ok: false }>): string {
-  return "reason" in result ? result.reason : result.error;
-}
-
-function safeNativeToolName(toolName: string): string {
-  const trimmed = toolName.trim();
-  if (trimmed.length === 0) return "Unknown";
-  return trimmed.slice(0, 120);
-}
-
-async function nativeYoloCanAutoAllow(
-  toolName: string,
-  input: Record<string, unknown>,
-  workingDirectory: string | undefined
-): Promise<boolean> {
-  if (!NATIVE_YOLO_AUTO_ALLOW.has(toolName)) return false;
-  const target = input[toolName === "NotebookEdit" ? "notebook_path" : "file_path"];
-  if (typeof workingDirectory !== "string" || workingDirectory.trim() === "") return false;
-  if (typeof target !== "string" || target.trim() === "") return false;
-
-  try {
-    const lexicalRoot = resolve(workingDirectory);
-    const lexicalTarget = resolve(lexicalRoot, target);
-    const lexicalRelative = relative(lexicalRoot, lexicalTarget);
-    // #1085 F3: native YOLO is workspace-scoped. Absolute paths and traversal that escape cwd
-    // stay gated even when they name ordinary-looking files such as ~/.bashrc or .git hooks.
-    if (
-      lexicalRelative === ".." ||
-      lexicalRelative.startsWith(`..${sep}`) ||
-      isAbsolute(lexicalRelative)
-    ) {
-      return false;
-    }
-
-    const canonicalRoot = await realpath(lexicalRoot);
-    const canonicalTarget = await realpathWriteTarget(lexicalTarget);
-    if (canonicalTarget === undefined) return false;
-    const canonicalRelative = relative(canonicalRoot, canonicalTarget);
-    if (
-      canonicalRelative === ".." ||
-      canonicalRelative.startsWith(`..${sep}`) ||
-      isAbsolute(canonicalRelative)
-    ) {
-      return false;
-    }
-
-    return (
-      !canonicalTarget.split(sep).includes(".claude") &&
-      !NATIVE_CONFIG_FILE_NAMES.has(basename(canonicalTarget))
-    );
-  } catch {
-    return false;
-  }
-}
-
-async function realpathWriteTarget(target: string): Promise<string | undefined> {
-  const unresolved: string[] = [];
-  let existing = target;
-
-  for (;;) {
-    try {
-      return resolve(await realpath(existing), ...unresolved);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") return undefined;
-    }
-
-    // #1085 F3: a dangling symlink can still redirect a subsequent Write outside cwd. Detect it
-    // while walking to the deepest existing ancestor; unreadable/ambiguous paths fail closed.
-    try {
-      if ((await lstat(existing)).isSymbolicLink()) return undefined;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") return undefined;
-    }
-
-    const parent = dirname(existing);
-    if (parent === existing) return undefined;
-    unresolved.unshift(basename(existing));
-    existing = parent;
-  }
-}
-
-function nativeToolRisk(toolName: string): "write" | "destructive" {
-  return toolName === "Bash" || toolName === "Unknown" ? "destructive" : "write";
-}
-
-function nativeToolSummary(toolName: string, input: Record<string, unknown>): string {
-  const inputKeyCount = Object.keys(input).length;
-  return `Claude wants to use native ${toolName} (${inputKeyCount} field(s)).`;
 }
