@@ -335,7 +335,9 @@ describe("MVP foundation schema catalog", () => {
         // #1753 — draft status + owner on external_modules, and the fan-out that gives a
         // draft's owner alone an active row from list_active_external_module_users.
         { version: "0187", name: "0187_external_modules_draft_owner.sql" },
-        { version: "0188", name: "0188_list_active_external_module_users_draft.sql" }
+        { version: "0188", name: "0188_list_active_external_module_users_draft.sql" },
+        // #1754 — module build records and the queue worker's continuation state.
+        { version: "0189", name: "0189_module_builds.sql" }
       ]);
     } finally {
       await client.end();
