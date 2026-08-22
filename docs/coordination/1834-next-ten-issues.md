@@ -837,3 +837,19 @@ Checked both open lanes fresh:
 
 Nothing new needed from Ben right now. Both open questions in the last note (1654's red checks,
 1838's rerun result) are mechanical next steps.
+
+## Continuation note - 2026-08-22, thirteenth coordinator, watchdog: started 1654's security review
+
+Pull request 1654's build lane reports both fixes done and is waiting on Ben, not merging itself
+- correct, matches instructions. But its automated checks are red on the latest commit (the main
+test-suite check and the overall gate both failed) - not yet explained, so this still is not
+ready to go to Ben as "just needs sign-off."
+
+Started the security review that was left half-set-up: refreshed the existing QA worktree to the
+PR's latest commit and started an Opus reviewer there (agent name qa1654-security, pane w1:pMJ, new
+"qa" tab). Told it to check specifically whether the red checks are a known flaky test or a real
+problem, and to look hard at the two fixes described (an outside-request safeguard, and a
+previously-silent logging bug). It will post its verdict as a comment on the pull request.
+
+Pull request 1838's rerun check is still in progress. Watching both with a background monitor
+instead of checking by hand. Nothing needs Ben yet.
