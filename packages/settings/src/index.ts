@@ -23,6 +23,8 @@ export * from "./host-restart-routes.js";
 export * from "./module-credential-crypto.js";
 export * from "./repository-module-credentials.js";
 export * from "./repository-module-kv.js";
+export * from "./module-builds-repository.js";
+export { isYoloActiveForActor } from "./yolo-routes.js";
 export {
   NOTES_LAST_SYNC_PREFERENCE_KEY,
   NOTES_SOURCE_PREFERENCE_KEY,

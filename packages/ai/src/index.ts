@@ -35,6 +35,7 @@ export * from "./adapters/multiplexer-resolve.js";
 export * from "./adapters/root-workspace.js";
 export { redactSecrets, redactExact } from "./adapters/redact.js";
 export * from "./gateway/index.js";
+export * from "./module-build/run-build-step.js";
 export {
   captureAckCursor,
   hasExactUserAck,

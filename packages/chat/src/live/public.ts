@@ -30,6 +30,12 @@ export { RpcConnection } from "./chat-engine-rpc-client.js";
 // #1350 — the ONE engine-selection rule. The cli-runner's EngineHost must build its engine
 // through this, not by hand, or `execution_mode` silently means nothing on a containerized deploy.
 export * from "./engine-selection.js";
+export { buildLaunchCommand, type LaunchCommandContext } from "./cli-launch-commands.js";
+export {
+  writeClaudePermissionHook,
+  type ClaudePermissionHookOpts
+} from "./claude-permission-hook.js";
+export type { EngineLaunchOpts } from "./types.js";
 // The engine interface itself, so hosts can hold any engine (one-shot or interactive) rather
 // than narrowing to the tmux implementation and quietly assuming a pane exists.
 export type { CliChatEngine } from "./types.js";

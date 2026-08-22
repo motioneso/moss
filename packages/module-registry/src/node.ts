@@ -22,6 +22,7 @@ export * from "./external/worker-runtime.js";
 export * from "./external/worker-rpc-host.js";
 export * from "./external/tool-manifests.js";
 export * from "./external/job-reconciler.js";
+export * from "./external/install-draft.js";
 export * from "./distribution/index-schema.js";
 export * from "./distribution/ensure-list.js";
 export * from "./distribution/catalog-signing.js";
@@ -30,6 +31,7 @@ export * from "./distribution/extract.js";
 export * from "./distribution/stage.js";
 export * from "./distribution/pipeline.js";
 export * from "./resolve-modules-dir.js";
+export * from "./external/resolve-build-dir.js";
 
 /**
  * Discover external modules under `modulesDir` (#917). Server-only. Read-only: never

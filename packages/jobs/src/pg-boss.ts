@@ -18,6 +18,7 @@ export const RLS_PROBE_QUEUE = "rls-probe";
 export const UPGRADE_CHECK_QUEUE = "system.upgrade-check";
 export const UPGRADE_NOTIFY_QUEUE = "system.upgrade-notify";
 export const PLATFORM_MODULE_CONTROL_QUEUE = "platform.module-control";
+export const MODULE_BUILD_QUEUE = "module-build";
 
 export interface ActorScopedJobPayload {
   readonly actorUserId: string;
@@ -61,6 +62,14 @@ export const FOUNDATION_QUEUES: readonly QueueDefinition[] = [
   },
   {
     name: PLATFORM_MODULE_CONTROL_QUEUE,
+    options: {
+      retryLimit: 3,
+      deleteAfterSeconds: 3600,
+      retentionSeconds: 3600
+    }
+  },
+  {
+    name: MODULE_BUILD_QUEUE,
     options: {
       retryLimit: 3,
       deleteAfterSeconds: 3600,
@@ -118,7 +127,9 @@ export const ALLOWED_PAYLOAD_KEYS: ReadonlySet<string> = new Set([
   "emailUpserted",
   "emailFailures",
   "escalations",
-  "errors"
+  "errors",
+  "buildId",
+  "step"
 ]);
 
 export function assertMetadataOnlyPayload(payload: unknown): void {

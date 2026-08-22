@@ -21,8 +21,12 @@ import {
   registerUpgradeNotifyWorker,
   assertModuleControlPayload,
   PLATFORM_MODULE_CONTROL_QUEUE,
+  MODULE_BUILD_QUEUE,
+  createModuleBuildWorker,
+  sendJob,
   type ExternalModuleJobPayload,
   type ModuleControlPayload,
+  type ModuleBuildPayload,
   type RlsProbeJobPayload
 } from "@moss/jobs";
 import {
@@ -39,12 +43,25 @@ import {
   ExternalModuleJobReconciler,
   ExternalModuleWorkerRuntime,
   createExternalModuleDiscoveryHolder,
+  resolveBuildSourceDir,
+  resolveModuleBuildsDir,
   resolveModulesDir
 } from "@moss/module-registry/node";
-import { AiRepository } from "@moss/ai";
+import {
+  AiRepository,
+  createRealTmuxIo,
+  runModuleBuildStep,
+  TmuxMultiplexer,
+  type ProviderKind
+} from "@moss/ai";
 import { ChatAttachmentsService } from "@moss/chat";
 import { NotificationsRepository, type CreateNotificationInput } from "@moss/notifications";
-import { createModuleCredentialSecretCipher } from "@moss/settings";
+import {
+  createModuleCredentialSecretCipher,
+  getModuleBuild,
+  updateModuleBuildStatus,
+  appendModuleBuildFetchedUrl
+} from "@moss/settings";
 import { getVaultBaseDir, VaultContextRunner } from "@moss/vault";
 
 import { createModuleWorkerAiBridge } from "./external-module-ai-bridge.js";
@@ -52,6 +69,7 @@ import { buildDiscoveryLookup } from "./external-module-discovery.js";
 import { createExternalBriefingInvoker } from "./external-module-invoke.js";
 import { createExternalModuleJobHandler } from "./external-module-job-handler.js";
 import { createIsModuleEnabled } from "./worker-module-gate.js";
+import { createModuleBuildLiveAgent } from "./module-build-live-agent.js";
 
 // ---------------------------------------------------------------------------
 // Bounded graceful-shutdown timeout (ms). On SIGINT/SIGTERM the worker waits
@@ -163,6 +181,58 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
         `Run \`pnpm db:migrate\` to create them before starting the worker.`
     );
   }
+
+  const moduleBuildsDir = resolveModuleBuildsDir(process.env);
+  const moduleBuildIo = createRealTmuxIo();
+  const moduleBuildMux = new TmuxMultiplexer(moduleBuildIo);
+  const aiRepository = new AiRepository();
+  const runModuleBuildStepForJob = async (payload: ModuleBuildPayload) => {
+    const access: AccessContext = {
+      actorUserId: payload.actorUserId,
+      requestId: `module-build:${payload.buildId}`
+    };
+    return dataContext.withDataContext(access, async (scopedDb) => {
+      const build = await getModuleBuild(scopedDb, payload.buildId);
+      if (!build) throw new Error("module build was not found");
+      const model = await aiRepository.selectChatModelForUser(scopedDb);
+      if (!model) throw new Error("no chat model is configured for module build");
+      const moduleBuildLiveAgent = createModuleBuildLiveAgent({
+        io: moduleBuildIo,
+        mux: moduleBuildMux,
+        provider: model.provider_kind as ProviderKind,
+        mcpToken: process.env.JARVIS_MCP_TOKEN,
+        mcpServerUrl:
+          process.env.JARVIS_MCP_SERVER_URL ??
+          `http://127.0.0.1:${process.env.PORT ?? "3000"}/api/mcp`
+      });
+
+      try {
+        const result = await runModuleBuildStep(
+          {
+            launchLiveAgent: moduleBuildLiveAgent,
+            resolveWorkingDir: (buildId) => resolveBuildSourceDir(moduleBuildsDir, buildId),
+            recordFetchedUrl: (buildId, url) => appendModuleBuildFetchedUrl(scopedDb, buildId, url)
+          },
+          build
+        );
+        await updateModuleBuildStatus(scopedDb, build.id, {
+          status: result.continuation ? "building" : "awaiting_change",
+          ...(result.continuation ? { step: result.continuation.step } : {})
+        });
+        return result;
+      } catch (error) {
+        await updateModuleBuildStatus(scopedDb, build.id, {
+          status: "failed",
+          error: error instanceof Error ? error.name : "unknown error"
+        });
+        throw error;
+      }
+    });
+  };
+  await boss.work<ModuleBuildPayload>(
+    MODULE_BUILD_QUEUE,
+    createModuleBuildWorker({ boss, sendJob, runStep: runModuleBuildStepForJob })
+  );
 
   await registerDataContextWorker<RlsProbeJobPayload, { targetItemVisible: boolean }>(
     boss,
