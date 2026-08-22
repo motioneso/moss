@@ -208,7 +208,8 @@ export class CommitmentsRepository {
 }
 
 function sanitizeExcerpt(text: string): string {
-  return text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "").slice(0, 500);
+  const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return escaped.slice(0, 500);
 }
 
 function pgDateToLocalStr(v: unknown): string | null {
