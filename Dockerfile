@@ -12,9 +12,9 @@ WORKDIR /app
 ENV PNPM_HOME=/pnpm
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable && corepack prepare pnpm@10.6.2 --activate
-# Copy manifests first for layer caching, then the workspace, then install.
+# Install from manifests before copying source so source-only edits reuse this layer.
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
-COPY . .
+COPY --parents apps/*/package.json packages/*/package.json ./
 # onlyBuiltDependencies (onnxruntime-node, sharp, node-pty) in pnpm-workspace.yaml
 # ensures the embedding native binaries are fetched (the worker needs them, §3) and
 # node-pty is allowed to run its install script.
@@ -22,11 +22,13 @@ COPY . .
 # node-gyp during `pnpm install`. bookworm-slim lacks the toolchain, so install python3/make/g++
 # for the compile, then purge in the SAME layer so the runtime image (FROM build ← FROM deps)
 # doesn't carry the ~200MB toolchain — the built pty.node is all runtime needs.
-RUN apt-get update \
+RUN --mount=type=cache,id=moss-pnpm,target=/pnpm/store \
+  apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
   && pnpm install --frozen-lockfile \
   && apt-get purge -y --auto-remove python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
+COPY . .
 
 # ---- build: compile resident entrypoints to dist/ -------------------------
 FROM deps AS build
@@ -35,8 +37,8 @@ RUN pnpm build:api && pnpm build:worker && pnpm build:web
 
 # ---- runtime: FROM build (full, self-consistent deps incl. tsx + source) ---
 # DECISION (Codex R2): we do NOT prune to prod-deps and we do NOT cherry-pick
-# tsx/esbuild out of the pnpm store. pnpm lays node_modules out as symlinks into
-# .pnpm with transitive deps; copying individual dirs (node_modules/tsx, etc.)
+# tsx/esbuild out of node_modules' .pnpm virtual store. pnpm lays node_modules out
+# as symlinks into .pnpm with transitive deps; copying individual dirs (node_modules/tsx, etc.)
 # produces a broken, non-self-consistent tree and `tsx scripts/migrate.ts` fails.
 # Instead the runtime IS the build stage with: tmux client added, source pruned to
 # what the three roles need, writable mount points, and a non-root user. This keeps
@@ -84,7 +86,7 @@ RUN printf '%s\n' 'export PATH="${JARVIS_UAT_SCRIPTED_PROVIDER_BIN:+$JARVIS_UAT_
 # Writable mount points for an arbitrary runtime uid (the prod Compose runs as the
 # host operator uid, which may differ from the image node uid — High UID finding).
 RUN mkdir -p "$HF_HOME" /data/vaults /data/cli-tools /data/cli-auth /run/jarv1s \
-  && chown -R node:node /app /data /run/jarv1s \
+  && chown -R node:node /data /run/jarv1s \
   && chmod -R 0777 "$HF_HOME" /data/vaults /data/cli-tools /data/cli-auth \
   && chmod 0700 /run/jarv1s
 EXPOSE 3000

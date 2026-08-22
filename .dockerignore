@@ -4,6 +4,20 @@ node_modules
 .git
 .gitignore
 .github
+# Local agent/runtime state. None is a build input; some contains credentials.
+.claude
+.agents
+.superpowers
+.impeccable
+.codebase-memory
+.cache
+data
+outputs
+screenshots
+Jarvis Design System
+.mcp.json
+coverage
+**/*.tsbuildinfo
 # #1026: tests/uat/seed/** is deliberately NOT excluded below — the `seed` compose
 # service (infra/docker-compose.prod.yml, #1032) runs tests/uat/seed/cli.ts *inside*
 # this image, and its imports are self-contained under tests/uat/seed/ (verified: no
