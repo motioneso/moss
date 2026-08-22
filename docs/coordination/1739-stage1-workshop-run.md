@@ -2500,3 +2500,39 @@ and `/tmp` from past runs. That is a repo-wide cleanup job of its own, out of sc
 flagging it here rather than touching it now.
 
 [pane w1:pKH]
+
+## Update, relay28 coordinator: sports news sources (#1572, pull request 1825) verdict GREEN, waiting on last check to merge
+
+Its tester did not just trust the claims on the pull request - it ran the browser check itself
+from scratch on a fresh copy of the branch and watched adding, assigning, editing, and removing a
+source actually work against the real settings page. Required checks are all green except one
+image-build check still finishing. Private data is locked down correctly (row-level security on
+and forced, owner-only, no admin bypass), and outside fetches reuse the same safety guard already
+proven in the News module. One harmless leftover: an unused error class, not worth blocking on.
+This is intentionally step one of three (making these sources show up in the Today and Sports
+feeds, and chat-based add/remove, are separate follow-up pull requests still to come).
+
+Not merged yet - waiting on that last check with a background watcher, will merge the moment it's
+green.
+
+## Update, relay28 coordinator: weather settings (#1571, pull request 1826) verdict RED, sent back
+
+Its tester found two real problems, not merge-ready:
+1. Someone added a new package without regenerating the lockfile, so a clean install of this
+   branch fails - that is why the required checks are red.
+2. Searching for and picking a place does save correctly on the server, but the screen shows no
+   confirmation until the page is reloaded - a real person using it would not know their choice
+   was saved. That is a genuine bug, found by the tester running it live since nobody had posted
+   proof of that yet.
+The Fahrenheit/Celsius toggle itself works well and needs no changes.
+
+Full verdict: https://github.com/motioneso/moss/pull/1826#issuecomment-5377830042
+
+Sent both problems back to the build lane in plain terms and confirmed it received the message and
+is working on them now. Closed the tester's pane and worktree - its verdict is already durable on
+the pull request, and it had left a test server running in its own copy of the code, which I
+stopped by its exact process ids before removing anything.
+
+Will re-test once the build lane reports the fixes pushed.
+
+[pane w1:pKH]
