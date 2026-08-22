@@ -251,3 +251,33 @@ is delegated to the coordinator by Ben himself, not routine - be careful, not fa
 Every message to Ben, every handoff, every brief written for an agent must be plain English, no
 jargon, no coined shorthand, exact names only where someone must act on one. This is not optional
 and it applies to every agent spawned, not only the one driving. Ben has said this more than once.
+
+## Fourth coordinator, 2026-08-22
+
+Took over from the third coordinator while it was mid-compaction. Its pane was w1:pK0; I am now
+driving from pane w1:pM5, agent name `coordinator`, session `7eb106c9-6111-4749-8c13-ffb3d7a01445`
+- that session id is the new lock. The old pane has been closed.
+
+**Pull request 1654 - checked directly, good news:** the build lane already did the fix. Its
+worktree is rebased on the very latest shared history, the two bad old commits are gone, the
+guard code that blocks the cloud metadata address is back, and both test files the reviewer said
+were being deleted are back too. It is now actively running the real-in-app proof (a background
+check is watching it). Still needed before this can merge: that proof needs to finish and get
+posted on the pull request, and then the tough outside reviewer needs to look at this corrected
+version and say it is fine - the reviewer from before has already been closed down, so a fresh one
+will need to be started once the proof is posted. Do not merge before then.
+
+**#1498 (styling cleanup):** still working, mid-turn. Asked it directly which model it is running
+on; no answer yet because it has not finished its current turn. Check back for that answer before
+trusting it is on the right one.
+
+**#1529:** unchanged - pull request 1838 open, the tough outside review is still running, watching
+for its verdict.
+
+**#1336:** unchanged - still building, running its full check suite right now.
+
+**Pull request 1832 (documentation cleanup):** checked directly - it is not stuck. Its one
+remaining check is a long one that runs sixteen steps and is currently partway through step seven,
+right on the kind of timing that check normally takes. Nothing to do here but keep waiting.
+
+Nothing new in `docs/coordination/AWAITING-BEN.md` - still empty.
