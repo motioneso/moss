@@ -350,3 +350,54 @@ for its verdict.
 **#1336:** unchanged - still building.
 
 Nothing in `docs/coordination/AWAITING-BEN.md` - still empty.
+
+## Sixth coordinator, handing off at context limit, 2026-08-22
+
+My own working memory hit the point where I need to hand off. Nothing is wrong, this is routine.
+Handing off from pane w1:pM7 (agent name `coordinator`, session
+`2aa2933e-426f-4ea7-b1af-6b40e971e829`). I restarted the fleet-watching background check myself
+after the last handoff closed the pane it was running in - a successor should start its own the
+same way (a script that snapshots pane states every so often and only speaks up when something
+changes) since it dies with the pane, not with the run.
+
+**Pull request 1654 - still the one thing needing real judgement.** Unchanged in substance: the
+build lane fixed the earlier problem (rebased on current shared history, bad commits gone,
+security guard and deleted tests restored). It is running its live-app proof now - I caught it
+completely frozen once (no progress for many minutes, identical screen) and unfroze it with a
+plain "continue" message; it is working again now. Nothing posted to the pull request yet. Do not
+merge until: the proof finishes and is posted, and a fresh tough outside review of this corrected
+version says it is fine (the earlier reviewer already finished and was shut down). This sign-off
+was delegated to the coordinator by Ben directly - be careful, not fast.
+
+**#1498 (styling cleanup), pull request 1841 - watch this one closely, it keeps freezing.** I
+caught this lane completely stalled mid-turn three separate times this session (identical screen,
+no progress) and had to nudge it back to life each time with a plain "continue" message each time -
+that is a real pattern, not a one-off, worth mentioning to Ben if it happens a fourth time. Separately,
+I noticed its own pane is undersized (5 lines tall next to a neighbor at 27 lines) - that is
+probably why its answers looked like they were producing nothing, the text was likely scrolling out
+of a too-small window rather than the lane failing to answer. **This still needs the standing
+"square up the tab layout" fix - I ran out of context before doing it; do that first.** I checked
+its checks directly and they were still running, not green, as of the last check - recheck with
+`gh pr checks 1841`. Still also waiting on its direct answer to "which model are you running on" -
+asked twice, no confirmed answer seen yet (its display was too small to read reliably, see above).
+Do not merge until checks are confirmed green and the model question is answered.
+
+**#1529, pull request 1838 - the tough outside review came back RED, but the real problem is small.**
+Verdict: the security substance was fine (no way for one person's data or permissions to leak to
+another), but CI itself failed because the pull request's own new test adds two fake user records
+whose ids collide with ids two other test files already use, so all three fail together with a
+duplicate-key error when the whole suite runs. I told the build lane exactly which two other files
+collide and what to fix; it started working on the fix. Re-check pull request 1838's checks and,
+once green, this still needs a second review pass before it can merge (security tier) - the
+reviewer that found the RED verdict already finished and is closed.
+
+**#1336 - opened its own pull request, number 1844, since the last note.** Have not yet reviewed
+it or checked its tier/checks - do that first thing.
+
+**Pane layout note:** the Builders tab (four lanes) is lopsided - one pane is only 5 lines tall,
+another is 27. This is the standing "keep tabs squared up" rule and I did not get to it - fix
+before spawning anything else into that tab.
+
+Nothing in `docs/coordination/AWAITING-BEN.md` - still empty; nothing has needed Ben's decision
+yet, but if #1498's freezing pattern repeats a fourth time, or #1654's proof stalls again after
+being nudged, that is worth flagging to him rather than nudging forever.
