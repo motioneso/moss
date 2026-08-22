@@ -1008,3 +1008,30 @@ verdict posted.
 
 Nothing else is currently blocked on Ben. The AWAITING-BEN file's pull request 1838 entry should
 be removed now that it's merged and Ben has ruled - do that as part of the bookkeeping above.
+
+## Continuation note - 2026-08-22, fifteenth coordinator taking over
+
+Took over from pane w1:pMK (now closed). Now driving from pane w1:pMN, agent name `coordinator`,
+session `ad22ff22-eba4-4a0a-9c2f-33be50aac255`.
+
+Bookkeeping done on takeover:
+- Confirmed with Ben that PR 1838 is merged (he had approved via the phone ping earlier; message
+  did land, just wanted to double check). No further action needed on 1838.
+- Reaped pull request 1529's lane: pane w1:pKX closed, worktree
+  `.claude/worktrees/1529-composed-dispatch-proof` and its branch both removed. All four safety
+  checks were clear (work confirmed merged on the main line, no uncommitted changes, no running
+  process, no pane still pointed at it).
+
+Still open, unchanged from last handoff:
+- **Pull request 1654 (security fix) is not ready for Ben yet.** Its third fix (commit 3e97cdf27)
+  is posted but its main automated check ("Verify foundation and app") is still running as of this
+  note. Once it turns green, the next step is to start a third independent security review (a
+  fresh copy of the code, using the strongest available review model) that specifically checks
+  whether the new check only accepts the one correct built-in path and correctly rejects
+  everything else, including in the real production setup - not just trusting the commit message.
+  Only after that review passes can this go to Ben for his required sign-off, since this is a
+  security-tier change.
+- Lane pane w1:pKT ("1654 live proof") is idle, waiting, holding worktree
+  `.claude/worktrees/groupA-audit-truth-ssrf-share-tests`.
+
+Nothing else is currently blocked on Ben.
