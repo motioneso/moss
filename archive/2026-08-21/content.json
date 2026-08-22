@@ -1,0 +1,141 @@
+{
+  "issue": 34,
+  "slug": "2026-08-21",
+  "weekOf": "August 17, 2026",
+  "summary": "A Workshop page for admins, food tracking lands, and eleven fixes. Here's the week.",
+  "intro": "A few things changed this week. Food tracking is now a real page rather than a chat trick, admins get a window into what I'm building, and the nav bar finally remembers that dark mode exists. Fixes are at the bottom if that's all you're here for.",
+  "headline": {
+    "title": "The Workshop page",
+    "body": [
+      "Admins now have a Workshop page showing which modules Moss is building, has finished, or has made live, with anything waiting on a decision from you called out first."
+    ],
+    "prs": [
+      1804
+    ]
+  },
+  "sections": [
+    {
+      "title": "New",
+      "items": [
+        {
+          "title": "Food tracking (Phase 1)",
+          "body": "Log meals, get an estimated nutrition breakdown, and review what you've eaten so far today. The Food page has its own Log a meal button, so nothing has to go through chat.",
+          "prs": [
+            1716,
+            1788
+          ]
+        },
+        {
+          "title": "A more useful Food day view",
+          "body": "See calories and macros at a glance, browse meals by time of day, and expand a meal to see the foods behind its estimate. Meals logged in chat appear here without a manual refresh.",
+          "prs": [
+            1744
+          ]
+        },
+        {
+          "title": "Food estimates you can control",
+          "body": "Nutrition estimates run automatically now, with a simple switch in Settings and no extra consent question in chat. Food can also show daily targets.",
+          "prs": [
+            1751,
+            1767
+          ]
+        },
+        {
+          "title": "Custom sports news sources",
+          "body": "Add your own sports news sources by URL in Sports settings, preview what Moss found, and assign them to your followed teams and leagues.",
+          "prs": [
+            1825
+          ]
+        },
+        {
+          "title": "Weather place and temperature units",
+          "body": "Choose the place used for your weather, and switch temperatures between Celsius and Fahrenheit.",
+          "prs": [
+            1826
+          ]
+        },
+        {
+          "title": "Settings for installed modules",
+          "body": "Installed modules appear in your personal settings, where you can manage your own sign-ins and jump straight to a module's settings when one exists.",
+          "prs": [
+            1764,
+            1765
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Improved",
+      "items": [
+        {
+          "title": "More reliable calendar changes",
+          "body": "Creating, rescheduling, and deleting events goes through a more reliable lookup step, so I confirm I have the right event before changing it.",
+          "prs": [
+            1703
+          ]
+        },
+        {
+          "title": "Settings are closer to where you need them",
+          "body": "Finance, Job Search, and News pages link to their own settings, so changing a connection or preference takes fewer clicks. Food now uses the full page width, in line with them.",
+          "prs": [
+            1772,
+            1793
+          ]
+        },
+        {
+          "title": "Food looks at home in Moss",
+          "body": "The Food day view uses the same cards, totals, and building blocks as the rest of the app.",
+          "prs": [
+            1733
+          ]
+        }
+      ]
+    }
+  ],
+  "fixes": [
+    {
+      "text": "The left nav bar switches color in dark mode instead of staying green.",
+      "prs": [
+        1810
+      ]
+    },
+    {
+      "text": "Meals logged late in the evening file under today, using your timezone rather than a guess.",
+      "prs": [
+        1790
+      ]
+    },
+    {
+      "text": "All-day events are seen when I check availability, and no longer make a day look fully booked.",
+      "prs": [
+        1786,
+        1717
+      ]
+    },
+    {
+      "text": "With AI estimates off, logging a meal no longer promises an estimate that isn't coming.",
+      "prs": [
+        1771
+      ]
+    },
+    {
+      "text": "Private chat respects your latest choice, and stays closed correctly if the browser refocuses mid-close.",
+      "prs": [
+        1781,
+        1801
+      ]
+    },
+    {
+      "text": "Granting a permission is reported as a permission grant, not as a finished action.",
+      "prs": [
+        1783
+      ]
+    },
+    {
+      "text": "Approve and reject cards handle quick repeated clicks safely, and expired actions explain themselves.",
+      "prs": [
+        1649
+      ]
+    }
+  ]
+}
