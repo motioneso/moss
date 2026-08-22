@@ -715,3 +715,14 @@ not a Ben decision, so I started it rather than leaving it idle. Opened a new wo
 pull request's current commit (`e6686ebdf`), opened a QA tab, and am spawning an Opus security
 review there (agent name `qa1838-security`, pane w1:pMG) - spawn is running, confirming it landed
 on the right model next.
+
+## Continuation note - 2026-08-22, twelfth coordinator, watchdog: fixed a stuck spawn
+
+The security review spawn for pull request 1838 got stuck starting (pane stayed empty, no agent
+registered) - a mechanical hiccup, not a Ben decision. Stopped the stuck attempt and retried;
+it started cleanly the second time. Confirmed pane w1:pMG is now running the review on Opus, agent
+name `qa1838-security`.
+
+Fleet status: pull request 1654's lane (pane w1:pKT) still working on its fix. Pull request 1838's
+security review (pane w1:pMG) now running. Pull request 1529's old lane (pane w1:pKX) idle -
+superseded, no action needed. Nothing currently needs Ben.
