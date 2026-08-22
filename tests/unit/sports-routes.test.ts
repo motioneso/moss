@@ -21,6 +21,8 @@ import type {
   SourceTeamRef,
   StandingsTable
 } from "../../packages/sports/src/source/sports-source.js";
+import type { SportsSourcesRepository } from "../../packages/sports/src/source/repository.js";
+import type { SportsCustomSourceDto } from "@moss/shared";
 
 /**
  * A fake `DatasetClient` dispatching by dataset key, mirroring the shape the retired
@@ -227,10 +229,70 @@ function buildApp(overrides: Partial<SportsRoutesDependencies> & { repo?: FakeRe
           generateJson: async () => ({ ok: false, error: "needs_config" }),
           fingerprint: async () => null
         }
-      } as SportsRoutesDependencies["discovery"])
+      } as SportsRoutesDependencies["discovery"]),
+    sourcesRepository: overrides.sourcesRepository,
+    previews: overrides.previews
   };
   registerSportsRoutes(app, deps);
   return { app, repo };
+}
+
+interface FakeSourcesRepo {
+  list(scopedDb: DataContextDb): Promise<SportsCustomSourceDto[]>;
+  create(
+    scopedDb: DataContextDb,
+    input: { candidate: { canonicalDomain: string; label: string; homepageUrl: string; feedUrl: string | null; retrievalMethod: "feed" | "scrape"; validationFingerprint: string } }
+  ): Promise<SportsCustomSourceDto | { limitExceeded: true }>;
+  remove(scopedDb: DataContextDb, id: string): Promise<boolean>;
+  setAssignments(
+    scopedDb: DataContextDb,
+    sourceId: string,
+    followIds: readonly string[]
+  ): Promise<SportsCustomSourceDto | null>;
+  removed: string[];
+  assignments: { sourceId: string; followIds: readonly string[] }[];
+}
+
+function makeSourcesRepo(initial: SportsCustomSourceDto[], atLimit = false): FakeSourcesRepo {
+  const sources = [...initial];
+  const removed: string[] = [];
+  const assignments: { sourceId: string; followIds: readonly string[] }[] = [];
+  return {
+    removed,
+    assignments,
+    list: async () => sources,
+    create: async (_db, input) => {
+      if (atLimit) return { limitExceeded: true };
+      const created: SportsCustomSourceDto = {
+        id: "22222222-2222-2222-2222-222222222222",
+        label: input.candidate.label,
+        canonicalDomain: input.candidate.canonicalDomain,
+        homepageUrl: input.candidate.homepageUrl,
+        feedUrl: input.candidate.feedUrl,
+        retrievalMethod: input.candidate.retrievalMethod,
+        enabled: true,
+        healthState: "pending",
+        healthReasonCode: null,
+        healthMessage: null,
+        lastCheckedAt: null,
+        lastSuccessAt: null,
+        assignedFollowIds: [],
+        createdAt: "2026-08-21T00:00:00.000Z"
+      };
+      sources.push(created);
+      return created;
+    },
+    remove: async (_db, id) => {
+      removed.push(id);
+      return sources.some((source) => source.id === id);
+    },
+    setAssignments: async (_db, sourceId, followIds) => {
+      assignments.push({ sourceId, followIds });
+      const source = sources.find((item) => item.id === sourceId);
+      if (!source) return null;
+      return { ...source, assignedFollowIds: [...followIds] };
+    }
+  };
 }
 
 describe("sports routes", () => {
@@ -660,6 +722,197 @@ describe("sports routes", () => {
     expect(body.teams).toEqual([]);
     expect(body.partial).toBe(false);
     expect(liveFetches).toBe(0);
+    await app.close();
+  });
+
+  it("GET /api/sports/sources returns the owner's sources", async () => {
+    const source: SportsCustomSourceDto = {
+      id: "11111111-1111-1111-1111-111111111111",
+      label: "Publisher",
+      canonicalDomain: "publisher.example.com",
+      homepageUrl: "https://publisher.example.com/",
+      feedUrl: null,
+      retrievalMethod: "scrape",
+      enabled: true,
+      healthState: "pending",
+      healthReasonCode: null,
+      healthMessage: null,
+      lastCheckedAt: null,
+      lastSuccessAt: null,
+      assignedFollowIds: [],
+      createdAt: "2026-08-21T00:00:00.000Z"
+    };
+    const sourcesRepository = makeSourcesRepo([source]);
+    const { app } = buildApp({
+      sourcesRepository: sourcesRepository as unknown as SportsSourcesRepository
+    });
+    await app.ready();
+    const res = await app.inject({ method: "GET", url: "/api/sports/sources" });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ sources: [source] });
+    await app.close();
+  });
+
+  it("POST /api/sports/sources/preview reports unavailable when no JSON model is configured", async () => {
+    const sourcesRepository = makeSourcesRepo([]);
+    const { app } = buildApp({
+      sourcesRepository: sourcesRepository as unknown as SportsSourcesRepository,
+      availability: { hasJsonModel: async () => false }
+    });
+    await app.ready();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/sports/sources/preview",
+      payload: { url: "https://one.example.com" }
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ status: "unavailable" });
+    await app.close();
+  });
+
+  it("POST /api/sports/sources confirms a preview and returns 400 at the source limit", async () => {
+    const sourcesRepository = makeSourcesRepo([], true);
+    const previews = {
+      put: () => "confirmation-1",
+      take: () => ({
+        ownerUserId: "user-a",
+        candidate: {
+          candidateId: "c1",
+          label: "Publisher",
+          canonicalDomain: "publisher.example.com",
+          homepageUrl: "https://publisher.example.com/",
+          feedUrl: null,
+          retrievalMethod: "scrape" as const,
+          sampleCount: 1,
+          validationFingerprint: "fp"
+        },
+        createdAt: Date.now()
+      })
+    };
+    const { app } = buildApp({
+      sourcesRepository: sourcesRepository as unknown as SportsSourcesRepository,
+      previews: previews as unknown as SportsRoutesDependencies["previews"]
+    });
+    await app.ready();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/sports/sources",
+      payload: { confirmationId: "confirmation-1" }
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("POST /api/sports/sources confirms a preview and assigns follows", async () => {
+    const sourcesRepository = makeSourcesRepo([]);
+    const previews = {
+      put: () => "confirmation-1",
+      take: () => ({
+        ownerUserId: "user-a",
+        candidate: {
+          candidateId: "c1",
+          label: "Publisher",
+          canonicalDomain: "publisher.example.com",
+          homepageUrl: "https://publisher.example.com/",
+          feedUrl: null,
+          retrievalMethod: "scrape" as const,
+          sampleCount: 1,
+          validationFingerprint: "fp"
+        },
+        createdAt: Date.now()
+      })
+    };
+    const { app } = buildApp({
+      sourcesRepository: sourcesRepository as unknown as SportsSourcesRepository,
+      previews: previews as unknown as SportsRoutesDependencies["previews"]
+    });
+    await app.ready();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/sports/sources",
+      payload: { confirmationId: "confirmation-1", followIds: ["33333333-3333-3333-3333-333333333333"] }
+    });
+    expect(res.statusCode).toBe(201);
+    const body = JSON.parse(res.body);
+    expect(body.source.assignedFollowIds).toEqual(["33333333-3333-3333-3333-333333333333"]);
+    expect(sourcesRepository.assignments).toEqual([{ sourceId: "22222222-2222-2222-2222-222222222222", followIds: ["33333333-3333-3333-3333-333333333333"] }]);
+    await app.close();
+  });
+
+  it("PATCH /api/sports/sources/:id/assignments replaces a source's follows", async () => {
+    const source: SportsCustomSourceDto = {
+      id: "11111111-1111-1111-1111-111111111111",
+      label: "Publisher",
+      canonicalDomain: "publisher.example.com",
+      homepageUrl: "https://publisher.example.com/",
+      feedUrl: null,
+      retrievalMethod: "scrape",
+      enabled: true,
+      healthState: "pending",
+      healthReasonCode: null,
+      healthMessage: null,
+      lastCheckedAt: null,
+      lastSuccessAt: null,
+      assignedFollowIds: [],
+      createdAt: "2026-08-21T00:00:00.000Z"
+    };
+    const sourcesRepository = makeSourcesRepo([source]);
+    const { app } = buildApp({
+      sourcesRepository: sourcesRepository as unknown as SportsSourcesRepository
+    });
+    await app.ready();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/sports/sources/11111111-1111-1111-1111-111111111111/assignments",
+      payload: { followIds: ["44444444-4444-4444-4444-444444444444"] }
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.source.assignedFollowIds).toEqual(["44444444-4444-4444-4444-444444444444"]);
+    await app.close();
+  });
+
+  it("PATCH /api/sports/sources/:id/assignments returns 404 for an unknown source", async () => {
+    const sourcesRepository = makeSourcesRepo([]);
+    const { app } = buildApp({
+      sourcesRepository: sourcesRepository as unknown as SportsSourcesRepository
+    });
+    await app.ready();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/api/sports/sources/55555555-5555-5555-5555-555555555555/assignments",
+      payload: { followIds: [] }
+    });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("DELETE /api/sports/sources/:id removes a source", async () => {
+    const source: SportsCustomSourceDto = {
+      id: "11111111-1111-1111-1111-111111111111",
+      label: "Publisher",
+      canonicalDomain: "publisher.example.com",
+      homepageUrl: "https://publisher.example.com/",
+      feedUrl: null,
+      retrievalMethod: "scrape",
+      enabled: true,
+      healthState: "pending",
+      healthReasonCode: null,
+      healthMessage: null,
+      lastCheckedAt: null,
+      lastSuccessAt: null,
+      assignedFollowIds: [],
+      createdAt: "2026-08-21T00:00:00.000Z"
+    };
+    const sourcesRepository = makeSourcesRepo([source]);
+    const { app } = buildApp({
+      sourcesRepository: sourcesRepository as unknown as SportsSourcesRepository
+    });
+    await app.ready();
+    const res = await app.inject({ method: "DELETE", url: "/api/sports/sources/11111111-1111-1111-1111-111111111111" });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ deleted: true });
+    expect(sourcesRepository.removed).toEqual(["11111111-1111-1111-1111-111111111111"]);
     await app.close();
   });
 });
