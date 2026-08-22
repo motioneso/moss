@@ -2030,3 +2030,17 @@ typechecking, tracked separately, not blocking this PR). No PR opened yet for #1
 (confirmed via `gh pr list`). Nudged with "continue" since it wasn't a wait-on-something-running
 freeze, just idle. Watch next pass to confirm it resumed the main task rather than repeating the
 idle pattern.
+
+## Update (coordinator session 6999e187-9101-4a78-bf9f-05fd8695510e, pane w1:pK3, 2026-08-21 ~9:0x PM PDT)
+
+Context-meter warning #1 fired this pass (70%) — per the new standing rule, not relaying yet;
+continuing to warning #4.
+
+#1571 stalled a second time on the same pattern as #1756 earlier: its own build lane declared
+"waiting on the successor agent" and stopped instead of actually checking on it. Pushed it with an
+explicit instruction to check the successor's real status and block on a result, not just wait.
+Confirmed delivered, lane now actively working. Not a Ben decision — a supervision nudge. Watch
+next pass to confirm it produced a real update rather than repeating the idle pattern a third time.
+
+All other lanes (#1517, #1756, #1039, #1572, #1754) confirmed still working this pass.
+AWAITING-BEN.md confirmed empty.
