@@ -23,13 +23,7 @@ interface SportsCustomSourceRow {
   feed_url: string | null;
   retrieval_method: "feed" | "scrape";
   enabled: boolean;
-  health_state:
-    | "pending"
-    | "healthy"
-    | "failing"
-    | "unsupported"
-    | "auth_required"
-    | "disabled";
+  health_state: "pending" | "healthy" | "failing" | "unsupported" | "auth_required" | "disabled";
   health_reason_code: string | null;
   health_message: string | null;
   last_checked_at: Date | null;
@@ -53,7 +47,10 @@ const SOURCE_COLUMNS = [
   "created_at"
 ] as const;
 
-function toDto(row: SportsCustomSourceRow, assignedFollowIds: readonly string[]): SportsCustomSourceDto {
+function toDto(
+  row: SportsCustomSourceRow,
+  assignedFollowIds: readonly string[]
+): SportsCustomSourceDto {
   return {
     id: row.id,
     label: row.label,

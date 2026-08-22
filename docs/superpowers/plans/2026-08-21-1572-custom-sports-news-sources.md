@@ -56,6 +56,7 @@ tables, `jarvis_app_runtime` grants only).
 ## REST — `packages/sports/src/routes.ts`, `packages/sports/src/source/repository.ts`
 
 `SportsSourcesRepository` (source/repository.ts):
+
 - `list(scopedDb: DataContextDb): Promise<SportsCustomSourceDto[]>`
 - `create(scopedDb, input: { candidate }): Promise<SportsCustomSourceDto | { limitExceeded: true }>`
   — returns `{ limitExceeded: true }` and the route throws 400 when the owner is already at the
@@ -71,10 +72,11 @@ tables, `jarvis_app_runtime` grants only).
   attempts.
 
 Routes, all under `/api/sports/sources*`, owner-scoped via `AccessContext`:
+
 - `GET /api/sports/sources` → `{ sources: SportsCustomSourceDto[] }`
 - `POST /api/sports/sources/preview` → resolves the submitted URL via
   `resolveSportsSourceInput`, returns `PreviewSportsSourceResponse` (`status: "ok"|"rejected"|
-  "unavailable"`, `candidate`, `confirmationId`, `duplicateOfSourceId`, `reason`).
+"unavailable"`, `candidate`, `confirmationId`, `duplicateOfSourceId`, `reason`).
 - `POST /api/sports/sources` → confirms a previewed candidate by `confirmationId`, optional
   `followIds`; 400 at the 10-source limit.
 - `PATCH /api/sports/sources/:id/assignments` → replaces a source's follow assignments.

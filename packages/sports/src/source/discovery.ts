@@ -186,7 +186,10 @@ export async function resolveSportsSourceInput(
         return { status: "rejected", reason: "unreachable" };
       }
       const expectedHomepage = normalizePublisherDomain(homepageUrl);
-      if (!expectedHomepage.ok || !acceptedFinalDomain(homepage.finalUrl, expectedHomepage.domain)) {
+      if (
+        !expectedHomepage.ok ||
+        !acceptedFinalDomain(homepage.finalUrl, expectedHomepage.domain)
+      ) {
         return { status: "rejected", reason: "policy" };
       }
       homepageUrl = new URL("/", homepage.finalUrl).toString();

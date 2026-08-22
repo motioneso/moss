@@ -73,7 +73,9 @@ describe("sports sources repository", () => {
       expect(created).toMatchObject({ canonicalDomain: `publisher-${index}.example.com` });
     }
     await expect(
-      asActor(ids.userA, (db) => repo.create(db, { candidate: candidate(NEWS_MAX_CUSTOM_SOURCES + 1) }))
+      asActor(ids.userA, (db) =>
+        repo.create(db, { candidate: candidate(NEWS_MAX_CUSTOM_SOURCES + 1) })
+      )
     ).resolves.toEqual({ limitExceeded: true });
   });
 
@@ -90,7 +92,9 @@ describe("sports sources repository", () => {
     await expect(asActor(ids.userA, (db) => repo.list(db))).resolves.toMatchObject([
       { id: created.id }
     ]);
-    await expect(asActor(ids.userB, (db) => repo.setAssignments(db, created.id, []))).resolves.toBeNull();
+    await expect(
+      asActor(ids.userB, (db) => repo.setAssignments(db, created.id, []))
+    ).resolves.toBeNull();
 
     expect(await asActor(ids.userA, (db) => repo.remove(db, created.id))).toBe(true);
     await expect(asActor(ids.userA, (db) => repo.list(db))).resolves.toEqual([]);

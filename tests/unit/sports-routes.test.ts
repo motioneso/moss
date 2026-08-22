@@ -241,7 +241,16 @@ interface FakeSourcesRepo {
   list(scopedDb: DataContextDb): Promise<SportsCustomSourceDto[]>;
   create(
     scopedDb: DataContextDb,
-    input: { candidate: { canonicalDomain: string; label: string; homepageUrl: string; feedUrl: string | null; retrievalMethod: "feed" | "scrape"; validationFingerprint: string } }
+    input: {
+      candidate: {
+        canonicalDomain: string;
+        label: string;
+        homepageUrl: string;
+        feedUrl: string | null;
+        retrievalMethod: "feed" | "scrape";
+        validationFingerprint: string;
+      };
+    }
   ): Promise<SportsCustomSourceDto | { limitExceeded: true }>;
   remove(scopedDb: DataContextDb, id: string): Promise<boolean>;
   setAssignments(
@@ -830,12 +839,20 @@ describe("sports routes", () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/sports/sources",
-      payload: { confirmationId: "confirmation-1", followIds: ["33333333-3333-3333-3333-333333333333"] }
+      payload: {
+        confirmationId: "confirmation-1",
+        followIds: ["33333333-3333-3333-3333-333333333333"]
+      }
     });
     expect(res.statusCode).toBe(201);
     const body = JSON.parse(res.body);
     expect(body.source.assignedFollowIds).toEqual(["33333333-3333-3333-3333-333333333333"]);
-    expect(sourcesRepository.assignments).toEqual([{ sourceId: "22222222-2222-2222-2222-222222222222", followIds: ["33333333-3333-3333-3333-333333333333"] }]);
+    expect(sourcesRepository.assignments).toEqual([
+      {
+        sourceId: "22222222-2222-2222-2222-222222222222",
+        followIds: ["33333333-3333-3333-3333-333333333333"]
+      }
+    ]);
     await app.close();
   });
 
@@ -909,7 +926,10 @@ describe("sports routes", () => {
       sourcesRepository: sourcesRepository as unknown as SportsSourcesRepository
     });
     await app.ready();
-    const res = await app.inject({ method: "DELETE", url: "/api/sports/sources/11111111-1111-1111-1111-111111111111" });
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/api/sports/sources/11111111-1111-1111-1111-111111111111"
+    });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual({ deleted: true });
     expect(sourcesRepository.removed).toEqual(["11111111-1111-1111-1111-111111111111"]);

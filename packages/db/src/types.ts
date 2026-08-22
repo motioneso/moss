@@ -1131,7 +1131,11 @@ export interface SportsCustomSourcesTable {
   feed_url: string | null;
   retrieval_method: "feed" | "scrape";
   enabled: ColumnType<boolean, boolean | undefined, boolean>;
-  health_state: ColumnType<SportsSourceHealthState, SportsSourceHealthState | undefined, SportsSourceHealthState>;
+  health_state: ColumnType<
+    SportsSourceHealthState,
+    SportsSourceHealthState | undefined,
+    SportsSourceHealthState
+  >;
   health_reason_code: string | null;
   health_message: string | null;
   last_checked_at: TimestampColumn | null;
