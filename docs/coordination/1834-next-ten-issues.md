@@ -281,3 +281,56 @@ remaining check is a long one that runs sixteen steps and is currently partway t
 right on the kind of timing that check normally takes. Nothing to do here but keep waiting.
 
 Nothing new in `docs/coordination/AWAITING-BEN.md` - still empty.
+
+## Seventh coordinator, 2026-08-22
+
+Took over after the sixth coordinator's handoff (pull request 1845, now merged). I was already
+spawned as the successor, agent name `coordinator-next-1834-relay4`, before this session started.
+Claimed the name `coordinator` and label `Coordinator`; I am driving from pane w1:pM9, session
+`2113fc26-911e-43d7-9ebc-4b13cc17fb97` - that session id is the new lock. The old pane (w1:pM7)
+confirmed it had already handed off, then was closed.
+
+**Pull request 1654 - real judgement call, still not ready.** Checked directly: all automated
+checks are now green. But the build lane had finished pushing its fix and then wandered off into
+debugging a different, unrelated problem (issue #1252) instead of finishing its actual job. I
+stopped it and told it plainly: forget #1252, finish the live end-to-end proof and post it on
+pull request 1654. Watching for that. A coordinator's own review comment is already on the pull
+request explaining what was checked so far (an old code revert was traced and confirmed harmless -
+the safety fix it seemed to remove was actually just moved to a different, already-merged pull
+request). Still needed before this can merge: the live proof finished and posted, then a fresh
+outside tough review of the corrected version, then Ben was told directly this sign-off is his to
+delegate to the coordinator - be careful, not fast.
+
+**#1498 (styling cleanup), pull request 1841 - looks ready.** Directly confirmed: checks are all
+green, it is running on the right, cheaper model (asked it directly, confirmed "Sonnet"), and live
+proof is already posted on the pull request - real screenshots of the command palette in both
+light and dark mode, checked by hand against the running app. This is styling-only, no security
+or shared-data concerns, so it just needs a normal review pass before it can merge. Sending it for
+that next.
+
+**#1529, pull request 1838 - fix pushed, not yet re-reviewed.** The earlier failing review was a
+false alarm: two new fake test users happened to reuse ID numbers already used by two other test
+files, so all three broke together only when run at the same time - not a real security problem.
+The build lane fixed the collision, reran all three files together (38 tests, all passing), and
+pushed the fix. As of this check, the pull request's own automated tests are still finishing up
+(one still running). Because this touches sign-in and permissions, it still needs a fresh, separate
+tough review before it can merge - the one that flagged the false alarm has already finished and
+is gone.
+
+**#1336 (job-search board validation) - new pull request, number 1844, one problem found and
+fixed.** The board now checks the shape of every row before showing it, warns the person on screen
+how many rows it had to skip, and logs which field was wrong on the server (never the actual job
+content). Its own publish check was failing because a shared toolkit used by every module had
+changed underneath it; the lane fixed this by bumping job-search's own version number and pushed
+that fix. Along the way it also found and fixed two unrelated problems that were breaking the
+shared preview website for everyone (a recently added page was missing some of its files, and the
+database was missing a few recent updates) - both fixed, site is healthy again. Still finishing:
+the live, in-browser check of the job-search board, after which it will post its proof to pull
+request 1844.
+
+**Pane layout fixed.** The Builders tab had one pane only 5 lines tall next to a neighbor at 27
+lines, flagged by two previous coordinators as still needing the standing "keep tabs squared up"
+fix. Popped the two short panes out and rejoined them at even width; no more tiny unreadable
+panes.
+
+Nothing in `docs/coordination/AWAITING-BEN.md` - still empty. Nothing needs Ben's decision yet.
