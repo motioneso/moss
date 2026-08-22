@@ -59,44 +59,50 @@ clear, using a fresh gate database each time, so they should be trustworthy — 
 should not reuse any log file timestamped before roughly 19:57 (the disk-clear notification
 landed then) as evidence.
 
-## What's left before wrap-up (unchanged in substance from the first relay)
+## What's left before wrap-up
 
-1. **Full local gate is IN PROGRESS right now, started fresh after all four fixes above and after
-   the post-cleanup rebase.** Command:
+1. **That gate run finished (rc=1) with three failures. Two are now fixed and committed
+   (`57230ac19`); one is unexplained and needs a look before the next full run.**
+
+   Fixed, both the same kind of problem — a test that hard-codes a snapshot of "every table/migration
+   that exists" and simply hadn't been told about the four new tables and one new migration file this
+   feature added:
+   - `tests/integration/foundation-schema-catalog.test.ts` — expected list of applied migrations was
+     missing the new `0189_sports_custom_sources.sql`. Added it.
+   - `tests/integration/module-data-lifecycle-cascade.test.ts` — expected list of tables that must
+     delete their data when a user is deleted was missing the four new sports tables. Before adding
+     them, confirmed the test's own separate check (that every declared table's delete rule is
+     real, run just above the part I edited) had already passed — so these four tables truly do
+     delete correctly, this was a snapshot needing an update, not a real bug. Added them.
+
+   **Not yet explained** — investigate this one before trusting a rerun:
+   - `tests/integration/job-search-store.test.ts` — one test failed with a database error, "role
+     jarvis_mod_job_search_runtime does not exist". This is a completely different feature (job
+     search), not touched by this branch at all, and that role should get created automatically
+     when the test suite sets up its database. Two guesses, not yet confirmed: (a) it's a
+     pre-existing flake unrelated to this branch — worth a quick check of whether main has the
+     same problem — or (b) something about running the gate back-to-back against reused database
+     state left that role missing. **Read the test's setup code
+     (`tests/integration/job-search-store.test.ts` and `scripts/module-install.ts`) to understand
+     how that role is supposed to get created, and don't touch sports/news code to chase this** —
+     if it turns out to be a pre-existing, branch-unrelated flake, say so plainly to the coordinator
+     rather than spending a long time chasing it.
+
+2. **Run the gate again from a clean database** to confirm all three issues are actually resolved
+   and nothing else broke:
    ```bash
    docker exec jarv1s-postgres psql -U postgres -c "DROP DATABASE IF EXISTS jarvis_gate_1572;"
    docker exec jarv1s-postgres psql -U postgres -c "CREATE DATABASE jarvis_gate_1572;"
    export JARVIS_PGDATABASE=jarvis_gate_1572
-   nohup bash -c '( pnpm verify:foundation > /tmp/vf_1572d.log 2>&1; echo "### FINAL rc=$?" >> /tmp/vf_1572d.log )' > /dev/null 2>&1 &
+   nohup bash -c '( pnpm verify:foundation > /tmp/vf_1572e.log 2>&1; echo "### FINAL rc=$?" >> /tmp/vf_1572e.log )' > /dev/null 2>&1 &
    disown
    ```
-   Log: `/tmp/vf_1572d.log` (this session's tmp dir — may not exist in a fresh session's
-   filesystem view if it's a different pane's `/tmp`; if the file is gone, just re-run the whole
-   gate fresh — don't try to resurrect a stale log). At last check it had gotten as far as
-   `test:integration` and hit ANOTHER likely-stale fixture:
-   ```
-   tests/integration/module-data-lifecycle-cascade.test.ts (3 tests | 1 failed)
-     × every declared cascade table across built-in modules really cascades to app.users
-   ```
-   This has the same shape as the two `test:unit` fixture failures already fixed above: it almost
-   certainly needs the four new sports tables (`sports_custom_sources`, `sports_source_assignments`,
-   `sports_policy_verdicts`, `sports_headline_prefs`) added to its expected cascade-table list,
-   the same way `sports-manifest.test.ts`'s `ownedTables` needed them. **Read
-   `tests/integration/module-data-lifecycle-cascade.test.ts` to confirm the exact assertion and
-   what "cascades to app.users" means for these four tables before editing** — don't blindly copy
-   the pattern from the unit-test fix without checking each table actually has an
-   `ON DELETE CASCADE` (or equivalent) foreign key to a user-owned row, since this test's whole
-   point is catching a table that DOESN'T cascade (a real privacy/orphan-data bug) as well as ones
-   that need registering. If a table doesn't cascade correctly, that's a real bug to fix in the
-   migration, not a fixture to update.
-   Finish watching this gate run to completion (or re-run it if the successor's shell environment
-   doesn't share `/tmp` with this one — check first with a quick `ls /tmp/vf_1572d.log`) before
-   moving on. If more stale/genuinely-new failures surface, apply the same
-   judgment: read the failing test, distinguish "manifest snapshot didn't get updated" (fix the
-   fixture) from "real bug the gate correctly caught" (fix the code) — do not blindly force fixtures
-   to pass.
-   **Don't forget to `DROP DATABASE jarvis_gate_1572` when the gate is fully green and no longer
-   needed**, per the `verify-gate` skill.
+   Watch it with the `Monitor` tool's until-loop pattern, not by polling in the conversation. If more
+   stale-snapshot or genuinely-new failures surface, apply the same judgment as above: distinguish "a
+   snapshot test just needs updating" from "a real bug the gate correctly caught" — don't blindly
+   force a fixture to pass without checking which one it is.
+   **Drop the `jarvis_gate_1572` database when the gate is fully green and no longer needed**, per
+   the `verify-gate` skill.
 
 2. **Live-path proof** — run the UAT spec against a live dev instance (`pnpm test:uat` per
    `tests/uat/run-uat.ts`'s env conventions — don't hand-set `JARVIS_UAT_BASE_URL` /
