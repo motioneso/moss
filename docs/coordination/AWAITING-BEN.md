@@ -63,6 +63,21 @@ it, and let the rest of the PTY backpressure fix land. Lane instructed to do exa
 report back. Full history of what was tried (timeout bumps, cleanup fix, isolating the test) is in
 docs/coordination/1739-stage1-workshop-run.md. -->
 
+## OPEN 2026-08-22: #1756 workshop chat cards (pull request 1799) — required check was red, re-run now passed
+
+The one required check that was blocking this pull request failed once, so a coordinator asked
+GitHub to run it again rather than treat it as a real failure. That re-run just finished and
+passed. This is good evidence the first failure was a flaky test unrelated to this change, not a
+real problem with the code. But the project rule is that a coordinator can never treat a single
+passing re-run as permission to merge past a check that failed even once - only Ben can approve
+skipping a required check. Nothing else is blocking this pull request.
+
+**Question for Ben: is it okay to merge pull request 1799 now that the required check passed on
+its second run?** If yes, it merges right away. If no, tell me what you want instead (leave it
+open, dig into why the check failed the first time, something else).
+
+Link: https://github.com/motioneso/moss/pull/1799
+
 ## RESOLVED 2026-08-11: #1533 live-path proof blocked — missing real-chat UAT credential
 
 **Draft PR open: https://github.com/motioneso/moss/pull/1574** — code-complete, gate green,
