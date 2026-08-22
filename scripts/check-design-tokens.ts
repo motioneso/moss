@@ -120,7 +120,9 @@ export const MIGRATED_SECTION_CSS_FILES: readonly string[] = [
   "apps/web/src/styles/settings.css",
   "apps/web/src/styles/settings-panes.css",
   "apps/web/src/styles/settings-panes-2.css",
-  "apps/web/src/styles/settings-panes-3.css"
+  "apps/web/src/styles/settings-panes-3.css",
+  // #1427-B: command palette, moved to packages/ui/src/styles/components-command-palette.css.
+  "apps/web/src/styles/command-palette.css"
 ];
 
 let validTokensCache: Set<string> | undefined;
