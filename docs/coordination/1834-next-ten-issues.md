@@ -878,3 +878,39 @@ Reaped the security review's pane and worktree (verdict is posted on the pull re
 more needed from it).
 
 Pull request 1838's rerun check is still pending. Watching both with a background monitor.
+
+## Continuation note - 2026-08-22, thirteenth coordinator handing off at context limit
+
+Handing off at 70 percent context. Was driving from pane w1:pMH, agent name `coordinator`,
+session `d8ea6713-e79a-40f7-8be2-1b95f6306de7` - check `herdr agent list` for the new pane once
+the successor claims the name.
+
+**Ben approved merging pull request 1838**, but it could not merge cleanly - its branch
+(`1529-composed-dispatch-proof`, pane w1:pKX) was behind main. Sent that back to the owning lane;
+it rebased with no conflicts and pushed. Checks are re-running now. **Successor: check
+`gh pr checks 1838` - if green, merge it right away** (`gh pr merge 1838 --squash --delete-branch`),
+Ben's sign-off already stands, then do the normal GitHub bookkeeping (close issue, board move) and
+reap pane w1:pKX / its worktree once you've confirmed the commits are on main.
+
+**Pull request 1654 (security fix):** the earlier security review found a real problem - a
+test-only setting could reach production and let someone swap in a fake AI tool - plus a
+formatting failure and a stale branch. Sent all three back to the lane (pane w1:pKT, branch
+`groupA-audit-truth-ssrf-share-tests`). It fixed the formatting and rebase, and reported the
+security gap fixed too. **CI is now green** (`gh pr checks 1654` - only an unrelated image-build
+step still pending). What's NOT done yet: the lane's own live end-to-end test run - I nudged it to
+check whether that finished and post fresh proof on the PR, and it had not yet replied when I hit
+this context limit. **Successor: read pane w1:pKT's latest output, and check whether a new comment
+landed on the PR** (currently 12 comments; the last one is still the old QA verdict, not fresh
+proof). Once fresh proof is posted, this needs ANOTHER fresh QA pass (a second Opus security
+review) confirming the fix is real and the fresh live-test proof is genuine, before this can go to
+Ben for his sign-off - it must NOT auto-merge, it is security tier. I had a background Monitor
+running to catch the lane's reply and any new PR comment; that Monitor dies with this session, so
+the successor needs to either re-check by hand once, or start its own Monitor.
+
+**Pane layout:** Builders tab (`w1:t2P`) - `pr1529-composed-dispatch` (pane w1:pKX, idle,
+finishing its rebase for 1838) and `pr1654-live-proof` (pane w1:pKT, idle, waiting on its own
+background live-test run). No QA tab currently open (last QA pane was reaped after posting its
+1654 verdict).
+
+Nothing is currently blocked on Ben beyond the already-standing "approved 1838" (which just needs
+mechanical follow-through) - no open question needs him right now.
