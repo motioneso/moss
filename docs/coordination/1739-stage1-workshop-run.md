@@ -2256,3 +2256,29 @@ assuming).
 Do the moves, verify each tab's grid (`herdr tab get <tab>`), fix any tab left lopsided, then
 resume normal supervision (three PRs -- 1816/1820/1821 -- waiting on QA verdicts; #1756 and #1572
 still building; #1571 done waiting). AWAITING-BEN.md is empty, nothing currently blocked on Ben.
+
+## Update (coordinator session c1b72fb7-18d7-4bce-b504-f374b1c2adfc, pane w1:pK8, 2026-08-21 ~10:0x PM PDT — relay26, tab split done)
+
+Took over as coordinator, closed the predecessor's leftover pane. Finished splitting the shared
+agents tab into two tabs, one for builders and one for testers, matching Ben's rule change:
+
+- Builders tab: four panes in a 2x2 grid (the escape-commitment work, the workshop chat cards
+  work, the replay-vs-purge work, the sports-news-sources work).
+- Builders 2 (overflow) tab: two panes (the build-agent-runner work, the weather units work).
+- QA tab: three panes, one per pull request being checked (1816, 1820, 1821).
+
+All three tabs are evenly laid out, nothing lopsided.
+
+Status of the three pull requests waiting on testing:
+- **Pull request 1820 (replay vs purge test coverage): tester gave it a clean pass and I merged
+  it.** No production code changed, just new tests and a doc, all checks green.
+- **Pull request 1821 (escape commitment evidence): still waiting on the main test gate to
+  finish running.** No verdict yet.
+- **Pull request 1816 (build agent runner): tester is still finishing up, but already found a
+  real problem** - the part of the code that actually starts a coding session is still a
+  placeholder, so the feature can plan work but can't actually write any code yet, and the pull
+  request's description doesn't mention this gap. Waiting on the tester's final call; this one
+  may come back as "needs more work" rather than a clean pass.
+
+The other two pieces of work, #1756 and #1572, are both still being built. #1571 finished earlier
+and is sitting done. Nothing is currently stuck waiting on Ben.
