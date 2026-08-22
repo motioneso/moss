@@ -25,6 +25,8 @@ describe("buildSanitizedCliEnv (§7.2)", () => {
     LANG: "en_US.UTF-8",
     LC_ALL: "en_US.UTF-8",
     TMPDIR: "/tmp",
+    JARVIS_UAT_SEED_CHAT_SCRIPT: "1252-audit-truth-livepath",
+    JARVIS_UAT_SCRIPTED_PROVIDER_BIN: "/app/tests/uat/fixtures/scripted-provider/bin",
     // EXCLUDED — socket + RPC secret + single-user flag (server-only)
     JARVIS_CLI_RUNNER_SOCKET: "/run/jarv1s/cli-runner.sock",
     JARVIS_CLI_RUNNER_RPC_SECRET: "super-secret",
@@ -46,6 +48,10 @@ describe("buildSanitizedCliEnv (§7.2)", () => {
     expect(env.JARVIS_CLI_NEUTRAL_BASE).toBe("/data/cli-auth/chat");
     expect(env.LC_ALL).toBe("en_US.UTF-8");
     expect(env.TERM).toBe("xterm");
+    expect(env.JARVIS_UAT_SEED_CHAT_SCRIPT).toBe("1252-audit-truth-livepath");
+    expect(env.JARVIS_UAT_SCRIPTED_PROVIDER_BIN).toBe(
+      "/app/tests/uat/fixtures/scripted-provider/bin"
+    );
 
     // EXCLUDED: socket path + RPC secret + single-user flag
     expect(env.JARVIS_CLI_RUNNER_SOCKET).toBeUndefined();
