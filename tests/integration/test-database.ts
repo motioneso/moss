@@ -36,9 +36,11 @@ export const ids = {
   userB: "00000000-0000-4000-8000-000000000002",
   adminUser: "00000000-0000-4000-8000-000000000003",
   /** Untouched by any other integration test's preference writes — safe for tests that assert
-   * a preference key is absent before they run. */
-  userC: "00000000-0000-4000-8000-000000000004",
-  userD: "00000000-0000-4000-8000-000000000005",
+   * a preference key is absent before they run. Picked at 091/092 specifically because they are
+   * outside every id block already claimed by other integration test files (checked against the
+   * full repo-wide grep for this id prefix, not just this file). */
+  userC: "00000000-0000-4000-8000-000000000091",
+  userD: "00000000-0000-4000-8000-000000000092",
   sessionA: "40000000-0000-4000-8000-000000000001",
   sessionB: "40000000-0000-4000-8000-000000000002",
   sessionAdmin: "40000000-0000-4000-8000-000000000003",
