@@ -2750,3 +2750,43 @@ sources, and build agent runner (merged earlier). Nothing left open in this run.
 whether to start a new run or close this manifest out.
 
 [pane w1:pKN]
+
+## relay30 coordinator: context checkpoint, handing off with new in-flight item
+
+Run 1739 itself is fully closed (see above) - nothing left there. But a new item came in mid-wrap-up:
+a separate agent in pane w3:p9 (a CI-performance research and spec effort, working with Ben
+directly, not part of run 1739) asked to coordinate on landing two new files:
+docs/research/2026-08-22-ci-foundation-performance.md and
+docs/superpowers/specs/2026-08-22-verify-foundation-performance.md. Both exist on disk, untracked,
+in the shared main checkout.
+
+I pushed back on one part of its plan: it wanted me to commit and open a pull request from this
+same branch (coord-1258-postmerge), which is a local-only coordination log 2349 commits deep and
+badly diverged from the main branch - a pull request from it would show all that unrelated history
+instead of just the two new files. I told it I would instead branch fresh off the current main
+branch in a separate copy of the code, add just its two files, and open a proper pull request from
+there. It agreed to wait.
+
+**Next coordinator: do this next.**
+1. Fetch the current main branch. Make a new worktree off it (not off this branch), something like
+   `.claude/worktrees/docs-ci-foundation-performance`.
+2. Copy in exactly these two files from the shared checkout at /home/ben/Jarv1s:
+   `docs/research/2026-08-22-ci-foundation-performance.md` and
+   `docs/superpowers/specs/2026-08-22-verify-foundation-performance.md`.
+3. Commit them by name (not a blanket add), push, open a pull request.
+4. Wait for the real automated checks to pass - do not just trust the other agent's own claim that
+   they already pass.
+5. Merge once green (plain documentation, no code change, so no special sign-off needed).
+6. Tell the agent in pane w3:p9 it can stand down once merged.
+7. Only after that - not before - is it safe to switch this shared checkout
+   (/home/ben/Jarv1s itself) from coord-1258-postmerge back to the main branch and clean up. Before
+   switching, check who else has that exact folder open (`herdr pane list`) and give them a
+   heads-up first, since more than one session shares it.
+
+The user also suggested, separately, building a proper end-of-run housekeeping checklist as its
+own reusable skill (switch back to main, prune local branches, sweep worktrees already merged,
+check nobody's still using the shared folder) - worth doing once the above is handled, not before.
+
+This branch (coord-1258-postmerge) is pushed to origin now as a backup of this coordination log.
+
+[pane w1:pKN]
