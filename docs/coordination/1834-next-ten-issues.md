@@ -726,3 +726,14 @@ name `qa1838-security`.
 Fleet status: pull request 1654's lane (pane w1:pKT) still working on its fix. Pull request 1838's
 security review (pane w1:pMG) now running. Pull request 1529's old lane (pane w1:pKX) idle -
 superseded, no action needed. Nothing currently needs Ben.
+
+## Continuation note - 2026-08-22, twelfth coordinator, watchdog: fixed the 1838 review's brief
+
+The pull request 1838 security review couldn't see the brief file I'd written to /tmp - that
+sandbox doesn't share it. Sent the brief straight as a message instead; the review (pane w1:pMG,
+agent `qa1838-security`, Opus) is now working on it.
+
+Checked pull request 1654's lane (pane w1:pKT) too - it is genuinely busy, running its fix in a
+background sub-task and waiting on it, not stalled.
+
+Both lanes healthy. Nothing needs Ben right now.
