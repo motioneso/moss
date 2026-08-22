@@ -2158,3 +2158,16 @@ proof needed). Confirmed the PR is real and mergeable on GitHub (branch
 rather than crowd the grid, per the standing layout rule. Told QA to independently confirm the
 diff really is test-only before accepting that claim, and to treat the same tracked #1673 flake
 as known rather than blocking. Not yet reaped -- waiting on QA verdict.
+
+## Update (same coordinator session, ~10:3x PM PDT)
+
+**#1517 reported done, PR #1821** (routine tier, escapes special characters in commitment
+evidence text, no UI surface of its own). Confirmed PR is real and mergeable on GitHub. Spawned
+QA in a fresh pane: worktree .claude/worktrees/qa-1517, agent qa-1517, on Sonnet, placed in the
+"agents 2" overflow tab (now 2 panes there) rather than the full "agents" tab. Told QA to verify
+the "no live-path needed" claim itself and to treat the same #1673 flake as known. Not yet
+reaped -- waiting on QA verdict, same as #1039/#1754.
+
+Three QA verdicts now in flight in parallel: qa-1754 (PR 1816), qa-1039 (PR 1820), qa-1517
+(PR 1821). All routine/sensitive tier, none security-tier, so none need Ben's merge sign-off --
+just watching for green verdicts to auto-merge.
