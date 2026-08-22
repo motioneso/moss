@@ -765,3 +765,10 @@ this pull request, since it's pre-existing behavior, not something this pull req
 Reaped the review's pane and worktree (its verdict is posted, nothing more needed from it).
 
 Pull request 1654's lane still working normally on its fix.
+
+## Continuation note - 2026-08-22, twelfth coordinator, watchdog: both lanes still genuinely busy
+
+Pull request 1654's lane shows "done" in the pane list but is not actually finished - checked its
+screen directly and it's still waiting on its own background sub-task fixing the approval-prompt
+bug (a real active wait, not a stall). Pull request 1838's CI rerun is still in progress; a
+background watcher is set to notify when it finishes. Nothing needs Ben right now.
