@@ -25,31 +25,42 @@ Geocoding is deterministic place resolution via Open-Meteo's geocoding API, neve
 ### New files
 
 - `packages/weather/src/open-meteo-geocode.ts`
+
   ```ts
   export class WeatherLocationSearchUnavailableError extends Error {}
-  export interface GeocodeCandidate { readonly lat: number; readonly lon: number; readonly label: string }
+  export interface GeocodeCandidate {
+    readonly lat: number;
+    readonly lon: number;
+    readonly label: string;
+  }
   export async function searchOpenMeteoLocations(
     query: string,
     fetchFn?: typeof fetch,
     limit?: number
-  ): Promise<GeocodeCandidate[]>
+  ): Promise<GeocodeCandidate[]>;
   ```
+
   Calls `https://geocoding-api.open-meteo.com/v1/search?name=<encodeURIComponent(query)>&count=10&language=en&format=json`. Empty/missing `results` -> `[]`. Non-OK response or bad JSON -> throw `WeatherLocationSearchUnavailableError`. Label built as `` `${name}${admin1 ? ", " + admin1 : ""}, ${country}` ``. Cap returned candidates to `limit` (default 5).
 
 - `packages/settings/src/weather-location-search-routes.ts`
+
   ```ts
   export interface WeatherLocationSearchRoutesDependencies {
     readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
     readonly fetchFn?: typeof fetch;
   }
-  export function registerWeatherLocationSearchRoutes(server, deps): void
+  export function registerWeatherLocationSearchRoutes(server, deps): void;
   ```
+
   `GET /api/me/weather-location/search?query=` -> auth via `resolveAccessContext` only (no data context — stateless search). Empty/missing query -> `{ candidates: [] }`. Provider failure -> 502 `{ error: "Weather location search is temporarily unavailable" }`. Success -> `{ candidates: GeocodeCandidate[] }`.
 
 - `packages/settings/src/weather-unit-routes.ts` (mirrors quiet-hours-routes.ts shape exactly)
   ```ts
   const WEATHER_UNIT_PREFERENCE_KEY = "weather-unit"; // must match weather-service.ts's WEATHER_UNIT_KEY exactly
-  export function registerWeatherUnitRoutes(server, deps: { dataContext, resolveAccessContext, preferencesRepository }): void
+  export function registerWeatherUnitRoutes(
+    server,
+    deps: { dataContext; resolveAccessContext; preferencesRepository }
+  ): void;
   ```
   `GET /api/me/weather-unit` -> `{ unit: "metric" | "imperial" }`, defaults to `"metric"` when unset (never persists the default). `PUT /api/me/weather-unit` body `{ unit }` (no null/clear state) -> upsert, return `{ unit }`.
 
@@ -72,14 +83,17 @@ Geocoding is deterministic place resolution via Open-Meteo's geocoding API, neve
 - New: `tests/integration/settings-weather-unit.test.ts` — GET default, PUT persists, owner scoping.
 
 Verification command (expected exit 0):
+
 ```bash
 pnpm --filter @moss/weather --filter @moss/settings test > /tmp/1571-phase1.log 2>&1; echo "EXIT=$?"
 ```
+
 Then the gate-DB integration run per the `verify-gate` skill recipe (not improvised).
 
 ### Kill gate (owner: coordinator, after Phase 1 lands)
 
 End the line here — do not proceed to Phase 2 UI — if either:
+
 1. Open-Meteo's geocoding endpoint does not return usable candidates for ordinary queries (e.g. "San Diego, CA") when called from this server (network egress, rate limit, or response-shape mismatch discovered against the live provider), or
 2. the cache-invalidation fix reveals `WeatherCache` cannot be made to key on both location and unit without a deeper rework (i.e. the one-line extension above turns out not to be one line).
 
@@ -92,6 +106,6 @@ Escalate to the coordinator with the concrete failure instead of improvising a w
 - `apps/web/src/settings/settings-personal-panes.tsx`: replace the label/lat/lon inputs (lines ~330-397) with a free-text query field + explicit "Search" button + candidate list (button per candidate, single candidate still requires one click same as multiple) + "Currently using X" line + existing "Clear override" button; add a `Switch`-based °F/°C row reading/writing the new unit preference, invalidating `weather.today` on change (same pattern as the existing location mutation at line ~198).
 - Rewrite `tests/uat/specs/1402-weather-location-settings.uat.spec.ts` -> `tests/uat/specs/1571-weather-location-and-units.uat.spec.ts` per the spec's Testing Decisions script: save a real place -> Today updates; change place -> Today updates again; ambiguous "Springfield" -> candidates shown, nothing saved until chosen; toggle °F/°C -> displayed temps change, location unchanged. `git rm` the old spec file (superseded, not kept alongside).
 - Update `.claude/skills/coordinate/uat-trigger-map.tsv` lines 77-80: repoint both existing rows at the new spec filename, add a `packages/settings/**` row.
-- No new assistant tool for units (spec's decisions only call out updating the *location* assistant action; adding a units tool would be scope creep not asked for).
+- No new assistant tool for units (spec's decisions only call out updating the _location_ assistant action; adding a units tool would be scope creep not asked for).
 
 Phase 2 e2e test: the rewritten Playwright UAT spec, run and observed passing against a live dev instance — this is also the PR's live-path proof comment.

@@ -19,7 +19,15 @@ describe("searchOpenMeteoLocations", () => {
     const fetchFn = vi.fn(async () => ({
       ok: true,
       json: async () => ({
-        results: [{ latitude: 32.7157, longitude: -117.1611, name: "San Diego", admin1: "California", country: "United States" }]
+        results: [
+          {
+            latitude: 32.7157,
+            longitude: -117.1611,
+            name: "San Diego",
+            admin1: "California",
+            country: "United States"
+          }
+        ]
       })
     })) as unknown as typeof fetch;
 
@@ -33,8 +41,20 @@ describe("searchOpenMeteoLocations", () => {
       ok: true,
       json: async () => ({
         results: [
-          { latitude: 39.7817, longitude: -89.6501, name: "Springfield", admin1: "Illinois", country: "United States" },
-          { latitude: 37.2153, longitude: -93.2982, name: "Springfield", admin1: "Missouri", country: "United States" }
+          {
+            latitude: 39.7817,
+            longitude: -89.6501,
+            name: "Springfield",
+            admin1: "Illinois",
+            country: "United States"
+          },
+          {
+            latitude: 37.2153,
+            longitude: -93.2982,
+            name: "Springfield",
+            admin1: "Missouri",
+            country: "United States"
+          }
         ]
       })
     })) as unknown as typeof fetch;

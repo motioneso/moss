@@ -1,7 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import type { AccessContext } from "@moss/db";
-import { searchWeatherLocationsRouteSchema, type SearchWeatherLocationsResponse } from "@moss/shared";
+import {
+  searchWeatherLocationsRouteSchema,
+  type SearchWeatherLocationsResponse
+} from "@moss/shared";
 import { searchOpenMeteoLocations, WeatherLocationSearchUnavailableError } from "@moss/weather";
 
 import { handleSettingsRouteError } from "./route-error.js";
