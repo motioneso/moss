@@ -1999,3 +1999,20 @@ rule, no rebalance needed. AWAITING-BEN.md confirmed empty again this pass.
 
 Next coordinator action: normal watch loop — recheck #1756 again next pass to confirm the gate
 actually finished (not just still running), keep an eye on #1039, #1571, #1572, #1754, #1517.
+
+## Update (coordinator session 6999e187-9101-4a78-bf9f-05fd8695510e, pane w1:pK3, 2026-08-21 ~8:5x PM PDT)
+
+Standing relay rule changed by Ben this pass: do not relay on the first context-meter warning
+alone — let it fire three times, relay on the fourth. Applies to this coordinator for the rest of
+this run.
+
+#1756: its own sub-agent had reported "still waiting" without actually blocking on the gate; the
+lane caught this itself and re-pushed the sub-agent with explicit "actually block" instructions.
+Now genuinely running verify:foundation (timer advancing, confirmed on a bounded reread). No
+coordinator action needed — the lane self-corrected.
+
+#1571: went idle with nothing running after filing a small followup issue (#1813, slow
+typechecking, tracked separately, not blocking this PR). No PR opened yet for #1571 itself
+(confirmed via `gh pr list`). Nudged with "continue" since it wasn't a wait-on-something-running
+freeze, just idle. Watch next pass to confirm it resumed the main task rather than repeating the
+idle pattern.
