@@ -577,3 +577,23 @@ correctly waiting. No QA tab open. Nothing needs rebalancing.
 
 The successor's job is the same as mine was: keep watching for Ben's replies on these two
 questions and act promptly once they land. Nothing else is queued for this run.
+
+## Continuation note - 2026-08-22, eleventh coordinator taking over
+
+Took over from pane w1:pMD (which had already spawned me as its successor and marked itself
+done). Driving from pane w1:pME, agent name `coordinator`, session
+`834e0e9d-4b17-4e6b-8021-a7a827b8aa1e` - that is the new lock. Old pane w1:pMD closed.
+
+Checked both open items - nothing has changed since the tenth coordinator's handoff:
+
+- **Pull request 1838** (#1529, security tier) - still stuck on the same known flaky chat test,
+  unrelated to the fix itself. Waiting on Ben's ruling.
+- **Pull request 1654** (security fix) - still blocked on issue #1252 (the app's own assistant
+  program not starting during the live test). Waiting on Ben's ruling.
+
+Both lanes' panes are idle and correctly waiting, no drift. No new reply from Ben as of this
+note (checked his reply folder, nothing today). Last ping was around 11:03am; will wait until
+that's been about an hour before pinging again, per the previous coordinator's note.
+
+**Pane layout:** Builders tab (`w1:t2P`) unchanged - two lanes, `pr1529-composed-dispatch` (pane
+w1:pKX) and `pr1654-live-proof` (pane w1:pKT). No QA tab open.
