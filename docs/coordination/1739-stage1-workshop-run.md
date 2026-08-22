@@ -2522,6 +2522,46 @@ else's feature code is not the coordinator's job. Waiting for it to push the fix
 
 [pane w1:pKH]
 
+## Relay: context meter hit 70%, handing off now (relay28 coordinator, pane w1:pKH)
+
+**Live fleet right now:**
+- Weather settings (#1571, pull request 1826): build lane (pane w1:pK9, agent name
+  weather-1571-codex) fixed both problems the tester found - the lockfile and the missing save
+  confirmation - and posted its own live-run evidence on commit 14e76a18e. That is a self-report,
+  not proof by itself, so I started a fresh independent tester (agent name qa-1826-recheck, pane
+  w1:pKJ, in its own new worktree `.claude/worktrees/qa-1826-r2`, branch qa-1826-recheck tracking
+  the pull request branch) to check it for real. No verdict yet - just spawned.
+- Sports news sources (#1572, pull request 1825): tester gave it a green verdict and I re-ran
+  the browser check myself with an early pass, but by the time the last GitHub check went green,
+  main had moved (pull request 1816 landed first) and now 1825 has a real conflict with main.
+  Sent it back to its own build lane (pane w1:pKB, agent name sports1572relay3) to resolve - I
+  told it directly and confirmed the message was received. Waiting for it to push the fix, then
+  it needs a fresh look at the *integrated* result before merging (a clean pull request can still
+  break against something that landed after it was reviewed).
+- Build agent runner (#1754, pull request 1816): **already merged and closed.** Commit
+  49c90a8b0c. Both its build pane and its tester's pane are gone, along with their worktrees.
+  Nothing further needed. Issue #1754 is closed.
+- Workshop chat cards (#1756, pull request 1799): still red, waiting on the same GitHub check
+  re-run from before I took over (run id 32547415397). I have a background watcher on it - last I
+  checked it was still running. If it now passes, that confirms the earlier coordinator's flake
+  theory, but per the CI-waiver rule this still needs Ben's OK before it can count toward a merge
+  on a required check. If it fails again, that is two failures on the same check - stop the line
+  and escalate to Ben instead of re-running again.
+
+**Cleanup done this pass:** while reaping the build agent runner's build and tester panes, I found
+two other worktrees left over from an earlier pass with nothing running in them and no unsaved
+changes, and removed those too. Separately, a full worktree listing turned up roughly a hundred
+other old-looking worktrees scattered across the repo from past runs - that is a cleanup job of
+its own, out of scope for this run, not touched.
+
+**Nothing needs Ben's decision right now** except the same possible flaky-check waiver as before,
+still not confirmed. The AWAITING-BEN file's one open-looking entry is already resolved and just
+needs its heading tidied into a comment - not urgent, noted by the previous coordinator too.
+
+Relaying now per the box-wide rule: never let this session keep going once the meter warns.
+
+[pane w1:pKH]
+
 ## Update, relay28 coordinator: weather settings (#1571, pull request 1826) verdict RED, sent back
 
 Its tester found two real problems, not merge-ready:

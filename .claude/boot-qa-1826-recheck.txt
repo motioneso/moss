@@ -1,0 +1,14 @@
+PR: 1826 | Branch: 1571-weather-location-units | Spec: n/a (settings screen fix) | Tier: sensitive
+
+This is a re-check after a RED verdict. Previous problems: (1) a missing lockfile update broke
+the build, (2) saving a place gave no visible confirmation until reload. The build lane says both
+are fixed as of commit 14e76a18e and has posted its own live-run evidence on the PR, but that is a
+self-report, not independent verification - do not trust it alone.
+
+Invoke the coordinated-qa skill; its step 3b (live-path gate + e2e-UAT, every tier) and step 4
+(tier depth) are authoritative. Confirm the lockfile is actually consistent and the confirmation
+message actually appears without a reload, using your own live run, not just reading their report.
+Post your verdict to the PR with gh pr comment when done.
+
+Write in plain English, no jargon and no more than one backtick per sentence - Ben reads status to
+know whether things are going well, not to review code.
