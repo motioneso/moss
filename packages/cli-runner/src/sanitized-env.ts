@@ -34,16 +34,11 @@ const ALLOWED_KEYS: readonly string[] = [
   "TERM",
   "LANG",
   "TMPDIR",
-  // UAT-only, non-secret: names which fixture JSON the scripted "claude" CLI child
-  // (tests/uat/fixtures/scripted-provider/claude-main.ts) should replay. Never set outside
-  // a UAT run. Without this the scripted CLI child always sees it as unset and fails
-  // silently, so no chat turn (and no confirmation card) ever appears.
-  "JARVIS_UAT_SEED_CHAT_SCRIPT",
-  // UAT-only, non-secret: a filesystem path (Dockerfile's profile.d script), read at shell
-  // login to put the fixture's fake "claude" binary ahead of the real one on PATH. Without
-  // this the login shell falls through to the real claude CLI, which has no real
-  // credentials, never writes a transcript, and the turn silently times out empty.
-  "JARVIS_UAT_SCRIPTED_PROVIDER_BIN",
+  // The "is this really a UAT run" marker (packages/module-registry/src/index.ts trusts the
+  // same flag for its own UAT-only carve-out). Allowlisted here ONLY so buildSanitizedCliEnv
+  // below can check it before honoring the two UAT-only keys right below it — never used for
+  // anything else downstream of the CLI subprocess.
+  "JARVIS_UAT_SEED_CONFIRM",
   // §A.3.7 self-update-disable (NAMED non-secret control, not a wildcard): the
   // anthropic/claude recipe's kind:"env" selfUpdateDisable key. MUST equal
   // PROVIDER_CATALOG.anthropic.recipe.selfUpdateDisable.key ("DISABLE_AUTOUPDATER").
@@ -73,5 +68,21 @@ export function buildSanitizedCliEnv(source: NodeJS.ProcessEnv = process.env): N
       out[key] = value;
     }
   }
+
+  // JARVIS_UAT_SCRIPTED_PROVIDER_BIN names a folder the Dockerfile puts first on PATH for
+  // every login shell — the same image runs in production, so this can only be honored when
+  // JARVIS_UAT_SEED_CONFIRM proves this is a real UAT run. JARVIS_UAT_SEED_CHAT_SCRIPT has no
+  // PATH effect but is gated the same way for consistency: neither var should ever reach a
+  // production CLI subprocess.
+  if (source.JARVIS_UAT_SEED_CONFIRM === "1") {
+    if (source.JARVIS_UAT_SEED_CHAT_SCRIPT !== undefined) {
+      out.JARVIS_UAT_SEED_CHAT_SCRIPT = source.JARVIS_UAT_SEED_CHAT_SCRIPT;
+    }
+    if (source.JARVIS_UAT_SCRIPTED_PROVIDER_BIN !== undefined) {
+      out.JARVIS_UAT_SCRIPTED_PROVIDER_BIN = source.JARVIS_UAT_SCRIPTED_PROVIDER_BIN;
+    }
+  }
+  delete out.JARVIS_UAT_SEED_CONFIRM;
+
   return out;
 }

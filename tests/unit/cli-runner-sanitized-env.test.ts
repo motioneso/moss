@@ -25,6 +25,7 @@ describe("buildSanitizedCliEnv (§7.2)", () => {
     LANG: "en_US.UTF-8",
     LC_ALL: "en_US.UTF-8",
     TMPDIR: "/tmp",
+    JARVIS_UAT_SEED_CONFIRM: "1",
     JARVIS_UAT_SEED_CHAT_SCRIPT: "1252-audit-truth-livepath",
     JARVIS_UAT_SCRIPTED_PROVIDER_BIN: "/app/tests/uat/fixtures/scripted-provider/bin",
     // EXCLUDED — socket + RPC secret + single-user flag (server-only)
@@ -65,6 +66,10 @@ describe("buildSanitizedCliEnv (§7.2)", () => {
     expect(env.POSTGRES_PASSWORD).toBeUndefined();
     expect(env.JARVIS_APP_DATABASE_URL).toBeUndefined();
     expect(env.JARVIS_VAULT_ROOT).toBeUndefined();
+
+    // The confirm marker itself is never forwarded to the CLI subprocess — it only gates
+    // the two UAT vars above, it is not itself needed downstream.
+    expect(env.JARVIS_UAT_SEED_CONFIRM).toBeUndefined();
   });
 
   it("does not leak unknown vars by default (deny-by-default)", () => {
@@ -72,6 +77,29 @@ describe("buildSanitizedCliEnv (§7.2)", () => {
     expect(env.SOME_RANDOM_VAR).toBeUndefined();
     // JARVIS_MULTIPLEXER is server spawn config, NOT for the CLI child (§7.2).
     expect(env.JARVIS_MULTIPLEXER).toBeUndefined();
+  });
+
+  it("drops JARVIS_UAT_SEED_CHAT_SCRIPT / JARVIS_UAT_SCRIPTED_PROVIDER_BIN without the UAT confirm marker", () => {
+    // This is the production case: JARVIS_UAT_SEED_CONFIRM is never set outside a real UAT
+    // run, so a production operator setting these two vars on the container must not reach
+    // the CLI subprocess — JARVIS_UAT_SCRIPTED_PROVIDER_BIN in particular names a folder the
+    // Dockerfile puts first on the CLI's own PATH.
+    const env = buildSanitizedCliEnv({
+      JARVIS_UAT_SEED_CHAT_SCRIPT: "1252-audit-truth-livepath",
+      JARVIS_UAT_SCRIPTED_PROVIDER_BIN: "/app/tests/uat/fixtures/scripted-provider/bin"
+    });
+    expect(env.JARVIS_UAT_SEED_CHAT_SCRIPT).toBeUndefined();
+    expect(env.JARVIS_UAT_SCRIPTED_PROVIDER_BIN).toBeUndefined();
+  });
+
+  it('also drops them when JARVIS_UAT_SEED_CONFIRM is set to anything other than exactly "1"', () => {
+    const env = buildSanitizedCliEnv({
+      JARVIS_UAT_SEED_CONFIRM: "true",
+      JARVIS_UAT_SEED_CHAT_SCRIPT: "1252-audit-truth-livepath",
+      JARVIS_UAT_SCRIPTED_PROVIDER_BIN: "/app/tests/uat/fixtures/scripted-provider/bin"
+    });
+    expect(env.JARVIS_UAT_SEED_CHAT_SCRIPT).toBeUndefined();
+    expect(env.JARVIS_UAT_SCRIPTED_PROVIDER_BIN).toBeUndefined();
   });
 });
 
