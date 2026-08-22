@@ -65,6 +65,28 @@ feature that is not present in the image you are running.
 
 - **The Food page uses the full width.** The Food page now lines up with the Finance and Job Search pages instead of sitting in a narrower column. [PR #1793](https://github.com/motioneso/moss/pull/1793)
 
+## Week of 2026-08-14
+
+### Added
+
+- **A closer look at each meal.** The Food page now groups meals by occasion and lets you expand a meal to see the foods, calories, and macros behind its estimate. Meals logged in Chat also appear on the page without a manual reload. [PR #1744](https://github.com/motioneso/moss/pull/1744)
+- **Nutrition estimates, on your terms.** Food estimates nutrition automatically, with a switch in Settings when you would rather leave estimates off. [PR #1751](https://github.com/motioneso/moss/pull/1751)
+- **Daily nutrition targets.** Set calorie, protein, net-carb, and fat targets in Food, then see what remains for the day—or how far over you are. [PR #1767](https://github.com/motioneso/moss/pull/1767)
+- **Module settings are easier to reach.** Installed modules now appear in your personal settings, your own sign-ins can be set or revoked there, and Finance, Job Search, and News link back to those settings from their pages. [PR #1764](https://github.com/motioneso/moss/pull/1764) · [PR #1765](https://github.com/motioneso/moss/pull/1765) · [PR #1772](https://github.com/motioneso/moss/pull/1772)
+
+### Fixed
+
+- **Food settings now take effect.** Changes such as daily targets and nutrition estimates are now honored when the assistant uses Food. [PR #1769](https://github.com/motioneso/moss/pull/1769)
+- **No more endless “Estimating…” message.** When nutrition estimates are off, Food says so and stops waiting for a result that will never arrive. [PR #1771](https://github.com/motioneso/moss/pull/1771)
+- **Private-chat status stays trustworthy.** The private-chat indicator no longer flips itself off when a stale response arrives just as a session starts. [PR #1781](https://github.com/motioneso/moss/pull/1781)
+- **Failures are called failures.** When a module reports a problem, the assistant and activity log no longer describe the action as completed. [PR #1782](https://github.com/motioneso/moss/pull/1782)
+- **Notes errors keep private paths private.** A failed notes sync now explains the problem without echoing the full file path into the settings card. [PR #1785](https://github.com/motioneso/moss/pull/1785)
+
+### Changed
+
+- **Long meal lists stay manageable.** Asking about many meals now keeps the most recent 200, reports how many there really are, and preserves the full-day totals. [PR #1779](https://github.com/motioneso/moss/pull/1779)
+- **A simpler sidebar.** Installed items now sit naturally in the navigation without a separate “Modules” heading. [PR #1773](https://github.com/motioneso/moss/pull/1773)
+
 ## v0.1.16 — 2026-08-05
 
 ### Added
