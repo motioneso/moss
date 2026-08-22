@@ -609,7 +609,9 @@ export class AssistantToolGateway {
       // taken at face value. Gating this on isExternal used to mean a built-in module's
       // self-reported error (e.g. tasks.updateStatus returning {error: "Task not found"} inside
       // an ok:true result) never got flagged and was recorded as a plain "success" (#1252 finding).
-      const moduleReportedErrorClass = isModuleReportedError(result.data) ? "module_reported" : null;
+      const moduleReportedErrorClass = isModuleReportedError(result.data)
+        ? "module_reported"
+        : null;
       return {
         response: {
           ok: true,
