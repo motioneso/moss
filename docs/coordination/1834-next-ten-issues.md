@@ -172,3 +172,82 @@ Every message to Ben, every handoff, every brief you write for an agent must be 
 reads status to know whether things are going well, not to review code. No jargon, no coined
 shorthand, keep exact names only where he must act on one. PASS THIS ON to every agent and every
 successor.
+
+## Continuation note - 2026-08-22, third coordinator handing off at its context limit
+
+Written by the coordinator in pane w1:pK0 (session `4341efcc-6c00-4ba9-8fd7-10730ef4feb9`, agent
+name `coordinator`). Handing off because my own working memory filled up. Routine, nothing wrong.
+
+### The pull request 1654 sign-off - still not ready, and here is why
+
+The tough outside reviewer (running on the stronger model) came back with a real, confirmed
+problem: merging the branch as it stood would have quietly deleted a security fix that is already
+protecting the live app - the guard that stops outbound requests being tricked into calling the
+cloud's internal metadata address - plus five safety tests for outbound requests and one sharing
+test, even though the pull request's own title claims it adds that last one. This was not a false
+alarm; the reviewer proved it by merging the branch into a scratch copy of the app and reading the
+result. Full verdict is posted on the pull request.
+
+The fix is simple and I already sent it to the build lane (`pr1654-live-proof`, pane w1:pKT): pull
+in the latest main and remove two specific old commits that undo the earlier fix, rather than
+trying to resolve them as conflicts. I also told it that the reason it was still waiting to prove
+the feature works on a real running copy of the app - a since-closed other ticket - is no longer a
+reason to wait, so it should go ahead and get that proof now too.
+
+**As of this handoff, I have not seen it report back yet.** Read the pull request's own comments
+first to see whether it has, and where things stand, before believing anything about status
+flags - one flag on this exact lane has shown "done" while it was still working, more than once.
+
+Do not merge 1654 until all three of these are true: the rebase is done and rechecked, a real
+person could see the feature working end to end and there is proof of that posted on the pull
+request, and the reviewer has looked at the corrected branch and said it is now fine. That sign-off
+is delegated to the coordinator by Ben himself, not routine - be careful, not fast.
+
+### The rest of the queue
+
+- **#1498** (moving leftover command-palette styling into the shared design package): the agent
+  doing this work has handed off to a fresh copy of itself twice. The first fresh copy accidentally
+  started on the wrong, more expensive model by a tooling default - caught before it touched any
+  files, closed with nothing lost, and restarted correctly. The current copy is pane w1:pM3, agent
+  name `pr1498-cp-css-r2`, and was started with the right model but I had not yet visually
+  confirmed its screen shows the correct model name when my own memory ran out - check that first
+  thing. The actual work reported as done before this last handoff: the leftover styling moved out
+  cleanly, the automatic checker reports no problems, and formatting/lint/type checks are clean.
+  Still needed: before-and-after pictures of the command palette on a real running copy of the app
+  to prove it looks the same, then opening the pull request.
+- **#1529** (proving a real chat instruction reaches the tasks feature and safely grants a missing
+  permission on its own): pull request is open, number 1838. This is a security-tier item, so it
+  needs the tough outside review before it can merge, same as 1654. That review is already running
+  - pane w1:pM4, agent name `qa1529-adversarial`, on the stronger model, in its own tab labelled
+  "qa" (tab id w1:t2T). Its brief file, in case you need to know exactly what it was asked to
+  check, is `/home/ben/.coord-briefs/boot-qa-1529.txt`. Watch the pull request for its verdict; do
+  not trust a status flag alone.
+- **#1336** (checking that the job-search board doesn't trust bad data from the server): handed off
+  to a fresh copy of itself once already; current pane w1:pM1, agent name
+  `pr1336-jobsearch-validation2`, correctly on the ordinary model. Work in progress per its own
+  report: the shape-check itself is written and wired into the code that reads the board, so bad
+  rows get dropped and counted rather than shown broken. It also opened a follow-up ticket, #1835,
+  for a related call this work does not cover, rather than quietly expanding scope. Still needed:
+  showing the person a plain count of dropped rows, the same kind of check on the server side with
+  a safe log message, tests, the full check suite, and opening the pull request.
+
+### Other loose ends
+
+- Pull request 1832 (documentation cleanup only) is open and set to merge itself once its one
+  remaining automated check finishes. It has been sitting on that same pending check for a while
+  across two handovers now - worth a look in case it is actually stuck rather than just slow.
+- My own bookkeeping pull request, 1837, already merged - the state table in this file is current
+  as of this handoff.
+- No direct push to the shared main line works any more - a required check blocks it, even for a
+  documentation change like this one. Everything, including this note, has to go through a branch
+  and a small pull request that merges itself once green. Budget time for that.
+- The QA review lane for pull request 1654 finished its job and has already been closed down
+  cleanly - nothing left over from it.
+- Nothing is currently sitting in the file that tracks decisions only Ben can make
+  (`docs/coordination/AWAITING-BEN.md`) - it is empty of live questions as of this handoff.
+
+### Plain English, always (repeating on purpose)
+
+Every message to Ben, every handoff, every brief written for an agent must be plain English, no
+jargon, no coined shorthand, exact names only where someone must act on one. This is not optional
+and it applies to every agent spawned, not only the one driving. Ben has said this more than once.
