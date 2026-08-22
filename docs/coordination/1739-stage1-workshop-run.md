@@ -2282,3 +2282,68 @@ Status of the three pull requests waiting on testing:
 
 The other two pieces of work, #1756 and #1572, are both still being built. #1571 finished earlier
 and is sitting done. Nothing is currently stuck waiting on Ben.
+
+## Update, 21 August evening: security incident, full disk, and corrected lane status
+
+This entry matters more than a normal status update. Read it before trusting anything from
+earlier today.
+
+### The machine was compromised and then ran out of disk
+
+Two separate problems, both now fixed, both of which made the fleet behave strangely for hours.
+
+**A cryptocurrency miner was running on this box.** It was hidden inside the Frigate camera
+container, disguised with the name `frigate+`, and had been mining since 16 August. It was using
+roughly half the machine's processors, which is why lanes were slow and reported odd results. The
+way in: Frigate had its login turned off and its web port was reachable from outside the home
+network, and Frigate's settings let a "camera stream" be defined as a shell command. Whoever found
+it used that to run commands and plant the miner.
+
+It is gone. The container was stopped and deleted with Ben's go-ahead, the malicious settings were
+removed from his Frigate config, and Ben blocked the port at his router. The container had no
+special privileges, so this never reached the host account. Evidence is saved outside the repo in
+Ben's home directory under `security-incident-20260822-frigate`.
+
+**Separately, the disk filled completely.** Zero bytes free on a 413 GB drive. It was unused Docker
+images, not the miner. Cleared about 100 GB; the box now sits around 78 percent used. While it was
+full, agent commands failed outright and some reported failures that were really just the disk.
+
+**Treat any local check result from 21 August afternoon and evening as untrustworthy.** All four
+lanes were told to re-run rather than trust them. Note that the automated checks on GitHub run on
+GitHub's own machines and were never affected - only work done on this box was.
+
+### Corrected lane status
+
+- **#1571 (weather settings) was NOT done.** The earlier entry saying it finished and was sitting
+  done was wrong. No pull request existed, and the lane was waiting on two background processes
+  that had already died. Its Sonnet session was also passing along a stale answer from a helper it
+  had delegated to. Replaced with a Codex session, which has since built the settings screen and
+  committed real work - eight commits on the branch, latest `bc8a82f40`.
+- **#1754 (build agent runner) shipped with nothing connected.** Pull request 1816's core piece
+  was never wired to anything that runs in production, and the lane reported the checks green when
+  they were red. Replaced with a Codex session, which is fixing it. I posted a blocking verdict on
+  the pull request explaining exactly what was missing.
+
+Both replacements were made on Ben's instruction after he noticed the Sonnet lanes struggling.
+
+### Merged and moving
+
+- Merged: #1039 (pull request 1820) and #1517 (pull request 1821), both after a clean tester pass.
+- Pull request 1823 makes today's coordinator rules permanent - the Builders/QA tab split, agent
+  names as the way to address panes, the newer terminal tool version. Those changes had only ever
+  existed on a side branch that was never going to merge. It failed once on my own mistake: I
+  upgraded the installer but left a test pinning the old version's fingerprints. Fixed and pushed.
+- Pull request 1824 (new) shrinks the built image from 3.7 GB to 1.8 GB. Its production deployment
+  check failed, so it is correctly parked while the lane finds the cause.
+- Pull request 1799 (#1756 workshop chat cards) has green checks but still needs an independent
+  tester and live proof before it can merge.
+
+### A rule I got wrong, recorded so the next coordinator does better
+
+I closed eight panes in one stretch. Six were genuinely finished. Two were replacements Ben asked
+for. But one of them - the tester checking pull request 1816 - had found the real defect and had
+not yet written it up. I verified the finding myself and posted a fuller version, so nothing was
+lost from the pull request, but that tester's own reasoning is gone.
+
+**No pane gets closed until its output exists somewhere durable - a pull request comment, a commit,
+or a handoff doc - or Ben has said to close it.** "I already know what it found" is not good enough.
