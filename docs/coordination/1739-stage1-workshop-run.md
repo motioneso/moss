@@ -2731,3 +2731,22 @@ pull request's life), then merge, close issue #1572, and confirm the project boa
 Done.
 
 [pane w1:pKN]
+
+## relay30 coordinator: merged sports news sources, run 1739 fully closed out
+
+The fresh independent tester's verdict came back green on the exact rebased code (real browser
+run, one small unused error-handling line noted as fine to leave). Re-checked the pull request
+could still merge cleanly right before merging - it could, same commit as when the tester checked
+it. Merged as commit be039398e. Closed issue #1572; the project board moved it to Done.
+
+Cleaned up both leftover copies of the code - the build lane's and the tester's - after confirming
+the merge commit was really on the main branch and neither copy had unsaved work or a live server
+running.
+
+All four items from this run are now done: weather settings, workshop chat cards, sports news
+sources, and build agent runner (merged earlier). Nothing left open in this run.
+
+`merges_since_relay` = 1 (sensitive tier). Nothing else queued for this run - awaiting Ben on
+whether to start a new run or close this manifest out.
+
+[pane w1:pKN]
