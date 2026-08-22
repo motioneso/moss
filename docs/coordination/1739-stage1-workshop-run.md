@@ -2515,6 +2515,13 @@ feeds, and chat-based add/remove, are separate follow-up pull requests still to 
 Not merged yet - waiting on that last check with a background watcher, will merge the moment it's
 green.
 
+Update: the last check went green, but by then main had moved forward (the build agent runner
+pull request landed in between) and pull request 1825 now has a real conflict with main. Sent it
+back to its own build lane to resolve, since that lane has the context and hand-editing someone
+else's feature code is not the coordinator's job. Waiting for it to push the fix.
+
+[pane w1:pKH]
+
 ## Update, relay28 coordinator: weather settings (#1571, pull request 1826) verdict RED, sent back
 
 Its tester found two real problems, not merge-ready:
