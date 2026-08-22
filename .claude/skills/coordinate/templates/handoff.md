@@ -9,9 +9,9 @@ this PR gets adversarial Opus QA + Ben merge sign-off — build to that bar.)
 **Worktree:** <repo>/.claude/worktrees/<slug> **Branch:** <branch off origin/main>
 **Build skill path (absolute):** <repo>/.claude/skills/coordinated-build/SKILL.md (follow this
 exact file if `coordinated-build` does not resolve by name in your spawn env)
-**Coordinator label:** `Coordinator` — escalate via `herdr-pane-message`; before messaging,
-verify `herdr pane list` shows EXACTLY ONE pane with this label, resolved fresh each time (never
-a cached `…-N` pane number — they reflow).
+**Coordinator agent name:** `coordinator` — escalate via `herdr agent prompt coordinator` (through
+`herdr-pane-message`); before messaging, verify `herdr agent list` shows EXACTLY ONE live agent
+with this name, resolved fresh each time. The visible pane label should also be `Coordinator`.
 **Coordinator session id:** `<agent_session.value>` (immutable authority; label is only routing).
 **Relay trigger:** the context-meter 70% warning, or a compaction summary in your own context →
 message the coordinator, then use the `relay` skill immediately.

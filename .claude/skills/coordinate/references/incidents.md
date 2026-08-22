@@ -127,11 +127,11 @@ normal English; do not compress into caveman/telegraph style.
 
 ## 2026-08-06 — spawned lanes were anonymous, in two namespaces at once
 
-Two lanes spawned for PRs #1437 and #1379 showed up as bare pane ids with an empty label, so Ben
+Two lanes spawned for PRs #1437 and #1379 showed up as bare pane ids with empty names, so Ben
 could not tell which was which without reading each pane. → Every spawn is named **twice**:
-`herdr pane rename <pane> "<Human Label>"` sets what `herdr pane list` and FleetView display;
-`herdr pane run <pane> "/rename <slug>"` sets the header inside the agent's own pane. Setting one
-leaves the other blank. Name for the work (`PR1437 typecheck fix`), not the wave.
+`herdr agent start <name>` (or `herdr agent rename <pane> <name>`) sets the durable Herdr routing
+name; `herdr pane rename <pane> "<Human Label>"` sets what `herdr pane list` and FleetView display.
+Setting one leaves the other blank. Name for the work (`pr1437-typecheck-fix`), not the wave.
 
 ## 2026-08-06 — this skill's spawn command had drifted from the herdr CLI
 

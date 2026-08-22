@@ -126,21 +126,27 @@ sender's session id), e.g. `[pane w1:pFZ]` at the end. Pane numbers reflow on ev
 this isn't a reply address — it's how you, a successor re-reading the manifest, or Ben tie a given
 message to the exact physical pane that sent it, without cross-referencing a label that may since
 have been reused or reaped. This applies to build agents (`coordinated-build`,
-`coordinated-wrap-up`), QA agents (`coordinated-qa`, Herdr-fallback path), and to you as
-coordinator on every escalation you relay onward.
+`coordinated-wrap-up`), QA agents (`coordinated-qa`), and to you as coordinator on every
+escalation you relay onward.
 
 ## Phase 0a — claim the single-coordinator lock (FIRST, before anything)
 
 There must be **exactly one** coordinator (see incidents: a stale labelled pane once ran a
 parallel merge loop).
 
-1. `herdr pane rename "$HERDR_PANE_ID" "Coordinator"`.
-2. Verify uniqueness: `herdr pane list` shows **exactly one** `Coordinator` pane (you). If another
+1. Register the agent name and visible pane label separately:
+   ```bash
+   herdr agent rename "$HERDR_PANE_ID" coordinator
+   herdr pane rename "$HERDR_PANE_ID" Coordinator
+   ```
+2. Verify uniqueness: `herdr agent list` and `herdr pane list` show **exactly one** live
+   `Coordinator` agent/pane (you). If another
    **active** pane holds it, you are a DUPLICATE — stand down, message that pane, do NOT run a
    second loop.
 3. Record the lock in the manifest as **Claude session id + label**. Identifier taxonomy (the one
    place it's defined — everything else references it):
-   - **label** (`Coordinator`) = *routing* — what agents address; re-claimable, so NOT authority.
+   - **agent name** (`coordinator`) = *routing* — what agents address; re-claimable, so NOT authority.
+   - **pane label** (`Coordinator`) = display-only; keep it aligned with the coordinator role.
    - **pane number** (`w…-N`) = *ephemeral* — reflows on every restart/split/reap; never trust a
      written pane number; resolve fresh by label+session at read time.
    - **session id** (`agent_session.value` in `herdr pane list`) = *authority* — immutable for
@@ -187,28 +193,30 @@ For each spec cleared to start (serialized specs wait for their predecessor to l
    Each worktree costs ~2 GB once `pnpm install` runs; the box hit 97% disk.
 2. **Write the handoff doc** from `templates/handoff.md` (spec, worktree/branch, tier, coordinator
    label + session id, collision notes) → commit it so the agent can read it.
-3. **Spawn the build agent** into the run's shared **"Agents" tab**. `herdr agent start` takes
-   **only** `--kind`, `--pane` and `--timeout` — there is no `--cwd` and no `--tab`. The pane must
-   already exist, be at a shell prompt, and be in the right directory, so **split first, start
-   second**:
+3. **Spawn the build agent** into the run's shared **"Builders" tab** (QA agents get their own
+   **"QA" tab** — see `coordinated-qa`; same rules, just two tabs by role instead of one shared
+   tab). `herdr agent start` takes **only** `--kind`, `--pane` and `--timeout` — there is no
+   `--cwd` and no `--tab`. The pane must already exist, be at a shell prompt, and be in the right
+   directory, so **split first, start second**:
 
    **⚠️ `herdr pane split` has no `--tab` flag — it always splits inside the SOURCE pane's own
-   tab.** `<agents-tab-pane>` below MUST already be a pane that lives in the agents tab (`herdr
-   pane list`, check `tab_id`) — never your own coordinator pane. Splitting off yourself silently
-   lands the new pane in your coordinator tab (Ben, 2026-08-19: caught this happening — a build
-   agent spawned straight into the Coordinator's own tab). If no agent pane exists yet to split
-   from (first spawn of a run), split off yourself once, then immediately relocate with `herdr
-   pane move <new-pane> --new-tab --workspace w1 --label "agents"` — **never leave a spawned pane
-   sharing the coordinator's tab, even for one command.**
+   tab.** `<builders-tab-pane>` below MUST already be a pane that lives in the Builders tab
+   (`herdr pane list`, check `tab_id`) — never your own coordinator pane, and never the QA tab.
+   Splitting off yourself silently lands the new pane in your coordinator tab (Ben, 2026-08-19:
+   caught this happening — a build agent spawned straight into the Coordinator's own tab). If no
+   builder pane exists yet to split from (first spawn of a run), split off yourself once, then
+   immediately relocate with `herdr pane move <new-pane> --new-tab --workspace w1 --label
+   "builders"` — **never leave a spawned pane sharing the coordinator's tab, even for one
+   command.**
 
    ```bash
    # 1. make the pane, in the worktree — --cwd lives on split, not on agent start
-   herdr pane split <agents-tab-pane> --direction down --cwd $(pwd)/.claude/worktrees/<slug> --no-focus
+   herdr pane split <builders-tab-pane> --direction down --cwd $(pwd)/.claude/worktrees/<slug> --no-focus
    # 2. start the agent in that pane; everything after `--` goes to claude
    herdr agent start <name> --kind claude --pane <new-pane> \
      -- --model sonnet --permission-mode bypassPermissions "<boot>"
    # 3. if step 1 had to split off the coordinator's own pane, relocate now — do not skip this:
-   herdr pane move <new-pane> --tab <existing-agents-tab-id>   # or --new-tab if none exists yet
+   herdr pane move <new-pane> --tab <existing-builders-tab-id>   # or --new-tab if none exists yet
    ```
 
    Two argument rules, both of which fail loudly and waste a spawn:
@@ -229,19 +237,39 @@ For each spec cleared to start (serialized specs wait for their predecessor to l
    > bloat a fresh context and trigger premature relays. Reading is not progress: BUILD, commit per
    > task, relay only after real work past ~80%. Begin now.
 
-   **Tab discipline (Ben, 2026-06-10/27):** ALL build + QA agents share one agents tab, which must
-   live in Jarvis workspace `w1`; your coordinator window stays coordinator-only (the ONLY thing
-   you may spawn there is your own relay successor). If the agents tab doesn't exist, create it:
-   `herdr pane move <first-pane> --new-tab --workspace w1 --label "agents"`. At 4+ panes, open an
-   `"agents 2"` overflow tab. Grid: 2×2 for 4-agent waves, 3×1 for 3.
-4. **Name the agent both ways (Ben, 2026-08-06)** — a spawned pane is anonymous in *two* separate
-   namespaces, and Ben has to be able to tell lanes apart at a glance:
+   **Tab discipline (Ben, 2026-06-10/27; split into role tabs 2026-08-21):** build agents live in
+   a **"Builders" tab** and QA agents live in a separate **"QA" tab**, both in Jarvis workspace
+   `w1`; your coordinator window stays coordinator-only (the ONLY thing you may spawn there is
+   your own relay successor). Same rules apply to each tab independently — grid limits, overflow
+   tabs, rebalancing — they just now sort by role instead of sharing one tab. If a role's tab
+   doesn't exist yet, create it: `herdr pane move <first-pane> --new-tab --workspace w1 --label
+   "builders"` (or `"qa"`). At 4+ panes in a tab, open an overflow tab for that same role (e.g.
+   `"builders 2"` / `"qa 2"`) rather than crowd it. Grid: 2×2 for 4-agent waves, 3×1 for 3 — per
+   tab.
+
+   **Keep each tab's grid tidy as its fleet changes size, not just at spawn (Ben, 2026-08-20):
+   "make sure this is written down so I don't have to ask for it every time."** Whenever the lane
+   count in a Builders or QA tab changes — a wave spawns, a lane finishes and gets reaped — re-
+   check that tab's layout and fix it if it's drifted into a lopsided stack; don't wait to be
+   asked. `herdr pane move` refuses to re-split a pane within its own current tab (`reason:
+   "same_tab"`); pop it out first with `herdr pane move <pane> --new-tab --workspace w1 --label
+   scratch`, then move it back in with `herdr pane move <pane> --tab <target-tab> --split
+   right|down --target-pane <anchor> --ratio 0.5` — the empty scratch tab closes itself once the
+   pane leaves it, no separate cleanup needed. **Reaffirmed 2026-08-21: this is a standing rule
+   for every coordinator, not a one-off ask** — check the grid every time the pane count in a
+   Builders or QA tab changes and re-square it via the pop-out/split-back-in procedure above,
+   without being asked.
+4. **Name the agent in both namespaces before recording it (Ben, 2026-08-06)** — a spawned pane
+   is anonymous in separate agent-name and pane-label namespaces:
    ```bash
-   herdr pane rename <pane> "<PR1437 typecheck fix>"   # the label `herdr pane list` + FleetView show
-   herdr pane run <pane> "/rename pr1437-typecheck-fix" # the header shown inside the agent's own pane
+   herdr agent rename <pane> <pr1437-typecheck-fix> # durable Herdr routing name
+   herdr pane rename <pane> "PR1437 typecheck fix" # visible label in pane list/FleetView
    ```
-   Setting one leaves the other blank. Name for the **work**, not the wave (`PR1437 typecheck fix`,
-   not `build-3`). Record both names in the manifest.
+   `herdr agent start <name>` sets the routing name at spawn, so rename immediately only when the
+   start path did not set it. Name for the **work**, not the wave (`pr1437-typecheck-fix`, not
+   `build-3`). Record both names in the manifest. The coordinator is the exception: every
+   coordinator and coordinator successor must use the registered agent name `coordinator` and
+   visible pane label `Coordinator`.
 5. **Verify it started AND on the right model:** `herdr pane read <pane> --source recent
    --lines 12` — answer trust prompts with `herdr pane send-keys <pane> Enter`; confirm the pane
    says **"Sonnet"** (Opus = herdr default leaked through — respawn with `--model sonnet`).
@@ -252,12 +280,13 @@ is a two-step action: send, then verify. A message you have not verified is not 
 still pending, not delivered. This applies to you as coordinator and is the standard you hold
 every agent you brief to as well.
 
-1. Send: `herdr pane run <pane> "<msg>"` (types + submits in one command), or
-   `herdr agent prompt <name-or-pane> "<msg>"` when the target is a named agent.
-2. **Always** verify with a bounded pane read (`herdr pane read <pane> --source recent
-   --lines 12`) — do this every time, not only when you suspect a problem. Read the actual result:
+1. Send: `herdr agent prompt <agent-name> "<msg>"` for named agents (the normal path), or
+   `herdr pane run <pane> "<msg>"` only for an unnamed/raw terminal target.
+2. **Always** verify with a bounded agent read (`herdr agent read <agent-name>
+   --source recent-unwrapped --lines 12`), or a bounded pane read for raw targets — do this every
+   time, not only when you suspect a problem. Read the actual result:
    - Input box empty, or your text now appears as agent output/history → delivered.
-   - Your text still sitting at the prompt with a cursor → **not sent**. Send one
+   - Your text still sitting at the prompt with a cursor → **not sent**. For raw targets, send one
      `herdr pane send-keys <pane> Enter`, then read again to confirm it cleared.
    - `❯ Press up to edit queued messages` → delivered and queued (the agent was busy); this is
      success, do not resend.
@@ -267,7 +296,7 @@ every agent you brief to as well.
 
 `send-text` is a fallback only (it leaves text unsubmitted without an explicit Enter) — never use
 it as the whole send. There is no `herdr agent send`. **Never assume a message landed because the
-command that sent it returned without error** — `herdr pane run`/`send-keys` succeeding only means
+command that sent it returned without error** — `agent prompt`/`herdr pane run` succeeding only means
 the keystrokes were delivered to the terminal, not that the target processed them.
 
 ## Phase 2 — supervise (resident)
@@ -286,6 +315,10 @@ catches silent failures between pushes.
   ≤270s (stays cache-warm) or space ticks 20–30 min — a wake between those pays a full cold
   re-read of your context for nothing. **Never block on `herdr pane run <pane> 'sleep N'`
   poll-loops** — `ScheduleWakeup` / `Monitor` / a background task are the only sanctioned waits.
+- **QA verdicts: `Monitor` is fine, an in-process `Agent`-tool QA agent is not.** A `Monitor`
+  polling `gh pr comment`s runs as a detached background task and doesn't block you. A QA agent
+  spawned via the `Agent` tool runs in-process and ties up whichever session spawned it until it
+  finishes — spawn QA in its own Herdr pane instead (see Phase 3 step 1).
 - **On a plan-ready escalation:** read the plan pointer. Approve if it stays inside the spec's
   locked decisions; reply via `herdr-pane-message`. A genuine product/architecture fork → model
   policy (Opus subagent), then route to Ben with the verdict framing the options.
@@ -306,10 +339,21 @@ catches silent failures between pushes.
     the successor with "do not end your turn between steps."
   - Distinguish them by the pane's last line, not by `agent_status`: a wait declaration is prose, a
     freeze is a spinner.
+- **A dispatched `Agent()` QA/build agent that pauses on its own background work is the same failure,
+  one level removed.** You get exactly one task-notification when it pauses like that — its own
+  background task's completion does NOT generate a second notification. **Whenever a spawned agent's
+  update is a wait declaration rather than a finished verdict, immediately schedule an active recheck**
+  (`ScheduleWakeup` a few minutes out, or a bounded `SendMessage` nudge) — do not assume a second
+  notification is coming.
 - **On an agent relay** (its meter warned or it saw a compaction summary): it spawns its successor
   in the same worktree and asks to be reaped — confirm the successor is driving (bounded pane
   read), reap the old pane, update the manifest. If YOU spawn the successor, always pass
   `--tab w1:<agents-tab>` and `--model sonnet` — never let it land in your coordinator tab.
+  Build/QA successors get a unique registered role name (`<slug>-relay<n>`). A coordinator
+  successor must transition from a temporary unique name to `coordinator`: start it as
+  `coordinator-next-<run>`, verify it is driving, clear the old coordinator's name, then run
+  `herdr agent rename <successor-pane> coordinator` and align its pane label. Never leave two
+  live agents named `coordinator`.
 - Keep the manifest current after every state change — it is your memory.
 
 ## Phase 3 — verify & merge (you own it all)
@@ -320,44 +364,30 @@ When an agent reports **done** (PR open + its own green evidence — which you d
    your own `agent_session.value` matches the recorded coordinator session id. Mismatch = you are
    not authoritative — **stand down, do not merge**, message the `Coordinator` label.
 
-1. **Spawn an ephemeral QA agent** on the PR branch, passing the risk tier. QA **trusts CI for
-   the mechanical gate** (`gh pr checks`) and re-runs nothing unless CI is red — tokens go to
-   review only.
+1. **Spawn an ephemeral QA agent in its own Herdr pane** on the PR branch, passing the risk tier —
+   never via the `Agent` tool (that runs in-process and ties up the coordinator session until it
+   finishes). QA trusts CI for the mechanical gate (`gh pr checks`) and re-runs nothing unless CI
+   is red — tokens go to review only.
 
-   **Primary path — registered subagent** (`.claude/agents/coordinated-qa.md`; the call returns
-   the agent's final message as the tool result, so only the verdict enters your context):
+   Spawn: `herdr pane split <agents-tab-pane> --direction down --cwd <fresh-qa-worktree>
+   --no-focus` → `herdr agent start <name> --kind claude --pane <new-pane> -- --model sonnet
+   --permission-mode bypassPermissions "<boot pointer>"` (`--model opus` for security tier). Boot
+   the pane with:
    ```
-   Agent(
-     description: "QA: <slug>",
-     subagent_type: "coordinated-qa",
-     isolation: "worktree",
-     model: "opus",        ← security tier only; omit for routine/sensitive (inherits Sonnet)
-     prompt: """
-   JARVIS_PGDATABASE=jarvis_qa_<n>
    PR: <PR number> | Branch: <branch> | Spec: <spec-path> | Tier: <routine|sensitive|security>
-
    Invoke the coordinated-qa skill; its step 3b (live-path gate + e2e-UAT, every tier) and
-   step 4 (tier depth) are authoritative.
-   Return ONLY the compact verdict as your final message.
-   """
-   )
+   step 4 (tier depth) are authoritative. Post your verdict to the PR with `gh pr comment` when
+   done.
    ```
-   **Fallback (Herdr):** if the Agent tool is unavailable, `herdr agent start` with the same
-   prompt **plus `--model sonnet`** (or opus for security tier), collect the verdict via a bounded
-   pane read, and note the fallback in the manifest.
+   Confirm the pane says "Sonnet" (or "Opus" for security tier). Don't wait on it — check the PR's
+   comments on your next pass. By tier: `routine`/`sensitive` = Sonnet QA (`/code-review` +
+   exit-criteria, + invariant walk and coordinated-qa step-4 e2e-UAT gate for sensitive).
+   `security` = Opus adversarial QA — must `gh pr comment` its verdict before you act.
 
-   By tier: `routine`/`sensitive` = Sonnet QA (`/code-review` + exit-criteria, + invariant walk
-   and coordinated-qa step-4 e2e-UAT gate for sensitive). `security` = Opus adversarial QA — must
-   `gh pr comment` its verdict before you act. Consume the compact verdict only — never the body.
-
-   **Reap the QA worktree the moment you've consumed its verdict** — do not wait for Phase 3
-   step 6 or defer it. QA worktrees are disposable by construction: `isolation: "worktree"`'s
-   "auto-remove if unchanged" almost never fires for them, because the QA agent's own screenshots
-   and `test-results/` output count as a change. That gap is exactly how the 2026-08-10 run
-   accumulated ~20 stray `qa-*`/`agent-a*` worktrees under `.claude/worktrees/` and `/tmp` by the
-   next morning. A QA worktree holds no work of its own (it never edits source, only reviews) —
-   `git worktree remove --force <qa-wt>` and delete its branch (if any) unconditionally, no
-   four-gate check needed; that check is for build-agent worktrees which *do* carry unlanded work.
+   **Reap the QA worktree and pane the moment you've consumed its verdict** — do not wait for
+   Phase 3 step 6. A QA worktree holds no work of its own (it never edits source, only reviews):
+   `git worktree remove --force <qa-wt>`, delete its branch if any, close the pane. No four-gate
+   check needed — that check is for build-agent worktrees which do carry unlanded work.
 
 2. **CI waiver protocol (red checks are stop-the-line).** A PR with any red required check does
    NOT merge. Waivable **only** if: (a) proven failing on `origin/main` at the same SHA, (b)
@@ -460,13 +490,17 @@ Fired by the relay triggers (Context discipline / Phase 3 step 7):
    - Claude: `claude --model sonnet --permission-mode bypassPermissions`
    - Codex: `codex -s danger-full-access -a never` (never the default/`workspace-write` sandbox —
      it must rename/close panes, push the manifest, and run the gate unprompted)
-   Bootstrap = "you are the new coordinator for run <run-id>; read
+   Start the successor with a temporary unique agent name such as
+   `coordinator-next-<run>` because the current `coordinator` name is still occupied. Bootstrap =
+   "you are the new coordinator for run <run-id>; read
    `docs/coordination/<run-id>.md` — the LATEST continuation note + the current fleet/merge-order
    state (skim; the manifest is long — do NOT deep-read its full history or you bloat on boot),
    invoke `coordinate`, re-adopt the live fleet (`herdr pane list` + labels), confirm you're
    driving, then close my pane."
-3. Confirm the successor is driving (bounded pane read); it reaps you — resolving your pane fresh
-   by label + session id, never a written pane number.
+3. Confirm the successor is driving (bounded pane read). Clear this session's registered name,
+   then have the successor run `herdr agent rename "$HERDR_PANE_ID" coordinator` and
+   `herdr pane rename "$HERDR_PANE_ID" Coordinator`; it reaps you after that. Resolve panes fresh
+   by agent name + session id, never a written pane number.
 
 ## Red flags — STOP
 
@@ -499,8 +533,9 @@ Fired by the relay triggers (Context discipline / Phase 3 step 7):
 | Manifest / handoff templates | `.claude/skills/coordinate/templates/{manifest,handoff}.md` |
 | Isolated worktree | `git worktree add .claude/worktrees/<slug> -b <slug> origin/main` |
 | Spawn build agent | `herdr pane split <pane> --direction down --cwd <worktree> --no-focus` → `herdr agent start <lowercase-name> --kind claude --pane <new-pane> -- --model sonnet --permission-mode bypassPermissions "<one-line pointer to a brief file>"` → confirm pane says "Sonnet" |
-| Name a lane (both namespaces) | `herdr pane rename <pane> "<Human Label>"` **and** `herdr pane run <pane> "/rename <slug>"` |
-| Spawn QA agent | `Agent(description, subagent_type: "coordinated-qa", isolation: "worktree", model: opus for security only, prompt)` |
+| Name a lane (both namespaces) | `herdr agent rename <pane> <lowercase-work-name>` **and** `herdr pane rename <pane> "<Human Label>"` |
+| Name a coordinator | `herdr agent rename "$HERDR_PANE_ID" coordinator` **and** `herdr pane rename "$HERDR_PANE_ID" Coordinator` |
+| Spawn QA agent | Herdr pane, same as a build agent (never the `Agent` tool) — `--model sonnet`, opus for security tier |
 | Spawn relay coordinator (SAME tab as yours) | `… -- claude --model sonnet --permission-mode bypassPermissions "<boot>"` or `… -- codex -s danger-full-access -a never "<boot>"` |
 | Talk to an agent | `herdr pane run <pane> "<msg>"` → bounded read to verify → `send-keys Enter` if unsubmitted |
 | Bounded pane read (always) | `herdr pane read <pane> --source recent --lines 12` |

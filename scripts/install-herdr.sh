@@ -10,8 +10,8 @@ set -euo pipefail
 #
 # Per-arch release artifacts and their SHA-256 checksums are pinned here rather than resolved at
 # install time, so a compromised or yanked upstream release can't silently swap the binary.
-HERDR_VERSION="v0.7.3"
-HERDR_REPO="ogulcancelik/herdr"
+HERDR_VERSION="v0.8.2"
+HERDR_REPO="herdrdev/herdr"
 INSTALL_PREFIX="${JARVIS_CLI_TOOLS_PREFIX:-/data/cli-tools}"
 INSTALL_DIR="${INSTALL_PREFIX}/bin"
 INSTALL_PATH="${INSTALL_DIR}/herdr"
@@ -20,11 +20,11 @@ arch="$(uname -m)"
 case "$arch" in
   x86_64|amd64)
     ASSET="herdr-linux-x86_64"
-    EXPECTED_SHA256="043ef43ecbabda28465dcff1eec3184518150d567b8b8f20cda9c6c88770641d"
+    EXPECTED_SHA256="976150a14d490c94b243ea2e1a7eb2dfb67f12e36b182db90936f6728e6aecf4"
     ;;
   aarch64|arm64)
     ASSET="herdr-linux-aarch64"
-    EXPECTED_SHA256="ea490094f2c7c39099870857d00c64c628ef7b5eba1967df4258033455ee2cb1"
+    EXPECTED_SHA256="f55610658e1c2e0d2aaef730b4b2ab885f7f8ba00285ab372bfb14f2e3d5b40d"
     ;;
   *)
     echo "install-herdr: unsupported architecture '${arch}'" >&2

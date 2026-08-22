@@ -10,10 +10,11 @@ describe("scripts/install-herdr.sh", () => {
 
     expect(script).toContain("set -euo pipefail");
     expect(script).toContain("herdr-linux-x86_64");
-    expect(script).toContain("043ef43ecbabda28465dcff1eec3184518150d567b8b8f20cda9c6c88770641d");
+    expect(script).toContain("976150a14d490c94b243ea2e1a7eb2dfb67f12e36b182db90936f6728e6aecf4");
     expect(script).toContain("herdr-linux-aarch64");
-    expect(script).toContain("ea490094f2c7c39099870857d00c64c628ef7b5eba1967df4258033455ee2cb1");
-    expect(script).toContain("v0.7.3");
+    expect(script).toContain("f55610658e1c2e0d2aaef730b4b2ab885f7f8ba00285ab372bfb14f2e3d5b40d");
+    expect(script).toContain("v0.8.2");
+    expect(script).toContain("herdrdev/herdr");
     expect(script).not.toMatch(/curl\s.*\|\s*sh/);
     expect(script).not.toMatch(/wget\s.*\|\s*sh/);
   });

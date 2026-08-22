@@ -1,105 +1,80 @@
 ---
 name: herdr-pane-message
-description: Use when you (Codex, running in a Herdr pane in the Jarv1s workspace) need to send a message, instruction, question, or finding to another agent session — e.g. a Claude Code pane labeled "Coordinator" or "Jarvis design" — in the same Herdr workspace, or to read its reply. Herdr is the terminal multiplexer (alternative to tmux); panes/agents carry human labels.
+description: Use when Codex needs to send a message, instruction, question, or finding to another agent session in the same Herdr workspace.
 ---
 
 # Send a Message to Another Herdr Pane (Codex)
 
-Herdr is a terminal workspace manager with a JSON CLI. Each pane can host an agent
-carrying a human **label** (e.g. "Coordinator", "Jarvis design"). You (Codex) are one
-of those panes. To coordinate, find the target by label, type a message into it, and
-verify it submitted — anything you send lands as that agent's user input.
-
-`herdr` lives at `~/.local/bin/herdr` (usually on PATH). If `herdr` is not found, call it
-by that absolute path. Run any subcommand with `--help` for exact flags.
+Herdr is a terminal workspace manager with a JSON CLI. Use the agent API for agent-to-agent
+prompts; use the pane API for ordinary shells and low-level terminal control.
 
 ## Steps
 
-**1. List panes and find the target by `label`.**
+**1. Resolve the target by unique agent name.**
 
 ```bash
-herdr pane list        # JSON: each pane has pane_id, label, agent, agent_status,
-                       #       focused, cwd, foreground_cwd
+herdr agent list
+herdr pane list        # use when the target is unnamed or pane context is needed
 ```
 
-- Identify the target by its `label` (e.g. `"Coordinator"`) and note its `pane_id`
-  (e.g. `w653f42bef3ac02-2`).
-- **The pane with `"focused": true` and `agent: "codex"` is YOU** — never message yourself.
-- **Skip unlabeled panes whose `cwd`/`foreground_cwd` is under `~/.jarvis/chat/*`** — those
-  are live Jarvis chat-engine sessions, not coordinating agents.
+- Prefer a unique registered agent `name`; it follows the live agent if its pane moves.
+- If using a pane ID, use the current opaque ID from the latest response; do not derive it from
+  sidebar order or assume an old ID identifies the same occupant.
+- Never message the focused pane running this agent.
+- Skip unlabeled panes under `~/.jarvis/chat/*`; those are chat-engine sessions, not coordinating
+  agents.
 
-**2. Send the message.** Prefer `herdr pane run` — it types the text _and_ submits Enter in
-one call:
+**2. Submit through the agent API.** It sends text plus encoded Enter atomically and honors
+bracketed-paste mode:
 
 ```bash
-herdr pane run <pane_id> "<your message>"
+herdr agent prompt <agent-name-or-pane-id> "<your message>"
 ```
 
-`herdr agent prompt <agent-name-or-pane_id> "<text>"` also types and submits in one call, and
-takes a registered agent name as well as a pane id — use it when the target is a named agent
-(`herdr agent list`). Add `--wait` only when you need to block until the agent settles.
-**There is no `herdr agent send`** — that verb does not exist in the CLI (`herdr agent` offers
-`list get read send-keys prompt rename focus wait attach start explain`).
-
-**3. Long messages may not auto-submit.** A long message types into the input box but the
-Enter can be absorbed (treated as a paste). If so, send a **separate** Enter:
+When the caller needs the first settled lifecycle state, add `--wait` and a bounded timeout:
 
 ```bash
-herdr pane send-keys <pane_id> Enter
+herdr agent prompt <agent-name-or-pane-id> "<your message>" --wait --timeout 120000
 ```
 
-**4. A BUSY agent QUEUES your message — that is success.** If a later read shows your text
-under `❯ Press up to edit queued messages`, the agent received it and will process it when
-it goes idle. **Do not resend** or send another Enter — that injects stray input.
+The default settled states are `idle`, `done`, and `blocked`. If the target is already `blocked`,
+inspect it and use `herdr agent send-keys` for a deliberate UI response; `agent prompt` refuses to
+inject input into an approval/question dialog. There is no `herdr agent send` command.
 
-**5. Verify it landed:**
+**3. Use the pane API only for raw terminal work.** For an ordinary shell command:
 
 ```bash
-herdr pane read <pane_id> --source visible --lines 12
+herdr pane run <pane_id> "<command>"
 ```
 
-Input box empty (agent processing) or showing "queued" = submitted. Still showing your raw
-text with a cursor = the Enter didn't land; send one `send-keys <pane_id> Enter` and re-read.
+`pane run` also submits atomically. Use `pane send-text` only when Enter must not be sent, and
+`pane send-keys` only for intentional low-level key input.
 
-## Getting a reply back (two-way)
-
-The target receives only your raw text — it does not know who sent it. To get an answer,
-name yourself and how to route the reply. Find your own pane (`focused: true`,
-`agent: "codex"`) in `herdr pane list`, then end your message with, e.g.:
-
-> "…your question… — reply via the herdr-pane-message skill to the Codex pane
-> `<your pane_id>` (or label `<your label>`)."
-
-Then poll for the reply:
+**4. Verify delivery.**
 
 ```bash
-herdr pane read <their_pane_id> --source recent --lines 30
+herdr agent get <agent-name-or-pane-id>
+herdr agent read <agent-name-or-pane-id> --source recent-unwrapped --lines 30
 ```
 
-## Quick reference (verified `herdr` CLI)
+For raw pane sends, use `herdr pane read <pane_id> --source visible --lines 12`. A busy agent
+showing a queued prompt is success; do not resend.
 
-| Need                                             | Command                                                                            |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| List panes (JSON: pane_id, label, agent, status) | `herdr pane list`                                                                  |
-| Get one pane                                     | `herdr pane get <pane_id>`                                                         |
-| List / get agents                                | `herdr agent list` · `herdr agent get <label>`                                     |
-| Send by pane + Enter (preferred/default)         | `herdr pane run <pane_id> "<text>"`                                                |
-| Send by agent name or pane + Enter               | `herdr agent prompt <name-or-pane_id> "<text>" [--wait]`                           |
-| Literal text, no Enter (fallback only)           | `herdr pane send-text <pane_id> "<text>"`                                          |
-| Submit / send a key                              | `herdr pane send-keys <pane_id> Enter`                                             |
-| Read output                                      | `herdr pane read <pane_id> --source visible\|recent\|recent-unwrapped [--lines N]` |
-| Rename a pane label                              | `herdr pane rename <pane_id> "<label>"`                                            |
+## Requesting a reply
 
-## Common mistakes
+Name yourself and ask the target to reply via this skill to your current agent name. If you have
+no registered name, ask it to re-resolve your pane from a fresh `herdr pane list` response.
 
-- **Resending because it "looked unsent."** A busy agent shows the message **queued**
-  (`Press up to edit queued messages`) — that's delivered, not failed. Read first; don't resend.
-- **Appending Enter to a long send and assuming it submitted.** Long text pastes and absorbs
-  the Enter — send a separate `send-keys <pane_id> Enter`, then verify with `read`.
-- **Messaging the wrong pane.** Confirm by `label` (and `foreground_cwd`), not screen position.
-  The `focused: true` / `agent: "codex"` pane is you; unlabeled `~/.jarvis/chat/*` panes are
-  live chat engines, not agents.
+## Quick reference
 
-> Scope: spawning a _new_ agent into a fresh pane (rather than messaging an existing one) is a
-> separate capability (`herdr agent start … -- claude …` with an isolated git worktree). This
-> skill covers messaging/reading existing panes only.
+| Need                   | Command                                                                  |
+| ---------------------- | ------------------------------------------------------------------------ |
+| Resolve agents         | `herdr agent list`                                                       |
+| Resolve panes          | `herdr pane list`                                                        |
+| Send to an agent       | `herdr agent prompt <name-or-pane-id> "<text>" [--wait]`                 |
+| Run a raw-pane command | `herdr pane run <pane_id> "<command>"`                                   |
+| Read an agent          | `herdr agent read <name-or-pane-id> --source recent-unwrapped --lines N` |
+| Send intentional keys  | `herdr agent send-keys <name-or-pane-id> <key> [key ...]`                |
+
+> Scope: spawning a new agent is separate (`herdr agent start`). This guide covers messaging
+> existing agents.

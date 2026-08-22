@@ -25,7 +25,8 @@ mangled precisely the findings that need precision.
 ## Inputs (from your handoff / bootstrap)
 
 - The **PR branch** (and/or worktree) to verify, the **spec** it implements, the **risk tier**
-  (`routine` | `sensitive` | `security`), and the **coordinator label** to report to. If the tier
+  (`routine` | `sensitive` | `security`), and the **coordinator agent name** (normally
+  `coordinator`) to report to. If the tier
   isn't given, infer it from the diff's content triggers and treat ambiguity as the higher tier.
 
 ## Procedure
@@ -142,7 +143,8 @@ merge), then report to the coordinator by the appropriate channel, then stop.
 the compact verdict block below as your last message with no trailing text. Do NOT call
 `herdr-pane-message` (there is no coordinator pane to target).
 
-**If invoked as a Herdr pane:** `herdr-pane-message` the compact block to the coordinator label,
+**If invoked as a Herdr pane:** use `herdr agent prompt coordinator` through `herdr-pane-message`
+with the compact block,
 appending `[pane <your pane id>]` (`$HERDR_PANE_ID`, or `herdr pane list` matched on your session
 id) — pane numbers reflow, so this ties the verdict to the exact pane that produced it without
 relying on a label that may since have been reused or reaped. (Not applicable to the native-subagent
@@ -202,7 +204,7 @@ start new work, don't merge, don't touch the board — verdict only.
 | Reviews | `/code-review` (all tiers) · `/security-review` + "what's NOT tested" (security tier) |
 | Post verdict to PR | `gh pr comment <PR> --body "<compact block>"` (always; mandatory for security) |
 | Report verdict (native subagent) | return compact verdict block as final message (no `herdr-pane-message`) |
-| Report verdict (Herdr pane) | `herdr-pane-message` → coordinator label (same compact block) |
+| Report verdict (Herdr pane) | `herdr agent prompt coordinator` through `herdr-pane-message` (same compact block) |
 
 See also: `coordinate` (who spawns + reaps you, risk tiers, model tiering), CLAUDE.md (Hard
 Invariants you check against).

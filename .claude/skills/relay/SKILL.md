@@ -66,6 +66,14 @@ verification without approval prompts.
   personal threshold. If the warning fires before you have committed anything, you over-read:
   commit whatever is green, relay anyway, and say so in the continuation doc. Never end your turn
   between steps."
+  **Tab and grid discipline applies to you too, not just the coordinator.** Split your successor's
+  pane into the SAME role tab your own pane already lives in — a build agent stays in `Builders`,
+  a QA agent stays in `QA` — never a new tab, never the other role's tab, and never the
+  coordinator's own tab. Once your old pane is reaped, that tab has one pane fewer for a moment and
+  one more once the successor lands: if that leaves the grid lopsided (not a clean 2x2 for four
+  panes, 3x1 for three, etc.), square it up yourself using the same pop-out/split-back-in procedure
+  the coordinate skill uses, or flag it to the coordinator so it does. Don't leave a messy grid for
+  the coordinator to notice later.
 - **Coordinator:** new pane; bootstrap = "you are the new coordinator for run <run-id>; read
   `docs/coordination/<run-id>.md` — the LATEST continuation note + current fleet/merge-order state
   (skim; the manifest is long — do NOT deep-read its full history or you bloat on boot), read

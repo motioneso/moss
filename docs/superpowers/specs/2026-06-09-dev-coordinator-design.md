@@ -78,9 +78,11 @@ These were settled in the design interview; they are decisions, not options.
 6. **Dependency chains hand off forward.** When parallel is impossible, agent A completes its spec
    work (confirmed complete with the coordinator), then A uses `herdr-handoff` to queue the next
    agent as a **fresh session**, and the coordinator **reaps** A's spent session.
-7. **Communication = hybrid push + poll.** Agents **push** escalations to the coordinator's Herdr
-   label (those messages wake the coordinator). The coordinator **polls** (`herdr pane list` /
-   `herdr pane read`) between events to catch crashes, stalls, and trust-prompt hangs.
+7. **Communication = hybrid push + poll.** Agents **push** escalations with Herdr's
+   `agent prompt` API to the coordinator's unique agent name (those messages wake the
+   coordinator). The coordinator uses `agent wait`/`agent read` for agent lifecycle and output,
+   and polls `pane list` only for topology or unnamed panes, to catch crashes, stalls, and
+   trust-prompt hangs.
 8. **Context-pressure = agent self-report.** Each agent monitors its own context usage and, at
    the threshold, messages the coordinator and begins a clean self-handoff so the next session
    resumes seamlessly. (Not coordinator-scrape.)
@@ -152,7 +154,8 @@ Committed, durable, human-readable. Holds only in-flight operational state:
 - **Run id / date / coordinator label.**
 - **Queue** — one row per spec: spec path, GitHub issue #, status
   (`queued` / `building` / `awaiting-plan-approval` / `blocked` / `pr-open` / `qa` / `merged`),
-  agent label + pane id, branch, PR link.
+  agent name + current pane id, branch, PR link. Agent names are the durable routing identity;
+  pane IDs are opaque runtime handles and must be resolved from fresh Herdr responses.
 - **Dependency / merge order** — the edges and the resulting serialized chains + parallel groups.
 - **Outstanding escalations** — blockers / forks awaiting coordinator or Ben.
 - **Reaped sessions** — spent panes killed, for auditability.
@@ -163,7 +166,8 @@ Carried by the handoff doc + encoded in `coordinated-build`:
 
 - Work **only** your own worktree/branch; commit green per task; `git add` only your task's files.
 - Run plan → **coordinator** approval → build (not the human gate).
-- Escalate to coordinator label `<X>` via `herdr-pane-message` on:
+- Escalate to coordinator agent name `<X>` via `herdr agent prompt` (through
+  `herdr-pane-message`) on:
   blocker / plan-ready / design-fork / review-needed / done.
 - **Self-monitor context**; at ~70% of the window, message the coordinator, then use `relay`:
   write a continuation handoff, `herdr-handoff` your successor, and let the coordinator reap you.
