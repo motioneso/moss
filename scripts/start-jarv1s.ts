@@ -51,15 +51,12 @@ const CLI_ENV_KEYS = new Set([
   // deploy (resolveVaultRoots() -> vaultRootsEnvEntry() in claude-permission-hook.ts) and needs
   // the app-validated vault roots to do it; without these, that fix is inert in this topology.
   "JARVIS_NOTES_ROOTS",
-  "MOSS_NOTES_ROOTS",
-  // UAT-only carve-out for JARVIS_UAT_SEED_CHAT_SCRIPT / JARVIS_UAT_SCRIPTED_PROVIDER_BIN lives
-  // in buildChildEnv below, gated on JARVIS_UAT_SEED_CONFIRM — never unconditional here. See the
-  // comment at that gate for why: this same set is compiled into the production image, and
-  // JARVIS_UAT_SCRIPTED_PROVIDER_BIN names a folder the Dockerfile puts first on PATH for every
-  // login shell, so passing it through unconditionally would let anyone who can set an env var
-  // on a running production container swap in their own program for the real AI provider CLI.
-  "JARVIS_UAT_SEED_CONFIRM"
+  "MOSS_NOTES_ROOTS"
 ]);
+
+// The one folder tests/uat/provisioner.ts ever writes into JARVIS_UAT_SCRIPTED_PROVIDER_BIN. See
+// buildChildEnv below for why this is a value pin rather than a mode flag.
+const UAT_SCRIPTED_PROVIDER_BIN = "/app/tests/uat/fixtures/scripted-provider/bin";
 
 const CLI_ENV_PREFIXES = ["LC_"];
 
@@ -116,18 +113,14 @@ export function buildChildEnv(
   // JARVIS_UAT_SEED_CHAT_SCRIPT / JARVIS_UAT_SCRIPTED_PROVIDER_BIN select and PATH-inject a fake
   // "claude" CLI binary for the UAT live-test fixture. JARVIS_UAT_SCRIPTED_PROVIDER_BIN in
   // particular names a folder the Dockerfile puts first on the login-shell PATH used to launch
-  // the real AI provider CLI — the same image runs in production, so passing this through
-  // unconditionally would let anyone who can set an env var on a running production container
-  // substitute their own program for the real AI provider. JARVIS_UAT_SEED_CONFIRM=1 is the same
-  // "this is a real UAT run" marker packages/module-registry/src/index.ts already trusts for its
-  // own UAT-only carve-out (never renamed to MOSS_*, per that file's Tier C comment) — only when
-  // it is set do these two vars reach the cli-runner child at all.
-  if (env.JARVIS_UAT_SEED_CONFIRM === "1") {
+  // the real AI provider CLI — the same image runs in production, so a mode flag is not enough
+  // (it would travel into a production container by the same conduit as the setting itself, and
+  // authorize nothing an attacker couldn't already set). Instead, only the one fixed value the
+  // UAT fixture ever needs is honored; anything else is dropped.
+  if (env.JARVIS_UAT_SCRIPTED_PROVIDER_BIN === UAT_SCRIPTED_PROVIDER_BIN) {
+    next.JARVIS_UAT_SCRIPTED_PROVIDER_BIN = UAT_SCRIPTED_PROVIDER_BIN;
     if (env.JARVIS_UAT_SEED_CHAT_SCRIPT !== undefined) {
       next.JARVIS_UAT_SEED_CHAT_SCRIPT = env.JARVIS_UAT_SEED_CHAT_SCRIPT;
-    }
-    if (env.JARVIS_UAT_SCRIPTED_PROVIDER_BIN !== undefined) {
-      next.JARVIS_UAT_SCRIPTED_PROVIDER_BIN = env.JARVIS_UAT_SCRIPTED_PROVIDER_BIN;
     }
   }
 
