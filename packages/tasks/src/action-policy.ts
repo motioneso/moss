@@ -39,7 +39,11 @@ export class TasksCompatibilityHelper {
    * exercise the both-absent code path directly against a pre-seeded row.
    */
   async healInstallGrantAndReread(db: DataContextDb): Promise<MossActionPermissionTier> {
-    await this.grantInstallTimeTrustIfUnset(db);
+    try {
+      await this.grantInstallTimeTrustIfUnset(db);
+    } catch {
+      return "ask_each_time";
+    }
     const reread = await this.prefs.getWithMetadata<MossActionPermissionTier>(
       db,
       TASK_CHANGES_POLICY_KEY
