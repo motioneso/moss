@@ -533,3 +533,37 @@ Nothing new to do.
 
 **Pane layout:** Builders tab has two lanes left (1529 and 1654), correctly laid out. The QA tab
 closed itself as expected.
+
+## Continuation note - 2026-08-22, ninth coordinator handing off at context limit
+
+Handing off at 70 percent context, routine, nothing wrong. Was driving from pane w1:pMC, agent
+name `coordinator`, session `46ddc119-6a9f-4a5e-8924-7ace3936dfdb` - check `herdr agent list` for
+the new pane once the successor claims the name.
+
+**Pull request 1844 (job search board) and pull request 1841 (styling) - both done, merged and
+cleaned up.** Nothing to do.
+
+**Pull request 1846 - was a stale leftover documentation pull request from an earlier handoff,
+already superseded and conflicting. Closed it and deleted its branch. Nothing to do.**
+
+**Pull request 1654 (security fix) - still blocked, logged for Ben, do not chase yourself.**
+Unchanged. Still waiting on issue #1252 (the app's own assistant program not starting during the
+live test) or a ruling from Ben. Already in `docs/coordination/AWAITING-BEN.md`, already pinged
+twice (several hours apart, no reply yet as of this handoff).
+
+**Pull request 1838 (#1529, security tier) - blocked, logged for Ben, do not chase yourself.**
+The lane's fix itself looks fine - its checks failed twice, but both times on the exact same
+already-flaky test in the chat window (unrelated to this fix), which I confirmed also fails on
+its own on the main line of the project with no one's changes involved. I logged this for Ben
+with a recommendation to treat it as noise and move ahead, and pinged him twice (several hours
+apart). No reply yet as of this handoff. Do not try the check a third time or make this call
+yourself - it's a sign-in and permissions change, so it needs his sign-off either way, and the
+open question (is this really unrelated flakiness) is his to rule on.
+
+**Pane layout:** Builders tab (`w1:t2P`) has two lanes: `pr1529-composed-dispatch` (pane w1:pKX,
+pull request 1838, idle, correctly waiting) and `pr1654-live-proof` (pane w1:pKT, idle, correctly
+waiting). No QA tab currently open. Nothing needs rebalancing.
+
+Nothing else is queued for this run. The only two open items are both waiting on the same person
+for two different questions - the successor's job is mostly to keep watching for his replies and
+act promptly once they land, not to start new work.
