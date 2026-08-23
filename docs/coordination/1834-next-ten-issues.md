@@ -1996,3 +1996,17 @@ recent writes. The exact #1874 runner group was stopped at its password prompt a
 authoritative `DONE rc=0`; its owner was instructed to proceed with rebase/push, induced live
 recovery proof, fresh Opus security QA, and wrap-up. #1501 and #1105 QA lanes remain active.
 [pane w1:pNF]
+
+## Update - 2026-08-23, #1501 QA verdict posted
+
+Independent QA posted a durable `NOT MERGE-READY` verdict on PR #1878: review of HEAD
+`868d5230279d3795ea7732595945f298a80e1e52` found no code or hard-invariant findings, exact
+remeasurement `31 -> 0`, focused checks green, and live proof present. The sole blocker is the
+pending GitHub `Verify foundation and app` job; QA did not run a duplicate local full gate. [pane
+w1:pNX]
+
+## Update - 2026-08-23, #1874 recovery proof active
+
+#1874's isolated gate is `DONE rc=0`; its owner is now running the required induced live recovery
+proof before rebase/push and fresh Opus security QA. #1335 is active on its restarted gate, and
+#899 remains active with a non-terminal upgrade-check warning. [pane w1:pNF]
