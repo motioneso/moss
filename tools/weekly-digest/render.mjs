@@ -230,6 +230,8 @@ function stamp(agentContent, archiveDir, fridayIso) {
   const previous = existsSync(archiveDir)
     ? readdirSync(archiveDir, { withFileTypes: true })
         .filter((entry) => entry.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(entry.name))
+        // Skip this week's own folder, so republishing a Friday keeps its issue number.
+        .filter((entry) => entry.name !== fridayIso)
         .map((entry) => {
           const meta = join(archiveDir, entry.name, "content.json");
           return existsSync(meta) ? (JSON.parse(readFileSync(meta, "utf8")).issue ?? 0) : 0;
