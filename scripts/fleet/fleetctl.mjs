@@ -44,6 +44,7 @@ const STATUS_LABELS = {
 
 const INT_FIELDS = new Set(["pr", "relays", "qa_rounds"]);
 const INCREMENT_FIELDS = new Set(["relays", "qa_rounds"]);
+const BOOL_FIELDS = new Set(["paused"]);
 const SETTABLE_FIELDS = new Set([
   "spec",
   "tier",
@@ -54,7 +55,12 @@ const SETTABLE_FIELDS = new Set([
   "agent",
   "relays",
   "qa_rounds",
-  "blocked_reason"
+  "blocked_reason",
+  "paused",
+  "pausedAt",
+  "pausedBy",
+  "question",
+  "questionAskedAt"
 ]);
 
 class CliError extends Error {
@@ -166,6 +172,11 @@ function cmdAdd(argv) {
     relays: 0,
     qa_rounds: 0,
     blocked_reason: null,
+    paused: false,
+    pausedAt: null,
+    pausedBy: null,
+    question: null,
+    questionAskedAt: null,
     updated_at: new Date().toISOString()
   };
   writeRecord(record);
@@ -191,6 +202,11 @@ function cmdSet(argv) {
         throw validationError(`"+1" is only valid for relays and qa_rounds, not ${field}`);
       }
       value = (record[field] ?? 0) + 1;
+    } else if (BOOL_FIELDS.has(field)) {
+      if (rawValue !== "true" && rawValue !== "false") {
+        throw validationError(`${field} must be true or false; got "${rawValue}"`);
+      }
+      value = rawValue === "true";
     } else if (rawValue === "null" || rawValue === "") {
       value = null;
     } else if (INT_FIELDS.has(field)) {
