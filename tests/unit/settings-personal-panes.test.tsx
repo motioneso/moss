@@ -39,15 +39,32 @@ describe("ProfilePane merged Account & preferences", () => {
     expect(html).toContain("Account &amp; preferences");
     expect(html).toContain("Quiet hours");
     expect(html).toContain("Location");
-    expect(html).toContain("Weather location");
+    expect(html).toContain(">Weather<");
+    expect(html).not.toContain("Weather location");
+    expect(html).not.toContain(">Temperature<");
     expect(html).toContain(
       "Search for a place to use instead of approximate timezone-based detection."
     );
-    expect(html).toContain("Temperature");
     expect(html).toContain(">Member<");
     expect(html).not.toContain(">Active<");
     expect(html).not.toContain(">Role<");
     expect(html).not.toContain("Auth provider configuration");
+  });
+
+  it("shows only the active unit letter and a state-matching accessible name", async () => {
+    const metricHtml = await renderProfilePane(undefined, "metric");
+    expect(metricHtml).toContain('aria-label="Temperature units: Celsius"');
+    expect(metricHtml).not.toContain('aria-label="Temperature units: Fahrenheit"');
+    const metricSwitch = metricHtml.slice(metricHtml.indexOf("jds-switch"));
+    expect(metricSwitch.slice(0, metricSwitch.indexOf("</label>"))).toContain(">C<");
+    expect(metricSwitch.slice(0, metricSwitch.indexOf("</label>"))).not.toContain(">F<");
+
+    const imperialHtml = await renderProfilePane(undefined, "imperial");
+    expect(imperialHtml).toContain('aria-label="Temperature units: Fahrenheit"');
+    expect(imperialHtml).not.toContain('aria-label="Temperature units: Celsius"');
+    const imperialSwitch = imperialHtml.slice(imperialHtml.indexOf("jds-switch"));
+    expect(imperialSwitch.slice(0, imperialSwitch.indexOf("</label>"))).toContain(">F<");
+    expect(imperialSwitch.slice(0, imperialSwitch.indexOf("</label>"))).not.toContain(">C<");
   });
 
   it("reflects a primed weather location override in the current-location row", async () => {
@@ -79,7 +96,8 @@ describe("ProfilePane merged Account & preferences", () => {
 async function renderProfilePane(
   weatherLocation: { location: { label: string; lat: number; lon: number } | null } = {
     location: null
-  }
+  },
+  weatherUnit: "metric" | "imperial" = "metric"
 ): Promise<string> {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const { queryKeys } = await import("../../apps/web/src/api/query-keys.js");
@@ -90,7 +108,7 @@ async function renderProfilePane(
     quietHours: { enabled: false, start: "22:00", end: "07:00", timezone: null }
   });
   client.setQueryData(queryKeys.weather.location, weatherLocation);
-  client.setQueryData(queryKeys.weather.unit, { unit: "metric" });
+  client.setQueryData(queryKeys.weather.unit, { unit: weatherUnit });
   const { FeedbackProvider } = await import("../../apps/web/src/settings/settings-feedback.js");
   const { ProfilePane } = await import("../../apps/web/src/settings/settings-personal-panes.js");
   return renderToString(

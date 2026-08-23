@@ -333,7 +333,7 @@ export function ProfilePane({ me }: PaneProps) {
       </Group>
 
       <Group
-        title="Weather location"
+        title="Weather"
         desc="Search for a place to use instead of approximate timezone-based detection."
       >
         <Field
@@ -403,17 +403,15 @@ export function ProfilePane({ me }: PaneProps) {
             </div>
           }
         />
-      </Group>
-
-      <Group title="Temperature">
         <Row
           name="Use Fahrenheit"
           desc={`Weather temperatures are shown in ${weatherUnit === "imperial" ? "Fahrenheit" : "Celsius"}.`}
           control={
             <Switch
-              ariaLabel="Use Fahrenheit"
+              ariaLabel={`Temperature units: ${weatherUnit === "imperial" ? "Fahrenheit" : "Celsius"}`}
               checked={weatherUnit === "imperial"}
               disabled={weatherUnitQuery.isLoading || weatherUnitMutation.isPending}
+              label={weatherUnit === "imperial" ? "F" : "C"}
               onChange={(enabled) => weatherUnitMutation.mutate(enabled ? "imperial" : "metric")}
             />
           }
