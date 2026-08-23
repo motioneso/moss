@@ -29,7 +29,9 @@ function manifestWithFirstPartyTool(
   };
 }
 
-async function callWithThrow(thrown: unknown): Promise<Awaited<ReturnType<AssistantToolGateway["callTool"]>>> {
+async function callWithThrow(
+  thrown: unknown
+): Promise<Awaited<ReturnType<AssistantToolGateway["callTool"]>>> {
   const tokens = new SessionTokenRegistry();
   const gateway = new AssistantToolGateway({
     resolveActiveModules: async () => [
@@ -57,7 +59,10 @@ describe("first-party tool dependency-failure classification (#1883)", () => {
       cause: Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNREFUSED" })
     });
     const result = await callWithThrow(thrown);
-    expect(result).toEqual({ ok: false, error: `Tool ${TOOL_NAME} failed (upstream_connection_refused)` });
+    expect(result).toEqual({
+      ok: false,
+      error: `Tool ${TOOL_NAME} failed (upstream_connection_refused)`
+    });
   });
 
   it("classifies an HttpError by statusCode", async () => {

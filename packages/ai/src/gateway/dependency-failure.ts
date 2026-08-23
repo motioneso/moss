@@ -7,7 +7,13 @@ export type ToolDependencyCause =
   | "upstream_http_error";
 
 const CONNECTION_REFUSED_CODES = new Set(["ECONNREFUSED"]);
-const UNREACHABLE_CODES = new Set(["ECONNRESET", "ENOTFOUND", "EAI_AGAIN", "EPIPE", "EHOSTUNREACH"]);
+const UNREACHABLE_CODES = new Set([
+  "ECONNRESET",
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "EPIPE",
+  "EHOSTUNREACH"
+]);
 const TIMEOUT_CODES = new Set([
   "ETIMEDOUT",
   "UND_ERR_CONNECT_TIMEOUT",
@@ -38,9 +44,11 @@ function classifyBrandedFields(fields: SafeErrorFields): ToolDependencyCause | n
         ? fields.status
         : undefined;
 
-  if (code !== undefined && CONNECTION_REFUSED_CODES.has(code)) return "upstream_connection_refused";
+  if (code !== undefined && CONNECTION_REFUSED_CODES.has(code))
+    return "upstream_connection_refused";
   if (code !== undefined && UNREACHABLE_CODES.has(code)) return "upstream_unreachable";
-  if (name === "AbortError" || (code !== undefined && TIMEOUT_CODES.has(code))) return "upstream_timeout";
+  if (name === "AbortError" || (code !== undefined && TIMEOUT_CODES.has(code)))
+    return "upstream_timeout";
   if (status !== undefined && status >= 400) return "upstream_http_error";
   return null;
 }

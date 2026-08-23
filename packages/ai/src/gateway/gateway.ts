@@ -657,7 +657,9 @@ export class AssistantToolGateway {
       return {
         response: {
           ok: false,
-          error: cause ? `Tool ${found.dto.name} failed (${cause})` : `Tool ${found.dto.name} failed`
+          error: cause
+            ? `Tool ${found.dto.name} failed (${cause})`
+            : `Tool ${found.dto.name} failed`
         },
         moduleReportedErrorClass: null
       };

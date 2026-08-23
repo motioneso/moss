@@ -6,10 +6,9 @@ Task issue: #1883. Spec: docs/superpowers/specs/2026-08-23-1883-vault-search-mcp
 ## Seams (file:line citations)
 
 - Generic swallow point: `packages/ai/src/gateway/gateway.ts:635-647` `runHandler` catch-all —
-  returns `{ ok:false, error: \`Tool ${found.dto.name} failed\` }` for every handler throw, no
-  cause detail, by design for #1251 hostile-throw safety. Protected by
-  `tests/unit/mcp-gateway-recovery.test.ts:199-300`, which asserts a hostile `Proxy` thrown by a
-  handler is NEVER inspected (`trapCalls` must stay `0`).
+  returns `{ ok:false, error: \`Tool ${found.dto.name} failed\` }`for every handler throw, no
+cause detail, by design for #1251 hostile-throw safety. Protected by`tests/unit/mcp-gateway-recovery.test.ts:199-300`, which asserts a hostile `Proxy` thrown by a
+handler is NEVER inspected (`trapCalls`must stay`0`).
 - Existing trust boundary to gate on: `packages/module-registry/src/index.ts:2143-2149`
   `markBuiltInManifestTrusted` marks every built-in module's tools `isExternal: false` at load
   time. Tools constructed directly in tests (as in the Proxy safety test) leave `isExternal`
@@ -19,7 +18,7 @@ Task issue: #1883. Spec: docs/superpowers/specs/2026-08-23-1883-vault-search-mcp
   `isExternal: false` at runtime — description: "Search the user's own ingested notes (Obsidian
   vault) by meaning"), execute at `packages/notes/src/tools.ts:34-62`, which calls
   `MemoryRetriever.retrieve` (`packages/memory/src/retrieval.ts:12-20`, default `sourceKind:
-  "vault"`) → an embedding provider (`packages/memory/src/local-embedding-provider.ts`, model
+"vault"`) → an embedding provider (`packages/memory/src/local-embedding-provider.ts`, model
   fetch / local worker) and `MemoryRepository.vectorSearch` (DB).
 - Existing safe-classification precedent for the same problem shape (network / timeout / HTTP
   status from a first-party dependency call), already reviewed and shipped:
@@ -49,12 +48,12 @@ export function classifyToolDependencyFailure(error: unknown): ToolDependencyCau
 Behavior (mirrors `classifyLiveReadFailure`'s safe-inspection pattern):
 
 - Caller-gated: only ever called on a throw from a tool where `isExternal === false` (first-party
-  module code). That gate establishes trust in the *tool*, not in the *shape of what it throws* —
+  module code). That gate establishes trust in the _tool_, not in the _shape of what it throws_ —
   a first-party dependency (e.g. an embedding library) can still surface a hostile-shaped value
   (a `Proxy`, a getter that throws or returns garbage, a `cause` chain that is itself hostile).
   **The classifier must be safe against that regardless of the gate.**
 - **Brand-check before touching anything — this is the actual fix for the coordinator's second
-  fork.** A `try/catch` around a property read still *invokes* a Proxy's `get`/`getPrototypeOf`
+  fork.** A `try/catch` around a property read still _invokes_ a Proxy's `get`/`getPrototypeOf`
   trap before the throw is caught — that increments `trapCalls`, which the hostile-throw test
   asserts stays at `0`. Catching the throw is not enough; the trap call itself is the violation.
   The fix is to never perform a property read, `instanceof` check, or coercion on any value until
@@ -71,7 +70,7 @@ Behavior (mirrors `classifyLiveReadFailure`'s safe-inspection pattern):
     on the cause value: `isNativeError(cause)`. If false, treat the cause as absent — do not read
     `.code`/`.name` off it. If true, read `cause.code`/`cause.name` as in step 2.
   - The whole function is still additionally wrapped in one outer `try { ... } catch { return
-    null; }` as a second line of defense (belt-and-braces for any Node/V8 edge case), but the
+null; }` as a second line of defense (belt-and-braces for any Node/V8 edge case), but the
     brand check is what actually keeps trap calls at zero — the try/catch alone does not.
 - Reads only `.code`, `.name`, `.cause.code`, `.cause.name`, `.statusCode`/`.status`, each gated by
   its own `isNativeError` brand check per above — a closed set of short symbolic fields. Never
@@ -83,7 +82,7 @@ Behavior (mirrors `classifyLiveReadFailure`'s safe-inspection pattern):
 - `code`/`cause.code` in `[ECONNRESET, ENOTFOUND, EAI_AGAIN, EPIPE, EHOSTUNREACH]` →
   `upstream_unreachable`
 - `name`/`cause.name` `"AbortError"`, or `code`/`cause.code` in `[ETIMEDOUT,
-  UND_ERR_CONNECT_TIMEOUT, UND_ERR_HEADERS_TIMEOUT, UND_ERR_BODY_TIMEOUT]` → `upstream_timeout`
+UND_ERR_CONNECT_TIMEOUT, UND_ERR_HEADERS_TIMEOUT, UND_ERR_BODY_TIMEOUT]` → `upstream_timeout`
 - `statusCode`/`status` numeric `>= 400` → `upstream_http_error`
 - else, or on any exception during inspection → `null` (no classification; caller keeps today's
   generic message unchanged)
@@ -91,12 +90,12 @@ Behavior (mirrors `classifyLiveReadFailure`'s safe-inspection pattern):
 `gateway.ts` `runHandler` catch (line 635) changes:
 
 - Gate strictly on `found.tool.isExternal === false`. This gate decides whether classification is
-  *attempted at all* — it does not change how the classifier or the log line inspects the thrown
+  _attempted at all_ — it does not change how the classifier or the log line inspects the thrown
   value. Both remain fully guarded (see below) so a first-party tool that throws a hostile-shaped
   value degrades to today's generic message, exactly like an ungated tool would.
 - When gated: call `classifyToolDependencyFailure(error)` (internally total/guarded, per above —
   never throws). If non-null, the response error becomes `` `Tool ${found.dto.name} failed
-  (${cause})` ``; if null, unchanged `` `Tool ${found.dto.name} failed` ``.
+(${cause})` ``; if null, unchanged `` `Tool ${found.dto.name} failed` ``.
 - When gated: add to the existing `tool_handler_threw` log call a `cause` field (nullable) and an
   `errorName` field, both derived from the SAME `isNativeError`-gated inspection the classifier
   does — never a bare `error instanceof Error` at the call site. `instanceof` walks the prototype
@@ -116,14 +115,14 @@ New file `tests/unit/mcp-gateway-dependency-errors.test.ts`, gateway constructed
 `tests/unit/mcp-gateway-units.test.ts:753` (`isExternal: false` tool), `execute` throwing:
 
 - `Object.assign(new TypeError("fetch failed"), { cause: Object.assign(new Error(), { code:
-  "ECONNREFUSED" }) })` → expect `Tool <name> failed (upstream_connection_refused)`
+"ECONNREFUSED" }) })` → expect `Tool <name> failed (upstream_connection_refused)`
 - `new HttpError(503, "...")` → expect `Tool <name> failed (upstream_http_error)`
 - `Object.assign(new Error(), { name: "AbortError" })` → expect `Tool <name> failed
-  (upstream_timeout)`
+(upstream_timeout)`
 - a plain `new Error("boom")` (unclassifiable) → expect the UNCHANGED generic `Tool <name> failed`
   (no cause, no message leak)
 - Assert `JSON.stringify(response)` never contains the literal thrown message text (`"fetch
-  failed"`, `"boom"`) — locks the "no raw exception dump" requirement.
+failed"`, `"boom"`) — locks the "no raw exception dump" requirement.
 
 **Hostile-shape cases, same `isExternal: false` tool** (this is the coordinator-flagged fork: a
 first-party tool can still throw a non-first-party-shaped value):
@@ -132,9 +131,9 @@ first-party tool can still throw a non-first-party-shaped value):
   `getOwnPropertyDescriptor`, `getPrototypeOf`, `ownKeys` all throw and increment a `trapCalls`
   counter) thrown directly from the `isExternal: false` tool's `execute`. `isNativeError` on this
   value must be `false` without invoking any trap. Expect the UNCHANGED generic `Tool <name>
-  failed`, `trapCalls === 0`, and no rethrow/crash.
+failed`, `trapCalls === 0`, and no rethrow/crash.
 - A real `Error` whose `cause` is that same hostile Proxy (`Object.assign(new Error("boom"), {
-  cause: hostileProxy })`). The top-level value passes `isNativeError` (it's a real `Error`, so
+cause: hostileProxy })`). The top-level value passes `isNativeError` (it's a real `Error`, so
   reading `.cause` off it is safe), but `isNativeError(cause)` must be `false` for the Proxy cause,
   and nothing on the cause may be read. Expect the UNCHANGED generic `Tool <name> failed`,
   `trapCalls === 0`, and `JSON.stringify(response)` contains neither `"boom"` nor the Proxy's
