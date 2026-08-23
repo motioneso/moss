@@ -170,6 +170,18 @@ jobs:
           fi
           exit "$status"
 
+      # #1872: the default e2e config above serves a plain `vite dev` server, which never
+      # registers the Service Worker (registration is gated to production builds). This is
+      # the only path that exercises the real, registered worker in a browser.
+      - name: Run Service Worker regression test
+        run: |
+          status=0
+          timeout --verbose --signal=TERM 5m pnpm test:sw || status=$?
+          if [ "$status" -eq 124 ]; then
+            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=playwright-sw budget=5m issue=#1872"
+          fi
+          exit "$status"
+
       - name: Stop database
         if: always()
         run: docker compose -f infra/docker-compose.yml down -v

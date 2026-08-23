@@ -71,6 +71,13 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (request.method === "GET") {
-    event.respondWith(caches.match(request).then((cached) => cached ?? fetchWithRecovery(request)));
+    // The cache lookup itself can reject (storage full/corrupted, restricted private-browsing
+    // mode) — that must fall through to the network like a cache miss, not reject respondWith().
+    event.respondWith(
+      caches
+        .match(request)
+        .then((cached) => cached ?? fetchWithRecovery(request))
+        .catch(() => fetchWithRecovery(request))
+    );
   }
 });

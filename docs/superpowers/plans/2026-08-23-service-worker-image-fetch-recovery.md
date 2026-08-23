@@ -67,7 +67,7 @@ cached — the next render re-fetches through the retry path.
 Steelmanned alternative, rejected: **stop intercepting cross-origin GETs entirely** (bail out
 before `respondWith`, let the browser fetch natively). Genuinely simpler, and it would silence the
 console error for CDN images — the strongest argument for it is that the SW adds zero value for
-requests it will never cache. Rejected because (a) the spec locks covering *same-origin and*
+requests it will never cache. Rejected because (a) the spec locks covering _same-origin and_
 cross-origin rejected uncached fetches, and same-origin GETs would still flow through the broken
 branch; (b) it provides no recovery at all — a transient blip still leaves a permanently broken
 `<img>`, failing the issue's "recover without a hard refresh" criterion, since the components have
@@ -106,26 +106,26 @@ Test cases — each stated as behavior plus why it fails against the broken impl
 
 1. **Uncached cross-origin image GET, fetch always rejects** (`TypeError: NetworkError…`, the
    exact browser message): the promise passed to `respondWith` resolves (to an error Response) —
-   it must not reject. *Red today: current code passes the bare rejection straight through; this
-   is the issue's repro.*
+   it must not reject. _Red today: current code passes the bare rejection straight through; this
+   is the issue's repro._
 2. **Uncached image GET, fetch rejects once then resolves**: `respondWith`'s promise resolves
-   with the successful response, and the fake fetch was called more than once. *Red today: no
-   retry exists, promise rejects on the first failure.*
-3. **Uncached same-origin GET, fetch rejects**: promise resolves, never rejects. *Red today —
+   with the successful response, and the fake fetch was called more than once. _Red today: no
+   retry exists, promise rejects on the first failure._
+3. **Uncached same-origin GET, fetch rejects**: promise resolves, never rejects. _Red today —
    and it pins the spec's same-origin requirement so a "just stop intercepting cross-origin"
-   regression can't sneak back in.*
-4. **Cached request**: served from cache, fake network fetch called zero times. *Guards existing
-   behavior; goes red if the fix accidentally bypasses the cache.*
+   regression can't sneak back in._
+4. **Cached request**: served from cache, fake network fetch called zero times. _Guards existing
+   behavior; goes red if the fix accidentally bypasses the cache._
 5. **Navigate-mode request whose fetch rejects**: resolves with the cached `/offline.html`
-   entry. *Guards the offline app-shell invariant; red if Task 1 leaks into the navigate branch.*
+   entry. _Guards the offline app-shell invariant; red if Task 1 leaks into the navigate branch._
 
 Retry delays: the test runs with the real 250/1000 ms constants (worst case ~1.3 s in case 1) —
 acceptable for one unit file; no timer mocking, no flake surface.
 
 ## Task 3 — agent-runnable browser regression check (registered SW)
 
-The issue's first acceptance criterion requires the failure reproduced *through the registered
-Service Worker* in a browser. Because registration is PROD-gated (seams check), this cannot ride
+The issue's first acceptance criterion requires the failure reproduced _through the registered
+Service Worker_ in a browser. Because registration is PROD-gated (seams check), this cannot ride
 the default e2e config.
 
 - New config `playwright.sw.config.ts` (root, alongside the existing two): testDir
@@ -142,10 +142,10 @@ the default e2e config.
      proves nothing.
   2. Inject an `<img>` pointing at the helper's flaky path. Assert the image reaches
      `complete && naturalWidth > 0` without any page reload (the SW's bounded retry absorbed the
-     transient failure). *Red today: first fetch rejects, respondWith rejects, image stays
-     broken.*
+     transient failure). _Red today: first fetch rejects, respondWith rejects, image stays
+     broken._
   3. Throughout, collect console messages; assert none contains `respondWith` /
-     `FetchEvent … network error` rejection text. *Red today on the same trigger.*
+     `FetchEvent … network error` rejection text. _Red today on the same trigger._
 - Run command (also the command a future agent runs):
   `pnpm exec playwright test --config playwright.sw.config.ts`.
 
