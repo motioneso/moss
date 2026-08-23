@@ -1425,7 +1425,7 @@ Outgoing coordinator identity: pane w1:pN1, agent name `coordinator`, session
 
 Codex successor adopted the live fleet and closed outgoing pane w1:pN1. The sole coordinator
 lock is now agent name `coordinator`, pane label `Coordinator`, session
-01a02cde-59a6-7900-99d9-aa65f8989e49. Lane `pr1500-css-forms-2` remains in flight. Plan
+01a02d06-70df-7420-bf04-beb05607d454. Lane `pr1500-css-forms-2` remains in flight. Plan
 approvals for this run continue to require a Fable-model review agent.
 
 ## Investigation added - 2026-08-23, issue #1872
