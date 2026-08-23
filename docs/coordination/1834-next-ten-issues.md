@@ -2245,3 +2245,18 @@ run pending #1246.
 
 Mid-doing: supervising #1105 fresh QA and the remaining build/CI lanes; no merge performed in
 this watchdog recovery. [pane w1:pP2]
+
+## Update - 2026-08-23, #1105 QA RED and remediation returned to owner
+
+Fresh routine QA for PR #1877 at head `407e01d00ac14d7287506b639cbd70dc3447d4e8` posted a durable
+RED verdict (`https://github.com/motioneso/moss/pull/1877#issuecomment-5385091177`). It found two
+blocking issues in `tests/uat/specs/1089-1090-chat-drawer-private.uat.spec.ts`: screenshot capture
+violates the repository standard, and the initial-empty-array `expect.poll` can pass before a
+delayed POST arrives. The review also recorded preflight success, invariant success, and the
+existing live proof; CI remains pending separately.
+
+The findings were delivered and acknowledged by the retained #1105 owner
+`codex-1105-build`, which is now removing screenshots, adding a bounded observation window, and
+rerunning the scoped UAT plus isolated gate before updating PR #1877 and requesting fresh QA.
+The review-only QA pane and worktree were reaped after its verdict. PR #1877 remains unmergeable;
+no Ben-only decision is open. [pane w1:pP2]
