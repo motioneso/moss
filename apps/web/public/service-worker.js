@@ -16,7 +16,7 @@ async function fetchWithRecovery(request) {
   for (;;) {
     try {
       return await fetch(request);
-    } catch (error) {
+    } catch {
       if (attempt >= delays.length) {
         return Response.error();
       }

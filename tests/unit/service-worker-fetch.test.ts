@@ -89,10 +89,7 @@ function loadServiceWorker(fetchImpl: (request: FakeRequest) => Promise<FakeResp
   return { listeners, cacheStore };
 }
 
-function dispatchFetch(
-  sandbox: Sandbox,
-  request: FakeRequest
-): Promise<FakeResponse> {
+function dispatchFetch(sandbox: Sandbox, request: FakeRequest): Promise<FakeResponse> {
   let capturedPromise: Promise<FakeResponse> | undefined;
   const event = {
     request,
