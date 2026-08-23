@@ -2465,3 +2465,12 @@ The durable verdict is posted; the QA pane was closed after matching session
 
 The owner was sent the exact blocking finding and acknowledged the remediation request. Fresh
 QA and green required CI are required after the correction; no merge is authorized. [pane w1:pP2]
+
+## Update - 2026-08-23, #1877 final QA clean; CI pending
+
+Final routine QA for PR #1877 at rebased head `cc308e616e33a0c81992ff9b1603cdc374e2f0fb`
+posted a durable RED only because the required foundation/app check remains pending. Review found
+no blocking findings; the screenshot-free proof, bounded delayed-POST evidence, invariants, and
+exit criteria were accepted. The QA pane was closed after matching session
+`01a02def-66a5-7b03-ab5e-11429bd7ccf0`, and its clean worktree was removed. No merge is
+authorized until CI is green. [pane w1:pP2]
