@@ -58,30 +58,32 @@ title/body and assigns the risk tier (the coordinate skill's mechanical triggers
 secrets, migrations = security; shared tables, exports, payloads = sensitive; else routine —
 in doubt, higher). Then `fleetctl add` — at the RIGHT starting state, not always `queued`. Started-but-unfinished
 work is adopted, not skipped (Ben's ruling, 2026-08-23):
+
 - Open PR exists → record enters at `pr-open` (daemon drives it through CI, QA, merge).
 - Branch exists but no PR → record enters `queued` with the branch noted; dispatch spawns the
   agent with a resume brief ("this branch has prior work — read its log, finish, open the PR")
   and reuses the existing worktree if present.
 - Nothing started → `queued`, fresh.
-The only hands-off case: a lane whose agent is LIVE right now (its agent name appears in
-`herdr agent list`) — that one is actively being worked, adopting it would double-drive it; log
-and re-check next tick. When the daytime run winds down and its agents exit, the daemon picks
-those lanes up automatically on the next tick.
+  The only hands-off case: a lane whose agent is LIVE right now (its agent name appears in
+  `herdr agent list`) — that one is actively being worked, adopting it would double-drive it; log
+  and re-check next tick. When the daytime run winds down and its agents exit, the daemon picks
+  those lanes up automatically on the next tick.
 
-| status | tick action |
-| ------ | ----------- |
-| `queued` | if live lanes < cap (3): create worktree off origin/main, generate brief from template, spawn build agent via herdr, set `building` |
+| status     | tick action                                                                                                                                                                                                                                                   |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `queued`   | if live lanes < cap (3): create worktree off origin/main, generate brief from template, spawn build agent via herdr, set `building`                                                                                                                           |
 | `building` | nothing (agent works; it sets `pr-open` or `blocked` itself). If the agent is gone from `herdr agent list` and the record hasn't moved in 30 min: judgment call — restart with same brief (fresh session, restart-over-rescue) once; second death = `blocked` |
-| `pr-open` | check CI via `gh pr checks`. Green: spawn QA agent (round = qa_rounds+1, incremental), set `qa`. Red: post the failing check names as a PR comment for the lane agent, set `ci-red` |
-| `ci-red` | if the same check fails twice: `blocked` (stop-the-line, file issue). Else wait for lane agent to push a fix (record goes back to `pr-open` on new head) |
-| `qa` | nothing (QA agent sets `qa-green` or `qa-red` + posts verdict on the PR) |
-| `qa-red` | if qa_rounds >= 2: judgment call — one-shot arbiter (different model) reads QA verdict + build agent's cited fixes, rules merge/park; park = `blocked`. Else notify lane agent to fix (cited SHAs required), back to `building` |
-| `qa-green` | tier routine/sensitive: enable `gh pr merge --squash --auto`, set `merging`. Tier security: `needs-ben` + `blocked` (his sign-off gate is untouched) |
-| `merging` | when PR reports merged: run `scripts/worktree-reapable.sh`, reap worktree + pane on REAPABLE, set `done`, write teardown line to log |
-| `blocked` | ensure a `needs-ben` entry exists with `blocked_reason`; otherwise skip (parked lanes cost nothing) |
-| `done` | skip |
+| `pr-open`  | check CI via `gh pr checks`. Green: spawn QA agent (round = qa_rounds+1, incremental), set `qa`. Red: post the failing check names as a PR comment for the lane agent, set `ci-red`                                                                           |
+| `ci-red`   | if the same check fails twice: `blocked` (stop-the-line, file issue). Else wait for lane agent to push a fix (record goes back to `pr-open` on new head)                                                                                                      |
+| `qa`       | nothing (QA agent sets `qa-green` or `qa-red` + posts verdict on the PR)                                                                                                                                                                                      |
+| `qa-red`   | if qa_rounds >= 2: judgment call — one-shot arbiter (different model) reads QA verdict + build agent's cited fixes, rules merge/park; park = `blocked`. Else notify lane agent to fix (cited SHAs required), back to `building`                               |
+| `qa-green` | tier routine/sensitive: enable `gh pr merge --squash --auto`, set `merging`. Tier security: `needs-ben` + `blocked` (his sign-off gate is untouched)                                                                                                          |
+| `merging`  | when PR reports merged: run `scripts/worktree-reapable.sh`, reap worktree + pane on REAPABLE, set `done`, write teardown line to log                                                                                                                          |
+| `blocked`  | ensure a `needs-ben` entry exists with `blocked_reason`; otherwise skip (parked lanes cost nothing)                                                                                                                                                           |
+| `done`     | skip                                                                                                                                                                                                                                                          |
 
 Cross-cutting rails, checked first every tick:
+
 - `STOP` file → exit. Spawn budget: max 12 agent spawns per calendar night → then queue only.
 - Live-path gate unchanged: a user-facing PR without a live-proof comment cannot leave `qa-green`
   (the tick checks for the proof comment before enabling auto-merge; missing → `blocked`,
@@ -95,10 +97,11 @@ Cross-cutting rails, checked first every tick:
 
 `claude -p` one-shot, plain prompt, facts only, answer forced to a single line the tick parses.
 Two calls exist in v1:
+
 1. **Dead-lane triage:** "agent died mid-build, here is its last log tail + record — restart
    fresh or park for Ben?" (max once per lane).
 2. **QA arbitration at round-2 red:** different model from the QA agent, binding one-shot ruling.
-Anything else is `needs-ben`. Rulings are logged verbatim to `log.jsonl`.
+   Anything else is `needs-ben`. Rulings are logged verbatim to `log.jsonl`.
 
 ## Deputy mode — Fable stands in when Ben can't answer
 
