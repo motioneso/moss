@@ -2358,3 +2358,17 @@ is an extra excluded TSX blind spot beyond the plan's deliberate exclusions. Its
 `codex-1335-build` is active in pane `w1:pNR` and is fixing the finding; fresh QA is required
 after a corrected push. PRs #1878 and #1879 have clean QA but remain gated on required CI.
 No merge has been performed in this continuation. [pane w1:pP2]
+
+## Update - 2026-08-23, #1879 merged after green CI and QA
+
+PR #1879 (#899) reached required CI green after the fresh routine QA review had already
+confirmed no blocking findings, no invariant risks, and no live-path requirement for the
+test-only diff. After re-confirming the coordinator session authority against the live pane
+(`01a02dad-7b3a-7b82-8d54-aaf556954e08`), the PR was squash-merged as
+`dc8cc40b2a7c92fb5d62c99e90ab2408f98bc5dd`; `origin/main` now contains that commit. Issue #899
+was closed as completed. The consumed build pane was closed only after a fresh session match
+(`01a02d57-0c63-71f3-8455-dda7f09e8c76`), and its clean worktree and local branch were removed.
+
+The #1877 fresh QA lane remains active in `w1:pP8`; #1878 and #1880 remain CI-pending, with
+#1335's owner still correcting its extra TSX exclusion. One routine merge has occurred since
+the last relay; no relay trigger has fired. [pane w1:pP2]
