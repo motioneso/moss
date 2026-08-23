@@ -1916,3 +1916,10 @@ exit-code, evidence-log, and screenshot fields, so it is not accepted as durable
 was instructed, with verified delivery, to post a safely quoted follow-up containing the actual
 runner, exact exit code, evidence path, screenshot paths, and bounded assertions before QA or
 wrap-up. [pane w1:pNF]
+
+## Update - 2026-08-23, #1501 live proof corrected
+
+#1501 posted a corrected follow-up on PR #1878 with the literal runner command, exit code `0`,
+evidence log, seven screenshot paths, and bounded real-browser assertions for the existing live
+instance. The live-path gate is now durable; CI remains in progress before independent QA. [pane
+w1:pNN]
