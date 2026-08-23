@@ -19,7 +19,7 @@ durable live-path proof comment.
 
 | Spec | Issue | Tier | Status | Agent name | Pane | Branch | PR |
 | ---- | ----- | ---- | ------ | ---------- | ---- | ------ | -- |
-| `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319-A (concrete child of #1470) | security | plan approved — relaying before build at 72% | `build-1319a-catalog-verify` | `w1:pQ2` | `build/1319a-catalog-verify` | — |
+| `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319-A (concrete child of #1470) | security | plan approved — building | `build-1319a-phase2-b` | `w1:pQ3` | `build/1319a-catalog-verify` | — |
 | `docs/superpowers/specs/2026-08-19-926-food-day-view-components-and-targets.md` | #1737 (concrete child of #926) | routine | closed/Done — Ben verified working in production; lane cancelled/reaped | reaped | — | deleted | — |
 | `docs/superpowers/specs/2026-08-23-1794-release-notes-protected-main.md` | #1794 | sensitive | queued | — | — | — | — |
 | `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | planning/building — diagnosis-first | `build-1883-vault-errors` | `w1:pP0` | `build/1883-vault-mcp-errors` | — |
@@ -113,3 +113,7 @@ None open.
 - Unspawned #1737 verification lane: worktree `~/Jarv1s/.claude/worktrees/1737-food-live` and branch
   `verify/1737-food-live` removed after production verification; it contained only the handoff doc,
   had no PR, tracked changes, or live process.
+- #1319-A planning session `build-1319a-catalog-verify`, Claude session
+  `decd65fd-48f6-42f8-ace6-290f737189f8`, reaped after committing the approved plan/relay handoff
+  and confirming successor `build-1319a-phase2-b` (session
+  `d36ff98a-4ba2-46d0-9582-8dc383f55dc6`) driving on Sonnet in the same worktree/branch.
