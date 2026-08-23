@@ -2072,3 +2072,11 @@ This is a scoped QA correction; the isolated gate and fresh QA remain pending. [
 #1105's corrected UAT path has advanced to a fresh isolated gate, started through the required
 runner at `/tmp/jarv1s-gate/1105_seeded_chat_uat-20260823-004559.log`. The lane is waiting for
 the exact sentinel and return code before updating PR #1877 and requesting fresh QA. [pane w1:pNF]
+
+## Update - 2026-08-23, #1335 stale runner rejected
+
+#1335's gate status remained `RUNNING` but read-only process inspection found no live runner PID,
+no terminal sentinel, and a stale last write. The coordinator rejected this as a completion result
+and delivered a verified instruction to preserve the authorized plan-only diff, restart through
+the required fresh `scripts/run-gate.sh start` path, and consume an exact sentinel before PR work.
+[pane w1:pNF]
