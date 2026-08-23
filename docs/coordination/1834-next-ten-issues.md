@@ -2275,3 +2275,12 @@ head before merge.
 PR #1877 (#1105) remains blocked on the two posted QA findings and its owner is actively fixing
 them. #1335's isolated runner remains genuinely active with no terminal result yet. No Ben-only
 decision is open, so no Ben ping was needed. [pane w1:pP2]
+
+## Update - 2026-08-23, #1501 rebased and fresh QA started
+
+PR #1878 (#1501) was rebased cleanly onto `origin/main` and force-pushed with lease. GitHub now
+reports head `6207eda6d5b5968359e1083ddc1e889bf473a40a`; the branch is two commits ahead and zero
+behind. A fresh routine QA reviewer is active in QA pane `w1:pP4`, agent `qa1878-1501`, session
+`01a02dce-5fff-7891-9b0a-dac4faec57e7`, on Codex GPT-5.6 Luna at high effort. The new CI run is
+still pending; do not merge until QA posts its durable verdict and all required checks are green.
+[pane w1:pP2]
