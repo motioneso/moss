@@ -2713,3 +2713,12 @@ smokes, and image build/publish all passed. The fleet remains empty and coordina
 matches session `01a02e90-46d7-7093-bffd-5e2a4bb029dc`. No new Ben reply has arrived. The only
 remaining blocker is the recorded decision whether to close run 1834 and prepare a fresh
 Ready-queue manifest (recommended) or park on dependency-blocked #1511. [pane w1:pPM]
+
+## Update - 2026-08-23, Fable retains overnight approval authority
+
+Ben corrected the coordinator's escalation: overnight run-scope approval belongs to Fable, so the
+coordinator must not wait on or ask Ben. This matches the standing Fable-review rule already in
+this manifest. The mistaken entry was removed from `docs/coordination/AWAITING-BEN.md`, and the
+rule was saved as a durable coordinator lesson. The fleet remains empty; next action is a Fable
+review of the Ready queue and proposed fresh run scope, with #1511 still dependency-blocked on
+#1246. [pane w1:pPM]
