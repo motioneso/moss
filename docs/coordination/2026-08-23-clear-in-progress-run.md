@@ -78,6 +78,10 @@ hand-merging it.
   binary toggle displays only the active letter, `C` or `F`. It still reuses existing JDS control
   vocabulary and remains isolated to the personal-settings surface and focused test unless the
   approved plan demonstrates a minimal shared-control change is necessary.
+- #1319-A disabled-envelope coverage uses one documented `CreateApiServerOptions`
+  `__testExternalModulesEnabled` seam defaulting to `true`, matching the server's existing
+  test-only override pattern. No environment variable, config key, deployment setting, or
+  production runtime toggle is added; the full-server test covers disabled-safe and default-on.
 
 ## CI waivers
 
