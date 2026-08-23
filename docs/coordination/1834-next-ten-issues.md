@@ -1833,3 +1833,13 @@ commit `647dd7094` is already present. [pane w1:pNF]
 The Fable reviewer returned its ruling and pane `w1:pNW` was closed after the verdict. The
 #1335 lane has applied the authorized plan-only formatting change and is rerunning its full gate;
 no other plan or scope change is in flight. [pane w1:pNF]
+
+## Update - 2026-08-23, gate collision sequenced
+
+#1335's authorized plan-only formatting diff is confirmed whitespace/punctuation-only and its
+fresh isolated gate is running. #899 stopped a gate that reached a private-key password prompt
+without entering or exposing a secret and is restarting with that trigger explicitly unset.
+#1874's fresh gate returned `rc=1`; its owner identified concurrent isolated-gate use of the shared
+Postgres container with #1501 as the collision risk. The owner was instructed to preserve the
+failure evidence, wait for #1501's live gate to exit, then rerun #1874; #1501 is not to be killed.
+[pane w1:pNF]
