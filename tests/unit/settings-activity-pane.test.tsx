@@ -3,6 +3,8 @@ import { renderToString } from "react-dom/server";
 import { act, create } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 
+import type { MeResponse } from "@moss/shared";
+
 const queryOptions = vi.hoisted(() => ({
   current: null as { retry?: boolean; queryKey?: unknown } | null
 }));
@@ -34,11 +36,25 @@ vi.mock("../../apps/web/src/locale/locale-format.js", () => ({
 
 import { ActivityPane } from "../../apps/web/src/settings/settings-activity-pane.js";
 
+const me: MeResponse = {
+  user: {
+    id: "u1",
+    email: "u@example.test",
+    emailVerified: true,
+    name: "U",
+    status: "active",
+    isInstanceAdmin: false,
+    isBootstrapOwner: false,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z"
+  },
+  profilePrefs: { addressed: null },
+  hasPasswordCredential: true
+};
+
 describe("ActivityPane", () => {
   it("shows bounded recovery instead of endless loading or false empty state", () => {
-    const html = renderToString(
-      createElement(ActivityPane, { me: {} as never, onNavigate: () => undefined })
-    );
+    const html = renderToString(createElement(ActivityPane, { me, onNavigate: () => undefined }));
 
     expect(html).toContain("Activity unavailable");
     expect(html).toContain("Try again");
@@ -55,17 +71,13 @@ describe("ActivityPane", () => {
     try {
       let renderer!: ReturnType<typeof create>;
       act(() => {
-        renderer = create(
-          createElement(ActivityPane, { me: {} as never, onNavigate: () => undefined })
-        );
+        renderer = create(createElement(ActivityPane, { me, onNavigate: () => undefined }));
       });
       const firstKey = queryOptions.current?.queryKey;
 
       nowSpy.mockReturnValue(1_700_000_050_000);
       act(() => {
-        renderer.update(
-          createElement(ActivityPane, { me: {} as never, onNavigate: () => undefined })
-        );
+        renderer.update(createElement(ActivityPane, { me, onNavigate: () => undefined }));
       });
       const secondKey = queryOptions.current?.queryKey;
 
