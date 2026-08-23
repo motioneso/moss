@@ -1986,3 +1986,13 @@ The fresh #1335 gate also reports `Password:` before a verdict, matching the inh
 instruction not to enter or expose a secret, to stop only that authorized gate, preserve evidence,
 unset the trigger, and restart the isolated gate before continuing to PR/QA. #899 remains alive
 with a known jsdom canvas warning and no terminal verdict. [pane w1:pNF]
+
+## Update - 2026-08-23, watchdog recovery and #1874 gate green
+
+Fresh Herdr state confirms the coordinator remains the sole `Coordinator`; #1105's build lane is
+done, #899 remains active with a non-terminal upgrade-check warning, and #1335 has successfully
+restarted on fresh gate log `/tmp/jarv1s-gate/1335_tests_tsx_typecheck-20260823-003528.log` with
+recent writes. The exact #1874 runner group was stopped at its password prompt and now reports
+authoritative `DONE rc=0`; its owner was instructed to proceed with rebase/push, induced live
+recovery proof, fresh Opus security QA, and wrap-up. #1501 and #1105 QA lanes remain active.
+[pane w1:pNF]
