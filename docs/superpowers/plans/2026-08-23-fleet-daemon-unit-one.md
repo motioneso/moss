@@ -38,10 +38,12 @@
 ### Task 1: New lane-record fields in fleetctl
 
 **Files:**
+
 - Modify: `scripts/fleet/fleetctl.mjs`
 - Test: `tests/unit/fleetctl.test.ts`
 
 **Interfaces:**
+
 - Produces: lane records carry `paused` (JSON boolean, default `false`), `pausedAt`, `pausedBy`, `question`, `questionAskedAt` (strings or null, default null). All five settable via `fleetctl set`. `paused` accepts only `true` or `false`; anything else is a validation error (exit 1). Setting any of the four string fields to `null` or empty clears it, same as existing fields.
 
 - [ ] **Step 1: Write the failing tests**
@@ -76,7 +78,12 @@ it("paused is a real boolean and rejects anything else", () => {
 
 it("question fields set and clear like other string fields", () => {
   run(["add", "44", "spec=docs/specs/x.md", "tier=routine"]);
-  run(["set", "44", "question=Should we merge PR 90 without live proof?", "questionAskedAt=2026-08-23T01:00:00Z"]);
+  run([
+    "set",
+    "44",
+    "question=Should we merge PR 90 without live proof?",
+    "questionAskedAt=2026-08-23T01:00:00Z"
+  ]);
   let record = JSON.parse(run(["get", "44"]).stdout);
   expect(record.question).toBe("Should we merge PR 90 without live proof?");
   expect(record.questionAskedAt).toBe("2026-08-23T01:00:00Z");
@@ -161,11 +168,13 @@ git commit -m "feat(fleet): lane records carry pause and question fields (#1907)
 ### Task 2: tick.sh reads settings.json, environment still wins
 
 **Files:**
+
 - Modify: `scripts/fleet/tick.sh` (the constants block, roughly lines 22-40)
 - Modify: `scripts/ops/systemd/jarv1s-fleet-tick.service` (comments only)
 - Test: `tests/scripts/test-fleet-tick.sh`
 
 **Interfaces:**
+
 - Consumes: nothing from other tasks.
 - Produces: shell functions `settings_get <jq-path>` (echoes the settings value or empty) and `int_or <value> <fallback>` (echoes the value if it is a whole number, else the fallback). Variables `LANE_CAP`, `SPAWN_BUDGET`, `DEPUTY_WAIT_SECONDS`, `JUDGE_CMD` now resolve env > settings > fallback. Tasks 3 and 6 build on `settings_get`.
 
@@ -268,6 +277,7 @@ BUILD_MODEL="${BUILD_MODEL:-sonnet}"
 (The literal `sonnet` fallback survives Task 2 and is removed in Task 6 — the grep test that forbids it is added there, not here. This keeps each task independently green.)
 
 Two ordering notes for the implementer:
+
 - `SETTINGS_FILE` uses `$STATE_DIR`, so this block must stay BELOW the `STATE_DIR=` line (it already is — you are editing in place).
 - `settings_get` is called before the `[ -d "$TASKS_DIR" ] || exit 0` rail runs; that is fine, it only reads a file that may not exist.
 
@@ -302,10 +312,12 @@ git commit -m "feat(fleet): daemon reads settings.json, environment still wins (
 ### Task 3: Deputy becomes a settings switch; the expiry file goes away
 
 **Files:**
+
 - Modify: `scripts/fleet/tick.sh` (the DEPUTY block, roughly lines 108-120, plus the header comment near the top)
 - Test: `tests/scripts/test-fleet-tick.sh` (rewrite tests 8 and 8b; 8c gets a settings file)
 
 **Interfaces:**
+
 - Consumes: `settings_get` from Task 2.
 - Produces: `DEPUTY_ACTIVE` is 1 only when `FLEET_DEPUTY_ENABLED=true` in the environment or `deputyEnabled` is `true` in settings.json. The `DEPUTY` marker file is dead: present or absent, it changes nothing.
 
@@ -400,11 +412,13 @@ git commit -m "feat(fleet): deputy is a settings switch, expiring DEPUTY file re
 ### Task 4: Per-lane pause, and the brief learns what a pause is
 
 **Files:**
+
 - Modify: `scripts/fleet/tick.sh` (main loop, roughly lines 715-745)
 - Modify: `scripts/fleet/brief-template.md`
 - Test: `tests/scripts/test-fleet-tick.sh`
 
 **Interfaces:**
+
 - Consumes: the `paused` record field from Task 1.
 - Produces: any record with `paused` true is skipped by the whole tick — no dispatch, no dead-lane check, no relay park, no status handler. It still counts toward the live-lane cap when its status is a live one (deliberate: its agent may resume any second, so its slot stays reserved).
 
@@ -491,10 +505,12 @@ git commit -m "feat(fleet): per-lane pause skips the whole tick; brief teaches t
 ### Task 5: Memory floor
 
 **Files:**
+
 - Modify: `scripts/fleet/tick.sh` (helpers block, plus the three spawn sites)
 - Test: `tests/scripts/test-fleet-tick.sh` (including the two run helpers)
 
 **Interfaces:**
+
 - Consumes: `int_or` from Task 2.
 - Produces: `memory_ok` — returns success when MemAvailable is at or above the floor, when the meminfo source is unreadable (fail open: a box where free memory cannot be read should not silently stop the fleet), or when the floor is 0. Reads from `$FLEET_MEMINFO` (default `/proc/meminfo`); floor is `$FLEET_MEMORY_FLOOR_MB` (default 4096).
 
@@ -565,6 +581,7 @@ refuse_spawn_low_memory() { # <issue>
 Gate all three spawn sites, right next to their existing `budget_available` checks:
 
 In `handle_queued`, after the budget check:
+
 ```bash
   if ! memory_ok; then
     refuse_spawn_low_memory "$issue"
@@ -593,10 +610,12 @@ git commit -m "feat(fleet): refuse agent starts below a 4 GB memory floor (#1907
 ### Task 6: A model and effort per kind of work; no model name left in the daemon
 
 **Files:**
+
 - Modify: `scripts/fleet/tick.sh` (`spawn_agent` and its three callers, plus the `BUILD_MODEL` lines from Task 2)
 - Test: `tests/scripts/test-fleet-tick.sh`
 
 **Interfaces:**
+
 - Consumes: `settings_get` (Task 2); the settings shape from the spec's seam table: `buildModels.<tier>.model` and `buildModels.<tier>.effort` for tiers `routine`, `sensitive`, `security`.
 - Produces: `spawn_agent <name> <cwd> <brief> <tier>` — note the NEW fourth argument. Resolution per lane: model is `FLEET_BUILD_MODEL` env if set, else the tier's settings entry, else absent (the spawn omits the model flag and the agent runs on whatever the local CLI is configured to use — that is the fallback, not a hardcoded name). Effort likewise via `FLEET_BUILD_EFFORT` / settings / absent, passed as `--effort <value>`.
 
@@ -678,6 +697,7 @@ spawn_agent() { # <name> <cwd> <brief-path> <tier>
 (Everything marked `...` is unchanged from today. Watch one bash trap: with `set -u`, expanding an empty array as `"${model_args[@]}"` is safe on bash 4.4+, which this box has — do not add workarounds.)
 
 Update the three callers to pass the tier, which each already has or can read from its record:
+
 - `handle_queued`: `spawn_agent "$agent" "$worktree" "$brief" "$tier"` (tier is already a local there).
 - `handle_pr_open` QA spawn: add `local tier`; `tier="$(jq -r '.tier // "routine"' <<<"$record")"`; pass it.
 - `handle_building` restart: same one-line tier read from the record; pass it.
@@ -699,10 +719,12 @@ git commit -m "feat(fleet): model and effort per kind of work; no model name in 
 ### Task 7: The outstanding question reaches the lane record
 
 **Files:**
+
 - Modify: `scripts/fleet/tick.sh` (`ensure_needs_ben`, roughly line 213)
 - Test: `tests/scripts/test-fleet-tick.sh`
 
 **Interfaces:**
+
 - Consumes: the `question` / `questionAskedAt` record fields from Task 1.
 - Produces: whenever the daemon files a new question for Ben about a lane, the same text and an ISO timestamp land on the lane record. The viewer (unit two) reads only these; it never opens the needs-ben folder. Existing questions are not re-stamped (the fields are written only when the entry is first created, so the "clock still running" time stays honest).
 
@@ -764,17 +786,17 @@ git commit -m "feat(fleet): copy a lane's outstanding question into its record (
 
 ## Spec coverage check (for the executor's final pass)
 
-| Spec requirement (unit one)                          | Task |
-| ---------------------------------------------------- | ---- |
-| Reads settings.json; environment still wins          | 2    |
-| Model and effort per kind of work                    | 6    |
-| Per-lane pause, skipped entirely incl. dead-lane     | 4    |
+| Spec requirement (unit one)                           | Task |
+| ----------------------------------------------------- | ---- |
+| Reads settings.json; environment still wins           | 2    |
+| Model and effort per kind of work                     | 6    |
+| Per-lane pause, skipped entirely incl. dead-lane      | 4    |
 | Deputy gating becomes a setting, expiry logic removed | 3    |
-| Memory floor at 4 GB, logged refusal                 | 5    |
-| Outstanding question copied into the lane record     | 7    |
-| Brief gains the pause line                           | 4    |
-| Service definition must not shadow settings          | 2, 6 |
-| Seam field names exactly as the spec table           | 1, 7 |
-| No model name in daemon code, enforced by a test     | 6    |
+| Memory floor at 4 GB, logged refusal                  | 5    |
+| Outstanding question copied into the lane record      | 7    |
+| Brief gains the pause line                            | 4    |
+| Service definition must not shadow settings           | 2, 6 |
+| Seam field names exactly as the spec table            | 1, 7 |
+| No model name in daemon code, enforced by a test      | 6    |
 
 Not in any task, on purpose: `run-started` (the launcher writes it — unit two), the settings seed defaults (launcher), anything on screen (viewer). The placeholder-style fix in Task 4 is a discovered bug repair in a file this plan already touches, called out to the coordinator rather than smuggled.
