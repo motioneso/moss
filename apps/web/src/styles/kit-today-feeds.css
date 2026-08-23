@@ -30,10 +30,6 @@
   text-align: left;
   padding: 0;
   cursor: pointer;
-  font: inherit;
-  color: inherit;
-  background: transparent;
-  border: none;
   display: block;
 }
 .loose-row__title {
@@ -43,8 +39,6 @@
 .loose-row__meta {
   display: block;
   margin-top: 2px;
-  color: var(--text-muted);
-  font-size: var(--text-xs);
 }
 .loose-row__act {
   display: flex;
@@ -59,9 +53,6 @@
 
 /* ===== Wellness widget (rail) ===== */
 .well {
-  background: var(--forest-soft);
-  border: 1px solid var(--forest-soft-2);
-  border-radius: 12px;
   padding: 15px 16px 14px;
 }
 .well__head {
@@ -71,25 +62,15 @@
   margin-bottom: 4px;
 }
 .well__head .ic {
-  color: var(--accent-fg);
   display: inline-flex;
 }
 .well__title {
-  font-size: 11px;
-  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--forest-ink);
 }
 .well__line {
-  font-family: var(--font-sans);
-  font-size: 14.5px;
-  color: var(--forest-ink);
   line-height: 1.45;
   margin: 6px 0 12px;
-}
-.well__line b {
-  font-weight: 700;
 }
 .well__actions {
   display: grid;
@@ -102,19 +83,8 @@
   justify-content: center;
   gap: 7px;
   padding: 9px 10px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--forest-soft-2);
-  background: var(--surface);
-  color: var(--forest-ink);
-  font-family: var(--font-sans);
-  font-size: 12.5px;
-  font-weight: 600;
   cursor: pointer;
   transition: var(--transition-control);
-}
-.well__btn:hover {
-  border-color: var(--accent);
-  background: var(--white);
 }
 .well__btn .ic {
   display: inline-flex;

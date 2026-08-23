@@ -341,3 +341,47 @@
   font-size: 11px;
   color: var(--text-faint);
 }
+.loose-row__main {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: none;
+}
+.loose-row__meta {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+.well {
+  background: var(--forest-soft);
+  border: 1px solid var(--forest-soft-2);
+  border-radius: 12px;
+}
+.well__head .ic {
+  color: var(--accent-fg);
+}
+.well__title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--forest-ink);
+}
+.well__line {
+  font-family: var(--font-sans);
+  font-size: 14.5px;
+  color: var(--forest-ink);
+}
+.well__line b {
+  font-weight: 700;
+}
+.well__btn {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--forest-soft-2);
+  background: var(--surface);
+  color: var(--forest-ink);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.well__btn:hover {
+  border-color: var(--accent);
+  background: var(--white);
+}
