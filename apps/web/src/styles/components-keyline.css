@@ -63,15 +63,6 @@
   transition: background var(--dur-fast) var(--ease-out);
 }
 
-/* ---------------------------------------------------------------
-   ROW RAIL — a full-height 3px leading column, coloured by state
-   ---------------------------------------------------------------
-   Same idiom as TaskRow's priority bar, generalized: a fit band on the match board, an
-   enabled-state marker on a monitor row, a done/current/todo marker on a setup step. Never a
-   border on the row itself, never a coloured pill — just this rail.
-   `.jds-rail-row` is the optional grid wrapper (a 3px 1fr track); a row needing a trailing column
-   too (e.g. a fit word + chevron) extends `grid-template-columns` itself — that's layout, not a
-   design token, so it doesn't need a host class. */
 .jds-rail {
   display: block;
   width: 3px;
