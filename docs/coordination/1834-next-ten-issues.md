@@ -1820,6 +1820,15 @@ existing Option B plan-authority exception for #1105/#899 applies. Reviewer
 pane `w1:pNW`; it is read-only and must return a ruling before #1335 changes its plan or claims a
 full gate. [pane w1:pNF]
 
+## Update - 2026-08-23, #1105 post-format gate green
+
+#1105 reports Fable Option B completed: its plan-only Prettier diff contains only Markdown
+emphasis markers, JSON whitespace/line wrapping, and one blank line, with no content changes;
+`pnpm format:check` passes. The isolated `verify:foundation` gate is `FINAL rc=0`, with unit
+632 files / 5,163 passed / 3 skipped, UAT seed 12 files / 29 tests, and integration 212 files /
+2,044 passed / 2 skipped; the gate database was dropped. The owner is committing only the plan
+path now and preserving implementation commit `29c0ded52`. [pane w1:pNQ]
+
 ## Update - 2026-08-23, Fable ruled #1335 plan formatting
 
 Fable 5 ruled **Option B** for #1335: format only
@@ -1931,3 +1940,14 @@ closed. A fresh detached QA worktree at `.claude/worktrees/qa-1501-keyline-globa
 running `qa-1501-review` in the dedicated `QA` tab on Codex GPT-5.6 Luna with full unattended
 access, at final PR head `868d52302`. It is grounded to the coordinated-qa procedure and must
 post its compact verdict to PR #1878 before reporting. [pane w1:pNF]
+
+## Update - 2026-08-23, #1105 gate green and queued lanes started
+
+#1105's authoritative isolated gate is now `DONE rc=0` from
+`/tmp/jarv1s-gate/1105_seeded_chat_uat-20260823-000017.log`; its owner was instructed to finish
+the authorized plan-format commit, rebase/push PR #1877, post live UAT proof, and wrap up. After
+the shared lock released, fresh isolated runners for #899, #1335, and #1874 are all active with
+new logs and recent writes. #1874 was nudged to consume its exact fresh sentinel and continue its
+security/live-proof finish line. #1501 QA discovered missing worktree dependencies (`vitest` not
+found); it was instructed to run `pnpm install` and continue the review without duplicating a green
+full gate. [pane w1:pNF]
