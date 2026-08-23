@@ -1692,3 +1692,9 @@ reaped. Codex GPT-5.6 Luna at high effort is now implementing the plan in isolat
 `.claude/worktrees/1105-seeded-chat-uat`, branch `1105-seeded-chat-uat`: agent `codex-1105-build`,
 session `01a02d57-f6a4-7cd0-ad6d-f2ea675bd013`, pane `w1:pNQ`. The lane must preserve the Fable
 plan, prove the real seeded chat/thread UAT path, open a PR, and wrap up. [pane w1:pNF]
+
+## Update - 2026-08-23, #899 plan approved
+
+The #899 Codex Luna lane verified the Fable plan's target-file absence, News module literal, and
+unchanged default fixtures. Implementation is approved with no design fork; the lane is proceeding
+through the exact mocked-News scope, checks, live proof, PR, and wrap-up. [pane w1:pNF]
