@@ -19,11 +19,11 @@ durable live-path proof comment.
 
 | Spec | Issue | Tier | Status | Agent name | Pane | Branch | PR |
 | ---- | ----- | ---- | ------ | ---------- | ---- | ------ | -- |
-| `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319 (concrete child of #1470) | security | queued — remaining installer verification only | — | — | — | — |
-| `docs/superpowers/specs/2026-08-19-926-food-day-view-components-and-targets.md` | #1737 (concrete child of #926) | routine | queued — verification-only; real-chat credential preflight passed | — | — | — | — |
+| `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319-A (concrete child of #1470) | security | planning/building — phase 2 only | `build-1319a-catalog-verify` | `w1:pQ2` | `build/1319a-catalog-verify` | — |
+| `docs/superpowers/specs/2026-08-19-926-food-day-view-components-and-targets.md` | #1737 (concrete child of #926) | routine | closed/Done — Ben verified working in production; lane cancelled/reaped | reaped | — | deleted | — |
 | `docs/superpowers/specs/2026-08-23-1794-release-notes-protected-main.md` | #1794 | sensitive | queued | — | — | — | — |
-| `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | queued — diagnosis-first | — | — | — | — |
-| `docs/superpowers/specs/2026-08-23-1884-weather-settings-card.md` | #1884 | routine | queued | — | — | — | — |
+| `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | planning/building — diagnosis-first | `build-1883-vault-errors` | `w1:pP0` | `build/1883-vault-mcp-errors` | — |
+| `docs/superpowers/specs/2026-08-23-1884-weather-settings-card.md` | #1884 | routine | planning/building | `build-1884-weather-settings` | `w1:pQ1` | `build/1884-weather-settings` | — |
 
 ## Scope decisions
 
@@ -86,10 +86,22 @@ hand-merging it.
 
 None yet.
 
+## Starting-point gate
+
+- Ben approved this manifest; latest `main` CI run `32649714543` completed fully green at
+  `4ee77dbd2152665defa15604aff0f71123178613` before branches were cut.
+- #1319, #1883, #1884, and #1794 are In progress on project 2. #1737 was moved from In progress to
+  Done after Ben directly verified in production that the issue works and meals break into their
+  individual items properly; #1737 closed and its unused lane/worktree/branch were reaped.
+- Starting comments were posted on all five concrete issues and parent epics #1470/#926 with the
+  exact scope, tier, ordering, and CI gate.
+
 ## Outstanding escalations
 
 None open.
 
 ## Reaped sessions
 
-None yet.
+- Unspawned #1737 verification lane: worktree `~/Jarv1s/.claude/worktrees/1737-food-live` and branch
+  `verify/1737-food-live` removed after production verification; it contained only the handoff doc,
+  had no PR, tracked changes, or live process.
