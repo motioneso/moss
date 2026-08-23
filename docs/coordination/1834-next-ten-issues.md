@@ -1311,6 +1311,12 @@ already done and merged. The remaining one:
 
 Tier: routine for now (self-contained listing page against already-merged pieces) - re-check
 during build in case it turns out to touch shared schema or module-install paths, which would
-bump it to sensitive. Queued behind the current #1499-#1503 chain; will start it once a Builders
-slot is free (the chain is serialized, but this issue isn't part of that chain, so it can run
-alongside once #1499 clears and a slot opens, not blocked on the chain finishing).
+bump it to sensitive.
+
+Started it right away, running in parallel with the #1499-#1503 chain (it's independent work,
+and the #1499 build lane was idle waiting on QA, so there was a free slot):
+- Work folder: `.claude/worktrees/1755-workshop-page`, branch `1755-workshop-page`, off main
+  commit 621465aea.
+- Handoff note: `docs/coordination/1834-handoff-1755-workshop-page.md`.
+- Running in pane w1:pMZ, "builders" tab, agent name `pr1755-workshop-page`. Confirmed on Sonnet
+  and working.
