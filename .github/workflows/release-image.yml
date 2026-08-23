@@ -49,27 +49,45 @@ jobs:
         run: |
           set -euo pipefail
 
-          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]             || { echo "::error::version must match vX.Y.Z"; exit 1; }
-          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]             || { echo "::error::source_sha must be a full lowercase commit SHA"; exit 1; }
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::version must match vX.Y.Z"
+            exit 1
+          fi
+          if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::source_sha must be a full lowercase commit SHA"
+            exit 1
+          fi
 
           comparison=$(gh api "repos/$GITHUB_REPOSITORY/compare/$SOURCE_SHA...main" --jq .status)
-          [[ "$comparison" == "ahead" || "$comparison" == "identical" ]]             || { echo "::error::$SOURCE_SHA is not on main"; exit 1; }
+          if [[ "$comparison" != "ahead" && "$comparison" != "identical" ]]; then
+            echo "::error::$SOURCE_SHA is not on main"
+            exit 1
+          fi
 
           edge_manifest=$(docker buildx imagetools inspect "$IMAGE:edge" --format '{{json .Manifest}}')
           edge_digest=$(jq -er .digest <<< "$edge_manifest")
           provenance=$(docker buildx imagetools inspect "$IMAGE:edge" --format '{{json .Provenance}}')
-          jq -e --arg sha "$SOURCE_SHA"             '([.. | objects | .["vcs:revision"]? // empty] | unique) == [$sha]'             <<< "$provenance" >/dev/null             || { echo "::error::edge provenance does not match $SOURCE_SHA"; exit 1; }
+          if ! jq -e --arg sha "$SOURCE_SHA"             '([.. | objects | .["vcs:revision"]? // empty] | unique) == [$sha]'             <<< "$provenance" >/dev/null; then
+            echo "::error::edge provenance does not match $SOURCE_SHA"
+            exit 1
+          fi
 
           version_exists=false
           if version_manifest=$(docker buildx imagetools inspect "$IMAGE:$VERSION"             --format '{{json .Manifest}}' 2>/dev/null); then
             version_digest=$(jq -er .digest <<< "$version_manifest")
-            [[ "$version_digest" == "$edge_digest" ]]               || { echo "::error::$VERSION already points to a different digest"; exit 1; }
+            if [[ "$version_digest" != "$edge_digest" ]]; then
+              echo "::error::$VERSION already points to a different digest"
+              exit 1
+            fi
             version_exists=true
           fi
 
           tag_exists=false
           if tag_ref=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$VERSION" 2>/dev/null); then
-            jq -e --arg sha "$SOURCE_SHA"               '.object.type == "commit" and .object.sha == $sha'               <<< "$tag_ref" >/dev/null               || { echo "::error::Git tag $VERSION already points elsewhere"; exit 1; }
+            if ! jq -e --arg sha "$SOURCE_SHA"               '.object.type == "commit" and .object.sha == $sha'               <<< "$tag_ref" >/dev/null; then
+              echo "::error::Git tag $VERSION already points elsewhere"
+              exit 1
+            fi
             tag_exists=true
           fi
 
@@ -92,7 +110,10 @@ jobs:
 
           for tag in "$VERSION" stable; do
             digest=$(docker buildx imagetools inspect "$IMAGE:$tag"               --format '{{json .Manifest}}' | jq -er .digest)
-            [[ "$digest" == "$EDGE_DIGEST" ]]               || { echo "::error::$tag resolved to $digest, expected $EDGE_DIGEST"; exit 1; }
+            if [[ "$digest" != "$EDGE_DIGEST" ]]; then
+              echo "::error::$tag resolved to $digest, expected $EDGE_DIGEST"
+              exit 1
+            fi
           done
 
       - name: Create GitHub release
