@@ -1624,3 +1624,12 @@ Coordinator authority is now agent name `coordinator`, pane label `Coordinator`,
 closed. PR #1874 remains RED: its retained owner is working the posted security findings; fresh
 security QA, green CI, live recovery proof, and Ben's sign-off are required. Start #1501 only when
 safe, with a Fable-authored implementation plan. [pane w1:pNF]
+
+## Update - 2026-08-23, #1501 plan started
+
+PR #1873 for #1500 is merged, so the styling chain is clear to advance. Fable 5 is authoring
+the #1501 implementation plan in isolated worktree `.claude/worktrees/1501-keyline-global-texture`
+on branch `1501-keyline-global-texture`, session `20c1d3f1-a6b2-481d-ae62-e559faddd216`, pane
+`w1:pNG`, tab `Fable 5`. This is plan-only: no implementation lane has started. The plan must
+cover Child E's exact files, collision boundaries, focused checks, and desktop/mobile light/dark
+live-path proof before a build agent is approved. [pane w1:pNF]
