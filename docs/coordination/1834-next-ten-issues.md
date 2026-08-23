@@ -1729,3 +1729,10 @@ worktree/branch from Builders 2 pane `w1:pNS`. It must complete the existing QA 
 induced recovery proof, PR update, and wrap-up; PR #1874 remains unmergeable until fresh security
 QA is green and posted, CI is green, and Ben signs off. #1501 has entered coordinated wrap-up and
 is running its isolated full gate. [pane w1:pNF]
+
+## Update - 2026-08-23, #1105 wrap-up prep
+
+The #1105 Codex Luna lane reports live seeded chat/thread UAT green in both scenarios after
+pathname-based route matching. Its final diff is limited to the planned UAT spec, seed types, and
+new `tests/uat/fixtures/chat-scripts/1105-drawer-private.json`; it is starting the isolated full
+gate before committing those explicit paths, pushing, opening the PR, and wrapping up. [pane w1:pNF]
