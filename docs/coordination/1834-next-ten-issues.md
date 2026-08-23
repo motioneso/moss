@@ -1669,3 +1669,10 @@ same isolated worktree/branch: `codex-1501-build`, session
 `01a02d53-0152-7c92-a3d0-84947677f620`, pane `w1:pNN`, branch `1501-keyline-global-texture`.
 The build lane must preserve the Fable plan, complete the required desktop/mobile light/dark
 live proof, and open a PR before QA. [pane w1:pNF]
+
+## Update - 2026-08-23, #1501 plan approved
+
+The #1501 Codex Luna build lane verified Fable plan commit `5810e0775` with `81205868d` as its
+ancestor and reported the baseline as 31 violations. Implementation is approved with no design
+fork. The lane is proceeding through the exact Child E scope, checks, live proof, PR, and wrap-up.
+[pane w1:pNF]
