@@ -199,7 +199,10 @@ async function main() {
   console.log(`Appended ${note.category} release note for PR #${prNumber} to docs/WHATS_NEW.md`);
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+// Only run when invoked directly; the weekly digest imports parseReleaseNote from here.
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}
