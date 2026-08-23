@@ -20,7 +20,7 @@ durable live-path proof comment.
 | Spec | Issue | Tier | Status | Agent name | Pane | Branch | PR |
 | ---- | ----- | ---- | ------ | ---------- | ---- | ------ | -- |
 | `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319 (concrete child of #1470) | security | queued — remaining installer verification only | — | — | — | — |
-| `docs/superpowers/specs/2026-08-19-926-food-day-view-components-and-targets.md` | #1737 (concrete child of #926) | routine | queued — verification-only; spawn only if real model exists | — | — | — | — |
+| `docs/superpowers/specs/2026-08-19-926-food-day-view-components-and-targets.md` | #1737 (concrete child of #926) | routine | queued — verification-only; real-chat credential preflight passed | — | — | — | — |
 | `docs/superpowers/specs/2026-08-23-1794-release-notes-protected-main.md` | #1794 | sensitive | queued | — | — | — | — |
 | `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | queued — diagnosis-first | — | — | — | — |
 | `docs/superpowers/specs/2026-08-23-1884-weather-settings-card.md` | #1884 | routine | queued | — | — | — | — |
@@ -35,6 +35,10 @@ durable live-path proof comment.
   no-op. If the environment cannot provide the required real-model access and only Ben can do so,
   the coordinator records the exact blocker in `docs/coordination/AWAITING-BEN.md` and runs
   `needs-ben`; the lane does not idle.
+- #1737 pre-spawn re-check on 2026-08-23 found `JARVIS_UAT_REAL_CHAT_TOKEN_FILE` configured,
+  readable, non-empty, and decryptable without exposing its contents. This clears the prior
+  fake-model-only preflight blocker; the verification lane still must prove the credential works
+  in the isolated live journey.
 - #1794 keeps release-note writes on a branch/PR and never pushes directly to protected `main`.
 - #1883 starts from a deterministic failing vault-search MCP request, then surfaces only safe cause
   classification; secrets, vault content, embedding inputs, raw bodies, and stack traces remain
