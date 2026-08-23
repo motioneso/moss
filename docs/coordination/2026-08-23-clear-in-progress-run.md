@@ -19,7 +19,7 @@ durable live-path proof comment.
 
 | Spec | Issue | Tier | Status | Agent name | Pane | Branch | PR |
 | ---- | ----- | ---- | ------ | ---------- | ---- | ------ | -- |
-| `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319-A (concrete child of #1470) | security | Task A committed `f786077a3`; Task B building | `build-1319a-phase2-c` | resolve live | `build/1319a-catalog-verify` | — |
+| `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319-A (concrete child of #1470) | security | Task B work-in-progress `f118ece3b`; building | `catalog-verify-1319a` | resolve live | `build/1319a-catalog-verify` | — |
 | `docs/superpowers/specs/2026-08-19-926-food-day-view-components-and-targets.md` | #1737 (concrete child of #926) | routine | closed/Done — Ben verified working in production; lane cancelled/reaped | reaped | — | deleted | — |
 | `docs/superpowers/specs/2026-08-23-1794-release-notes-protected-main.md` | #1794 | sensitive | queued | — | — | — | — |
 | `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | implementation `db1e5c1e7`; full gate and wrap-up running | `build-1883-vault-errors-2` | resolve live | `build/1883-vault-mcp-errors` | — |
@@ -140,13 +140,17 @@ None yet.
   `5cd79260-53d8-4ce4-ad18-c1c3719af24f`) reaped after implementation commit `db1e5c1e7`, 66/66
   focused tests green, and confirmation that successor `build-1883-vault-errors-2` was driving
   the full gate and wrap-up on Sonnet in the same worktree/branch.
+- #1319-A build session `build-1319a-phase2-c` (Claude session
+  `c0e51f45-5944-4bdd-8a89-6002f1513bc4`) reaped after work-in-progress commit `f118ece3b` and
+  confirmation that successor `catalog-verify-1319a` was driving on Sonnet in the same
+  worktree/branch.
 
 ## Latest continuation note — Codex relay adopted
 
 Codex session `01a02f7f-5563-7590-ac66-9b2827dab85c` holds the coordinator lock. The prior Codex
 session remains separately named `watchdog-timer-fix` and owns no fleet work. #1883 implementation
 commit `db1e5c1e7` is in full gate/wrap-up; #1884 relay is finishing live UAT/gates; #1319-A
-relay is building Task B after Task A commit `f786077a3`. The one-time #1319-A worktree-integrity
+relay is building from work-in-progress commit `f118ece3b`. The one-time #1319-A worktree-integrity
 warning remains stop-the-line on recurrence. Watchdog fix commit `246bd29f4` was replayed cleanly
 onto issue #1885 / PR #1886; focused checks are green and routine QA is running. No merges occurred
 during adoption. Feature merge order remains #1883, #1884, #1319-A, #1319-B, #1794; #1737 is
