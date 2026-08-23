@@ -1420,3 +1420,10 @@ same whether the successor is Claude or Codex.
 
 Outgoing coordinator identity: pane w1:pN1, agent name `coordinator`, session
 968e7cb9-418f-44cf-9508-9834d869c74f.
+
+## Coordinator adoption - 2026-08-23, Codex successor
+
+Codex successor adopted the live fleet and closed outgoing pane w1:pN1. The sole coordinator
+lock is now agent name `coordinator`, pane label `Coordinator`, session
+01a02cde-59a6-7900-99d9-aa65f8989e49. Lane `pr1500-css-forms-2` remains in flight. Plan
+approvals for this run continue to require a Fable-model review agent.
