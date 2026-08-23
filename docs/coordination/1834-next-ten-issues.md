@@ -1736,3 +1736,10 @@ The #1105 Codex Luna lane reports live seeded chat/thread UAT green in both scen
 pathname-based route matching. Its final diff is limited to the planned UAT spec, seed types, and
 new `tests/uat/fixtures/chat-scripts/1105-drawer-private.json`; it is starting the isolated full
 gate before committing those explicit paths, pushing, opening the PR, and wrapping up. [pane w1:pNF]
+
+## Update - 2026-08-23, stale #1874 gate detected
+
+The #1874 worktree still had predecessor gate PID `3341119` alive with no log write for 711
+seconds while relay 6 was running fresh checks. The coordinator sent relay 6 the exact-PID
+collision warning; it must verify that PID is abandoned and stop only it if stale, preserving its
+own current process before continuing. [pane w1:pNF]
