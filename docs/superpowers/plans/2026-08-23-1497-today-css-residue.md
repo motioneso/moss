@@ -38,7 +38,7 @@ here). No further drift since that comment — baseline for this build is confir
   every other `*.css` under `apps/web/src` and `packages/ui/src` — zero other definitions of any of
   them exist anywhere. Confirmed sole TSX consumers:
   `apps/web/src/today/{briefing-action-rows,briefing-feedback-menu,briefing-freshness,news-desk,
-  overnight-section,proactive-cards,evening-mode,today-page}.tsx`. No rename needed.
+overnight-section,proactive-cards,evening-mode,today-page}.tsx`. No rename needed.
 - **Destination confirmed:** `packages/ui/src/styles/components-moss-today.css` exists (282 lines),
   already imported at `packages/ui/src/styles.css:3` (first import, before
   `components-command-palette.css:18`). It currently holds unrelated `jds-*` primitives (masthead,
