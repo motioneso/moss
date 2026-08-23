@@ -14,7 +14,7 @@
 | Spec | Issue | Tier | Status | Agent name | Pane | Branch | PR |
 | ---- | ----- | ---- | ------ | ---------- | ---- | ------ | -- |
 | `docs/superpowers/specs/2026-08-10-1137-robustness-followups.md` | #1517 | routine | closed — no-op, already satisfied | reaped | — (reaped) | (branch deleted) | — |
-| `docs/superpowers/specs/2026-08-10-css-guard-residue.md` | #1497 | routine | building — plan approved, proceeding to code | `build-1497-today-relay2` (session `a3d101ab-0506-4b30-ac42-434e663afa9a`) | resolve fresh | `build/1497-today-residue` | — |
+| `docs/superpowers/specs/2026-08-10-css-guard-residue.md` | #1497 | routine | PR open — CI and independent QA running | `build-1497-today-relay2` (session `a3d101ab-0506-4b30-ac42-434e663afa9a`) | resolve fresh | `build/1497-today-residue` | #1881 |
 
 ## Dependency / merge order
 
@@ -28,6 +28,12 @@
 | Check | PR | Proven red on `main` @ SHA | Proof | Ben-approved |
 | ----- | -- | -------------------------- | ----- | ------------ |
 | none | — | — | — | — |
+
+## Active QA
+
+- PR #1881 exact head `62564b81b1455a3f25c4f97cb4c13c83034e9e6e`: routine QA `qa-1881`
+  (session `3d966c3c-91de-458b-8e2f-53933ada4906`), isolated worktree
+  `.claude/worktrees/qa-1881`; CI in progress.
 
 ## Outstanding escalations
 
