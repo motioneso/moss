@@ -2722,3 +2722,9 @@ this manifest. The mistaken entry was removed from `docs/coordination/AWAITING-B
 rule was saved as a durable coordinator lesson. The fleet remains empty; next action is a Fable
 review of the Ready queue and proposed fresh run scope, with #1511 still dependency-blocked on
 #1246. [pane w1:pPM]
+
+Fable scope review is active in the dedicated QA tab: agent `fable-run-scope`, session
+`c359c706-e66d-4a52-b7c1-823ba3d315c6`, isolated worktree
+`.claude/worktrees/fable-next-run-scope`, model Fable 5. It will write the exact APPROVE/REVISE
+queue verdict to `~/Jarv1s/fable-next-run-verdict.md` and message the coordinator; no build lane is
+authorized before that verdict is consumed. [pane w1:pPM]
