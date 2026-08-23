@@ -2443,3 +2443,13 @@ Final routine QA is active in the QA tab at pane `w1:pPC`, agent `qa1877-1105-r3
 `01a02def-66a5-7b03-ab5e-11429bd7ccf0`, using Codex GPT-5.6 Luna at high reasoning. It must
 post a durable verdict against the exact rebased head; CI remains pending and no merge is
 authorized. [pane w1:pP2]
+
+## Update - 2026-08-23, #1878 final QA clean; CI pending
+
+Final routine QA for PR #1878 at rebased head `3df25bf03ee81964190af0c641e3869d578fa08d`
+posted its durable verdict. Grounding, invariants, extraction behavior, comment placement, live
+proof, and exit criteria are clean; the only observation is that the plan still mentions
+screenshots despite the repository standard requiring executable/textual evidence. Required CI
+foundation/app remains pending, so the PR is not merge-ready. The QA pane was closed after
+matching session `01a02ded-01f1-7db0-8faf-d606e0938e80`, and its clean worktree was removed.
+[pane w1:pP2]
