@@ -1427,3 +1427,11 @@ Codex successor adopted the live fleet and closed outgoing pane w1:pN1. The sole
 lock is now agent name `coordinator`, pane label `Coordinator`, session
 01a02cde-59a6-7900-99d9-aa65f8989e49. Lane `pr1500-css-forms-2` remains in flight. Plan
 approvals for this run continue to require a Fable-model review agent.
+
+## Investigation added - 2026-08-23, issue #1872
+
+Ben authorized a diagnosis-only lane for #1872. Agent `issue1872-image-diagnosis`, session
+8228e388-8ee0-423a-a554-0da691c37a90, is working in branch/worktree
+`1872-service-worker-image-diagnosis`. Scope is reproduce, isolate, and post findings to the issue;
+no implementation or PR is authorized. Any later implementation plan must go through a Fable-model
+review agent before coordinator approval.
