@@ -252,7 +252,13 @@ function renderToday(input: {
         { client },
         createElement(
           ChatControlsProvider,
-          { value: { openChat: () => undefined, openChatWith: () => undefined } },
+          {
+            value: {
+              openChat: () => undefined,
+              openChatWith: () => undefined,
+              openAssistantWithDraft: () => undefined
+            }
+          },
           createElement(
             MemoryRouter,
             null,
@@ -334,6 +340,7 @@ function task(overrides: Partial<TaskDto> = {}): TaskDto {
     createdAt: "2026-06-29T00:00:00.000Z",
     updatedAt: "2026-06-29T00:00:00.000Z",
     tags: [],
+    suggestionMetadata: null,
     ...overrides
   };
 }

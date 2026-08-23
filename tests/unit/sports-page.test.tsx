@@ -65,6 +65,7 @@ function followedCard(overrides: Partial<FollowedTeamCard> = {}): FollowedTeamCa
       homeAway: "home",
       startsAt: "2026-07-05T20:00:00.000Z"
     },
+    lastMatchAt: "2026-06-29T20:00:00.000Z",
     rationale: "Playing right now",
     ...overrides
   };
@@ -159,6 +160,7 @@ function makeOverview(overrides: Partial<SportsOverviewResponse> = {}): SportsOv
     standings: [standingsGroup()],
     followedTeams: [{ competitionKey: "nfl", teamKey: "min" }],
     followedLeagues: [],
+    followedLeagueCards: [],
     degraded: false,
     ...overrides
   };

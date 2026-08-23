@@ -8,7 +8,10 @@ import {
   findModuleSettingsSurface,
   type ModuleSettingsComponent
 } from "../../packages/settings-ui/src/router.js";
-import type { GeneratedSettingsSurface } from "../../packages/settings-ui/src/index.js";
+import type {
+  GeneratedSettingsSurface,
+  ModuleSettingsSurfaceProps
+} from "../../packages/settings-ui/src/index.js";
 
 const surfaces: GeneratedSettingsSurface[] = [
   {
@@ -24,7 +27,7 @@ const surfaces: GeneratedSettingsSurface[] = [
 ];
 const declarativeSurfaces: GeneratedSettingsSurface[] = [
   {
-    ...surfaces[0],
+    ...surfaces[0]!,
     moduleId: "declarative",
     moduleName: "Declarative",
     hasEntry: false
@@ -33,7 +36,11 @@ const declarativeSurfaces: GeneratedSettingsSurface[] = [
 
 describe("ModuleSettingsRouter", () => {
   it("renders a contributed module settings component with host props", () => {
-    const FixtureSettings: ModuleSettingsComponent = ({ onBack, onSelectSection, onNavigate }) => (
+    const FixtureSettings: ModuleSettingsComponent = ({
+      onBack,
+      onSelectSection,
+      onNavigate
+    }: ModuleSettingsSurfaceProps) => (
       <section>
         <button type="button" onClick={onBack}>
           Back
@@ -109,7 +116,7 @@ describe("ModuleSettingsRouter", () => {
 
   it("exposes the error fallback used by the per-surface boundary", () => {
     const markup = renderToStaticMarkup(
-      <ModuleSettingsErrorFallback surface={surfaces[0]} onBack={() => undefined} />
+      <ModuleSettingsErrorFallback surface={surfaces[0]!} onBack={() => undefined} />
     );
 
     expect(markup).toContain("Fixture settings failed to load");
@@ -118,7 +125,7 @@ describe("ModuleSettingsRouter", () => {
 
   it("finds only user-scoped surfaces for module rows", () => {
     expect(
-      findModuleSettingsSurface("fixture", [{ ...surfaces[0], scope: "admin" }, surfaces[0]])?.id
+      findModuleSettingsSurface("fixture", [{ ...surfaces[0]!, scope: "admin" }, surfaces[0]!])?.id
     ).toBe("fixture.settings");
   });
 

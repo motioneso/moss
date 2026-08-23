@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { createElement, type JSX } from "react";
 import { renderToString } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";

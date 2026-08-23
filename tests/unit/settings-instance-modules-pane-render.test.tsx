@@ -272,8 +272,10 @@ describe("InstanceModulesPane module library merge (#1187 decisions 1/2)", () =>
         {
           id: "builtin-a",
           name: "Builtin A",
-          required: false,
-          instanceDisabled: false
+          version: "1.0.0",
+          lifecycle: "optional",
+          navigation: [],
+          settings: []
         }
       ]
     } satisfies ListModulesResponse);
@@ -359,18 +361,15 @@ describe("install-confirm dialog capability copy (#1187 decision 4 render proof)
       }
     });
     const html = renderToString(
-      createElement(
-        FeedbackProvider,
-        {
-          initialDialog: {
-            title: "Install Acme Net?",
-            description: describeCapabilityConsequences(rowWithCaps),
-            confirmLabel: "Download",
-            onConfirm: () => {}
-          }
+      createElement(FeedbackProvider, {
+        initialDialog: {
+          title: "Install Acme Net?",
+          description: describeCapabilityConsequences(rowWithCaps),
+          confirmLabel: "Download",
+          onConfirm: () => {}
         },
-        createElement("div")
-      )
+        children: createElement("div")
+      })
     );
     expect(html).toContain("jds-dialog__desc");
     expect(html).toContain("This module can connect to the internet");

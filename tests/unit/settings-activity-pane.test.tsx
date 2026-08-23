@@ -36,7 +36,9 @@ import { ActivityPane } from "../../apps/web/src/settings/settings-activity-pane
 
 describe("ActivityPane", () => {
   it("shows bounded recovery instead of endless loading or false empty state", () => {
-    const html = renderToString(createElement(ActivityPane, {}));
+    const html = renderToString(
+      createElement(ActivityPane, { me: {} as never, onNavigate: () => undefined })
+    );
 
     expect(html).toContain("Activity unavailable");
     expect(html).toContain("Try again");
@@ -53,13 +55,17 @@ describe("ActivityPane", () => {
     try {
       let renderer!: ReturnType<typeof create>;
       act(() => {
-        renderer = create(createElement(ActivityPane, {}));
+        renderer = create(
+          createElement(ActivityPane, { me: {} as never, onNavigate: () => undefined })
+        );
       });
       const firstKey = queryOptions.current?.queryKey;
 
       nowSpy.mockReturnValue(1_700_000_050_000);
       act(() => {
-        renderer.update(createElement(ActivityPane, {}));
+        renderer.update(
+          createElement(ActivityPane, { me: {} as never, onNavigate: () => undefined })
+        );
       });
       const secondKey = queryOptions.current?.queryKey;
 

@@ -75,7 +75,15 @@
       "@moss/commitments/prefilter": ["packages/commitments/src/prefilter.ts"],
       "@moss/commitments/signature": ["packages/commitments/src/signature.ts"],
       "@moss/commitments/tools": ["packages/commitments/src/tools.ts"],
-      "@moss/people": ["packages/people/src/index.ts"]
+      "@moss/people": ["packages/people/src/index.ts"],
+      "react": ["apps/web/node_modules/@types/react"],
+      "react/jsx-runtime": ["apps/web/node_modules/@types/react/jsx-runtime.d.ts"],
+      "react-dom": ["apps/web/node_modules/@types/react-dom"],
+      "react-dom/client": ["apps/web/node_modules/@types/react-dom/client.d.ts"],
+      "react-dom/server": ["apps/web/node_modules/@types/react-dom/server.d.ts"],
+      "react-dom/test-utils": ["apps/web/node_modules/@types/react-dom/test-utils.d.ts"],
+      "@tanstack/react-query": ["apps/web/node_modules/@tanstack/react-query"],
+      "react-router": ["apps/web/node_modules/react-router"]
     }
   },
   "include": [

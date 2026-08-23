@@ -37,7 +37,7 @@ import type { TranscriptRecord } from "../../apps/web/src/chat/use-chat-stream.j
 vi.stubGlobal("localStorage", {
   getItem: () => null,
   setItem: () => undefined
-} as Storage);
+} as unknown as Storage);
 
 const useChatStreamMock = vi.fn((surface?: string) => ({
   records: [] as readonly TranscriptRecord[],
@@ -108,11 +108,12 @@ function renderWithModuleMount(moduleId: string | undefined, key: string | null)
       createElement(
         MemoryRouter,
         { initialEntries: ["/today"] },
-        createElement(
-          AppShell,
-          { me: ME, modules: MODULES, modulesLoading: false },
-          createElement("div", null, "routed content")
-        )
+        createElement(AppShell, {
+          me: ME,
+          modules: MODULES,
+          modulesLoading: false,
+          children: createElement("div", null, "routed content")
+        })
       )
     )
   );

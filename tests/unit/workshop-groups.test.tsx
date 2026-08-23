@@ -84,7 +84,9 @@ describe("WorkshopGroups", () => {
 
   it("only renders jds-* design system classes, no invented ones", () => {
     const html = render([building()], [liveModule()]);
-    const classAttrs = [...html.matchAll(/class="([^"]*)"/g)].flatMap((m) => m[1].split(/\s+/));
+    const classAttrs = [...html.matchAll(/class="([^"]*)"/g)].flatMap((m) =>
+      (m[1] ?? "").split(/\s+/)
+    );
     for (const cls of classAttrs) {
       expect(cls === "" || cls.startsWith("jds-") || cls.startsWith("workshop-")).toBe(true);
     }

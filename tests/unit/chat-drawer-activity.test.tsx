@@ -52,7 +52,7 @@ describe("chat drawer activity outcomes", () => {
       threadId: "t1",
       ownerUserId: "u1",
       role: "assistant",
-      status: "complete",
+      status: "stored",
       body: "I changed that.",
       modelRoute: null,
       tools: [],

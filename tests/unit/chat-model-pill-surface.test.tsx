@@ -162,7 +162,7 @@ async function renderPill(
 
 function menuButtons(renderer: ReactTestRenderer) {
   const menu = renderer.root.findAll((node) => node.props.className === "chatd-model__menu");
-  return menu.length > 0 ? menu[0].findAllByType("button") : [];
+  return menu.length > 0 ? menu[0]!.findAllByType("button") : [];
 }
 
 async function openMenu(renderer: ReactTestRenderer): Promise<void> {
@@ -170,7 +170,7 @@ async function openMenu(renderer: ReactTestRenderer): Promise<void> {
     (node) => node.props.className === "chatd-model__trigger"
   )[0];
   await act(async () => {
-    trigger.props.onClick();
+    trigger!.props.onClick();
   });
 }
 
@@ -224,7 +224,7 @@ describe("ChatModelPill mutation surface routing (#1533)", () => {
     await openMenu(renderer);
     const buttons = menuButtons(renderer);
     await act(async () => {
-      buttons[1].props.onClick();
+      buttons[1]!.props.onClick();
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
@@ -252,7 +252,7 @@ describe("ChatModelPill mutation surface routing (#1533)", () => {
     await openMenu(renderer);
     const buttons = menuButtons(renderer);
     await act(async () => {
-      buttons[1].props.onClick();
+      buttons[1]!.props.onClick();
       await Promise.resolve();
     });
 
@@ -306,7 +306,7 @@ describe("ChatDrawer forwards its surface into ChatModelPill (#1533)", () => {
 
     const calls = vi.mocked(ChatModelPill).mock.calls;
     expect(calls.length).toBeGreaterThan(0);
-    const pillProps = calls[calls.length - 1][0];
+    const pillProps = calls[calls.length - 1]![0];
     expect(pillProps.surface).toBe(moduleSurface);
 
     await act(async () => {
@@ -331,7 +331,7 @@ describe("ChatDrawer forwards its surface into ChatModelPill (#1533)", () => {
 
     const calls = vi.mocked(ChatModelPill).mock.calls;
     expect(calls.length).toBeGreaterThan(0);
-    const pillProps = calls[calls.length - 1][0];
+    const pillProps = calls[calls.length - 1]![0];
     expect(pillProps.surface).toBe(DEFAULT_CHAT_SURFACE);
   });
 });
