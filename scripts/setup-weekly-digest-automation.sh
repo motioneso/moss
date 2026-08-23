@@ -8,8 +8,11 @@ set -euo pipefail
 # branch, and asks GitHub to deploy. Nothing is pushed to main: a branch rule refuses direct
 # pushes there, which is what silently broke the previous version of this job.
 
-SCRIPT_PATH="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/$(basename -- "${BASH_SOURCE[0]}")"
-REPO_ROOT="$(cd -- "$(dirname -- "$SCRIPT_PATH")/.." && pwd)"
+# The repository is used as a source of git objects only. All work happens in temporary
+# worktrees, so it does not matter which branch anyone has checked out there, and the cron entry
+# reads this script from the main branch rather than from whatever is in the working files.
+REPO_ROOT="${MOSS_DIGEST_REPO:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}"
+SCRIPT_PATH="$REPO_ROOT/scripts/$(basename -- "${BASH_SOURCE[0]}")"
 MARKER="# jarv1s-weekly-digest-automation"
 LOG_FILE="$REPO_ROOT/.git/weekly-digest-automation.log"
 PAGES_BRANCH="gh-pages"
@@ -133,18 +136,19 @@ install_cron() {
     exit 1
   }
 
-  local current entry temp
+  local current entry temp=""
   current="$(crontab -l 2>/dev/null || true)"
   if grep -Fq "$MARKER" <<<"$current"; then
     echo "Weekly digest automation is already installed."
     exit 0
   fi
 
+  # cron runs /bin/sh, which cannot read a script from a pipe, so the line asks for bash.
   entry="$MARKER
 CRON_TZ=America/Los_Angeles
-0 6 * * 5 $SCRIPT_PATH --run"
+0 6 * * 5 bash -lc 'cd $REPO_ROOT && git fetch -q origin main && MOSS_DIGEST_REPO=$REPO_ROOT bash <(git show origin/main:scripts/setup-weekly-digest-automation.sh) --run'"
   temp="$(mktemp)"
-  trap 'rm -f "$temp"' EXIT
+  trap 'rm -f "${temp:-}"' EXIT
   {
     printf '%s\n' "$current"
     printf '%s\n' "$entry"
@@ -159,7 +163,7 @@ case "${1:-install}" in
   --install|install) install_cron ;;
   --uninstall|uninstall)
     current="$(crontab -l 2>/dev/null || true)"
-    crontab - <<<"$(awk -v marker="$MARKER" 'index($0, marker) == 0 && $0 != "CRON_TZ=America/Los_Angeles" && $0 !~ /^0 6 \* \* 5 .*setup-weekly-digest-automation\.sh --run$/ { print }' <<<"$current")"
+    crontab - <<<"$(awk -v marker="$MARKER" 'index($0, marker) == 0 && $0 != "CRON_TZ=America/Los_Angeles" && $0 !~ /setup-weekly-digest-automation\.sh.* --run$/ { print }' <<<"$current")"
     echo "Removed weekly digest automation."
     ;;
   --status|status)
