@@ -2133,3 +2133,11 @@ checks. #1335's clean retry has likewise advanced through lint/typecheck; its ow
 sentinel yet and is allowing the known benign `Password:` unit-test output to finish. #899's
 integration runner remains alive with no failure sentinel. #1874 Opus QA and #1501 image
 publication remain pending. [pane w1:pNF]
+
+## Update - 2026-08-23, #899 gate green
+
+#899's authoritative isolated gate is `DONE rc=0` for
+`/tmp/jarv1s-gate/899_news_mocked_e2e-20260823-001657.log`. The owner is committing the
+authorized plan-only formatting change, then will push and open the PR before routine QA. #1105
+and #1335 remain in their fresh gates; #1874 Opus QA and #1501 image publication remain pending.
+[pane w1:pNF]
