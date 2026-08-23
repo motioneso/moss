@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-23
 **Coordinator lock:** registered agent name `coordinator` + visible pane label `Coordinator`,
-**stable anchor = Codex session id `01a02f0e-05d0-7e61-9a20-c87b7a7f9305`** (match
+**stable anchor = Codex session id `01a02f7f-5563-7590-ac66-9b2827dab85c`** (match
 `agent_session.value` in `herdr agent list`). Exactly one live agent named `coordinator` whose
 session id matches this anchor holds authority. Pane ids are ephemeral; resolve fresh by name and
 immutable session id.
