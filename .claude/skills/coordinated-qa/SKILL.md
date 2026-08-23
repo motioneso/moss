@@ -32,7 +32,15 @@ mangled precisely the findings that need precision.
 ## Procedure
 
 **1. Get on the branch, then ground yourself.** Check out the PR branch into a **fresh
-worktree/checkout** of your own (never an author's tree). `[ -d node_modules ] || pnpm install`
+worktree/checkout** of your own (never an author's tree), under
+`.claude/worktrees/qa-<issue>-r<round>` — never `/tmp`. `[ -d node_modules ] || pnpm install`.
+**Re-review rounds are incremental (round 2+):** reuse round N-1's QA worktree, `git fetch` the
+new commits, and review only `git diff <round-N-1-SHA>..HEAD` plus re-running whatever was red —
+the build agent's fix report cites a commit and file:line per finding; verify exactly those. A
+full fresh review is only for round 1, a force-push, or a diff touching files never reviewed.
+(2026-08-23 audit: three small PRs burned 10+ full fresh-checkout rounds in one night.)
+**Record the SHA you reviewed in your verdict; if the branch moves mid-review (SHA changed under
+you), stop and report "branch moved, re-run round against <new SHA>" rather than grading a mix.
 (shared pnpm store — skip if present). Then:
 ```bash
 pnpm audit:preflight        # MUST exit 0 — a stale tree invalidates the whole review
@@ -98,6 +106,11 @@ No proof comment on a user-facing PR = **MERGE-READY: NO**, at `routine` tier to
 exactly where this has been skipped. Report it as *code-complete, unverified* — do not soften it to
 green-with-a-note. Out of scope: docs-only, refactors with no user-visible surface, internal
 tooling. Full rule: `docs/DEVELOPMENT_STANDARDS.md` → Live-Path Gate.
+
+**The live dev instance is shared — serialize your UAT.** Before driving the UI, check with the
+coordinator (or `herdr pane list` labels) that no sibling QA lane or build lane is mid-UAT against
+it; two lanes seeding and clicking one database corrupt each other's evidence. And NEVER touch
+:1533 — that is prod.
 
 Then run the changed-path e2e-UAT lookup — **also every tier**, since a spec that exists and fails
 is a real failure regardless of how the diff was classified:

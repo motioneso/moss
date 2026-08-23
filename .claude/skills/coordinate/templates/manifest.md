@@ -12,9 +12,13 @@
 
 ## Queue
 
-| Spec | Issue | Tier | Status | Agent name | Pane | Branch | PR |
-| ---- | ----- | ---- | ------ | ----------- | ---- | ------ | -- |
-| docs/superpowers/specs/<slug>.md | #NN | routine\|sensitive\|security | queued | — | — | — | — |
+| Spec | Issue | Tier | Status | Agent name | Pane | Branch | PR | Relays |
+| ---- | ----- | ---- | ------ | ----------- | ---- | ------ | -- | ------ |
+| docs/superpowers/specs/<slug>.md | #NN | routine\|sensitive\|security | queued | — | — | — | — | 0 |
+
+**`Relays` counts lane self-handoffs — budget is ONE per lane** (Ben, 2026-08-23: one session per
+unit of work). A lane reaching 2 was mis-scoped: don't relay it again, re-slice the remaining work
+into new, smaller lanes with their own issues.
 
 **The `Issue` column may never be `—` or prose.** Every lane needs a real GitHub `task` issue
 before it is queued, including work Ben authorizes verbally mid-run. A lane recorded as
@@ -54,6 +58,21 @@ stop-the-line + file an issue (no waiver).
 
 - [ ] <blocker / design-fork awaiting coordinator or Ben — who owns it, since when>
 
+## Merge audit (one block per merged PR)
+
+Written at Phase 3 step 7, before the merge is reported. A merge with no block here is
+unaccounted.
+
+- **PR #NN** (<slug>):
+  - QA verdict + model used: <verdict, model confirmed>
+  - Live-path proof: <link to `gh pr comment`, or "N/A — not user-facing (why)">
+  - Session id at merge matched lock anchor: y/n
+  - Worktree check: `<verbatim VERDICT line from scripts/worktree-reapable.sh>`
+  - Pane teardown recorded (Reaped sessions below): y/n
+
 ## Reaped sessions
 
-- <pane id / label — spent agent killed, when, why (done | handed-off)>
+One line per closed pane, written BEFORE the kill: what the agent was doing and where the work
+landed. A closed pane with no line here is unaccounted work.
+
+- <pane id / label — what it was doing; work landed at <branch/PR link | "no output — why">; killed when>

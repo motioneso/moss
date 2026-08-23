@@ -84,15 +84,19 @@ signal — not a doc edit.
 
 **3b. Plan stage** (approved spec, no approved plan):
 
-- **REQUIRED SUB-SKILL:** use `superpowers:writing-plans` to produce
-  `docs/superpowers/plans/YYYY-MM-DD-<feature>.md` (bite-sized TDD tasks, exact files, green per
-  commit). Read the spec with fresh eyes and verify coverage.
+- **REQUIRED SUB-SKILL:** use **`plan-build`** (it supersedes `superpowers:writing-plans`, #1278 —
+  the old skill's pasted-code plans caused a six-round review loop) to produce
+  `docs/superpowers/plans/YYYY-MM-DD-<feature>.md`. Read the spec with fresh eyes and verify
+  coverage. **Scope the plan so each build slice fits ONE agent session** (Ben, 2026-08-23): if a
+  slice would plausibly need a relay, split it here, at planning time — not mid-build.
 - **PAUSE.** Present the plan and ask for approval. Do not write code.
 
 **3c. Build stage** (approved plan):
 
-- Branch off `main`: `git checkout main && git checkout -b <slug>` (only when the working tree is
-  clean and no other build is running on the tree).
+- **Work in your own worktree, never by switching the shared tree's branch:**
+  `git worktree add .claude/worktrees/<slug> -b <slug> origin/main`. (`git checkout -b` on the
+  shared checkout disrupts every other live session — the shared-checkout skill treats it as
+  unsafe.)
 - **Pick the build engine** with the heuristic below; state your recommendation and proceed unless
   the user redirects.
 - Execute the plan. **The superpowers execution skills are disabled in this repo by design** — use
@@ -159,8 +163,8 @@ gh api -X PATCH repos/motioneso/Jarv1s/milestones/<M> -f state=closed
 - About to write code with **no approved spec or plan** → violates the spec-before-build gate. Stop.
 - About to `git checkout` a new branch (or `git add -A`/`stash`/`reset`) while a build workflow is
   mid-run on the working tree → you will disrupt running agents or sweep their uncommitted work into
-  your commit. Wait until it finishes, and send a heads-up via the `tmux-pane-message` skill (see
-  CLAUDE.md → _Coordinating With Other Agent Sessions_).
+  your commit. Wait until it finishes, and send a heads-up via the `herdr-pane-message` skill (see
+  CLAUDE.md → _Working in a shared checkout_, and the `shared-checkout` skill).
 - About to mark an issue/milestone done from an **agent's self-report** → verify with
   `scripts/run-gate.sh` (both gates) yourself first.
 - About to update only the doc and not the board → GitHub is the source of truth; move the board.
