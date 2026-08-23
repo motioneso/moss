@@ -1444,3 +1444,13 @@ same-origin and cross-origin requests alike. No fix was implemented. The diagnos
 and the issue is back in Backlog pending authorization for a Fable-reviewed implementation plan.
 The clean worktree `1872-service-worker-image-diagnosis` remains because it is one commit ahead of
 `origin/main` (the committed handoff doc); it has no live processes, seeded rows, or untracked work.
+
+## Implementation prioritized - 2026-08-23, issue #1872
+
+Ben authorized prioritizing the fix. The approved narrow spec is
+`docs/superpowers/specs/2026-08-23-service-worker-image-fetch-recovery.md`; issue #1872 is RFA and
+In progress. Routine-tier build agent `issue1872-image-fix`, session
+ade27279-2d46-47b9-b52c-773f24503f6d, is using the existing clean
+`1872-service-worker-image-diagnosis` worktree. It must stop after publishing its plan pointer.
+Implementation remains blocked until a separate Fable-model review agent approves that plan; the
+coordinator must not substitute inline judgment.
