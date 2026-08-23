@@ -82,7 +82,11 @@ function getSourceBehaviors() {
 function putSourceBehavior(enabled: boolean) {
   return requestJson<PutSourceBehaviorResponse>(
     `/api/me/source-behaviors/${encodeURIComponent(EMAIL_BEHAVIOR_ID)}`,
-    { method: "PUT", body: { enabled } }
+    {
+      method: "PUT",
+      // @ts-expect-error #1876: requestJson's JSON body contract is tracked separately.
+      body: { enabled }
+    }
   );
 }
 
@@ -93,6 +97,7 @@ function getEmailSettings() {
 function patchEmailSettings(body: UpdateEmailBriefingSettingsRequest) {
   return requestJson<UpdateEmailBriefingSettingsResponse>("/api/email/briefing-settings", {
     method: "PATCH",
+    // @ts-expect-error #1876: requestJson's JSON body contract is tracked separately.
     body
   });
 }
@@ -104,6 +109,7 @@ function getEmailTaskMode() {
 function putEmailTaskMode(body: UpdateEmailTaskCreationModeRequest) {
   return requestJson<EmailTaskCreationModeResponse>("/api/email/task-creation-mode", {
     method: "PUT",
+    // @ts-expect-error #1876: requestJson's JSON body contract is tracked separately.
     body
   });
 }
@@ -115,7 +121,11 @@ function getActionPolicies() {
 function patchDraftPolicy(tier: AiActionPolicyTier) {
   return requestJson<PatchAiActionPolicyResponse>(
     `/api/ai/action-policy/${encodeURIComponent(DRAFTS_MODULE_ID)}/${encodeURIComponent(DRAFTS_FAMILY_ID)}`,
-    { method: "PATCH", body: { tier } }
+    {
+      method: "PATCH",
+      // @ts-expect-error #1876: requestJson's JSON body contract is tracked separately.
+      body: { tier }
+    }
   );
 }
 

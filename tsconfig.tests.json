@@ -31,8 +31,6 @@
     "tests/unit/job-search-web-onboarding.test.tsx",
     "tests/unit/job-search-web-root-settings-link.test.tsx",
     "tests/unit/job-search-web-root.test.tsx",
-    "tests/unit/job-search-web-settings.test.tsx",
-    // This test imports a production requestJson body-type defect; #1876 tracks the fix.
-    "tests/unit/email-settings-draft-policy.test.tsx"
+    "tests/unit/job-search-web-settings.test.tsx"
   ]
 }
