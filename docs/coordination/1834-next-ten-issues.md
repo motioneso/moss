@@ -2058,3 +2058,11 @@ provider checks are green, and its real UAT path is running before the isolated 
 runner's exact terminal result. #899 remains active with runner activity and no failure sentinel.
 #1874's fresh Opus security review is still in progress; #1501 remains unchanged with CI as its
 sole blocker. [pane w1:pNF]
+
+## Update - 2026-08-23, #1105 UAT exposed assertion mismatch
+
+#1105's first post-fix UAT run failed on a real test-design mismatch: identical scripted reply
+text is deduplicated by the UI, so counting two identical DOM replies cannot prove the resumed
+turn. The owner is replacing that assertion with a post-resume method-specific `POST /api/chat/turn`
+response check tied to the continuation message plus an exact continuation-message DOM assertion.
+This is a scoped QA correction; the isolated gate and fresh QA remain pending. [pane w1:pNF]
