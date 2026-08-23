@@ -19,11 +19,11 @@ durable live-path proof comment.
 
 | Spec | Issue | Tier | Status | Agent name | Pane | Branch | PR |
 | ---- | ----- | ---- | ------ | ---------- | ---- | ------ | -- |
-| `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319-A (concrete child of #1470) | security | PR open; local gate green; initial Opus QA RED only on pending CI + deferred matched UAT, with no blocking code finding; held behind #1883/#1884 | `catalog-verify-1319a-2` | resolve live | `build/1319a-catalog-verify` | #1897 |
+| `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319-A (concrete child of #1470) | security | deferred — fleet-daemon adoption; PR open; initial Opus QA RED only on pending CI + deferred matched UAT, with no blocking code finding | reaped; worktree retained | — | `build/1319a-catalog-verify` | #1897 |
 | `docs/superpowers/specs/2026-08-19-926-food-day-view-components-and-targets.md` | #1737 (concrete child of #926) | routine | closed/Done — Ben verified working in production; lane cancelled/reaped | reaped | — | deleted | — |
-| `docs/superpowers/specs/2026-08-23-1794-release-notes-protected-main.md` | #1794 | sensitive | initial QA green; CI pending; merge last; final integrated QA + real merged-PR proof pending | `build_1794` | Codex subagent | `build/1794-release-notes-protected-main` | #1896 |
-| `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | PR open; local gate green; fresh relay building branch-installed real-UI proof; security QA not started | `build-1883-livepath2` | resolve live | `build/1883-vault-mcp-errors` | #1892 |
-| `docs/superpowers/specs/2026-08-23-1884-weather-settings-card.md` | #1884 | routine | initial QA green; CI pending; held for post-#1883 rebase + integrated QA | `build-1884-relay` | resolve live | `build/1884-weather-settings` | #1891 |
+| `docs/superpowers/specs/2026-08-23-1794-release-notes-protected-main.md` | #1794 | sensitive | deferred — fleet-daemon adoption; initial QA green; final integrated QA + real merged-PR proof pending | no live agent; worktree retained | — | `build/1794-release-notes-protected-main` | #1896 |
+| `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | deferred — fleet-daemon adoption at pushed head `8c7e3f189`; first real UAT timed out before any assistant reply and rerun needs captured container logs | reaped; worktree retained | — | `build/1883-vault-mcp-errors` | #1892 |
+| `docs/superpowers/specs/2026-08-23-1884-weather-settings-card.md` | #1884 | routine | deferred — fleet-daemon adoption; initial QA green; post-#1883 rebase + integrated QA still pending | reaped; worktree retained | — | `build/1884-weather-settings` | #1891 |
 | issue #1885 | #1885 | routine | merged `91aa6ad84`; issue closed/Done | reaped | — | `fix/1885-coordinator-watchdog` | #1886 |
 
 ## Scope decisions
@@ -128,6 +128,11 @@ hand-merging it.
 - `~/Jarv1s/.claude/worktrees/1885-coordinator-watchdog` is clean with no live process or pane,
   but the mandatory first reap check reports `origin/main..HEAD = 1` after squash merge. Kept per
   the four-gate rule; do not delete until that gate reads zero.
+- Fleet-daemon wind-down: keep `~/Jarv1s/.claude/worktrees/1883-vault-mcp-errors`,
+  `~/Jarv1s/.claude/worktrees/1884-weather-settings`,
+  `~/Jarv1s/.claude/worktrees/1319a-catalog-verify`, and
+  `~/Jarv1s/.claude/worktrees/1794-release-notes-protected-main` with their branches in place for
+  automatic adoption. Do not reap them during this coordinator's closeout.
 
 ## Plan approvals
 
@@ -246,3 +251,19 @@ layout. Current live state after adoption:
 
 Merge order remains #1883 -> #1884 -> #1319-A -> #1319-B -> #1794. `merges_since_relay` remains
 1. No open Ben decision is currently recorded in `docs/coordination/AWAITING-BEN.md`.
+
+## Latest continuation note — fleet-daemon wind-down
+
+Ben directed this coordinator to wind down for fleet-daemon takeover. Spawn no new lanes, perform
+no further merges, and leave unfinished work for automatic adoption. #1883, #1884, and #1319-A are
+now parked cleanly and pushed; their agent panes are closed while their worktrees and branches
+remain in place. #1794 had no live Herdr pane and its worktree and branch also remain. Initial QA
+panes for #1896 and #1897 were already consumed and reaped. The #1883 in-process relay attempt was
+cancelled before it touched a file; pushed head `8c7e3f189` includes the UAT WIP and handoff note.
+
+This coordinator run is closed for fleet-daemon takeover. It shipped PR #1886; PRs #1892, #1891,
+#1897, and #1896 remain open and explicitly deferred as recorded in the queue. Closeout removed no
+worktrees or branches and retained the four run worktrees listed above. The wider worktree backlog
+was not swept because Ben's wind-down direction explicitly reserves unfinished board work for the
+daemon and keeps unrelated fleet-daemon agents/worktrees out of this run's scope. No Ben decision
+is pending in `docs/coordination/AWAITING-BEN.md`.
