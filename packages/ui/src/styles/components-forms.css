@@ -94,6 +94,16 @@
   border-radius: 50%;
   background: var(--white);
   box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.jds-switch__thumb-label {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: var(--weight-semibold);
+  color: var(--text);
+  line-height: 1;
 }
 .jds-switch input:checked + .jds-switch__track {
   background: var(--accent);
