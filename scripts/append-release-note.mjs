@@ -3,15 +3,8 @@
 // docs/WHATS_NEW.md's edge-channel section. Silently does nothing when a pull request has no
 // release note (internal/non-user-facing change) — that is the normal case, not an error.
 //
-// Run by hand from the pull request's own branch, once the pull request exists and has a number:
-//
-//   node scripts/append-release-note.mjs --pr 1796
-//
-// then commit docs/WHATS_NEW.md onto that same branch. This used to run as a GitHub Action on
-// merge, which pushed straight to main; the "Require CI gate on main" ruleset rejects such a push
-// because a direct push has no pull request and therefore no CI gate run to satisfy the required
-// check. Nothing the bot pushes can pass that rule without a bypass credential, so the note is now
-// written where every other change is written — in the pull request. See #1795.
+// The release-notes workflow runs this on its serialized automation branch after a merge. It is
+// also safe to run locally with --pr or explicit metadata flags while developing the transformer.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
@@ -51,12 +44,11 @@ function todayPacificDate(now = new Date()) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(now);
 }
 
-/** Inserts the new bullet under the edge channel's category heading, creating the heading
- * (in canonical Added/Fixed/Changed order) if this is the first entry of that category. */
+/** Inserts the new bullet under the edge channel's date and category headings. */
 export function appendReleaseNote(markdown, note, { prNumber, prUrl, today }) {
   const bullet = `- **${note.title}.** ${note.description} [PR #${prNumber}](${prUrl})`;
 
-  const edgeMatch = markdown.match(/^## Edge channel — \S+\n/m);
+  const edgeMatch = markdown.match(/^## Edge channel(?: — (\S+))?\n/m);
   assert.ok(edgeMatch, "docs/WHATS_NEW.md is missing its '## Edge channel' heading");
   const edgeStart = edgeMatch.index;
   const nextTopHeadingIndex = markdown.indexOf("\n## ", edgeStart + edgeMatch[0].length);
@@ -64,32 +56,54 @@ export function appendReleaseNote(markdown, note, { prNumber, prUrl, today }) {
 
   let edgeSection = markdown
     .slice(edgeStart, edgeEnd)
-    .replace(/^## Edge channel — \S+/, `## Edge channel — ${today}`);
+    .replace(/^## Edge channel(?: — \S+)?/, "## Edge channel");
 
-  const categoryHeading = `### ${note.category}`;
-  const categoryIndex = edgeSection.indexOf(`${categoryHeading}\n`);
-  if (categoryIndex === -1) {
-    const insertAt = CATEGORIES.slice(0, CATEGORIES.indexOf(note.category))
-      .map((category) => edgeSection.indexOf(`### ${category}\n`))
-      .filter((index) => index !== -1)
-      .reduce((furthest, index) => {
-        const nextHeading = edgeSection.indexOf("\n### ", index + 1);
-        const sectionEnd = nextHeading === -1 ? edgeSection.length : nextHeading + 1;
-        return Math.max(furthest, sectionEnd);
-      }, edgeSection.length);
-    // Normalise the blank lines either side of the new section rather than only prepending one.
-    // When the new section lands at the very end of the edge channel, what follows it is the next
-    // top-level heading, which lives outside this slice — so without the trailing newline the new
-    // bullet ran straight into "## v0.1.16" with no blank line between them, and the whitespace
-    // already at the end of the slice produced a doubled blank line above the heading.
-    const before = edgeSection.slice(0, insertAt).replace(/\n+$/, "\n");
-    const after = edgeSection.slice(insertAt);
-    edgeSection =
-      `${before}\n${categoryHeading}\n\n${bullet}\n` + (after.startsWith("\n") ? "" : "\n") + after;
+  const legacyDate = edgeMatch[1];
+  const hasDateGroup = /^### \d{4}-\d{2}-\d{2}$/m.test(edgeSection);
+  if (legacyDate && !hasDateGroup) {
+    edgeSection = edgeSection.replace(
+      /^(### (?:Added|Fixed|Changed))$/m,
+      `### ${legacyDate}\n\n$1`
+    );
+  }
+  edgeSection = edgeSection.replace(/^### (Added|Fixed|Changed)$/gm, "#### $1");
+
+  if (edgeSection.includes(`[PR #${prNumber}]`)) return markdown;
+
+  const dateHeading = `### ${today}`;
+  const categoryHeading = `#### ${note.category}`;
+  const dateIndex = edgeSection.indexOf(`${dateHeading}\n`);
+  if (dateIndex !== -1) {
+    const nextDateMatch = edgeSection
+      .slice(dateIndex + dateHeading.length)
+      .match(/^### \d{4}-\d{2}-\d{2}$/m);
+    const nextDateIndex = nextDateMatch ? dateIndex + dateHeading.length + nextDateMatch.index : -1;
+    const dateEnd = nextDateIndex === -1 ? edgeSection.length : nextDateIndex;
+    const dateSection = edgeSection.slice(dateIndex, dateEnd);
+    const categoryIndex = dateSection.indexOf(`${categoryHeading}\n`);
+    if (categoryIndex !== -1) {
+      const afterHeading = dateIndex + categoryIndex + categoryHeading.length + 1;
+      edgeSection =
+        edgeSection.slice(0, afterHeading) + `\n${bullet}` + edgeSection.slice(afterHeading);
+    } else {
+      const insertAt = CATEGORIES.slice(0, CATEGORIES.indexOf(note.category))
+        .map((category) => dateSection.indexOf(`#### ${category}\n`))
+        .filter((index) => index !== -1)
+        .reduce((furthest, index) => {
+          const nextHeading = dateSection.indexOf("\n#### ", index + 1);
+          return Math.max(furthest, nextHeading === -1 ? dateSection.length : nextHeading + 1);
+        }, dateSection.length);
+      const absoluteInsertAt = dateIndex + insertAt;
+      const before = edgeSection.slice(0, absoluteInsertAt).replace(/\n+$/, "\n");
+      const after = edgeSection.slice(absoluteInsertAt);
+      edgeSection = `${before}\n${categoryHeading}\n\n${bullet}\n` + after.replace(/^\n+/, "\n");
+    }
   } else {
-    const afterHeading = categoryIndex + categoryHeading.length + 1;
-    edgeSection =
-      edgeSection.slice(0, afterHeading) + "\n" + bullet + edgeSection.slice(afterHeading);
+    const firstDate = edgeSection.match(/^### (\d{4}-\d{2}-\d{2})$/m);
+    const insertAt = firstDate && firstDate[1] < today ? firstDate.index : edgeSection.length;
+    const before = edgeSection.slice(0, insertAt).replace(/\n+$/, "\n");
+    const after = edgeSection.slice(insertAt).replace(/^\n+/, "\n");
+    edgeSection = `${before}\n${dateHeading}\n\n${categoryHeading}\n\n${bullet}\n\n` + after;
   }
 
   return markdown.slice(0, edgeStart) + edgeSection + markdown.slice(edgeEnd);
@@ -104,6 +118,13 @@ function selfTest() {
     "## Summary\nstuff\n\n## Release note\nCategory: Fixed\nTitle: Thing broke.\nDescription: It works now.\n"
   );
   assert.deepEqual(note, { category: "Fixed", title: "Thing broke", description: "It works now." });
+
+  const firstEntry = appendReleaseNote(
+    "# What's New in Moss\n\n## Edge channel\n\nEdge builds.\n",
+    { category: "Added", title: "First entry", description: "The first note for this date." },
+    { prNumber: 41, prUrl: "https://example.com/41", today: "2026-08-20" }
+  );
+  assert.match(firstEntry, /## Edge channel\n[\s\S]*### 2026-08-20\n\n#### Added\n/);
 
   const doc = [
     "# What's New in Moss",
@@ -133,28 +154,49 @@ function selfTest() {
     { category: "Fixed", title: "New fix", description: "Broken thing now works." },
     { prNumber: 42, prUrl: "https://example.com/42", today: "2026-08-20" }
   );
-  assert.match(withFix, /## Edge channel — 2026-08-20/);
-  assert.match(
-    withFix,
-    /### Fixed\n\n- \*\*New fix\.\*\* Broken thing now works\. \[PR #42\]\(https:\/\/example\.com\/42\)\n- \*\*Old fix\.\*\*/
-  );
+  assert.match(withFix, /## Edge channel\n/);
+  assert.match(withFix, /### 2026-08-20\n\n#### Fixed\n\n- \*\*New fix\.\*\*/);
+  assert.match(withFix, /### 2026-08-14[\s\S]*#### Fixed\n\n- \*\*Old fix\.\*\*/);
   assert.doesNotMatch(withFix.slice(withFix.indexOf("## v0.1.16")), /New fix/);
 
   const withChanged = appendReleaseNote(
-    doc,
+    withFix,
     { category: "Changed", title: "New behavior", description: "It behaves differently now." },
     { prNumber: 43, prUrl: "https://example.com/43", today: "2026-08-20" }
   );
-  assert.match(withChanged, /### Changed\n\n- \*\*New behavior\.\*\* It behaves differently now\./);
-  assert.ok(withChanged.indexOf("### Changed") > withChanged.indexOf("### Fixed"));
-  assert.ok(withChanged.indexOf("### Changed") < withChanged.indexOf("## v0.1.16"));
-  // A new section at the end of the edge channel butts up against the next top-level heading,
-  // which is outside the slice being edited. Exactly one blank line either side of it, or the
-  // file fails `prettier --check` and the bullet reads as part of the older release below it.
   assert.match(
     withChanged,
-    /- \*\*Old fix\.\*\* Existing entry\. \[PR #2\]\(url\)\n\n### Changed\n\n- \*\*New behavior\.\*\*[^\n]*\n\n## v0\.1\.16/
+    /### 2026-08-20\n\n#### Fixed\n[\s\S]*#### Changed\n\n- \*\*New behavior\./
   );
+  assert.equal((withChanged.match(/### 2026-08-20\n/g) ?? []).length, 1);
+
+  const withLaterDate = appendReleaseNote(
+    withChanged,
+    { category: "Added", title: "Later release", description: "A later release note." },
+    { prNumber: 44, prUrl: "https://example.com/44", today: "2026-08-21" }
+  );
+  assert.match(withLaterDate, /### 2026-08-21\n\n#### Added\n\n- \*\*Later release/);
+  assert.match(withLaterDate, /### 2026-08-20[\s\S]*New behavior/);
+  assert.equal((withLaterDate.match(/### 2026-08-20\n/g) ?? []).length, 1);
+
+  const duplicate = appendReleaseNote(
+    withLaterDate,
+    { category: "Fixed", title: "New fix", description: "Broken thing now works." },
+    { prNumber: 44, prUrl: "https://example.com/44", today: "2026-08-21" }
+  );
+  assert.equal(duplicate, withLaterDate);
+
+  const concurrentInputs = appendReleaseNote(
+    appendReleaseNote(
+      doc,
+      { category: "Added", title: "First queued", description: "First queued note." },
+      { prNumber: 45, prUrl: "https://example.com/45", today: "2026-08-22" }
+    ),
+    { category: "Fixed", title: "Second queued", description: "Second queued note." },
+    { prNumber: 46, prUrl: "https://example.com/46", today: "2026-08-22" }
+  );
+  assert.match(concurrentInputs, /\[PR #45\]/);
+  assert.match(concurrentInputs, /\[PR #46\]/);
 
   console.log("append-release-note self-test passed");
 }

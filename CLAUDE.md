@@ -56,15 +56,13 @@ Deliberate decisions, each with a real failure behind it. Violating one is a blo
   live end-to-end proof recorded on the PR — installed and exercised through the real UI on a live
   dev instance. Without that the honest status is _code-complete, unverified_: don't merge, don't
   mark Done. Full rule in `docs/DEVELOPMENT_STANDARDS.md` → Live-Path Gate.
-- **Every pull request fills in the "Release note" section of the PR template _and_ carries the
-  note in the PR.** If the change is user-facing, give it a Category (Added/Fixed/Changed), a short
-  Title, and a one-sentence plain-English Description, then run
-  `node scripts/append-release-note.mjs --pr <number>` from the branch and commit the resulting
-  `docs/WHATS_NEW.md` change onto the same branch. Nothing appends it for you: the merge-time job
-  was removed in #1795 because it pushed straight to main, where the branch rule requires a CI gate
-  run that a direct push cannot produce. If the change isn't user-visible, write `Category: N/A` and
-  touch nothing else. The Description is read by non-technical users — no code names, file paths, or
-  internal jargon.
+- **Every product pull request fills in the "Release note" section of the PR template.** If the
+  change is user-facing, give it a Category (Added/Fixed/Changed), a short Title, and a one-sentence
+  plain-English Description. After the pull request merges, the release-notes workflow reads that
+  section, updates the date-grouped `docs/WHATS_NEW.md`, and opens or updates a separate release-note
+  pull request through protected `main`; it never pushes `main` directly. If the change isn't
+  user-visible, write `Category: N/A` and touch nothing else. The Description is read by non-technical
+  users — no code names, file paths, or internal jargon.
 
 ## Working in a shared checkout
 
