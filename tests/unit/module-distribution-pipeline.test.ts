@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { createHash } from "node:crypto";
+import { createHash, generateKeyPairSync } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -10,7 +10,10 @@ import {
   downloadAndStageModule,
   fetchRegistryIndex,
   REGISTRY_INDEX_URL,
+  REGISTRY_SIGNATURE_MAX_BYTES,
   resolveRegistryIndexUrl,
+  signCatalogBytes,
+  type ModuleCatalogPublicKey,
   type ModuleRegistryIndex
 } from "../../packages/module-registry/src/node.js";
 
@@ -85,6 +88,37 @@ const fakeFetch =
     return new Response("not found", { status: 404 });
   };
 
+const ephemeralKeypair = generateKeyPairSync("ed25519", {
+  publicKeyEncoding: { type: "spki", format: "pem" },
+  privateKeyEncoding: { type: "pkcs8", format: "pem" }
+});
+const TEST_KEY_ID = "test-catalog-key";
+const TEST_TRUSTED_KEYS: readonly ModuleCatalogPublicKey[] = [
+  { keyId: TEST_KEY_ID, publicKeyPem: ephemeralKeypair.publicKey }
+];
+
+/** Fake fetch additionally serving a signature over the exact served index bytes. */
+const fakeFetchSigned = (
+  index: ModuleRegistryIndex,
+  tarballBytes: Buffer,
+  options?: { readonly signatureOverride?: unknown; readonly indexBytesOverride?: Buffer }
+): typeof fetch => {
+  const indexBytes = Buffer.from(JSON.stringify(index), "utf8");
+  const signature =
+    options?.signatureOverride ??
+    signCatalogBytes(indexBytes, ephemeralKeypair.privateKey, TEST_KEY_ID);
+  const servedIndexBytes = options?.indexBytesOverride ?? indexBytes;
+  return async (input) => {
+    const url = String(input);
+    if (url.endsWith("/index.json.sig")) {
+      return new Response(JSON.stringify(signature), { status: 200 });
+    }
+    if (url.endsWith("/index.json")) return new Response(new Uint8Array(servedIndexBytes), { status: 200 });
+    if (url.endsWith(".tgz")) return new Response(new Uint8Array(tarballBytes), { status: 200 });
+    return new Response("not found", { status: 404 });
+  };
+};
+
 describe("resolveRegistryIndexUrl (#964)", () => {
   it("defaults to the pinned release URL", () => {
     expect(resolveRegistryIndexUrl({} as NodeJS.ProcessEnv)).toBe(REGISTRY_INDEX_URL);
@@ -124,6 +158,75 @@ describe("fetchRegistryIndex (#964)", () => {
     const nope: typeof fetch = async () => new Response("gone", { status: 404 });
     const result = await fetchRegistryIndex({ env: {} as NodeJS.ProcessEnv, fetchFn: nope });
     expect(result.index).toBeNull();
+    expect(result.verification).toBe("unavailable");
+    expect(result.digestSha256).toBeNull();
+  });
+
+  it("verifies a correctly signed index over the exact served bytes", async () => {
+    const { index, tarballBytes } = await makeFixture();
+    const indexBytes = Buffer.from(JSON.stringify(index), "utf8");
+    const result = await fetchRegistryIndex({
+      env: {} as NodeJS.ProcessEnv,
+      fetchFn: fakeFetchSigned(index, tarballBytes),
+      trustedKeys: TEST_TRUSTED_KEYS
+    });
+    expect(result.index?.modules[0]?.id).toBe("demo-module");
+    expect(result.verification).toBe("verified");
+    expect(result.digestSha256).toBe(createHash("sha256").update(indexBytes).digest("hex"));
+    expect(result.failureReason).toBeNull();
+  });
+
+  it("is unverified with signature-fetch-failed when no .sig route exists, but index still parses", async () => {
+    const { index, tarballBytes } = await makeFixture();
+    const result = await fetchRegistryIndex({
+      env: {} as NodeJS.ProcessEnv,
+      fetchFn: fakeFetch(index, tarballBytes),
+      trustedKeys: TEST_TRUSTED_KEYS
+    });
+    expect(result.index?.modules[0]?.id).toBe("demo-module");
+    expect(result.verification).toBe("unverified");
+    expect(result.failureReason).toBe("signature-fetch-failed");
+  });
+
+  it("is unverified with signature-mismatch when index bytes are tampered under a stale signature", async () => {
+    const { index, tarballBytes } = await makeFixture();
+    const indexBytes = Buffer.from(JSON.stringify(index), "utf8");
+    const staleSignature = signCatalogBytes(indexBytes, ephemeralKeypair.privateKey, TEST_KEY_ID);
+    const tamperedIndex = { ...index, modules: [...index.modules] };
+    const tamperedBytes = Buffer.from(JSON.stringify(tamperedIndex) + " ", "utf8");
+    const result = await fetchRegistryIndex({
+      env: {} as NodeJS.ProcessEnv,
+      fetchFn: fakeFetchSigned(index, tarballBytes, {
+        signatureOverride: staleSignature,
+        indexBytesOverride: tamperedBytes
+      }),
+      trustedKeys: TEST_TRUSTED_KEYS
+    });
+    expect(result.verification).toBe("unverified");
+    expect(result.failureReason).toBe("signature-mismatch");
+  });
+
+  it("is unverified with signature-unknown-key when the signature names an untrusted key", async () => {
+    const { index, tarballBytes } = await makeFixture();
+    const result = await fetchRegistryIndex({
+      env: {} as NodeJS.ProcessEnv,
+      fetchFn: fakeFetchSigned(index, tarballBytes),
+      trustedKeys: []
+    });
+    expect(result.verification).toBe("unverified");
+    expect(result.failureReason).toBe("signature-unknown-key");
+  });
+
+  it("is unverified with signature-too-large when the signature body exceeds the cap", async () => {
+    const { index, tarballBytes } = await makeFixture();
+    const oversizeSignature = { padding: "x".repeat(REGISTRY_SIGNATURE_MAX_BYTES + 1) };
+    const result = await fetchRegistryIndex({
+      env: {} as NodeJS.ProcessEnv,
+      fetchFn: fakeFetchSigned(index, tarballBytes, { signatureOverride: oversizeSignature }),
+      trustedKeys: TEST_TRUSTED_KEYS
+    });
+    expect(result.verification).toBe("unverified");
+    expect(result.failureReason).toBe("signature-too-large");
   });
 });
 
