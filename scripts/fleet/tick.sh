@@ -30,6 +30,13 @@ LANE_CAP=3
 SPAWN_BUDGET=12
 STALE_SECONDS=$((30 * 60))
 DEPUTY_WAIT_SECONDS=$((20 * 60))
+# Every judgment shell-out goes through one command so no provider or model
+# name is baked into the fleet. The default runs the local Claude CLI on
+# whatever model it is configured to use; override to point at another
+# provider. Word-splitting here is deliberate -- the value is a command.
+JUDGE_CMD="${FLEET_JUDGE_CMD:-claude -p}"
+# Model the spawned build agents run on. A cost policy, not a provider choice.
+BUILD_MODEL="${FLEET_BUILD_MODEL:-sonnet}"
 
 NOW_EPOCH="$(date +%s)"
 
@@ -148,11 +155,12 @@ $record
 Last 20 log lines for this lane:
 $(lane_log_tail "$issue")"
   if [ "$DRY" = "1" ]; then
-    echo "DRY: claude -p [judgment for lane $issue: $question]"
+    echo "DRY: $JUDGE_CMD [judgment for lane $issue: $question]"
     echo ""
     return 0
   fi
-  ruling="$(claude -p "$prompt" 2>/dev/null | head -n1 | tr -d '\r' | awk '{print toupper($1)}')"
+  # shellcheck disable=SC2086 # JUDGE_CMD is a command, splitting is intended
+  ruling="$($JUDGE_CMD "$prompt" 2>/dev/null | head -n1 | tr -d '\r' | awk '{print toupper($1)}')"
   fctl log "$issue" "judgment question: $question"
   fctl log "$issue" "judgment ruling: ${ruling:-<no answer>}"
   echo "$ruling"
@@ -181,7 +189,7 @@ spawn_agent() { # <name> <cwd> <brief-path>
   local boot="You are a fleet lane agent. Read and follow the brief at $brief exactly. Report status in plain English, no jargon, and pass that rule to anything you spawn."
   if [ "$DRY" = "1" ]; then
     echo "DRY: herdr pane split <base-pane> --direction down --cwd $cwd --no-focus"
-    echo "DRY: herdr agent start $name --kind claude --pane <new-pane> -- --model sonnet --permission-mode bypassPermissions \"$boot\""
+    echo "DRY: herdr agent start $name --kind claude --pane <new-pane> -- --model $BUILD_MODEL --permission-mode bypassPermissions \"$boot\""
     return 0
   fi
   local base_pane new_pane
@@ -195,7 +203,7 @@ spawn_agent() { # <name> <cwd> <brief-path>
     echo "fleet-tick: pane split failed for $name" >&2
     return 1
   fi
-  if ! herdr agent start "$name" --kind claude --pane "$new_pane" -- --model sonnet --permission-mode bypassPermissions "$boot" >/dev/null 2>&1; then
+  if ! herdr agent start "$name" --kind claude --pane "$new_pane" -- --model "$BUILD_MODEL" --permission-mode bypassPermissions "$boot" >/dev/null 2>&1; then
     echo "fleet-tick: herdr agent start failed for $name" >&2
     return 1
   fi
@@ -254,7 +262,8 @@ Answer with a SINGLE first line containing exactly one word: SECURITY, SENSITIVE
 Issue #$issue: $title
 
 $(head -c 4000 <<<"$body")"
-  tier="$(claude -p "$prompt" 2>/dev/null | head -n1 | tr -d '\r' | awk '{print tolower($1)}')"
+  # shellcheck disable=SC2086 # JUDGE_CMD is a command, splitting is intended
+  tier="$($JUDGE_CMD "$prompt" 2>/dev/null | head -n1 | tr -d '\r' | awk '{print tolower($1)}')"
   case "$tier" in
     security|sensitive|routine) echo "$tier" ;;
     *) echo "security" ;; # unreadable answer = doubt = highest tier
@@ -276,7 +285,7 @@ issue_url() { # <issue number>
 intake() {
   if [ "$DRY" = "1" ]; then
     echo "DRY: gh project item-list $FLEET_PROJECT_NUMBER --owner $FLEET_PROJECT_OWNER --format json (intake: find Ready/In Progress task issues with no record)"
-    echo "DRY: claude -p [intake: assign a risk tier per new issue]"
+    echo "DRY: $JUDGE_CMD [intake: assign a risk tier per new issue]"
     return 0
   fi
   local items row n title body tier branch pr
@@ -636,7 +645,7 @@ deputy_call() { # <issue> <record> <reason>
   tier="$(jq -r '.tier // "routine"' <<<"$record")"
   question="You are acting as Ben's deputy for the Jarv1s fleet tonight. Lane $issue is parked with reason: $reason. Ben was asked over 20 minutes ago and has not replied. You may decide anything Ben could have been asked, including security-tier merge sign-off, EXCEPT actions on the hard floor: touching prod (:1533); deleting or dropping user data, databases, or vault content; force-pushing or rewriting history; deleting branches or worktrees with unmerged work; disabling CI, guardrails, or required checks; exceeding the spawn budget; bypassing the live-path check; exposing secrets. If the ruling would need any of those, your only allowed answer is PARK. Prefer the reversible option when it is close. This lane's tier is $tier."
   if [ "$DRY" = "1" ]; then
-    echo "DRY: claude -p --model claude-fable-5 [deputy for lane $issue: $reason]"
+    echo "DRY: $JUDGE_CMD [deputy for lane $issue: $reason]"
     return 0
   fi
   local prompt
@@ -649,7 +658,8 @@ $record
 
 Last 20 log lines for this lane:
 $(lane_log_tail "$issue")"
-  ruling="$(claude -p --model claude-fable-5 "$prompt" 2>/dev/null | head -n1 | tr -d '\r' | awk '{print toupper($1)}')"
+  # shellcheck disable=SC2086 # JUDGE_CMD is a command, splitting is intended
+  ruling="$($JUDGE_CMD "$prompt" 2>/dev/null | head -n1 | tr -d '\r' | awk '{print toupper($1)}')"
   fctl log "$issue" "DEPUTY question: $question"
   fctl log "$issue" "DEPUTY ruling: ${ruling:-<no answer>}"
   case "$ruling" in

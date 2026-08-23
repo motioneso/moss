@@ -212,8 +212,15 @@ pass "expired DEPUTY file means no deputy call"
 
 printf 'until=%s\n' "$(date -d '1 hour' +%Y-%m-%dT%H:%M)" > "$state/DEPUTY"
 out="$(run_tick "$state")"
-grep -q "DRY: claude -p --model claude-fable-5 \[deputy for lane 108" <<<"$out"
+grep -q "DRY: claude -p \[deputy for lane 108" <<<"$out"
 pass "active DEPUTY file triggers the deputy call after 20 minutes with no reply"
+
+# --- 8c. the judgment command is swappable, no model name baked in ------------------
+
+out="$(run_tick "$state" FLEET_JUDGE_CMD='some-other-provider run')"
+grep -q "DRY: some-other-provider run \[deputy for lane 108" <<<"$out"
+if grep -qiE "claude-(fable|opus|sonnet|haiku)" <<<"$out"; then false; fi
+pass "deputy honours FLEET_JUDGE_CMD and pins no model name"
 
 # --- 9. intake adopts an issue with an open PR at pr-open ---------------------------
 
