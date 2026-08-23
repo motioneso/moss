@@ -1660,3 +1660,12 @@ running before implementation:
 No implementation lane starts until Fable grounds or resolves the missing-spec gate. Main CI is
 currently in progress; build agents will use Codex GPT-5.6 Luna at high effort with isolated
 worktrees and unattended permissions once the gate is clear. [pane w1:pNF]
+
+## Update - 2026-08-23, #1501 build started
+
+Fable 5 completed the authoritative #1501 plan at commit `5810e0775`. Its planner pane was
+resolved fresh and reaped. Codex GPT-5.6 Luna at high effort is now implementing #1501 in the
+same isolated worktree/branch: `codex-1501-build`, session
+`01a02d53-0152-7c92-a3d0-84947677f620`, pane `w1:pNN`, branch `1501-keyline-global-texture`.
+The build lane must preserve the Fable plan, complete the required desktop/mobile light/dark
+live proof, and open a PR before QA. [pane w1:pNF]
