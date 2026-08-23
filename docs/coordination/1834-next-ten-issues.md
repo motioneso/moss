@@ -2624,3 +2624,17 @@ The work remains recoverable on `origin/main` at `d389a59e17f7483ee198fe0d955277
 PR #1878's required CI and image build have now completed green, but the PR remains stopped on its
 second failed QA and the open Ben decision about one final deletion-only correction. Its owner pane
 and worktree remain intact; no merge is authorized. [pane w1:pPE]
+
+## Continuation - 2026-08-23, relay 13 required by compaction tripwire
+
+The coordinator compaction tripwire fired, so no merge or lane restart is permitted in this
+session. Current authority remains session `01a02e12-8834-7b51-b0fa-51ef6f2ca2e3`, agent
+`coordinator`, label `Coordinator`. The only Jarv1s fleet lane is stopped owner
+`codex-1501-build`, session `01a02d53-0152-7c92-a3d0-84947677f620`, for PR #1878 at
+`92953e1c8319c682663d5ce69bdc9280bca509ec`; no QA lane is live. Required CI is green, but two
+fresh QA cycles failed the remaining duplicated-comment criterion. The Ben-only choice is already
+recorded in `docs/coordination/AWAITING-BEN.md`, and the phone ping is queued: allow one final
+deletion-only correction (recommended), or defer. A fresh coordinator must adopt this state,
+check for Ben's reply, and only after approval restart the owner for the narrow correction,
+rebase onto current `origin/main`, and request fresh exact-head QA. No merge is authorized.
+[pane w1:pPE]
