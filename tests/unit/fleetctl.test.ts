@@ -158,4 +158,46 @@ describe("fleetctl", () => {
   it("exits 2 with usage on an unknown command", () => {
     expect(run(["frobnicate"]).code).toBe(2);
   });
+
+  it("new records carry pause and question fields with safe defaults", () => {
+    run(["add", "42", "spec=docs/specs/x.md", "tier=routine"]);
+    const record = JSON.parse(run(["get", "42"]).stdout);
+    expect(record).toMatchObject({
+      paused: false,
+      pausedAt: null,
+      pausedBy: null,
+      question: null,
+      questionAskedAt: null
+    });
+  });
+
+  it("paused is a real boolean and rejects anything else", () => {
+    run(["add", "43", "spec=docs/specs/x.md", "tier=routine"]);
+    expect(run(["set", "43", "paused=true"]).code).toBe(0);
+    let record = JSON.parse(run(["get", "43"]).stdout);
+    expect(record.paused).toBe(true);
+
+    expect(run(["set", "43", "paused=false"]).code).toBe(0);
+    record = JSON.parse(run(["get", "43"]).stdout);
+    expect(record.paused).toBe(false);
+
+    expect(run(["set", "43", "paused=banana"]).code).toBe(1);
+  });
+
+  it("question fields set and clear like other string fields", () => {
+    run(["add", "44", "spec=docs/specs/x.md", "tier=routine"]);
+    run([
+      "set",
+      "44",
+      "question=Should we merge PR 90 without live proof?",
+      "questionAskedAt=2026-08-23T01:00:00Z"
+    ]);
+    let record = JSON.parse(run(["get", "44"]).stdout);
+    expect(record.question).toBe("Should we merge PR 90 without live proof?");
+    expect(record.questionAskedAt).toBe("2026-08-23T01:00:00Z");
+
+    run(["set", "44", "question=null"]);
+    record = JSON.parse(run(["get", "44"]).stdout);
+    expect(record.question).toBeNull();
+  });
 });

@@ -55,6 +55,12 @@ echo "claude called" >> "$SHIM_LOG_DIR/claude.log"
 printf '%s\n' "${CLAUDE_ANSWER:-PARK}"
 EOF
 
+cat >"$tmp/bin/other-judge" <<'EOF'
+#!/usr/bin/env bash
+echo "other-judge called" >> "$SHIM_LOG_DIR/other-judge.log"
+printf '%s\n' "PARK"
+EOF
+
 cat >"$tmp/bin/needs-ben" <<'EOF'
 #!/usr/bin/env bash
 echo "$*" >> "$SHIM_LOG_DIR/needs-ben.log"
@@ -80,6 +86,8 @@ chmod +x "$tmp/bin/"*
 
 template="$tmp/brief-template.md"
 printf '%s\n' '# Build issue ${ISSUE}' 'Tier: ${TIER}. Branch: ${BRANCH}. Worktree: ${WORKTREE}.' > "$template"
+meminfo_ok="$tmp/meminfo-ok"
+printf 'MemTotal:       65536000 kB\nMemAvailable:   32768000 kB\n' > "$meminfo_ok"
 
 now_iso="$(date -Iseconds)"
 
@@ -105,6 +113,7 @@ run_tick() { # <state-dir> [extra env KEY=VAL...]; dry-run unless FLEET_DRY_RUN 
     JARV1S_FLEET_STATE="$state" \
     FLEET_BRIEF_TEMPLATE="$template" \
     NEEDS_BEN_DIR="$tmp/needs-ben" \
+    FLEET_MEMINFO="$meminfo_ok" \
     FLEET_DRY_RUN=1 \
     env "$@" "$tick"
 }
@@ -116,6 +125,7 @@ run_tick_live() { # non-dry: everything still stubbed via PATH shims
     JARV1S_FLEET_STATE="$state" \
     FLEET_BRIEF_TEMPLATE="$template" \
     NEEDS_BEN_DIR="$tmp/needs-ben" \
+    FLEET_MEMINFO="$meminfo_ok" \
     env "$@" "$tick"
 }
 
@@ -197,7 +207,7 @@ out="$(run_tick "$state")"
 grep -q "needs re-slice" <<<"$out"
 pass "a lane relayed twice parks with reason needs re-slice"
 
-# --- 8. expired DEPUTY file means no deputy call ------------------------------------
+# --- 8. deputy off by default; the old DEPUTY marker file is dead -------------------
 
 state="$(new_state)"
 write_record "$state" 108 '{"issue":108,"status":"blocked","tier":"routine","blocked_reason":"stuck on a decision","relays":0}'
@@ -206,17 +216,25 @@ echo "108: stuck on a decision" > "$tmp/needs-ben/sent/entry-108.msg"
 touch -d '30 minutes ago' "$tmp/needs-ben/sent/entry-108.msg"
 out="$(run_tick "$state")"
 if grep -qi "deputy" <<<"$out"; then false; fi
-pass "expired DEPUTY file means no deputy call"
+pass "deputy stays off by default even when the old DEPUTY file is present"
 
-# --- 8b. active DEPUTY file does trigger the deputy call ----------------------------
+# --- 8b. deputyEnabled in settings turns the deputy on ------------------------------
 
-printf 'until=%s\n' "$(date -d '1 hour' +%Y-%m-%dT%H:%M)" > "$state/DEPUTY"
+printf '{"deputyEnabled": true}\n' > "$state/settings.json"
 out="$(run_tick "$state")"
 grep -q "DRY: claude -p \[deputy for lane 108" <<<"$out"
-pass "active DEPUTY file triggers the deputy call after 20 minutes with no reply"
+pass "deputyEnabled true in settings triggers the deputy call after the wait"
+
+# --- 8d. deputyWaitSeconds from settings is honoured -------------------------------
+
+printf '{"deputyEnabled": true, "deputyWaitSeconds": 7200}\n' > "$state/settings.json"
+out="$(run_tick "$state")"
+if grep -qi "deputy for lane" <<<"$out"; then false; fi
+pass "a 2-hour deputyWaitSeconds means a 30-minute-old question gets no deputy call yet"
 
 # --- 8c. the judgment command is swappable, no model name baked in ------------------
 
+printf '{"deputyEnabled": true}\n' > "$state/settings.json"
 out="$(run_tick "$state" FLEET_JUDGE_CMD='some-other-provider run')"
 grep -q "DRY: some-other-provider run \[deputy for lane 108" <<<"$out"
 if grep -qiE "claude-(fable|opus|sonnet|haiku)" <<<"$out"; then false; fi
@@ -261,6 +279,7 @@ state="$(new_state)"
 clear_logs
 write_record "$state" 301 '{"issue":301,"status":"blocked","tier":"security","pr":88,"blocked_reason":"security tier: merge needs Ben sign-off","relays":0}'
 printf 'until=%s\n' "$(date -d '1 hour' +%Y-%m-%dT%H:%M)" > "$state/DEPUTY"
+printf '{"deputyEnabled": true}\n' > "$state/settings.json"
 echo "301: security tier: merge needs Ben sign-off" > "$tmp/needs-ben/sent/entry-301.msg"
 touch -d '30 minutes ago' "$tmp/needs-ben/sent/entry-301.msg"
 run_tick_live "$state" CLAUDE_ANSWER="MERGE" >/dev/null
@@ -275,11 +294,156 @@ state="$(new_state)"
 clear_logs
 write_record "$state" 302 '{"issue":302,"status":"blocked","tier":"routine","pr":89,"blocked_reason":"code-complete, unverified","relays":0}'
 printf 'until=%s\n' "$(date -d '1 hour' +%Y-%m-%dT%H:%M)" > "$state/DEPUTY"
+printf '{"deputyEnabled": true}\n' > "$state/settings.json"
 echo "302: code-complete, unverified" > "$tmp/needs-ben/sent/entry-302.msg"
 touch -d '30 minutes ago' "$tmp/needs-ben/sent/entry-302.msg"
 run_tick_live "$state" CLAUDE_ANSWER="MERGE" >/dev/null
 if grep -q "pr merge 89" "$SHIM_LOG_DIR/gh.log"; then false; fi
 grep -q "MERGE refused" "$SHIM_LOG_DIR/fleetctl.log"
 pass "deputy cannot merge past the live-path check; the lane stays parked"
+
+# --- 14. settings.json is read, and the environment still wins ---------------------
+
+state="$(new_state)"
+write_record "$state" 401 '{"issue":401,"status":"queued","tier":"routine","relays":0,"spec":"docs/x.md"}'
+printf '{"laneCap": 0}\n' > "$state/settings.json"
+out="$(run_tick "$state")"
+if grep -q "worktree add" <<<"$out"; then false; fi
+pass "laneCap from settings.json is honoured (0 lanes means nothing dispatches)"
+
+out="$(run_tick "$state" FLEET_LANE_CAP=1)"
+grep -q "DRY: herdr agent start fleet-lane-401" <<<"$out"
+pass "an environment variable still overrides the settings file"
+
+# --- 14b. judgeCmd from settings drives judgment calls ------------------------------
+
+state="$(new_state)"
+stale_iso="$(date -Iseconds -d '40 minutes ago')"
+write_record "$state" 402 "{\"issue\":402,\"status\":\"building\",\"agent\":\"gone-agent\",\"relays\":0,\"updated_at\":\"$stale_iso\"}"
+printf '{"judgeCmd": "other-judge run"}\n' > "$state/settings.json"
+run_tick_live "$state" >/dev/null
+grep -q "other-judge called" "$SHIM_LOG_DIR/other-judge.log"
+pass "judgeCmd from settings.json drives the dead-lane judgment call"
+
+# --- 14c. a malformed settings file falls back to the built-in numbers --------------
+
+state="$(new_state)"
+write_record "$state" 403 '{"issue":403,"status":"queued","tier":"routine","relays":0,"spec":"docs/x.md"}'
+printf '{"laneCap": "lots"}\n' > "$state/settings.json"
+out="$(run_tick "$state")"
+grep -q "DRY: herdr agent start fleet-lane-403" <<<"$out"
+pass "a non-numeric laneCap falls back to the built-in cap instead of breaking the tick"
+
+# --- 15. a paused lane is skipped entirely, including the dead-lane check ----------
+
+state="$(new_state)"
+stale_iso="$(date -Iseconds -d '40 minutes ago')"
+write_record "$state" 501 "{\"issue\":501,\"status\":\"building\",\"agent\":\"gone-agent\",\"paused\":true,\"relays\":0,\"updated_at\":\"$stale_iso\"}"
+out="$(run_tick "$state")"
+if grep -qE "judgment for lane 501|set 501 status=blocked" <<<"$out"; then false; fi
+pass "a paused lane survives past the dead-lane threshold untouched"
+
+# --- 15b. a paused queued lane is not dispatched ------------------------------------
+
+state="$(new_state)"
+write_record "$state" 502 '{"issue":502,"status":"queued","tier":"routine","paused":true,"relays":0,"spec":"docs/x.md"}'
+out="$(run_tick "$state")"
+if grep -q "worktree add" <<<"$out"; then false; fi
+pass "a paused queued lane spawns nothing"
+
+# --- 15c. the brief template teaches agents what a pause is, and renders ------------
+
+grep -q "pause" "$repo_root/scripts/fleet/brief-template.md"
+if grep -q '{{' "$repo_root/scripts/fleet/brief-template.md"; then false; fi
+pass "brief template carries the pause rule and only placeholders the renderer replaces"
+
+# --- 16. below the memory floor, no agent starts and the refusal is logged ---------
+
+state="$(new_state)"
+write_record "$state" 601 '{"issue":601,"status":"queued","tier":"routine","relays":0,"spec":"docs/x.md"}'
+meminfo_low="$tmp/meminfo-low"
+printf 'MemTotal:       65536000 kB\nMemAvailable:    1048576 kB\n' > "$meminfo_low"
+out="$(run_tick "$state" FLEET_MEMINFO="$meminfo_low")"
+if grep -q "worktree add" <<<"$out"; then false; fi
+grep -q "free memory" <<<"$out"
+pass "below the 4 GB floor nothing spawns and the refusal is logged in plain English"
+
+# --- 16b. an unreadable memory source fails open ------------------------------------
+
+out="$(run_tick "$state" FLEET_MEMINFO="$tmp/does-not-exist")"
+grep -q "DRY: herdr agent start fleet-lane-601" <<<"$out"
+pass "an unreadable memory source does not stop the fleet"
+
+# --- 16c. the memory floor is settable from the settings file, and env still wins ---
+
+state="$(new_state)"
+write_record "$state" 602 '{"issue":602,"status":"queued","tier":"routine","relays":0,"spec":"docs/x.md"}'
+printf '{"memoryFloorMb":60000}\n' > "$state/settings.json"
+out="$(run_tick "$state")"
+if grep -q "worktree add" <<<"$out"; then false; fi
+grep -q "60000 MB floor" <<<"$out"
+pass "a floor set in the settings file is honoured, so it is tunable without editing the unit"
+
+out="$(run_tick "$state" FLEET_MEMORY_FLOOR_MB=1)"
+grep -q "DRY: herdr agent start fleet-lane-602" <<<"$out"
+pass "a floor pinned in the environment beats the settings file, like every other setting"
+
+printf '{"memoryFloorMb":0}\n' > "$state/settings.json"
+out="$(run_tick "$state")"
+grep -q "DRY: herdr agent start fleet-lane-602" <<<"$out"
+pass "a floor of zero in the settings file turns the check off"
+
+# --- 17. each kind of work spawns on its configured model and effort ----------------
+
+state="$(new_state)"
+write_record "$state" 701 '{"issue":701,"status":"queued","tier":"security","relays":0,"spec":"docs/x.md"}'
+printf '{"buildModels":{"security":{"model":"model-x","effort":"high"}}}\n' > "$state/settings.json"
+out="$(run_tick "$state")"
+grep -q -- "--model model-x --effort high" <<<"$out"
+pass "a security-tier lane spawns on the model and effort configured for security work"
+
+# --- 17b. no configuration at all means no model flag, not a baked-in name ----------
+
+state="$(new_state)"
+write_record "$state" 702 '{"issue":702,"status":"queued","tier":"routine","relays":0,"spec":"docs/x.md"}'
+out="$(run_tick "$state")"
+grep -q "DRY: herdr agent start fleet-lane-702" <<<"$out"
+if grep -q -- "--model" <<<"$out"; then false; fi
+pass "with no settings and no env, the spawn omits the model flag entirely"
+
+# --- 17b2. a model pinned by hand does not inherit an effort meant for another ------
+
+state="$(new_state)"
+write_record "$state" 703 '{"issue":703,"status":"queued","tier":"security","relays":0,"spec":"docs/x.md"}'
+printf '{"buildModels":{"security":{"model":"model-x","effort":"high"}}}\n' > "$state/settings.json"
+out="$(run_tick "$state" FLEET_BUILD_MODEL=pinned-model)"
+grep -q -- "--model pinned-model" <<<"$out"
+if grep -q -- "--effort" <<<"$out"; then false; fi
+pass "pinning only the model drops the settings file's effort instead of mispairing them"
+
+out="$(run_tick "$state" FLEET_BUILD_MODEL=pinned-model FLEET_BUILD_EFFORT=low)"
+grep -q -- "--model pinned-model --effort low" <<<"$out"
+pass "pinning both the model and the effort uses exactly what was pinned"
+
+# --- 17c. no model name appears in the daemon's own code ----------------------------
+
+if grep -riE 'sonnet|opus|haiku|fable|gpt-[0-9]' "$repo_root/scripts/fleet/tick.sh" "$repo_root/scripts/fleet/fleetctl.mjs"; then false; fi
+pass "the daemon and the state CLI contain no model names; names are data in settings"
+
+# --- 18. a lane's outstanding question reaches the lane record ----------------------
+
+state="$(new_state)"
+write_record "$state" 801 '{"issue":801,"status":"blocked","tier":"routine","blocked_reason":"needs a schema decision","relays":0}'
+out="$(run_tick "$state")"
+grep -q "DRY: needs-ben fleet-daemon 801: needs a schema decision" <<<"$out"
+grep -q "DRY: fleetctl set 801 question=needs a schema decision questionAskedAt=" <<<"$out"
+pass "filing a question for Ben also copies it onto the lane record"
+
+# --- 18b. an existing question is not re-stamped every tick -------------------------
+
+echo "801: needs a schema decision" > "$tmp/needs-ben/sent/entry-801.msg"
+out="$(run_tick "$state")"
+if grep -q "set 801 question=" <<<"$out"; then false; fi
+pass "a question already on file is not re-stamped, so its clock stays honest"
 
 echo "fleet tick tests passed"

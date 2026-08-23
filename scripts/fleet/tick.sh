@@ -7,8 +7,8 @@
 #   - STOP file in the state dir: exit immediately, do nothing, say nothing.
 #   - Spawn budget: at most 12 agent spawns per night (since 18:00 local); at the
 #     cap, nothing new is dispatched.
-#   - DEPUTY file: lets a one-shot model call stand in for Ben on parked lanes,
-#     within an explicit scope and expiry.
+#   - Deputy switch (deputyEnabled in settings.json): lets a one-shot model call
+#     stand in for Ben on parked lanes, within a hard floor it may never cross.
 #
 # FLEET_DRY_RUN=1 prints every externally-visible action as "DRY: <command>"
 # instead of running it (worktree add, herdr, gh writes, needs-ben, claude -p,
@@ -26,17 +26,49 @@ BRIEFS_DIR="$STATE_DIR/briefs"
 BRIEF_TEMPLATE="${FLEET_BRIEF_TEMPLATE:-$SCRIPT_DIR/brief-template.md}"
 NEEDS_BEN_DIR="${NEEDS_BEN_DIR:-$HOME/.needs-ben}"
 DRY="${FLEET_DRY_RUN:-0}"
-LANE_CAP=3
-SPAWN_BUDGET=12
+# Configuration precedence, for every value below: environment variable wins,
+# then settings.json in the state folder (written by the launcher's setup
+# questions), then a built-in fallback that matches the daemon's original
+# behaviour. The environment path exists so the service can be driven directly.
+SETTINGS_FILE="$STATE_DIR/settings.json"
+
+settings_get() { # <jq path, e.g. .laneCap> -> value or empty
+  [ -f "$SETTINGS_FILE" ] || return 0
+  jq -r "$1 // empty" "$SETTINGS_FILE" 2>/dev/null
+}
+
+int_or() { # <value> <fallback> -> the value if it is a whole number, else the fallback
+  case "${1:-}" in
+    '' | *[!0-9]*) echo "$2" ;;
+    *) echo "$1" ;;
+  esac
+}
+
+LANE_CAP="$(int_or "${FLEET_LANE_CAP:-$(settings_get '.laneCap')}" 3)"
+SPAWN_BUDGET="$(int_or "${FLEET_SPAWN_BUDGET:-$(settings_get '.spawnBudget')}" 12)"
 STALE_SECONDS=$((30 * 60))
-DEPUTY_WAIT_SECONDS=$((20 * 60))
+DEPUTY_WAIT_SECONDS="$(int_or "${FLEET_DEPUTY_WAIT_SECONDS:-$(settings_get '.deputyWaitSeconds')}" $((20 * 60)))"
 # Every judgment shell-out goes through one command so no provider or model
 # name is baked into the fleet. The default runs the local Claude CLI on
 # whatever model it is configured to use; override to point at another
 # provider. Word-splitting here is deliberate -- the value is a command.
-JUDGE_CMD="${FLEET_JUDGE_CMD:-claude -p}"
-# Model the spawned build agents run on. A cost policy, not a provider choice.
-BUILD_MODEL="${FLEET_BUILD_MODEL:-sonnet}"
+JUDGE_CMD="${FLEET_JUDGE_CMD:-$(settings_get '.judgeCmd')}"
+JUDGE_CMD="${JUDGE_CMD:-claude -p}"
+
+tier_model() { # <tier> -> model for this kind of work, or empty for "CLI default"
+  if [ -n "${FLEET_BUILD_MODEL:-}" ]; then echo "$FLEET_BUILD_MODEL"; return; fi
+  settings_get ".buildModels.\"$1\".model"
+}
+
+tier_effort() { # <tier> -> effort level, or empty for "do not pass one"
+  if [ -n "${FLEET_BUILD_EFFORT:-}" ]; then echo "$FLEET_BUILD_EFFORT"; return; fi
+  # A model pinned by environment does not inherit the settings file's effort:
+  # that effort was chosen for whatever model the file names, and pairing it
+  # with a hand-pinned model silently misconfigures the spawn. Pin both or
+  # neither; pinning only the model falls back to the CLI's own default.
+  if [ -n "${FLEET_BUILD_MODEL:-}" ]; then return; fi
+  settings_get ".buildModels.\"$1\".effort"
+}
 
 NOW_EPOCH="$(date +%s)"
 
@@ -108,19 +140,35 @@ note_spawn() {
   SPAWNS_TONIGHT=$((SPAWNS_TONIGHT + 1))
 }
 
-# DEPUTY file: "until=2026-08-24T08:00" (one scope for everything; Ben's ruling
-# 2026-08-23). Missing file, missing expiry, or past expiry all mean deputy off
-# (fail closed).
+# Deputy switch (Ben's ruling, 2026-08-23): a plain on/off setting with no
+# time element, replacing the old expiring DEPUTY marker file. Off unless
+# deputyEnabled is true in settings.json or FLEET_DEPUTY_ENABLED=true in the
+# environment. The launcher shows this state on screen at all times; the
+# hard floor below is unaffected by it.
 DEPUTY_ACTIVE=0
-if [ -f "$STATE_DIR/DEPUTY" ]; then
-  deputy_raw="$(cat "$STATE_DIR/DEPUTY" 2>/dev/null || true)"
-  deputy_until="$(grep -o 'until=[^ ]*' <<<"$deputy_raw" | head -n1 | cut -d= -f2)"
-  if [ -n "$deputy_until" ] && [ "$(iso_to_epoch "$deputy_until")" -gt "$NOW_EPOCH" ]; then
-    DEPUTY_ACTIVE=1
-  fi
-fi
+deputy_enabled="${FLEET_DEPUTY_ENABLED:-$(settings_get '.deputyEnabled')}"
+[ "$deputy_enabled" = "true" ] && DEPUTY_ACTIVE=1
 
 # --- shared helpers ------------------------------------------------------------
+
+# Memory floor (spec: 4 GB). The fleet degrades instead of pushing the box
+# into swap at 4am: below the floor no new agent starts, and the tick says
+# so and carries on. An unreadable source fails open -- a box where free
+# memory cannot be read should not silently stop the fleet.
+MEMINFO_SOURCE="${FLEET_MEMINFO:-/proc/meminfo}"
+MEMORY_FLOOR_MB="$(int_or "${FLEET_MEMORY_FLOOR_MB:-$(settings_get '.memoryFloorMb')}" 4096)"
+
+memory_ok() {
+  local kb
+  [ "$MEMORY_FLOOR_MB" -gt 0 ] || return 0
+  kb="$(awk '/^MemAvailable:/ {print $2}' "$MEMINFO_SOURCE" 2>/dev/null)"
+  case "$kb" in '' | *[!0-9]*) return 0 ;; esac
+  [ $((kb / 1024)) -ge "$MEMORY_FLOOR_MB" ]
+}
+
+refuse_spawn_low_memory() { # <issue>
+  fctl log "$1" "not starting an agent: free memory is below the $MEMORY_FLOOR_MB MB floor; will try again next tick"
+}
 
 lane_log_tail() { # <issue> [n]
   local issue="$1" n="${2:-20}"
@@ -184,12 +232,18 @@ render_brief() { # <template> <out> ISSUE SPEC TIER BRANCH WORKTREE PR AGENT ROU
 }
 
 # Spawn a Claude agent in a fresh herdr pane pointed at a brief file.
-spawn_agent() { # <name> <cwd> <brief-path>
-  local name="$1" cwd="$2" brief="$3"
+spawn_agent() { # <name> <cwd> <brief-path> <tier>
+  local name="$1" cwd="$2" brief="$3" tier="${4:-routine}"
+  local model effort
+  local model_args=()
+  model="$(tier_model "$tier")"
+  effort="$(tier_effort "$tier")"
+  [ -n "$model" ] && model_args+=(--model "$model")
+  [ -n "$effort" ] && model_args+=(--effort "$effort")
   local boot="You are a fleet lane agent. Read and follow the brief at $brief exactly. Report status in plain English, no jargon, and pass that rule to anything you spawn."
   if [ "$DRY" = "1" ]; then
     echo "DRY: herdr pane split <base-pane> --direction down --cwd $cwd --no-focus"
-    echo "DRY: herdr agent start $name --kind claude --pane <new-pane> -- --model $BUILD_MODEL --permission-mode bypassPermissions \"$boot\""
+    echo "DRY: herdr agent start $name --kind claude --pane <new-pane> -- ${model_args[*]} --permission-mode bypassPermissions \"$boot\""
     return 0
   fi
   local base_pane new_pane
@@ -203,7 +257,7 @@ spawn_agent() { # <name> <cwd> <brief-path>
     echo "fleet-tick: pane split failed for $name" >&2
     return 1
   fi
-  if ! herdr agent start "$name" --kind claude --pane "$new_pane" -- --model "$BUILD_MODEL" --permission-mode bypassPermissions "$boot" >/dev/null 2>&1; then
+  if ! herdr agent start "$name" --kind claude --pane "$new_pane" -- "${model_args[@]}" --permission-mode bypassPermissions "$boot" >/dev/null 2>&1; then
     echo "fleet-tick: herdr agent start failed for $name" >&2
     return 1
   fi
@@ -224,6 +278,10 @@ ensure_needs_ben() { # <issue> <reason>
   local issue="$1" reason="$2"
   if [ -z "$(needs_ben_entry_file "$issue")" ]; then
     act needs-ben fleet-daemon "$issue: $reason"
+    # Copy the question onto the lane record so the fleet screen can show it
+    # without reading the needs-ben folder. Written once, when the question
+    # is first filed, so the asked-at clock stays honest.
+    fctl set "$issue" "question=$reason" "questionAskedAt=$(date -Iseconds)"
   fi
 }
 
@@ -349,6 +407,10 @@ handle_queued() { # <issue> <record>
   if ! budget_available; then
     return 0
   fi
+  if ! memory_ok; then
+    refuse_spawn_low_memory "$issue"
+    return 0
+  fi
   if [ ! -f "$BRIEF_TEMPLATE" ]; then
     fctl log "$issue" "dispatch failed: brief template missing at $BRIEF_TEMPLATE; lane stays queued"
     return 0
@@ -400,7 +462,7 @@ handle_queued() { # <issue> <record>
       return 0
     fi
   fi
-  if spawn_agent "$agent" "$worktree" "$brief"; then
+  if spawn_agent "$agent" "$worktree" "$brief" "$tier"; then
     fctl log "$issue" "spawn: build agent $agent in $worktree"
     note_spawn
     fctl set "$issue" status=building "agent=$agent" "branch=$branch" "worktree=$worktree"
@@ -412,8 +474,9 @@ handle_queued() { # <issue> <record>
 
 handle_building() { # <issue> <record>
   local issue="$1" record="$2"
-  local agent updated age restart_count ruling
+  local agent tier updated age restart_count ruling
   agent="$(jq -r '.agent // empty' <<<"$record")"
+  tier="$(jq -r '.tier // "routine"' <<<"$record")"
   updated="$(jq -r '.updated_at // empty' <<<"$record")"
   [ -n "$agent" ] || return 0
   if herdr_agent_names | grep -qxF "$agent"; then
@@ -436,10 +499,14 @@ handle_building() { # <issue> <record>
         fctl log "$issue" "restart approved but spawn budget exhausted; leaving lane as is"
         return 0
       fi
+      if ! memory_ok; then
+        refuse_spawn_low_memory "$issue"
+        return 0
+      fi
       local worktree brief
       worktree="$(jq -r '.worktree // empty' <<<"$record")"
       brief="$BRIEFS_DIR/brief-$issue-build.md"
-      if [ -n "$worktree" ] && [ -f "$brief" ] && spawn_agent "$agent" "$worktree" "$brief"; then
+      if [ -n "$worktree" ] && [ -f "$brief" ] && spawn_agent "$agent" "$worktree" "$brief" "$tier"; then
         fctl log "$issue" "restart: respawned build agent $agent with the same brief"
         fctl log "$issue" "spawn: build agent $agent (restart)"
         note_spawn
@@ -461,7 +528,8 @@ handle_building() { # <issue> <record>
 
 handle_pr_open() { # <issue> <record>
   local issue="$1" record="$2"
-  local pr checks failing pending
+  local pr checks failing pending tier
+  tier="$(jq -r '.tier // "routine"' <<<"$record")"
   pr="$(jq -r '.pr // empty' <<<"$record")"
   if [ -z "$pr" ]; then
     fctl log "$issue" "status is pr-open but the record has no PR number"
@@ -487,6 +555,10 @@ handle_pr_open() { # <issue> <record>
     fctl log "$issue" "CI green but spawn budget exhausted; QA spawn deferred"
     return 0
   fi
+  if ! memory_ok; then
+    refuse_spawn_low_memory "$issue"
+    return 0
+  fi
   local qa_rounds round qa_agent worktree branch brief
   qa_rounds="$(jq -r '.qa_rounds // 0' <<<"$record")"
   round=$((qa_rounds + 1))
@@ -509,7 +581,7 @@ handle_pr_open() { # <issue> <record>
     echo "Write everything a human reads in plain English, no jargon, plain ASCII"
     echo "punctuation, and pass this rule to anything you spawn."
   } > "$brief"
-  if spawn_agent "$qa_agent" "${worktree:-$REPO_ROOT}" "$brief"; then
+  if spawn_agent "$qa_agent" "${worktree:-$REPO_ROOT}" "$brief" "$tier"; then
     fctl log "$issue" "spawn: QA agent $qa_agent for round $round"
     note_spawn
     fctl set "$issue" status=qa "agent=$qa_agent"
@@ -730,6 +802,17 @@ for f in "$TASKS_DIR"/*.json; do
   status="$(jq -r '.status // empty' <<<"$record")"
   [ -n "$issue" ] || continue
   [ -n "$status" ] || continue
+
+  # A paused lane is skipped entirely: no dispatch, no dead-lane check, no
+  # relay park. A paused agent's record goes quiet on purpose, which is
+  # exactly the signature the dead-lane check hunts for -- so the skip must
+  # come before every other rule. Unpausing (paused=false) puts the lane
+  # straight back into the normal flow; if its agent died while paused, the
+  # dead-lane path picks it up on the next tick.
+  paused="$(jq -r '.paused // false' <<<"$record")"
+  if [ "$paused" = "true" ]; then
+    continue
+  fi
 
   # Relay rule: two relays means the task was sliced too big. Park it.
   relays="$(jq -r '.relays // 0' <<<"$record")"
