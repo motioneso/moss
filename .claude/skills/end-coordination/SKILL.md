@@ -56,6 +56,43 @@ handle it like any other Phase 3 reap — this skill does not get a looser versi
 Once clear: `git worktree remove --force <wt>`, delete the branch, close the pane
 (`herdr pane close <pane>`). Close any now-empty Builders/QA tabs.
 
+### 2b. Sweep the wider worktree/branch backlog — not just this run's
+
+`git worktree list` on this repo accumulates entries from every past run, not only the current
+one — a real run of this box found 100+ leftover worktrees under `.claude/worktrees/` and stray
+ones under `/tmp/`, most already safe to remove but never reaped because nothing forced a repo-wide
+pass. This step is that pass. **Do it once, at the end of a run, not on every merge** — it's
+backlog cleanup, not part of the hot loop.
+
+**Delegate this — don't enumerate 100+ worktrees in your own context.** Dispatch a `general-purpose`
+subagent (or fork) with the exact four-gate + merge-confirmation procedure below and have it report
+back a short summary (counts removed / kept / flagged), not the per-worktree transcript.
+
+For every worktree under `.claude/worktrees/` (and any other path `git worktree list` shows —
+flag anything outside `.claude/worktrees/` as unusual on top of checking it, per CLAUDE.md's `/tmp`
+worktree warning) that this run did **not** itself create:
+
+1. Run the same four-gate check as step 2 (no tracked modifications, no process cwd'd there, no
+   Herdr pane there). Any gate failing → leave it alone, note it, move on.
+2. **Confirm the work actually landed before deleting anything** — ahead-count alone is not proof
+   (squash merges keep old commits ahead of `main` forever). For each candidate:
+   - If the branch name or worktree name points at a PR/issue number, check
+     `gh pr list --head <branch> --state all` — merged → safe to remove; open → **leave it, it's
+     someone's live work**; no PR found → treat as unconfirmed, do not delete on git evidence
+     alone.
+   - Otherwise, check whether the worktree's `HEAD` commit is an ancestor of `origin/main`
+     (`git merge-base --is-ancestor <sha> origin/main`) — true → safe; false/unknown → leave it and
+     flag it rather than guess.
+3. Remove only the confirmed-safe ones: `git worktree remove --force <wt>`, then
+   `git branch -D <branch>` only if nothing else has that branch checked out.
+4. Everything not confirmed safe gets listed, not deleted — put the list in the closing manifest
+   entry (step 3) so the next coordinator or Ben can look at it, instead of it silently staying
+   invisible backlog forever.
+
+This step follows the same rule as everywhere else in this skill: **when in doubt, leave it and
+report it — never delete on a guess.** A worktree with genuine unsaved work in it is exactly what
+the 2026-07-26 cleanup lost nine live-verified commits to.
+
 ### 3. Reconcile the manifest and GitHub one last time
 
 - Every merged PR's issue is closed and its board item is in Done.
@@ -65,8 +102,9 @@ Once clear: `git worktree remove --force <wt>`, delete the branch, close the pan
   unflagged. If one remains open, do not proceed past this step; that's a reason to keep
   coordinating, not to stop.
 - Write a closing entry to the run manifest: what shipped this run (PR links), what's still open
-  and why (if anything was deliberately deferred), and that the run is now closed. Commit it with
-  the `shared-checkout` skill's explicit-path discipline.
+  and why (if anything was deliberately deferred), the counts from step 2b's backlog sweep
+  (removed / kept / flagged), and that the run is now closed. Commit it with the `shared-checkout`
+  skill's explicit-path discipline.
 
 ### 4. Turn the idle watchdog back off
 
@@ -111,6 +149,11 @@ is quietly still running in the background.
 - **Stopping the watchdog while any coordinator pane (yours or a successor's) is still meant to be
   driving.** That's what makes the pane go unwatched.
 - **Reaping a pane/worktree without the four-gate check** just because "the run is ending anyway."
+- **Deleting a worktree from the step 2b backlog sweep on git ancestry/ahead-count alone**, without
+  confirming via `gh pr` state or a commit-in-`origin/main` check. Ahead-count is not proof after a
+  squash merge; an unmatched branch is unconfirmed, not safe.
+- **Running the backlog sweep inline in your own context** instead of delegating it — it's a
+  100+-item enumeration and belongs in a subagent that reports a summary back.
 - **Closing out with an open `AWAITING-BEN.md` entry.** An unanswered question doesn't become
   answered because the run ended.
 - **Running this mid-relay.** Relaying keeps the watchdog and the coordinator identity alive for
