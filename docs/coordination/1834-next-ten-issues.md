@@ -2125,3 +2125,11 @@ with the token trigger explicitly removed: #1105 log
 `/tmp/jarv1s-gate/1335_tests_tsx_typecheck-20260823-005533.log`. Both are actively checking
 formatting and still require exact terminal sentinels. #899 remains alive in integration; #1874
 Opus QA and #1501 image publication remain pending. [pane w1:pNF]
+
+## Update - 2026-08-23, corrected gates progressing
+
+#1105's clean retry has advanced beyond formatting and lint into TypeScript and external-module
+checks. #1335's clean retry has likewise advanced through lint/typecheck; its owner reports no
+sentinel yet and is allowing the known benign `Password:` unit-test output to finish. #899's
+integration runner remains alive with no failure sentinel. #1874 Opus QA and #1501 image
+publication remain pending. [pane w1:pNF]
