@@ -2155,3 +2155,10 @@ Process inspection confirms #1105's fresh runner owns `/tmp/jarv1s-gate/db.lock`
 child is running; the `Password:` status line is not an interactive prompt. #1335 remains alive in
 its independent checks. #899's green-gate owner is still running a live pre-push TypeScript check
 before opening the PR. [pane w1:pNF]
+
+## Update - 2026-08-23, #899 routine QA started
+
+PR #1879 is open at head `1240c7a6a`. A fresh isolated routine QA agent is driving in QA pane
+`w1:pP1`, agent `qa-1879-news-e2e`, session
+`01a02da6-2e77-7233-b921-8860a8ad4e3f`, using Codex GPT-5.6 Luna at high effort. It must post
+the coordinated QA verdict, including live-path evidence, before merge consideration. [pane w1:pNF]
