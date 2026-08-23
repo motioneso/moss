@@ -2386,3 +2386,11 @@ A fresh routine QA agent is active in the dedicated QA tab at pane `w1:pP9`, age
 high reasoning. It is reviewing exact head `da8e14437`; no merge will occur until its durable
 QA verdict and all required CI checks are green. The existing #1877 fresh QA remains active in
 pane `w1:pP8`. [pane w1:pP2]
+
+## Update - 2026-08-23, remaining lanes must rebase after #1879
+
+Squash merge of #1879 advanced `origin/main` to `dc8cc40b2`. The owners of #1877, #1878, and
+#1880 were sent verified instructions to rebase their final heads onto current `origin/main`,
+force-with-lease push, and obtain fresh QA against those rebased heads. Current QA work may
+finish for evidence, but no remaining PR is mergeable until its final rebased head has clean QA
+and all required CI checks green. [pane w1:pP2]
