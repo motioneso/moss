@@ -1873,3 +1873,9 @@ repo files, and retained a green format check. [pane w1:pNF]
 Its sequential integration Vitest remains active at roughly 15 minutes with recent log writes
 and no failure sentinel; the lane is waiting for the required final verdict. The queued #1335,
 #899, and #1874 starts remain unaccepted until their own runner sentinels exist. [pane w1:pNN]
+
+## Update - 2026-08-23, #1105 gate advanced
+
+#1105's full gate has cleared the previously blocked sections and reports `test:uat-seed` green
+for 12 files and 29 tests. Its long integration phase remains active with ongoing runner writes
+and no failure sentinel; the exclusive provisioning lock is therefore preserved. [pane w1:pNQ]
