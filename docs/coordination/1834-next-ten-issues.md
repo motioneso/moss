@@ -2512,3 +2512,29 @@ any further merge or implementation action. On resumption, rebase #1878 onto new
 `origin/main` `18fb95fd7`, push with lease, and request fresh QA; #1880 remains with its owner,
 blocked on removing the four production suppressions from `packages/email/src/settings/index.tsx`
 and moving the typing repair into tests. No Ben-only decision is open. [pane w1:pP2]
+
+## Continuation - 2026-08-23, relay 12 adopted
+
+Coordinator authority transferred after the predecessor lock was matched exactly. The authoritative
+session is now `01a02e12-8834-7b51-b0fa-51ef6f2ca2e3`, agent name `coordinator`, pane label
+`Coordinator`. The predecessor session `01a02dad-7b3a-7b82-8d54-aaf556954e08` was renamed as
+retired and remains pending a final fresh session-id match and close.
+
+The live fleet was re-adopted. The #1501 owner is rebasing PR #1878 onto `origin/main`
+`18fb95fd7338544c9627dcf534165ff671586ff8`, then will force-with-lease push and request fresh QA.
+The #1335 owner is completing the test-side typing correction for PR #1880 with all four production
+`@ts-expect-error` suppressions removed, then will push for fresh QA. No merge is authorized before
+fresh QA and required CI are green. [pane w1:pPE]
+
+## Update - 2026-08-23, relay transfer complete and #1878 final QA started
+
+The predecessor coordinator session `01a02dad-7b3a-7b82-8d54-aaf556954e08` was closed only after
+a fresh label and session-id match. Exactly one live coordinator remains: authoritative session
+`01a02e12-8834-7b51-b0fa-51ef6f2ca2e3`, agent `coordinator`, label `Coordinator`.
+
+PR #1878 was rebased onto `origin/main` `18fb95fd7338544c9627dcf534165ff671586ff8`
+and force-with-lease pushed at exact head `e8f6d06731fd0e1012a626d5714a65c3680ed06e`.
+Fresh routine QA is active in the dedicated QA tab, agent `qa1878-1501-r4`, session
+`01a02e17-926c-7821-8b94-b1e122681925`, using Codex GPT-5.6 Luna at high reasoning. It must
+post a durable verdict against that exact head; required CI must also be green. No merge is
+authorized. [pane w1:pPE]
