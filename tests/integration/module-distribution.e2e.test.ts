@@ -146,8 +146,13 @@ beforeAll(async () => {
 
   // Mock registry on an ephemeral port. The index is built PER REQUEST from the
   // mutable `latestVersion` so the update test can "publish" 0.3.0 mid-suite.
+  // The pipeline always fetches /index.json.sig immediately after /index.json, so
+  // caching the freshest served bytes here (no real concurrency) is sufficient to sign
+  // exactly what was just served.
+  let lastServedIndexBytes: Buffer | null = null;
   registry = createServer((req, res) => {
     if (req.url === "/index.json") {
+      registryIndexRequestCount += 1;
       const latest = refs[latestVersion];
       const index = {
         schemaVersion: 1,
@@ -186,8 +191,20 @@ beforeAll(async () => {
           }
         ]
       };
+      const indexBytes = Buffer.from(JSON.stringify(index), "utf8");
+      lastServedIndexBytes = indexBytes;
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify(index));
+      res.end(indexBytes);
+      return;
+    }
+    if (req.url === "/index.json.sig") {
+      const signature = signCatalogBytes(
+        lastServedIndexBytes ?? Buffer.alloc(0),
+        catalogTestKeypair.privateKey,
+        CATALOG_TEST_KEY_ID
+      );
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify(signature));
       return;
     }
     if (req.url?.endsWith(".tgz")) {
@@ -204,6 +221,7 @@ beforeAll(async () => {
   await new Promise<void>((resolve) => registry.listen(0, "127.0.0.1", resolve));
   registryUrl = `http://127.0.0.1:${(registry.address() as AddressInfo).port}`;
   process.env.JARVIS_MODULE_REGISTRY_URL = `${registryUrl}/index.json`;
+  process.env.MOSS_MODULE_CATALOG_TEST_PUBLIC_KEY = catalogTestKeypair.publicKey;
 
   appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
   boss = createPgBossClient(connectionStrings.app, { connectionTimeoutMillis: 25_000 });
@@ -225,6 +243,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   delete process.env.JARVIS_MODULE_REGISTRY_URL;
+  delete process.env.MOSS_MODULE_CATALOG_TEST_PUBLIC_KEY;
   delete process.env.MOSS_RECONCILE_CONFIRM_OWNER_EMAIL;
   await Promise.allSettled([server?.close(), appDb?.destroy(), boss?.stop({ graceful: false })]);
   await new Promise((resolve) => registry?.close(resolve));
@@ -233,6 +252,9 @@ afterAll(async () => {
 
 describe("module distribution e2e (#964)", () => {
   it("denies non-admin access to every registry route", async () => {
+    // Proves assertAdminUser runs before fetchRegistryEntries ever calls out to the
+    // registry: the mock registry's request count must not move.
+    const requestCountBefore = registryIndexRequestCount;
     // Bodies must satisfy each route's request schema — an invalid/missing body would
     // 400 at schema validation before ever reaching assertAdminUser, which would make
     // this test pass for the wrong reason (not proving authz is enforced).
@@ -256,6 +278,7 @@ describe("module distribution e2e (#964)", () => {
       });
       expect(res.statusCode, `${method} ${url}`).toBe(403);
     }
+    expect(registryIndexRequestCount).toBe(requestCountBefore);
   });
 
   it("lists the registry module as not-installed with full capabilities", async () => {
@@ -268,6 +291,8 @@ describe("module distribution e2e (#964)", () => {
     const body = res.json();
     expect(body.enabled).toBe(true);
     expect(body.registryUnavailable).toBe(false);
+    expect(body.catalogVerification).toBe("verified");
+    expect(typeof body.catalogDigestSha256).toBe("string");
     const row = body.modules.find((m: { id: string }) => m.id === FIXTURE_MODULE_ID);
     // Every DTO field must survive fast-json-stringify (additionalProperties:false
     // drops undeclared fields SILENTLY — the recurring trap; assert them all).
@@ -289,6 +314,41 @@ describe("module distribution e2e (#964)", () => {
       lastInstallError: null,
       purgePending: false
     });
+  });
+
+  it("returns the disabled envelope when external modules are turned off", async () => {
+    // #1319 D6: __testExternalModulesEnabled is a TEST-ONLY createApiServer() override
+    // (apps/api/src/server.ts) — production always runs with modules enabled.
+    const disabledServer = createApiServer({
+      appDb,
+      boss,
+      logger: false,
+      __testExternalModulesEnabled: false,
+      apiServerConfig: {
+        host: "0.0.0.0",
+        port: 0,
+        mcpServerUrl: "http://127.0.0.1:0/api/mcp",
+        externalModulesDir: modulesDir
+      }
+    });
+    try {
+      await disabledServer.ready();
+      const res = await disabledServer.inject({
+        method: "GET",
+        url: "/api/admin/module-registry",
+        headers: { cookie: adminCookie }
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({
+        enabled: false,
+        registryUnavailable: false,
+        catalogVerification: "unavailable",
+        catalogDigestSha256: null,
+        modules: []
+      });
+    } finally {
+      await disabledServer.close();
+    }
   });
 
   it("downloads + stages via the admin route → pending-restart, files on disk", async () => {
