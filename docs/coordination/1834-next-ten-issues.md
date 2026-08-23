@@ -1478,3 +1478,35 @@ Lane `issue1872-image-build` is actively implementing. Lane `pr1500-css-forms-2`
 to a background helper stuck on confirming a format-check exit code for about 35 minutes; the
 coordinator queued an instruction to stop waiting on that helper, finish the bounded verification
 directly, and continue through live-path proof and wrap-up. No new Ben-only decision is open.
+
+## Continuation note - 2026-08-23, Codex coordinator relaying after compaction
+
+The coordinate skill's compaction tripwire fired, so this coordinator is relaying before any merge.
+Coordinator authority at flush time is agent name `coordinator`, pane label `Coordinator`, session
+`01a02cde-59a6-7900-99d9-aa65f8989e49`; the successor must replace this session id in the lock only
+after it is visibly driving.
+
+**Live fleet at flush time:**
+- `issue1872-image-build`, session `7e21e0d0-2b4f-4215-bdf1-317225103cfd`, remains the only Herdr
+  lane visible for #1872 in worktree/branch `1872-fable-plan`. It reported commits `7de285b04`,
+  `2d1ce52a0`, and `5e0be815e`: fix, unit regression, and browser Service Worker regression are
+  red-then-green; `test:e2e` reported 98 passing plus one unrelated pre-existing flake that passes
+  alone; scoped `verify:foundation` was still running. Remaining work is live-path proof through the
+  LAN proxy, release note, PR, and wrap-up. Its attempted relay currently appears only as an internal
+  Claude helper in the same pane, not a separately named Herdr successor. Do not close the original
+  pane until a separately addressable successor is visible and confirmed driving; then update this
+  manifest with the successor name/session and close the old pane resolved fresh by session.
+- `pr1500-css-forms-2`, session `929bbab3-8e5c-41b7-9e20-7191c8558c67`, remains in worktree/branch
+  `1500-shared-web-forms`. Its bounded pane output shows `scripts/run-gate.sh wait` still active.
+  Recheck the deliverable and bounded pane output; do not trust `agent_status` alone.
+- No QA lane or merge-ready PR is currently recorded for #1872. Independent QA remains mandatory
+  after its PR opens, and user-facing live-path evidence must be on the PR before merge.
+- `docs/coordination/AWAITING-BEN.md` has no open Ben-only decision; #1511 remains blocked on #1246
+  as a status dependency only.
+
+**Standing run guardrail:** Fable 5 authors implementation plans for this run. The coordinator must
+not author plans or substitute inline plan judgment. #1872's authoritative Fable-authored plan is
+`docs/superpowers/plans/2026-08-23-service-worker-image-fetch-recovery.md` at `9373e271a`.
+
+Mid-doing: supervising #1872's build-lane relay and #1500's long-running gate; merge nothing until
+the new coordinator has adopted the fleet and updated the coordinator session-id lock.
