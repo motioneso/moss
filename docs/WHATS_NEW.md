@@ -54,6 +54,7 @@ feature that is not present in the image you are running.
 
 ### Fixed
 
+- **Photos and logos recover on their own.** A news photo or sports logo that failed to load because of a brief network hiccup now recovers on its own, instead of staying broken until you refresh the page. [PR #1874](https://github.com/motioneso/moss/pull/1874)
 - **Job board shows a count when some roles can't be displayed.** The job-search board now tells you if it couldn't show some roles instead of leaving them out with no explanation. [PR #1844](https://github.com/motioneso/moss/pull/1844)
 - **Activity log now shows failed actions as failed.** When the assistant tried to do something and the relevant app said it could not (for example, updating a task that no longer exists), the activity log used to record it as a success. It now correctly shows it as failed. [PR #1654](https://github.com/motioneso/moss/pull/1654)
 - **Nav bar now switches color in dark mode.** The left navigation bar used to stay the same green shade when you switched to dark mode, out of step with the rest of the app. It now switches to match, like every other part of the interface. [PR #1810](https://github.com/motioneso/moss/pull/1810)
