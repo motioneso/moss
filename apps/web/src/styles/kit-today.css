@@ -2,6 +2,8 @@
    Jarvis — UI-kit screen layouts (ported from the design system
    prototype kit.css). Composes the DS tokens; consumed by the
    rebuilt screens. Only literal swap from source: bare white -> var(--white).
+   The visual half of the Today-only rules below now lives in
+   packages/ui/src/styles/components-moss-today.css (#1427-A); these keep layout only.
    ============================================================ */
 
 .today-feedback {
@@ -15,17 +17,10 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: var(--text-subtle);
-  font-size: 11px;
   white-space: nowrap;
 }
 .today-feedback__status button {
-  border: 0;
-  background: transparent;
-  font: inherit;
   cursor: pointer;
-  color: var(--accent-fg);
-  font-size: 11px;
   padding: 0;
 }
 
@@ -55,42 +50,27 @@
   padding: 30px 40px 0;
 }
 .cmd-next {
-  background: var(--rail-bg);
-  color: var(--rail-fg);
-  border-radius: var(--radius-xs);
   padding: 18px 18px 16px;
 }
 .cmd-next__k {
-  font-family: var(--font-sans);
-  font-size: 11px;
   letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
-  color: var(--rail-fg-muted);
 }
 .cmd-next__v {
-  font-family: var(--font-sans);
-  font-size: 44px;
   line-height: 1;
   margin-top: 10px;
   font-variant-numeric: tabular-nums;
 }
 .cmd-next__what {
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 600;
   margin-top: 12px;
-  color: var(--rail-fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .cmd-glance__title {
-  font-family: var(--font-sans);
-  font-size: 11px;
   letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
-  color: var(--text-subtle);
   margin-bottom: 10px;
 }
 .cmd-glance__grid {
@@ -157,31 +137,16 @@
   border-top: none;
 }
 .day-ev__t {
-  font-family: var(--font-sans);
-  font-size: 14px;
   font-variant-numeric: tabular-nums;
-  color: var(--text);
   padding-top: 1px;
 }
-.day-ev__t .ap {
-  font-size: 11px;
-  color: var(--text-faint);
-}
 .day-ev__title {
-  font-family: var(--font-display);
-  font-size: 17px;
-  color: var(--text);
   line-height: 1.35;
 }
 .day-ev__where {
-  font-size: 13px;
-  color: var(--text-subtle);
   margin-top: 2px;
 }
 .day-ev__who {
-  font-family: var(--font-sans);
-  font-size: 11px;
-  color: var(--text-faint);
   white-space: nowrap;
   text-align: right;
   padding-top: 3px;
