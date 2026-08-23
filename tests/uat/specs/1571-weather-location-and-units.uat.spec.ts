@@ -31,7 +31,7 @@ async function gotoProfileSettings(page: Page) {
   await page.goto(`${requireBaseURL()}/settings?section=profile`);
   const search = page.getByLabel("Search for a weather location");
   await expect(search).toBeEnabled();
-  await expect(page.getByLabel("Use Fahrenheit")).toBeEnabled();
+  await expect(page.getByLabel(/Temperature units:/)).toBeEnabled();
 }
 
 async function searchAndChoose(page: Page, query: string, expectedLabel: string) {
@@ -82,11 +82,13 @@ test("place search, ambiguity handling, and temperature units work through the U
   await candidates.first().click();
   await expect(page.getByText(`Currently using ${selectedCandidate}.`)).toBeVisible();
 
-  const fahrenheit = page.getByLabel("Use Fahrenheit");
-  if (await fahrenheit.isChecked()) {
-    await fahrenheit.locator("..").click();
+  const unitToggle = page.getByLabel(/Temperature units:/);
+  if (await unitToggle.isChecked()) {
+    await unitToggle.locator("..").click();
     await expect(page.getByText("Weather temperatures are shown in Celsius.")).toBeVisible();
   }
+  await expect(page.getByLabel("Temperature units: Celsius")).toBeVisible();
+  await expect(page.getByLabel("Temperature units: Celsius").locator("..")).toContainText("C");
   await page.goto(`${baseURL}/today`);
   const metricTemp = await page.locator(".jds-weather-chip__temp").innerText();
   await gotoProfileSettings(page);
@@ -94,9 +96,11 @@ test("place search, ambiguity handling, and temperature units work through the U
     (response) =>
       response.url().endsWith("/api/me/weather-unit") && response.request().method() === "PUT"
   );
-  await fahrenheit.locator("..").click();
+  await page.getByLabel("Temperature units: Celsius").locator("..").click();
   expect((await (await unitResponse).json()).unit).toBe("imperial");
   await expect(page.getByText("Weather temperatures are shown in Fahrenheit.")).toBeVisible();
+  await expect(page.getByLabel("Temperature units: Fahrenheit")).toBeVisible();
+  await expect(page.getByLabel("Temperature units: Fahrenheit").locator("..")).toContainText("F");
   await expect(page.getByText(`Currently using ${selectedCandidate}.`)).toBeVisible();
 
   await page.goto(`${baseURL}/today`);
