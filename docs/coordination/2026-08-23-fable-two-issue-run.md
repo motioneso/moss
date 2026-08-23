@@ -14,7 +14,7 @@
 | Spec | Issue | Tier | Status | Agent name | Pane | Branch | PR |
 | ---- | ----- | ---- | ------ | ---------- | ---- | ------ | -- |
 | `docs/superpowers/specs/2026-08-10-1137-robustness-followups.md` | #1517 | routine | closed — no-op, already satisfied | reaped | — (reaped) | (branch deleted) | — |
-| `docs/superpowers/specs/2026-08-10-css-guard-residue.md` | #1497 | routine | building — successor writing plan, will ask one-shot Fable approval before code | `build-1497-today-relay1` (session `50b9cbe9-c6e4-46a8-af12-efc5c4c17435`) | `1497 Today residue r2` (resolve fresh) | `build/1497-today-residue` | — |
+| `docs/superpowers/specs/2026-08-10-css-guard-residue.md` | #1497 | routine | building — plan approved, proceeding to code | `build-1497-today-relay2` (session `a3d101ab-0506-4b30-ac42-434e663afa9a`) | resolve fresh | `build/1497-today-residue` | — |
 
 ## Dependency / merge order
 
@@ -48,20 +48,26 @@ None open.
 
 - Fable scope reviewer `fable-run-scope`, session `c359c706-e66d-4a52-b7c1-823ba3d315c6`: verdict consumed; session and isolated worktree fully reaped.
 
-## Continuation — 2026-08-23, both forks resolved, #1497 on its second build owner
+## Continuation — 2026-08-23, coordinator relay (context-meter 70%), #1497 plan approved
 
-Exact-session transfer complete: authority is session `c60ed2b9-0da3-4fdc-95a9-12113657660e`
-(agent name `coordinator`, pane label `Coordinator`, resolve fresh — pane numbers reflow). #1517
-resolved as a genuine no-op — issue closed citing PR #1821, lane reaped. #1497's baseline fork
-was routed to a one-shot Fable agent, which ruled build to 152 -> 0; recorded on the issue, lane
-released to build. That owner (`build-1497-today`, session `dc82fb30-...`) relayed itself at a 70%
-context-meter warning with no code written yet — it had spent its budget grounding the split
-pattern used by the earlier command-palette sibling change (keep layout in place, copy color/font
-into the shared design package) and handed off via
-`docs/superpowers/handoffs/2026-08-23-1497-today-residue-relay.md`. Successor confirmed driving on
-Sonnet; old pane reaped. Current owner is `build-1497-today-relay1`, session
-`50b9cbe9-c6e4-46a8-af12-efc5c4c17435`, pane `1497 Today residue r2` (resolve fresh). It will write
-the plan and ask for one-shot Fable approval before touching code, same as the standard flow.
-`docs/coordination/AWAITING-BEN.md` has no open decision. Next: watch for its plan-ready
-escalation, approve/route to Fable if it's a genuine fork, then supervise build and QA per the
-standard coordinate-skill loop. [pane w1:pPR]
+Both forks are resolved (see Resolved forks). #1517 is fully closed and reaped. #1497: baseline
+ruled 152 -> 0 by one-shot Fable, recorded on the issue. The build lane relayed twice while
+grounding and planning (no code written either time) — `build-1497-today` -> `build-1497-today-relay1`
+-> `build-1497-today-relay2` (session `a3d101ab-0506-4b30-ac42-434e663afa9a`, worktree
+`.claude/worktrees/1497-today-residue`, branch `build/1497-today-residue`). Each successor was
+confirmed driving on Sonnet before the prior pane was closed; no orphaned panes/worktrees.
+
+The plan at `docs/superpowers/plans/2026-08-23-1497-today-css-residue.md` was reviewed and
+**approved as-is** (mechanical extraction, guard-tool-verified declaration list, both `font:
+inherit` cascade couplings handled, clean collision boundaries with children B-E/F/G, live-path +
+UAT plan present) — no fork, this coordinator approved directly without escalating to Fable. The
+approval was delivered to `build-1497-today-relay2` and confirmed processing.
+
+This coordinator's own context meter hit 70% immediately after that send, firing the mandatory
+relay trigger. No merge has happened yet this session (`merges_since_relay: 0`, unchanged).
+Handing off now: a successor coordinator is being spawned in this same pane's tab. It should
+confirm `build-1497-today-relay2` is actually building (not another relay-without-code loop —
+if it relays a third time before any commit, that is worth a closer look, not just another
+silent adopt), then continue the standard coordinate-skill loop: QA on green, merge, close #1497
+and its board item, report to Ben. `docs/coordination/AWAITING-BEN.md` has no open decision.
+[pane w1:pPR]
