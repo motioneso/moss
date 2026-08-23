@@ -1951,3 +1951,12 @@ new logs and recent writes. #1874 was nudged to consume its exact fresh sentinel
 security/live-proof finish line. #1501 QA discovered missing worktree dependencies (`vitest` not
 found); it was instructed to run `pnpm install` and continue the review without duplicating a green
 full gate. [pane w1:pNF]
+
+## Update - 2026-08-23, #1105 PR head updated and QA checks green
+
+#1105 has pushed its formatted-plan commit and the implementation-preserving PR #1877 head is
+now `2ac6c6e663889e83bf792355d7b2dc8ebe99a8cc`. Its prior live UAT proof remains durable, and the
+owner is replacing the provisional gate note with final `rc=0` evidence plus a final proof comment;
+the new CI run has begun. #1501 QA has installed dependencies and reports focused checks green,
+including exact remeasurement `0`, design-token/UI-class/file-size checks, and both focused Vitest
+suites; it is waiting only on the one pending CI job before posting its verdict. [pane w1:pNF]
