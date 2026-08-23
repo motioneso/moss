@@ -6,6 +6,7 @@
 
    These are generic keyline-grid primitives, not job-search-specific — any module doing a
    hairline-ruled row-list (rails, fields, section heads) should reach for these first. */
+/* Visual declarations now live in packages/ui/src/styles/components-keyline.css (#1427-E). */
 
 /* ---------------------------------------------------------------
    DISPLAY HEADING — uppercase, weight-800, tight display type
@@ -18,43 +19,27 @@
 .jds-display {
   display: block;
   margin: 0;
-  font-family: var(--font-display);
-  font-weight: var(--weight-heavy);
   text-transform: uppercase;
   line-height: 0.9;
-  color: var(--text);
   font-variant-numeric: tabular-nums;
   text-wrap: balance;
 }
 .jds-display--xl {
-  /* 72px — board hero count ("N new") */
-  font-size: clamp(var(--text-4xl), 9vw, 4.5rem);
   letter-spacing: -0.035em;
   line-height: 0.85;
 }
 .jds-display--lg {
-  /* 62px — overview two-line hero */
-  font-size: clamp(var(--text-3xl), 8vw, 3.875rem);
   letter-spacing: -0.035em;
   line-height: 0.88;
 }
 .jds-display--md {
-  /* 46px — opportunity detail title */
-  font-size: clamp(var(--text-2xl), 6vw, 2.875rem);
   letter-spacing: -0.03em;
   line-height: 0.95;
 }
 .jds-display--sm {
-  /* 44px — profile / monitors screen title */
-  font-size: clamp(var(--text-2xl), 5.5vw, 2.75rem);
   letter-spacing: -0.03em;
   line-height: 0.92;
 }
-/* The overview hero's second line ("ready to go") — nest inside a `.jds-display--lg`. */
-.jds-display__accent {
-  color: var(--accent);
-}
-
 /* ---------------------------------------------------------------
    HAIRLINE ROW BUTTON — a full-width row that is a <button>
    ---------------------------------------------------------------
@@ -71,56 +56,11 @@
   border-top: 1px solid var(--line);
   transition: background var(--dur-fast) var(--ease-out);
 }
-.jds-hairline-row:hover {
-  background: var(--surface-hover);
-}
 
-/* ---------------------------------------------------------------
-   ROW RAIL — a full-height 3px leading column, coloured by state
-   ---------------------------------------------------------------
-   Same idiom as TaskRow's priority bar, generalized: a fit band on the match board, an
-   enabled-state marker on a monitor row, a done/current/todo marker on a setup step. Never a
-   border on the row itself, never a coloured pill — just this rail.
-   `.jds-rail-row` is the optional grid wrapper (a 3px 1fr track); a row needing a trailing column
-   too (e.g. a fit word + chevron) extends `grid-template-columns` itself — that's layout, not a
-   design token, so it doesn't need a host class. */
 .jds-rail {
   display: block;
   width: 3px;
   align-self: stretch;
-  border-radius: 2px;
-  background: var(--line);
-}
-.jds-rail--accent {
-  background: var(--accent);
-}
-.jds-rail--gold {
-  background: var(--gold);
-}
-.jds-rail--steel {
-  background: var(--steel);
-}
-.jds-rail--line-strong {
-  background: var(--line-strong);
-}
-.jds-rail--line {
-  background: var(--line);
-}
-.jds-rail--danger {
-  background: var(--danger);
-}
-/* Time-of-day rails, off the `--bucket-*` tokens that tokens.css has carried
-   unused since it was authored. A rail is the only place a time-of-day accent
-   belongs — the alternative a module reaches for is a coloured pill or a tinted
-   row background, both of which the idiom above rules out. */
-.jds-rail--morning {
-  background: var(--bucket-morning);
-}
-.jds-rail--afternoon {
-  background: var(--bucket-afternoon);
-}
-.jds-rail--evening {
-  background: var(--bucket-evening);
 }
 .jds-rail-row {
   display: grid;
@@ -139,7 +79,6 @@
   flex: none;
   width: 1px;
   height: 9px;
-  background: var(--line-strong);
   opacity: 0.8;
 }
 
@@ -161,16 +100,8 @@
 .jds-section-head__rule {
   flex: 1;
   height: 1px;
-  background: var(--line);
 }
 
-/* ---------------------------------------------------------------
-   INSTRUMENT FIELD — an uppercase micro-label over a value, hairline-ruled above
-   ---------------------------------------------------------------
-   The mockup's `Field`: kit.jsx calls it "the platform's instrument idiom." Named `.jds-instrument`
-   rather than `.jds-field` because that name is already taken by the form-control label+input
-   primitive in components-forms.css — a different thing wearing a similar name would be worse
-   than a new name. */
 .jds-instrument {
   border-top: 1px solid var(--line);
   padding-top: 10px;
@@ -179,25 +110,12 @@
   border-top: none;
   padding-top: 0;
 }
-/* The figure under an instrument label. The mockup styled this inline, so the
-   primitive shipped with a label and no value — every caller then invented its
-   own, which is how a keyline field starts drifting from screen to screen.
-   Sans (the display face is reserved for headings and hero figures) with
-   tabular numerals, so a column of values stays aligned as digits change. */
 .jds-instrument__value {
   margin: 0;
-  font-family: var(--font-sans);
-  font-size: var(--text-xl);
-  font-weight: var(--weight-bold);
   font-variant-numeric: tabular-nums;
-  color: var(--text);
 }
 .jds-instrument__label {
   margin: 0 0 5px;
-  font-family: var(--font-sans);
-  font-size: 9px;
-  font-weight: var(--weight-medium);
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--ink-3);
 }

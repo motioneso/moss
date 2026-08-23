@@ -1,0 +1,116 @@
+/* #1427-E: keyline primitives' visual declarations, moved from the web app. */
+
+.jds-display {
+  font-family: var(--font-display);
+  font-weight: var(--weight-heavy);
+  color: var(--text);
+}
+
+.jds-display--xl {
+  /* 72px — board hero count ("N new") */
+  font-size: clamp(var(--text-4xl), 9vw, 4.5rem);
+}
+
+.jds-display--lg {
+  /* 62px — overview two-line hero */
+  font-size: clamp(var(--text-3xl), 8vw, 3.875rem);
+}
+
+.jds-display--md {
+  /* 46px — opportunity detail title */
+  font-size: clamp(var(--text-2xl), 6vw, 2.875rem);
+}
+
+.jds-display--sm {
+  /* 44px — profile / monitors screen title */
+  font-size: clamp(var(--text-2xl), 5.5vw, 2.75rem);
+}
+
+.jds-display__accent {
+  color: var(--accent);
+}
+
+.jds-hairline-row:hover {
+  background: var(--surface-hover);
+}
+
+/* ---------------------------------------------------------------
+   ROW RAIL — a full-height 3px leading column, coloured by state
+   ---------------------------------------------------------------
+   Same idiom as TaskRow's priority bar, generalized: a fit band on the match board, an
+   enabled-state marker on a monitor row, a done/current/todo marker on a setup step. Never a
+   border on the row itself, never a coloured pill — just this rail.
+   `.jds-rail-row` is the optional grid wrapper (a 3px 1fr track); a row needing a trailing column
+   too (e.g. a fit word + chevron) extends `grid-template-columns` itself — that's layout, not a
+   design token, so it doesn't need a host class. */
+.jds-rail {
+  border-radius: 2px;
+  background: var(--line);
+}
+
+.jds-rail--accent {
+  background: var(--accent);
+}
+
+.jds-rail--gold {
+  background: var(--gold);
+}
+
+.jds-rail--steel {
+  background: var(--steel);
+}
+
+.jds-rail--line-strong {
+  background: var(--line-strong);
+}
+
+.jds-rail--line {
+  background: var(--line);
+}
+
+.jds-rail--danger {
+  background: var(--danger);
+}
+
+/* Time-of-day rails, off the `--bucket-*` tokens that tokens.css has carried
+   unused since it was authored. A rail is the only place a time-of-day accent
+   belongs — the alternative a module reaches for is a coloured pill or a tinted
+   row background, both of which the idiom above rules out. */
+.jds-rail--morning {
+  background: var(--bucket-morning);
+}
+
+.jds-rail--afternoon {
+  background: var(--bucket-afternoon);
+}
+
+.jds-rail--evening {
+  background: var(--bucket-evening);
+}
+
+.jds-meta-sep {
+  background: var(--line-strong);
+}
+
+.jds-section-head__rule {
+  background: var(--line);
+}
+
+/* The figure under an instrument label. The mockup styled this inline, so the
+   primitive shipped with a label and no value — every caller then invented its
+   own, which is how a keyline field starts drifting from screen to screen.
+   Sans (the display face is reserved for headings and hero figures) with
+   tabular numerals, so a column of values stays aligned as digits change. */
+.jds-instrument__value {
+  font-family: var(--font-sans);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  color: var(--text);
+}
+
+.jds-instrument__label {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: var(--weight-medium);
+  color: var(--ink-3);
+}

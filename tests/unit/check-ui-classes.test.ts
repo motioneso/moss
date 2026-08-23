@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { checkUiClasses, DEFINITION_FILES } from "../../scripts/check-ui-classes.ts";
+import { checkUiClasses, WEB_DEFINITION_FILES } from "../../scripts/check-ui-classes.ts";
 
 /**
  * Guard 1/2 regression test (#1388 foundation).
@@ -32,17 +32,18 @@ async function buildFixture(): Promise<string> {
   await mkdir(join(root, "apps/web/src/widgets"), { recursive: true });
   await mkdir(join(root, "packages/other/src"), { recursive: true });
   await mkdir(join(root, "external-modules/demo/src/web"), { recursive: true });
+  await mkdir(join(root, "packages/ui/src/styles"), { recursive: true });
 
-  // Fixture directories/files are derived from the guard's own DEFINITION_FILES rather than a
+  // Fixture directories/files are derived from the guard's own WEB_DEFINITION_FILES rather than a
   // second hand-maintained copy — a duplicated list drifts the moment the script gains an entry
   // (#1393: components-empty.css/components-forms.css landed in the script but not here, and
   // every check-ui-classes.test.ts case ENOENT'd on the missing fixture file).
-  const definitionDirs = new Set(DEFINITION_FILES.map((relativeFile) => dirname(relativeFile)));
+  const definitionDirs = new Set(WEB_DEFINITION_FILES.map((relativeFile) => dirname(relativeFile)));
   for (const dir of definitionDirs) {
     await mkdir(join(root, dir), { recursive: true });
   }
 
-  for (const relativeFile of DEFINITION_FILES) {
+  for (const relativeFile of WEB_DEFINITION_FILES) {
     await writeFile(join(root, relativeFile), "");
   }
 
@@ -73,6 +74,22 @@ describe("check-ui-classes guard (#1388)", () => {
     await writeFile(
       join(root, "apps/web/src/widgets/thing.tsx"),
       'export const Thing = () => <button className="jds-btn jds-btn--primary">Go</button>;\n'
+    );
+
+    const result = await checkUiClasses(root);
+
+    expect(result.undefinedClassViolations).toEqual([]);
+  });
+
+  it("discovers an unregistered package style sheet", async () => {
+    const root = await buildFixture();
+    await writeFile(
+      join(root, "packages/ui/src/styles/components-discovery-probe.css"),
+      ".jds-discovery-probe { display: block; }\n"
+    );
+    await writeFile(
+      join(root, "packages/ui/src/discovery-probe.tsx"),
+      'export const DiscoveryProbe = () => <div className="jds-discovery-probe">Probe</div>;\n'
     );
 
     const result = await checkUiClasses(root);

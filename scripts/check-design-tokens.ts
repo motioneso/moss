@@ -126,7 +126,10 @@ export const MIGRATED_SECTION_CSS_FILES: readonly string[] = [
   // #1427-C: assistant surface, moved to packages/ui/src/styles/components-chat.css.
   "apps/web/src/chat/assistant-surface/assistant-surface.css",
   // #1427-D: web forms, moved to packages/ui/src/styles/components-forms.css.
-  "apps/web/src/styles/components-forms.css"
+  "apps/web/src/styles/components-forms.css",
+  // #1427-E: keyline primitives + global texture, moved to packages/ui/src/styles/components-keyline.css and components-web.css.
+  "apps/web/src/styles/components-keyline.css",
+  "apps/web/src/styles/texture.css"
 ];
 
 let validTokensCache: Set<string> | undefined;
