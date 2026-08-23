@@ -2171,3 +2171,11 @@ PR #1879 is open at head `1240c7a6a`. A fresh isolated routine QA agent is drivi
 `w1:pP1`, agent `qa-1879-news-e2e`, session
 `01a02da6-2e77-7233-b921-8860a8ad4e3f`, using Codex GPT-5.6 Luna at high effort. It must post
 the coordinated QA verdict, including live-path evidence, before merge consideration. [pane w1:pNF]
+
+## Update - 2026-08-23, #1874 PR body corrected
+
+The retained #1874 owner confirmed the text-only QA fix landed through GitHub's plain API and
+verified the live PR body: the formatting note now states this branch fixed the plan and passes
+format checking, the unit test line says 11 of 11, and the gate line states the real isolated
+exit-0 result. The PR remains open. Fresh Opus QA was instructed to re-read the body and post the
+updated durable security verdict; no source or gate rerun is required. [pane w1:pNF]
