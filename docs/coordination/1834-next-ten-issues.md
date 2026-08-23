@@ -1719,3 +1719,13 @@ The retained #1874 owner `issue1872-relay5` was frozen in a long `Warping…` tu
 interrupted once and resumed from the existing QA-fix worktree; it is now actively running the
 remaining gate and delivery steps. No source work was discarded and PR #1874 remains blocked on
 fresh security QA, green CI, induced recovery proof, and Ben's sign-off. [pane w1:pNF]
+
+## Update - 2026-08-23, #1874 relay 6 adopted
+
+The wait-declaration owner `issue1872-relay5`, session `d4569fa8-943d-48a7-81a0-dfa8d809b497`,
+was resolved fresh and closed after its retained worktree was verified. Sonnet successor
+`issue1872-relay6`, session `622f3052-bd31-44f6-8c27-78360082263b`, is visibly driving the same
+worktree/branch from Builders 2 pane `w1:pNS`. It must complete the existing QA fixes, gate,
+induced recovery proof, PR update, and wrap-up; PR #1874 remains unmergeable until fresh security
+QA is green and posted, CI is green, and Ben signs off. #1501 has entered coordinated wrap-up and
+is running its isolated full gate. [pane w1:pNF]
