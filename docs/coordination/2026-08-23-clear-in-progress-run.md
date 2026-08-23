@@ -22,8 +22,8 @@ durable live-path proof comment.
 | `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319-A (concrete child of #1470) | security | Task B `26ec5c458` complete; gate and wrap-up running | `catalog-verify-1319a-2` | resolve live | `build/1319a-catalog-verify` | — |
 | `docs/superpowers/specs/2026-08-19-926-food-day-view-components-and-targets.md` | #1737 (concrete child of #926) | routine | closed/Done — Ben verified working in production; lane cancelled/reaped | reaped | — | deleted | — |
 | `docs/superpowers/specs/2026-08-23-1794-release-notes-protected-main.md` | #1794 | sensitive | plan `1e8c41906` approved; Luna-high builder implementing; merge last | `build_1794` | Codex subagent | `build/1794-release-notes-protected-main` | — |
-| `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | PR open; local gate green; live-outage proof in progress; security QA not started | `build-1883-vault-errors-2` | resolve live | `build/1883-vault-mcp-errors` | #1892 |
-| `docs/superpowers/specs/2026-08-23-1884-weather-settings-card.md` | #1884 | routine | PR open; live proof and local gate green; initial QA running; held behind #1883 | `build-1884-relay` + `qa-1891-weather` | resolve live | `build/1884-weather-settings` | #1891 |
+| `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | PR open; local gate green; returned for branch-installed real-UI proof; security QA not started | `build-1883-vault-errors-2` | resolve live | `build/1883-vault-mcp-errors` | #1892 |
+| `docs/superpowers/specs/2026-08-23-1884-weather-settings-card.md` | #1884 | routine | initial QA green; CI pending; held for post-#1883 rebase + integrated QA | `build-1884-relay` | resolve live | `build/1884-weather-settings` | #1891 |
 | issue #1885 | #1885 | routine | merged `91aa6ad84`; issue closed/Done | reaped | — | `fix/1885-coordinator-watchdog` | #1886 |
 
 ## Scope decisions
@@ -95,6 +95,10 @@ hand-merging it.
   test exit 0, no shell-safety or invariant finding, no live-UI gate. Verdict posted at
   `https://github.com/motioneso/moss/pull/1886#issuecomment-5387189864`; required CI later passed
   (`Verify foundation and app` 30m56s, `CI gate` exit 0). QA pane/worktree reaped after verdict.
+- PR #1891 initial routine QA: GREEN at exact head `472e10fc4`; audit preflight exit 0, independent
+  blocking UAT exit 0 (1 passed), durable authenticated live-UI proof present, and no findings.
+  `Verify foundation and app` was pending at verdict time. PR remains held behind #1883 and needs
+  a fresh integrated QA pass after rebase. Initial QA pane/worktree reaped after verdict.
 
 ## Merge digest
 
