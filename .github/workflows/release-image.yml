@@ -118,6 +118,7 @@ jobs:
 
       - name: Create GitHub release
         env:
+          GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ inputs.source_sha }}
           TAG_EXISTS: ${{ steps.source.outputs.tag_exists }}
