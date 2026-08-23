@@ -19,7 +19,7 @@ durable live-path proof comment.
 
 | Spec | Issue | Tier | Status | Agent name | Pane | Branch | PR |
 | ---- | ----- | ---- | ------ | ---------- | ---- | ------ | -- |
-| `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319-A (concrete child of #1470) | security | planning/building — phase 2 only | `build-1319a-catalog-verify` | `w1:pQ2` | `build/1319a-catalog-verify` | — |
+| `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319-A (concrete child of #1470) | security | plan approved — relaying before build at 72% | `build-1319a-catalog-verify` | `w1:pQ2` | `build/1319a-catalog-verify` | — |
 | `docs/superpowers/specs/2026-08-19-926-food-day-view-components-and-targets.md` | #1737 (concrete child of #926) | routine | closed/Done — Ben verified working in production; lane cancelled/reaped | reaped | — | deleted | — |
 | `docs/superpowers/specs/2026-08-23-1794-release-notes-protected-main.md` | #1794 | sensitive | queued | — | — | — | — |
 | `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | planning/building — diagnosis-first | `build-1883-vault-errors` | `w1:pP0` | `build/1883-vault-mcp-errors` | — |
@@ -85,6 +85,14 @@ hand-merging it.
 ## QA history
 
 None yet.
+
+## Plan approvals
+
+- #1319-A phase-2 plan `docs/superpowers/plans/2026-08-23-1319a-phase2-catalog-verify.md`
+  approved as written. It covers raw-byte verification, atomic snapshot caching, the response
+  envelope, authorization-before-fetch testing, and the signed-index e2e baseline; phases 3-4,
+  enforcement, override, UI, UAT, and migrations remain excluded. The planning session reached
+  72% before code and was instructed to relay to a fresh Sonnet successor before building.
 
 ## Starting-point gate
 
