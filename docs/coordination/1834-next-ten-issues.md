@@ -1899,3 +1899,11 @@ running gates against the shared database server; this is recorded as contention
 PR failure. The old gate database was dropped, a clean run was requested, and the lane's watcher
 confirmed it is queued behind the shared lock and will start when the current holder exits. Rebase,
 push, and PR update remain after the clean gate result. No Ben-only decision is open. [pane w1:pNS]
+
+## Update - 2026-08-23, #1335 accidental process correction
+
+#1335 corrected that an earlier coordinator-message shell command evaluated an unintended local
+`flock`/`pnpm verify:foundation` process because of unescaped backticks. Exact unintended PIDs
+`3699744`/`3699745` were terminated; they produced no gate record or verdict. The authorized
+plan-only diff remains intact, `format:check` is green, and the real #1335 runner remains active
+at PIDs `3702267`/`3702268`. [pane w1:pNR]
