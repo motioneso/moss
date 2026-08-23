@@ -1320,3 +1320,25 @@ and the #1499 build lane was idle waiting on QA, so there was a free slot):
 - Handoff note: `docs/coordination/1834-handoff-1755-workshop-page.md`.
 - Running in pane w1:pMZ, "builders" tab, agent name `pr1755-workshop-page`. Confirmed on Sonnet
   and working.
+
+## Update - 2026-08-23, #1499 merged; #1755 was a duplicate, caught and closed
+
+**#1499:** QA came back green (routine tier, standard review, no findings). Merged pull request
+1868. Closed issue #1499 (the merge did not auto-close it). Reaped the build and QA lanes -
+closed both panes, removed both work folders and branches. Both "builders" and "qa" tabs closed
+automatically once empty.
+
+**#1755:** this was a mistake on my part - I queued it as new work without checking whether it
+had already been built. The build lane caught it immediately: the Workshop page was already
+built and merged on 2026-08-21 as pull request 1804, and issue #1755 had just been left open by
+accident. Confirmed independently (the merged pull request, and an empty diff between the new
+work folder and the main branch) before acting. Closed issue #1755 with a note pointing to pull
+request 1804. There was also a leftover process still running from the build agent's own testing
+(a dev server it forgot to stop) - killed it before removing the work folder. Reaped the lane the
+same way as #1499.
+
+Lesson for next time queuing work from a GitHub search: check for a merged pull request against
+the issue number specifically, not just whether the issue itself is still open - an issue can be
+done and merged while still showing open on the board if nothing closed it automatically.
+
+Next: starting #1500 (shared web forms), the second item in the chain.
