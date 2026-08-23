@@ -19,7 +19,7 @@ durable live-path proof comment.
 
 | Spec | Issue | Tier | Status | Agent name | Pane | Branch | PR |
 | ---- | ----- | ---- | ------ | ---------- | ---- | ------ | -- |
-| `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319-A (concrete child of #1470) | security | Task B `26ec5c458` complete; gate and wrap-up running | `catalog-verify-1319a-2` | resolve live | `build/1319a-catalog-verify` | — |
+| `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319-A (concrete child of #1470) | security | PR open; local gate green; initial Opus security QA running; held behind #1883/#1884 | `catalog-verify-1319a-2` + `qa-1897-catalog-security` | resolve live | `build/1319a-catalog-verify` | #1897 |
 | `docs/superpowers/specs/2026-08-19-926-food-day-view-components-and-targets.md` | #1737 (concrete child of #926) | routine | closed/Done — Ben verified working in production; lane cancelled/reaped | reaped | — | deleted | — |
 | `docs/superpowers/specs/2026-08-23-1794-release-notes-protected-main.md` | #1794 | sensitive | PR open; local gate green; initial QA running; merge last; real merged-PR proof pending | `build_1794` + `qa-1896-release-notes` | Codex subagent + resolve QA live | `build/1794-release-notes-protected-main` | #1896 |
 | `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | PR open; local gate green; fresh relay building branch-installed real-UI proof; security QA not started | `build-1883-livepath` | resolve live | `build/1883-vault-mcp-errors` | #1892 |
