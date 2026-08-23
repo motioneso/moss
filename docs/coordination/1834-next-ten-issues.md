@@ -1569,3 +1569,12 @@ Ben directed that #1511 leave run 1834's queue and remain in Backlog with #1246.
 already in GitHub's Backlog, so no project-field mutation was needed. #1511 no longer blocks this
 run; reconsider it only after #1246 and the live tasks-sharing dependency clear and it is
 reprioritized.
+
+## Continuation note - 2026-08-23, #1872 relayed after clean gate
+
+#1872's clean full gate against `jarvis_gate_1872c` passed with exit 0, including the isolation
+tests invalidated by the earlier database collision; the gate database was dropped afterward.
+Sonnet successor `issue1872-image-relay4`, session `d2a048bd-2e33-48f2-af01-937c1c56a99f`, is
+visibly driving the same worktree/branch through push, PR creation, live-path proof, release note,
+and wrap-up. Spent predecessor session `f598bdac-11ec-4d7e-aa71-ccad13e05612` was closed after
+successor confirmation. No Ben-only decision is open; the Fable-authored plan remains authoritative.
