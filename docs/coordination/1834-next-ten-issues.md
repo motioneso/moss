@@ -2638,3 +2638,17 @@ deletion-only correction (recommended), or defer. A fresh coordinator must adopt
 check for Ben's reply, and only after approval restart the owner for the narrow correction,
 rebase onto current `origin/main`, and request fresh exact-head QA. No merge is authorized.
 [pane w1:pPE]
+
+## Continuation - 2026-08-23, relay 13 adopted; Ben approved #1878
+
+Coordinator authority transferred after an exact predecessor match. The authoritative session is
+now `01a02e65-1ed1-71a3-b7ba-1b1ddbfa814b`, agent `coordinator`, pane label `Coordinator`; old
+session `01a02e12-8834-7b51-b0fa-51ef6f2ca2e3` was renamed and closed only after its immutable
+session id and label matched the relay record. The live fleet was re-adopted with only the stopped
+#1501 owner session `01a02d53-0152-7c92-a3d0-84947677f620`; no QA lane is live.
+
+Ben replied `Merge` to the open PR #1878 decision. This authorizes the recommended final narrow
+deletion-only correction, not a QA bypass: the existing owner must remove only the remaining
+duplicated explanatory web-sheet comments, rebase onto current `origin/main`, push with lease, and
+request fresh exact-head QA. Required CI and that fresh QA must be green before merge. The resolved
+entry was removed from `docs/coordination/AWAITING-BEN.md`. [pane w1:pPJ]
