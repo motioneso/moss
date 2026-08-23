@@ -2303,3 +2303,12 @@ the required foundation check is still pending. Review, invariants, test-only cl
 and exit criteria are clean; the only observation is intentional fixture duplication. The
 review-only QA pane and worktree were reaped after the verdict. PR #1879 remains unmergeable until
 CI completes green. [pane w1:pP2]
+
+## Update - 2026-08-23, #1335 fresh QA started
+
+PR #1880 (#1335) is open at rebased head `64a35cb52e1179c8093aa1d1a94fa504c98baf4c`, based on
+`origin/main` `f59297ee1`. The final isolated gate, targeted prompt test, format, lint, and
+typecheck evidence are posted; the change has no user-facing surface. Fresh routine QA is active
+in the shared QA tab, pane `w1:pP6`, agent `qa1880-1335`, session
+`01a02dd9-a536-7891-80da-f81d960e0880`, on Codex GPT-5.6 Luna at high effort. CI is still pending;
+do not merge until QA posts its durable verdict and all required checks are green. [pane w1:pP2]
