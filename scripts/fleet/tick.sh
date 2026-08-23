@@ -261,6 +261,18 @@ $(head -c 4000 <<<"$body")"
   esac
 }
 
+# The GitHub web URL for an issue, derived from the repo's own remote.
+issue_url() { # <issue number>
+  local remote owner_repo
+  remote="$(git -C "$REPO_ROOT" config --get remote.origin.url 2>/dev/null)"
+  owner_repo="$(sed -E 's#^(git@github\.com:|https://github\.com/)##; s#\.git$##' <<<"$remote")"
+  if [ -n "$owner_repo" ]; then
+    echo "https://github.com/$owner_repo/issues/$1"
+  else
+    echo "issue-#$1"
+  fi
+}
+
 intake() {
   if [ "$DRY" = "1" ]; then
     echo "DRY: gh project item-list $FLEET_PROJECT_NUMBER --owner $FLEET_PROJECT_OWNER --format json (intake: find Ready/In Progress task issues with no record)"
@@ -293,19 +305,28 @@ intake() {
       pr="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty' 2>/dev/null)"
     fi
     tier="$(intake_tier "$n" "$title" "$body")"
+    # fleetctl add only accepts spec= and tier= (and requires spec); everything
+    # else goes through set. Board issues have no spec file, so the issue URL
+    # is the spec of record for an adopted lane.
+    spec_url="$(issue_url "$n")"
     if [ -n "$pr" ]; then
-      fctl add "$n" "tier=$tier" status=pr-open "pr=$pr" "branch=$branch"
+      fctl add "$n" "spec=$spec_url" "tier=$tier"
+      fctl set "$n" status=pr-open "pr=$pr" "branch=$branch"
       fctl log "$n" "intake: adopted issue #$n at pr-open (open PR #$pr on branch $branch), tier $tier"
     elif [ -n "$branch" ]; then
-      fctl add "$n" "tier=$tier" status=queued "branch=$branch"
+      fctl add "$n" "spec=$spec_url" "tier=$tier"
+      fctl set "$n" "branch=$branch"
       fctl log "$n" "intake: adopted issue #$n at queued with existing branch $branch (dispatch will use a resume brief), tier $tier"
     else
-      fctl add "$n" "tier=$tier" status=queued
+      fctl add "$n" "spec=$spec_url" "tier=$tier"
       fctl log "$n" "intake: queued issue #$n fresh, tier $tier"
     fi
   done < <(jq -c '.items[]?
       | select((.content.type // "") == "Issue")
-      | select((.status // "") == "Ready" or (.status // "") == "In Progress")
+      # Compare case-insensitively: the real board column is "In progress"
+      # (lowercase p), and an exact "In Progress" match would skip every
+      # started task.
+      | select(((.status // "") | ascii_downcase) as $s | $s == "ready" or $s == "in progress")
       | select(((.labels // []) | map(ascii_downcase) | index("task")) != null)' <<<"$items" 2>/dev/null)
 }
 

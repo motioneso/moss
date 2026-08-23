@@ -217,16 +217,19 @@ state="$(new_state)"
 clear_logs
 project_json='{"items":[{"status":"Ready","labels":["task"],"content":{"type":"Issue","number":201,"title":"Add widget","body":"plain feature"}}]}'
 run_tick_live "$state" GH_PROJECT_JSON="$project_json" GH_ISSUE_BRANCHES=$'feat/201-widget\trepo' GH_PR_LIST="77" CLAUDE_ANSWER="ROUTINE" >/dev/null
-grep -q "add 201 tier=routine status=pr-open pr=77 branch=feat/201-widget" "$SHIM_LOG_DIR/fleetctl.log"
+grep -q "add 201 spec=https://github.com/.*/issues/201 tier=routine" "$SHIM_LOG_DIR/fleetctl.log"
+grep -q "set 201 status=pr-open pr=77 branch=feat/201-widget" "$SHIM_LOG_DIR/fleetctl.log"
 pass "intake adopts an issue with an open PR at pr-open"
 
 # --- 10. intake adopts an issue with a branch but no PR at queued -------------------
 
 state="$(new_state)"
 clear_logs
-project_json='{"items":[{"status":"In Progress","labels":["task"],"content":{"type":"Issue","number":202,"title":"Fix export","body":"touches exports"}}]}'
+# Real board value is "In progress" with a lowercase p; the match must not care.
+project_json='{"items":[{"status":"In progress","labels":["task"],"content":{"type":"Issue","number":202,"title":"Fix export","body":"touches exports"}}]}'
 run_tick_live "$state" GH_PROJECT_JSON="$project_json" GH_ISSUE_BRANCHES=$'fix/202-export\trepo' GH_PR_LIST="" CLAUDE_ANSWER="SENSITIVE" >/dev/null
-grep -q "add 202 tier=sensitive status=queued branch=fix/202-export" "$SHIM_LOG_DIR/fleetctl.log"
+grep -q "add 202 spec=https://github.com/.*/issues/202 tier=sensitive" "$SHIM_LOG_DIR/fleetctl.log"
+grep -q "set 202 branch=fix/202-export" "$SHIM_LOG_DIR/fleetctl.log"
 grep -q "resume brief" "$SHIM_LOG_DIR/fleetctl.log"
 pass "intake adopts an issue with a branch but no PR at queued, marked for resume"
 
