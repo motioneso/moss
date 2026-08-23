@@ -40,8 +40,6 @@
   letter-spacing: -0.03em;
   line-height: 0.92;
 }
-/* The overview hero's second line ("ready to go") — nest inside a `.jds-display--lg`. */
-
 /* ---------------------------------------------------------------
    HAIRLINE ROW BUTTON — a full-width row that is a <button>
    ---------------------------------------------------------------
@@ -104,13 +102,6 @@
   height: 1px;
 }
 
-/* ---------------------------------------------------------------
-   INSTRUMENT FIELD — an uppercase micro-label over a value, hairline-ruled above
-   ---------------------------------------------------------------
-   The mockup's `Field`: kit.jsx calls it "the platform's instrument idiom." Named `.jds-instrument`
-   rather than `.jds-field` because that name is already taken by the form-control label+input
-   primitive in components-forms.css — a different thing wearing a similar name would be worse
-   than a new name. */
 .jds-instrument {
   border-top: 1px solid var(--line);
   padding-top: 10px;
