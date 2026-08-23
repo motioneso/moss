@@ -2080,3 +2080,14 @@ no terminal sentinel, and a stale last write. The coordinator rejected this as a
 and delivered a verified instruction to preserve the authorized plan-only diff, restart through
 the required fresh `scripts/run-gate.sh start` path, and consume an exact sentinel before PR work.
 [pane w1:pNF]
+
+## Update - 2026-08-23, #1105 prompt stopped; #1335 fresh start released
+
+#1105's authorized gate was confirmed at a private-key `Password:` prompt and stopped cleanly;
+`scripts/run-gate.sh status` now records `DONE rc=143` for
+`1105_seeded_chat_uat-20260823-004559.log`, with no secret entered. This released the shared
+database lock. #1335's fresh `scripts/run-gate.sh start` is now the sole queued/provisioning
+runner (PIDs `3999661/3999696`); it has not emitted its log path or sentinel yet. No plan or
+implementation files changed. The first coordinator prompt had shell-evaluated inline markers;
+it created no unintended background process, and a safely quoted correction was delivered to the
+owner. [pane w1:pNR]
