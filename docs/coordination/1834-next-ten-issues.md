@@ -2588,3 +2588,39 @@ allow one final deletion-only correction or defer PR #1878; the open decision is
 The spent #1878 review-only QA pane was then closed after matching session
 `01a02e1f-7e7c-7882-8a3b-6b1725eb31a1`, and its clean isolated worktree was removed. The remaining
 #1880 QA lane now occupies the QA tab alone and remains active. [pane w1:pPE]
+
+## Update - 2026-08-23, #1880 final QA clean; CI pending
+
+Fresh routine QA for PR #1880 at `b636f0dd5095e500058969ff850451d173178f42` posted a durable
+RED solely because the required foundation/app check remains pending. Review found zero blocking
+issues and no invariant risk; it confirmed all production suppressions are absent, the email test
+is included, and no live-path or mapped UAT applies. Four test-contract and formatting observations
+were recorded as non-blocking. The review-only QA pane was closed after matching session
+`01a02e20-f9dd-7e63-9288-5973bc5edb69`, and its clean isolated worktree was removed.
+
+PR #1880 remains unmerged until required CI completes green. [pane w1:pPE]
+
+## Update - 2026-08-23, #1880 merged after final green CI
+
+PR #1880 reached complete required CI green on exact head
+`b636f0dd5095e500058969ff850451d173178f42`: foundation/app passed in 30m37s, both compose smokes
+passed, the CI gate passed, and image build/publish passed in 7m40s. After re-confirming coordinator
+authority session `01a02e12-8834-7b51-b0fa-51ef6f2ca2e3` against the manifest and live pane, the
+routine PR was squash-merged as `d389a59e17f7483ee198fe0d95527798e3a24d84`. Issue #1335 is
+closed as completed and its live project item is Done.
+
+The #1335 owner is preparing its clean squash-merged worktree to pass all four reap gates; no
+worktree or local branch has yet been removed. This is one routine merge since relay 12, so no
+merge-count relay trigger has fired. PR #1878 remains stopped awaiting Ben's decision. [pane w1:pPE]
+
+## Update - 2026-08-23, #1880 fully reaped; #1878 CI green
+
+The #1880 owner aligned its clean branch exactly to landed main, then passed all four worktree reap
+gates: zero commits ahead, zero tracked changes, zero remaining process CWDs after the matched pane
+closed, and zero panes in the worktree. The owner pane was closed after matching session
+`01a02d59-6b9b-7270-a117-ef7c49ac80a9`; the worktree and local/remote feature branches were removed.
+The work remains recoverable on `origin/main` at `d389a59e17f7483ee198fe0d95527798e3a24d84`.
+
+PR #1878's required CI and image build have now completed green, but the PR remains stopped on its
+second failed QA and the open Ben decision about one final deletion-only correction. Its owner pane
+and worktree remain intact; no merge is authorized. [pane w1:pPE]
