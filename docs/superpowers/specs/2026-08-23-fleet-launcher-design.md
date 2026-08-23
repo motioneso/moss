@@ -49,15 +49,36 @@ Two consequences, both the point: closing the viewer cannot affect the run, and 
 be tested by pointing it at a directory of fixture lanes.
 
 It is not, however, read-only. Pause and rescue act on live agents through the terminal workspace
-manager (`herdr`), which is how every other tool on this box addresses a running agent. The viewer
-holds no other write path: it does not edit lane records, does not enable merges, and does not
-change settings apart from the deputy toggle.
+manager (`herdr`), which is how every other tool on this box addresses a running agent.
 
-**Racing the daemon.** The daemon ticks every minute and may act on the same lane in the same
-minute a human does. Both actions are messages to an agent rather than edits to shared state, so the
-worst case is an agent receiving a pause and a daemon instruction close together. To keep this
-legible rather than merely unlikely, every viewer action is written to that lane's log with an
-explicit human marker, so the morning board shows who did what.
+Its writes are enumerated, and this list is exhaustive:
+
+| Write                               | Where                                                    |
+| ----------------------------------- | -------------------------------------------------------- |
+| Pause or unpause a lane             | `paused` field in the lane record, through the state CLI |
+| A line saying what a human just did | That lane's log, through the state CLI                   |
+| Deputy on or off                    | The settings file                                        |
+
+It never edits a lane's status, never enables a merge, and never writes anything else. Everything
+else it shows, it read.
+
+**Racing the daemon.** The daemon ticks every minute and may act on the same lane a human just
+acted on. Messages alone do not prevent this: the daemon decides from the lane record, so an action
+it cannot see in the record is an action it will talk over.
+
+Both actions therefore make themselves visible in the record before anything else happens. Pause
+sets the paused field, which the daemon checks first. Rescue's spawned agent claims the lane through
+the state CLI as its first act, exactly as a build agent does, so the record names it and the clock
+on it restarts.
+
+Without that claim there is a specific collision worth naming, because it is the one this design
+nearly shipped with: the daemon treats a lane whose record has not changed in thirty minutes as
+dead, and starts a fresh agent. A rescue agent working quietly on a lane whose record still names
+the old agent looks exactly like that, and would get a second agent dropped onto the same branch
+half an hour later.
+
+Every viewer action is also written to that lane's log marked as human, so the morning board shows
+who did what.
 
 ## Implementation choice
 
@@ -87,16 +108,44 @@ issue and its own plan.
 
 ### Unit one in detail
 
-| Change               | Today                                                  | After                                                                                     |
-| -------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| Settings             | Environment variables plus fixed numbers in the script | Reads `settings.json` from the state folder; environment still wins, for the systemd unit |
-| Build model          | One model for every lane                               | A model and effort level per kind of work: routine, sensitive, security-touching          |
-| Pause                | Only a switch that stops the whole fleet               | A lane may be paused; the daemon skips it and does not spawn for it                       |
-| Memory floor         | None                                                   | Refuses to start an agent below a floor of free memory, logs why, carries on              |
-| Outstanding question | Only a one-line blocked reason in the lane record      | The full question and when it was asked, copied into the lane record                      |
+| Change               | Today                                                         | After                                                                                                 |
+| -------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Settings             | Environment variables plus fixed numbers in the script        | Reads `settings.json` from the state folder; environment still wins, for the systemd unit             |
+| Build model          | One model for every lane                                      | A model and effort level per kind of work: routine, sensitive, security-touching                      |
+| Pause                | Only a switch that stops the whole fleet                      | A `paused` field on the lane record; a paused lane is skipped entirely, including the dead-lane check |
+| Deputy gating        | A file carrying an expiry; no file or a past expiry means off | A setting; the expiry logic is removed from the daemon                                                |
+| Memory floor         | None                                                          | Refuses to start an agent below a floor of free memory, logs why, carries on                          |
+| Outstanding question | Only a one-line blocked reason in the lane record             | The full question and when it was asked, copied into the lane record                                  |
 
 That last one keeps the viewer honest: without it the screen would have to read the folder that
 pings Ben as well as the state folder, and the single-source-of-truth claim would be false.
+
+### The seam between the units
+
+Unit two builds against what unit one writes, so the shape is fixed here rather than in two separate
+plans, where it would be invented twice and differently. Everything lives under the state folder
+(`$JARV1S_FLEET_STATE`, default `~/.local/state/jarv1s-fleet`).
+
+| Thing                    | Where                | Shape                                                                                     |
+| ------------------------ | -------------------- | ----------------------------------------------------------------------------------------- |
+| Settings                 | `settings.json`      | `judgeCmd`, `buildModels`, `laneCap`, `spawnBudget`, `deputyEnabled`, `deputyWaitSeconds` |
+| When tonight began       | `run-started`        | One ISO timestamp, written by the launcher                                                |
+| A lane is paused         | lane record          | `paused`, plus `pausedAt` and `pausedBy`                                                  |
+| The outstanding question | lane record          | `question` with the full text, plus `questionAskedAt`                                     |
+| Who is working the lane  | existing agent field | Unchanged; a rescue agent overwrites it when it claims the lane                           |
+
+Unit one writes all of these; unit two may assume all of them exist. Changing this table changes
+both units, so it lives here rather than in either plan.
+
+**Nothing starts the daemon, so the daemon cannot record when the night began.** It is a script that
+runs once a minute and exits; every tick is a new process with no memory of the last, and there is
+no moment matching "tonight started". The launcher is the only thing that knows, so the launcher
+writes the start time when it starts the service. Opening and closing the viewer does not touch it.
+
+**Settings must not be shadowed.** Environment variables win over the settings file, so the service
+can still be driven directly when needed. But the service definition is where those variables live
+today, and if the launcher started it unchanged the old values would silently override every answer
+the user just gave. The launcher owns the service definition and keeps those variables out of it.
 
 ## Setup flow
 
@@ -104,14 +153,14 @@ Six questions, each with a working default, so pressing Enter six times produces
 Answers are written to `$JARV1S_FLEET_STATE/settings.json` (default
 `~/.local/state/jarv1s-fleet/settings.json`), which unit one teaches the daemon to read.
 
-| #   | Question                                       | Setting             | Default     |
-| --- | ---------------------------------------------- | ------------------- | ----------- |
-| 1   | Which command makes judgment calls?            | `judgeCmd`          | `claude -p` |
-| 2   | Which models build, per kind of work?          | `buildModels`       | see below   |
-| 3   | How many lanes at once?                        | `laneCap`           | 5           |
-| 4   | How many agent starts tonight?                 | `spawnBudget`       | 30          |
-| 5   | Is the deputy on?                              | `deputyEnabled`     | off         |
-| 6   | How long does it wait for you before deciding? | `deputyWaitSeconds` | 1200        |
+| #   | Question                                                                        | Setting             | Default     |
+| --- | ------------------------------------------------------------------------------- | ------------------- | ----------- |
+| 1   | Which command makes judgment calls?                                             | `judgeCmd`          | `claude -p` |
+| 2   | Which models build, per kind of work?                                           | `buildModels`       | see below   |
+| 3   | How many lanes at once?                                                         | `laneCap`           | 5           |
+| 4   | How many agent starts tonight?                                                  | `spawnBudget`       | 30          |
+| 5   | Is the deputy on?                                                               | `deputyEnabled`     | off         |
+| 6   | How long does it wait for you before deciding? (asked only if the deputy is on) | `deputyWaitSeconds` | 1200        |
 
 Question 1 asks for a command, not a model name, so pointing the fleet at another provider is a
 one-line change. This is the provider-agnostic rule from `CLAUDE.md`, which Ben extended to ops
@@ -129,7 +178,9 @@ sensitive, or security-touching; the setup maps a model and an effort level onto
 }
 ```
 
-All three may name the same model. Effort is passed through only where the provider supports it.
+All three may name the same model. Effort reaches the agent as a spawn argument where the provider
+takes one — for the local Claude command, its reasoning-effort flag — and is ignored, with a line in
+the log, where it is not.
 
 **Where model names are allowed to appear.** The rule is that no model name is compiled into the
 fleet's logic. Names in a settings file the user edits, and in the seed defaults the setup screen
@@ -219,14 +270,29 @@ Both keys exist only in the detail view, where the target is visible and unambig
 through the terminal workspace manager rather than by editing state, and both write what they did to
 the lane's log, marked as a human action.
 
-**`p` — pause.** Confirms, then sends the lane's running agent a message telling it to stop at its
-next safe point and wait, and marks the lane paused so the daemon skips it. Pressing again resumes:
-the lane is unmarked and the agent is told to carry on.
+**`p` — pause.** Confirms, then marks the lane paused on its record and sends its running agent a
+message telling it to stop at its next safe point and wait. Pressing again unmarks the lane and
+tells the agent to carry on.
 
 Pause is cooperative, not a kill. An agent mid-edit finishes what it is doing and then stops, which
-is the behaviour you want at 1am — a hard stop mid-commit leaves a worse mess than the problem you
-were trying to interrupt. If the lane has no running agent, pausing only sets the marker, which is
-enough to stop the daemon spawning for it.
+is what you want at 1am: a hard stop mid-commit leaves a worse mess than the problem you were
+interrupting.
+
+Three consequences the daemon has to handle, none of which it does today:
+
+- **A paused lane is skipped entirely, including the dead-lane check.** The daemon judges a lane
+  dead when its record has not changed in thirty minutes, and a paused agent produces exactly that
+  signature. Without this, any pause lasting longer than half an hour ends with the lane parked.
+- **The agents must be told what a pause is.** Their briefs currently say the opposite — finish or
+  stop your session, never idle waiting — so a pause message arriving in that session would be
+  obeyed unpredictably. Unit one adds a line to the brief: on a pause, stop at a safe point and
+  wait to be told to continue or to stop for good.
+- **Resume must survive a missing agent.** If the agent exited while paused, there is nothing to
+  tell. Unpausing simply clears the mark, and the lane rejoins the normal flow, where the dead-lane
+  path picks it up on the next tick.
+
+If the lane has no running agent to begin with, pausing just sets the mark, which is enough to stop
+the daemon spawning for it.
 
 **`r` — rescue.** Two steps, with a decision in between.
 
@@ -243,9 +309,24 @@ Nothing is spawned before you accept. That is the whole reason rescue is two ste
 judgment call the daemon already makes on its own, but with a preview, because a keypress at 1am
 should not start real work sight unseen.
 
-Rescue obeys the same hard floor as the deputy. If the model's suggestion would require merging
-unproven work, touching production, or any other floor action, the viewer refuses to act on it and
-says so.
+**What a rescue agent may do.** It is a build agent with a better brief, not a diagnostician (Ben,
+2026-08-23). It may change code, push, and carry the issue the rest of the way, under the same rules
+as any build agent.
+
+Three things follow, and all three are what make it safe to start one from a keypress:
+
+- **It claims the lane first.** Before touching anything it writes itself into the lane record
+  through the state CLI, exactly as a spawned build agent does. Until it does, the daemon still sees
+  the old agent on a stale record and will eventually send a second agent to the same branch.
+- **It counts against the night's budget.** A rescue is an agent start like any other. If the budget
+  is exhausted the viewer still shows the preview, but cannot be accepted, and says why.
+- **Its brief carries the hard floor.** It may not merge unproven work, touch production, delete
+  data, rewrite history, or disable checks — the same list the deputy is bound by.
+
+The floor is enforced in the brief and in the daemon, which already refuses these at the point of
+action. It is deliberately not enforced by the viewer inspecting the model's answer: that answer is
+free text, and a screen claiming to detect a forbidden intention in prose would promise something it
+cannot deliver.
 
 ## Out of scope
 
@@ -265,6 +346,7 @@ Named so that their absence is a decision rather than an oversight:
 | Daemon not running               | Launcher offers to start it; viewer shows a banner and stays usable |
 | A lane's state file is malformed | That row shows an error, the rest of the screen renders             |
 | Rescue call fails or times out   | Message in the detail view; nothing written; lane untouched         |
+| Agent-start budget exhausted     | Rescue shows its preview but cannot be accepted, and says why       |
 | Terminal too small               | A clear message rather than a broken layout                         |
 
 ## Testing
@@ -288,7 +370,10 @@ Actions, with the workspace manager stubbed:
 - Pause messages the running agent, marks the lane, and logs the action as human
 - Pause on a lane with no running agent still marks it, and does not error
 - Rescue shows the model's answer before anything is spawned, and dismissing spawns nothing
-- Rescue refuses a suggestion that would cross the hard floor
+- An accepted rescue claims the lane in the record before the agent does anything else
+- An accepted rescue is refused when the agent-start budget is exhausted, and says why
+- A paused lane survives past the dead-lane threshold without being parked
+- Unpausing a lane whose agent has exited clears the mark and does not error
 - A failed or slow model call leaves the lane untouched and says so
 
 Setup:
@@ -334,12 +419,15 @@ portion of #1895; that issue keeps its live-proof requirement.
 
 Made by Ben on 2026-08-23, in this design conversation, and captured so they are not relitigated:
 
-| Decision                                                        | Note                                                                                                    |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Built with Ink                                                  | Chosen over a hand-rolled renderer for the tab and list plumbing                                        |
-| Launcher starts the daemon, then the daemon survives on its own | Closing the viewer does not stop the fleet                                                              |
-| Three tabs, In Progress by default                              | Ready and Done Tonight alongside                                                                        |
-| Rescue is in the first version                                  | Reviewed as the least-defined piece; kept and specified rather than cut                                 |
-| Pause messages the running agent                                | Cooperative stop through the workspace manager, not a marker the agent never sees                       |
-| Deputy is a plain on/off switch                                 | No expiry, contrary to the daemon's current fail-closed file; default off, always visible in the header |
-| 5 lanes, 30 agent starts                                        | Raised from 3 and 12 after measuring the box                                                            |
+| Decision                                                        | Note                                                                                                                                                                                                                                                                           |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Built with Ink                                                  | Chosen over a hand-rolled renderer for the tab and list plumbing                                                                                                                                                                                                               |
+| Launcher starts the daemon, then the daemon survives on its own | Closing the viewer does not stop the fleet                                                                                                                                                                                                                                     |
+| Three tabs, In Progress by default                              | Ready and Done Tonight alongside                                                                                                                                                                                                                                               |
+| Rescue is in the first version                                  | Reviewed as the least-defined piece; kept and specified rather than cut                                                                                                                                                                                                        |
+| Pause messages the running agent                                | Cooperative stop through the workspace manager, not a marker the agent never sees                                                                                                                                                                                              |
+| Deputy is a plain on/off switch                                 | No expiry, contrary to the daemon's current fail-closed file; default off, always visible in the header                                                                                                                                                                        |
+| 5 lanes, 30 agent starts                                        | Raised from 3 and 12 after measuring the box                                                                                                                                                                                                                                   |
+| Build everything, then prove it once at the end                 | Unit one, then unit two, then the live proof. Ben on 2026-08-23: "the delay is fine, I want it done right." The daemon has never been installed or run, so waiting costs nothing currently in use. The cost accepted is one large proof session rather than several small ones |
+| A rescue agent fixes the lane and carries it on                 | Ben on 2026-08-23. It is a build agent with a better brief, not a diagnostician: it may change code, push, and take the issue the rest of the way                                                                                                                              |
+| The one-page runbook is dropped                                 | The launcher manual replaces it; #1895 keeps only its live-proof requirement                                                                                                                                                                                                   |
