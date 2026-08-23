@@ -1795,3 +1795,18 @@ PR #1877 is open for #1105, but its current head still reflects the implementati
 the Fable-authorized plan-only formatting change is being prepared and the post-format gate is
 rerun. GitHub checks are pending; independent QA will start only after the final formatted head,
 green required checks, and durable evidence are present. [pane w1:pNF]
+
+## Update - 2026-08-23, Option B ruling relayed and #1335 baseline recorded
+
+The Fable 5 Option B ruling was relayed and delivery-verified to both Codex Luna build lanes:
+#1105 and #899 may format only their authoritative plan with `npx prettier --write`, inspect
+`git diff --word-diff` for whitespace/punctuation-only changes, rerun `pnpm format:check` and
+the isolated full gate, and preserve all existing targeted/live evidence. No exemption or other
+scope change is authorized. #1105 remains on PR #1877 while its formatted head and post-format
+checks are being prepared; #899 is doing the same before opening its PR. [pane w1:pNF]
+
+#1335 reports dedicated tsconfig, listFiles (67 `.tsx` files), `@moss/web` typecheck,
+`check:external-modules`, and lint all green. Its only format failure is the untouched
+authoritative plan `docs/superpowers/plans/2026-08-22-1335-tests-tsx-typecheck.md`; the two edited
+files are formatted. No plan rewrite was authorized. Follow-up issues recorded by the lane are
+#1875 (module-web exclusions) and #1876 (email requestJson production typing). [pane w1:pNR]
