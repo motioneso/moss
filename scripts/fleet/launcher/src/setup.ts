@@ -28,11 +28,13 @@ export function cloneDefaults(): Settings {
   return JSON.parse(JSON.stringify(DEFAULT_SETTINGS)) as Settings;
 }
 
-export function parseModelAnswers(raw: string, defaults = cloneDefaults()): Settings {
+export function parseBuildAnswers(raw: string, defaults = cloneDefaults()): Settings {
   const values = raw.split(",").map((value) => value.trim());
   const tiers: Tier[] = ["routine", "sensitive", "security"];
   for (const [index, tier] of tiers.entries()) {
-    if (values[index]) defaults.buildModels[tier].model = values[index];
+    const [model, effort] = (values[index] || "").split(/[/:]/).map((value) => value.trim());
+    if (model) defaults.buildModels[tier].model = model;
+    if (effort) defaults.buildModels[tier].effort = effort;
   }
   return defaults;
 }

@@ -111,8 +111,15 @@ export function logsForLane(logs: LogEntry[], issue: number): LogEntry[] {
     .reverse();
 }
 
-export function spawnsSince(logs: LogEntry[], started: string | null): number {
-  const cutoff = started ? Date.parse(started) : 0;
+export function spawnWindowStart(now = new Date()): number {
+  const cutoff = new Date(now);
+  cutoff.setHours(18, 0, 0, 0);
+  if (now.getTime() < cutoff.getTime()) cutoff.setDate(cutoff.getDate() - 1);
+  return cutoff.getTime();
+}
+
+export function spawnsSince(logs: LogEntry[], now = new Date()): number {
+  const cutoff = spawnWindowStart(now);
   return logs.filter((entry) => {
     const timestamp = entry.ts ? Date.parse(entry.ts) : 0;
     return timestamp >= cutoff && entry.msg?.startsWith("spawn");

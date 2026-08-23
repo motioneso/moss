@@ -69,10 +69,12 @@ function ActionPrompt({ children }: { children: React.ReactNode }) {
 export function Viewer({
   dir,
   initialSettings,
+  daemonRunning,
   onQuit
 }: {
   dir: string;
   initialSettings?: Settings;
+  daemonRunning: boolean;
   onQuit?: () => void;
 }) {
   const { exit } = useApp();
@@ -84,6 +86,7 @@ export function Viewer({
   const [action, setAction] = useState<"pause" | "resume" | "rescue-confirm" | null>(null);
   const [message, setMessage] = useState("");
   const [rescueReading, setRescueReading] = useState<string | null>(null);
+  const [rescueLoading, setRescueLoading] = useState(false);
   const settings = state.settings || initialSettings;
   const tab = TABS[tabIndex] ?? "In Progress";
   const lanes = useMemo(() => tabLanes(state, tab), [state, tab]);
@@ -124,9 +127,10 @@ export function Viewer({
       if (key.return && lanes[selected]) return setDetail(lanes[selected]);
       return;
     }
+    if (rescueLoading) return;
     if (rescueReading) {
       if (input === "y") {
-        const used = spawnsSince(state.logs, state.runStarted);
+        const used = spawnsSince(state.logs);
         if (!settings || used >= settings.spawnBudget) {
           setMessage(
             `Rescue cannot start: the ${settings?.spawnBudget || 0}-start budget is exhausted.`
@@ -154,10 +158,14 @@ export function Viewer({
       if (action === "rescue-confirm") {
         if (!settings) return setMessage("Settings are not available yet.");
         setAction(null);
-        setRescueReading("Thinking...");
+        setRescueLoading(true);
         void askJudge(settings, story(detail, state))
-          .then(setRescueReading)
+          .then((answer) => {
+            setRescueLoading(false);
+            setRescueReading(answer);
+          })
           .catch((error) => {
+            setRescueLoading(false);
             setRescueReading(null);
             setMessage(
               error instanceof Error ? error.message : "The judgment call failed; nothing changed."
@@ -194,8 +202,25 @@ export function Viewer({
     if (input === "r") return setAction("rescue-confirm");
   });
 
+  const tooSmall =
+    stdout.columns !== undefined &&
+    stdout.rows !== undefined &&
+    (stdout.columns < 60 || stdout.rows < 12);
+  if (tooSmall)
+    return (
+      <Text color="red">
+        The terminal is too small. Resize it to at least 60 columns by 12 rows.
+      </Text>
+    );
+
   return (
     <Box flexDirection="column" padding={1}>
+      {!daemonRunning && (
+        <Text color="yellow">
+          The fleet daemon is not running. This is the last state it wrote. Press q to close it, or
+          restart the launcher.
+        </Text>
+      )}
       <Box>
         {TABS.map((name, index) => (
           <Text
@@ -215,12 +240,19 @@ export function Viewer({
             # {lane.issue || "?"} error: {lane.error}
           </Text>
         ))}
-        {state.lanes.length === 0 && state.errors.length === 0 && (
+        {state.lanes.length === 0 &&
+          state.errors.length === 0 &&
+          !(tab === "Done Tonight" && !state.runStarted) && (
+            <Text color="gray">
+              The daemon has not ticked yet. Waiting for the first lane records.
+            </Text>
+          )}
+        {tab === "Done Tonight" && !state.runStarted && (
           <Text color="gray">
-            The daemon has not ticked yet. Waiting for the first lane records.
+            Done Tonight is unavailable because this run has no launcher start time.
           </Text>
         )}
-        {state.lanes.length > 0 && lanes.length === 0 && (
+        {state.lanes.length > 0 && lanes.length === 0 && state.runStarted && (
           <Text color="gray">No lanes in this tab.</Text>
         )}
         {lanes.map((lane, index) => (
@@ -251,11 +283,14 @@ export function Viewer({
                   : "Ask for a rescue preview?"}
             </ActionPrompt>
           )}
+          {rescueLoading && (
+            <Text color="cyan">
+              Waiting for the rescue preview. Accept is disabled until it arrives.
+            </Text>
+          )}
           {rescueReading && (
             <Text color="cyan">
-              {rescueReading === "Thinking..."
-                ? rescueReading
-                : `Rescue preview:\n${rescueReading}\n\n[y] accept  [p] pause  [d] dismiss`}
+              {`Rescue preview:\n${rescueReading}\n\n[y] accept  [p] pause  [d] dismiss`}
             </Text>
           )}
         </Box>
@@ -265,13 +300,6 @@ export function Viewer({
           <Text color="yellow">{message} (q to close)</Text>
         </Box>
       )}
-      {stdout.columns !== undefined &&
-        stdout.rows !== undefined &&
-        (stdout.columns < 60 || stdout.rows < 12) && (
-          <Text color="red">
-            The terminal is too small. Resize it to at least 60 columns by 12 rows.
-          </Text>
-        )}
     </Box>
   );
 }

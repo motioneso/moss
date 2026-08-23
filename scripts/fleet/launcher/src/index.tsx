@@ -1,13 +1,18 @@
-import React, { useState } from "react";
-import { render, Text, useInput } from "ink";
-import fs from "node:fs";
+import React, { useEffect, useState } from "react";
+import { Box, render, Text, useInput } from "ink";
 import { Viewer } from "./view.js";
-import { cloneDefaults, parseModelAnswers, SETUP_QUESTIONS } from "./setup.js";
+import { cloneDefaults, parseBuildAnswers, SETUP_QUESTIONS } from "./setup.js";
 import { daemonActive, startDaemon } from "./operations.js";
-import { stateDir, writeRunStarted, writeSettings } from "./state.js";
+import { readSettings, stateDir, writeRunStarted, writeSettings } from "./state.js";
 import type { Settings } from "./types.js";
 
-function Setup({ dir, onDone }: { dir: string; onDone: (settings: Settings) => void }) {
+function Setup({
+  dir,
+  onDone
+}: {
+  dir: string;
+  onDone: (settings: Settings, error?: string) => void;
+}) {
   const [step, setStep] = useState(0);
   const [value, setValue] = useState("");
   const [settings, setSettings] = useState(cloneDefaults());
@@ -15,7 +20,7 @@ function Setup({ dir, onDone }: { dir: string; onDone: (settings: Settings) => v
     if (key.return) {
       const next = { ...settings };
       if (step === 0 && value.trim()) next.judgeCmd = value.trim();
-      if (step === 1) setSettings(parseModelAnswers(value, next));
+      if (step === 1) setSettings(parseBuildAnswers(value, next));
       if (step === 2 && Number.isFinite(Number(value)) && Number(value) > 0)
         next.laneCap = Number(value);
       if (step === 3 && Number.isFinite(Number(value)) && Number(value) > 0)
@@ -26,12 +31,15 @@ function Setup({ dir, onDone }: { dir: string; onDone: (settings: Settings) => v
       if (step === SETUP_QUESTIONS.length - 1 || (step === 4 && !next.deputyEnabled)) {
         writeSettings(dir, next);
         try {
-          startDaemon();
+          startDaemon(dir);
           writeRunStarted(dir);
-        } catch {
-          /* the viewer gives the user a start option */
+          onDone(next);
+        } catch (error) {
+          onDone(
+            next,
+            error instanceof Error ? error.message : "The fleet service could not start."
+          );
         }
-        onDone(next);
       } else {
         setSettings(next);
         setStep(step + 1);
@@ -46,7 +54,7 @@ function Setup({ dir, onDone }: { dir: string; onDone: (settings: Settings) => v
     step === 0
       ? "claude -p"
       : step === 1
-        ? "routine, sensitive, security"
+        ? "routine model/effort, sensitive model/effort, security model/effort"
         : step === 2
           ? "5"
           : step === 3
@@ -55,19 +63,33 @@ function Setup({ dir, onDone }: { dir: string; onDone: (settings: Settings) => v
               ? "off"
               : "1200";
   return (
-    <Text>
-      {SETUP_QUESTIONS[step]} [{defaults}]\n&gt; {value}
-    </Text>
+    <Box flexDirection="column">
+      <Text>
+        {SETUP_QUESTIONS[step]} [{defaults}]
+      </Text>
+      <Text>&gt; {value}</Text>
+    </Box>
   );
 }
 
-function StartPrompt({ onStarted, onQuit }: { onStarted: () => void; onQuit: () => void }) {
-  const [error, setError] = useState("");
+function StartPrompt({
+  dir,
+  initialError,
+  onStarted,
+  onQuit
+}: {
+  dir: string;
+  initialError: string;
+  onStarted: () => void;
+  onQuit: () => void;
+}) {
+  const [error, setError] = useState(initialError);
   useInput((input, key) => {
     if (input === "q") return onQuit();
     if (input === "s") {
       try {
-        startDaemon();
+        startDaemon(dir);
+        writeRunStarted(dir);
         onStarted();
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : "The daemon could not be started.");
@@ -76,37 +98,54 @@ function StartPrompt({ onStarted, onQuit }: { onStarted: () => void; onQuit: () 
     if (key.escape) onQuit();
   });
   return (
-    <Text color="yellow">
-      The fleet daemon is not running. Press [s] to start it, or [q] to quit.
-      {error ? ` ${error}` : ""}
-    </Text>
+    <Box flexDirection="column">
+      <Text color="yellow">
+        The fleet daemon is not running. Press [s] to start it, or [q] to quit.
+      </Text>
+      {error && <Text color="red">{error}</Text>}
+    </Box>
   );
 }
 
 function Root() {
   const dir = stateDir();
-  const [settings, setSettings] = useState<Settings | null>(() => {
-    try {
-      return JSON.parse(fs.readFileSync(`${dir}/settings.json`, "utf8")) as Settings;
-    } catch {
-      return null;
-    }
-  });
+  const [settings, setSettings] = useState<Settings | null>(() => readSettings(dir));
   const [closed, setClosed] = useState(false);
-  const [started, setStarted] = useState(false);
+  const [started, setStarted] = useState(() => Boolean(settings && daemonActive()));
+  const [daemonRunning, setDaemonRunning] = useState(() => Boolean(settings && daemonActive()));
+  const [startupError, setStartupError] = useState("");
+  useEffect(() => {
+    if (!settings) return;
+    const timer = setInterval(() => setDaemonRunning(daemonActive()), 2000);
+    return () => clearInterval(timer);
+  }, [settings]);
   if (closed) return null;
-  if (!settings) return <Setup dir={dir} onDone={setSettings} />;
-  if (!daemonActive() && !started)
+  if (!settings)
+    return (
+      <Setup
+        dir={dir}
+        onDone={(next, error) => {
+          setSettings(next);
+          setStartupError(error || "");
+          setStarted(!error);
+          setDaemonRunning(!error);
+        }}
+      />
+    );
+  if (!daemonRunning && !started)
     return (
       <StartPrompt
+        dir={dir}
+        initialError={startupError}
         onStarted={() => {
-          writeRunStarted(dir);
           setStarted(true);
+          setDaemonRunning(true);
+          setStartupError("");
         }}
         onQuit={() => setClosed(true)}
       />
     );
-  return <Viewer dir={dir} initialSettings={settings} />;
+  return <Viewer dir={dir} initialSettings={settings} daemonRunning={daemonRunning} />;
 }
 
 render(<Root />);
