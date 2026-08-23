@@ -25,22 +25,18 @@
   text-wrap: balance;
 }
 .jds-display--xl {
-  /* 72px — board hero count ("N new") */
   letter-spacing: -0.035em;
   line-height: 0.85;
 }
 .jds-display--lg {
-  /* 62px — overview two-line hero */
   letter-spacing: -0.035em;
   line-height: 0.88;
 }
 .jds-display--md {
-  /* 46px — opportunity detail title */
   letter-spacing: -0.03em;
   line-height: 0.95;
 }
 .jds-display--sm {
-  /* 44px — profile / monitors screen title */
   letter-spacing: -0.03em;
   line-height: 0.92;
 }
@@ -123,11 +119,6 @@
   border-top: none;
   padding-top: 0;
 }
-/* The figure under an instrument label. The mockup styled this inline, so the
-   primitive shipped with a label and no value — every caller then invented its
-   own, which is how a keyline field starts drifting from screen to screen.
-   Sans (the display face is reserved for headings and hero figures) with
-   tabular numerals, so a column of values stays aligned as digits change. */
 .jds-instrument__value {
   margin: 0;
   font-variant-numeric: tabular-nums;
