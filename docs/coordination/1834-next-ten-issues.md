@@ -1633,3 +1633,12 @@ on branch `1501-keyline-global-texture`, session `20c1d3f1-a6b2-481d-ae62-e559fa
 `w1:pNG`, tab `Fable 5`. This is plan-only: no implementation lane has started. The plan must
 cover Child E's exact files, collision boundaries, focused checks, and desktop/mobile light/dark
 live-path proof before a build agent is approved. [pane w1:pNF]
+
+## Update - 2026-08-23, #1872 relay 5 adopted
+
+Fresh Herdr resolution confirmed successor `issue1872-relay5`, session
+`d4569fa8-943d-48a7-81a0-dfa8d809b497`, driving in `.claude/worktrees/1872-fable-plan` on branch
+`1872-fable-plan` with the QA-fix handoff doc loaded. The prior owner `issue1872-image-relay4`,
+session `d2a048bd-2e33-48f2-af01-937c1c56a99f`, was then resolved fresh and closed. PR #1874
+remains blocked on its posted QA findings until the owner finishes, CI is green, fresh security QA
+is green and posted, and Ben signs off. [pane w1:pNF]
