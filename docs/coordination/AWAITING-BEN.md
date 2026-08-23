@@ -84,3 +84,10 @@ folders and branches removed). -->
 
 Issue #1511 stays blocked because issue #1246 is still open — not a decision for Ben, just a
 status note.
+
+## Open - 2026-08-23: PR #1874 security-tier merge approval
+
+PR #1874 has a final GREEN security QA verdict, green required CI, accepted socket-level live
+recovery proof, and no blocking findings. Security-tier policy requires Ben's explicit approval
+before merge. Question: may the coordinator merge PR #1874? Recommendation: yes; the remaining
+three QA observations are non-blocking follow-up issues.
