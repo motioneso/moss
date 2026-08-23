@@ -2339,3 +2339,22 @@ no blocking or non-blocking findings. It confirmed the moved rail-idiom comment,
 criteria, invariants, live proof, and focused checks. The durable verdict is on the PR; only the
 required foundation check remains pending. The review-only QA pane and worktree were reaped. PR
 #1878 is ready after CI completes green; no merge yet. [pane w1:pP2]
+
+## Continuation - 2026-08-23, #1877 fresh QA and #1335 remediation
+
+The coordinator lock remains authoritative in session
+`01a02dad-7b3a-7b82-8d54-aaf556954e08`, agent name `coordinator`, pane label
+`Coordinator`, pane `w1:pP2`; the stale predecessor was already resolved and closed by
+fresh session-id match. `AWAITING-BEN.md` has no live Ben-only decision.
+
+PR #1877 (#1105) is at corrected head `16650f3b43f1ff97b9a24e3a011fb397b646f6aa`. A fresh
+routine QA agent is active in the dedicated QA tab, pane `w1:pP8`, agent
+`qa1877-1105-r2`, session `01a02de8-03af-7473-ac16-446bdd910755`, using Codex GPT-5.6 Luna
+with high reasoning. It must post its durable verdict before merge consideration; CI is also
+still pending.
+
+PR #1880 (#1335) remains blocked by QA's finding that `tests/unit/email-settings-draft-policy.test.tsx`
+is an extra excluded TSX blind spot beyond the plan's deliberate exclusions. Its owner
+`codex-1335-build` is active in pane `w1:pNR` and is fixing the finding; fresh QA is required
+after a corrected push. PRs #1878 and #1879 have clean QA but remain gated on required CI.
+No merge has been performed in this continuation. [pane w1:pP2]
