@@ -1529,3 +1529,21 @@ Coordinator authority is agent name `coordinator`, pane label `Coordinator`, ses
 
 Fable remains the sole author of implementation plans for this run. #1872 continues against the
 approved Fable-authored plan; the coordinator and build successor must not replace it.
+
+## Continuation note - 2026-08-23, #1500 build lane relayed
+
+Coordinator authority remains agent name `coordinator`, pane label `Coordinator`, session
+`01a02d06-70df-7420-bf04-beb05607d454`.
+
+- #1500's outgoing Sonnet session `929bbab3-8e5c-41b7-9e20-7191c8558c67` reached its relay
+  trigger while creating a successor shell. Commit `1739152ec` and the live-path browser proof
+  were already complete. The outgoing session was closed and Sonnet agent
+  `pr1500-css-forms-3`, session `19c2e5c5-8252-422e-af93-82032a742b29`, is visibly driving the
+  same worktree/branch through gate completion, push, PR creation, proof posting, and wrap-up.
+  Preserve but do not commit the existing untracked coordination handoff in that worktree.
+- #1872's Sonnet successor `issue1872-image-relay2`, session
+  `9772db8c-0b09-4db3-a9df-63ba6865faee`, remains working; neither active branch has a PR yet.
+- No Ben-only decision is open. Issue #1511 remains a status dependency on #1246.
+
+Fable remains the sole author of implementation plans for this run. Both successors must continue
+against their existing approved Fable-authored plans and must not replace them.
