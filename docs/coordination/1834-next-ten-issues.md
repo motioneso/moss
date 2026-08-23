@@ -1463,3 +1463,11 @@ non-authoritative and isolated in `1872-service-worker-image-diagnosis`. Fable 5
 `issue1872-fable-plan`, session ea3935a0-09a0-47e1-b29e-a014c6cd218e, is independently authoring
 the authoritative plan in clean branch/worktree `1872-fable-plan`. No implementation may start
 until that Fable-authored plan is committed and handed to a build agent.
+
+## Fable plan approved; build started - 2026-08-23, issue #1872
+
+Fable 5 independently authored and approved
+`docs/superpowers/plans/2026-08-23-service-worker-image-fetch-recovery.md` at commit `9373e271a`;
+no product code was written in planning. The Fable pane is closed. Sonnet build agent
+`issue1872-image-build`, session 7e21e0d0-2b4f-4215-bdf1-317225103cfd, is implementing that plan
+in branch/worktree `1872-fable-plan`. Routine tier; live-path proof remains mandatory before merge.
