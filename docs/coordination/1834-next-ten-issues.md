@@ -1562,3 +1562,10 @@ against their existing approved Fable-authored plans and must not replace them.
   successor stopped exact PID `2972986`, confirmed exit, discarded that run's false failures, and
   restarted the full chain in the foreground against fresh database `jarvis_gate_1872c`.
 - No Ben-only decision is open. Fable remains the sole implementation-plan author for this run.
+
+## Continuation note - 2026-08-23, #1511 parked with #1246
+
+Ben directed that #1511 leave run 1834's queue and remain in Backlog with #1246. Both issues were
+already in GitHub's Backlog, so no project-field mutation was needed. #1511 no longer blocks this
+run; reconsider it only after #1246 and the live tasks-sharing dependency clear and it is
+reprioritized.
