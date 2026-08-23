@@ -86,6 +86,8 @@ chmod +x "$tmp/bin/"*
 
 template="$tmp/brief-template.md"
 printf '%s\n' '# Build issue ${ISSUE}' 'Tier: ${TIER}. Branch: ${BRANCH}. Worktree: ${WORKTREE}.' > "$template"
+meminfo_ok="$tmp/meminfo-ok"
+printf 'MemTotal:       65536000 kB\nMemAvailable:   32768000 kB\n' > "$meminfo_ok"
 
 now_iso="$(date -Iseconds)"
 
@@ -111,6 +113,7 @@ run_tick() { # <state-dir> [extra env KEY=VAL...]; dry-run unless FLEET_DRY_RUN 
     JARV1S_FLEET_STATE="$state" \
     FLEET_BRIEF_TEMPLATE="$template" \
     NEEDS_BEN_DIR="$tmp/needs-ben" \
+    FLEET_MEMINFO="$meminfo_ok" \
     FLEET_DRY_RUN=1 \
     env "$@" "$tick"
 }
@@ -122,6 +125,7 @@ run_tick_live() { # non-dry: everything still stubbed via PATH shims
     JARV1S_FLEET_STATE="$state" \
     FLEET_BRIEF_TEMPLATE="$template" \
     NEEDS_BEN_DIR="$tmp/needs-ben" \
+    FLEET_MEMINFO="$meminfo_ok" \
     env "$@" "$tick"
 }
 
@@ -352,5 +356,22 @@ pass "a paused queued lane spawns nothing"
 grep -q "pause" "$repo_root/scripts/fleet/brief-template.md"
 if grep -q '{{' "$repo_root/scripts/fleet/brief-template.md"; then false; fi
 pass "brief template carries the pause rule and only placeholders the renderer replaces"
+
+# --- 16. below the memory floor, no agent starts and the refusal is logged ---------
+
+state="$(new_state)"
+write_record "$state" 601 '{"issue":601,"status":"queued","tier":"routine","relays":0,"spec":"docs/x.md"}'
+meminfo_low="$tmp/meminfo-low"
+printf 'MemTotal:       65536000 kB\nMemAvailable:    1048576 kB\n' > "$meminfo_low"
+out="$(run_tick "$state" FLEET_MEMINFO="$meminfo_low")"
+if grep -q "worktree add" <<<"$out"; then false; fi
+grep -q "free memory" <<<"$out"
+pass "below the 4 GB floor nothing spawns and the refusal is logged in plain English"
+
+# --- 16b. an unreadable memory source fails open ------------------------------------
+
+out="$(run_tick "$state" FLEET_MEMINFO="$tmp/does-not-exist")"
+grep -q "DRY: herdr agent start fleet-lane-601" <<<"$out"
+pass "an unreadable memory source does not stop the fleet"
 
 echo "fleet tick tests passed"

@@ -141,6 +141,25 @@ deputy_enabled="${FLEET_DEPUTY_ENABLED:-$(settings_get '.deputyEnabled')}"
 
 # --- shared helpers ------------------------------------------------------------
 
+# Memory floor (spec: 4 GB). The fleet degrades instead of pushing the box
+# into swap at 4am: below the floor no new agent starts, and the tick says
+# so and carries on. An unreadable source fails open -- a box where free
+# memory cannot be read should not silently stop the fleet.
+MEMINFO_SOURCE="${FLEET_MEMINFO:-/proc/meminfo}"
+MEMORY_FLOOR_MB="$(int_or "${FLEET_MEMORY_FLOOR_MB:-}" 4096)"
+
+memory_ok() {
+  local kb
+  [ "$MEMORY_FLOOR_MB" -gt 0 ] || return 0
+  kb="$(awk '/^MemAvailable:/ {print $2}' "$MEMINFO_SOURCE" 2>/dev/null)"
+  case "$kb" in '' | *[!0-9]*) return 0 ;; esac
+  [ $((kb / 1024)) -ge "$MEMORY_FLOOR_MB" ]
+}
+
+refuse_spawn_low_memory() { # <issue>
+  fctl log "$1" "not starting an agent: free memory is below the $MEMORY_FLOOR_MB MB floor; will try again next tick"
+}
+
 lane_log_tail() { # <issue> [n]
   local issue="$1" n="${2:-20}"
   [ -f "$LOG_FILE" ] || return 0
@@ -368,6 +387,10 @@ handle_queued() { # <issue> <record>
   if ! budget_available; then
     return 0
   fi
+  if ! memory_ok; then
+    refuse_spawn_low_memory "$issue"
+    return 0
+  fi
   if [ ! -f "$BRIEF_TEMPLATE" ]; then
     fctl log "$issue" "dispatch failed: brief template missing at $BRIEF_TEMPLATE; lane stays queued"
     return 0
@@ -455,6 +478,10 @@ handle_building() { # <issue> <record>
         fctl log "$issue" "restart approved but spawn budget exhausted; leaving lane as is"
         return 0
       fi
+      if ! memory_ok; then
+        refuse_spawn_low_memory "$issue"
+        return 0
+      fi
       local worktree brief
       worktree="$(jq -r '.worktree // empty' <<<"$record")"
       brief="$BRIEFS_DIR/brief-$issue-build.md"
@@ -504,6 +531,10 @@ handle_pr_open() { # <issue> <record>
   # Green: spawn an incremental QA round.
   if ! budget_available; then
     fctl log "$issue" "CI green but spawn budget exhausted; QA spawn deferred"
+    return 0
+  fi
+  if ! memory_ok; then
+    refuse_spawn_low_memory "$issue"
     return 0
   fi
   local qa_rounds round qa_agent worktree branch brief
