@@ -53,19 +53,32 @@ Behavior (mirrors `classifyLiveReadFailure`'s safe-inspection pattern):
   a first-party dependency (e.g. an embedding library) can still surface a hostile-shaped value
   (a `Proxy`, a getter that throws or returns garbage, a `cause` chain that is itself hostile).
   **The classifier must be safe against that regardless of the gate.**
-- **Total inspection, never partial trust:** every property read, `instanceof` check, and
-  `typeof`/coercion this function performs is wrapped so that if ANY of them throws for ANY reason,
-  the function catches it and returns `null` immediately — same as an unclassifiable error. No
-  step may rethrow, and no step's result is used before every prior step in the chain has
-  succeeded. Concretely: wrap the whole body in one `try { ... } catch { return null; }`, and read
-  `.cause` the same guarded way (a getter access is inside the same try). No separate unguarded
-  pass over `.cause`.
-- Reads only `.code`, `.name`, `.cause.code`, `.cause.name`, `.statusCode`/`.status` — a closed set
-  of short symbolic fields. Never touches `.message` or a stack, and never serializes or logs the
-  value being classified.
+- **Brand-check before touching anything — this is the actual fix for the coordinator's second
+  fork.** A `try/catch` around a property read still *invokes* a Proxy's `get`/`getPrototypeOf`
+  trap before the throw is caught — that increments `trapCalls`, which the hostile-throw test
+  asserts stays at `0`. Catching the throw is not enough; the trap call itself is the violation.
+  The fix is to never perform a property read, `instanceof` check, or coercion on any value until
+  it is confirmed to be a real native `Error` via a trap-free brand check —
+  `require("node:util").types.isNativeError(value)`. That check inspects the value's internal V8
+  class tag directly; it does not go through any proxy trap (`get`, `getPrototypeOf`,
+  `getOwnPropertyDescriptor`, `ownKeys`, etc.), so calling it on a hostile Proxy costs zero trap
+  calls and cannot throw.
+  - Step 1: `isNativeError(error)`. If false, return `null` immediately — no other access of
+    `error` of any kind.
+  - Step 2: only once step 1 is true, read `error.code`, `error.name`, `error.statusCode`/`.status`
+    (safe — a real native `Error` is a plain object with no traps).
+  - Step 3: read `error.cause` (safe, same reason). Before touching anything on it, repeat step 1
+    on the cause value: `isNativeError(cause)`. If false, treat the cause as absent — do not read
+    `.code`/`.name` off it. If true, read `cause.code`/`cause.name` as in step 2.
+  - The whole function is still additionally wrapped in one outer `try { ... } catch { return
+    null; }` as a second line of defense (belt-and-braces for any Node/V8 edge case), but the
+    brand check is what actually keeps trap calls at zero — the try/catch alone does not.
+- Reads only `.code`, `.name`, `.cause.code`, `.cause.name`, `.statusCode`/`.status`, each gated by
+  its own `isNativeError` brand check per above — a closed set of short symbolic fields. Never
+  touches `.message` or a stack, and never serializes or logs the value being classified.
 - Values read are compared with `===`/`.includes` against fixed string constants only — never
   interpolated, logged, or returned. A read that produces something other than a short string/number
-  (e.g. an object, a thrown getter) is treated as unclassifiable, not coerced or stringified.
+  (e.g. an object) is treated as unclassifiable, not coerced or stringified.
 - `code`/`cause.code` `"ECONNREFUSED"` → `upstream_connection_refused`
 - `code`/`cause.code` in `[ECONNRESET, ENOTFOUND, EAI_AGAIN, EPIPE, EHOSTUNREACH]` →
   `upstream_unreachable`
@@ -85,11 +98,12 @@ Behavior (mirrors `classifyLiveReadFailure`'s safe-inspection pattern):
   never throws). If non-null, the response error becomes `` `Tool ${found.dto.name} failed
   (${cause})` ``; if null, unchanged `` `Tool ${found.dto.name} failed` ``.
 - When gated: add to the existing `tool_handler_threw` log call a `cause` field (nullable) and an
-  `errorName` field computed by the SAME guarded helper (or an equally try/catch-wrapped inline
-  check) — note `error instanceof Error` itself calls `getPrototypeOf` on the value, one of the
-  trapped operations in the hostile-Proxy test, so it must sit inside the same guarded block as the
-  rest of the inspection, not called bare. On any exception, `errorName` is omitted (not `"unknown"`
-  or any derived string).
+  `errorName` field, both derived from the SAME `isNativeError`-gated inspection the classifier
+  does — never a bare `error instanceof Error` at the call site. `instanceof` walks the prototype
+  chain via `getPrototypeOf`, one of the trapped operations in the hostile-Proxy test, so it must
+  never run on an unbranded value. Only after `isNativeError(error)` is true is `error.name` read
+  for the log. If `isNativeError` is false, `errorName` is omitted entirely (not `"unknown"` or any
+  derived string, and no further access of the value).
 - When NOT gated (`isExternal !== false` — third-party/untrusted): zero change, identical to
   today's code — no call to the classifier, no `instanceof` check, no property access at all — so
   the Proxy hostile-throw test's `trapCalls === 0` assertion is untouched.
@@ -116,13 +130,15 @@ first-party tool can still throw a non-first-party-shaped value):
 
 - A top-level hostile `Proxy` — same trap set as `mcp-gateway-recovery.test.ts`'s Proxy (`get`,
   `getOwnPropertyDescriptor`, `getPrototypeOf`, `ownKeys` all throw and increment a `trapCalls`
-  counter) thrown directly from the `isExternal: false` tool's `execute`. Expect the UNCHANGED
-  generic `Tool <name> failed`, `trapCalls === 0`, and no rethrow/crash.
+  counter) thrown directly from the `isExternal: false` tool's `execute`. `isNativeError` on this
+  value must be `false` without invoking any trap. Expect the UNCHANGED generic `Tool <name>
+  failed`, `trapCalls === 0`, and no rethrow/crash.
 - A real `Error` whose `cause` is that same hostile Proxy (`Object.assign(new Error("boom"), {
-  cause: hostileProxy })`). Expect the UNCHANGED generic `Tool <name> failed` (the top-level `Error`
-  itself is safely `instanceof Error`, but its `cause` must never be touched unguarded), `trapCalls
-  === 0`, and `JSON.stringify(response)` contains neither `"boom"` nor the Proxy's sentinel
-  property value.
+  cause: hostileProxy })`). The top-level value passes `isNativeError` (it's a real `Error`, so
+  reading `.cause` off it is safe), but `isNativeError(cause)` must be `false` for the Proxy cause,
+  and nothing on the cause may be read. Expect the UNCHANGED generic `Tool <name> failed`,
+  `trapCalls === 0`, and `JSON.stringify(response)` contains neither `"boom"` nor the Proxy's
+  sentinel property value.
 
 This fails today (current code always returns the bare generic message, no `cause` suffix) and
 passes after the fix. The hostile-shape cases must pass from the first version of the fix, not be
