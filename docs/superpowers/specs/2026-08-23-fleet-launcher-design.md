@@ -134,7 +134,7 @@ plans, where it would be invented twice and differently. Everything lives under 
 | The outstanding question | lane record          | `question` with the full text, plus `questionAskedAt`                                     |
 | Who is working the lane  | existing agent field | Unchanged; a rescue agent overwrites it when it claims the lane                           |
 
-Unit one writes all of these; unit two may assume all of them exist. Changing this table changes
+Unit one writes all of these except the start time, which the launcher owns. Unit two may assume all of them exist. Changing this table changes
 both units, so it lives here rather than in either plan.
 
 **Nothing starts the daemon, so the daemon cannot record when the night began.** It is a script that
@@ -239,8 +239,8 @@ One line per lane: issue number, title, and a short plain-English status — "bu
 checks", "review found problems", "waiting on you". Lanes needing a human are visually distinct.
 
 **Done Tonight is run-scoped, not status-scoped.** It is not the set of lanes whose stored status is
-`done`; it is the set that reached `done` since the daemon was last started. The daemon writes its
-start time into the state folder when it comes up, and the viewer filters on that.
+`done`; it is the set that reached `done` since tonight's run began. The launcher writes the start time
+into the state folder when it starts the service, and the viewer filters on that.
 
 The distinction matters at 7am: if the filter were "since this window opened", reopening the viewer
 in the morning would show an empty list at exactly the moment the night's work is what you want to
