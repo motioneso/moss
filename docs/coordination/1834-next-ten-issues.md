@@ -1960,3 +1960,12 @@ owner is replacing the provisional gate note with final `rc=0` evidence plus a f
 the new CI run has begun. #1501 QA has installed dependencies and reports focused checks green,
 including exact remeasurement `0`, design-token/UI-class/file-size checks, and both focused Vitest
 suites; it is waiting only on the one pending CI job before posting its verdict. [pane w1:pNF]
+
+## Update - 2026-08-23, #1105 independent QA started
+
+#1105 is wrapped at PR #1877 head `2ac6c6e663889e83bf792355d7b2dc8ebe99a8cc`, with isolated
+gate `rc=0`, durable live UAT proof (2/2 in 13.6s), targeted fixture 23/23, clean typecheck/
+lint/file-size/format checks, and a clean/reapable worktree. A fresh detached QA worktree
+`.claude/worktrees/qa-1105-seeded-chat-uat` is running `qa-1105-review` in the dedicated QA tab
+on Codex GPT-5.6 Luna with unattended access. It must post its verdict to PR #1877 before merge.
+[pane w1:pNF]
