@@ -35,6 +35,8 @@ blocking	packages/notes/**	tests/uat/specs/notes-path-recheck.uat.spec.ts
 blocking	packages/chat/src/live/notes-retrieval.ts	tests/uat/specs/notes-default-retrieval.uat.spec.ts
 blocking	packages/chat/src/live/notes-secret-filter.ts	tests/uat/specs/notes-default-retrieval.uat.spec.ts
 blocking	packages/chat/src/live/engine-text.ts	tests/uat/specs/notes-default-retrieval.uat.spec.ts
+blocking	packages/ai/src/gateway/dependency-failure.ts	tests/uat/specs/1883-vault-search-dependency-failure.uat.spec.ts
+blocking	packages/chat/src/mcp-transport.ts	tests/uat/specs/1883-vault-search-dependency-failure.uat.spec.ts
 blocking	apps/web/src/chat/**	tests/uat/specs/1089-1090-chat-drawer-private.uat.spec.ts
 blocking	apps/web/src/chat/**	tests/uat/specs/1133-chat-attachments.uat.spec.ts
 blocking	apps/web/src/chat/**	tests/uat/specs/runtime-context.uat.spec.ts

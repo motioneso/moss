@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "turns": [
+    {
+      "expectIncludes": ["UAT-1883-VAULT-SEARCH"],
+      "calls": [
+        {
+          "tool": "notes.search",
+          "arguments": { "query": "UAT-1883-VAULT-SEARCH" },
+          "expectedError": "Tool notes.search failed (upstream_connection_refused)"
+        }
+      ],
+      "reply": "I couldn't search your notes right now - that service looks unavailable."
+    }
+  ]
+}
