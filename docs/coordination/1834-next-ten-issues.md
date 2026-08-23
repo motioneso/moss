@@ -1073,3 +1073,56 @@ if that stall is caused by this change or is a pre-existing flake (their diff is
 code path where it stalled). Handoff notes for the successor:
 docs/coordination/1530-relay-state.md. Successor confirmed driving as
 `pr1530-permission-repair-relay`, pane w1:pMR, same worktree. Old pane w1:pMP reaped.
+
+## Continuation note - 2026-08-22, fifteenth coordinator relaying at context limit
+
+Relaying at 70 percent context. Was driving from pane w1:pMN, agent name `coordinator`, session
+`ad22ff22-eba4-4a0a-9c2f-33be50aac255` - check `herdr agent list` for the new pane once the
+successor claims the name.
+
+**Ben wants three things merged, then a prod update: pull request 1654, issue #1530, issue
+#1511 - in that order. Once all three are merged and their image is built, update prod.**
+
+Status of each:
+
+1. **Pull request 1654 (security fix) - waiting on Ben's merge sign-off, nothing else blocking.**
+   Third independent security review came back clean: zero blocking findings, verified exact by
+   22 near-miss tests plus tracing the real production path, not just trusting the commit
+   message. It also found a separate, pre-existing gap not caused by this fix - filed as new
+   issue #1860 (module-build worker path doesn't clean its settings the same way chat now does) -
+   does not block 1654. Asked Ben for sign-off via needs-ben; no reply yet as of this note.
+   **Successor: check for a reply, and if yes, merge pull request 1654 (`gh pr merge 1654 --squash
+   --delete-branch`), then do the GitHub bookkeeping (close linked issue if any, move board item to
+   Done) and reap its lane** - pane w1:pKT (agent name `pr1654-live-proof`, idle, worktree
+   `.claude/worktrees/groupA-audit-truth-ssrf-share-tests`) once its commits are confirmed on
+   `main`.
+
+2. **Issue #1530 (permission-repair fail-closed) - build lane relayed once already, in progress.**
+   The code change and its test are done and committed (commit ac217d2a2), rebased on
+   `origin/main`, unit tests and the two named database-backed checks pass, formatting/lint/type
+   check clean. **One open thread the current lane has not yet resolved:** the full local gate
+   stalled for over ten minutes with no CPU activity partway through (after migrations and
+   seeding finished, before finishing); the previous agent stopped it rather than let it hang, and
+   did not yet know whether that stall is caused by this change or is a pre-existing flake in the
+   gate itself (their code change is nowhere near the code path where it stalled). Handoff detail
+   at `docs/coordination/1530-relay-state.md`. Currently driven by `pr1530-permission-repair-relay`,
+   pane w1:pMR, same worktree `.claude/worktrees/1530-permission-repair-fail-closed`. **Successor:
+   keep supervising this lane; when it reports a plan or is done, follow the normal
+   coordinated-build / QA / merge flow. This is security tier - it needs adversarial review and
+   Ben's sign-off before merge, same as 1654.**
+
+3. **Issue #1511 - blocked, do not start.** Its design doc requires issue #1246 to be closed AND
+   pull request 1654's task-sharing changes to be merged, before it can start (they'd collide on
+   the same code otherwise). #1246 was still open as of this note. **Successor: once 1654 merges,
+   re-check #1246 - if it's closed by then, start #1511's build lane; if not, this stays blocked
+   and Ben should be told #1511 can't start yet.**
+
+**Once all three of the above are merged: build the image and update prod (Ben's explicit
+instruction) - this has not been started yet, it comes after the three merges.**
+
+Other bookkeeping done this run: pull request 1838 confirmed merged (Ben's approval had landed,
+double-checked with him live). Pull request 1529's lane (the same work as 1838) fully reaped -
+pane closed, worktree and branch removed, all four safety checks were clear. The QA pane/worktree
+for 1654's third review is already reaped (verdict consumed, review-only, no unlanded work).
+
+Nothing else is currently blocked on Ben beyond the pull request 1654 sign-off above.
