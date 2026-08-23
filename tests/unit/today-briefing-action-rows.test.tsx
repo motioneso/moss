@@ -180,7 +180,7 @@ describe("BriefingActionRowsSection", () => {
 
     // The hostile text may be DISPLAYED, but must never reach an attribute or the prompt.
     expect(html).not.toMatch(/(href|src|action)="[^"]*attacker-id/);
-    const action = rows[0].primaryAction;
+    const action = rows[0]!.primaryAction;
     const cacheMessageId = action?.kind === "reply" ? action.cacheMessageId : "";
     expect(buildReplyChatPrompt(cacheMessageId)).toBe(
       "Draft a reply to the cached email cache-123 using email.draftReply."

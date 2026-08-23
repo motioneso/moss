@@ -10,7 +10,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const createAiProvider = vi.fn(async () => ({
+const createAiProvider = vi.fn(async (_input: unknown) => ({
   provider: {
     id: "p1",
     providerKind: "openai-compatible",
@@ -185,7 +185,7 @@ describe("AiProvidersPane provider picker (#1325)", () => {
     await flush();
 
     expect(createAiProvider).toHaveBeenCalledTimes(1);
-    const sent = createAiProvider.mock.calls[0]?.[0] as Record<string, unknown>;
+    const sent = createAiProvider.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
     expect(sent.providerKind).toBe("anthropic");
     expect(sent.authMethod).toBe("cli");
     expect("credentialPayload" in sent).toBe(false);

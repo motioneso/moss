@@ -24,7 +24,7 @@ import type * as ReactRouter from "react-router";
 vi.stubGlobal("localStorage", {
   getItem: () => null,
   setItem: () => undefined
-} as Storage);
+} as unknown as Storage);
 
 // app.tsx calls installModuleHostRuntime() at module scope (#918), which reads the bare `window`
 // global to install a module-runtime marker — also absent under Node.

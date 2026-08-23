@@ -361,6 +361,7 @@ async function renderInteractiveComposer(
       sendError: null,
       needsProvider: false,
       lockedModelUnavailable: false,
+      privateMode: false,
       onSend: () => {},
       onStop: () => {}
     }) as ReactElement
@@ -453,6 +454,7 @@ async function renderComposer(
         sendError: null,
         needsProvider: false,
         lockedModelUnavailable: false,
+        privateMode: false,
         onSend: () => {},
         onStop: () => {}
       }) as ReactElement

@@ -172,7 +172,7 @@ async function typeAndSend(renderer: ReactTestRenderer, text: string): Promise<v
   });
   const sendButton = findByClassName(renderer, "chatd-send");
   await act(async () => {
-    sendButton.props.onClick();
+    sendButton!.props.onClick();
     await Promise.resolve();
   });
 }
@@ -229,13 +229,13 @@ describe("ChatDrawer surface routing (#1533)", () => {
       textarea.props.onChange({ target: { value: "Remote only" } });
     });
     await act(async () => {
-      findByClassName(renderer, "chatd-send").props.onClick();
+      findByClassName(renderer, "chatd-send")!.props.onClick();
       await Promise.resolve();
     });
 
     // sendChatTurn's promise is still pending, so the drawer is mid-send — the send button has
     // flipped to Stop.
-    const stopButton = findByClassName(renderer, "chatd-send");
+    const stopButton = findByClassName(renderer, "chatd-send")!;
     expect(stopButton.props["aria-label"]).toBe("Stop generating");
     await act(async () => {
       stopButton.props.onClick();
@@ -278,7 +278,16 @@ describe("ChatDrawer surface routing (#1533)", () => {
 
   it("clears local surface state on a surface flip", async () => {
     vi.mocked(listChatThreads).mockResolvedValueOnce({
-      threads: [{ id: "t1", title: "Old thread", updatedAt: "2026-01-01T00:00:00Z" }]
+      threads: [
+        {
+          id: "t1",
+          ownerUserId: "user-1",
+          title: "Old thread",
+          incognito: false,
+          createdAt: "2026-01-01T00:00:00Z",
+          updatedAt: "2026-01-01T00:00:00Z"
+        }
+      ]
     });
     let resolveSend!: (value: {
       userMessageId: string;
@@ -302,7 +311,7 @@ describe("ChatDrawer surface routing (#1533)", () => {
       textarea.props.onChange({ target: { value: "Remote only" } });
     });
     await act(async () => {
-      findByClassName(renderer, "chatd-send").props.onClick();
+      findByClassName(renderer, "chatd-send")!.props.onClick();
       await Promise.resolve();
     });
 
@@ -311,7 +320,7 @@ describe("ChatDrawer surface routing (#1533)", () => {
     });
     const row = findByClassName(renderer, "chatd-sess__row");
     await act(async () => {
-      row.props.onClick();
+      row!.props.onClick();
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -356,7 +365,7 @@ describe("ChatDrawer surface routing (#1533)", () => {
       textarea.props.onChange({ target: { value: "Remote only" } });
     });
     await act(async () => {
-      findByClassName(renderer, "chatd-send").props.onClick();
+      findByClassName(renderer, "chatd-send")!.props.onClick();
       await Promise.resolve();
     });
 
@@ -395,7 +404,16 @@ describe("ChatDrawer surface routing (#1533)", () => {
     // moduleSurface thread-list response now too — its query fires as soon as we flip below, so
     // this must be queued before that flip, not at the start of stage 2.
     vi.mocked(listChatThreads).mockResolvedValueOnce({
-      threads: [{ id: "t1", title: "Job thread", updatedAt: "2026-01-02T00:00:00Z" }]
+      threads: [
+        {
+          id: "t1",
+          ownerUserId: "user-1",
+          title: "Job thread",
+          incognito: false,
+          createdAt: "2026-01-02T00:00:00Z",
+          updatedAt: "2026-01-02T00:00:00Z"
+        }
+      ]
     });
     await act(async () => {
       findByAriaLabel(renderer, "Start private chat")?.props.onClick();
@@ -411,7 +429,7 @@ describe("ChatDrawer surface routing (#1533)", () => {
     // Stage 2: resume that thread on moduleSurface, flip before it resolves. Still on
     // moduleSurface from stage 1's flip — no re-flip needed (a same-value flip wouldn't
     // re-trigger the already-fetched thread-list query anyway).
-    let resolveResume!: (value: object) => void;
+    let resolveResume!: (value: void) => void;
     vi.mocked(resumeChat).mockImplementationOnce(
       () =>
         new Promise((resolve) => {
@@ -421,13 +439,13 @@ describe("ChatDrawer surface routing (#1533)", () => {
     await act(async () => {
       findByAriaLabel(renderer, "Show chat history")?.props.onClick();
     });
-    const row = findByClassName(renderer, "chatd-sess__row");
+    const row = findByClassName(renderer, "chatd-sess__row")!;
     await act(async () => {
       row.props.onClick();
     });
     await flipSurface(renderer, client, moduleSurfaceB, clearRecords);
     await act(async () => {
-      resolveResume({});
+      resolveResume(undefined);
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -451,7 +469,7 @@ describe("ChatDrawer surface routing (#1533)", () => {
       textarea.props.onChange({ target: { value: "first" } });
     });
     await act(async () => {
-      findByClassName(renderer, "chatd-send").props.onClick();
+      findByClassName(renderer, "chatd-send")!.props.onClick();
       await Promise.resolve();
     });
     await act(async () => {
@@ -465,7 +483,7 @@ describe("ChatDrawer surface routing (#1533)", () => {
       });
     });
     await act(async () => {
-      findByClassName(renderer, "chatd-send").props.onClick();
+      findByClassName(renderer, "chatd-send")!.props.onClick();
     });
 
     const callsBefore = vi.mocked(sendChatTurn).mock.calls.length;
@@ -498,7 +516,7 @@ describe("ChatDrawer surface routing (#1533)", () => {
       textarea.props.onChange({ target: { value: "fails" } });
     });
     await act(async () => {
-      findByClassName(rendererA, "chatd-send").props.onClick();
+      findByClassName(rendererA, "chatd-send")!.props.onClick();
       await Promise.resolve();
       await Promise.resolve();
     });

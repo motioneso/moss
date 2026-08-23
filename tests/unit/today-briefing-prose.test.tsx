@@ -205,7 +205,8 @@ function renderToday(input: {
           {
             value: {
               openChat: () => undefined,
-              openChatWith: input.openChatWith ?? (() => undefined)
+              openChatWith: input.openChatWith ?? (() => undefined),
+              openAssistantWithDraft: () => undefined
             }
           },
           createElement(

@@ -4,7 +4,7 @@ import { renderToString } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 
-import type { LookupAiCapabilityRouteResponse } from "@moss/shared";
+import { DEFAULT_CHAT_SURFACE, type LookupAiCapabilityRouteResponse } from "@moss/shared";
 
 import { queryKeys } from "../../apps/web/src/api/query-keys.js";
 import { ChatDrawer } from "../../apps/web/src/chat/chat-drawer.js";
@@ -25,7 +25,8 @@ function render(route: LookupAiCapabilityRouteResponse): string {
           records: [],
           clearRecords: () => {},
           streamErrorCount: 0,
-          isFounder: false
+          isFounder: false,
+          surface: DEFAULT_CHAT_SURFACE
         })
       )
     )

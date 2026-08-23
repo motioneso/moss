@@ -82,7 +82,10 @@ function getSourceBehaviors() {
 function putSourceBehavior(enabled: boolean) {
   return requestJson<PutSourceBehaviorResponse>(
     `/api/me/source-behaviors/${encodeURIComponent(EMAIL_BEHAVIOR_ID)}`,
-    { method: "PUT", body: { enabled } }
+    {
+      method: "PUT",
+      body: { enabled }
+    }
   );
 }
 
@@ -115,7 +118,10 @@ function getActionPolicies() {
 function patchDraftPolicy(tier: AiActionPolicyTier) {
   return requestJson<PatchAiActionPolicyResponse>(
     `/api/ai/action-policy/${encodeURIComponent(DRAFTS_MODULE_ID)}/${encodeURIComponent(DRAFTS_FAMILY_ID)}`,
-    { method: "PATCH", body: { tier } }
+    {
+      method: "PATCH",
+      body: { tier }
+    }
   );
 }
 

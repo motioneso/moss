@@ -21,12 +21,15 @@ describe("YoloAdminGroup", () => {
       id: "usr-1",
       email: "test@example.com",
       name: "Test User",
+      emailVerified: true,
       status: "active",
       yoloAllowed: false,
       yoloEnabled: false,
       yoloActive: false,
       isInstanceAdmin: false,
-      isBootstrapOwner: false
+      isBootstrapOwner: false,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z"
     };
     client.setQueryData(queryKeys.settings.adminYolo, {
       instanceEnabled: false,
@@ -65,12 +68,15 @@ describe("YoloAdminGroup", () => {
       id: "usr-2",
       email: "allowed@example.com",
       name: "Allowed User",
+      emailVerified: true,
       status: "active",
       yoloAllowed: true,
       yoloEnabled: true,
       yoloActive: true,
       isInstanceAdmin: true,
-      isBootstrapOwner: false
+      isBootstrapOwner: false,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z"
     };
     client.setQueryData(queryKeys.settings.adminYolo, {
       instanceEnabled: false,

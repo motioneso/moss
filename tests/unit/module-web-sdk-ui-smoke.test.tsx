@@ -13,7 +13,7 @@
 import "./helpers/install-module-runtime";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { createElement } from "react";
+import { createElement, type ReactNode } from "react";
 import { act, create } from "react-test-renderer";
 import type { ReactTestRenderer } from "react-test-renderer";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -43,7 +43,7 @@ describe("module-web-sdk UI smoke (#1388 Foundation task 11)", () => {
     const mod = (await import(
       `${pathToFileURL(`${moduleDir}/dist/web/index.js`).href}?t=${Math.random()}`
     )) as {
-      default: { contractVersion: number; Root: () => unknown; css: string };
+      default: { contractVersion: number; Root: () => ReactNode; css: string };
     };
     expect(mod.default.contractVersion).toBe(2);
 
@@ -58,7 +58,7 @@ describe("module-web-sdk UI smoke (#1388 Foundation task 11)", () => {
         (node.props as { className?: string }).className === "jds-btn jds-btn--primary"
     );
     expect(button).toHaveLength(1);
-    expect(button[0].children.join("")).toContain("Smoke");
+    expect(button[0]!.children.join("")).toContain("Smoke");
 
     const chip = renderer.root.findAll(
       (node) =>

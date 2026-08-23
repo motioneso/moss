@@ -16,7 +16,6 @@ function renderPane(): string {
         FeedbackProvider,
         null,
         createElement(MemoryPane, {
-          advanced: false,
           me: {} as never,
           onNavigate: () => undefined
         })

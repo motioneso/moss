@@ -9,12 +9,13 @@ import {
   prioritySourceIncluded,
   priorityWeightLabel
 } from "@moss/settings-ui";
+import type { PriorityModelPreferenceV1 } from "@moss/priority";
 
 describe("PrioritySettings", () => {
   const savedModel = {
     version: 1 as const,
     mode: "balanced" as const,
-    anchors: [],
+    anchors: [] as PriorityModelPreferenceV1["anchors"],
     mutedSources: ["memory", "wellness", "future-source"],
     updatedAt: "2026-07-01T00:00:00Z"
   };

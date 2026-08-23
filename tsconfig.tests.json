@@ -1,0 +1,36 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "noEmit": true
+  },
+  "include": [
+    "tests/**/*.tsx",
+    "apps/web/src/vite-env.d.ts",
+    "apps/web/node_modules/vite/client.d.ts",
+    "apps/api/node_modules/@fastify/websocket/types/index.d.ts",
+    "packages/news/src/web/styles.d.ts",
+    "packages/sports/src/web/styles.d.ts"
+  ],
+  "exclude": [
+    // External-module web sources use a separate classic JSX dialect and loose JSX namespace.
+    // Follow-up issue #1875 will type the module-web SDK surface against React types.
+    "tests/unit/external-module-finance-web-root.test.tsx",
+    "tests/unit/external-module-food-web-root.test.tsx",
+    "tests/unit/helpers/job-search-board-harness.tsx",
+    "tests/unit/job-search-keyline.test.tsx",
+    "tests/unit/job-search-manifest-conformance.test.tsx",
+    "tests/unit/job-search-overview.test.tsx",
+    "tests/unit/job-search-profile.test.tsx",
+    "tests/unit/job-search-resume-editor.test.tsx",
+    "tests/unit/job-search-web-board.test.tsx",
+    "tests/unit/job-search-web-board-inspector.test.tsx",
+    "tests/unit/job-search-web-discuss.test.tsx",
+    "tests/unit/job-search-web-onboarding.test.tsx",
+    "tests/unit/job-search-web-root-settings-link.test.tsx",
+    "tests/unit/job-search-web-root.test.tsx",
+    "tests/unit/job-search-web-settings.test.tsx"
+  ]
+}

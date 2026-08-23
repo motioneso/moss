@@ -42,7 +42,8 @@ describe("settings admin panes", () => {
           },
           profilePrefs: { addressed: null },
           hasPasswordCredential: true
-        }
+        },
+        onNavigate: () => undefined
       }),
       client
     );
