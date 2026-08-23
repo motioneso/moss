@@ -2141,3 +2141,10 @@ publication remain pending. [pane w1:pNF]
 authorized plan-only formatting change, then will push and open the PR before routine QA. #1105
 and #1335 remain in their fresh gates; #1874 Opus QA and #1501 image publication remain pending.
 [pane w1:pNF]
+
+## Update - 2026-08-23, #899 plan commit and pre-push
+
+#899 committed its authorized plan-only formatting as `1240c7a6a`, preserving the implementation
+commits. Its pre-push TypeScript check is actively running in the isolated worktree; no PR exists
+yet. #1105 and #1335 remain in their fresh gates, with #1335 confirming its `Password:` output is
+benign test text and the process requires no input. [pane w1:pNF]
