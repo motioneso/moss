@@ -1296,3 +1296,21 @@ Started QA: pane w1:pMY, "qa" tab w1:t34, agent name `qa1868-1499-css-review`, r
 (standard review, no Ben sign-off needed to merge once green). Confirmed running on Sonnet.
 
 Once this merges: start #1500 the same way, chain continues.
+
+## Update - 2026-08-23, added issue #1755 (the Workshop page) to this run
+
+Ben asked what's open on the Workshop (letting users build their own custom modules through
+chat) and building custom modules generally. Found a five-part build for it; four parts are
+already done and merged. The remaining one:
+
+- **Issue #1755 - "Workshop 4: the Workshop page."** The actual page showing modules a user has
+  asked Moss to build, grouped into "needs you," "building now," and "live." Has an approved
+  spec and an already Ben-approved mockup (`docs/superpowers/specs/assets/2026-08-19-moss-
+  workshop/workshop.html`), and is not blocked by anything else - the three pieces it depends on
+  are already merged. Ben said to add it to this run.
+
+Tier: routine for now (self-contained listing page against already-merged pieces) - re-check
+during build in case it turns out to touch shared schema or module-install paths, which would
+bump it to sensitive. Queued behind the current #1499-#1503 chain; will start it once a Builders
+slot is free (the chain is serialized, but this issue isn't part of that chain, so it can run
+alongside once #1499 clears and a slot opens, not blocked on the chain finishing).
