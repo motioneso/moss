@@ -48,29 +48,51 @@ export function classifyToolDependencyFailure(error: unknown): ToolDependencyCau
 
 Behavior (mirrors `classifyLiveReadFailure`'s safe-inspection pattern):
 
-- Caller-gated only: this function is only ever called on an error already known to originate from
-  trusted first-party code (see gating rule below) — never on an unvalidated third-party throw.
+- Caller-gated: only ever called on a throw from a tool where `isExternal === false` (first-party
+  module code). That gate establishes trust in the *tool*, not in the *shape of what it throws* —
+  a first-party dependency (e.g. an embedding library) can still surface a hostile-shaped value
+  (a `Proxy`, a getter that throws or returns garbage, a `cause` chain that is itself hostile).
+  **The classifier must be safe against that regardless of the gate.**
+- **Total inspection, never partial trust:** every property read, `instanceof` check, and
+  `typeof`/coercion this function performs is wrapped so that if ANY of them throws for ANY reason,
+  the function catches it and returns `null` immediately — same as an unclassifiable error. No
+  step may rethrow, and no step's result is used before every prior step in the chain has
+  succeeded. Concretely: wrap the whole body in one `try { ... } catch { return null; }`, and read
+  `.cause` the same guarded way (a getter access is inside the same try). No separate unguarded
+  pass over `.cause`.
 - Reads only `.code`, `.name`, `.cause.code`, `.cause.name`, `.statusCode`/`.status` — a closed set
-  of short symbolic fields. Never touches `.message` or a stack.
+  of short symbolic fields. Never touches `.message` or a stack, and never serializes or logs the
+  value being classified.
+- Values read are compared with `===`/`.includes` against fixed string constants only — never
+  interpolated, logged, or returned. A read that produces something other than a short string/number
+  (e.g. an object, a thrown getter) is treated as unclassifiable, not coerced or stringified.
 - `code`/`cause.code` `"ECONNREFUSED"` → `upstream_connection_refused`
 - `code`/`cause.code` in `[ECONNRESET, ENOTFOUND, EAI_AGAIN, EPIPE, EHOSTUNREACH]` →
   `upstream_unreachable`
 - `name`/`cause.name` `"AbortError"`, or `code`/`cause.code` in `[ETIMEDOUT,
   UND_ERR_CONNECT_TIMEOUT, UND_ERR_HEADERS_TIMEOUT, UND_ERR_BODY_TIMEOUT]` → `upstream_timeout`
 - `statusCode`/`status` numeric `>= 400` → `upstream_http_error`
-- else → `null` (no classification; caller keeps today's generic message unchanged)
+- else, or on any exception during inspection → `null` (no classification; caller keeps today's
+  generic message unchanged)
 
 `gateway.ts` `runHandler` catch (line 635) changes:
 
-- Gate strictly on `found.tool.isExternal === false`.
-- When gated: call `classifyToolDependencyFailure(error)`. If non-null, the response error becomes
-  `` `Tool ${found.dto.name} failed (${cause})` ``; if null, unchanged
-  `` `Tool ${found.dto.name} failed` ``.
-- When gated: add to the existing `tool_handler_threw` log call a `cause` field (nullable) and,
-  only when `error instanceof Error`, `errorName: error.name` (a symbolic tag such as `TypeError`
-  or `HttpError` — never `.message`) — the safe, server-side-preserved trace the spec asks for.
+- Gate strictly on `found.tool.isExternal === false`. This gate decides whether classification is
+  *attempted at all* — it does not change how the classifier or the log line inspects the thrown
+  value. Both remain fully guarded (see below) so a first-party tool that throws a hostile-shaped
+  value degrades to today's generic message, exactly like an ungated tool would.
+- When gated: call `classifyToolDependencyFailure(error)` (internally total/guarded, per above —
+  never throws). If non-null, the response error becomes `` `Tool ${found.dto.name} failed
+  (${cause})` ``; if null, unchanged `` `Tool ${found.dto.name} failed` ``.
+- When gated: add to the existing `tool_handler_threw` log call a `cause` field (nullable) and an
+  `errorName` field computed by the SAME guarded helper (or an equally try/catch-wrapped inline
+  check) — note `error instanceof Error` itself calls `getPrototypeOf` on the value, one of the
+  trapped operations in the hostile-Proxy test, so it must sit inside the same guarded block as the
+  rest of the inspection, not called bare. On any exception, `errorName` is omitted (not `"unknown"`
+  or any derived string).
 - When NOT gated (`isExternal !== false` — third-party/untrusted): zero change, identical to
-  today's code, so the Proxy hostile-throw test is untouched.
+  today's code — no call to the classifier, no `instanceof` check, no property access at all — so
+  the Proxy hostile-throw test's `trapCalls === 0` assertion is untouched.
 
 No change to `mcp-transport.ts` — see seam above.
 
@@ -89,11 +111,25 @@ New file `tests/unit/mcp-gateway-dependency-errors.test.ts`, gateway constructed
 - Assert `JSON.stringify(response)` never contains the literal thrown message text (`"fetch
   failed"`, `"boom"`) — locks the "no raw exception dump" requirement.
 
+**Hostile-shape cases, same `isExternal: false` tool** (this is the coordinator-flagged fork: a
+first-party tool can still throw a non-first-party-shaped value):
+
+- A top-level hostile `Proxy` — same trap set as `mcp-gateway-recovery.test.ts`'s Proxy (`get`,
+  `getOwnPropertyDescriptor`, `getPrototypeOf`, `ownKeys` all throw and increment a `trapCalls`
+  counter) thrown directly from the `isExternal: false` tool's `execute`. Expect the UNCHANGED
+  generic `Tool <name> failed`, `trapCalls === 0`, and no rethrow/crash.
+- A real `Error` whose `cause` is that same hostile Proxy (`Object.assign(new Error("boom"), {
+  cause: hostileProxy })`). Expect the UNCHANGED generic `Tool <name> failed` (the top-level `Error`
+  itself is safely `instanceof Error`, but its `cause` must never be touched unguarded), `trapCalls
+  === 0`, and `JSON.stringify(response)` contains neither `"boom"` nor the Proxy's sentinel
+  property value.
+
 This fails today (current code always returns the bare generic message, no `cause` suffix) and
-passes after the fix.
+passes after the fix. The hostile-shape cases must pass from the first version of the fix, not be
+patched in after a review round finds them.
 
 Re-run `tests/unit/mcp-gateway-recovery.test.ts` unmodified — must stay green (`trapCalls` stays
-`0`), proving third-party/untrusted tools are untouched.
+`0`), proving the existing untrusted (`isExternal !== false`) hostile-throw path is untouched.
 
 ## Live diagnosis (after the fix ships to dev)
 
