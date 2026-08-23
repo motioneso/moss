@@ -1712,3 +1712,10 @@ through the exact mocked-News scope, checks, live proof, PR, and wrap-up. [pane 
 The #1105 Codex Luna lane verified Fable plan commit `5f5b56a15` on a clean branch. Implementation
 is approved with no design fork; the lane is proceeding through the exact seeded chat/thread UAT
 scope, checks, live proof, PR, and wrap-up. [pane w1:pNF]
+
+## Update - 2026-08-23, #1874 owner resumed
+
+The retained #1874 owner `issue1872-relay5` was frozen in a long `Warping…` turn. Its turn was
+interrupted once and resumed from the existing QA-fix worktree; it is now actively running the
+remaining gate and delivery steps. No source work was discarded and PR #1874 remains blocked on
+fresh security QA, green CI, induced recovery proof, and Ben's sign-off. [pane w1:pNF]
