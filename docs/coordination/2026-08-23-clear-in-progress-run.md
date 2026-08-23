@@ -22,7 +22,7 @@ durable live-path proof comment.
 | `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319-A (concrete child of #1470) | security | Task A committed `f786077a3`; Task B building | `build-1319a-phase2-c` | resolve live | `build/1319a-catalog-verify` | — |
 | `docs/superpowers/specs/2026-08-19-926-food-day-view-components-and-targets.md` | #1737 (concrete child of #926) | routine | closed/Done — Ben verified working in production; lane cancelled/reaped | reaped | — | deleted | — |
 | `docs/superpowers/specs/2026-08-23-1794-release-notes-protected-main.md` | #1794 | sensitive | queued | — | — | — | — |
-| `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | revised plan `118c02f9e` approved; building | `build-1883-vault-errors` | resolve live | `build/1883-vault-mcp-errors` | — |
+| `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | implementation `db1e5c1e7`; full gate and wrap-up running | `build-1883-vault-errors-2` | resolve live | `build/1883-vault-mcp-errors` | — |
 | `docs/superpowers/specs/2026-08-23-1884-weather-settings-card.md` | #1884 | routine | relay driving live UAT, gate, and wrap-up | `build-1884-relay` | resolve live | `build/1884-weather-settings` | — |
 | issue #1885 | #1885 | routine | focused checks green; independent QA running | `qa-1886-watchdog` | resolve live | `fix/1885-coordinator-watchdog` | #1886 |
 
@@ -136,12 +136,16 @@ None yet.
 - #1319-A build session `build-1319a-phase2-b` (Claude session
   `d36ff98a-4ba2-46d0-9582-8dc383f55dc6`) reaped after Task A commit `f786077a3` and confirmation
   that successor `build-1319a-phase2-c` was driving Task B on Sonnet in the same worktree/branch.
+- #1883 build session `build-1883-vault-errors` (Claude session
+  `5cd79260-53d8-4ce4-ad18-c1c3719af24f`) reaped after implementation commit `db1e5c1e7`, 66/66
+  focused tests green, and confirmation that successor `build-1883-vault-errors-2` was driving
+  the full gate and wrap-up on Sonnet in the same worktree/branch.
 
 ## Latest continuation note — Codex relay adopted
 
 Codex session `01a02f7f-5563-7590-ac66-9b2827dab85c` holds the coordinator lock. The prior Codex
-session remains separately named `watchdog-timer-fix` and owns no fleet work. #1883 is building
-from approved security plan commit `118c02f9e`; #1884 relay is finishing live UAT/gates; #1319-A
+session remains separately named `watchdog-timer-fix` and owns no fleet work. #1883 implementation
+commit `db1e5c1e7` is in full gate/wrap-up; #1884 relay is finishing live UAT/gates; #1319-A
 relay is building Task B after Task A commit `f786077a3`. The one-time #1319-A worktree-integrity
 warning remains stop-the-line on recurrence. Watchdog fix commit `246bd29f4` was replayed cleanly
 onto issue #1885 / PR #1886; focused checks are green and routine QA is running. No merges occurred
