@@ -67,13 +67,13 @@ jobs:
           edge_manifest=$(docker buildx imagetools inspect "$IMAGE:edge" --format '{{json .Manifest}}')
           edge_digest=$(jq -er .digest <<< "$edge_manifest")
           provenance=$(docker buildx imagetools inspect "$IMAGE:edge" --format '{{json .Provenance}}')
-          if ! jq -e --arg sha "$SOURCE_SHA"             '([.. | objects | .["vcs:revision"]? // empty] | unique) == [$sha]'             <<< "$provenance" >/dev/null; then
+          if ! jq -e --arg sha "$SOURCE_SHA" '([.. | objects | .["vcs:revision"]? // empty] | unique) == [$sha]' <<< "$provenance" >/dev/null; then
             echo "::error::edge provenance does not match $SOURCE_SHA"
             exit 1
           fi
 
           version_exists=false
-          if version_manifest=$(docker buildx imagetools inspect "$IMAGE:$VERSION"             --format '{{json .Manifest}}' 2>/dev/null); then
+          if version_manifest=$(docker buildx imagetools inspect "$IMAGE:$VERSION" --format '{{json .Manifest}}' 2>/dev/null); then
             version_digest=$(jq -er .digest <<< "$version_manifest")
             if [[ "$version_digest" != "$edge_digest" ]]; then
               echo "::error::$VERSION already points to a different digest"
@@ -84,7 +84,7 @@ jobs:
 
           tag_exists=false
           if tag_ref=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$VERSION" 2>/dev/null); then
-            if ! jq -e --arg sha "$SOURCE_SHA"               '.object.type == "commit" and .object.sha == $sha'               <<< "$tag_ref" >/dev/null; then
+            if ! jq -e --arg sha "$SOURCE_SHA" '.object.type == "commit" and .object.sha == $sha' <<< "$tag_ref" >/dev/null; then
               echo "::error::Git tag $VERSION already points elsewhere"
               exit 1
             fi
@@ -109,7 +109,7 @@ jobs:
           docker buildx imagetools create "${tags[@]}" "$IMAGE@$EDGE_DIGEST"
 
           for tag in "$VERSION" stable; do
-            digest=$(docker buildx imagetools inspect "$IMAGE:$tag"               --format '{{json .Manifest}}' | jq -er .digest)
+            digest=$(docker buildx imagetools inspect "$IMAGE:$tag" --format '{{json .Manifest}}' | jq -er .digest)
             if [[ "$digest" != "$EDGE_DIGEST" ]]; then
               echo "::error::$tag resolved to $digest, expected $EDGE_DIGEST"
               exit 1
