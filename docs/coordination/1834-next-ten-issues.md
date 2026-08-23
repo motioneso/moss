@@ -1587,3 +1587,31 @@ security tier. Opus QA agent `qa-pr1874-security`, session
 `3e6fa4e0-57ab-411a-9ca9-2d2a65882468`, is visibly reviewing in a fresh detached worktree in the
 QA tab. Do not merge until GitHub CI is green, the agent posts a security verdict to the PR, and Ben
 explicitly signs off. The Fable-authored plan remains authoritative.
+
+## Continuation note - 2026-08-23, PR 1874 returned from security QA
+
+Coordinator authority remains agent name `coordinator`, pane label `Coordinator`, session
+`01a02d06-70df-7420-bf04-beb05607d454` until the relay successor visibly takes over and replaces
+this lock.
+
+Ben directed that future build and routine-QA agents use Codex GPT-5.6 Luna at high reasoning
+effort, while continuing to follow the Herdr isolation, naming, tab, delivery-verification, and
+unattended-permission rules. The explicit launch tail is
+`codex --model gpt-5.6-luna -c model_reasoning_effort='"high"' -s danger-full-access -a never`.
+The local Codex model catalog confirms Luna supports high effort. Existing security QA for PR
+#1874 stayed on Opus as required; do not replace completed or already-running agents merely for
+this preference. Fable remains the sole author of implementation plans.
+
+PR #1874's Opus security QA posted a RED verdict on the PR. The three blockers are: the branch's
+own Fable plan file fails formatting and stops CI before later checks; the Service Worker browser
+regression is not wired into any normal command or CI path; and the live-path evidence never
+induces and observes recovery without a reload. The retained owner `issue1872-image-relay4`,
+session `d2a048bd-2e33-48f2-af01-937c1c56a99f`, received and began acting on the exact findings,
+including the narrow retry/bypass/cache-error coverage requested by QA without changing the
+Fable-authored plan. Fresh QA is mandatory after the fixes. PR #1874 remains unmergeable until CI
+is green, security QA is green and posted, and Ben explicitly signs off.
+
+Mid-doing: the coordinate compaction tripwire fired. Relay immediately after committing this note;
+the successor should re-adopt the #1874 owner, reap the already-consumed QA pane/worktree if still
+present, and start #1501 when a safe Builders slot is available using a Fable-authored plan and the
+new Codex Luna/high-effort launch policy.
