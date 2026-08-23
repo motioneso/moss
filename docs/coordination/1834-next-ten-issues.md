@@ -1380,3 +1380,13 @@ Coordinator identity: pane w1:pMV, agent name `coordinator`, session
 7b8957b3-93f9-44ee-81cc-a6a436514031. Successor should re-claim the `coordinator` name/label
 after confirming this pane is safe to close (per the coordinate skill's Phase 0a), same as every
 prior relay in this run.
+
+## Standing rule added 2026-08-23, nineteenth coordinator (Ben)
+
+Ben's instruction: plan approvals for this run must go through the Fable model, not the
+coordinator's own inline judgment. From now on, when a build agent reports its plan is ready,
+spawn a one-shot Fable agent to review it and decide approve/reject before replying to the build
+agent. Applies for the rest of run 1834.
+
+Coordinator identity: pane w1:pN1, agent name `coordinator`, session
+968e7cb9-418f-44cf-9508-9834d869c74f.
