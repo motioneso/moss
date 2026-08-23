@@ -1829,3 +1829,7 @@ and the isolated full `verify:foundation` gate, and preserve all other checks an
 `prettier-ignore`, other plan edits, or scope change is authorized. The ruling was relayed to
 Codex Luna. Fable's stale snapshot was corrected by current worktree evidence: implementation
 commit `647dd7094` is already present. [pane w1:pNF]
+
+The Fable reviewer returned its ruling and pane `w1:pNW` was closed after the verdict. The
+#1335 lane has applied the authorized plan-only formatting change and is rerunning its full gate;
+no other plan or scope change is in flight. [pane w1:pNF]
