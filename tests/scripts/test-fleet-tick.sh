@@ -60,13 +60,17 @@ cat >"$tmp/bin/needs-ben" <<'EOF'
 echo "$*" >> "$SHIM_LOG_DIR/needs-ben.log"
 EOF
 
+# Match on the git SUBCOMMAND, never the whole argument string: paths in the
+# arguments (this repo lives under .claude/worktrees/) would otherwise trip the
+# worktree pattern and swallow unrelated calls like git config.
 cat >"$tmp/bin/git" <<EOF
 #!/usr/bin/env bash
-case "\$*" in
-  *ls-remote*) printf '%s\n' "\${GIT_LSREMOTE_OUT:-}"; exit 0 ;;
-  *show-ref*)  exit 1 ;;
-  *worktree*)  echo "\$*" >> "\$SHIM_LOG_DIR/git.log"; exit 0 ;;
-  *)           exec "$real_git" "\$@" ;;
+if [ "\${1:-}" = "-C" ]; then sub="\${3:-}"; else sub="\${1:-}"; fi
+case "\$sub" in
+  ls-remote) printf '%s\n' "\${GIT_LSREMOTE_OUT:-}"; exit 0 ;;
+  show-ref)  exit 1 ;;
+  worktree)  echo "\$*" >> "\$SHIM_LOG_DIR/git.log"; exit 0 ;;
+  *)         exec "$real_git" "\$@" ;;
 esac
 EOF
 
