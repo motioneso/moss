@@ -2,7 +2,8 @@
  * Park Press riso tooth — one static feTurbulence grain tile over everything.
  * body::after needs no markup, no React churn, and covers auth/onboarding too.
  * Static by design: no animation, so prefers-reduced-motion is a non-issue.
- * The data-URI contains no color literals (check:design-tokens stays clean).
+ * The data-URI lives in @moss/ui's components-web.css and contains no color literals
+ * (check:design-tokens stays clean).
  */
 body::after {
   content: "";
@@ -10,7 +11,6 @@ body::after {
   inset: 0;
   z-index: 2147483000;
   pointer-events: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   background-repeat: repeat;
   opacity: var(--texture-opacity);
   mix-blend-mode: var(--texture-blend);

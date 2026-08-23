@@ -1,0 +1,7 @@
+/* #1427-E/F destination for app-global visual declarations (spec: css-guard-residue).
+   Park Press riso grain: the tile itself is visual identity, so it lives in @moss/ui;
+   the body::after plumbing (position, z-index, opacity/blend tokens) stays in
+   apps/web/src/styles/texture.css, which still owns the overlay's layout. */
+body::after {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}

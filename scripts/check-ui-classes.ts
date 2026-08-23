@@ -18,14 +18,7 @@ import { fileURLToPath } from "node:url";
 
 const rootDirectory = process.cwd();
 
-export const DEFINITION_FILES = [
-  "packages/ui/src/styles/components-core.css",
-  "packages/ui/src/styles/components-empty.css",
-  "packages/ui/src/styles/components-forms.css",
-  "packages/ui/src/styles/components-moss.css",
-  "packages/ui/src/styles/components-moss-today.css",
-  "packages/ui/src/styles/components-settings-1.css",
-  "packages/ui/src/styles/components-settings-2.css",
+export const WEB_DEFINITION_FILES = [
   "apps/web/src/styles/command-palette.css",
   "apps/web/src/styles/components-forms.css",
   "apps/web/src/styles/components-keyline.css",
@@ -52,6 +45,8 @@ export const DEFINITION_FILES = [
   "apps/web/src/styles/wellness-2.css",
   "apps/web/src/styles/wellness-3.css"
 ];
+
+const PACKAGE_STYLE_ROOT = "packages/ui/src/styles";
 
 const USAGE_ROOTS = ["apps/web/src", "packages", "external-modules"];
 
@@ -100,8 +95,15 @@ export interface CheckResult {
 export async function collectDefinedClasses(root: string): Promise<Set<string>> {
   const defined = new Set<string>();
   const classSelectorPattern = /\.(jds-[a-zA-Z0-9-]+)/g;
+  const packageDefinitionFiles: string[] = [];
 
-  for (const relativeFile of DEFINITION_FILES) {
+  for await (const filePath of walk(join(root, PACKAGE_STYLE_ROOT))) {
+    if (extname(filePath) === ".css") {
+      packageDefinitionFiles.push(normalizePath(relative(root, filePath)));
+    }
+  }
+
+  for (const relativeFile of [...packageDefinitionFiles.sort(), ...WEB_DEFINITION_FILES]) {
     const contents = await readFile(join(root, relativeFile), "utf8");
     const stripped = stripCssComments(contents);
     let match;
