@@ -2022,3 +2022,11 @@ pre-existing morning-briefing flake, and induced live recovery proof is posted d
 worktree is clean with no leftover processes or seed rows. PR CI is newly in progress; launch a
 fresh Opus security QA against this head, then require its PR verdict and Ben's explicit sign-off
 before merge. [pane w1:pNS]
+
+## Update - 2026-08-23, #1874 fresh Opus security QA started
+
+The PR is at head `3f1054bdc3837594f2d47e1eba2c756d377b2d79`, with its new CI run in progress.
+Fresh detached QA worktree `.claude/worktrees/qa-1874-service-worker-recovery` is driving in
+the dedicated QA tab as `qa-1874-security-review`, session `37fa830a-9d79-4b13-a72a-6a89357adc69`,
+pane `w1:pN0`, on Opus. It must post the required security verdict to PR #1874. Merge remains
+blocked until CI is green, the verdict is posted, and Ben explicitly signs off. [pane w1:pNF]
