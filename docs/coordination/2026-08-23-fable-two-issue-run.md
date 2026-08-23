@@ -71,3 +71,28 @@ if it relays a third time before any commit, that is worth a closer look, not ju
 silent adopt), then continue the standard coordinate-skill loop: QA on green, merge, close #1497
 and its board item, report to Ben. `docs/coordination/AWAITING-BEN.md` has no open decision.
 [pane w1:pPR]
+
+## Continuation — 2026-08-23, coordinator relay to Codex (Ben's explicit instruction, not a threshold trigger)
+
+Adopted from the prior Claude coordinator (session `c60ed2b9-0da3-4fdc-95a9-12113657660e`, pane
+`w1:pPR`, exact-session match confirmed, closed cleanly). No merges happened this session
+(`merges_since_relay: 0`). `docs/coordination/AWAITING-BEN.md` has no open decision.
+
+Build lane since adoption: `build-1497-today-relay2` (session `a3d101ab-0506-4b30-ac42-434e663afa9a`,
+worktree `.claude/worktrees/1497-today-residue`, branch `build/1497-today-residue`) did real work —
+all 152 style violations moved into the shared design package, verified and committed across 4
+commits. It then used its own internal subagent (`build-1497-today-relay3`, NOT a separate Herdr
+pane — confirmed via `herdr agent list`, no such agent/pane exists) to do the browser proof, the
+UAT spec, and now the full test gate, ahead of writing the release note and opening the PR. As of
+this handoff the PR is not yet open — still waiting on that gate. relay2's own pane is at ~69%
+context (11% until its own auto-compact), so it may relay again on its own before the PR lands;
+that is normal per the build-agent relay protocol, not a stall.
+
+**Ben instructed this coordinator relay explicitly** (not a context-meter/merge-count trigger) —
+model `gpt-5.6-sol` at medium reasoning effort, via Codex, and he asked the successor to **stay on
+Codex relays only for the rest of this run** — i.e. do not relay back to a Claude coordinator;
+every further coordinator self-handoff in this run should also spawn a Codex successor.
+
+Successor's next steps: re-confirm the Codex session id as the new lock anchor, watch
+`build-1497-today-relay2`'s pane (`w1:pPT`) for the PR to open, then run the standard
+coordinate-skill QA-on-green -> merge -> close #1497 -> report-to-Ben loop. [pane w1:pPV]
