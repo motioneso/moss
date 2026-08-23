@@ -1677,14 +1677,6 @@ ancestor and reported the baseline as 31 violations. Implementation is approved 
 fork. The lane is proceeding through the exact Child E scope, checks, live proof, PR, and wrap-up.
 [pane w1:pNF]
 
-## Update - 2026-08-23, Fable ruled plan formatting exception
-
-Fable 5 ruled **Option B** for both #1105 and #899: run `npx prettier --write` only on each
-affected authoritative plan, inspect `git diff --word-diff` to verify whitespace/punctuation-only
-changes, rerun `pnpm format:check` and the isolated full gate, and preserve the previously green
-targeted/live evidence. No permanent `prettier-ignore` exemption or other scope change is
-authorized. The ruling was relayed to both Codex Luna owners. [pane w1:pNF]
-
 ## Update - 2026-08-23, #899 build started
 
 Fable 5 completed the #899 plan at commit `9c998181e`; its planner pane was resolved fresh and
@@ -1788,3 +1780,18 @@ agent's implementation commits remain clean and the gate is currently checking f
 predecessor run was cleared. #1501 has passed static, type, and build stages and is deep in its
 unit suite. All three remain unmergeable until their full evidence and PR/QA gates are complete.
 [pane w1:pNF]
+
+## Update - 2026-08-23, Fable ruled plan formatting exception
+
+Fable 5 ruled **Option B** for both #1105 and #899: run `npx prettier --write` only on each
+affected authoritative plan, inspect `git diff --word-diff` to verify whitespace/punctuation-only
+changes, rerun `pnpm format:check` and the isolated full gate, and preserve the previously green
+targeted/live evidence. No permanent `prettier-ignore` exemption or other scope change is
+authorized. The ruling was relayed to both Codex Luna owners. [pane w1:pNF]
+
+## Update - 2026-08-23, #1105 PR opened pending formatted head
+
+PR #1877 is open for #1105, but its current head still reflects the implementation commit while
+the Fable-authorized plan-only formatting change is being prepared and the post-format gate is
+rerun. GitHub checks are pending; independent QA will start only after the final formatted head,
+green required checks, and durable evidence are present. [pane w1:pNF]
