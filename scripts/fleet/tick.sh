@@ -7,8 +7,8 @@
 #   - STOP file in the state dir: exit immediately, do nothing, say nothing.
 #   - Spawn budget: at most 12 agent spawns per night (since 18:00 local); at the
 #     cap, nothing new is dispatched.
-#   - DEPUTY file: lets a one-shot model call stand in for Ben on parked lanes,
-#     within an explicit scope and expiry.
+#   - Deputy switch (deputyEnabled in settings.json): lets a one-shot model call
+#     stand in for Ben on parked lanes, within a hard floor it may never cross.
 #
 # FLEET_DRY_RUN=1 prints every externally-visible action as "DRY: <command>"
 # instead of running it (worktree add, herdr, gh writes, needs-ben, claude -p,
@@ -130,17 +130,14 @@ note_spawn() {
   SPAWNS_TONIGHT=$((SPAWNS_TONIGHT + 1))
 }
 
-# DEPUTY file: "until=2026-08-24T08:00" (one scope for everything; Ben's ruling
-# 2026-08-23). Missing file, missing expiry, or past expiry all mean deputy off
-# (fail closed).
+# Deputy switch (Ben's ruling, 2026-08-23): a plain on/off setting with no
+# time element, replacing the old expiring DEPUTY marker file. Off unless
+# deputyEnabled is true in settings.json or FLEET_DEPUTY_ENABLED=true in the
+# environment. The launcher shows this state on screen at all times; the
+# hard floor below is unaffected by it.
 DEPUTY_ACTIVE=0
-if [ -f "$STATE_DIR/DEPUTY" ]; then
-  deputy_raw="$(cat "$STATE_DIR/DEPUTY" 2>/dev/null || true)"
-  deputy_until="$(grep -o 'until=[^ ]*' <<<"$deputy_raw" | head -n1 | cut -d= -f2)"
-  if [ -n "$deputy_until" ] && [ "$(iso_to_epoch "$deputy_until")" -gt "$NOW_EPOCH" ]; then
-    DEPUTY_ACTIVE=1
-  fi
-fi
+deputy_enabled="${FLEET_DEPUTY_ENABLED:-$(settings_get '.deputyEnabled')}"
+[ "$deputy_enabled" = "true" ] && DEPUTY_ACTIVE=1
 
 # --- shared helpers ------------------------------------------------------------
 

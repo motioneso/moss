@@ -203,7 +203,7 @@ out="$(run_tick "$state")"
 grep -q "needs re-slice" <<<"$out"
 pass "a lane relayed twice parks with reason needs re-slice"
 
-# --- 8. expired DEPUTY file means no deputy call ------------------------------------
+# --- 8. deputy off by default; the old DEPUTY marker file is dead -------------------
 
 state="$(new_state)"
 write_record "$state" 108 '{"issue":108,"status":"blocked","tier":"routine","blocked_reason":"stuck on a decision","relays":0}'
@@ -212,17 +212,25 @@ echo "108: stuck on a decision" > "$tmp/needs-ben/sent/entry-108.msg"
 touch -d '30 minutes ago' "$tmp/needs-ben/sent/entry-108.msg"
 out="$(run_tick "$state")"
 if grep -qi "deputy" <<<"$out"; then false; fi
-pass "expired DEPUTY file means no deputy call"
+pass "deputy stays off by default even when the old DEPUTY file is present"
 
-# --- 8b. active DEPUTY file does trigger the deputy call ----------------------------
+# --- 8b. deputyEnabled in settings turns the deputy on ------------------------------
 
-printf 'until=%s\n' "$(date -d '1 hour' +%Y-%m-%dT%H:%M)" > "$state/DEPUTY"
+printf '{"deputyEnabled": true}\n' > "$state/settings.json"
 out="$(run_tick "$state")"
 grep -q "DRY: claude -p \[deputy for lane 108" <<<"$out"
-pass "active DEPUTY file triggers the deputy call after 20 minutes with no reply"
+pass "deputyEnabled true in settings triggers the deputy call after the wait"
+
+# --- 8d. deputyWaitSeconds from settings is honoured -------------------------------
+
+printf '{"deputyEnabled": true, "deputyWaitSeconds": 7200}\n' > "$state/settings.json"
+out="$(run_tick "$state")"
+if grep -qi "deputy for lane" <<<"$out"; then false; fi
+pass "a 2-hour deputyWaitSeconds means a 30-minute-old question gets no deputy call yet"
 
 # --- 8c. the judgment command is swappable, no model name baked in ------------------
 
+printf '{"deputyEnabled": true}\n' > "$state/settings.json"
 out="$(run_tick "$state" FLEET_JUDGE_CMD='some-other-provider run')"
 grep -q "DRY: some-other-provider run \[deputy for lane 108" <<<"$out"
 if grep -qiE "claude-(fable|opus|sonnet|haiku)" <<<"$out"; then false; fi
@@ -267,6 +275,7 @@ state="$(new_state)"
 clear_logs
 write_record "$state" 301 '{"issue":301,"status":"blocked","tier":"security","pr":88,"blocked_reason":"security tier: merge needs Ben sign-off","relays":0}'
 printf 'until=%s\n' "$(date -d '1 hour' +%Y-%m-%dT%H:%M)" > "$state/DEPUTY"
+printf '{"deputyEnabled": true}\n' > "$state/settings.json"
 echo "301: security tier: merge needs Ben sign-off" > "$tmp/needs-ben/sent/entry-301.msg"
 touch -d '30 minutes ago' "$tmp/needs-ben/sent/entry-301.msg"
 run_tick_live "$state" CLAUDE_ANSWER="MERGE" >/dev/null
@@ -281,6 +290,7 @@ state="$(new_state)"
 clear_logs
 write_record "$state" 302 '{"issue":302,"status":"blocked","tier":"routine","pr":89,"blocked_reason":"code-complete, unverified","relays":0}'
 printf 'until=%s\n' "$(date -d '1 hour' +%Y-%m-%dT%H:%M)" > "$state/DEPUTY"
+printf '{"deputyEnabled": true}\n' > "$state/settings.json"
 echo "302: code-complete, unverified" > "$tmp/needs-ben/sent/entry-302.msg"
 touch -d '30 minutes ago' "$tmp/needs-ben/sent/entry-302.msg"
 run_tick_live "$state" CLAUDE_ANSWER="MERGE" >/dev/null
