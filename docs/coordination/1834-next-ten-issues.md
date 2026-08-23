@@ -2538,3 +2538,37 @@ Fresh routine QA is active in the dedicated QA tab, agent `qa1878-1501-r4`, sess
 `01a02e17-926c-7821-8b94-b1e122681925`, using Codex GPT-5.6 Luna at high reasoning. It must
 post a durable verdict against that exact head; required CI must also be green. No merge is
 authorized. [pane w1:pPE]
+
+## Update - 2026-08-23, #1878 comment-relocation correction required
+
+Fresh routine QA for PR #1878 at `e8f6d06731fd0e1012a626d5714a65c3680ed06e` posted a durable
+RED because required CI was still pending and the plan's comment-relocation exit criterion remained
+partial. Review found no blocking code defect or invariant risk, but explanatory display-size and
+instrument comments remained duplicated in the web and package keyline sheets. The review-only QA
+pane was closed after matching session `01a02e17-926c-7821-8b94-b1e122681925`, and its clean
+isolated worktree was removed.
+
+The #1501 owner received and began the minimal comment-relocation correction. A corrected push,
+fresh exact-head QA, and green required CI are required before merge. [pane w1:pPE]
+
+## Update - 2026-08-23, #1878 corrected head in fresh QA r5
+
+The #1501 owner pushed the minimal comment-relocation correction for PR #1878 at exact head
+`92953e1c8319c682663d5ce69bdc9280bca509ec`, still based on current `origin/main`
+`18fb95fd7338544c9627dcf534165ff671586ff8`. Fresh routine QA is active in the dedicated QA tab,
+agent `qa1878-1501-r5`, session `01a02e1f-7e7c-7882-8a3b-6b1725eb31a1`, using Codex GPT-5.6
+Luna at high reasoning. It must post a durable verdict against that exact head; the newly triggered
+required CI must also finish green. No merge is authorized. [pane w1:pPE]
+
+## Update - 2026-08-23, #1880 corrected head in fresh QA r5
+
+The #1335 owner removed all four production `@ts-expect-error` suppressions and moved the typing
+repair entirely into the email settings test contract. PR #1880 was rebased onto `origin/main`
+`18fb95fd7338544c9627dcf534165ff671586ff8` and force-with-lease pushed at exact head
+`b636f0dd5095e500058969ff850451d173178f42`. The owner's isolated gate completed with exit 0,
+2,044 tests passed and 2 skipped; its gate database was dropped and no live gate remains.
+
+Fresh routine QA is active in the balanced QA tab, agent `qa1880-1335-r5`, session
+`01a02e20-f9dd-7e63-9288-5973bc5edb69`, using Codex GPT-5.6 Luna at high reasoning. It must post
+a durable verdict against that exact head; newly triggered required CI must also finish green.
+No merge is authorized. [pane w1:pPE]
