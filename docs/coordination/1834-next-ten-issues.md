@@ -2010,3 +2010,15 @@ w1:pNX]
 #1874's isolated gate is `DONE rc=0`; its owner is now running the required induced live recovery
 proof before rebase/push and fresh Opus security QA. #1335 is active on its restarted gate, and
 #899 remains active with a non-terminal upgrade-check warning. [pane w1:pNF]
+
+## Update - 2026-08-23, #1874 fixes pushed; fresh security QA required
+
+#1874 owner reports all prior QA findings fixed and pushed at rebased head `3f1054bdc`: the
+authoritative plan is formatted whitespace-only, the service-worker regression suite is wired
+into CI, coverage now pins retry counts and failure shape, excludes API/non-GET requests, and
+handles rejected cache lookup by falling through to the network. Isolated `pnpm verify:foundation`
+is green on a throwaway database, the full browser suite is 98/99 with the same unrelated
+pre-existing morning-briefing flake, and induced live recovery proof is posted durably. The
+worktree is clean with no leftover processes or seed rows. PR CI is newly in progress; launch a
+fresh Opus security QA against this head, then require its PR verdict and Ben's explicit sign-off
+before merge. [pane w1:pNS]
