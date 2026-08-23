@@ -124,7 +124,9 @@ export const MIGRATED_SECTION_CSS_FILES: readonly string[] = [
   // #1427-B: command palette, moved to packages/ui/src/styles/components-command-palette.css.
   "apps/web/src/styles/command-palette.css",
   // #1427-C: assistant surface, moved to packages/ui/src/styles/components-chat.css.
-  "apps/web/src/chat/assistant-surface/assistant-surface.css"
+  "apps/web/src/chat/assistant-surface/assistant-surface.css",
+  // #1427-D: web forms, moved to packages/ui/src/styles/components-forms.css.
+  "apps/web/src/styles/components-forms.css"
 ];
 
 let validTokensCache: Set<string> | undefined;
