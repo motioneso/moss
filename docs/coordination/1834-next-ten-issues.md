@@ -2665,3 +2665,27 @@ Fresh routine QA is active in the dedicated QA tab, agent `qa1878-1501-r6`, sess
 `d689eb7f-6cba-448b-845e-0c158143d1c4`, using Claude Sonnet. It must post a durable verdict against
 that exact head, and newly triggered required CI must also finish green. No merge is authorized.
 [pane w1:pPJ]
+
+## Continuation - 2026-08-23, #1878 merged and relay 14 required
+
+Fresh routine QA for PR #1878 posted GREEN against exact head
+`9a8ae7f69e7604927ce6aeb062f93a5961e45e11`: audit preflight exited 0, all required CI passed
+(foundation/app 29m57s, both compose smokes, CI gate, and image build), the nine-line correction
+was deletion-only, no duplicated web/package explanatory comments remain, and the existing package
+comments are intact. Durable verdict: https://github.com/motioneso/moss/pull/1878#issuecomment-5385940035.
+The matched QA session `d689eb7f-6cba-448b-845e-0c158143d1c4` and its clean isolated worktree were
+removed immediately after the verdict was consumed.
+
+After re-confirming coordinator authority session `01a02e65-1ed1-71a3-b7ba-1b1ddbfa814b`, PR
+#1878 was squash-merged as `2996f6cf6c068a2567cbec62580879e0cd9ee527`. Issue #1501 is closed
+and its project item is Done. The owner aligned its clean branch exactly to landed main and reported
+no lane-owned process or seeded rows; all four reap gates then passed with zero ahead commits,
+tracked/untracked changes, process CWDs, and panes. Matched owner session
+`01a02d53-0152-7c92-a3d0-84947677f620`, its worktree, and local/remote branch were removed. Only
+the coordinator remains live.
+
+This is the second routine merge since relay 12 (#1880 then #1878), so the merge-counter trigger
+requires relay before any further run action. Issue #1511 remains blocked on open issue #1246 as a
+status dependency, not a Ben-only decision; `docs/coordination/AWAITING-BEN.md` has no open entry.
+The successor must re-adopt the now-empty fleet and decide the next run action from GitHub source of
+truth. Current authority remains this session until the relay transfer completes. [pane w1:pPJ]
