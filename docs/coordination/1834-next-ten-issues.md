@@ -2098,3 +2098,12 @@ After #1105's prompt-blocked runner was stopped and its lock released, #1335 pro
 gate at `/tmp/jarv1s-gate/1335_tests_tsx_typecheck-20260823-004839.log`; `scripts/run-gate.sh
 status` reports it active with recent writes at `Checking formatting...`. It still needs its exact
 terminal sentinel and return code before PR work. [pane w1:pNR]
+
+## Update - 2026-08-23, watchdog sweep
+
+The coordinator re-adopted the fleet under session lock `01a02d45-dc51-79b0-8ec1-91c0784f68c2`.
+#1105 and #1335 have live fresh isolated runners; #899's integration stage is alive and has no
+failure sentinel. #1874's isolated gate is `DONE rc=0` and its fresh Opus security review is
+actively running. #1501's Verify foundation and app check is now green; only image publication
+remains pending on PR #1878. No Ben-only decision is currently open; security-tier sign-off for
+#1874 will be logged and pinged when its durable QA verdict and CI are ready. [pane w1:pNF]
