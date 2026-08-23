@@ -2704,3 +2704,12 @@ but they are outside this approved ten-issue run and cannot be added implicitly.
 spawned. The next decision is recorded in `docs/coordination/AWAITING-BEN.md`: close run 1834 and
 prepare a fresh Ready-queue manifest after `main` is green (recommended), or keep this coordinator
 parked on #1511. [pane w1:pPM]
+
+## Update - 2026-08-23, post-#1878 main CI green
+
+The post-merge `main` CI run completed green at merge commit
+`2996f6cf6c068a2567cbec62580879e0cd9ee527`: foundation/app, CI gate, both compose deployment
+smokes, and image build/publish all passed. The fleet remains empty and coordinator authority still
+matches session `01a02e90-46d7-7093-bffd-5e2a4bb029dc`. No new Ben reply has arrived. The only
+remaining blocker is the recorded decision whether to close run 1834 and prepare a fresh
+Ready-queue manifest (recommended) or park on dependency-blocked #1511. [pane w1:pPM]

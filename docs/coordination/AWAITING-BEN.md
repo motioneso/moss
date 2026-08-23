@@ -21,8 +21,8 @@ PR #1878 is merged and fully reaped. The only remaining run item, issue #1511, i
 cannot start until open Backlog issue #1246 clears. The board has other Ready issues, but they were
 not part of the approved ten-issue manifest.
 
-Recommendation: close run 1834 and prepare a fresh Ready-queue manifest after the current `main`
-CI run turns green. Alternative: keep this coordinator parked on #1511 until #1246 is scheduled
+The post-merge `main` CI run is now fully green. Recommendation: close run 1834 and prepare a fresh
+Ready-queue manifest. Alternative: keep this coordinator parked on #1511 until #1246 is scheduled
 and completed.
 
 <!-- Resolved 2026-08-19: PR #1703 (calendar rebuild) and PR #1717 (all-day scheduling) both merged.
