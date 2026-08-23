@@ -15,6 +15,16 @@ The 2026-08-05 transcript audit found 216 idle hours blocked on Ben, mostly on q
 never recorded — an overnight coordinator sat 15h on a question while this file said nothing was
 pending. Silent waiting is the failure mode this protocol exists to kill.
 
+## Run 1834 is exhausted except dependency-blocked #1511
+
+PR #1878 is merged and fully reaped. The only remaining run item, issue #1511, is Backlog and
+cannot start until open Backlog issue #1246 clears. The board has other Ready issues, but they were
+not part of the approved ten-issue manifest.
+
+Recommendation: close run 1834 and prepare a fresh Ready-queue manifest after the current `main`
+CI run turns green. Alternative: keep this coordinator parked on #1511 until #1246 is scheduled
+and completed.
+
 <!-- Resolved 2026-08-19: PR #1703 (calendar rebuild) and PR #1717 (all-day scheduling) both merged.
 Ben ruled "let's just merge all of these, I'll test in prod" — live-path proof on the dev instance
 is no longer the gate for this batch. -->
