@@ -19,7 +19,7 @@ durable live-path proof comment.
 
 | Spec | Issue | Tier | Status | Agent name | Pane | Branch | PR |
 | ---- | ----- | ---- | ------ | ---------- | ---- | ------ | -- |
-| `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319-A (concrete child of #1470) | security | Task B work-in-progress `f118ece3b`; building | `catalog-verify-1319a` | resolve live | `build/1319a-catalog-verify` | — |
+| `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319-A (concrete child of #1470) | security | Task B `26ec5c458` complete; gate and wrap-up running | `catalog-verify-1319a-2` | resolve live | `build/1319a-catalog-verify` | — |
 | `docs/superpowers/specs/2026-08-19-926-food-day-view-components-and-targets.md` | #1737 (concrete child of #926) | routine | closed/Done — Ben verified working in production; lane cancelled/reaped | reaped | — | deleted | — |
 | `docs/superpowers/specs/2026-08-23-1794-release-notes-protected-main.md` | #1794 | sensitive | plan `1e8c41906` approved; Luna-high builder implementing; merge last | `build_1794` | Codex subagent | `build/1794-release-notes-protected-main` | — |
 | `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | implementation `db1e5c1e7`; full gate and wrap-up running | `build-1883-vault-errors-2` | resolve live | `build/1883-vault-mcp-errors` | — |
@@ -157,13 +157,17 @@ hand-merging it.
   `c0e51f45-5944-4bdd-8a89-6002f1513bc4`) reaped after work-in-progress commit `f118ece3b` and
   confirmation that successor `catalog-verify-1319a` was driving on Sonnet in the same
   worktree/branch.
+- #1319-A build session `catalog-verify-1319a` (Claude session
+  `fd22bc0c-01cc-4c72-b4b1-b8ad493bb34f`) reaped after Task B commit `26ec5c458`, typecheck green,
+  focused unit 3/3 and DB-backed integration 14/14, and confirmation that successor
+  `catalog-verify-1319a-2` was driving gate/wrap-up on Sonnet in the same worktree/branch.
 
 ## Latest continuation note — Codex relay adopted
 
 Codex session `01a02f7f-5563-7590-ac66-9b2827dab85c` holds the coordinator lock. The prior Codex
 session remains separately named `watchdog-timer-fix` and owns no fleet work. #1883 implementation
 commit `db1e5c1e7` is in full gate/wrap-up; #1884 relay is finishing live UAT/gates; #1319-A
-relay is building from work-in-progress commit `f118ece3b`. The one-time #1319-A worktree-integrity
+relay is running gate/wrap-up from Task B commit `26ec5c458`. The one-time #1319-A worktree-integrity
 warning remains stop-the-line on recurrence. Watchdog fix commit `246bd29f4` was replayed cleanly
 onto issue #1885 / PR #1886; independent QA is green and final CI is pending. No merges occurred
 during adoption. Feature merge order remains #1883, #1884, #1319-A, #1319-B, #1794; #1737 is
