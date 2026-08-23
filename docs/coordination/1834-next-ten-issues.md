@@ -1858,3 +1858,11 @@ is preserved; #1874 remains sequenced behind its exit before another gate attemp
 accepted as a completion verdict. The lane was instructed to use the runner's required fresh
 `scripts/run-gate.sh start` path, wait for the sentinel and exact return code, and keep the
 authorized plan-only change isolated. No PR/QA step will start from the missing verdict. [pane w1:pNF]
+
+## Update - 2026-08-23, exclusive gate holder confirmed
+
+Fresh process/lock evidence shows #1105's active gate owns `/tmp/jarv1s-gate/db.lock` with its
+intentional exclusive mode while integration work runs. Three fresh starts (#1335, #899, and
+#1874) are queued behind that lock; #1501's separate integration process remains alive and is
+not to be interrupted. #1335 stopped only its own pre-run blocked start (`rc=130`), changed no
+repo files, and retained a green format check. [pane w1:pNF]
