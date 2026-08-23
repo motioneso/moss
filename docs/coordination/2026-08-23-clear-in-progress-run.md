@@ -24,7 +24,7 @@ durable live-path proof comment.
 | `docs/superpowers/specs/2026-08-23-1794-release-notes-protected-main.md` | #1794 | sensitive | Luna-high builder planning; merge last | `build_1794` | Codex subagent | `build/1794-release-notes-protected-main` | — |
 | `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | implementation `db1e5c1e7`; full gate and wrap-up running | `build-1883-vault-errors-2` | resolve live | `build/1883-vault-mcp-errors` | — |
 | `docs/superpowers/specs/2026-08-23-1884-weather-settings-card.md` | #1884 | routine | relay driving live UAT, gate, and wrap-up | `build-1884-relay` | resolve live | `build/1884-weather-settings` | — |
-| issue #1885 | #1885 | routine | focused checks green; independent QA running | `qa-1886-watchdog` | resolve live | `fix/1885-coordinator-watchdog` | #1886 |
+| issue #1885 | #1885 | routine | QA green; waiting on final CI check | reaped | — | `fix/1885-coordinator-watchdog` | #1886 |
 
 ## Scope decisions
 
@@ -87,7 +87,10 @@ hand-merging it.
 
 ## QA history
 
-None yet.
+- PR #1886 routine QA: GREEN at exact head `3e3891930`; audit preflight and focused regression
+  test exit 0, no shell-safety or invariant finding, no live-UI gate. Verdict posted at
+  `https://github.com/motioneso/moss/pull/1886#issuecomment-5387189864`; merge remains blocked only
+  on the pending GitHub `Verify foundation and app` check. QA pane/worktree reaped after verdict.
 
 ## Plan approvals
 
@@ -154,7 +157,7 @@ session remains separately named `watchdog-timer-fix` and owns no fleet work. #1
 commit `db1e5c1e7` is in full gate/wrap-up; #1884 relay is finishing live UAT/gates; #1319-A
 relay is building from work-in-progress commit `f118ece3b`. The one-time #1319-A worktree-integrity
 warning remains stop-the-line on recurrence. Watchdog fix commit `246bd29f4` was replayed cleanly
-onto issue #1885 / PR #1886; focused checks are green and routine QA is running. No merges occurred
+onto issue #1885 / PR #1886; independent QA is green and final CI is pending. No merges occurred
 during adoption. Feature merge order remains #1883, #1884, #1319-A, #1319-B, #1794; #1737 is
 already closed/Done. PR #1886 is an independent coordinator-tooling hotfix and may merge after its
 own green QA.
