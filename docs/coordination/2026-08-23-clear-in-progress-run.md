@@ -21,7 +21,7 @@ durable live-path proof comment.
 | ---- | ----- | ---- | ------ | ---------- | ---- | ------ | -- |
 | `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319-A (concrete child of #1470) | security | PR open; local gate green; initial Opus security QA running; held behind #1883/#1884 | `catalog-verify-1319a-2` + `qa-1897-catalog-security` | resolve live | `build/1319a-catalog-verify` | #1897 |
 | `docs/superpowers/specs/2026-08-19-926-food-day-view-components-and-targets.md` | #1737 (concrete child of #926) | routine | closed/Done — Ben verified working in production; lane cancelled/reaped | reaped | — | deleted | — |
-| `docs/superpowers/specs/2026-08-23-1794-release-notes-protected-main.md` | #1794 | sensitive | PR open; local gate green; initial QA running; merge last; real merged-PR proof pending | `build_1794` + `qa-1896-release-notes` | Codex subagent + resolve QA live | `build/1794-release-notes-protected-main` | #1896 |
+| `docs/superpowers/specs/2026-08-23-1794-release-notes-protected-main.md` | #1794 | sensitive | initial QA green; CI pending; merge last; final integrated QA + real merged-PR proof pending | `build_1794` | Codex subagent | `build/1794-release-notes-protected-main` | #1896 |
 | `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | PR open; local gate green; fresh relay building branch-installed real-UI proof; security QA not started | `build-1883-livepath` | resolve live | `build/1883-vault-mcp-errors` | #1892 |
 | `docs/superpowers/specs/2026-08-23-1884-weather-settings-card.md` | #1884 | routine | initial QA green; CI pending; held for post-#1883 rebase + integrated QA | `build-1884-relay` | resolve live | `build/1884-weather-settings` | #1891 |
 | issue #1885 | #1885 | routine | merged `91aa6ad84`; issue closed/Done | reaped | — | `fix/1885-coordinator-watchdog` | #1886 |
@@ -103,6 +103,11 @@ hand-merging it.
   blocking UAT exit 0 (1 passed), durable authenticated live-UI proof present, and no findings.
   `Verify foundation and app` was pending at verdict time. PR remains held behind #1883 and needs
   a fresh integrated QA pass after rebase. Initial QA pane/worktree reaped after verdict.
+- PR #1896 initial sensitive QA: substantive review GREEN at exact head `d6e125e59`; merge-ready NO
+  only because foundation CI was still running, the final rebase/integrated QA remains, and the
+  required post-merge acceptance proof must come from the reserved closing coordination PR.
+  Verdict: `https://github.com/motioneso/moss/pull/1896#issuecomment-5387556732`. Initial QA
+  pane/worktree reaped after verdict.
 
 ## Merge digest
 
