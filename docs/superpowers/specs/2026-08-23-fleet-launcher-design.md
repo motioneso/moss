@@ -329,10 +329,6 @@ portion of #1895; that issue keeps its live-proof requirement.
   really. It can be used outside of Moss." This design keeps it in `scripts/fleet/` with the
   launcher self-contained, which makes extraction cheap but does not perform it. The cheapest moment
   to move is before #1895 writes a runbook around these paths.
-- **Ordering against #1895.** Task C is end-to-end live proof — the gate on whether the daemon can
-  be trusted to run unattended. Unit one below touches the daemon's spawning and settings, so doing
-  it before the live proof means proving a daemon that is about to change. Sequencing unit one,
-  then live proof, then unit two is the coherent order, but this has not been ruled on.
 
 ## Decisions recorded here
 
