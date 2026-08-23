@@ -1615,3 +1615,12 @@ Mid-doing: the coordinate compaction tripwire fired. Relay immediately after com
 the completed #1874 QA pane and disposable worktree were reaped after its verdict was consumed.
 The successor should re-adopt the #1874 owner and start #1501 when a safe Builders slot is
 available using a Fable-authored plan and the new Codex Luna/high-effort launch policy.
+
+## Continuation note - 2026-08-23, Codex coordinator takeover
+
+Coordinator authority is now agent name `coordinator`, pane label `Coordinator`, session
+`01a02d45-dc51-79b0-8ec1-91c0784f68c2`. The outgoing coordinator session
+`01a02d06-70df-7420-bf04-beb05607d454` was resolved by fresh `agent_session.value` match and
+closed. PR #1874 remains RED: its retained owner is working the posted security findings; fresh
+security QA, green CI, live recovery proof, and Ben's sign-off are required. Start #1501 only when
+safe, with a Fable-authored implementation plan. [pane w1:pNF]
