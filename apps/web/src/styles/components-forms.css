@@ -5,23 +5,9 @@
 /* ---------------------------------------------------------------
    FORM CONTROLS — Input / Textarea / Select
    --------------------------------------------------------------- */
-.jds-hint {
-  font-size: var(--text-xs);
-  color: var(--text-subtle);
-}
-.jds-hint--error {
-  color: var(--danger-fg);
-}
-
 .jds-input,
 .jds-textarea,
 .jds-select {
-  font-family: var(--font-sans);
-  font-size: var(--text-md);
-  color: var(--text);
-  background: var(--surface);
-  border: var(--border-w) solid var(--border-strong);
-  border-radius: var(--radius-md);
   padding: 0 var(--space-3);
   height: 38px;
   width: 100%;
@@ -36,37 +22,13 @@
   line-height: var(--leading-normal);
   resize: vertical;
 }
-.jds-input::placeholder,
-.jds-textarea::placeholder {
-  color: var(--text-faint);
-}
-.jds-input:hover,
-.jds-textarea:hover,
-.jds-select:hover {
-  border-color: var(--ink-3);
-}
-.jds-input:focus,
-.jds-textarea:focus,
-.jds-select:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--focus-ring);
-}
-.jds-input[aria-invalid="true"],
-.jds-textarea[aria-invalid="true"] {
-  border-color: var(--danger);
-  box-shadow: 0 0 0 3px var(--red-soft);
-}
 .jds-input[disabled],
 .jds-textarea[disabled],
 .jds-select[disabled] {
-  background: var(--surface-2);
-  color: var(--text-faint);
   cursor: not-allowed;
 }
 .jds-input--sm {
   height: 32px;
-  font-size: var(--text-sm);
 }
 
 /* Input with leading icon / addon */
@@ -82,7 +44,6 @@
   position: absolute;
   left: 11px;
   display: inline-flex;
-  color: var(--text-subtle);
   pointer-events: none;
 }
 .jds-inputwrap__icon svg {
@@ -103,7 +64,6 @@
   position: absolute;
   right: 11px;
   display: inline-flex;
-  color: var(--text-subtle);
   pointer-events: none;
 }
 .jds-selectwrap__chev svg {
@@ -119,8 +79,6 @@
   align-items: flex-start;
   gap: var(--space-3);
   cursor: pointer;
-  font-size: var(--text-md);
-  color: var(--text);
 }
 .jds-check input {
   position: absolute;
@@ -133,14 +91,10 @@
   height: 19px;
   flex: none;
   margin-top: 1px;
-  border: var(--border-w-strong) solid var(--border-strong);
-  border-radius: var(--radius-xs);
-  background: var(--surface);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: var(--transition-control);
-  color: var(--white);
 }
 .jds-check__box svg {
   width: 13px;
@@ -149,16 +103,9 @@
   transform: scale(0.7);
   transition: var(--transition-control);
 }
-.jds-check input:checked + .jds-check__box {
-  background: var(--accent);
-  border-color: var(--accent);
-}
 .jds-check input:checked + .jds-check__box svg {
   opacity: 1;
   transform: scale(1);
-}
-.jds-check input:focus-visible + .jds-check__box {
-  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 .jds-check input:disabled ~ * {
   opacity: 0.5;
@@ -182,9 +129,6 @@
 .jds-switch__track {
   width: 40px;
   height: 23px;
-  border-radius: var(--radius-pill);
-  background: var(--surface-3);
-  border: var(--border-w) solid var(--border-strong);
   position: relative;
   transition: var(--transition-control);
   flex: none;
@@ -195,20 +139,10 @@
   left: 2px;
   width: 17px;
   height: 17px;
-  border-radius: 50%;
-  background: var(--white);
-  box-shadow: var(--shadow-sm);
   transition: transform var(--dur-base) var(--ease-out);
-}
-.jds-switch input:checked + .jds-switch__track {
-  background: var(--accent);
-  border-color: var(--accent);
 }
 .jds-switch input:checked + .jds-switch__track .jds-switch__thumb {
   transform: translateX(17px);
-}
-.jds-switch input:focus-visible + .jds-switch__track {
-  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 .jds-switch input:disabled + .jds-switch__track {
   opacity: 0.5;
@@ -221,40 +155,16 @@
   display: inline-flex;
   padding: 3px;
   gap: 2px;
-  background: var(--surface-2);
-  border: var(--border-w) solid var(--border);
-  border-radius: var(--radius-lg);
 }
 .jds-segmented__opt {
   appearance: none;
-  border: none;
-  background: transparent;
   cursor: pointer;
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  color: var(--text-muted);
   padding: var(--space-1) var(--space-3);
   height: 30px;
-  border-radius: var(--radius-md);
   transition: var(--transition-control);
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-}
-.jds-segmented__opt:hover {
-  color: var(--text);
-}
-.jds-segmented__opt[aria-pressed="true"],
-.jds-segmented__opt.is-active {
-  background: var(--surface);
-  color: var(--text);
-  font-weight: var(--weight-semibold);
-  box-shadow: var(--shadow-xs);
-}
-.jds-segmented__opt:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 .jds-segmented__opt svg {
   width: 15px;

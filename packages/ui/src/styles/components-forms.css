@@ -8,3 +8,126 @@
   font-weight: var(--weight-semibold);
   color: var(--text);
 }
+
+/* from apps/web/src/styles/components-forms.css */
+.jds-hint {
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+}
+.jds-hint--error {
+  color: var(--danger-fg);
+}
+
+.jds-input,
+.jds-textarea,
+.jds-select {
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  color: var(--text);
+  background: var(--surface);
+  border: var(--border-w) solid var(--border-strong);
+  border-radius: var(--radius-md);
+}
+.jds-input::placeholder,
+.jds-textarea::placeholder {
+  color: var(--text-faint);
+}
+.jds-input:hover,
+.jds-textarea:hover,
+.jds-select:hover {
+  border-color: var(--ink-3);
+}
+.jds-input:focus,
+.jds-textarea:focus,
+.jds-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+.jds-input[aria-invalid="true"],
+.jds-textarea[aria-invalid="true"] {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px var(--red-soft);
+}
+.jds-input[disabled],
+.jds-textarea[disabled],
+.jds-select[disabled] {
+  background: var(--surface-2);
+  color: var(--text-faint);
+}
+.jds-input--sm {
+  font-size: var(--text-sm);
+}
+
+.jds-inputwrap__icon {
+  color: var(--text-subtle);
+}
+
+.jds-selectwrap__chev {
+  color: var(--text-subtle);
+}
+
+.jds-check {
+  font-size: var(--text-md);
+  color: var(--text);
+}
+.jds-check__box {
+  border: var(--border-w-strong) solid var(--border-strong);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  color: var(--white);
+}
+.jds-check input:checked + .jds-check__box {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.jds-check input:focus-visible + .jds-check__box {
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.jds-switch__track {
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  border: var(--border-w) solid var(--border-strong);
+}
+.jds-switch__thumb {
+  border-radius: 50%;
+  background: var(--white);
+  box-shadow: var(--shadow-sm);
+}
+.jds-switch input:checked + .jds-switch__track {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.jds-switch input:focus-visible + .jds-switch__track {
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.jds-segmented {
+  background: var(--surface-2);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.jds-segmented__opt {
+  border: none;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-muted);
+  border-radius: var(--radius-md);
+}
+.jds-segmented__opt:hover {
+  color: var(--text);
+}
+.jds-segmented__opt[aria-pressed="true"],
+.jds-segmented__opt.is-active {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: var(--weight-semibold);
+  box-shadow: var(--shadow-xs);
+}
+.jds-segmented__opt:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
