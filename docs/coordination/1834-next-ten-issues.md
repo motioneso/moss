@@ -1471,3 +1471,10 @@ Fable 5 independently authored and approved
 no product code was written in planning. The Fable pane is closed. Sonnet build agent
 `issue1872-image-build`, session 7e21e0d0-2b4f-4215-bdf1-317225103cfd, is implementing that plan
 in branch/worktree `1872-fable-plan`. Routine tier; live-path proof remains mandatory before merge.
+
+## Watchdog supervision - 2026-08-23
+
+Lane `issue1872-image-build` is actively implementing. Lane `pr1500-css-forms-2` remained attached
+to a background helper stuck on confirming a format-check exit code for about 35 minutes; the
+coordinator queued an instruction to stop waiting on that helper, finish the bounded verification
+directly, and continue through live-path proof and wrap-up. No new Ben-only decision is open.
