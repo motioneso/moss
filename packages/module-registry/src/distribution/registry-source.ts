@@ -125,8 +125,10 @@ async function verifyIndexSignature(
 
   const result = verifyCatalogBytes(indexBytes, signatureDocument, trustedKeys);
   if (result.verified) return { verified: true, failureReason: null };
-  if (result.reason === "malformed") return { verified: false, failureReason: "signature-malformed" };
-  if (result.reason === "unknown-key") return { verified: false, failureReason: "signature-unknown-key" };
+  if (result.reason === "malformed")
+    return { verified: false, failureReason: "signature-malformed" };
+  if (result.reason === "unknown-key")
+    return { verified: false, failureReason: "signature-unknown-key" };
   return { verified: false, failureReason: "signature-mismatch" };
 }
 

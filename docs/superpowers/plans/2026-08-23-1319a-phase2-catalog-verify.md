@@ -11,6 +11,7 @@
   Task 6), web UI (Phase 3 Task 7), UAT/live-path (Phase 4). No DB migration.
 
 ## Verified against current tree this session (line numbers re-checked, not trusted from the
+
 master plan's ledger — some had drifted)
 
 - `packages/module-registry/src/distribution/registry-source.ts`: `REGISTRY_INDEX_MAX_BYTES` :20,

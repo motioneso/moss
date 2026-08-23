@@ -113,7 +113,8 @@ const fakeFetchSigned = (
     if (url.endsWith("/index.json.sig")) {
       return new Response(JSON.stringify(signature), { status: 200 });
     }
-    if (url.endsWith("/index.json")) return new Response(new Uint8Array(servedIndexBytes), { status: 200 });
+    if (url.endsWith("/index.json"))
+      return new Response(new Uint8Array(servedIndexBytes), { status: 200 });
     if (url.endsWith(".tgz")) return new Response(new Uint8Array(tarballBytes), { status: 200 });
     return new Response("not found", { status: 404 });
   };

@@ -12,10 +12,7 @@ import {
   resolveBuildSourceDir,
   resolveModuleBuildsDir
 } from "@moss/module-registry/node";
-import type {
-  ModuleDistributionDependencies,
-  RegistryEntriesSnapshot
-} from "@moss/settings";
+import type { ModuleDistributionDependencies, RegistryEntriesSnapshot } from "@moss/settings";
 
 import type { ApiServerConfig, CreateApiServerOptions } from "./server.js";
 
