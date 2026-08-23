@@ -1435,3 +1435,12 @@ Ben authorized a diagnosis-only lane for #1872. Agent `issue1872-image-diagnosis
 `1872-service-worker-image-diagnosis`. Scope is reproduce, isolate, and post findings to the issue;
 no implementation or PR is authorized. Any later implementation plan must go through a Fable-model
 review agent before coordinator approval.
+
+## Investigation complete - 2026-08-23, issue #1872
+
+Diagnosis is posted at https://github.com/motioneso/moss/issues/1872#issuecomment-5384238958.
+The shared Service Worker GET handler is the confirmed fix seam; rejected uncached fetches fail for
+same-origin and cross-origin requests alike. No fix was implemented. The diagnosis pane is closed,
+and the issue is back in Backlog pending authorization for a Fable-reviewed implementation plan.
+The clean worktree `1872-service-worker-image-diagnosis` remains because it is one commit ahead of
+`origin/main` (the committed handoff doc); it has no live processes, seeded rows, or untracked work.
