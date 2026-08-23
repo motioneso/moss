@@ -2476,6 +2476,19 @@ activity-pane tests passed. A fresh routine QA agent is active in the new QA tab
 GPT-5.6 Luna at high reasoning. It must post a durable verdict against that exact head; CI
 remains pending and no merge is authorized. [pane w1:pP2]
 
+## Update - 2026-08-23, #1880 production suppression blocker returned
+
+Fresh routine QA for PR #1880 at `6ee85684b6cac256e7aa7f5a32d985a9fcbe99b6` grounded cleanly
+but found a blocking scope/standards violation: four `@ts-expect-error` suppressions remain in
+`packages/email/src/settings/index.tsx` at lines 87, 100, 112, and 126. The approved #1335
+plan requires the repair to stay in tests and standards require explicit boundary contracts.
+The durable QA verdict is posted; the QA pane was closed after matching session
+`01a02df8-833d-7bb1-acb8-69a23435ce43`, and its clean worktree was removed.
+
+The owner was sent the exact finding and instructed to remove all production suppressions,
+repair only the test-side typing, run checks, push, and request fresh QA. No merge is authorized.
+[pane w1:pP2]
+
 ## Update - 2026-08-23, #1877 final QA clean; CI pending
 
 Final routine QA for PR #1877 at rebased head `cc308e616e33a0c81992ff9b1603cdc374e2f0fb`
