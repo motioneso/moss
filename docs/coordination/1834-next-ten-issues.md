@@ -1819,3 +1819,13 @@ existing Option B plan-authority exception for #1105/#899 applies. Reviewer
 `fable5-1335-plan-format`, session `f60b2f85-4329-4378-abdc-0fbf25d1aca6`, is driving in Fable 5
 pane `w1:pNW`; it is read-only and must return a ruling before #1335 changes its plan or claims a
 full gate. [pane w1:pNF]
+
+## Update - 2026-08-23, Fable ruled #1335 plan formatting
+
+Fable 5 ruled **Option B** for #1335: format only
+`docs/superpowers/plans/2026-08-22-1335-tests-tsx-typecheck.md`, verify with
+`git diff --word-diff` that the change is whitespace/punctuation-only, rerun `pnpm format:check`
+and the isolated full `verify:foundation` gate, and preserve all other checks and scope. No
+`prettier-ignore`, other plan edits, or scope change is authorized. The ruling was relayed to
+Codex Luna. Fable's stale snapshot was corrected by current worktree evidence: implementation
+commit `647dd7094` is already present. [pane w1:pNF]
