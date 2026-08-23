@@ -397,4 +397,20 @@ pass "with no settings and no env, the spawn omits the model flag entirely"
 if grep -riE 'sonnet|opus|haiku|fable|gpt-[0-9]' "$repo_root/scripts/fleet/tick.sh" "$repo_root/scripts/fleet/fleetctl.mjs"; then false; fi
 pass "the daemon and the state CLI contain no model names; names are data in settings"
 
+# --- 18. a lane's outstanding question reaches the lane record ----------------------
+
+state="$(new_state)"
+write_record "$state" 801 '{"issue":801,"status":"blocked","tier":"routine","blocked_reason":"needs a schema decision","relays":0}'
+out="$(run_tick "$state")"
+grep -q "DRY: needs-ben fleet-daemon 801: needs a schema decision" <<<"$out"
+grep -q "DRY: fleetctl set 801 question=needs a schema decision questionAskedAt=" <<<"$out"
+pass "filing a question for Ben also copies it onto the lane record"
+
+# --- 18b. an existing question is not re-stamped every tick -------------------------
+
+echo "801: needs a schema decision" > "$tmp/needs-ben/sent/entry-801.msg"
+out="$(run_tick "$state")"
+if grep -q "set 801 question=" <<<"$out"; then false; fi
+pass "a question already on file is not re-stamped, so its clock stays honest"
+
 echo "fleet tick tests passed"

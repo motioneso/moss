@@ -273,6 +273,10 @@ ensure_needs_ben() { # <issue> <reason>
   local issue="$1" reason="$2"
   if [ -z "$(needs_ben_entry_file "$issue")" ]; then
     act needs-ben fleet-daemon "$issue: $reason"
+    # Copy the question onto the lane record so the fleet screen can show it
+    # without reading the needs-ben folder. Written once, when the question
+    # is first filed, so the asked-at clock stays honest.
+    fctl set "$issue" "question=$reason" "questionAskedAt=$(date -Iseconds)"
   fi
 }
 
