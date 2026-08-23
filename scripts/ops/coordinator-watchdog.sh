@@ -21,6 +21,7 @@ coordinator="$(jq -c '.[0]' <<<"$coordinator_rows")"
 
 pane_id="$(jq -r '.pane_id' <<<"$coordinator")"
 revision="$(jq -r '.revision' <<<"$coordinator")"
+agent_status="$(jq -r '.agent_status // "unknown"' <<<"$coordinator")"
 now="$(date +%s)"
 
 last_revision=""
@@ -32,8 +33,8 @@ if [ -f "$STATE_FILE" ]; then
   last_nudge="$(jq -r '.last_nudge // 0' "$STATE_FILE" 2>/dev/null || echo 0)"
 fi
 
-if [ "$revision" != "$last_revision" ]; then
-  # Pane produced new output since the last check -- it's active, reset the clock.
+if [ "$agent_status" = "working" ] || [ "$revision" != "$last_revision" ]; then
+  # Active work may not emit terminal output, so either signal resets the clock.
   last_change="$now"
 fi
 
