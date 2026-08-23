@@ -45,7 +45,9 @@ All numbers below come from actually running candidate configs, not estimates.
     "packages/news/src/web/styles.d.ts",
     "packages/sports/src/web/styles.d.ts"
   ],
-  "exclude": [ /* module-web tests — see "Deliberate exclusion" */ ]
+  "exclude": [
+    /* module-web tests — see "Deliberate exclusion" */
+  ]
 }
 ```
 
@@ -88,10 +90,11 @@ JSX transform with `jsxFactory: "h"` and a deliberately loose global JSX namespa
 the pnpm workspace and cannot resolve `@types/react`; see also the #1418 note in
 `packages/module-web-sdk/src/runtime.ts`). A single tsc project has one `jsx` setting, and any
 test that imports a module screen pulls that screen's source into the program, where `react-jsx`
-+ real `@types/react` mis-checks it: **~200 of the probe's 324 residual errors** are this wall
-(TS2786 "cannot be used as a JSX component", TS2322 `unknown` → `ReactNode`, and their
-implicit-any cascade), landing in module source files that `check:external-modules` already
-checks correctly under their own configs.
+
+- real `@types/react` mis-checks it: **~200 of the probe's 324 residual errors** are this wall
+  (TS2786 "cannot be used as a JSX component", TS2322 `unknown` → `ReactNode`, and their
+  implicit-any cascade), landing in module source files that `check:external-modules` already
+  checks correctly under their own configs.
 
 Therefore `tsconfig.tests.json` **excludes** the tests whose import graph reaches an
 external-module `.tsx`. Grounded list (grep for imports of
