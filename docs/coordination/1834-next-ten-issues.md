@@ -1923,3 +1923,11 @@ wrap-up. [pane w1:pNF]
 evidence log, seven screenshot paths, and bounded real-browser assertions for the existing live
 instance. The live-path gate is now durable; CI remains in progress before independent QA. [pane
 w1:pNN]
+
+## Update - 2026-08-23, #1501 independent QA started
+
+The first QA launch timed out without creating an agent; its empty coordinator-tab shell pane was
+closed. A fresh detached QA worktree at `.claude/worktrees/qa-1501-keyline-global-texture` is now
+running `qa-1501-review` in the dedicated `QA` tab on Codex GPT-5.6 Luna with full unattended
+access, at final PR head `868d52302`. It is grounded to the coordinated-qa procedure and must
+post its compact verdict to PR #1878 before reporting. [pane w1:pNF]
