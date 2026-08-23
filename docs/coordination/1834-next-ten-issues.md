@@ -2260,3 +2260,18 @@ The findings were delivered and acknowledged by the retained #1105 owner
 rerunning the scoped UAT plus isolated gate before updating PR #1877 and requesting fresh QA.
 The review-only QA pane and worktree were reaped after its verdict. PR #1877 remains unmergeable;
 no Ben-only decision is open. [pane w1:pP2]
+
+## Update - 2026-08-23, watchdog reconciliation of routine PRs
+
+PR #1879 (#899) is fully CI green and its prior routine QA found no blocking findings. The branch
+is one commit behind current `origin/main`; the owner was instructed and acknowledged the
+required rebase and push. Fresh QA must review the rebased head before merge.
+
+PR #1878 (#1501) is likewise fully CI green, with prior QA finding no code or invariant blockers
+and live proof already posted. Its branch is one commit behind current `origin/main`; the owner
+was instructed and acknowledged the required rebase and push. Fresh QA must review the rebased
+head before merge.
+
+PR #1877 (#1105) remains blocked on the two posted QA findings and its owner is actively fixing
+them. #1335's isolated runner remains genuinely active with no terminal result yet. No Ben-only
+decision is open, so no Ben ping was needed. [pane w1:pP2]
