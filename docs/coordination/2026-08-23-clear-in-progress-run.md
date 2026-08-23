@@ -88,7 +88,8 @@ None yet.
 
 ## Outstanding escalations
 
-None open.
+- Ben approval of this manifest is pending and recorded in
+  `docs/coordination/AWAITING-BEN.md`; recommendation is approve as written.
 
 ## Reaped sessions
 
