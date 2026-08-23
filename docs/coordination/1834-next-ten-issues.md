@@ -1879,3 +1879,14 @@ and no failure sentinel; the lane is waiting for the required final verdict. The
 #1105's full gate has cleared the previously blocked sections and reports `test:uat-seed` green
 for 12 files and 29 tests. Its long integration phase remains active with ongoing runner writes
 and no failure sentinel; the exclusive provisioning lock is therefore preserved. [pane w1:pNQ]
+
+## Update - 2026-08-23, watchdog sweep and #1874 resumed
+
+Fresh Herdr lists confirm this session remains the sole `Coordinator`, with coordinator lock
+session `01a02d45-dc51-79b0-8ec1-91c0784f68c2`; the outgoing coordinator session is absent. #1501
+has committed `868d52302` with exactly its eight scoped files and is running its final pre-push
+checks. #1105 remains active in integration after 12 files / 29 seed tests passed; #899 and
+#1335 remain queued behind the exclusive gate lock. #1874 had ended on a wait declaration, so
+the coordinator sent a verified resume prompt to `issue1872-relay6`; it must continue the fresh
+gate when the lock frees and return an exact sentinel result. No Ben-only decision is currently
+open in `AWAITING-BEN.md`. [pane w1:pNF]
