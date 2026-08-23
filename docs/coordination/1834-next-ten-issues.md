@@ -1743,3 +1743,10 @@ The #1874 worktree still had predecessor gate PID `3341119` alive with no log wr
 seconds while relay 6 was running fresh checks. The coordinator sent relay 6 the exact-PID
 collision warning; it must verify that PID is abandoned and stop only it if stale, preserving its
 own current process before continuing. [pane w1:pNF]
+
+## Update - 2026-08-23, stale #1874 gate cleared
+
+The abandoned predecessor gate was verified as parent PID `3341119` with child PID `3341124`,
+both with no progress for over 12 minutes. Only those exact processes were terminated; the gate
+reported `DONE rc=143`. Relay 6 was notified and is continuing its own checks and delivery steps.
+[pane w1:pNF]
