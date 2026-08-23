@@ -1851,3 +1851,10 @@ running. #899's password-prompt run was stopped cleanly (`rc=143`); its retry ha
 unset and is waiting on the shared gate-database lock without entering any secret. #1105's gate
 continues through integration checks. #1501's integration Vitest process is active, so its gate
 is preserved; #1874 remains sequenced behind its exit before another gate attempt. [pane w1:pNF]
+
+## Update - 2026-08-23, #1335 gate sentinel re-requested
+
+#1335's post-format runner returned no live gate state after its initial launch, so it is not
+accepted as a completion verdict. The lane was instructed to use the runner's required fresh
+`scripts/run-gate.sh start` path, wait for the sentinel and exact return code, and keep the
+authorized plan-only change isolated. No PR/QA step will start from the missing verdict. [pane w1:pNF]
