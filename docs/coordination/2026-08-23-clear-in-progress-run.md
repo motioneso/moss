@@ -19,7 +19,7 @@ durable live-path proof comment.
 
 | Spec | Issue | Tier | Status | Agent name | Pane | Branch | PR |
 | ---- | ----- | ---- | ------ | ---------- | ---- | ------ | -- |
-| `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319-A (concrete child of #1470) | security | PR open; local gate green; initial Opus security QA running; held behind #1883/#1884 | `catalog-verify-1319a-2` + `qa-1897-catalog-security` | resolve live | `build/1319a-catalog-verify` | #1897 |
+| `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319-A (concrete child of #1470) | security | PR open; local gate green; initial Opus QA RED only on pending CI + deferred matched UAT, with no blocking code finding; held behind #1883/#1884 | `catalog-verify-1319a-2` | resolve live | `build/1319a-catalog-verify` | #1897 |
 | `docs/superpowers/specs/2026-08-19-926-food-day-view-components-and-targets.md` | #1737 (concrete child of #926) | routine | closed/Done — Ben verified working in production; lane cancelled/reaped | reaped | — | deleted | — |
 | `docs/superpowers/specs/2026-08-23-1794-release-notes-protected-main.md` | #1794 | sensitive | initial QA green; CI pending; merge last; final integrated QA + real merged-PR proof pending | `build_1794` | Codex subagent | `build/1794-release-notes-protected-main` | #1896 |
 | `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | PR open; local gate green; fresh relay building branch-installed real-UI proof; security QA not started | `build-1883-livepath2` | resolve live | `build/1883-vault-mcp-errors` | #1892 |
@@ -108,6 +108,13 @@ hand-merging it.
   required post-merge acceptance proof must come from the reserved closing coordination PR.
   Verdict: `https://github.com/motioneso/moss/pull/1896#issuecomment-5387556732`. Initial QA
   pane/worktree reaped after verdict.
+- PR #1897 initial security QA: RED / merge-ready NO at exact head `5606185fa`; audit preflight
+  exit 0, focused unit evidence 18/18 exit 0, and no blocking code finding. Foundation CI was
+  still pending and required matched module-install UAT evidence was absent because the lane is
+  held for ordered rebase behind #1883/#1884. Verdict:
+  `https://github.com/motioneso/moss/pull/1897#issuecomment-5387605467`. The build owner was briefed
+  to rebase, provide matched UAT, and return for fresh exact-head Opus QA; initial QA pane/worktree
+  reaped after verdict.
 
 ## Merge digest
 
@@ -226,9 +233,10 @@ layout. Current live state after adoption:
   Sonnet in the same worktree. Its approved implementation remains the UAT-only preload that
   points Transformers at closed port 65534 and proves the fixed safe error end to end; do not add
   a product environment variable or production config surface.
-- `qa-1897-catalog-security` is still running the initial Opus adversarial review. Do not merge
-  #1897 from that initial review: after earlier ordered merges it still needs a rebase, fresh
-  exact-head Opus QA, and Ben's explicit security-tier approval.
+- Initial Opus QA for #1897 posted RED only on unfinished CI and absent deferred matched UAT; it
+  found no blocking code issue and its pane/worktree are reaped. Do not merge #1897 from that
+  initial review: after earlier ordered merges it still needs a rebase, matched module-install UAT,
+  fresh exact-head Opus QA, and Ben's explicit security-tier approval.
 - `build-1884-relay` and `catalog-verify-1319a-2` are done but remain alive because their PRs are
   unmerged. Keep them available for ordered rebases/fixes. The unrelated fleet-daemon worktrees
   and agents remain explicitly outside this run and must not be tracked, QA'd, or reaped.
