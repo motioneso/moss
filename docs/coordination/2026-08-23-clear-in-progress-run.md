@@ -11,7 +11,7 @@ immutable session id.
 require independent Opus QA and Ben's explicit merge approval. UI/live features also require a
 durable live-path proof comment.
 **Relay policy:** Codex successors only for the remainder of this run.
-**merges_since_relay:** 0
+**merges_since_relay:** 1
 
 > GitHub project 2 is source of truth. This manifest holds only operational state.
 
@@ -24,7 +24,7 @@ durable live-path proof comment.
 | `docs/superpowers/specs/2026-08-23-1794-release-notes-protected-main.md` | #1794 | sensitive | plan `1e8c41906` approved; Luna-high builder implementing; merge last | `build_1794` | Codex subagent | `build/1794-release-notes-protected-main` | — |
 | `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | implementation `db1e5c1e7`; full gate and wrap-up running | `build-1883-vault-errors-2` | resolve live | `build/1883-vault-mcp-errors` | — |
 | `docs/superpowers/specs/2026-08-23-1884-weather-settings-card.md` | #1884 | routine | relay driving live UAT, gate, and wrap-up | `build-1884-relay` | resolve live | `build/1884-weather-settings` | — |
-| issue #1885 | #1885 | routine | QA green; waiting on final CI check | reaped | — | `fix/1885-coordinator-watchdog` | #1886 |
+| issue #1885 | #1885 | routine | merged `91aa6ad84`; issue closed/Done | reaped | — | `fix/1885-coordinator-watchdog` | #1886 |
 
 ## Scope decisions
 
@@ -93,8 +93,21 @@ hand-merging it.
 
 - PR #1886 routine QA: GREEN at exact head `3e3891930`; audit preflight and focused regression
   test exit 0, no shell-safety or invariant finding, no live-UI gate. Verdict posted at
-  `https://github.com/motioneso/moss/pull/1886#issuecomment-5387189864`; merge remains blocked only
-  on the pending GitHub `Verify foundation and app` check. QA pane/worktree reaped after verdict.
+  `https://github.com/motioneso/moss/pull/1886#issuecomment-5387189864`; required CI later passed
+  (`Verify foundation and app` 30m56s, `CI gate` exit 0). QA pane/worktree reaped after verdict.
+
+## Merge digest
+
+- PR #1886 (`routine`) merged as `91aa6ad84`: active Codex coordinators no longer receive false
+  idle nudges; genuinely idle coordinators retain the 900-second cadence. Shell syntax, focused
+  regression test, live oneshot service run, independent QA, and required CI were green. The
+  service runs the repo script directly, so no daemon reload or timer restart was needed.
+
+## Retained worktrees
+
+- `~/Jarv1s/.claude/worktrees/1885-coordinator-watchdog` is clean with no live process or pane,
+  but the mandatory first reap check reports `origin/main..HEAD = 1` after squash merge. Kept per
+  the four-gate rule; do not delete until that gate reads zero.
 
 ## Plan approvals
 
@@ -169,7 +182,6 @@ session remains separately named `watchdog-timer-fix` and owns no fleet work. #1
 commit `db1e5c1e7` is in full gate/wrap-up; #1884 relay is finishing live UAT/gates; #1319-A
 relay is running gate/wrap-up from Task B commit `26ec5c458`. The one-time #1319-A worktree-integrity
 warning remains stop-the-line on recurrence. Watchdog fix commit `246bd29f4` was replayed cleanly
-onto issue #1885 / PR #1886; independent QA is green and final CI is pending. No merges occurred
-during adoption. Feature merge order remains #1883, #1884, #1319-A, #1319-B, #1794; #1737 is
-already closed/Done. PR #1886 is an independent coordinator-tooling hotfix and may merge after its
-own green QA.
+onto issue #1885 / PR #1886 and merged as `91aa6ad84` after green QA and required CI. No feature
+merges occurred during adoption. Feature merge order remains #1883, #1884, #1319-A, #1319-B,
+#1794; #1737 is already closed/Done.
