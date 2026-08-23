@@ -1,0 +1,112 @@
+name: Release image
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release tag (vX.Y.Z)
+        required: true
+        type: string
+      source_sha:
+        description: Full main commit SHA already published as edge
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: release-image
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/motioneso/moss
+
+jobs:
+  release:
+    name: Promote tested image
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify release source
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]             || { echo "::error::version must match vX.Y.Z"; exit 1; }
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]             || { echo "::error::source_sha must be a full lowercase commit SHA"; exit 1; }
+
+          comparison=$(gh api "repos/$GITHUB_REPOSITORY/compare/$SOURCE_SHA...main" --jq .status)
+          [[ "$comparison" == "ahead" || "$comparison" == "identical" ]]             || { echo "::error::$SOURCE_SHA is not on main"; exit 1; }
+
+          edge_manifest=$(docker buildx imagetools inspect "$IMAGE:edge" --format '{{json .Manifest}}')
+          edge_digest=$(jq -er .digest <<< "$edge_manifest")
+          provenance=$(docker buildx imagetools inspect "$IMAGE:edge" --format '{{json .Provenance}}')
+          jq -e --arg sha "$SOURCE_SHA"             '([.. | objects | .["vcs:revision"]? // empty] | unique) == [$sha]'             <<< "$provenance" >/dev/null             || { echo "::error::edge provenance does not match $SOURCE_SHA"; exit 1; }
+
+          version_exists=false
+          if version_manifest=$(docker buildx imagetools inspect "$IMAGE:$VERSION"             --format '{{json .Manifest}}' 2>/dev/null); then
+            version_digest=$(jq -er .digest <<< "$version_manifest")
+            [[ "$version_digest" == "$edge_digest" ]]               || { echo "::error::$VERSION already points to a different digest"; exit 1; }
+            version_exists=true
+          fi
+
+          tag_exists=false
+          if tag_ref=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$VERSION" 2>/dev/null); then
+            jq -e --arg sha "$SOURCE_SHA"               '.object.type == "commit" and .object.sha == $sha'               <<< "$tag_ref" >/dev/null               || { echo "::error::Git tag $VERSION already points elsewhere"; exit 1; }
+            tag_exists=true
+          fi
+
+          echo "edge_digest=$edge_digest" >> "$GITHUB_OUTPUT"
+          echo "tag_exists=$tag_exists" >> "$GITHUB_OUTPUT"
+          echo "version_exists=$version_exists" >> "$GITHUB_OUTPUT"
+
+      - name: Promote image without rebuilding
+        env:
+          EDGE_DIGEST: ${{ steps.source.outputs.edge_digest }}
+          VERSION: ${{ inputs.version }}
+          VERSION_EXISTS: ${{ steps.source.outputs.version_exists }}
+        run: |
+          set -euo pipefail
+          tags=(--tag "$IMAGE:stable")
+          if [[ "$VERSION_EXISTS" != "true" ]]; then
+            tags+=(--tag "$IMAGE:$VERSION")
+          fi
+          docker buildx imagetools create "${tags[@]}" "$IMAGE@$EDGE_DIGEST"
+
+          for tag in "$VERSION" stable; do
+            digest=$(docker buildx imagetools inspect "$IMAGE:$tag"               --format '{{json .Manifest}}' | jq -er .digest)
+            [[ "$digest" == "$EDGE_DIGEST" ]]               || { echo "::error::$tag resolved to $digest, expected $EDGE_DIGEST"; exit 1; }
+          done
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          TAG_EXISTS: ${{ steps.source.outputs.tag_exists }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "GitHub release $VERSION already exists."
+          elif [[ "$TAG_EXISTS" == "true" ]]; then
+            gh release create "$VERSION" --verify-tag --generate-notes --title "$VERSION"
+          else
+            gh release create "$VERSION" --target "$SOURCE_SHA" --generate-notes --title "$VERSION"
+          fi
