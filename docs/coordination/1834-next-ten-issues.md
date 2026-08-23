@@ -1642,3 +1642,21 @@ Fresh Herdr resolution confirmed successor `issue1872-relay5`, session
 session `d2a048bd-2e33-48f2-af01-937c1c56a99f`, was then resolved fresh and closed. PR #1874
 remains blocked on its posted QA findings until the owner finishes, CI is green, fresh security QA
 is green and posted, and Ben signs off. [pane w1:pNF]
+
+## Update - 2026-08-23, overnight intake expanded
+
+Ben asked to queue #1335, #899, and #1105 through completion overnight, with blockers routed to
+Fable and Fable's rulings controlling. All three issues are open and have task records, but no
+standalone approved spec was found in `docs/superpowers/specs/`, so Fable 5 planning gates are
+running before implementation:
+
+- #1335: `fable5-1335-plan`, session `fab5b547-ead6-4b83-9aaf-473d42fe77c7`, pane `w1:pNJ`,
+  branch/worktree `1335-tests-tsx-typecheck`.
+- #899: `fable5-899-plan`, session `267cfda1-eeaa-40e9-be91-9b831350389f`, pane `w1:pNK`,
+  branch/worktree `899-news-mocked-e2e`.
+- #1105: `fable5-1105-plan`, session `0379eee9-0de6-40a6-84c6-73c7ea40e589`, pane `w1:pNM`,
+  branch/worktree `1105-seeded-chat-uat`.
+
+No implementation lane starts until Fable grounds or resolves the missing-spec gate. Main CI is
+currently in progress; build agents will use Codex GPT-5.6 Luna at high effort with isolated
+worktrees and unattended permissions once the gate is clear. [pane w1:pNF]
