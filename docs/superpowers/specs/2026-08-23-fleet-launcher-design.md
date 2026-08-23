@@ -18,12 +18,15 @@ with arrow keys and Enter for detail — taking inspiration from Claude Code's a
 
 ## Shape
 
-Three programs with one direction of data flow.
+Three programs. Status flows one way; actions take a separate path.
 
 ```
-launcher  ──starts──>  daemon  ──writes──>  state folder  ──read by──>  viewer
-   │                                              ▲                       │
-   └──writes settings──────────────────────────────┘        writes pause/rescue markers
+  launcher --starts--> daemon --writes--> state folder --read by--> viewer
+      |                                        ^                       |
+      +--writes settings-----------------------+                       |
+                                                                       |
+                     running agents <---- pause / rescue --------------+
+                     (via the terminal workspace manager)
 ```
 
 **The daemon** already exists: `scripts/fleet/tick.sh` on a systemd timer, with
@@ -35,21 +38,26 @@ file beside the state folder, and starts the daemon as a background service. On 
 the settings, skips the questions, and confirms the daemon is alive.
 
 **The viewer** is the screen. It reads the state folder on a short interval and redraws. It never
-speaks to the daemon directly.
+speaks to the daemon process; when it acts, it addresses the running agents directly.
 
-### Why the viewer only reads
+### What the viewer may and may not do
 
-Three consequences, all of them the point:
+The viewer reads everything it displays from the state folder. It never queries GitHub, never
+inspects worktrees, never talks to the daemon process.
 
-- Closing the viewer cannot affect the run. The daemon keeps ticking; `q` exits the window, not the
-  fleet.
-- The viewer is testable without a fleet. Point it at a directory of fixture lanes and assert on
-  what it draws.
-- There is no protocol to design, version, or debug between the two.
+Two consequences, both the point: closing the viewer cannot affect the run, and the whole screen can
+be tested by pointing it at a directory of fixture lanes.
 
-The two actions are the deliberate exception, and they stay one-directional: pause writes a marker
-file that the daemon reads on its next tick. Rescue calls the judgment model in the viewer's own
-process and only writes a marker once the user accepts.
+It is not, however, read-only. Pause and rescue act on live agents through the terminal workspace
+manager (`herdr`), which is how every other tool on this box addresses a running agent. The viewer
+holds no other write path: it does not edit lane records, does not enable merges, and does not
+change settings apart from the deputy toggle.
+
+**Racing the daemon.** The daemon ticks every minute and may act on the same lane in the same
+minute a human does. Both actions are messages to an agent rather than edits to shared state, so the
+worst case is an agent receiving a pause and a daemon instruction close together. To keep this
+legible rather than merely unlikely, every viewer action is written to that lane's log with an
+explicit human marker, so the morning board shows who did what.
 
 ## Implementation choice
 
@@ -63,20 +71,47 @@ that directory to another machine yields a working program with no ties to the M
 
 Location: `scripts/fleet/launcher/`. Not imported by the app, not part of its dependency graph.
 
+## Two units, in order
+
+This is two pieces of work, and the second cannot be built first.
+
+**Unit one — teach the daemon what the launcher needs.** Today the daemon takes two settings from
+environment variables and holds the rest as fixed numbers in the script. It has no per-lane pause,
+no concept of effort, one build model for everything, and it does not copy a lane's outstanding
+question into the lane record. Every one of those is something the screens below assume.
+
+**Unit two — the launcher and viewer**, built against a daemon that has them.
+
+Building the screen first would mean building against state nothing writes. Each unit gets its own
+issue and its own plan.
+
+### Unit one in detail
+
+| Change               | Today                                                  | After                                                                                     |
+| -------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| Settings             | Environment variables plus fixed numbers in the script | Reads `settings.json` from the state folder; environment still wins, for the systemd unit |
+| Build model          | One model for every lane                               | A model and effort level per kind of work: routine, sensitive, security-touching          |
+| Pause                | Only a switch that stops the whole fleet               | A lane may be paused; the daemon skips it and does not spawn for it                       |
+| Memory floor         | None                                                   | Refuses to start an agent below a floor of free memory, logs why, carries on              |
+| Outstanding question | Only a one-line blocked reason in the lane record      | The full question and when it was asked, copied into the lane record                      |
+
+That last one keeps the viewer honest: without it the screen would have to read the folder that
+pings Ben as well as the state folder, and the single-source-of-truth claim would be false.
+
 ## Setup flow
 
 Six questions, each with a working default, so pressing Enter six times produces a running fleet.
 Answers are written to `$JARV1S_FLEET_STATE/settings.json` (default
-`~/.local/state/jarv1s-fleet/settings.json`).
+`~/.local/state/jarv1s-fleet/settings.json`), which unit one teaches the daemon to read.
 
-| #   | Question                              | Setting             | Default     |
-| --- | ------------------------------------- | ------------------- | ----------- |
-| 1   | Which command makes judgment calls?   | `judgeCmd`          | `claude -p` |
-| 2   | Which models build, per kind of work? | `buildModels`       | see below   |
-| 3   | How many lanes at once?               | `laneCap`           | 5           |
-| 4   | How many agent starts tonight?        | `spawnBudget`       | 30          |
-| 5   | Is the deputy on?                     | `deputyEnabled`     | on          |
-| 6   | If on, how long does it wait for you? | `deputyWaitSeconds` | 1200        |
+| #   | Question                                       | Setting             | Default     |
+| --- | ---------------------------------------------- | ------------------- | ----------- |
+| 1   | Which command makes judgment calls?            | `judgeCmd`          | `claude -p` |
+| 2   | Which models build, per kind of work?          | `buildModels`       | see below   |
+| 3   | How many lanes at once?                        | `laneCap`           | 5           |
+| 4   | How many agent starts tonight?                 | `spawnBudget`       | 30          |
+| 5   | Is the deputy on?                              | `deputyEnabled`     | off         |
+| 6   | How long does it wait for you before deciding? | `deputyWaitSeconds` | 1200        |
 
 Question 1 asks for a command, not a model name, so pointing the fleet at another provider is a
 one-line change. This is the provider-agnostic rule from `CLAUDE.md`, which Ben extended to ops
@@ -96,20 +131,41 @@ sensitive, or security-touching; the setup maps a model and an effort level onto
 
 All three may name the same model. Effort is passed through only where the provider supports it.
 
-After the questions the launcher prints the resolved settings and asks once whether to start.
-Re-running setup later is a flag on the launcher and a key on the viewer's settings screen.
+**Where model names are allowed to appear.** The rule is that no model name is compiled into the
+fleet's logic. Names in a settings file the user edits, and in the seed defaults the setup screen
+offers on first run, are data. The test is exact: no model name may appear in the daemon or in the
+viewer's own code. The seed defaults live in one exported table in the launcher, and a test asserts
+that table is the only place they occur.
 
-### Not a setting
+**Lane and budget numbers.** The approved daemon design said 3 lanes and 12 agent starts. This
+raises them to 5 and 30 — Ben's decision on 2026-08-23, made after measuring the box: an agent
+session costs around 270 MB, so the machine was never the constraint. The limit is how many pull
+requests are worth reviewing in one morning.
 
-The deputy may never merge work that has not been proven to run on a live instance. This is the
-live-path gate from `DEVELOPMENT_STANDARDS.md`, enforced in `tick.sh` as a hard floor. It does not
-become configurable.
+### The deputy toggle
+
+The daemon today gates the deputy behind a file carrying an explicit expiry: no file, no expiry, or
+a past expiry all mean off. That design fails closed by construction — forget about it and it turns
+itself off overnight.
+
+Ben's ruling on 2026-08-23 is a plain on/off switch with no time element, flipped from the setup
+screen or from the viewer. Recorded honestly: this trades a switch that expires on its own for one
+that stays as last set, so leaving it on means it stays on until turned off.
+
+Two things keep that safe enough. The default is off, so pressing Enter through setup never enables
+a stand-in. And the viewer shows the deputy's state in the header at all times, on every tab, so an
+enabled deputy is never invisible.
+
+The hard floor is unchanged and non-negotiable: the deputy may not merge work that has not been
+proven to run on a live instance, and may not touch production, delete data, rewrite history,
+disable checks, or exceed the spawn budget. Already enforced in the daemon; not configurable.
 
 ### Memory floor
 
-The daemon gains one rail not previously specified: it refuses to start a new agent when free
-system memory falls below a floor, logs the refusal in plain English, and carries on. Sized against
-measurement rather than guesswork — an agent session costs roughly 270 MB resident.
+The daemon refuses to start a new agent when free system memory is below **4 GB**, logs the refusal
+in plain English, and continues its tick. Sized against measurement: an agent session costs roughly
+270 MB resident, so the floor leaves room for the lane cap several times over while still stopping
+well short of swap.
 
 This is not protection against the fleet. On 2026-08-23 an unrelated process on the box was found
 holding 18 GB, a third of system memory, and the fleet should degrade rather than push the machine
@@ -132,9 +188,16 @@ One line per lane: issue number, title, and a short plain-English status — "bu
 checks", "review found problems", "waiting on you". Lanes needing a human are visually distinct.
 
 **Done Tonight is run-scoped, not status-scoped.** It is not the set of lanes whose stored status is
-`done`; it is the set that reached `done` after this run began. The launcher writes a run-start
-timestamp into the state folder and the viewer filters on it. Without this the tab becomes an
-ever-growing all-time list and stops answering the question it exists to answer.
+`done`; it is the set that reached `done` since the daemon was last started. The daemon writes its
+start time into the state folder when it comes up, and the viewer filters on that.
+
+The distinction matters at 7am: if the filter were "since this window opened", reopening the viewer
+in the morning would show an empty list at exactly the moment the night's work is what you want to
+see. Opening and closing the viewer changes nothing; only restarting the daemon starts a new night.
+
+**Ready shows an approximate order.** The daemon walks lane files in whatever order the filesystem
+returns them and promises no ordering, so the tab is labelled as the likely next few rather than a
+queue. Committing the daemon to a real order is possible but is not part of this work.
 
 ### The detail view
 
@@ -152,24 +215,43 @@ Escape returns to the list.
 
 ### Actions
 
-Both keys exist only in the detail view, where the target is visible and unambiguous.
+Both keys exist only in the detail view, where the target is visible and unambiguous. Both act
+through the terminal workspace manager rather than by editing state, and both write what they did to
+the lane's log, marked as a human action.
 
-**`p` — pause.** Confirms, then writes a pause marker on the lane. The daemon leaves it alone from
-its next tick. Pressing again resumes.
+**`p` — pause.** Confirms, then sends the lane's running agent a message telling it to stop at its
+next safe point and wait, and marks the lane paused so the daemon skips it. Pressing again resumes:
+the lane is unmarked and the agent is told to carry on.
 
-**`r` — rescue.** Gathers the lane's status, failing check, and recent log, sends them to the
-configured judgment model with cold context, and displays what comes back: a plain reading of what
-went wrong plus a suggested next move. Nothing is written until the user chooses — accept, pause
-instead, or dismiss. The screen stays responsive while the call is in flight.
+Pause is cooperative, not a kill. An agent mid-edit finishes what it is doing and then stops, which
+is the behaviour you want at 1am — a hard stop mid-commit leaves a worse mess than the problem you
+were trying to interrupt. If the lane has no running agent, pausing only sets the marker, which is
+enough to stop the daemon spawning for it.
 
-Rescue is the same judgment call the daemon already makes autonomously. Exposing it as a key does
-not add a new capability; it adds a way to invoke that capability on demand, with a preview.
+**`r` — rescue.** Two steps, with a decision in between.
+
+First it gathers the lane's story — current status, failing check, recent log, the outstanding
+question if there is one — and sends it to the configured judgment model with cold context. The
+screen stays responsive while the call is in flight. What comes back is displayed: a plain reading
+of what went wrong, and a suggested next move.
+
+Then you choose. Accept starts a fresh rescue agent on that lane through the workspace manager,
+carrying the model's reading as its brief. Pause instead does the pause above. Dismiss writes
+nothing.
+
+Nothing is spawned before you accept. That is the whole reason rescue is two steps: the same
+judgment call the daemon already makes on its own, but with a preview, because a keypress at 1am
+should not start real work sight unseen.
+
+Rescue obeys the same hard floor as the deputy. If the model's suggestion would require merging
+unproven work, touching production, or any other floor action, the viewer refuses to act on it and
+says so.
 
 ## Out of scope
 
 Named so that their absence is a decision rather than an oversight:
 
-- No chat with the daemon or with agents
+- No chat with the daemon or with agents. Pause and rescue send fixed messages, not free text
 - No editing issues, no starting new work from the screen
 - No history beyond the current run
 - No mouse support
@@ -187,25 +269,44 @@ Named so that their absence is a decision rather than an oversight:
 
 ## Testing
 
-The viewer's read-only design is what makes it testable: render it against a fixture state
-directory and assert on output. No fleet, no network, no cost.
+The viewer displays only what it reads from a folder, so the screens can be tested by rendering
+against fixture state. No fleet, no network, no cost.
 
 Viewer:
 
 - In Progress is the tab on open
-- A lane awaiting a human is marked
-- Done Tonight excludes a lane completed before the run-start timestamp
+- A lane awaiting a human is marked, and the outstanding question appears in its detail view
+- Done Tonight excludes a lane completed before the daemon's start time, and is unaffected by
+  opening and closing the viewer
 - Arrows move selection and tabs; Enter opens detail; Escape returns
-- Both action keys prompt for confirmation before writing anything
-- A malformed lane file does not take down the screen
+- A malformed lane file shows an error on its row and does not take down the screen
+- The deputy's state is visible in the header on every tab
+
+Actions, with the workspace manager stubbed:
+
+- Both keys prompt for confirmation and do nothing when declined
+- Pause messages the running agent, marks the lane, and logs the action as human
+- Pause on a lane with no running agent still marks it, and does not error
+- Rescue shows the model's answer before anything is spawned, and dismissing spawns nothing
+- Rescue refuses a suggestion that would cross the hard floor
+- A failed or slow model call leaves the lane untouched and says so
 
 Setup:
 
 - Enter through every question yields valid, complete settings
+- The deputy is off after an all-defaults setup
 - A second launch skips the questions
-- No provider or model name is hard-coded anywhere in the launcher
+- No model name appears in the daemon or in the viewer's code, only in the launcher's seed table
 
-The rescue model call is stubbed in tests.
+Unit one, against the daemon:
+
+- The daemon reads the settings file, and an environment variable still overrides it
+- A paused lane is skipped and spawns nothing
+- Below the memory floor, no agent starts and the refusal is logged
+- Each kind of work spawns on its configured model and effort
+- A lane's outstanding question reaches the lane record
+
+The rescue model call is stubbed throughout.
 
 ## Manual
 
@@ -229,5 +330,20 @@ portion of #1895; that issue keeps its live-proof requirement.
   launcher self-contained, which makes extraction cheap but does not perform it. The cheapest moment
   to move is before #1895 writes a runbook around these paths.
 - **Ordering against #1895.** Task C is end-to-end live proof — the gate on whether the daemon can
-  be trusted to run unattended. The launcher makes it pleasant to watch; the live proof makes it
-  safe to leave. Not yet ruled on.
+  be trusted to run unattended. Unit one below touches the daemon's spawning and settings, so doing
+  it before the live proof means proving a daemon that is about to change. Sequencing unit one,
+  then live proof, then unit two is the coherent order, but this has not been ruled on.
+
+## Decisions recorded here
+
+Made by Ben on 2026-08-23, in this design conversation, and captured so they are not relitigated:
+
+| Decision                                                        | Note                                                                                                    |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Built with Ink                                                  | Chosen over a hand-rolled renderer for the tab and list plumbing                                        |
+| Launcher starts the daemon, then the daemon survives on its own | Closing the viewer does not stop the fleet                                                              |
+| Three tabs, In Progress by default                              | Ready and Done Tonight alongside                                                                        |
+| Rescue is in the first version                                  | Reviewed as the least-defined piece; kept and specified rather than cut                                 |
+| Pause messages the running agent                                | Cooperative stop through the workspace manager, not a marker the agent never sees                       |
+| Deputy is a plain on/off switch                                 | No expiry, contrary to the daemon's current fail-closed file; default off, always visible in the header |
+| 5 lanes, 30 agent starts                                        | Raised from 3 and 12 after measuring the box                                                            |
