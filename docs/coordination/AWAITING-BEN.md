@@ -15,16 +15,6 @@ The 2026-08-05 transcript audit found 216 idle hours blocked on Ben, mostly on q
 never recorded — an overnight coordinator sat 15h on a question while this file said nothing was
 pending. Silent waiting is the failure mode this protocol exists to kill.
 
-## 2026-08-23 — approve clear-in-progress coordination manifest
-
-The run cannot launch build lanes until Ben explicitly approves
-`docs/coordination/2026-08-23-clear-in-progress-run.md`, per the coordinate-skill Phase 0 gate.
-Options: approve the manifest as written, or request a specific scope/tier/order change.
-Recommendation: approve as written; the one-shot Opus collision map found no source or migration
-collisions, #1319 is split serially, #1794 is held to wave 2/merged last, and the #1737 real-chat
-credential preflight passed. Current `main` CI is still running and remains a separate hard spawn
-gate.
-
 <!-- Resolved 2026-08-19: PR #1703 (calendar rebuild) and PR #1717 (all-day scheduling) both merged.
 Ben ruled "let's just merge all of these, I'll test in prod" — live-path proof on the dev instance
 is no longer the gate for this batch. -->

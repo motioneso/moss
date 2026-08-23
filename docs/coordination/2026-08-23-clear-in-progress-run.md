@@ -6,7 +6,7 @@
 `agent_session.value` in `herdr agent list`). Exactly one live agent named `coordinator` whose
 session id matches this anchor holds authority. Pane ids are ephemeral; resolve fresh by name and
 immutable session id.
-**Approval authority:** Ben. No build lane launches until Ben explicitly approves this manifest.
+**Approval authority:** Ben. Manifest explicitly approved on 2026-08-23.
 **Merge policy:** autonomous after exact-head green QA for routine/sensitive lanes; security lanes
 require independent Opus QA and Ben's explicit merge approval. UI/live features also require a
 durable live-path proof comment.
@@ -88,8 +88,7 @@ None yet.
 
 ## Outstanding escalations
 
-- Ben approval of this manifest is pending and recorded in
-  `docs/coordination/AWAITING-BEN.md`; recommendation is approve as written.
+None open.
 
 ## Reaped sessions
 
