@@ -2107,3 +2107,12 @@ failure sentinel. #1874's isolated gate is `DONE rc=0` and its fresh Opus securi
 actively running. #1501's Verify foundation and app check is now green; only image publication
 remains pending on PR #1878. No Ben-only decision is currently open; security-tier sign-off for
 #1874 will be logged and pinged when its durable QA verdict and CI are ready. [pane w1:pNF]
+
+## Update - 2026-08-23, gate prompt recovery
+
+#1105's fresh gate unexpectedly remains at a private-key `Password:` prompt; no secret was
+entered. The coordinator sent the owner a verified instruction to stop only that runner, confirm
+`DONE rc=143`, and restart with `JARVIS_UAT_REAL_CHAT_TOKEN_FILE` unset. #1335's corresponding
+attempt ended `DONE rc=143`; its owner is actively restarting the isolated gate with the trigger
+absent. #899 remains alive in integration with no failure sentinel. #1874's Opus security review
+and #1501's image-publication check remain in flight. [pane w1:pNF]
