@@ -2041,3 +2041,10 @@ screenshots contrary to the current bounded screenshot standard. The findings we
 verified to `codex-1105-build`, which is back on the lane for a scoped fix, fresh checks, updated
 proof, and re-QA. Its QA pane/worktree were closed and removed after the verdict; PR CI remains
 pending. [pane w1:pNF]
+
+## Update - 2026-08-23, consumed QA lanes reaped
+
+The consumed QA worktrees and panes for #1501 and #1105 were closed and removed after their
+verdicts; both build worktrees remain retained because neither PR has merged. #1501 remains
+blocked only by its pending Verify foundation and app CI job. #1105 is back in scoped remediation
+after its QA RED verdict. [pane w1:pNF]
