@@ -5,7 +5,7 @@
 **Approval authority:** Fable holds delegated overnight run-scope and plan approval authority. Durable scope verdict: `~/Jarv1s/fable-next-run-verdict.md` — APPROVE.
 **Merge policy:** autonomous after exact-head green QA for both routine lanes; #1497 also requires live-path proof.
 **Relay threshold:** routine/sensitive `merges_since_relay` ≥ 2, context-meter warning, or compaction summary. No deferral.
-**merges_since_relay:** 0
+**merges_since_relay:** 1
 
 > GitHub project 2 is source of truth. This manifest holds only operational state.
 
@@ -14,7 +14,7 @@
 | Spec | Issue | Tier | Status | Agent name | Pane | Branch | PR |
 | ---- | ----- | ---- | ------ | ---------- | ---- | ------ | -- |
 | `docs/superpowers/specs/2026-08-10-1137-robustness-followups.md` | #1517 | routine | closed — no-op, already satisfied | reaped | — (reaped) | (branch deleted) | — |
-| `docs/superpowers/specs/2026-08-10-css-guard-residue.md` | #1497 | routine | merge-ready — cycle 2 GREEN, all CI green, live-path proof posted | `build-1497-today-relay2` (session `a3d101ab-0506-4b30-ac42-434e663afa9a`) | resolve fresh | `build/1497-today-residue` | #1881 |
+| `docs/superpowers/specs/2026-08-10-css-guard-residue.md` | #1497 | routine | merged — issue closed, board Done, lane reaped | reaped | — (reaped) | (branch deleted) | #1881 |
 
 ## Dependency / merge order
 
@@ -105,3 +105,21 @@ every further coordinator self-handoff in this run should also spawn a Codex suc
 Successor's next steps: re-confirm the Codex session id as the new lock anchor, watch
 `build-1497-today-relay2`'s pane (`w1:pPT`) for the PR to open, then run the standard
 coordinate-skill QA-on-green -> merge -> close #1497 -> report-to-Ben loop. [pane w1:pPV]
+
+## Closed — 2026-08-23
+
+Run complete. #1517 was closed as a confirmed no-op already satisfied by merged work. PR #1881
+merged as `4ee77dbd2152665defa15604aff0f71123178613`; issue #1497 is closed and its project item is
+Done. Exact-head CI, cycle-2 independent QA, and the durable live-path proof were green. All build
+and QA panes, worktrees, local branches, remote branches, test processes, containers, and isolated
+test databases created by this run were reaped.
+
+End-of-run wider backlog sweep: 69 confirmed-safe worktrees removed and 72 retained. The sweep
+flagged 82 entries in total: 35 heads not on `origin/main`, 27 numbered branches with no PR, one
+closed/unmerged PR worktree, four with tracked changes, five with live process cwd references, 18
+unusual-path worktrees retained, and 10 unusual `/tmp` worktrees that passed every gate and were
+removed safely. Retained entries were left untouched for a future targeted cleanup.
+
+Follow-up tasks filed outside this run: #1882 (CI usefulness/efficiency audit) and #1883 (surface
+safe underlying vault-search MCP failures and diagnose the current outage). No Ben decision is
+open in `docs/coordination/AWAITING-BEN.md`.
