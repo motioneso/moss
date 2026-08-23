@@ -112,7 +112,8 @@ export type {
   ExternalModuleRejection,
   ExternalModulesDependencies,
   InstalledExternalModuleSummary,
-  ModuleDistributionDependencies
+  ModuleDistributionDependencies,
+  RegistryEntriesSnapshot
 } from "./routes-external-module-types.js";
 
 export interface SettingsRoutesDependencies {

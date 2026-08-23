@@ -23,6 +23,8 @@ test.describe("Module registry installed-row switch (#996, #860)", () => {
         json: {
           enabled: true,
           registryUnavailable: false,
+          catalogVerification: "verified",
+          catalogDigestSha256: "a".repeat(64),
           modules: [
             {
               id: "acme-widgets",

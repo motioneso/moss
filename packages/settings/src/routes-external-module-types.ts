@@ -96,19 +96,34 @@ export interface ExternalModulesDependencies {
 }
 
 /**
+ * #1319 — one fetch's worth of registry state, always sourced from a single
+ * `fetchRegistryIndex` call so entries/verification/digest never mix across fetches.
+ * `entries: null` / `catalogVerification: "unavailable"` go together (registry
+ * unreachable/invalid — the GET degrades to local-only rows, never a 500, spec §6).
+ * Settings must NOT import @moss/module-registry (module-isolation), so
+ * `catalogVerification` is redeclared here as a literal union rather than importing
+ * module-registry's `CatalogVerification` type.
+ */
+export interface RegistryEntriesSnapshot {
+  readonly entries: readonly ModuleRegistryEntryLike[] | null;
+  readonly catalogVerification: "verified" | "unverified" | "unavailable";
+  readonly catalogDigestSha256: string | null;
+}
+
+/**
  * #964 — module-distribution port injected by the composition root. Network + filesystem
  * only; all DB writes stay in this package (updateExternalModuleStaging etc.), so the
  * pipeline never needs a database handle and settings never imports module-registry.
  */
 export interface ModuleDistributionDependencies {
   /**
-   * Pinned-registry index entries, served through the composition root's 10-minute
-   * in-process cache; `refresh: true` busts it. null = registry unreachable/invalid —
-   * the GET degrades to local-only rows, never a 500 (spec §6).
+   * Pinned-registry index snapshot, served through the composition root's 10-minute
+   * in-process cache; `refresh: true` busts it. Cache never stores an "unavailable"
+   * snapshot — a failed refetch leaves the previous cached snapshot untouched.
    */
   readonly fetchRegistryEntries: (options: {
     readonly refresh: boolean;
-  }) => Promise<readonly ModuleRegistryEntryLike[] | null>;
+  }) => Promise<RegistryEntriesSnapshot>;
   /** Run download→verify→extract→stage (Task 5 pipeline). Never touches the DB. */
   readonly download: (input: {
     readonly moduleId: string;

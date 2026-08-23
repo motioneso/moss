@@ -6,6 +6,7 @@
 // hash/format contract is tested against the real artifact shape, not a hand-rolled one.
 import { createServer, type Server } from "node:http";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from "node:fs";
+import { generateKeyPairSync } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AddressInfo } from "node:net";
@@ -17,7 +18,7 @@ import { Client } from "pg";
 
 import { createDatabase, type MossDatabase } from "@moss/db";
 import { createPgBossClient, type PgBoss } from "@moss/jobs";
-import { getExternalModuleRegistrations } from "@moss/module-registry/node";
+import { getExternalModuleRegistrations, signCatalogBytes } from "@moss/module-registry/node";
 
 import { createApiServer } from "../../apps/api/src/server.js";
 import { packModuleArtifact } from "../../scripts/publish-module-registry.js";
@@ -39,6 +40,18 @@ let boss: PgBoss;
 let server: ReturnType<typeof createApiServer>;
 let adminCookie: string;
 let memberCookie: string;
+// #1319 D6: the mock registry signs every index.json it serves with this ephemeral
+// test key, so the e2e proves the verified-listing path end to end. The test-only key
+// is wired in via MOSS_MODULE_CATALOG_TEST_PUBLIC_KEY (resolveCatalogTrustedKeys),
+// never the pinned production keyring.
+const catalogTestKeypair = generateKeyPairSync("ed25519", {
+  publicKeyEncoding: { type: "spki", format: "pem" },
+  privateKeyEncoding: { type: "pkcs8", format: "pem" }
+});
+const CATALOG_TEST_KEY_ID = "test";
+// Counts requests actually reaching the mock registry — used to prove authorization
+// runs before the registry is ever fetched (non-admin-before-fetch ordering).
+let registryIndexRequestCount = 0;
 
 // #1625: derived from this test lane's own database identity, so two concurrent
 // integration-test lanes never fight over the same cluster-global module roles for
