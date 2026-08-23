@@ -23,7 +23,7 @@ durable live-path proof comment.
 | `docs/superpowers/specs/2026-08-19-926-food-day-view-components-and-targets.md` | #1737 (concrete child of #926) | routine | closed/Done — Ben verified working in production; lane cancelled/reaped | reaped | — | deleted | — |
 | `docs/superpowers/specs/2026-08-23-1794-release-notes-protected-main.md` | #1794 | sensitive | queued | — | — | — | — |
 | `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | planning/building — diagnosis-first | `build-1883-vault-errors` | `w1:pP0` | `build/1883-vault-mcp-errors` | — |
-| `docs/superpowers/specs/2026-08-23-1884-weather-settings-card.md` | #1884 | routine | planning/building | `build-1884-weather-settings` | `w1:pQ1` | `build/1884-weather-settings` | — |
+| `docs/superpowers/specs/2026-08-23-1884-weather-settings-card.md` | #1884 | routine | corrected plan approved — building | `build-1884-weather-settings` | `w1:pQ1` | `build/1884-weather-settings` | — |
 
 ## Scope decisions
 
@@ -93,6 +93,11 @@ None yet.
   envelope, authorization-before-fetch testing, and the signed-index e2e baseline; phases 3-4,
   enforcement, override, UI, UAT, and migrations remain excluded. The planning session reached
   72% before code and was instructed to relay to a fresh Sonnet successor before building.
+- #1884 plan `docs/superpowers/plans/2026-08-23-1884-weather-settings-card.md` returned once for an
+  accessibility fork, then approved after correction. The visible thumb letter remains
+  `aria-hidden`, while the native checkbox's dynamic accessible name explicitly states
+  `Temperature units: Celsius` or `Temperature units: Fahrenheit`; focused tests and the existing
+  live UAT assert both states. No new ARIA role, component family, API, or persistence change.
 
 ## Starting-point gate
 
