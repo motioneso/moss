@@ -2030,3 +2030,14 @@ Fresh detached QA worktree `.claude/worktrees/qa-1874-service-worker-recovery` i
 the dedicated QA tab as `qa-1874-security-review`, session `37fa830a-9d79-4b13-a72a-6a89357adc69`,
 pane `w1:pN0`, on Opus. It must post the required security verdict to PR #1874. Merge remains
 blocked until CI is green, the verdict is posted, and Ben explicitly signs off. [pane w1:pNF]
+
+## Update - 2026-08-23, #1105 QA red; scoped fixes returned
+
+Independent routine QA posted `RED` on PR #1877 at
+https://github.com/motioneso/moss/pull/1877#issuecomment-5384884617. The three blocking
+findings are: the resumed #1090 assertion can match turn-one reply text instead of proving a new
+reply; the #1089 request counter does not require exactly one POST; and the UAT captures full-page
+screenshots contrary to the current bounded screenshot standard. The findings were delivered and
+verified to `codex-1105-build`, which is back on the lane for a scoped fix, fresh checks, updated
+proof, and re-QA. Its QA pane/worktree were closed and removed after the verdict; PR CI remains
+pending. [pane w1:pNF]
