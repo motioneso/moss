@@ -37,15 +37,24 @@ async function openChat(page: Page): Promise<Locator> {
   return drawer;
 }
 
-async function sendAndAwaitReply(drawer: Locator, message: string): Promise<void> {
+async function sendAndAwaitReply(page: Page, drawer: Locator, message: string): Promise<void> {
+  const turnResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.endsWith("/api/chat/turn") &&
+      response.request().method() === "POST"
+  );
   const composer = drawer.getByLabel("Message Moss");
   await composer.fill(message);
   await composer.press("Enter");
-  await expect(drawer.getByText(SCRIPTED_REPLY)).toBeVisible();
+  const response = await turnResponse;
+  expect(response.status()).toBe(200);
+  expect(response.request().postDataJSON()).toMatchObject({ text: message });
+  await expect(drawer.getByText(SCRIPTED_REPLY, { exact: true })).toBeVisible();
+  await expect(response.json()).resolves.toMatchObject({ reply: SCRIPTED_REPLY });
 }
 
-async function shot(page: Page, name: string): Promise<void> {
-  await page.screenshot({ path: test.info().outputPath(`${name}.png`), fullPage: true });
+async function shot(drawer: Locator, name: string): Promise<void> {
+  await drawer.screenshot({ path: test.info().outputPath(`${name}.png`) });
 }
 
 test.describe.configure({ mode: "serial" });
@@ -56,14 +65,14 @@ test("resuming a History thread while private clears the stale privateMode flag 
   await signIn(page);
   const drawer = await openChat(page);
 
-  await sendAndAwaitReply(drawer, FIRST_MESSAGE);
+  await sendAndAwaitReply(page, drawer, FIRST_MESSAGE);
   await drawer.getByRole("button", { name: "Start private chat" }).click();
   await expect(drawer.locator(".chatd-private").filter({ hasText: "not saved" })).toBeVisible();
   await expect(drawer.getByRole("button", { name: "Start private chat" })).toHaveAttribute(
     "aria-pressed",
     "true"
   );
-  await shot(page, "1090-private-active");
+  await shot(drawer, "1090-private-active");
 
   await drawer.getByRole("button", { name: "Show chat history" }).click();
   const threadRow = drawer.getByRole("button", { name: new RegExp(FIRST_MESSAGE) });
@@ -76,9 +85,10 @@ test("resuming a History thread while private clears the stale privateMode flag 
     "false"
   );
   await expect(drawer.locator(".chatd-private").filter({ hasText: "not saved" })).toHaveCount(0);
-  await shot(page, "1090-resumed-persisted");
+  await shot(drawer, "1090-resumed-persisted");
 
-  await sendAndAwaitReply(drawer, CONTINUATION_MESSAGE);
+  await sendAndAwaitReply(page, drawer, CONTINUATION_MESSAGE);
+  await expect(drawer.getByText(CONTINUATION_MESSAGE, { exact: true })).toBeVisible();
   await expect(drawer.locator(".chatd-private").filter({ hasText: "not saved" })).toHaveCount(0);
 });
 
@@ -90,7 +100,7 @@ test("private activation blocks send until the server confirms, then allows it (
   const clearHeld = new Promise<void>((resolve) => {
     releaseClear = resolve;
   });
-  let turnRequests = 0;
+  const turnRequestMethods: string[] = [];
 
   await page.route(clearPath, async (route) => {
     clearRoute = route;
@@ -98,7 +108,7 @@ test("private activation blocks send until the server confirms, then allows it (
     await route.continue();
   });
   await page.route(turnPath, async (route) => {
-    turnRequests += 1;
+    turnRequestMethods.push(route.request().method());
     await route.continue();
   });
 
@@ -110,7 +120,7 @@ test("private activation blocks send until the server confirms, then allows it (
     await expect(drawer.locator(".chatd-private").filter({ hasText: "not saved" })).toHaveCount(0);
     await drawer.getByLabel("Message Moss").fill(ACTIVATION_MESSAGE);
     await drawer.getByLabel("Message Moss").press("Enter");
-    await expect.poll(() => turnRequests, { timeout: 2_000 }).toBe(0);
+    await expect.poll(() => turnRequestMethods, { timeout: 2_000 }).toEqual([]);
 
     expect(clearRoute).toBeDefined();
     releaseClear?.();
@@ -119,10 +129,10 @@ test("private activation blocks send until the server confirms, then allows it (
       "aria-pressed",
       "true"
     );
-    await shot(page, "1089-private-activation-confirmed");
+    await shot(drawer, "1089-private-activation-confirmed");
 
-    await sendAndAwaitReply(drawer, AFTER_ACTIVATION_MESSAGE);
-    await expect.poll(() => turnRequests).toBe(1);
+    await sendAndAwaitReply(page, drawer, AFTER_ACTIVATION_MESSAGE);
+    await expect.poll(() => turnRequestMethods).toEqual(["POST"]);
   } finally {
     await page.unroute(clearPath);
     await page.unroute(turnPath);
