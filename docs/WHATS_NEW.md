@@ -23,7 +23,7 @@
 
 - **Settings are closer to where you need them.** Finance, Job Search, and News pages now link to their own settings, so changing a connection or preference takes fewer clicks. [PR #1772](https://github.com/motioneso/moss/pull/1772)
 
-## Edge channel — 2026-08-22
+## Edge channel — 2026-08-23
 
 Edge builds include the stable history below plus the user-facing changes already available in
 the current edge image. This section is intentionally build-bundled so it never advertises a
@@ -54,6 +54,7 @@ feature that is not present in the image you are running.
 
 ### Fixed
 
+- **Latest releases appear first.** Recently Released now shows the newest Edge updates at the top, ahead of older weekly history. [PR #1908](https://github.com/motioneso/moss/pull/1908)
 - **Photos and logos recover on their own.** A news photo or sports logo that failed to load because of a brief network hiccup now recovers on its own, instead of staying broken until you refresh the page. [PR #1874](https://github.com/motioneso/moss/pull/1874)
 - **Job board shows a count when some roles can't be displayed.** The job-search board now tells you if it couldn't show some roles instead of leaving them out with no explanation. [PR #1844](https://github.com/motioneso/moss/pull/1844)
 - **Activity log now shows failed actions as failed.** When the assistant tried to do something and the relevant app said it could not (for example, updating a task that no longer exists), the activity log used to record it as a success. It now correctly shows it as failed. [PR #1654](https://github.com/motioneso/moss/pull/1654)
