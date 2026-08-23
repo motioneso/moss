@@ -1,0 +1,36 @@
+name: GHCR retention
+
+on:
+  schedule:
+    # Sunday morning Pacific time. GitHub cron is UTC.
+    - cron: "17 11 * * 0"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Report deletions without changing GHCR
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ghcr-retention
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: Delete expired untagged images
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Keep tagged images and 14 days of untagged images
+        env:
+          DRY_RUN: ${{ inputs.dry_run || false }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: node scripts/cleanup-ghcr-versions.mjs
