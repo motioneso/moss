@@ -2294,3 +2294,12 @@ active in the shared QA tab, pane `w1:pP5`, agent `qa1879-899`, session
 `01a02dd0-282c-79b2-82a2-e9f866c7e926`, on Codex GPT-5.6 Luna at high effort. The new CI run is
 still pending; do not merge until QA posts its durable verdict and all required checks are green.
 [pane w1:pP2]
+
+## Update - 2026-08-23, #899 fresh QA clean; CI remains pending
+
+Fresh routine QA for PR #1879 at head `101970eac686345ea860c072cc108f178965e5e2` posted a durable
+RED verdict (`https://github.com/motioneso/moss/pull/1879#issuecomment-5385160088`) solely because
+the required foundation check is still pending. Review, invariants, test-only classification,
+and exit criteria are clean; the only observation is intentional fixture duplication. The
+review-only QA pane and worktree were reaped after the verdict. PR #1879 remains unmergeable until
+CI completes green. [pane w1:pP2]
