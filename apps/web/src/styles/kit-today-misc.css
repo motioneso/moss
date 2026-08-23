@@ -13,14 +13,8 @@
 }
 .np-photo {
   position: relative;
-  border-radius: var(--radius-lg);
   overflow: hidden;
   min-height: 176px;
-  background: linear-gradient(135deg, var(--forest-soft) 0%, var(--surface-2) 78%);
-  border: 1px solid var(--border-subtle);
-}
-.np-photo--news {
-  background: linear-gradient(135deg, var(--steel-soft) 0%, var(--surface-2) 78%);
 }
 .np-photo__ph {
   position: absolute;
@@ -30,11 +24,8 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: var(--text-faint);
 }
 .np-photo__cap {
-  font-family: var(--font-sans);
-  font-size: 10.5px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -44,14 +35,9 @@
   bottom: 12px;
   width: 30px;
   height: 30px;
-  border-radius: 8px;
-  color: var(--white);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 800;
 }
 .np-hero__body {
   display: flex;
@@ -63,35 +49,20 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-family: var(--font-sans);
-  font-size: 11px;
   letter-spacing: 0.04em;
-  color: var(--accent-fg);
-}
-.np-kicker .out {
-  font-weight: 700;
 }
 .np-headline {
-  font-family: var(--font-display);
-  font-size: 23px;
-  font-weight: 600;
   line-height: 1.18;
   letter-spacing: -0.01em;
-  color: var(--text);
   margin: 8px 0 0;
   text-wrap: pretty;
 }
 .np-dek {
-  font-family: var(--font-sans);
-  font-size: 15px;
   line-height: 1.5;
-  color: var(--text-muted);
   margin-top: 8px;
   text-wrap: pretty;
 }
 .np-meta {
-  font-size: 11.5px;
-  color: var(--text-faint);
   margin-top: 10px;
 }
 
@@ -109,77 +80,36 @@
   flex: none;
   width: 30px;
   height: 30px;
-  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   align-self: center;
-}
-.np-row__lead.crest {
-  color: var(--white);
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 800;
-}
-.np-row__lead.src {
-  background: var(--surface-2);
-  color: var(--accent-fg);
 }
 .np-row__main {
   flex: 1;
   min-width: 0;
 }
 .np-row__title {
-  font-family: var(--font-display);
-  font-size: 16px;
-  color: var(--text);
   line-height: 1.32;
 }
 .np-row__sub {
-  font-size: 12.5px;
-  color: var(--text-subtle);
   margin-top: 2px;
-}
-.np-row__sub .src {
-  color: var(--accent-fg);
-  font-family: var(--font-sans);
-  font-size: 11px;
 }
 .np-row__out {
   flex: none;
   width: 22px;
   height: 22px;
-  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 700;
   align-self: center;
-}
-.np-row__out.w {
-  background: var(--forest-soft);
-  color: var(--forest-ink);
-}
-.np-row__out.d {
-  background: var(--steel-soft);
-  color: var(--steel-ink);
-}
-.np-row__out.news {
-  background: var(--amber-soft);
-  color: var(--amber-ink);
 }
 .np-topic {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-subtle);
 }
 .np-topic .ic {
-  color: var(--accent-fg);
   display: inline-flex;
 }
 
@@ -196,26 +126,13 @@
   align-items: baseline;
 }
 .overnight__row .tx {
-  font-family: var(--font-sans);
-  font-size: 16px;
-  color: var(--text-muted);
   line-height: 1.5;
-}
-.overnight__row .tx b {
-  color: var(--text);
-  font-weight: 600;
 }
 
 /* ===== Agenda next / empty / tomorrow ===== */
 .agenda-clear {
-  font-size: 13px;
-  color: var(--text-muted);
   line-height: 1.5;
   padding: 2px 0 12px;
-}
-.agenda-clear b {
-  color: var(--text);
-  font-weight: 600;
 }
 
 /* ===== Wellness card (progress meds) ===== */
@@ -230,14 +147,7 @@
   gap: 7px;
 }
 .well__ct {
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--accent-fg);
   font-variant-numeric: tabular-nums;
-}
-.well__ct.is-done {
-  color: var(--forest-ink);
 }
 
 /* Soft, dismissible med reminder (client-only; reappears on reload — no server flag). */
@@ -247,9 +157,6 @@
   gap: 8px;
   margin: 8px 0 12px;
   padding: 8px 10px;
-  border-radius: var(--radius-md);
-  background: var(--amber-soft);
-  border: 1px solid var(--amber-soft-2);
 }
 .well__nudge-x {
   flex: none;
@@ -258,17 +165,12 @@
   justify-content: center;
   width: 22px;
   height: 22px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--amber-ink);
   cursor: pointer;
   opacity: 0.75;
   transition: var(--transition-control);
 }
 .well__nudge-x:hover {
   opacity: 1;
-  background: var(--amber-soft-2);
 }
 
 /* Briefing freshness list (#541) */
@@ -278,11 +180,8 @@
   border-top: 1px solid var(--border-subtle);
 }
 .bfresh__label {
-  font-family: var(--font-sans);
-  font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--text-faint);
   display: block;
   margin-bottom: 6px;
 }
@@ -298,31 +197,11 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-.bfresh__source {
-  font-weight: 500;
-  color: var(--text-subtle);
-}
-.bfresh__age {
-  font-family: var(--font-sans);
-  font-size: 11px;
-  color: var(--text-faint);
-}
-.bfresh__age--live {
-  color: var(--accent-fg);
 }
 .bfresh__age--unknown {
-  color: var(--text-faint);
   font-style: italic;
 }
 .bfresh__stale {
   margin-top: 8px;
-  font-size: 12px;
-  color: var(--text-muted);
   padding: 6px 10px;
-  border-radius: var(--radius-md);
-  background: var(--warn-soft);
-  border: 1px solid var(--warn);
 }
