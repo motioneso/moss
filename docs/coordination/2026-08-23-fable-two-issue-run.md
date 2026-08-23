@@ -14,7 +14,7 @@
 | Spec | Issue | Tier | Status | Agent name | Pane | Branch | PR |
 | ---- | ----- | ---- | ------ | ---------- | ---- | ------ | -- |
 | `docs/superpowers/specs/2026-08-10-1137-robustness-followups.md` | #1517 | routine | closed — no-op, already satisfied | reaped | — (reaped) | (branch deleted) | — |
-| `docs/superpowers/specs/2026-08-10-css-guard-residue.md` | #1497 | routine | QA cycle 2 running after live-path proof comment posted; all CI green | `build-1497-today-relay2` (session `a3d101ab-0506-4b30-ac42-434e663afa9a`) | resolve fresh | `build/1497-today-residue` | #1881 |
+| `docs/superpowers/specs/2026-08-10-css-guard-residue.md` | #1497 | routine | merge-ready — cycle 2 GREEN, all CI green, live-path proof posted | `build-1497-today-relay2` (session `a3d101ab-0506-4b30-ac42-434e663afa9a`) | resolve fresh | `build/1497-today-residue` | #1881 |
 
 ## Dependency / merge order
 
@@ -34,8 +34,9 @@
 - PR #1881 cycle 1, exact head `62564b81b1455a3f25c4f97cb4c13c83034e9e6e`: RED only because
   the PR lacked a separate durable live-path proof comment; code review had zero findings and QA's
   independent UAT passed. QA pane/worktree reaped; owning lane is posting the missing evidence.
-- PR #1881 cycle 2: `qa-1881-r2` (session `d6ec531c-b09e-4b5d-88db-0590a09e6ce4`) verifying
-  live-path proof comment `5386869629` on the unchanged exact head; all CI checks are green.
+- PR #1881 cycle 2, exact head unchanged: GREEN / merge-ready. All CI checks green; live-path
+  proof comment `5386869629` accepted; zero code findings. QA pane/worktree reaped. `origin/main`
+  remains an ancestor of the reviewed head, so no rebase or post-rebase QA is needed.
 
 ## Outstanding escalations
 
