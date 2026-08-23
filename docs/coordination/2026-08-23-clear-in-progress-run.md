@@ -19,11 +19,12 @@ durable live-path proof comment.
 
 | Spec | Issue | Tier | Status | Agent name | Pane | Branch | PR |
 | ---- | ----- | ---- | ------ | ---------- | ---- | ------ | -- |
-| `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319-A (concrete child of #1470) | security | plan approved — building | `build-1319a-phase2-b` | `w1:pQ3` | `build/1319a-catalog-verify` | — |
+| `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319-A (concrete child of #1470) | security | Task A committed `f786077a3`; Task B building | `build-1319a-phase2-c` | resolve live | `build/1319a-catalog-verify` | — |
 | `docs/superpowers/specs/2026-08-19-926-food-day-view-components-and-targets.md` | #1737 (concrete child of #926) | routine | closed/Done — Ben verified working in production; lane cancelled/reaped | reaped | — | deleted | — |
 | `docs/superpowers/specs/2026-08-23-1794-release-notes-protected-main.md` | #1794 | sensitive | queued | — | — | — | — |
-| `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | relay pending; revised security plan required before code | `build-1883-vault-errors` | resolve live | `build/1883-vault-mcp-errors` | — |
-| `docs/superpowers/specs/2026-08-23-1884-weather-settings-card.md` | #1884 | routine | approved build mid-task 3; relay pending after progress commit | `build-1884-weather-settings` | resolve live | `build/1884-weather-settings` | — |
+| `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | revised plan `118c02f9e` approved; building | `build-1883-vault-errors` | resolve live | `build/1883-vault-mcp-errors` | — |
+| `docs/superpowers/specs/2026-08-23-1884-weather-settings-card.md` | #1884 | routine | relay driving live UAT, gate, and wrap-up | `build-1884-relay` | resolve live | `build/1884-weather-settings` | — |
+| issue #1885 | #1885 | routine | focused checks green; independent QA running | `qa-1886-watchdog` | resolve live | `fix/1885-coordinator-watchdog` | #1886 |
 
 ## Scope decisions
 
@@ -98,6 +99,11 @@ None yet.
   `aria-hidden`, while the native checkbox's dynamic accessible name explicitly states
   `Temperature units: Celsius` or `Temperature units: Fahrenheit`; focused tests and the existing
   live UAT assert both states. No new ARIA role, component family, API, or persistence change.
+- #1883 plan `docs/superpowers/plans/2026-08-23-1883-vault-mcp-errors.md` returned once because
+  guarded property reads still invoked hostile Proxy traps, then approved at `118c02f9e` after it
+  moved the boundary to Node's trap-free native-error brand check. Hostile top-level and nested
+  cause tests require fixed generic output, no leak, and zero trap calls; the existing untrusted
+  #1251 path remains unchanged.
 
 ## Starting-point gate
 
@@ -111,14 +117,9 @@ None yet.
 
 ## Outstanding escalations
 
-- #1883 plan is not yet approved. The successor must revise it so classification of first-party
-  thrown values is total and fail-safe even for hostile top-level values and hostile nested
-  `cause` values. Add first-party hostile Proxy/getter tests proving generic output, no leak, and
-  no classifier rethrow; preserve the existing untrusted #1251 test. No code before coordinator
-  approval of that revision.
 - #1319-A reported one unexplained loss of uncommitted Task A edits in its isolated worktree. The
-  lane is redoing and committing immediately. Treat a second occurrence as stop-the-line and
-  investigate shared-worktree integrity before more edits.
+  redo is now committed at `f786077a3` with no recurrence. Treat a second occurrence as
+  stop-the-line and investigate shared-worktree integrity before more edits.
 
 ## Reaped sessions
 
@@ -129,17 +130,21 @@ None yet.
   `decd65fd-48f6-42f8-ace6-290f737189f8`, reaped after committing the approved plan/relay handoff
   and confirming successor `build-1319a-phase2-b` (session
   `d36ff98a-4ba2-46d0-9582-8dc383f55dc6`) driving on Sonnet in the same worktree/branch.
+- #1884 build session `build-1884-weather-settings` (Claude session
+  `2457b4f0-7cf7-4bfc-b212-75d4cef9b514`) reaped after successor `build-1884-relay` was confirmed
+  driving on Sonnet in the same worktree/branch.
+- #1319-A build session `build-1319a-phase2-b` (Claude session
+  `d36ff98a-4ba2-46d0-9582-8dc383f55dc6`) reaped after Task A commit `f786077a3` and confirmation
+  that successor `build-1319a-phase2-c` was driving Task B on Sonnet in the same worktree/branch.
 
-## Latest continuation note — Codex relay
+## Latest continuation note — Codex relay adopted
 
-Compaction tripwire fired before any merge. Current coordinator authority is Codex session
-`01a02f0e-05d0-7e61-9a20-c87b7a7f9305`; successor must replace the lock with its own
-`agent_session.value`, remain Codex-only, and resolve/reap this outgoing coordinator by pane label
-`Coordinator` plus that exact session id. Fleet sweep at handoff: #1319-A successor is driving on
-Sonnet and redoing its reverted Task A edits; #1883's old Sonnet session is compacting with the
-security-plan correction queued and no successor visible yet; #1884's old Sonnet session is still
-running typecheck after its relay notice and no successor is visible yet. First action after
-adoption: resolve both build relays fresh, verify each successor is driving on Sonnet, resend the
-#1883 security fork, reap only the old relay sessions, square the three-pane Builders layout, and
-update issue comments plus this manifest. Do not merge during adoption. Merge order remains
-#1883, #1884, #1319-A, #1319-B, #1794; #1737 is already closed/Done.
+Codex session `01a02f7f-5563-7590-ac66-9b2827dab85c` holds the coordinator lock. The prior Codex
+session remains separately named `watchdog-timer-fix` and owns no fleet work. #1883 is building
+from approved security plan commit `118c02f9e`; #1884 relay is finishing live UAT/gates; #1319-A
+relay is building Task B after Task A commit `f786077a3`. The one-time #1319-A worktree-integrity
+warning remains stop-the-line on recurrence. Watchdog fix commit `246bd29f4` was replayed cleanly
+onto issue #1885 / PR #1886; focused checks are green and routine QA is running. No merges occurred
+during adoption. Feature merge order remains #1883, #1884, #1319-A, #1319-B, #1794; #1737 is
+already closed/Done. PR #1886 is an independent coordinator-tooling hotfix and may merge after its
+own green QA.
