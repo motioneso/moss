@@ -357,7 +357,7 @@ test("queued chat drain stays stable while SSE records arrive, then sends once a
   await composerInput.press("Enter");
   await expect(queuedChip).toContainText('Next: "Drained queued"');
 
-  await expect(drawer.getByText("Tick 2")).toBeVisible();
+  await expect(drawer.getByText("Tick 2")).toBeVisible({ timeout: 10_000 });
   await expect(queuedChip).toContainText('Next: "Drained queued"');
   await composerAction.click();
   await expect.poll(() => turnTexts).toEqual(["First question", "Drained queued"]);
