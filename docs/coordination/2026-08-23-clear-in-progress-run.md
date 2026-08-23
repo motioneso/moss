@@ -21,7 +21,7 @@ durable live-path proof comment.
 | ---- | ----- | ---- | ------ | ---------- | ---- | ------ | -- |
 | `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319-A (concrete child of #1470) | security | Task B work-in-progress `f118ece3b`; building | `catalog-verify-1319a` | resolve live | `build/1319a-catalog-verify` | — |
 | `docs/superpowers/specs/2026-08-19-926-food-day-view-components-and-targets.md` | #1737 (concrete child of #926) | routine | closed/Done — Ben verified working in production; lane cancelled/reaped | reaped | — | deleted | — |
-| `docs/superpowers/specs/2026-08-23-1794-release-notes-protected-main.md` | #1794 | sensitive | queued | — | — | — | — |
+| `docs/superpowers/specs/2026-08-23-1794-release-notes-protected-main.md` | #1794 | sensitive | Luna-high builder planning; merge last | `build_1794` | Codex subagent | `build/1794-release-notes-protected-main` | — |
 | `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | implementation `db1e5c1e7`; full gate and wrap-up running | `build-1883-vault-errors-2` | resolve live | `build/1883-vault-mcp-errors` | — |
 | `docs/superpowers/specs/2026-08-23-1884-weather-settings-card.md` | #1884 | routine | relay driving live UAT, gate, and wrap-up | `build-1884-relay` | resolve live | `build/1884-weather-settings` | — |
 | issue #1885 | #1885 | routine | focused checks green; independent QA running | `qa-1886-watchdog` | resolve live | `fix/1885-coordinator-watchdog` | #1886 |
@@ -63,6 +63,8 @@ hand-merging it.
   and live proof). They touch the same files and are strictly serial. B branches from `main` only
   after A merges.
 - **Wave 2:** #1319-B after #1319-A merges, plus #1794. They have disjoint source files.
+- Ben explicitly authorized Luna-high builders during the run, so #1794 started early in its own
+  isolated worktree while keeping its merge-last constraint and post-merge acceptance proof.
 - **Merge order:** #1883 -> #1884 -> #1319-A -> #1737 (issue-evidence close/no PR if verified) ->
   #1319-B -> #1794.
 - #1883, #1319-A, and #1319-B each require adversarial Opus QA and Ben's explicit merge sign-off.
