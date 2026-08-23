@@ -2148,3 +2148,10 @@ and #1335 remain in their fresh gates; #1874 Opus QA and #1501 image publication
 commits. Its pre-push TypeScript check is actively running in the isolated worktree; no PR exists
 yet. #1105 and #1335 remain in their fresh gates, with #1335 confirming its `Password:` output is
 benign test text and the process requires no input. [pane w1:pNF]
+
+## Update - 2026-08-23, #1105 acquired gate lock
+
+Process inspection confirms #1105's fresh runner owns `/tmp/jarv1s-gate/db.lock` and its database
+child is running; the `Password:` status line is not an interactive prompt. #1335 remains alive in
+its independent checks. #899's green-gate owner is still running a live pre-push TypeScript check
+before opening the PR. [pane w1:pNF]
