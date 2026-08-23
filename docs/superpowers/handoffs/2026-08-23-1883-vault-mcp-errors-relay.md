@@ -2,37 +2,59 @@
 
 Branch/worktree: `build/1883-vault-mcp-errors`, this worktree (unchanged — stay here).
 Coordinator: agent name `coordinator` (re-resolve via `herdr agent list` before messaging — do not
-trust a pane number from this doc).
+trust a pane number from this doc; it has already relayed itself once mid-run).
 
-## State
+## State (fix implemented and committed, gate not yet run)
 
-- Spec: `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` (approved, verified
-  current against this branch).
-- Plan (committed, commit `e8dd27105`): `docs/superpowers/plans/2026-08-23-1883-vault-mcp-errors.md`
-  — read it in full, it's short and has everything (seams with file:line, design, test cases,
-  verification commands, kill gate).
-- **Plan sent to coordinator for approval, NOT yet confirmed approved.** Message was delivered and
-  queued (coordinator was busy). Check for a reply before writing any code — if none arrived yet,
-  ping the coordinator again or wait; do not start Phase 2 (build) without approval.
-- No code changes made yet. Nothing else is in flight on this branch from me.
+- Spec: `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` (approved).
+- Plan: `docs/superpowers/plans/2026-08-23-1883-vault-mcp-errors.md`, **approved by coordinator at
+  commit `118c02f9e`** after two security-fork revision rounds:
+  round 1 required all inspection to be exception-safe; round 2 (the binding one) required a
+  trap-free brand check — `util.types.isNativeError` — BEFORE any property read, because wrapping
+  reads in try/catch still invokes a hostile Proxy's trap even though the throw is caught. Read
+  the plan's "Design" section for the exact classifier contract if touching this code again.
+- **Fix implemented and committed** at `db1e5c1e7`:
+  - New file `packages/ai/src/gateway/dependency-failure.ts` — `classifyToolDependencyFailure` and
+    `safeErrorName`, both brand-check with `util.types.isNativeError` on the top-level error AND
+    its `.cause` before touching any property, only ever called when `found.tool.isExternal ===
+    false`.
+  - `packages/ai/src/gateway/gateway.ts` `runHandler` catch block (~line 636) now reads `error`
+    only through those two guarded functions, gated on `isExternal === false`; the untrusted path
+    is completely unchanged (no property access at all).
+  - New test `tests/unit/mcp-gateway-dependency-errors.test.ts` — 7 cases: 3 classification
+    cases, 1 unclassifiable-stays-generic case, 1 no-message-leak case, and 2 hostile-shape cases
+    (top-level Proxy, Error with hostile-Proxy cause) asserting zero trap calls.
+  - Verified green: `pnpm test:unit tests/unit/mcp-gateway-dependency-errors.test.ts
+    tests/unit/mcp-gateway-recovery.test.ts tests/unit/mcp-gateway-units.test.ts` gave
+    `66 passed (66)`, confirming the #1251 hostile-throw test is untouched.
+- **Kill gate cleared without code reading** (node_modules access was sandbox-denied): relied on
+  documented Node/undici behavior — a failed `fetch()` throws `TypeError("fetch failed", {
+  cause })` where `cause.code` is `ECONNREFUSED`/`ENOTFOUND`/etc., exactly the shape the classifier
+  reads, and the same shape the existing `classifyLiveReadFailure` precedent
+  (`packages/connectors/src/source-context/types.ts:145-176`) already relies on.
+  `@huggingface/transformers`'s model-download path runs through this same fetch. If you want to
+  double-check with actual library code, node_modules reads were blocked for me here — try again or
+  ask the coordinator why.
+- **`pnpm install` was required** — `node_modules` was NOT present in this worktree at relay time
+  despite the usual assumption. Successor: `test -d node_modules` first; if missing, install (fast,
+  pnpm store is warm).
+- Gate database created but gate NOT yet run: `jarvis_gate_1883vault` exists (fresh, empty) on
+  `jarv1s-postgres`. Successor should `export JARVIS_PGDATABASE=jarvis_gate_1883vault` (or
+  drop/recreate fresh per the `verify-gate` skill — either is fine, it's empty) before running
+  `pnpm verify:foundation`.
 
 ## Next steps
 
-1. Confirm plan approval from coordinator (check messages / `herdr pane read`).
-2. Follow `coordinated-build` Phase 2: TDD the plan task-by-task, commit green.
-3. Kill-gate check first: verify the real error shape `notes.search`'s dependency actually throws
-   (read `@huggingface/transformers` fetch/model-load error shape, or force a failure locally) —
-   the plan's classifier assumes `.code`/`.cause.code`/`.name`/`.statusCode` are present; if the
-   real shape has none of those, escalate to coordinator with the actual shape before shipping a
-   dead classifier.
-4. Write `tests/unit/mcp-gateway-dependency-errors.test.ts` (see plan for exact cases), watch it
-   fail, then implement `packages/ai/src/gateway/dependency-failure.ts` +
-   `packages/ai/src/gateway/gateway.ts` runHandler catch change, watch it pass.
-5. Re-run `tests/unit/mcp-gateway-recovery.test.ts` — must stay green untouched.
-6. Full gate via `verify-gate` skill, then `coordinated-wrap-up`: PR, live-path evidence.
-7. Live diagnosis: after fix ships to dev, call `/api/mcp` `notes.search` on the real dev instance
-   and read the surfaced cause to identify the current outage — report the finding, do not fix an
-   unrelated dependency without that evidence.
+1. `export JARVIS_PGDATABASE=jarvis_gate_1883vault` (or drop+recreate fresh per `verify-gate`
+   skill), then run the full gate backgrounded with a sentinel per that skill — never piped.
+2. If green: `coordinated-wrap-up` — pre-push trio + rebase, push, open PR with release note
+   (`Category: Fixed`, plain-English description — no jargon, per CLAUDE.md), report PR + evidence
+   to coordinator.
+3. Live diagnosis (spec requires this AFTER the fix ships): call `/api/mcp` `notes.search` on the
+   real dev instance (`http://192.168.50.36:5173` / API `:3000`, login `ben@ben.com` /
+   `jarvistest123!`) and read the surfaced `cause` in the error text to identify what's actually
+   broken in the current live vault-search outage. Record the finding in the PR. Do not fix an
+   unrelated dependency without that evidence — spec non-goal.
 
 ## Reminders from CLAUDE.md / boot brief
 
