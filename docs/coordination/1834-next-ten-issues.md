@@ -2322,3 +2322,12 @@ instead of moving with the rail declarations; CI was also still pending. The dur
 is on the PR. The finding was delivered and acknowledged by `codex-1501-build`, which is moving
 the comment, pushing a corrected head, and requesting fresh QA. The review-only QA pane and
 worktree were reaped. PR #1878 remains unmergeable. [pane w1:pP2]
+
+## Update - 2026-08-23, #1501 corrected head in fresh QA
+
+PR #1878 (#1501) now points to corrected head `d7280feea8e91ed2abbc5da0c58491db948ef561`.
+The owner moved the complete explanatory rail-idiom comment beside the moved declarations and
+reported focused checks green. Fresh routine QA is active in the shared QA tab, pane `w1:pP7`,
+agent `qa1878-1501-r2`, session `01a02ddd-dcb0-7fe1-96e7-88cd3ad1d092`, on Codex GPT-5.6 Luna at
+high effort. CI remains pending; do not merge until QA posts its durable verdict and all required
+checks are green. [pane w1:pP2]
