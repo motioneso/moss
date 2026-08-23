@@ -1,14 +1,30 @@
-import { createElement } from "react";
+import { createElement, type ComponentType } from "react";
 import { renderToString } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 
-import type { AiActionPolicyDto } from "@moss/shared";
-import EmailSettings, {
+import type {
+  AiActionPolicyDto,
+  AiActionPolicyTier,
+  GetAiActionPoliciesResponse
+} from "@moss/shared";
+
+type EmailSettingsModule = {
+  default: ComponentType;
+  draftAutoChecked: (tier: AiActionPolicyTier) => boolean;
+  draftAutoTierFromChecked: (checked: boolean) => AiActionPolicyTier;
+  draftAutoTierFromPolicies: (
+    policies: GetAiActionPoliciesResponse["policies"]
+  ) => AiActionPolicyTier;
+};
+
+const emailSettingsModulePath: string = "../../packages/email/src/settings/index.js";
+const {
+  default: EmailSettings,
   draftAutoChecked,
   draftAutoTierFromChecked,
   draftAutoTierFromPolicies
-} from "../../packages/email/src/settings/index.js";
+} = (await import(emailSettingsModulePath)) as EmailSettingsModule;
 
 function policy(overrides: Partial<AiActionPolicyDto>): AiActionPolicyDto {
   return { moduleId: "email", actionFamilyId: "email_drafts", tier: "trusted_auto", ...overrides };
