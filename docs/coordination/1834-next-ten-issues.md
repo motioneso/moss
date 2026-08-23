@@ -1676,3 +1676,11 @@ The #1501 Codex Luna build lane verified Fable plan commit `5810e0775` with `812
 ancestor and reported the baseline as 31 violations. Implementation is approved with no design
 fork. The lane is proceeding through the exact Child E scope, checks, live proof, PR, and wrap-up.
 [pane w1:pNF]
+
+## Update - 2026-08-23, #899 build started
+
+Fable 5 completed the #899 plan at commit `9c998181e`; its planner pane was resolved fresh and
+reaped. Codex GPT-5.6 Luna at high effort is now implementing the plan in isolated worktree
+`.claude/worktrees/899-news-mocked-e2e`, branch `899-news-mocked-e2e`: agent `codex-899-build`,
+pane `w1:pNP`. The lane must preserve the Fable plan, complete checks and required live-path
+evidence, then open a PR and wrap up. [pane w1:pNF]
