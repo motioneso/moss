@@ -22,8 +22,8 @@ durable live-path proof comment.
 | `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319-A (concrete child of #1470) | security | plan approved — building | `build-1319a-phase2-b` | `w1:pQ3` | `build/1319a-catalog-verify` | — |
 | `docs/superpowers/specs/2026-08-19-926-food-day-view-components-and-targets.md` | #1737 (concrete child of #926) | routine | closed/Done — Ben verified working in production; lane cancelled/reaped | reaped | — | deleted | — |
 | `docs/superpowers/specs/2026-08-23-1794-release-notes-protected-main.md` | #1794 | sensitive | queued | — | — | — | — |
-| `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | planning/building — diagnosis-first | `build-1883-vault-errors` | `w1:pP0` | `build/1883-vault-mcp-errors` | — |
-| `docs/superpowers/specs/2026-08-23-1884-weather-settings-card.md` | #1884 | routine | corrected plan approved — building | `build-1884-weather-settings` | `w1:pQ1` | `build/1884-weather-settings` | — |
+| `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | relay pending; revised security plan required before code | `build-1883-vault-errors` | resolve live | `build/1883-vault-mcp-errors` | — |
+| `docs/superpowers/specs/2026-08-23-1884-weather-settings-card.md` | #1884 | routine | approved build mid-task 3; relay pending after progress commit | `build-1884-weather-settings` | resolve live | `build/1884-weather-settings` | — |
 
 ## Scope decisions
 
@@ -111,7 +111,14 @@ None yet.
 
 ## Outstanding escalations
 
-None open.
+- #1883 plan is not yet approved. The successor must revise it so classification of first-party
+  thrown values is total and fail-safe even for hostile top-level values and hostile nested
+  `cause` values. Add first-party hostile Proxy/getter tests proving generic output, no leak, and
+  no classifier rethrow; preserve the existing untrusted #1251 test. No code before coordinator
+  approval of that revision.
+- #1319-A reported one unexplained loss of uncommitted Task A edits in its isolated worktree. The
+  lane is redoing and committing immediately. Treat a second occurrence as stop-the-line and
+  investigate shared-worktree integrity before more edits.
 
 ## Reaped sessions
 
@@ -122,3 +129,17 @@ None open.
   `decd65fd-48f6-42f8-ace6-290f737189f8`, reaped after committing the approved plan/relay handoff
   and confirming successor `build-1319a-phase2-b` (session
   `d36ff98a-4ba2-46d0-9582-8dc383f55dc6`) driving on Sonnet in the same worktree/branch.
+
+## Latest continuation note — Codex relay
+
+Compaction tripwire fired before any merge. Current coordinator authority is Codex session
+`01a02f0e-05d0-7e61-9a20-c87b7a7f9305`; successor must replace the lock with its own
+`agent_session.value`, remain Codex-only, and resolve/reap this outgoing coordinator by pane label
+`Coordinator` plus that exact session id. Fleet sweep at handoff: #1319-A successor is driving on
+Sonnet and redoing its reverted Task A edits; #1883's old Sonnet session is compacting with the
+security-plan correction queued and no successor visible yet; #1884's old Sonnet session is still
+running typecheck after its relay notice and no successor is visible yet. First action after
+adoption: resolve both build relays fresh, verify each successor is driving on Sonnet, resend the
+#1883 security fork, reap only the old relay sessions, square the three-pane Builders layout, and
+update issue comments plus this manifest. Do not merge during adoption. Merge order remains
+#1883, #1884, #1319-A, #1319-B, #1794; #1737 is already closed/Done.
