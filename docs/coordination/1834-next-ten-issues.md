@@ -1969,3 +1969,12 @@ lint/file-size/format checks, and a clean/reapable worktree. A fresh detached QA
 `.claude/worktrees/qa-1105-seeded-chat-uat` is running `qa-1105-review` in the dedicated QA tab
 on Codex GPT-5.6 Luna with unattended access. It must post its verdict to PR #1877 before merge.
 [pane w1:pNF]
+
+## Update - 2026-08-23, #1874 password prompt intercepted
+
+The fresh #1874 gate has not produced a verdict: `scripts/run-gate.sh status` reported its live
+runner with last output `Password:`. This matches the known inherited
+`JARVIS_UAT_REAL_CHAT_TOKEN_FILE` trigger seen in another lane. The owner was sent a verified
+instruction not to enter or expose a secret, to stop only this authorized run, unset that trigger,
+preserve the evidence, and restart the isolated gate before continuing the security/live-proof
+finish line. [pane w1:pNF]
