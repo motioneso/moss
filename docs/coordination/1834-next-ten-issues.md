@@ -2453,3 +2453,15 @@ screenshots despite the repository standard requiring executable/textual evidenc
 foundation/app remains pending, so the PR is not merge-ready. The QA pane was closed after
 matching session `01a02ded-01f1-7db0-8faf-d606e0938e80`, and its clean worktree was removed.
 [pane w1:pP2]
+
+## Update - 2026-08-23, #1880 blocking fixture finding returned
+
+Final routine QA for PR #1880 at `83e9306175ba65bed0e4a128a658bea7085624e2` grounded cleanly
+but found one blocking issue: `tests/unit/settings-activity-pane.test.tsx` lines 40, 59, and
+67 use `{}` cast to `never`, bypassing the required `MeResponse` fixture contract. The QA also
+recorded two non-blocking double-assertion observations and four tracked #1876 suppressions.
+The durable verdict is posted; the QA pane was closed after matching session
+`01a02ded-cbd2-7951-9ba6-66ee7dabbc34`, and its clean worktree was removed.
+
+The owner was sent the exact blocking finding and acknowledged the remediation request. Fresh
+QA and green required CI are required after the correction; no merge is authorized. [pane w1:pP2]
