@@ -44,6 +44,10 @@ durable live-path proof comment.
 - #1883 starts from a deterministic failing vault-search MCP request, then surfaces only safe cause
   classification; secrets, vault content, embedding inputs, raw bodies, and stack traces remain
   prohibited.
+- #1883 live-path proof uses a UAT-only Node preload selected by its chat-script id to set the
+  Transformers `env.remoteHost` to closed port 65534, producing a real `ECONNREFUSED`. The scripted
+  provider accepts one exact fixed safe error and never echoes/logs the dynamic payload. No product
+  environment variable, config surface, or runtime code is added.
 - #1884 is presentation-only: one Weather card and a binary unit toggle that displays `C` or `F`
   for its current state, reusing the existing metric/imperial API and JDS vocabulary.
 
