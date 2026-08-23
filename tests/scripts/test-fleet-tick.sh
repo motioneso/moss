@@ -374,6 +374,25 @@ out="$(run_tick "$state" FLEET_MEMINFO="$tmp/does-not-exist")"
 grep -q "DRY: herdr agent start fleet-lane-601" <<<"$out"
 pass "an unreadable memory source does not stop the fleet"
 
+# --- 16c. the memory floor is settable from the settings file, and env still wins ---
+
+state="$(new_state)"
+write_record "$state" 602 '{"issue":602,"status":"queued","tier":"routine","relays":0,"spec":"docs/x.md"}'
+printf '{"memoryFloorMb":60000}\n' > "$state/settings.json"
+out="$(run_tick "$state")"
+if grep -q "worktree add" <<<"$out"; then false; fi
+grep -q "60000 MB floor" <<<"$out"
+pass "a floor set in the settings file is honoured, so it is tunable without editing the unit"
+
+out="$(run_tick "$state" FLEET_MEMORY_FLOOR_MB=1)"
+grep -q "DRY: herdr agent start fleet-lane-602" <<<"$out"
+pass "a floor pinned in the environment beats the settings file, like every other setting"
+
+printf '{"memoryFloorMb":0}\n' > "$state/settings.json"
+out="$(run_tick "$state")"
+grep -q "DRY: herdr agent start fleet-lane-602" <<<"$out"
+pass "a floor of zero in the settings file turns the check off"
+
 # --- 17. each kind of work spawns on its configured model and effort ----------------
 
 state="$(new_state)"
@@ -391,6 +410,20 @@ out="$(run_tick "$state")"
 grep -q "DRY: herdr agent start fleet-lane-702" <<<"$out"
 if grep -q -- "--model" <<<"$out"; then false; fi
 pass "with no settings and no env, the spawn omits the model flag entirely"
+
+# --- 17b2. a model pinned by hand does not inherit an effort meant for another ------
+
+state="$(new_state)"
+write_record "$state" 703 '{"issue":703,"status":"queued","tier":"security","relays":0,"spec":"docs/x.md"}'
+printf '{"buildModels":{"security":{"model":"model-x","effort":"high"}}}\n' > "$state/settings.json"
+out="$(run_tick "$state" FLEET_BUILD_MODEL=pinned-model)"
+grep -q -- "--model pinned-model" <<<"$out"
+if grep -q -- "--effort" <<<"$out"; then false; fi
+pass "pinning only the model drops the settings file's effort instead of mispairing them"
+
+out="$(run_tick "$state" FLEET_BUILD_MODEL=pinned-model FLEET_BUILD_EFFORT=low)"
+grep -q -- "--model pinned-model --effort low" <<<"$out"
+pass "pinning both the model and the effort uses exactly what was pinned"
 
 # --- 17c. no model name appears in the daemon's own code ----------------------------
 

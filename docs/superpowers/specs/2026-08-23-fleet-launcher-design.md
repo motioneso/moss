@@ -126,13 +126,13 @@ Unit two builds against what unit one writes, so the shape is fixed here rather 
 plans, where it would be invented twice and differently. Everything lives under the state folder
 (`$JARV1S_FLEET_STATE`, default `~/.local/state/jarv1s-fleet`).
 
-| Thing                    | Where                | Shape                                                                                     |
-| ------------------------ | -------------------- | ----------------------------------------------------------------------------------------- |
-| Settings                 | `settings.json`      | `judgeCmd`, `buildModels`, `laneCap`, `spawnBudget`, `deputyEnabled`, `deputyWaitSeconds` |
-| When tonight began       | `run-started`        | One ISO timestamp, written by the launcher                                                |
-| A lane is paused         | lane record          | `paused`, plus `pausedAt` and `pausedBy`                                                  |
-| The outstanding question | lane record          | `question` with the full text, plus `questionAskedAt`                                     |
-| Who is working the lane  | existing agent field | Unchanged; a rescue agent overwrites it when it claims the lane                           |
+| Thing                    | Where                | Shape                                                                                                      |
+| ------------------------ | -------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Settings                 | `settings.json`      | `judgeCmd`, `buildModels`, `laneCap`, `spawnBudget`, `deputyEnabled`, `deputyWaitSeconds`, `memoryFloorMb` |
+| When tonight began       | `run-started`        | One ISO timestamp, written by the launcher                                                                 |
+| A lane is paused         | lane record          | `paused`, plus `pausedAt` and `pausedBy`                                                                   |
+| The outstanding question | lane record          | `question` with the full text, plus `questionAskedAt`                                                      |
+| Who is working the lane  | existing agent field | Unchanged; a rescue agent overwrites it when it claims the lane                                            |
 
 Unit one writes all of these except the start time, which the launcher owns. Unit two may assume all of them exist. Changing this table changes
 both units, so it lives here rather than in either plan.

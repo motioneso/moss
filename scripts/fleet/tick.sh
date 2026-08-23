@@ -62,6 +62,11 @@ tier_model() { # <tier> -> model for this kind of work, or empty for "CLI defaul
 
 tier_effort() { # <tier> -> effort level, or empty for "do not pass one"
   if [ -n "${FLEET_BUILD_EFFORT:-}" ]; then echo "$FLEET_BUILD_EFFORT"; return; fi
+  # A model pinned by environment does not inherit the settings file's effort:
+  # that effort was chosen for whatever model the file names, and pairing it
+  # with a hand-pinned model silently misconfigures the spawn. Pin both or
+  # neither; pinning only the model falls back to the CLI's own default.
+  if [ -n "${FLEET_BUILD_MODEL:-}" ]; then return; fi
   settings_get ".buildModels.\"$1\".effort"
 }
 
@@ -151,7 +156,7 @@ deputy_enabled="${FLEET_DEPUTY_ENABLED:-$(settings_get '.deputyEnabled')}"
 # so and carries on. An unreadable source fails open -- a box where free
 # memory cannot be read should not silently stop the fleet.
 MEMINFO_SOURCE="${FLEET_MEMINFO:-/proc/meminfo}"
-MEMORY_FLOOR_MB="$(int_or "${FLEET_MEMORY_FLOOR_MB:-}" 4096)"
+MEMORY_FLOOR_MB="$(int_or "${FLEET_MEMORY_FLOOR_MB:-$(settings_get '.memoryFloorMb')}" 4096)"
 
 memory_ok() {
   local kb
