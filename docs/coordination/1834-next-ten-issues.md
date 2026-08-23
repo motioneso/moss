@@ -1866,3 +1866,10 @@ intentional exclusive mode while integration work runs. Three fresh starts (#133
 #1874) are queued behind that lock; #1501's separate integration process remains alive and is
 not to be interrupted. #1335 stopped only its own pre-run blocked start (`rc=130`), changed no
 repo files, and retained a green format check. [pane w1:pNF]
+
+## Update - 2026-08-23, #1501 gate advanced
+
+#1501's isolated full gate is green through static, type, build, and all 12 UAT seed tests.
+Its sequential integration Vitest remains active at roughly 15 minutes with recent log writes
+and no failure sentinel; the lane is waiting for the required final verdict. The queued #1335,
+#899, and #1874 starts remain unaccepted until their own runner sentinels exist. [pane w1:pNN]
