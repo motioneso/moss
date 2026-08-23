@@ -129,7 +129,11 @@ export const MIGRATED_SECTION_CSS_FILES: readonly string[] = [
   "apps/web/src/styles/components-forms.css",
   // #1427-E: keyline primitives + global texture, moved to packages/ui/src/styles/components-keyline.css and components-web.css.
   "apps/web/src/styles/components-keyline.css",
-  "apps/web/src/styles/texture.css"
+  "apps/web/src/styles/texture.css",
+  // #1427-A: Today residue, moved to packages/ui/src/styles/components-moss-today.css.
+  "apps/web/src/styles/kit-today.css",
+  "apps/web/src/styles/kit-today-feeds.css",
+  "apps/web/src/styles/kit-today-misc.css"
 ];
 
 let validTokensCache: Set<string> | undefined;
