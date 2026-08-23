@@ -2048,3 +2048,13 @@ The consumed QA worktrees and panes for #1501 and #1105 were closed and removed 
 verdicts; both build worktrees remain retained because neither PR has merged. #1501 remains
 blocked only by its pending Verify foundation and app CI job. #1105 is back in scoped remediation
 after its QA RED verdict. [pane w1:pNF]
+
+## Update - 2026-08-23, remediation and gate runs active
+
+#1105 has applied all three QA fixes; targeted Prettier, ESLint, full typecheck, and scripted
+provider checks are green, and its real UAT path is running before the isolated gate and fresh QA.
+#1335 has a fresh isolated runner at
+`/tmp/jarv1s-gate/1335_tests_tsx_typecheck-20260823-004326.log` and is waiting through the
+runner's exact terminal result. #899 remains active with runner activity and no failure sentinel.
+#1874's fresh Opus security review is still in progress; #1501 remains unchanged with CI as its
+sole blocker. [pane w1:pNF]
