@@ -26,17 +26,39 @@ BRIEFS_DIR="$STATE_DIR/briefs"
 BRIEF_TEMPLATE="${FLEET_BRIEF_TEMPLATE:-$SCRIPT_DIR/brief-template.md}"
 NEEDS_BEN_DIR="${NEEDS_BEN_DIR:-$HOME/.needs-ben}"
 DRY="${FLEET_DRY_RUN:-0}"
-LANE_CAP=3
-SPAWN_BUDGET=12
+# Configuration precedence, for every value below: environment variable wins,
+# then settings.json in the state folder (written by the launcher's setup
+# questions), then a built-in fallback that matches the daemon's original
+# behaviour. The environment path exists so the service can be driven directly.
+SETTINGS_FILE="$STATE_DIR/settings.json"
+
+settings_get() { # <jq path, e.g. .laneCap> -> value or empty
+  [ -f "$SETTINGS_FILE" ] || return 0
+  jq -r "$1 // empty" "$SETTINGS_FILE" 2>/dev/null
+}
+
+int_or() { # <value> <fallback> -> the value if it is a whole number, else the fallback
+  case "${1:-}" in
+    '' | *[!0-9]*) echo "$2" ;;
+    *) echo "$1" ;;
+  esac
+}
+
+LANE_CAP="$(int_or "${FLEET_LANE_CAP:-$(settings_get '.laneCap')}" 3)"
+SPAWN_BUDGET="$(int_or "${FLEET_SPAWN_BUDGET:-$(settings_get '.spawnBudget')}" 12)"
 STALE_SECONDS=$((30 * 60))
-DEPUTY_WAIT_SECONDS=$((20 * 60))
+DEPUTY_WAIT_SECONDS="$(int_or "${FLEET_DEPUTY_WAIT_SECONDS:-$(settings_get '.deputyWaitSeconds')}" $((20 * 60)))"
 # Every judgment shell-out goes through one command so no provider or model
 # name is baked into the fleet. The default runs the local Claude CLI on
 # whatever model it is configured to use; override to point at another
 # provider. Word-splitting here is deliberate -- the value is a command.
-JUDGE_CMD="${FLEET_JUDGE_CMD:-claude -p}"
+JUDGE_CMD="${FLEET_JUDGE_CMD:-$(settings_get '.judgeCmd')}"
+JUDGE_CMD="${JUDGE_CMD:-claude -p}"
 # Model the spawned build agents run on. A cost policy, not a provider choice.
-BUILD_MODEL="${FLEET_BUILD_MODEL:-sonnet}"
+# The literal fallback below is removed in a later task once per-tier model
+# resolution lands; until then this keeps today's behaviour unchanged.
+BUILD_MODEL="${FLEET_BUILD_MODEL:-$(settings_get '.buildModels.routine.model')}"
+BUILD_MODEL="${BUILD_MODEL:-sonnet}"
 
 NOW_EPOCH="$(date +%s)"
 

@@ -55,6 +55,12 @@ echo "claude called" >> "$SHIM_LOG_DIR/claude.log"
 printf '%s\n' "${CLAUDE_ANSWER:-PARK}"
 EOF
 
+cat >"$tmp/bin/other-judge" <<'EOF'
+#!/usr/bin/env bash
+echo "other-judge called" >> "$SHIM_LOG_DIR/other-judge.log"
+printf '%s\n' "PARK"
+EOF
+
 cat >"$tmp/bin/needs-ben" <<'EOF'
 #!/usr/bin/env bash
 echo "$*" >> "$SHIM_LOG_DIR/needs-ben.log"
@@ -281,5 +287,37 @@ run_tick_live "$state" CLAUDE_ANSWER="MERGE" >/dev/null
 if grep -q "pr merge 89" "$SHIM_LOG_DIR/gh.log"; then false; fi
 grep -q "MERGE refused" "$SHIM_LOG_DIR/fleetctl.log"
 pass "deputy cannot merge past the live-path check; the lane stays parked"
+
+# --- 14. settings.json is read, and the environment still wins ---------------------
+
+state="$(new_state)"
+write_record "$state" 401 '{"issue":401,"status":"queued","tier":"routine","relays":0,"spec":"docs/x.md"}'
+printf '{"laneCap": 0}\n' > "$state/settings.json"
+out="$(run_tick "$state")"
+if grep -q "worktree add" <<<"$out"; then false; fi
+pass "laneCap from settings.json is honoured (0 lanes means nothing dispatches)"
+
+out="$(run_tick "$state" FLEET_LANE_CAP=1)"
+grep -q "DRY: herdr agent start fleet-lane-401" <<<"$out"
+pass "an environment variable still overrides the settings file"
+
+# --- 14b. judgeCmd from settings drives judgment calls ------------------------------
+
+state="$(new_state)"
+stale_iso="$(date -Iseconds -d '40 minutes ago')"
+write_record "$state" 402 "{\"issue\":402,\"status\":\"building\",\"agent\":\"gone-agent\",\"relays\":0,\"updated_at\":\"$stale_iso\"}"
+printf '{"judgeCmd": "other-judge run"}\n' > "$state/settings.json"
+run_tick_live "$state" >/dev/null
+grep -q "other-judge called" "$SHIM_LOG_DIR/other-judge.log"
+pass "judgeCmd from settings.json drives the dead-lane judgment call"
+
+# --- 14c. a malformed settings file falls back to the built-in numbers --------------
+
+state="$(new_state)"
+write_record "$state" 403 '{"issue":403,"status":"queued","tier":"routine","relays":0,"spec":"docs/x.md"}'
+printf '{"laneCap": "lots"}\n' > "$state/settings.json"
+out="$(run_tick "$state")"
+grep -q "DRY: herdr agent start fleet-lane-403" <<<"$out"
+pass "a non-numeric laneCap falls back to the built-in cap instead of breaking the tick"
 
 echo "fleet tick tests passed"
