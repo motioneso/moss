@@ -1684,3 +1684,11 @@ reaped. Codex GPT-5.6 Luna at high effort is now implementing the plan in isolat
 `.claude/worktrees/899-news-mocked-e2e`, branch `899-news-mocked-e2e`: agent `codex-899-build`,
 pane `w1:pNP`. The lane must preserve the Fable plan, complete checks and required live-path
 evidence, then open a PR and wrap up. [pane w1:pNF]
+
+## Update - 2026-08-23, #1105 build started
+
+Fable 5 completed the #1105 plan at commit `5f5b56a15`; its planner pane was resolved fresh and
+reaped. Codex GPT-5.6 Luna at high effort is now implementing the plan in isolated worktree
+`.claude/worktrees/1105-seeded-chat-uat`, branch `1105-seeded-chat-uat`: agent `codex-1105-build`,
+session `01a02d57-f6a4-7cd0-ad6d-f2ea675bd013`, pane `w1:pNQ`. The lane must preserve the Fable
+plan, prove the real seeded chat/thread UAT path, open a PR, and wrap up. [pane w1:pNF]
