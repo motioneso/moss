@@ -1186,3 +1186,49 @@ pull request when done.
 
 Issue #1246 still open as of this update, so issue #1511 stays blocked - informational only, not
 a Ben decision.
+
+## Continuation note - 2026-08-23, sixteenth coordinator relaying at context limit
+
+Relaying at 70 percent context. Was driving from pane w1:pMS, agent name `coordinator`, session
+`31820081-42ce-467c-8f6f-ceec14b585ac` - check `herdr agent list` for the new pane once the
+successor claims the name.
+
+**Status of the three things Ben wants merged before a prod update (pull request 1654, issue
+#1530, issue #1511, in that order):**
+
+1. **Pull request 1654 - DONE.** Merged. Issue #1252 closed. Lane fully reaped (pane, worktree,
+   branch all gone).
+
+2. **Issue #1530 (pull request 1862) - ready for Ben's merge sign-off, nothing else blocking.**
+   All CI checks green (the long "Verify foundation and app" check passed at 31m37s, image build
+   at 8m50s, both compose smokes, CI gate). Independent security review (adversarial pass, Opus)
+   posted its verdict as a comment on the pull request: GREEN, MERGE-READY: YES, no findings at or
+   above the reporting bar. It independently verified (not just trusted) the claim that no
+   user-facing screen changed in this fix, so no live-click-through demo is required - confirmed
+   true, only backend files changed. **Successor: check for Ben's reply (pinged via needs-ben just
+   before this relay); if yes, merge pull request 1862 (`gh pr merge 1862 --squash
+   --delete-branch`), do the GitHub bookkeeping (close issue #1530 if not auto-closed, move board
+   item to Done), and reap both lanes** - build lane pane w1:pMR (agent
+   `pr1530-permission-repair-relay`, worktree
+   `.claude/worktrees/1530-permission-repair-fail-closed`) and QA lane pane w1:pMT (agent
+   `qa1862-1530-security-review`, worktree `.claude/worktrees/qa-1862-1530-permission-repair`,
+   "qa" tab w1:t32) - once commits are confirmed on `main`. The QA lane has no unlanded work
+   (review-only) so it can be reaped immediately without the four-gate check; the build lane needs
+   the normal four-gate check first.
+
+   Note: the QA agent (pane w1:pMT) had an unsubmitted line queued at its prompt suggesting it
+   file a follow-up GitHub issue about a "no error logging" observation from its review - that is
+   out of scope for QA and was left unsubmitted on purpose. Do not act on it; just reap the pane.
+
+3. **Issue #1511 - still blocked, do not start.** Rechecked issue #1246 multiple times this run;
+   it was still open as of the last check. Re-check again before starting; if closed, this is
+   cleared to begin.
+
+**Once all three are merged: build the image and update prod (Ben's explicit instruction) - not
+started yet.**
+
+Other state: `docs/coordination/AWAITING-BEN.md` currently has one open entry - pull request
+1862's sign-off ask (mirrors the summary above). Ben was pinged via `needs-ben` immediately before
+this relay; no reply yet as of this note.
+
+Nothing else is currently blocked on Ben beyond the pull request 1862 sign-off above.
