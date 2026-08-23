@@ -1,16 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Installs a local Friday 06:00 Pacific cron entry that writes and publishes the Moss weekly
-# digest.
+# Installs a Friday 06:00 Pacific timer that writes and publishes the Moss weekly digest.
+#
+# An agent reads every pull request merged in the week and writes the article; a mechanical list
+# of release notes reads far thinner, which is why a model does the reading.
 #
 # The agent writes words only. This wrapper turns them into the page, commits it to the gh-pages
 # branch, and asks GitHub to deploy. Nothing is pushed to main: a branch rule refuses direct
 # pushes there, which is what silently broke the previous version of this job.
 
-SCRIPT_PATH="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/$(basename -- "${BASH_SOURCE[0]}")"
-REPO_ROOT="$(cd -- "$(dirname -- "$SCRIPT_PATH")/.." && pwd)"
-MARKER="# jarv1s-weekly-digest-automation"
+# The repository is a source of git objects only - all work happens in temporary worktrees - so it
+# does not matter which branch the shared checkout is on. The timer reads this script from the main
+# branch rather than from whatever is in the working files.
+REPO_ROOT="${MOSS_DIGEST_REPO:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}"
+SCRIPT_NAME="setup-weekly-digest-automation.sh"
+UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+UNIT="moss-weekly-digest"
 LOG_FILE="$REPO_ROOT/.git/weekly-digest-automation.log"
 PAGES_BRANCH="gh-pages"
 RENDERER="tools/weekly-digest/render.mjs"
@@ -55,7 +61,7 @@ PROMPT
 }
 
 run_digest() {
-  for tool in codex git gh node; do
+  for tool in claude git gh node; do
     command -v "$tool" >/dev/null || { echo "$tool is required" >&2; exit 1; }
   done
 
@@ -96,12 +102,10 @@ run_digest() {
   fi
 
   : >"$agent"
-  { prompt; printf '\nOutput file: %s\n' "$agent"; } | codex exec \
-    --cd "$work" \
-    --dangerously-bypass-approvals-and-sandbox \
-    --ephemeral \
-    -o "$last_message" \
-    -
+  # The CLI is already signed in on this box, so the job needs no API key.
+  { prompt; printf '\nOutput file: %s\n' "$agent"; } \
+    | (cd "$work" && claude -p --dangerously-skip-permissions --output-format text) \
+    >"$last_message" 2>&1
 
   if [[ ! -s "$agent" ]]; then
     echo "No digest written: quiet week, or the agent produced nothing" | tee -a "$LOG_FILE"
@@ -127,46 +131,51 @@ run_digest() {
   echo "Published the digest for $friday and asked GitHub Pages to deploy" | tee -a "$LOG_FILE"
 } >>"$LOG_FILE" 2>&1
 
-install_cron() {
-  command -v crontab >/dev/null || {
-    echo "crontab is required; this installer targets Unix cron." >&2
-    exit 1
-  }
+install_timer() {
+  command -v systemctl >/dev/null || { echo "systemctl is required" >&2; exit 1; }
+  mkdir -p "$UNIT_DIR"
 
-  local current entry temp
-  current="$(crontab -l 2>/dev/null || true)"
-  if grep -Fq "$MARKER" <<<"$current"; then
-    echo "Weekly digest automation is already installed."
-    exit 0
-  fi
+  cat >"$UNIT_DIR/$UNIT.service" <<UNIT_FILE
+[Unit]
+Description=Write and publish the Moss weekly digest
 
-  entry="$MARKER
-CRON_TZ=America/Los_Angeles
-0 6 * * 5 $SCRIPT_PATH --run"
-  temp="$(mktemp)"
-  trap 'rm -f "$temp"' EXIT
-  {
-    printf '%s\n' "$current"
-    printf '%s\n' "$entry"
-  } >"$temp"
-  crontab "$temp"
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -lc 'cd $REPO_ROOT && git fetch -q origin main && MOSS_DIGEST_REPO=$REPO_ROOT bash <(git show origin/main:scripts/$SCRIPT_NAME) --run'
+UNIT_FILE
+
+  cat >"$UNIT_DIR/$UNIT.timer" <<UNIT_FILE
+[Unit]
+Description=Moss weekly digest, Friday mornings
+
+[Timer]
+OnCalendar=Fri 06:00 America/Los_Angeles
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT_FILE
+
+  systemctl --user daemon-reload
+  systemctl --user enable --now "$UNIT.timer"
   echo "Installed: every Friday at 06:00 America/Los_Angeles"
   echo "Log: $LOG_FILE"
 }
 
 case "${1:-install}" in
   --run) run_digest ;;
-  --install|install) install_cron ;;
+  --install|install) install_timer ;;
   --uninstall|uninstall)
-    current="$(crontab -l 2>/dev/null || true)"
-    crontab - <<<"$(awk -v marker="$MARKER" 'index($0, marker) == 0 && $0 != "CRON_TZ=America/Los_Angeles" && $0 !~ /^0 6 \* \* 5 .*setup-weekly-digest-automation\.sh --run$/ { print }' <<<"$current")"
+    systemctl --user disable --now "$UNIT.timer" 2>/dev/null || true
+    rm -f "$UNIT_DIR/$UNIT.timer" "$UNIT_DIR/$UNIT.service"
+    systemctl --user daemon-reload
     echo "Removed weekly digest automation."
     ;;
   --status|status)
-    crontab -l 2>/dev/null | grep -F -A1 "$MARKER" || echo "Not installed."
+    systemctl --user list-timers "$UNIT.timer" --all 2>/dev/null || echo "Not installed."
     ;;
   *)
-    echo "Usage: $SCRIPT_PATH [install|--run|uninstall|status]" >&2
+    echo "Usage: $SCRIPT_NAME [install|--run|uninstall|status]" >&2
     exit 2
     ;;
 esac
