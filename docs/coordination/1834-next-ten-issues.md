@@ -1260,3 +1260,26 @@ status note, unchanged from before.
 **Next step: once issue #1511 clears, build the image and update prod (Ben's explicit
 instruction) - not started yet, and item 3 is not ready.** Nothing else is currently blocked on
 Ben.
+
+## Update - 2026-08-23, starting the five-item styling cleanup chain
+
+Ben's instruction: start the #1499 through #1503 chain (same styling cleanup applied to five
+different parts of the app, one after another, each waiting for the previous one to merge) and
+keep it moving without stalling.
+
+Checked #1499's dependency (#1498) first - it is closed and merged, so #1499 was actually clear
+to start.
+
+Started the first lane:
+- Issue #1499 - moves the assistant surface's leftover styling into the shared kit. Routine risk,
+  needs a live-proof screenshot before merge like the rest of this chain.
+- Work folder: `.claude/worktrees/1499-css-assistant-surface`, branch
+  `1499-css-assistant-surface`, off the current main branch (commit dfbbc5b44, which includes
+  pull request 1862).
+- Handoff note for the builder: `docs/coordination/1834-handoff-1499-css-assistant-surface.md`.
+- Running in pane w1:pMW, "builders" tab, agent name `pr1499-css-assistant-surface`, pane label
+  "PR1499 CSS assistant surface". Confirmed it booted on the right model (Sonnet) and is working.
+
+Next: once #1499 is reviewed and merged, start #1500 (shared web forms) the same way, then #1501,
+#1502, #1503 in order. Issue #1511 stays blocked on issue #1246 being open - unchanged, not a
+decision for Ben yet.
