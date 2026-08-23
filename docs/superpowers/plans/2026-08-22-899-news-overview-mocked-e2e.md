@@ -34,9 +34,11 @@
 ### Task 1: Shared news mock — `tests/e2e/mock-news-api.ts`
 
 **Files:**
+
 - Create: `tests/e2e/mock-news-api.ts`
 
 **Interfaces:**
+
 - Consumes: `NewsEnabledSource`, `NewsHeadline`, `NewsOverviewResponse`, `NewsSourceGroup` from `@moss/shared`; `modulesResponse`, `myModulesResponse` from `./mock-modules.js`; Playwright `Page`.
 - Produces (exact exports Task 2 relies on):
   - `export const NEWS_MODULE` — module descriptor with `id: "news"`, `navigation: [{ id: "news", label: "News", path: "/news", icon: "newspaper", order: 34 }]` (copy the literal from `tests/e2e/news-settings.spec.ts:11-18`).
@@ -215,6 +217,7 @@ export async function registerMockNewsRoutes(
 ```
 
 Implementer notes:
+
 - If typecheck complains that `NEWS_MODULE` doesn't satisfy a modules DTO type, type it exactly the way `news-settings.spec.ts` does (bare object literal) — match that file rather than inventing a type import.
 - If `myModulesResponse.modules` entries carry fields not shown above, spread each existing entry unchanged and only append the news entry — the goal is defaults + news, byte-compatible with what the shell expects.
 - `newsOverviewFixture()` resets `seq` so ids are stable run-to-run (`h-1`…`h-6`); tests key on titles, never on ids.
@@ -242,9 +245,11 @@ git commit -m "test(news): add shared mocked news API fixtures for e2e (#899)"
 ### Task 2: Overview spec — `tests/e2e/news-overview.spec.ts`
 
 **Files:**
+
 - Create: `tests/e2e/news-overview.spec.ts`
 
 **Interfaces:**
+
 - Consumes: `mockApi` from `./mock-api.js`; `newsOverviewFixture`, `registerMockNewsRoutes` from `./mock-news-api.js`.
 - Produces: nothing downstream; this is the leaf deliverable.
 
@@ -387,6 +392,7 @@ test("News appears in the primary nav and navigates to /news", async ({ page }) 
 ```
 
 Implementer notes (verify, don't assume):
+
 - **Route layering:** later `page.route` registrations take precedence in Playwright, so the 500 test's re-route of `**/api/news/overview` wins over the one inside `registerMockNewsRoutes`. If the pinned Playwright version behaves otherwise, add an `overviewStatus` option to `registerMockNewsRoutes` instead.
 - **Query retries:** if the 500 test times out because TanStack Query retries before surfacing the error, check the app's QueryClient `defaultOptions` (grep under `apps/web/src`). If retries are on, the persistent 500 route already covers every retry — raise only that one test's expect timeout; never add fixed sleeps.
 - **Nav test:** if the sidebar link's accessible name isn't exactly "News" (icon + label composition), copy the locator pattern `app-shell.spec.ts` uses to click nav entries.
@@ -437,6 +443,7 @@ git commit -m "test(news): mocked e2e coverage for the /news overview page (#899
 ### Task 3: PR, release note, issue close-out
 
 **Files:**
+
 - None modified by hand. (Release note: `Category: N/A` — the issue says explicitly this is not user-visible, so `docs/WHATS_NEW.md` is not touched and the append script is not run.)
 
 - [ ] **Step 1: Open the PR against main**
