@@ -2387,6 +2387,32 @@ high reasoning. It is reviewing exact head `da8e14437`; no merge will occur unti
 QA verdict and all required CI checks are green. The existing #1877 fresh QA remains active in
 pane `w1:pP8`. [pane w1:pP2]
 
+## Update - 2026-08-23, #1880 grounding retry and #1878 fresh QA
+
+Fresh QA for PR #1880 at `da8e14437` posted a durable RED solely because that checkout was one
+commit behind the newly advanced `origin/main`; no code review or runtime evidence was
+accepted. The stale QA pane `w1:pP9` was closed after matching session
+`01a02dea-b80d-7a62-b22c-8871a892e352`, and its isolated worktree was removed. The owner was
+instructed and acknowledged a rebase onto `dc8cc40b2`; fresh QA remains required after the push.
+
+PR #1878 (#1501) was rebased cleanly onto `origin/main` `dc8cc40b2` and force-pushed at head
+`3df25bf03`. A fresh routine QA agent is now active in the QA tab at pane `w1:pPA`, agent
+`qa1878-1501-r3`, session `01a02ded-01f1-7db0-8faf-d606e0938e80`, using Codex GPT-5.6 Luna at
+high reasoning. It must post a durable verdict against that exact head; CI remains pending and
+no merge is authorized. [pane w1:pP2]
+
+## Update - 2026-08-23, #1105 QA clean review but final rebase required
+
+Fresh routine QA for PR #1877 at `16650f3b4` posted a durable RED only because required CI was
+pending; it found no blocking review findings, confirmed invariants and the corrected acceptance
+criteria, and retained the live proof. The QA pane was closed after matching session
+`01a02de8-03af-7473-ac16-446bdd910755`, and its clean isolated worktree was removed.
+
+Because #1879 had since advanced `origin/main` to `dc8cc40b2`, the #1105 owner was instructed
+and acknowledged a rebase and force-with-lease push, followed by final fresh QA against the
+rebased head. No merge is authorized before that final grounding, clean QA, and required CI.
+[pane w1:pP2]
+
 ## Update - 2026-08-23, remaining lanes must rebase after #1879
 
 Squash merge of #1879 advanced `origin/main` to `dc8cc40b2`. The owners of #1877, #1878, and
