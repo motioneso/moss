@@ -2331,3 +2331,11 @@ reported focused checks green. Fresh routine QA is active in the shared QA tab, 
 agent `qa1878-1501-r2`, session `01a02ddd-dcb0-7fe1-96e7-88cd3ad1d092`, on Codex GPT-5.6 Luna at
 high effort. CI remains pending; do not merge until QA posts its durable verdict and all required
 checks are green. [pane w1:pP2]
+
+## Update - 2026-08-23, #1501 corrected QA clean; CI remains pending
+
+Fresh routine QA for PR #1878 at corrected head `d7280feea8e91ed2abbc5da0c58491db948ef561` found
+no blocking or non-blocking findings. It confirmed the moved rail-idiom comment, full exit
+criteria, invariants, live proof, and focused checks. The durable verdict is on the PR; only the
+required foundation check remains pending. The review-only QA pane and worktree were reaped. PR
+#1878 is ready after CI completes green; no merge yet. [pane w1:pP2]
