@@ -54,11 +54,16 @@ DEPUTY_WAIT_SECONDS="$(int_or "${FLEET_DEPUTY_WAIT_SECONDS:-$(settings_get '.dep
 # provider. Word-splitting here is deliberate -- the value is a command.
 JUDGE_CMD="${FLEET_JUDGE_CMD:-$(settings_get '.judgeCmd')}"
 JUDGE_CMD="${JUDGE_CMD:-claude -p}"
-# Model the spawned build agents run on. A cost policy, not a provider choice.
-# The literal fallback below is removed in a later task once per-tier model
-# resolution lands; until then this keeps today's behaviour unchanged.
-BUILD_MODEL="${FLEET_BUILD_MODEL:-$(settings_get '.buildModels.routine.model')}"
-BUILD_MODEL="${BUILD_MODEL:-sonnet}"
+
+tier_model() { # <tier> -> model for this kind of work, or empty for "CLI default"
+  if [ -n "${FLEET_BUILD_MODEL:-}" ]; then echo "$FLEET_BUILD_MODEL"; return; fi
+  settings_get ".buildModels.\"$1\".model"
+}
+
+tier_effort() { # <tier> -> effort level, or empty for "do not pass one"
+  if [ -n "${FLEET_BUILD_EFFORT:-}" ]; then echo "$FLEET_BUILD_EFFORT"; return; fi
+  settings_get ".buildModels.\"$1\".effort"
+}
 
 NOW_EPOCH="$(date +%s)"
 
@@ -222,12 +227,18 @@ render_brief() { # <template> <out> ISSUE SPEC TIER BRANCH WORKTREE PR AGENT ROU
 }
 
 # Spawn a Claude agent in a fresh herdr pane pointed at a brief file.
-spawn_agent() { # <name> <cwd> <brief-path>
-  local name="$1" cwd="$2" brief="$3"
+spawn_agent() { # <name> <cwd> <brief-path> <tier>
+  local name="$1" cwd="$2" brief="$3" tier="${4:-routine}"
+  local model effort
+  local model_args=()
+  model="$(tier_model "$tier")"
+  effort="$(tier_effort "$tier")"
+  [ -n "$model" ] && model_args+=(--model "$model")
+  [ -n "$effort" ] && model_args+=(--effort "$effort")
   local boot="You are a fleet lane agent. Read and follow the brief at $brief exactly. Report status in plain English, no jargon, and pass that rule to anything you spawn."
   if [ "$DRY" = "1" ]; then
     echo "DRY: herdr pane split <base-pane> --direction down --cwd $cwd --no-focus"
-    echo "DRY: herdr agent start $name --kind claude --pane <new-pane> -- --model $BUILD_MODEL --permission-mode bypassPermissions \"$boot\""
+    echo "DRY: herdr agent start $name --kind claude --pane <new-pane> -- ${model_args[*]} --permission-mode bypassPermissions \"$boot\""
     return 0
   fi
   local base_pane new_pane
@@ -241,7 +252,7 @@ spawn_agent() { # <name> <cwd> <brief-path>
     echo "fleet-tick: pane split failed for $name" >&2
     return 1
   fi
-  if ! herdr agent start "$name" --kind claude --pane "$new_pane" -- --model "$BUILD_MODEL" --permission-mode bypassPermissions "$boot" >/dev/null 2>&1; then
+  if ! herdr agent start "$name" --kind claude --pane "$new_pane" -- "${model_args[@]}" --permission-mode bypassPermissions "$boot" >/dev/null 2>&1; then
     echo "fleet-tick: herdr agent start failed for $name" >&2
     return 1
   fi
@@ -442,7 +453,7 @@ handle_queued() { # <issue> <record>
       return 0
     fi
   fi
-  if spawn_agent "$agent" "$worktree" "$brief"; then
+  if spawn_agent "$agent" "$worktree" "$brief" "$tier"; then
     fctl log "$issue" "spawn: build agent $agent in $worktree"
     note_spawn
     fctl set "$issue" status=building "agent=$agent" "branch=$branch" "worktree=$worktree"
@@ -454,8 +465,9 @@ handle_queued() { # <issue> <record>
 
 handle_building() { # <issue> <record>
   local issue="$1" record="$2"
-  local agent updated age restart_count ruling
+  local agent tier updated age restart_count ruling
   agent="$(jq -r '.agent // empty' <<<"$record")"
+  tier="$(jq -r '.tier // "routine"' <<<"$record")"
   updated="$(jq -r '.updated_at // empty' <<<"$record")"
   [ -n "$agent" ] || return 0
   if herdr_agent_names | grep -qxF "$agent"; then
@@ -485,7 +497,7 @@ handle_building() { # <issue> <record>
       local worktree brief
       worktree="$(jq -r '.worktree // empty' <<<"$record")"
       brief="$BRIEFS_DIR/brief-$issue-build.md"
-      if [ -n "$worktree" ] && [ -f "$brief" ] && spawn_agent "$agent" "$worktree" "$brief"; then
+      if [ -n "$worktree" ] && [ -f "$brief" ] && spawn_agent "$agent" "$worktree" "$brief" "$tier"; then
         fctl log "$issue" "restart: respawned build agent $agent with the same brief"
         fctl log "$issue" "spawn: build agent $agent (restart)"
         note_spawn
@@ -507,7 +519,8 @@ handle_building() { # <issue> <record>
 
 handle_pr_open() { # <issue> <record>
   local issue="$1" record="$2"
-  local pr checks failing pending
+  local pr checks failing pending tier
+  tier="$(jq -r '.tier // "routine"' <<<"$record")"
   pr="$(jq -r '.pr // empty' <<<"$record")"
   if [ -z "$pr" ]; then
     fctl log "$issue" "status is pr-open but the record has no PR number"
@@ -559,7 +572,7 @@ handle_pr_open() { # <issue> <record>
     echo "Write everything a human reads in plain English, no jargon, plain ASCII"
     echo "punctuation, and pass this rule to anything you spawn."
   } > "$brief"
-  if spawn_agent "$qa_agent" "${worktree:-$REPO_ROOT}" "$brief"; then
+  if spawn_agent "$qa_agent" "${worktree:-$REPO_ROOT}" "$brief" "$tier"; then
     fctl log "$issue" "spawn: QA agent $qa_agent for round $round"
     note_spawn
     fctl set "$issue" status=qa "agent=$qa_agent"

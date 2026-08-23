@@ -374,4 +374,27 @@ out="$(run_tick "$state" FLEET_MEMINFO="$tmp/does-not-exist")"
 grep -q "DRY: herdr agent start fleet-lane-601" <<<"$out"
 pass "an unreadable memory source does not stop the fleet"
 
+# --- 17. each kind of work spawns on its configured model and effort ----------------
+
+state="$(new_state)"
+write_record "$state" 701 '{"issue":701,"status":"queued","tier":"security","relays":0,"spec":"docs/x.md"}'
+printf '{"buildModels":{"security":{"model":"model-x","effort":"high"}}}\n' > "$state/settings.json"
+out="$(run_tick "$state")"
+grep -q -- "--model model-x --effort high" <<<"$out"
+pass "a security-tier lane spawns on the model and effort configured for security work"
+
+# --- 17b. no configuration at all means no model flag, not a baked-in name ----------
+
+state="$(new_state)"
+write_record "$state" 702 '{"issue":702,"status":"queued","tier":"routine","relays":0,"spec":"docs/x.md"}'
+out="$(run_tick "$state")"
+grep -q "DRY: herdr agent start fleet-lane-702" <<<"$out"
+if grep -q -- "--model" <<<"$out"; then false; fi
+pass "with no settings and no env, the spawn omits the model flag entirely"
+
+# --- 17c. no model name appears in the daemon's own code ----------------------------
+
+if grep -riE 'sonnet|opus|haiku|fable|gpt-[0-9]' "$repo_root/scripts/fleet/tick.sh" "$repo_root/scripts/fleet/fleetctl.mjs"; then false; fi
+pass "the daemon and the state CLI contain no model names; names are data in settings"
+
 echo "fleet tick tests passed"
