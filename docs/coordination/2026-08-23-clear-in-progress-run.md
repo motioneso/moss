@@ -210,16 +210,18 @@ onto issue #1885 / PR #1886 and merged as `91aa6ad84` after green QA and require
 merges occurred during adoption. Feature merge order remains #1883, #1884, #1319-A, #1319-B,
 #1794; #1737 is already closed/Done.
 
-## Latest continuation note — mandatory compaction relay
+## Latest continuation note — mandatory compaction relay adopted
 
-Codex session `01a02f7f-5563-7590-ac66-9b2827dab85c` saw a compacted-context summary and is
-relaying immediately without merging. The successor must replace the coordinator lock with its
-own immutable Codex session id, re-adopt the live fleet, and then reap this session by resolving
-label `Coordinator` plus the old session id above. Current live state at relay:
+Codex session `01a02fc3-d518-78c0-8a88-cd3243d936b4` replaced the manifest lock, re-adopted the
+live fleet, claimed registered name `coordinator` and pane label `Coordinator`, and reaped outgoing
+Codex session `01a02f7f-5563-7590-ac66-9b2827dab85c` after resolving it from a fresh Herdr pane
+list by label plus immutable session id. The three in-scope Builders panes are re-squared to a 3x1
+layout. Current live state after adoption:
 
-- PRs #1892, #1891, #1897, and #1896 have no red checks; each still has only `Verify foundation
-  and app` pending. PR #1896's initial sensitive QA verdict is already recorded above and remains
-  merge-ready NO until CI, its final integrated QA, and the real post-merge workflow proof.
+- PRs #1892, #1891, #1897, and #1896 have no red checks. #1891's foundation check passed and its
+  image build remains pending; the other three still have `Verify foundation and app` pending.
+  PR #1896's initial sensitive QA verdict is already recorded above and remains merge-ready NO
+  until CI, its final integrated QA, and the real post-merge workflow proof.
 - `build-1883-livepath` relayed cleanly to `build-1883-livepath2`, which is confirmed driving on
   Sonnet in the same worktree. Its approved implementation remains the UAT-only preload that
   points Transformers at closed port 65534 and proves the fixed safe error end to end; do not add
