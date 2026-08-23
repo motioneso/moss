@@ -2652,3 +2652,16 @@ deletion-only correction, not a QA bypass: the existing owner must remove only t
 duplicated explanatory web-sheet comments, rebase onto current `origin/main`, push with lease, and
 request fresh exact-head QA. Required CI and that fresh QA must be green before merge. The resolved
 entry was removed from `docs/coordination/AWAITING-BEN.md`. [pane w1:pPJ]
+
+## Update - 2026-08-23, #1878 final deletion-only head in fresh QA r6
+
+The #1501 owner made the approved final correction at exact head
+`9a8ae7f69e7604927ce6aeb062f93a5961e45e11`, rebased onto `origin/main`
+`d389a59e17f7483ee198fe0d95527798e3a24d84`. The commit deletes nine remaining duplicated
+explanatory comment lines from the web keyline sheet, with no additions or value/content changes;
+the package explanations remain intact. Smallest owner checks passed and no merge was performed.
+
+Fresh routine QA is active in the dedicated QA tab, agent `qa1878-1501-r6`, session
+`d689eb7f-6cba-448b-845e-0c158143d1c4`, using Claude Sonnet. It must post a durable verdict against
+that exact head, and newly triggered required CI must also finish green. No merge is authorized.
+[pane w1:pPJ]
