@@ -2186,3 +2186,12 @@ Fresh fleet evidence shows no dead lane. #1105 and #1335 isolated runners remain
 failure sentinel. Routine QA for #899 is actively reviewing PR #1879 and its scoped helpers. The
 #1874 Opus reviewer is re-reading the corrected PR body and checking the non-required image job
 before posting the updated security verdict. No Ben-only decision is open. [pane w1:pNF]
+
+## Update - 2026-08-23, #1874 security QA GREEN; Ben sign-off requested
+
+Fresh Opus QA posted GREEN on PR #1874
+(`https://github.com/motioneso/moss/pull/1874#issuecomment-5384979094`). The corrected PR body,
+required CI, isolated full gate, accepted socket-level live recovery proof, and invariants are all
+green; three observations are explicitly non-blocking. Security-tier policy now leaves one
+Ben-only merge decision, so the coordinator added `AWAITING-BEN.md` and sent `needs-ben`; no merge
+will occur until his explicit approval. [pane w1:pNF]
