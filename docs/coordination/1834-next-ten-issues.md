@@ -1454,3 +1454,12 @@ ade27279-2d46-47b9-b52c-773f24503f6d, is using the existing clean
 `1872-service-worker-image-diagnosis` worktree. It must stop after publishing its plan pointer.
 Implementation remains blocked until a separate Fable-model review agent approves that plan; the
 coordinator must not substitute inline judgment.
+
+## Plan-authorship correction - 2026-08-23, issue #1872
+
+Ben clarified the standing rule: **Fable authors implementation plans; Fable does not merely review
+Sonnet-authored plans.** The Sonnet lane was stopped before product code, and its untracked draft is
+non-authoritative and isolated in `1872-service-worker-image-diagnosis`. Fable 5 agent
+`issue1872-fable-plan`, session ea3935a0-09a0-47e1-b29e-a014c6cd218e, is independently authoring
+the authoritative plan in clean branch/worktree `1872-fable-plan`. No implementation may start
+until that Fable-authored plan is committed and handed to a build agent.
