@@ -1,0 +1,10 @@
+[Unit]
+Description=Jarv1s fleet daemon tick -- advance every lane one step
+
+[Service]
+Type=oneshot
+Environment=JARV1S_FLEET_STATE=/home/ben/.local/state/jarv1s-fleet
+ExecStart=/home/ben/Jarv1s/scripts/fleet/tick.sh
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=jarv1s-fleet-tick
