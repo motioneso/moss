@@ -2116,3 +2116,12 @@ entered. The coordinator sent the owner a verified instruction to stop only that
 attempt ended `DONE rc=143`; its owner is actively restarting the isolated gate with the trigger
 absent. #899 remains alive in integration with no failure sentinel. #1874's Opus security review
 and #1501's image-publication check remain in flight. [pane w1:pNF]
+
+## Update - 2026-08-23, clean gate retries running
+
+#1105 and #1335 both completed the password-prompt recovery and now have fresh isolated runners
+with the token trigger explicitly removed: #1105 log
+`/tmp/jarv1s-gate/1105_seeded_chat_uat-20260823-005639.log`, #1335 log
+`/tmp/jarv1s-gate/1335_tests_tsx_typecheck-20260823-005533.log`. Both are actively checking
+formatting and still require exact terminal sentinels. #899 remains alive in integration; #1874
+Opus QA and #1501 image publication remain pending. [pane w1:pNF]
