@@ -1173,3 +1173,16 @@ and no test data left behind; its worktree can be reused.
 This is security tier (permission/auth logic) - waiting on CI to go green, then spawning Opus
 adversarial QA, then Ben's explicit merge sign-off is required before merge (no auto-merge).
 Watching CI in a background monitor.
+
+## Update - 2026-08-23, sixteenth coordinator (cont. 2)
+
+Pull request 1862 (issue #1530): all CI checks finished green (CI gate, both compose smokes, the
+long foundation/app check at 31m37s, and the image build at 8m50s). Spawned the required Opus
+adversarial security review: pane w1:pMT, agent name `qa1862-1530-security-review`, worktree
+`.claude/worktrees/qa-1862-1530-permission-repair`, new "qa" tab (w1:t32). Confirmed running on
+Opus. It was told to verify the claim in the pull request that no user-facing screen changed (so
+no live-walkthrough proof needed), not just accept it, and to post its verdict as a comment on the
+pull request when done.
+
+Issue #1246 still open as of this update, so issue #1511 stays blocked - informational only, not
+a Ben decision.
