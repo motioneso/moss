@@ -2434,3 +2434,12 @@ PR #1878 (#1501) final routine QA is active at pane `w1:pPA`, agent `qa1878-1501
 pending. PR #1877's owner is rebasing `16650f3b4` onto current main after its fresh QA found no
 blocking review findings but CI was pending; final QA will be spawned after the force-push.
 [pane w1:pP2]
+
+## Update - 2026-08-23, #1105 final QA started
+
+PR #1877 (#1105) is now rebased onto `origin/main` `dc8cc40b2` at head
+`cc308e616e33a0c81992ff9b1603cdc374e2f0fb`, with the corrected screenshot-free proof preserved.
+Final routine QA is active in the QA tab at pane `w1:pPC`, agent `qa1877-1105-r3`, session
+`01a02def-66a5-7b03-ab5e-11429bd7ccf0`, using Codex GPT-5.6 Luna at high reasoning. It must
+post a durable verdict against the exact rebased head; CI remains pending and no merge is
+authorized. [pane w1:pP2]
