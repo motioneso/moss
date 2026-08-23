@@ -221,8 +221,23 @@ export async function runScriptedClaude(): Promise<void> {
       "mcp-tools-call"
     );
     if (callBody.error) fail(scriptId, effectiveTurnIndex, "mcp-tools-call-jsonrpc-error");
-    const result = callBody.result as { isError?: boolean } | undefined;
-    if (result?.isError) fail(scriptId, effectiveTurnIndex, "mcp-tools-call-denied-or-failed");
+    const result = callBody.result as
+      | { isError?: boolean; content?: Array<{ text?: unknown }> }
+      | undefined;
+    if (call.expectedError !== undefined) {
+      // #1883: this call is scripted to fail on purpose — a real dependency-failure proof, not a
+      // permission/schema problem. Never log or echo the received text (secrets-never-leak, see
+      // this file's header) — only a fixed failure-class string on mismatch.
+      if (result?.isError !== true) {
+        fail(scriptId, effectiveTurnIndex, "expected-error-but-succeeded");
+      }
+      const receivedText = result?.content?.[0]?.text;
+      if (receivedText !== call.expectedError) {
+        fail(scriptId, effectiveTurnIndex, "expected-error-mismatch");
+      }
+    } else if (result?.isError) {
+      fail(scriptId, effectiveTurnIndex, "mcp-tools-call-denied-or-failed");
+    }
 
     for (const [name, pointer] of Object.entries(call.captures ?? {})) {
       try {
