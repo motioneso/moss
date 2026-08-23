@@ -5,7 +5,7 @@ Part of #1884. Spec: `docs/superpowers/specs/2026-08-23-1884-weather-settings-ca
 ## Seams check (file:line citations)
 
 - Current groups live in `apps/web/src/settings/settings-personal-panes.tsx:335` (`Weather
-  location` group, ends `:406`) and `:408` (`Temperature` group, ends `:421`). Both are siblings
+location` group, ends `:406`) and `:408` (`Temperature` group, ends `:421`). Both are siblings
   inside `ProfilePane`'s returned JSX — merging is a matter of deleting the second `<Group>`
   wrapper and moving its `<Row>` into the first.
 - `weatherUnit`, `weatherUnitQuery`, `weatherUnitMutation` are already computed at
@@ -59,6 +59,7 @@ system").
 ## Task 1 — extend `Switch` with an optional letter label
 
 Files:
+
 - `packages/ui/src/switch.tsx`
 - `packages/ui/src/styles/components-forms.css` (color/sizing for the label text — add rules under
   the existing `.jds-switch__thumb` block, e.g. a `.jds-switch__thumb-label` class using
@@ -66,6 +67,7 @@ Files:
 - `packages/ui/catalogue.json`, `packages/ui/OPTIONS.md` (regenerate via `pnpm build:ui-catalogue`)
 
 Signature change:
+
 ```ts
 export interface SwitchProps {
   readonly ariaLabel: string;
@@ -75,6 +77,7 @@ export interface SwitchProps {
   readonly onChange?: (checked: boolean) => void;
 }
 ```
+
 `label`, when present, renders as a `<span className="jds-switch__thumb-label" aria-hidden="true">`
 inside `.jds-switch__thumb`. `aria-hidden` because the visible letter is a sighted-user affordance; the accessible name itself
 (computed by the caller, see Task 2) is what carries the unit information to assistive tech — no
@@ -110,10 +113,10 @@ File: `apps/web/src/settings/settings-personal-panes.tsx`
   checked", which doesn't say checked means which unit. Fix: the accessible name is now
   **dynamic**, carrying both the setting name and the current full unit word ("Temperature units:
   Fahrenheit" / "Temperature units: Celsius"). This stays a plain native `<input
-  type="checkbox">` — no ARIA role added — and the visible `C`/`F` span stays `aria-hidden` since
+type="checkbox">` — no ARIA role added — and the visible `C`/`F` span stays `aria-hidden` since
   the accessible name alone already fully conveys state.
   Keep the `Row`'s `name`/`desc` text as-is (already correct: `"Weather temperatures are shown in
-  Fahrenheit/Celsius."`).
+Fahrenheit/Celsius."`).
 - No changes to `weatherLocationQuery`, `weatherLocationMutation`, `weatherUnitQuery`,
   `weatherUnitMutation`, `clearWeatherLocation`, or any query key — persistence, loading/pending
   disabling, error toasts (`onError: (error) => toast(readError(error), { tone: "drift" })`), and
@@ -122,6 +125,7 @@ File: `apps/web/src/settings/settings-personal-panes.tsx`
   edited).
 
 Test cases (extend `tests/unit/settings-personal-panes.test.tsx`):
+
 - `html` contains exactly one `Weather` group heading and does **not** contain `"Weather location"`
   or `"Temperature"` as group titles — would fail against a version that only renamed the group
   without deleting the old `Temperature` wrapper, or that left both headings.
@@ -173,6 +177,7 @@ pnpm build:ui-catalogue > /tmp/catalogue.log 2>&1; echo "EXIT=$?"
 pnpm vitest run tests/unit/settings-personal-panes.test.tsx > /tmp/unit.log 2>&1; echo "EXIT=$?"
 pnpm vitest run tests/integration/settings-weather-unit.test.ts > /tmp/int.log 2>&1; echo "EXIT=$?"
 ```
+
 Full gate (`pnpm verify:foundation`) only via the `verify-gate` skill at wrap-up, per CLAUDE.md.
 
 ## Kill gate
