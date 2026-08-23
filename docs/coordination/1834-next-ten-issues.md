@@ -1283,3 +1283,16 @@ Started the first lane:
 Next: once #1499 is reviewed and merged, start #1500 (shared web forms) the same way, then #1501,
 #1502, #1503 in order. Issue #1511 stays blocked on issue #1246 being open - unchanged, not a
 decision for Ben yet.
+
+## Update - 2026-08-23, #1499 built, in QA
+
+Build finished: pull request 1868, branch `1499-css-assistant-surface`, rebased onto main at
+621465aea. Full local gate green. Caught during a second-opinion plan check that the proof on the
+PR was missing the mobile-width comparison the spec requires (it only had light/dark at desktop
+width) - asked the lane to add it, they did, both widths now confirmed pixel-clean except for a
+known unrelated animation timing difference.
+
+Started QA: pane w1:pMY, "qa" tab w1:t34, agent name `qa1868-1499-css-review`, routine tier
+(standard review, no Ben sign-off needed to merge once green). Confirmed running on Sonnet.
+
+Once this merges: start #1500 the same way, chain continues.
