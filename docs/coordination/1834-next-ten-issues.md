@@ -2466,6 +2466,16 @@ The durable verdict is posted; the QA pane was closed after matching session
 The owner was sent the exact blocking finding and acknowledged the remediation request. Fresh
 QA and green required CI are required after the correction; no merge is authorized. [pane w1:pP2]
 
+## Update - 2026-08-23, #1880 fixture correction in fresh QA
+
+The #1335 owner corrected PR #1880 at head `6ee85684b`, replacing all three
+`settings-activity-pane` `{} as never` fixtures with one valid `MeResponse` fixture. The
+branch is current on `origin/main` `dc8cc40b2`; typecheck, format, lint, and the targeted
+activity-pane tests passed. A fresh routine QA agent is active in the new QA tab at pane
+`w1:pPD`, agent `qa1880-1335-r4`, session `01a02df8-833d-7bb1-acb8-69a23435ce43`, using Codex
+GPT-5.6 Luna at high reasoning. It must post a durable verdict against that exact head; CI
+remains pending and no merge is authorized. [pane w1:pP2]
+
 ## Update - 2026-08-23, #1877 final QA clean; CI pending
 
 Final routine QA for PR #1877 at rebased head `cc308e616e33a0c81992ff9b1603cdc374e2f0fb`
