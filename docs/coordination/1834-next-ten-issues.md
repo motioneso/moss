@@ -2420,3 +2420,17 @@ Squash merge of #1879 advanced `origin/main` to `dc8cc40b2`. The owners of #1877
 force-with-lease push, and obtain fresh QA against those rebased heads. Current QA work may
 finish for evidence, but no remaining PR is mergeable until its final rebased head has clean QA
 and all required CI checks green. [pane w1:pP2]
+
+## Continuation - 2026-08-23, final QA wave on current main
+
+PR #1880 (#1335) is finally grounded at `83e930617`, rebased onto `origin/main` `dc8cc40b2`
+and force-pushed with fresh evidence. Final routine QA is active in the QA tab at pane
+`w1:pPB`, agent `qa1880-1335-r3`, session `01a02ded-cbd2-7951-9ba6-66ee7dabbc34`, using Codex
+GPT-5.6 Luna at high reasoning. It must post a durable verdict against that exact head; CI is
+pending.
+
+PR #1878 (#1501) final routine QA is active at pane `w1:pPA`, agent `qa1878-1501-r3`, session
+`01a02ded-01f1-7db0-8faf-d606e0938e80`, against rebased head `3df25bf03` on current main. CI is
+pending. PR #1877's owner is rebasing `16650f3b4` onto current main after its fresh QA found no
+blocking review findings but CI was pending; final QA will be spawned after the force-push.
+[pane w1:pP2]
