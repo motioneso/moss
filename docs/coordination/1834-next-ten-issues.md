@@ -1612,6 +1612,6 @@ Fable-authored plan. Fresh QA is mandatory after the fixes. PR #1874 remains unm
 is green, security QA is green and posted, and Ben explicitly signs off.
 
 Mid-doing: the coordinate compaction tripwire fired. Relay immediately after committing this note;
-the successor should re-adopt the #1874 owner, reap the already-consumed QA pane/worktree if still
-present, and start #1501 when a safe Builders slot is available using a Fable-authored plan and the
-new Codex Luna/high-effort launch policy.
+the completed #1874 QA pane and disposable worktree were reaped after its verdict was consumed.
+The successor should re-adopt the #1874 owner and start #1501 when a safe Builders slot is
+available using a Fable-authored plan and the new Codex Luna/high-effort launch policy.
