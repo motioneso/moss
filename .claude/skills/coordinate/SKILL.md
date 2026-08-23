@@ -152,6 +152,12 @@ parallel merge loop).
    - **session id** (`agent_session.value` in `herdr pane list`) = *authority* — immutable for
      the session's life. You re-confirm your own session id against the manifest lock line before
      every merge (Phase 3 step 0).
+4. **Turn on the idle watchdog** — it only runs while a coordinator is actually driving:
+   ```bash
+   systemctl --user start coordinator-watchdog.timer
+   ```
+   It nudges the pane labeled `Coordinator` if it goes quiet for 15 minutes. Turning it off again
+   is part of `end-coordination`, not this phase — don't stop it yourself mid-run.
 
 ## Phase 0 — readiness (with Ben)
 
@@ -478,6 +484,11 @@ When an agent reports **done** (PR open + its own green evidence — which you d
   Terse and result-first: no recaps, no option surveys, no restating what he just read. Anything
   merged without its live-path proof is reported as **code-complete, unverified** — never "done".
 - **Save durable memory** for any non-obvious decision/trap (`memory_save`, `project: "jarv1s"`).
+
+**When the whole run is done — the queue is empty, nothing is left building, and you are not
+about to relay** — use `end-coordination` to close the run out fully, including turning the idle
+watchdog back off. Phase 4 above is what you do after every merge; `end-coordination` is what you
+do once, at the very end.
 
 ## Coordinator self-handoff (protect the long-lived session)
 

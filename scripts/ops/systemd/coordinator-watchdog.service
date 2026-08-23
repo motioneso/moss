@@ -1,0 +1,10 @@
+[Unit]
+Description=Jarv1s dev-coordinator watchdog -- nudge if idle
+
+[Service]
+Type=oneshot
+Environment=COORDINATOR_WATCHDOG_IDLE_SECONDS=900
+ExecStart=/home/ben/Jarv1s/scripts/ops/coordinator-watchdog.sh
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=coordinator-watchdog

@@ -3,7 +3,7 @@
 # Runs as a systemd oneshot on a 1-minute timer (see scripts/ops/systemd/).
 set -euo pipefail
 
-IDLE_THRESHOLD_SECONDS="${COORDINATOR_WATCHDOG_IDLE_SECONDS:-300}"
+IDLE_THRESHOLD_SECONDS="${COORDINATOR_WATCHDOG_IDLE_SECONDS:-900}"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/jarv1s-coordinator-watchdog"
 STATE_FILE="$STATE_DIR/state.json"
 mkdir -p "$STATE_DIR"
