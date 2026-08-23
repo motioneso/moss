@@ -21,7 +21,7 @@ Spec: `docs/superpowers/specs/2026-08-10-css-guard-residue.md`, child C row (lin
 - No selector under `packages/ui/src/styles/components-chat.css` matches `.assistant-surface*`
   today (grepped, zero hits) — no collision, no cascade-order dependency to resolve on the move.
 - No `font: inherit` shorthand is among the 9 moved declarations (`.assistant-surface__composer
-  textarea` has `font: inherit` but that property name is not in `BANNED_VISUAL_PROPERTIES` and
+textarea` has `font: inherit` but that property name is not in `BANNED_VISUAL_PROPERTIES` and
   stays in the app file) — the spec's shorthand-coupling rule (line 75) applies to children A/F
   only, not C.
 - `scripts/check-design-tokens.ts:89-` — `MIGRATED_SECTION_CSS_FILES` is the registration array.
