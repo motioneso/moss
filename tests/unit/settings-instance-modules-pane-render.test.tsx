@@ -84,6 +84,8 @@ function seedClient(
   client.setQueryData(queryKeys.settings.adminModuleRegistry, {
     enabled: true,
     registryUnavailable: false,
+    catalogVerification: "verified",
+    catalogDigestSha256: "a".repeat(64),
     modules: [
       {
         id: UNDECLARED_ID,
@@ -225,6 +227,8 @@ describe("InstanceModulesPane external-modules trust warning (#1187 decision 5)"
     client.setQueryData(queryKeys.settings.adminModuleRegistry, {
       enabled: true,
       registryUnavailable: false,
+      catalogVerification: "verified",
+      catalogDigestSha256: "a".repeat(64),
       modules: [
         {
           id: DECLARED_ID,
@@ -282,6 +286,8 @@ describe("InstanceModulesPane module library merge (#1187 decisions 1/2)", () =>
     client.setQueryData(queryKeys.settings.adminModuleRegistry, {
       enabled: true,
       registryUnavailable: false,
+      catalogVerification: "verified",
+      catalogDigestSha256: "a".repeat(64),
       modules: [
         {
           id: "registry-a",

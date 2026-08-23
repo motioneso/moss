@@ -10,7 +10,10 @@ import {
   ModuleDownloadError,
   parseModulesEnsure
 } from "@moss/module-registry/node";
-import type { ModuleDistributionDependencies, ModuleRegistryEntryLike } from "@moss/settings";
+import type {
+  ModuleDistributionDependencies,
+  RegistryEntriesSnapshot
+} from "@moss/settings";
 
 import type { ApiServerConfig, CreateApiServerOptions } from "./server.js";
 
@@ -33,20 +36,28 @@ export function createModuleDistributionPort(
   const fetchFn = options.fetchFn;
 
   const REGISTRY_CACHE_TTL_MS = 10 * 60 * 1000;
-  let registryCache: { at: number; entries: readonly ModuleRegistryEntryLike[] } | null = null;
+  let registryCache: { at: number; snapshot: RegistryEntriesSnapshot } | null = null;
 
   return {
     fetchRegistryEntries: async ({ refresh }) => {
       if (!refresh && registryCache && Date.now() - registryCache.at < REGISTRY_CACHE_TTL_MS) {
-        return registryCache.entries;
+        return registryCache.snapshot;
       }
-      const { index, errors } = await fetchRegistryIndex({ env: process.env, fetchFn });
-      if (!index) {
-        server.log.warn({ errors }, "module registry index unavailable (#964)");
-        return null;
+      const result = await fetchRegistryIndex({ env: process.env, fetchFn });
+      if (!result.index) {
+        server.log.warn({ errors: result.errors }, "module registry index unavailable (#964)");
+        // "unavailable" is never cached — a failed refetch leaves any previous
+        // cached snapshot untouched so the next request can retry.
+        return { entries: null, catalogVerification: "unavailable", catalogDigestSha256: null };
       }
-      registryCache = { at: Date.now(), entries: index.modules };
-      return index.modules;
+      // Atomic: entries + verification + digest all come from this one fetchRegistryIndex call.
+      const snapshot: RegistryEntriesSnapshot = {
+        entries: result.index.modules,
+        catalogVerification: result.verification,
+        catalogDigestSha256: result.digestSha256
+      };
+      registryCache = { at: Date.now(), snapshot };
+      return snapshot;
     },
     download: async (input) => {
       try {

@@ -92,17 +92,21 @@ export function registerModuleRegistryRoutes(
           const body: GetModuleRegistryResponse = {
             enabled: false,
             registryUnavailable: false,
+            catalogVerification: "unavailable",
+            catalogDigestSha256: null,
             modules: []
           };
           return body;
         }
-        const entries = await dist.fetchRegistryEntries({
+        const snapshot = await dist.fetchRegistryEntries({
           refresh: request.query.refresh === "1"
         });
         const body: GetModuleRegistryResponse = {
           enabled: true,
-          registryUnavailable: entries === null,
-          modules: await deriveRows(entries, adminStates)
+          registryUnavailable: snapshot.catalogVerification === "unavailable",
+          catalogVerification: snapshot.catalogVerification,
+          catalogDigestSha256: snapshot.catalogDigestSha256,
+          modules: await deriveRows(snapshot.entries, adminStates)
         };
         return body;
       } catch (error) {
@@ -154,8 +158,8 @@ export function registerModuleRegistryRoutes(
             return listExternalModuleAdminStates(scopedDb);
           }
         );
-        const entries = await dist.fetchRegistryEntries({ refresh: false });
-        const rows = await deriveRows(entries, adminStates);
+        const snapshot = await dist.fetchRegistryEntries({ refresh: false });
+        const rows = await deriveRows(snapshot.entries, adminStates);
         const row = rows.find((r) => r.id === moduleId);
         if (!row) throw new HttpError(404, "External module not found");
         return { module: row };
@@ -218,8 +222,8 @@ export function registerModuleRegistryRoutes(
         // fs delete LAST — if it fails the module is already pinned disabled (safe),
         // and the admin can retry Remove.
         await dist!.removeModuleFiles(moduleId);
-        const entries = await dist!.fetchRegistryEntries({ refresh: false });
-        const rows = await deriveRows(entries, adminStates);
+        const snapshot = await dist!.fetchRegistryEntries({ refresh: false });
+        const rows = await deriveRows(snapshot.entries, adminStates);
         const row = rows.find((r) => r.id === moduleId);
         if (!row) throw new HttpError(404, "External module not found");
         return { module: row };
@@ -258,8 +262,8 @@ export function registerModuleRegistryRoutes(
             return listExternalModuleAdminStates(scopedDb);
           }
         );
-        const entries = await dist!.fetchRegistryEntries({ refresh: false });
-        const rows = await deriveRows(entries, adminStates);
+        const snapshot = await dist!.fetchRegistryEntries({ refresh: false });
+        const rows = await deriveRows(snapshot.entries, adminStates);
         const row = rows.find((r) => r.id === moduleId);
         if (!row) throw new HttpError(404, "External module not found");
         return { module: row };

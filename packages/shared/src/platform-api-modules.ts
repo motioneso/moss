@@ -520,6 +520,10 @@ export interface ModuleRegistryRowDto {
 export interface GetModuleRegistryResponse {
   readonly enabled: boolean;
   readonly registryUnavailable: boolean;
+  /** #1319: whether the pinned signing key verified this fetch's catalog bytes. */
+  readonly catalogVerification: "verified" | "unverified" | "unavailable";
+  /** SHA-256 hex digest of the exact catalog bytes this response was derived from; null when unavailable. */
+  readonly catalogDigestSha256: string | null;
   readonly modules: readonly ModuleRegistryRowDto[];
 }
 
@@ -592,10 +596,18 @@ export const getModuleRegistryRouteSchema = {
     200: {
       type: "object",
       additionalProperties: false,
-      required: ["enabled", "registryUnavailable", "modules"],
+      required: [
+        "enabled",
+        "registryUnavailable",
+        "catalogVerification",
+        "catalogDigestSha256",
+        "modules"
+      ],
       properties: {
         enabled: { type: "boolean" },
         registryUnavailable: { type: "boolean" },
+        catalogVerification: { type: "string", enum: ["verified", "unverified", "unavailable"] },
+        catalogDigestSha256: { type: ["string", "null"] },
         modules: { type: "array", items: moduleRegistryRowSchema }
       }
     },
