@@ -2312,3 +2312,13 @@ typecheck evidence are posted; the change has no user-facing surface. Fresh rout
 in the shared QA tab, pane `w1:pP6`, agent `qa1880-1335`, session
 `01a02dd9-a536-7891-80da-f81d960e0880`, on Codex GPT-5.6 Luna at high effort. CI is still pending;
 do not merge until QA posts its durable verdict and all required checks are green. [pane w1:pP2]
+
+## Update - 2026-08-23, #1501 Task 1 comment gap returned to owner
+
+Fresh routine QA for PR #1878 at head `6207eda6d5b5968359e1083ddc1e889bf473a40a` found no code
+blockers and confirmed the live proof, invariants, and CSS/import/discovery behavior. It marked
+the exit criteria partial because the explanatory rail-idiom comment remained in the web sheet
+instead of moving with the rail declarations; CI was also still pending. The durable QA verdict
+is on the PR. The finding was delivered and acknowledged by `codex-1501-build`, which is moving
+the comment, pushing a corrected head, and requesting fresh QA. The review-only QA pane and
+worktree were reaped. PR #1878 remains unmergeable. [pane w1:pP2]
