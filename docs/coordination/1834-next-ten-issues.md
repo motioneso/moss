@@ -1558,4 +1558,7 @@ against their existing approved Fable-authored plans and must not replace them.
 - #1872 relayed again. Sonnet successor `issue1872-image-relay3`, session
   `f598bdac-11ec-4d7e-aa71-ccad13e05612`, is visibly driving the existing worktree. The spent
   predecessor session `9772db8c-0b09-4db3-a9df-63ba6865faee` was closed after confirmation.
+  A leftover predecessor test process collided with the successor's first gate database; the
+  successor stopped exact PID `2972986`, confirmed exit, discarded that run's false failures, and
+  restarted the full chain in the foreground against fresh database `jarvis_gate_1872c`.
 - No Ben-only decision is open. Fable remains the sole implementation-plan author for this run.
