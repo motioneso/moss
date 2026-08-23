@@ -1390,3 +1390,33 @@ agent. Applies for the rest of run 1834.
 
 Coordinator identity: pane w1:pN1, agent name `coordinator`, session
 968e7cb9-418f-44cf-9508-9834d869c74f.
+
+## Continuation note - 2026-08-23, nineteenth coordinator handing off to Codex successor (Ben's request, not a context relay)
+
+Ben asked to switch the coordinator seat to a Codex agent (model gpt-5.6-sol, medium reasoning
+effort), spawned in the same tab as the coordinator pane. Not a context-limit relay - the run
+state is unchanged from the prior note below.
+
+**Current state, unchanged:**
+- #1500 (#1427-D, shared web form visuals into @moss/ui): CSS move landed on branch
+  1500-shared-web-forms, commit f6aa258ba. Now on its second build-lane relay, agent name
+  `pr1500-css-forms-2`, pane resolved fresh by that name (do not trust a written pane number).
+  Remaining: pre-push checks (format/lint/typecheck + rebase), live-path browser proof (Settings
+  Appearance pane, desktop+mobile x light+dark, plus a checkbox/switch spot check elsewhere), PR,
+  wrap-up.
+- Standing rule from earlier this session: **plan approvals for this run go through a Fable-model
+  review agent, not the coordinator's own inline judgment.** Used successfully once already on
+  #1500's plan (approved).
+- After #1500 merges: start #1501, then #1502, then #1503, same pattern each time (fetch fresh
+  main, worktree, handoff doc referencing the spec's Child E section, spawn, verify on Sonnet,
+  record in manifest).
+- Issue #1511 stays blocked on #1246 - re-check before starting, just a status check, not a
+  decision for Ben.
+- Issues #1869 and #1870 filed but not started, no action needed unless Ben raises them.
+
+Successor should re-claim the `coordinator` name/label after confirming this pane is safe to
+close, same as every relay in this run - Phase 0a of the coordinate skill covers the exact steps,
+same whether the successor is Claude or Codex.
+
+Outgoing coordinator identity: pane w1:pN1, agent name `coordinator`, session
+968e7cb9-418f-44cf-9508-9834d869c74f.
