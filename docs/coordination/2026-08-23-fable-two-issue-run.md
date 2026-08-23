@@ -14,7 +14,7 @@
 | Spec | Issue | Tier | Status | Agent name | Pane | Branch | PR |
 | ---- | ----- | ---- | ------ | ---------- | ---- | ------ | -- |
 | `docs/superpowers/specs/2026-08-10-1137-robustness-followups.md` | #1517 | routine | closed — no-op, already satisfied | reaped | — (reaped) | (branch deleted) | — |
-| `docs/superpowers/specs/2026-08-10-css-guard-residue.md` | #1497 | routine | building — released after Fable ruling (target 152 -> 0) | `build-1497-today` (session `dc82fb30-071e-4959-925d-98e05416d6c1`) | `1497 Today residue` (resolve fresh) | `build/1497-today-residue` | — |
+| `docs/superpowers/specs/2026-08-10-css-guard-residue.md` | #1497 | routine | building — successor writing plan, will ask one-shot Fable approval before code | `build-1497-today-relay1` (session `50b9cbe9-c6e4-46a8-af12-efc5c4c17435`) | `1497 Today residue r2` (resolve fresh) | `build/1497-today-residue` | — |
 
 ## Dependency / merge order
 
@@ -48,13 +48,20 @@ None open.
 
 - Fable scope reviewer `fable-run-scope`, session `c359c706-e66d-4a52-b7c1-823ba3d315c6`: verdict consumed; session and isolated worktree fully reaped.
 
-## Continuation — 2026-08-23, both forks resolved, one lane building
+## Continuation — 2026-08-23, both forks resolved, #1497 on its second build owner
 
 Exact-session transfer complete: authority is session `c60ed2b9-0da3-4fdc-95a9-12113657660e`
-(agent name `coordinator`, pane label `Coordinator`, resolve fresh — pane numbers reflow); the
-prior coordinator's session `01a02e90-46d7-7093-bffd-5e2a4bb029dc` was confirmed by exact match,
-cleared, and its pane closed. #1517 resolved as a genuine no-op — issue closed citing PR #1821,
-lane reaped (worktree removed, branch deleted, pane closed). #1497's baseline fork was routed to
-a one-shot Fable agent, which ruled build to 152 -> 0; recorded on the issue, lane released and is
-now building. `docs/coordination/AWAITING-BEN.md` has no open decision. Next: supervise #1497
-through plan approval, build, and QA per the standard coordinate-skill loop. [pane w1:pPR]
+(agent name `coordinator`, pane label `Coordinator`, resolve fresh — pane numbers reflow). #1517
+resolved as a genuine no-op — issue closed citing PR #1821, lane reaped. #1497's baseline fork
+was routed to a one-shot Fable agent, which ruled build to 152 -> 0; recorded on the issue, lane
+released to build. That owner (`build-1497-today`, session `dc82fb30-...`) relayed itself at a 70%
+context-meter warning with no code written yet — it had spent its budget grounding the split
+pattern used by the earlier command-palette sibling change (keep layout in place, copy color/font
+into the shared design package) and handed off via
+`docs/superpowers/handoffs/2026-08-23-1497-today-residue-relay.md`. Successor confirmed driving on
+Sonnet; old pane reaped. Current owner is `build-1497-today-relay1`, session
+`50b9cbe9-c6e4-46a8-af12-efc5c4c17435`, pane `1497 Today residue r2` (resolve fresh). It will write
+the plan and ask for one-shot Fable approval before touching code, same as the standard flow.
+`docs/coordination/AWAITING-BEN.md` has no open decision. Next: watch for its plan-ready
+escalation, approve/route to Fable if it's a genuine fork, then supervise build and QA per the
+standard coordinate-skill loop. [pane w1:pPR]
