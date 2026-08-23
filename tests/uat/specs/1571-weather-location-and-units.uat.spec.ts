@@ -87,7 +87,7 @@ test("place search, ambiguity handling, and temperature units work through the U
     await unitToggle.locator("..").click();
     await expect(page.getByText("Weather temperatures are shown in Celsius.")).toBeVisible();
   }
-  await expect(page.getByLabel("Temperature units: Celsius")).toBeVisible();
+  await expect(page.getByLabel("Temperature units: Celsius").locator("..")).toBeVisible();
   await expect(page.getByLabel("Temperature units: Celsius").locator("..")).toContainText("C");
   await page.goto(`${baseURL}/today`);
   const metricTemp = await page.locator(".jds-weather-chip__temp").innerText();
@@ -99,7 +99,7 @@ test("place search, ambiguity handling, and temperature units work through the U
   await page.getByLabel("Temperature units: Celsius").locator("..").click();
   expect((await (await unitResponse).json()).unit).toBe("imperial");
   await expect(page.getByText("Weather temperatures are shown in Fahrenheit.")).toBeVisible();
-  await expect(page.getByLabel("Temperature units: Fahrenheit")).toBeVisible();
+  await expect(page.getByLabel("Temperature units: Fahrenheit").locator("..")).toBeVisible();
   await expect(page.getByLabel("Temperature units: Fahrenheit").locator("..")).toContainText("F");
   await expect(page.getByText(`Currently using ${selectedCandidate}.`)).toBeVisible();
 
