@@ -1843,3 +1843,11 @@ without entering or exposing a secret and is restarting with that trigger explic
 Postgres container with #1501 as the collision risk. The owner was instructed to preserve the
 failure evidence, wait for #1501's live gate to exit, then rerun #1874; #1501 is not to be killed.
 [pane w1:pNF]
+
+## Update - 2026-08-23, post-ruling gates advancing
+
+#1335's plan-only diff passed `pnpm format:check` cleanly and its fresh isolated full gate is
+running. #899's password-prompt run was stopped cleanly (`rc=143`); its retry has the trigger
+unset and is waiting on the shared gate-database lock without entering any secret. #1105's gate
+continues through integration checks. #1501's integration Vitest process is active, so its gate
+is preserved; #1874 remains sequenced behind its exit before another gate attempt. [pane w1:pNF]
