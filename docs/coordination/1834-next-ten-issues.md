@@ -1890,3 +1890,12 @@ checks. #1105 remains active in integration after 12 files / 29 seed tests passe
 the coordinator sent a verified resume prompt to `issue1872-relay6`; it must continue the fresh
 gate when the lock frees and return an exact sentinel result. No Ben-only decision is currently
 open in `AWAITING-BEN.md`. [pane w1:pNF]
+
+## Update - 2026-08-23, #1874 clean gate queued after contention
+
+#1874 reports format check, lint, and typecheck clean. Its first full gate failed during unrelated
+database seed setup/teardown symptoms immediately after completion, while multiple worktrees were
+running gates against the shared database server; this is recorded as contention evidence, not a
+PR failure. The old gate database was dropped, a clean run was requested, and the lane's watcher
+confirmed it is queued behind the shared lock and will start when the current holder exits. Rebase,
+push, and PR update remain after the clean gate result. No Ben-only decision is open. [pane w1:pNS]
