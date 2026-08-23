@@ -1232,3 +1232,31 @@ Other state: `docs/coordination/AWAITING-BEN.md` currently has one open entry - 
 this relay; no reply yet as of this note.
 
 Nothing else is currently blocked on Ben beyond the pull request 1862 sign-off above.
+
+## Update - 2026-08-23, seventeenth coordinator taking over
+
+Adopted run 1834 from pane w1:pMS, agent name `coordinator`, session
+31820081-42ce-467c-8f6f-ceec14b585ac. That pane was already showing done at hand-off; closed it.
+Now driving from pane w1:pMV, agent name `coordinator`, session
+7b8957b3-93f9-44ee-81cc-a6a436514031.
+
+Checked the phone-reply inbox and found Ben had already answered the pull request 1862 sign-off
+question three times ("Yes merge", "I replied to merge 1.5 hours ago, did you?", "Merge please") -
+these had not been read yet. Merged pull request 1862 (squash). Issue #1530 closed automatically
+by the merge. Confirmed the commit landed on the main branch. Cleared the AWAITING-BEN entry.
+
+Fully cleaned up both lanes for this pull request: closed the build pane (w1:pMR) and the review
+pane (w1:pMT), removed both of their work folders and the build branch (the review lane never
+had its own branch). Confirmed nothing was still running in either folder before removing them.
+
+Rechecked issue #1246: still open, so issue #1511 stays blocked - not a decision for Ben, just a
+status note, unchanged from before.
+
+**Status of the three things Ben wants merged before a prod update:**
+1. Pull request 1654 - done, merged earlier.
+2. Issue #1530 (pull request 1862) - done, merged this update.
+3. Issue #1511 - still blocked on issue #1246 being open. Not started.
+
+**Next step: once issue #1511 clears, build the image and update prod (Ben's explicit
+instruction) - not started yet, and item 3 is not ready.** Nothing else is currently blocked on
+Ben.

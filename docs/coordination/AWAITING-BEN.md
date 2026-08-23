@@ -77,14 +77,10 @@ merged. -->
 <!-- Resolved 2026-08-23: Ben replied "yes merge" (typed into the outgoing coordinator's pane).
 Pull request 1654 merged (squash), issue #1252 closed, lane reaped. -->
 
-**Pull request 1862 (issue #1530, permission-repair fail-closed) — ready for your merge sign-off.**
-Independent security review (adversarial pass, strongest review model) found no problems: the fix
-makes a failed permission repair show the user a confirm prompt instead of crashing or silently
-succeeding, on the real code path that actually handles these requests. No new risk introduced -
-nothing about how data is secured or who can see what changed. It also checked the claim that no
-visible screen changed (so no click-through demo is needed) itself rather than taking the pull
-request's word for it, and confirmed it's true. Recommendation: sign off and merge.
-Full verdict: https://github.com/motioneso/moss/pull/1862 (comment).
+<!-- Resolved 2026-08-23: Ben replied three times ("Yes merge", "I replied to merge 1.5 hours ago,
+did you?", "Merge please") to the phone ping about pull request 1862. Merged (squash), issue
+#1530 closed, both the build lane and the review lane fully cleaned up (panes closed, work
+folders and branches removed). -->
 
 Issue #1511 stays blocked because issue #1246 is still open — not a decision for Ben, just a
 status note.
