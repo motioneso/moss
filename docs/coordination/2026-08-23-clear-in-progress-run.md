@@ -22,7 +22,7 @@ durable live-path proof comment.
 | `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319-A (concrete child of #1470) | security | PR open; local gate green; initial Opus security QA running; held behind #1883/#1884 | `catalog-verify-1319a-2` + `qa-1897-catalog-security` | resolve live | `build/1319a-catalog-verify` | #1897 |
 | `docs/superpowers/specs/2026-08-19-926-food-day-view-components-and-targets.md` | #1737 (concrete child of #926) | routine | closed/Done — Ben verified working in production; lane cancelled/reaped | reaped | — | deleted | — |
 | `docs/superpowers/specs/2026-08-23-1794-release-notes-protected-main.md` | #1794 | sensitive | initial QA green; CI pending; merge last; final integrated QA + real merged-PR proof pending | `build_1794` | Codex subagent | `build/1794-release-notes-protected-main` | #1896 |
-| `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | PR open; local gate green; fresh relay building branch-installed real-UI proof; security QA not started | `build-1883-livepath` | resolve live | `build/1883-vault-mcp-errors` | #1892 |
+| `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | PR open; local gate green; fresh relay building branch-installed real-UI proof; security QA not started | `build-1883-livepath2` | resolve live | `build/1883-vault-mcp-errors` | #1892 |
 | `docs/superpowers/specs/2026-08-23-1884-weather-settings-card.md` | #1884 | routine | initial QA green; CI pending; held for post-#1883 rebase + integrated QA | `build-1884-relay` | resolve live | `build/1884-weather-settings` | #1891 |
 | issue #1885 | #1885 | routine | merged `91aa6ad84`; issue closed/Done | reaped | — | `fix/1885-coordinator-watchdog` | #1886 |
 
@@ -192,6 +192,12 @@ hand-merging it.
   2 skipped), clean rebase, and a committed live-path handoff; successor `build-1883-livepath`
   was confirmed driving the required branch-installed real-chat proof on Sonnet in the same
   worktree/branch.
+- #1883 live-path research session `build-1883-livepath` (Claude session
+  `ca977829-b570-406e-b69d-30f413cbd926`) relayed without code changes after committing the
+  coordinator-approved UAT-only preload ruling to
+  `docs/superpowers/handoffs/2026-08-23-1883-vault-mcp-errors-livepath-relay2.md`; successor
+  `build-1883-livepath2` (Claude session `b0238459-b668-430e-afe6-e6a0a43d7504`) was confirmed
+  driving on Sonnet in the same worktree/branch.
 
 ## Latest continuation note — Codex relay adopted
 
@@ -214,10 +220,10 @@ label `Coordinator` plus the old session id above. Current live state at relay:
 - PRs #1892, #1891, #1897, and #1896 have no red checks; each still has only `Verify foundation
   and app` pending. PR #1896's initial sensitive QA verdict is already recorded above and remains
   merge-ready NO until CI, its final integrated QA, and the real post-merge workflow proof.
-- `build-1883-livepath` is at its own compaction boundary (~91% shown in the pane). Immediately
-  ensure it performs its required relay before accepting more work. Its approved implementation
-  remains the UAT-only preload that points Transformers at closed port 65534 and proves the fixed
-  safe error end to end; do not add a product environment variable or production config surface.
+- `build-1883-livepath` relayed cleanly to `build-1883-livepath2`, which is confirmed driving on
+  Sonnet in the same worktree. Its approved implementation remains the UAT-only preload that
+  points Transformers at closed port 65534 and proves the fixed safe error end to end; do not add
+  a product environment variable or production config surface.
 - `qa-1897-catalog-security` is still running the initial Opus adversarial review. Do not merge
   #1897 from that initial review: after earlier ordered merges it still needs a rebase, fresh
   exact-head Opus QA, and Ben's explicit security-tier approval.
