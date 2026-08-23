@@ -1706,3 +1706,9 @@ Implementation is approved with no fork. [pane w1:pNF]
 The #899 Codex Luna lane verified the Fable plan's target-file absence, News module literal, and
 unchanged default fixtures. Implementation is approved with no design fork; the lane is proceeding
 through the exact mocked-News scope, checks, live proof, PR, and wrap-up. [pane w1:pNF]
+
+## Update - 2026-08-23, #1105 plan approved
+
+The #1105 Codex Luna lane verified Fable plan commit `5f5b56a15` on a clean branch. Implementation
+is approved with no design fork; the lane is proceeding through the exact seeded chat/thread UAT
+scope, checks, live proof, PR, and wrap-up. [pane w1:pNF]
