@@ -2372,3 +2372,17 @@ was closed as completed. The consumed build pane was closed only after a fresh s
 The #1877 fresh QA lane remains active in `w1:pP8`; #1878 and #1880 remain CI-pending, with
 #1335's owner still correcting its extra TSX exclusion. One routine merge has occurred since
 the last relay; no relay trigger has fired. [pane w1:pP2]
+
+## Update - 2026-08-23, #1335 corrected head in fresh QA
+
+The #1335 owner pushed corrected PR #1880 head `da8e14437`: the unintended
+`email-settings-draft-policy.test.tsx` exclusion is removed, the tests project now covers 68
+TSX files, and four narrowly scoped `@ts-expect-error` comments cover the existing #1876 email
+request-body typing sites. Typecheck, format, lint, and the targeted email tests passed; CI is
+still pending.
+
+A fresh routine QA agent is active in the dedicated QA tab at pane `w1:pP9`, agent
+`qa1880-1335-r2`, session `01a02dea-b80d-7a62-b22c-8871a892e352`, using Codex GPT-5.6 Luna at
+high reasoning. It is reviewing exact head `da8e14437`; no merge will occur until its durable
+QA verdict and all required CI checks are green. The existing #1877 fresh QA remains active in
+pane `w1:pP8`. [pane w1:pP2]
