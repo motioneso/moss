@@ -1,10 +1,16 @@
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { chmod, lstat, mkdir, unlink } from "node:fs/promises";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { dirname } from "node:path";
+import { Readable } from "node:stream";
 
 import {
   type BrowserFetchRequest,
   type BrowserRenderRequest,
   type BrowserResourceType,
-  SPORTS_BROWSER_LIMITS
+  parseBrowserFetchBody,
+  SPORTS_BROWSER_LIMITS,
+  SPORTS_BROWSER_ROUTES
 } from "./browser-protocol.js";
 
 interface BrowserSafeFetchHop {
@@ -55,6 +61,7 @@ interface BrowserJob {
   readonly control: BrowserRenderRequest;
   readonly allowedHosts: readonly string[];
   readonly requestIds: Set<string>;
+  readonly evidence: BrowserFetchEvidence[];
   readonly abortController: AbortController;
   readonly deadlineAt: number;
   readonly timer: NodeJS.Timeout;
@@ -73,9 +80,26 @@ export type BrowserBrokerFetchResult =
       readonly bytesRead?: number;
     };
 
+export interface BrowserFetchEvidence {
+  readonly requestId: string;
+  readonly resourceType: "document" | "fetch" | "xhr";
+  readonly finalUrl: string;
+  readonly contentType: string | null;
+  readonly body: Uint8Array;
+}
+
+export type BrowserJobCompletion =
+  | { readonly ok: true; readonly evidence: readonly BrowserFetchEvidence[] }
+  | { readonly ok: false; readonly reason: "unknown_job" | "unauthorized" };
+
 export interface SportsBrowserBrokerDependencies {
   readonly fetch: BrowserSafeFetch;
   readonly now?: () => number;
+}
+
+export interface SportsBrowserBrokerServerDependencies {
+  readonly broker: SportsBrowserBroker;
+  readonly socketPath: string;
 }
 
 const CONTENT_TYPES: Readonly<Record<BrowserResourceType, readonly string[]>> = {
@@ -117,6 +141,42 @@ function normalizeAllowedHosts(hosts: readonly string[], initialUrl: URL): reado
   return normalized;
 }
 
+class RequestBodyTooLargeError extends Error {}
+
+async function readRequestBody(request: IncomingMessage): Promise<Buffer> {
+  const declared = request.headers["content-length"];
+  if (declared !== undefined) {
+    if (!/^(0|[1-9]\d*)$/.test(declared)) throw new Error("Invalid Content-Length");
+    if (Number(declared) > SPORTS_BROWSER_LIMITS.maxJsonBodyBytes) {
+      throw new RequestBodyTooLargeError();
+    }
+  }
+  const chunks: Buffer[] = [];
+  let total = 0;
+  for await (const chunk of request) {
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
+    total += bytes.byteLength;
+    if (total > SPORTS_BROWSER_LIMITS.maxJsonBodyBytes) {
+      throw new RequestBodyTooLargeError();
+    }
+    chunks.push(bytes);
+  }
+  if (declared !== undefined && Number(declared) !== total) {
+    throw new Error("Mismatched Content-Length");
+  }
+  return Buffer.concat(chunks);
+}
+
+function sendJson(response: ServerResponse, status: number, value: unknown): void {
+  const body = Buffer.from(JSON.stringify(value));
+  response.writeHead(status, {
+    "cache-control": "no-store",
+    "content-type": "application/json",
+    "content-length": body.byteLength
+  });
+  response.end(body);
+}
+
 export class SportsBrowserBroker {
   private readonly jobs = new Map<string, BrowserJob>();
   private readonly now: () => number;
@@ -145,6 +205,7 @@ export class SportsBrowserBroker {
       control,
       allowedHosts: normalizeAllowedHosts(input.allowedHosts, initialUrl),
       requestIds: new Set(),
+      evidence: [],
       abortController: new AbortController(),
       deadlineAt: this.now() + SPORTS_BROWSER_LIMITS.deadlineMs,
       timer,
@@ -162,6 +223,18 @@ export class SportsBrowserBroker {
 
   cancelJob(jobId: string): void {
     this.endJob(jobId);
+  }
+
+  completeJob(jobId: string, capability: string): BrowserJobCompletion {
+    const job = this.jobs.get(jobId);
+    if (!job) return { ok: false, reason: "unknown_job" };
+    if (!capabilitiesMatch(job.control.capability, capability)) {
+      this.endJob(jobId);
+      return { ok: false, reason: "unauthorized" };
+    }
+    const evidence = job.evidence.map((item) => ({ ...item, body: item.body.slice() }));
+    this.endJob(jobId);
+    return { ok: true, evidence };
   }
 
   async fetch(request: BrowserFetchRequest): Promise<BrowserBrokerFetchResult> {
@@ -236,6 +309,20 @@ export class SportsBrowserBroker {
           bytesRead: result.bytesRead
         };
       }
+      if (
+        job.evidence.length < SPORTS_BROWSER_LIMITS.maxCandidateEvidence &&
+        (request.resourceType === "document" ||
+          request.resourceType === "fetch" ||
+          request.resourceType === "xhr")
+      ) {
+        job.evidence.push({
+          requestId: request.requestId,
+          resourceType: request.resourceType,
+          finalUrl: result.finalUrl,
+          contentType: result.contentType,
+          body: result.body.slice()
+        });
+      }
       return result;
     } finally {
       job.activeRequests -= 1;
@@ -252,5 +339,111 @@ export class SportsBrowserBroker {
     this.jobs.delete(jobId);
     clearTimeout(job.timer);
     job.abortController.abort();
+  }
+}
+
+export class SportsBrowserBrokerServer {
+  private server: Server | undefined;
+
+  constructor(private readonly dependencies: SportsBrowserBrokerServerDependencies) {}
+
+  async start(): Promise<void> {
+    if (this.server) return;
+    await mkdir(dirname(this.dependencies.socketPath), { recursive: true, mode: 0o770 });
+    const existing = await lstat(this.dependencies.socketPath).catch(() => undefined);
+    if (existing && !existing.isSocket()) {
+      throw new Error("Refusing to replace a non-socket Sports browser broker path");
+    }
+    if (existing) await unlink(this.dependencies.socketPath);
+
+    const server = createServer((request, response) => {
+      void this.handleRequest(request, response);
+    });
+    server.requestTimeout = SPORTS_BROWSER_LIMITS.deadlineMs;
+    server.headersTimeout = 5_000;
+    server.on("clientError", (_error, socket) => socket.destroy());
+    await new Promise<void>((resolve, reject) => {
+      const onError = (error: Error): void => {
+        server.off("listening", onListening);
+        reject(error);
+      };
+      const onListening = (): void => {
+        server.off("error", onError);
+        resolve();
+      };
+      server.once("error", onError);
+      server.once("listening", onListening);
+      server.listen(this.dependencies.socketPath);
+    });
+    this.server = server;
+    await chmod(this.dependencies.socketPath, 0o660);
+  }
+
+  async stop(): Promise<void> {
+    const server = this.server;
+    this.server = undefined;
+    this.dependencies.broker.dispose();
+    if (server) {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+    await unlink(this.dependencies.socketPath).catch(() => undefined);
+  }
+
+  private async handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    try {
+      if (request.method !== "POST" || request.url !== SPORTS_BROWSER_ROUTES.fetch) {
+        sendJson(response, 404, { error: "not_found" });
+        return;
+      }
+      const contentType = request.headers["content-type"]?.split(";", 1)[0]?.trim().toLowerCase();
+      if (contentType !== "application/json") {
+        sendJson(response, 415, { error: "unsupported_media_type" });
+        return;
+      }
+      const parsed = parseBrowserFetchBody(await readRequestBody(request));
+      if (!parsed.ok) {
+        sendJson(response, parsed.reason === "body_too_large" ? 413 : 400, {
+          error: parsed.reason
+        });
+        return;
+      }
+      const result = await this.dependencies.broker.fetch(parsed.value);
+      if (!result.ok) {
+        const status =
+          result.reason === "unauthorized"
+            ? 403
+            : result.reason === "unknown_job"
+              ? 404
+              : result.reason === "timeout"
+                ? 408
+                : result.reason === "budget_exceeded"
+                  ? 429
+                  : result.reason === "protocol_violation"
+                    ? 409
+                    : 502;
+        sendJson(response, status, { error: result.reason });
+        return;
+      }
+      if (result.body.byteLength > SPORTS_BROWSER_LIMITS.maxResponseBytes) {
+        this.dependencies.broker.cancelJob(parsed.value.jobId);
+        sendJson(response, 502, { error: "response_too_large" });
+        return;
+      }
+      response.writeHead(200, {
+        "cache-control": "no-store",
+        "content-type": result.contentType ?? "application/octet-stream",
+        "content-length": result.body.byteLength,
+        "x-moss-sports-final-url": encodeURIComponent(result.finalUrl),
+        "x-moss-sports-status": String(result.status)
+      });
+      Readable.from([Buffer.from(result.body)]).pipe(response);
+    } catch (error) {
+      if (error instanceof RequestBodyTooLargeError) {
+        request.resume();
+        sendJson(response, 413, { error: "body_too_large" });
+        return;
+      }
+      sendJson(response, 400, { error: "invalid_request" });
+    }
   }
 }

@@ -5,9 +5,15 @@ export const SPORTS_BROWSER_LIMITS = Object.freeze({
   maxConcurrentRequests: 4,
   maxAggregateBytes: 10 * 1024 * 1024,
   maxResponseBytes: 2 * 1024 * 1024,
+  maxRenderResultBytes: 512 * 1024,
   maxJsonBodyBytes: 16 * 1024,
   maxRequestIdChars: 64,
   maxUrlChars: 4_096
+});
+
+export const SPORTS_BROWSER_ROUTES = Object.freeze({
+  fetch: "/v1/fetch",
+  render: "/v1/render"
 });
 
 export type BrowserResourceType = "document" | "fetch" | "xhr" | "script" | "stylesheet";
@@ -27,6 +33,21 @@ export interface BrowserRenderRequest {
   readonly url: string;
 }
 
+export type BrowserRenderFailureReason = "cancelled" | "timeout" | "render_failed" | "unsupported";
+
+export type BrowserRenderResult =
+  | {
+      readonly ok: true;
+      readonly jobId: string;
+      readonly finalUrl: string;
+      readonly domHtml: string;
+    }
+  | {
+      readonly ok: false;
+      readonly jobId: string;
+      readonly reason: BrowserRenderFailureReason;
+    };
+
 export type BrowserProtocolParseResult<T> =
   | { readonly ok: true; readonly value: T }
   | {
@@ -36,6 +57,9 @@ export type BrowserProtocolParseResult<T> =
 
 const FETCH_KEYS = new Set(["jobId", "requestId", "capability", "url", "method", "resourceType"]);
 const RENDER_KEYS = new Set(["jobId", "capability", "url"]);
+const RENDER_SUCCESS_KEYS = new Set(["ok", "jobId", "finalUrl", "domHtml"]);
+const RENDER_FAILURE_KEYS = new Set(["ok", "jobId", "reason"]);
+const RENDER_FAILURE_REASONS = new Set(["cancelled", "timeout", "render_failed", "unsupported"]);
 const RESOURCE_TYPES = new Set<BrowserResourceType>([
   "document",
   "fetch",
@@ -112,11 +136,33 @@ function parseRenderRequest(value: unknown): BrowserRenderRequest | undefined {
   return { jobId: value.jobId, capability: value.capability, url };
 }
 
+function parseRenderResult(value: unknown): BrowserRenderResult | undefined {
+  if (!isRecord(value) || typeof value.jobId !== "string" || !UUID_PATTERN.test(value.jobId)) {
+    return undefined;
+  }
+  if (value.ok === true && hasExactKeys(value, RENDER_SUCCESS_KEYS)) {
+    const finalUrl = parseHttpsUrl(value.finalUrl);
+    return typeof value.domHtml === "string" && finalUrl
+      ? { ok: true, jobId: value.jobId, finalUrl, domHtml: value.domHtml }
+      : undefined;
+  }
+  if (
+    value.ok === false &&
+    hasExactKeys(value, RENDER_FAILURE_KEYS) &&
+    typeof value.reason === "string" &&
+    RENDER_FAILURE_REASONS.has(value.reason)
+  ) {
+    return { ok: false, jobId: value.jobId, reason: value.reason as BrowserRenderFailureReason };
+  }
+  return undefined;
+}
+
 function parseBody<T>(
   body: Uint8Array,
-  parse: (value: unknown) => T | undefined
+  parse: (value: unknown) => T | undefined,
+  maxBytes = SPORTS_BROWSER_LIMITS.maxJsonBodyBytes
 ): BrowserProtocolParseResult<T> {
-  if (body.byteLength > SPORTS_BROWSER_LIMITS.maxJsonBodyBytes) {
+  if (body.byteLength > maxBytes) {
     return { ok: false, reason: "body_too_large" };
   }
   let value: unknown;
@@ -139,4 +185,10 @@ export function parseBrowserRenderBody(
   body: Uint8Array
 ): BrowserProtocolParseResult<BrowserRenderRequest> {
   return parseBody(body, parseRenderRequest);
+}
+
+export function parseBrowserRenderResultBody(
+  body: Uint8Array
+): BrowserProtocolParseResult<BrowserRenderResult> {
+  return parseBody(body, parseRenderResult, SPORTS_BROWSER_LIMITS.maxRenderResultBytes);
 }
