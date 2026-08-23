@@ -2572,3 +2572,19 @@ Fresh routine QA is active in the balanced QA tab, agent `qa1880-1335-r5`, sessi
 `01a02e20-f9dd-7e63-9288-5973bc5edb69`, using Codex GPT-5.6 Luna at high reasoning. It must post
 a durable verdict against that exact head; newly triggered required CI must also finish green.
 No merge is authorized. [pane w1:pPE]
+
+## Update - 2026-08-23, #1878 stopped after second failed QA
+
+Fresh routine QA for PR #1878 at `92953e1c8319c682663d5ce69bdc9280bca509ec` posted a durable
+RED with one blocking finding: explanatory display-size and instrument comments still remain in
+the web sheet while the moved comments also exist in the package sheet, leaving the approved
+comment-relocation criterion incomplete. Required CI was also still pending.
+
+This is the second failed fresh QA cycle for the lane. The #1501 owner was stopped under the
+coordinator failure budget and acknowledged no further edits or pushes. Ben was asked whether to
+allow one final deletion-only correction or defer PR #1878; the open decision is recorded in
+`docs/coordination/AWAITING-BEN.md`. No merge is authorized. [pane w1:pPE]
+
+The spent #1878 review-only QA pane was then closed after matching session
+`01a02e1f-7e7c-7882-8a3b-6b1725eb31a1`, and its clean isolated worktree was removed. The remaining
+#1880 QA lane now occupies the QA tab alone and remains active. [pane w1:pPE]

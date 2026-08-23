@@ -88,3 +88,13 @@ status note.
 <!-- Resolved 2026-08-23: Ben replied "Merge" to the PR #1874 security-tier approval request.
 Final Opus QA was GREEN, required CI and live recovery proof were green, and the three remaining
 QA observations were non-blocking. Coordinator authorized to merge. -->
+
+## PR #1878 (#1501) — two-QA correction budget exhausted
+
+Blocked: two fresh exact-head QA cycles found that explanatory display-size and instrument comments
+still remain duplicated in the web and package keyline sheets, so the approved comment-relocation
+criterion is incomplete. The lane is stopped under the coordinator's two-failed-QA rule.
+
+Options: allow one final comment-only owner correction targeting the remaining web comments, or
+defer PR #1878. Recommendation: allow the final narrow correction because the code and invariants
+are otherwise clean and the remaining change is deletion-only.
