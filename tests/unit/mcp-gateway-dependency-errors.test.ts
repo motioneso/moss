@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { AssistantToolGateway, ConfirmationRegistry, SessionTokenRegistry } from "@moss/ai";
 import { HttpError } from "@moss/module-sdk";
-import type { MossModuleManifest, ModuleAssistantToolManifest, ToolResult } from "@moss/module-sdk";
+import type { MossModuleManifest, ModuleAssistantToolManifest } from "@moss/module-sdk";
 
 const TOOL_NAME = "notes.search";
 
