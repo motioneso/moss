@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
   pull_request:
 
 permissions:
@@ -14,7 +12,7 @@ permissions:
 jobs:
   # Classifies a PR as docs-only so the heavy jobs can be skipped. Measured 2026-07-27:
   # a docs-only PR paid ~35 min of CI (verify 21m + the sequential publish build 13.5m)
-  # to validate nothing but prettier formatting. Push/tag events always classify as
+  # to validate nothing but prettier formatting. Push events always classify as
   # code so main and releases keep the full gate unconditionally.
   changes:
     name: Detect change scope
@@ -336,7 +334,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -346,11 +344,7 @@ jobs:
       - name: Compute image tags
         id: tags
         run: |
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/}"
-            echo "image_tags=ghcr.io/motioneso/moss:${VERSION}" >> "$GITHUB_OUTPUT"
-            echo "push=true" >> "$GITHUB_OUTPUT"
-          elif [[ "${GITHUB_REF}" == refs/heads/main ]]; then
+          if [[ "${GITHUB_REF}" == refs/heads/main ]]; then
             echo "image_tags=ghcr.io/motioneso/moss:edge" >> "$GITHUB_OUTPUT"
             echo "push=true" >> "$GITHUB_OUTPUT"
           else
@@ -358,7 +352,7 @@ jobs:
             echo "push=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build (and push on tag/main) Moss image
+      - name: Build (and push on main) Moss image
         uses: docker/build-push-action@v6
         with:
           context: .
