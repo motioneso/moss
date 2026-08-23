@@ -1810,3 +1810,12 @@ checks are being prepared; #899 is doing the same before opening its PR. [pane w
 authoritative plan `docs/superpowers/plans/2026-08-22-1335-tests-tsx-typecheck.md`; the two edited
 files are formatted. No plan rewrite was authorized. Follow-up issues recorded by the lane are
 #1875 (module-web exclusions) and #1876 (email requestJson production typing). [pane w1:pNR]
+
+## Update - 2026-08-23, Fable adjudication opened for #1335 format blocker
+
+Because #1335 has the same pre-existing authoritative-plan `format:check` failure while all
+scoped implementation checks are green, a fresh Fable 5 reviewer was opened to rule whether the
+existing Option B plan-authority exception for #1105/#899 applies. Reviewer
+`fable5-1335-plan-format`, session `f60b2f85-4329-4378-abdc-0fbf25d1aca6`, is driving in Fable 5
+pane `w1:pNW`; it is read-only and must return a ruling before #1335 changes its plan or claims a
+full gate. [pane w1:pNF]
