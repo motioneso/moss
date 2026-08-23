@@ -2066,3 +2066,9 @@ text is deduplicated by the UI, so counting two identical DOM replies cannot pro
 turn. The owner is replacing that assertion with a post-resume method-specific `POST /api/chat/turn`
 response check tied to the continuation message plus an exact continuation-message DOM assertion.
 This is a scoped QA correction; the isolated gate and fresh QA remain pending. [pane w1:pNF]
+
+## Update - 2026-08-23, #1105 corrected gate started
+
+#1105's corrected UAT path has advanced to a fresh isolated gate, started through the required
+runner at `/tmp/jarv1s-gate/1105_seeded_chat_uat-20260823-004559.log`. The lane is waiting for
+the exact sentinel and return code before updating PR #1877 and requesting fresh QA. [pane w1:pNF]
