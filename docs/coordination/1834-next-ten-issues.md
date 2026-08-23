@@ -2091,3 +2091,10 @@ runner (PIDs `3999661/3999696`); it has not emitted its log path or sentinel yet
 implementation files changed. The first coordinator prompt had shell-evaluated inline markers;
 it created no unintended background process, and a safely quoted correction was delivered to the
 owner. [pane w1:pNR]
+
+## Update - 2026-08-23, #1335 fresh runner provisioned
+
+After #1105's prompt-blocked runner was stopped and its lock released, #1335 provisioned a fresh
+gate at `/tmp/jarv1s-gate/1335_tests_tsx_typecheck-20260823-004839.log`; `scripts/run-gate.sh
+status` reports it active with recent writes at `Checking formatting...`. It still needs its exact
+terminal sentinel and return code before PR work. [pane w1:pNR]
