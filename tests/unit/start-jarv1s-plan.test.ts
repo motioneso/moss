@@ -104,7 +104,9 @@ describe("start-jarv1s startup plan", () => {
       TMPDIR: "/tmp",
       LC_ALL: "C.UTF-8",
       DISABLE_AUTOUPDATER: "1",
-      JARVIS_CLI_RUNNER_RPC_SECRET: "rpc-secret"
+      JARVIS_CLI_RUNNER_RPC_SECRET: "rpc-secret",
+      JARVIS_UAT_SEED_CHAT_SCRIPT: "1252-audit-truth-livepath",
+      JARVIS_UAT_SCRIPTED_PROVIDER_BIN: "/app/tests/uat/fixtures/scripted-provider/bin"
     } as NodeJS.ProcessEnv;
 
     const expectedForCli = buildSanitizedCliEnv(source);
@@ -117,6 +119,34 @@ describe("start-jarv1s startup plan", () => {
       }
       expect(cliRunnerServerEnv[key]).toBe(value);
     }
+  });
+
+  it("never forwards the UAT scripted-provider vars to cli-runner when the bin path isn't the exact fixture value", () => {
+    // A production operator (or an attacker who can set an env var on the container) setting
+    // these two vars must not reach the cli-runner child unless JARVIS_UAT_SCRIPTED_PROVIDER_BIN
+    // is exactly the one path the UAT fixture ever uses — that var names a folder the Dockerfile
+    // puts first on the CLI subprocess's own PATH.
+    const env = buildChildEnv("cli-runner", {
+      PATH: "/usr/bin:/bin",
+      JARVIS_UAT_SEED_CHAT_SCRIPT: "1252-audit-truth-livepath",
+      JARVIS_UAT_SCRIPTED_PROVIDER_BIN: "/tmp/attacker-controlled-bin"
+    } as NodeJS.ProcessEnv);
+
+    expect(env.JARVIS_UAT_SEED_CHAT_SCRIPT).toBeUndefined();
+    expect(env.JARVIS_UAT_SCRIPTED_PROVIDER_BIN).toBeUndefined();
+  });
+
+  it("forwards the UAT scripted-provider vars to cli-runner only when the bin path is the exact fixture value", () => {
+    const env = buildChildEnv("cli-runner", {
+      PATH: "/usr/bin:/bin",
+      JARVIS_UAT_SEED_CHAT_SCRIPT: "1252-audit-truth-livepath",
+      JARVIS_UAT_SCRIPTED_PROVIDER_BIN: "/app/tests/uat/fixtures/scripted-provider/bin"
+    } as NodeJS.ProcessEnv);
+
+    expect(env.JARVIS_UAT_SEED_CHAT_SCRIPT).toBe("1252-audit-truth-livepath");
+    expect(env.JARVIS_UAT_SCRIPTED_PROVIDER_BIN).toBe(
+      "/app/tests/uat/fixtures/scripted-provider/bin"
+    );
   });
 
   it("puts installed provider tools on the cli-runner PATH", () => {

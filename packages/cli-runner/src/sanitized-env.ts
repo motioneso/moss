@@ -47,6 +47,14 @@ const ALLOWED_KEYS: readonly string[] = [
 /** Key prefixes allowed (locale basics — `LC_*`, §7.2). */
 const ALLOWED_PREFIXES: readonly string[] = ["LC_"];
 
+// The one folder tests/uat/provisioner.ts ever writes into JARVIS_UAT_SCRIPTED_PROVIDER_BIN.
+// This is a value pin, not a mode flag: a marker env var (e.g. "is this a UAT run?") travels
+// into a production container by the exact same conduit as the setting it would gate, so it
+// authorizes nothing an attacker couldn't set themselves. Pinning to this literal path means the
+// var is only ever useful for pointing at the fixture binary that already ships at this path —
+// never a lever an attacker can turn to point production PATH-resolution at their own program.
+const UAT_SCRIPTED_PROVIDER_BIN = "/app/tests/uat/fixtures/scripted-provider/bin";
+
 /**
  * Build the allowlisted CLI-subprocess env from a source env (defaults to
  * `process.env`). Only the §7.2 keys/prefixes survive; every secret — including
@@ -63,5 +71,18 @@ export function buildSanitizedCliEnv(source: NodeJS.ProcessEnv = process.env): N
       out[key] = value;
     }
   }
+
+  // JARVIS_UAT_SCRIPTED_PROVIDER_BIN names a folder the Dockerfile puts first on PATH for every
+  // login shell — the same image runs in production, so only the one fixed value the UAT
+  // fixture ever needs is honored; anything else (including a real attacker-chosen path) is
+  // dropped. JARVIS_UAT_SEED_CHAT_SCRIPT has no PATH effect, but only travels alongside a
+  // genuine, recognized fixture-bin value for the same reason.
+  if (source.JARVIS_UAT_SCRIPTED_PROVIDER_BIN === UAT_SCRIPTED_PROVIDER_BIN) {
+    out.JARVIS_UAT_SCRIPTED_PROVIDER_BIN = UAT_SCRIPTED_PROVIDER_BIN;
+    if (source.JARVIS_UAT_SEED_CHAT_SCRIPT !== undefined) {
+      out.JARVIS_UAT_SEED_CHAT_SCRIPT = source.JARVIS_UAT_SEED_CHAT_SCRIPT;
+    }
+  }
+
   return out;
 }

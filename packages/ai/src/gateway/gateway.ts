@@ -1,6 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { lstat, realpath } from "node:fs/promises";
-import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import { HttpError } from "@moss/module-sdk";
@@ -23,6 +21,13 @@ import { validateToolInput } from "./input-validation.js";
 import { renderAndCap, sanitizeAssistantToolResult } from "./output-validation.js";
 import { resolvePolicy } from "./policy.js";
 import type { AgencyPrefLookup, ActionPolicyLookup } from "./policy.js";
+import {
+  gatewayFailureReason,
+  nativeToolRisk,
+  nativeToolSummary,
+  nativeYoloCanAutoAllow,
+  safeNativeToolName
+} from "./native-tool-guard.js";
 import { isSelfOperationExcluded } from "./self-operation.js";
 import type { SessionTokenRegistry } from "./session-tokens.js";
 import type { ActiveModulesResolver, GatewayToolResponse, SessionNotifier } from "./types.js";
@@ -34,6 +39,27 @@ export interface GatewayLogger {
 const defaultGatewayLogger: GatewayLogger = {
   error: (event, fields) => console.error(JSON.stringify({ event, ...fields }))
 };
+
+/**
+ * Private runHandler return shape — carries the audit-truth signal alongside the unchanged
+ * public envelope so callers can distinguish a module self-reporting failure inside an
+ * `ok:true` result from genuine handler success. Never exposed outside this file.
+ */
+interface RunHandlerOutcome {
+  readonly response: GatewayToolResponse;
+  readonly moduleReportedErrorClass: string | null;
+}
+
+/**
+ * Closed set of conventional error shapes a module handler may return inside an `ok:true`
+ * ToolResult. Checked on the raw pre-sanitize payload (#1252) — top-level only, no recursion.
+ */
+function isModuleReportedError(data: Record<string, unknown>): boolean {
+  if (data.status === "error") return true;
+  if (data.ok === false) return true;
+  if (typeof data.error === "string" && data.error.length > 0) return true;
+  return false;
+}
 
 export interface AssistantToolGatewayDependencies {
   readonly resolveActiveModules: ActiveModulesResolver;
@@ -123,9 +149,6 @@ export function createUnwiredActionResolver(deps: {
 
 const NATIVE_TOOL_MODULE_ID = "claude-native";
 const NATIVE_TOOL_MODULE_NAME = "Claude Native Tools";
-// Bash and Task stay permanently gated: YOLO removes confirmation only for these mutation-only
-// tools, and unknown/future native capabilities fail closed to the normal confirmation path.
-const NATIVE_YOLO_AUTO_ALLOW = new Set(["Edit", "Write", "NotebookEdit"]);
 // #1158: read-only native META-tools that must never require a user confirmation.
 // Claude Code loads its MCP tool schemas lazily via the native ToolSearch tool; gating it
 // behind the confirm flow deadlocks the permission hook (150s confirm wait == 150s hook
@@ -135,19 +158,6 @@ const NATIVE_YOLO_AUTO_ALLOW = new Set(["Edit", "Write", "NotebookEdit"]);
 // anything, so a row per call is audit spam. Keep this set minimal: anything unlisted
 // (including read-only tools like Grep/Read) stays on the confirm path.
 const NATIVE_READONLY_AUTO_ALLOW = new Set(["ToolSearch"]);
-const NATIVE_CONFIG_FILE_NAMES = new Set([
-  "settings.json",
-  "settings.local.json",
-  "CLAUDE.md",
-  ".mcp.json",
-  "keybindings.json",
-  // #1085 F2: these cwd-root files enforce the native permission boundary; auto-allowing a
-  // rewrite would let later Bash/Task hooks bypass the gateway and every audit row.
-  ".jarvis-claude-permission-hook.mjs",
-  ".jarvis-claude-settings.json",
-  ".jarvis-claude-permission-token",
-  ".claude.json"
-]);
 
 /**
  * The single chokepoint between Jarvis and every module's real operations. Lists
@@ -225,12 +235,16 @@ export class AssistantToolGateway {
           reason: "Rate limit exceeded for unattended runs of this tool. Try again shortly."
         };
       }
-      const result = await this.runHandler(found, input, ctx);
+      const { response: result, moduleReportedErrorClass } = await this.runHandler(
+        found,
+        input,
+        ctx
+      );
       this.deps.notifier.emit(ctx.chatSessionId, {
         kind: "action_result",
         actionRequestId: ctx.requestId,
         toolName: found.dto.name,
-        outcome: result.ok ? "executed" : "error",
+        outcome: result.ok && moduleReportedErrorClass === null ? "executed" : "error",
         ...(result.ok ? { result: result.data } : { reason: gatewayFailureReason(result) }),
         ...(result.ok && found.tool.affectsQueryKeys
           ? { affectsQueryKeys: found.tool.affectsQueryKeys }
@@ -239,8 +253,8 @@ export class AssistantToolGateway {
       const access: AccessContext = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
       void this.recordAudit(access, found, {
         approvalMode: "yolo",
-        outcome: result.ok ? "success" : "failed",
-        errorClass: result.ok ? null : "handler_error",
+        outcome: result.ok && moduleReportedErrorClass === null ? "success" : "failed",
+        errorClass: result.ok ? moduleReportedErrorClass : "handler_error",
         chatSessionId: ctx.chatSessionId
       });
       return result;
@@ -265,13 +279,17 @@ export class AssistantToolGateway {
           "Automatic execution hit its rate limit — please confirm this action."
         );
       }
-      const result = await this.runHandler(found, input, ctx);
+      const { response: result, moduleReportedErrorClass } = await this.runHandler(
+        found,
+        input,
+        ctx
+      );
       if (found.tool.risk !== "read") {
         this.deps.notifier.emit(ctx.chatSessionId, {
           kind: "action_result",
           actionRequestId: ctx.requestId,
           toolName: found.dto.name,
-          outcome: result.ok ? "executed" : "error",
+          outcome: result.ok && moduleReportedErrorClass === null ? "executed" : "error",
           ...(result.ok ? { result: result.data } : { reason: gatewayFailureReason(result) }),
           ...(result.ok && found.tool.affectsQueryKeys
             ? { affectsQueryKeys: found.tool.affectsQueryKeys }
@@ -280,8 +298,8 @@ export class AssistantToolGateway {
         const access: AccessContext = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
         void this.recordAudit(access, found, {
           approvalMode: "auto",
-          outcome: result.ok ? "success" : "failed",
-          errorClass: result.ok ? null : "handler_error",
+          outcome: result.ok && moduleReportedErrorClass === null ? "success" : "failed",
+          errorClass: result.ok ? moduleReportedErrorClass : "handler_error",
           chatSessionId: ctx.chatSessionId
         });
       }
@@ -577,28 +595,42 @@ export class AssistantToolGateway {
     found: ExecutableTool,
     input: Record<string, unknown>,
     ctx: ToolContext
-  ): Promise<GatewayToolResponse> {
+  ): Promise<RunHandlerOutcome> {
     const access: AccessContext = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
     const services = this.servicesFor(found.tool);
     try {
       const result = await this.executeTool(found, input, ctx, services, access);
       const sanitized = sanitizeAssistantToolResult(found.tool.outputSchema, result);
+      // Detection must run on the raw pre-sanitize payload: sanitizeAssistantToolResult
+      // allow-lists to schema-declared keys, so an undeclared status/ok/error field would
+      // already be stripped from structuredData by the time we could inspect it.
+      // Applies to every module, built-in or external: isExternal only decides whether a
+      // module's INPUT is trusted (validateToolInput above), not whether its output can be
+      // taken at face value. Gating this on isExternal used to mean a built-in module's
+      // self-reported error (e.g. tasks.updateStatus returning {error: "Task not found"} inside
+      // an ok:true result) never got flagged and was recorded as a plain "success" (#1252 finding).
+      const moduleReportedErrorClass = isModuleReportedError(result.data)
+        ? "module_reported"
+        : null;
       return {
-        ok: true,
-        data: renderAndCap(
-          found.tool.outputSchema,
-          result,
-          // Scope trust-boundary wrapping to tools with untrusted external content only.
-          // Internal tools whose output Jarvis controls must not be wrapped (PR #435 sets
-          // externalContent: true on web.search + web.read; all others leave it unset).
-          found.tool.externalContent ? found.tool.name : undefined
-        ),
-        structuredData: sanitized.data,
-        // #1133 — media (image bytes) bypasses renderAndCap on purpose: sanitize's schema
-        // projection would drop the field and the 16k text cap would truncate base64. Size
-        // is already bounded at upload (attachment caps), and the payload flows only over
-        // the engine's MCP stdio channel — never into logs, DB, or job payloads.
-        ...(result.media ? { media: result.media } : {})
+        response: {
+          ok: true,
+          data: renderAndCap(
+            found.tool.outputSchema,
+            result,
+            // Scope trust-boundary wrapping to tools with untrusted external content only.
+            // Internal tools whose output Jarvis controls must not be wrapped (PR #435 sets
+            // externalContent: true on web.search + web.read; all others leave it unset).
+            found.tool.externalContent ? found.tool.name : undefined
+          ),
+          structuredData: sanitized.data,
+          // #1133 — media (image bytes) bypasses renderAndCap on purpose: sanitize's schema
+          // projection would drop the field and the 16k text cap would truncate base64. Size
+          // is already bounded at upload (attachment caps), and the payload flows only over
+          // the engine's MCP stdio channel — never into logs, DB, or job payloads.
+          ...(result.media ? { media: result.media } : {})
+        },
+        moduleReportedErrorClass
       };
     } catch {
       // #1251: a tool handler (including third-party module handlers) can throw an arbitrary
@@ -608,7 +640,10 @@ export class AssistantToolGateway {
         requestId: ctx.requestId,
         errorClass: "handler_error"
       });
-      return { ok: false, error: `Tool ${found.dto.name} failed` };
+      return {
+        response: { ok: false, error: `Tool ${found.dto.name} failed` },
+        moduleReportedErrorClass: null
+      };
     }
   }
 
@@ -713,12 +748,12 @@ export class AssistantToolGateway {
       return { ok: false, denied: true, reason };
     }
 
-    const result = await this.runHandler(found, input, ctx);
+    const { response: result, moduleReportedErrorClass } = await this.runHandler(found, input, ctx);
     this.deps.notifier.emit(ctx.chatSessionId, {
       kind: "action_result",
       actionRequestId: action.id,
       toolName: found.dto.name,
-      outcome: result.ok ? "executed" : "error",
+      outcome: result.ok && moduleReportedErrorClass === null ? "executed" : "error",
       ...(result.ok ? { result: result.data } : { reason: gatewayFailureReason(result) }),
       ...(result.ok && found.tool.affectsQueryKeys
         ? { affectsQueryKeys: found.tool.affectsQueryKeys }
@@ -726,8 +761,8 @@ export class AssistantToolGateway {
     });
     void this.recordAudit(access, found, {
       approvalMode: "confirmed",
-      outcome: result.ok ? "success" : "failed",
-      errorClass: result.ok ? null : "handler_error",
+      outcome: result.ok && moduleReportedErrorClass === null ? "success" : "failed",
+      errorClass: result.ok ? moduleReportedErrorClass : "handler_error",
       chatSessionId: ctx.chatSessionId
     });
     return result;
@@ -880,94 +915,4 @@ export class AssistantToolGateway {
       opts
     );
   }
-}
-
-function gatewayFailureReason(result: Extract<GatewayToolResponse, { ok: false }>): string {
-  return "reason" in result ? result.reason : result.error;
-}
-
-function safeNativeToolName(toolName: string): string {
-  const trimmed = toolName.trim();
-  if (trimmed.length === 0) return "Unknown";
-  return trimmed.slice(0, 120);
-}
-
-async function nativeYoloCanAutoAllow(
-  toolName: string,
-  input: Record<string, unknown>,
-  workingDirectory: string | undefined
-): Promise<boolean> {
-  if (!NATIVE_YOLO_AUTO_ALLOW.has(toolName)) return false;
-  const target = input[toolName === "NotebookEdit" ? "notebook_path" : "file_path"];
-  if (typeof workingDirectory !== "string" || workingDirectory.trim() === "") return false;
-  if (typeof target !== "string" || target.trim() === "") return false;
-
-  try {
-    const lexicalRoot = resolve(workingDirectory);
-    const lexicalTarget = resolve(lexicalRoot, target);
-    const lexicalRelative = relative(lexicalRoot, lexicalTarget);
-    // #1085 F3: native YOLO is workspace-scoped. Absolute paths and traversal that escape cwd
-    // stay gated even when they name ordinary-looking files such as ~/.bashrc or .git hooks.
-    if (
-      lexicalRelative === ".." ||
-      lexicalRelative.startsWith(`..${sep}`) ||
-      isAbsolute(lexicalRelative)
-    ) {
-      return false;
-    }
-
-    const canonicalRoot = await realpath(lexicalRoot);
-    const canonicalTarget = await realpathWriteTarget(lexicalTarget);
-    if (canonicalTarget === undefined) return false;
-    const canonicalRelative = relative(canonicalRoot, canonicalTarget);
-    if (
-      canonicalRelative === ".." ||
-      canonicalRelative.startsWith(`..${sep}`) ||
-      isAbsolute(canonicalRelative)
-    ) {
-      return false;
-    }
-
-    return (
-      !canonicalTarget.split(sep).includes(".claude") &&
-      !NATIVE_CONFIG_FILE_NAMES.has(basename(canonicalTarget))
-    );
-  } catch {
-    return false;
-  }
-}
-
-async function realpathWriteTarget(target: string): Promise<string | undefined> {
-  const unresolved: string[] = [];
-  let existing = target;
-
-  for (;;) {
-    try {
-      return resolve(await realpath(existing), ...unresolved);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") return undefined;
-    }
-
-    // #1085 F3: a dangling symlink can still redirect a subsequent Write outside cwd. Detect it
-    // while walking to the deepest existing ancestor; unreadable/ambiguous paths fail closed.
-    try {
-      if ((await lstat(existing)).isSymbolicLink()) return undefined;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") return undefined;
-    }
-
-    const parent = dirname(existing);
-    if (parent === existing) return undefined;
-    unresolved.unshift(basename(existing));
-    existing = parent;
-  }
-}
-
-function nativeToolRisk(toolName: string): "write" | "destructive" {
-  return toolName === "Bash" || toolName === "Unknown" ? "destructive" : "write";
-}
-
-function nativeToolSummary(toolName: string, input: Record<string, unknown>): string {
-  const inputKeyCount = Object.keys(input).length;
-  return `Claude wants to use native ${toolName} (${inputKeyCount} field(s)).`;
 }

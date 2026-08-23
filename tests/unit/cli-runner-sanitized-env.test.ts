@@ -25,6 +25,8 @@ describe("buildSanitizedCliEnv (§7.2)", () => {
     LANG: "en_US.UTF-8",
     LC_ALL: "en_US.UTF-8",
     TMPDIR: "/tmp",
+    JARVIS_UAT_SEED_CHAT_SCRIPT: "1252-audit-truth-livepath",
+    JARVIS_UAT_SCRIPTED_PROVIDER_BIN: "/app/tests/uat/fixtures/scripted-provider/bin",
     // EXCLUDED — socket + RPC secret + single-user flag (server-only)
     JARVIS_CLI_RUNNER_SOCKET: "/run/jarv1s/cli-runner.sock",
     JARVIS_CLI_RUNNER_RPC_SECRET: "super-secret",
@@ -46,6 +48,10 @@ describe("buildSanitizedCliEnv (§7.2)", () => {
     expect(env.JARVIS_CLI_NEUTRAL_BASE).toBe("/data/cli-auth/chat");
     expect(env.LC_ALL).toBe("en_US.UTF-8");
     expect(env.TERM).toBe("xterm");
+    expect(env.JARVIS_UAT_SEED_CHAT_SCRIPT).toBe("1252-audit-truth-livepath");
+    expect(env.JARVIS_UAT_SCRIPTED_PROVIDER_BIN).toBe(
+      "/app/tests/uat/fixtures/scripted-provider/bin"
+    );
 
     // EXCLUDED: socket path + RPC secret + single-user flag
     expect(env.JARVIS_CLI_RUNNER_SOCKET).toBeUndefined();
@@ -66,6 +72,28 @@ describe("buildSanitizedCliEnv (§7.2)", () => {
     expect(env.SOME_RANDOM_VAR).toBeUndefined();
     // JARVIS_MULTIPLEXER is server spawn config, NOT for the CLI child (§7.2).
     expect(env.JARVIS_MULTIPLEXER).toBeUndefined();
+  });
+
+  it("drops JARVIS_UAT_SEED_CHAT_SCRIPT / JARVIS_UAT_SCRIPTED_PROVIDER_BIN when the bin path isn't the exact fixture value", () => {
+    // A production operator (or an attacker who can set an env var on the container) setting
+    // these two vars must not reach the CLI subprocess unless JARVIS_UAT_SCRIPTED_PROVIDER_BIN
+    // is exactly the one path the UAT fixture ever uses — JARVIS_UAT_SCRIPTED_PROVIDER_BIN in
+    // particular names a folder the Dockerfile puts first on the CLI's own PATH, so any other
+    // value (real or attacker-chosen) is worthless to set.
+    const env = buildSanitizedCliEnv({
+      JARVIS_UAT_SEED_CHAT_SCRIPT: "1252-audit-truth-livepath",
+      JARVIS_UAT_SCRIPTED_PROVIDER_BIN: "/tmp/attacker-controlled-bin"
+    });
+    expect(env.JARVIS_UAT_SEED_CHAT_SCRIPT).toBeUndefined();
+    expect(env.JARVIS_UAT_SCRIPTED_PROVIDER_BIN).toBeUndefined();
+  });
+
+  it("drops both when JARVIS_UAT_SCRIPTED_PROVIDER_BIN is entirely unset", () => {
+    const env = buildSanitizedCliEnv({
+      JARVIS_UAT_SEED_CHAT_SCRIPT: "1252-audit-truth-livepath"
+    });
+    expect(env.JARVIS_UAT_SEED_CHAT_SCRIPT).toBeUndefined();
+    expect(env.JARVIS_UAT_SCRIPTED_PROVIDER_BIN).toBeUndefined();
   });
 });
 

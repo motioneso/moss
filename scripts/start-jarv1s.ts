@@ -54,6 +54,10 @@ const CLI_ENV_KEYS = new Set([
   "MOSS_NOTES_ROOTS"
 ]);
 
+// The one folder tests/uat/provisioner.ts ever writes into JARVIS_UAT_SCRIPTED_PROVIDER_BIN. See
+// buildChildEnv below for why this is a value pin rather than a mode flag.
+const UAT_SCRIPTED_PROVIDER_BIN = "/app/tests/uat/fixtures/scripted-provider/bin";
+
 const CLI_ENV_PREFIXES = ["LC_"];
 
 export function runtimeUidGid(env: NodeJS.ProcessEnv = process.env): { uid: number; gid: number } {
@@ -105,6 +109,21 @@ export function buildChildEnv(
   next.JARVIS_CLI_PER_USER_UID = env.JARVIS_CLI_PER_USER_UID ?? "0";
   next.JARVIS_MULTIPLEXER = resolveMossEnv(env, "JARVIS_MULTIPLEXER") ?? "tmux";
   next.JARVIS_MCP_SERVER_URL = env.JARVIS_MCP_SERVER_URL ?? "http://127.0.0.1:3000/api/mcp";
+
+  // JARVIS_UAT_SEED_CHAT_SCRIPT / JARVIS_UAT_SCRIPTED_PROVIDER_BIN select and PATH-inject a fake
+  // "claude" CLI binary for the UAT live-test fixture. JARVIS_UAT_SCRIPTED_PROVIDER_BIN in
+  // particular names a folder the Dockerfile puts first on the login-shell PATH used to launch
+  // the real AI provider CLI — the same image runs in production, so a mode flag is not enough
+  // (it would travel into a production container by the same conduit as the setting itself, and
+  // authorize nothing an attacker couldn't already set). Instead, only the one fixed value the
+  // UAT fixture ever needs is honored; anything else is dropped.
+  if (env.JARVIS_UAT_SCRIPTED_PROVIDER_BIN === UAT_SCRIPTED_PROVIDER_BIN) {
+    next.JARVIS_UAT_SCRIPTED_PROVIDER_BIN = UAT_SCRIPTED_PROVIDER_BIN;
+    if (env.JARVIS_UAT_SEED_CHAT_SCRIPT !== undefined) {
+      next.JARVIS_UAT_SEED_CHAT_SCRIPT = env.JARVIS_UAT_SEED_CHAT_SCRIPT;
+    }
+  }
+
   return next;
 }
 

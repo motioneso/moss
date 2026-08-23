@@ -55,6 +55,7 @@ feature that is not present in the image you are running.
 ### Fixed
 
 - **Job board shows a count when some roles can't be displayed.** The job-search board now tells you if it couldn't show some roles instead of leaving them out with no explanation. [PR #1844](https://github.com/motioneso/moss/pull/1844)
+- **Activity log now shows failed actions as failed.** When the assistant tried to do something and the relevant app said it could not (for example, updating a task that no longer exists), the activity log used to record it as a success. It now correctly shows it as failed. [PR #1654](https://github.com/motioneso/moss/pull/1654)
 - **Nav bar now switches color in dark mode.** The left navigation bar used to stay the same green shade when you switched to dark mode, out of step with the rest of the app. It now switches to match, like every other part of the interface. [PR #1810](https://github.com/motioneso/moss/pull/1810)
 - **Private chat now stays closed correctly if the browser refocuses mid-close.** Fixed a rare case where switching away from the app while closing a private chat, then switching back, could leave the app showing the chat as closed even if the close didn't actually finish on the server. [PR #1801](https://github.com/motioneso/moss/pull/1801)
 - **All-day events are seen when checking your calendar.** Availability is now checked a whole day
