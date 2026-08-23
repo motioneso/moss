@@ -1771,3 +1771,12 @@ checks and was resolved fresh. New Fable 5 reviewer `fable5-1105-plan-format-rel
 `f103e9b3-546e-4721-a645-e950cbff7b31`, is driving from Fable 5 pane `w1:pNV` with the same
 evidence. #1105's implementation commit `29c0ded52` remains preserved; no plan edits or rebase
 were authorized pending the fresh ruling. [pane w1:pNF]
+
+## Update - 2026-08-23, gates advancing while Fable rules
+
+#899 has started its isolated `verify:foundation` gate in `jarvis_gate_899_news_mocked_e2e`; the
+agent's implementation commits remain clean and the gate is currently checking formatting.
+#1874 relay 6 has started a fresh isolated gate in `jarvis_gate_1872_fable_plan` after the stale
+predecessor run was cleared. #1501 has passed static, type, and build stages and is deep in its
+unit suite. All three remain unmergeable until their full evidence and PR/QA gates are complete.
+[pane w1:pNF]
