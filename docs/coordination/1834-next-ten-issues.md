@@ -1547,3 +1547,15 @@ Coordinator authority remains agent name `coordinator`, pane label `Coordinator`
 
 Fable remains the sole author of implementation plans for this run. Both successors must continue
 against their existing approved Fable-authored plans and must not replace them.
+
+## Continuation note - 2026-08-23, PR 1873 entered independent QA
+
+- #1500 is code-complete in PR #1873. The branch gate reported exit 0, the live-path proof is
+  posted on the PR, and GitHub CI is still running. This is routine tier with no Ben sign-off.
+  Sonnet QA agent `qa-pr1873`, session `6d20f491-9a0d-425d-81a9-688826ee5b7d`, is reviewing in a
+  fresh detached worktree in the dedicated QA tab. Do not merge until its PR verdict and CI are
+  green.
+- #1872 relayed again. Sonnet successor `issue1872-image-relay3`, session
+  `f598bdac-11ec-4d7e-aa71-ccad13e05612`, is visibly driving the existing worktree. The spent
+  predecessor session `9772db8c-0b09-4db3-a9df-63ba6865faee` was closed after confirmation.
+- No Ben-only decision is open. Fable remains the sole implementation-plan author for this run.
