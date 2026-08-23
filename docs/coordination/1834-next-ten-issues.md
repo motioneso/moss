@@ -1907,3 +1907,12 @@ push, and PR update remain after the clean gate result. No Ben-only decision is 
 `3699744`/`3699745` were terminated; they produced no gate record or verdict. The authorized
 plan-only diff remains intact, `format:check` is green, and the real #1335 runner remains active
 at PIDs `3702267`/`3702268`. [pane w1:pNR]
+
+## Update - 2026-08-23, #1501 PR opened; live proof correction required
+
+#1501 committed `868d52302`, pushed branch `1501-keyline-global-texture`, and opened PR #1878.
+CI is in progress. The first live-path comment contains the assertions but has empty runner,
+exit-code, evidence-log, and screenshot fields, so it is not accepted as durable proof. The lane
+was instructed, with verified delivery, to post a safely quoted follow-up containing the actual
+runner, exact exit code, evidence path, screenshot paths, and bounded assertions before QA or
+wrap-up. [pane w1:pNF]
