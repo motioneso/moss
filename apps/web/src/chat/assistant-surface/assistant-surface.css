@@ -34,9 +34,6 @@
   align-items: center;
   gap: var(--space-1);
   padding-top: var(--space-2);
-  color: var(--text-muted);
-  font-size: var(--text-2xs);
-  font-weight: 700;
 }
 
 .assistant-surface__typing {
@@ -75,16 +72,7 @@
   flex: 1;
   min-width: 0;
   resize: vertical;
-  border: var(--border-w) solid var(--border-strong);
-  border-radius: var(--radius-md);
-  background: var(--surface-2);
-  color: var(--text);
   font: inherit;
   line-height: var(--leading-normal);
   padding: var(--space-3) var(--space-4);
-}
-
-.assistant-surface__composer textarea:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--focus-ring);
 }
