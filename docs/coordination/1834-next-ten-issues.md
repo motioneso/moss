@@ -1510,3 +1510,22 @@ not author plans or substitute inline plan judgment. #1872's authoritative Fable
 
 Mid-doing: supervising #1872's build-lane relay and #1500's long-running gate; merge nothing until
 the new coordinator has adopted the fleet and updated the coordinator session-id lock.
+
+## Continuation note - 2026-08-23, Codex successor adopted run 1834
+
+Coordinator authority is agent name `coordinator`, pane label `Coordinator`, session
+`01a02d06-70df-7420-bf04-beb05607d454`; watchdog is active. The outgoing coordinator session
+`01a02cde-59a6-7900-99d9-aa65f8989e49` was resolved by session id and closed after takeover.
+
+- #1872's spent build session `7e21e0d0-2b4f-4215-bdf1-317225103cfd` ended on a wait declaration
+  at 3% remaining context with no PR. Its worktree was clean, so it was closed and replaced in the
+  same worktree/branch by Sonnet agent `issue1872-image-relay2`, session
+  `9772db8c-0b09-4db3-a9df-63ba6865faee`. The successor is visibly driving the remaining gate,
+  live-path proof, release note, PR, and coordinated wrap-up.
+- `pr1500-css-forms-2`, session `929bbab3-8e5c-41b7-9e20-7191c8558c67`, remains genuinely busy
+  retrying `scripts/run-gate.sh wait` after the first run was terminated while the box was low on
+  memory. It has no PR yet.
+- No Ben-only decision is open. Issue #1511 remains a status dependency on #1246.
+
+Fable remains the sole author of implementation plans for this run. #1872 continues against the
+approved Fable-authored plan; the coordinator and build successor must not replace it.
