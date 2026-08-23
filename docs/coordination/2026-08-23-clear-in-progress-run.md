@@ -22,7 +22,7 @@ durable live-path proof comment.
 | `docs/superpowers/specs/2026-08-17-1319-signed-module-catalog.md` | #1319-A (concrete child of #1470) | security | Task B `26ec5c458` complete; gate and wrap-up running | `catalog-verify-1319a-2` | resolve live | `build/1319a-catalog-verify` | — |
 | `docs/superpowers/specs/2026-08-19-926-food-day-view-components-and-targets.md` | #1737 (concrete child of #926) | routine | closed/Done — Ben verified working in production; lane cancelled/reaped | reaped | — | deleted | — |
 | `docs/superpowers/specs/2026-08-23-1794-release-notes-protected-main.md` | #1794 | sensitive | plan `1e8c41906` approved; Luna-high builder implementing; merge last | `build_1794` | Codex subagent | `build/1794-release-notes-protected-main` | — |
-| `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | PR open; local gate green; returned for branch-installed real-UI proof; security QA not started | `build-1883-vault-errors-2` | resolve live | `build/1883-vault-mcp-errors` | #1892 |
+| `docs/superpowers/specs/2026-08-23-1883-vault-search-mcp-errors.md` | #1883 | security | PR open; local gate green; fresh relay building branch-installed real-UI proof; security QA not started | `build-1883-livepath` | resolve live | `build/1883-vault-mcp-errors` | #1892 |
 | `docs/superpowers/specs/2026-08-23-1884-weather-settings-card.md` | #1884 | routine | initial QA green; CI pending; held for post-#1883 rebase + integrated QA | `build-1884-relay` | resolve live | `build/1884-weather-settings` | #1891 |
 | issue #1885 | #1885 | routine | merged `91aa6ad84`; issue closed/Done | reaped | — | `fix/1885-coordinator-watchdog` | #1886 |
 
@@ -178,6 +178,11 @@ hand-merging it.
   `fd22bc0c-01cc-4c72-b4b1-b8ad493bb34f`) reaped after Task B commit `26ec5c458`, typecheck green,
   focused unit 3/3 and DB-backed integration 14/14, and confirmation that successor
   `catalog-verify-1319a-2` was driving gate/wrap-up on Sonnet in the same worktree/branch.
+- #1883 build session `build-1883-vault-errors-2` (Claude session
+  `c77ef341-8b0f-416d-9edc-5b4260862032`) reaped after PR #1892, full gate exit 0 (2044 tests,
+  2 skipped), clean rebase, and a committed live-path handoff; successor `build-1883-livepath`
+  was confirmed driving the required branch-installed real-chat proof on Sonnet in the same
+  worktree/branch.
 
 ## Latest continuation note — Codex relay adopted
 
