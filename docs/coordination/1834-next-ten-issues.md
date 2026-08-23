@@ -2497,3 +2497,18 @@ no blocking findings; the screenshot-free proof, bounded delayed-POST evidence, 
 exit criteria were accepted. The QA pane was closed after matching session
 `01a02def-66a5-7b03-ab5e-11429bd7ccf0`, and its clean worktree was removed. No merge is
 authorized until CI is green. [pane w1:pP2]
+
+## Continuation - 2026-08-23, #1877 merged; relay required
+
+After re-confirming the live coordinator authority (`agent_session.value`
+`01a02dad-7b3a-7b82-8d54-aaf556954e08`, agent `coordinator`, label `Coordinator`), PR #1877
+was squash-merged with clean final QA and all required checks green. Merge commit is
+`18fb95fd7338544c9627dcf534165ff671586ff8`; `origin/main` contains it and issue #1105 is
+closed. The #1105 build pane was closed after fresh session match
+`01a02d57-f6a4-7cd0-ad6d-f2ea675bd013`, and its clean worktree/branch were removed.
+
+This is the second routine merge since the prior relay, so the coordinator must relay before
+any further merge or implementation action. On resumption, rebase #1878 onto new
+`origin/main` `18fb95fd7`, push with lease, and request fresh QA; #1880 remains with its owner,
+blocked on removing the four production suppressions from `packages/email/src/settings/index.tsx`
+and moving the typing repair into tests. No Ben-only decision is open. [pane w1:pP2]
