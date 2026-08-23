@@ -1978,3 +1978,11 @@ runner with last output `Password:`. This matches the known inherited
 instruction not to enter or expose a secret, to stop only this authorized run, unset that trigger,
 preserve the evidence, and restart the isolated gate before continuing the security/live-proof
 finish line. [pane w1:pNF]
+
+## Update - 2026-08-23, #1335 password prompt intercepted
+
+The fresh #1335 gate also reports `Password:` before a verdict, matching the inherited
+`JARVIS_UAT_REAL_CHAT_TOKEN_FILE` trigger rather than a code failure. The owner received a verified
+instruction not to enter or expose a secret, to stop only that authorized gate, preserve evidence,
+unset the trigger, and restart the isolated gate before continuing to PR/QA. #899 remains alive
+with a known jsdom canvas warning and no terminal verdict. [pane w1:pNF]
