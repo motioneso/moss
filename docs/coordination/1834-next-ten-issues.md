@@ -1750,3 +1750,16 @@ The abandoned predecessor gate was verified as parent PID `3341119` with child P
 both with no progress for over 12 minutes. Only those exact processes were terminated; the gate
 reported `DONE rc=143`. Relay 6 was notified and is continuing its own checks and delivery steps.
 [pane w1:pNF]
+
+## Update - 2026-08-23, #1105 Fable ruling requested and #899 wrap-up prep
+
+The #1105 isolated gate reached lint green but returned `rc=1` at `format:check` solely because
+the authoritative Fable plan `docs/superpowers/plans/2026-08-22-1105-seeded-chat-uat.md` is not
+Prettier-formatted. The build agent is preserving that plan as required. Dedicated Fable 5
+reviewer `fable5-1105-plan-format`, session `c56513a1-e135-498a-b139-7449349265f0`, is driving in
+Fable 5 pane `w1:pNT` to rule targeted checks versus an explicit plan-only formatting exception.
+
+#899 is implementation-complete in commits `c9fecbc9a` and `47e8d0539`; its live/scoped evidence
+is green and the agent is running pre-push checks before opening its PR. One neighboring sweep test
+has an isolated pre-existing #1310 theme assertion failure; no waiver is granted until the agent
+posts its exact evidence and PR. [pane w1:pNF]
