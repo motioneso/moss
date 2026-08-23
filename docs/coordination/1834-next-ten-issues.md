@@ -1578,3 +1578,12 @@ Sonnet successor `issue1872-image-relay4`, session `d2a048bd-2e33-48f2-af01-937c
 visibly driving the same worktree/branch through push, PR creation, live-path proof, release note,
 and wrap-up. Spent predecessor session `f598bdac-11ec-4d7e-aa71-ccad13e05612` was closed after
 successor confirmation. No Ben-only decision is open; the Fable-authored plan remains authoritative.
+
+## Continuation note - 2026-08-23, PR 1874 entered security QA
+
+#1872 is code-complete in PR #1874 with a clean gate, release note, and written live-path evidence
+posted on the PR. Because the diff changes the Service Worker's cross-origin fetch boundary, it is
+security tier. Opus QA agent `qa-pr1874-security`, session
+`3e6fa4e0-57ab-411a-9ca9-2d2a65882468`, is visibly reviewing in a fresh detached worktree in the
+QA tab. Do not merge until GitHub CI is green, the agent posts a security verdict to the PR, and Ben
+explicitly signs off. The Fable-authored plan remains authoritative.
