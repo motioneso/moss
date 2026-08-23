@@ -1342,3 +1342,41 @@ the issue number specifically, not just whether the issue itself is still open -
 done and merged while still showing open on the board if nothing closed it automatically.
 
 Next: starting #1500 (shared web forms), the second item in the chain.
+
+## Continuation note - 2026-08-23, eighteenth coordinator relaying at context limit
+
+Started #1500 and am relaying immediately after (context meter hit 70%) - this is a flush, not a
+stall.
+
+- Work folder: `.claude/worktrees/1500-shared-web-forms`, branch `1500-shared-web-forms`, off main
+  commit 09a983c22 (includes the #1499 merge).
+- Handoff note: `docs/coordination/1834-handoff-1500-shared-web-forms.md`. Told the builder to
+  cover both desktop and mobile widths in its live-path proof up front (learned from #1499, which
+  needed a follow-up round for this).
+- Running in pane w1:pM0, "builders" tab, agent name `pr1500-shared-web-forms`. Confirmed on
+  Sonnet and working.
+
+**Successor: next step is to wait for #1500's plan, approve it, then supervise the build through
+PR + QA + merge, exactly like #1499.** Once #1500 merges, start #1501 the same way (fetch fresh
+main, worktree, handoff doc referencing the spec's Child E section, spawn, verify Sonnet, record
+in manifest), then #1502, then #1503 - same pattern each time.
+
+Also still open, not urgent: issue #1511 stays blocked on issue #1246 being open - re-check
+before starting anything on it; not a decision for Ben, just a status check.
+
+Two other things filed this session, not part of this run's build queue, no action needed unless
+Ben raises them: issue #1869 (a date/time bug found during dogfood testing of the Food module)
+and issue #1870 (the assistant's own tool connection dropping and reconnecting during
+conversations). Both just logged, not started.
+
+**Lesson learned this session, worth remembering:** before queuing an open GitHub issue as new
+work, check whether a pull request already merged against that issue number
+(`gh pr list --search "<issue> in:body" --state all`), not just whether the issue itself still
+shows open - #1755 looked like real open work but had already shipped in pull request 1804 on
+2026-08-21; the issue was just never closed. A build lane caught it before wasting much time, but
+it should have been caught before spawning at all.
+
+Coordinator identity: pane w1:pMV, agent name `coordinator`, session
+7b8957b3-93f9-44ee-81cc-a6a436514031. Successor should re-claim the `coordinator` name/label
+after confirming this pane is safe to close (per the coordinate skill's Phase 0a), same as every
+prior relay in this run.
