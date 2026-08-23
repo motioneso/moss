@@ -46,7 +46,7 @@ conversion on existing approved infrastructure plus two design decisions, which 
   prompt.
 
 Consequence: design the script as a **single turn** with one marker present in every message the
-spec sends, and ensure every scripted send is the *first* submit of a fresh engine session:
+spec sends, and ensure every scripted send is the _first_ submit of a fresh engine session:
 
 - Turn A (#1090 seed turn): fresh stack → fresh engine → index 0. ✓
 - Turn B (#1090 post-resume turn): resume dropped the engine → fresh → index 0. ✓
@@ -61,9 +61,14 @@ session in this spec — that would need index 1 and fail `turn-index-out-of-ran
 ## Exact file changes
 
 1. **`tests/uat/fixtures/chat-scripts/1105-drawer-private.json`** (new)
+
    ```json
-   {"version":1,"turns":[{"expectIncludes":["UAT-1105"],"calls":[],"reply":"Scripted UAT-1105 reply."}]}
+   {
+     "version": 1,
+     "turns": [{ "expectIncludes": ["UAT-1105"], "calls": [], "reply": "Scripted UAT-1105 reply." }]
+   }
    ```
+
    `calls: []` is valid per `script-schema.ts` (only `turns` must be non-empty). Every message the
    spec sends contains the literal `UAT-1105`.
 
@@ -73,6 +78,7 @@ session in this spec — that would need index 1 and fail `turn-index-out-of-ran
    thread any registered id.
 
 3. **`tests/uat/specs/1089-1090-chat-drawer-private.uat.spec.ts`** — full rewrite. Header:
+
    ```ts
    export const uatLevel = {
      level: "admin+data",
@@ -81,6 +87,7 @@ session in this spec — that would need index 1 and fail `turn-index-out-of-ran
      chatScript: "1105-drawer-private"
    } as const;
    ```
+
    - `admin+data` (not solo-admin): lands on AppShell, no onboarding wizard.
    - `withoutNewsJsonBinding: true` is **required**, same trap 1533 hit live: without it two active
      assistant providers leave no resolvable default and Send stays disabled
@@ -88,7 +95,7 @@ session in this spec — that would need index 1 and fail `turn-index-out-of-ran
    - Field order in the header must match `run-uat.ts`'s anchored regex (level, without,
      withoutNewsJsonBinding, chatScript).
    - Copy (not import) the sign-in helper per UAT convention; `test.describe.configure({ mode:
-     "serial" })`, **#1090 test first, #1089 second** (order is load-bearing: #1089 ends in an
+"serial" })`, **#1090 test first, #1089 second** (order is load-bearing: #1089 ends in an
      active private session; nothing runs after it).
 
 ## Test A — #1090 resume clears stale privateMode (real stack)
@@ -129,7 +136,7 @@ session in this spec — that would need index 1 and fail `turn-index-out-of-ran
 - **Live proof (the point of the issue):** one full harness run of this spec file via the standard
   `run-uat.ts` path with Playwright-result parsing (not exit-code trust). Evidence on the PR:
   scenario names, pass counts, screenshots; no prompts/replies beyond the fixture's own markers,
-  no secrets. This run *is* the live-path gate for test infrastructure.
+  no secrets. This run _is_ the live-path gate for test infrastructure.
 - **Acceptance (from #1105):** both scenarios run as real pass/fail — zero `test.fixme` in the
   file; the harness drives a real chat turn and opens a real persisted thread; default
   credential-free CI seed unchanged (registry addition is inert unless a spec opts in).
