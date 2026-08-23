@@ -2179,3 +2179,10 @@ verified the live PR body: the formatting note now states this branch fixed the 
 format checking, the unit test line says 11 of 11, and the gate line states the real isolated
 exit-0 result. The PR remains open. Fresh Opus QA was instructed to re-read the body and post the
 updated durable security verdict; no source or gate rerun is required. [pane w1:pNF]
+
+## Update - 2026-08-23, watchdog rechecks active
+
+Fresh fleet evidence shows no dead lane. #1105 and #1335 isolated runners remain alive with no
+failure sentinel. Routine QA for #899 is actively reviewing PR #1879 and its scoped helpers. The
+#1874 Opus reviewer is re-reading the corrected PR body and checking the non-required image job
+before posting the updated security verdict. No Ben-only decision is open. [pane w1:pNF]
