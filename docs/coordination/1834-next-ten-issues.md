@@ -1763,3 +1763,11 @@ Fable 5 pane `w1:pNT` to rule targeted checks versus an explicit plan-only forma
 is green and the agent is running pre-push checks before opening its PR. One neighboring sweep test
 has an isolated pre-existing #1310 theme assertion failure; no waiver is granted until the agent
 posts its exact evidence and PR. [pane w1:pNF]
+
+## Update - 2026-08-23, fresh Fable ruling lane for #1105/#899
+
+The first Fable reviewer remained in an unproductive recombination turn across repeated bounded
+checks and was resolved fresh. New Fable 5 reviewer `fable5-1105-plan-format-relay`, session
+`f103e9b3-546e-4721-a645-e950cbff7b31`, is driving from Fable 5 pane `w1:pNV` with the same
+evidence. #1105's implementation commit `29c0ded52` remains preserved; no plan edits or rebase
+were authorized pending the fresh ruling. [pane w1:pNF]
