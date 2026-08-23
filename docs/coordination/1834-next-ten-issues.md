@@ -2156,6 +2156,15 @@ child is running; the `Password:` status line is not an interactive prompt. #133
 its independent checks. #899's green-gate owner is still running a live pre-push TypeScript check
 before opening the PR. [pane w1:pNF]
 
+## Update - 2026-08-23, #1874 security QA text blocker
+
+Fresh Opus security QA posted a durable RED verdict on PR #1874
+(`https://github.com/motioneso/moss/pull/1874#issuecomment-5384970314`). The isolated gate,
+service-worker CI step, induced live recovery proof, and invariants are green; the sole blocking
+finding is stale PR description text that still calls plan formatting pre-existing/out of scope and
+still says five unit tests instead of eleven. The retained owner was instructed to correct only
+the PR body and request QA recheck; no source or gate rerun is required. [pane w1:pNF]
+
 ## Update - 2026-08-23, #899 routine QA started
 
 PR #1879 is open at head `1240c7a6a`. A fresh isolated routine QA agent is driving in QA pane
