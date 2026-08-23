@@ -1693,6 +1693,14 @@ reaped. Codex GPT-5.6 Luna at high effort is now implementing the plan in isolat
 session `01a02d57-f6a4-7cd0-ad6d-f2ea675bd013`, pane `w1:pNQ`. The lane must preserve the Fable
 plan, prove the real seeded chat/thread UAT path, open a PR, and wrap up. [pane w1:pNF]
 
+## Update - 2026-08-23, #1335 build started
+
+Fable 5 completed the #1335 plan at commit `e70f70b6e` with no blocker; its planner pane was
+resolved fresh and reaped. Codex GPT-5.6 Luna at high effort is now implementing the plan in
+isolated worktree `.claude/worktrees/1335-tests-tsx-typecheck`, branch `1335-tests-tsx-typecheck`:
+agent `codex-1335-build`, session `01a02d59-6b9b-7270-a117-ef7c49ac80a9`, pane `w1:pNR`.
+Implementation is approved with no fork. [pane w1:pNF]
+
 ## Update - 2026-08-23, #899 plan approved
 
 The #899 Codex Luna lane verified the Fable plan's target-file absence, News module literal, and
