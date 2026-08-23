@@ -47,6 +47,8 @@ You may also leave breadcrumbs for the audit trail:
   and any spawn prompt you write: no jargon, no invented terms, plain ASCII punctuation. Exact
   names only for things Ben must act on (a command, a file, an error string). Pass this rule on to
   any agent you spawn.
+- **Never run any DB-touching test outside the `verify-gate` skill** — an unscoped run hits the
+  LIVE dev database. This includes `pnpm verify:foundation`.
 - **Never pipe a gate.** Verification commands are written so the exit code survives:
   `<command> > /tmp/out.log 2>&1; echo "EXIT=$?"` — never `| tail`, `| head`, or `| tee`, which
   report the last command's status and let a failed gate read as green.
