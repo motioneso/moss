@@ -750,6 +750,17 @@ for f in "$TASKS_DIR"/*.json; do
   [ -n "$issue" ] || continue
   [ -n "$status" ] || continue
 
+  # A paused lane is skipped entirely: no dispatch, no dead-lane check, no
+  # relay park. A paused agent's record goes quiet on purpose, which is
+  # exactly the signature the dead-lane check hunts for -- so the skip must
+  # come before every other rule. Unpausing (paused=false) puts the lane
+  # straight back into the normal flow; if its agent died while paused, the
+  # dead-lane path picks it up on the next tick.
+  paused="$(jq -r '.paused // false' <<<"$record")"
+  if [ "$paused" = "true" ]; then
+    continue
+  fi
+
   # Relay rule: two relays means the task was sliced too big. Park it.
   relays="$(jq -r '.relays // 0' <<<"$record")"
   if [ "$relays" -ge 2 ] && [ "$status" != "blocked" ] && [ "$status" != "done" ]; then

@@ -330,4 +330,27 @@ out="$(run_tick "$state")"
 grep -q "DRY: herdr agent start fleet-lane-403" <<<"$out"
 pass "a non-numeric laneCap falls back to the built-in cap instead of breaking the tick"
 
+# --- 15. a paused lane is skipped entirely, including the dead-lane check ----------
+
+state="$(new_state)"
+stale_iso="$(date -Iseconds -d '40 minutes ago')"
+write_record "$state" 501 "{\"issue\":501,\"status\":\"building\",\"agent\":\"gone-agent\",\"paused\":true,\"relays\":0,\"updated_at\":\"$stale_iso\"}"
+out="$(run_tick "$state")"
+if grep -qE "judgment for lane 501|set 501 status=blocked" <<<"$out"; then false; fi
+pass "a paused lane survives past the dead-lane threshold untouched"
+
+# --- 15b. a paused queued lane is not dispatched ------------------------------------
+
+state="$(new_state)"
+write_record "$state" 502 '{"issue":502,"status":"queued","tier":"routine","paused":true,"relays":0,"spec":"docs/x.md"}'
+out="$(run_tick "$state")"
+if grep -q "worktree add" <<<"$out"; then false; fi
+pass "a paused queued lane spawns nothing"
+
+# --- 15c. the brief template teaches agents what a pause is, and renders ------------
+
+grep -q "pause" "$repo_root/scripts/fleet/brief-template.md"
+if grep -q '{{' "$repo_root/scripts/fleet/brief-template.md"; then false; fi
+pass "brief template carries the pause rule and only placeholders the renderer replaces"
+
 echo "fleet tick tests passed"

@@ -1,11 +1,11 @@
-# Build Brief — issue #{{ISSUE}}
+# Build Brief — issue #${ISSUE}
 
-**Spec (approved):** {{SPEC_PATH}}
-**GitHub issue:** #{{ISSUE}} — **required, no exceptions.** A lane with no issue is invisible to
+**Spec (approved):** ${SPEC}
+**GitHub issue:** #${ISSUE} — **required, no exceptions.** A lane with no issue is invisible to
 every later sweep. If this field is empty, stop and record a blocker before planning.
-**Risk tier:** {{TIER}} (`security` means this PR gets adversarial QA and Ben's merge sign-off —
+**Risk tier:** ${TIER} (`security` means this PR gets adversarial QA and Ben's merge sign-off —
 build to that bar.)
-**Worktree:** {{WORKTREE}} **Branch:** {{BRANCH}} (off origin/main)
+**Worktree:** ${WORKTREE} **Branch:** ${BRANCH} (off origin/main)
 **Build skill path (absolute):** <repo>/.claude/skills/coordinated-build/SKILL.md (follow this
 exact file if `coordinated-build` does not resolve by name in your spawn env)
 
@@ -16,19 +16,24 @@ task record with the `fleetctl` command line tool, and escalations that need a h
 the record, never through idling. The exact commands:
 
 - **You opened a PR:**
-  `node scripts/fleet/fleetctl.mjs set {{ISSUE}} status=pr-open pr=<PR number>`
+  `node scripts/fleet/fleetctl.mjs set ${ISSUE} status=pr-open pr=<PR number>`
 - **You are blocked** (a real decision you cannot make, a broken dependency, anything that stops
   the work):
-  `node scripts/fleet/fleetctl.mjs set {{ISSUE}} status=blocked blocked_reason="<one plain-English sentence>"`
+  `node scripts/fleet/fleetctl.mjs set ${ISSUE} status=blocked blocked_reason="<one plain-English sentence>"`
   then **STOP your session immediately. Never idle waiting for an answer** — the daemon and Ben
   read the record; a stopped lane costs nothing, an idle one burns a slot.
 - **You are relaying** (handing off to a fresh session of yourself):
-  `node scripts/fleet/fleetctl.mjs set {{ISSUE}} relays=+1`
+  `node scripts/fleet/fleetctl.mjs set ${ISSUE} relays=+1`
   before you stop. Two relays parks the lane automatically — that is Ben's one-session rule,
   enforced in code, so re-slice rather than relay twice.
 
 You may also leave breadcrumbs for the audit trail:
-`node scripts/fleet/fleetctl.mjs log {{ISSUE}} "<what just happened>"`.
+`node scripts/fleet/fleetctl.mjs log ${ISSUE} "<what just happened>"`.
+
+- **If a pause message arrives** (a human paused this lane from the fleet screen), stop at your
+  next safe point: finish the edit or commit you are in the middle of, start nothing new, and
+  wait to be told to continue or to stop for good. This is the one exception to "never idle
+  waiting" — a pause is a human holding the lane, not a lane waiting on a human.
 
 ## Start
 
