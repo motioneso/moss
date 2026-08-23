@@ -1,7 +1,7 @@
 # Coordination Run — 2026-08-23-fable-two-issue
 
 **Date:** 2026-08-23
-**Coordinator lock:** registered agent name `coordinator` + visible pane label `Coordinator`, **stable anchor = Codex session id `01a02e90-46d7-7093-bffd-5e2a4bb029dc`** (match `agent_session.value` in `herdr agent list`). Exactly one live agent named `coordinator` whose session id matches this anchor holds authority. Pane ids are ephemeral; resolve agents fresh by name and immutable session id.
+**Coordinator lock:** registered agent name `coordinator` + visible pane label `Coordinator`, **stable anchor = Claude session id `c60ed2b9-0da3-4fdc-95a9-12113657660e`** (match `agent_session.value` in `herdr agent list`). Exactly one live agent named `coordinator` whose session id matches this anchor holds authority. Pane ids are ephemeral; resolve agents fresh by name and immutable session id. Prior anchor (relayed 2026-08-23): Codex session `01a02e90-46d7-7093-bffd-5e2a4bb029dc`, pane `w1:pPM`, closed after exact-session confirmed transfer.
 **Approval authority:** Fable holds delegated overnight run-scope and plan approval authority. Durable scope verdict: `~/Jarv1s/fable-next-run-verdict.md` — APPROVE.
 **Merge policy:** autonomous after exact-head green QA for both routine lanes; #1497 also requires live-path proof.
 **Relay threshold:** routine/sensitive `merges_since_relay` ≥ 2, context-meter warning, or compaction summary. No deferral.
