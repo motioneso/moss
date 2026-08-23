@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Moss weekly — Week of August 17, 2026</title>
-<meta name="description" content="A Workshop page for admins, food tracking lands, and eleven fixes. Here's the week.">
+<meta name="description" content="Moss starts building its own modules in the open, sports and weather get real settings, and six fixes land.">
 <link rel="stylesheet" href="../../weekly.css">
 </head>
 <body>
@@ -12,7 +12,7 @@
 <header class="masthead">
   <div class="shell">
     <span class="wordmark">Moss weekly</span>
-    <span class="issue">Issue #34</span>
+    <span class="issue">Issue #35</span>
   </div>
 </header>
 
@@ -20,17 +20,18 @@
 
   <div class="lede">
     <h1>Week of August 17, 2026</h1>
-    <p>A few things changed this week. Food tracking is now a real page rather than a chat trick, admins get a window into what I'm building, and the nav bar finally remembers that dark mode exists. Fixes are at the bottom if that's all you're here for.</p>
+    <p>This was a week about watching Moss work. There is now a Workshop where you can see what Moss is building, agree to a plan before it starts, and try a half-finished module without inflicting it on anyone else. Elsewhere, sports news and weather picked up settings worth having, and a handful of small annoyances went away.</p>
   </div>
 
   <section class="hero">
     <div>
       <p class="eyebrow">This week's headline</p>
-      <h2>The Workshop page</h2>
+      <h2>The Workshop, where Moss builds its own modules</h2>
     </div>
     <div class="hero-body">
-      <p>Admins now have a Workshop page showing which modules Moss is building, has finished, or has made live, with anything waiting on a decision from you called out first.</p>
-      <p class="refs"><a href="https://github.com/motioneso/moss/pull/1804">PR&nbsp;#1804</a></p>
+      <p>Admins get a Workshop page listing the modules Moss is building, has finished, or has already made live, grouped so anything waiting on a decision from you comes first.</p>
+      <p>The interesting part is what happens around it. Before a build starts, chat shows a plan card in plain terms: what the module does, what it reaches out to, what it keeps, when it runs, and roughly what it costs, with buttons to agree or not. While it is being built, a module stays a draft that runs only for the person building it, so nothing half-finished shows up for anyone else until you press ship. Ask for a change mid-build and a cosmetic tweak just happens, while anything that reaches somewhere new comes back for approval first.</p>
+      <p class="refs"><a href="https://github.com/motioneso/moss/pull/1804">PR&nbsp;#1804</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/1808">PR&nbsp;#1808</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/1799">PR&nbsp;#1799</a></p>
     </div>
   </section>
 
@@ -39,34 +40,14 @@
     <hr class="hr">
     <div class="items">
       <article class="item">
-        <h4>Food tracking (Phase 1)</h4>
-        <p>Log meals, get an estimated nutrition breakdown, and review what you've eaten so far today. The Food page has its own Log a meal button, so nothing has to go through chat.</p>
-        <p class="refs"><a href="https://github.com/motioneso/moss/pull/1716">PR&nbsp;#1716</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/1788">PR&nbsp;#1788</a></p>
-      </article>
-      <article class="item">
-        <h4>A more useful Food day view</h4>
-        <p>See calories and macros at a glance, browse meals by time of day, and expand a meal to see the foods behind its estimate. Meals logged in chat appear here without a manual refresh.</p>
-        <p class="refs"><a href="https://github.com/motioneso/moss/pull/1744">PR&nbsp;#1744</a></p>
-      </article>
-      <article class="item">
-        <h4>Food estimates you can control</h4>
-        <p>Nutrition estimates run automatically now, with a simple switch in Settings and no extra consent question in chat. Food can also show daily targets.</p>
-        <p class="refs"><a href="https://github.com/motioneso/moss/pull/1751">PR&nbsp;#1751</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/1767">PR&nbsp;#1767</a></p>
-      </article>
-      <article class="item">
         <h4>Custom sports news sources</h4>
-        <p>Add your own sports news sources by URL in Sports settings, preview what Moss found, and assign them to your followed teams and leagues.</p>
+        <p>Add your own sports news sources by URL in Sports settings, preview what Moss found before committing, and assign them to your followed teams and leagues. The default headlines stay unless you remove them, and removing them leaves scores, schedules, and standings alone.</p>
         <p class="refs"><a href="https://github.com/motioneso/moss/pull/1825">PR&nbsp;#1825</a></p>
       </article>
       <article class="item">
-        <h4>Weather place and temperature units</h4>
-        <p>Choose the place used for your weather, and switch temperatures between Celsius and Fahrenheit.</p>
+        <h4>Your weather place, in your units</h4>
+        <p>Search for the place you want your weather from, pick the right one when several share a name, and change it later. Temperatures switch between Celsius and Fahrenheit.</p>
         <p class="refs"><a href="https://github.com/motioneso/moss/pull/1826">PR&nbsp;#1826</a></p>
-      </article>
-      <article class="item">
-        <h4>Settings for installed modules</h4>
-        <p>Installed modules appear in your personal settings, where you can manage your own sign-ins and jump straight to a module's settings when one exists.</p>
-        <p class="refs"><a href="https://github.com/motioneso/moss/pull/1764">PR&nbsp;#1764</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/1765">PR&nbsp;#1765</a></p>
       </article>
     </div>
   </section>
@@ -76,19 +57,14 @@
     <hr class="hr">
     <div class="items">
       <article class="item">
-        <h4>More reliable calendar changes</h4>
-        <p>Creating, rescheduling, and deleting events goes through a more reliable lookup step, so I confirm I have the right event before changing it.</p>
-        <p class="refs"><a href="https://github.com/motioneso/moss/pull/1703">PR&nbsp;#1703</a></p>
+        <h4>A new look for this page</h4>
+        <p>The weekly summary you are reading has a new design and is published properly again every Friday morning. It used to be built each week and quietly thrown away.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/1830">PR&nbsp;#1830</a></p>
       </article>
       <article class="item">
-        <h4>Settings are closer to where you need them</h4>
-        <p>Finance, Job Search, and News pages link to their own settings, so changing a connection or preference takes fewer clicks. Food now uses the full page width, in line with them.</p>
-        <p class="refs"><a href="https://github.com/motioneso/moss/pull/1772">PR&nbsp;#1772</a><span class="sep">·</span><a href="https://github.com/motioneso/moss/pull/1793">PR&nbsp;#1793</a></p>
-      </article>
-      <article class="item">
-        <h4>Food looks at home in Moss</h4>
-        <p>The Food day view uses the same cards, totals, and building blocks as the rest of the app.</p>
-        <p class="refs"><a href="https://github.com/motioneso/moss/pull/1733">PR&nbsp;#1733</a></p>
+        <h4>A job board that does not break on one bad row</h4>
+        <p>The job search board now checks each role before showing it. A malformed one is left out rather than rendered broken, the rest of the board still loads, and a plain message tells you how many could not be shown so nothing disappears silently.</p>
+        <p class="refs"><a href="https://github.com/motioneso/moss/pull/1844">PR&nbsp;#1844</a></p>
       </article>
     </div>
   </section>
@@ -97,13 +73,11 @@
     <h3>Fixed</h3>
     <hr class="hr">
     <ul class="fixes">
-      <li>The left nav bar switches color in dark mode instead of staying green. <a href="https://github.com/motioneso/moss/pull/1810">#1810</a></li>
-      <li>Meals logged late in the evening file under today, using your timezone rather than a guess. <a href="https://github.com/motioneso/moss/pull/1790">#1790</a></li>
-      <li>All-day events are seen when I check availability, and no longer make a day look fully booked. <a href="https://github.com/motioneso/moss/pull/1786">#1786</a> <span class="sep">·</span> <a href="https://github.com/motioneso/moss/pull/1717">#1717</a></li>
-      <li>With AI estimates off, logging a meal no longer promises an estimate that isn't coming. <a href="https://github.com/motioneso/moss/pull/1771">#1771</a></li>
-      <li>Private chat respects your latest choice, and stays closed correctly if the browser refocuses mid-close. <a href="https://github.com/motioneso/moss/pull/1781">#1781</a> <span class="sep">·</span> <a href="https://github.com/motioneso/moss/pull/1801">#1801</a></li>
-      <li>Granting a permission is reported as a permission grant, not as a finished action. <a href="https://github.com/motioneso/moss/pull/1783">#1783</a></li>
-      <li>Approve and reject cards handle quick repeated clicks safely, and expired actions explain themselves. <a href="https://github.com/motioneso/moss/pull/1649">#1649</a></li>
+      <li>The left nav bar switches color in dark mode instead of staying the same green. <a href="https://github.com/motioneso/moss/pull/1810">#1810</a></li>
+      <li>Private chat stays closed correctly if you switch away from the app and back while it is closing. <a href="https://github.com/motioneso/moss/pull/1801">#1801</a></li>
+      <li>Quoted evidence behind a commitment shows exactly what was written, punctuation and all, rather than being mangled. <a href="https://github.com/motioneso/moss/pull/1821">#1821</a></li>
+      <li>Action history no longer records a module's tool call as successful when the module itself reported an error. <a href="https://github.com/motioneso/moss/pull/1654">#1654</a></li>
+      <li>If Moss cannot repair a missing permission, it asks you rather than letting the action through. <a href="https://github.com/motioneso/moss/pull/1862">#1862</a></li>
     </ul>
   </section>
 
