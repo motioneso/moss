@@ -42,7 +42,11 @@ idle_seconds=$(( now - last_change ))
 
 if [ "$idle_seconds" -ge "$IDLE_THRESHOLD_SECONDS" ]; then
   echo "coordinator-watchdog: pane $pane_id idle for ${idle_seconds}s, nudging"
-  nudge="Watchdog: no activity for ${IDLE_THRESHOLD_SECONDS}s. Check the run manifest and the fleet's pane statuses, then continue supervising -- if a lane needs a decision only Ben can make, log it and ping him rather than sitting idle."
+  # Carry the fleet's pane statuses IN the nudge so the coordinator doesn't burn context
+  # re-polling `herdr pane list` on every wake (2026-08-23 audit: 242 nudges in two days, each
+  # answered with 5-27 identical pane-list calls).
+  pane_summary="$(jq -r '[.result.panes[] | "\(.label // .pane_id):\(.agent_status // "?")"] | join(", ")' <<<"$pane_list" 2>/dev/null || echo "unavailable")"
+  nudge="Watchdog: no activity for ${IDLE_THRESHOLD_SECONDS}s. Current pane statuses (fresh, do NOT re-poll pane list): ${pane_summary}. Act only on lanes that need it per the run manifest -- if a lane needs a decision only Ben can make, log it and ping him rather than sitting idle."
   if [ "${COORDINATOR_WATCHDOG_DRY_RUN:-0}" = "1" ]; then
     echo "coordinator-watchdog: DRY RUN, would send to $pane_id: $nudge"
   else

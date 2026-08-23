@@ -20,7 +20,10 @@ If **every** change in this session is docs/coordination files (`.md`, `docs/**`
 coordinator manifests) with **no source, migration, config, or test changes**, skip step 3 (the gate)
 entirely. Confirm this by checking `git diff --name-only` — if every path matches `**/*.md`,
 `docs/**`, `.claude/**`, or similar non-code paths, state "docs-only — skipping gate" and proceed
-directly from step 2 to step 4. Never skip the gate when there is any doubt.
+directly from step 2 to step 4. **Exception: executable files under `.claude/` are code, not
+docs** — `.claude/hooks/*.sh`, `.claude/skills/**/*.sh`, and anything else that runs — a change
+there does not qualify for the fast path (at minimum, syntax-check and exercise the script).
+Never skip the gate when there is any doubt.
 
 ---
 

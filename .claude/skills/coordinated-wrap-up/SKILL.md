@@ -113,7 +113,7 @@ path. If you can't produce the proof (no live instance, or a step that needs Ben
 exactly that in the PR body and report the honest status: **code-complete, unverified**. Never
 report it as done. Full rule: `docs/DEVELOPMENT_STANDARDS.md` → Live-Path Gate.
 
-### 4. Report to the coordinator — then STOP
+### 5. Report to the coordinator — then STOP (teardown FIRST — step 4 — the report asserts it already happened)
 
 Report **terse and result-first** — lead with the outcome, no recap, no option survey, but in
 normal English (caveman/telegraph style was removed from this family on 2026-07-27; it saved few
@@ -132,13 +132,17 @@ Sign off with your own pane id (`$HERDR_PANE_ID`, or `herdr pane list` matched o
 reading the manifest later) ties a report to the physical pane that produced it without
 cross-referencing a label that may since have been reused or reaped.
 
-Then stop. **Do not** move the board, close the issue/milestone, or merge — the coordinator owns
-QA, merge order, conflict resolution, and all GitHub bookkeeping.
+Then stop — but **stay alive. Your lane owns this branch until the PR is MERGED** (or the
+coordinator explicitly reassigns it). "Worktree reapable" describes the tree's state, not
+permission to disappear: QA has not run yet, and red findings come back to YOU with your context
+(re-open, fix, cite commit + file:line per finding, report again). **Do not** move the board,
+close the issue/milestone, or merge — the coordinator owns QA, merge order, conflict resolution,
+and all GitHub bookkeeping.
 
-### 5. Tear down everything you stood up — then say so
+### 4. Tear down everything you stood up — BEFORE the report
 
 **Your work is not finished when the PR is green.** Anything you started outside your own worktree
-is still running until you stop it, and the next lane inherits the mess. Before you report done:
+is still running until you stop it, and the next lane inherits the mess. Do this BEFORE writing the step-5 report — the old ordering (report first, teardown after) invited asserting teardown that had not happened yet. Before you report done:
 
 - **Dev instances: stop by explicit PID, never by name pattern.** Record the PIDs when you start
   them. `pkill -f worker` matches prod's containerised worker, which shows up in host `ps` as a
