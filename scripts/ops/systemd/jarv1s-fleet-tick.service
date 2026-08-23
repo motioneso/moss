@@ -1,0 +1,19 @@
+[Unit]
+Description=Jarv1s fleet daemon tick -- advance every lane one step
+
+[Service]
+Type=oneshot
+# Type=oneshot disables the start timeout by default, so one wedged tick
+# (a hung gh call, a stalled model call) would stop the daemon silently and
+# forever. Cap it: systemd kills the stuck run and the timer starts a fresh
+# tick a minute later.
+TimeoutStartSec=10min
+Environment=JARV1S_FLEET_STATE=/home/ben/.local/state/jarv1s-fleet
+# Judgment calls and build-agent spawns are provider-agnostic. Uncomment to
+# point them somewhere else; the defaults use the locally configured model.
+#Environment=FLEET_JUDGE_CMD=claude -p
+#Environment=FLEET_BUILD_MODEL=sonnet
+ExecStart=/home/ben/Jarv1s/scripts/fleet/tick.sh
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=jarv1s-fleet-tick

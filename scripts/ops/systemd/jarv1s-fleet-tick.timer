@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the Jarv1s fleet daemon tick every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target
