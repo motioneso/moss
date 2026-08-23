@@ -2213,3 +2213,35 @@ required CI, isolated full gate, accepted socket-level live recovery proof, and 
 green; three observations are explicitly non-blocking. Security-tier policy now leaves one
 Ben-only merge decision, so the coordinator added `AWAITING-BEN.md` and sent `needs-ben`; no merge
 will occur until his explicit approval. [pane w1:pNF]
+
+## Continuation - 2026-08-23, successor adoption after security merge
+
+This is the latest continuation note and must remain at EOF. PR #1874 is merged on `origin/main`
+as `f59297ee11e8d9d197b72b3285f66d1148e5cfe0`; issue #1872 is closed and its owner and Opus-QA
+lanes are reaped. Ben's security approval is resolved in `AWAITING-BEN.md`. PR #1879 has no
+blocking QA findings but required CI is still pending. #1105 and #1335 gates remain active; #1501
+is still open pending image publication. Security-merge relay is complete in state, and successor
+`coordinator-next-1834` session `01a02dad-7b3a-7b82-8d54-aaf556954e08` must claim the coordinator
+lock, rename to `coordinator` / `Coordinator`, and close old session
+`01a02d45-dc51-79b0-8ec1-91c0784f68c2` by fresh session-id match. [pane w1:pNF]
+
+## Continuation - 2026-08-23, watchdog recovery and #1105 fresh QA
+
+The live coordinator is session `01a02dad-7b3a-7b82-8d54-aaf556954e08`, agent name `coordinator`,
+pane label `Coordinator`, pane `w1:pP2`. The stale predecessor session
+`01a02d45-dc51-79b0-8ec1-91c0784f68c2` was resolved by fresh session match and closed.
+
+PR #1877 (#1105) is at head `407e01d00ac14d7287506b639cbd70dc3447d4e8`, rebased on `main`, with
+the corrected live proof and isolated full-gate evidence posted. Fresh routine QA is active in
+QA pane `w1:pP3`, agent `qa1877-1105`, session `01a02dbe-5cbd-7381-acd2-848c77a227d8`, on Codex
+GPT-5.6 Luna at high effort. Do not merge until QA posts its durable verdict and all required CI
+checks are green.
+
+PR #1879 (#899) has a clean routine QA review but remains unmergeable until its required
+foundation check settles; its review pane and worktree were reaped after the verdict. #1335's
+build lane remains active. #1501 remains open pending image publication. #1874 is merged and
+fully reaped. `AWAITING-BEN.md` has no live Ben-only decision; #1511 remains parked outside this
+run pending #1246.
+
+Mid-doing: supervising #1105 fresh QA and the remaining build/CI lanes; no merge performed in
+this watchdog recovery. [pane w1:pP2]
