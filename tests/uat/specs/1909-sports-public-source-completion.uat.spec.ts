@@ -298,14 +298,13 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
 
   await page.context().clearCookies();
   await signIn(page);
+  await bringUpRealModel(page);
+  const follows = await createPremierLeagueFollows(page);
   const section = await openSportsSettings(page);
   await expect(section.getByLabel("Publication homepage or domain")).toBeVisible();
   await expect(section.getByRole("button", { name: "Check", exact: true })).toBeVisible();
   await expect(section.getByText("One or more source targets are failing.")).toBeVisible();
   await expect(section.getByRole("button", { name: /Rebuild FotMob legacy scrape/ })).toBeVisible();
-
-  await bringUpRealModel(page);
-  const follows = await createPremierLeagueFollows(page);
 
   await test.step("Moss Retry recovers a controlled partial target failure", async () => {
     await confirmThroughMoss(
