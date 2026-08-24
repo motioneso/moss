@@ -165,9 +165,10 @@ export function Group(props: {
   readonly desc?: ReactNode;
   readonly action?: ReactNode;
   readonly children: ReactNode;
+  readonly tone?: "danger";
 }) {
   return (
-    <section className="pane__card">
+    <section className={props.tone === "danger" ? "pane__card pane__card--danger" : "pane__card"}>
       <header className="pane__cardhead">
         <div className="pane__cardheadmain">
           <div className="pane__cardtitle">{props.title}</div>

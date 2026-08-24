@@ -80,6 +80,10 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
 }
+.pane__card--danger {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+}
 .pane__cardtitle {
   font-family: var(--font-display);
   font-size: 18px;
