@@ -6,7 +6,8 @@ export type CommandPaletteGroupLabel = "Navigate" | "Tasks" | "Appearance" | "Se
 export type CommandPaletteAction =
   | { readonly kind: "navigate"; readonly to: string }
   | { readonly kind: "theme"; readonly themeId: string }
-  | { readonly kind: "create-task" };
+  | { readonly kind: "create-task" }
+  | { readonly kind: "set-color-mode"; readonly mode: "light" | "dark" };
 
 export interface CommandPaletteCommand {
   readonly id: string;
@@ -93,6 +94,21 @@ export function buildCommandPaletteCommands(input: {
   }
   for (const theme of input.themes?.custom ?? []) {
     commands.push(themeCommand(theme.id, theme.name));
+  }
+  const activeThemeId = input.themes?.activeId;
+  const activeIsBuiltIn =
+    input.themes?.builtIn.some((theme) => theme.id === activeThemeId) ?? true;
+  if (activeIsBuiltIn && input.themes) {
+    const otherMode = input.themes.mode === "dark" ? "light" : "dark";
+    commands.push({
+      id: `mode:${otherMode}`,
+      group: "Appearance",
+      label: `Switch to ${otherMode} mode`,
+      description: `Set color mode to ${otherMode}`,
+      keywords: ["appearance", "theme", "color mode", "light", "dark"],
+      icon: "palette",
+      action: { kind: "set-color-mode", mode: otherMode }
+    });
   }
   commands.push({
     id: "settings:appearance",
