@@ -209,7 +209,7 @@ async function confirmThroughMoss(
 ): Promise<void> {
   const before = new Set((await listActions(page)).map((action) => action.id));
   const open = page.getByRole("button", { name: /^(Chat with |Open chat$)/ });
-  if (await open.isVisible()) await open.click();
+  if ((await open.getAttribute("aria-pressed")) !== "true") await open.click();
   const turnSettled = page.waitForResponse(
     (response) =>
       response.url().includes("/api/chat/turn") && response.request().method() === "POST",
