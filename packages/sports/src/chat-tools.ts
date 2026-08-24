@@ -11,7 +11,7 @@ import type {
 
 import { SportsFollowsRepository } from "./repository.js";
 import { SportsService, type SportsFollowsWriter } from "./sports-service.js";
-import { SportsSourceRequestError, SportsSourceService } from "./source/service.js";
+import { SportsSourceRequestError, type SportsSourceService } from "./source/service.js";
 
 /**
  * Content-write counterpart to `briefing-tool.ts`'s read-only singleton — same composition-root
