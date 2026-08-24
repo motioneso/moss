@@ -28,6 +28,10 @@ import { BrandMark } from "../shell/brand-mark";
 import { ActionRequestCard } from "./action-request-card";
 import { formatAttachmentSize } from "./attachments";
 import { MarkdownMessage } from "./markdown-message";
+import {
+  ModuleBuildPlanRecord,
+  parseModuleBuildPlanResult
+} from "./module-build-plan-record";
 import type { ChatRecordKind, TranscriptRecord } from "./use-chat-stream";
 
 /**
@@ -190,6 +194,21 @@ function RecordRow(props: {
   }
 
   if (kind === "action_result") {
+    // #1888 — workshop.buildModule hands back a plan for the user to approve. It is the only
+    // action result that owns a card; everything else stays the one-line "Changed" note below.
+    if (props.record.toolName === "workshop.buildModule") {
+      const parsed = parseModuleBuildPlanResult(props.record.result);
+      if (parsed) {
+        return (
+          <ModuleBuildPlanRecord
+            buildId={parsed.buildId}
+            plan={parsed.plan}
+            awaitingApproval={parsed.awaitingApproval}
+          />
+        );
+      }
+    }
+
     return (
       <div className="chatd-peek__line" role="status">
         <span className="chatd-peek__kind">

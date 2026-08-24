@@ -28,6 +28,7 @@
     "@moss/tasks": "workspace:*",
     "@moss/usefulness-feedback": "workspace:*",
     "@moss/vault": "workspace:*",
+    "@moss/workshop": "workspace:*",
     "fastify": "^5.6.2",
     "jszip": "^3.10.1",
     "kysely": "^0.29.2",
