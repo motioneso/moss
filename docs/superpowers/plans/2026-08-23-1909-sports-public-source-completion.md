@@ -1,9 +1,9 @@
 # Plan: Complete Public Sports News Sources (#1909)
 
-**Status:** Approved — Codex/Fable aligned  
-**Spec:** `docs/superpowers/specs/2026-08-23-1909-sports-public-source-completion.md` (Approved)  
-**Repairs:** #1572  
-**Separate future scope:** #1682  
+**Status:** Approved — Codex/Fable aligned
+**Spec:** `docs/superpowers/specs/2026-08-23-1909-sports-public-source-completion.md` (Approved)
+**Repairs:** #1572
+**Separate future scope:** #1682
 **Risk tier:** high (untrusted browser execution, arbitrary public URLs/SSRF boundary, owner-scoped
 RLS migration, and confirmed assistant writes)
 

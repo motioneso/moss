@@ -22,7 +22,11 @@ export {
 export { configureNewsBriefingService, newsTopHeadlinesTodayExecute } from "./briefing-tool.js";
 export { configureNewsChatTools } from "./chat-tools.js";
 export type { NewsChatToolDependencies } from "./chat-tools.js";
-export { createRssDatasetAdapter } from "./source/rss-source.js";
+export {
+  createRssDatasetAdapter,
+  isPublicFeedDocument,
+  parsePublicFeedItems
+} from "./source/rss-source.js";
 // #1572: declared public seam so Sports' own (URL-only) source discovery can reuse News'
 // reviewed feed-discovery, sanitize, domain-normalization and policy-check primitives instead
 // of importing News internals or re-implementing them.

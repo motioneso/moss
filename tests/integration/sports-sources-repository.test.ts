@@ -207,7 +207,10 @@ describe("sports sources repository", () => {
       })
     );
     if ("limitExceeded" in created) throw new Error("unexpected limit");
-    const retained = created.assignments[0]!;
+    const retained = created.assignments.find(
+      (assignment) => assignment.followId === follows.rows[0].id
+    );
+    if (!retained) throw new Error("retained assignment missing");
     await bootstrap.query(
       `UPDATE app.sports_source_assignments
           SET health_state = 'unsupported', health_reason_code = 'unsupported_shape',
@@ -240,6 +243,251 @@ describe("sports sources repository", () => {
         }
       ]
     });
+  });
+
+  it("persists target results and transactionally derives truthful source health", async () => {
+    const follows = await bootstrap.query(
+      `INSERT INTO app.sports_follows (owner_user_id, competition_key, team_key)
+       VALUES ($1, 'nfl', 'one'), ($1, 'nfl', 'two') RETURNING id`,
+      [ids.userA]
+    );
+    const base = candidate(1);
+    const checkedAt = "2026-08-23T12:00:00.000Z";
+    const target = (followId: string, teamKey: string) => ({
+      followId,
+      competitionKey: "nfl",
+      competitionLabel: "NFL",
+      teamKey,
+      teamLabel: teamKey,
+      scope: "team" as const,
+      targetUrl: base.feedUrl,
+      parameters: {},
+      samples: [],
+      checkedAt
+    });
+    const created = await asActor(ids.userA, (db) =>
+      repo.create(db, {
+        candidate: {
+          ...base,
+          targets: [target(follows.rows[0].id, "one"), target(follows.rows[1].id, "two")]
+        }
+      })
+    );
+    if ("limitExceeded" in created) throw new Error("unexpected limit");
+    const [first, second] = created.assignments;
+    if (!first || !second) throw new Error("assignments missing");
+    const runtimeResult = (
+      assignment: typeof first,
+      healthState: "healthy" | "failing" | "unsupported" | "auth_required",
+      healthReasonCode: string | null,
+      resultCheckedAt: Date | null
+    ) => ({
+      sourceId: created.id,
+      assignmentId: assignment.id,
+      runtimeFingerprint: base.validationFingerprint,
+      targetUrl: assignment.targetUrl,
+      targetParameters: {},
+      healthState,
+      healthReasonCode,
+      healthMessage: healthReasonCode ? "Safe bounded failure." : null,
+      checkedAt: resultCheckedAt
+    });
+
+    const failureAt = new Date("2026-08-24T10:00:00.000Z");
+    await asActor(ids.userA, (db) =>
+      repo.persistRuntimeResults(db, [
+        runtimeResult(first, "failing", "upstream_unavailable", failureAt)
+      ])
+    );
+    await expect(asActor(ids.userA, (db) => repo.list(db))).resolves.toMatchObject([
+      {
+        healthState: "failing",
+        healthReasonCode: "partial_target_failure",
+        lastCheckedAt: failureAt.toISOString(),
+        lastSuccessAt: checkedAt,
+        assignments: [
+          {
+            id: first.id,
+            healthState: "failing",
+            lastCheckedAt: failureAt.toISOString(),
+            lastSuccessAt: checkedAt
+          },
+          { id: second.id, healthState: "healthy" }
+        ]
+      }
+    ]);
+
+    const unsupportedAt = new Date("2026-08-24T11:00:00.000Z");
+    await asActor(ids.userA, (db) =>
+      repo.persistRuntimeResults(db, [
+        runtimeResult(first, "unsupported", "unsupported_response", unsupportedAt),
+        runtimeResult(second, "unsupported", "unsupported_response", unsupportedAt)
+      ])
+    );
+    await expect(asActor(ids.userA, (db) => repo.list(db))).resolves.toMatchObject([
+      {
+        healthState: "unsupported",
+        healthReasonCode: "unsupported_response",
+        lastCheckedAt: unsupportedAt.toISOString(),
+        lastSuccessAt: checkedAt
+      }
+    ]);
+
+    const noCheck = runtimeResult(first, "failing", "recipe_drift", null);
+    await asActor(ids.userA, (db) => repo.persistRuntimeResults(db, [noCheck]));
+    await expect(asActor(ids.userA, (db) => repo.list(db))).resolves.toMatchObject([
+      {
+        lastCheckedAt: unsupportedAt.toISOString(),
+        lastSuccessAt: checkedAt,
+        assignments: expect.arrayContaining([
+          expect.objectContaining({
+            id: first.id,
+            healthReasonCode: "recipe_drift",
+            lastCheckedAt: unsupportedAt.toISOString(),
+            lastSuccessAt: checkedAt
+          })
+        ])
+      }
+    ]);
+  });
+
+  it("discards obsolete fingerprint and assignment identities", async () => {
+    const follow = await bootstrap.query(
+      `INSERT INTO app.sports_follows (owner_user_id, competition_key, team_key)
+       VALUES ($1, 'eng.1', 'arsenal') RETURNING id`,
+      [ids.userA]
+    );
+    const base = candidate(1);
+    const created = await asActor(ids.userA, (db) =>
+      repo.create(db, {
+        candidate: {
+          ...base,
+          targets: [
+            {
+              followId: follow.rows[0].id,
+              competitionKey: "eng.1",
+              competitionLabel: "Premier League",
+              teamKey: "arsenal",
+              teamLabel: "Arsenal",
+              scope: "team",
+              targetUrl: base.feedUrl,
+              parameters: {},
+              samples: [],
+              checkedAt: base.checkedAt
+            }
+          ]
+        }
+      })
+    );
+    if ("limitExceeded" in created) throw new Error("unexpected limit");
+    const assignment = created.assignments[0]!;
+    const result = {
+      sourceId: created.id,
+      assignmentId: assignment.id,
+      runtimeFingerprint: base.validationFingerprint,
+      targetUrl: assignment.targetUrl,
+      targetParameters: {},
+      healthState: "failing" as const,
+      healthReasonCode: "upstream_unavailable",
+      healthMessage: "Safe bounded failure.",
+      checkedAt: new Date("2026-08-24T10:00:00.000Z")
+    };
+
+    await bootstrap.query(
+      `UPDATE app.sports_custom_sources SET validation_fingerprint = 'replacement' WHERE id = $1`,
+      [created.id]
+    );
+    await expect(
+      asActor(ids.userA, (db) => repo.persistRuntimeResults(db, [result]))
+    ).resolves.toBe(0);
+    await bootstrap.query(
+      `UPDATE app.sports_custom_sources SET validation_fingerprint = $2 WHERE id = $1`,
+      [created.id, base.validationFingerprint]
+    );
+    await bootstrap.query(
+      `UPDATE app.sports_source_assignments SET target_url = target_url || '?new=1' WHERE id = $1`,
+      [assignment.id]
+    );
+    await expect(
+      asActor(ids.userA, (db) => repo.persistRuntimeResults(db, [result]))
+    ).resolves.toBe(0);
+  });
+
+  it("serializes stale writes behind rebuild and assignment replacement source locks", async () => {
+    const follow = await bootstrap.query(
+      `INSERT INTO app.sports_follows (owner_user_id, competition_key, team_key)
+       VALUES ($1, 'eng.1', 'arsenal') RETURNING id`,
+      [ids.userA]
+    );
+    const base = candidate(1);
+    const created = await asActor(ids.userA, (db) =>
+      repo.create(db, {
+        candidate: {
+          ...base,
+          targets: [
+            {
+              followId: follow.rows[0].id,
+              competitionKey: "eng.1",
+              competitionLabel: "Premier League",
+              teamKey: "arsenal",
+              teamLabel: "Arsenal",
+              scope: "team",
+              targetUrl: base.feedUrl,
+              parameters: {},
+              samples: [],
+              checkedAt: base.checkedAt
+            }
+          ]
+        }
+      })
+    );
+    if ("limitExceeded" in created) throw new Error("unexpected limit");
+    const assignment = created.assignments[0]!;
+    const result = {
+      sourceId: created.id,
+      assignmentId: assignment.id,
+      runtimeFingerprint: base.validationFingerprint,
+      targetUrl: assignment.targetUrl,
+      targetParameters: {},
+      healthState: "healthy" as const,
+      healthReasonCode: null,
+      healthMessage: null,
+      checkedAt: new Date("2026-08-24T10:00:00.000Z")
+    };
+    const waitUntilBlocked = async (write: Promise<number>): Promise<void> => {
+      await expect(
+        Promise.race([
+          write.then(() => "completed"),
+          new Promise<string>((resolve) => setTimeout(() => resolve("blocked"), 30))
+        ])
+      ).resolves.toBe("blocked");
+    };
+
+    await bootstrap.query("BEGIN");
+    await bootstrap.query(
+      `UPDATE app.sports_custom_sources SET validation_fingerprint = 'rebuilt' WHERE id = $1`,
+      [created.id]
+    );
+    const rebuildRace = asActor(ids.userA, (db) => repo.persistRuntimeResults(db, [result]));
+    await waitUntilBlocked(rebuildRace);
+    await bootstrap.query("COMMIT");
+    await expect(rebuildRace).resolves.toBe(0);
+
+    await bootstrap.query("BEGIN");
+    await bootstrap.query(
+      `UPDATE app.sports_custom_sources SET validation_fingerprint = $2, updated_at = now()
+        WHERE id = $1`,
+      [created.id, base.validationFingerprint]
+    );
+    await bootstrap.query(
+      `UPDATE app.sports_source_assignments SET target_url = target_url || '?replacement=1'
+        WHERE id = $1`,
+      [assignment.id]
+    );
+    const assignmentRace = asActor(ids.userA, (db) => repo.persistRuntimeResults(db, [result]));
+    await waitUntilBlocked(assignmentRace);
+    await bootstrap.query("COMMIT");
+    await expect(assignmentRace).resolves.toBe(0);
   });
 
   it("rejects inconsistent recipe and assignment preview shapes", async () => {

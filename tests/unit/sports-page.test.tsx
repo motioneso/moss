@@ -121,6 +121,8 @@ function headline(
     imageUrl: null,
     summary: "",
     teamKeys: [],
+    publisherLabel: "ESPN",
+    publisherDomain: "espn.com",
     ...overrides
   };
 }
@@ -290,7 +292,9 @@ describe("SportsPage", () => {
                 title: "Cowboys clinch the division",
                 url: "https://example.com/h1",
                 publishedAt: "2026-07-01T12:00:00Z",
-                imageUrl: null
+                imageUrl: null,
+                publisherLabel: "ESPN",
+                publisherDomain: "espn.com"
               }
             ]
           })

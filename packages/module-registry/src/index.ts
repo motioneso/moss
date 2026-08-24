@@ -266,6 +266,8 @@ import {
   SportsBrowserBroker,
   SportsBrowserBrokerServer,
   SportsBrowserClient,
+  SportsPublicSourceReader,
+  SportsSourcesRepository,
   SPORTS_BROWSER_SOCKETS,
   sportsModuleManifest,
   sportsModuleSqlMigrationDirectory
@@ -281,7 +283,7 @@ import {
   registerNewsRoutes,
   type NewsRoutesDependencies
 } from "@moss/news";
-import { assertValidFetchHosts, createDatasetClient } from "@moss/datasets";
+import { assertValidFetchHosts, createDatasetClient, DatasetCache } from "@moss/datasets";
 import {
   notesModuleManifest,
   notesCommitmentProvider,
@@ -724,13 +726,28 @@ function buildSportsDiscoveryPorts(
       options?: {
         readonly allowedHosts?: readonly string[];
         readonly requestHeaders?: Readonly<Record<string, string>>;
+        readonly allowedContentTypes?: readonly string[];
+        readonly beforeRequest?: (hop: {
+          readonly url: URL;
+          readonly redirectCount: number;
+        }) => boolean | void | Promise<boolean | void>;
+        readonly maxBytes?: number;
+        readonly rejectOversizedResponses?: boolean;
+        readonly timeoutMs?: number;
+        readonly signal?: AbortSignal;
       }
     ) =>
       fetchWebResource(url, {
         requireHttps: true,
         rateLimiter: sportsHostRateLimiter,
         allowedHosts: options?.allowedHosts,
-        requestHeaders: options?.requestHeaders
+        requestHeaders: options?.requestHeaders,
+        allowedContentTypes: options?.allowedContentTypes,
+        beforeRequest: options?.beforeRequest,
+        maxBytes: options?.maxBytes,
+        rejectOversizedResponses: options?.rejectOversizedResponses,
+        timeoutMs: options?.timeoutMs,
+        signal: options?.signal
       }),
     ...(browser ? { browser } : {}),
     ai: {
@@ -1775,11 +1792,24 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       // via a late-bound setter (mirrors `adoptChatRpcConnection` above for the chat RPC path).
       configureSportsBriefingService(datasetClient);
       configureSportsChatTools(datasetClient);
+      const discovery = buildSportsDiscoveryPorts(
+        createModuleLogger(server.log, "sports"),
+        browser
+      );
+      const sourcesRepository = new SportsSourcesRepository();
+      const publicSourceReader = new SportsPublicSourceReader({
+        dataContext: deps.dataContext,
+        repository: sourcesRepository,
+        fetch: discovery.fetch,
+        cache: new DatasetCache({ maxEntries: 500 })
+      });
       registerSportsRoutes(server, {
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext,
         datasetClient,
-        discovery: buildSportsDiscoveryPorts(createModuleLogger(server.log, "sports"), browser)
+        discovery,
+        sourcesRepository,
+        publicSourceReader
       });
     }
   },

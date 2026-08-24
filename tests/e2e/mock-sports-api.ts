@@ -84,7 +84,9 @@ function headline(id: string, competitionKey: string, title: string): Headline {
     publishedAt: "2026-07-06T18:00:00Z",
     imageUrl: null,
     summary: "",
-    teamKeys: []
+    teamKeys: [],
+    publisherLabel: "ESPN",
+    publisherDomain: "espn.com"
   };
 }
 
@@ -210,7 +212,9 @@ export const sportsOverviewFixture: SportsOverviewResponse = {
           title: "Celtics extend win streak to eight",
           url: "https://example.test/celtics-8",
           publishedAt: "2026-07-06T18:00:00Z",
-          imageUrl: null
+          imageUrl: null,
+          publisherLabel: "ESPN",
+          publisherDomain: "espn.com"
         }
       ],
       rationale: "Latest headline"
@@ -324,13 +328,17 @@ export const sportsOverviewFixture: SportsOverviewResponse = {
           title: "Trade deadline shakes up the AL East race",
           url: "https://example.com/mlb/deadline",
           publishedAt: "2026-07-09T12:00:00.000Z",
-          imageUrl: "https://example.com/img/mlb-deadline.jpg"
+          imageUrl: "https://example.com/img/mlb-deadline.jpg",
+          publisherLabel: "ESPN",
+          publisherDomain: "espn.com"
         },
         {
           title: "Rookie call-ups to watch down the stretch",
           url: "https://example.com/mlb/rookies",
           publishedAt: "2026-07-09T09:30:00.000Z",
-          imageUrl: null
+          imageUrl: null,
+          publisherLabel: "ESPN",
+          publisherDomain: "espn.com"
         }
       ],
       results: [

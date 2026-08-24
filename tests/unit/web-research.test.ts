@@ -450,6 +450,31 @@ describe("fetchWebResource", () => {
     expect(result).toMatchObject({ ok: true, body: "hello", bytesRead: 5 });
   });
 
+  it("cancels HTTP error bodies and returns Retry-After even when cancellation fails", async () => {
+    let cancelled = false;
+    setWebHostResolverForTests(async () => [{ address: "93.184.216.34", family: 4 }]);
+    setWebHttpTransportForTests(
+      async () =>
+        new Response(
+          new ReadableStream({
+            cancel: () => {
+              cancelled = true;
+              throw new Error("synthetic cancellation failure");
+            }
+          }),
+          { status: 429, headers: { "retry-after": "2" } }
+        )
+    );
+
+    await expect(fetchWebResource("https://publisher.example/news")).resolves.toEqual({
+      ok: false,
+      reason: "http_error",
+      status: 429,
+      retryAfter: "2"
+    });
+    expect(cancelled).toBe(true);
+  });
+
   it("accepts only explicitly allowed final response content types", async () => {
     setWebHostResolverForTests(async () => [{ address: "93.184.216.34", family: 4 }]);
     setWebHttpTransportForTests(

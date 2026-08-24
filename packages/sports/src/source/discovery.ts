@@ -27,11 +27,22 @@ import {
   type SportsSourceRecipe
 } from "./recipe.js";
 
+export interface SportsWebRequestHop {
+  readonly url: URL;
+  readonly redirectCount: number;
+}
+
 export type SportsSafeFetchPort = (
   url: string,
   options?: {
     readonly allowedHosts?: readonly string[];
     readonly requestHeaders?: Readonly<Record<string, string>>;
+    readonly allowedContentTypes?: readonly string[];
+    readonly beforeRequest?: (hop: SportsWebRequestHop) => boolean | void | Promise<boolean | void>;
+    readonly maxBytes?: number;
+    readonly rejectOversizedResponses?: boolean;
+    readonly timeoutMs?: number;
+    readonly signal?: AbortSignal;
   }
 ) => Promise<
   | {
@@ -54,6 +65,8 @@ export type SportsSafeFetchPort = (
         | "network"
         | "not_https";
       readonly status?: number;
+      readonly retryAfter?: string;
+      readonly detail?: string;
     }
 >;
 

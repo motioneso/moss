@@ -65,6 +65,8 @@ export interface Headline {
   readonly imageUrl: string | null; // first "header" image, else first image, else null
   readonly summary: string; // short article blurb from the source; "" when absent (#840)
   readonly teamKeys: readonly string[]; // filled by the service join (Task 4); source emits []
+  readonly publisherLabel: string;
+  readonly publisherDomain: string;
   // Sanitized plaintext excerpt of the full article body (#857). Populated ONLY for the single
   // NewsBand featured story (the service fetches its per-article ESPN body); every other headline
   // omits it and the UI falls back to `summary`. Already stripped of all HTML/tokens and length-
@@ -126,6 +128,8 @@ export interface FollowedTeamNews {
   readonly url: string;
   readonly publishedAt: string; // ISO — the ticker ranks idle teams by news freshness (mra54n4h)
   readonly imageUrl: string | null; // small thumbnail on non-live ticker cards (mra5xnt2)
+  readonly publisherLabel: string;
+  readonly publisherDomain: string;
 }
 
 export interface FollowedNextMatch {
@@ -402,7 +406,9 @@ const headlineSchema = {
     "publishedAt",
     "imageUrl",
     "summary",
-    "teamKeys"
+    "teamKeys",
+    "publisherLabel",
+    "publisherDomain"
   ],
   properties: {
     id: { type: "string" },
@@ -414,6 +420,8 @@ const headlineSchema = {
     imageUrl: { type: ["string", "null"] },
     summary: { type: "string" },
     teamKeys: { type: "array", items: { type: "string" } },
+    publisherLabel: { type: "string" },
+    publisherDomain: { type: "string" },
     // Optional (not in `required`) — only the featured story carries it (#857). MUST be listed
     // here even though it's optional: this schema is used inside a oneOf (hero.headline), where
     // fast-json-stringify REJECTS the whole object for any emitted key it doesn't know — the same
@@ -486,12 +494,14 @@ const followedTeamCardSchema = {
         // Plain array items (no oneOf — an empty array replaces the old null), but keep every
         // emitted field listed: fast-json-stringify silently DROPS unknown keys outside oneOf,
         // and rejects the whole object inside one — see toPublicHeadline note.
-        required: ["title", "url", "publishedAt", "imageUrl"],
+        required: ["title", "url", "publishedAt", "imageUrl", "publisherLabel", "publisherDomain"],
         properties: {
           title: { type: "string" },
           url: { type: "string" },
           publishedAt: { type: "string" },
-          imageUrl: { type: ["string", "null"] }
+          imageUrl: { type: ["string", "null"] },
+          publisherLabel: { type: "string" },
+          publisherDomain: { type: "string" }
         }
       }
     },

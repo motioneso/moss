@@ -31,6 +31,7 @@ import { SportsService, type SportsFollowsWriter } from "./sports-service.js";
 import { catalogEntry } from "./source/catalog.js";
 import { type SportsDiscoveryBrowserPort, type SportsSafeFetchPort } from "./source/discovery.js";
 import { SportsSourcesRepository } from "./source/repository.js";
+import type { SportsPublicSourceReader } from "./source/public-source-reader.js";
 import { createSportsPreviewStore } from "./source/preview-store.js";
 import { SportsSourceRequestError, SportsSourceService } from "./source/service.js";
 
@@ -57,6 +58,7 @@ export interface SportsRoutesDependencies {
   };
   /** Optional injection point for tests; defaults to a real `SportsSourcesRepository`. */
   readonly sourcesRepository?: SportsSourcesRepository;
+  readonly publicSourceReader?: Pick<SportsPublicSourceReader, "refresh">;
   /** Optional injection point for tests; defaults to a private in-memory store. */
   readonly previews?: SportsSourcePreviewStore;
 }
@@ -66,13 +68,14 @@ export function registerSportsRoutes(
   dependencies: SportsRoutesDependencies
 ): void {
   const repository: SportsFollowsWriter = dependencies.repository ?? new SportsFollowsRepository();
+  const sourcesRepository = dependencies.sourcesRepository ?? new SportsSourcesRepository();
   const service = new SportsService({
     datasetClient: dependencies.datasetClient,
     dataContext: dependencies.dataContext,
     repository,
-    now: dependencies.now
+    now: dependencies.now,
+    publicSourceReader: dependencies.publicSourceReader
   });
-  const sourcesRepository = dependencies.sourcesRepository ?? new SportsSourcesRepository();
   const previews = dependencies.previews ?? createSportsPreviewStore();
   const sourceService = new SportsSourceService({
     follows: repository,
@@ -134,7 +137,14 @@ export function registerSportsRoutes(
     async (request, reply) => {
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
-        return await service.getOverview(accessContext);
+        const controller = new AbortController();
+        const abort = (): void => controller.abort();
+        request.raw.once("aborted", abort);
+        try {
+          return await service.getOverview(accessContext, controller.signal);
+        } finally {
+          request.raw.off("aborted", abort);
+        }
       } catch (error) {
         return handleRouteError(error, reply);
       }

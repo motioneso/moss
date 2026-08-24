@@ -223,6 +223,9 @@ const nflHeadlines: SourceHeadline[] = [
     imageUrl: null,
     summary: "",
     teamKeys: [],
+    origin: "espn",
+    publisherLabel: "ESPN",
+    publisherDomain: "espn.com",
     sourceTeamIds: ["6"]
   }
 ];
@@ -501,7 +504,9 @@ describe("SportsService.getOverview", () => {
       title: "Cowboys clinch the division",
       url: "https://example.com/h1",
       publishedAt: `${TODAY}T12:00:00.000Z`,
-      imageUrl: null
+      imageUrl: null,
+      publisherLabel: "ESPN",
+      publisherDomain: "espn.com"
     });
     expect(card?.name).toBe("Dallas Cowboys");
     expect(card?.crestUrl).toContain("dal.png");
@@ -536,6 +541,9 @@ describe("SportsService.getOverview", () => {
       imageUrl: null,
       summary: "",
       teamKeys: [],
+      origin: "espn" as const,
+      publisherLabel: "ESPN",
+      publisherDomain: "espn.com",
       sourceTeamIds: ["6"]
     };
     const service = new SportsService(
@@ -599,7 +607,7 @@ describe("SportsService.getOverview", () => {
   it("ranks by editorial feed position, caps top stories at six, keeps league news distinct", async () => {
     // 9 stories, all tagged to dal ("6"), in ESPN feed order h0..h8 (h0 = editorial lead). Ranking
     // keys off feed POSITION now, not recency (mrb51pnq) — publishedAt only breaks cross-league ties.
-    const manyHeadlines = Array.from({ length: 9 }, (_, i) => ({
+    const manyHeadlines: SourceHeadline[] = Array.from({ length: 9 }, (_, i) => ({
       id: `h${i}`,
       competitionKey: "nfl",
       competitionLabel: "NFL",
@@ -609,6 +617,9 @@ describe("SportsService.getOverview", () => {
       imageUrl: null,
       summary: "",
       teamKeys: [],
+      origin: "espn",
+      publisherLabel: "ESPN",
+      publisherDomain: "espn.com",
       sourceTeamIds: ["6"]
     }));
     const service = new SportsService(
@@ -661,6 +672,9 @@ describe("SportsService.getOverview", () => {
       imageUrl: null,
       summary: "",
       teamKeys: [],
+      origin: "espn",
+      publisherLabel: "ESPN",
+      publisherDomain: "espn.com",
       sourceTeamIds: []
     };
     const service = new SportsService(
@@ -726,6 +740,9 @@ describe("SportsService.getOverview", () => {
       imageUrl: null,
       summary: "",
       teamKeys: [],
+      origin: "espn",
+      publisherLabel: "ESPN",
+      publisherDomain: "espn.com",
       sourceTeamIds: []
     };
     const service = new SportsService(

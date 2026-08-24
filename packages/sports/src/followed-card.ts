@@ -142,7 +142,9 @@ export function toTeamStories(headlines: readonly SourceHeadline[]): FollowedTea
       title: h.title,
       url: safeHref(h.url),
       publishedAt: h.publishedAt,
-      imageUrl: h.imageUrl
+      imageUrl: h.imageUrl,
+      publisherLabel: h.publisherLabel,
+      publisherDomain: h.publisherDomain
     }));
 }
 

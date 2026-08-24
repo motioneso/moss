@@ -1,10 +1,10 @@
 # #1909 — Complete Public Sports News Sources
 
-**Status:** Approved — Codex/Fable aligned  
-**Date:** 2026-08-23  
-**Owner:** Ben  
-**GitHub:** [#1909](https://github.com/motioneso/moss/issues/1909)  
-**Repairs:** [#1572](https://github.com/motioneso/moss/issues/1572)  
+**Status:** Approved — Codex/Fable aligned
+**Date:** 2026-08-23
+**Owner:** Ben
+**GitHub:** [#1909](https://github.com/motioneso/moss/issues/1909)
+**Repairs:** [#1572](https://github.com/motioneso/moss/issues/1572)
 **Separate future scope:** [#1682](https://github.com/motioneso/moss/issues/1682)
 
 ## Problem

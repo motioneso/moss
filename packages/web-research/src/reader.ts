@@ -243,6 +243,8 @@ export type FetchWebResourceFailure = {
     | "response_too_large"
     | "unsupported_content_type";
   readonly status?: number;
+  /** Raw Retry-After value; callers must apply their own bounded retry policy. */
+  readonly retryAfter?: string;
   readonly bytesRead?: number;
 };
 
@@ -402,7 +404,14 @@ async function fetchWebResourceWithBody<TBody>(
         }
       }
       if (response.status >= 400) {
-        return { ok: false, reason: "http_error", status: response.status };
+        await response.body?.cancel().catch(() => {});
+        const retryAfter = response.headers.get("retry-after") ?? undefined;
+        return {
+          ok: false,
+          reason: "http_error",
+          status: response.status,
+          ...(retryAfter ? { retryAfter } : {})
+        };
       }
       const contentType = response.headers.get("content-type");
       const mediaType = contentType?.split(";", 1)[0]?.trim().toLowerCase();

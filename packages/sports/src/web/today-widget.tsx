@@ -69,7 +69,9 @@ export function SportsTodayWidget(): ReactNode {
             {lead.imageUrl ? (
               <img className="sp-lead__photo" src={lead.imageUrl} alt="" loading="lazy" />
             ) : null}
-            <span className="sp-lead__tag">{lead.competitionLabel}</span>
+            <span className="sp-lead__tag">
+              {lead.competitionLabel} · {lead.publisherLabel}
+            </span>
             <span className="sp-lead__title">{lead.title}</span>
             {lead.summary ? <span className="sp-lead__dek">{lead.summary}</span> : null}
           </a>
@@ -78,7 +80,9 @@ export function SportsTodayWidget(): ReactNode {
               {briefs.map((story) => (
                 <li className="sp-brief__item" key={story.id}>
                   <a className="sp-brief__link" href={story.url} target="_blank" rel="noreferrer">
-                    <span className="sp-brief__tag">{story.competitionLabel}</span>
+                    <span className="sp-brief__tag">
+                      {story.competitionLabel} · {story.publisherLabel}
+                    </span>
                     <span className="sp-brief__title">{story.title}</span>
                   </a>
                 </li>

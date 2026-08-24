@@ -65,6 +65,40 @@ export interface SportsSourceBaseline {
   }[];
 }
 
+export interface SportsRuntimeSource {
+  readonly id: string;
+  readonly label: string;
+  readonly canonicalDomain: string;
+  readonly feedUrl: string | null;
+  readonly retrievalMethod: "feed" | "scrape";
+  readonly enabled: boolean;
+  readonly runtimeFingerprint: string;
+  readonly recipeJson: Readonly<Record<string, unknown>> | null;
+  readonly confirmedFetchHosts: readonly string[];
+  readonly assignments: readonly {
+    readonly id: string;
+    readonly followId: string;
+    readonly competitionKey: string;
+    readonly teamKey: string | null;
+    readonly targetUrl: string | null;
+    readonly targetParameters: Readonly<Record<string, unknown>>;
+    readonly previewStatus: SportsSourceAssignmentDto["previewStatus"];
+  }[];
+}
+
+export interface SportsRuntimeTargetResult {
+  readonly sourceId: string;
+  readonly assignmentId: string;
+  readonly runtimeFingerprint: string;
+  readonly targetUrl: string | null;
+  readonly targetParameters: Readonly<Record<string, unknown>>;
+  readonly healthState: SportsSourceHealthState;
+  readonly healthReasonCode: string | null;
+  readonly healthMessage: string | null;
+  /** Null when the target was not fetched (for example, request-budget exhaustion). */
+  readonly checkedAt: Date | null;
+}
+
 const SOURCE_COLUMNS = [
   "id",
   "label",
@@ -175,6 +209,170 @@ export class SportsSourcesRepository {
       bySource.set(assignment.source_id, list);
     }
     return rows.map((row) => toDto(row, bySource.get(row.id) ?? []));
+  }
+
+  async listRuntimeSources(
+    scopedDb: DataContextDb,
+    sourceId?: string
+  ): Promise<SportsRuntimeSource[]> {
+    assertDataContextDb(scopedDb);
+    let sourceQuery = scopedDb.db
+      .selectFrom("app.sports_custom_sources")
+      .select([
+        "id",
+        "label",
+        "canonical_domain",
+        "feed_url",
+        "retrieval_method",
+        "enabled",
+        "validation_fingerprint",
+        "recipe_fingerprint",
+        "recipe_json",
+        "confirmed_fetch_hosts"
+      ]);
+    sourceQuery = sourceId
+      ? sourceQuery.where("id", "=", sourceId)
+      : sourceQuery.where("enabled", "=", true);
+    const sources = await sourceQuery.orderBy("created_at").orderBy("id").execute();
+    if (sources.length === 0) return [];
+
+    const assignments = await scopedDb.db
+      .selectFrom("app.sports_source_assignments as assignment")
+      .innerJoin("app.sports_follows as follow", "follow.id", "assignment.follow_id")
+      .select([
+        "assignment.id",
+        "assignment.source_id",
+        "assignment.follow_id",
+        "assignment.target_url",
+        "assignment.target_parameters",
+        "assignment.preview_status",
+        "follow.competition_key",
+        "follow.team_key"
+      ])
+      .where(
+        "assignment.source_id",
+        "in",
+        sources.map((source) => source.id)
+      )
+      .orderBy("assignment.created_at")
+      .orderBy("assignment.id")
+      .execute();
+    const assignmentsBySource = new Map<string, typeof assignments>();
+    for (const assignment of assignments) {
+      const rows = assignmentsBySource.get(assignment.source_id) ?? [];
+      rows.push(assignment);
+      assignmentsBySource.set(assignment.source_id, rows);
+    }
+    return sources.map((source) => ({
+      id: source.id,
+      label: source.label,
+      canonicalDomain: source.canonical_domain,
+      feedUrl: source.feed_url,
+      retrievalMethod: source.retrieval_method,
+      enabled: source.enabled,
+      runtimeFingerprint: source.recipe_fingerprint ?? source.validation_fingerprint,
+      recipeJson: source.recipe_json,
+      confirmedFetchHosts: source.confirmed_fetch_hosts,
+      assignments: (assignmentsBySource.get(source.id) ?? []).map((assignment) => ({
+        id: assignment.id,
+        followId: assignment.follow_id,
+        competitionKey: assignment.competition_key,
+        teamKey: assignment.team_key,
+        targetUrl: assignment.target_url,
+        targetParameters: assignment.target_parameters,
+        previewStatus: assignment.preview_status
+      }))
+    }));
+  }
+
+  async persistRuntimeResults(
+    scopedDb: DataContextDb,
+    results: readonly SportsRuntimeTargetResult[]
+  ): Promise<number> {
+    assertDataContextDb(scopedDb);
+    const bySource = new Map<string, SportsRuntimeTargetResult[]>();
+    for (const result of results) {
+      const rows = bySource.get(result.sourceId) ?? [];
+      rows.push(result);
+      bySource.set(result.sourceId, rows);
+    }
+
+    let accepted = 0;
+    for (const [sourceId, sourceResults] of bySource) {
+      const source = await scopedDb.db
+        .selectFrom("app.sports_custom_sources")
+        .select([
+          "enabled",
+          "retrieval_method",
+          "validation_fingerprint",
+          "recipe_fingerprint",
+          "recipe_status"
+        ])
+        .where("id", "=", sourceId)
+        .forUpdate()
+        .executeTakeFirst();
+      if (!source) continue;
+      const runtimeFingerprint = source.recipe_fingerprint ?? source.validation_fingerprint;
+      const currentResults = sourceResults.filter(
+        (result) => result.runtimeFingerprint === runtimeFingerprint
+      );
+      let sourceAccepted = 0;
+      for (const result of currentResults) {
+        const update = await scopedDb.db
+          .updateTable("app.sports_source_assignments")
+          .set({
+            health_state: result.healthState,
+            health_reason_code: result.healthReasonCode,
+            health_message: result.healthMessage,
+            ...(result.checkedAt ? { last_checked_at: result.checkedAt } : {}),
+            ...(result.healthState === "healthy" && result.checkedAt
+              ? { last_success_at: result.checkedAt }
+              : {})
+          })
+          .where("id", "=", result.assignmentId)
+          .where("source_id", "=", sourceId)
+          .where(sql<boolean>`target_url IS NOT DISTINCT FROM ${result.targetUrl}`)
+          .where(
+            sql<boolean>`target_parameters = ${JSON.stringify(result.targetParameters)}::jsonb`
+          )
+          .executeTakeFirst();
+        if ((update.numUpdatedRows ?? 0n) === 0n) continue;
+        sourceAccepted += 1;
+      }
+      if (sourceAccepted === 0) continue;
+
+      const assignments = await scopedDb.db
+        .selectFrom("app.sports_source_assignments")
+        .select(ASSIGNMENT_COLUMNS)
+        .where("source_id", "=", sourceId)
+        .orderBy("created_at")
+        .orderBy("id")
+        .execute();
+      if (assignments.length === 0) continue;
+      const aggregate = aggregateAssignmentHealth(source.enabled, assignments);
+      const recipeStatus =
+        source.retrieval_method === "feed"
+          ? "feed"
+          : assignments.some((assignment) => assignment.health_reason_code === "recipe_drift")
+            ? "drift"
+            : source.recipe_status === "missing"
+              ? "missing"
+              : "ready";
+      await scopedDb.db
+        .updateTable("app.sports_custom_sources")
+        .set({
+          health_state: aggregate.state,
+          health_reason_code: aggregate.reason,
+          health_message: aggregate.message,
+          last_checked_at: newest(assignments.map((assignment) => assignment.last_checked_at)),
+          last_success_at: newest(assignments.map((assignment) => assignment.last_success_at)),
+          recipe_status: recipeStatus
+        })
+        .where("id", "=", sourceId)
+        .execute();
+      accepted += sourceAccepted;
+    }
+    return accepted;
   }
 
   async getBaseline(
@@ -333,6 +531,7 @@ export class SportsSourcesRepository {
       .selectFrom("app.sports_custom_sources")
       .select(SOURCE_COLUMNS)
       .where("id", "=", sourceId)
+      .forUpdate()
       .executeTakeFirst();
     if (!source) return null;
 
@@ -388,7 +587,15 @@ export class SportsSourcesRepository {
       .orderBy("created_at")
       .orderBy("id")
       .execute();
-    if (assignments.length === 0) return toDto(source, assignments);
+    if (assignments.length === 0) {
+      const updated = await scopedDb.db
+        .updateTable("app.sports_custom_sources")
+        .set({ updated_at: new Date() })
+        .where("id", "=", sourceId)
+        .returning(SOURCE_COLUMNS)
+        .executeTakeFirstOrThrow();
+      return toDto(updated, assignments);
+    }
 
     const aggregate = aggregateAssignmentHealth(source.enabled, assignments);
     const updated = await scopedDb.db

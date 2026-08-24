@@ -423,6 +423,9 @@ describe("sports routes", () => {
             imageUrl: null,
             summary: "A late field goal sealed the NFC North.",
             teamKeys: [],
+            origin: "espn",
+            publisherLabel: "ESPN",
+            publisherDomain: "espn.com",
             sourceTeamIds: []
           }
         ]
