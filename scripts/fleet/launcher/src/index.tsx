@@ -54,7 +54,7 @@ function Setup({
     step === 0
       ? "claude -p"
       : step === 1
-        ? "routine model/effort, sensitive model/effort, security model/effort"
+        ? "routine program/model/effort, sensitive program/model/effort, security program/model/effort"
         : step === 2
           ? "5"
           : step === 3

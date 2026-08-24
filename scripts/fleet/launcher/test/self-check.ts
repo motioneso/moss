@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { serviceFiles } from "../src/operations.js";
+import { launchArgs, serviceFiles } from "../src/operations.js";
 import { cloneDefaults, parseBuildAnswers } from "../src/setup.js";
 import { loadState, spawnsSince } from "../src/state.js";
 import { tabLanes } from "../src/view.js";
@@ -27,6 +27,38 @@ assert.equal(spawnsSince(state.logs, new Date("2026-08-24T03:00:00.000Z")), 1);
 assert.equal(cloneDefaults().deputyEnabled, false);
 assert.equal(parseBuildAnswers("a/low, b/high, c/medium").buildModels.security.model, "c");
 assert.equal(parseBuildAnswers("a/low, b/high, c/medium").buildModels.security.effort, "medium");
+// A two-part answer keeps the program already set for that kind of work.
+assert.equal(
+  parseBuildAnswers("a/low").buildModels.routine.tool,
+  cloneDefaults().buildModels.routine.tool
+);
+// A three-part answer sets the program as well.
+const threePart = parseBuildAnswers("some-tool/some-model/low");
+assert.equal(threePart.buildModels.routine.tool, "some-tool");
+assert.equal(threePart.buildModels.routine.model, "some-model");
+assert.equal(threePart.buildModels.routine.effort, "low");
+// Every kind of work names the program that runs it.
+for (const build of Object.values(cloneDefaults().buildModels)) assert.ok(build.tool);
+// Each program gets the flags it actually understands.
+assert.deepEqual(launchArgs("claude", "m", "high"), [
+  "--model",
+  "m",
+  "--effort",
+  "high",
+  "--permission-mode",
+  "bypassPermissions"
+]);
+assert.deepEqual(launchArgs("codex", "m", "high"), [
+  "-m",
+  "m",
+  "-c",
+  "model_reasoning_effort=high",
+  "-s",
+  "danger-full-access",
+  "-a",
+  "never"
+]);
+assert.deepEqual(launchArgs("something-else", "m", "high"), ["--model", "m"]);
 assert.equal(tabLanes(state, "Done Tonight").length, 1);
 const completed = state.lanes[0];
 assert.ok(completed);

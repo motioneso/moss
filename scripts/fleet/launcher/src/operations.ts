@@ -120,6 +120,74 @@ function shellQuote(value: string): string {
   return "'" + value.replaceAll("'", "'\\''") + "'";
 }
 
+// Lane agents share one tab so they never land in a tab a person is working in.
+const AGENT_TAB_LABEL = process.env.FLEET_AGENT_TAB || "Fleet Agents";
+
+type HerdrTabList = { result?: { tabs?: Array<{ label?: string; tab_id?: string }> } };
+type HerdrPaneList = { result?: { panes?: Array<{ tab_id?: string; pane_id?: string }> } };
+type HerdrPaneSplit = { result?: { pane_id?: string; pane?: { pane_id?: string } } };
+type HerdrTabCreate = { result?: { root_pane?: { pane_id?: string } } };
+
+function herdrJson<T>(args: string[]): T {
+  return JSON.parse(execFileSync("herdr", args, { encoding: "utf8" })) as T;
+}
+
+// Each agent program spells "which model" and "how hard to think" its own way,
+// and needs its own flag to run unattended. A program we do not know gets the
+// model on a --model flag, the most common spelling.
+export function launchArgs(tool: string, model: string, effort: string): string[] {
+  if (tool === "codex")
+    return [
+      "-m",
+      model,
+      "-c",
+      "model_reasoning_effort=" + effort,
+      "-s",
+      "danger-full-access",
+      "-a",
+      "never"
+    ];
+  if (tool === "claude")
+    return ["--model", model, "--effort", effort, "--permission-mode", "bypassPermissions"];
+  return ["--model", model];
+}
+
+// A pane in the shared agents tab: split one that is already there, or make the
+// tab if this is the first agent.
+function agentPane(cwd: string): string {
+  const tabs = herdrJson<HerdrTabList>(["tab", "list"])?.result?.tabs ?? [];
+  const tab = tabs.find((entry) => entry?.label === AGENT_TAB_LABEL);
+  if (tab?.tab_id) {
+    const panes = herdrJson<HerdrPaneList>(["pane", "list"])?.result?.panes ?? [];
+    const base = panes.find((pane) => pane?.tab_id === tab.tab_id);
+    if (base?.pane_id) {
+      const split = herdrJson<HerdrPaneSplit>([
+        "pane",
+        "split",
+        base.pane_id,
+        "--direction",
+        "down",
+        "--cwd",
+        cwd,
+        "--no-focus"
+      ]);
+      const pane = split?.result?.pane_id ?? split?.result?.pane?.pane_id;
+      if (pane) return pane;
+    }
+  }
+  const created = herdrJson<HerdrTabCreate>([
+    "tab",
+    "create",
+    "--cwd",
+    cwd,
+    "--label",
+    AGENT_TAB_LABEL
+  ]);
+  const pane = created?.result?.root_pane?.pane_id;
+  if (!pane) throw new Error("Herdr could not open a pane for the rescue agent");
+  return pane;
+}
+
 function spawnRescueAgent(lane: Lane, settings: Settings, reading: string): void {
   const name = "fleet-rescue-" + lane.issue + "-" + Date.now();
   const worktree = lane.worktree || process.cwd();
@@ -137,21 +205,11 @@ function spawnRescueAgent(lane: Lane, settings: Settings, reading: string): void
     lane.issue +
     " " +
     shellQuote("spawn: rescue agent " + name);
-  const model = settings.buildModels[lane.tier || "routine"];
-  if (!model?.model || !model.effort)
+  const build = settings.buildModels[lane.tier || "routine"];
+  if (!build?.model || !build.effort)
     throw new Error("No build model and effort are configured for this lane.");
-  const panes = JSON.parse(execFileSync("herdr", ["pane", "list"], { encoding: "utf8" }));
-  const basePane = panes?.result?.panes?.[0]?.pane_id;
-  if (!basePane) throw new Error("no Herdr pane is available");
-  const split = JSON.parse(
-    execFileSync(
-      "herdr",
-      ["pane", "split", basePane, "--direction", "down", "--cwd", worktree, "--no-focus"],
-      { encoding: "utf8" }
-    )
-  );
-  const pane = split?.result?.pane_id ?? split?.result?.pane?.pane_id;
-  if (!pane) throw new Error("Herdr could not create a rescue pane");
+  const tool = build.tool || "claude";
+  const pane = agentPane(worktree);
   execFileSync(
     "herdr",
     [
@@ -159,16 +217,11 @@ function spawnRescueAgent(lane: Lane, settings: Settings, reading: string): void
       "start",
       name,
       "--kind",
-      "claude",
+      tool,
       "--pane",
       pane,
       "--",
-      "--model",
-      model.model,
-      "--effort",
-      model.effort,
-      "--permission-mode",
-      "bypassPermissions",
+      ...launchArgs(tool, build.model, build.effort),
       "You are rescuing issue #" +
         lane.issue +
         ". Your first action must be to run " +

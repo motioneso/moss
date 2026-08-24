@@ -70,6 +70,39 @@ tier_effort() { # <tier> -> effort level, or empty for "do not pass one"
   settings_get ".buildModels.\"$1\".effort"
 }
 
+tier_tool() { # <tier> -> which agent program runs this kind of work
+  if [ -n "${FLEET_BUILD_TOOL:-}" ]; then echo "$FLEET_BUILD_TOOL"; return; fi
+  local tool
+  tool="$(settings_get ".buildModels.\"$1\".tool")"
+  # Falling back to the local Claude CLI keeps a settings file written before
+  # tools were configurable working exactly as it did.
+  echo "${tool:-claude}"
+}
+
+# Each agent program spells the same two ideas -- which model, how hard to think
+# -- with its own flags, and needs its own flag to run unattended. A program we
+# do not know gets the model on a --model flag and nothing else, which is the
+# most common spelling.
+agent_launch_args() { # <tool> <model> <effort> -> one argument per line
+  local tool="$1" model="$2" effort="$3"
+  case "$tool" in
+    claude)
+      [ -n "$model" ] && printf '%s\n%s\n' --model "$model"
+      [ -n "$effort" ] && printf '%s\n%s\n' --effort "$effort"
+      printf '%s\n%s\n' --permission-mode bypassPermissions
+      ;;
+    codex)
+      [ -n "$model" ] && printf '%s\n%s\n' -m "$model"
+      [ -n "$effort" ] && printf '%s\n%s\n' -c "model_reasoning_effort=$effort"
+      printf '%s\n%s\n%s\n%s\n' -s danger-full-access -a never
+      ;;
+    *)
+      [ -n "$model" ] && printf '%s\n%s\n' --model "$model"
+      ;;
+  esac
+  return 0
+}
+
 NOW_EPOCH="$(date +%s)"
 
 # --- rails -------------------------------------------------------------------
@@ -231,33 +264,61 @@ render_brief() { # <template> <out> ISSUE SPEC TIER BRANCH WORKTREE PR AGENT ROU
   printf '%s\n' "$text" > "$out"
 }
 
-# Spawn a Claude agent in a fresh herdr pane pointed at a brief file.
+# Lane agents live together in their own tab so they never land in a tab a
+# person is working in. Overridable for a second fleet on the same box.
+AGENT_TAB_LABEL="${FLEET_AGENT_TAB:-Fleet Agents}"
+
+agent_tab_id() { # -> the tab lane agents share, or empty if it does not exist yet
+  herdr tab list 2>/dev/null |
+    jq -r --arg label "$AGENT_TAB_LABEL" \
+      '.result.tabs[]? | select(.label == $label) | .tab_id' 2>/dev/null | head -n1
+}
+
+pane_in_tab() { # <tab-id> -> any pane in that tab, or empty
+  herdr pane list 2>/dev/null |
+    jq -r --arg tab "$1" '.result.panes[]? | select(.tab_id == $tab) | .pane_id' 2>/dev/null |
+    head -n1
+}
+
+# Give a lane agent a pane in the shared agents tab: split a pane already there,
+# or make the tab if this is the first agent of the run.
+agent_pane() { # <cwd> -> a pane id ready for an agent, or empty
+  local cwd="$1" tab base
+  tab="$(agent_tab_id)"
+  if [ -n "$tab" ]; then
+    base="$(pane_in_tab "$tab")"
+    if [ -n "$base" ]; then
+      herdr pane split "$base" --direction down --cwd "$cwd" --no-focus 2>/dev/null |
+        jq -r '.result.pane_id // .result.pane.pane_id // empty' 2>/dev/null
+      return 0
+    fi
+  fi
+  herdr tab create --cwd "$cwd" --label "$AGENT_TAB_LABEL" 2>/dev/null |
+    jq -r '.result.root_pane.pane_id // empty' 2>/dev/null
+}
+
+# Spawn a lane agent in a fresh pane in the agents tab, pointed at a brief file.
 spawn_agent() { # <name> <cwd> <brief-path> <tier>
   local name="$1" cwd="$2" brief="$3" tier="${4:-routine}"
-  local model effort
-  local model_args=()
+  local model effort tool
+  local launch_args=()
   model="$(tier_model "$tier")"
   effort="$(tier_effort "$tier")"
-  [ -n "$model" ] && model_args+=(--model "$model")
-  [ -n "$effort" ] && model_args+=(--effort "$effort")
+  tool="$(tier_tool "$tier")"
+  mapfile -t launch_args < <(agent_launch_args "$tool" "$model" "$effort")
   local boot="You are a fleet lane agent. Read and follow the brief at $brief exactly. Report status in plain English, no jargon, and pass that rule to anything you spawn."
   if [ "$DRY" = "1" ]; then
-    echo "DRY: herdr pane split <base-pane> --direction down --cwd $cwd --no-focus"
-    echo "DRY: herdr agent start $name --kind claude --pane <new-pane> -- ${model_args[*]} --permission-mode bypassPermissions \"$boot\""
+    echo "DRY: herdr pane for $name in tab $AGENT_TAB_LABEL --cwd $cwd"
+    echo "DRY: herdr agent start $name --kind $tool --pane <new-pane> -- ${launch_args[*]} \"$boot\""
     return 0
   fi
-  local base_pane new_pane
-  base_pane="$(herdr pane list 2>/dev/null | jq -r '.result.panes[0].pane_id // empty' 2>/dev/null)"
-  if [ -z "$base_pane" ]; then
-    echo "fleet-tick: no herdr pane available to split for $name" >&2
-    return 1
-  fi
-  new_pane="$(herdr pane split "$base_pane" --direction down --cwd "$cwd" --no-focus 2>/dev/null | jq -r '.result.pane_id // .result.pane.pane_id // empty' 2>/dev/null)"
+  local new_pane
+  new_pane="$(agent_pane "$cwd")"
   if [ -z "$new_pane" ]; then
-    echo "fleet-tick: pane split failed for $name" >&2
+    echo "fleet-tick: could not open a pane in the $AGENT_TAB_LABEL tab for $name" >&2
     return 1
   fi
-  if ! herdr agent start "$name" --kind claude --pane "$new_pane" -- "${model_args[@]}" --permission-mode bypassPermissions "$boot" >/dev/null 2>&1; then
+  if ! herdr agent start "$name" --kind "$tool" --pane "$new_pane" -- "${launch_args[@]}" "$boot" >/dev/null 2>&1; then
     echo "fleet-tick: herdr agent start failed for $name" >&2
     return 1
   fi
