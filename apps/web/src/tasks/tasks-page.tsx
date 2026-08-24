@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { TaskDefaultView, TaskDto, TaskSearchIntent } from "@moss/shared";
-import { Chip, EmptyState, Segmented } from "@moss/ui";
+import { Chip, EmptyState, IconButton, Segmented } from "@moss/ui";
 import {
   CheckCheck,
   ChevronDown,
@@ -201,6 +201,14 @@ export function TasksPage() {
                 viewMutation.mutate(next);
               }}
             />
+
+            <IconButton
+              aria-label="Toggle search"
+              active={showSearch}
+              onClick={() => setShowSearch((v) => !v)}
+            >
+              <Search size={15} aria-hidden="true" />
+            </IconButton>
           </div>
 
           {/* "" is the no-selection value: a URL focus overrides the status filter. */}
@@ -225,9 +233,7 @@ export function TasksPage() {
             active={tagFilter}
             onAdd={(name) => setTagFilter((a) => (a.includes(name) ? a : [...a, name]))}
           />
-        </div>
 
-        <div className="tk-bar__right">
           <div className={`tk-bar__search${showSearch ? " is-open" : ""}`}>
             <label className="tk-tagfield">
               <span className="ic">
@@ -260,15 +266,6 @@ export function TasksPage() {
               </button>
             </label>
           </div>
-
-          <button
-            aria-label="Toggle search"
-            className={`tk-msrch${showSearch ? " is-active" : ""}`}
-            type="button"
-            onClick={() => setShowSearch((v) => !v)}
-          >
-            <Search size={15} aria-hidden="true" />
-          </button>
         </div>
       </div>
 
