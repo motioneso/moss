@@ -31,7 +31,7 @@ import { DeleteAccount } from "./delete-account";
 import { useFeedback } from "./settings-feedback";
 import { DataExport, Sessions } from "./settings-profile-subviews";
 import { readError, type PaneProps } from "./settings-types";
-import { Avatar, Badge, Field, Group, PaneHead, Row, Select, Switch } from "./settings-ui";
+import { Avatar, Badge, Field, Group, PaneHead, Row, Segmented, Select, Switch } from "./settings-ui";
 
 const DEFAULT_LOCALE_SETTINGS: LocaleSettingsDto = {
   timezone: "America/Los_Angeles",
@@ -222,6 +222,7 @@ export function ProfilePane({ me }: PaneProps) {
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.weather.location, data);
       void queryClient.invalidateQueries({ queryKey: queryKeys.weather.today });
+      weatherLocationSearchMutation.reset();
       toast(
         data.location
           ? `Weather location saved: ${data.location.label}.`
@@ -253,6 +254,7 @@ export function ProfilePane({ me }: PaneProps) {
     },
     onError: (error) => toast(readError(error), { tone: "drift" })
   });
+  const weatherUnitBusy = weatherUnitQuery.isLoading || weatherUnitMutation.isPending;
 
   return (
     <>
@@ -260,7 +262,11 @@ export function ProfilePane({ me }: PaneProps) {
         title="Account & preferences"
         desc={`Who you are to ${assistantName}: your identity and account status. How ${assistantName} sounds and behaves lives in Assistant & AI.`}
       />
-      <Group title="Account" action={<SaveStatusChip status={status} />}>
+      <Group
+        title="Account"
+        desc="Changes save automatically."
+        action={<SaveStatusChip status={status} />}
+      >
         <div className="prof">
           <Avatar name={fields.name || user.email} size="lg" />
           <div className="prof__main">
@@ -271,7 +277,7 @@ export function ProfilePane({ me }: PaneProps) {
             <Badge tone="neutral">{role}</Badge>
           </div>
         </div>
-        <Field label="Display name" hint="Changes save automatically.">
+        <Field label="Display name">
           <input
             className="jds-input"
             value={fields.name}
@@ -346,10 +352,7 @@ export function ProfilePane({ me }: PaneProps) {
         </div>
       </Group>
 
-      <Group
-        title="Weather location"
-        desc="Search for a place to use instead of approximate timezone-based detection."
-      >
+      <Group title="Weather" desc="Search for a place to use instead of approximate timezone-based detection.">
         <Field
           label="Search for a place"
           hint="Choose a result to save it as your weather location."
@@ -417,18 +420,18 @@ export function ProfilePane({ me }: PaneProps) {
             </div>
           }
         />
-      </Group>
-
-      <Group title="Temperature">
         <Row
-          name="Use Fahrenheit"
+          name="Unit"
           desc={`Weather temperatures are shown in ${weatherUnit === "imperial" ? "Fahrenheit" : "Celsius"}.`}
           control={
-            <Switch
-              ariaLabel="Use Fahrenheit"
-              checked={weatherUnit === "imperial"}
-              disabled={weatherUnitQuery.isLoading || weatherUnitMutation.isPending}
-              onChange={(enabled) => weatherUnitMutation.mutate(enabled ? "imperial" : "metric")}
+            <Segmented
+              ariaLabel="Unit"
+              value={weatherUnit}
+              options={[
+                { value: "metric", label: "Celsius", disabled: weatherUnitBusy },
+                { value: "imperial", label: "Fahrenheit", disabled: weatherUnitBusy }
+              ]}
+              onChange={(unit) => weatherUnitMutation.mutate(unit)}
             />
           }
         />
