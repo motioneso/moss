@@ -270,7 +270,7 @@
 }
 .wl-insights__hd {
   border-bottom: 1px solid var(--border-subtle);
-  background: linear-gradient(180deg, var(--forest-soft) 0%, transparent 160%);
+  background: var(--forest-soft);
 }
 .wl-insights__hd .ic {
   color: var(--accent-fg);
