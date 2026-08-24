@@ -10,7 +10,6 @@ import {
   FolderOpen,
   FolderSearch,
   HeartPulse,
-  Info,
   ListChecks,
   Lock,
   Mail,
@@ -339,10 +338,6 @@ function ConnectedPane() {
           <ServicePicker onGoogle={() => setFlow("google")} onImap={() => setFlow("imap")} />
         ) : null}
       </Group>
-      <Note icon={<ShieldCheck size={13} />}>
-        These are your accounts and their trust state — not backend provider definitions. What each
-        account powers is set in its module settings.
-      </Note>
     </>
   );
 }
@@ -674,16 +669,7 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
     const cat = CAT_BY_ID[module.id];
     const path = pathFor(module.id);
 
-    // Required modules stay distinct from optional modules without offering a toggle.
-    const badge = locked ? (
-      <Badge tone="neutral">Unavailable</Badge>
-    ) : control.kind === "required" ? (
-      <Badge tone="neutral">Required</Badge>
-    ) : control.kind === "toggle" && module.active ? (
-      <Badge tone="forest" dot>
-        Enabled
-      </Badge>
-    ) : null;
+    const badge = locked ? <Badge tone="neutral">Unavailable</Badge> : null;
 
     let action: React.ReactNode = null;
     if (locked) {
@@ -796,10 +782,6 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
           />
         )}
       </Group>
-      <Note icon={<Info size={13} />}>
-        Real app screens open in place; settings-only modules — Briefings, Chat, Notifications —
-        configure right here.
-      </Note>
     </>
   );
 }

@@ -34,7 +34,7 @@ const STATE_LABELS: Record<ModuleRegistryRowDto["state"], string> = {
   "installed-enabled": "Installed",
   "installed-disabled": "Installed (disabled)",
   "update-available": "Update available",
-  "update-pending-restart": "Update downloaded — restart to apply",
+  "update-pending-restart": "Update downloaded. Restart to apply.",
   "install-failed": "Install failed",
   "declared-not-present": "Declared in compose — will install on restart",
   incompatible: "Incompatible with this Moss version"
@@ -259,11 +259,7 @@ export function ModuleRegistrySection({
         return (
           <div key={row.id}>
             <Row
-              name={
-                <>
-                  {row.name} <code>{row.id}</code>
-                </>
-              }
+              name={row.name}
               desc={
                 <>
                   {row.installedVersion || row.latestVersion ? (
@@ -279,7 +275,7 @@ export function ModuleRegistrySection({
                 </>
               }
               control={
-                <div>
+                <div className="regrow-controls">
                   {action.kind === "install" ? (
                     <Button onClick={() => onInstall(row)} disabled={downloadMutation.isPending}>
                       {action.label}

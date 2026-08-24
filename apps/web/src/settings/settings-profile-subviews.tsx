@@ -42,7 +42,7 @@ import { queryKeys } from "../api/query-keys.js";
 import { useAssistantName } from "../api/use-assistant-name.js";
 import { formatDate, useUserLocale } from "../locale/locale-format.js";
 import { useFeedback } from "./settings-feedback.js";
-import { Badge, Group, Note, Row } from "./settings-ui.js";
+import { Badge, Group, Row } from "./settings-ui.js";
 import { Button, ButtonLink } from "@moss/ui";
 
 /* ----------------------------------------------------------- Data export */
@@ -445,10 +445,6 @@ export function Sessions() {
           );
         })}
       </div>
-      <Note icon={<ShieldCheck size={13} />}>
-        Sessions are bound to this instance on your network. Signing a device out takes effect
-        immediately.
-      </Note>
     </Group>
   );
 }
