@@ -1,0 +1,31 @@
+# syntax=docker/dockerfile:1-labs
+
+FROM node:24-bookworm-slim AS build
+WORKDIR /app
+ENV PNPM_HOME=/pnpm
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable && corepack prepare pnpm@10.6.2 --activate
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json .npmrc ./
+COPY --parents apps/*/package.json packages/*/package.json ./
+RUN --mount=type=cache,id=moss-sports-renderer-pnpm,target=/pnpm/store \
+  pnpm install --frozen-lockfile --filter @moss/sports --ignore-scripts
+COPY packages/sports/src/source ./packages/sports/src/source
+RUN pnpm exec esbuild packages/sports/src/source/browser-sidecar.ts \
+  --bundle \
+  --external:playwright-core \
+  --format=esm \
+  --outfile=/out/browser-sidecar.mjs \
+  --platform=node \
+  --target=node24 \
+  && mkdir -p /out/node_modules \
+  && cp -RL packages/sports/node_modules/playwright-core /out/node_modules/playwright-core
+
+FROM mcr.microsoft.com/playwright:v1.60.0-noble
+WORKDIR /app
+ENV HOME=/tmp
+ENV NODE_ENV=production
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+COPY --from=build --chown=1001:1001 /out/ ./
+RUN install -d -o 1001 -g 1001 -m 0770 /run/moss-sports-browser
+USER 1001:1001
+CMD ["node", "browser-sidecar.mjs"]

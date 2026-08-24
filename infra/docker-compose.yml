@@ -86,7 +86,29 @@ services:
   api:
     image: node:24-bookworm-slim
     working_dir: /workspace
-    volumes: *workspace-volumes
+    volumes:
+      - ..:/workspace
+      - /workspace/node_modules
+      - /workspace/apps/api/node_modules
+      - /workspace/apps/web/node_modules
+      - /workspace/apps/worker/node_modules
+      - /workspace/packages/ai/node_modules
+      - /workspace/packages/auth/node_modules
+      - /workspace/packages/briefings/node_modules
+      - /workspace/packages/calendar/node_modules
+      - /workspace/packages/chat/node_modules
+      - /workspace/packages/connectors/node_modules
+      - /workspace/packages/db/node_modules
+      - /workspace/packages/email/node_modules
+      - /workspace/packages/jobs/node_modules
+      - /workspace/packages/module-registry/node_modules
+      - /workspace/packages/module-sdk/node_modules
+      - /workspace/packages/notes/node_modules
+      - /workspace/packages/notifications/node_modules
+      - /workspace/packages/settings/node_modules
+      - /workspace/packages/shared/node_modules
+      - /workspace/packages/tasks/node_modules
+      - jarv1s-sports-browser-socket:/run/moss-sports-browser
     environment:
       CI: "true"
       PORT: "3000"
@@ -147,8 +169,40 @@ services:
     networks:
       - jarv1s
 
+  sports-source-renderer:
+    image: moss-sports-renderer:dev
+    build:
+      context: ..
+      dockerfile: Dockerfile.sports-renderer
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=256m,uid=1001,gid=1001,mode=1770
+    user: "1001:1001"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 1.0
+    mem_limit: 512m
+    pids_limit: 128
+    volumes:
+      - jarv1s-sports-browser-socket:/run/moss-sports-browser
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "process.exit(require('node:fs').statSync('/run/moss-sports-browser/renderer.sock').isSocket()?0:1)"
+        ]
+      interval: 1s
+      timeout: 2s
+      retries: 10
+      start_period: 2s
+    restart: unless-stopped
+
 volumes:
   jarv1s-postgres-data:
+  jarv1s-sports-browser-socket:
 
 networks:
   jarv1s:

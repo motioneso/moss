@@ -322,7 +322,7 @@ jobs:
   publish:
     name: Build and publish images
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     needs: [verify, compose-smoke, prod-compose-smoke]
     permissions:
       contents: read
@@ -358,9 +358,11 @@ jobs:
         run: |
           if [[ "${GITHUB_REF}" == refs/heads/main ]]; then
             echo "image_tags=ghcr.io/motioneso/moss:edge" >> "$GITHUB_OUTPUT"
+            echo "renderer_tags=ghcr.io/motioneso/moss-sports-renderer:edge" >> "$GITHUB_OUTPUT"
             echo "push=true" >> "$GITHUB_OUTPUT"
           else
             echo "image_tags=ghcr.io/motioneso/moss:pr-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
+            echo "renderer_tags=ghcr.io/motioneso/moss-sports-renderer:pr-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
             echo "push=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -372,5 +374,16 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: ${{ steps.tags.outputs.push == 'true' }}
           tags: ${{ steps.tags.outputs.image_tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=moss
+          cache-to: type=gha,mode=max,scope=moss
+
+      - name: Build (and push on main) Sports renderer image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.sports-renderer
+          platforms: linux/amd64,linux/arm64
+          push: ${{ steps.tags.outputs.push == 'true' }}
+          tags: ${{ steps.tags.outputs.renderer_tags }}
+          cache-from: type=gha,scope=sports-renderer
+          cache-to: type=gha,mode=max,scope=sports-renderer

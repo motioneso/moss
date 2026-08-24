@@ -1140,6 +1140,9 @@ importers:
       '@types/react':
         specifier: ^19.0.0
         version: 19.2.17
+      esbuild:
+        specifier: ^0.25.0
+        version: 0.25.12
 
   packages/structured-state:
     dependencies:
