@@ -112,6 +112,7 @@ function allowedBrowserRequest(
       url.protocol === "https:" &&
       !url.username &&
       !url.password &&
+      !url.port &&
       isRelatedPublisherHost(initialUrl, url) &&
       !TRACKING_PATH.test(`${url.hostname}${url.pathname}`)
     );

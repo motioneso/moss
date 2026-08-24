@@ -121,12 +121,26 @@ describe("Sports public source recipe", () => {
         requestUrl: "https://publisher.example/team/liverpool/news"
       })
     ).toEqual({ ok: false, reason: "recipe_drift" });
+    expect(
+      extractSportsSourceRecipe(validated.recipe, {
+        body: `<main class="news">${"<div>".repeat(129)}story${"</div>".repeat(129)}</main>`,
+        contentType: "text/html",
+        requestUrl: "https://publisher.example/team/liverpool/news"
+      })
+    ).toEqual({ ok: false, reason: "unsupported" });
   });
 
   it("rejects open authority and executable or undeclared recipe fields", () => {
     const unsafeRecipes = [
       { ...fotmobJsonRecipe, script: "return fetch(url)" },
       { ...fotmobJsonRecipe, fetchHosts: ["www.fotmob.com", "evil.example"] },
+      {
+        ...fotmobJsonRecipe,
+        request: {
+          ...fotmobJsonRecipe.request,
+          urlTemplate: "https://www.fotmob.com:8443/api/tltv3/teams/{teamId}"
+        }
+      },
       {
         ...fotmobJsonRecipe,
         request: { ...fotmobJsonRecipe.request, urlTemplate: "https://www.fotmob.com/{other}" }

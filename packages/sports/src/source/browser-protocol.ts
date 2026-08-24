@@ -91,7 +91,9 @@ function parseHttpsUrl(value: unknown): string | undefined {
   }
   try {
     const url = new URL(value);
-    return url.protocol === "https:" && !url.username && !url.password ? value : undefined;
+    return url.protocol === "https:" && !url.username && !url.password && !url.port
+      ? value
+      : undefined;
   } catch {
     return undefined;
   }

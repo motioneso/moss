@@ -1,3 +1,5 @@
+import { execFileSync } from "node:child_process";
+
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
@@ -5,13 +7,19 @@ import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 // #1909 live-path proof. The surface check remains credential-free. The full public-source path
 // uses real publisher fetches plus the operator-provided real JSON-capable model, matching the
 // product boundary rather than replacing discovery or extraction with fixtures.
-export const uatLevel = { level: "solo-admin", without: [] } as const;
+export const uatLevel = {
+  level: "admin+data",
+  without: ["sports"],
+  withSportsPublicSourceFixtures: true
+} as const;
 
 test.describe.configure({ mode: "serial" });
 
 const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE);
 const BBC_FEED_URL = "https://feeds.bbci.co.uk/sport/football/rss.xml";
-const FOTMOB_URL = "https://www.fotmob.com";
+const RAW_FIXTURE_DOMAIN = "raw.githubusercontent.com";
+const DRIFT_FIXTURE_DOMAIN = "raw.githack.com";
+const SHARED_STORY_URL = "https://example.com/issue-1909-shared-story";
 const MODEL_DISCOVERY_DEADLINE_MS = 60_000;
 const SOURCE_DEADLINE_MS = 180_000;
 const POLL_INITIAL_INTERVAL_MS = 500;
@@ -22,19 +30,43 @@ interface SourceRow {
   readonly label: string;
   readonly canonicalDomain: string;
   readonly healthState: string;
+  readonly healthReasonCode: string | null;
+  readonly recipeStatus: string;
   readonly lastCheckedAt: string | null;
   readonly lastSuccessAt: string | null;
   readonly assignments: readonly {
+    readonly followId: string;
     readonly targetUrl: string | null;
+    readonly previewStatus: string;
     readonly healthState: string;
+    readonly healthReasonCode: string | null;
   }[];
 }
 
 interface HeadlineRow {
+  readonly id: string;
+  readonly competitionKey: string;
   readonly title: string;
   readonly url: string;
   readonly publisherLabel: string;
   readonly publisherDomain: string;
+}
+
+interface PreviewResult {
+  readonly status: string;
+  readonly confirmationId?: string;
+  readonly authorizationAcknowledgement?: string;
+  readonly candidate?: {
+    readonly canonicalDomain: string;
+    readonly confirmedFetchHosts: readonly string[];
+    readonly targets: readonly { readonly followId: string; readonly targetUrl: string }[];
+  };
+}
+
+interface RecordedAction {
+  readonly id: string;
+  readonly toolName?: string;
+  readonly status: string;
 }
 
 function requireBaseURL(): string {
@@ -84,7 +116,10 @@ async function bringUpRealModel(page: Page): Promise<void> {
           models: readonly { status: string; capabilities: readonly string[] }[];
         };
         return body.models.some(
-          (model) => model.status === "active" && model.capabilities.includes("json")
+          (model) =>
+            model.status === "active" &&
+            model.capabilities.includes("json") &&
+            model.capabilities.includes("chat")
         );
       },
       { timeout: MODEL_DISCOVERY_DEADLINE_MS }
@@ -92,7 +127,10 @@ async function bringUpRealModel(page: Page): Promise<void> {
     .toBe(true);
 }
 
-async function createPremierLeagueFollows(page: Page): Promise<readonly string[]> {
+async function createPremierLeagueFollows(page: Page): Promise<{
+  readonly leagueId: string;
+  readonly teamId: string;
+}> {
   const league = await page.request.post("/api/sports/follows", {
     data: { competitionKey: "eng.1" }
   });
@@ -118,41 +156,12 @@ async function createPremierLeagueFollows(page: Page): Promise<readonly string[]
     data: { competitionKey: arsenal.competitionKey, teamKey: arsenal.teamKey }
   });
   expect(team.ok(), `team follow -> ${team.status()}`).toBeTruthy();
-  return ["All Premier League", arsenal.shortName || arsenal.name];
-}
-
-async function addSource(
-  section: Locator,
-  url: string,
-  followLabels: readonly string[]
-): Promise<{ readonly domain: string; readonly label: string }> {
-  await section.getByLabel("Publication homepage or domain").fill(url);
-  for (const label of followLabels) await section.getByLabel(label, { exact: true }).check();
-  await section.getByRole("button", { name: "Check", exact: true }).click();
-
-  const candidate = section.locator(".sp-src__candidate").last();
-  await expect(candidate, `preview never completed for ${url}`).toBeVisible({
-    timeout: SOURCE_DEADLINE_MS
-  });
-  await expect(candidate.getByText(/^Fetch hosts:/)).toBeVisible();
-  for (const label of followLabels) {
-    const targetLabel = label.replace(/^All /, "");
-    await expect(
-      candidate.locator("p.sp-src__hint").filter({ hasText: `${targetLabel}: https://` })
-    ).toBeVisible();
-  }
-
-  const domain = (await candidate.locator(".sp-src__item-meta").textContent())?.trim();
-  const label = (await candidate.locator(".sp-src__candidate-label").textContent())?.trim();
-  expect(domain).toBeTruthy();
-  expect(label).toBeTruthy();
-  await candidate.getByRole("checkbox").check();
-  await candidate.getByRole("button", { name: "Add this source" }).click();
-  await expect(section.getByText("Source added.")).toBeVisible({ timeout: 30_000 });
-  await expect(
-    section.locator(".sp-src__item").filter({ hasText: domain as string })
-  ).toBeVisible();
-  return { domain: domain as string, label: label as string };
+  const leagueRow = (await league.json()) as { follow: { id: string } };
+  const teamRow = (await team.json()) as { follow: { id: string } };
+  return {
+    leagueId: leagueRow.follow.id,
+    teamId: teamRow.follow.id
+  };
 }
 
 async function listSources(page: Page): Promise<readonly SourceRow[]> {
@@ -161,12 +170,87 @@ async function listSources(page: Page): Promise<readonly SourceRow[]> {
   return ((await response.json()) as { sources: readonly SourceRow[] }).sources;
 }
 
-async function retrySource(section: Locator, source: SourceRow): Promise<void> {
-  const row = section.locator(".sp-src__item").filter({ hasText: source.canonicalDomain });
-  await row.getByRole("button", { name: `Retry ${source.label}` }).click();
-  await expect(row.getByText("Last checked: Never", { exact: false })).toHaveCount(0, {
+async function invokeReadTool<T>(
+  page: Page,
+  name: string,
+  input: Record<string, unknown>
+): Promise<T> {
+  const response = await page.request.post(`/api/ai/assistant-tools/${name}/invoke`, {
+    data: { input }
+  });
+  expect(response.ok(), `${name} -> ${response.status()}`).toBeTruthy();
+  const body = (await response.json()) as {
+    invocation?: { status?: string; result?: T | { data?: T } };
+  };
+  expect(body.invocation?.status, `${name} did not succeed`).toBe("succeeded");
+  const result = body.invocation?.result;
+  if (!result) throw new Error(`${name} returned no result`);
+  return ((result as { data?: T }).data ?? result) as T;
+}
+
+async function listActions(page: Page): Promise<readonly RecordedAction[]> {
+  const response = await page.request.get("/api/ai/assistant-actions");
+  expect(response.ok(), `assistant-actions -> ${response.status()}`).toBeTruthy();
+  return ((await response.json()) as { actions: readonly RecordedAction[] }).actions;
+}
+
+async function confirmThroughMoss(
+  page: Page,
+  toolName: string,
+  input: Record<string, unknown>,
+  summaryText: RegExp
+): Promise<void> {
+  const before = new Set((await listActions(page)).map((action) => action.id));
+  const open = page.getByRole("button", { name: /^(Chat with |Open chat$)/ });
+  if (await open.isVisible()) await open.click();
+  const turnSettled = page.waitForResponse(
+    (response) =>
+      response.url().includes("/api/chat/turn") && response.request().method() === "POST",
+    { timeout: 300_000 }
+  );
+  const composer = page.getByRole("textbox", { name: /^Message/ });
+  await composer.fill(
+    `Call ${toolName} exactly once with this JSON input. Do not call another tool: ${JSON.stringify(input)}`
+  );
+  await composer.press("Enter");
+
+  const card = page
+    .locator('[role="region"][aria-label="Action request"]')
+    .filter({ hasText: summaryText })
+    .last();
+  await expect(card.getByRole("button", { name: "Approve" })).toBeVisible({
     timeout: SOURCE_DEADLINE_MS
   });
+  await card.getByRole("button", { name: "Approve" }).click();
+  const response = await turnSettled;
+  expect(response.ok(), `${toolName} chat turn -> ${response.status()}`).toBeTruthy();
+  await expect
+    .poll(
+      async () =>
+        (await listActions(page)).find(
+          (action) => !before.has(action.id) && action.toolName === toolName
+        )?.status,
+      { timeout: 60_000 }
+    )
+    .toBe("confirmed");
+}
+
+function confirmationInput(preview: PreviewResult, extra: Record<string, unknown> = {}) {
+  expect(preview.status).toBe("ok");
+  expect(preview.confirmationId).toBeTruthy();
+  expect(preview.authorizationAcknowledgement).toBeTruthy();
+  expect(preview.candidate).toBeTruthy();
+  if (!preview.confirmationId || !preview.authorizationAcknowledgement || !preview.candidate) {
+    throw new Error("Sports source preview omitted confirmation authority");
+  }
+  return {
+    ...extra,
+    confirmationId: preview.confirmationId,
+    authorizationAcknowledgement: preview.authorizationAcknowledgement,
+    canonicalDomain: preview.candidate.canonicalDomain,
+    confirmedFetchHosts: preview.candidate.confirmedFetchHosts,
+    targets: preview.candidate.targets.map(({ followId, targetUrl }) => ({ followId, targetUrl }))
+  };
 }
 
 test("Sports settings exposes truthful public-source controls (#1909)", async ({ page }) => {
@@ -174,7 +258,9 @@ test("Sports settings exposes truthful public-source controls (#1909)", async ({
   const section = await openSportsSettings(page);
   await expect(section.getByLabel("Publication homepage or domain")).toBeVisible();
   await expect(section.getByRole("button", { name: "Check", exact: true })).toBeVisible();
-  await expect(section.getByText("No custom sources yet.")).toBeVisible();
+  await expect(section.getByText("Awaiting first check", { exact: false })).toBeVisible();
+  await expect(section.getByText("One or more source targets are failing.")).toBeVisible();
+  await expect(section.getByRole("button", { name: /Rebuild FotMob legacy scrape/ })).toBeVisible();
 });
 
 test("public publishers reach Sports, Today, recovery, and Moss status (#1909)", async ({
@@ -184,23 +270,140 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
     !REAL_CHAT_CONFIGURED,
     "JARVIS_UAT_REAL_CHAT_TOKEN_FILE is required for real public-source discovery (#1909)"
   );
-  test.setTimeout(900_000);
+  test.setTimeout(1_500_000);
 
   await signIn(page);
   await bringUpRealModel(page);
-  const followLabels = await createPremierLeagueFollows(page);
-  const section = await openSportsSettings(page);
-
-  const fotmob = await addSource(section, FOTMOB_URL, followLabels);
-  const bbc = await addSource(section, BBC_FEED_URL, followLabels);
-  const customDomains = [fotmob.domain, bbc.domain];
-
+  const follows = await createPremierLeagueFollows(page);
   let sources = await listSources(page);
-  for (const domain of customDomains) {
-    const source = sources.find((candidate) => candidate.canonicalDomain === domain);
-    expect(source, `${domain} must persist`).toBeDefined();
-    if (source) await retrySource(section, source);
+  const bbc = sources.find((source) => source.canonicalDomain === new URL(BBC_FEED_URL).hostname);
+  const failing = sources.find((source) => source.canonicalDomain === RAW_FIXTURE_DOMAIN);
+  const fotmob = sources.find((source) => source.canonicalDomain === "fotmob.com");
+  const drift = sources.find((source) => source.canonicalDomain === DRIFT_FIXTURE_DOMAIN);
+  expect(bbc, "grandfathered feed fixture must persist").toBeDefined();
+  expect(failing, "controlled target-failure fixture must persist").toBeDefined();
+  expect(fotmob, "grandfathered scrape fixture must persist").toBeDefined();
+  expect(drift, "recipe-drift fixture must persist").toBeDefined();
+  if (!bbc || !failing || !fotmob || !drift) {
+    throw new Error("#1909 source fixtures were not seeded");
   }
+
+  expect(bbc.healthState).toBe("pending");
+  expect(bbc.lastCheckedAt).toBeNull();
+  expect(bbc.assignments.every((assignment) => assignment.previewStatus === "verified")).toBe(true);
+  expect(failing.healthState).toBe("failing");
+  expect(failing.healthReasonCode).toBe("partial_target_failure");
+  expect(failing.assignments.map((assignment) => assignment.healthState).sort()).toEqual([
+    "failing",
+    "healthy"
+  ]);
+  expect(fotmob.healthReasonCode).toBe("recipe_missing");
+  expect(
+    fotmob.assignments.every((assignment) => assignment.previewStatus === "recipe_missing")
+  ).toBe(true);
+  expect(drift.recipeStatus).toBe("drift");
+  expect(drift.healthReasonCode).toBe("recipe_drift");
+
+  await test.step("Moss Retry recovers a controlled partial target failure", async () => {
+    await confirmThroughMoss(
+      page,
+      "sports.retrySource",
+      { sourceId: failing.id },
+      new RegExp(`Retry sports source ${failing.id}`)
+    );
+    const recovered = (await listSources(page)).find((source) => source.id === failing.id);
+    expect(recovered?.healthState).toBe("healthy");
+    expect(recovered?.assignments.every((assignment) => assignment.healthState === "healthy")).toBe(
+      true
+    );
+  });
+
+  await test.step("the grandfathered verified feed performs its first application refresh", async () => {
+    const response = await page.request.get("/api/sports/overview");
+    expect(response.ok(), `overview -> ${response.status()}`).toBeTruthy();
+    const refreshed = (await listSources(page)).find((source) => source.id === bbc.id);
+    expect(refreshed?.healthState).toBe("healthy");
+    expect(refreshed?.lastCheckedAt).toBeTruthy();
+    expect(refreshed?.lastSuccessAt).toBeTruthy();
+  });
+
+  await test.step("Moss previews and confirms a legacy scrape recipe rebuild", async () => {
+    const preview = await invokeReadTool<PreviewResult>(page, "sports.rebuildSourceRecipe", {
+      sourceId: fotmob.id
+    });
+    expect(preview.candidate?.confirmedFetchHosts).toContain("www.fotmob.com");
+    await confirmThroughMoss(
+      page,
+      "sports.confirmSourceRecipe",
+      confirmationInput(preview, { sourceId: fotmob.id }),
+      new RegExp(`Replace the recipe for sports source ${fotmob.id}`)
+    );
+    const rebuilt = (await listSources(page)).find((source) => source.id === fotmob.id);
+    expect(rebuilt?.recipeStatus).toBe("ready");
+    expect(rebuilt?.healthReasonCode).toBeNull();
+    expect(
+      rebuilt?.assignments.every((assignment) => assignment.previewStatus === "verified")
+    ).toBe(true);
+  });
+
+  await test.step("Moss rebuilds and confirms a drifted recipe", async () => {
+    const preview = await invokeReadTool<PreviewResult>(page, "sports.rebuildSourceRecipe", {
+      sourceId: drift.id
+    });
+    expect(preview.candidate?.confirmedFetchHosts).toContain(DRIFT_FIXTURE_DOMAIN);
+    await confirmThroughMoss(
+      page,
+      "sports.confirmSourceRecipe",
+      confirmationInput(preview, { sourceId: drift.id }),
+      new RegExp(`Replace the recipe for sports source ${drift.id}`)
+    );
+    const rebuilt = (await listSources(page)).find((source) => source.id === drift.id);
+    expect(rebuilt?.recipeStatus).toBe("feed");
+    expect(rebuilt?.healthReasonCode).toBeNull();
+    expect(
+      rebuilt?.assignments.every((assignment) => assignment.previewStatus === "verified")
+    ).toBe(true);
+  });
+
+  const head = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  const mirroredFeedUrl = `https://cdn.jsdelivr.net/gh/motioneso/moss@${head}/tests/fixtures/sports/1909-shared-feed.xml`;
+  let mirroredSourceId = "";
+  await test.step("Moss previews and confirms a new public source", async () => {
+    const preview = await invokeReadTool<PreviewResult>(page, "sports.previewSource", {
+      url: mirroredFeedUrl,
+      assignments: [{ followId: follows.leagueId }, { followId: follows.teamId }]
+    });
+    expect(preview.candidate?.confirmedFetchHosts).toContain("cdn.jsdelivr.net");
+    await confirmThroughMoss(
+      page,
+      "sports.confirmSource",
+      confirmationInput(preview),
+      /Add sports source/
+    );
+    const created = (await listSources(page)).find(
+      (source) => source.canonicalDomain === "cdn.jsdelivr.net"
+    );
+    expect(created?.assignments).toHaveLength(2);
+    mirroredSourceId = created?.id ?? "";
+    expect(mirroredSourceId).toBeTruthy();
+  });
+
+  await test.step("Moss previews and confirms an exact assignment replacement", async () => {
+    const preview = await invokeReadTool<PreviewResult>(page, "sports.previewSourceAssignments", {
+      sourceId: mirroredSourceId,
+      assignments: [{ followId: follows.leagueId }]
+    });
+    await confirmThroughMoss(
+      page,
+      "sports.confirmSourceAssignments",
+      confirmationInput(preview, { sourceId: mirroredSourceId }),
+      new RegExp(`Replace assignments for sports source ${mirroredSourceId}`)
+    );
+    const replaced = (await listSources(page)).find((source) => source.id === mirroredSourceId);
+    expect(replaced?.assignments.map((assignment) => assignment.followId)).toEqual([
+      follows.leagueId
+    ]);
+  });
 
   let customHeadlines: readonly HeadlineRow[] = [];
   await expect
@@ -216,70 +419,50 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
           ...overview.topStories,
           ...overview.leagueNews.flatMap((g) => g.headlines)
         ];
-        return customDomains.every((domain) =>
-          customHeadlines.some((headline) => headline.publisherDomain === domain)
+        return (
+          customHeadlines.some((headline) => headline.publisherDomain === "espn.com") &&
+          customHeadlines.some((headline) => headline.url === SHARED_STORY_URL)
         );
       },
       { timeout: SOURCE_DEADLINE_MS, intervals: [POLL_INITIAL_INTERVAL_MS, POLL_MAX_INTERVAL_MS] }
     )
     .toBe(true);
 
-  for (const domain of customDomains) {
-    const urls = customHeadlines
-      .filter((headline) => headline.publisherDomain === domain)
-      .map((headline) => headline.url);
-    expect(new Set(urls).size, `${domain} headlines must dedupe overlapping assignments`).toBe(
-      urls.length
-    );
-  }
+  const shared = customHeadlines.filter((headline) => headline.url === SHARED_STORY_URL);
+  expect(shared, "the same URL from two distinct sources must compose exactly once").toHaveLength(
+    1
+  );
+  expect([RAW_FIXTURE_DOMAIN, "cdn.jsdelivr.net"]).toContain(shared[0]?.publisherDomain);
+  expect(shared[0]?.publisherLabel).toBeTruthy();
 
   await page.goto(`${requireBaseURL()}/sports`);
-  await expect(page.getByText(new RegExp(`${fotmob.label}|${bbc.label}`, "i")).first()).toBeVisible(
-    {
-      timeout: SOURCE_DEADLINE_MS
-    }
-  );
+  await expect(
+    page.getByText(/Issue 1909 fixture feed|Issue 1909 shared sports feed/i).first()
+  ).toBeVisible({
+    timeout: SOURCE_DEADLINE_MS
+  });
   await page.goto(`${requireBaseURL()}/today`);
-  await expect(page.getByText(new RegExp(`${fotmob.label}|${bbc.label}`, "i")).first()).toBeVisible(
-    {
-      timeout: SOURCE_DEADLINE_MS
-    }
-  );
+  await expect(
+    page.getByText(/BBC legacy feed|FotMob legacy scrape|Issue 1909 fixture feed/i).first()
+  ).toBeVisible({ timeout: SOURCE_DEADLINE_MS });
 
-  const toolResponse = await page.request.post(
-    "/api/ai/assistant-tools/sports.listSources/invoke",
-    { data: { input: {} } }
-  );
-  expect(toolResponse.ok(), `sports.listSources -> ${toolResponse.status()}`).toBeTruthy();
-  const invocation = (await toolResponse.json()) as {
-    invocation?: {
-      status?: string;
-      result?: { sources?: readonly SourceRow[]; data?: { sources?: readonly SourceRow[] } };
-    };
-  };
-  expect(invocation.invocation?.status).toBe("succeeded");
-  const mossSources =
-    invocation.invocation?.result?.sources ?? invocation.invocation?.result?.data?.sources ?? [];
-  expect(
-    customDomains.every((domain) => mossSources.some((source) => source.canonicalDomain === domain))
-  ).toBe(true);
+  const mossSources = (
+    await invokeReadTool<{ sources: readonly SourceRow[] }>(page, "sports.listSources", {})
+  ).sources;
+  expect(mossSources.some((source) => source.id === mirroredSourceId)).toBe(true);
 
   sources = await listSources(page);
-  for (const domain of customDomains) {
-    const source = sources.find((candidate) => candidate.canonicalDomain === domain);
+  for (const source of sources) {
     expect(source?.healthState).toBe("healthy");
     expect(source?.lastCheckedAt).toBeTruthy();
     expect(source?.lastSuccessAt).toBeTruthy();
-    expect(source?.assignments).toHaveLength(2);
     expect(source?.assignments.every((assignment) => assignment.healthState === "healthy")).toBe(
       true
     );
   }
 
   const finalSection = await openSportsSettings(page);
-  for (const source of sources.filter((candidate) =>
-    customDomains.includes(candidate.canonicalDomain)
-  )) {
+  for (const source of sources) {
     const row = finalSection.locator(".sp-src__item").filter({ hasText: source.canonicalDomain });
     await row.getByRole("button", { name: `Remove ${source.label}` }).click();
     await expect(row).toHaveCount(0, { timeout: 30_000 });

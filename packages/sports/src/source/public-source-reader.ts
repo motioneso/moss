@@ -447,7 +447,9 @@ export class SportsPublicSourceReader {
           budgetDenied = requestCount >= MAX_REQUESTS;
           return false;
         }
-        if (!group.allowedHosts.includes(hop.url.hostname.toLowerCase())) return false;
+        if (hop.url.port || !group.allowedHosts.includes(hop.url.hostname.toLowerCase())) {
+          return false;
+        }
         requestCount += 1;
         return true;
       };

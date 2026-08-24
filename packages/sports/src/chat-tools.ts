@@ -55,6 +55,18 @@ function stringField(input: unknown, key: string): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
+function sourceAuthoritySummary(input: unknown): string {
+  const value = input as Partial<ConfirmSportsSourceRequest> | undefined;
+  const publisher = stringField(input, "canonicalDomain") ?? "unknown publisher";
+  const hosts = Array.isArray(value?.confirmedFetchHosts)
+    ? value.confirmedFetchHosts.join(", ")
+    : "";
+  const targets = Array.isArray(value?.targets)
+    ? value.targets.map((target) => `${target.followId} -> ${target.targetUrl}`).join(", ")
+    : "";
+  return `; publisher: ${publisher}; hosts: ${hosts || "none"}; targets: ${targets || "none"}`;
+}
+
 function requireService(): SportsService {
   if (!service) {
     throw new Error(
@@ -253,13 +265,13 @@ export const sportsRemoveSourceExecute: ToolExecute = async (
 };
 
 export const summarizeSportsConfirmSource: ToolSummarize = (input) =>
-  `Add sports source ${stringField(input, "canonicalDomain") ?? "unknown publisher"}`;
+  `Add sports source${sourceAuthoritySummary(input)}`;
 
 export const summarizeSportsConfirmSourceAssignments: ToolSummarize = (input) =>
-  `Replace assignments for sports source ${stringField(input, "sourceId") ?? "unknown id"}`;
+  `Replace assignments for sports source ${stringField(input, "sourceId") ?? "unknown id"}${sourceAuthoritySummary(input)}`;
 
 export const summarizeSportsConfirmSourceRecipe: ToolSummarize = (input) =>
-  `Replace the recipe for sports source ${stringField(input, "sourceId") ?? "unknown id"}`;
+  `Replace the recipe for sports source ${stringField(input, "sourceId") ?? "unknown id"}${sourceAuthoritySummary(input)}`;
 
 export const summarizeSportsRetrySource: ToolSummarize = (input) =>
   `Retry sports source ${stringField(input, "sourceId") ?? "unknown id"}`;

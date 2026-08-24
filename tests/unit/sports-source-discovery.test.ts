@@ -82,6 +82,49 @@ describe("resolveSportsSourceInput", () => {
     });
   });
 
+  it("replays a persisted feed with null recipe authority and retains submitted redirect hosts", async () => {
+    const fetch = vi.fn<NewsSafeFetchPort>(async () => ({
+      ok: true,
+      status: 200,
+      finalUrl: "https://one.example/feed.xml",
+      contentType: "application/rss+xml",
+      body: feed,
+      truncated: false
+    }));
+    const result = await resolveSportsSourceInput(
+      db,
+      { fetch, ai: ai() },
+      {
+        rawUrl: "https://www.one.example/feed.xml",
+        targets: [
+          {
+            followId: "follow-1",
+            competitionKey: "eng.1",
+            competitionLabel: "Premier League",
+            teamKey: null,
+            teamLabel: null
+          }
+        ],
+        persistedAuthority: {
+          recipeJson: null,
+          recipeFingerprint: null,
+          confirmedFetchHosts: ["www.one.example", "one.example"]
+        }
+      }
+    );
+    expect(result).toMatchObject({
+      status: "ok",
+      candidate: {
+        recipeFingerprint: null,
+        confirmedFetchHosts: ["www.one.example", "one.example"],
+        targets: [{ followId: "follow-1", targetUrl: "https://one.example/feed.xml" }]
+      }
+    });
+    expect(fetch).toHaveBeenCalledWith("https://www.one.example/feed.xml", {
+      allowedHosts: ["www.one.example", "one.example"]
+    });
+  });
+
   it("accepts a structurally valid empty feed discovered on an exact first-party host", async () => {
     const fetch = fetchMap({
       "https://one.example/": {
@@ -132,6 +175,14 @@ describe("resolveSportsSourceInput", () => {
     await expect(
       resolveSportsSourceInput(db, { fetch, ai: ai() }, { rawUrl: "http://one.example" })
     ).resolves.toEqual({ status: "rejected", reason: "not_https" });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects a non-default HTTPS port without making a network request", async () => {
+    const fetch = fetchMap({});
+    await expect(
+      resolveSportsSourceInput(db, { fetch, ai: ai() }, { rawUrl: "https://one.example:8443" })
+    ).resolves.toEqual({ status: "rejected", reason: "invalid_input" });
     expect(fetch).not.toHaveBeenCalled();
   });
 

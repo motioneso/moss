@@ -71,6 +71,7 @@ describe("Sports browser protocol", () => {
       { ...valid, capability: "shared-secret" },
       { ...valid, method: "POST" },
       { ...valid, url: "http://publisher.example/news" },
+      { ...valid, url: "https://publisher.example:8443/news" },
       { ...valid, resourceType: "websocket" },
       { ...valid, headers: { authorization: "secret" } },
       { ...valid, requestId: "x".repeat(SPORTS_BROWSER_LIMITS.maxRequestIdChars + 1) }
@@ -106,7 +107,8 @@ describe("Sports browser protocol", () => {
       { ...valid, hosts: ["attacker.example"] },
       { ...valid, maxRequests: 100 },
       { ...valid, deadlineMs: 60_000 },
-      { ...valid, url: "http://publisher.example/news" }
+      { ...valid, url: "http://publisher.example/news" },
+      { ...valid, url: "https://publisher.example:8443/news" }
     ]) {
       expect(parseBrowserRenderBody(Buffer.from(JSON.stringify(candidate)))).toEqual({
         ok: false,
@@ -129,6 +131,11 @@ describe("Sports browser protocol", () => {
     expect(
       parseBrowserRenderResultBody(
         Buffer.from(JSON.stringify({ ...valid, capability: "abcdefghijklmnopqrstuv" }))
+      )
+    ).toEqual({ ok: false, reason: "invalid_message" });
+    expect(
+      parseBrowserRenderResultBody(
+        Buffer.from(JSON.stringify({ ...valid, finalUrl: "https://publisher.example:8443/news" }))
       )
     ).toEqual({ ok: false, reason: "invalid_message" });
     expect(
@@ -161,6 +168,12 @@ describe("Sports browser protocol", () => {
         };
       }
     });
+    expect(() =>
+      broker.createJob({
+        url: "https://publisher.example:8443/news",
+        allowedHosts: ["publisher.example"]
+      })
+    ).toThrow(/public HTTPS URL/);
     const server = new SportsBrowserBrokerServer({ broker, socketPath });
     await server.start();
     const control = broker.createJob({

@@ -2,10 +2,13 @@ import { createHash } from "node:crypto";
 
 import { Ajv } from "ajv";
 import { compile, selectAll, selectOne } from "css-select";
-import { DomUtils, parseDocument } from "htmlparser2";
+import { DomUtils, Parser, parseDocument } from "htmlparser2";
 import { getDomain } from "tldts";
 
 export const SPORTS_SOURCE_RECIPE_VERSION = 1 as const;
+
+const MAX_HTML_NODES = 10_000;
+const MAX_HTML_DEPTH = 128;
 
 export type SportsRecipeNormalization = "trim" | "collapse_whitespace" | "strip_controls";
 
@@ -273,6 +276,7 @@ function validateRecipeSemantics(recipe: SportsSourceRecipe): boolean {
       parsed.protocol === "https:" &&
       !parsed.username &&
       !parsed.password &&
+      !parsed.port &&
       !parsed.hash &&
       recipe.fetchHosts.includes(parsed.hostname.toLowerCase()) &&
       recipe.fetchHosts.every((host) => (getDomain(host) ?? host) === requestDomain) &&
@@ -407,6 +411,34 @@ function htmlFieldValue(
       : undefined;
 }
 
+function hasBoundedHtmlStructure(body: string): boolean {
+  let depth = 0;
+  let nodes = 0;
+  const count = (): void => {
+    nodes += 1;
+    if (nodes > MAX_HTML_NODES) throw new Error("html_node_limit");
+  };
+  try {
+    const parser = new Parser({
+      onopentag() {
+        count();
+        depth += 1;
+        if (depth > MAX_HTML_DEPTH) throw new Error("html_depth_limit");
+      },
+      onclosetag() {
+        depth = Math.max(0, depth - 1);
+      },
+      ontext: count,
+      oncomment: count,
+      onprocessinginstruction: count
+    });
+    parser.end(body);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function extractHtmlRecipe(
   recipe: SportsHtmlSourceRecipe,
   response: {
@@ -420,6 +452,7 @@ function extractHtmlRecipe(
   if (!/(?:text\/html|application\/xhtml\+xml)/i.test(response.contentType ?? "")) {
     return { ok: false, reason: "unsupported" };
   }
+  if (!hasBoundedHtmlStructure(response.body)) return { ok: false, reason: "unsupported" };
   const document = parseDocument(response.body, { decodeEntities: true });
   const collection = selectOne(recipe.extraction.collectionSelector, document);
   if (!collection) return { ok: false, reason: "recipe_drift" };

@@ -191,7 +191,12 @@ export class SportsBrowserBroker {
     readonly allowedHosts: readonly string[];
   }): BrowserRenderRequest {
     const initialUrl = new URL(input.url);
-    if (initialUrl.protocol !== "https:" || initialUrl.username || initialUrl.password) {
+    if (
+      initialUrl.protocol !== "https:" ||
+      initialUrl.username ||
+      initialUrl.password ||
+      initialUrl.port
+    ) {
       throw new Error("Sports browser jobs require a public HTTPS URL");
     }
     const jobId = randomUUID();
@@ -288,7 +293,8 @@ export class SportsBrowserBroker {
           "accept-language": "en-US,en;q=0.5"
         },
         allowedContentTypes: CONTENT_TYPES[request.resourceType],
-        beforeRequest: () => {
+        beforeRequest: (hop) => {
+          if (hop.url.port) return false;
           if (job.requests >= SPORTS_BROWSER_LIMITS.maxRequests) {
             requestBudgetExceeded = true;
             return false;

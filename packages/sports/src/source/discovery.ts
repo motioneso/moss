@@ -192,7 +192,13 @@ function samePublisherIdentity(left: string, right: string): boolean {
 
 function acceptedFinalDomain(finalUrl: string, expectedDomain: string): string | null {
   const normalized = normalizePublisherDomain(finalUrl);
-  if (!normalized.ok || !samePublisherIdentity(expectedDomain, normalized.domain)) return null;
+  if (
+    !normalized.ok ||
+    new URL(finalUrl).port ||
+    !samePublisherIdentity(expectedDomain, normalized.domain)
+  ) {
+    return null;
+  }
   return normalized.domain;
 }
 
@@ -487,6 +493,7 @@ export async function resolveSportsSourceInput(
     };
   }
   const url = /^[a-z][a-z0-9+.-]*:/i.test(raw) ? raw : `https://${raw}`;
+  if (new URL(url).port) return { status: "rejected", reason: "invalid_input" };
 
   const authority = input.persistedAuthority;
   const fixedRecipeValidation = authority?.recipeJson
@@ -495,7 +502,7 @@ export async function resolveSportsSourceInput(
   if (
     authority &&
     ((fixedRecipeValidation && !fixedRecipeValidation.ok) ||
-      fixedRecipeValidation?.fingerprint !== authority.recipeFingerprint ||
+      (fixedRecipeValidation?.fingerprint ?? null) !== authority.recipeFingerprint ||
       authority.confirmedFetchHosts.length === 0 ||
       !authority.confirmedFetchHosts.includes(exactHost(url)))
   ) {
@@ -582,7 +589,9 @@ export async function resolveSportsSourceInput(
     return { status: "rejected", reason: "invalid_input" };
   }
   const metadata = htmlMetadata(homepageBody);
-  const feedHosts = feedUrl ? [...new Set([homepageUrl, feedUrl].map(exactHost))] : undefined;
+  const feedHosts = feedUrl
+    ? [...new Set([url, fetched.finalUrl, homepageUrl, feedUrl].map(exactHost))]
+    : undefined;
   if (feedUrl && feedHosts) {
     const checkedAt = new Date().toISOString();
     const samples: SportsRecipeItem[] = headlines.map((headline) => ({

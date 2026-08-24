@@ -500,7 +500,11 @@ export class SportsService {
         ? publicLeagueNews.map((group) => ({
             ...group,
             headlines: group.headlines.map((h) =>
-              h.url === feature.url ? { ...h, body: featureBody } : h
+              h.competitionKey === feature.competitionKey &&
+              h.id === feature.id &&
+              h.url === feature.url
+                ? { ...h, body: featureBody }
+                : h
             )
           }))
         : publicLeagueNews;

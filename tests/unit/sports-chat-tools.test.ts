@@ -21,6 +21,9 @@ import {
   sportsRebuildSourceRecipeExecute,
   sportsRemoveSourceExecute,
   sportsRetrySourceExecute,
+  summarizeSportsConfirmSource,
+  summarizeSportsConfirmSourceAssignments,
+  summarizeSportsConfirmSourceRecipe,
   sportsUnfollowTeamExecute
 } from "../../packages/sports/src/chat-tools.js";
 import type { SportsFollowsWriter } from "../../packages/sports/src/sports-service.js";
@@ -85,6 +88,23 @@ async function callTool(execute: ToolExecute, input: Record<string, unknown>) {
 }
 
 describe("sports chat tools (#1265)", () => {
+  it("shows the exact host and target authority in source confirmation summaries", () => {
+    const input = {
+      sourceId: "source-1",
+      canonicalDomain: "publisher.example",
+      confirmedFetchHosts: ["publisher.example", "api.publisher.example"],
+      targets: [{ followId: "follow-1", targetUrl: "https://api.publisher.example/team/1" }]
+    };
+    for (const summarize of [
+      summarizeSportsConfirmSource,
+      summarizeSportsConfirmSourceAssignments,
+      summarizeSportsConfirmSourceRecipe
+    ]) {
+      const summary = summarize(input, CTX);
+      expect(summary).toContain("publisher.example, api.publisher.example");
+      expect(summary).toContain("follow-1 -> https://api.publisher.example/team/1");
+    }
+  });
   it("rejects a competitionKey outside the catalog before any write", async () => {
     configureSportsChatTools(makeFakeDatasetClient(), makeFakeWriter());
     const result = await callTool(sportsFollowTeamExecute, { competitionKey: "not-a-league" });

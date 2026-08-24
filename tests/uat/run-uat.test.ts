@@ -51,6 +51,7 @@ describe("run-uat CLI (#1027/#1047)", () => {
       excludeChunks: [],
       withoutNewsJsonBinding: false,
       withJobSearchFixture: false,
+      withSportsPublicSourceFixtures: false,
       chatScript: undefined
     });
     const [command, args] = mocks.spawn.mock.calls[0] ?? [];
@@ -89,7 +90,29 @@ describe("run-uat CLI (#1027/#1047)", () => {
       excludeChunks: [],
       withoutNewsJsonBinding: false,
       withJobSearchFixture: false,
+      withSportsPublicSourceFixtures: false,
       chatScript: "phase1-smoke"
+    });
+  });
+
+  it("threads the opt-in #1909 public-source fixture flag", async () => {
+    mocks.readFile.mockResolvedValue(
+      `export const uatLevel = {
+        level: "admin+data",
+        without: ["sports"],
+        withSportsPublicSourceFixtures: true
+      } as const;`
+    );
+    process.argv = ["node", "tests/uat/run-uat.ts", "future-advisory"];
+
+    await import("./run-uat.js");
+
+    expect(mocks.provisionForUat).toHaveBeenCalledWith("admin+data", {
+      excludeChunks: ["sports"],
+      withoutNewsJsonBinding: false,
+      withJobSearchFixture: false,
+      withSportsPublicSourceFixtures: true,
+      chatScript: undefined
     });
   });
 

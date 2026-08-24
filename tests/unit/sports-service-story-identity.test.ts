@@ -170,8 +170,8 @@ describe("id→url story keying (#858)", () => {
       publisherDomain: "espn.com",
       sourceTeamIds: []
     };
-    const service = new SportsService(
-      makeDeps({
+    const service = new SportsService({
+      ...makeDeps({
         follows: [nflFollow, nbaFollow],
         source: makeSource({
           getHeadlines: async (competitionKey) => {
@@ -181,8 +181,31 @@ describe("id→url story keying (#858)", () => {
           },
           getArticleBody: async () => "Fetched real article body."
         })
-      })
-    );
+      }),
+      publicSourceReader: {
+        refresh: async () => ({
+          degraded: false,
+          persistedResults: 0,
+          headlines: [
+            {
+              id: "custom-shared-url",
+              sourceId: "source-1",
+              competitionKey: "nba",
+              competitionLabel: "NBA",
+              title: "Custom story sharing the ESPN feature URL",
+              url: nflFeature.url,
+              publishedAt: `${TODAY}T06:00:00.000Z`,
+              imageUrl: null,
+              summary: "Custom summary",
+              teamKeys: [],
+              origin: "custom",
+              publisherLabel: "Publisher",
+              publisherDomain: "publisher.example"
+            }
+          ]
+        })
+      }
+    });
     const overview = await service.getOverview(userA);
     const nflGroup = overview.leagueNews.find((g) => g.competitionKey === "nfl");
     expect(nflGroup?.headlines.find((h) => h.title === "NFL feature story")?.body).toBe(
@@ -192,6 +215,7 @@ describe("id→url story keying (#858)", () => {
     expect(
       nbaGroup?.headlines.find((h) => h.title === "NBA distinct story (colliding id)")?.body
     ).toBeUndefined();
+    expect(nbaGroup?.headlines.find((h) => h.id === "custom-shared-url")?.body).toBeUndefined();
   });
 
   it("never sends a custom feature id to ESPN when another competition has the same URL", async () => {
