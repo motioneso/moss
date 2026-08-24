@@ -303,7 +303,9 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
   const section = await openSportsSettings(page);
   await expect(section.getByLabel("Publication homepage or domain")).toBeVisible();
   await expect(section.getByRole("button", { name: "Check", exact: true })).toBeVisible();
-  await expect(section.getByText("One or more source targets are failing.")).toBeVisible();
+  await expect(
+    section.getByRole("button", { name: /Retry Issue 1909 fixture feed/ })
+  ).toBeVisible();
   await expect(section.getByRole("button", { name: /Rebuild FotMob legacy scrape/ })).toBeVisible();
 
   await test.step("Moss Retry recovers a controlled partial target failure", async () => {
