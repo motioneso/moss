@@ -60,10 +60,7 @@ export function WeatherChip(props: WeatherChipProps) {
         ))}
       </div>
       {tooltip ? (
-        <div
-          className="jds-weather-chip__tooltip"
-          style={{ left: tooltip.left, top: tooltip.top }}
-        >
+        <div className="jds-weather-chip__tooltip" style={{ left: tooltip.left, top: tooltip.top }}>
           {props.days[tooltip.index]?.detail}
         </div>
       ) : null}
