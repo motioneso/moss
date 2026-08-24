@@ -32,7 +32,16 @@ function makeOpenMeteoResponse(temp: number, feelsLike: number, wmoCode: number)
       current: {
         temperature_2m: temp,
         apparent_temperature: feelsLike,
-        weather_code: wmoCode
+        weather_code: wmoCode,
+        relative_humidity_2m: 50,
+        dew_point_2m: 10,
+        wind_speed_10m: 8
+      },
+      daily: {
+        time: ["2026-08-24", "2026-08-25", "2026-08-26", "2026-08-27", "2026-08-28"],
+        weather_code: [wmoCode, 2, 61, 3, 71],
+        temperature_2m_max: [temp + 2, 22, 19, 21, 15],
+        temperature_2m_min: [temp - 4, 13, 11, 10, 8]
       }
     }),
     { status: 200, headers: { "content-type": "application/json" } }
@@ -220,6 +229,18 @@ describe("weather integration", () => {
       expect(data.condition).toBe("Clear sky");
       expect(data.location).toBe("San Francisco, US");
       expect(data.unit).toBe("metric");
+      expect(data.humidity).toBe(50);
+      expect(data.dewPoint).toBe(10);
+      expect(data.windSpeed).toBe(8);
+      expect(data.lat).toBe(37.77);
+      expect(data.lon).toBe(-122.42);
+      expect(data.forecast).toHaveLength(4);
+      expect(data.forecast[0]).toMatchObject({
+        date: "2026-08-25",
+        icon: "cloud-sun",
+        high: 22,
+        low: 13
+      });
       // Only one call to Open-Meteo
       expect(fakeFetch).toHaveBeenCalledTimes(1);
       expect(String(fakeFetch.mock.calls[0]?.[0] ?? "")).toContain("api.open-meteo.com");

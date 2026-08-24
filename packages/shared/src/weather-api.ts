@@ -4,6 +4,13 @@ export type WeatherIcon = "sun" | "cloud" | "cloud-sun" | "cloud-rain" | "cloud-
 
 export type WeatherUnit = "metric" | "imperial";
 
+export interface WeatherForecastDayDto {
+  readonly date: string;
+  readonly icon: WeatherIcon;
+  readonly high: number;
+  readonly low: number;
+}
+
 export interface WeatherTodayDto {
   readonly temp: number;
   readonly feelsLike: number;
@@ -11,6 +18,12 @@ export interface WeatherTodayDto {
   readonly icon: WeatherIcon;
   readonly location: string;
   readonly unit: WeatherUnit;
+  readonly humidity: number;
+  readonly dewPoint: number;
+  readonly windSpeed: number;
+  readonly lat: number;
+  readonly lon: number;
+  readonly forecast: readonly WeatherForecastDayDto[];
 }
 
 export interface GetWeatherTodayResponse {
@@ -39,17 +52,48 @@ const weatherIconValues = [
   "wind"
 ] as const;
 
+const weatherForecastDaySchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["date", "icon", "high", "low"],
+  properties: {
+    date: { type: "string" },
+    icon: { type: "string", enum: weatherIconValues },
+    high: { type: "number" },
+    low: { type: "number" }
+  }
+} as const;
+
 const weatherTodaySchema = {
   type: "object",
   additionalProperties: false,
-  required: ["temp", "feelsLike", "condition", "icon", "location", "unit"],
+  required: [
+    "temp",
+    "feelsLike",
+    "condition",
+    "icon",
+    "location",
+    "unit",
+    "humidity",
+    "dewPoint",
+    "windSpeed",
+    "lat",
+    "lon",
+    "forecast"
+  ],
   properties: {
     temp: { type: "number" },
     feelsLike: { type: "number" },
     condition: { type: "string" },
     icon: { type: "string", enum: weatherIconValues },
     location: { type: "string" },
-    unit: { type: "string", enum: ["metric", "imperial"] }
+    unit: { type: "string", enum: ["metric", "imperial"] },
+    humidity: { type: "number" },
+    dewPoint: { type: "number" },
+    windSpeed: { type: "number" },
+    lat: { type: "number" },
+    lon: { type: "number" },
+    forecast: { type: "array", items: weatherForecastDaySchema }
   }
 } as const;
 
