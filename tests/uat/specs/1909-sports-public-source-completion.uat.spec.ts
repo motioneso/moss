@@ -262,14 +262,10 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
   );
   test.setTimeout(1_500_000);
 
-  await signIn(page);
-  const section = await openSportsSettings(page);
-  await expect(section.getByLabel("Publication homepage or domain")).toBeVisible();
-  await expect(section.getByRole("button", { name: "Check", exact: true })).toBeVisible();
-  await expect(section.getByText("Awaiting first check", { exact: false }).first()).toBeVisible();
-  await expect(section.getByText("One or more source targets are failing.")).toBeVisible();
-  await expect(section.getByRole("button", { name: /Rebuild FotMob legacy scrape/ })).toBeVisible();
-
+  const seededSignIn = await page.request.post("/api/auth/sign-in/email", {
+    data: { email: UAT_ADMIN_EMAIL, password: UAT_ADMIN_PASSWORD }
+  });
+  expect(seededSignIn.ok(), `seeded sign-in -> ${seededSignIn.status()}`).toBeTruthy();
   let sources = await listSources(page);
   const bbc = sources.find((source) => source.canonicalDomain === new URL(BBC_FEED_URL).hostname);
   const failing = sources.find((source) => source.canonicalDomain === RAW_FIXTURE_DOMAIN);
@@ -283,14 +279,9 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
     throw new Error("#1909 source fixtures were not seeded");
   }
 
-  expect(["pending", "healthy"]).toContain(bbc.healthState);
-  if (bbc.healthState === "pending") {
-    expect(bbc.lastCheckedAt).toBeNull();
-    expect(bbc.lastSuccessAt).toBeNull();
-  } else {
-    expect(bbc.lastCheckedAt).toBeTruthy();
-    expect(bbc.lastSuccessAt).toBeTruthy();
-  }
+  expect(bbc.healthState).toBe("pending");
+  expect(bbc.lastCheckedAt).toBeNull();
+  expect(bbc.lastSuccessAt).toBeNull();
   expect(bbc.assignments.every((assignment) => assignment.previewStatus === "verified")).toBe(true);
   expect(failing.healthState).toBe("failing");
   expect(failing.healthReasonCode).toBe("partial_target_failure");
@@ -304,6 +295,15 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
   ).toBe(true);
   expect(drift.recipeStatus).toBe("drift");
   expect(drift.healthReasonCode).toBe("recipe_drift");
+
+  const seededSignOut = await page.request.post("/api/auth/sign-out");
+  expect(seededSignOut.ok(), `seeded sign-out -> ${seededSignOut.status()}`).toBeTruthy();
+  await signIn(page);
+  const section = await openSportsSettings(page);
+  await expect(section.getByLabel("Publication homepage or domain")).toBeVisible();
+  await expect(section.getByRole("button", { name: "Check", exact: true })).toBeVisible();
+  await expect(section.getByText("One or more source targets are failing.")).toBeVisible();
+  await expect(section.getByRole("button", { name: /Rebuild FotMob legacy scrape/ })).toBeVisible();
 
   await bringUpRealModel(page);
   const follows = await createPremierLeagueFollows(page);
