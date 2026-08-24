@@ -188,6 +188,19 @@ export function TerminalModal(props: {
       toast("Terminal connection failed", { tone: "drift", icon: <TriangleAlert size={17} /> });
     };
 
+    // A server-side close (e.g. 1011 "terminal backend unavailable", 1008 "unauthorized") is a
+    // clean close, not a socket error, so `onerror` above never fires for it — without this the
+    // terminal was just left blank with no explanation at all. `1000` is a normal close from our
+    // own cleanup below and should stay silent.
+    ws.onclose = (event) => {
+      if (event.code === 1000) return;
+      term.writeln(`\r\n[connection closed: ${event.reason || `code ${event.code}`}]`);
+      toast(event.reason || "Terminal connection closed", {
+        tone: "drift",
+        icon: <TriangleAlert size={17} />
+      });
+    };
+
     return () => {
       window.removeEventListener("resize", sendResize);
       dataDisposable.dispose();
