@@ -464,4 +464,81 @@ out="$(run_tick "$state")"
 if grep -q "set 801 question=" <<<"$out"; then false; fi
 pass "a question already on file is not re-stamped, so its clock stays honest"
 
+# --- 19. every lane status has a dry-run proof --------------------------------------
+
+# The fixture for each status forces the next action where that status has one. The
+# dry-run output is the proof of the decision only: it does not prove the external
+# command would succeed.
+state="$(new_state)"
+stale_iso="$(date -Iseconds -d '40 minutes ago')"
+write_record "$state" 901 "{\"issue\":901,\"status\":\"building\",\"tier\":\"routine\",\"agent\":\"gone-agent\",\"relays\":0,\"updated_at\":\"$stale_iso\"}"
+out="$(run_tick "$state")"
+grep -q "DRY: claude -p \[judgment for lane 901" <<<"$out"
+pass "building status asks for dead-lane judgment"
+
+state="$(new_state)"
+write_record "$state" 902 '{"issue":902,"status":"pr-open","tier":"routine","pr":902,"relays":0}'
+out="$(GH_CHECKS='[{"name":"lint","bucket":"pass"}]' run_tick "$state")"
+grep -q "DRY: herdr agent start fleet-qa-902-r1" <<<"$out"
+grep -q "DRY: fleetctl set 902 status=qa" <<<"$out"
+pass "pr-open status starts the first QA round after green checks"
+
+state="$(new_state)"
+write_record "$state" 903 '{"issue":903,"status":"ci-red","tier":"routine","relays":0}'
+printf '{"ts":"%s","issue":903,"msg":"ci-red: failing checks: lint"}\n{"ts":"%s","issue":903,"msg":"ci-red: failing checks: lint"}\n' "$now_iso" "$now_iso" > "$state/log.jsonl"
+out="$(run_tick "$state")"
+grep -q "DRY: fleetctl set 903 status=blocked" <<<"$out"
+grep -q "same CI check failed twice" <<<"$out"
+pass "ci-red status parks after the same check fails twice"
+
+state="$(new_state)"
+write_record "$state" 904 '{"issue":904,"status":"qa","tier":"routine","relays":0}'
+out="$(run_tick "$state")"
+if grep -qE "fleet-(lane|qa)-904|fleetctl set 904 status=" <<<"$out"; then false; fi
+pass "qa status waits for the QA agent to update the record"
+
+state="$(new_state)"
+write_record "$state" 905 '{"issue":905,"status":"qa-red","tier":"routine","pr":905,"qa_rounds":1,"relays":0}'
+out="$(run_tick "$state")"
+grep -q "DRY: gh pr comment 905" <<<"$out"
+grep -q "DRY: fleetctl set 905 status=building" <<<"$out"
+pass "qa-red status sends the lane back to fix findings"
+
+state="$(new_state)"
+write_record "$state" 910 '{"issue":910,"status":"qa-red","tier":"routine","pr":910,"qa_rounds":2,"relays":0}'
+out="$(run_tick "$state")"
+grep -q "DRY: claude -p \[judgment for lane 910" <<<"$out"
+pass "qa-red status asks for arbitration after two failed rounds"
+
+state="$(new_state)"
+write_record "$state" 906 '{"issue":906,"status":"qa-green","tier":"routine","pr":906,"spec":"docs/x.md","relays":0}'
+out="$(GH_PR_FILES='' GH_PR_COMMENTS='' run_tick "$state")"
+grep -q "DRY: gh pr merge 906 --squash --auto" <<<"$out"
+grep -q "DRY: fleetctl set 906 status=merging" <<<"$out"
+pass "qa-green status enables squash auto-merge for a non-user-facing lane"
+
+state="$(new_state)"
+reapable="$tmp/reapable-worktree"
+mkdir -p "$reapable"
+git -C "$reapable" init -q
+write_record "$state" 907 "{\"issue\":907,\"status\":\"merging\",\"tier\":\"routine\",\"pr\":907,\"agent\":\"fleet-lane-907\",\"worktree\":\"$reapable\",\"relays\":0}"
+out="$(GH_PR_STATE=MERGED run_tick "$state")"
+grep -q "DRY: git .*worktree remove $reapable" <<<"$out"
+grep -q "DRY: herdr pane close <pane of fleet-lane-907>" <<<"$out"
+grep -q "DRY: fleetctl set 907 status=done" <<<"$out"
+pass "merging status checks reaping before marking the lane done"
+
+state="$(new_state)"
+write_record "$state" 908 '{"issue":908,"status":"blocked","tier":"routine","blocked_reason":"needs a decision","relays":0}'
+out="$(run_tick "$state")"
+grep -q "DRY: needs-ben fleet-daemon 908: needs a decision" <<<"$out"
+pass "blocked status files the recorded question for Ben"
+
+state="$(new_state)"
+write_record "$state" 909 '{"issue":909,"status":"done","tier":"routine","relays":0}'
+out="$(run_tick "$state")"
+if grep -qE "fleet-(lane|qa)-909|fleetctl set 909 status=" <<<"$out"; then false; fi
+grep -q "DRY: fleetctl board" <<<"$out"
+pass "done status is skipped and the board is still refreshed"
+
 echo "fleet tick tests passed"
