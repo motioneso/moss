@@ -21,10 +21,17 @@ describe("sports manifest", () => {
     expect(sportsModuleManifest.navigation[0]?.path).toBe("/sports");
     expect(sportsModuleManifest.settings[0]?.path).toBe("/settings/modules/sports");
     expect(sportsModuleManifest.routes.map((r) => r.path)).toContain("/api/sports/overview");
+    expect(sportsModuleManifest.routes.map((r) => r.path)).toEqual(
+      expect.arrayContaining([
+        "/api/sports/sources/:id/retry",
+        "/api/sports/sources/:id/rebuild/preview",
+        "/api/sports/sources/:id/rebuild"
+      ])
+    );
   });
 
-  it("exposes one read-risk briefing tool and two write-risk follow tools", () => {
-    expect(sportsModuleManifest.assistantTools).toHaveLength(3);
+  it("exposes follows plus bounded actor-scoped source tools", () => {
+    expect(sportsModuleManifest.assistantTools).toHaveLength(12);
     const byName = Object.fromEntries(
       sportsModuleManifest.assistantTools.map((tool) => [tool.name, tool])
     );
@@ -39,6 +46,31 @@ describe("sports manifest", () => {
       expect(byName[name]?.actionFamilyId).toBe("sports_follows");
       expect(byName[name]?.executionPolicy).toBe("auto");
       expect(byName[name]?.selfOperationGrant).toBe("granted_at_install");
+    }
+    for (const name of [
+      "sports.listSources",
+      "sports.previewSource",
+      "sports.previewSourceAssignments",
+      "sports.rebuildSourceRecipe"
+    ]) {
+      expect(byName[name]?.risk).toBe("read");
+    }
+    for (const name of [
+      "sports.previewSource",
+      "sports.previewSourceAssignments",
+      "sports.rebuildSourceRecipe"
+    ]) {
+      expect(byName[name]?.externalContent).toBe(true);
+    }
+    for (const name of [
+      "sports.confirmSource",
+      "sports.confirmSourceAssignments",
+      "sports.confirmSourceRecipe",
+      "sports.retrySource",
+      "sports.removeSource"
+    ]) {
+      expect(byName[name]?.actionFamilyId).toBe("sports.sources");
+      expect(byName[name]?.selfOperationGrant).toBe("confirm_always");
     }
   });
 
@@ -68,11 +100,13 @@ describe("sports manifest", () => {
     }
   });
 
-  it("declares exactly one action family, sports_follows, with trusted_auto allowed", () => {
-    expect(sportsModuleManifest.assistantActionFamilies).toHaveLength(1);
-    const family = sportsModuleManifest.assistantActionFamilies?.[0];
-    expect(family?.id).toBe("sports_follows");
-    expect(family?.allowedTiers).toContain("trusted_auto");
+  it("keeps follow automation separate from confirmed source recovery", () => {
+    expect(sportsModuleManifest.assistantActionFamilies).toHaveLength(2);
+    const byId = Object.fromEntries(
+      (sportsModuleManifest.assistantActionFamilies ?? []).map((family) => [family.id, family])
+    );
+    expect(byId.sports_follows?.allowedTiers).toContain("trusted_auto");
+    expect(byId["sports.sources"]?.allowedTiers).not.toContain("trusted_auto");
   });
 
   it("declares the espn external source with credential none and pinned hosts", () => {

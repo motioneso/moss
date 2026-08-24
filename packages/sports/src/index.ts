@@ -1,9 +1,10 @@
 export { registerSportsRoutes } from "./routes.js";
+export { collectSportsSourcesExportSection } from "./data-lifecycle.js";
 // #1025: re-exported so root-level tests/uat/seed/* can write follows through the real
 // repository (same precedent as @moss/auth's hashPassword / @moss/news's NewsPrefsRepository).
 export { SportsFollowsRepository } from "./repository.js";
 export type { SportsRoutesDependencies } from "./routes.js";
-export type { SportsFollowsWriter } from "./sports-service.js";
+export { SportsService, type SportsFollowsWriter } from "./sports-service.js";
 export {
   SPORTS_MODULE_ID,
   sportsAddSourceRequirement,
@@ -20,4 +21,6 @@ export { SportsBrowserBroker, SportsBrowserBrokerServer } from "./source/browser
 export { SportsBrowserClient } from "./source/browser-client.js";
 export { SPORTS_BROWSER_SOCKETS } from "./source/browser-protocol.js";
 export { SportsPublicSourceReader } from "./source/public-source-reader.js";
+export { createSportsPreviewStore } from "./source/preview-store.js";
 export { SportsSourcesRepository } from "./source/repository.js";
+export { SportsSourceService } from "./source/service.js";

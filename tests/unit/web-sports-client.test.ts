@@ -2,12 +2,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   createSportsFollow,
+  confirmSportsSourceRecipe,
   confirmSportsSourceAssignments,
   deleteSportsFollow,
   getSportsCatalog,
   getSportsOverview,
   listSportsFollows,
-  previewSportsSourceAssignments
+  previewSportsSourceAssignments,
+  previewSportsSourceRecipe,
+  retrySportsSource
 } from "../../packages/sports/src/web/sports-client.js";
 import { sportsQueryKeys } from "../../packages/sports/src/web/query-keys.js";
 
@@ -34,6 +37,15 @@ describe("sports API client", () => {
     await previewSportsSourceAssignments("source-1", { assignments: [] });
     await confirmSportsSourceAssignments("source-1", {
       confirmationId: "preview-1",
+      authorizationAcknowledgement: "acknowledged",
+      canonicalDomain: "publisher.example",
+      confirmedFetchHosts: ["publisher.example"],
+      targets: []
+    });
+    await retrySportsSource("source-1");
+    await previewSportsSourceRecipe("source-1");
+    await confirmSportsSourceRecipe("source-1", {
+      confirmationId: "preview-2",
       authorizationAcknowledgement: "acknowledged",
       canonicalDomain: "publisher.example",
       confirmedFetchHosts: ["publisher.example"],
@@ -76,6 +88,21 @@ describe("sports API client", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       7,
       "/api/sports/sources/source-1/assignments",
+      expect.objectContaining({ method: "PATCH" })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      8,
+      "/api/sports/sources/source-1/retry",
+      expect.objectContaining({ method: "POST" })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      9,
+      "/api/sports/sources/source-1/rebuild/preview",
+      expect.objectContaining({ method: "POST" })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      10,
+      "/api/sports/sources/source-1/rebuild",
       expect.objectContaining({ method: "PATCH" })
     );
   });

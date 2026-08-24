@@ -62,6 +62,11 @@ export interface NewsPersonalizationExportSection {
   readonly source_exclusions: readonly ExportRow[];
 }
 
+export interface SportsSourcesExportSection {
+  readonly assignments: readonly ExportRow[];
+  readonly sources: readonly ExportRow[];
+}
+
 export interface ExportUserDataOptions {
   readonly scopedDb: DataContextDb;
   readonly authDb: Kysely<MossDatabase>;
@@ -126,6 +131,7 @@ export interface UserDataExportTables {
   readonly notificationReads: readonly ExportRow[];
   readonly notifications: readonly ExportRow[];
   readonly preferences: readonly ExportRow[];
+  readonly sportsSources: SportsSourcesExportSection;
   readonly taskActivity: readonly ExportRow[];
   readonly tasks: readonly ExportRow[];
   readonly usefulnessFeedbackSignals: readonly ExportRow[];
@@ -234,6 +240,14 @@ async function readExportTables(
       { actorUserId: userId, requestId }
     );
 
+  const sportsSourcesSection = await collectModuleExportSection<SportsSourcesExportSection>(
+    listModuleManifests,
+    "sports",
+    "sportsSources",
+    scopedDb,
+    { actorUserId: userId, requestId }
+  );
+
   return {
     users: await readRows(scopedDb.db, userQuery(userId)),
     authAccounts: await readRows(authDb, authAccountsQuery(userId)),
@@ -274,6 +288,7 @@ async function readExportTables(
     commitments: await readRows(scopedDb.db, commitmentsQuery(userId)),
     entities: await readRows(scopedDb.db, entitiesQuery(userId)),
     preferences: await readRows(scopedDb.db, preferencesQuery(userId)),
+    sportsSources: sportsSourcesSection,
     usefulnessFeedbackSignals: await readRows(scopedDb.db, usefulnessFeedbackSignalsQuery(userId)),
     usefulnessFeedbackTargets: await readRows(scopedDb.db, usefulnessFeedbackTargetsQuery(userId)),
     newsPersonalization: newsPersonalizationSection,

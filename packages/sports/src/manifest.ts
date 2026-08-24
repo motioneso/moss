@@ -9,6 +9,8 @@ import {
   deleteSportsFollowResponseSchema,
   previewSportsSourceSchema,
   previewSportsSourceAssignmentsSchema,
+  previewSportsSourceRecipeSchema,
+  retrySportsSourceSchema,
   sportsCatalogResponseSchema,
   sportsCustomSourcesResponseSchema,
   sportsFollowsResponseSchema,
@@ -16,14 +18,30 @@ import {
   sportsOverviewResponseSchema,
   sportsStandingsResponseSchema,
   sportsTeamSearchResponseSchema,
-  updateSportsSourceAssignmentsSchema
+  updateSportsSourceAssignmentsSchema,
+  updateSportsSourceRecipeSchema
 } from "@moss/shared";
 
 import { sportsFollowedFactsTodayExecute } from "./briefing-tool.js";
+import { collectSportsSourcesExportSection } from "./data-lifecycle.js";
 import {
   sportsFollowTeamExecute,
+  sportsConfirmSourceAssignmentsExecute,
+  sportsConfirmSourceExecute,
+  sportsConfirmSourceRecipeExecute,
+  sportsListSourcesExecute,
+  sportsPreviewSourceAssignmentsExecute,
+  sportsPreviewSourceExecute,
+  sportsRebuildSourceRecipeExecute,
+  sportsRemoveSourceExecute,
+  sportsRetrySourceExecute,
   sportsUnfollowTeamExecute,
+  summarizeSportsConfirmSource,
+  summarizeSportsConfirmSourceAssignments,
+  summarizeSportsConfirmSourceRecipe,
   summarizeSportsFollowTeam,
+  summarizeSportsRemoveSource,
+  summarizeSportsRetrySource,
   summarizeSportsUnfollowTeam
 } from "./chat-tools.js";
 import { ESPN_FETCH_HOSTS, ESPN_IMAGE_HOSTS } from "./source/espn-source.js";
@@ -47,6 +65,7 @@ const ARTICLE_BODY_TTL_MS = 6 * 60 * 60 * 1000;
 // land (espn-source.ts `getSchedule`). This is a schema-level belt only — the service still closes
 // teamKey against the live league roster, and the URL site still percent-encodes.
 const CATALOG_KEY_PATTERN = "^[a-z0-9.]{1,100}$";
+const SOURCE_ID_PROPERTY = { type: "string", format: "uuid" } as const;
 
 export const sportsModuleSqlMigrationDirectory = fileURLToPath(new URL("../sql", import.meta.url));
 
@@ -221,6 +240,25 @@ export const sportsModuleManifest = {
       permissionId: "sports.sources"
     },
     {
+      method: "POST",
+      path: "/api/sports/sources/:id/retry",
+      responseSchema: retrySportsSourceSchema,
+      permissionId: "sports.sources"
+    },
+    {
+      method: "POST",
+      path: "/api/sports/sources/:id/rebuild/preview",
+      responseSchema: previewSportsSourceRecipeSchema,
+      permissionId: "sports.sources"
+    },
+    {
+      method: "PATCH",
+      path: "/api/sports/sources/:id/rebuild",
+      requestSchema: updateSportsSourceRecipeSchema.body,
+      responseSchema: updateSportsSourceRecipeSchema,
+      permissionId: "sports.sources"
+    },
+    {
       method: "DELETE",
       path: "/api/sports/sources/:id",
       responseSchema: deleteSportsCustomSourceSchema,
@@ -234,6 +272,13 @@ export const sportsModuleManifest = {
       description: "Follow and unfollow the active actor's own teams and competitions.",
       defaultTier: "ask_each_time",
       allowedTiers: ["ask_each_time", "trusted_auto", "always_confirm"]
+    },
+    {
+      id: "sports.sources",
+      label: "Sports sources",
+      description: "Add, update, retry, rebuild, and remove the active actor's sports sources.",
+      defaultTier: "ask_each_time",
+      allowedTiers: ["ask_each_time", "always_confirm"]
     }
   ],
   assistantTools: [
@@ -309,13 +354,151 @@ export const sportsModuleManifest = {
       },
       summarize: summarizeSportsUnfollowTeam,
       execute: sportsUnfollowTeamExecute
+    },
+    {
+      name: "sports.listSources",
+      description:
+        "List the active actor's bounded public sports sources, assignments, health, timestamps, and safe recovery status. Never returns recipes or opaque parameters.",
+      permissionId: "sports.view",
+      risk: "read",
+      inputSchema: { type: "object", properties: {} },
+      execute: sportsListSourcesExecute
+    },
+    {
+      name: "sports.previewSource",
+      description:
+        "Preview and safely verify one public unauthenticated sports publisher and optional followed targets before confirmation. Returned headline samples are external publisher content.",
+      permissionId: "sports.sources",
+      risk: "read",
+      externalContent: true,
+      inputSchema: previewSportsSourceSchema.body,
+      execute: sportsPreviewSourceExecute
+    },
+    {
+      name: "sports.confirmSource",
+      description:
+        "Confirm a sports source from its actor-bound preview using the exact displayed publisher, hosts, targets, and authorization acknowledgement.",
+      permissionId: "sports.sources",
+      actionFamilyId: "sports.sources",
+      risk: "write",
+      executionPolicy: "auto",
+      selfOperationGrant: "confirm_always",
+      inputSchema: confirmSportsSourceSchema.body,
+      summarize: summarizeSportsConfirmSource,
+      execute: sportsConfirmSourceExecute
+    },
+    {
+      name: "sports.previewSourceAssignments",
+      description:
+        "Preview an exact replacement assignment set for one sports source. Added target samples are external publisher content.",
+      permissionId: "sports.sources",
+      risk: "read",
+      externalContent: true,
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          sourceId: SOURCE_ID_PROPERTY,
+          ...previewSportsSourceAssignmentsSchema.body.properties
+        },
+        required: ["sourceId", "assignments"]
+      },
+      execute: sportsPreviewSourceAssignmentsExecute
+    },
+    {
+      name: "sports.confirmSourceAssignments",
+      description:
+        "Confirm the exact actor-bound sports source assignment replacement shown by the preview.",
+      permissionId: "sports.sources",
+      actionFamilyId: "sports.sources",
+      risk: "write",
+      executionPolicy: "auto",
+      selfOperationGrant: "confirm_always",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: { sourceId: SOURCE_ID_PROPERTY, ...confirmSportsSourceSchema.body.properties },
+        required: ["sourceId", ...confirmSportsSourceSchema.body.required]
+      },
+      summarize: summarizeSportsConfirmSourceAssignments,
+      execute: sportsConfirmSourceAssignmentsExecute
+    },
+    {
+      name: "sports.rebuildSourceRecipe",
+      description:
+        "Preview a bounded safe rebuild of one saved sports source recipe without changing it. Samples are external publisher content.",
+      permissionId: "sports.sources",
+      risk: "read",
+      externalContent: true,
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: { sourceId: SOURCE_ID_PROPERTY },
+        required: ["sourceId"]
+      },
+      execute: sportsRebuildSourceRecipeExecute
+    },
+    {
+      name: "sports.confirmSourceRecipe",
+      description:
+        "Confirm the exact actor-bound sports source recipe rebuild shown by the preview.",
+      permissionId: "sports.sources",
+      actionFamilyId: "sports.sources",
+      risk: "write",
+      executionPolicy: "auto",
+      selfOperationGrant: "confirm_always",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: { sourceId: SOURCE_ID_PROPERTY, ...confirmSportsSourceSchema.body.properties },
+        required: ["sourceId", ...confirmSportsSourceSchema.body.required]
+      },
+      summarize: summarizeSportsConfirmSourceRecipe,
+      execute: sportsConfirmSourceRecipeExecute
+    },
+    {
+      name: "sports.retrySource",
+      description:
+        "Retry every verified target for one actor-owned sports source through pinned safe fetch with no browser.",
+      permissionId: "sports.sources",
+      actionFamilyId: "sports.sources",
+      risk: "write",
+      executionPolicy: "auto",
+      selfOperationGrant: "confirm_always",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: { sourceId: SOURCE_ID_PROPERTY },
+        required: ["sourceId"]
+      },
+      summarize: summarizeSportsRetrySource,
+      execute: sportsRetrySourceExecute
+    },
+    {
+      name: "sports.removeSource",
+      description: "Remove one actor-owned sports source and its assignments.",
+      permissionId: "sports.sources",
+      actionFamilyId: "sports.sources",
+      risk: "destructive",
+      selfOperationGrant: "confirm_always",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: { sourceId: SOURCE_ID_PROPERTY },
+        required: ["sourceId"]
+      },
+      summarize: summarizeSportsRemoveSource,
+      execute: sportsRemoveSourceExecute
     }
   ],
   dataLifecycle: {
-    // Sports has no full-account export data today (follows are catalog references, not
-    // exported); declared explicitly per the parity assertion (owned tables + no export
-    // sections still requires an explicit empty exportSections).
-    exportSections: [],
+    exportSections: [
+      {
+        key: "sportsSources",
+        displayName: "Sports sources",
+        collect: collectSportsSourcesExportSection
+      }
+    ],
     deletion: {
       strategy: "cascade",
       tables: [

@@ -11,6 +11,8 @@ import {
   deleteSportsFollowResponseSchema,
   previewSportsSourceSchema,
   previewSportsSourceAssignmentsSchema,
+  previewSportsSourceRecipeSchema,
+  retrySportsSourceSchema,
   sportsCatalogResponseSchema,
   sportsCustomSourcesResponseSchema,
   sportsFollowsResponseSchema,
@@ -19,6 +21,8 @@ import {
   sportsStandingsResponseSchema,
   sportsTeamSearchResponseSchema,
   updateSportsSourceAssignmentsSchema,
+  updateSportsSourceRecipeSchema,
+  type ConfirmSportsSourceRecipeRequest,
   type ConfirmSportsSourceRequest,
   type ConfirmSportsSourceAssignmentsRequest,
   type CreateSportsFollowRequest,
@@ -59,6 +63,7 @@ export interface SportsRoutesDependencies {
   /** Optional injection point for tests; defaults to a real `SportsSourcesRepository`. */
   readonly sourcesRepository?: SportsSourcesRepository;
   readonly publicSourceReader?: Pick<SportsPublicSourceReader, "refresh">;
+  readonly sourceService?: SportsSourceService;
   /** Optional injection point for tests; defaults to a private in-memory store. */
   readonly previews?: SportsSourcePreviewStore;
 }
@@ -77,13 +82,17 @@ export function registerSportsRoutes(
     publicSourceReader: dependencies.publicSourceReader
   });
   const previews = dependencies.previews ?? createSportsPreviewStore();
-  const sourceService = new SportsSourceService({
-    follows: repository,
-    sources: sourcesRepository,
-    previews,
-    discovery: dependencies.discovery,
-    resolveTeams: async (competitionKey) => (await service.getLeagueTeams(competitionKey)).teams
-  });
+  const sourceService =
+    dependencies.sourceService ??
+    new SportsSourceService({
+      follows: repository,
+      sources: sourcesRepository,
+      previews,
+      discovery: dependencies.discovery,
+      resolveTeams: async (competitionKey) => (await service.getLeagueTeams(competitionKey)).teams,
+      dataContext: dependencies.dataContext,
+      reader: dependencies.publicSourceReader
+    });
 
   server.get(
     "/api/sports/catalog",
@@ -230,7 +239,7 @@ export function registerSportsRoutes(
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
         const sources = await dependencies.dataContext.withDataContext(accessContext, (db) =>
-          sourcesRepository.list(db)
+          sourceService.listSources(db)
         );
         return { sources };
       } catch (error) {
@@ -317,6 +326,63 @@ export function registerSportsRoutes(
     }
   );
 
+  server.post(
+    "/api/sports/sources/:id/retry",
+    { schema: retrySportsSourceSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const { id } = request.params as { id: string };
+        return { source: await sourceService.retrySource(accessContext, id) };
+      } catch (error) {
+        if (error instanceof SportsSourceRequestError) {
+          return handleRouteError(new HttpError(error.statusCode, error.message), reply);
+        }
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  server.post(
+    "/api/sports/sources/:id/rebuild/preview",
+    { schema: previewSportsSourceRecipeSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const { id } = request.params as { id: string };
+        return await dependencies.dataContext.withDataContext(accessContext, (db) =>
+          sourceService.previewRecipeRebuild(db, accessContext.actorUserId, id)
+        );
+      } catch (error) {
+        if (error instanceof SportsSourceRequestError) {
+          return handleRouteError(new HttpError(error.statusCode, error.message), reply);
+        }
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  server.patch(
+    "/api/sports/sources/:id/rebuild",
+    { schema: updateSportsSourceRecipeSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const { id } = request.params as { id: string };
+        const input = request.body as ConfirmSportsSourceRecipeRequest;
+        const source = await dependencies.dataContext.withDataContext(accessContext, (db) =>
+          sourceService.confirmRecipeRebuild(db, accessContext.actorUserId, id, input)
+        );
+        return { source };
+      } catch (error) {
+        if (error instanceof SportsSourceRequestError) {
+          return handleRouteError(new HttpError(error.statusCode, error.message), reply);
+        }
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
   server.delete(
     "/api/sports/sources/:id",
     { schema: deleteSportsCustomSourceSchema },
@@ -325,7 +391,7 @@ export function registerSportsRoutes(
         const accessContext = await dependencies.resolveAccessContext(request);
         const { id } = request.params as { id: string };
         const deleted = await dependencies.dataContext.withDataContext(accessContext, (db) =>
-          sourcesRepository.remove(db, id)
+          sourceService.removeSource(db, id)
         );
         return { deleted };
       } catch (error) {

@@ -30,9 +30,17 @@ export interface PendingSportsAssignmentPreview extends PendingSportsPreviewBase
   readonly verifiedTargets: readonly VerifiedSportsSourceTarget[];
 }
 
+export interface PendingSportsRecipeRebuildPreview extends PendingSportsPreviewBase {
+  readonly kind: "recipe-rebuild";
+  readonly candidate: VerifiedSportsSourceCandidate;
+  readonly sourceId: string;
+  readonly baseline: SportsSourceBaseline;
+}
+
 export type PendingSportsSourcePreview =
   | PendingSportsNewSourcePreview
-  | PendingSportsAssignmentPreview;
+  | PendingSportsAssignmentPreview
+  | PendingSportsRecipeRebuildPreview;
 
 export function createSportsPreviewStore(
   opts: { ttlMs?: number; maxPerOwner?: number; now?: () => number } = {}

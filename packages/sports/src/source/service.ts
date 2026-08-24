@@ -1,13 +1,15 @@
-import type { DataContextDb } from "@moss/db";
+import type { AccessContext, DataContextDb } from "@moss/db";
 import type { NewsAiPort } from "@moss/news";
 import {
   SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT,
+  type ConfirmSportsSourceRecipeRequest,
   type ConfirmSportsSourceRequest,
   type ConfirmSportsSourceAssignmentsRequest,
   type PreviewSportsSourceRequest,
   type PreviewSportsSourceAssignmentsRequest,
   type PreviewSportsSourceAssignmentsResponse,
   type PreviewSportsSourceCandidate,
+  type PreviewSportsSourceRecipeResponse,
   type PreviewSportsSourceResponse,
   type SportsCustomSourceDto,
   type SportsFollowDto,
@@ -25,6 +27,7 @@ import {
   type VerifiedSportsSourceTarget
 } from "./discovery.js";
 import type { createSportsPreviewStore } from "./preview-store.js";
+import type { SportsPublicSourceReader } from "./public-source-reader.js";
 import type { SportsSourceBaseline, SportsSourcesRepository } from "./repository.js";
 
 type SportsPreviewStore = ReturnType<typeof createSportsPreviewStore>;
@@ -49,6 +52,13 @@ interface SportsSourceServiceDependencies {
     readonly browser?: SportsDiscoveryBrowserPort;
   };
   readonly resolveTeams: (competitionKey: string) => Promise<readonly TeamRef[]>;
+  readonly dataContext?: {
+    withDataContext<T>(
+      accessContext: AccessContext,
+      work: (scopedDb: DataContextDb) => Promise<T>
+    ): Promise<T>;
+  };
+  readonly reader?: Pick<SportsPublicSourceReader, "refresh">;
 }
 
 function sameStrings(left: readonly string[], right: readonly string[]): boolean {
@@ -383,6 +393,111 @@ export class SportsSourceService {
     );
     if (!source) throw new SportsSourceRequestError(404, "Source not found");
     return source;
+  }
+
+  async previewRecipeRebuild(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    sourceId: string
+  ): Promise<PreviewSportsSourceRecipeResponse> {
+    const baseline = await this.dependencies.sources.getBaseline(scopedDb, sourceId);
+    if (!baseline) throw new SportsSourceRequestError(404, "Source not found");
+
+    const follows = await this.dependencies.follows.list(scopedDb);
+    const followById = new Map(follows.map((follow) => [follow.id, follow]));
+    const teamsByCompetition = new Map<string, readonly TeamRef[]>();
+    const targets: SportsDiscoveryTarget[] = [];
+    for (const assignment of baseline.assignments) {
+      const follow = followById.get(assignment.followId);
+      if (!follow) return { status: "rejected", reason: "stale_source" };
+      const target = await this.resolveTarget(follow, teamsByCompetition);
+      if (!target) return { status: "rejected", reason: "stale_source" };
+      targets.push(target);
+    }
+
+    const result = await resolveSportsSourceInput(scopedDb, this.dependencies.discovery, {
+      rawUrl: baseline.source.feedUrl ?? baseline.source.homepageUrl,
+      targets
+    });
+    if (result.status !== "ok") return result;
+    if (result.candidate.canonicalDomain !== baseline.source.canonicalDomain) {
+      return { status: "rejected", reason: "stale_source" };
+    }
+
+    const confirmationId = this.dependencies.previews.put({
+      kind: "recipe-rebuild",
+      ownerUserId,
+      sourceId,
+      baseline,
+      candidate: result.candidate,
+      authorizationAcknowledgement: SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT,
+      createdAt: Date.now()
+    });
+    return {
+      status: "ok",
+      confirmationId,
+      authorizationAcknowledgement: SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT,
+      candidate: candidateResponse(result.candidate)
+    };
+  }
+
+  async confirmRecipeRebuild(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    sourceId: string,
+    input: ConfirmSportsSourceRecipeRequest
+  ): Promise<SportsCustomSourceDto> {
+    const preview = this.dependencies.previews.take(ownerUserId, input.confirmationId);
+    if (!preview || preview.kind !== "recipe-rebuild" || preview.sourceId !== sourceId) {
+      throw new SportsSourceRequestError(409, "Recipe preview expired or was not found");
+    }
+    const expectedTargets = preview.candidate.targets.map((target) => ({
+      followId: target.followId,
+      targetUrl: target.targetUrl
+    }));
+    if (
+      input.authorizationAcknowledgement !== preview.authorizationAcknowledgement ||
+      input.canonicalDomain !== preview.candidate.canonicalDomain ||
+      !sameStrings(input.confirmedFetchHosts, preview.candidate.confirmedFetchHosts) ||
+      !targetIdentityMatches(input.targets, expectedTargets)
+    ) {
+      throw new SportsSourceRequestError(409, "Recipe preview identity changed");
+    }
+
+    await this.dependencies.sources.lockOwnerAssignments(scopedDb);
+    const current = await this.dependencies.sources.getBaseline(scopedDb, sourceId);
+    if (!current || !baselineMatches(current, preview.baseline)) {
+      throw new SportsSourceRequestError(409, "Source changed after recipe preview");
+    }
+    const source = await this.dependencies.sources.replaceRecipe(
+      scopedDb,
+      sourceId,
+      preview.candidate
+    );
+    if (!source) throw new SportsSourceRequestError(404, "Source not found");
+    return source;
+  }
+
+  async retrySource(
+    accessContext: AccessContext,
+    sourceId: string
+  ): Promise<SportsCustomSourceDto> {
+    const { dataContext, reader } = this.dependencies;
+    if (!dataContext || !reader) throw new Error("Sports source Retry is not configured");
+    await reader.refresh(accessContext, { sourceId, bypassCache: true });
+    const baseline = await dataContext.withDataContext(accessContext, (db) =>
+      this.dependencies.sources.getBaseline(db, sourceId)
+    );
+    if (!baseline) throw new SportsSourceRequestError(404, "Source not found");
+    return baseline.source;
+  }
+
+  listSources(scopedDb: DataContextDb): Promise<readonly SportsCustomSourceDto[]> {
+    return this.dependencies.sources.list(scopedDb);
+  }
+
+  removeSource(scopedDb: DataContextDb, sourceId: string): Promise<boolean> {
+    return this.dependencies.sources.remove(scopedDb, sourceId);
   }
 
   private async resolveTarget(

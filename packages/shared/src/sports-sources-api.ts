@@ -117,6 +117,8 @@ export interface PreviewSportsSourceAssignmentsRequest {
 
 export type PreviewSportsSourceAssignmentsResponse = PreviewSportsSourceResponse;
 export type ConfirmSportsSourceAssignmentsRequest = ConfirmSportsSourceRequest;
+export type PreviewSportsSourceRecipeResponse = PreviewSportsSourceResponse;
+export type ConfirmSportsSourceRecipeRequest = ConfirmSportsSourceRequest;
 
 const sportsSourceHealthSchema = {
   type: "string",
@@ -438,4 +440,29 @@ export const updateSportsSourceAssignmentsSchema = {
     404: errorResponseSchema,
     409: errorResponseSchema
   }
+} as const;
+
+export const retrySportsSourceSchema = {
+  params: sportsSourceAssignmentsParamsSchema,
+  response: {
+    200: {
+      type: "object",
+      additionalProperties: false,
+      required: ["source"],
+      properties: { source: sportsCustomSourceDtoSchema }
+    },
+    401: errorResponseSchema,
+    404: errorResponseSchema
+  }
+} as const;
+
+export const previewSportsSourceRecipeSchema = {
+  params: sportsSourceAssignmentsParamsSchema,
+  response: previewSportsSourceSchema.response
+} as const;
+
+export const updateSportsSourceRecipeSchema = {
+  params: sportsSourceAssignmentsParamsSchema,
+  body: confirmSportsSourceSchema.body,
+  response: updateSportsSourceAssignmentsSchema.response
 } as const;

@@ -261,12 +261,16 @@ import { workshopModuleManifest } from "@moss/workshop";
 import {
   configureSportsBriefingService,
   configureSportsChatTools,
+  createSportsPreviewStore,
   createEspnDatasetAdapter,
   registerSportsRoutes,
+  SportsFollowsRepository,
   SportsBrowserBroker,
   SportsBrowserBrokerServer,
   SportsBrowserClient,
   SportsPublicSourceReader,
+  SportsService,
+  SportsSourceService,
   SportsSourcesRepository,
   SPORTS_BROWSER_SOCKETS,
   sportsModuleManifest,
@@ -1791,7 +1795,6 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       // static manifest data at import time, before this wiring runs, so it adopts the client
       // via a late-bound setter (mirrors `adoptChatRpcConnection` above for the chat RPC path).
       configureSportsBriefingService(datasetClient);
-      configureSportsChatTools(datasetClient);
       const discovery = buildSportsDiscoveryPorts(
         createModuleLogger(server.log, "sports"),
         browser
@@ -1803,13 +1806,35 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         fetch: discovery.fetch,
         cache: new DatasetCache({ maxEntries: 500 })
       });
+      const followsRepository = new SportsFollowsRepository();
+      const previews = createSportsPreviewStore();
+      const sourceTeamResolver = new SportsService({
+        datasetClient,
+        dataContext: deps.dataContext,
+        repository: followsRepository,
+        publicSourceReader
+      });
+      const sourceService = new SportsSourceService({
+        follows: followsRepository,
+        sources: sourcesRepository,
+        previews,
+        discovery,
+        resolveTeams: async (competitionKey) =>
+          (await sourceTeamResolver.getLeagueTeams(competitionKey)).teams,
+        dataContext: deps.dataContext,
+        reader: publicSourceReader
+      });
+      configureSportsChatTools(datasetClient, followsRepository, sourceService);
       registerSportsRoutes(server, {
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext,
         datasetClient,
         discovery,
+        repository: followsRepository,
         sourcesRepository,
-        publicSourceReader
+        publicSourceReader,
+        previews,
+        sourceService
       });
     }
   },

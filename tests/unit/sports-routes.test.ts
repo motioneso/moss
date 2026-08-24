@@ -1,5 +1,5 @@
 import Fastify from "fastify";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { DatasetClient, DatasetEnvelope } from "@moss/datasets";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
@@ -232,7 +232,9 @@ function buildApp(overrides: Partial<SportsRoutesDependencies> & { repo?: FakeRe
         }
       } as SportsRoutesDependencies["discovery"]),
     sourcesRepository: overrides.sourcesRepository,
-    previews: overrides.previews
+    previews: overrides.previews,
+    publicSourceReader: overrides.publicSourceReader,
+    sourceService: overrides.sourceService
   };
   registerSportsRoutes(app, deps);
   return { app, repo };
@@ -965,6 +967,82 @@ describe("sports routes", () => {
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual({ deleted: true });
     expect(sourcesRepository.removed).toEqual(["11111111-1111-1111-1111-111111111111"]);
+    await app.close();
+  });
+
+  it("routes Retry and recipe rebuild through the shared source service", async () => {
+    const id = "11111111-1111-1111-1111-111111111111";
+    const source: SportsCustomSourceDto = {
+      id,
+      label: "Publisher",
+      canonicalDomain: "publisher.example.com",
+      homepageUrl: "https://publisher.example.com/",
+      feedUrl: "https://publisher.example.com/feed.xml",
+      retrievalMethod: "feed",
+      enabled: true,
+      healthState: "healthy",
+      healthReasonCode: null,
+      healthMessage: null,
+      lastCheckedAt: "2026-08-24T12:00:00.000Z",
+      lastSuccessAt: "2026-08-24T12:00:00.000Z",
+      recipeStatus: "feed",
+      assignedFollowIds: [],
+      assignments: [],
+      createdAt: "2026-08-21T00:00:00.000Z"
+    };
+    const preview = {
+      status: "ok" as const,
+      confirmationId: "confirmation-1",
+      authorizationAcknowledgement: SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT,
+      candidate: {
+        label: source.label,
+        canonicalDomain: source.canonicalDomain,
+        homepageUrl: source.homepageUrl,
+        retrievalMethod: source.retrievalMethod,
+        sampleCount: 0,
+        confirmedFetchHosts: [source.canonicalDomain],
+        sampleHeadlines: [],
+        targets: []
+      }
+    };
+    const sourceService = {
+      retrySource: vi.fn(async () => source),
+      previewRecipeRebuild: vi.fn(async () => preview),
+      confirmRecipeRebuild: vi.fn(async () => source)
+    } as unknown as NonNullable<SportsRoutesDependencies["sourceService"]>;
+    const { app } = buildApp({ sourceService });
+    await app.ready();
+
+    const retry = await app.inject({ method: "POST", url: `/api/sports/sources/${id}/retry` });
+    expect(retry.statusCode).toBe(200);
+    expect(JSON.parse(retry.body)).toEqual({ source });
+    expect(sourceService.retrySource).toHaveBeenCalledWith(userA, id);
+
+    const rebuildPreview = await app.inject({
+      method: "POST",
+      url: `/api/sports/sources/${id}/rebuild/preview`
+    });
+    expect(rebuildPreview.statusCode).toBe(200);
+    expect(sourceService.previewRecipeRebuild).toHaveBeenCalledWith({}, userA.actorUserId, id);
+
+    const rebuild = await app.inject({
+      method: "PATCH",
+      url: `/api/sports/sources/${id}/rebuild`,
+      payload: {
+        confirmationId: preview.confirmationId,
+        authorizationAcknowledgement: preview.authorizationAcknowledgement,
+        canonicalDomain: preview.candidate.canonicalDomain,
+        confirmedFetchHosts: preview.candidate.confirmedFetchHosts,
+        targets: []
+      }
+    });
+    expect(rebuild.statusCode).toBe(200);
+    expect(sourceService.confirmRecipeRebuild).toHaveBeenCalledWith(
+      {},
+      userA.actorUserId,
+      id,
+      expect.objectContaining({ confirmationId: preview.confirmationId })
+    );
     await app.close();
   });
 });

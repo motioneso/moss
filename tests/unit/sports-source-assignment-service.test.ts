@@ -287,3 +287,199 @@ describe("SportsSourceService assignment replacement", () => {
     }
   });
 });
+
+describe("SportsSourceService recipe recovery", () => {
+  function rebuildService(currentBaseline: SportsSourceBaseline = baseline) {
+    const replaceRecipe = vi.fn(async () => currentBaseline.source);
+    const getBaseline = vi.fn(async () => currentBaseline);
+    const fetch = vi.fn(async (url: string) => ({
+      ok: true as const,
+      status: 200,
+      finalUrl: url,
+      contentType: "application/rss+xml",
+      body: "<rss><channel><title>Publisher</title></channel></rss>",
+      truncated: false
+    }));
+    const service = new SportsSourceService({
+      follows: {
+        list: async () => [
+          { id: followId, competitionKey: "nfl", teamKey: "dal", createdAt: checkedAt }
+        ]
+      },
+      sources: {
+        getBaseline,
+        lockOwnerAssignments: vi.fn(async () => undefined),
+        replaceRecipe
+      } as unknown as SportsSourcesRepository,
+      previews: createSportsPreviewStore(),
+      discovery: {
+        fetch,
+        ai: {
+          generateJson: async () => ({ ok: false as const, error: "needs_config" as const }),
+          fingerprint: async () => null
+        }
+      },
+      resolveTeams: async () => [
+        {
+          teamKey: "dal",
+          competitionKey: "nfl",
+          name: "Dallas Cowboys",
+          shortName: "DAL",
+          crestUrl: null
+        }
+      ]
+    });
+    return { service, fetch, getBaseline, replaceRecipe };
+  }
+
+  it("previews and confirms a complete actor-bound rebuild", async () => {
+    const { service, replaceRecipe } = rebuildService();
+    const db = {} as DataContextDb;
+    const preview = await service.previewRecipeRebuild(db, "owner-1", sourceId);
+    if (!preview.confirmationId || !preview.candidate || !preview.authorizationAcknowledgement) {
+      throw new Error("expected successful recipe preview");
+    }
+
+    const source = await service.confirmRecipeRebuild(db, "owner-1", sourceId, {
+      confirmationId: preview.confirmationId,
+      authorizationAcknowledgement: preview.authorizationAcknowledgement,
+      canonicalDomain: preview.candidate.canonicalDomain,
+      confirmedFetchHosts: preview.candidate.confirmedFetchHosts,
+      targets: preview.candidate.targets.map((target) => ({
+        followId: target.followId,
+        targetUrl: target.targetUrl
+      }))
+    });
+
+    expect(source).toBe(baseline.source);
+    expect(replaceRecipe).toHaveBeenCalledWith(
+      db,
+      sourceId,
+      expect.objectContaining({
+        canonicalDomain: baseline.source.canonicalDomain,
+        retrievalMethod: "feed",
+        targets: [expect.objectContaining({ followId })]
+      })
+    );
+  });
+
+  it("rejects confirmation after the source baseline changes", async () => {
+    const { service, getBaseline, replaceRecipe } = rebuildService();
+    const db = {} as DataContextDb;
+    const preview = await service.previewRecipeRebuild(db, "owner-1", sourceId);
+    if (!preview.confirmationId || !preview.candidate || !preview.authorizationAcknowledgement) {
+      throw new Error("expected successful recipe preview");
+    }
+    getBaseline.mockResolvedValueOnce({ ...baseline, updatedAt: "2026-08-24T00:00:00.000Z" });
+
+    await expect(
+      service.confirmRecipeRebuild(db, "owner-1", sourceId, {
+        confirmationId: preview.confirmationId,
+        authorizationAcknowledgement: preview.authorizationAcknowledgement,
+        canonicalDomain: preview.candidate.canonicalDomain,
+        confirmedFetchHosts: preview.candidate.confirmedFetchHosts,
+        targets: preview.candidate.targets.map((target) => ({
+          followId: target.followId,
+          targetUrl: target.targetUrl
+        }))
+      })
+    ).rejects.toThrow("Source changed after recipe preview");
+    expect(replaceRecipe).not.toHaveBeenCalled();
+  });
+
+  it("allows only one assignment or rebuild preview to commit from the same baseline", async () => {
+    let current = baseline;
+    const replaceRecipe = vi.fn(async () => current.source);
+    const service = new SportsSourceService({
+      follows: {
+        list: async () => [
+          { id: followId, competitionKey: "nfl", teamKey: "dal", createdAt: checkedAt }
+        ]
+      },
+      sources: {
+        getBaseline: async () => current,
+        lockOwnerAssignments: async () => undefined,
+        countAssignments: async () => 1,
+        replaceAssignments: async () => {
+          current = { ...current, updatedAt: "2026-08-24T00:00:00.000Z" };
+          return current.source;
+        },
+        replaceRecipe
+      } as unknown as SportsSourcesRepository,
+      previews: createSportsPreviewStore(),
+      discovery: {
+        fetch: async (url) => ({
+          ok: true as const,
+          status: 200,
+          finalUrl: url,
+          contentType: "application/rss+xml",
+          body: "<rss><channel><title>Publisher</title></channel></rss>",
+          truncated: false
+        }),
+        ai: {
+          generateJson: async () => ({ ok: false as const, error: "needs_config" as const }),
+          fingerprint: async () => null
+        }
+      },
+      resolveTeams: async () => [
+        {
+          teamKey: "dal",
+          competitionKey: "nfl",
+          name: "Dallas Cowboys",
+          shortName: "DAL",
+          crestUrl: null
+        }
+      ]
+    });
+    const db = {} as DataContextDb;
+    const rebuild = await service.previewRecipeRebuild(db, "owner-1", sourceId);
+    const assignments = await service.previewAssignments(db, "owner-1", sourceId, {
+      assignments: [{ followId }]
+    });
+    await confirm(service, db, assignments);
+    if (!rebuild.confirmationId || !rebuild.candidate || !rebuild.authorizationAcknowledgement) {
+      throw new Error("expected successful recipe preview");
+    }
+
+    await expect(
+      service.confirmRecipeRebuild(db, "owner-1", sourceId, {
+        confirmationId: rebuild.confirmationId,
+        authorizationAcknowledgement: rebuild.authorizationAcknowledgement,
+        canonicalDomain: rebuild.candidate.canonicalDomain,
+        confirmedFetchHosts: rebuild.candidate.confirmedFetchHosts,
+        targets: rebuild.candidate.targets.map((target) => ({
+          followId: target.followId,
+          targetUrl: target.targetUrl
+        }))
+      })
+    ).rejects.toThrow("Source changed after recipe preview");
+    expect(replaceRecipe).not.toHaveBeenCalled();
+  });
+
+  it("retries through the runtime reader with cache bypass and returns persisted health", async () => {
+    const reader = {
+      refresh: vi.fn(async () => ({ headlines: [], degraded: false, persistedResults: 1 }))
+    };
+    const getBaseline = vi.fn(async () => baseline);
+    const service = new SportsSourceService({
+      follows: { list: async () => [] },
+      sources: { getBaseline } as unknown as SportsSourcesRepository,
+      previews: createSportsPreviewStore(),
+      discovery: {
+        fetch: async () => ({ ok: false as const, reason: "network" as const }),
+        ai: {
+          generateJson: async () => ({ ok: false as const, error: "needs_config" as const }),
+          fingerprint: async () => null
+        }
+      },
+      resolveTeams: async () => [],
+      dataContext: { withDataContext: async (_context, work) => work({} as DataContextDb) },
+      reader
+    });
+    const accessContext = { actorUserId: "owner-1", requestId: "request-1" };
+
+    await expect(service.retrySource(accessContext, sourceId)).resolves.toBe(baseline.source);
+    expect(reader.refresh).toHaveBeenCalledWith(accessContext, { sourceId, bypassCache: true });
+    expect(getBaseline).toHaveBeenCalledWith({}, sourceId);
+  });
+});

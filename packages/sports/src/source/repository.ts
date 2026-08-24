@@ -613,6 +613,43 @@ export class SportsSourcesRepository {
     return toDto(updated, assignments);
   }
 
+  async replaceRecipe(
+    scopedDb: DataContextDb,
+    sourceId: string,
+    candidate: VerifiedSportsSourceCandidate
+  ): Promise<SportsCustomSourceDto | null> {
+    assertDataContextDb(scopedDb);
+    const checkedAt = new Date(candidate.checkedAt);
+    const confirmedAt = new Date();
+    const updated = await scopedDb.db
+      .updateTable("app.sports_custom_sources")
+      .set({
+        label: candidate.label,
+        canonical_domain: candidate.canonicalDomain,
+        homepage_url: candidate.homepageUrl,
+        feed_url: candidate.feedUrl,
+        retrieval_method: candidate.retrievalMethod,
+        validation_fingerprint: candidate.validationFingerprint,
+        validated_at: confirmedAt,
+        recipe_json: candidate.recipe === null ? null : { ...candidate.recipe },
+        recipe_schema_version: candidate.recipe?.version ?? null,
+        recipe_fingerprint: candidate.recipeFingerprint,
+        recipe_status: candidate.retrievalMethod === "feed" ? "feed" : "ready",
+        confirmed_fetch_hosts: [...candidate.confirmedFetchHosts],
+        authorization_confirmed_at: confirmedAt,
+        health_state: "healthy",
+        health_reason_code: null,
+        health_message: null,
+        last_checked_at: checkedAt,
+        last_success_at: checkedAt,
+        updated_at: confirmedAt
+      })
+      .where("id", "=", sourceId)
+      .executeTakeFirst();
+    if (updated.numUpdatedRows === 0n) return null;
+    return this.replaceAssignments(scopedDb, sourceId, [], candidate.targets);
+  }
+
   /**
    * Replaces the full assignment set for one source. Postgres foreign-key checks bypass RLS (a
    * FK reference does not fail on a row the caller's policies would hide from SELECT), so a

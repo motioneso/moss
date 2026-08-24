@@ -1,16 +1,19 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Badge, Note } from "@moss/settings-ui";
+import { Badge, Note, formatTimestamp } from "@moss/settings-ui";
 import { ApiError, Button } from "@moss/module-web-sdk";
 import type { CompetitionRef, SportsCustomSourceDto, SportsFollowDto, TeamRef } from "@moss/shared";
 
 import {
   confirmSportsSourceAssignments,
+  confirmSportsSourceRecipe,
   confirmSportsSource,
   deleteSportsSource,
   listSportsSources,
   previewSportsSourceAssignments,
-  previewSportsSource
+  previewSportsSource,
+  previewSportsSourceRecipe,
+  retrySportsSource
 } from "../web/sports-client.js";
 import { sportsQueryKeys } from "../web/query-keys.js";
 
@@ -31,8 +34,8 @@ const HEALTH_BADGE: Record<
   SportsCustomSourceDto["healthState"],
   { tone: "neutral" | "pine" | "amber" | "red" | "steel"; label: string } | null
 > = {
-  pending: { tone: "steel", label: "Checking…" },
-  healthy: null,
+  pending: { tone: "steel", label: "Awaiting first check" },
+  healthy: { tone: "pine", label: "Healthy" },
   failing: { tone: "amber", label: "Having trouble" },
   unsupported: { tone: "red", label: "Unsupported" },
   auth_required: { tone: "red", label: "Needs login" },
@@ -345,10 +348,32 @@ export function SportsSourcesSection(props: {
     result: Awaited<ReturnType<typeof previewSportsSourceAssignments>>;
   } | null>(null);
   const [assignmentAuthorizationAccepted, setAssignmentAuthorizationAccepted] = useState(false);
+  const [recipePreview, setRecipePreview] = useState<{
+    sourceId: string;
+    result: Awaited<ReturnType<typeof previewSportsSourceRecipe>>;
+  } | null>(null);
+  const [recipeAuthorizationAccepted, setRecipeAuthorizationAccepted] = useState(false);
 
   const invalidate = () =>
     void queryClient.invalidateQueries({ queryKey: sportsQueryKeys.sources });
   const removeMutation = useMutation({ mutationFn: deleteSportsSource, onSuccess: invalidate });
+  const retryMutation = useMutation({ mutationFn: retrySportsSource, onSuccess: invalidate });
+  const recipePreviewMutation = useMutation({
+    mutationFn: previewSportsSourceRecipe,
+    onSuccess: (result, sourceId) => {
+      setRecipePreview({ sourceId, result });
+      setRecipeAuthorizationAccepted(false);
+    }
+  });
+  const recipeConfirmMutation = useMutation({
+    mutationFn: (input: { id: string; request: Parameters<typeof confirmSportsSourceRecipe>[1] }) =>
+      confirmSportsSourceRecipe(input.id, input.request),
+    onSuccess: () => {
+      setRecipePreview(null);
+      setRecipeAuthorizationAccepted(false);
+      invalidate();
+    }
+  });
   const assignmentPreviewMutation = useMutation({
     mutationFn: (input: { id: string; followIds: readonly string[] }) =>
       previewSportsSourceAssignments(input.id, {
@@ -404,6 +429,16 @@ export function SportsSourcesSection(props: {
             const badge = HEALTH_BADGE[source.healthState];
             const editing = editingSourceId === source.id;
             const removing = removeMutation.isPending && removeMutation.variables === source.id;
+            const retrying = retryMutation.isPending && retryMutation.variables === source.id;
+            const rebuilding =
+              recipePreviewMutation.isPending && recipePreviewMutation.variables === source.id;
+            const recoveryBusy =
+              removing || retrying || rebuilding || recipeConfirmMutation.isPending;
+            const showRebuild =
+              source.retrievalMethod === "scrape" &&
+              (source.recipeStatus === "missing" ||
+                source.recipeStatus === "drift" ||
+                source.healthReasonCode === "recipe_drift");
             return (
               <li key={source.id} className="sp-src__item">
                 <div className="sp-src__item-row">
@@ -413,8 +448,28 @@ export function SportsSourcesSection(props: {
                   <Button
                     variant="secondary"
                     size="sm"
+                    aria-label={`Retry ${source.label}`}
+                    disabled={recoveryBusy}
+                    onClick={() => retryMutation.mutate(source.id)}
+                  >
+                    {retrying ? "Checking…" : "Retry"}
+                  </Button>
+                  {showRebuild ? (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      aria-label={`Rebuild ${source.label}`}
+                      disabled={recoveryBusy}
+                      onClick={() => recipePreviewMutation.mutate(source.id)}
+                    >
+                      {rebuilding ? "Checking…" : "Rebuild"}
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     aria-label={`Edit teams for ${source.label}`}
-                    disabled={removing}
+                    disabled={recoveryBusy}
                     onClick={() => (editing ? setEditingSourceId(null) : startEditing(source))}
                   >
                     {editing ? "Close" : "Edit teams"}
@@ -423,14 +478,105 @@ export function SportsSourcesSection(props: {
                     variant="secondary"
                     size="sm"
                     aria-label={`Remove ${source.label}`}
-                    disabled={removing}
+                    disabled={recoveryBusy}
                     onClick={() => removeMutation.mutate(source.id)}
                   >
                     Remove
                   </Button>
                 </div>
+                <p className="sp-src__hint sp-src__hint--tight">
+                  Last checked:{" "}
+                  {source.lastCheckedAt
+                    ? formatTimestamp(source.lastCheckedAt, "Unknown")
+                    : "Never"}
+                  {" · "}
+                  Last successful:{" "}
+                  {source.lastSuccessAt
+                    ? formatTimestamp(source.lastSuccessAt, "Unknown")
+                    : "Never"}
+                </p>
+                {source.healthMessage ? (
+                  <p className="sp-src__hint sp-src__hint--tight">{source.healthMessage}</p>
+                ) : null}
+                {source.healthState === "auth_required" ? (
+                  <Note>
+                    This publisher needs credentials. Authenticated sources are not supported yet.
+                  </Note>
+                ) : null}
+                {source.assignments.length > 0 ? (
+                  <ul className="sp-src__assign-list">
+                    {source.assignments.map((assignment) => {
+                      const assignmentBadge = HEALTH_BADGE[assignment.healthState];
+                      return (
+                        <li key={assignment.id} className="sp-src__assign-item">
+                          <span>{assignment.targetUrl ?? "Awaiting preview"}</span>
+                          {assignment.previewStatus !== "verified" ? (
+                            <Badge tone="steel">Awaiting preview</Badge>
+                          ) : assignmentBadge ? (
+                            <Badge tone={assignmentBadge.tone}>{assignmentBadge.label}</Badge>
+                          ) : (
+                            <Badge tone="pine">Healthy</Badge>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : null}
                 {source.assignedFollowIds.length === 0 ? (
                   <p className="sp-src__hint sp-src__hint--tight">Unassigned — not used yet.</p>
+                ) : null}
+                {recipePreview?.sourceId === source.id &&
+                recipePreview.result.status === "ok" &&
+                recipePreview.result.candidate &&
+                recipePreview.result.confirmationId &&
+                recipePreview.result.authorizationAcknowledgement ? (
+                  <div className="sp-src__candidate">
+                    <p className="sp-src__hint">
+                      Publisher: {recipePreview.result.candidate.canonicalDomain}
+                    </p>
+                    <p className="sp-src__hint">
+                      Fetch hosts: {recipePreview.result.candidate.confirmedFetchHosts.join(", ")}
+                    </p>
+                    {recipePreview.result.candidate.targets.map((target) => (
+                      <p key={target.followId} className="sp-src__hint">
+                        {target.teamLabel ?? target.competitionLabel}: {target.targetUrl}
+                      </p>
+                    ))}
+                    <label className="sp-src__label">
+                      <input
+                        type="checkbox"
+                        checked={recipeAuthorizationAccepted}
+                        disabled={recipeConfirmMutation.isPending}
+                        onChange={(event) => setRecipeAuthorizationAccepted(event.target.checked)}
+                      />{" "}
+                      {recipePreview.result.authorizationAcknowledgement}
+                    </label>
+                    <Button
+                      size="sm"
+                      disabled={!recipeAuthorizationAccepted || recipeConfirmMutation.isPending}
+                      onClick={() => {
+                        const result = recipePreview.result;
+                        recipeConfirmMutation.mutate({
+                          id: source.id,
+                          request: {
+                            confirmationId: result.confirmationId!,
+                            authorizationAcknowledgement: result.authorizationAcknowledgement!,
+                            canonicalDomain: result.candidate!.canonicalDomain,
+                            confirmedFetchHosts: result.candidate!.confirmedFetchHosts,
+                            targets: result.candidate!.targets.map((target) => ({
+                              followId: target.followId,
+                              targetUrl: target.targetUrl
+                            }))
+                          }
+                        });
+                      }}
+                    >
+                      {recipeConfirmMutation.isPending ? "Saving…" : "Confirm rebuild"}
+                    </Button>
+                  </div>
+                ) : null}
+                {recipePreview?.sourceId === source.id && recipePreview.result.status !== "ok" ? (
+                  <Note>The source recipe could not be rebuilt.</Note>
                 ) : null}
                 {editing ? (
                   <div className="sp-src__assign">
@@ -528,6 +674,10 @@ export function SportsSourcesSection(props: {
       ) : null}
       {sourcesQuery.isSuccess && sources.length === 0 ? <Note>No custom sources yet.</Note> : null}
       {removeMutation.isError ? <Note>Could not remove that source. Try again.</Note> : null}
+      {retryMutation.isError ? <Note>Could not retry that source. Try again.</Note> : null}
+      {recipePreviewMutation.isError || recipeConfirmMutation.isError ? (
+        <Note>Could not rebuild that source. Try again.</Note>
+      ) : null}
       <AddSourceFlow
         follows={props.follows}
         competitionsByKey={props.competitionsByKey}

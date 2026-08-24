@@ -245,6 +245,68 @@ describe("sports sources repository", () => {
     });
   });
 
+  it("atomically replaces a recipe and all verified target identities", async () => {
+    const follow = await bootstrap.query(
+      `INSERT INTO app.sports_follows (owner_user_id, competition_key, team_key)
+       VALUES ($1, 'eng.1', 'arsenal') RETURNING id`,
+      [ids.userA]
+    );
+    const base = candidate(1);
+    const target = (targetUrl: string, targetCheckedAt: string) => ({
+      followId: follow.rows[0].id,
+      competitionKey: "eng.1",
+      competitionLabel: "Premier League",
+      teamKey: "arsenal",
+      teamLabel: "Arsenal",
+      scope: "team" as const,
+      targetUrl,
+      parameters: {},
+      samples: [],
+      checkedAt: targetCheckedAt
+    });
+    const created = await asActor(ids.userA, (db) =>
+      repo.create(db, { candidate: { ...base, targets: [target(base.feedUrl, base.checkedAt)] } })
+    );
+    if ("limitExceeded" in created) throw new Error("unexpected limit");
+    const rebuiltAt = "2026-08-24T12:00:00.000Z";
+    const rebuiltFeed = "https://publisher-1.example.com/rebuilt.xml";
+
+    const rebuilt = await asActor(ids.userA, (db) =>
+      repo.replaceRecipe(db, created.id, {
+        ...base,
+        label: "Rebuilt Publisher",
+        feedUrl: rebuiltFeed,
+        validationFingerprint: "rebuilt-fingerprint",
+        checkedAt: rebuiltAt,
+        targets: [target(rebuiltFeed, rebuiltAt)]
+      })
+    );
+
+    expect(rebuilt).toMatchObject({
+      label: "Rebuilt Publisher",
+      healthState: "healthy",
+      lastCheckedAt: rebuiltAt,
+      lastSuccessAt: rebuiltAt,
+      assignments: [
+        {
+          followId: follow.rows[0].id,
+          targetUrl: rebuiltFeed,
+          previewStatus: "verified",
+          healthState: "healthy",
+          lastCheckedAt: rebuiltAt,
+          lastSuccessAt: rebuiltAt
+        }
+      ]
+    });
+    expect(rebuilt?.assignments[0]?.id).not.toBe(created.assignments[0]?.id);
+    await expect(
+      asActor(ids.userA, (db) => repo.getBaseline(db, created.id))
+    ).resolves.toMatchObject({
+      validationFingerprint: "rebuilt-fingerprint",
+      assignments: [{ targetUrl: rebuiltFeed }]
+    });
+  });
+
   it("persists target results and transactionally derives truthful source health", async () => {
     const follows = await bootstrap.query(
       `INSERT INTO app.sports_follows (owner_user_id, competition_key, team_key)
