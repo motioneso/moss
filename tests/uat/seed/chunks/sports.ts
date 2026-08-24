@@ -31,6 +31,7 @@ const RAW_FEED_URL =
   "https://raw.githubusercontent.com/motioneso/moss/build/1909-sports-public-sources/tests/fixtures/sports/1909-shared-feed.xml";
 const DRIFT_FEED_URL =
   "https://raw.githack.com/motioneso/moss/build/1909-sports-public-sources/tests/fixtures/sports/1909-shared-feed.xml";
+const ARSENAL_TEAM_KEY = "ars"; // ESPN's canonical abbreviation-backed team key.
 
 function fixtureFingerprint(value: string): string {
   return createHash("sha256").update(value).digest("hex");
@@ -86,7 +87,7 @@ export async function seedSportsPublicSourceFixtures(
   const follows = new SportsFollowsRepository();
   await runner.withDataContext({ actorUserId }, async (db) => {
     const league = await follows.create(db, { competitionKey: "eng.1", teamKey: null });
-    const team = await follows.create(db, { competitionKey: "eng.1", teamKey: "arsenal" });
+    const team = await follows.create(db, { competitionKey: "eng.1", teamKey: ARSENAL_TEAM_KEY });
 
     const legacyFeed = await createFeedSource(db, {
       label: "BBC legacy feed",
@@ -173,7 +174,7 @@ export async function seedSportsPublicSourceFixtures(
             followId: team.id,
             competitionKey: "eng.1",
             competitionLabel: "Premier League",
-            teamKey: "arsenal",
+            teamKey: ARSENAL_TEAM_KEY,
             teamLabel: "Arsenal",
             scope: "team",
             targetUrl: "https://www.fotmob.com/",
