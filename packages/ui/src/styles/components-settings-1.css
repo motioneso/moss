@@ -82,7 +82,11 @@
 }
 .pane__card--danger {
   background: var(--danger-soft);
-  border-color: var(--danger);
+  border: 1px solid var(--danger);
+}
+.pane__card--danger .pane__cardtitle,
+.pane__card--danger .pane__carddesc {
+  color: var(--danger-fg);
 }
 .pane__cardtitle {
   font-family: var(--font-display);
