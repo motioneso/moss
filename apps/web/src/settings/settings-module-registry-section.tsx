@@ -4,7 +4,8 @@
 // ModuleRegistryRowDto.state (spec §8) — no client-side state math beyond labels.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { Button } from "@moss/ui";
+import { Button, IconButton } from "@moss/ui";
+import { Trash2 } from "lucide-react";
 import type { ExternalModuleDto, ModuleRegistryRowDto } from "@moss/shared";
 
 import {
@@ -194,22 +195,9 @@ export function ModuleRegistrySection({
       title: `Remove ${row.name}?`,
       description:
         "The module stops on next restart and its files are deleted. Its data is kept " +
-        "and comes back if you reinstall. To also destroy its data, use “Remove + purge”.",
+        "and comes back if you reinstall.",
       confirmLabel: "Remove, keep data",
       onConfirm: () => removeMutation.mutate({ id: row.id, purgeData: false })
-    });
-  };
-
-  const onRemovePurge = (row: ModuleRegistryRowDto) => {
-    confirm({
-      title: `Remove ${row.name} and destroy its data?`,
-      description:
-        "This permanently deletes every table and record the module owns on the next " +
-        "restart. There is no undo after the restart runs.",
-      confirmLabel: "Remove + purge data",
-      danger: true,
-      requireText: row.id,
-      onConfirm: () => removeMutation.mutate({ id: row.id, purgeData: true })
     });
   };
 
@@ -238,22 +226,6 @@ export function ModuleRegistrySection({
           The module registry is unreachable — showing installed modules only.
         </p>
       ) : null}
-      {data.modules.some(
-        (row) => row.state === "pending-restart" || row.state === "update-pending-restart"
-      ) ? (
-        <Note>
-          Downloaded modules apply on the next restart. From your deployment directory:{" "}
-          <code>{"docker compose restart jarv1s"}</code> to apply now, or restart the container the
-          next time you deploy.
-        </Note>
-      ) : null}
-      <Button
-        variant="quiet"
-        onClick={() => refreshMutation.mutate()}
-        disabled={refreshMutation.isPending}
-      >
-        {refreshMutation.isPending ? "Refreshing…" : "Refresh from registry"}
-      </Button>
       {data.modules.map((row) => {
         const action = libraryAction(row);
         return (
@@ -284,14 +256,14 @@ export function ModuleRegistrySection({
                     <span className="jds-caption">{action.label}</span>
                   ) : null}
                   {canRemove(row) ? (
-                    <>
-                      <Button variant="quiet" onClick={() => onRemove(row)}>
-                        Remove
-                      </Button>
-                      <Button variant="quiet" onClick={() => onRemovePurge(row)}>
-                        Remove + purge
-                      </Button>
-                    </>
+                    <IconButton
+                      variant="secondary"
+                      size="sm"
+                      aria-label={`Remove ${row.name}`}
+                      onClick={() => onRemove(row)}
+                    >
+                      <Trash2 size={15} aria-hidden="true" />
+                    </IconButton>
                   ) : null}
                   {row.purgePending ? (
                     <Button
@@ -324,6 +296,22 @@ export function ModuleRegistrySection({
           </div>
         );
       })}
+      {data.modules.some(
+        (row) => row.state === "pending-restart" || row.state === "update-pending-restart"
+      ) ? (
+        <Note>
+          Downloaded modules apply on the next restart. From your deployment directory:{" "}
+          <code>{"docker compose restart jarv1s"}</code> to apply now, or restart the container the
+          next time you deploy.
+        </Note>
+      ) : null}
+      <Button
+        variant="quiet"
+        onClick={() => refreshMutation.mutate()}
+        disabled={refreshMutation.isPending}
+      >
+        {refreshMutation.isPending ? "Refreshing…" : "Refresh from registry"}
+      </Button>
     </>
   );
 }
