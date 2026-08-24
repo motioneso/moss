@@ -19,7 +19,6 @@ import {
   createPersonaDraft,
   discardPersonaDraft,
   personaDraftIsDirty,
-  personaSample,
   type DirectnessDial,
   type HumorDial,
   type PersonaDials,
@@ -83,7 +82,6 @@ function Persona({ who }: { readonly who: string }) {
     setRev((r) => r + 1);
   }, [personaQuery.data]);
   const dirty = personaDraftIsDirty(p, saved);
-  const sample = useMemo(() => personaSample(p, who), [p, who]);
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -210,22 +208,18 @@ function Persona({ who }: { readonly who: string }) {
         </>
       )}
 
-      <div className="ppv">
-        <div className="ppv__hd">
-          <GitCommitHorizontal size={13} aria-hidden="true" />
-          How {p.assistantName || "Moss"} would sound
-        </div>
-        <div className="ppv__bubble ppv__bubble--main">
-          <div className="ppv__cap">{previewReply ? "Response preview" : "Morning briefing"}</div>
-          <p className="ppv__say">{previewReply ?? sample.greeting}</p>
-        </div>
-        {previewReply ? null : (
-          <div className="ppv__bubble">
-            <div className="ppv__cap">When you fall behind</div>
-            <p className="ppv__say">{sample.recovery}</p>
+      {previewReply ? (
+        <div className="ppv">
+          <div className="ppv__hd">
+            <GitCommitHorizontal size={13} aria-hidden="true" />
+            How {p.assistantName || "Moss"} would sound
           </div>
-        )}
-      </div>
+          <div className="ppv__bubble ppv__bubble--main">
+            <div className="ppv__cap">Response preview</div>
+            <p className="ppv__say">{previewReply}</p>
+          </div>
+        </div>
+      ) : null}
 
       <div className={`psona-save${dirty ? " is-dirty" : ""}`}>
         <span className="psona-save__state">

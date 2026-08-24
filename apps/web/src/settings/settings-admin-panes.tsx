@@ -707,13 +707,7 @@ export function HostPane() {
     // working tmux host with a half-installed herdr would hide the tmux attach command the
     // operator actually needs.
     const primaryNote =
-      mux.active === "herdr" ? (
-        <Note icon={<Terminal size={13} aria-hidden="true" />}>
-          Prefer the terminal? Chat sessions run in Herdr on this host. List panes with{" "}
-          <code>{"herdr pane list"}</code>, attach with <code>{"herdr pane attach <pane-id>"}</code>
-          , or read output non-interactively with <code>{"herdr pane read <pane-id>"}</code>.
-        </Note>
-      ) : mux.active === "tmux" ? (
+      mux.active === "herdr" ? null : mux.active === "tmux" ? (
         <Note icon={<Terminal size={13} aria-hidden="true" />}>
           Prefer the terminal? Chat sessions run in tmux inside the container. From your deployment
           directory, list them with <code>{"docker compose exec jarv1s tmux ls"}</code>, then attach
