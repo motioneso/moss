@@ -11,12 +11,17 @@ import {
   slugifyThemeId,
   tokensToCssVars
 } from "../../apps/web/src/settings/settings-appearance-pane.js";
+import { FeedbackProvider } from "../../apps/web/src/settings/settings-feedback.js";
 import { parsePalette } from "../../apps/web/src/theme/theme-runtime.js";
 
 function renderAppearancePane(): string {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return renderToString(
-    createElement(QueryClientProvider, { client }, createElement(AppearancePane))
+    createElement(
+      FeedbackProvider,
+      null,
+      createElement(QueryClientProvider, { client }, createElement(AppearancePane))
+    )
   );
 }
 

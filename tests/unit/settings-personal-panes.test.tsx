@@ -39,11 +39,11 @@ describe("ProfilePane merged Account & preferences", () => {
     expect(html).toContain("Account &amp; preferences");
     expect(html).toContain("Quiet hours");
     expect(html).toContain("Location");
-    expect(html).toContain("Weather location");
+    expect(html).toContain(">Weather<");
     expect(html).toContain(
       "Search for a place to use instead of approximate timezone-based detection."
     );
-    expect(html).toContain("Temperature");
+    expect(html).toContain(">Unit<");
     expect(html).toContain(">Member<");
     expect(html).not.toContain(">Active<");
     expect(html).not.toContain(">Role<");

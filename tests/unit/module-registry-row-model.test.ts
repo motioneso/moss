@@ -78,7 +78,7 @@ describe("libraryAction (#1187 decision 2)", () => {
   it("update-pending-restart keeps its existing truthful reason, unchanged", () => {
     expect(libraryAction(row({ id: "m", state: "update-pending-restart" }))).toEqual({
       kind: "none",
-      label: "Update downloaded — restart to apply"
+      label: "Update downloaded. Restart to apply."
     });
   });
 

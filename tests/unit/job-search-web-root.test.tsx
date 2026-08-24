@@ -838,9 +838,7 @@ describe("job-search web Root", () => {
       expect(monitorsTab!.props["aria-current"]).toBeUndefined();
       expect(renderer.root.findAllByProps({ role: "tablist" })).toHaveLength(0);
       expect(renderer.root.findAllByProps({ role: "tab" })).toHaveLength(0);
-      expect(renderer.root.findAllByType("h1").map((node) => flatten(node.children))).toEqual([
-        "Job Search"
-      ]);
+      expect(renderer.root.findAllByType("h1")).toHaveLength(0);
 
       // Matches is the board — the pre-existing title-text assertion elsewhere in this file
       // already covers that it's the real BoardScreen, not a placeholder. (board.tsx has no
@@ -965,9 +963,7 @@ describe("job-search web Root", () => {
       expect(findButton(renderer, /^Overview$/)).toBeUndefined();
       expect(findButton(renderer, /^Profile$/)).toBeUndefined();
       expect(findButton(renderer, /^Monitors$/)).toBeUndefined();
-      expect(renderer.root.findAllByType("h1").map((node) => flatten(node.children))).toEqual([
-        "Job Search"
-      ]);
+      expect(renderer.root.findAllByType("h1")).toHaveLength(0);
       expect(text(renderer)).toMatch(/Setup incomplete/);
     });
   });
@@ -982,7 +978,6 @@ describe("job-search web Root", () => {
     const renderer = await renderRoot();
     await flush(renderer);
 
-    expect(text(renderer)).toContain("Moss · Module");
     expect(text(renderer)).toContain(label);
   });
 });

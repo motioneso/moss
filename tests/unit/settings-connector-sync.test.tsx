@@ -167,7 +167,7 @@ async function renderPane(
 }
 
 describe("connector settings panes without manual sync (spec #729 §7)", () => {
-  it("ConnectedPane shows live vs fallback-cache health with no Sync now button", async () => {
+  it("ConnectedPane shows live health without redundant cache copy or Sync now", async () => {
     const { queryKeys } = await import("../../apps/web/src/api/query-keys.js");
     const { ConnectedPane } =
       await import("../../apps/web/src/settings/settings-personal-data-panes.js");
@@ -178,7 +178,7 @@ describe("connector settings panes without manual sync (spec #729 §7)", () => {
 
     expect(html).not.toContain("Sync now");
     expect(html).toContain("Live connection");
-    expect(html).toContain("Fallback cache");
+    expect(html).not.toContain("Fallback cache");
   });
 
   it("admin OversightPane shows fallback-cache metadata with no Sync now button", async () => {
