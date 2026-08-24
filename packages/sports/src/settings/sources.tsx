@@ -101,6 +101,8 @@ export function AddSourceFlow(props: {
     null
   );
   const [selectedFollowIds, setSelectedFollowIds] = useState<Set<string>>(new Set());
+  const [exactTargetUrls, setExactTargetUrls] = useState<Map<string, string>>(new Map());
+  const [authorizationAccepted, setAuthorizationAccepted] = useState(false);
   const [added, setAdded] = useState(false);
 
   const invalidate = () =>
@@ -108,7 +110,10 @@ export function AddSourceFlow(props: {
 
   const previewMutation = useMutation({
     mutationFn: previewSportsSource,
-    onSuccess: (result) => setPreview(result)
+    onSuccess: (result) => {
+      setPreview(result);
+      setAuthorizationAccepted(false);
+    }
   });
 
   const confirmMutation = useMutation({
@@ -117,6 +122,8 @@ export function AddSourceFlow(props: {
       setInput("");
       setPreview(null);
       setSelectedFollowIds(new Set());
+      setExactTargetUrls(new Map());
+      setAuthorizationAccepted(false);
       setAdded(true);
       invalidate();
     }
@@ -128,20 +135,42 @@ export function AddSourceFlow(props: {
     if (!trimmed) return;
     setAdded(false);
     setPreview(null);
-    previewMutation.mutate({ url: trimmed });
+    previewMutation.mutate({
+      url: trimmed,
+      assignments: [...selectedFollowIds].map((followId) => ({
+        followId,
+        ...(exactTargetUrls.get(followId)?.trim()
+          ? { exactTargetUrl: exactTargetUrls.get(followId)!.trim() }
+          : {})
+      }))
+    });
   }
 
   function confirm() {
-    if (!preview?.confirmationId) return;
+    if (
+      !preview?.confirmationId ||
+      !preview.candidate ||
+      !preview.authorizationAcknowledgement ||
+      !authorizationAccepted
+    )
+      return;
     confirmMutation.mutate({
       confirmationId: preview.confirmationId,
-      followIds: [...selectedFollowIds]
+      authorizationAcknowledgement: preview.authorizationAcknowledgement,
+      canonicalDomain: preview.candidate.canonicalDomain,
+      confirmedFetchHosts: preview.candidate.confirmedFetchHosts,
+      targets: preview.candidate.targets.map((target) => ({
+        followId: target.followId,
+        targetUrl: target.targetUrl
+      }))
     });
   }
 
   function reset() {
     setPreview(null);
     setSelectedFollowIds(new Set());
+    setExactTargetUrls(new Map());
+    setAuthorizationAccepted(false);
     confirmMutation.reset();
   }
 
@@ -150,6 +179,8 @@ export function AddSourceFlow(props: {
       const next = new Set(current);
       if (next.has(followId)) next.delete(followId);
       else next.add(followId);
+      setPreview(null);
+      setAuthorizationAccepted(false);
       return next;
     });
   }
@@ -197,6 +228,43 @@ export function AddSourceFlow(props: {
         </div>
       </form>
 
+      <p className="sp-src__hint">Assign to (optional — leave blank to add unassigned):</p>
+      <FollowAssignmentPicker
+        follows={props.follows}
+        competitionsByKey={props.competitionsByKey}
+        teamsByCompetition={props.teamsByCompetition}
+        selected={selectedFollowIds}
+        onToggle={toggleFollow}
+        disabled={busy}
+        idPrefix="sp-addsource-assign"
+      />
+      {[...selectedFollowIds].map((followId) => {
+        const follow = props.follows.find((candidate) => candidate.id === followId);
+        if (!follow) return null;
+        const id = `sp-target-${followId}`;
+        return (
+          <label key={followId} className="sp-src__label" htmlFor={id}>
+            Exact target URL for{" "}
+            {followDisplayLabel(follow, props.competitionsByKey, props.teamsByCompetition)}{" "}
+            (optional)
+            <input
+              id={id}
+              className="jds-input"
+              type="url"
+              placeholder="https://publisher.example/team-or-league-news"
+              value={exactTargetUrls.get(followId) ?? ""}
+              disabled={busy}
+              onChange={(event) => {
+                const value = event.target.value;
+                setExactTargetUrls((current) => new Map(current).set(followId, value));
+                setPreview(null);
+                setAuthorizationAccepted(false);
+              }}
+            />
+          </label>
+        );
+      })}
+
       {errorMessage ? (
         <p className="sp-src__err" role="alert">
           {errorMessage}
@@ -210,18 +278,43 @@ export function AddSourceFlow(props: {
           ) : null}
           <p className="sp-src__candidate-label">{preview.candidate.label}</p>
           <p className="sp-src__item-meta">{preview.candidate.canonicalDomain}</p>
-          <p className="sp-src__hint">Assign to (optional — leave blank to add unassigned):</p>
-          <FollowAssignmentPicker
-            follows={props.follows}
-            competitionsByKey={props.competitionsByKey}
-            teamsByCompetition={props.teamsByCompetition}
-            selected={selectedFollowIds}
-            onToggle={toggleFollow}
-            disabled={busy}
-            idPrefix="sp-addsource-assign"
-          />
+          <p className="sp-src__hint">
+            Fetch hosts: {preview.candidate.confirmedFetchHosts.join(", ")}
+          </p>
+          {preview.candidate.sampleHeadlines.map((headline) => (
+            <p key={headline} className="sp-src__hint">
+              {headline}
+            </p>
+          ))}
+          {preview.candidate.targets.map((target) => (
+            <div key={target.followId}>
+              <p className="sp-src__hint">
+                {target.teamLabel ?? target.competitionLabel}: {target.targetUrl}
+              </p>
+              {target.sampleHeadlines.map((headline) => (
+                <p key={headline} className="sp-src__hint">
+                  {headline}
+                </p>
+              ))}
+            </div>
+          ))}
+          {preview.authorizationAcknowledgement ? (
+            <label className="sp-src__label">
+              <input
+                type="checkbox"
+                checked={authorizationAccepted}
+                disabled={busy}
+                onChange={(event) => setAuthorizationAccepted(event.target.checked)}
+              />{" "}
+              {preview.authorizationAcknowledgement}
+            </label>
+          ) : null}
           <div className="sp-src__addrow">
-            <Button size="sm" disabled={busy} onClick={confirm}>
+            <Button
+              size="sm"
+              disabled={busy || !authorizationAccepted || Boolean(preview.duplicateOfSourceId)}
+              onClick={confirm}
+            >
               {confirmMutation.isPending ? "Adding…" : "Add this source"}
             </Button>
             <Button variant="secondary" size="sm" disabled={busy} onClick={reset}>

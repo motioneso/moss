@@ -6,8 +6,12 @@ import { randomUUID } from "node:crypto";
 import type { VerifiedSportsSourceCandidate } from "./discovery.js";
 
 export interface PendingSportsSourcePreview {
+  readonly kind: "new-source";
   readonly ownerUserId: string;
+  readonly submittedUrl: string;
   readonly candidate: VerifiedSportsSourceCandidate;
+  readonly duplicateOfSourceId: string | null;
+  readonly authorizationAcknowledgement: string;
   readonly createdAt: number;
 }
 

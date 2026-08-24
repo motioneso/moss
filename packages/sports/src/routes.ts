@@ -27,13 +27,10 @@ import {
 import { SportsFollowsRepository } from "./repository.js";
 import { SportsService, type SportsFollowsWriter } from "./sports-service.js";
 import { catalogEntry } from "./source/catalog.js";
-import {
-  resolveSportsSourceInput,
-  type SportsDiscoveryBrowserPort,
-  type SportsSafeFetchPort
-} from "./source/discovery.js";
+import { type SportsDiscoveryBrowserPort, type SportsSafeFetchPort } from "./source/discovery.js";
 import { SportsSourcesRepository } from "./source/repository.js";
 import { createSportsPreviewStore } from "./source/preview-store.js";
+import { SportsSourceRequestError, SportsSourceService } from "./source/service.js";
 
 type SportsSourcePreviewStore = ReturnType<typeof createSportsPreviewStore>;
 
@@ -75,6 +72,13 @@ export function registerSportsRoutes(
   });
   const sourcesRepository = dependencies.sourcesRepository ?? new SportsSourcesRepository();
   const previews = dependencies.previews ?? createSportsPreviewStore();
+  const sourceService = new SportsSourceService({
+    follows: repository,
+    sources: sourcesRepository,
+    previews,
+    discovery: dependencies.discovery,
+    resolveTeams: async (competitionKey) => (await service.getLeagueTeams(competitionKey)).teams
+  });
 
   server.get(
     "/api/sports/catalog",
@@ -230,34 +234,9 @@ export function registerSportsRoutes(
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
         const input = request.body as PreviewSportsSourceRequest;
-        return await dependencies.dataContext.withDataContext(accessContext, async (db) => {
-          const result = await resolveSportsSourceInput(db, dependencies.discovery, {
-            rawUrl: input.url
-          });
-          if (result.status !== "ok") return result;
-
-          const confirmationId = previews.put({
-            ownerUserId: accessContext.actorUserId,
-            candidate: result.candidate,
-            createdAt: Date.now()
-          });
-          const existing = await sourcesRepository.list(db);
-          const duplicate = existing.find(
-            (source) => source.canonicalDomain === result.candidate.canonicalDomain
-          );
-          return {
-            status: "ok" as const,
-            confirmationId,
-            candidate: {
-              label: result.candidate.label,
-              canonicalDomain: result.candidate.canonicalDomain,
-              homepageUrl: result.candidate.homepageUrl,
-              retrievalMethod: result.candidate.retrievalMethod,
-              sampleCount: result.candidate.sampleCount
-            },
-            ...(duplicate ? { duplicateOfSourceId: duplicate.id } : {})
-          };
-        });
+        return await dependencies.dataContext.withDataContext(accessContext, (db) =>
+          sourceService.previewNewSource(db, accessContext.actorUserId, input)
+        );
       } catch (error) {
         return handleRouteError(error, reply);
       }
@@ -271,28 +250,15 @@ export function registerSportsRoutes(
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
         const input = request.body as ConfirmSportsSourceRequest;
-        const source = await dependencies.dataContext.withDataContext(accessContext, async (db) => {
-          const preview = previews.take(accessContext.actorUserId, input.confirmationId);
-          if (!preview) {
-            throw new HttpError(409, "Source preview expired or was not found");
-          }
-          const created = await sourcesRepository.create(db, { candidate: preview.candidate });
-          if ("limitExceeded" in created) {
-            throw new HttpError(400, "A maximum of 10 custom sources is allowed");
-          }
-          if (input.followIds && input.followIds.length > 0) {
-            const assigned = await sourcesRepository.setAssignments(
-              db,
-              created.id,
-              input.followIds
-            );
-            if (assigned) return assigned;
-          }
-          return created;
-        });
+        const source = await dependencies.dataContext.withDataContext(accessContext, (db) =>
+          sourceService.confirmNewSource(db, accessContext.actorUserId, input)
+        );
         reply.code(201);
         return { source };
       } catch (error) {
+        if (error instanceof SportsSourceRequestError) {
+          return handleRouteError(new HttpError(error.statusCode, error.message), reply);
+        }
         return handleRouteError(error, reply);
       }
     }

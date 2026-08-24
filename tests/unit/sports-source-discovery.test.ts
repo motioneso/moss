@@ -202,6 +202,197 @@ describe("resolveSportsSourceInput", () => {
     expect(generateJson.mock.calls[1]?.[1].prompt).toContain("UNTRUSTED_EVIDENCE_START");
   });
 
+  it("derives and replays one generic slotted recipe for team and league targets", async () => {
+    const targetedRecipe = {
+      version: 1,
+      kind: "json",
+      fetchHosts: ["one.example"],
+      request: {
+        urlTemplate: "https://one.example/api/{scope}/{targetId}/news",
+        slots: [
+          { name: "scope", location: "path", encoding: "path_segment", maxLength: 16 },
+          { name: "targetId", location: "path", encoding: "path_segment", maxLength: 32 }
+        ],
+        headers: { accept: "application/json" }
+      },
+      scopes: ["team", "competition"],
+      itemLimit: 10,
+      extraction: {
+        itemsPath: ["news"],
+        headlinePath: ["title"],
+        urlPath: ["url"],
+        normalize: ["trim"]
+      }
+    } as const;
+    const targetProposal = {
+      recipe: targetedRecipe,
+      targets: [
+        { followId: "team-follow", parameters: { scope: "team", targetId: "9825" } },
+        { followId: "league-follow", parameters: { scope: "league", targetId: "47" } }
+      ]
+    };
+    const generateJson = vi
+      .fn<NewsAiPort["generateJson"]>()
+      .mockResolvedValueOnce({ ok: true, object: {} })
+      .mockResolvedValueOnce({ ok: true, object: targetProposal });
+    const browser = {
+      render: vi.fn(async () => ({
+        ok: true as const,
+        finalUrl: "https://one.example/",
+        domHtml: `<div id="app"></div>`,
+        evidence: [
+          {
+            finalUrl: "https://one.example/api/team/9825/news",
+            contentType: "application/json",
+            body: new TextEncoder().encode(`{"news":[{"title":"Arsenal story"}]}`)
+          },
+          {
+            finalUrl: "https://one.example/api/league/47/news",
+            contentType: "application/json",
+            body: new TextEncoder().encode(`{"news":[{"title":"Premier League story"}]}`)
+          }
+        ]
+      }))
+    };
+    const result = await resolveSportsSourceInput(
+      db,
+      {
+        fetch: fetchMap({
+          "https://one.example/": { body: `<div id="app"></div>` },
+          "https://one.example/api/team/9825/news": {
+            body: `{"news":[{"title":"Arsenal story","url":"/story/arsenal"}]}`,
+            contentType: "application/json"
+          },
+          "https://one.example/api/league/47/news": {
+            body: `{"news":[{"title":"Premier League story","url":"/story/premier-league"}]}`,
+            contentType: "application/json"
+          }
+        }),
+        ai: { fingerprint: async () => null, generateJson },
+        browser
+      },
+      {
+        rawUrl: "https://one.example",
+        targets: [
+          {
+            followId: "team-follow",
+            competitionKey: "eng.1",
+            competitionLabel: "Premier League",
+            teamKey: "arsenal",
+            teamLabel: "Arsenal"
+          },
+          {
+            followId: "league-follow",
+            competitionKey: "eng.1",
+            competitionLabel: "Premier League",
+            teamKey: null,
+            teamLabel: null
+          }
+        ]
+      }
+    );
+
+    expect(result).toMatchObject({
+      status: "ok",
+      candidate: {
+        recipe: targetedRecipe,
+        sampleCount: 2,
+        targets: [
+          {
+            followId: "team-follow",
+            scope: "team",
+            targetUrl: "https://one.example/api/team/9825/news",
+            parameters: { scope: "team", targetId: "9825" },
+            samples: [{ headline: "Arsenal story", url: "https://one.example/story/arsenal" }]
+          },
+          {
+            followId: "league-follow",
+            scope: "competition",
+            targetUrl: "https://one.example/api/league/47/news",
+            parameters: { scope: "league", targetId: "47" }
+          }
+        ]
+      }
+    });
+    expect(generateJson.mock.calls[1]?.[1].prompt).toContain("Premier League");
+    expect(generateJson.mock.calls[1]?.[1].prompt).toContain("Arsenal");
+  });
+
+  it("replays an exact pasted target through the same recipe path", async () => {
+    const recipe = {
+      version: 1,
+      kind: "json",
+      fetchHosts: ["one.example"],
+      request: {
+        urlTemplate: "https://one.example/api/team/{teamId}/news",
+        slots: [{ name: "teamId", location: "path", encoding: "path_segment", maxLength: 32 }],
+        headers: { accept: "application/json" }
+      },
+      scopes: ["team"],
+      itemLimit: 10,
+      extraction: {
+        itemsPath: ["news"],
+        headlinePath: ["title"],
+        normalize: ["trim"]
+      }
+    } as const;
+    const fetch = fetchMap({
+      "https://one.example/": { body: `<title>One</title>` },
+      "https://one.example/api/team/9825/news": {
+        body: `{"news":[]}`,
+        contentType: "application/json"
+      }
+    });
+    const result = await resolveSportsSourceInput(
+      db,
+      {
+        fetch,
+        ai: {
+          fingerprint: async () => null,
+          generateJson: async () => ({
+            ok: true,
+            object: {
+              recipe,
+              targets: [{ followId: "team-follow", parameters: { teamId: "9825" } }]
+            }
+          })
+        }
+      },
+      {
+        rawUrl: "https://one.example",
+        targets: [
+          {
+            followId: "team-follow",
+            competitionKey: "eng.1",
+            competitionLabel: "Premier League",
+            teamKey: "arsenal",
+            teamLabel: "Arsenal",
+            exactTargetUrl: "https://one.example/api/team/9825/news"
+          }
+        ]
+      }
+    );
+
+    expect(result).toMatchObject({
+      status: "ok",
+      candidate: {
+        sampleCount: 0,
+        targets: [
+          {
+            followId: "team-follow",
+            targetUrl: "https://one.example/api/team/9825/news",
+            samples: []
+          }
+        ]
+      }
+    });
+    expect(fetch).toHaveBeenCalledWith("https://one.example/api/team/9825/news");
+    expect(fetch).toHaveBeenCalledWith("https://one.example/api/team/9825/news", {
+      allowedHosts: ["one.example"],
+      requestHeaders: { accept: "application/json" }
+    });
+  });
+
   it("reports unavailable when recipe derivation needs an unconfigured model", async () => {
     const noAi: NewsAiPort = {
       fingerprint: async () => null,

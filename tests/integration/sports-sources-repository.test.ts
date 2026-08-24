@@ -23,7 +23,10 @@ const candidate = (index: number): VerifiedSportsSourceCandidate => ({
   validationFingerprint: "opaque-fingerprint",
   recipe: null,
   recipeFingerprint: null,
-  confirmedFetchHosts: [`publisher-${index}.example.com`]
+  confirmedFetchHosts: [`publisher-${index}.example.com`],
+  targets: [],
+  checkedAt: "2026-08-23T12:00:00.000Z",
+  samples: []
 });
 
 describe("sports sources repository", () => {
@@ -121,6 +124,56 @@ describe("sports sources repository", () => {
       confirmed_fetch_hosts: ["publisher-1.example.com"]
     });
     expect(result.rows[0].authorization_confirmed_at).toEqual(result.rows[0].validated_at);
+  });
+
+  it("atomically persists verified target identity and preview health", async () => {
+    const follow = await bootstrap.query(
+      `INSERT INTO app.sports_follows (owner_user_id, competition_key, team_key)
+       VALUES ($1, 'eng.1', 'arsenal') RETURNING id`,
+      [ids.userA]
+    );
+    const checkedAt = "2026-08-23T12:00:00.000Z";
+    const base = candidate(1);
+    const created = await asActor(ids.userA, (db) =>
+      repo.create(db, {
+        candidate: {
+          ...base,
+          checkedAt,
+          targets: [
+            {
+              followId: follow.rows[0].id,
+              competitionKey: "eng.1",
+              competitionLabel: "Premier League",
+              teamKey: "arsenal",
+              teamLabel: "Arsenal",
+              scope: "team",
+              targetUrl: base.feedUrl,
+              parameters: {},
+              samples: [{ headline: "Arsenal story" }],
+              checkedAt
+            }
+          ]
+        }
+      })
+    );
+    if ("limitExceeded" in created) throw new Error("unexpected limit");
+
+    expect(created).toMatchObject({
+      healthState: "healthy",
+      lastCheckedAt: checkedAt,
+      lastSuccessAt: checkedAt,
+      assignedFollowIds: [follow.rows[0].id],
+      assignments: [
+        {
+          followId: follow.rows[0].id,
+          targetUrl: base.feedUrl,
+          previewStatus: "verified",
+          healthState: "healthy",
+          lastCheckedAt: checkedAt,
+          lastSuccessAt: checkedAt
+        }
+      ]
+    });
   });
 
   it("rejects inconsistent recipe and assignment preview shapes", async () => {

@@ -116,6 +116,22 @@ function toDto(
 }
 
 export class SportsSourcesRepository {
+  async lockOwnerAssignments(scopedDb: DataContextDb): Promise<void> {
+    assertDataContextDb(scopedDb);
+    await sql`SELECT pg_advisory_xact_lock(
+      hashtext('sports:source-assignments:' || app.current_actor_user_id())
+    )`.execute(scopedDb.db);
+  }
+
+  async countAssignments(scopedDb: DataContextDb): Promise<number> {
+    assertDataContextDb(scopedDb);
+    const row = await scopedDb.db
+      .selectFrom("app.sports_source_assignments")
+      .select(({ fn }) => fn.countAll<string>().as("count"))
+      .executeTakeFirstOrThrow();
+    return Number(row.count);
+  }
+
   async list(scopedDb: DataContextDb): Promise<SportsCustomSourceDto[]> {
     assertDataContextDb(scopedDb);
     const [rows, assignments] = await Promise.all([
@@ -155,6 +171,19 @@ export class SportsSourcesRepository {
     }
     const { candidate } = input;
     const confirmedAt = new Date();
+    const checkedAt = new Date(candidate.checkedAt);
+    const followIds = candidate.targets.map((target) => target.followId);
+    const ownedFollows =
+      followIds.length === 0
+        ? []
+        : await scopedDb.db
+            .selectFrom("app.sports_follows")
+            .select(["id"])
+            .where("id", "in", followIds)
+            .execute();
+    if (ownedFollows.length !== followIds.length) {
+      throw new Error("Sports source preview contains an unavailable follow");
+    }
     const row = await scopedDb.db
       .insertInto("app.sports_custom_sources")
       .values({
@@ -171,12 +200,46 @@ export class SportsSourcesRepository {
         recipe_fingerprint: candidate.recipeFingerprint,
         recipe_status: candidate.retrievalMethod === "feed" ? "feed" : "ready",
         confirmed_fetch_hosts: [...candidate.confirmedFetchHosts],
-        authorization_confirmed_at: confirmedAt
+        authorization_confirmed_at: confirmedAt,
+        health_state: "healthy",
+        health_reason_code: null,
+        health_message: null,
+        last_checked_at: checkedAt,
+        last_success_at: checkedAt
       })
       .onConflict((oc) => oc.doNothing())
       .returning(SOURCE_COLUMNS)
       .executeTakeFirst();
-    if (row) return toDto(row, []);
+    if (row) {
+      if (candidate.targets.length > 0) {
+        await scopedDb.db
+          .insertInto("app.sports_source_assignments")
+          .values(
+            candidate.targets.map((target) => ({
+              owner_user_id: sql<string>`app.current_actor_user_id()`,
+              source_id: row.id,
+              follow_id: target.followId,
+              target_url: target.targetUrl,
+              target_parameters: { ...target.parameters },
+              preview_status: "verified" as const,
+              health_state: "healthy" as const,
+              health_reason_code: null,
+              health_message: null,
+              last_checked_at: checkedAt,
+              last_success_at: checkedAt
+            }))
+          )
+          .execute();
+      }
+      const assignments = await scopedDb.db
+        .selectFrom("app.sports_source_assignments")
+        .select(ASSIGNMENT_COLUMNS)
+        .where("source_id", "=", row.id)
+        .orderBy("created_at")
+        .orderBy("id")
+        .execute();
+      return toDto(row, assignments);
+    }
 
     const existing = await scopedDb.db
       .selectFrom("app.sports_custom_sources")

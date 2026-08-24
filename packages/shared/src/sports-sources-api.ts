@@ -53,6 +53,24 @@ export interface SportsCustomSourcesResponse {
 
 export interface PreviewSportsSourceRequest {
   readonly url: string;
+  readonly assignments?: readonly {
+    readonly followId: string;
+    readonly exactTargetUrl?: string;
+  }[];
+}
+
+export const SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT =
+  "I confirm I am authorized to fetch this publisher's public, unauthenticated sports news.";
+
+export interface PreviewSportsSourceTarget {
+  readonly followId: string;
+  readonly competitionKey: string;
+  readonly competitionLabel: string;
+  readonly teamKey: string | null;
+  readonly teamLabel: string | null;
+  readonly scope: "team" | "competition";
+  readonly targetUrl: string;
+  readonly sampleHeadlines: readonly string[];
 }
 
 export interface PreviewSportsSourceCandidate {
@@ -61,6 +79,9 @@ export interface PreviewSportsSourceCandidate {
   readonly homepageUrl: string;
   readonly retrievalMethod: "feed" | "scrape";
   readonly sampleCount: number;
+  readonly confirmedFetchHosts: readonly string[];
+  readonly sampleHeadlines: readonly string[];
+  readonly targets: readonly PreviewSportsSourceTarget[];
 }
 
 export interface PreviewSportsSourceResponse {
@@ -69,11 +90,18 @@ export interface PreviewSportsSourceResponse {
   readonly candidate?: PreviewSportsSourceCandidate;
   readonly reason?: string;
   readonly duplicateOfSourceId?: string;
+  readonly authorizationAcknowledgement?: string;
 }
 
 export interface ConfirmSportsSourceRequest {
   readonly confirmationId: string;
-  readonly followIds?: readonly string[];
+  readonly authorizationAcknowledgement: string;
+  readonly canonicalDomain: string;
+  readonly confirmedFetchHosts: readonly string[];
+  readonly targets: readonly {
+    readonly followId: string;
+    readonly targetUrl: string;
+  }[];
 }
 
 export interface ConfirmSportsSourceResponse {
@@ -183,7 +211,24 @@ export const previewSportsSourceSchema = {
     additionalProperties: false,
     required: ["url"],
     properties: {
-      url: { type: "string", minLength: 1, maxLength: 2048 }
+      url: { type: "string", minLength: 1, maxLength: 2048 },
+      assignments: {
+        type: "array",
+        maxItems: 20,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["followId"],
+          properties: {
+            followId: { type: "string", format: "uuid" },
+            exactTargetUrl: {
+              type: "string",
+              maxLength: 2048,
+              pattern: "^https://"
+            }
+          }
+        }
+      }
     }
   },
   response: {
@@ -197,17 +242,69 @@ export const previewSportsSourceSchema = {
         candidate: {
           type: "object",
           additionalProperties: false,
-          required: ["label", "canonicalDomain", "homepageUrl", "retrievalMethod", "sampleCount"],
+          required: [
+            "label",
+            "canonicalDomain",
+            "homepageUrl",
+            "retrievalMethod",
+            "sampleCount",
+            "confirmedFetchHosts",
+            "sampleHeadlines",
+            "targets"
+          ],
           properties: {
             label: { type: "string" },
             canonicalDomain: { type: "string" },
             homepageUrl: { type: "string" },
             retrievalMethod: { type: "string", enum: ["feed", "scrape"] },
-            sampleCount: { type: "number" }
+            sampleCount: { type: "number" },
+            confirmedFetchHosts: {
+              type: "array",
+              maxItems: 6,
+              items: { type: "string", minLength: 1, maxLength: 253 }
+            },
+            sampleHeadlines: {
+              type: "array",
+              maxItems: 10,
+              items: { type: "string", minLength: 1, maxLength: 500 }
+            },
+            targets: {
+              type: "array",
+              maxItems: 20,
+              items: {
+                type: "object",
+                additionalProperties: false,
+                required: [
+                  "followId",
+                  "competitionKey",
+                  "competitionLabel",
+                  "teamKey",
+                  "teamLabel",
+                  "scope",
+                  "targetUrl",
+                  "sampleHeadlines"
+                ],
+                properties: {
+                  followId: { type: "string", format: "uuid" },
+                  competitionKey: { type: "string", minLength: 1, maxLength: 100 },
+                  competitionLabel: { type: "string", minLength: 1, maxLength: 120 },
+                  teamKey: { type: ["string", "null"], maxLength: 100 },
+                  teamLabel: { type: ["string", "null"], maxLength: 120 },
+                  scope: { type: "string", enum: ["team", "competition"] },
+                  targetUrl: { type: "string", maxLength: 2048, pattern: "^https://" },
+                  sampleHeadlines: {
+                    type: "array",
+                    maxItems: 10,
+                    items: { type: "string", minLength: 1, maxLength: 500 }
+                  }
+                }
+              }
+            }
           }
         },
         reason: { type: "string" },
-        duplicateOfSourceId: { type: "string", format: "uuid" }
+        duplicateOfSourceId: { type: "string", format: "uuid" },
+        authorizationAcknowledgement: { type: "string", minLength: 1, maxLength: 300 }
       }
     },
     400: errorResponseSchema,
@@ -219,10 +316,35 @@ export const confirmSportsSourceSchema = {
   body: {
     type: "object",
     additionalProperties: false,
-    required: ["confirmationId"],
+    required: [
+      "confirmationId",
+      "authorizationAcknowledgement",
+      "canonicalDomain",
+      "confirmedFetchHosts",
+      "targets"
+    ],
     properties: {
       confirmationId: { type: "string", minLength: 1, maxLength: 256 },
-      followIds: { type: "array", items: { type: "string", format: "uuid" } }
+      authorizationAcknowledgement: { type: "string", minLength: 1, maxLength: 300 },
+      canonicalDomain: { type: "string", minLength: 1, maxLength: 253 },
+      confirmedFetchHosts: {
+        type: "array",
+        maxItems: 6,
+        items: { type: "string", minLength: 1, maxLength: 253 }
+      },
+      targets: {
+        type: "array",
+        maxItems: 20,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["followId", "targetUrl"],
+          properties: {
+            followId: { type: "string", format: "uuid" },
+            targetUrl: { type: "string", maxLength: 2048, pattern: "^https://" }
+          }
+        }
+      }
     }
   },
   response: {
