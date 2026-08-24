@@ -140,15 +140,6 @@ function AccountRow(props: {
           <span>Live connection</span>
           <Indicator status={health.indicator} label={health.label} />
         </div>
-        {account.scopes.length ? (
-          <div className="acct__scopes">{account.scopes.join(" · ")}</div>
-        ) : null}
-        <div className="acct__scopes">
-          Fallback cache{" "}
-          {account.lastSyncFinishedAt
-            ? `updated ${formatTimestamp(account.lastSyncFinishedAt, account.lastSyncFinishedAt)}`
-            : "not yet populated"}
-        </div>
         {health.alert ? <div className="acct__alert">{health.alert}</div> : null}
         {account.status !== "revoked" && (hasEmail || hasCalendar) ? (
           <div className="acct__features">
@@ -296,7 +287,7 @@ function ConnectedPane() {
     <>
       <PaneHead
         title="Connected accounts"
-        desc={`The external accounts ${assistantName} can reach, and how healthy each connection is. You stay in control — reconnect or revoke at any time.`}
+        desc={`The external accounts ${assistantName} can reach, and how healthy each connection is.`}
       />
       <Group
         title="Accounts"
@@ -770,7 +761,7 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
   return (
     <>
       <PaneHead title="Modules" desc="Choose which parts of Moss to use and configure." />
-      <Group title="Built-in" desc="Required modules stay available.">
+      <Group title="Built-in" desc="Modules included with core installation.">
         {builtInModules.length ? (
           builtInModules.map(renderRow)
         ) : (
