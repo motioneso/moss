@@ -555,7 +555,7 @@ export function OversightPane() {
     <>
       <PaneHead
         title="Connector oversight"
-        desc="Connection health across the instance — safe metadata only. No private synced data, no secrets."
+        desc="Connection health across the instance, safe metadata only. No private synced data, no secrets."
       />
       <Group title="Connectors">
         <div className="cono">
@@ -599,10 +599,6 @@ export function OversightPane() {
           )}
         </div>
       </Group>
-      <Note>
-        Lower priority — this view exists mainly so a failing connection surfaces before anyone
-        notices it broke.
-      </Note>
     </>
   );
 }
