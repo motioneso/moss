@@ -260,7 +260,7 @@ export function ProfilePane({ me }: PaneProps) {
         title="Account & preferences"
         desc={`Who you are to ${assistantName}: your identity and account status. How ${assistantName} sounds and behaves lives in Assistant & AI.`}
       />
-      <Group title="Identity" action={<SaveStatusChip status={status} />}>
+      <Group title="Account" action={<SaveStatusChip status={status} />}>
         <div className="prof">
           <Avatar name={fields.name || user.email} size="lg" />
           <div className="prof__main">
@@ -290,20 +290,6 @@ export function ProfilePane({ me }: PaneProps) {
             aria-label={`How ${assistantName} addresses you`}
           />
         </Field>
-      </Group>
-
-      <Group title="Account">
-        <Row
-          name="Email"
-          desc={user.email}
-          control={
-            user.emailVerified ? (
-              <Badge tone="forest" dot>
-                Verified
-              </Badge>
-            ) : undefined
-          }
-        />
       </Group>
 
       <Group title="Location">
