@@ -3,6 +3,7 @@ import type { ComponentType } from "react";
 import type { WeatherTodayDto } from "@moss/shared";
 import { WeatherChip, type WeatherDayTileProps } from "@moss/ui";
 
+import { formatDate, useUserLocale } from "../locale/locale-format.js";
 import type { WeatherIcon } from "./feed-source";
 
 const ICONS: Record<
@@ -26,9 +27,10 @@ const ICON_COLOR: Record<WeatherIcon, string> = {
   wind: "var(--steel)"
 };
 
-const WEEKDAY_FORMAT = new Intl.DateTimeFormat(undefined, { weekday: "short" });
+const WEEKDAY_OPTS: Intl.DateTimeFormatOptions = { weekday: "short" };
 
 export function HeaderWeather(props: { readonly weather?: WeatherTodayDto | null }) {
+  const locale = useUserLocale();
   const wx = props.weather ?? null;
   if (!wx) return null;
 
@@ -53,7 +55,7 @@ export function HeaderWeather(props: { readonly weather?: WeatherTodayDto | null
     ...wx.forecast.map((day) => {
       const DayIcon = ICONS[day.icon];
       return {
-        label: WEEKDAY_FORMAT.format(new Date(day.date)),
+        label: formatDate(day.date, locale, WEEKDAY_OPTS),
         icon: <DayIcon size={16} color={ICON_COLOR[day.icon]} />,
         temp: `${day.high}°/${day.low}°`,
         detail: (
