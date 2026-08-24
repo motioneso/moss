@@ -39,6 +39,7 @@
     "admin:reset-password": "tsx scripts/admin-reset-password.ts",
     "audit:preflight": "bash scripts/check-tree-fresh.sh",
     "audit:release-hardening": "tsx scripts/audit-release-hardening.ts",
+    "gate:release-hardening": "pnpm db:migrate && pnpm audit:release-hardening",
     "smoke:compose": "tsx scripts/smoke-compose.ts",
     "dev:api": "pnpm --filter @moss/api dev",
     "dev:web": "pnpm --filter @moss/web dev",
