@@ -66,7 +66,10 @@ describe("resolveSportsSourceInput", () => {
         feedUrl: "https://one.example/feed.xml",
         retrievalMethod: "feed",
         sampleCount: 1,
-        validationFingerprint: "fp"
+        validationFingerprint: "fp",
+        recipe: null,
+        recipeFingerprint: null,
+        confirmedFetchHosts: ["one.example"]
       }
     });
   });

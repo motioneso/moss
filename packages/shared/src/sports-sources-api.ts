@@ -12,6 +12,22 @@ export type SportsSourceHealthState =
   | "auth_required"
   | "disabled";
 
+export type SportsSourceRecipeStatus = "feed" | "ready" | "missing" | "drift";
+export type SportsSourceTargetPreviewStatus = "pending" | "verified" | "recipe_missing";
+
+export interface SportsSourceAssignmentDto {
+  readonly id: string;
+  readonly followId: string;
+  readonly targetUrl: string | null;
+  readonly previewStatus: SportsSourceTargetPreviewStatus;
+  readonly healthState: SportsSourceHealthState;
+  readonly healthReasonCode: string | null;
+  readonly healthMessage: string | null;
+  readonly lastCheckedAt: string | null;
+  readonly lastSuccessAt: string | null;
+  readonly createdAt: string;
+}
+
 export interface SportsCustomSourceDto {
   readonly id: string;
   readonly label: string;
@@ -25,7 +41,9 @@ export interface SportsCustomSourceDto {
   readonly healthMessage: string | null;
   readonly lastCheckedAt: string | null;
   readonly lastSuccessAt: string | null;
+  readonly recipeStatus: SportsSourceRecipeStatus;
   readonly assignedFollowIds: readonly string[];
+  readonly assignments: readonly SportsSourceAssignmentDto[];
   readonly createdAt: string;
 }
 
@@ -66,6 +84,40 @@ export interface UpdateSportsSourceAssignmentsRequest {
   readonly followIds: readonly string[];
 }
 
+const sportsSourceHealthSchema = {
+  type: "string",
+  enum: ["pending", "healthy", "failing", "unsupported", "auth_required", "disabled"]
+} as const;
+
+const sportsSourceAssignmentDtoSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "id",
+    "followId",
+    "targetUrl",
+    "previewStatus",
+    "healthState",
+    "healthReasonCode",
+    "healthMessage",
+    "lastCheckedAt",
+    "lastSuccessAt",
+    "createdAt"
+  ],
+  properties: {
+    id: { type: "string", format: "uuid" },
+    followId: { type: "string", format: "uuid" },
+    targetUrl: { type: ["string", "null"], maxLength: 2048, pattern: "^https://" },
+    previewStatus: { type: "string", enum: ["pending", "verified", "recipe_missing"] },
+    healthState: sportsSourceHealthSchema,
+    healthReasonCode: { type: ["string", "null"], maxLength: 64 },
+    healthMessage: { type: ["string", "null"], maxLength: 500 },
+    lastCheckedAt: { type: ["string", "null"], format: "date-time" },
+    lastSuccessAt: { type: ["string", "null"], format: "date-time" },
+    createdAt: { type: "string", format: "date-time" }
+  }
+} as const;
+
 const sportsCustomSourceDtoSchema = {
   type: "object",
   additionalProperties: false,
@@ -82,27 +134,32 @@ const sportsCustomSourceDtoSchema = {
     "healthMessage",
     "lastCheckedAt",
     "lastSuccessAt",
+    "recipeStatus",
     "assignedFollowIds",
+    "assignments",
     "createdAt"
   ],
   properties: {
     id: { type: "string" },
-    label: { type: "string" },
-    canonicalDomain: { type: "string" },
-    homepageUrl: { type: "string" },
-    feedUrl: { type: ["string", "null"] },
+    label: { type: "string", minLength: 1, maxLength: 120 },
+    canonicalDomain: { type: "string", minLength: 1, maxLength: 253 },
+    homepageUrl: { type: "string", maxLength: 2048, pattern: "^https://" },
+    feedUrl: { type: ["string", "null"], maxLength: 2048, pattern: "^https://" },
     retrievalMethod: { type: "string", enum: ["feed", "scrape"] },
     enabled: { type: "boolean" },
-    healthState: {
-      type: "string",
-      enum: ["pending", "healthy", "failing", "unsupported", "auth_required", "disabled"]
+    healthState: sportsSourceHealthSchema,
+    healthReasonCode: { type: ["string", "null"], maxLength: 64 },
+    healthMessage: { type: ["string", "null"], maxLength: 500 },
+    lastCheckedAt: { type: ["string", "null"], format: "date-time" },
+    lastSuccessAt: { type: ["string", "null"], format: "date-time" },
+    recipeStatus: { type: "string", enum: ["feed", "ready", "missing", "drift"] },
+    assignedFollowIds: {
+      type: "array",
+      maxItems: 20,
+      items: { type: "string", format: "uuid" }
     },
-    healthReasonCode: { type: ["string", "null"] },
-    healthMessage: { type: ["string", "null"] },
-    lastCheckedAt: { type: ["string", "null"] },
-    lastSuccessAt: { type: ["string", "null"] },
-    assignedFollowIds: { type: "array", items: { type: "string" } },
-    createdAt: { type: "string" }
+    assignments: { type: "array", maxItems: 20, items: sportsSourceAssignmentDtoSchema },
+    createdAt: { type: "string", format: "date-time" }
   }
 } as const;
 

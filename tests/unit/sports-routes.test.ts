@@ -285,7 +285,9 @@ function makeSourcesRepo(initial: SportsCustomSourceDto[], atLimit = false): Fak
         healthMessage: null,
         lastCheckedAt: null,
         lastSuccessAt: null,
+        recipeStatus: input.candidate.retrievalMethod === "feed" ? "feed" : "ready",
         assignedFollowIds: [],
+        assignments: [],
         createdAt: "2026-08-21T00:00:00.000Z"
       };
       sources.push(created);
@@ -748,7 +750,9 @@ describe("sports routes", () => {
       healthMessage: null,
       lastCheckedAt: null,
       lastSuccessAt: null,
+      recipeStatus: "ready",
       assignedFollowIds: [],
+      assignments: [],
       createdAt: "2026-08-21T00:00:00.000Z"
     };
     const sourcesRepository = makeSourcesRepo([source]);
@@ -870,7 +874,9 @@ describe("sports routes", () => {
       healthMessage: null,
       lastCheckedAt: null,
       lastSuccessAt: null,
+      recipeStatus: "ready",
       assignedFollowIds: [],
+      assignments: [],
       createdAt: "2026-08-21T00:00:00.000Z"
     };
     const sourcesRepository = makeSourcesRepo([source]);
@@ -918,7 +924,9 @@ describe("sports routes", () => {
       healthMessage: null,
       lastCheckedAt: null,
       lastSuccessAt: null,
+      recipeStatus: "ready",
       assignedFollowIds: [],
+      assignments: [],
       createdAt: "2026-08-21T00:00:00.000Z"
     };
     const sourcesRepository = makeSourcesRepo([source]);

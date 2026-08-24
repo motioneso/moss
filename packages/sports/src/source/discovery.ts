@@ -20,6 +20,8 @@ import {
   type NewsAiPort
 } from "@moss/news";
 
+import type { SportsSourceRecipe } from "./recipe.js";
+
 export type SportsSafeFetchPort = (url: string) => Promise<
   | {
       readonly ok: true;
@@ -44,16 +46,31 @@ export type SportsSafeFetchPort = (url: string) => Promise<
     }
 >;
 
-export interface VerifiedSportsSourceCandidate {
+interface VerifiedSportsSourceCandidateBase {
   readonly candidateId: string;
   readonly label: string;
   readonly canonicalDomain: string;
   readonly homepageUrl: string;
-  readonly feedUrl: string | null;
-  readonly retrievalMethod: "feed" | "scrape";
   readonly sampleCount: number;
   readonly validationFingerprint: string;
+  readonly confirmedFetchHosts: readonly string[];
 }
+
+export type VerifiedSportsSourceCandidate = VerifiedSportsSourceCandidateBase &
+  (
+    | {
+        readonly feedUrl: string;
+        readonly retrievalMethod: "feed";
+        readonly recipe: null;
+        readonly recipeFingerprint: null;
+      }
+    | {
+        readonly feedUrl: null;
+        readonly retrievalMethod: "scrape";
+        readonly recipe: SportsSourceRecipe;
+        readonly recipeFingerprint: string;
+      }
+  );
 
 export type SportsSourceResolutionResult =
   | { status: "ok"; candidate: VerifiedSportsSourceCandidate }
@@ -234,6 +251,8 @@ export async function resolveSportsSourceInput(
   if (policy.verdict === "rejected") {
     return { status: "rejected", reason: "policy" };
   }
+  // Static/browser extraction must first produce and replay a validated declarative recipe.
+  if (!feedUrl) return { status: "rejected", reason: "unreachable" };
   return {
     status: "ok",
     candidate: {
@@ -242,9 +261,14 @@ export async function resolveSportsSourceInput(
       canonicalDomain: domain.domain,
       homepageUrl,
       feedUrl,
-      retrievalMethod: feedUrl ? "feed" : "scrape",
+      retrievalMethod: "feed",
       sampleCount: headlines.length,
-      validationFingerprint: policy.fingerprint
+      validationFingerprint: policy.fingerprint,
+      recipe: null,
+      recipeFingerprint: null,
+      confirmedFetchHosts: [
+        ...new Set([homepageUrl, feedUrl].map((value) => new URL(value).hostname))
+      ]
     }
   };
 }

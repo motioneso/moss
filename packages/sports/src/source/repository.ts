@@ -4,7 +4,7 @@ import { sql } from "kysely";
 
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
 import { NEWS_MAX_CUSTOM_SOURCES } from "@moss/news";
-import type { SportsCustomSourceDto } from "@moss/shared";
+import type { SportsCustomSourceDto, SportsSourceAssignmentDto } from "@moss/shared";
 
 import type { VerifiedSportsSourceCandidate } from "./discovery.js";
 
@@ -28,6 +28,20 @@ interface SportsCustomSourceRow {
   health_message: string | null;
   last_checked_at: Date | null;
   last_success_at: Date | null;
+  recipe_status: "feed" | "ready" | "missing" | "drift";
+  created_at: Date;
+}
+
+interface SportsSourceAssignmentRow {
+  id: string;
+  follow_id: string;
+  target_url: string | null;
+  preview_status: "pending" | "verified" | "recipe_missing";
+  health_state: SportsCustomSourceRow["health_state"];
+  health_reason_code: string | null;
+  health_message: string | null;
+  last_checked_at: Date | null;
+  last_success_at: Date | null;
   created_at: Date;
 }
 
@@ -44,13 +58,43 @@ const SOURCE_COLUMNS = [
   "health_message",
   "last_checked_at",
   "last_success_at",
+  "recipe_status",
   "created_at"
 ] as const;
 
+const ASSIGNMENT_COLUMNS = [
+  "id",
+  "follow_id",
+  "target_url",
+  "preview_status",
+  "health_state",
+  "health_reason_code",
+  "health_message",
+  "last_checked_at",
+  "last_success_at",
+  "created_at"
+] as const;
+
+function assignmentToDto(row: SportsSourceAssignmentRow): SportsSourceAssignmentDto {
+  return {
+    id: row.id,
+    followId: row.follow_id,
+    targetUrl: row.target_url,
+    previewStatus: row.preview_status,
+    healthState: row.health_state,
+    healthReasonCode: row.health_reason_code,
+    healthMessage: row.health_message,
+    lastCheckedAt: row.last_checked_at?.toISOString() ?? null,
+    lastSuccessAt: row.last_success_at?.toISOString() ?? null,
+    createdAt: row.created_at.toISOString()
+  };
+}
+
 function toDto(
   row: SportsCustomSourceRow,
-  assignedFollowIds: readonly string[]
+  assignmentRows: readonly SportsSourceAssignmentRow[]
 ): SportsCustomSourceDto {
+  const assignments = assignmentRows.map(assignmentToDto);
   return {
     id: row.id,
     label: row.label,
@@ -64,7 +108,9 @@ function toDto(
     healthMessage: row.health_message,
     lastCheckedAt: row.last_checked_at ? row.last_checked_at.toISOString() : null,
     lastSuccessAt: row.last_success_at ? row.last_success_at.toISOString() : null,
-    assignedFollowIds,
+    recipeStatus: row.recipe_status,
+    assignedFollowIds: assignments.map((assignment) => assignment.followId),
+    assignments,
     createdAt: row.created_at.toISOString()
   };
 }
@@ -81,13 +127,15 @@ export class SportsSourcesRepository {
         .execute(),
       scopedDb.db
         .selectFrom("app.sports_source_assignments")
-        .select(["source_id", "follow_id"])
+        .select(["source_id", ...ASSIGNMENT_COLUMNS])
+        .orderBy("created_at")
+        .orderBy("id")
         .execute()
     ]);
-    const bySource = new Map<string, string[]>();
+    const bySource = new Map<string, SportsSourceAssignmentRow[]>();
     for (const assignment of assignments) {
       const list = bySource.get(assignment.source_id) ?? [];
-      list.push(assignment.follow_id);
+      list.push(assignment);
       bySource.set(assignment.source_id, list);
     }
     return rows.map((row) => toDto(row, bySource.get(row.id) ?? []));
@@ -106,6 +154,7 @@ export class SportsSourcesRepository {
       return { limitExceeded: true };
     }
     const { candidate } = input;
+    const confirmedAt = new Date();
     const row = await scopedDb.db
       .insertInto("app.sports_custom_sources")
       .values({
@@ -116,7 +165,13 @@ export class SportsSourcesRepository {
         feed_url: candidate.feedUrl,
         retrieval_method: candidate.retrievalMethod,
         validation_fingerprint: candidate.validationFingerprint,
-        validated_at: new Date()
+        validated_at: confirmedAt,
+        recipe_json: candidate.recipe === null ? null : { ...candidate.recipe },
+        recipe_schema_version: candidate.recipe?.version ?? null,
+        recipe_fingerprint: candidate.recipeFingerprint,
+        recipe_status: candidate.retrievalMethod === "feed" ? "feed" : "ready",
+        confirmed_fetch_hosts: [...candidate.confirmedFetchHosts],
+        authorization_confirmed_at: confirmedAt
       })
       .onConflict((oc) => oc.doNothing())
       .returning(SOURCE_COLUMNS)
@@ -187,13 +242,12 @@ export class SportsSourcesRepository {
     }
     const assignments = await scopedDb.db
       .selectFrom("app.sports_source_assignments")
-      .select(["follow_id"])
+      .select(ASSIGNMENT_COLUMNS)
       .where("source_id", "=", sourceId)
+      .orderBy("created_at")
+      .orderBy("id")
       .execute();
-    return toDto(
-      source,
-      assignments.map((row) => row.follow_id)
-    );
+    return toDto(source, assignments);
   }
 
   async readPolicyVerdict(
