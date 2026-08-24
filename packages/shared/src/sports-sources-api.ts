@@ -143,7 +143,7 @@ const sportsSourceAssignmentDtoSchema = {
   properties: {
     id: { type: "string", format: "uuid" },
     followId: { type: "string", format: "uuid" },
-    targetUrl: { type: ["string", "null"], maxLength: 2048, pattern: "^https://" },
+    targetUrl: { type: ["string", "null"], maxLength: 2048, pattern: "^https://.+$" },
     previewStatus: { type: "string", enum: ["pending", "verified", "recipe_missing"] },
     healthState: sportsSourceHealthSchema,
     healthReasonCode: { type: ["string", "null"], maxLength: 64 },
@@ -179,8 +179,8 @@ const sportsCustomSourceDtoSchema = {
     id: { type: "string" },
     label: { type: "string", minLength: 1, maxLength: 120 },
     canonicalDomain: { type: "string", minLength: 1, maxLength: 253 },
-    homepageUrl: { type: "string", maxLength: 2048, pattern: "^https://" },
-    feedUrl: { type: ["string", "null"], maxLength: 2048, pattern: "^https://" },
+    homepageUrl: { type: "string", maxLength: 2048, pattern: "^https://.+$" },
+    feedUrl: { type: ["string", "null"], maxLength: 2048, pattern: "^https://.+$" },
     retrievalMethod: { type: "string", enum: ["feed", "scrape"] },
     enabled: { type: "boolean" },
     healthState: sportsSourceHealthSchema,
@@ -232,7 +232,7 @@ export const previewSportsSourceSchema = {
             exactTargetUrl: {
               type: "string",
               maxLength: 2048,
-              pattern: "^https://"
+              pattern: "^https://.+$"
             }
           }
         }
@@ -299,7 +299,7 @@ export const previewSportsSourceSchema = {
                   teamKey: { type: ["string", "null"], maxLength: 100 },
                   teamLabel: { type: ["string", "null"], maxLength: 120 },
                   scope: { type: "string", enum: ["team", "competition"] },
-                  targetUrl: { type: "string", maxLength: 2048, pattern: "^https://" },
+                  targetUrl: { type: "string", maxLength: 2048, pattern: "^https://.+$" },
                   sampleHeadlines: {
                     type: "array",
                     maxItems: 10,
@@ -349,7 +349,7 @@ export const confirmSportsSourceSchema = {
           required: ["followId", "targetUrl"],
           properties: {
             followId: { type: "string", format: "uuid" },
-            targetUrl: { type: "string", maxLength: 2048, pattern: "^https://" }
+            targetUrl: { type: "string", maxLength: 2048, pattern: "^https://.+$" }
           }
         }
       }
@@ -416,7 +416,7 @@ export const previewSportsSourceAssignmentsSchema = {
           required: ["followId"],
           properties: {
             followId: { type: "string", format: "uuid" },
-            exactTargetUrl: { type: "string", maxLength: 2048, pattern: "^https://" }
+            exactTargetUrl: { type: "string", maxLength: 2048, pattern: "^https://.+$" }
           }
         }
       }

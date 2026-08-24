@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { validateToolInput } from "@moss/ai";
 import { sportsModuleManifest } from "../../packages/sports/src/manifest.js";
 
 describe("sports manifest", () => {
@@ -73,6 +74,42 @@ describe("sports manifest", () => {
       expect(byName[name]?.actionFamilyId).toBe("sports.sources");
       expect(byName[name]?.selfOperationGrant).toBe("confirm_always");
     }
+  });
+
+  it("accepts a complete HTTPS target through the Moss confirmation boundary", async () => {
+    const tool = sportsModuleManifest.assistantTools.find(
+      ({ name }) => name === "sports.confirmSourceRecipe"
+    );
+    const input = {
+      sourceId: "22222222-2222-4222-8222-222222222222",
+      confirmationId: "confirmation-1",
+      authorizationAcknowledgement: "I am authorized.",
+      canonicalDomain: "www.publisher.example",
+      confirmedFetchHosts: ["www.publisher.example"],
+      targets: [
+        {
+          followId: "11111111-1111-4111-8111-111111111111",
+          targetUrl: "https://www.publisher.example/feed?format=atom"
+        }
+      ]
+    };
+
+    await expect(
+      validateToolInput(tool?.inputSchema, input, {
+        external: false,
+        toolName: "sports.confirmSourceRecipe"
+      })
+    ).resolves.toEqual(input);
+    await expect(
+      validateToolInput(
+        tool?.inputSchema,
+        {
+          ...input,
+          targets: [{ ...input.targets[0], targetUrl: "http://www.publisher.example/feed" }]
+        },
+        { external: false, toolName: "sports.confirmSourceRecipe" }
+      )
+    ).rejects.toThrow("targets[0].targetUrl has an invalid format");
   });
 
   // #1265 security QA BLOCKING-1(b): both follow tools auto-run under a granted_at_install grant,
