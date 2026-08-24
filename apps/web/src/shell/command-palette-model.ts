@@ -29,16 +29,8 @@ const GROUP_ORDER: readonly CommandPaletteGroupLabel[] = [
   "Appearance",
   "Settings"
 ] as const;
-const V1_NAV_ORDER: readonly string[] = [
-  "today",
-  "tasks",
-  "calendar",
-  "wellness",
-  "notifications",
-  "briefings",
-  "settings"
-] as const;
-const V1_NAV_IDS = new Set(V1_NAV_ORDER);
+// "briefings" has no web route of its own -- Today covers it -- and "chat" isn't a page.
+const PALETTE_HIDDEN_NAV_IDS = new Set(["chat", "briefings"]);
 
 export function buildCommandPaletteCommands(input: {
   readonly modules: readonly ModuleDto[];
@@ -209,15 +201,17 @@ function paletteNavigationEntries(
 
   for (const module of modules) {
     for (const entry of module.navigation) {
-      if (!V1_NAV_IDS.has(entry.id)) continue;
+      if (PALETTE_HIDDEN_NAV_IDS.has(entry.id)) continue;
       entryById.set(entry.id, entry);
     }
   }
 
   return [...entryById.values()].sort((left, right) => {
-    const leftIndex = V1_NAV_ORDER.indexOf(left.id);
-    const rightIndex = V1_NAV_ORDER.indexOf(right.id);
-    return leftIndex - rightIndex;
+    if (left.id === "today" || right.id === "today") return left.id === "today" ? -1 : 1;
+    if (left.id === "settings" || right.id === "settings") return left.id === "settings" ? 1 : -1;
+    const leftOrder = left.order ?? Number.MAX_SAFE_INTEGER;
+    const rightOrder = right.order ?? Number.MAX_SAFE_INTEGER;
+    return leftOrder - rightOrder || left.label.localeCompare(right.label);
   });
 }
 
