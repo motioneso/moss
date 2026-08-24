@@ -187,6 +187,7 @@ async function main(): Promise<void> {
 }
 
 function ensureProdSmokeEnv(composeFile: string): () => void {
+  if (composeFile === "infra/docker-compose.prod.yml") process.env.JARVIS_IMAGE_TAG ??= "smoke";
   if (composeFile !== "infra/docker-compose.prod.yml" || process.env.JARVIS_ENV_FILE) {
     process.env.POSTGRES_PASSWORD ??= "postgres";
     process.env.JARVIS_CLI_RUNNER_RPC_SECRET ??= "smoke-only-not-real";
@@ -214,6 +215,7 @@ function ensureProdSmokeEnv(composeFile: string): () => void {
       "BETTER_AUTH_SECRET=smoke-only-not-a-real-secret-0000000000",
       "JARVIS_CONNECTOR_SECRET_KEY=00000000000000000000000000000000",
       "JARVIS_AI_SECRET_KEY=11111111111111111111111111111111",
+      "JARVIS_MODULE_CREDENTIAL_SECRET_KEY=22222222222222222222222222222222",
       "JARVIS_CLI_RUNNER_RPC_SECRET=smoke-only-not-real",
       "JARVIS_EMBED_PROVIDER=stub",
       ""
