@@ -100,6 +100,7 @@ describe("run-uat CLI (#1027/#1047)", () => {
       `export const uatLevel = {
         level: "admin+data",
         without: ["sports"],
+        withoutNewsJsonBinding: true,
         withSportsPublicSourceFixtures: true
       } as const;`
     );
@@ -109,7 +110,7 @@ describe("run-uat CLI (#1027/#1047)", () => {
 
     expect(mocks.provisionForUat).toHaveBeenCalledWith("admin+data", {
       excludeChunks: ["sports"],
-      withoutNewsJsonBinding: false,
+      withoutNewsJsonBinding: true,
       withJobSearchFixture: false,
       withSportsPublicSourceFixtures: true,
       chatScript: undefined

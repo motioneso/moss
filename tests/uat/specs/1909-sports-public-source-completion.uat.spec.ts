@@ -10,6 +10,7 @@ import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 export const uatLevel = {
   level: "admin+data",
   without: ["sports"],
+  withoutNewsJsonBinding: true,
   withSportsPublicSourceFixtures: true
 } as const;
 
