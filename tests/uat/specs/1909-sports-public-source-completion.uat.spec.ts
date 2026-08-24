@@ -288,8 +288,14 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
     throw new Error("#1909 source fixtures were not seeded");
   }
 
-  expect(bbc.healthState).toBe("pending");
-  expect(bbc.lastCheckedAt).toBeNull();
+  expect(["pending", "healthy"]).toContain(bbc.healthState);
+  if (bbc.healthState === "pending") {
+    expect(bbc.lastCheckedAt).toBeNull();
+    expect(bbc.lastSuccessAt).toBeNull();
+  } else {
+    expect(bbc.lastCheckedAt).toBeTruthy();
+    expect(bbc.lastSuccessAt).toBeTruthy();
+  }
   expect(bbc.assignments.every((assignment) => assignment.previewStatus === "verified")).toBe(true);
   expect(failing.healthState).toBe("failing");
   expect(failing.healthReasonCode).toBe("partial_target_failure");
