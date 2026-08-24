@@ -59,7 +59,7 @@ export function TasksPage() {
   const [searchWarning, setSearchWarning] = useState<string | null>(null);
   const [listStates, setListStates] = useState<Record<string, ListState>>({});
   const [tagFilter, setTagFilter] = useState<string[]>([]);
-  const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
   // Modal: null = closed; { id: string } = edit; { id: null, defaultName? } = create.
   const [dialog, setDialog] = useState<{
     readonly id: string | null;
@@ -182,6 +182,19 @@ export function TasksPage() {
               onCycle={cycleList}
               onReset={() => setListStates({})}
             />
+
+            <Segmented<TaskDefaultView>
+              ariaLabel="View"
+              options={[
+                { value: "priority", label: "List" },
+                { value: "matrix", label: "Matrix" }
+              ]}
+              value={view}
+              onChange={(next) => {
+                if (viewMutation.isPending) return;
+                viewMutation.mutate(next);
+              }}
+            />
           </div>
 
           {/* "" is the no-selection value: a URL focus overrides the status filter. */}
@@ -209,7 +222,7 @@ export function TasksPage() {
         </div>
 
         <div className="tk-bar__right">
-          <div className={`tk-bar__search${showMobileSearch ? " is-open" : ""}`}>
+          <div className={`tk-bar__search${showSearch ? " is-open" : ""}`}>
             <label className="tk-tagfield">
               <span className="ic">
                 <Search size={14} aria-hidden="true" />
@@ -244,25 +257,12 @@ export function TasksPage() {
 
           <button
             aria-label="Toggle search"
-            className={`tk-msrch${showMobileSearch ? " is-active" : ""}`}
+            className={`tk-msrch${showSearch ? " is-active" : ""}`}
             type="button"
-            onClick={() => setShowMobileSearch((v) => !v)}
+            onClick={() => setShowSearch((v) => !v)}
           >
             <Search size={15} aria-hidden="true" />
           </button>
-
-          <Segmented<TaskDefaultView>
-            ariaLabel="View"
-            options={[
-              { value: "priority", label: "List" },
-              { value: "matrix", label: "Matrix" }
-            ]}
-            value={view}
-            onChange={(next) => {
-              if (viewMutation.isPending) return;
-              viewMutation.mutate(next);
-            }}
-          />
         </div>
       </div>
 
