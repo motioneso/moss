@@ -16,8 +16,7 @@ test("connects Google via the settings flow", async ({ page }) => {
   await page.getByRole("button", { name: "Connected accounts" }).click();
   await expect(page.getByRole("heading", { name: "Connected accounts" })).toBeVisible();
 
-  // Connect account -> service picker -> Google opens the walkthrough takeover.
-  await page.getByRole("button", { name: "Connect account" }).click();
+  // With no accounts yet, the service picker is shown immediately.
   await page.getByRole("button", { name: "Google", exact: true }).click();
   await expect(page.getByText("Connect Google")).toBeVisible();
 

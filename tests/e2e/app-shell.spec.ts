@@ -163,7 +163,7 @@ test("lists and marks notifications read through REST calls", async ({ page }) =
   });
 
   await page.goto("/notifications");
-  await expect(page.getByRole("heading", { name: "Notifications" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Notifications" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Unread\s*\(2\)/ })).toBeVisible();
   await expect(page.getByText("New secure notice")).toBeVisible();
 
@@ -215,7 +215,7 @@ test("connector accounts panel shows existing accounts and supports revoke", asy
   await expect(page.getByRole("heading", { name: "Connected accounts" })).toBeVisible();
 
   await expect(page.getByText("Google Email")).toBeVisible();
-  await expect(page.getByText(/gmail\.readonly/)).toBeVisible();
+  await expect(page.getByText("Live connection")).toBeVisible();
   await page.getByRole("button", { name: "Revoke" }).click();
   await page
     .getByRole("dialog", { name: "Revoke Google Email access?" })

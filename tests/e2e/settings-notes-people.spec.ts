@@ -113,9 +113,9 @@ async function openPeoplePane(page: Page): Promise<void> {
   await page.goto("/settings?section=memory");
   await page
     .getByRole("group", { name: "Memory section" })
-    .getByRole("button", { name: "People & context" })
+    .getByRole("button", { name: "People", exact: true })
     .click();
-  await expect(page.getByRole("heading", { name: "People & context" })).toBeVisible();
+  await expect(page.getByText("People notes", { exact: true })).toBeVisible();
 }
 
 async function choosePeopleFamily(page: Page, keyboard = false): Promise<void> {
