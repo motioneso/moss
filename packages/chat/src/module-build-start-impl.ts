@@ -20,6 +20,17 @@ import type { ModuleBuildStartService } from "@moss/workshop";
 
 import { createCliStructuredAdapterFactory } from "./live/cli-structured-adapter.js";
 
+// The gateway hands a tool a `chatSessionId` that identifies the SURFACE, not a row: on the chat
+// drawer it is literally "<userId>:drawer". `module_builds.conversation_id` is a uuid column, so
+// passing that straight through makes the insert throw and the whole tool call fail — which is
+// exactly what happened the first time this ran against a live instance. Store it only when it is
+// a real id; the column is nullable, and a build with no conversation link is correct and honest.
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function asConversationId(chatSessionId: string): string | undefined {
+  return UUID_PATTERN.test(chatSessionId) ? chatSessionId : undefined;
+}
+
 export interface ModuleBuildStartServiceDeps {
   readonly boss: PgBoss;
   readonly aiRepository: AiRepository;
@@ -91,7 +102,7 @@ export function buildModuleBuildStartService(
         },
         {
           actorUserId: input.actorUserId,
-          conversationId: input.chatSessionId,
+          conversationId: asConversationId(input.chatSessionId),
           description: input.description,
           conversationExcerpt: input.conversationExcerpt
         }
