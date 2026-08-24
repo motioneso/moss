@@ -9,7 +9,9 @@ earlier viewer-and-watchdog draft of the same date.
 The first draft covered a lane watchdog and a nicer screen. An adversarial review of the daemon
 found bigger problems underneath: one way the fleet can merge an unproven user-facing change on
 its own, three ways a lane stalls forever once its first agent exits, and three loops that spend
-a model call every minute all night. The watchdog and the screen are still here, but they ship
+a model call every minute all night. The same evening, a live run then demonstrated a defect
+the review had not: the whole fleet froze in silence when GitHub stopped answering questions,
+and the freeze was indistinguishable from normal progress (unit 2). The watchdog and the screen are still here, but they ship
 last, because none of them matter if the fleet strands its lanes or burns money while everyone
 sleeps.
 
@@ -25,11 +27,19 @@ Two constraints are settled and not revisited here:
 
 ## Ship order
 
-Seven units, each one pull request. Units 1 through 4 must land before the next unattended
-overnight run: without them the fleet can merge an unproven change (unit 1), strands most lanes
-that hit any bump (unit 2), can burn a model call a minute (unit 3), and silently wedges its
-merge step (unit 4). Units 5 through 7 follow in order; the fleet is safe to run overnight
-without them, just rougher around the edges.
+Eight units, each one pull request. Units 1 through 5 must land before the next unattended
+overnight run: without them the fleet can merge an unproven change (unit 1), freezes the whole
+run in silence when GitHub's answer allowance runs out (unit 2, observed live tonight), strands
+most lanes that hit any bump (unit 3), can burn a model call a minute (unit 4), and silently
+wedges its merge step (unit 5). Units 6 through 8 follow in order; the fleet is safe to run
+overnight without them, just rougher around the edges.
+
+Unit 2 sits that high, above lane recovery, because of how the two fail. Every other defect
+strands one lane and leaves evidence a human can read in the morning. This one freezes every
+lane at once and writes nothing at all - the board looks like normal progress. It has already
+happened once, at a single lane, at eight in the evening; at five lanes and thirty agents it is
+close to guaranteed. Unit 1 stays first only because it is tiny and it is the one defect that
+can break production rather than waste a night.
 
 ---
 
@@ -66,7 +76,80 @@ unit's own pull request.
 
 ---
 
-## Unit 2: lanes must recover after their first agent exits
+## Unit 2: silence must never read as progress
+
+**The bug, observed live on 2026-08-23.** Issue 1422's pull request went fully green at 02:38.
+The daemon ticked every minute afterwards and never advanced the lane, and wrote no log line.
+Cause: the daemon asks GitHub for a pull request's check results through GitHub's query
+service, whose hourly answer allowance is shared by every agent and tool on this box. The
+allowance was exhausted. When that happens, the command the daemon runs prints a rate-limit
+error and still exits as if it succeeded, with no results. The daemon saw zero failing checks
+and zero finished checks, concluded the build was still running, and settled in to wait
+forever. One lane hit this at eight in the evening; an overnight run at five lanes shares the
+same single allowance, so this is the failure mode where Ben wakes up to a frozen fleet, a
+board that says everything is in progress, and nothing done.
+
+Note that unit 5's stuck-checks deadline does not save us here: that deadline fires when the
+daemon knows checks are pending too long. In this failure the daemon never learns anything at
+all - it cannot tell a starved answer from a build still running.
+
+**The fix, in three layers, ordered from the specific defect out to the general disease.**
+
+- **Never trust an empty answer from a command that claims success.** Everywhere the daemon
+  asks GitHub something and gets nothing back, "nothing" stops meaning "no news, wait" and
+  becomes a distinct condition: the error text is captured instead of thrown away, and a
+  rate-limit message is recognised and handled as "GitHub is refusing to answer right now",
+  never as "checks still running". Today the daemon discards every error message these
+  commands print, which is exactly why this failed without a trace. Rate-limit responses are
+  logged once per tick at fleet level - one line, not one per lane, so a starved hour does not
+  flood the log.
+- **Ask the healthier door first.** GitHub exposes check results through two separate doors
+  with separate allowances: the query service the daemon uses today (which was at zero), and
+  the plain REST interface (which was at 4999 of 5000 at the same moment, because almost
+  nothing on this box uses it). The daemon switches to the REST interface as the primary
+  source for check results and merge state, and keeps the current command only as the
+  fallback when REST itself fails. This is the cheapest real fix: same information, an
+  allowance nobody is competing for. Also, when GitHub reports the allowance exhausted, the
+  daemon backs off: it marks the whole tick as starved, skips the remaining GitHub questions
+  that tick instead of burning one failed call per lane, and resumes normally once an answer
+  succeeds. The reply says when the allowance resets, and the daemon believes it rather than
+  hammering.
+- **A stillness alarm, regardless of cause.** The general disease is silence reading as
+  progress, and the next silent failure will have a cause nobody has met yet. So the daemon
+  gets one cheap, cause-blind rule: at the end of each tick it checks, from the records it
+  already has in hand, whether any lane in a supposedly moving state (waiting on checks, in
+  review, merging) has gone a full hour with no record change and no log line. If so it
+  raises a fleet-level warning: one line in the log, a banner line on the board, and the
+  viewer shows it in the header next to the judge alarm from unit 6. It does not park the
+  lane and does not spawn anything - the specific deadlines in units 3 and 5 own the acting;
+  this alarm owns the noticing, so that even a failure those deadlines cannot see still
+  leaves a visible trace by morning. It costs no GitHub calls and no model calls, only a
+  comparison of timestamps the tick already read.
+
+**Why this over the alternatives.** Retrying the same starved query harder does nothing; the
+allowance is shared and empty. Giving the fleet its own dedicated GitHub identity would truly
+isolate its allowance and may be worth doing someday, but it is account setup and credential
+handling for a problem the REST door solves today with zero new secrets. And relying on the
+stillness alarm alone, without the first two layers, would tell Ben the fleet froze without
+making it stop freezing.
+
+**Tests.** The tick tests already run against stubbed GitHub commands, so the fixtures gain: a
+check query that exits clean but prints a rate-limit error routes to "GitHub refusing to
+answer", not "still running"; a starved tick skips remaining GitHub questions and touches no
+lane state; the REST door is asked first and the old door only on REST failure; a lane
+unmoved for an hour in a moving state raises the stillness warning and a parked lane does
+not; the warning appears once, not once per lane per tick.
+
+**Live proof for this unit.** Reproduce the real event: on the dev box, exhaust the query
+allowance (or point the daemon at a stub that answers exactly what GitHub answered at 02:38),
+with a live lane green and waiting. Show the daemon advancing the lane anyway through the
+REST door, and show the log carrying the rate-limit line instead of nothing. Separately,
+freeze a lane record by hand for an hour and show the stillness warning on the board and in
+the viewer header. Recorded on the pull request.
+
+---
+
+## Unit 3: lanes must recover after their first agent exits
 
 **The bug, in three parts.** A build agent ends its session when it opens the pull request.
 Everything the daemon does after that assumes someone is still listening, and nobody is:
@@ -93,7 +176,7 @@ commands every brief carries. The fix agent pushes, sets the record back to "pul
 waiting on checks", and stops.
 
 **How recovery spends the budget.** Every recovery spawn - a fix agent, a re-spawned reviewer,
-a conflict-resolver from unit 4 - counts against the same nightly spawn budget as everything
+a conflict-resolver from unit 5 - counts against the same nightly spawn budget as everything
 else, and respects the memory floor. One number stays honest that way; a separate recovery
 budget would be a second dial to misconfigure. But the budget is split by purpose: the last
 fifth of it (six spawns, at the agreed thirty) is reserved for recovery. New lanes stop being
@@ -137,7 +220,7 @@ with nobody typing into any pane. Recorded on the pull request.
 
 ---
 
-## Unit 3: stop the repeating model calls
+## Unit 4: stop the repeating model calls
 
 **The bug, in three loops.** Each of these asks a model the same question once per tick, which
 is once per minute, with no memory and no cap:
@@ -186,7 +269,7 @@ pull request.
 
 ---
 
-## Unit 4: merges must succeed, fail loudly, or get out of the way
+## Unit 5: merges must succeed, fail loudly, or get out of the way
 
 **The bug.** The command that turns on auto-merge can fail: the branch has conflicts, the
 branch is behind and the rules require it current, or auto-merge is not permitted. The daemon
@@ -204,7 +287,7 @@ pending forever (a CI outage at 3am) hold a lane slot all night with no deadline
   - Branch merely behind: the daemon asks GitHub to update the branch (the built-in
     update-branch action, a plain API call, no model involved), then retries auto-merge next
     tick. Two failed update attempts park the lane.
-  - Conflicts: the daemon spawns a fix agent (unit 2's machinery) with a brief that says
+  - Conflicts: the daemon spawns a fix agent (unit 3's machinery) with a brief that says
     exactly this: bring this branch up to date with main, resolve the conflicts, push. It
     counts as a fix round.
   - Anything else (auto-merge not allowed, rules refuse it): park immediately with the
@@ -235,7 +318,7 @@ reason, with nobody typing. Recorded on the pull request.
 
 ---
 
-## Unit 5: trust and hygiene
+## Unit 6: trust and hygiene
 
 Smaller fixes, batched because each is a few lines and they share test scaffolding. All are
 real findings from the review, none is speculative.
@@ -276,12 +359,12 @@ real findings from the review, none is speculative.
   nothing new, the daemon polls GitHub every tenth tick instead of every tick, and writes a
   "run complete" line to the board. It never disables its own timer: a program that switches
   off its own supervision cannot be restarted by that supervision, and the real stop belongs
-  to the human, via the viewer's end-run action (unit 7) or the STOP file.
+  to the human, via the viewer's end-run action (unit 8) or the STOP file.
 - **One set of defaults: five lanes, thirty spawns.** The daemon falls back to three lanes and
   twelve spawns; the launcher seeds five and thirty. Ben's ruling, 2026-08-23: align up, not
   down - the daemon's fallbacks rise to five and thirty so both halves agree. Two consequences
   are handled elsewhere in this spec: recovery spawns now share and reserve part of that
-  budget (unit 2), and the memory question below.
+  budget (unit 3), and the memory question below.
 - **The memory floor with five lanes.** The 4 GB free-memory floor stays, but it is only a
   pre-spawn check: it stops the next agent from starting, it does not notice a box that
   drifted below the floor after everyone was already running. Five lanes plus reviewers and
@@ -310,7 +393,7 @@ replies folder and nothing else. Recorded on the pull request.
 
 ---
 
-## Unit 6: the lane watchdog, corrected
+## Unit 7: the lane watchdog, corrected
 
 The first draft's watchdog had a hole in the middle: its third strike handed a wedged lane "to
 the daemon's existing restart-or-park judgment call", but that call only fires when the agent
@@ -321,7 +404,7 @@ the decision that the watchdog is a script, never a model, and fixes the mechani
 - **A script on the existing one-minute timer**, generalised from the coordinator watchdog
   that already exists and is switched off. It watches every pane in the fleet's agents tab.
 - **Pane to lane mapping, defined.** The agent list maps each live agent to its pane, and the
-  fleet's own agent names carry the issue number (unit 5 makes that matching exact). A pane in
+  fleet's own agent names carry the issue number (unit 6 makes that matching exact). A pane in
   the tab with no fleet-named agent is ignored. A lane whose record says paused is never
   touched: a paused lane is a human holding it on purpose.
 - **Signs of life.** As in the existing script, either the pane reporting "working" or any
@@ -389,7 +472,7 @@ stopped lane through its normal dead-agent triage. Recorded on the pull request.
 
 ---
 
-## Unit 7: the viewer
+## Unit 8: the viewer
 
 Last because it is the least load-bearing: it changes only what is drawn and what is read from
 disk. Ben's already-agreed rulings stand: the progress track stays, the fuel bar shows tokens
@@ -412,10 +495,10 @@ bottom.
 - **End the run.** The "e" key, behind a confirmation: stops the tick timer and the watchdog
   timer, asks whether to leave running agents working or close their panes, writes a run-ended
   stamp so "Completed This Run" freezes at what the run actually finished, and rotates the log
-  (unit 5).
+  (unit 6).
 - **Layout**, per the agreed mockup: header with run clock, live indicator, lanes against the
-  cap, spawn budget, held count, token totals, deputy state, and the judge alarm from unit 5
-  when present; three lines per in-progress lane (identity, progress track, one plain
+  cap, spawn budget, held count, token totals, deputy state, and, when present, the judge
+  alarm from unit 6 and the stillness warning from unit 2; three lines per in-progress lane (identity, progress track, one plain
   sentence); held issues collapsed to one dim line; colour carries state; key hints along the
   bottom. Copy stays dry and plain, one sentence per lane, no jargon.
 
@@ -437,16 +520,16 @@ The open questions from the first draft are settled and folded into the units ab
 here so the reasoning is not lost:
 
 1. **Replies to parked lanes use fixed first words** ("resume", "merge", anything else flags
-   the lane for his attention). No model between his words and the action. Unit 5.
+   the lane for his attention). No model between his words and the action. Unit 6.
 2. **Checks pending too long: re-run once, then park**, so a 3am CI outage does not cost the
-   whole lane. Unit 4.
-3. **Defaults are five lanes and thirty spawns** - aligned up, not down. Unit 5 carries the
-   two consequences: the recovery reserve in the spawn budget (unit 2) and the memory-floor
+   whole lane. Unit 5.
+3. **Defaults are five lanes and thirty spawns** - aligned up, not down. Unit 6 carries the
+   two consequences: the recovery reserve in the spawn budget (unit 3) and the memory-floor
    watch on the first five-lane run.
 4. **The watchdog never kills on quiet alone.** It checks the process tree first and stays
    its hand when anything underneath is computing, fails safe to a nudge when it cannot read
    the system, and keeps only a long three-hour backstop for the CPU-burning infinite loop.
-   Unit 6.
+   Unit 7.
 
 ## What this spec does not do
 
