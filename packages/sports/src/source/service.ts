@@ -256,8 +256,13 @@ export class SportsSourceService {
     let discovered: VerifiedSportsSourceCandidate | null = null;
     if (requestedTargets.length > 0) {
       const result = await resolveSportsSourceInput(scopedDb, this.dependencies.discovery, {
-        rawUrl: baseline.source.homepageUrl,
-        targets: requestedTargets
+        rawUrl: baseline.source.feedUrl ?? baseline.source.homepageUrl,
+        targets: requestedTargets,
+        persistedAuthority: {
+          recipeJson: baseline.recipeJson,
+          recipeFingerprint: baseline.recipeFingerprint,
+          confirmedFetchHosts: baseline.confirmedFetchHosts
+        }
       });
       if (result.status !== "ok") return result;
       if (

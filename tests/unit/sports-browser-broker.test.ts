@@ -262,6 +262,82 @@ describe("SportsBrowserBroker", () => {
     expect(broker.hasJob(control.jobId)).toBe(false);
   });
 
+  it("reserves aggregate byte allowance before concurrent fetches start", async () => {
+    let blocking = false;
+    const maxBytes: number[] = [];
+    const broker = new SportsBrowserBroker({
+      fetch: async (url, options) => {
+        maxBytes.push(options.maxBytes);
+        options.beforeRequest({
+          url: new URL(url),
+          address: "93.184.216.34",
+          family: 4,
+          method: options.method,
+          redirectCount: 0
+        });
+        if (blocking) {
+          return new Promise((resolve) => {
+            options.signal.addEventListener(
+              "abort",
+              () => resolve({ ok: false, reason: "network", detail: "aborted" }),
+              { once: true }
+            );
+          });
+        }
+        return {
+          ok: true,
+          status: 200,
+          finalUrl: url,
+          contentType: "application/json",
+          body: new Uint8Array(),
+          truncated: false,
+          bytesRead: 2 * 1024 * 1024
+        };
+      }
+    });
+    brokers.push(broker);
+    const control = broker.createJob({
+      url: "https://publisher.example/news",
+      allowedHosts: ["publisher.example"]
+    });
+    for (let index = 0; index < 3; index += 1) {
+      await broker.fetch({
+        ...control,
+        requestId: `prime_${index}`,
+        method: "GET",
+        resourceType: "fetch"
+      });
+    }
+
+    blocking = true;
+    const first = broker.fetch({
+      ...control,
+      requestId: "concurrent_1",
+      method: "GET",
+      resourceType: "fetch"
+    });
+    const second = broker.fetch({
+      ...control,
+      requestId: "concurrent_2",
+      method: "GET",
+      resourceType: "fetch"
+    });
+    await expect(
+      broker.fetch({
+        ...control,
+        requestId: "concurrent_3",
+        method: "GET",
+        resourceType: "fetch"
+      })
+    ).resolves.toEqual({ ok: false, reason: "budget_exceeded" });
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { ok: false, reason: "aborted", status: undefined, bytesRead: undefined },
+      { ok: false, reason: "aborted", status: undefined, bytesRead: undefined }
+    ]);
+    expect(maxBytes).toEqual(Array.from({ length: 5 }, () => 2 * 1024 * 1024));
+    expect(broker.hasJob(control.jobId)).toBe(false);
+  });
+
   it("retains at most five candidate responses and clears them when control completes", async () => {
     const broker = new SportsBrowserBroker({
       fetch: async (url, options) => {

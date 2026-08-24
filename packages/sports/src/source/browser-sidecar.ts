@@ -293,7 +293,8 @@ async function render(control: BrowserRenderRequest, socketPath: string, signal:
           signal
         );
         if (request.resourceType() === "document") finalUrl = fetchedFinalUrl;
-      } catch {
+      } catch (error) {
+        console.error("sports browser broker request failed", error);
         await route.abort("failed").catch(() => undefined);
       }
     });
@@ -330,7 +331,7 @@ export class SportsBrowserSidecar {
 
   async start(): Promise<void> {
     if (this.server) return;
-    await mkdir(dirname(this.socketPath), { recursive: true, mode: 0o770 });
+    await mkdir(dirname(this.socketPath), { recursive: true, mode: 0o2770 });
     const existing = await lstat(this.socketPath).catch(() => undefined);
     if (existing && !existing.isSocket()) {
       throw new Error("Refusing to replace a non-socket Sports renderer path");
@@ -388,7 +389,8 @@ export class SportsBrowserSidecar {
       let result: BrowserRenderResult;
       try {
         result = await render(parsed.value, this.brokerSocketPath, controller.signal);
-      } catch {
+      } catch (error) {
+        console.error("sports browser render failed", error);
         result = {
           ok: false,
           jobId: parsed.value.jobId,

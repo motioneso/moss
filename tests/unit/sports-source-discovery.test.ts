@@ -82,6 +82,51 @@ describe("resolveSportsSourceInput", () => {
     });
   });
 
+  it("accepts a structurally valid empty feed discovered on an exact first-party host", async () => {
+    const fetch = fetchMap({
+      "https://one.example/": {
+        body: `<link rel="alternate" type="application/rss+xml" href="https://feeds.one.example/rss.xml">`
+      },
+      "https://feeds.one.example/rss.xml": {
+        body: `\uFEFF<?xml version="1.0"?><!-- empty --><rss><channel></channel></rss>`,
+        contentType: "application/rss+xml"
+      }
+    });
+    await expect(
+      resolveSportsSourceInput(db, { fetch, ai: ai() }, { rawUrl: "https://one.example" })
+    ).resolves.toMatchObject({
+      status: "ok",
+      candidate: {
+        feedUrl: "https://feeds.one.example/rss.xml",
+        sampleCount: 0,
+        confirmedFetchHosts: ["one.example", "feeds.one.example"]
+      }
+    });
+    expect(fetch).toHaveBeenCalledWith("https://feeds.one.example/rss.xml", {
+      allowedHosts: ["feeds.one.example"]
+    });
+  });
+
+  it("does not treat arbitrary XML as a public feed", async () => {
+    const generateJson = vi.fn(async () => ({ ok: true as const, object: {} }));
+    await expect(
+      resolveSportsSourceInput(
+        db,
+        {
+          fetch: fetchMap({
+            "https://one.example/": {
+              body: `<rss><evil/></rss>`,
+              contentType: "application/xml"
+            }
+          }),
+          ai: { fingerprint: async () => null, generateJson }
+        },
+        { rawUrl: "https://one.example" }
+      )
+    ).resolves.toEqual({ status: "rejected", reason: "unsupported" });
+    expect(generateJson).toHaveBeenCalledOnce();
+  });
+
   it("rejects a non-HTTPS URL without making a network request", async () => {
     const fetch = fetchMap({});
     await expect(
@@ -118,6 +163,19 @@ describe("resolveSportsSourceInput", () => {
         { rawUrl: "https://one.example" }
       )
     ).resolves.toEqual({ status: "rejected", reason: "policy" });
+  });
+
+  it("rejects an escaped canonical before fetching it", async () => {
+    const fetch = fetchMap({
+      "https://one.example/": {
+        body: `<link rel="canonical" href="https://evil.test/news">`
+      },
+      "https://evil.test/": { body: `<title>Evil</title>` }
+    });
+    await expect(
+      resolveSportsSourceInput(db, { fetch, ai: ai() }, { rawUrl: "https://one.example" })
+    ).resolves.toEqual({ status: "rejected", reason: "policy" });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("resolves a static page only after strict recipe replay", async () => {
@@ -202,6 +260,76 @@ describe("resolveSportsSourceInput", () => {
     expect(generateJson.mock.calls[1]?.[1].prompt).toContain("UNTRUSTED_EVIDENCE_START");
   });
 
+  it("derives bounded first-party hosts before one browser job and replays only recipe hosts", async () => {
+    const recipe = {
+      version: 1,
+      kind: "json",
+      fetchHosts: ["api.one.example"],
+      request: {
+        urlTemplate: "https://api.one.example/news",
+        slots: [],
+        headers: { accept: "application/json" }
+      },
+      scopes: ["team"],
+      itemLimit: 10,
+      extraction: {
+        itemsPath: ["news"],
+        headlinePath: ["title"],
+        normalize: ["trim"]
+      }
+    } as const;
+    const generateJson = vi
+      .fn<NewsAiPort["generateJson"]>()
+      .mockResolvedValueOnce({ ok: true, object: {} })
+      .mockResolvedValueOnce({ ok: true, object: recipe });
+    const fetch = fetchMap({
+      "https://one.example/": {
+        body: `<script>window.api = "https://api.one.example/news"</script>`
+      },
+      "https://api.one.example/news": {
+        body: `{"news":[{"title":"First-party API headline"}]}`,
+        contentType: "application/json"
+      }
+    });
+    const browser = {
+      render: vi.fn(async () => ({
+        ok: true as const,
+        finalUrl: "https://one.example/",
+        domHtml: `<main>Rendered</main>`,
+        evidence: Array.from({ length: 8 }, (_, index) => ({
+          finalUrl: `https://api.one.example/news?page=${index}`,
+          contentType: "application/json",
+          body: new TextEncoder().encode(`{"page":${index}}`)
+        }))
+      }))
+    };
+
+    await expect(
+      resolveSportsSourceInput(
+        db,
+        { fetch, ai: { fingerprint: async () => null, generateJson }, browser },
+        { rawUrl: "https://one.example" }
+      )
+    ).resolves.toMatchObject({
+      status: "ok",
+      candidate: { recipe, confirmedFetchHosts: ["one.example", "api.one.example"] }
+    });
+    expect(browser.render).toHaveBeenCalledOnce();
+    expect(browser.render).toHaveBeenCalledWith({
+      url: "https://one.example/",
+      allowedHosts: ["one.example", "api.one.example"]
+    });
+    expect(fetch).toHaveBeenCalledWith("https://api.one.example/news", {
+      allowedHosts: ["api.one.example"],
+      requestHeaders: { accept: "application/json" }
+    });
+    const prompt = generateJson.mock.calls[1]?.[1].prompt ?? "";
+    const evidenceJson = prompt
+      .split("UNTRUSTED_EVIDENCE_START\n")[1]
+      ?.split("\nUNTRUSTED_EVIDENCE_END")[0];
+    expect(JSON.parse(evidenceJson ?? "[]")).toHaveLength(5);
+  });
+
   it("derives and replays one generic slotted recipe for team and league targets", async () => {
     const targetedRecipe = {
       version: 1,
@@ -279,14 +407,16 @@ describe("resolveSportsSourceInput", () => {
             competitionKey: "eng.1",
             competitionLabel: "Premier League",
             teamKey: "arsenal",
-            teamLabel: "Arsenal"
+            teamLabel: "Arsenal",
+            exactTargetUrl: "https://one.example/api/team/9825/news"
           },
           {
             followId: "league-follow",
             competitionKey: "eng.1",
             competitionLabel: "Premier League",
             teamKey: null,
-            teamLabel: null
+            teamLabel: null,
+            exactTargetUrl: "https://one.example/api/league/47/news"
           }
         ]
       }
@@ -316,6 +446,7 @@ describe("resolveSportsSourceInput", () => {
     });
     expect(generateJson.mock.calls[1]?.[1].prompt).toContain("Premier League");
     expect(generateJson.mock.calls[1]?.[1].prompt).toContain("Arsenal");
+    expect(browser.render).toHaveBeenCalledOnce();
   });
 
   it("replays an exact pasted target through the same recipe path", async () => {
@@ -386,7 +517,9 @@ describe("resolveSportsSourceInput", () => {
         ]
       }
     });
-    expect(fetch).toHaveBeenCalledWith("https://one.example/api/team/9825/news");
+    expect(fetch).toHaveBeenCalledWith("https://one.example/api/team/9825/news", {
+      allowedHosts: ["one.example"]
+    });
     expect(fetch).toHaveBeenCalledWith("https://one.example/api/team/9825/news", {
       allowedHosts: ["one.example"],
       requestHeaders: { accept: "application/json" }

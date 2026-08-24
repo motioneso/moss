@@ -67,6 +67,7 @@ interface BrowserJob {
   readonly timer: NodeJS.Timeout;
   requests: number;
   bytesRead: number;
+  reservedBytes: number;
   activeRequests: number;
   documentSeen: boolean;
 }
@@ -211,6 +212,7 @@ export class SportsBrowserBroker {
       timer,
       requests: 0,
       bytesRead: 0,
+      reservedBytes: 0,
       activeRequests: 0,
       documentSeen: false
     });
@@ -264,13 +266,17 @@ export class SportsBrowserBroker {
       this.endJob(request.jobId);
       return { ok: false, reason: "budget_exceeded" };
     }
-    const remainingBytes = SPORTS_BROWSER_LIMITS.maxAggregateBytes - job.bytesRead;
-    if (remainingBytes <= 0) {
+    const reservation = Math.min(
+      SPORTS_BROWSER_LIMITS.maxResponseBytes,
+      SPORTS_BROWSER_LIMITS.maxAggregateBytes - job.bytesRead - job.reservedBytes
+    );
+    if (reservation <= 0) {
       this.endJob(request.jobId);
       return { ok: false, reason: "budget_exceeded" };
     }
 
     let requestBudgetExceeded = false;
+    job.reservedBytes += reservation;
     job.activeRequests += 1;
     try {
       const result = await this.dependencies.fetch(request.url, {
@@ -290,14 +296,18 @@ export class SportsBrowserBroker {
           job.requests += 1;
           return true;
         },
-        maxBytes: Math.min(SPORTS_BROWSER_LIMITS.maxResponseBytes, remainingBytes),
+        maxBytes: reservation,
         rejectOversizedResponses: true,
         timeoutMs: Math.max(1, job.deadlineAt - this.now()),
         signal: job.abortController.signal
       });
       const bytesRead = result.bytesRead ?? 0;
       job.bytesRead += bytesRead;
-      if (requestBudgetExceeded || job.bytesRead > SPORTS_BROWSER_LIMITS.maxAggregateBytes) {
+      if (
+        requestBudgetExceeded ||
+        bytesRead > reservation ||
+        job.bytesRead > SPORTS_BROWSER_LIMITS.maxAggregateBytes
+      ) {
         this.endJob(request.jobId);
         return { ok: false, reason: "budget_exceeded", bytesRead };
       }
@@ -325,6 +335,7 @@ export class SportsBrowserBroker {
       }
       return result;
     } finally {
+      job.reservedBytes -= reservation;
       job.activeRequests -= 1;
     }
   }
@@ -349,7 +360,7 @@ export class SportsBrowserBrokerServer {
 
   async start(): Promise<void> {
     if (this.server) return;
-    await mkdir(dirname(this.dependencies.socketPath), { recursive: true, mode: 0o770 });
+    await mkdir(dirname(this.dependencies.socketPath), { recursive: true, mode: 0o2770 });
     const existing = await lstat(this.dependencies.socketPath).catch(() => undefined);
     if (existing && !existing.isSocket()) {
       throw new Error("Refusing to replace a non-socket Sports browser broker path");

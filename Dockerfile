@@ -88,9 +88,9 @@ RUN printf '%s\n' 'export PATH="${JARVIS_UAT_SCRIPTED_PROVIDER_BIN:+$JARVIS_UAT_
 # ~1.4 GB tree in a new layer. The HF cache is the one writable path under /app.
 RUN mkdir -p "$HF_HOME" /data/vaults /data/cli-tools /data/cli-auth /run/jarv1s /run/moss-sports-browser \
   && chown -R node:node /data /run/jarv1s \
-  && chown 1001:1001 /run/moss-sports-browser \
+  && chown root:1001 /run/moss-sports-browser \
   && chmod -R 0777 "$HF_HOME" /data/vaults /data/cli-tools /data/cli-auth \
   && chmod 0700 /run/jarv1s \
-  && chmod 0770 /run/moss-sports-browser
+  && chmod 2770 /run/moss-sports-browser
 EXPOSE 3000
 CMD ["node_modules/.bin/tsx", "scripts/start-jarv1s.ts"]

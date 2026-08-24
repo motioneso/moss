@@ -111,6 +111,16 @@ export function createComposeSmokePlan(input: ComposeSmokePlanInput = {}): Compo
         args: [...composeArgs, "config", "--quiet"],
         description: "Validate Docker Compose configuration"
       },
+      ...(isProd
+        ? [
+            {
+              command: "docker" as const,
+              args: [...composeArgs, "run", "--rm", "sports-renderer-smoke"],
+              description:
+                "Complete a FotMob-shaped document and XHR through both exact-image UDS sockets"
+            }
+          ]
+        : []),
       {
         command: "docker",
         args: [...composeArgs, "up", "-d", "postgres", "--wait"],

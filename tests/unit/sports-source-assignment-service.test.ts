@@ -4,6 +4,7 @@ import type { DataContextDb } from "@moss/db";
 import { SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT } from "@moss/shared";
 
 import { createSportsPreviewStore } from "../../packages/sports/src/source/preview-store.js";
+import { validateSportsSourceRecipe } from "../../packages/sports/src/source/recipe.js";
 import type {
   SportsSourceBaseline,
   SportsSourcesRepository
@@ -13,6 +14,7 @@ import { SportsSourceService } from "../../packages/sports/src/source/service.js
 const followId = "11111111-1111-1111-1111-111111111111";
 const sourceId = "22222222-2222-2222-2222-222222222222";
 const assignmentId = "33333333-3333-3333-3333-333333333333";
+const addedFollowId = "44444444-4444-4444-4444-444444444444";
 const checkedAt = "2026-08-23T12:00:00.000Z";
 
 const baseline: SportsSourceBaseline = {
@@ -154,5 +156,134 @@ describe("SportsSourceService assignment replacement", () => {
       lastCheckedAt: checkedAt,
       lastSuccessAt: checkedAt
     });
+  });
+
+  it("maps an added assignment with the persisted recipe and exact saved hosts", async () => {
+    const recipe = {
+      version: 1,
+      kind: "json",
+      fetchHosts: ["publisher.example.com"],
+      request: {
+        urlTemplate: "https://publisher.example.com/api/team/{teamId}/news",
+        slots: [{ name: "teamId", location: "path", encoding: "path_segment", maxLength: 16 }],
+        headers: { accept: "application/json" }
+      },
+      scopes: ["team"],
+      itemLimit: 10,
+      extraction: {
+        itemsPath: ["news"],
+        headlinePath: ["title"],
+        normalize: ["trim"]
+      }
+    } as const;
+    const validated = validateSportsSourceRecipe(recipe);
+    if (!validated.ok) throw new Error("expected valid fixture recipe");
+    const recipeBaseline: SportsSourceBaseline = {
+      ...baseline,
+      source: {
+        ...baseline.source,
+        feedUrl: null,
+        retrievalMethod: "scrape",
+        recipeStatus: "ready",
+        assignments: baseline.source.assignments.map((assignment) => ({
+          ...assignment,
+          targetUrl: "https://publisher.example.com/api/team/DAL/news"
+        }))
+      },
+      validationFingerprint: validated.fingerprint,
+      recipeJson: recipe,
+      recipeFingerprint: validated.fingerprint,
+      assignments: baseline.assignments.map((assignment) => ({
+        ...assignment,
+        targetUrl: "https://publisher.example.com/api/team/DAL/news",
+        parameters: { teamId: "DAL" }
+      }))
+    };
+    const generateJson = vi.fn(async () => ({
+      ok: true as const,
+      object: [{ followId: addedFollowId, parameters: { teamId: "42" } }]
+    }));
+    const fetch = vi.fn(async (url: string, options?: { allowedHosts?: readonly string[] }) => {
+      if (url === "https://publisher.example.com/") {
+        return {
+          ok: true as const,
+          status: 200,
+          finalUrl: url,
+          contentType: "text/html",
+          body: "<title>Publisher</title>",
+          truncated: false
+        };
+      }
+      if (url === "https://publisher.example.com/api/team/42/news") {
+        return {
+          ok: true as const,
+          status: 200,
+          finalUrl: url,
+          contentType: "application/json",
+          body: JSON.stringify({ news: [{ title: "A persisted recipe headline" }] }),
+          truncated: false
+        };
+      }
+      return { ok: false as const, reason: "network" as const };
+    });
+    const service = new SportsSourceService({
+      follows: {
+        list: async () => [
+          { id: followId, competitionKey: "nfl", teamKey: "dal", createdAt: checkedAt },
+          { id: addedFollowId, competitionKey: "nfl", teamKey: "phi", createdAt: checkedAt }
+        ]
+      },
+      sources: {
+        getBaseline: async () => recipeBaseline
+      } as unknown as SportsSourcesRepository,
+      previews: createSportsPreviewStore(),
+      discovery: {
+        fetch,
+        ai: { fingerprint: async () => null, generateJson }
+      },
+      resolveTeams: async () => [
+        {
+          teamKey: "dal",
+          competitionKey: "nfl",
+          name: "Dallas Cowboys",
+          shortName: "DAL",
+          crestUrl: null
+        },
+        {
+          teamKey: "phi",
+          competitionKey: "nfl",
+          name: "Philadelphia Eagles",
+          shortName: "PHI",
+          crestUrl: null
+        }
+      ]
+    });
+
+    const preview = await service.previewAssignments({} as DataContextDb, "owner-1", sourceId, {
+      assignments: [{ followId }, { followId: addedFollowId }]
+    });
+
+    expect(preview).toMatchObject({
+      status: "ok",
+      candidate: {
+        targets: [
+          { followId, targetUrl: "https://publisher.example.com/api/team/DAL/news" },
+          {
+            followId: addedFollowId,
+            targetUrl: "https://publisher.example.com/api/team/42/news",
+            sampleHeadlines: ["A persisted recipe headline"]
+          }
+        ]
+      }
+    });
+    expect(generateJson).toHaveBeenCalledOnce();
+    expect(generateJson).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ prompt: expect.stringContaining("FIXED_RECIPE_START") })
+    );
+    expect(fetch).toHaveBeenCalledTimes(2);
+    for (const [, options] of fetch.mock.calls) {
+      expect(options?.allowedHosts).toEqual(["publisher.example.com"]);
+    }
   });
 });

@@ -117,6 +117,7 @@ services:
       JARVIS_APP_DATABASE_URL: postgres://jarvis_app_runtime:app_password@postgres:5432/jarv1s
       JARVIS_AUTH_DATABASE_URL: postgres://jarvis_auth_runtime:auth_password@postgres:5432/jarv1s
     command: sh -c "corepack enable && apt-get update && apt-get install -y --no-install-recommends python3 make g++ && pnpm install --frozen-lockfile --store-dir /tmp/pnpm-store && pnpm start:api"
+    group_add: ["1001"]
     restart: unless-stopped
     healthcheck:
       test:
@@ -134,6 +135,8 @@ services:
       - "${JARVIS_API_PORT:-3000}:3000"
     depends_on:
       migrate:
+        condition: service_completed_successfully
+      sports-browser-socket-init:
         condition: service_completed_successfully
     networks:
       - jarv1s
@@ -170,6 +173,23 @@ services:
     networks:
       - jarv1s
 
+  sports-browser-socket-init:
+    image: moss-sports-renderer:dev
+    build:
+      context: ..
+      dockerfile: Dockerfile.sports-renderer
+    network_mode: none
+    read_only: true
+    user: "0:0"
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER, FSETID]
+    security_opt: [no-new-privileges:true]
+    command:
+      ["sh", "-c", "chown 0:1001 /run/moss-sports-browser && chmod 2770 /run/moss-sports-browser"]
+    volumes:
+      - jarv1s-sports-browser-socket:/run/moss-sports-browser
+    restart: "no"
+
   sports-source-renderer:
     image: moss-sports-renderer:dev
     build:
@@ -187,6 +207,9 @@ services:
     pids_limit: 128
     volumes:
       - jarv1s-sports-browser-socket:/run/moss-sports-browser
+    depends_on:
+      sports-browser-socket-init:
+        condition: service_completed_successfully
     healthcheck:
       test:
         [
