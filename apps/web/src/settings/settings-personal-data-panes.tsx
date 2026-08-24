@@ -437,10 +437,7 @@ function SourcesPane() {
 
   return (
     <>
-      <PaneHead
-        title="Data sources"
-        desc={`Connect a notes folder ${assistantName} can index and use as context.`}
-      />
+      <PaneHead title="Data sources" />
 
       <Group
         title={
@@ -449,7 +446,7 @@ function SourcesPane() {
             Notes &amp; documents
           </span>
         }
-        desc={`Point ${assistantName} at a folder of notes on this server — a Markdown vault, a plain folder of text files, anything. Tool-agnostic by design.`}
+        desc={`Point ${assistantName} at a folder of notes on this server — a Markdown vault, a plain folder of text files, anything.`}
       >
         <div className="vault">
           <span className="vault__ic">

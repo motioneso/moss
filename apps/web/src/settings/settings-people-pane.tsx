@@ -26,7 +26,7 @@ import {
   writeSourceBehaviorCache
 } from "./settings-source-behaviors";
 import { readError } from "./settings-types";
-import { Badge, Group, Note, PaneHead, Row, Switch } from "./settings-ui";
+import { Badge, Group, Note, Row, Switch } from "./settings-ui";
 import { Button } from "@moss/ui";
 import { VaultChooser } from "./settings-vault-chooser";
 
@@ -188,11 +188,6 @@ export function SettingsPeoplePane() {
 
   return (
     <>
-      <PaneHead
-        title="People & context"
-        desc={`Everyone ${assistantName} knows about — people extracted from your emails, calendar, and notes.`}
-      />
-
       <Group title="People notes">
         <Row
           name="Folder"

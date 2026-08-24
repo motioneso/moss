@@ -98,7 +98,6 @@ export function GoogleConnect(props: { readonly onBack: () => void }) {
         <span className="gflow__g">G</span>
         <div className="gflow__introtx">
           <div className="gflow__title">Connect Google</div>
-          <div className="gflow__sub">Developer setup · you only do this once</div>
         </div>
       </div>
 
@@ -241,16 +240,14 @@ export function GoogleConnect(props: { readonly onBack: () => void }) {
             ok={csecOk}
             ariaLabel="Google client secret"
           />
-          <div className="onb-cred__hint">
-            Stored encrypted on this server. Never shown in briefings or logs.
-          </div>
+          <div className="onb-cred__hint">Stored encrypted on this server.</div>
         </div>
 
         <div className="onb-cred gflow__phase">
           <div className="onb-cred__hd">2 · Authorize {assistantName}</div>
           <p className="gflow__p">
             Open Google's consent screen, sign in, and grant access. Google then redirects to a{" "}
-            <code>http://localhost:1/…</code> address that won't load — that's expected.
+            <code>http://localhost:1/…</code> address that won't load — <strong>that's expected</strong>.
           </p>
           <div className="gflow__authrow">
             {authorized ? (
@@ -270,7 +267,7 @@ export function GoogleConnect(props: { readonly onBack: () => void }) {
                 type="button"
                 className={`onb-guide__link gflow__authlink${credsReady ? "" : " is-disabled"}`}
                 disabled={!credsReady || google.authorizationPending}
-                onClick={google.startAuthorization}
+                onClick={google.openConsentScreen}
               >
                 Open consent screen{" "}
                 <span className="ic">
@@ -287,6 +284,10 @@ export function GoogleConnect(props: { readonly onBack: () => void }) {
               <span className="gflow__wait">Paste your credentials first</span>
             ) : google.authorizationPending ? (
               <span className="gflow__wait">Preparing…</span>
+            ) : google.popupBlocked ? (
+              <span className="gflow__wait">
+                Your browser blocked the popup — allow popups for this site and try again.
+              </span>
             ) : null}
           </div>
         </div>
