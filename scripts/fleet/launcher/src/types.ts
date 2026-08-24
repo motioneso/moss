@@ -1,6 +1,7 @@
 export type Tier = "routine" | "sensitive" | "security";
 
-export type BuildModel = { model: string; effort: string };
+// "tool" is the agent program that runs the work, e.g. the local Claude CLI.
+export type BuildModel = { tool: string; model: string; effort: string };
 
 export type Settings = {
   judgeCmd: string;

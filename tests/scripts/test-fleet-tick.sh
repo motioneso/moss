@@ -402,6 +402,24 @@ out="$(run_tick "$state")"
 grep -q -- "--model model-x --effort high" <<<"$out"
 pass "a security-tier lane spawns on the model and effort configured for security work"
 
+# --- 17a2. each kind of work also names the program that runs it --------------------
+
+state="$(new_state)"
+write_record "$state" 703 '{"issue":703,"status":"queued","tier":"security","relays":0,"spec":"docs/x.md"}'
+printf '{"buildModels":{"security":{"tool":"codex","model":"model-y","effort":"high"}}}\n' > "$state/settings.json"
+out="$(run_tick "$state")"
+grep -q -- "--kind codex" <<<"$out"
+grep -q -- "-m model-y -c model_reasoning_effort=high" <<<"$out"
+pass "a lane configured for another program launches that program with its own flags"
+
+# --- 17a3. lane agents open in their own tab, not wherever a person is working ------
+
+state="$(new_state)"
+write_record "$state" 704 '{"issue":704,"status":"queued","tier":"routine","relays":0,"spec":"docs/x.md"}'
+out="$(run_tick "$state")"
+grep -q "in tab Fleet Agents" <<<"$out"
+pass "a lane agent opens in the shared agents tab"
+
 # --- 17b. no configuration at all means no model flag, not a baked-in name ----------
 
 state="$(new_state)"

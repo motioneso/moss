@@ -9,8 +9,11 @@ contacting the project board or the running agents.
 
 Install the launcher's separate dependencies once, then start it:
 
-    pnpm --dir scripts/fleet/launcher install
+    pnpm --dir scripts/fleet/launcher install --ignore-workspace
     pnpm --dir scripts/fleet/launcher start
+
+The `--ignore-workspace` matters: the launcher sits inside the repo's workspace, so without it
+pnpm installs into the repo root and the launcher starts with a missing-package error.
 
 Answer each question, or press Enter to use the value in brackets. The daemon starts in the
 background after setup. Closing the viewer does not stop it.
@@ -18,10 +21,24 @@ background after setup. Closing the viewer does not stop it.
 ## Setup questions
 
 The judgment command is the command used when the fleet needs a decision. The three build entries
-choose a model and an effort for routine, sensitive, and security work. Enter each as `model/effort`,
-separated by commas. Lane cap limits simultaneous lanes. The start budget limits fresh agents for
+choose a program, a model and an effort for routine, sensitive, and security work. Enter each as
+`program/model/effort`, separated by commas. The program is the agent command to launch, such as
+the local Claude CLI or Codex; the model must be one that program accepts, because the fleet
+launches the program you name and hands it the model you name. Two parts are read as `model/effort`
+and keep the program already set.
+
+To see what is installed and what each program says about the models it takes, run:
+
+    scripts/fleet/models.sh Lane cap limits simultaneous lanes. The start budget limits fresh agents for
+
 the run. The deputy is off by default; when on, it may answer after the wait period. Its safety
 limits cannot be changed here.
+
+## Where the agents appear
+
+Lane agents open in their own tab, called Fleet Agents, so they never land in a tab you are working
+in. The first agent of a run creates it; later ones split a pane inside it. Set `FLEET_AGENT_TAB` to
+use a different name.
 
 ## Reading the viewer
 
