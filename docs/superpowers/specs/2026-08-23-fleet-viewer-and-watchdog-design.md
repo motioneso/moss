@@ -1,7 +1,8 @@
 # Fleet fixes: close the overnight gaps, then the viewer — design
 
 Date: 2026-08-23
-Status: draft for Ben, replaces the earlier viewer-and-watchdog draft of the same date
+Status: approved direction; Ben's four rulings of 2026-08-23 are folded in below. Replaces the
+earlier viewer-and-watchdog draft of the same date.
 
 ## Why this spec changed shape
 
@@ -89,8 +90,18 @@ spawns a fix agent into the lane's existing worktree with a fix brief the daemon
 moment, containing: the failing check names (for red checks) or the reviewer's findings pulled
 from the pull request comments (for a failed review), the branch, and the same report-back
 commands every brief carries. The fix agent pushes, sets the record back to "pull request open,
-waiting on checks", and stops. Fix spawns count against the nightly spawn budget and respect
-the memory floor, like every other spawn.
+waiting on checks", and stops.
+
+**How recovery spends the budget.** Every recovery spawn - a fix agent, a re-spawned reviewer,
+a conflict-resolver from unit 4 - counts against the same nightly spawn budget as everything
+else, and respects the memory floor. One number stays honest that way; a separate recovery
+budget would be a second dial to misconfigure. But the budget is split by purpose: the last
+fifth of it (six spawns, at the agreed thirty) is reserved for recovery. New lanes stop being
+dispatched once the unreserved part is used, so a busy night can never spend the whole budget
+starting fresh work and then have nothing left to rescue it with. When the entire budget is
+gone and a lane still needs a recovery spawn, that lane parks at once with the reason "spawn
+budget exhausted" instead of waiting silently - a parked lane with a readable reason is the
+correct end state for a night that ran out of fuel, and the reserve makes it rare.
 
 Bounds: each lane gets at most two fix rounds per cause (two for red checks, two for review
 findings). A third failure of the same kind parks the lane with a plain reason and a question
@@ -116,7 +127,9 @@ spawn only when there is actually something to fix.
 **Tests.** Dry-run cases: red checks produce a fix-agent spawn with the check names in the
 brief; a failed review produces a fix-agent spawn with the findings in the brief; a third
 same-cause failure parks; a dead reviewer is respawned once and a twice-dead reviewer parks;
-the builder field survives a review round.
+the builder field survives a review round; a fresh lane is refused dispatch once only the
+recovery reserve remains while a fix agent is still granted; a lane needing recovery with the
+whole budget spent parks with the reason "spawn budget exhausted".
 
 **Live proof for this unit.** One real lane on the dev box driven through a deliberately
 failing check, the fix agent observed fixing and re-pushing, and the lane reaching merge, all
@@ -180,7 +193,7 @@ branch is behind and the rules require it current, or auto-merge is not permitte
 ignores the command's exit code, marks the lane "merging" regardless, and the merging state
 waits forever for a merge that was never armed. Nothing in the daemon ever brings a branch up
 to date. Two overnight lanes touching the same file guarantee this. Worse, a wedged merging
-lane still counts against the three-lane cap, so three wedged lanes freeze the whole fleet
+lane still counts against the lane cap, so a handful of wedged lanes freeze the whole fleet
 while the queue waits. The same open-ended wait exists one state earlier: checks that stay
 pending forever (a CI outage at 3am) hold a lane slot all night with no deadline.
 
@@ -199,9 +212,12 @@ pending forever (a CI outage at 3am) hold a lane slot all night with no deadline
 - Deadlines on the two waiting states. A lane sitting in "merging" with the pull request still
   open after forty-five minutes gets one merge-state re-check and either a routed fix as above
   or a park with the state text as the reason. A lane whose checks have been pending for
-  ninety minutes parks with the reason "checks never finished". Parked lanes already do not
-  count against the lane cap, so a 3am CI outage degrades to parked lanes and a readable
-  morning board instead of a frozen fleet.
+  ninety minutes gets one rescue attempt first: the daemon asks GitHub to re-run the checks, a
+  single time, and waits another ninety minutes (Ben's ruling, 2026-08-23: re-run once, then
+  park, so a 3am CI hiccup does not cost the whole lane). If the re-run also never finishes,
+  the lane parks with the reason "checks never finished". Parked lanes already do not count
+  against the lane cap, so a CI outage degrades to parked lanes and a readable morning board
+  instead of a frozen fleet.
 
 **Why deadlines over exempting stuck lanes from the cap.** Not counting merging lanes against
 the cap would unfreeze the queue but leave wedged lanes wedged and let worktrees and panes pile
@@ -210,7 +226,8 @@ a reason, which is the shape the whole state machine is supposed to have.
 
 **Tests.** Dry-run cases: failed auto-merge with a behind branch triggers update-branch;
 conflicts trigger a fix-agent spawn; a refused auto-merge parks with the error text; merging
-past the deadline re-checks and routes; pending checks past the deadline park.
+past the deadline re-checks and routes; pending checks past the deadline trigger exactly one
+re-run request; a second timeout after the re-run parks.
 
 **Live proof for this unit.** Two live lanes deliberately made to conflict on one file, and the
 log showing one of them detected, fixed by a fix agent, and merged, or parked with a readable
@@ -240,8 +257,8 @@ real findings from the review, none is speculative.
   nothing; every parked lane needs a hand-edited record. Fix: a reply whose first word is
   "resume" puts the lane back in the queue, "merge" enables auto-merge (subject to every
   existing gate, including live proof), and anything else leaves the lane parked but stamps
-  the record "Ben replied, needs reading" so the board surfaces it. This is a fixed-format
-  reply, not model interpretation; see the open question below.
+  the record "Ben replied, needs reading" so the board surfaces it. Ben's ruling, 2026-08-23:
+  fixed first words, no model between his words and the action.
 - **Dispatch stops retrying a failing worktree.** Creating the worktree can fail every minute
   all night (a leftover directory from a prior run is a realistic cause). Two failures park
   the lane with the git error as the reason, matching the box-wide two-identical-failures
@@ -260,9 +277,21 @@ real findings from the review, none is speculative.
   "run complete" line to the board. It never disables its own timer: a program that switches
   off its own supervision cannot be restarted by that supervision, and the real stop belongs
   to the human, via the viewer's end-run action (unit 7) or the STOP file.
-- **One set of defaults.** The daemon falls back to three lanes and twelve spawns; the
-  launcher seeds five and thirty. The launcher's seeds change to match the daemon and the
-  approved daemon spec: three lanes, twelve spawns.
+- **One set of defaults: five lanes, thirty spawns.** The daemon falls back to three lanes and
+  twelve spawns; the launcher seeds five and thirty. Ben's ruling, 2026-08-23: align up, not
+  down - the daemon's fallbacks rise to five and thirty so both halves agree. Two consequences
+  are handled elsewhere in this spec: recovery spawns now share and reserve part of that
+  budget (unit 2), and the memory question below.
+- **The memory floor with five lanes.** The 4 GB free-memory floor stays, but it is only a
+  pre-spawn check: it stops the next agent from starting, it does not notice a box that
+  drifted below the floor after everyone was already running. Five lanes plus reviewers and
+  fix agents can mean eight or more live agents at once, which this box has not carried
+  before. Two additions: the tick logs a fleet-level warning whenever free memory is below
+  the floor even when it is not trying to spawn, so a swapping night is visible in the
+  morning log; and the first live five-lane run watches actual memory use before anyone
+  trusts the floor at that width. If that run shows the box near the floor with healthy
+  lanes, the fix is a higher floor or a lower lane cap, and that is a one-line settings
+  change, not code.
 - **The log stops growing forever.** The event log is scanned in full several times per tick
   and never rotated, so ticks slow down week over week. Fix: the nightly spawn count moves to
   a small counter file reset at the budget window, and the log rotates when the viewer's
@@ -296,31 +325,67 @@ the decision that the watchdog is a script, never a model, and fixes the mechani
   the tab with no fleet-named agent is ignored. A lane whose record says paused is never
   touched: a paused lane is a human holding it on purpose.
 - **Signs of life.** As in the existing script, either the pane reporting "working" or any
-  change in the pane's content resets the quiet clock, with one addition: "working" alone only
-  counts for up to forty-five minutes. An agent stuck inside one endless tool call reports
-  itself as working the whole time, which is the commonest wedge and the one the first draft
-  missed entirely. Forty-five minutes of "working" with zero pane change is treated as quiet.
+  change in the pane's content resets the quiet clock. But "working" is a self-report, and an
+  agent stuck inside one endless tool call reports itself as working the whole time - the
+  commonest wedge, and the one the first draft missed entirely. So "working" is trusted only
+  as far as the process check below confirms it.
+- **The process check: never kill on quiet alone.** Ben's ruling, 2026-08-23. Before the third
+  strike may stop an agent, the watchdog looks underneath the pane: the terminal manager knows
+  the pane's top process, and the watchdog reads that process and all its children from the
+  system's process table. The test is simple and cheap: it records the total CPU time used by
+  that process family, and compares it to the total it recorded on its previous pass a minute
+  earlier. If the family used any CPU in between, something is genuinely computing - a long
+  install, a slow local gate, a big download being unpacked - and the watchdog does not kill,
+  no matter how quiet the pane looks. It logs "quiet but computing" on the lane and keeps
+  waiting. Only a pane that is quiet on screen AND flat underneath - no CPU movement between
+  passes - is treated as truly wedged. Why CPU time between passes rather than reading each
+  process's run state at one instant: a single snapshot catches a process only if it is on the
+  CPU at that exact moment, so a busy process sleeping between bursts reads as idle; the
+  between-passes comparison cannot miss work, because the counter only ever goes up.
+- **Fail safe when the system cannot be read.** If the process table is unreadable, the pane's
+  top process cannot be found, or the previous pass left no counter to compare against, the
+  watchdog does not kill. It sends a nudge instead, logs that the process check was
+  unavailable, and tries again next pass. A blind watchdog must never swing.
 - **Escalation that actually connects.** First and second quiet periods (fifteen minutes each)
-  send a nudge into the agent's pane. On the third strike the watchdog stops the agent through
-  the terminal manager and logs why. Now the agent really is gone from the list, the daemon's
+  send a nudge into the agent's pane. On the third strike, with the process check confirming
+  flat, the watchdog stops the agent through the terminal manager and logs why, including the
+  CPU readings that justified it. Now the agent really is gone from the list, the daemon's
   existing dead-agent path notices on its normal schedule, and the already-tested
   restart-or-park triage takes over. Why kill rather than add a force-triage flag to the
   daemon: killing reuses one tested recovery path instead of adding a second entry point into
-  triage that only the watchdog uses; and an agent that ignored two nudges is not producing
-  anything worth preserving.
+  triage that only the watchdog uses; and an agent that ignored two nudges while doing no
+  measurable work is not producing anything worth preserving.
+- **Is a time ceiling still needed? Yes, one, much longer, for the opposite wedge.** The
+  process check protects the healthy-but-slow agent. It cannot catch the inverse case: an
+  agent spinning in a genuine infinite loop, burning CPU forever while its pane and its lane
+  record never change. For that, one backstop remains: if the pane content and the lane
+  record have both been unchanged for three hours, the watchdog escalates to the third strike
+  even though CPU is moving. Three hours, because the longest legitimate silent stretches on
+  this box - a dependency install, a full local gate - finish well inside one hour, the agent
+  gets two nudges it could answer during the window, and the cost of being wrong once at 4am
+  is one lost session against a whole night of a lane burning CPU for nothing. The old draft's
+  forty-five minute ceiling is gone; it existed only because quiet alone was the trigger.
 - **Nudge counts** live in the watchdog's own small state file keyed by agent name, and each
   nudge is also logged onto the lane so the viewer and the morning board show it. Reading the
   count from its own file rather than re-scanning the fleet log keeps the watchdog cheap.
 - Ships as its own service unit next to the existing coordinator one, so the two can be
   enabled independently; the launcher installs and enables it with the tick timer.
 
-**Tests.** Dry-run cases: a quiet lane gets a nudge; a paused lane never does; a pane with no
-fleet agent is ignored; forty-five minutes of "working" with no pane change counts as quiet;
-the third strike issues a stop command, not a nudge.
+**Tests, without wedging a real agent.** The watchdog reads the process table through a
+single seam that tests can point at fixture files, the same pattern the daemon already uses
+for reading free memory. Fixtures feed it: CPU counters that grew between passes (no kill,
+"quiet but computing" logged); counters that stayed flat (third strike proceeds); an
+unreadable process table and a missing previous counter (no kill, nudge, logged); a paused
+lane (never touched); a pane with no fleet agent (ignored); pane and record unchanged for
+three hours with CPU still growing (backstop escalates). Plus the existing dry-run cases: a
+quiet lane gets a nudge, and the third strike issues a stop command rather than a nudge.
 
-**Live proof for this unit.** A real lane agent deliberately wedged on the dev box, both
-nudges observed arriving in its pane, the third strike observed stopping it, and the daemon
-observed restarting or parking the lane afterwards. Recorded on the pull request.
+**Live proof for this unit.** No real agent is wedged. Two stand-in panes on the dev box,
+registered under fleet lane names: one running a command that sleeps (quiet on screen, flat
+CPU), one running a busy loop (quiet on screen, CPU moving). The sleeper is observed getting
+two nudges and then stopped on the third strike; the busy one is observed being left alone
+with "quiet but computing" in the lane log. Then the daemon is observed picking up the
+stopped lane through its normal dead-agent triage. Recorded on the pull request.
 
 ---
 
@@ -366,20 +431,22 @@ stopping both timers on a live box. Recorded on the pull request.
 
 ---
 
-## Questions for Ben
+## Ben's rulings, 2026-08-23
 
-These are written out rather than decided, because each changes behaviour he owns:
+The open questions from the first draft are settled and folded into the units above; recorded
+here so the reasoning is not lost:
 
-1. **Reply format for parked lanes (unit 5).** The spec proposes fixed first words: "resume"
-   or "merge", anything else just flags the lane for reading. The alternative is one model
-   call per reply to interpret free text. Replies are rare, so the call would be cheap, but it
-   puts a model between your words and the action. Which do you want?
-2. **Checks pending too long (unit 4).** After ninety minutes of pending checks the lane
-   parks. Should the daemon first try re-running the checks once (GitHub allows re-requesting
-   a run), or is parking with a reason enough?
-3. **Defaults (unit 5).** The launcher currently seeds five lanes and thirty spawns; the
-   daemon and the approved spec say three and twelve. This spec aligns everything to three and
-   twelve. Say if you want the bigger numbers instead.
+1. **Replies to parked lanes use fixed first words** ("resume", "merge", anything else flags
+   the lane for his attention). No model between his words and the action. Unit 5.
+2. **Checks pending too long: re-run once, then park**, so a 3am CI outage does not cost the
+   whole lane. Unit 4.
+3. **Defaults are five lanes and thirty spawns** - aligned up, not down. Unit 5 carries the
+   two consequences: the recovery reserve in the spawn budget (unit 2) and the memory-floor
+   watch on the first five-lane run.
+4. **The watchdog never kills on quiet alone.** It checks the process tree first and stays
+   its hand when anything underneath is computing, fails safe to a nudge when it cannot read
+   the system, and keeps only a long three-hour backstop for the CPU-burning infinite loop.
+   Unit 6.
 
 ## What this spec does not do
 
