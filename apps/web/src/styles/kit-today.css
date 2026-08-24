@@ -98,6 +98,17 @@
     grid-template-columns: 1fr;
   }
 }
+@media (max-width: 640px) {
+  /* Ben 2026-08-24: on a phone the wellness/meds check-in card sat at the very bottom of
+     the stacked layout, behind the whole main column — too far to reach for a quick meds
+     log. Move the aside above main and put the check-in card first within it. */
+  .cmd-aside {
+    order: -1;
+  }
+  .cmd-aside__inner .well {
+    order: -1;
+  }
+}
 
 /* The rail stretches to the full grid-row height (overriding .cmd-grid's align-items:start)
    so the column keyline it carries reaches the main column's bottom instead of stopping where
