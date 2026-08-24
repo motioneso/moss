@@ -29,7 +29,7 @@ import {
   type ToneDial
 } from "./settings-persona-preview";
 import { type PaneProps } from "./settings-types";
-import { Choice, Field, Group, Note, PaneHead, Row, Select, Switch } from "./settings-ui";
+import { Choice, Field, Group, Note, PaneHead, Row, Segmented, Select, Switch } from "./settings-ui";
 import { Button } from "@moss/ui";
 
 type PersonaState = PersonaDraft;
@@ -152,24 +152,15 @@ function Persona({ who }: { readonly who: string }) {
         />
       </Field>
       <Field label="How to set your persona" hint="Switching methods keeps your current draft.">
-        <span className="psona-save__acts">
-          <Button
-            variant="quiet"
-            size="sm"
-            aria-pressed={mode === "authored"}
-            onClick={() => setMode("authored")}
-          >
-            Write it yourself
-          </Button>
-          <Button
-            variant="quiet"
-            size="sm"
-            aria-pressed={mode === "guided"}
-            onClick={() => setMode("guided")}
-          >
-            Use guided dials
-          </Button>
-        </span>
+        <Segmented
+          ariaLabel="How to set your persona"
+          value={mode}
+          options={[
+            { value: "authored", label: "Write it yourself" },
+            { value: "guided", label: "Use guided dials" }
+          ]}
+          onChange={setMode}
+        />
       </Field>
       {mode === "authored" ? (
         <Field
