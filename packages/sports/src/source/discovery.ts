@@ -184,7 +184,7 @@ function htmlMetadata(html: string): {
   };
 }
 
-function samePublisherIdentity(left: string, right: string): boolean {
+export function samePublisherIdentity(left: string, right: string): boolean {
   return (
     left === right || publisherDomainMatches(left, right) || publisherDomainMatches(right, left)
   );

@@ -20,6 +20,7 @@ import type { SportsFollowsReader } from "../sports-service.js";
 import { catalogEntry } from "./catalog.js";
 import {
   resolveSportsSourceInput,
+  samePublisherIdentity,
   type SportsDiscoveryBrowserPort,
   type SportsDiscoveryTarget,
   type SportsSafeFetchPort,
@@ -420,7 +421,7 @@ export class SportsSourceService {
       targets
     });
     if (result.status !== "ok") return result;
-    if (result.candidate.canonicalDomain !== baseline.source.canonicalDomain) {
+    if (!samePublisherIdentity(result.candidate.canonicalDomain, baseline.source.canonicalDomain)) {
       return { status: "rejected", reason: "stale_source" };
     }
 

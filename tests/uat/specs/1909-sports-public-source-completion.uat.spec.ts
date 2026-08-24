@@ -344,7 +344,10 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
     const preview = await invokeReadTool<PreviewResult>(page, "sports.rebuildSourceRecipe", {
       sourceId: fotmob.id
     });
-    expect(preview.candidate?.confirmedFetchHosts).toContain("www.fotmob.com");
+    expect(preview).toMatchObject({
+      status: "ok",
+      candidate: { confirmedFetchHosts: expect.arrayContaining(["www.fotmob.com"]) }
+    });
     await confirmThroughMoss(
       page,
       "sports.confirmSourceRecipe",

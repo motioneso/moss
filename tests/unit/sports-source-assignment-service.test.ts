@@ -363,6 +363,30 @@ describe("SportsSourceService recipe recovery", () => {
     );
   });
 
+  it("rebuilds a legacy apex source when discovery resolves its www host", async () => {
+    const legacyBaseline: SportsSourceBaseline = {
+      ...baseline,
+      source: {
+        ...baseline.source,
+        canonicalDomain: "publisher.example.com",
+        homepageUrl: "https://www.publisher.example.com/",
+        feedUrl: null,
+        retrievalMethod: "scrape"
+      }
+    };
+    const { service } = rebuildService(legacyBaseline);
+
+    await expect(
+      service.previewRecipeRebuild({} as DataContextDb, "owner-1", sourceId)
+    ).resolves.toMatchObject({
+      status: "ok",
+      candidate: {
+        canonicalDomain: "www.publisher.example.com",
+        confirmedFetchHosts: ["www.publisher.example.com"]
+      }
+    });
+  });
+
   it("rejects confirmation after the source baseline changes", async () => {
     const { service, getBaseline, replaceRecipe } = rebuildService();
     const db = {} as DataContextDb;
