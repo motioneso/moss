@@ -757,6 +757,7 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
           </div>
         </div>
         <div className="modrow__act">
+          {action}
           {control.kind === "toggle" ? (
             <Switch
               ariaLabel={`Use ${module.name}`}
@@ -764,7 +765,6 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
               onChange={(value) => toggleMutation.mutate({ id: module.id, disabled: !value })}
             />
           ) : null}
-          {action}
         </div>
       </div>
     );
