@@ -10,9 +10,11 @@ import { PlanApprovalCard, type ModuleBuildPlan } from "./plan-approval-card";
  * result. Everything here is defensive: the record is data off a stream, so a missing or
  * mis-shaped plan renders nothing at all rather than a half-drawn card.
  */
-export function parseModuleBuildPlanResult(
-  result: Record<string, unknown> | undefined
-): { readonly buildId: string; readonly plan: ModuleBuildPlan; readonly awaitingApproval: boolean } | null {
+export function parseModuleBuildPlanResult(result: Record<string, unknown> | undefined): {
+  readonly buildId: string;
+  readonly plan: ModuleBuildPlan;
+  readonly awaitingApproval: boolean;
+} | null {
   if (!result) return null;
   const buildId = result.buildId;
   const raw = result.plan;

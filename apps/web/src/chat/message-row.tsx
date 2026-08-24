@@ -28,10 +28,7 @@ import { BrandMark } from "../shell/brand-mark";
 import { ActionRequestCard } from "./action-request-card";
 import { formatAttachmentSize } from "./attachments";
 import { MarkdownMessage } from "./markdown-message";
-import {
-  ModuleBuildPlanRecord,
-  parseModuleBuildPlanResult
-} from "./module-build-plan-record";
+import { ModuleBuildPlanRecord, parseModuleBuildPlanResult } from "./module-build-plan-record";
 import type { ChatRecordKind, TranscriptRecord } from "./use-chat-stream";
 
 /**

@@ -293,8 +293,8 @@ export class AssistantToolGateway {
           toolName: found.dto.name,
           outcome: result.ok && moduleReportedErrorClass === null ? "executed" : "error",
           ...(result.ok
-          ? { result: liveStreamResult(found.tool, result) }
-          : { reason: gatewayFailureReason(result) }),
+            ? { result: liveStreamResult(found.tool, result) }
+            : { reason: gatewayFailureReason(result) }),
           ...(result.ok && found.tool.affectsQueryKeys
             ? { affectsQueryKeys: found.tool.affectsQueryKeys }
             : {})
@@ -759,8 +759,8 @@ export class AssistantToolGateway {
       toolName: found.dto.name,
       outcome: result.ok && moduleReportedErrorClass === null ? "executed" : "error",
       ...(result.ok
-          ? { result: liveStreamResult(found.tool, result) }
-          : { reason: gatewayFailureReason(result) }),
+        ? { result: liveStreamResult(found.tool, result) }
+        : { reason: gatewayFailureReason(result) }),
       ...(result.ok && found.tool.affectsQueryKeys
         ? { affectsQueryKeys: found.tool.affectsQueryKeys }
         : {})

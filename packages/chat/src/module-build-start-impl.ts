@@ -25,6 +25,8 @@ export interface ModuleBuildStartServiceDeps {
   readonly aiRepository: AiRepository;
   /** Same three-gate YOLO check every other auto-approved action uses. */
   readonly isYoloActive: (scopedDb: DataContextDb) => Promise<boolean>;
+  /** Overridable only so a test can exercise the admin rule without a database. */
+  readonly isInstanceAdmin?: (scopedDb: DataContextDb, userId: string) => Promise<boolean>;
 }
 
 /**
@@ -41,13 +43,16 @@ export function buildModuleBuildStartService(
   const cipher = createAiSecretCipher();
   const createCliStructuredAdapter = createCliStructuredAdapterFactory();
   const settings = new SettingsRepository();
+  const isInstanceAdmin =
+    deps.isInstanceAdmin ??
+    (async (db: DataContextDb, userId: string) =>
+      (await settings.getUserById(db, userId))?.is_instance_admin === true);
 
   return {
     async start(scopedDb, input) {
       const db = scopedDb as DataContextDb;
 
-      const user = await settings.getUserById(db, input.actorUserId);
-      if (!user?.is_instance_admin) {
+      if (!(await isInstanceAdmin(db, input.actorUserId))) {
         throw new HttpError(403, "Only an administrator can have Moss build a new module.");
       }
 
