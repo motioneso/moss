@@ -35,7 +35,11 @@ export function NotificationsPage() {
   const unreadCount = notificationsQuery.data?.unreadCount ?? 0;
 
   return (
-    <section className="page-stack" aria-label="Notifications" style={{ marginTop: "var(--space-4)" }}>
+    <section
+      className="page-stack"
+      aria-label="Notifications"
+      style={{ marginTop: "var(--space-4)" }}
+    >
       <section
         className="tk-toolbar"
         aria-label="Notification filters"

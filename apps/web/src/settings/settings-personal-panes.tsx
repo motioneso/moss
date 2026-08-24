@@ -31,7 +31,17 @@ import { DeleteAccount } from "./delete-account";
 import { useFeedback } from "./settings-feedback";
 import { DataExport, Sessions } from "./settings-profile-subviews";
 import { readError, type PaneProps } from "./settings-types";
-import { Avatar, Badge, Field, Group, PaneHead, Row, Segmented, Select, Switch } from "./settings-ui";
+import {
+  Avatar,
+  Badge,
+  Field,
+  Group,
+  PaneHead,
+  Row,
+  Segmented,
+  Select,
+  Switch
+} from "./settings-ui";
 
 const DEFAULT_LOCALE_SETTINGS: LocaleSettingsDto = {
   timezone: "America/Los_Angeles",
@@ -65,7 +75,11 @@ function formatTimeZoneOffset(offsetMinutes: number): string {
 const SUPPORTED_TIME_ZONES = Intl.supportedValuesOf("timeZone")
   .map((timeZone) => {
     const offsetMinutes = timeZoneOffsetMinutes(timeZone, new Date());
-    return { timeZone, offsetMinutes, label: `(${formatTimeZoneOffset(offsetMinutes)}) ${timeZone}` };
+    return {
+      timeZone,
+      offsetMinutes,
+      label: `(${formatTimeZoneOffset(offsetMinutes)}) ${timeZone}`
+    };
   })
   .sort((a, b) => a.offsetMinutes - b.offsetMinutes || a.timeZone.localeCompare(b.timeZone));
 
@@ -352,7 +366,10 @@ export function ProfilePane({ me }: PaneProps) {
         </div>
       </Group>
 
-      <Group title="Weather" desc="Search for a place to use instead of approximate timezone-based detection.">
+      <Group
+        title="Weather"
+        desc="Search for a place to use instead of approximate timezone-based detection."
+      >
         <Field
           label="Search for a place"
           hint="Choose a result to save it as your weather location."

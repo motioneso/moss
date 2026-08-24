@@ -28,7 +28,17 @@ import {
   type ToneDial
 } from "./settings-persona-preview";
 import { type PaneProps } from "./settings-types";
-import { Choice, Field, Group, Note, PaneHead, Row, Segmented, Select, Switch } from "./settings-ui";
+import {
+  Choice,
+  Field,
+  Group,
+  Note,
+  PaneHead,
+  Row,
+  Segmented,
+  Select,
+  Switch
+} from "./settings-ui";
 import { Button } from "@moss/ui";
 
 type PersonaState = PersonaDraft;

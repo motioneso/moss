@@ -307,21 +307,21 @@ function ConnectedPane() {
         {accounts.length === 0
           ? null
           : accounts.map((account) => (
-            <AccountRow
-              key={account.id}
-              account={account}
-              onReconnect={() => setFlow(account.providerType === "google" ? "google" : "imap")}
-              onRevoke={() =>
-                confirm({
-                  title: `Revoke ${account.providerDisplayName} access?`,
-                  description: `${assistantName} will lose access to this account until you reconnect it. Nothing on the account itself is changed.`,
-                  confirmLabel: "Revoke",
-                  danger: true,
-                  onConfirm: () => revokeMutation.mutate(account.id)
-                })
-              }
-            />
-          ))}
+              <AccountRow
+                key={account.id}
+                account={account}
+                onReconnect={() => setFlow(account.providerType === "google" ? "google" : "imap")}
+                onRevoke={() =>
+                  confirm({
+                    title: `Revoke ${account.providerDisplayName} access?`,
+                    description: `${assistantName} will lose access to this account until you reconnect it. Nothing on the account itself is changed.`,
+                    confirmLabel: "Revoke",
+                    danger: true,
+                    onConfirm: () => revokeMutation.mutate(account.id)
+                  })
+                }
+              />
+            ))}
         {flow === "picker" || accounts.length === 0 ? (
           <ServicePicker onGoogle={() => setFlow("google")} onImap={() => setFlow("imap")} />
         ) : null}
@@ -641,8 +641,14 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
   );
   const byName = (a: (typeof modules)[number], b: (typeof modules)[number]) =>
     a.name.localeCompare(b.name);
-  const builtInModules = modules.filter((module) => module.required).slice().sort(byName);
-  const optionalModules = modules.filter((module) => !module.required).slice().sort(byName);
+  const builtInModules = modules
+    .filter((module) => module.required)
+    .slice()
+    .sort(byName);
+  const optionalModules = modules
+    .filter((module) => !module.required)
+    .slice()
+    .sort(byName);
   const pathFor = (id: string): string | null =>
     modulesQuery.data?.modules.find((m) => m.id === id)?.navigation[0]?.path ?? null;
 

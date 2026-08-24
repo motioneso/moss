@@ -96,8 +96,7 @@ export function buildCommandPaletteCommands(input: {
     commands.push(themeCommand(theme.id, theme.name));
   }
   const activeThemeId = input.themes?.activeId;
-  const activeIsBuiltIn =
-    input.themes?.builtIn.some((theme) => theme.id === activeThemeId) ?? true;
+  const activeIsBuiltIn = input.themes?.builtIn.some((theme) => theme.id === activeThemeId) ?? true;
   if (activeIsBuiltIn && input.themes) {
     const otherMode = input.themes.mode === "dark" ? "light" : "dark";
     commands.push({

@@ -247,7 +247,8 @@ export function GoogleConnect(props: { readonly onBack: () => void }) {
           <div className="onb-cred__hd">2 · Authorize {assistantName}</div>
           <p className="gflow__p">
             Open Google's consent screen, sign in, and grant access. Google then redirects to a{" "}
-            <code>http://localhost:1/…</code> address that won't load — <strong>that's expected</strong>.
+            <code>http://localhost:1/…</code> address that won't load —{" "}
+            <strong>that's expected</strong>.
           </p>
           <div className="gflow__authrow">
             {authorized ? (
