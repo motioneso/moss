@@ -381,7 +381,6 @@ export const sportsModuleManifest = {
       permissionId: "sports.sources",
       actionFamilyId: "sports.sources",
       risk: "write",
-      executionPolicy: "auto",
       selfOperationGrant: "confirm_always",
       inputSchema: confirmSportsSourceSchema.body,
       summarize: summarizeSportsConfirmSource,
@@ -412,7 +411,6 @@ export const sportsModuleManifest = {
       permissionId: "sports.sources",
       actionFamilyId: "sports.sources",
       risk: "write",
-      executionPolicy: "auto",
       selfOperationGrant: "confirm_always",
       inputSchema: {
         type: "object",
@@ -445,7 +443,6 @@ export const sportsModuleManifest = {
       permissionId: "sports.sources",
       actionFamilyId: "sports.sources",
       risk: "write",
-      executionPolicy: "auto",
       selfOperationGrant: "confirm_always",
       inputSchema: {
         type: "object",
@@ -463,7 +460,6 @@ export const sportsModuleManifest = {
       permissionId: "sports.sources",
       actionFamilyId: "sports.sources",
       risk: "write",
-      executionPolicy: "auto",
       selfOperationGrant: "confirm_always",
       inputSchema: {
         type: "object",
