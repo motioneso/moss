@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import type { LookupAiCapabilityRouteResponse } from "@moss/shared";
 
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 
@@ -118,10 +119,7 @@ async function bringUpRealModel(page: Page): Promise<void> {
           ["chat", "json"].map(async (capability) => {
             const response = await page.request.get(`/api/ai/capability-route/${capability}`);
             expect(response.ok(), `${capability} capability -> ${response.status()}`).toBeTruthy();
-            return (await response.json()) as {
-              available: boolean;
-              model: { providerKind: string; status: string } | null;
-            };
+            return ((await response.json()) as LookupAiCapabilityRouteResponse).route;
           })
         );
         return routes.every(
