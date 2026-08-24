@@ -35,9 +35,21 @@ export function NotificationsPage() {
   const unreadCount = notificationsQuery.data?.unreadCount ?? 0;
 
   return (
-    <section className="page-stack" aria-label="Notifications">
-      <div className="page-heading">
-        <div />
+    <section className="page-stack" aria-label="Notifications" style={{ marginTop: "var(--space-4)" }}>
+      <section
+        className="tk-toolbar"
+        aria-label="Notification filters"
+        style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+      >
+        <Segmented
+          ariaLabel="Read filter"
+          options={[
+            { value: "all", label: `All (${totalCount})` },
+            { value: "unread", label: `Unread (${unreadCount})` }
+          ]}
+          value={filter}
+          onChange={setFilter}
+        />
 
         <Button
           disabled={unreadCount === 0 || markAllReadMutation.isPending}
@@ -53,18 +65,6 @@ export function NotificationsPage() {
         >
           Mark all read
         </Button>
-      </div>
-
-      <section className="tk-toolbar" aria-label="Notification filters">
-        <Segmented
-          ariaLabel="Read filter"
-          options={[
-            { value: "all", label: `All (${totalCount})` },
-            { value: "unread", label: `Unread (${unreadCount})` }
-          ]}
-          value={filter}
-          onChange={setFilter}
-        />
       </section>
 
       <section className="tk-list tk-list--loose" aria-live="polite">
