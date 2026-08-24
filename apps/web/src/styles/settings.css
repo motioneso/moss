@@ -216,7 +216,8 @@
   padding: 14px 0;
   border-top: 1px solid var(--border-subtle);
 }
-.fld:first-child {
+.fld:first-child,
+.fld--no-border {
   border-top: none;
 }
 .fld__lbl {
