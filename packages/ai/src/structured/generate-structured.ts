@@ -141,6 +141,7 @@ export async function generateStructured(
     let result: Extract<StructuredProviderResult, { readonly rawObject: unknown }>;
     try {
       const generated = await adapter.generateStructured({
+        service: input.service,
         model: { provider_kind: providerKind, provider_model_id: model.provider_model_id },
         messages,
         schema: input.schema,
