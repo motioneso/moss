@@ -167,6 +167,12 @@ export function TasksPage() {
     if (!query) return;
     interpretMutation.mutate(query);
   };
+  const isFiltered =
+    statusFilter !== "todo" ||
+    focus !== null ||
+    tagFilter.length > 0 ||
+    searchIntent !== null ||
+    Object.values(listStates).some((state) => state !== "included");
 
   return (
     <section className="tasks-wrap tasks--comfortable tasks--panels" aria-label="Tasks">
@@ -329,11 +335,17 @@ export function TasksPage() {
           icon={<LoaderCircle className="spin" size={24} aria-hidden="true" />}
           title="Loading tasks"
         />
-      ) : visibleTasks.length === 0 ? (
+      ) : visibleTasks.length === 0 && isFiltered ? (
         <EmptyState
           icon={<CheckCheck size={24} aria-hidden="true" />}
           title="No tasks match"
           description="Try clearing a filter or two."
+        />
+      ) : visibleTasks.length === 0 ? (
+        <EmptyState
+          icon={<CheckCheck size={24} aria-hidden="true" />}
+          title="No tasks yet"
+          description="Add one above to get started."
         />
       ) : view === "matrix" ? (
         <TaskMatrixView
