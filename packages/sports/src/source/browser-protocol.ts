@@ -16,6 +16,11 @@ export const SPORTS_BROWSER_ROUTES = Object.freeze({
   render: "/v1/render"
 });
 
+export const SPORTS_BROWSER_SOCKETS = Object.freeze({
+  broker: "/run/moss-sports-browser/broker.sock",
+  renderer: "/run/moss-sports-browser/renderer.sock"
+});
+
 export type BrowserResourceType = "document" | "fetch" | "xhr" | "script" | "stylesheet";
 
 export interface BrowserFetchRequest {

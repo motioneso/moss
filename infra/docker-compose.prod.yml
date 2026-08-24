@@ -176,6 +176,7 @@ services:
       JARVIS_EMBED_PROVIDER: ${JARVIS_EMBED_PROVIDER:-local}
       JARVIS_EMBED_MODEL: ${JARVIS_EMBED_MODEL:-}
       JARVIS_MODULES_DIR: /data/modules
+      MOSS_SPORTS_RENDERER_SOCKET: /run/moss-sports-browser/renderer.sock
       # #1468: start-jarv1s.ts runs module-reconcile.ts as a mandatory boot one-shot, which
       # calls assertReconcileTargetIdentity — without this, prod crash-loops on boot the moment
       # app.users has a bootstrap owner (fresh installs are exempted). See the module-install

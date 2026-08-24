@@ -221,9 +221,13 @@ const HTML_RECIPE_SCHEMA = {
   }
 } as const;
 
-const RECIPE_SCHEMA = { oneOf: [JSON_RECIPE_SCHEMA, HTML_RECIPE_SCHEMA] } as const;
+export const SPORTS_SOURCE_RECIPE_SCHEMA = {
+  oneOf: [JSON_RECIPE_SCHEMA, HTML_RECIPE_SCHEMA]
+} as const;
 
-const validateSchema = new Ajv({ allErrors: true, strict: true }).compile(RECIPE_SCHEMA);
+const validateSchema = new Ajv({ allErrors: true, strict: true }).compile(
+  SPORTS_SOURCE_RECIPE_SCHEMA
+);
 
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;

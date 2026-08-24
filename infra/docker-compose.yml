@@ -113,6 +113,7 @@ services:
       CI: "true"
       PORT: "3000"
       HOST: 0.0.0.0
+      MOSS_SPORTS_RENDERER_SOCKET: /run/moss-sports-browser/renderer.sock
       JARVIS_APP_DATABASE_URL: postgres://jarvis_app_runtime:app_password@postgres:5432/jarv1s
       JARVIS_AUTH_DATABASE_URL: postgres://jarvis_auth_runtime:auth_password@postgres:5432/jarv1s
     command: sh -c "corepack enable && apt-get update && apt-get install -y --no-install-recommends python3 make g++ && pnpm install --frozen-lockfile --store-dir /tmp/pnpm-store && pnpm start:api"

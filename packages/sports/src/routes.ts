@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import type { DatasetClient } from "@moss/datasets";
-import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
+import type { AccessContext, DataContextRunner } from "@moss/db";
 import { HttpError, handleRouteError } from "@moss/module-sdk";
 import type { NewsAiPort } from "@moss/news";
 import {
@@ -27,7 +27,11 @@ import {
 import { SportsFollowsRepository } from "./repository.js";
 import { SportsService, type SportsFollowsWriter } from "./sports-service.js";
 import { catalogEntry } from "./source/catalog.js";
-import { resolveSportsSourceInput, type SportsSafeFetchPort } from "./source/discovery.js";
+import {
+  resolveSportsSourceInput,
+  type SportsDiscoveryBrowserPort,
+  type SportsSafeFetchPort
+} from "./source/discovery.js";
 import { SportsSourcesRepository } from "./source/repository.js";
 import { createSportsPreviewStore } from "./source/preview-store.js";
 
@@ -47,12 +51,10 @@ export interface SportsRoutesDependencies {
   /** Clock seam forwarded to the service (default `() => new Date()`). */
   readonly now?: () => Date;
   /** #1572 custom source discovery — required for the preview/confirm/list/assign/delete routes. */
-  readonly availability: {
-    hasJsonModel(scopedDb: DataContextDb): Promise<boolean>;
-  };
   readonly discovery: {
     readonly fetch: SportsSafeFetchPort;
     readonly ai: NewsAiPort;
+    readonly browser?: SportsDiscoveryBrowserPort;
   };
   /** Optional injection point for tests; defaults to a real `SportsSourcesRepository`. */
   readonly sourcesRepository?: SportsSourcesRepository;
@@ -229,15 +231,9 @@ export function registerSportsRoutes(
         const accessContext = await dependencies.resolveAccessContext(request);
         const input = request.body as PreviewSportsSourceRequest;
         return await dependencies.dataContext.withDataContext(accessContext, async (db) => {
-          const hasJsonModel = await dependencies.availability.hasJsonModel(db);
-          if (!hasJsonModel) {
-            return { status: "unavailable" as const };
-          }
-          const result = await resolveSportsSourceInput(
-            db,
-            { ...dependencies.discovery, repo: sourcesRepository },
-            { rawUrl: input.url }
-          );
+          const result = await resolveSportsSourceInput(db, dependencies.discovery, {
+            rawUrl: input.url
+          });
           if (result.status !== "ok") return result;
 
           const confirmationId = previews.put({

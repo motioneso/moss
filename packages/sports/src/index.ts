@@ -16,3 +16,6 @@ export {
 } from "./briefing-tool.js";
 export { configureSportsChatTools, resetSportsChatToolsForTests } from "./chat-tools.js";
 export { createEspnDatasetAdapter } from "./source/espn-source.js";
+export { SportsBrowserBroker, SportsBrowserBrokerServer } from "./source/browser-broker.js";
+export { SportsBrowserClient } from "./source/browser-client.js";
+export { SPORTS_BROWSER_SOCKETS } from "./source/browser-protocol.js";

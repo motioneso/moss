@@ -24,13 +24,9 @@ import {
   type BrowserResourceType,
   parseBrowserRenderBody,
   SPORTS_BROWSER_LIMITS,
-  SPORTS_BROWSER_ROUTES
+  SPORTS_BROWSER_ROUTES,
+  SPORTS_BROWSER_SOCKETS
 } from "./browser-protocol.js";
-
-export const SPORTS_BROWSER_SOCKETS = Object.freeze({
-  broker: "/run/moss-sports-browser/broker.sock",
-  renderer: "/run/moss-sports-browser/renderer.sock"
-});
 
 export interface SportsBrowserSidecarDependencies {
   readonly brokerSocketPath?: string;

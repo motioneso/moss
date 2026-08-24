@@ -220,7 +220,6 @@ function buildApp(overrides: Partial<SportsRoutesDependencies> & { repo?: FakeRe
     resolveAccessContext: overrides.resolveAccessContext ?? (async () => userA),
     repository: repo,
     now: () => new Date("2026-07-01T18:00:00.000Z"),
-    availability: overrides.availability ?? { hasJsonModel: async () => false },
     discovery:
       overrides.discovery ??
       ({
@@ -766,11 +765,24 @@ describe("sports routes", () => {
     await app.close();
   });
 
-  it("POST /api/sports/sources/preview reports unavailable when no JSON model is configured", async () => {
+  it("POST /api/sports/sources/preview accepts a feed without a JSON model", async () => {
     const sourcesRepository = makeSourcesRepo([]);
     const { app } = buildApp({
       sourcesRepository: sourcesRepository as unknown as SportsSourcesRepository,
-      availability: { hasJsonModel: async () => false }
+      discovery: {
+        fetch: async (url) => ({
+          ok: true,
+          status: 200,
+          finalUrl: url,
+          contentType: "application/rss+xml",
+          body: `<rss><channel><item><title>A consequential sports headline</title><link>https://one.example.com/story</link></item></channel></rss>`,
+          truncated: false
+        }),
+        ai: {
+          generateJson: async () => ({ ok: false, error: "needs_config" }),
+          fingerprint: async () => null
+        }
+      }
     });
     await app.ready();
     const res = await app.inject({
@@ -779,7 +791,10 @@ describe("sports routes", () => {
       payload: { url: "https://one.example.com" }
     });
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ status: "unavailable" });
+    expect(JSON.parse(res.body)).toMatchObject({
+      status: "ok",
+      candidate: { canonicalDomain: "one.example.com", retrievalMethod: "feed" }
+    });
     await app.close();
   });
 

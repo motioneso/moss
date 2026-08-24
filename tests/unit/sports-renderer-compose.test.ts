@@ -73,6 +73,9 @@ function expectSandboxedRenderer(services: Record<string, ComposeService>, appNa
   expect(services[appName]?.volumes).toContainEqual(
     expect.objectContaining({ type: "volume", target: "/run/moss-sports-browser" })
   );
+  expect(services[appName]?.environment).toMatchObject({
+    MOSS_SPORTS_RENDERER_SOCKET: "/run/moss-sports-browser/renderer.sock"
+  });
 }
 
 describe("Sports source renderer Compose sandbox", () => {
