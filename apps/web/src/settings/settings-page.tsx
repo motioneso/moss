@@ -129,9 +129,6 @@ const HostPane = lazyPane(() =>
   import("./settings-admin-panes").then((module) => ({ default: module.HostPane }))
 );
 
-// Sentinel for the one nav group whose label follows the user's configured
-// assistant name instead of the fixed product name "Moss" — swapped for the
-// live name at render time in SettingsPage.
 const ASSISTANT_NAME_GROUP_LABEL = "__ASSISTANT_NAME__";
 
 const PERSONAL_GROUPS = [
