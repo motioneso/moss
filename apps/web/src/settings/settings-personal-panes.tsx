@@ -39,7 +39,35 @@ const DEFAULT_LOCALE_SETTINGS: LocaleSettingsDto = {
   dateFormat: "24"
 };
 
-const SUPPORTED_TIME_ZONES = Intl.supportedValuesOf("timeZone");
+function timeZoneOffsetMinutes(timeZone: string, date: Date): number {
+  const part = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    timeZoneName: "shortOffset"
+  })
+    .formatToParts(date)
+    .find((entry) => entry.type === "timeZoneName")?.value;
+  const match = /GMT([+-])(\d+)(?::(\d+))?/.exec(part ?? "");
+  if (!match) return 0;
+  const sign = match[1] === "-" ? -1 : 1;
+  return sign * (Number(match[2]) * 60 + Number(match[3] ?? 0));
+}
+
+function formatTimeZoneOffset(offsetMinutes: number): string {
+  const sign = offsetMinutes < 0 ? "-" : "+";
+  const abs = Math.abs(offsetMinutes);
+  const hours = String(Math.floor(abs / 60)).padStart(2, "0");
+  const minutes = String(abs % 60).padStart(2, "0");
+  return `UTC${sign}${hours}:${minutes}`;
+}
+
+// Sorted by UTC offset (then name) and labeled with that offset, rather than
+// the browser's arbitrary IANA-list order — the plain list read as unsorted noise.
+const SUPPORTED_TIME_ZONES = Intl.supportedValuesOf("timeZone")
+  .map((timeZone) => {
+    const offsetMinutes = timeZoneOffsetMinutes(timeZone, new Date());
+    return { timeZone, offsetMinutes, label: `(${formatTimeZoneOffset(offsetMinutes)}) ${timeZone}` };
+  })
+  .sort((a, b) => a.offsetMinutes - b.offsetMinutes || a.timeZone.localeCompare(b.timeZone));
 
 const DEFAULT_QUIET_HOURS: QuietHoursSettingsDto = {
   enabled: false,
@@ -288,9 +316,9 @@ export function ProfilePane({ me }: PaneProps) {
               disabled={localeQuery.isLoading || localeMutation.isPending}
               onChange={(event) => updateLocale({ timezone: event.currentTarget.value })}
             >
-              {SUPPORTED_TIME_ZONES.map((timeZone) => (
-                <option key={timeZone} value={timeZone}>
-                  {timeZone}
+              {SUPPORTED_TIME_ZONES.map((zone) => (
+                <option key={zone.timeZone} value={zone.timeZone}>
+                  {zone.label}
                 </option>
               ))}
             </Select>
