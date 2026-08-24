@@ -568,7 +568,7 @@
       "id": "job-search",
       "label": "Job Search",
       "path": "/",
-      "icon": "compass",
+      "icon": "briefcase",
       "badge": { "source": "notifications" }
     }
   ]
