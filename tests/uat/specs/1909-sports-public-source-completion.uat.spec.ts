@@ -253,16 +253,6 @@ function confirmationInput(preview: PreviewResult, extra: Record<string, unknown
   };
 }
 
-test("Sports settings exposes truthful public-source controls (#1909)", async ({ page }) => {
-  await signIn(page);
-  const section = await openSportsSettings(page);
-  await expect(section.getByLabel("Publication homepage or domain")).toBeVisible();
-  await expect(section.getByRole("button", { name: "Check", exact: true })).toBeVisible();
-  await expect(section.getByText("Awaiting first check", { exact: false }).first()).toBeVisible();
-  await expect(section.getByText("One or more source targets are failing.")).toBeVisible();
-  await expect(section.getByRole("button", { name: /Rebuild FotMob legacy scrape/ })).toBeVisible();
-});
-
 test("public publishers reach Sports, Today, recovery, and Moss status (#1909)", async ({
   page
 }) => {
@@ -273,8 +263,13 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
   test.setTimeout(1_500_000);
 
   await signIn(page);
-  await bringUpRealModel(page);
-  const follows = await createPremierLeagueFollows(page);
+  const section = await openSportsSettings(page);
+  await expect(section.getByLabel("Publication homepage or domain")).toBeVisible();
+  await expect(section.getByRole("button", { name: "Check", exact: true })).toBeVisible();
+  await expect(section.getByText("Awaiting first check", { exact: false }).first()).toBeVisible();
+  await expect(section.getByText("One or more source targets are failing.")).toBeVisible();
+  await expect(section.getByRole("button", { name: /Rebuild FotMob legacy scrape/ })).toBeVisible();
+
   let sources = await listSources(page);
   const bbc = sources.find((source) => source.canonicalDomain === new URL(BBC_FEED_URL).hostname);
   const failing = sources.find((source) => source.canonicalDomain === RAW_FIXTURE_DOMAIN);
@@ -309,6 +304,9 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
   ).toBe(true);
   expect(drift.recipeStatus).toBe("drift");
   expect(drift.healthReasonCode).toBe("recipe_drift");
+
+  await bringUpRealModel(page);
+  const follows = await createPremierLeagueFollows(page);
 
   await test.step("Moss Retry recovers a controlled partial target failure", async () => {
     await confirmThroughMoss(

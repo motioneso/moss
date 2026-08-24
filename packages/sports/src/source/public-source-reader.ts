@@ -347,13 +347,15 @@ export class SportsPublicSourceReader {
           identity: stableId(`${source.runtimeFingerprint}\0${source.feedUrl}`),
           url: source.feedUrl,
           headers: {
-            accept: "application/rss+xml, application/atom+xml, application/xml, text/xml"
+            accept:
+              "application/rss+xml, application/atom+xml, application/xml, text/xml, text/plain;q=0.9"
           },
           allowedContentTypes: [
             "application/rss+xml",
             "application/atom+xml",
             "application/xml",
-            "text/xml"
+            "text/xml",
+            "text/plain"
           ],
           allowedHosts: source.confirmedFetchHosts,
           recipe: null

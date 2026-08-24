@@ -157,10 +157,11 @@ describe("SportsPublicSourceReader", () => {
     const fetch = vi.fn<SportsSafeFetchPort>(async (url, options) => {
       if (!(await permitInitialRequest(url, options))) return { ok: false, reason: "blocked" };
       if (url.endsWith("sports.xml")) {
+        expect(options?.allowedContentTypes).toContain("text/plain");
         return success(
           url,
           `<rss><channel><item><guid>feed-1</guid><title> Feed  story </title><link>https://stories.example/feed</link></item></channel></rss>`,
-          "application/rss+xml"
+          "text/plain"
         );
       }
       if (url.includes("/team/8650/")) {
