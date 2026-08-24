@@ -35,12 +35,9 @@ export function NotificationsPage() {
   const unreadCount = notificationsQuery.data?.unreadCount ?? 0;
 
   return (
-    <section className="page-stack" aria-labelledby="notifications-title">
+    <section className="page-stack" aria-label="Notifications">
       <div className="page-heading">
-        <div>
-          <p className="eyebrow">Notifications</p>
-          <h1 id="notifications-title">Notifications</h1>
-        </div>
+        <div />
 
         <Button
           disabled={unreadCount === 0 || markAllReadMutation.isPending}
