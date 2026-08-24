@@ -258,7 +258,7 @@ test("Sports settings exposes truthful public-source controls (#1909)", async ({
   const section = await openSportsSettings(page);
   await expect(section.getByLabel("Publication homepage or domain")).toBeVisible();
   await expect(section.getByRole("button", { name: "Check", exact: true })).toBeVisible();
-  await expect(section.getByText("Awaiting first check", { exact: false })).toBeVisible();
+  await expect(section.getByText("Awaiting first check", { exact: false }).first()).toBeVisible();
   await expect(section.getByText("One or more source targets are failing.")).toBeVisible();
   await expect(section.getByRole("button", { name: /Rebuild FotMob legacy scrape/ })).toBeVisible();
 });
