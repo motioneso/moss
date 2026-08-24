@@ -5,6 +5,8 @@
 The launcher starts the overnight fleet. The viewer shows what each lane is doing without
 contacting the project board or the running agents.
 
+For the concise operating instructions, see the [fleet runbook](../../../docs/coordination/fleet-runbook.md).
+
 ## Starting it the first time
 
 Install the launcher's separate dependencies once, then start it:

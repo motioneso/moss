@@ -225,7 +225,8 @@ herdr_agent_names() {
 # ruling. Dry-run prints the call and returns no ruling.
 judgment_call() { # <issue> <record-json> <options e.g. 'RESTART or PARK'> <question>
   local issue="$1" record="$2" options="$3" question="$4"
-  local prompt ruling
+  local prompt
+  RULING=""
   prompt="$question
 
 Answer with a SINGLE first line containing exactly one word: $options. You may explain after the first line, but only the first line is read.
@@ -241,10 +242,9 @@ $(lane_log_tail "$issue")"
     return 0
   fi
   # shellcheck disable=SC2086 # JUDGE_CMD is a command, splitting is intended
-  ruling="$($JUDGE_CMD "$prompt" 2>/dev/null | head -n1 | tr -d '\r' | awk '{print toupper($1)}')"
+  RULING="$($JUDGE_CMD "$prompt" 2>/dev/null | head -n1 | tr -d '\r' | awk '{print toupper($1)}')"
   fctl log "$issue" "judgment question: $question"
-  fctl log "$issue" "judgment ruling: ${ruling:-<no answer>}"
-  echo "$ruling"
+  fctl log "$issue" "judgment ruling: ${RULING:-<no answer>}"
 }
 
 # Render the build brief from the template by replacing ${NAME} placeholders.
@@ -552,8 +552,9 @@ handle_building() { # <issue> <record>
     fctl log "$issue" "build agent died a second time; parked"
     return 0
   fi
-  ruling="$(judgment_call "$issue" "$record" 'RESTART or PARK' \
-    "The build agent for issue $issue died mid-build (gone from the agent list, no record change for over 30 minutes). Should we restart it fresh with the same brief, or park the lane for Ben?" | tail -n1)"
+  judgment_call "$issue" "$record" 'RESTART or PARK' \
+    "The build agent for issue $issue died mid-build (gone from the agent list, no record change for over 30 minutes). Should we restart it fresh with the same brief, or park the lane for Ben?"
+  ruling="$RULING"
   case "$ruling" in
     RESTART)
       if ! budget_available; then
@@ -674,8 +675,9 @@ handle_qa_red() { # <issue> <record>
   qa_rounds="$(jq -r '.qa_rounds // 0' <<<"$record")"
   pr="$(jq -r '.pr // empty' <<<"$record")"
   if [ "$qa_rounds" -ge 2 ]; then
-    ruling="$(judgment_call "$issue" "$record" 'MERGE or PARK' \
-      "Issue $issue failed QA twice. Read the QA verdict and the build agent's cited fixes on PR #$pr and rule: merge anyway, or park for Ben? When it is close, prefer parking." | tail -n1)"
+    judgment_call "$issue" "$record" 'MERGE or PARK' \
+      "Issue $issue failed QA twice. Read the QA verdict and the build agent's cited fixes on PR #$pr and rule: merge anyway, or park for Ben? When it is close, prefer parking."
+    ruling="$RULING"
     case "$ruling" in
       MERGE)
         fctl set "$issue" status=qa-green
