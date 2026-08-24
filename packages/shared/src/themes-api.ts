@@ -69,7 +69,7 @@ export interface DeleteCustomThemeResponse {
 const colorValueSchema = {
   type: "string",
   pattern:
-    "^(#[0-9a-fA-F]{6}|rgb\\((25[0-5]|2[0-4]\\d|1?\\d?\\d),\\s*(25[0-5]|2[0-4]\\d|1?\\d?\\d),\\s*(25[0-5]|2[0-4]\\d|1?\\d?\\d)\\))$"
+    "^(#[0-9a-fA-F]{6}|rgba?\\((25[0-5]|2[0-4]\\d|1?\\d?\\d),\\s*(25[0-5]|2[0-4]\\d|1?\\d?\\d),\\s*(25[0-5]|2[0-4]\\d|1?\\d?\\d)(,\\s*(0|1|0?\\.\\d+))?\\))$"
 } as const;
 
 const tokenProperties = Object.fromEntries(

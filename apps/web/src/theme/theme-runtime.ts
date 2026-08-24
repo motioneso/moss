@@ -11,7 +11,7 @@ export interface CSSStyleDeclarationLike {
 }
 
 const THEME_COLOR_RE =
-  /^#[0-9a-fA-F]{6}$|^rgb\((25[0-5]|2[0-4]\d|1?\d?\d),\s*(25[0-5]|2[0-4]\d|1?\d?\d),\s*(25[0-5]|2[0-4]\d|1?\d?\d)\)$/;
+  /^#[0-9a-fA-F]{6}$|^rgba?\((25[0-5]|2[0-4]\d|1?\d?\d),\s*(25[0-5]|2[0-4]\d|1?\d?\d),\s*(25[0-5]|2[0-4]\d|1?\d?\d)(,\s*(0|1|0?\.\d+))?\)$/;
 
 /* Only the required 12 map 1:1 to a var; the optional gold slot derives a ramp below. */
 const TOKEN_TO_VAR: Record<AestheticThemeTokenKey, string> = {
@@ -57,7 +57,7 @@ export function isThemeColor(value: string): boolean {
 }
 
 export function parsePalette(input: string): string[] {
-  const matches = input.match(/#[0-9a-fA-F]{6}\b|rgb\([^)]*\)/g) ?? [];
+  const matches = input.match(/#[0-9a-fA-F]{6}\b|rgba?\([^)]*\)/g) ?? [];
   return [...new Set(matches.map((value) => value.trim()).filter(isThemeColor))];
 }
 

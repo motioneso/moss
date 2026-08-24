@@ -13,6 +13,10 @@
   font-size: 13px;
   color: var(--text-subtle);
 }
+.set-technical-details .set-row__control {
+  font-size: 13px;
+  color: var(--text-subtle);
+}
 .set2__adv-t {
   font-size: 13px;
   font-weight: 600;
@@ -79,6 +83,14 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
+}
+.pane__card--danger {
+  background: var(--danger-soft);
+  border: 1px solid var(--danger);
+}
+.pane__card--danger .pane__cardtitle,
+.pane__card--danger .pane__carddesc {
+  color: var(--danger-fg);
 }
 .pane__cardtitle {
   font-family: var(--font-display);

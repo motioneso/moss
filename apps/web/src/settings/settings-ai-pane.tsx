@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CornerDownRight, PencilLine, GitCommitHorizontal } from "lucide-react";
+import { Check, PencilLine, GitCommitHorizontal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -19,17 +19,26 @@ import {
   createPersonaDraft,
   discardPersonaDraft,
   personaDraftIsDirty,
-  personaSeedText,
-  personaSample,
   type DirectnessDial,
   type HumorDial,
+  type PersonaDials,
   type PersonaDraft,
   type PersonaSnapshot,
   type RecoveryDial,
   type ToneDial
 } from "./settings-persona-preview";
 import { type PaneProps } from "./settings-types";
-import { Choice, Field, Group, Note, PaneHead, Row, Select, Switch } from "./settings-ui";
+import {
+  Choice,
+  Field,
+  Group,
+  Note,
+  PaneHead,
+  Row,
+  Segmented,
+  Select,
+  Switch
+} from "./settings-ui";
 import { Button } from "@moss/ui";
 
 type PersonaState = PersonaDraft;
@@ -61,6 +70,13 @@ function Persona({ who }: { readonly who: string }) {
   const receivedInitialSnapshot = useRef(false);
   const set = <K extends keyof PersonaState>(k: K, v: PersonaState[K]) =>
     setP((s) => ({ ...s, [k]: v }));
+  // Guided mode has no free-text editing happening alongside it, so a dial change can just
+  // write the seeded text straight through instead of asking the user to confirm and apply it.
+  const setDial = <K extends keyof PersonaDials>(k: K, v: PersonaDials[K]) =>
+    setP((s) => {
+      const next = { ...s, [k]: v };
+      return applyGuidedPersonaText(next, next);
+    });
   const personaQuery = useQuery({
     queryKey: queryKeys.settings.persona,
     queryFn: getPersonaSettings,
@@ -76,8 +92,6 @@ function Persona({ who }: { readonly who: string }) {
     setRev((r) => r + 1);
   }, [personaQuery.data]);
   const dirty = personaDraftIsDirty(p, saved);
-  const sample = useMemo(() => personaSample(p, who), [p, who]);
-  const seedText = useMemo(() => personaSeedText(p), [p]);
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -125,20 +139,12 @@ function Persona({ who }: { readonly who: string }) {
     setP(discardPersonaDraft(saved, p));
     setRev((r) => r + 1);
   };
-  const applySeed = () => {
-    if (
-      p.personaText.trim() !== saved.personaText.trim() &&
-      !window.confirm("Replace your edited persona text with the guided draft?")
-    )
-      return;
-    setP((draft) => applyGuidedPersonaText(draft, draft));
-  };
   const previewReply = previewMutation.data?.reply;
 
   return (
     <Group
       title="Persona"
-      desc={`How ${assistantName} sounds and carries itself — write it yourself, or set it with the dials below. The preview shows the effect.`}
+      desc={`How ${assistantName} sounds and carries itself: write it yourself, or set it with the dials below. The preview shows the effect.`}
     >
       <Field
         label="Assistant name"
@@ -152,27 +158,19 @@ function Persona({ who }: { readonly who: string }) {
         />
       </Field>
       <Field label="How to set your persona" hint="Switching methods keeps your current draft.">
-        <span className="psona-save__acts">
-          <Button
-            variant="quiet"
-            size="sm"
-            aria-pressed={mode === "authored"}
-            onClick={() => setMode("authored")}
-          >
-            Write it yourself
-          </Button>
-          <Button
-            variant="quiet"
-            size="sm"
-            aria-pressed={mode === "guided"}
-            onClick={() => setMode("guided")}
-          >
-            Use guided dials
-          </Button>
-        </span>
+        <Segmented
+          ariaLabel="How to set your persona"
+          value={mode}
+          options={[
+            { value: "authored", label: "Write it yourself" },
+            { value: "guided", label: "Use guided dials" }
+          ]}
+          onChange={setMode}
+        />
       </Field>
       {mode === "authored" ? (
         <Field
+          className="fld--no-border"
           label="In your own words"
           hint={`How should ${assistantName} interact with you? Its style, what to lean into, what to avoid.`}
         >
@@ -189,24 +187,25 @@ function Persona({ who }: { readonly who: string }) {
         <>
           <Choice
             key={`tone${rev}`}
+            className="fld--no-border"
             label="Tone"
             value={p.tone}
             options={["Warm", "Neutral", "Crisp"]}
-            onChange={(v) => set("tone", v as ToneDial)}
+            onChange={(v) => setDial("tone", v as ToneDial)}
           />
           <Choice
             key={`dir${rev}`}
             label="Directness"
             value={p.directness}
             options={["Gentle", "Balanced", "Direct"]}
-            onChange={(v) => set("directness", v as DirectnessDial)}
+            onChange={(v) => setDial("directness", v as DirectnessDial)}
           />
           <Choice
             key={`hum${rev}`}
             label="Humor"
             value={p.humor}
             options={["None", "Dry", "Playful"]}
-            onChange={(v) => set("humor", v as HumorDial)}
+            onChange={(v) => setDial("humor", v as HumorDial)}
           />
           <Choice
             key={`rec${rev}`}
@@ -214,39 +213,23 @@ function Persona({ who }: { readonly who: string }) {
             hint={`How ${assistantName} responds when you fall behind. Never shaming: that's a promise of the product.`}
             value={p.recovery}
             options={["Encouraging", "Matter-of-fact", "Firm"]}
-            onChange={(v) => set("recovery", v as RecoveryDial)}
+            onChange={(v) => setDial("recovery", v as RecoveryDial)}
           />
-          <Field
-            label="Apply dials"
-            hint="Overwrites the text above with a description built from these dials."
-          >
-            <Button variant="quiet" size="sm" onClick={applySeed}>
-              Use dials for text
-            </Button>
-          </Field>
         </>
       )}
 
-      <div className="ppv">
-        <div className="ppv__hd">
-          <GitCommitHorizontal size={13} aria-hidden="true" />
-          How {p.assistantName || "Moss"} would sound
-        </div>
-        <div className="ppv__bubble ppv__bubble--main">
-          <div className="ppv__cap">{previewReply ? "Response preview" : "Morning briefing"}</div>
-          <p className="ppv__say">{previewReply ?? sample.greeting}</p>
-        </div>
-        {previewReply ? null : (
-          <div className="ppv__bubble">
-            <div className="ppv__cap">When you fall behind</div>
-            <p className="ppv__say">{sample.recovery}</p>
+      {previewReply ? (
+        <div className="ppv">
+          <div className="ppv__hd">
+            <GitCommitHorizontal size={13} aria-hidden="true" />
+            How {p.assistantName || "Moss"} would sound
           </div>
-        )}
-        <div className="ppv__foot">
-          <CornerDownRight size={12} aria-hidden="true" />
-          {previewReply ? "Real preview from your chat route." : seedText}
+          <div className="ppv__bubble ppv__bubble--main">
+            <div className="ppv__cap">Response preview</div>
+            <p className="ppv__say">{previewReply}</p>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div className={`psona-save${dirty ? " is-dirty" : ""}`}>
         <span className="psona-save__state">

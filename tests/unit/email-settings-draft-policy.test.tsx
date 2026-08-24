@@ -64,12 +64,12 @@ describe("email_drafts policy ↔ toggle mapping", () => {
 });
 
 describe("EmailSettings pane", () => {
-  it("renders the draft-agency toggle and the always-asks send notice", () => {
+  it("renders the draft-agency toggle without redundant send-policy copy", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const html = renderToString(
       createElement(QueryClientProvider, { client }, createElement(EmailSettings))
     );
     expect(html).toContain("Let your assistant draft email replies without asking");
-    expect(html).toContain("Sending a reply always asks first");
+    expect(html).not.toContain("Sending a reply always asks first");
   });
 });

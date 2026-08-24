@@ -506,9 +506,8 @@ export function Root(props: { hostActions: HostActions }): ReactNodeLike {
   return (
     <div className="fud-root">
       <header className="fud-header">
-        <h1 className="jds-display jds-display--md">Food</h1>
         {/* Grouped so the three controls travel together at the right edge; without the wrapper
-            the header's space-between spreads four children across the full width and the date
+            the header's flex layout spreads four children across the full width and the date
             picker drifts into the middle of nothing. */}
         <div className="fud-header-actions">
           <input

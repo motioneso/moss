@@ -10,7 +10,6 @@ import {
   FolderOpen,
   FolderSearch,
   HeartPulse,
-  Info,
   ListChecks,
   Lock,
   Mail,
@@ -140,15 +139,6 @@ function AccountRow(props: {
           <span className="acct__dot">·</span>
           <span>Live connection</span>
           <Indicator status={health.indicator} label={health.label} />
-        </div>
-        {account.scopes.length ? (
-          <div className="acct__scopes">{account.scopes.join(" · ")}</div>
-        ) : null}
-        <div className="acct__scopes">
-          Fallback cache{" "}
-          {account.lastSyncFinishedAt
-            ? `updated ${formatTimestamp(account.lastSyncFinishedAt, account.lastSyncFinishedAt)}`
-            : "not yet populated"}
         </div>
         {health.alert ? <div className="acct__alert">{health.alert}</div> : null}
         {account.status !== "revoked" && (hasEmail || hasCalendar) ? (
@@ -297,52 +287,45 @@ function ConnectedPane() {
     <>
       <PaneHead
         title="Connected accounts"
-        desc={`The external accounts ${assistantName} can reach, and how healthy each connection is. You stay in control — reconnect or revoke at any time.`}
+        desc={`The external accounts ${assistantName} can reach, and how healthy each connection is.`}
       />
       <Group
         title="Accounts"
         action={
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setFlow((f) => (f === "picker" ? null : "picker"))}
-            icon={<Plus size={15} />}
-          >
-            Connect account
-          </Button>
+          accounts.length === 0 ? undefined : (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setFlow((f) => (f === "picker" ? null : "picker"))}
+              icon={<Plus size={15} />}
+            >
+              Connect account
+            </Button>
+          )
         }
       >
-        {accounts.length === 0 ? (
-          <Row
-            name="No accounts connected"
-            desc={`Connect Google or another account to give ${assistantName} context.`}
-          />
-        ) : (
-          accounts.map((account) => (
-            <AccountRow
-              key={account.id}
-              account={account}
-              onReconnect={() => setFlow(account.providerType === "google" ? "google" : "imap")}
-              onRevoke={() =>
-                confirm({
-                  title: `Revoke ${account.providerDisplayName} access?`,
-                  description: `${assistantName} will lose access to this account until you reconnect it. Nothing on the account itself is changed.`,
-                  confirmLabel: "Revoke",
-                  danger: true,
-                  onConfirm: () => revokeMutation.mutate(account.id)
-                })
-              }
-            />
-          ))
-        )}
-        {flow === "picker" ? (
+        {accounts.length === 0
+          ? null
+          : accounts.map((account) => (
+              <AccountRow
+                key={account.id}
+                account={account}
+                onReconnect={() => setFlow(account.providerType === "google" ? "google" : "imap")}
+                onRevoke={() =>
+                  confirm({
+                    title: `Revoke ${account.providerDisplayName} access?`,
+                    description: `${assistantName} will lose access to this account until you reconnect it. Nothing on the account itself is changed.`,
+                    confirmLabel: "Revoke",
+                    danger: true,
+                    onConfirm: () => revokeMutation.mutate(account.id)
+                  })
+                }
+              />
+            ))}
+        {flow === "picker" || accounts.length === 0 ? (
           <ServicePicker onGoogle={() => setFlow("google")} onImap={() => setFlow("imap")} />
         ) : null}
       </Group>
-      <Note icon={<ShieldCheck size={13} />}>
-        These are your accounts and their trust state — not backend provider definitions. What each
-        account powers is set in its module settings.
-      </Note>
     </>
   );
 }
@@ -454,10 +437,7 @@ function SourcesPane() {
 
   return (
     <>
-      <PaneHead
-        title="Data sources"
-        desc={`Connect a notes folder ${assistantName} can index and use as context.`}
-      />
+      <PaneHead title="Data sources" />
 
       <Group
         title={
@@ -466,7 +446,7 @@ function SourcesPane() {
             Notes &amp; documents
           </span>
         }
-        desc={`Point ${assistantName} at a folder of notes on this server — a Markdown vault, a plain folder of text files, anything. Tool-agnostic by design.`}
+        desc={`Point ${assistantName} at a folder of notes on this server — a Markdown vault, a plain folder of text files, anything.`}
       >
         <div className="vault">
           <span className="vault__ic">
@@ -659,6 +639,16 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
     myQuery.data?.modules ?? [],
     hasImplementedModuleSettings
   );
+  const byName = (a: (typeof modules)[number], b: (typeof modules)[number]) =>
+    a.name.localeCompare(b.name);
+  const builtInModules = modules
+    .filter((module) => module.required)
+    .slice()
+    .sort(byName);
+  const optionalModules = modules
+    .filter((module) => !module.required)
+    .slice()
+    .sort(byName);
   const pathFor = (id: string): string | null =>
     modulesQuery.data?.modules.find((m) => m.id === id)?.navigation[0]?.path ?? null;
 
@@ -674,16 +664,7 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
     const cat = CAT_BY_ID[module.id];
     const path = pathFor(module.id);
 
-    // Required modules stay distinct from optional modules without offering a toggle.
-    const badge = locked ? (
-      <Badge tone="neutral">Unavailable</Badge>
-    ) : control.kind === "required" ? (
-      <Badge tone="neutral">Required</Badge>
-    ) : control.kind === "toggle" && module.active ? (
-      <Badge tone="forest" dot>
-        Enabled
-      </Badge>
-    ) : null;
+    const badge = locked ? <Badge tone="neutral">Unavailable</Badge> : null;
 
     let action: React.ReactNode = null;
     if (locked) {
@@ -767,6 +748,7 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
           </div>
         </div>
         <div className="modrow__act">
+          {action}
           {control.kind === "toggle" ? (
             <Switch
               ariaLabel={`Use ${module.name}`}
@@ -774,7 +756,6 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
               onChange={(value) => toggleMutation.mutate({ id: module.id, disabled: !value })}
             />
           ) : null}
-          {action}
         </div>
       </div>
     );
@@ -783,12 +764,19 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
   return (
     <>
       <PaneHead title="Modules" desc="Choose which parts of Moss to use and configure." />
-      <Group
-        title="Available modules"
-        desc="Required modules stay available; optional modules can be turned on or off."
-      >
-        {modules.length ? (
-          modules.map(renderRow)
+      <Group title="Built-in" desc="Modules included with core installation.">
+        {builtInModules.length ? (
+          builtInModules.map(renderRow)
+        ) : (
+          <Row
+            name={myQuery.isLoading ? "Loading modules…" : "No built-in modules"}
+            desc="Built-in modules will appear here when available."
+          />
+        )}
+      </Group>
+      <Group title="Optional" desc="Optional modules can be turned on or off.">
+        {optionalModules.length ? (
+          optionalModules.map(renderRow)
         ) : (
           <Row
             name={myQuery.isLoading ? "Loading modules…" : "No additional modules"}
@@ -796,10 +784,6 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
           />
         )}
       </Group>
-      <Note icon={<Info size={13} />}>
-        Real app screens open in place; settings-only modules — Briefings, Chat, Notifications —
-        configure right here.
-      </Note>
     </>
   );
 }

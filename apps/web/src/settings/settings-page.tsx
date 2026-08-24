@@ -24,6 +24,7 @@ import {
 import { Fragment, lazy, Suspense, useEffect, useState, type ComponentType } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
+import { useAssistantName } from "../api/use-assistant-name";
 import { FeedbackProvider } from "./settings-feedback";
 import { ProfilePane } from "./settings-personal-panes";
 import {
@@ -128,6 +129,8 @@ const HostPane = lazyPane(() =>
   import("./settings-admin-panes").then((module) => ({ default: module.HostPane }))
 );
 
+const ASSISTANT_NAME_GROUP_LABEL = "__ASSISTANT_NAME__";
+
 const PERSONAL_GROUPS = [
   {
     label: "Your account",
@@ -149,7 +152,7 @@ const PERSONAL_GROUPS = [
     ]
   },
   {
-    label: "Moss",
+    label: ASSISTANT_NAME_GROUP_LABEL,
     sections: [
       {
         id: "assistant",
@@ -300,6 +303,7 @@ export function SettingsPage({ me }: SettingsPageProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const isAdmin = me.user.isInstanceAdmin;
   const storage = browserSettingsStorage();
+  const assistantName = useAssistantName();
 
   const [mode, setMode] = useState<"personal" | "admin">(() =>
     isAdmin && readSettingsStorage(storage, "mode") === "admin" ? "admin" : "personal"
@@ -380,7 +384,9 @@ export function SettingsPage({ me }: SettingsPageProps) {
           <nav className="set2__nav" aria-label="Settings categories">
             {groups.map((group) => (
               <Fragment key={group.label}>
-                <div className="set2__navgroup">{group.label}</div>
+                <div className="set2__navgroup">
+                  {group.label === ASSISTANT_NAME_GROUP_LABEL ? assistantName : group.label}
+                </div>
                 {group.sections.map((item) => {
                   const Icon = item.icon;
                   return (

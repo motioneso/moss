@@ -20,7 +20,7 @@ export const MODULE_STYLES = `
    Only the width is shared: job-search carries 6rem of bottom padding to clear the floating
    assistant button, which is a fact about its long board, not about the page frame. */
 .fud-root { max-width: 72rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
-.fud-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.75rem; }
+.fud-header { display: flex; align-items: center; justify-content: flex-end; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.75rem; }
 /* #1787: the header's controls travel as one group at the right edge. Wraps as a unit on a narrow
    screen rather than letting the date picker and the buttons separate onto different rows. */
 .fud-header-actions { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }

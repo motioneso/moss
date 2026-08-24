@@ -69,10 +69,6 @@ function ModuleMasthead(props: { profile: Profile | null }): ReactNodeLike {
   const status = mastheadStatus(props.profile);
   return (
     <div className="jsm-masthead">
-      <div className="jsm-masthead__ident">
-        <span className="jds-eyebrow">Moss · Module</span>
-        <h1 className="jds-section-title">Job Search</h1>
-      </div>
       <div className="jsm-masthead__aside">
         {status ? (
           <span

@@ -273,10 +273,6 @@ export default function EmailSettings() {
             />
           }
         />
-        <Row
-          name="Sending a reply always asks first"
-          desc="Sending an email is destructive, so your assistant always shows an Approve card before it sends — this can't be turned off."
-        />
       </Group>
       {sourceBehaviors.isError ||
       settingsQuery.isError ||

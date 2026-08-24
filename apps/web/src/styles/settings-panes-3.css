@@ -597,3 +597,8 @@ button.theme-swatch {
   display: flex;
   gap: 8px;
 }
+.regrow-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

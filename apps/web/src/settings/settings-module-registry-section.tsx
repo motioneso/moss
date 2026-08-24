@@ -2,9 +2,11 @@
 // Instance-modules pane. Functional pass only: reuses jds primitives; visual design
 // is a later annotation round. All states come from the server-derived
 // ModuleRegistryRowDto.state (spec §8) — no client-side state math beyond labels.
+import { Fragment } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { Button } from "@moss/ui";
+import { Button, IconButton } from "@moss/ui";
+import { Trash2 } from "lucide-react";
 import type { ExternalModuleDto, ModuleRegistryRowDto } from "@moss/shared";
 
 import {
@@ -34,7 +36,7 @@ const STATE_LABELS: Record<ModuleRegistryRowDto["state"], string> = {
   "installed-enabled": "Installed",
   "installed-disabled": "Installed (disabled)",
   "update-available": "Update available",
-  "update-pending-restart": "Update downloaded — restart to apply",
+  "update-pending-restart": "Update downloaded. Restart to apply.",
   "install-failed": "Install failed",
   "declared-not-present": "Declared in compose — will install on restart",
   incompatible: "Incompatible with this Moss version"
@@ -194,22 +196,9 @@ export function ModuleRegistrySection({
       title: `Remove ${row.name}?`,
       description:
         "The module stops on next restart and its files are deleted. Its data is kept " +
-        "and comes back if you reinstall. To also destroy its data, use “Remove + purge”.",
+        "and comes back if you reinstall.",
       confirmLabel: "Remove, keep data",
       onConfirm: () => removeMutation.mutate({ id: row.id, purgeData: false })
-    });
-  };
-
-  const onRemovePurge = (row: ModuleRegistryRowDto) => {
-    confirm({
-      title: `Remove ${row.name} and destroy its data?`,
-      description:
-        "This permanently deletes every table and record the module owns on the next " +
-        "restart. There is no undo after the restart runs.",
-      confirmLabel: "Remove + purge data",
-      danger: true,
-      requireText: row.id,
-      onConfirm: () => removeMutation.mutate({ id: row.id, purgeData: true })
     });
   };
 
@@ -238,6 +227,76 @@ export function ModuleRegistrySection({
           The module registry is unreachable — showing installed modules only.
         </p>
       ) : null}
+      {data.modules.map((row) => {
+        const action = libraryAction(row);
+        return (
+          <Fragment key={row.id}>
+            <Row
+              name={row.name}
+              desc={
+                <>
+                  {row.installedVersion || row.latestVersion ? (
+                    <div>
+                      {row.installedVersion ? `v${row.installedVersion}` : null}
+                      {row.latestVersion && row.latestVersion !== row.installedVersion
+                        ? ` (latest v${row.latestVersion})`
+                        : null}
+                    </div>
+                  ) : null}
+                  {row.description ? <div>{row.description}</div> : null}
+                  {action.reason ? <div className="jds-caption">{action.reason}</div> : null}
+                </>
+              }
+              control={
+                <div className="regrow-controls">
+                  {action.kind === "install" ? (
+                    <Button onClick={() => onInstall(row)} disabled={downloadMutation.isPending}>
+                      {action.label}
+                    </Button>
+                  ) : action.kind === "none" ? (
+                    <span className="jds-caption">{action.label}</span>
+                  ) : null}
+                  {canRemove(row) ? (
+                    <IconButton
+                      variant="secondary"
+                      size="sm"
+                      aria-label={`Remove ${row.name}`}
+                      onClick={() => onRemove(row)}
+                    >
+                      <Trash2 size={15} aria-hidden="true" />
+                    </IconButton>
+                  ) : null}
+                  {row.purgePending ? (
+                    <Button
+                      variant="quiet"
+                      onClick={() => cancelPurgeMutation.mutate(row.id)}
+                      disabled={cancelPurgeMutation.isPending}
+                    >
+                      Cancel purge
+                    </Button>
+                  ) : null}
+                  {showEnableSwitch(row) ? (
+                    <Switch
+                      ariaLabel={`Enable ${row.name}`}
+                      checked={
+                        (externalModules?.find((module) => module.id === row.id)?.status ??
+                          null) === "enabled"
+                      }
+                      disabled={settingEnabledPending}
+                      onChange={(value) => onSetEnabled(row.id, value)}
+                    />
+                  ) : null}
+                </div>
+              }
+            />
+            {/* #918: instance-scope credential slots declared by this module's manifest, if
+                any — renders nothing when the module has none. */}
+            {showEnableSwitch(row) ? (
+              <ModuleCredentialsSection moduleId={row.id} surface="admin" />
+            ) : null}
+          </Fragment>
+        );
+      })}
       {data.modules.some(
         (row) => row.state === "pending-restart" || row.state === "update-pending-restart"
       ) ? (
@@ -254,80 +313,6 @@ export function ModuleRegistrySection({
       >
         {refreshMutation.isPending ? "Refreshing…" : "Refresh from registry"}
       </Button>
-      {data.modules.map((row) => {
-        const action = libraryAction(row);
-        return (
-          <div key={row.id}>
-            <Row
-              name={
-                <>
-                  {row.name} <code>{row.id}</code>
-                </>
-              }
-              desc={
-                <>
-                  {row.installedVersion || row.latestVersion ? (
-                    <div>
-                      {row.installedVersion ? `v${row.installedVersion}` : null}
-                      {row.latestVersion && row.latestVersion !== row.installedVersion
-                        ? ` (latest v${row.latestVersion})`
-                        : null}
-                    </div>
-                  ) : null}
-                  {row.description ? <div>{row.description}</div> : null}
-                  {action.reason ? <div className="jds-caption">{action.reason}</div> : null}
-                </>
-              }
-              control={
-                <div>
-                  {action.kind === "install" ? (
-                    <Button onClick={() => onInstall(row)} disabled={downloadMutation.isPending}>
-                      {action.label}
-                    </Button>
-                  ) : action.kind === "none" ? (
-                    <span className="jds-caption">{action.label}</span>
-                  ) : null}
-                  {showEnableSwitch(row) ? (
-                    <Switch
-                      ariaLabel={`Enable ${row.name}`}
-                      checked={
-                        (externalModules?.find((module) => module.id === row.id)?.status ??
-                          null) === "enabled"
-                      }
-                      disabled={settingEnabledPending}
-                      onChange={(value) => onSetEnabled(row.id, value)}
-                    />
-                  ) : null}
-                  {canRemove(row) ? (
-                    <>
-                      <Button variant="quiet" onClick={() => onRemove(row)}>
-                        Remove
-                      </Button>
-                      <Button variant="quiet" onClick={() => onRemovePurge(row)}>
-                        Remove + purge
-                      </Button>
-                    </>
-                  ) : null}
-                  {row.purgePending ? (
-                    <Button
-                      variant="quiet"
-                      onClick={() => cancelPurgeMutation.mutate(row.id)}
-                      disabled={cancelPurgeMutation.isPending}
-                    >
-                      Cancel purge
-                    </Button>
-                  ) : null}
-                </div>
-              }
-            />
-            {/* #918: instance-scope credential slots declared by this module's manifest, if
-                any — renders nothing when the module has none. */}
-            {showEnableSwitch(row) ? (
-              <ModuleCredentialsSection moduleId={row.id} surface="admin" />
-            ) : null}
-          </div>
-        );
-      })}
     </>
   );
 }

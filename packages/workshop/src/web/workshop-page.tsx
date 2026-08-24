@@ -36,8 +36,6 @@ export function WorkshopPage() {
   return (
     <div className="workshop-page">
       <header className="workshop-head">
-        <span className="jds-eyebrow jds-eyebrow--muted">Modules</span>
-        <h1 className="jds-display jds-display--md">The workshop</h1>
         <p className="workshop-lede">
           See what Moss is building for you, and what's already running.
         </p>
