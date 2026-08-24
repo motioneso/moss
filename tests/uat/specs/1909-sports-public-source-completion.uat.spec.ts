@@ -296,8 +296,7 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
   expect(drift.recipeStatus).toBe("drift");
   expect(drift.healthReasonCode).toBe("recipe_drift");
 
-  const seededSignOut = await page.request.post("/api/auth/sign-out");
-  expect(seededSignOut.ok(), `seeded sign-out -> ${seededSignOut.status()}`).toBeTruthy();
+  await page.context().clearCookies();
   await signIn(page);
   const section = await openSportsSettings(page);
   await expect(section.getByLabel("Publication homepage or domain")).toBeVisible();
