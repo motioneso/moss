@@ -97,5 +97,5 @@
     "tests/**/*.ts",
     "vitest.config.ts"
   ],
-  "exclude": ["node_modules", "scripts/fleet/launcher"]
+  "exclude": ["node_modules"]
 }
