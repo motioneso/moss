@@ -654,6 +654,10 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
     myQuery.data?.modules ?? [],
     hasImplementedModuleSettings
   );
+  const byName = (a: (typeof modules)[number], b: (typeof modules)[number]) =>
+    a.name.localeCompare(b.name);
+  const builtInModules = modules.filter((module) => module.required).slice().sort(byName);
+  const optionalModules = modules.filter((module) => !module.required).slice().sort(byName);
   const pathFor = (id: string): string | null =>
     modulesQuery.data?.modules.find((m) => m.id === id)?.navigation[0]?.path ?? null;
 
@@ -769,12 +773,19 @@ function ModulesPane({ onNavigate, onSelectSection }: PaneProps) {
   return (
     <>
       <PaneHead title="Modules" desc="Choose which parts of Moss to use and configure." />
-      <Group
-        title="Available modules"
-        desc="Required modules stay available; optional modules can be turned on or off."
-      >
-        {modules.length ? (
-          modules.map(renderRow)
+      <Group title="Built-in" desc="Required modules stay available.">
+        {builtInModules.length ? (
+          builtInModules.map(renderRow)
+        ) : (
+          <Row
+            name={myQuery.isLoading ? "Loading modules…" : "No built-in modules"}
+            desc="Built-in modules will appear here when available."
+          />
+        )}
+      </Group>
+      <Group title="Optional" desc="Optional modules can be turned on or off.">
+        {optionalModules.length ? (
+          optionalModules.map(renderRow)
         ) : (
           <Row
             name={myQuery.isLoading ? "Loading modules…" : "No additional modules"}
