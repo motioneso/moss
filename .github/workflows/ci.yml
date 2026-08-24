@@ -117,6 +117,26 @@ jobs:
       - name: Start database
         run: pnpm db:up
 
+      # #1724: `--with-deps` can stall in apt, so bound and retry the install. The foundation suite
+      # now includes the brokered Sports renderer smoke, so Chromium must exist before unit tests;
+      # the later Playwright suites reuse this cached install.
+      - name: Install Playwright browsers
+        run: |
+          status=0
+          for attempt in 1 2; do
+            status=0
+            timeout --verbose --signal=TERM 5m pnpm exec playwright install --with-deps chromium \
+              || status=$?
+            if [ "$status" -eq 0 ]; then break; fi
+            if [ "$status" -eq 124 ]; then
+              echo "::warning title=Playwright install timed out::attempt $attempt of 2 hit the 5m budget"
+            fi
+          done
+          if [ "$status" -eq 124 ]; then
+            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=playwright-install budget=5m issue=#1534"
+          fi
+          exit "$status"
+
       - name: Verify foundation
         run: |
           status=0
@@ -134,32 +154,6 @@ jobs:
 
       - name: Build web
         run: pnpm build:web
-
-      # #1724: this was the only long step without a deadline, and it cost two whole CI runs.
-      # `--with-deps` runs `apt-get update`, and when the Azure Ubuntu mirror stalls, apt retries
-      # in silence for as long as you let it — 21 minutes on run 32272908152, which ate the
-      # 45-minute job backstop and cancelled the tests before any of them ran. A cancelled job
-      # reports no error annotation, so the only way to learn the cause was reading the raw log.
-      #
-      # Two attempts rather than one: a mirror stall usually clears, and the whole point of a short
-      # budget is to fail fast enough that a retry still fits. 5m is generous — a healthy install
-      # takes about 60 seconds.
-      - name: Install Playwright browsers
-        run: |
-          status=0
-          for attempt in 1 2; do
-            status=0
-            timeout --verbose --signal=TERM 5m pnpm exec playwright install --with-deps chromium \
-              || status=$?
-            if [ "$status" -eq 0 ]; then break; fi
-            if [ "$status" -eq 124 ]; then
-              echo "::warning title=Playwright install timed out::attempt $attempt of 2 hit the 5m budget"
-            fi
-          done
-          if [ "$status" -eq 124 ]; then
-            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=playwright-install budget=5m issue=#1534"
-          fi
-          exit "$status"
 
       - name: Run Playwright smoke tests
         run: |
