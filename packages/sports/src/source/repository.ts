@@ -4,9 +4,13 @@ import { sql } from "kysely";
 
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
 import { NEWS_MAX_CUSTOM_SOURCES } from "@moss/news";
-import type { SportsCustomSourceDto, SportsSourceAssignmentDto } from "@moss/shared";
+import type {
+  SportsCustomSourceDto,
+  SportsSourceAssignmentDto,
+  SportsSourceHealthState
+} from "@moss/shared";
 
-import type { VerifiedSportsSourceCandidate } from "./discovery.js";
+import type { VerifiedSportsSourceCandidate, VerifiedSportsSourceTarget } from "./discovery.js";
 
 export class SportsSourceLimitError extends Error {
   constructor() {
@@ -43,6 +47,22 @@ interface SportsSourceAssignmentRow {
   last_checked_at: Date | null;
   last_success_at: Date | null;
   created_at: Date;
+}
+
+export interface SportsSourceBaseline {
+  readonly source: SportsCustomSourceDto;
+  readonly validationFingerprint: string;
+  readonly recipeJson: Readonly<Record<string, unknown>> | null;
+  readonly recipeFingerprint: string | null;
+  readonly confirmedFetchHosts: readonly string[];
+  readonly updatedAt: string;
+  readonly assignments: readonly {
+    readonly id: string;
+    readonly followId: string;
+    readonly targetUrl: string | null;
+    readonly parameters: Readonly<Record<string, unknown>>;
+    readonly previewStatus: SportsSourceAssignmentDto["previewStatus"];
+  }[];
 }
 
 const SOURCE_COLUMNS = [
@@ -157,6 +177,50 @@ export class SportsSourcesRepository {
     return rows.map((row) => toDto(row, bySource.get(row.id) ?? []));
   }
 
+  async getBaseline(
+    scopedDb: DataContextDb,
+    sourceId: string
+  ): Promise<SportsSourceBaseline | null> {
+    assertDataContextDb(scopedDb);
+    const [source, assignments] = await Promise.all([
+      scopedDb.db
+        .selectFrom("app.sports_custom_sources")
+        .select([
+          ...SOURCE_COLUMNS,
+          "validation_fingerprint",
+          "recipe_json",
+          "recipe_fingerprint",
+          "confirmed_fetch_hosts",
+          "updated_at"
+        ])
+        .where("id", "=", sourceId)
+        .executeTakeFirst(),
+      scopedDb.db
+        .selectFrom("app.sports_source_assignments")
+        .select([...ASSIGNMENT_COLUMNS, "target_parameters"])
+        .where("source_id", "=", sourceId)
+        .orderBy("created_at")
+        .orderBy("id")
+        .execute()
+    ]);
+    if (!source) return null;
+    return {
+      source: toDto(source, assignments),
+      validationFingerprint: source.validation_fingerprint,
+      recipeJson: source.recipe_json,
+      recipeFingerprint: source.recipe_fingerprint,
+      confirmedFetchHosts: source.confirmed_fetch_hosts,
+      updatedAt: source.updated_at.toISOString(),
+      assignments: assignments.map((assignment) => ({
+        id: assignment.id,
+        followId: assignment.follow_id,
+        targetUrl: assignment.target_url,
+        parameters: assignment.target_parameters,
+        previewStatus: assignment.preview_status
+      }))
+    };
+  }
+
   async create(
     scopedDb: DataContextDb,
     input: { candidate: VerifiedSportsSourceCandidate }
@@ -258,6 +322,90 @@ export class SportsSourcesRepository {
     return (result.numDeletedRows ?? 0n) > 0n;
   }
 
+  async replaceAssignments(
+    scopedDb: DataContextDb,
+    sourceId: string,
+    reusedAssignmentIds: readonly string[],
+    verifiedTargets: readonly VerifiedSportsSourceTarget[]
+  ): Promise<SportsCustomSourceDto | null> {
+    assertDataContextDb(scopedDb);
+    const source = await scopedDb.db
+      .selectFrom("app.sports_custom_sources")
+      .select(SOURCE_COLUMNS)
+      .where("id", "=", sourceId)
+      .executeTakeFirst();
+    if (!source) return null;
+
+    const followIds = verifiedTargets.map((target) => target.followId);
+    const ownedFollows =
+      followIds.length === 0
+        ? []
+        : await scopedDb.db
+            .selectFrom("app.sports_follows")
+            .select("id")
+            .where("id", "in", followIds)
+            .execute();
+    if (ownedFollows.length !== followIds.length) {
+      throw new Error("Sports assignment preview contains an unavailable follow");
+    }
+
+    let removal = scopedDb.db
+      .deleteFrom("app.sports_source_assignments")
+      .where("source_id", "=", sourceId);
+    if (reusedAssignmentIds.length > 0) {
+      removal = removal.where("id", "not in", reusedAssignmentIds);
+    }
+    await removal.execute();
+
+    if (verifiedTargets.length > 0) {
+      await scopedDb.db
+        .insertInto("app.sports_source_assignments")
+        .values(
+          verifiedTargets.map((target) => {
+            const checkedAt = new Date(target.checkedAt);
+            return {
+              owner_user_id: sql<string>`app.current_actor_user_id()`,
+              source_id: sourceId,
+              follow_id: target.followId,
+              target_url: target.targetUrl,
+              target_parameters: { ...target.parameters },
+              preview_status: "verified" as const,
+              health_state: "healthy" as const,
+              health_reason_code: null,
+              health_message: null,
+              last_checked_at: checkedAt,
+              last_success_at: checkedAt
+            };
+          })
+        )
+        .execute();
+    }
+
+    const assignments = await scopedDb.db
+      .selectFrom("app.sports_source_assignments")
+      .select(ASSIGNMENT_COLUMNS)
+      .where("source_id", "=", sourceId)
+      .orderBy("created_at")
+      .orderBy("id")
+      .execute();
+    if (assignments.length === 0) return toDto(source, assignments);
+
+    const aggregate = aggregateAssignmentHealth(source.enabled, assignments);
+    const updated = await scopedDb.db
+      .updateTable("app.sports_custom_sources")
+      .set({
+        health_state: aggregate.state,
+        health_reason_code: aggregate.reason,
+        health_message: aggregate.message,
+        last_checked_at: newest(assignments.map((assignment) => assignment.last_checked_at)),
+        last_success_at: newest(assignments.map((assignment) => assignment.last_success_at))
+      })
+      .where("id", "=", sourceId)
+      .returning(SOURCE_COLUMNS)
+      .executeTakeFirstOrThrow();
+    return toDto(updated, assignments);
+  }
+
   /**
    * Replaces the full assignment set for one source. Postgres foreign-key checks bypass RLS (a
    * FK reference does not fail on a row the caller's policies would hide from SELECT), so a
@@ -312,4 +460,50 @@ export class SportsSourcesRepository {
       .execute();
     return toDto(source, assignments);
   }
+}
+
+function newest(values: readonly (Date | null)[]): Date | null {
+  return values.reduce<Date | null>(
+    (latest, value) => (!value || (latest && latest >= value) ? latest : value),
+    null
+  );
+}
+
+function aggregateAssignmentHealth(
+  enabled: boolean,
+  assignments: readonly SportsSourceAssignmentRow[]
+): { state: SportsSourceHealthState; reason: string | null; message: string | null } {
+  if (!enabled) return { state: "disabled", reason: null, message: null };
+  if (assignments.some((assignment) => assignment.health_state === "pending")) {
+    return { state: "pending", reason: null, message: null };
+  }
+  if (assignments.every((assignment) => assignment.health_state === "healthy")) {
+    return { state: "healthy", reason: null, message: null };
+  }
+  const state = assignments[0]!.health_state;
+  if (
+    (state === "unsupported" || state === "auth_required") &&
+    assignments.every((assignment) => assignment.health_state === state)
+  ) {
+    return {
+      state,
+      reason: assignments[0]!.health_reason_code,
+      message: assignments[0]!.health_message
+    };
+  }
+  const reason = assignments[0]!.health_reason_code;
+  if (
+    state === "failing" &&
+    assignments.every(
+      (assignment) =>
+        assignment.health_state === "failing" && assignment.health_reason_code === reason
+    )
+  ) {
+    return { state: "failing", reason, message: assignments[0]!.health_message };
+  }
+  return {
+    state: "failing",
+    reason: "partial_target_failure",
+    message: "Some source targets could not be refreshed."
+  };
 }

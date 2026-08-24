@@ -8,6 +8,7 @@ import {
   deleteSportsCustomSourceSchema,
   deleteSportsFollowResponseSchema,
   previewSportsSourceSchema,
+  previewSportsSourceAssignmentsSchema,
   sportsCatalogResponseSchema,
   sportsCustomSourcesResponseSchema,
   sportsFollowsResponseSchema,
@@ -203,6 +204,13 @@ export const sportsModuleManifest = {
       path: "/api/sports/sources",
       requestSchema: confirmSportsSourceSchema.body,
       responseSchema: confirmSportsSourceSchema,
+      permissionId: "sports.sources"
+    },
+    {
+      method: "POST",
+      path: "/api/sports/sources/:id/assignments/preview",
+      requestSchema: previewSportsSourceAssignmentsSchema.body,
+      responseSchema: previewSportsSourceAssignmentsSchema,
       permissionId: "sports.sources"
     },
     {

@@ -12,7 +12,9 @@ import { connectionStrings, ids, resetFoundationDatabase } from "./test-database
 const { Client } = pg;
 const repo = new SportsSourcesRepository();
 
-const candidate = (index: number): VerifiedSportsSourceCandidate => ({
+const candidate = (
+  index: number
+): Extract<VerifiedSportsSourceCandidate, { retrievalMethod: "feed" }> => ({
   candidateId: `candidate-${index}`,
   label: `Publisher ${index}`,
   canonicalDomain: `publisher-${index}.example.com`,
@@ -168,6 +170,70 @@ describe("sports sources repository", () => {
           followId: follow.rows[0].id,
           targetUrl: base.feedUrl,
           previewStatus: "verified",
+          healthState: "healthy",
+          lastCheckedAt: checkedAt,
+          lastSuccessAt: checkedAt
+        }
+      ]
+    });
+  });
+
+  it("atomically replaces assignments while retaining unchanged target health", async () => {
+    const follows = await bootstrap.query(
+      `INSERT INTO app.sports_follows (owner_user_id, competition_key, team_key)
+       VALUES ($1, 'nfl', 'one'), ($1, 'nfl', 'two'), ($1, 'nfl', 'three') RETURNING id`,
+      [ids.userA]
+    );
+    const checkedAt = "2026-08-23T12:00:00.000Z";
+    const base = candidate(1);
+    const target = (followId: string, teamKey: string) => ({
+      followId,
+      competitionKey: "nfl",
+      competitionLabel: "NFL",
+      teamKey,
+      teamLabel: teamKey,
+      scope: "team" as const,
+      targetUrl: base.feedUrl,
+      parameters: {},
+      samples: [],
+      checkedAt
+    });
+    const created = await asActor(ids.userA, (db) =>
+      repo.create(db, {
+        candidate: {
+          ...base,
+          targets: [target(follows.rows[0].id, "one"), target(follows.rows[1].id, "two")]
+        }
+      })
+    );
+    if ("limitExceeded" in created) throw new Error("unexpected limit");
+    const retained = created.assignments[0]!;
+    await bootstrap.query(
+      `UPDATE app.sports_source_assignments
+          SET health_state = 'unsupported', health_reason_code = 'unsupported_shape',
+              health_message = 'This public source shape is unsupported.'
+        WHERE id = $1`,
+      [retained.id]
+    );
+
+    const result = await asActor(ids.userA, (db) =>
+      repo.replaceAssignments(db, created.id, [retained.id], [target(follows.rows[2].id, "three")])
+    );
+
+    expect(result).toMatchObject({
+      healthState: "failing",
+      healthReasonCode: "partial_target_failure",
+      assignedFollowIds: [follows.rows[0].id, follows.rows[2].id],
+      assignments: [
+        {
+          id: retained.id,
+          followId: follows.rows[0].id,
+          healthState: "unsupported",
+          lastCheckedAt: checkedAt,
+          lastSuccessAt: checkedAt
+        },
+        {
+          followId: follows.rows[2].id,
           healthState: "healthy",
           lastCheckedAt: checkedAt,
           lastSuccessAt: checkedAt

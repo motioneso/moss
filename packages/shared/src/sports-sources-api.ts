@@ -108,9 +108,15 @@ export interface ConfirmSportsSourceResponse {
   readonly source: SportsCustomSourceDto;
 }
 
-export interface UpdateSportsSourceAssignmentsRequest {
-  readonly followIds: readonly string[];
+export interface PreviewSportsSourceAssignmentsRequest {
+  readonly assignments: readonly {
+    readonly followId: string;
+    readonly exactTargetUrl?: string;
+  }[];
 }
+
+export type PreviewSportsSourceAssignmentsResponse = PreviewSportsSourceResponse;
+export type ConfirmSportsSourceAssignmentsRequest = ConfirmSportsSourceRequest;
 
 const sportsSourceHealthSchema = {
   type: "string",
@@ -383,23 +389,43 @@ export const deleteSportsCustomSourceSchema = {
   }
 } as const;
 
-export const updateSportsSourceAssignmentsSchema = {
-  params: {
-    type: "object",
-    additionalProperties: false,
-    required: ["id"],
-    properties: {
-      id: { type: "string", format: "uuid" }
-    }
-  },
+const sportsSourceAssignmentsParamsSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["id"],
+  properties: {
+    id: { type: "string", format: "uuid" }
+  }
+} as const;
+
+export const previewSportsSourceAssignmentsSchema = {
+  params: sportsSourceAssignmentsParamsSchema,
   body: {
     type: "object",
     additionalProperties: false,
-    required: ["followIds"],
+    required: ["assignments"],
     properties: {
-      followIds: { type: "array", items: { type: "string", format: "uuid" } }
+      assignments: {
+        type: "array",
+        maxItems: 20,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["followId"],
+          properties: {
+            followId: { type: "string", format: "uuid" },
+            exactTargetUrl: { type: "string", maxLength: 2048, pattern: "^https://" }
+          }
+        }
+      }
     }
   },
+  response: previewSportsSourceSchema.response
+} as const;
+
+export const updateSportsSourceAssignmentsSchema = {
+  params: sportsSourceAssignmentsParamsSchema,
+  body: confirmSportsSourceSchema.body,
   response: {
     200: {
       type: "object",
@@ -409,6 +435,7 @@ export const updateSportsSourceAssignmentsSchema = {
     },
     400: errorResponseSchema,
     401: errorResponseSchema,
-    404: errorResponseSchema
+    404: errorResponseSchema,
+    409: errorResponseSchema
   }
 } as const;

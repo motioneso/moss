@@ -24,7 +24,7 @@ import type {
   StandingsTable
 } from "../../packages/sports/src/source/sports-source.js";
 import type { SportsSourcesRepository } from "../../packages/sports/src/source/repository.js";
-import type { VerifiedSportsSourceCandidate } from "../../packages/sports/src/source/discovery.js";
+import { makeSourcesRepo } from "./sports-sources-route-fixture.js";
 
 /**
  * A fake `DatasetClient` dispatching by dataset key, mirroring the shape the retired
@@ -236,88 +236,6 @@ function buildApp(overrides: Partial<SportsRoutesDependencies> & { repo?: FakeRe
   };
   registerSportsRoutes(app, deps);
   return { app, repo };
-}
-
-interface FakeSourcesRepo {
-  list(scopedDb: DataContextDb): Promise<SportsCustomSourceDto[]>;
-  create(
-    scopedDb: DataContextDb,
-    input: {
-      candidate: VerifiedSportsSourceCandidate;
-    }
-  ): Promise<SportsCustomSourceDto | { limitExceeded: true }>;
-  lockOwnerAssignments(scopedDb: DataContextDb): Promise<void>;
-  countAssignments(scopedDb: DataContextDb): Promise<number>;
-  remove(scopedDb: DataContextDb, id: string): Promise<boolean>;
-  setAssignments(
-    scopedDb: DataContextDb,
-    sourceId: string,
-    followIds: readonly string[]
-  ): Promise<SportsCustomSourceDto | null>;
-  removed: string[];
-  assignments: { sourceId: string; followIds: readonly string[] }[];
-  lockCount: number;
-}
-
-function makeSourcesRepo(initial: SportsCustomSourceDto[], atLimit = false): FakeSourcesRepo {
-  const sources = [...initial];
-  const removed: string[] = [];
-  const assignments: { sourceId: string; followIds: readonly string[] }[] = [];
-  return {
-    removed,
-    assignments,
-    lockCount: 0,
-    lockOwnerAssignments: async function () {
-      this.lockCount++;
-    },
-    countAssignments: async () =>
-      sources.reduce((count, source) => count + source.assignedFollowIds.length, 0),
-    list: async () => sources,
-    create: async (_db, input) => {
-      if (atLimit) return { limitExceeded: true };
-      const created: SportsCustomSourceDto = {
-        id: "22222222-2222-2222-2222-222222222222",
-        label: input.candidate.label,
-        canonicalDomain: input.candidate.canonicalDomain,
-        homepageUrl: input.candidate.homepageUrl,
-        feedUrl: input.candidate.feedUrl,
-        retrievalMethod: input.candidate.retrievalMethod,
-        enabled: true,
-        healthState: "healthy",
-        healthReasonCode: null,
-        healthMessage: null,
-        lastCheckedAt: input.candidate.checkedAt,
-        lastSuccessAt: input.candidate.checkedAt,
-        recipeStatus: input.candidate.retrievalMethod === "feed" ? "feed" : "ready",
-        assignedFollowIds: input.candidate.targets.map((target) => target.followId),
-        assignments: input.candidate.targets.map((target, index) => ({
-          id: `33333333-3333-3333-3333-33333333333${index}`,
-          followId: target.followId,
-          targetUrl: target.targetUrl,
-          previewStatus: "verified",
-          healthState: "healthy",
-          healthReasonCode: null,
-          healthMessage: null,
-          lastCheckedAt: target.checkedAt,
-          lastSuccessAt: target.checkedAt,
-          createdAt: target.checkedAt
-        })),
-        createdAt: "2026-08-21T00:00:00.000Z"
-      };
-      sources.push(created);
-      return created;
-    },
-    remove: async (_db, id) => {
-      removed.push(id);
-      return sources.some((source) => source.id === id);
-    },
-    setAssignments: async (_db, sourceId, followIds) => {
-      assignments.push({ sourceId, followIds });
-      const source = sources.find((item) => item.id === sourceId);
-      if (!source) return null;
-      return { ...source, assignedFollowIds: [...followIds] };
-    }
-  };
 }
 
 describe("sports routes", () => {
@@ -1010,56 +928,6 @@ describe("sports routes", () => {
     expect(body.source.assignedFollowIds).toEqual(["33333333-3333-3333-3333-333333333333"]);
     expect(sourcesRepository.assignments).toEqual([]);
     expect(sourcesRepository.lockCount).toBe(1);
-    await app.close();
-  });
-
-  it("PATCH /api/sports/sources/:id/assignments replaces a source's follows", async () => {
-    const source: SportsCustomSourceDto = {
-      id: "11111111-1111-1111-1111-111111111111",
-      label: "Publisher",
-      canonicalDomain: "publisher.example.com",
-      homepageUrl: "https://publisher.example.com/",
-      feedUrl: null,
-      retrievalMethod: "scrape",
-      enabled: true,
-      healthState: "pending",
-      healthReasonCode: null,
-      healthMessage: null,
-      lastCheckedAt: null,
-      lastSuccessAt: null,
-      recipeStatus: "ready",
-      assignedFollowIds: [],
-      assignments: [],
-      createdAt: "2026-08-21T00:00:00.000Z"
-    };
-    const sourcesRepository = makeSourcesRepo([source]);
-    const { app } = buildApp({
-      sourcesRepository: sourcesRepository as unknown as SportsSourcesRepository
-    });
-    await app.ready();
-    const res = await app.inject({
-      method: "PATCH",
-      url: "/api/sports/sources/11111111-1111-1111-1111-111111111111/assignments",
-      payload: { followIds: ["44444444-4444-4444-4444-444444444444"] }
-    });
-    expect(res.statusCode).toBe(200);
-    const body = JSON.parse(res.body);
-    expect(body.source.assignedFollowIds).toEqual(["44444444-4444-4444-4444-444444444444"]);
-    await app.close();
-  });
-
-  it("PATCH /api/sports/sources/:id/assignments returns 404 for an unknown source", async () => {
-    const sourcesRepository = makeSourcesRepo([]);
-    const { app } = buildApp({
-      sourcesRepository: sourcesRepository as unknown as SportsSourcesRepository
-    });
-    await app.ready();
-    const res = await app.inject({
-      method: "PATCH",
-      url: "/api/sports/sources/55555555-5555-5555-5555-555555555555/assignments",
-      payload: { followIds: [] }
-    });
-    expect(res.statusCode).toBe(404);
     await app.close();
   });
 

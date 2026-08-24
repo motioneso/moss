@@ -10,6 +10,7 @@ import {
   deleteSportsCustomSourceSchema,
   deleteSportsFollowResponseSchema,
   previewSportsSourceSchema,
+  previewSportsSourceAssignmentsSchema,
   sportsCatalogResponseSchema,
   sportsCustomSourcesResponseSchema,
   sportsFollowsResponseSchema,
@@ -19,9 +20,10 @@ import {
   sportsTeamSearchResponseSchema,
   updateSportsSourceAssignmentsSchema,
   type ConfirmSportsSourceRequest,
+  type ConfirmSportsSourceAssignmentsRequest,
   type CreateSportsFollowRequest,
   type PreviewSportsSourceRequest,
-  type UpdateSportsSourceAssignmentsRequest
+  type PreviewSportsSourceAssignmentsRequest
 } from "@moss/shared";
 
 import { SportsFollowsRepository } from "./repository.js";
@@ -271,13 +273,35 @@ export function registerSportsRoutes(
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
         const { id } = request.params as { id: string };
-        const input = request.body as UpdateSportsSourceAssignmentsRequest;
+        const input = request.body as ConfirmSportsSourceAssignmentsRequest;
         const source = await dependencies.dataContext.withDataContext(accessContext, (db) =>
-          sourcesRepository.setAssignments(db, id, input.followIds)
+          sourceService.confirmAssignments(db, accessContext.actorUserId, id, input)
         );
-        if (!source) throw new HttpError(404, "Source not found");
         return { source };
       } catch (error) {
+        if (error instanceof SportsSourceRequestError) {
+          return handleRouteError(new HttpError(error.statusCode, error.message), reply);
+        }
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  server.post(
+    "/api/sports/sources/:id/assignments/preview",
+    { schema: previewSportsSourceAssignmentsSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const { id } = request.params as { id: string };
+        const input = request.body as PreviewSportsSourceAssignmentsRequest;
+        return await dependencies.dataContext.withDataContext(accessContext, (db) =>
+          sourceService.previewAssignments(db, accessContext.actorUserId, id, input)
+        );
+      } catch (error) {
+        if (error instanceof SportsSourceRequestError) {
+          return handleRouteError(new HttpError(error.statusCode, error.message), reply);
+        }
         return handleRouteError(error, reply);
       }
     }

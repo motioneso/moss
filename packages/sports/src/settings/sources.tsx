@@ -5,11 +5,12 @@ import { ApiError, Button } from "@moss/module-web-sdk";
 import type { CompetitionRef, SportsCustomSourceDto, SportsFollowDto, TeamRef } from "@moss/shared";
 
 import {
+  confirmSportsSourceAssignments,
   confirmSportsSource,
   deleteSportsSource,
   listSportsSources,
-  previewSportsSource,
-  updateSportsSourceAssignments
+  previewSportsSourceAssignments,
+  previewSportsSource
 } from "../web/sports-client.js";
 import { sportsQueryKeys } from "../web/query-keys.js";
 
@@ -339,15 +340,34 @@ export function SportsSourcesSection(props: {
   const sources = sourcesQuery.data?.sources ?? [];
   const [editingSourceId, setEditingSourceId] = useState<string | null>(null);
   const [editingSelection, setEditingSelection] = useState<Set<string>>(new Set());
+  const [assignmentPreview, setAssignmentPreview] = useState<{
+    sourceId: string;
+    result: Awaited<ReturnType<typeof previewSportsSourceAssignments>>;
+  } | null>(null);
+  const [assignmentAuthorizationAccepted, setAssignmentAuthorizationAccepted] = useState(false);
 
   const invalidate = () =>
     void queryClient.invalidateQueries({ queryKey: sportsQueryKeys.sources });
   const removeMutation = useMutation({ mutationFn: deleteSportsSource, onSuccess: invalidate });
-  const assignMutation = useMutation({
+  const assignmentPreviewMutation = useMutation({
     mutationFn: (input: { id: string; followIds: readonly string[] }) =>
-      updateSportsSourceAssignments(input.id, { followIds: input.followIds }),
+      previewSportsSourceAssignments(input.id, {
+        assignments: input.followIds.map((followId) => ({ followId }))
+      }),
+    onSuccess: (result, input) => {
+      setAssignmentPreview({ sourceId: input.id, result });
+      setAssignmentAuthorizationAccepted(false);
+    }
+  });
+  const assignmentConfirmMutation = useMutation({
+    mutationFn: (input: {
+      id: string;
+      request: Parameters<typeof confirmSportsSourceAssignments>[1];
+    }) => confirmSportsSourceAssignments(input.id, input.request),
     onSuccess: () => {
       setEditingSourceId(null);
+      setAssignmentPreview(null);
+      setAssignmentAuthorizationAccepted(false);
       invalidate();
     }
   });
@@ -355,6 +375,8 @@ export function SportsSourcesSection(props: {
   function startEditing(source: SportsCustomSourceDto) {
     setEditingSourceId(source.id);
     setEditingSelection(new Set(source.assignedFollowIds));
+    setAssignmentPreview(null);
+    setAssignmentAuthorizationAccepted(false);
   }
 
   function toggleEditingFollow(followId: string) {
@@ -362,6 +384,8 @@ export function SportsSourcesSection(props: {
       const next = new Set(current);
       if (next.has(followId)) next.delete(followId);
       else next.add(followId);
+      setAssignmentPreview(null);
+      setAssignmentAuthorizationAccepted(false);
       return next;
     });
   }
@@ -416,24 +440,83 @@ export function SportsSourcesSection(props: {
                       teamsByCompetition={props.teamsByCompetition}
                       selected={editingSelection}
                       onToggle={toggleEditingFollow}
-                      disabled={assignMutation.isPending}
+                      disabled={
+                        assignmentPreviewMutation.isPending || assignmentConfirmMutation.isPending
+                      }
                       idPrefix={`sp-edit-${source.id}`}
                     />
                     <div className="sp-src__addrow">
                       <Button
                         size="sm"
-                        disabled={assignMutation.isPending}
+                        disabled={
+                          assignmentPreviewMutation.isPending || assignmentConfirmMutation.isPending
+                        }
                         onClick={() =>
-                          assignMutation.mutate({
+                          assignmentPreviewMutation.mutate({
                             id: source.id,
                             followIds: [...editingSelection]
                           })
                         }
                       >
-                        {assignMutation.isPending ? "Saving…" : "Save"}
+                        {assignmentPreviewMutation.isPending ? "Checking…" : "Review changes"}
                       </Button>
                     </div>
-                    {assignMutation.isError ? (
+                    {assignmentPreview?.sourceId === source.id &&
+                    assignmentPreview.result.status === "ok" &&
+                    assignmentPreview.result.candidate &&
+                    assignmentPreview.result.confirmationId &&
+                    assignmentPreview.result.authorizationAcknowledgement ? (
+                      <div className="sp-src__candidate">
+                        {assignmentPreview.result.candidate.targets.map((target) => (
+                          <p key={target.followId} className="sp-src__hint">
+                            {target.teamLabel ?? target.competitionLabel}: {target.targetUrl}
+                          </p>
+                        ))}
+                        {assignmentPreview.result.candidate.targets.length === 0 ? (
+                          <p className="sp-src__hint">This source will be left unassigned.</p>
+                        ) : null}
+                        <label className="sp-src__label">
+                          <input
+                            type="checkbox"
+                            checked={assignmentAuthorizationAccepted}
+                            disabled={assignmentConfirmMutation.isPending}
+                            onChange={(event) =>
+                              setAssignmentAuthorizationAccepted(event.target.checked)
+                            }
+                          />{" "}
+                          {assignmentPreview.result.authorizationAcknowledgement}
+                        </label>
+                        <Button
+                          size="sm"
+                          disabled={
+                            !assignmentAuthorizationAccepted || assignmentConfirmMutation.isPending
+                          }
+                          onClick={() => {
+                            const result = assignmentPreview.result;
+                            assignmentConfirmMutation.mutate({
+                              id: source.id,
+                              request: {
+                                confirmationId: result.confirmationId!,
+                                authorizationAcknowledgement: result.authorizationAcknowledgement!,
+                                canonicalDomain: result.candidate!.canonicalDomain,
+                                confirmedFetchHosts: result.candidate!.confirmedFetchHosts,
+                                targets: result.candidate!.targets.map((target) => ({
+                                  followId: target.followId,
+                                  targetUrl: target.targetUrl
+                                }))
+                              }
+                            });
+                          }}
+                        >
+                          {assignmentConfirmMutation.isPending ? "Saving…" : "Save assignments"}
+                        </Button>
+                      </div>
+                    ) : null}
+                    {assignmentPreview?.sourceId === source.id &&
+                    assignmentPreview.result.status !== "ok" ? (
+                      <Note>Those assignments could not be verified.</Note>
+                    ) : null}
+                    {assignmentPreviewMutation.isError || assignmentConfirmMutation.isError ? (
                       <Note>Could not update assignments. Try again.</Note>
                     ) : null}
                   </div>
