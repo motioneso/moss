@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
 
-import type { DatasetClient } from "@moss/datasets";
+import type { DatasetClient, GetDatasetOptions } from "@moss/datasets";
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import {
   SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT,
@@ -22,7 +22,11 @@ function buildApp(sourceService: NonNullable<SportsRoutesDependencies["sourceSer
   const app = Fastify();
   registerSportsRoutes(app, {
     datasetClient: {
-      async getDataset<T>(_key, _params, options) {
+      async getDataset<T>(
+        _key: string,
+        _params: Record<string, unknown>,
+        options: GetDatasetOptions<T>
+      ) {
         return {
           data: options.fallback as T,
           degraded: false,
