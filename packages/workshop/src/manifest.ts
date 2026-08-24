@@ -18,7 +18,7 @@ export const workshopModuleManifest = {
   navigation: [
     {
       id: "workshop",
-      label: "The workshop",
+      label: "The Workshop",
       description: "See modules Moss is building, and the ones already running.",
       path: "/workshop",
       icon: "wrench",

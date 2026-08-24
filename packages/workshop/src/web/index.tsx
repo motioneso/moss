@@ -12,7 +12,7 @@ const workshopWebContribution: ModuleWebContribution = {
   routes: [
     {
       path: "/workshop",
-      title: "The workshop",
+      title: "The Workshop",
       icon: "wrench",
       order: 900,
       element: <WorkshopPage />
