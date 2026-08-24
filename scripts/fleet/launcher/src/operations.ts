@@ -123,8 +123,13 @@ function shellQuote(value: string): string {
 // Lane agents share one tab so they never land in a tab a person is working in.
 const AGENT_TAB_LABEL = process.env.FLEET_AGENT_TAB || "Fleet Agents";
 
-function herdrJson(args: string[]): any {
-  return JSON.parse(execFileSync("herdr", args, { encoding: "utf8" }));
+type HerdrTabList = { result?: { tabs?: Array<{ label?: string; tab_id?: string }> } };
+type HerdrPaneList = { result?: { panes?: Array<{ tab_id?: string; pane_id?: string }> } };
+type HerdrPaneSplit = { result?: { pane_id?: string; pane?: { pane_id?: string } } };
+type HerdrTabCreate = { result?: { root_pane?: { pane_id?: string } } };
+
+function herdrJson<T>(args: string[]): T {
+  return JSON.parse(execFileSync("herdr", args, { encoding: "utf8" })) as T;
 }
 
 // Each agent program spells "which model" and "how hard to think" its own way,
@@ -150,13 +155,13 @@ export function launchArgs(tool: string, model: string, effort: string): string[
 // A pane in the shared agents tab: split one that is already there, or make the
 // tab if this is the first agent.
 function agentPane(cwd: string): string {
-  const tabs = herdrJson(["tab", "list"])?.result?.tabs ?? [];
-  const tab = tabs.find((entry: { label?: string }) => entry?.label === AGENT_TAB_LABEL);
+  const tabs = herdrJson<HerdrTabList>(["tab", "list"])?.result?.tabs ?? [];
+  const tab = tabs.find((entry) => entry?.label === AGENT_TAB_LABEL);
   if (tab?.tab_id) {
-    const panes = herdrJson(["pane", "list"])?.result?.panes ?? [];
-    const base = panes.find((pane: { tab_id?: string }) => pane?.tab_id === tab.tab_id);
+    const panes = herdrJson<HerdrPaneList>(["pane", "list"])?.result?.panes ?? [];
+    const base = panes.find((pane) => pane?.tab_id === tab.tab_id);
     if (base?.pane_id) {
-      const split = herdrJson([
+      const split = herdrJson<HerdrPaneSplit>([
         "pane",
         "split",
         base.pane_id,
@@ -170,7 +175,14 @@ function agentPane(cwd: string): string {
       if (pane) return pane;
     }
   }
-  const created = herdrJson(["tab", "create", "--cwd", cwd, "--label", AGENT_TAB_LABEL]);
+  const created = herdrJson<HerdrTabCreate>([
+    "tab",
+    "create",
+    "--cwd",
+    cwd,
+    "--label",
+    AGENT_TAB_LABEL
+  ]);
   const pane = created?.result?.root_pane?.pane_id;
   if (!pane) throw new Error("Herdr could not open a pane for the rescue agent");
   return pane;
