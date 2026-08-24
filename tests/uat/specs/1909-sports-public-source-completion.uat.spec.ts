@@ -102,6 +102,7 @@ async function bringUpRealModel(page: Page): Promise<void> {
     data: { providerKind: "anthropic" }
   });
   expect(install.ok(), `provider-install -> ${install.status()}`).toBeTruthy();
+  expect((await install.json()).installState).toBe("installed");
 
   const begin = await page.request.post("/api/onboarding/provider-login/begin", {
     data: { providerKind: "anthropic" }
@@ -112,14 +113,21 @@ async function bringUpRealModel(page: Page): Promise<void> {
   await expect
     .poll(
       async () => {
-        const body = (await (await page.request.get("/api/ai/models")).json()) as {
-          models: readonly { status: string; capabilities: readonly string[] }[];
-        };
-        return body.models.some(
-          (model) =>
-            model.status === "active" &&
-            model.capabilities.includes("json") &&
-            model.capabilities.includes("chat")
+        const routes = await Promise.all(
+          ["chat", "json"].map(async (capability) => {
+            const response = await page.request.get(`/api/ai/capability-route/${capability}`);
+            expect(response.ok(), `${capability} capability -> ${response.status()}`).toBeTruthy();
+            return (await response.json()) as {
+              available: boolean;
+              model: { providerKind: string; status: string } | null;
+            };
+          })
+        );
+        return routes.every(
+          (route) =>
+            route.available &&
+            route.model?.providerKind === "anthropic" &&
+            route.model.status === "active"
         );
       },
       { timeout: MODEL_DISCOVERY_DEADLINE_MS }
