@@ -283,17 +283,6 @@ export function ModuleRegistrySection({
                   ) : action.kind === "none" ? (
                     <span className="jds-caption">{action.label}</span>
                   ) : null}
-                  {showEnableSwitch(row) ? (
-                    <Switch
-                      ariaLabel={`Enable ${row.name}`}
-                      checked={
-                        (externalModules?.find((module) => module.id === row.id)?.status ??
-                          null) === "enabled"
-                      }
-                      disabled={settingEnabledPending}
-                      onChange={(value) => onSetEnabled(row.id, value)}
-                    />
-                  ) : null}
                   {canRemove(row) ? (
                     <>
                       <Button variant="quiet" onClick={() => onRemove(row)}>
@@ -312,6 +301,17 @@ export function ModuleRegistrySection({
                     >
                       Cancel purge
                     </Button>
+                  ) : null}
+                  {showEnableSwitch(row) ? (
+                    <Switch
+                      ariaLabel={`Enable ${row.name}`}
+                      checked={
+                        (externalModules?.find((module) => module.id === row.id)?.status ??
+                          null) === "enabled"
+                      }
+                      disabled={settingEnabledPending}
+                      onChange={(value) => onSetEnabled(row.id, value)}
+                    />
                   ) : null}
                 </div>
               }
