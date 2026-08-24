@@ -13,6 +13,10 @@
   font-size: 13px;
   color: var(--text-subtle);
 }
+.set-technical-details .set-row__control {
+  font-size: 13px;
+  color: var(--text-subtle);
+}
 .set2__adv-t {
   font-size: 13px;
   font-weight: 600;

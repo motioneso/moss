@@ -915,8 +915,7 @@ export function HostPane() {
                 />
               ) : null}
               <Row name="Commit" control={diag.commit ?? "—"} />
-              <Row name="Bind address" control={`${diag.host}:${diag.port}`} />
-              <Row name="Log level" control={<Badge tone="neutral">{diag.logLevel}</Badge>} />
+              <Row name="API bind address" control={`${diag.host}:${diag.port}`} />
             </details>
           </>
         )}

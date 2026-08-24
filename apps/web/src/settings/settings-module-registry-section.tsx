@@ -2,6 +2,7 @@
 // Instance-modules pane. Functional pass only: reuses jds primitives; visual design
 // is a later annotation round. All states come from the server-derived
 // ModuleRegistryRowDto.state (spec §8) — no client-side state math beyond labels.
+import { Fragment } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Button, IconButton } from "@moss/ui";
@@ -229,7 +230,7 @@ export function ModuleRegistrySection({
       {data.modules.map((row) => {
         const action = libraryAction(row);
         return (
-          <div key={row.id}>
+          <Fragment key={row.id}>
             <Row
               name={row.name}
               desc={
@@ -293,7 +294,7 @@ export function ModuleRegistrySection({
             {showEnableSwitch(row) ? (
               <ModuleCredentialsSection moduleId={row.id} surface="admin" />
             ) : null}
-          </div>
+          </Fragment>
         );
       })}
       {data.modules.some(
