@@ -301,23 +301,21 @@ function ConnectedPane() {
       <Group
         title="Accounts"
         action={
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setFlow((f) => (f === "picker" ? null : "picker"))}
-            icon={<Plus size={15} />}
-          >
-            Connect account
-          </Button>
+          accounts.length === 0 ? undefined : (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setFlow((f) => (f === "picker" ? null : "picker"))}
+              icon={<Plus size={15} />}
+            >
+              Connect account
+            </Button>
+          )
         }
       >
-        {accounts.length === 0 ? (
-          <Row
-            name="No accounts connected"
-            desc={`Connect Google or another account to give ${assistantName} context.`}
-          />
-        ) : (
-          accounts.map((account) => (
+        {accounts.length === 0
+          ? null
+          : accounts.map((account) => (
             <AccountRow
               key={account.id}
               account={account}
@@ -332,9 +330,8 @@ function ConnectedPane() {
                 })
               }
             />
-          ))
-        )}
-        {flow === "picker" ? (
+          ))}
+        {flow === "picker" || accounts.length === 0 ? (
           <ServicePicker onGoogle={() => setFlow("google")} onImap={() => setFlow("imap")} />
         ) : null}
       </Group>
