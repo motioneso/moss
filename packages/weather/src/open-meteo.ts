@@ -44,6 +44,15 @@ interface OpenMeteoResponse {
     temperature_2m: number;
     apparent_temperature: number;
     weather_code: number;
+    relative_humidity_2m: number;
+    dew_point_2m: number;
+    wind_speed_10m: number;
+  };
+  daily: {
+    time: string[];
+    weather_code: number[];
+    temperature_2m_max: number[];
+    temperature_2m_min: number[];
   };
 }
 
@@ -58,7 +67,9 @@ export async function fetchOpenMeteoForecast(
   const url =
     `https://api.open-meteo.com/v1/forecast` +
     `?latitude=${lat}&longitude=${lon}` +
-    `&current=temperature_2m,apparent_temperature,weather_code` +
+    `&current=temperature_2m,apparent_temperature,weather_code,relative_humidity_2m,dew_point_2m,wind_speed_10m` +
+    `&daily=weather_code,temperature_2m_max,temperature_2m_min` +
+    `&forecast_days=5&timezone=auto` +
     `&temperature_unit=${tempUnit}`;
 
   const response = await fetchFn(url);
@@ -72,12 +83,28 @@ export async function fetchOpenMeteoForecast(
     throw new WeatherUnavailableError("Open-Meteo returned a non-JSON body");
   }
   const { condition, icon } = resolveWmoCode(data.current.weather_code);
+  const forecast = data.daily.time.slice(1).map((date, index) => {
+    const dayIndex = index + 1;
+    const { icon: dayIcon } = resolveWmoCode(data.daily.weather_code[dayIndex]!);
+    return {
+      date,
+      icon: dayIcon,
+      high: Math.round(data.daily.temperature_2m_max[dayIndex]!),
+      low: Math.round(data.daily.temperature_2m_min[dayIndex]!)
+    };
+  });
   return {
     temp: Math.round(data.current.temperature_2m),
     feelsLike: Math.round(data.current.apparent_temperature),
     condition,
     icon,
     location,
-    unit
+    unit,
+    humidity: Math.round(data.current.relative_humidity_2m),
+    dewPoint: Math.round(data.current.dew_point_2m),
+    windSpeed: Math.round(data.current.wind_speed_10m),
+    lat,
+    lon,
+    forecast
   };
 }
