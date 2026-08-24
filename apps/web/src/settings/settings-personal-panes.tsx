@@ -230,7 +230,7 @@ export function ProfilePane({ me }: PaneProps) {
     <>
       <PaneHead
         title="Account & preferences"
-        desc={`Who you are to ${assistantName} — your identity and account status. How ${assistantName} sounds and behaves lives in Assistant & AI.`}
+        desc={`Who you are to ${assistantName}: your identity and account status. How ${assistantName} sounds and behaves lives in Assistant & AI.`}
       />
       <Group title="Identity" action={<SaveStatusChip status={status} />}>
         <div className="prof">
