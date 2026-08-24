@@ -71,8 +71,9 @@
   .tk-bar {
     gap: 8px 10px;
   }
-  .tk-bar__spacer {
-    flex-basis: 0;
+  .tk-bar__left,
+  .tk-bar__right {
+    flex: 1 1 100%;
   }
   .tk-bar__sep {
     display: none;
