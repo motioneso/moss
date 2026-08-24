@@ -7,6 +7,7 @@ import type {
   WeatherLocationDto,
   WeatherUnit
 } from "@moss/shared";
+import { formatInZone } from "@moss/shared";
 import { Button } from "@moss/ui";
 import { Check, LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -50,13 +51,8 @@ const DEFAULT_LOCALE_SETTINGS: LocaleSettingsDto = {
 };
 
 function timeZoneOffsetMinutes(timeZone: string, date: Date): number {
-  const part = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    timeZoneName: "shortOffset"
-  })
-    .formatToParts(date)
-    .find((entry) => entry.type === "timeZoneName")?.value;
-  const match = /GMT([+-])(\d+)(?::(\d+))?/.exec(part ?? "");
+  const label = formatInZone(date, timeZone, { timeZoneName: "shortOffset" }, "en-US");
+  const match = /GMT([+-])(\d+)(?::(\d+))?/.exec(label);
   if (!match) return 0;
   const sign = match[1] === "-" ? -1 : 1;
   return sign * (Number(match[2]) * 60 + Number(match[3] ?? 0));
