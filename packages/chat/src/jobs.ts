@@ -309,7 +309,7 @@ function utcRangeForLocalDate(localDate: string): { rangeStartUtcIso: string; ra
   };
 }
 
-async function handleArchiveDayJob(
+export async function handleArchiveDayJob(
   scopedDb: DataContextDb,
   actorUserId: string,
   localDate: string,

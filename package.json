@@ -63,6 +63,7 @@
     "test:ai-tools": "tsx scripts/test-integration.ts tests/integration/ai-tools.test.ts",
     "test:briefings": "tsx scripts/test-integration.ts tests/integration/briefings.test.ts tests/integration/briefings-synthesis.test.ts",
     "test:chat": "tsx scripts/test-integration.ts tests/integration/chat-live.test.ts",
+    "test:chat-archive": "tsx scripts/test-integration.ts tests/integration/chat-archive-day-job.test.ts tests/integration/chat-live.test.ts tests/integration/notes-write-tools.test.ts",
     "test:persistent-pool": "tsx scripts/test-integration.ts tests/integration/persistent-pool-reap.test.ts",
     "test:connectors": "tsx scripts/test-integration.ts tests/integration/connectors.test.ts",
     "test:notes": "tsx scripts/test-integration.ts tests/integration/notes.test.ts",
