@@ -462,6 +462,11 @@ function ExternalModuleMount(props: {
         <ThrowAwayDraftDialog
           moduleId={props.moduleId}
           busy={throwAwayMutation.isPending}
+          error={
+            throwAwayMutation.isError
+              ? "That didn't work, and the draft is still here. Try again in a moment."
+              : undefined
+          }
           onCancel={() => setConfirmingThrowAway(false)}
           onConfirm={() => throwAwayMutation.mutate()}
         />

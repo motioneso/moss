@@ -74,4 +74,14 @@ describe("ThrowAwayDraftDialog", () => {
     expect(keep?.props.disabled).toBe(true);
     expect(throwAway?.props.disabled).toBe(true);
   });
+
+  it("keeps the dialog open and says so when the delete was refused", () => {
+    const renderer = renderDialog({
+      ...baseProps,
+      error: "That didn't work, and the draft is still here."
+    });
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("That didn't work, and the draft is still here.");
+    expect(text).toContain("Throw it away");
+  });
 });

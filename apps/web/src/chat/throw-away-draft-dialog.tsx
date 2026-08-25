@@ -20,6 +20,12 @@ export interface ThrowAwayDraftDialogProps {
   readonly onConfirm: () => void;
   /** True while the delete is in flight; both buttons lock so it cannot be fired twice. */
   readonly busy?: boolean;
+  /**
+   * Plain sentence to show when the delete was refused or failed. The dialog stays open so the
+   * person can read it and try again — a destructive action that quietly does nothing is worse
+   * than one that says it did not work.
+   */
+  readonly error?: string;
 }
 
 export function ThrowAwayDraftDialog(props: ThrowAwayDraftDialogProps) {
@@ -45,6 +51,11 @@ export function ThrowAwayDraftDialog(props: ThrowAwayDraftDialogProps) {
         There is no undo, and no earlier version to go back to. If you want this module again, Moss
         has to build it from scratch.
       </p>
+      {props.error ? (
+        <p className="jds-card__meta" role="alert">
+          {props.error}
+        </p>
+      ) : null}
     </Dialog>
   );
 }
