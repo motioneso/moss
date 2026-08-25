@@ -12,7 +12,7 @@ import SportsSettings, {
   searchLeagueRows,
   SearchResults
 } from "../../packages/sports/src/settings/index.js";
-import { SportsSourcesSection } from "../../packages/sports/src/settings/sources.js";
+import { AddSourceFlow, SportsSourcesSection } from "../../packages/sports/src/settings/sources.js";
 import { sportsQueryKeys } from "../../packages/sports/src/web/query-keys.js";
 
 const CATALOG_KEY = ["sports", "catalog"] as const;
@@ -158,8 +158,15 @@ describe("SportsSettings", () => {
         QueryClientProvider,
         { client },
         createElement(SportsSourcesSection, {
-          follows: [],
-          competitionsByKey: new Map(),
+          follows: [
+            {
+              id: "22222222-2222-2222-2222-222222222222",
+              competitionKey: "nfl",
+              teamKey: null,
+              createdAt: "2026-08-24T12:00:00.000Z"
+            }
+          ],
+          competitionsByKey: new Map([["nfl", TWO_LEAGUES[0]!]]),
           teamsByCompetition: new Map()
         })
       )
@@ -167,6 +174,7 @@ describe("SportsSettings", () => {
 
     expect(html).toContain("Awaiting first check");
     expect(html).toContain("Awaiting preview");
+    expect(html).toContain("All NFL");
     expect(html).toContain("Last checked:");
     expect(html).toContain("Never");
     expect(html).toContain("The publisher changed its public response shape.");
@@ -174,6 +182,31 @@ describe("SportsSettings", () => {
     expect(html).toContain(">Rebuild<");
     expect(html).toContain("Authenticated sources are not supported yet.");
     expect(html).not.toContain("Checking…");
+  });
+
+  it("uses the shared checkbox primitive for source assignments", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const html = renderToString(
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement(AddSourceFlow, {
+          follows: [
+            {
+              id: "22222222-2222-2222-2222-222222222222",
+              competitionKey: "nfl",
+              teamKey: null,
+              createdAt: "2026-08-24T12:00:00.000Z"
+            }
+          ],
+          competitionsByKey: new Map(),
+          teamsByCompetition: new Map()
+        })
+      )
+    );
+
+    expect(html).toContain('class="jds-check sp-src__check"');
+    expect(html).toContain('class="jds-check__box"');
   });
 
   it("empty-query view starts with browse leagues collapsed, not the full catalog", () => {

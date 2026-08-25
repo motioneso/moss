@@ -18,7 +18,8 @@ describe("sports manifest", () => {
       "sql/0186_sports_whole_league_unique.sql",
       "sql/0190_sports_custom_sources.sql",
       "sql/0191_sports_public_source_runtime.sql",
-      "sql/0192_sports_legacy_feed_assignments_verified.sql"
+      "sql/0192_sports_legacy_feed_assignments_verified.sql",
+      "sql/0193_sports_legacy_feed_assignment_repair.sql"
     ]);
     expect(sportsModuleManifest.navigation[0]?.path).toBe("/sports");
     expect(sportsModuleManifest.settings[0]?.path).toBe("/settings/modules/sports");

@@ -1,6 +1,7 @@
-/* #1572 custom sports news sources (packages/sports/src/settings/sources.tsx). Tokens only —
-   raw colors live in apps/web/src/styles/tokens.css. Mirrors packages/news/src/settings/news-settings.css's
-   .nw-set__* family, prefixed sp-src to stay scoped to this section. */
+/* Hallmark · component: sports source settings · genre: modern-minimal · theme: Moss
+ * states: default · hover · focus · active · disabled · loading · error · success
+ * pre-emit critique: P4 H5 E4 S5 R5 V4 · contrast: pass · mobile: pass
+ */
 
 .sp-src {
   margin-top: var(--space-5);
@@ -15,6 +16,7 @@
 .sp-src__hint {
   margin: calc(-1 * var(--space-2)) 0 var(--space-3);
   line-height: 1.5;
+  color: var(--text-subtle);
 }
 
 .sp-src__hint--tight {
@@ -24,47 +26,91 @@
 .sp-src__list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  margin: 0 0 var(--space-3);
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
   padding: 0;
   list-style: none;
 }
 
 .sp-src__item {
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3);
+  border: var(--border-w) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface);
 }
 
-.sp-src__item-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-}
-
-.sp-src__item-meta {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sp-src__item-row > button {
-  margin-left: auto;
-}
-.sp-src__item-row > button:last-child {
-  margin-left: 0;
-}
-
+.sp-src__item-row,
+.sp-src__identity,
+.sp-src__actions,
 .sp-src__addrow {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.sp-src__item-row {
   gap: var(--space-3);
 }
 
+.sp-src__identity {
+  flex: 1 1 18rem;
+  min-width: 0;
+  gap: var(--space-2);
+}
+
+.sp-src__item-label,
+.sp-src__assignment-label {
+  font-weight: 600;
+}
+
+.sp-src__item-meta,
+.sp-src__assignment-target {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-subtle);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sp-src__actions {
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.sp-src .jds-btn {
+  white-space: nowrap;
+}
+
+.sp-src__meta-line,
+.sp-src__health-message {
+  margin: var(--space-2) 0 0;
+  color: var(--text-subtle);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.sp-src__health-message {
+  color: var(--text);
+}
+
+.sp-src__addrow {
+  gap: var(--space-2);
+}
+
+.sp-src__add-section {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: var(--border-w) solid var(--border-subtle);
+}
+
+.sp-src__subheading {
+  margin: 0 0 var(--space-3);
+  font-weight: 600;
+}
+
 .sp-src__addflow {
-  margin-top: var(--space-2);
+  max-width: 42rem;
 }
 
 .sp-src__form {
@@ -74,6 +120,12 @@
 .sp-src__label {
   display: block;
   margin: 0 0 var(--space-2);
+}
+
+.sp-src__label > .jds-input {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-1);
 }
 
 .sp-src__row {
@@ -88,59 +140,102 @@
 }
 
 .sp-src__err {
-  margin: calc(-1 * var(--space-2)) 0 var(--space-3);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-w) solid var(--danger);
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  color: var(--danger-fg);
+  line-height: 1.45;
+}
+
+.sp-src__err svg {
+  flex: none;
+  margin-top: 0.15em;
 }
 
 .sp-src__candidate {
-  margin: var(--space-2) 0 0;
+  margin: var(--space-3) 0 0;
+  padding-top: var(--space-3);
+  border-top: var(--border-w) solid var(--border-subtle);
 }
 
 .sp-src__candidate-label {
   margin: 0;
+  font-weight: 600;
 }
 
 .sp-src__assign {
-  margin-top: var(--space-2);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: var(--border-w) solid var(--border-subtle);
 }
 
 .sp-src__assign-list {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  margin: 0 0 var(--space-2);
-  padding: 0;
-  list-style: none;
   max-height: 12rem;
+  margin: var(--space-2) 0;
+  padding: 0;
   overflow-y: auto;
+  list-style: none;
 }
 
 .sp-src__assign-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
+  min-width: 0;
 }
 
-.sp-src__assign-item input[type="checkbox"] {
-  accent-color: var(--accent);
+.sp-src__check {
+  width: 100%;
+  padding: var(--space-1) 0;
+}
+
+.sp-src__assign-item--status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: var(--border-w) solid var(--border-subtle);
+}
+
+.sp-src__assignment-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.sp-src__assignment-target {
+  font-size: var(--text-sm);
 }
 
 @media (max-width: 40rem) {
-  .sp-src__item-row {
-    flex-wrap: wrap;
-  }
-
-  .sp-src__item-meta {
-    order: 3;
+  .sp-src__identity,
+  .sp-src__actions {
     flex-basis: 100%;
-    overflow: visible;
-    white-space: normal;
   }
 
-  .sp-src__item-row > button {
+  .sp-src__actions {
+    justify-content: flex-start;
     margin-left: 0;
   }
 
-  .sp-src__item-row > button:first-of-type {
-    margin-left: auto;
+  .sp-src__item-meta {
+    flex-basis: 100%;
+    white-space: normal;
+  }
+
+  .sp-src__row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .sp-src__row .jds-btn {
+    align-self: flex-start;
   }
 }
