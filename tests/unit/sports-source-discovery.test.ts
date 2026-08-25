@@ -206,6 +206,42 @@ describe("resolveSportsSourceInput", () => {
     expect(fetch).not.toHaveBeenCalledWith("https://api5.one.example/news", expect.anything());
   });
 
+  it("counts unique target hosts when enforcing the confirmation cap", async () => {
+    const fetch = vi.fn<NewsSafeFetchPort>(async (url: string) => ({
+      ok: true,
+      status: 200,
+      finalUrl: url,
+      contentType: "text/html",
+      body: "<main></main>",
+      truncated: false
+    }));
+    const targets = [
+      ...Array.from({ length: 5 }, (_, index) => ({
+        followId: `follow-${index}`,
+        competitionKey: "eng.1",
+        competitionLabel: "Premier League",
+        teamKey: `team-${index}`,
+        teamLabel: `Team ${index}`,
+        exactTargetUrl: `https://one.example/team/${index}/news`
+      })),
+      {
+        followId: "follow-sibling",
+        competitionKey: "eng.1",
+        competitionLabel: "Premier League",
+        teamKey: "team-sibling",
+        teamLabel: "Sibling Team",
+        exactTargetUrl: "https://api.one.example/news"
+      }
+    ];
+
+    await expect(
+      resolveSportsSourceInput(db, { fetch, ai: ai() }, { rawUrl: "https://one.example", targets })
+    ).resolves.toEqual({ status: "rejected", reason: "unsupported" });
+    expect(fetch).toHaveBeenCalledWith("https://api.one.example/news", {
+      allowedHosts: ["api.one.example"]
+    });
+  });
+
   it("rejects a non-HTTPS URL without making a network request", async () => {
     const fetch = fetchMap({});
     await expect(

@@ -668,7 +668,8 @@ export async function resolveSportsSourceInput(
     ) {
       return { status: "rejected", reason: "unreachable" };
     }
-    allowedHosts.push(exactHost(targetResponse.finalUrl));
+    const finalTargetHost = exactHost(targetResponse.finalUrl);
+    if (!allowedHosts.includes(finalTargetHost)) allowedHosts.push(finalTargetHost);
     if (staticEvidence.length < MAX_DISCOVERY_EVIDENCE) {
       staticEvidence.push({
         url: targetResponse.finalUrl,
@@ -696,7 +697,7 @@ export async function resolveSportsSourceInput(
     ) {
       continue;
     }
-    allowedHosts.push(candidateHost);
+    if (!allowedHosts.includes(candidateHost)) allowedHosts.push(candidateHost);
     staticEvidence.push({
       url: response.finalUrl,
       contentType: response.contentType,
