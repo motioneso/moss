@@ -1,8 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { lazy, Suspense, useEffect, useMemo, type ComponentType, type ReactNode } from "react";
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useMemo,
+  useState,
+  type ComponentType,
+  type ReactNode
+} from "react";
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import { MODULE_WEB_CONTRIBUTIONS, MODULE_WEB_ROUTES } from "virtual:moss-module-web";
 import { confineModuleCss } from "@moss/module-css-confine";
+import { WORKSHOP_MODULE_ID, workshopModuleManifest } from "@moss/workshop";
 
 import {
   ApiError,
@@ -12,13 +21,15 @@ import {
   getMyModules,
   getOnboardingStatus,
   getPersonaSettings,
-  shipExternalModule
+  shipExternalModule,
+  throwAwayExternalModuleDraft
 } from "./api/client";
 import { webRoutePath } from "./app-route-metadata";
 import { queryKeys } from "./api/query-keys";
 import { AuthScreen } from "./auth/auth-screen";
 import { createAssistantSurfaceHandle, useAssistantSurfaceHost } from "./chat/assistant-surface";
 import { DraftBanner } from "./chat/draft-banner";
+import { ThrowAwayDraftDialog } from "./chat/throw-away-draft-dialog";
 import {
   installModuleHostRuntime,
   loadExternalModuleContribution,
@@ -61,6 +72,14 @@ const WellnessPage = lazy(() =>
  * loaded and its declared `routes[].element` (matched by path) is rendered. Computed once at
  * module scope (not per-render) so each route keeps a stable `lazy()` identity across App renders.
  */
+/**
+ * #1890: where a user lands after throwing a draft away. Read from the workshop module's own
+ * navigation declaration rather than typed as a literal, so it cannot drift from the route the
+ * shell actually registers.
+ */
+const WORKSHOP_PATH =
+  workshopModuleManifest.navigation.find((item) => item.id === WORKSHOP_MODULE_ID)?.path ?? "/";
+
 const moduleRoutes = MODULE_WEB_ROUTES.map((route) => ({
   path: route.path,
   moduleId: route.moduleId,
@@ -373,6 +392,8 @@ function ExternalModuleMount(props: {
   const { openAssistantWithDraft, openChat } = useChatControls();
   const { subscribeRecords, seedComposer } = useAssistantSurfaceHost();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [confirmingThrowAway, setConfirmingThrowAway] = useState(false);
   // #1756: ships the draft for real — POST /api/admin/modules/:id/ship (packages/settings/src/
   // routes-modules.ts). Success flips the DB row from draft to enabled and clears its owner;
   // refetching /api/modules is what makes ModuleDto.draft disappear and the banner unmount.
@@ -380,6 +401,22 @@ function ExternalModuleMount(props: {
     mutationFn: () => shipExternalModule(props.moduleId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.modules });
+    }
+  });
+  // #1890: throws the draft away for real — DELETE /api/admin/modules/:id/draft. On success the
+  // module's row, its installed folder and any leftover build folder are gone, so this page no
+  // longer exists: refetch the module list (which unmounts this route) and leave for the
+  // workshop. Order matters — navigate FIRST, so the route this component lives on is not pulled
+  // out from under it while it is still mounted.
+  const throwAwayMutation = useMutation({
+    mutationFn: () => throwAwayExternalModuleDraft(props.moduleId),
+    onSuccess: () => {
+      setConfirmingThrowAway(false);
+      navigate(WORKSHOP_PATH, { replace: true });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.modules });
+      // The workshop reads the current user through its own key; refetch so its groups
+      // recompute once they are wired to real data.
+      void queryClient.invalidateQueries({ queryKey: ["workshop"] });
     }
   });
   const hostActions = useMemo(
@@ -417,9 +454,23 @@ function ExternalModuleMount(props: {
         }
         onShip={() => shipMutation.mutate()}
         onAskForChange={openChat}
+        onThrowAway={() => setConfirmingThrowAway(true)}
+        throwAwayPending={throwAwayMutation.isPending}
         seeCodeUnavailableReason="Viewing the code isn't wired up yet."
-        throwAwayUnavailableReason="Deleting a draft isn't wired up yet."
       />
+      {confirmingThrowAway ? (
+        <ThrowAwayDraftDialog
+          moduleId={props.moduleId}
+          busy={throwAwayMutation.isPending}
+          error={
+            throwAwayMutation.isError
+              ? "That didn't work, and the draft is still here. Try again in a moment."
+              : undefined
+          }
+          onCancel={() => setConfirmingThrowAway(false)}
+          onConfirm={() => throwAwayMutation.mutate()}
+        />
+      ) : null}
       <div className="draft-workshop-page__body">{page}</div>
     </div>
   );

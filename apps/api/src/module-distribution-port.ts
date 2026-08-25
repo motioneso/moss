@@ -8,7 +8,9 @@ import {
   downloadAndStageModule,
   fetchRegistryIndex,
   ModuleDownloadError,
-  parseModulesEnsure
+  parseModulesEnsure,
+  resolveBuildSourceDir,
+  resolveModuleBuildsDir
 } from "@moss/module-registry/node";
 import type { ModuleDistributionDependencies, ModuleRegistryEntryLike } from "@moss/settings";
 
@@ -76,6 +78,24 @@ export function createModuleDistributionPort(
         return;
       }
       await rm(join(externalModulesDir, moduleId), { recursive: true, force: true });
+    },
+    removeModuleBuildFiles: async (buildId: string) => {
+      // #1890: resolveBuildSourceDir THROWS on any id that is not a plain safe name, so a
+      // crafted build id cannot walk out of the builds dir. Swallowed rather than rethrown:
+      // this runs after the row is already deleted, and a leftover build directory is inert
+      // (nothing scans the builds dir), so failing here must not turn a completed throw-away
+      // into an error the user sees.
+      try {
+        await rm(resolveBuildSourceDir(resolveModuleBuildsDir(process.env), buildId), {
+          recursive: true,
+          force: true
+        });
+      } catch (error) {
+        server.log.warn(
+          { errorName: (error as Error).name },
+          "module build directory cleanup failed (#1890)"
+        );
+      }
     },
     listOnDiskModuleIds: async () => {
       const dirents = await readdir(externalModulesDir, { withFileTypes: true }).catch(() => []);

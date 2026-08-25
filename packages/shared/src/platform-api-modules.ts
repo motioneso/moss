@@ -353,6 +353,26 @@ export const shipExternalModuleRouteSchema = {
   }
 } as const;
 
+// #1890: throwing a draft away. One answer shape whether or not anything was on disk — the
+// endpoint either deleted the caller's own draft or it 404s, and the 404 deliberately cannot be
+// told apart from "that is a shipped module" or "that draft is someone else's" (see
+// deleteExternalModuleDraft's doc-comment for why).
+export const deleteExternalModuleDraftRouteSchema = {
+  params: adminModuleParamsSchema,
+  response: {
+    200: {
+      type: "object",
+      additionalProperties: false,
+      required: ["deleted"],
+      properties: { deleted: { type: "boolean" } }
+    },
+    401: errorResponseSchema,
+    403: errorResponseSchema,
+    404: errorResponseSchema,
+    409: errorResponseSchema
+  }
+} as const;
+
 // #918: module-credential admin/user surface contracts. ModuleCredentialStatusDto is
 // METADATA ONLY by construction — there is no field that could carry plaintext or the
 // ciphertext envelope, and the strict response schema below (additionalProperties: false)
