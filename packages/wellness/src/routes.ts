@@ -239,8 +239,9 @@ export function registerWellnessRoutes(
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
         const input = parseCreateMedicationBody(request.body);
+        const timeZone = await resolveRouteTimeZone(dependencies, request, accessContext);
         const med = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
-          repo.createMedication(scopedDb, input)
+          repo.createMedication(scopedDb, input, timeZone)
         );
         return reply.code(201).send({ medication: serializeMedication(med) });
       } catch (error) {
@@ -668,6 +669,73 @@ function parseCreateMedicationBody(body: unknown): CreateMedicationInput {
   ) {
     throw new HttpError(400, "cycleAnchorDate and cycleDaysOn are required for cyclical");
   }
+  assertIntInRange(value["intervalCount"], "intervalCount", 1, 999);
+  assertIntInRange(value["monthDay"], "monthDay", 1, 31);
+  assertIntInRange(value["monthWeekday"], "monthWeekday", 1, 7);
+  if (frequencyType === "every_interval") {
+    const intervalUnit = value["intervalUnit"];
+    if (intervalUnit !== "days" && intervalUnit !== "weeks" && intervalUnit !== "months") {
+      throw new HttpError(400, "intervalUnit must be one of days, weeks, months");
+    }
+    if (value["intervalCount"] == null) {
+      throw new HttpError(400, "intervalCount is required for every_interval");
+    }
+    if (!isNonEmptyArray(value["scheduleTimes"])) {
+      throw new HttpError(400, "scheduleTimes is required for every_interval");
+    }
+    if (intervalUnit === "weeks") {
+      if (!isNonEmptyArray(value["weekdays"])) {
+        throw new HttpError(400, "weekdays is required for every_interval with weeks unit");
+      }
+      if ((value["weekdays"] as number[]).some((d) => !Number.isInteger(d) || d < 1 || d > 7)) {
+        throw new HttpError(400, "weekdays must be ISO weekday integers 1 (Mon) to 7 (Sun)");
+      }
+    }
+    if (typeof value["startDate"] !== "string" || !value["startDate"].trim()) {
+      throw new HttpError(400, "startDate is required for every_interval");
+    }
+    if (typeof value["endDate"] === "string" && value["endDate"] < (value["startDate"] as string)) {
+      throw new HttpError(400, "endDate must not be before startDate");
+    }
+  }
+  if (frequencyType === "monthly") {
+    const monthKind = value["monthKind"];
+    if (monthKind !== "date" && monthKind !== "weekdayPosition") {
+      throw new HttpError(400, "monthKind must be one of date, weekdayPosition");
+    }
+    if (monthKind === "date") {
+      const hasDay = value["monthDay"] != null;
+      const isLast = value["monthDayIsLast"] === true;
+      if (hasDay === isLast) {
+        throw new HttpError(
+          400,
+          "exactly one of monthDay or monthDayIsLast is required for monthly by date"
+        );
+      }
+    }
+    if (monthKind === "weekdayPosition") {
+      const position = value["monthWeekdayPosition"];
+      const validPositions = ["first", "second", "third", "fourth", "last"];
+      if (typeof position !== "string" || !validPositions.includes(position)) {
+        throw new HttpError(
+          400,
+          "monthWeekdayPosition must be one of first, second, third, fourth, last"
+        );
+      }
+      if (value["monthWeekday"] == null) {
+        throw new HttpError(400, "monthWeekday is required for monthly by weekdayPosition");
+      }
+    }
+    if (!isNonEmptyArray(value["scheduleTimes"])) {
+      throw new HttpError(400, "scheduleTimes is required for monthly");
+    }
+    if (typeof value["startDate"] !== "string" || !value["startDate"].trim()) {
+      throw new HttpError(400, "startDate is required for monthly");
+    }
+    if (typeof value["endDate"] === "string" && value["endDate"] < (value["startDate"] as string)) {
+      throw new HttpError(400, "endDate must not be before startDate");
+    }
+  }
   // as_needed (PRN) is unscheduled — reject scheduling/cycle fields (matches the DB CHECK).
   if (frequencyType === "as_needed") {
     for (const f of [
@@ -677,7 +745,16 @@ function parseCreateMedicationBody(body: unknown): CreateMedicationInput {
       "weekdays",
       "cycleAnchorDate",
       "cycleDaysOn",
-      "cycleDaysOff"
+      "cycleDaysOff",
+      "intervalUnit",
+      "intervalCount",
+      "startDate",
+      "endDate",
+      "monthKind",
+      "monthDay",
+      "monthDayIsLast",
+      "monthWeekdayPosition",
+      "monthWeekday"
     ]) {
       if (value[f] != null) throw new HttpError(400, `${f} is not allowed for as_needed`);
     }
@@ -694,7 +771,23 @@ function parseCreateMedicationBody(body: unknown): CreateMedicationInput {
     cycleDaysOn: optionalNumber(value["cycleDaysOn"]),
     cycleDaysOff: optionalNumber(value["cycleDaysOff"]),
     cycleAnchorDate: optionalNullableString(value["cycleAnchorDate"], "cycleAnchorDate"),
-    notes: optionalNullableString(value["notes"], "notes")
+    notes: optionalNullableString(value["notes"], "notes"),
+    intervalUnit: value["intervalUnit"] as "days" | "weeks" | "months" | null | undefined,
+    intervalCount: optionalNumber(value["intervalCount"]),
+    startDate: optionalNullableString(value["startDate"], "startDate"),
+    endDate: optionalNullableString(value["endDate"], "endDate"),
+    monthKind: value["monthKind"] as "date" | "weekdayPosition" | null | undefined,
+    monthDay: optionalNumber(value["monthDay"]),
+    monthDayIsLast: value["monthDayIsLast"] as boolean | undefined,
+    monthWeekdayPosition: value["monthWeekdayPosition"] as
+      | "first"
+      | "second"
+      | "third"
+      | "fourth"
+      | "last"
+      | null
+      | undefined,
+    monthWeekday: optionalNumber(value["monthWeekday"])
   };
 }
 

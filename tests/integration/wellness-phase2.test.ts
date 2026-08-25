@@ -204,21 +204,29 @@ describe("WellnessRepository — listLogsRange", () => {
 
   it("scheduled logs bucketed by scheduled_for (not logged_at); PRN logs included", async () => {
     await dataContext.withDataContext(ctx(userId), async (db) => {
-      const med = await repo.createMedication(db, {
-        name: "RangeTest",
-        frequencyType: "once_daily",
-        scheduleTimes: ["08:00"]
-      });
+      const med = await repo.createMedication(
+        db,
+        {
+          name: "RangeTest",
+          frequencyType: "once_daily",
+          scheduleTimes: ["08:00"]
+        },
+        "UTC"
+      );
       // A scheduled log with scheduled_for within 30 days
       await repo.logDose(db, med.id, {
         status: "taken",
         scheduledFor: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString()
       });
       // A PRN log within 30 days
-      const prnMed = await repo.createMedication(db, {
-        name: "RangePRN",
-        frequencyType: "as_needed"
-      });
+      const prnMed = await repo.createMedication(
+        db,
+        {
+          name: "RangePRN",
+          frequencyType: "as_needed"
+        },
+        "UTC"
+      );
       await repo.logDose(db, prnMed.id, { status: "prn", prnReason: "headache" });
 
       const logs = await repo.listLogsRange(db, { sinceDays: 30 });
@@ -249,11 +257,15 @@ describe("wellness insights — owner-scoped", () => {
     // Seed other user with a med + taken dose so their adherence takenCount > 0
     await dataContext.withDataContext(ctx(otherUserId), async (db) => {
       await repo.createCheckin(db, { feelingCore: "happy", intensity: 5 });
-      const med = await repo.createMedication(db, {
-        name: "OtherMed",
-        frequencyType: "once_daily",
-        scheduleTimes: ["08:00"]
-      });
+      const med = await repo.createMedication(
+        db,
+        {
+          name: "OtherMed",
+          frequencyType: "once_daily",
+          scheduleTimes: ["08:00"]
+        },
+        "UTC"
+      );
       await repo.logDose(db, med.id, {
         status: "taken",
         scheduledFor: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString()
