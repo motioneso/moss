@@ -21,7 +21,8 @@ describe("runModuleBuildStep", () => {
     const deps = {
       launchLiveAgent: fakeLaunchLiveAgent,
       resolveWorkingDir: (buildId: string) => `/data/module-builds/${buildId}`,
-      recordFetchedUrl: vi.fn(async () => {})
+      recordFetchedUrl: vi.fn(async () => {}),
+      recordWrittenFile: vi.fn(async () => {})
     };
 
     const build = makeBuildRow();
@@ -45,7 +46,8 @@ describe("runModuleBuildStep", () => {
     const deps = {
       launchLiveAgent: fakeLaunchLiveAgent,
       resolveWorkingDir: (buildId: string) => `/data/module-builds/${buildId}`,
-      recordFetchedUrl: vi.fn(async () => {})
+      recordFetchedUrl: vi.fn(async () => {}),
+      recordWrittenFile: vi.fn(async () => {})
     };
 
     const result = await runModuleBuildStep(
@@ -70,12 +72,33 @@ describe("runModuleBuildStep", () => {
     const deps = {
       launchLiveAgent: fakeLaunchLiveAgent,
       resolveWorkingDir: (buildId: string) => `/data/module-builds/${buildId}`,
-      recordFetchedUrl
+      recordFetchedUrl,
+      recordWrittenFile: vi.fn(async () => {})
     };
 
     await runModuleBuildStep(deps, makeBuildRow());
 
     expect(recordFetchedUrl).toHaveBeenCalledWith("b1", "https://example.com/widgets");
+  });
+
+  it("records every file the build session wrote", async () => {
+    const fakeLaunchLiveAgent = vi.fn(
+      async (): Promise<LaunchLiveAgentResult> => ({
+        wroteFiles: ["module.ts", "module.test.ts"]
+      })
+    );
+    const recordWrittenFile = vi.fn(async () => {});
+    const deps = {
+      launchLiveAgent: fakeLaunchLiveAgent,
+      resolveWorkingDir: (buildId: string) => `/data/module-builds/${buildId}`,
+      recordFetchedUrl: vi.fn(async () => {}),
+      recordWrittenFile
+    };
+
+    await runModuleBuildStep(deps, makeBuildRow());
+
+    expect(recordWrittenFile).toHaveBeenNthCalledWith(1, "b1", "module.ts");
+    expect(recordWrittenFile).toHaveBeenNthCalledWith(2, "b1", "module.test.ts");
   });
 
   it("never reads a credential value directly — only code it emits may do that later", () => {

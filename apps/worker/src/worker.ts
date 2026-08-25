@@ -60,7 +60,8 @@ import {
   createModuleCredentialSecretCipher,
   getModuleBuild,
   updateModuleBuildStatus,
-  appendModuleBuildFetchedUrl
+  appendModuleBuildFetchedUrl,
+  appendModuleBuildWrittenFile
 } from "@moss/settings";
 import { getVaultBaseDir, VaultContextRunner } from "@moss/vault";
 
@@ -211,7 +212,9 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
           {
             launchLiveAgent: moduleBuildLiveAgent,
             resolveWorkingDir: (buildId) => resolveBuildSourceDir(moduleBuildsDir, buildId),
-            recordFetchedUrl: (buildId, url) => appendModuleBuildFetchedUrl(scopedDb, buildId, url)
+            recordFetchedUrl: (buildId, url) => appendModuleBuildFetchedUrl(scopedDb, buildId, url),
+            recordWrittenFile: (buildId, path) =>
+              appendModuleBuildWrittenFile(scopedDb, buildId, path)
           },
           build
         );

@@ -27,6 +27,7 @@ export interface RunModuleBuildStepDeps {
   }) => Promise<LaunchLiveAgentResult>;
   readonly resolveWorkingDir: (buildId: string) => string;
   readonly recordFetchedUrl: (buildId: string, url: string) => Promise<void>;
+  readonly recordWrittenFile: (buildId: string, path: string) => Promise<void>;
 }
 
 export async function runModuleBuildStep(
@@ -41,6 +42,10 @@ export async function runModuleBuildStep(
 
   for (const url of result.fetchedUrls ?? []) {
     await deps.recordFetchedUrl(build.id, url);
+  }
+
+  for (const path of result.wroteFiles) {
+    await deps.recordWrittenFile(build.id, path);
   }
 
   const next = nextBuildStep(step);

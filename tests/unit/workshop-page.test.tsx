@@ -70,6 +70,7 @@ describe("WorkshopPage", () => {
           step: "Writing the page",
           plan: null,
           fetchedUrls: [],
+          writtenFiles: [],
           costCents: 10,
           error: null,
           createdAt: "2026-08-20T09:00:00Z",

@@ -42,6 +42,7 @@ export function registerModuleBuildRoutes(
             step: build.step,
             plan: build.plan as ModuleBuildPlan | null,
             fetchedUrls: build.fetchedUrls,
+            writtenFiles: build.writtenFiles,
             costCents: build.costCents,
             error: build.error,
             createdAt: build.createdAt.toISOString(),
