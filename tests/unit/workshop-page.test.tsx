@@ -81,7 +81,7 @@ describe("WorkshopPage", () => {
     expect(html).not.toContain("Nothing in the workshop yet");
   });
 
-  it("only shows an optional module in the Live group, not a required one", () => {
+  it("only shows optional modules created by the logged-in user", () => {
     const html = render(meResponse(true), undefined, {
       modules: [
         {
@@ -111,10 +111,25 @@ describe("WorkshopPage", () => {
           hasPreferences: false,
           hasUserCredentials: false,
           scope: "you"
+        },
+        {
+          id: "someone-elses-module",
+          name: "Someone else's module",
+          version: "0.1.0",
+          lifecycle: "optional",
+          required: false,
+          supportsUserDisable: true,
+          instanceDisabled: false,
+          userDisabled: false,
+          active: true,
+          hasPreferences: false,
+          hasUserCredentials: false,
+          scope: "everyone"
         }
       ]
     });
     expect(html).toContain("GMM tracker");
     expect(html).not.toContain("Finance");
+    expect(html).not.toContain("Someone else&#x27;s module");
   });
 });

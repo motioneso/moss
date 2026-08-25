@@ -57,6 +57,7 @@ feature that is not present in the image you are running.
 
 ### Fixed
 
+- **Workshop module builds.** Module builds no longer stall, and the Workshop only shows modules created by the signed-in user. [PR #1964](https://github.com/motioneso/moss/pull/1964)
 - **Sports source setup and status layout.** Custom sports sources now recover legacy feed assignments and show clearer controls, team labels, status details, and errors. [PR #1956](https://github.com/motioneso/moss/pull/1956)
 - **Custom sports sources now stay current.** Custom sports sources now refresh into Sports and Today, show accurate health, and offer clear recovery actions in Settings and through Moss. [PR #1929](https://github.com/motioneso/moss/pull/1929)
 - **Polished everyday app screens.** Settings, tasks, navigation, notifications, and several module pages now use clearer labels, cleaner layouts, and more consistent controls. [PR #1938](https://github.com/motioneso/moss/pull/1938)
