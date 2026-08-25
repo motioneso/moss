@@ -51,10 +51,7 @@ export interface EveryNMonthsSchedule {
   readonly doseTimes: readonly string[];
 }
 
-export type EveryIntervalSchedule =
-  | EveryNDaysSchedule
-  | EveryNWeeksSchedule
-  | EveryNMonthsSchedule;
+export type EveryIntervalSchedule = EveryNDaysSchedule | EveryNWeeksSchedule | EveryNMonthsSchedule;
 
 export interface MonthlyDateSchedule {
   readonly family: "monthly";
@@ -146,7 +143,11 @@ export function expandOccurrences(
   if (compareDateKeys(scanFrom, scanTo) > 0) return [];
 
   const occurrences: Occurrence[] = [];
-  for (let dateKey = scanFrom; compareDateKeys(dateKey, scanTo) <= 0; dateKey = addDays(dateKey, 1)) {
+  for (
+    let dateKey = scanFrom;
+    compareDateKeys(dateKey, scanTo) <= 0;
+    dateKey = addDays(dateKey, 1)
+  ) {
     if (!isEligibleDay(schedule, startDate, dateKey)) continue;
     for (const time of schedule.doseTimes) {
       const at = zonedTimeToUtc(tz, dateKey, time);
@@ -365,6 +366,13 @@ function offsetMinutesAt(timeZone: string, instantMs: number): number {
   const get = (type: string) => Number(parts.find((p) => p.type === type)!.value);
   let hour = get("hour");
   if (hour === 24) hour = 0; // some locales format midnight as 24:00
-  const asUtc = Date.UTC(get("year"), get("month") - 1, get("day"), hour, get("minute"), get("second"));
+  const asUtc = Date.UTC(
+    get("year"),
+    get("month") - 1,
+    get("day"),
+    hour,
+    get("minute"),
+    get("second")
+  );
   return Math.round((asUtc - instantMs) / 60_000);
 }
