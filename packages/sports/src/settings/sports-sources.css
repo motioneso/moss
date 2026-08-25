@@ -174,6 +174,25 @@
   border-top: var(--border-w) solid var(--border-subtle);
 }
 
+.sp-src__assign-groups {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-2) 0 var(--space-3);
+}
+
+.sp-src__assign-group {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.sp-src__assign-legend {
+  margin-bottom: var(--space-1);
+  font-weight: 600;
+}
+
 .sp-src__assign-list {
   display: flex;
   flex-direction: column;
@@ -215,6 +234,10 @@
 }
 
 @media (max-width: 40rem) {
+  .sp-src__assign-groups {
+    grid-template-columns: 1fr;
+  }
+
   .sp-src__identity,
   .sp-src__actions {
     flex-basis: 100%;

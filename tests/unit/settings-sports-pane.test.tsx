@@ -121,6 +121,7 @@ describe("SportsSettings", () => {
             {
               id: "33333333-3333-3333-3333-333333333333",
               followId: "22222222-2222-2222-2222-222222222222",
+              sportKey: null,
               targetUrl: null,
               previewStatus: "pending",
               healthState: "pending",
@@ -128,6 +129,19 @@ describe("SportsSettings", () => {
               healthMessage: null,
               lastCheckedAt: null,
               lastSuccessAt: null,
+              createdAt: "2026-08-24T12:00:00.000Z"
+            },
+            {
+              id: "55555555-5555-5555-5555-555555555555",
+              followId: null,
+              sportKey: "soccer",
+              targetUrl: "https://publisher.example.com/soccer",
+              previewStatus: "verified",
+              healthState: "healthy",
+              healthReasonCode: null,
+              healthMessage: null,
+              lastCheckedAt: "2026-08-24T12:00:00.000Z",
+              lastSuccessAt: "2026-08-24T12:00:00.000Z",
               createdAt: "2026-08-24T12:00:00.000Z"
             }
           ],
@@ -177,6 +191,7 @@ describe("SportsSettings", () => {
     expect(html).toContain("Awaiting first check");
     expect(html).toContain("Awaiting preview");
     expect(html).toContain("All NFL");
+    expect(html).toContain("Soccer");
     expect(html).toContain("Last checked:");
     expect(html).toContain("Never");
     expect(html).toContain("The publisher changed its public response shape.");
