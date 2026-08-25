@@ -74,4 +74,40 @@ describe("DraftBanner", () => {
     act(() => throwButton.props.onClick());
     expect(onThrowAway).toHaveBeenCalledOnce();
   });
+
+  // #1890: the throw-away button is live now. It only greys out while a delete is in flight,
+  // and the old "not wired up yet" tooltip must not come back when the action is supplied.
+  it("enables the throw-away button and shows no tooltip once the action exists", () => {
+    const renderer = renderBanner({
+      ...baseProps,
+      throwAwayUnavailableReason: "should never be shown"
+    });
+    const throwButton = renderer.root
+      .findAllByType("button")
+      .find((instance) => instance.children.includes("Throw it away"));
+    expect(throwButton?.props.disabled).toBe(false);
+    expect(throwButton?.props.title).toBeUndefined();
+  });
+
+  it("greys out the throw-away button while a delete is in flight", () => {
+    const onThrowAway = vi.fn();
+    const renderer = renderBanner({ ...baseProps, onThrowAway, throwAwayPending: true });
+    const throwButton = renderer.root
+      .findAllByType("button")
+      .find((instance) => instance.children.includes("Throw it away"));
+    expect(throwButton?.props.disabled).toBe(true);
+  });
+
+  it("greys out the throw-away button and explains why when there is no action", () => {
+    const renderer = renderBanner({
+      ...baseProps,
+      onThrowAway: undefined,
+      throwAwayUnavailableReason: "Not available here."
+    });
+    const throwButton = renderer.root
+      .findAllByType("button")
+      .find((instance) => instance.children.includes("Throw it away"));
+    expect(throwButton?.props.disabled).toBe(true);
+    expect(throwButton?.props.title).toBe("Not available here.");
+  });
 });

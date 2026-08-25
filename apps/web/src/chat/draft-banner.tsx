@@ -15,6 +15,8 @@ export interface DraftBannerProps {
   readonly onSeeCode?: () => void;
   /** Absent until there's a real delete-draft action wired up. */
   readonly onThrowAway?: () => void;
+  /** #1890: true while a throw-away is in flight, so the button can't be fired twice. */
+  readonly throwAwayPending?: boolean;
   /** Shown as the disabled button's title when onSeeCode is absent. */
   readonly seeCodeUnavailableReason?: string;
   /** Shown as the disabled button's title when onThrowAway is absent. */
@@ -65,7 +67,7 @@ export function DraftBanner(props: DraftBannerProps) {
             <button
               className="jds-btn jds-btn--quiet jds-btn--sm"
               type="button"
-              disabled={!props.onThrowAway}
+              disabled={!props.onThrowAway || props.throwAwayPending === true}
               title={props.onThrowAway ? undefined : props.throwAwayUnavailableReason}
               onClick={props.onThrowAway}
             >

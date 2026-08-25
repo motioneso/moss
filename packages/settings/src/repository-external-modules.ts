@@ -523,3 +523,50 @@ export async function shipExternalModule(
   });
   return true;
 }
+
+export interface DeleteExternalModuleDraftInput {
+  readonly id: string;
+  readonly actorUserId: string;
+  readonly requestId: string;
+}
+
+/**
+ * #1890 Workshop 8: throw a draft away — the human action that ends a draft's life entirely.
+ * Deliberately the mirror image of shipExternalModule: the SAME three-part predicate (this id,
+ * still `draft`, owned by the caller) decides whether anything happens, so this function CANNOT
+ * tell "no such module" apart from "that is a shipped module" apart from "that draft belongs to
+ * another admin" — all three return false and the route turns all three into one 404. That is the
+ * point: an instance admin must not be able to probe for another admin's private drafts, and
+ * distinct status codes would be exactly such a probe.
+ *
+ * The owner and status checks live HERE, in the statement, not in a route-layer `if`. RLS on
+ * app.external_modules only narrows DELETE to instance admins (0152) — which every draft author
+ * already is — so the predicate is what enforces the owner-only and shipped-modules-are-safe
+ * guarantees. Removing either `where` re-opens both holes silently.
+ *
+ * Rows only. On-disk files are the route's job, and it does them AFTER this returns true.
+ */
+export async function deleteExternalModuleDraft(
+  scopedDb: DataContextDb,
+  input: DeleteExternalModuleDraftInput,
+  writeAudit: ExternalModuleAuditWriter
+): Promise<boolean> {
+  assertDataContextDb(scopedDb);
+  const result = await scopedDb.db
+    .deleteFrom("app.external_modules")
+    .where("id", "=", input.id)
+    .where("status", "=", "draft")
+    .where("owner_user_id", "=", input.actorUserId)
+    .executeTakeFirst();
+  if ((result.numDeletedRows ?? 0n) === 0n) return false;
+
+  await writeAudit({
+    actorUserId: input.actorUserId,
+    action: "module.external_draft_delete",
+    targetType: "module",
+    targetId: input.id,
+    metadata: { moduleId: input.id },
+    requestId: input.requestId
+  });
+  return true;
+}

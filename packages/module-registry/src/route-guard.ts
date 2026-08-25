@@ -107,6 +107,9 @@ export const PLATFORM_UNGUARDED_ROUTES: ReadonlySet<RouteKey> = new Set<RouteKey
   // #1753 Task 10: shipping a draft module — settings-owned, same platform-route
   // reasoning as the external-module admin routes above.
   routeKey("POST", "/api/admin/modules/:id/ship"),
+  // #1890 Workshop 8: throwing a draft away — the other end of ship's lifecycle, same
+  // settings-owned platform-route reasoning.
+  routeKey("DELETE", "/api/admin/modules/:id/draft"),
   // #964 module-registry distribution surface (settings-owned, admin-gated via
   // assertAdminUser in routes-module-registry.ts — NOT module-enablement-gated; a
   // disabled/not-yet-installed module must still be discoverable/installable here).

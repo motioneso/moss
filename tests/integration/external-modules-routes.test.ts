@@ -1,4 +1,5 @@
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { OutgoingHttpHeaders } from "node:http";
@@ -376,6 +377,114 @@ describe("the personal Modules pane hides a draft from everyone but its owner (#
       payload: { disabled: true }
     });
     expect(patch.statusCode).toBe(200);
+  });
+});
+
+// #1890: throwing a draft away. The route must delete the row, the installed module folder and
+// the build's source folder — and must refuse for anything that is not the caller's own draft.
+// A dedicated module id and its own folders keep this block independent of the fixtures above.
+describe("throwing a draft away (#1890)", () => {
+  const buildsDir = () => join(root, "module-builds");
+
+  async function insertDraft(ownerUserId: string, status: "draft" | "enabled") {
+    const client = new Client({ connectionString: connectionStrings.bootstrap });
+    await client.connect();
+    await client.query(
+      `INSERT INTO app.external_modules (id, status, manifest_hash, package_hash, owner_user_id, created_at, updated_at)
+       VALUES ('throwaway-draft', $2, 'sha256:stale', 'sha256:stale', $1, now(), now())
+       ON CONFLICT (id) DO UPDATE SET status = $2, owner_user_id = $1`,
+      [status === "enabled" ? null : ownerUserId, status]
+    );
+    await client.end();
+  }
+
+  async function draftRowCount(): Promise<number> {
+    const client = new Client({ connectionString: connectionStrings.bootstrap });
+    await client.connect();
+    const rows = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM app.external_modules WHERE id = 'throwaway-draft'`
+    );
+    await client.end();
+    return Number(rows.rows[0]?.count ?? "0");
+  }
+
+  it("deletes the owner's own draft: row, installed folder and build folder all go", async () => {
+    process.env.JARVIS_MODULE_BUILDS_DIR = buildsDir();
+    await insertDraft(adminUserId, "draft");
+
+    const buildId = randomUUID();
+    const client = new Client({ connectionString: connectionStrings.bootstrap });
+    await client.connect();
+    await client.query(
+      `INSERT INTO app.module_builds (id, owner_user_id, status, module_id, created_at, updated_at)
+       VALUES ($1, $2, 'ready', 'throwaway-draft', now(), now())`,
+      [buildId, adminUserId]
+    );
+    await client.end();
+
+    const installedDir = join(root, "modules", "throwaway-draft");
+    mkdirSync(installedDir, { recursive: true });
+    writeFileSync(join(installedDir, "jarvis.module.json"), "{}");
+    const buildSourceDir = join(buildsDir(), buildId);
+    mkdirSync(buildSourceDir, { recursive: true });
+    writeFileSync(join(buildSourceDir, "index.ts"), "// build source\n");
+
+    const res = await server.inject({
+      method: "DELETE",
+      url: "/api/admin/modules/throwaway-draft/draft",
+      headers: { cookie: adminCookie }
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ deleted: true });
+
+    expect(await draftRowCount()).toBe(0);
+    expect(existsSync(installedDir)).toBe(false);
+    expect(existsSync(buildSourceDir)).toBe(false);
+  });
+
+  it("returns 404 for another user's draft, and leaves that draft alone", async () => {
+    await insertDraft(memberUserId, "draft");
+
+    const res = await server.inject({
+      method: "DELETE",
+      url: "/api/admin/modules/throwaway-draft/draft",
+      headers: { cookie: adminCookie }
+    });
+    expect(res.statusCode).toBe(404);
+    expect(await draftRowCount()).toBe(1);
+  });
+
+  it("returns 404 for a shipped module, and leaves it installed", async () => {
+    await insertDraft(adminUserId, "enabled");
+
+    const res = await server.inject({
+      method: "DELETE",
+      url: "/api/admin/modules/throwaway-draft/draft",
+      headers: { cookie: adminCookie }
+    });
+    expect(res.statusCode).toBe(404);
+    expect(await draftRowCount()).toBe(1);
+  });
+
+  it("denies a non-admin with 403", async () => {
+    await insertDraft(memberUserId, "draft");
+
+    const res = await server.inject({
+      method: "DELETE",
+      url: "/api/admin/modules/throwaway-draft/draft",
+      headers: { cookie: memberCookie }
+    });
+    expect(res.statusCode).toBe(403);
+    expect(await draftRowCount()).toBe(1);
+  });
+
+  it("returns 404 for an unknown module id", async () => {
+    const res = await server.inject({
+      method: "DELETE",
+      url: "/api/admin/modules/ghost/draft",
+      headers: { cookie: adminCookie }
+    });
+    expect(res.statusCode).toBe(404);
   });
 });
 

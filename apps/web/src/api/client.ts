@@ -461,6 +461,18 @@ export async function shipExternalModule(
   );
 }
 
+/**
+ * Admin: throw away a running draft (#1890) — deletes its database row, its installed module
+ * folder and any leftover build folder. Not undoable; the caller is expected to have confirmed
+ * first. 404 covers "no such module", "that is shipped" and "that draft is someone else's"
+ * alike, on purpose — see deleteExternalModuleDraft in @moss/settings.
+ */
+export async function throwAwayExternalModuleDraft(id: string): Promise<{ deleted: boolean }> {
+  return requestJson<{ deleted: boolean }>(`/api/admin/modules/${encodeURIComponent(id)}/draft`, {
+    method: "DELETE"
+  });
+}
+
 /** Admin: registry-backed module list — install/update/remove states (#964). */
 export async function getModuleRegistry(refresh: boolean): Promise<GetModuleRegistryResponse> {
   return requestJson<GetModuleRegistryResponse>(
