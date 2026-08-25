@@ -62,7 +62,7 @@ dataset adapter.
 
 ### Production
 
-- Add migration `packages/sports/sql/0195_sports_news_source_scopes.sql`, register it in
+- Add migration `packages/sports/sql/0196_sports_news_source_scopes.sql`, register it in
   `packages/sports/src/manifest.ts`, and update the manifest/catalog tests.
 - Extend `app.sports_source_assignments` with nullable `sport_key`, make `follow_id` nullable, and
   require exactly one target. Replace the old unique constraint with partial unique indexes for
@@ -87,7 +87,7 @@ dataset adapter.
 ### Checks
 
 - Contract tests reject empty, mixed, unknown-sport, duplicate, and over-limit target shapes.
-- Integration coverage starts from migrations through `0194`, applies `0195`, and proves existing
+- Integration coverage starts from migrations through `0195`, applies `0196`, and proves existing
   rows remain follow assignments with their verified target/health state intact.
 - Under FORCE RLS, prove owner isolation for custom sport assignments, ESPN preferences, and ESPN
   scope rows; foreign-owner follow ids are rejected even though FK checks bypass row visibility.
@@ -187,7 +187,7 @@ dataset adapter.
 ## Exit Criteria
 
 - All fourteen spec acceptance items have executable evidence.
-- Migration `0195` preserves production assignments and RLS posture.
+- Migration `0196` preserves production assignments and RLS posture.
 - ESPN is visible and assignable but cannot affect non-headline datasets.
 - General sport news can mix ESPN and multiple custom publishers without false competition labels
   or duplicate stories.

@@ -346,7 +346,9 @@ describe("MVP foundation schema catalog", () => {
         // #1959 — store all six medication schedule types and a real time zone.
         { version: "0194", name: "0194_wellness_medication_schedule_v2.sql" },
         // Module-build jobs execute as jarvis_worker_runtime and need owner-scoped read/write.
-        { version: "0195", name: "0195_module_builds_worker_runtime.sql" }
+        { version: "0195", name: "0195_module_builds_worker_runtime.sql" },
+        // #1961 — assign ESPN and custom sports news sources by sport, league, or team.
+        { version: "0196", name: "0196_sports_news_source_scopes.sql" }
       ]);
     } finally {
       await client.end();

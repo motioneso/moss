@@ -1,4 +1,4 @@
--- #1961 Sport-wide custom and ESPN headline coverage.
+-- #1961 Sport-wide custom and ESPN headline coverage (global migration 0196).
 -- Both assignment tables are owner-only under ENABLE + FORCE RLS. ESPN scope rows control
 -- headlines only; the provider remains available for every non-headline Sports dataset.
 
