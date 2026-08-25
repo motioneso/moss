@@ -325,6 +325,10 @@ export default defineConfig({
         replacement: fileURLToPath(new URL("./packages/weather/src/index.ts", import.meta.url))
       },
       {
+        find: "@moss/workshop",
+        replacement: fileURLToPath(new URL("./packages/workshop/src/index.ts", import.meta.url))
+      },
+      {
         find: "@moss/people",
         replacement: fileURLToPath(new URL("./packages/people/src/index.ts", import.meta.url))
       }

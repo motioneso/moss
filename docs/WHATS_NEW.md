@@ -31,6 +31,7 @@ feature that is not present in the image you are running.
 
 ### Added
 
+- **Ask Moss for a new module right in chat.** Tell Moss what you want a new module to do and it will come back with a plan you can read and approve before any work starts. [PR #1940](https://github.com/motioneso/moss/pull/1940)
 - **Fleet launcher and overnight viewer.** Start the fleet from one terminal screen, follow its lanes, pause work safely, and preview a rescue before starting it. [PR #1911](https://github.com/motioneso/moss/pull/1911)
 - **Choose your weather place and temperature units.** You can choose the place used for your weather and switch temperatures between Celsius and Fahrenheit. [PR #1826](https://github.com/motioneso/moss/pull/1826)
 - **Custom sports news sources.** You can now add your own sports news sources by URL in Sports settings, preview what Moss found, and assign them to your followed teams and leagues. [PR #1825](https://github.com/motioneso/moss/pull/1825)
