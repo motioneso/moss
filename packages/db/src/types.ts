@@ -782,7 +782,9 @@ export type MedicationFrequencyType =
   | "specific_weekdays"
   | "every_n_hours"
   | "as_needed"
-  | "cyclical";
+  | "cyclical"
+  | "every_interval"
+  | "monthly";
 export type MedicationLogStatus = "taken" | "skipped" | "prn";
 
 export interface MedicationsTable {
@@ -801,6 +803,16 @@ export interface MedicationsTable {
   cycle_anchor_date: ColumnType<string | null, string | null | undefined, string | null>;
   active: ColumnType<boolean, boolean | undefined, boolean>;
   notes: string | null;
+  schedule_start_date: ColumnType<string | null, string | null | undefined, string | null>;
+  schedule_end_date: ColumnType<string | null, string | null | undefined, string | null>;
+  time_zone: string | null;
+  interval_unit: "days" | "weeks" | "months" | null;
+  interval_count: number | null;
+  month_kind: "date" | "weekdayPosition" | null;
+  month_day: number | null;
+  month_day_is_last: ColumnType<boolean, boolean | undefined, boolean>;
+  month_weekday_position: "first" | "second" | "third" | "fourth" | "last" | null;
+  month_weekday: number | null;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
 }

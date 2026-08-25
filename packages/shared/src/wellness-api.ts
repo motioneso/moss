@@ -17,7 +17,9 @@ export const MEDICATION_FREQUENCY_TYPES = [
   "specific_weekdays",
   "every_n_hours",
   "as_needed",
-  "cyclical"
+  "cyclical",
+  "every_interval",
+  "monthly"
 ] as const;
 export type MedicationFrequencyTypeApi = (typeof MEDICATION_FREQUENCY_TYPES)[number];
 
@@ -89,6 +91,16 @@ export interface MedicationDto {
   readonly cycleAnchorDate: string | null;
   readonly active: boolean;
   readonly notes: string | null;
+  readonly scheduleStartDate: string | null;
+  readonly scheduleEndDate: string | null;
+  readonly timeZone: string | null;
+  readonly intervalUnit: "days" | "weeks" | "months" | null;
+  readonly intervalCount: number | null;
+  readonly monthKind: "date" | "weekdayPosition" | null;
+  readonly monthDay: number | null;
+  readonly monthDayIsLast: boolean;
+  readonly monthWeekdayPosition: "first" | "second" | "third" | "fourth" | "last" | null;
+  readonly monthWeekday: number | null;
   readonly createdAt: string | null;
   readonly updatedAt: string | null;
 }
@@ -106,6 +118,15 @@ export interface CreateMedicationRequest {
   readonly cycleDaysOff?: number | null;
   readonly cycleAnchorDate?: string | null;
   readonly notes?: string | null;
+  readonly intervalUnit?: "days" | "weeks" | "months" | null;
+  readonly intervalCount?: number | null;
+  readonly startDate?: string | null;
+  readonly endDate?: string | null;
+  readonly monthKind?: "date" | "weekdayPosition" | null;
+  readonly monthDay?: number | null;
+  readonly monthDayIsLast?: boolean | null;
+  readonly monthWeekdayPosition?: "first" | "second" | "third" | "fourth" | "last" | null;
+  readonly monthWeekday?: number | null;
 }
 
 // Update is intentionally limited to non-schedule fields this slice (Codex R3): editing
@@ -545,6 +566,16 @@ export const medicationDtoSchema = {
     "cycleAnchorDate",
     "active",
     "notes",
+    "scheduleStartDate",
+    "scheduleEndDate",
+    "timeZone",
+    "intervalUnit",
+    "intervalCount",
+    "monthKind",
+    "monthDay",
+    "monthDayIsLast",
+    "monthWeekdayPosition",
+    "monthWeekday",
     "createdAt",
     "updatedAt"
   ],
@@ -564,6 +595,23 @@ export const medicationDtoSchema = {
     cycleAnchorDate: nullableStringSchema,
     active: { type: "boolean" },
     notes: nullableStringSchema,
+    scheduleStartDate: nullableStringSchema,
+    scheduleEndDate: nullableStringSchema,
+    timeZone: nullableStringSchema,
+    intervalUnit: {
+      anyOf: [{ type: "string", enum: ["days", "weeks", "months"] }, { type: "null" }]
+    },
+    intervalCount: { anyOf: [{ type: "number" }, { type: "null" }] },
+    monthKind: { anyOf: [{ type: "string", enum: ["date", "weekdayPosition"] }, { type: "null" }] },
+    monthDay: { anyOf: [{ type: "number" }, { type: "null" }] },
+    monthDayIsLast: { type: "boolean" },
+    monthWeekdayPosition: {
+      anyOf: [
+        { type: "string", enum: ["first", "second", "third", "fourth", "last"] },
+        { type: "null" }
+      ]
+    },
+    monthWeekday: { anyOf: [{ type: "number" }, { type: "null" }] },
     createdAt: nullableStringSchema,
     updatedAt: nullableStringSchema
   }
@@ -590,7 +638,23 @@ export const createMedicationRequestSchema = {
     cycleDaysOn: { anyOf: [{ type: "integer", minimum: 1 }, { type: "null" }] },
     cycleDaysOff: { anyOf: [{ type: "integer", minimum: 0 }, { type: "null" }] },
     cycleAnchorDate: nullableStringSchema,
-    notes: nullableStringSchema
+    notes: nullableStringSchema,
+    intervalUnit: {
+      anyOf: [{ type: "string", enum: ["days", "weeks", "months"] }, { type: "null" }]
+    },
+    intervalCount: { anyOf: [{ type: "integer", minimum: 1 }, { type: "null" }] },
+    startDate: nullableStringSchema,
+    endDate: nullableStringSchema,
+    monthKind: { anyOf: [{ type: "string", enum: ["date", "weekdayPosition"] }, { type: "null" }] },
+    monthDay: { anyOf: [{ type: "integer", minimum: 1, maximum: 31 }, { type: "null" }] },
+    monthDayIsLast: { anyOf: [{ type: "boolean" }, { type: "null" }] },
+    monthWeekdayPosition: {
+      anyOf: [
+        { type: "string", enum: ["first", "second", "third", "fourth", "last"] },
+        { type: "null" }
+      ]
+    },
+    monthWeekday: { anyOf: [{ type: "integer", minimum: 1, maximum: 7 }, { type: "null" }] }
   }
 } as const;
 

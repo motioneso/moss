@@ -342,7 +342,9 @@ describe("MVP foundation schema catalog", () => {
         { version: "0190", name: "0190_sports_custom_sources.sql" },
         { version: "0191", name: "0191_sports_public_source_runtime.sql" },
         { version: "0192", name: "0192_sports_legacy_feed_assignments_verified.sql" },
-        { version: "0193", name: "0193_sports_legacy_feed_assignment_repair.sql" }
+        { version: "0193", name: "0193_sports_legacy_feed_assignment_repair.sql" },
+        // #1959 — store all six medication schedule types and a real time zone.
+        { version: "0194", name: "0194_wellness_medication_schedule_v2.sql" }
       ]);
     } finally {
       await client.end();
