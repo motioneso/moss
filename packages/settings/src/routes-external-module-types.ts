@@ -45,6 +45,13 @@ export interface InstalledExternalModuleSummary {
    * credentials and no switches — and either one on its own is a reason to offer a settings page.
    */
   readonly hasUserCredentials: boolean;
+  /**
+   * #1945: whether this module is active only for the person who built it (still a draft) or
+   * shipped/admin-enabled for everyone. Only these two statuses ever reach this list — a
+   * discovered-but-not-installed or admin-disabled module is filtered out before this type is
+   * built.
+   */
+  readonly status: "draft" | "enabled";
 }
 
 /**

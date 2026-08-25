@@ -2,16 +2,13 @@ import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
+import type { ModuleBuildSummary, WorkshopLiveModuleSummary } from "@moss/shared";
 
 import { WorkshopGroups } from "../../packages/workshop/src/web/workshop-groups.js";
-import type {
-  ExternalModuleSummary,
-  ModuleBuildSummary
-} from "../../packages/workshop/src/web/types.js";
 
 function render(
   builds: readonly ModuleBuildSummary[],
-  modules: readonly ExternalModuleSummary[]
+  modules: readonly WorkshopLiveModuleSummary[]
 ): string {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return renderToString(
@@ -26,34 +23,30 @@ function render(
 function building(overrides: Partial<ModuleBuildSummary> = {}): ModuleBuildSummary {
   return {
     id: "b-1",
-    title: "Allotment watering log",
-    description: "Tracks watering for the allotment beds",
     status: "building",
     step: "Writing the page",
-    stepIndex: 4,
-    totalSteps: 6,
-    progressPercent: 64,
-    startedAt: "2026-08-20T09:00:00Z",
+    plan: {
+      whatItDoes: "Allotment watering log",
+      whatItReaches: ["the weather service"],
+      whatItKeeps: "watering dates",
+      whenItRuns: "each morning",
+      roughCost: { time: "5 minutes", budgetCents: 500 }
+    },
+    fetchedUrls: [],
     costCents: 42,
-    dailyLimitCents: 500,
-    log: [],
-    reachesExternalServices: 0,
-    storesData: true,
+    error: null,
+    createdAt: "2026-08-20T09:00:00Z",
+    updatedAt: "2026-08-20T09:00:00Z",
     ...overrides
   };
 }
 
-function liveModule(overrides: Partial<ExternalModuleSummary> = {}): ExternalModuleSummary {
+function liveModule(overrides: Partial<WorkshopLiveModuleSummary> = {}): WorkshopLiveModuleSummary {
   return {
     id: "m-1",
-    title: "Good Mythical Morning tracker",
-    description: "Watches for new episodes",
+    name: "Good Mythical Morning tracker",
+    version: "0.1.0",
     scope: "you",
-    approvedAt: "2026-08-01T09:00:00Z",
-    lastRefreshedAt: "2026-08-20T09:00:00Z",
-    usedByCount: null,
-    broken: false,
-    brokenReason: null,
     ...overrides
   };
 }
@@ -71,10 +64,21 @@ describe("WorkshopGroups", () => {
     expect(html).toContain("Needs you");
   });
 
+  it("renders a still-planning build without a plan, without throwing", () => {
+    const html = render([building({ status: "planning", plan: null })], []);
+    expect(html).toContain("New module");
+  });
+
   it("shows an installed module under Live", () => {
     const html = render([], [liveModule()]);
     expect(html).toContain("Live");
     expect(html).toContain("Good Mythical Morning tracker");
+    expect(html).toContain("Live · you only");
+  });
+
+  it("shows the everyone badge for a shipped module", () => {
+    const html = render([], [liveModule({ scope: "everyone" })]);
+    expect(html).toContain("Live · everyone");
   });
 
   it("renders the empty state when there is nothing to show", () => {
