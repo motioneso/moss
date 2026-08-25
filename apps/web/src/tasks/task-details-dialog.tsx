@@ -124,7 +124,7 @@ export function TaskDetailsDialog(props: {
   useEffect(() => {
     if (!props.open) return;
     if (isNew) {
-      setForm(blankTaskDetailsForm(props.defaultListId));
+      setForm(blankTaskDetailsForm(props.defaultListId, props.defaultTitle));
       setNewTags([]);
       setNewSubs([]);
     } else if (task) {
@@ -136,7 +136,7 @@ export function TaskDetailsDialog(props: {
     // locale.timezone: re-seed once the persisted locale loads (it starts at
     // DEFAULT_LOCALE and can flip after `/api/me/locale` resolves) so the
     // due-date/reminder inputs don't stick to the wrong day (#877 finding 3).
-  }, [props.open, isNew, task, props.defaultListId, locale.timezone]);
+  }, [props.open, isNew, task, props.defaultListId, props.defaultTitle, locale.timezone]);
 
   const invalidateLists = () =>
     Promise.all([

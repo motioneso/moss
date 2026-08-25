@@ -7,6 +7,7 @@ import type {
   WeatherLocationDto,
   WeatherUnit
 } from "@moss/shared";
+import { formatInZone } from "@moss/shared";
 import { Button } from "@moss/ui";
 import { Check, LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -31,7 +32,17 @@ import { DeleteAccount } from "./delete-account";
 import { useFeedback } from "./settings-feedback";
 import { DataExport, Sessions } from "./settings-profile-subviews";
 import { readError, type PaneProps } from "./settings-types";
-import { Avatar, Badge, Field, Group, PaneHead, Row, Select, Switch } from "./settings-ui";
+import {
+  Avatar,
+  Badge,
+  Field,
+  Group,
+  PaneHead,
+  Row,
+  Segmented,
+  Select,
+  Switch
+} from "./settings-ui";
 
 const DEFAULT_LOCALE_SETTINGS: LocaleSettingsDto = {
   timezone: "America/Los_Angeles",
@@ -39,7 +50,34 @@ const DEFAULT_LOCALE_SETTINGS: LocaleSettingsDto = {
   dateFormat: "24"
 };
 
-const SUPPORTED_TIME_ZONES = Intl.supportedValuesOf("timeZone");
+function timeZoneOffsetMinutes(timeZone: string, date: Date): number {
+  const label = formatInZone(date, timeZone, { timeZoneName: "shortOffset" }, "en-US");
+  const match = /GMT([+-])(\d+)(?::(\d+))?/.exec(label);
+  if (!match) return 0;
+  const sign = match[1] === "-" ? -1 : 1;
+  return sign * (Number(match[2]) * 60 + Number(match[3] ?? 0));
+}
+
+function formatTimeZoneOffset(offsetMinutes: number): string {
+  const sign = offsetMinutes < 0 ? "-" : "+";
+  const abs = Math.abs(offsetMinutes);
+  const hours = String(Math.floor(abs / 60)).padStart(2, "0");
+  const minutes = String(abs % 60).padStart(2, "0");
+  return `UTC${sign}${hours}:${minutes}`;
+}
+
+// Sorted by UTC offset (then name) and labeled with that offset, rather than
+// the browser's arbitrary IANA-list order — the plain list read as unsorted noise.
+const SUPPORTED_TIME_ZONES = Intl.supportedValuesOf("timeZone")
+  .map((timeZone) => {
+    const offsetMinutes = timeZoneOffsetMinutes(timeZone, new Date());
+    return {
+      timeZone,
+      offsetMinutes,
+      label: `(${formatTimeZoneOffset(offsetMinutes)}) ${timeZone}`
+    };
+  })
+  .sort((a, b) => a.offsetMinutes - b.offsetMinutes || a.timeZone.localeCompare(b.timeZone));
 
 const DEFAULT_QUIET_HOURS: QuietHoursSettingsDto = {
   enabled: false,
@@ -194,6 +232,7 @@ export function ProfilePane({ me }: PaneProps) {
     onSuccess: (data) => {
       queryClient.setQueryData(queryKeys.weather.location, data);
       void queryClient.invalidateQueries({ queryKey: queryKeys.weather.today });
+      weatherLocationSearchMutation.reset();
       toast(
         data.location
           ? `Weather location saved: ${data.location.label}.`
@@ -225,14 +264,19 @@ export function ProfilePane({ me }: PaneProps) {
     },
     onError: (error) => toast(readError(error), { tone: "drift" })
   });
+  const weatherUnitBusy = weatherUnitQuery.isLoading || weatherUnitMutation.isPending;
 
   return (
     <>
       <PaneHead
         title="Account & preferences"
-        desc={`Who you are to ${assistantName} — your identity and account status. How ${assistantName} sounds and behaves lives in Assistant & AI.`}
+        desc={`Who you are to ${assistantName}: your identity and account status. How ${assistantName} sounds and behaves lives in Assistant & AI.`}
       />
-      <Group title="Identity" action={<SaveStatusChip status={status} />}>
+      <Group
+        title="Account"
+        desc="Changes save automatically."
+        action={<SaveStatusChip status={status} />}
+      >
         <div className="prof">
           <Avatar name={fields.name || user.email} size="lg" />
           <div className="prof__main">
@@ -243,7 +287,7 @@ export function ProfilePane({ me }: PaneProps) {
             <Badge tone="neutral">{role}</Badge>
           </div>
         </div>
-        <Field label="Display name" hint="Changes save automatically.">
+        <Field label="Display name">
           <input
             className="jds-input"
             value={fields.name}
@@ -264,20 +308,6 @@ export function ProfilePane({ me }: PaneProps) {
         </Field>
       </Group>
 
-      <Group title="Account">
-        <Row
-          name="Email"
-          desc={user.email}
-          control={
-            user.emailVerified ? (
-              <Badge tone="forest" dot>
-                Verified
-              </Badge>
-            ) : undefined
-          }
-        />
-      </Group>
-
       <Group title="Location">
         <div className="fld">
           <div className="fld__lbl">Time zone</div>
@@ -288,9 +318,9 @@ export function ProfilePane({ me }: PaneProps) {
               disabled={localeQuery.isLoading || localeMutation.isPending}
               onChange={(event) => updateLocale({ timezone: event.currentTarget.value })}
             >
-              {SUPPORTED_TIME_ZONES.map((timeZone) => (
-                <option key={timeZone} value={timeZone}>
-                  {timeZone}
+              {SUPPORTED_TIME_ZONES.map((zone) => (
+                <option key={zone.timeZone} value={zone.timeZone}>
+                  {zone.label}
                 </option>
               ))}
             </Select>
@@ -333,7 +363,7 @@ export function ProfilePane({ me }: PaneProps) {
       </Group>
 
       <Group
-        title="Weather location"
+        title="Weather"
         desc="Search for a place to use instead of approximate timezone-based detection."
       >
         <Field
@@ -403,18 +433,18 @@ export function ProfilePane({ me }: PaneProps) {
             </div>
           }
         />
-      </Group>
-
-      <Group title="Temperature">
         <Row
-          name="Use Fahrenheit"
+          name="Unit"
           desc={`Weather temperatures are shown in ${weatherUnit === "imperial" ? "Fahrenheit" : "Celsius"}.`}
           control={
-            <Switch
-              ariaLabel="Use Fahrenheit"
-              checked={weatherUnit === "imperial"}
-              disabled={weatherUnitQuery.isLoading || weatherUnitMutation.isPending}
-              onChange={(enabled) => weatherUnitMutation.mutate(enabled ? "imperial" : "metric")}
+            <Segmented
+              ariaLabel="Unit"
+              value={weatherUnit}
+              options={[
+                { value: "metric", label: "Celsius", disabled: weatherUnitBusy },
+                { value: "imperial", label: "Fahrenheit", disabled: weatherUnitBusy }
+              ]}
+              onChange={(unit) => weatherUnitMutation.mutate(unit)}
             />
           }
         />

@@ -124,7 +124,7 @@ describe("settings admin panes", () => {
     expect(html).not.toContain("Install Herdr");
   });
 
-  it("renders herdr attach guidance when herdr is the active mux", () => {
+  it("does not render an unusable browser attach hint when herdr is the active mux", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(queryKeys.settings.chatMultiplexer, {
       multiplexer: "herdr",
@@ -137,8 +137,8 @@ describe("settings admin panes", () => {
 
     const html = renderWithQuery(createElement(HostPane), client);
 
-    expect(html).toContain("herdr pane list");
-    expect(html).toContain("herdr pane attach");
+    expect(html).not.toContain("herdr pane list");
+    expect(html).not.toContain("herdr pane attach");
   });
 
   it("shows an env-override note when JARVIS_MULTIPLEXER pins the active mux", () => {

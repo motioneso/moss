@@ -367,9 +367,6 @@ export function TodayPage(props: {
               <span className="jds-brief__kicker">Start here</span>
             </div>
             <div className="jds-brief__title">The few things that matter most</div>
-            <p className="cmd-leadin">
-              Pulled from your tasks and recent notes: sources are noted for each.
-            </p>
             <div className="top3" style={{ marginTop: 4 }}>
               {startHere.length > 0 ? (
                 startHere.map((task) => (

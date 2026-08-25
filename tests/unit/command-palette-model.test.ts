@@ -57,14 +57,7 @@ describe("command palette model", () => {
 
     expect(
       commands.filter((command) => command.group === "Navigate").map((command) => command.id)
-    ).toEqual([
-      "nav:today",
-      "nav:tasks",
-      "nav:calendar",
-      "nav:notifications",
-      "nav:briefings",
-      "nav:settings"
-    ]);
+    ).toEqual(["nav:today", "nav:tasks", "nav:calendar", "nav:notifications", "nav:settings"]);
 
     expect(
       commands.filter((command) => command.group === "Tasks").map((command) => command.id)
@@ -80,6 +73,7 @@ describe("command palette model", () => {
       "theme:dusk",
       "theme:dark",
       "theme:night-owl",
+      "mode:dark",
       "settings:appearance"
     ]);
 

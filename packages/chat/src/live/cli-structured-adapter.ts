@@ -1,7 +1,9 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
+
+import { sanitizeSessionKey } from "./cli-session-lifecycle.js";
 
 import type {
   GenerateStructuredProviderInput,
@@ -15,6 +17,16 @@ import type {
 import { CliChatUnavailableError } from "./errors.js";
 import { selectEngineFactory, type ChatEngineFactory } from "./runtime.js";
 import type { CliChatEngine } from "./types.js";
+
+/** #1422: one fixed directory per calling service so the CLI's cwd (near the top of its system
+ * prompt) stays identical across one-shot calls and the prompt-cache prefix can hit. Destroyed and
+ * recreated at this same path on every call (see `generateOneShotStructured`'s finally block) so
+ * private per-call prompt content never survives between calls. */
+const STRUCTURED_ONE_SHOT_ROOT = join(tmpdir(), "jarv1s-structured");
+
+function oneShotStructuredDir(service: string | undefined): string {
+  return join(STRUCTURED_ONE_SHOT_ROOT, sanitizeSessionKey(service ?? "unscoped"));
+}
 
 const CLI_STRUCTURED_TIMEOUT_MS = 120_000;
 const CLI_STRUCTURED_POLL_MS = 100;
@@ -119,7 +131,8 @@ export class CliStructuredAdapter implements StructuredProviderAdapter {
     let timedOut = false;
 
     try {
-      neutralDir = await mkdtemp(join(tmpdir(), "jarv1s-structured-"));
+      neutralDir = oneShotStructuredDir(input.service);
+      await mkdir(neutralDir, { recursive: true, mode: 0o700 });
       const personaPath = join(neutralDir, "persona.md");
       await writeFile(personaPath, "You produce structured JSON only.\n", { mode: 0o600 });
       const activeEngine = await this.engineFactory(this.provider, `structured-${randomUUID()}`, {

@@ -304,7 +304,7 @@ export function ChatSettingsView(props: {
           desc={
             voiceAvailable
               ? "A transcription model is configured — tap the mic in the composer to dictate."
-              : "Set up a transcription model in Assistant & AI to enable the composer's mic."
+              : "Set up a transcription model in Assistant & AI (admin) to enable the composer's mic."
           }
           control={
             voiceAvailable ? (
@@ -313,7 +313,7 @@ export function ChatSettingsView(props: {
               <button
                 type="button"
                 className="note__link"
-                onClick={() => props.onCat?.("assistant")}
+                onClick={() => props.onCat?.("aiproviders")}
               >
                 Set up
               </button>
@@ -322,8 +322,11 @@ export function ChatSettingsView(props: {
         />
       </Group>
       <Note icon={<MessageSquare size={13} />}>
-        {assistantName}'s voice and directness are set once in <b>Assistant &amp; AI</b> — these
-        only shape the chat surface.
+        {assistantName}'s voice and directness are set once in{" "}
+        <button type="button" className="note__link" onClick={() => props.onCat?.("assistant")}>
+          Assistant &amp; AI
+        </button>
+        , these only shape the chat surface.
       </Note>
     </ModuleSub>
   );

@@ -30,6 +30,9 @@
 .jds-input--sm {
   height: 32px;
 }
+.jds-input--num {
+  width: 90px;
+}
 
 /* Input with leading icon / addon */
 .jds-inputwrap {

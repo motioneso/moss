@@ -58,4 +58,4 @@ export type { SwitchProps } from "./switch.js";
 export { TodayPill } from "./today-pill.js";
 export type { TodayPillProps, TodayPillVariant } from "./today-pill.js";
 export { WeatherChip } from "./weather-chip.js";
-export type { WeatherChipProps } from "./weather-chip.js";
+export type { WeatherChipProps, WeatherDayTileProps } from "./weather-chip.js";

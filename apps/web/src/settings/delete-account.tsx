@@ -101,6 +101,7 @@ export function DeleteAccount({ me }: { readonly me: MeResponse }) {
       <Group
         title="Danger zone"
         desc="Irreversible actions. Account deletion is immediate and removes all your personal data."
+        tone="danger"
       >
         <Row
           name="Delete account"

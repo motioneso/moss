@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { renderToPipeableStream, renderToString } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { Writable } from "node:stream";
@@ -6,6 +6,10 @@ import type { ReactNode } from "react";
 
 import { SettingsPage } from "../../apps/web/src/settings/settings-page.js";
 import { CORE_APP_SETTINGS } from "../../packages/shared/src/app-map-core.js";
+
+vi.mock("../../apps/web/src/api/use-assistant-name.js", () => ({
+  useAssistantName: () => "Moss"
+}));
 
 function renderAll(element: ReactNode): Promise<string> {
   return new Promise((resolve, reject) => {

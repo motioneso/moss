@@ -1,25 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ListTaskListsResponse, TaskListDto } from "@moss/shared";
+import { AlertCircle, Check, Layers3, Search } from "lucide-react";
 import {
-  AlertCircle,
-  Bell,
-  Boxes,
-  CalendarDays,
-  Check,
-  CheckSquare,
-  Database,
-  FileText,
-  HeartPulse,
-  House,
-  Layers3,
-  Link2,
-  Palette,
-  Plus,
-  Search,
-  Settings
-} from "lucide-react";
-import {
-  type ComponentType,
   type KeyboardEvent as ReactKeyboardEvent,
   useCallback,
   useEffect,
@@ -28,7 +10,7 @@ import {
   useState
 } from "react";
 
-import { createTask, listTaskLists, setActiveTheme } from "../api/client.js";
+import { createTask, listTaskLists, setActiveTheme, setColorMode } from "../api/client.js";
 import { queryKeys } from "../api/query-keys.js";
 import { useAssistantName } from "../api/use-assistant-name.js";
 import {
@@ -37,6 +19,7 @@ import {
   type CommandPaletteGroup,
   filterCommandPaletteCommands
 } from "./command-palette-model.js";
+import { NAV_ICON_MAP } from "./nav-icons.js";
 import type { ListThemesResponse, ModuleDto } from "@moss/shared";
 
 type Stage =
@@ -57,21 +40,6 @@ interface PaletteToast {
   readonly message: string;
   readonly tone: "ready" | "error";
 }
-
-const ICONS: Record<string, ComponentType<{ readonly size?: number }>> = {
-  bell: Bell,
-  boxes: Boxes,
-  "calendar-days": CalendarDays,
-  "check-square": CheckSquare,
-  database: Database,
-  "file-text": FileText,
-  "heart-pulse": HeartPulse,
-  house: House,
-  "link-2": Link2,
-  palette: Palette,
-  plus: Plus,
-  settings: Settings
-};
 
 export function CommandPalette(props: {
   readonly modules: readonly ModuleDto[];
@@ -148,6 +116,15 @@ export function CommandPalette(props: {
     },
     onError: (error) => showToast(error.message, "error")
   });
+  const colorModeMutation = useMutation({
+    mutationFn: (mode: "light" | "dark") => setColorMode({ mode }),
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.settings.themes, data);
+      showToast(data.mode === "dark" ? "Switched to dark mode" : "Switched to light mode");
+      closePalette();
+    },
+    onError: (error) => showToast(error.message, "error")
+  });
   const createTaskMutation = useMutation({
     mutationFn: (input: { readonly title: string; readonly listId?: string }) => createTask(input),
     onSuccess: async () => {
@@ -209,10 +186,14 @@ export function CommandPalette(props: {
         themeMutation.mutate(command.action.themeId);
         return;
       }
+      if (command.action.kind === "set-color-mode") {
+        colorModeMutation.mutate(command.action.mode);
+        return;
+      }
       setStage({ kind: "pick-list" });
       setQuery("");
     },
-    [closePalette, props, themeMutation]
+    [closePalette, colorModeMutation, props, themeMutation]
   );
 
   const submitTask = useCallback(
@@ -453,7 +434,7 @@ function titleGroups(list: TaskListChoice, title: string): readonly ListGroup[] 
 }
 
 function itemIcon(item: PaletteItem) {
-  return ("icon" in item && item.icon ? ICONS[item.icon] : null) ?? Layers3;
+  return ("icon" in item && item.icon ? NAV_ICON_MAP[item.icon] : null) ?? Layers3;
 }
 
 function isCommandItem(item: PaletteItem): item is CommandPaletteCommand {

@@ -338,7 +338,8 @@ export default defineConfig({
       "packages/people/src/__tests__/**/*.test.ts",
       "packages/db/src/__tests__/**/*.test.ts",
       "packages/chat/src/live/*.test.ts",
-      "packages/calendar/src/*.test.ts"
+      "packages/calendar/src/*.test.ts",
+      "packages/ai/src/structured/*.test.ts"
     ],
     setupFiles: ["tests/setup-env.ts"],
     hookTimeout: 30_000,

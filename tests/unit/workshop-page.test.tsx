@@ -38,9 +38,10 @@ function render(me?: MeResponse): string {
 }
 
 describe("WorkshopPage", () => {
-  it("renders the page title with no builds or modules", () => {
+  it("uses the shell title instead of repeating it in the page", () => {
     const html = render(meResponse(true));
-    expect(html).toContain("The workshop");
+    expect(html).not.toContain(">The workshop<");
+    expect(html).toContain("See what Moss is building for you");
   });
 
   it("falls back to the empty state when nothing is building or live", () => {

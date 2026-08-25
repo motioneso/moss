@@ -555,7 +555,7 @@ export function OversightPane() {
     <>
       <PaneHead
         title="Connector oversight"
-        desc="Connection health across the instance — safe metadata only. No private synced data, no secrets."
+        desc="Connection health across the instance, safe metadata only. No private synced data, no secrets."
       />
       <Group title="Connectors">
         <div className="cono">
@@ -599,10 +599,6 @@ export function OversightPane() {
           )}
         </div>
       </Group>
-      <Note>
-        Lower priority — this view exists mainly so a failing connection surfaces before anyone
-        notices it broke.
-      </Note>
     </>
   );
 }
@@ -711,13 +707,7 @@ export function HostPane() {
     // working tmux host with a half-installed herdr would hide the tmux attach command the
     // operator actually needs.
     const primaryNote =
-      mux.active === "herdr" ? (
-        <Note icon={<Terminal size={13} aria-hidden="true" />}>
-          Prefer the terminal? Chat sessions run in Herdr on this host. List panes with{" "}
-          <code>{"herdr pane list"}</code>, attach with <code>{"herdr pane attach <pane-id>"}</code>
-          , or read output non-interactively with <code>{"herdr pane read <pane-id>"}</code>.
-        </Note>
-      ) : mux.active === "tmux" ? (
+      mux.active === "herdr" ? null : mux.active === "tmux" ? (
         <Note icon={<Terminal size={13} aria-hidden="true" />}>
           Prefer the terminal? Chat sessions run in tmux inside the container. From your deployment
           directory, list them with <code>{"docker compose exec jarv1s tmux ls"}</code>, then attach
@@ -925,8 +915,7 @@ export function HostPane() {
                 />
               ) : null}
               <Row name="Commit" control={diag.commit ?? "—"} />
-              <Row name="Bind address" control={`${diag.host}:${diag.port}`} />
-              <Row name="Log level" control={<Badge tone="neutral">{diag.logLevel}</Badge>} />
+              <Row name="API bind address" control={`${diag.host}:${diag.port}`} />
             </details>
           </>
         )}
