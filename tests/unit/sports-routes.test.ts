@@ -427,6 +427,7 @@ describe("sports routes", () => {
         getHeadlines: async () => [
           {
             id: "n1",
+            sportKey: "football",
             competitionKey: "nfl",
             competitionLabel: "NFL",
             title: "Vikings clinch division",

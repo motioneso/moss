@@ -11,6 +11,7 @@ import type {
   SportsRuntimeTargetResult,
   SportsSourcesRepository
 } from "../../packages/sports/src/source/repository.js";
+import type { SportsNewsScope } from "../../packages/sports/src/source/scope.js";
 
 const actor: AccessContext = { actorUserId: "user-a", requestId: "request-a" };
 
@@ -68,6 +69,7 @@ function runtimeSource(options: {
   feedUrl?: string | null;
   hosts?: readonly string[];
   fingerprint?: string;
+  scope?: SportsNewsScope;
 }): SportsRuntimeSource {
   const recipe = options.recipe === undefined ? jsonRecipe : options.recipe;
   return {
@@ -86,9 +88,12 @@ function runtimeSource(options: {
     assignments: [
       {
         id: `assignment-${options.id}`,
-        followId: `follow-${options.id}`,
-        competitionKey: "eng.1",
-        teamKey: "arsenal",
+        scope: options.scope ?? {
+          kind: "team",
+          sportKey: "soccer",
+          competitionKey: "eng.1",
+          teamKey: "arsenal"
+        },
         targetUrl: options.targetUrl ?? `https://publisher.example/display/${options.id}`,
         targetParameters: options.parameters ?? { teamId: options.id },
         previewStatus: "verified"
@@ -197,6 +202,88 @@ describe("SportsPublicSourceReader", () => {
     expect(fetch.mock.calls.flatMap(([url]) => url)).not.toContain("stories.example");
     expect(persisted[0]).toHaveLength(3);
     expect(persisted[0]?.every((item) => item.healthState === "healthy")).toBe(true);
+  });
+
+  it("emits a sport assignment once without fake competition or team attribution", async () => {
+    const source = runtimeSource({
+      id: "soccer",
+      recipe: null,
+      feedUrl: "https://feeds.publisher.example/soccer.xml",
+      hosts: ["feeds.publisher.example"],
+      scope: { kind: "sport", sportKey: "soccer" }
+    });
+    const fetch = vi.fn<SportsSafeFetchPort>(async (url, options) => {
+      await permitInitialRequest(url, options);
+      return success(
+        url,
+        `<rss><channel><item><guid>general-1</guid><title>Soccer story</title><link>https://stories.example/general</link></item></channel></rss>`,
+        "application/rss+xml"
+      );
+    });
+    const { reader, persisted } = makeReader([source], fetch);
+
+    const result = await reader.refresh(actor);
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(result.headlines).toEqual([
+      expect.objectContaining({
+        sportKey: "soccer",
+        competitionKey: null,
+        competitionLabel: "Soccer",
+        teamKeys: []
+      })
+    ]);
+    expect(persisted[0]).toHaveLength(1);
+  });
+
+  it("fetches one source request once for sport and follow scopes while persisting both", async () => {
+    const base = runtimeSource({
+      id: "shared-soccer",
+      recipe: null,
+      feedUrl: "https://feeds.publisher.example/soccer.xml",
+      hosts: ["feeds.publisher.example"],
+      scope: { kind: "sport", sportKey: "soccer" }
+    });
+    const source: SportsRuntimeSource = {
+      ...base,
+      assignments: [
+        base.assignments[0]!,
+        {
+          ...base.assignments[0]!,
+          id: "assignment-shared-soccer-team",
+          scope: {
+            kind: "team",
+            sportKey: "soccer",
+            competitionKey: "eng.1",
+            teamKey: "arsenal"
+          }
+        }
+      ]
+    };
+    const fetch = vi.fn<SportsSafeFetchPort>(async (url, options) => {
+      await permitInitialRequest(url, options);
+      return success(
+        url,
+        `<rss><channel><item><guid>shared-1</guid><title>Shared story</title><link>https://stories.example/shared</link></item></channel></rss>`,
+        "application/rss+xml"
+      );
+    });
+    const { reader, persisted } = makeReader([source], fetch);
+
+    const result = await reader.refresh(actor);
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(result.headlines.map(({ competitionKey }) => competitionKey)).toEqual([null, "eng.1"]);
+    expect(persisted[0]).toEqual([
+      expect.objectContaining({
+        assignmentId: "assignment-shared-soccer",
+        healthState: "healthy"
+      }),
+      expect.objectContaining({
+        assignmentId: "assignment-shared-soccer-team",
+        healthState: "healthy"
+      })
+    ]);
   });
 
   it("treats valid-empty feed and recipe collections as healthy, but missing structure as drift", async () => {

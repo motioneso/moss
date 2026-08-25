@@ -277,6 +277,8 @@ describe("sports sources repository", () => {
       assignedFollowIds: [],
       assignments: [{ followId: null, sportKey: "soccer", previewStatus: "verified" }]
     });
+    const runtime = await asActor(ids.userA, (db) => repo.listRuntimeSources(db, created.id));
+    expect(runtime[0]?.assignments[0]?.scope).toEqual({ kind: "sport", sportKey: "soccer" });
   });
 
   it("atomically persists verified target identity and preview health", async () => {
@@ -323,6 +325,13 @@ describe("sports sources repository", () => {
           lastSuccessAt: checkedAt
         }
       ]
+    });
+    const runtime = await asActor(ids.userA, (db) => repo.listRuntimeSources(db, created.id));
+    expect(runtime[0]?.assignments[0]?.scope).toEqual({
+      kind: "team",
+      sportKey: "soccer",
+      competitionKey: "eng.1",
+      teamKey: "arsenal"
     });
   });
 

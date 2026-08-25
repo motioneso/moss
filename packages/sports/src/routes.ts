@@ -84,6 +84,7 @@ export function registerSportsRoutes(
     datasetClient: dependencies.datasetClient,
     dataContext: dependencies.dataContext,
     repository,
+    espnCoverage: espnCoverageRepository,
     now: dependencies.now,
     publicSourceReader: dependencies.publicSourceReader
   });

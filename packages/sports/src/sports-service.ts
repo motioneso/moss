@@ -9,13 +9,14 @@ import {
   type GamedayGame,
   type GameSummary,
   type IsoDate,
-  type LeagueNewsGroup,
   type OverviewHero,
   type ScoreboardGroup,
   type SportsCatalogResponse,
   type SportsFollowDto,
   type SportsLeagueTeamsResponse,
   type SportsOverviewResponse,
+  type SportsNewsGroup,
+  type SportsSportKey,
   type SportsTeamSearchResponse,
   type StandingsGroup,
   type TeamRef
@@ -24,6 +25,8 @@ import {
 import { SPORTS_CATALOG, catalogEntry, competitionLogoUrl } from "./source/catalog.js";
 import { selectFeature } from "./news-ranking.js";
 import {
+  canonicalStoryUrl,
+  composeSportsNewsGroups,
   mergeHeadlineScope,
   rankTopStories,
   resolveEspnHeadlineTeamKeys,
@@ -60,6 +63,11 @@ import {
 } from "./followed-card.js";
 import type { SourceHeadline, SourceTeamRef, StandingsTable } from "./source/sports-source.js";
 import type { SportsPublicSourceReader } from "./source/public-source-reader.js";
+import type {
+  SportsEspnCoverageRepository,
+  SportsEspnCoverageState
+} from "./source/espn-coverage-repository.js";
+import { sportsNewsCoverageAllows, sportsNewsScopeForFollow } from "./source/scope.js";
 
 /** A compact, non-sensitive today-fact for the daily briefing. */
 export type FollowedFact = { competitionKey: string; text: string };
@@ -95,6 +103,7 @@ export interface SportsServiceDependencies {
   readonly dataContext: SportsDataContext;
   readonly repository: SportsFollowsWriter;
   readonly publicSourceReader?: Pick<SportsPublicSourceReader, "refresh">;
+  readonly espnCoverage?: Pick<SportsEspnCoverageRepository, "get">;
   /** Clock seam (default `() => new Date()`); tests inject a fixed instant. */
   readonly now?: () => Date;
 }
@@ -115,6 +124,16 @@ const DAY_MS = 86_400_000;
 // Two feed reads per game; beyond this the later slides render bar-only.
 const HERO_STORY_FEED_GAMES = 3;
 const EMPTY_STANDINGS: StandingsTable = { sections: [] };
+const DEFAULT_ESPN_COVERAGE: SportsEspnCoverageState = {
+  enabled: true,
+  usesDefaultCoverage: true,
+  assignments: []
+};
+const DISABLED_ESPN_COVERAGE: SportsEspnCoverageState = {
+  enabled: false,
+  usesDefaultCoverage: false,
+  assignments: []
+};
 
 // A brand-new user with zero follows (no teams, no whole-league follows) would otherwise drive
 // `competitionKeys` to `[]`, so `getOverview` never fetches any scoreboard/headline data and the
@@ -160,12 +179,14 @@ export class SportsService {
   private readonly repository: SportsFollowsWriter;
   private readonly now: () => Date;
   private readonly publicSourceReader?: Pick<SportsPublicSourceReader, "refresh">;
+  private readonly espnCoverage?: Pick<SportsEspnCoverageRepository, "get">;
 
   constructor(deps: SportsServiceDependencies) {
     this.datasetClient = deps.datasetClient;
     this.dataContext = deps.dataContext;
     this.repository = deps.repository;
     this.publicSourceReader = deps.publicSourceReader;
+    this.espnCoverage = deps.espnCoverage;
     this.now = deps.now ?? (() => new Date());
   }
 
@@ -245,14 +266,22 @@ export class SportsService {
           .refresh(accessContext, { signal })
           .catch(() => ({ headlines: [], degraded: true, persistedResults: 0 }))
       : Promise.resolve({ headlines: [], degraded: false, persistedResults: 0 });
-    const rawFollows = await this.dataContext.withDataContext(accessContext, (db) =>
-      this.repository.list(db)
-    );
+    const coverageRepository = this.espnCoverage;
+    const [rawFollows, coverage] = await Promise.all([
+      this.dataContext.withDataContext(accessContext, (db) => this.repository.list(db)),
+      coverageRepository
+        ? this.dataContext
+            .withDataContext(accessContext, (db) => coverageRepository.get(db))
+            .then((value) => ({ value, degraded: false }))
+            .catch(() => ({ value: DISABLED_ESPN_COVERAGE, degraded: true }))
+        : Promise.resolve({ value: DEFAULT_ESPN_COVERAGE, degraded: false })
+    ]);
+    const espnCoverage = coverage.value;
     // Skip any follow row whose competitionKey isn't in the catalog (e.g. a retired entry)
     // instead of letting it permanently degrade every load with no explanation — the picker
     // flags these to the user separately as unrecognized (#765 M3).
     const follows = rawFollows.filter((f) => catalogEntry(f.competitionKey) !== undefined);
-    const state: DegradeState = { degraded: false };
+    const state: DegradeState = { degraded: coverage.degraded };
     const today = this.today();
     // Scoreboard window start — see currentTeamGame (followed-card.ts) for why one Eastern day isn't enough.
     // ESPN accepts `dates=YYYYMMDD-YYYYMMDD`, so yesterday..today is a single fetch (and a
@@ -296,8 +325,18 @@ export class SportsService {
             ),
             this.teamsFor(key, state)
           ]);
+          const competition = catalogEntry(key);
+          const includeEspnHeadlines =
+            competition !== undefined &&
+            sportsNewsCoverageAllows(espnCoverage, follows, {
+              kind: "competition",
+              sportKey: competition.espnSport,
+              competitionKey: key
+            });
           const headlines = resolveEspnHeadlineTeamKeys(
-            await this.cached<SourceHeadline[]>("headlines", { competitionKey: key }, [], state),
+            includeEspnHeadlines
+              ? await this.cached<SourceHeadline[]>("headlines", { competitionKey: key }, [], state)
+              : [],
             teams
           );
           return { key, scoreboard, standingsTable, teams, headlines };
@@ -309,10 +348,16 @@ export class SportsService {
     const scoreboardByComp = new Map(perComp.map((p) => [p.key, p.scoreboard]));
     const standingsByComp = new Map(perComp.map((p) => [p.key, p.standingsTable]));
     const headlinesByComp = new Map(perComp.map((p) => [p.key, p.headlines]));
+    const headlinesBySport = new Map<SportsSportKey, SourceHeadline[]>();
     const teamsByComp = new Map(perComp.map((p) => [p.key, p.teams]));
     for (const headline of custom.headlines) {
-      const existing = headlinesByComp.get(headline.competitionKey) ?? [];
-      headlinesByComp.set(headline.competitionKey, mergeHeadlineScope(existing, headline));
+      if (headline.competitionKey === null) {
+        const existing = headlinesBySport.get(headline.sportKey) ?? [];
+        headlinesBySport.set(headline.sportKey, mergeHeadlineScope(existing, headline));
+      } else {
+        const existing = headlinesByComp.get(headline.competitionKey) ?? [];
+        headlinesByComp.set(headline.competitionKey, mergeHeadlineScope(existing, headline));
+      }
     }
 
     // One schedule fetch per followed team, also parallelized (#765 M2). Each follow's fetched
@@ -328,6 +373,9 @@ export class SportsService {
           (teamsByComp.get(follow.competitionKey) ?? []).find(
             (team) => team.teamKey === follow.teamKey
           )?.sourceTeamId ?? null;
+        const teamScope = sportsNewsScopeForFollow(follow);
+        const includeEspnTeamFeed =
+          teamScope !== null && sportsNewsCoverageAllows(espnCoverage, follows, teamScope);
         // The league-wide feed rarely files a story under a specific team, so most followed
         // cards showed "No recent news" while ESPN's per-team feed had plenty (live feedback
         // mraxssnf). Pull each followed team's own feed — same pattern as the gameday hero
@@ -339,21 +387,20 @@ export class SportsService {
             [],
             state
           ),
-          this.cached<SourceHeadline[]>(
-            "headlines",
-            { competitionKey: follow.competitionKey, teamKey: follow.teamKey, sourceTeamId },
-            [],
-            state
-          )
+          includeEspnTeamFeed
+            ? this.cached<SourceHeadline[]>(
+                "headlines",
+                { competitionKey: follow.competitionKey, teamKey: follow.teamKey, sourceTeamId },
+                [],
+                state
+              )
+            : Promise.resolve([])
         ]);
         const compTeams = teamsByComp.get(follow.competitionKey) ?? [];
         const leagueHeadlines = headlinesByComp.get(follow.competitionKey) ?? [];
-        const seen = new Set(leagueHeadlines.map((h) => h.id));
-        const headlines = [...leagueHeadlines];
+        let headlines = [...leagueHeadlines];
         for (const headline of resolveEspnHeadlineTeamKeys(teamFeed, compTeams)) {
-          if (seen.has(headline.id)) continue;
-          seen.add(headline.id);
-          headlines.push(headline);
+          headlines = mergeHeadlineScope(headlines, headline);
         }
         return {
           follow,
@@ -377,7 +424,12 @@ export class SportsService {
     // Rank across every followed competition (team or whole-league), not just team-followed
     // ones — otherwise a league-only follower's competition never contributes a top story and
     // the story hero has nothing personalized to fall back to (#763).
-    const rankedTopStories = rankTopStories(headlinesByComp, followedTeams, competitionKeys);
+    const rankingNewsGroups = composeSportsNewsGroups(
+      headlinesBySport,
+      headlinesByComp,
+      competitionKeys
+    );
+    const rankedTopStories = rankTopStories(rankingNewsGroups, followedTeams);
 
     // The hero must not echo what the followed strip already shows (mrb8ahf7). rankTopStories'
     // first tier IS followed-team stories — the same pool toTeamStories draws each card's ≤3
@@ -386,13 +438,21 @@ export class SportsService {
     // hero then surfaces that team's deeper stories plus each league's editorial lead instead.
     // Match on url, not id — the same story arrives from the league and per-team feeds under
     // different ids (the same reason toTeamStories dedups by url).
-    const followedStoryUrls = new Set(cards.flatMap((card) => card.stories.map((s) => s.url)));
-    const topStories = rankedTopStories.filter((h) => !followedStoryUrls.has(h.url));
+    const followedStoryUrls = new Set(
+      cards.flatMap((card) =>
+        card.stories.map((story) => canonicalStoryUrl(story.url) ?? story.url)
+      )
+    );
+    const topStories = rankedTopStories.filter(
+      (headline) => !followedStoryUrls.has(canonicalStoryUrl(headline.url) ?? headline.url)
+    );
 
     // Band exclusion keys off the FULL ranked set, not the deduped one: a story we pulled from
     // the hero for already being on a card must not resurface in the league news band either, so
     // a followed-team story stays shown exactly once — in its card.
-    const topStoryUrls = new Set(rankedTopStories.map((h) => h.url));
+    const topStoryUrls = new Set(
+      rankedTopStories.map((headline) => canonicalStoryUrl(headline.url) ?? headline.url)
+    );
 
     const hero = this.buildHero(followedTeams, scoreboardByComp, topStories, this.now());
 
@@ -407,22 +467,34 @@ export class SportsService {
     if (hero.mode === "gameday") {
       for (const { game } of hero.games.slice(0, HERO_STORY_FEED_GAMES)) {
         const heroTeams = teamsByComp.get(game.competitionKey) ?? [];
+        const heroCompetition = catalogEntry(game.competitionKey);
         // Resolve each hero side's numeric id from the same catalog the followed cards use — the
         // news endpoint 400s on a soccer abbreviation slug (EspnHeadlinesParams.sourceTeamId),
         // which would leave a soccer gameday hero with no matchup story at all.
         const teamFeeds = await Promise.all(
-          [game.home.teamKey, game.away.teamKey].map((teamKey) =>
-            this.cached<SourceHeadline[]>(
-              "headlines",
-              {
+          [game.home.teamKey, game.away.teamKey].map((teamKey) => {
+            const includeEspnTeamFeed =
+              heroCompetition !== undefined &&
+              sportsNewsCoverageAllows(espnCoverage, follows, {
+                kind: "team",
+                sportKey: heroCompetition.espnSport,
                 competitionKey: game.competitionKey,
-                teamKey,
-                sourceTeamId: heroTeams.find((t) => t.teamKey === teamKey)?.sourceTeamId ?? null
-              },
-              [],
-              state
-            )
-          )
+                teamKey
+              });
+            return includeEspnTeamFeed
+              ? this.cached<SourceHeadline[]>(
+                  "headlines",
+                  {
+                    competitionKey: game.competitionKey,
+                    teamKey,
+                    sourceTeamId:
+                      heroTeams.find((team) => team.teamKey === teamKey)?.sourceTeamId ?? null
+                  },
+                  [],
+                  state
+                )
+              : Promise.resolve([]);
+          })
         );
         const existing = headlinesByComp.get(game.competitionKey) ?? [];
         // Dedup by url, not id: the same story arrives from the league feed and a hero team's own
@@ -430,26 +502,24 @@ export class SportsService {
         // toTeamStories/followedStoryUrls dedup, which key on url for the same reason). Keying on
         // id here let a matchup story render twice in the NewsBand (Fable M1). url is the story's
         // stable cross-feed identity.
-        const seen = new Set(existing.map((h) => h.url));
-        const merged = [...existing];
+        let merged = [...existing];
         for (const headline of resolveEspnHeadlineTeamKeys(teamFeeds.flat(), heroTeams)) {
-          if (seen.has(headline.url)) continue;
-          seen.add(headline.url);
-          merged.push(headline);
+          merged = mergeHeadlineScope(merged, headline);
         }
         headlinesByComp.set(game.competitionKey, merged);
       }
     }
 
-    const leagueNews = competitionKeys
-      .map((key) => ({
-        competitionKey: key,
-        competitionLabel: catalogEntry(key)?.label ?? key,
-        // Feed order preserved deliberately — it's ESPN's editorial prominence ranking, which
-        // the news band's tiering leans on (mrb51pnq; see rankTopStories). No byNewest here.
-        headlines: (headlinesByComp.get(key) ?? []).filter((h) => !topStoryUrls.has(h.url))
-      }))
-      .filter((group) => group.headlines.length > 0);
+    const newsGroups = composeSportsNewsGroups(
+      headlinesBySport,
+      headlinesByComp,
+      competitionKeys
+    ).flatMap((group) => {
+      const headlines = group.headlines.filter(
+        (headline) => !topStoryUrls.has(canonicalStoryUrl(headline.url) ?? headline.url)
+      );
+      return headlines.length > 0 ? [{ ...group, headlines }] : [];
+    });
 
     const scoreboard: ScoreboardGroup[] = competitionKeys
       .map((key) => ({
@@ -475,39 +545,34 @@ export class SportsService {
     // matching headline. Body isn't a ranking input, so the pick is stable. Any failure returns
     // "" → we leave `body` off → the client falls back to the one-paragraph dek. Only ONE extra
     // request per overview, cached by article id (immutable post-publish).
-    const publicLeagueNews: LeagueNewsGroup[] = leagueNews.map((group) => ({
+    const publicNewsGroups: SportsNewsGroup[] = newsGroups.map((group) => ({
       ...group,
       headlines: group.headlines.map(toPublicHeadline)
     }));
     const followedPairs = new Set(followedTeams.map((f) => `${f.competitionKey}:${f.teamKey}`));
-    const feature = selectFeature(publicLeagueNews, followedPairs);
+    const feature = selectFeature(publicNewsGroups, followedPairs);
     const internalFeature = feature
-      ? leagueNews
+      ? newsGroups
           .flatMap((group) => group.headlines)
           .find(
             (headline) =>
-              headline.competitionKey === feature.competitionKey &&
               headline.id === feature.id &&
-              headline.url === feature.url
+              canonicalStoryUrl(headline.url) === canonicalStoryUrl(feature.url)
           )
       : undefined;
     const featureBody =
       feature && internalFeature?.origin === "espn"
         ? await this.cached<string>("articleBody", { articleId: feature.id }, "", state)
         : "";
-    const leagueNewsWithBody =
+    const newsGroupsWithBody =
       feature && featureBody
-        ? publicLeagueNews.map((group) => ({
+        ? publicNewsGroups.map((group) => ({
             ...group,
             headlines: group.headlines.map((h) =>
-              h.competitionKey === feature.competitionKey &&
-              h.id === feature.id &&
-              h.url === feature.url
-                ? { ...h, body: featureBody }
-                : h
+              h.id === feature.id && h.url === feature.url ? { ...h, body: featureBody } : h
             )
           }))
-        : publicLeagueNews;
+        : publicNewsGroups;
 
     // Team-shaped cards for whole-competition follows that are ACTIVE right now (Ben 2026-07-09:
     // "show news/results for a followed league/tournament when it's active"). Active = the comp has
@@ -541,7 +606,7 @@ export class SportsService {
       followed: cards,
       scoreboard,
       topStories: topStories.map(toPublicHeadline),
-      leagueNews: leagueNewsWithBody,
+      leagueNews: newsGroupsWithBody,
       standings,
       followedTeams: followedTeams.map((f) => ({
         competitionKey: f.competitionKey,

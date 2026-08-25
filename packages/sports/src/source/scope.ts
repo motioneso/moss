@@ -1,5 +1,6 @@
 import {
   SPORTS_SOURCE_ASSIGNMENT_LIMIT,
+  type SportsFollowDto,
   type SportsSourceAssignmentTarget,
   type SportsSportKey
 } from "@moss/shared";
@@ -71,4 +72,40 @@ export function sportsNewsScopeCovers(
   }
   if (assignment.kind === "competition") return true;
   return requested.kind === "team" && assignment.teamKey === requested.teamKey;
+}
+
+export function sportsNewsScopeForFollow(
+  follow: Pick<SportsFollowDto, "competitionKey" | "teamKey">
+): SportsNewsScope | null {
+  const sportKey = SPORTS_CATALOG.find(
+    (entry) => entry.competitionKey === follow.competitionKey
+  )?.espnSport;
+  if (!sportKey) return null;
+  return follow.teamKey
+    ? { kind: "team", sportKey, competitionKey: follow.competitionKey, teamKey: follow.teamKey }
+    : { kind: "competition", sportKey, competitionKey: follow.competitionKey };
+}
+
+export function sportsNewsCoverageAllows(
+  coverage: {
+    readonly enabled: boolean;
+    readonly usesDefaultCoverage: boolean;
+    readonly assignments: readonly SportsSourceAssignmentTarget[];
+  },
+  follows: readonly SportsFollowDto[],
+  requested: SportsNewsScope
+): boolean {
+  if (!coverage.enabled) return false;
+  if (coverage.usesDefaultCoverage) return true;
+  const byId = new Map(follows.map((follow) => [follow.id, follow]));
+  return coverage.assignments.some((target) => {
+    const follow = target.kind === "follow" ? byId.get(target.followId) : undefined;
+    const assignment =
+      target.kind === "sport"
+        ? ({ kind: "sport", sportKey: target.sportKey } as const)
+        : follow
+          ? sportsNewsScopeForFollow(follow)
+          : null;
+    return assignment !== null && sportsNewsScopeCovers(assignment, requested);
+  });
 }

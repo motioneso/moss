@@ -77,6 +77,14 @@ function finalGame(): GameSummary {
 function headline(id: string, competitionKey: string, title: string): Headline {
   return {
     id,
+    sportKey:
+      competitionKey === "nfl"
+        ? "football"
+        : competitionKey === "nba"
+          ? "basketball"
+          : competitionKey === "mlb"
+            ? "baseball"
+            : "soccer",
     competitionKey,
     competitionLabel: COMPETITION_LABELS[competitionKey] ?? competitionKey,
     title,
@@ -294,11 +302,15 @@ export const sportsOverviewFixture: SportsOverviewResponse = {
   ],
   leagueNews: [
     {
+      kind: "competition",
+      sportKey: "football",
       competitionKey: "nfl",
       competitionLabel: "NFL",
       headlines: [headline("h4", "nfl", "Cowboys sign veteran lineman")]
     },
     {
+      kind: "competition",
+      sportKey: "soccer",
       competitionKey: "epl",
       competitionLabel: "Premier League",
       headlines: [headline("h5", "epl", "Chelsea injury list grows before derby")]

@@ -12,7 +12,12 @@ import type {
 } from "@moss/shared";
 
 import type { VerifiedSportsSourceCandidate } from "./discovery.js";
-import { hasValidSportsSourceTargets, isSportsSportKey } from "./scope.js";
+import {
+  hasValidSportsSourceTargets,
+  isSportsSportKey,
+  sportsNewsScopeForFollow,
+  type SportsNewsScope
+} from "./scope.js";
 
 export class SportsSourceLimitError extends Error {
   constructor() {
@@ -81,9 +86,7 @@ export interface SportsRuntimeSource {
   readonly confirmedFetchHosts: readonly string[];
   readonly assignments: readonly {
     readonly id: string;
-    readonly followId: string;
-    readonly competitionKey: string;
-    readonly teamKey: string | null;
+    readonly scope: SportsNewsScope;
     readonly targetUrl: string | null;
     readonly targetParameters: Readonly<Record<string, unknown>>;
     readonly previewStatus: SportsSourceAssignmentDto["previewStatus"];
@@ -256,11 +259,12 @@ export class SportsSourcesRepository {
 
     const assignments = await scopedDb.db
       .selectFrom("app.sports_source_assignments as assignment")
-      .innerJoin("app.sports_follows as follow", "follow.id", "assignment.follow_id")
+      .leftJoin("app.sports_follows as follow", "follow.id", "assignment.follow_id")
       .select([
         "assignment.id",
         "assignment.source_id",
         "assignment.follow_id",
+        "assignment.sport_key",
         "assignment.target_url",
         "assignment.target_parameters",
         "assignment.preview_status",
@@ -291,15 +295,26 @@ export class SportsSourcesRepository {
       runtimeFingerprint: source.recipe_fingerprint ?? source.validation_fingerprint,
       recipeJson: source.recipe_json,
       confirmedFetchHosts: source.confirmed_fetch_hosts,
-      assignments: (assignmentsBySource.get(source.id) ?? []).map((assignment) => ({
-        id: assignment.id,
-        followId: assignment.follow_id!,
-        competitionKey: assignment.competition_key,
-        teamKey: assignment.team_key,
-        targetUrl: assignment.target_url,
-        targetParameters: assignment.target_parameters,
-        previewStatus: assignment.preview_status
-      }))
+      assignments: (assignmentsBySource.get(source.id) ?? []).map((assignment) => {
+        const scope = assignment.sport_key
+          ? isSportsSportKey(assignment.sport_key)
+            ? ({ kind: "sport", sportKey: assignment.sport_key } as const)
+            : null
+          : assignment.competition_key
+            ? sportsNewsScopeForFollow({
+                competitionKey: assignment.competition_key,
+                teamKey: assignment.team_key
+              })
+            : null;
+        if (!scope) throw new Error("Sports source assignment has an invalid runtime scope");
+        return {
+          id: assignment.id,
+          scope,
+          targetUrl: assignment.target_url,
+          targetParameters: assignment.target_parameters,
+          previewStatus: assignment.preview_status
+        };
+      })
     }));
   }
 
