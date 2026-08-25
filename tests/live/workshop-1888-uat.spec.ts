@@ -3,7 +3,7 @@
 // engine and a real AI provider. Nothing is mocked. See docs/DEVELOPMENT_STANDARDS.md.
 //
 // Run with:
-//   LIVE_BASE_URL=http://127.0.0.1:5174 LIVE_API_URL=http://127.0.0.1:3033 \
+//   LIVE_BASE_URL=http://127.0.0.1:5184 LIVE_API_URL=http://127.0.0.1:3033 \
 //     npx playwright test --config playwright.live.config.ts workshop-1888
 import { expect, test, type Page } from "@playwright/test";
 
@@ -44,10 +44,21 @@ test("asking Moss for a module in the chat drawer returns a plan for approval", 
   const composer = page.getByRole("textbox", { name: /^Message/ });
   await expect(composer).toBeVisible();
 
+  // #1943: start a fresh conversation before asking. The drawer reopens the previous one, and
+  // both of the ways that broke this test come from that history. The old plan is still in it,
+  // so Moss reasonably answers "that plan is already waiting on you" and never calls the tool
+  // again; and the words "Build it" are already on the page, in the old card and in Moss's own
+  // prose, so waiting for them to appear passed in under two seconds against a branch where
+  // nothing had happened - no new build record, no new entry in the tool audit log.
+  await page.getByRole("button", { name: /^New chat$/ }).click();
+
+  // Exactly one card, and only after the ask, so neither a leftover card nor a polite refusal
+  // nor a follow-up question can pass this.
+  const planCards = page.getByRole("button", { name: /^Build it$/ });
+  await expect(planCards).toHaveCount(0);
+
   await composer.fill(ASK);
   await composer.press("Enter");
 
-  // The plan card IS the approval gate. Wait for it rather than for any assistant text, so a
-  // polite "I couldn't do that" cannot pass.
-  await expect(page.getByText(/Build it/i).first()).toBeVisible({ timeout: 240_000 });
+  await expect(planCards).toHaveCount(1, { timeout: 240_000 });
 });
