@@ -6,7 +6,7 @@ import type { ModuleBuildPlan } from "./write-plan.js";
 
 export interface StartModuleBuildInput {
   readonly actorUserId: string;
-  readonly conversationId: string;
+  readonly conversationId?: string;
   readonly description: string;
   readonly conversationExcerpt?: string;
 }
@@ -24,7 +24,7 @@ export interface StartModuleBuildDeps {
   }) => Promise<ModuleBuildPlan>;
   readonly createModuleBuild: (input: {
     readonly ownerUserId: string;
-    readonly conversationId: string;
+    readonly conversationId?: string;
   }) => Promise<{ readonly id: string }>;
   readonly updateModuleBuildPlan: (buildId: string, plan: Record<string, unknown>) => Promise<void>;
   readonly updateModuleBuildStatus: (

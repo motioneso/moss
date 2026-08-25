@@ -96,6 +96,12 @@ const SANCTIONED_FEATURE_COUPLINGS = [
   "@moss/chat -> @moss/email",
   "@moss/chat -> @moss/notes",
   "@moss/chat -> @moss/tasks",
+  // #1888: chat is the composition host for workshop.buildModule. Workshop declares the service it
+  // needs (`ModuleBuildStartService`) in its public API and never constructs it; chat implements
+  // that interface because it owns the database handle, the queue and the admin check. Type-only
+  // import of a declared public boundary — the same shape as the calendar/email write services
+  // above, not a reach into another module's internals.
+  "@moss/chat -> @moss/workshop",
   "@moss/cli-runner -> @moss/chat",
   "@moss/connectors -> @moss/calendar",
   "@moss/connectors -> @moss/email",
