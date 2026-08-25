@@ -3,7 +3,12 @@ import "./workshop.css";
 import { useQuery } from "@tanstack/react-query";
 import { EmptyState } from "@moss/ui";
 import { requestJson } from "@moss/module-web-sdk";
-import type { MeResponse } from "@moss/shared";
+import type {
+  ListMyModuleBuildsResponse,
+  ListMyModulesResponse,
+  MeResponse,
+  WorkshopLiveModuleSummary
+} from "@moss/shared";
 
 import { WorkshopGroups } from "./workshop-groups.js";
 
@@ -17,10 +22,28 @@ function useIsInstanceAdmin(): boolean | undefined {
   return data?.user.isInstanceAdmin;
 }
 
-// Real build/module data is wired once #1752/#1753 land the backend routes; the page renders
-// its groups against empty lists for now, which falls through to WorkshopGroups' empty state.
+function useMyModuleBuilds() {
+  const { data } = useQuery({
+    queryKey: ["workshop", "module-builds", "mine"],
+    queryFn: () => requestJson<ListMyModuleBuildsResponse>("/api/ai/module-builds/mine")
+  });
+  return data?.builds ?? [];
+}
+
+function useLiveModules(): readonly WorkshopLiveModuleSummary[] {
+  const { data } = useQuery({
+    queryKey: ["workshop", "modules", "mine"],
+    queryFn: () => requestJson<ListMyModulesResponse>("/api/me/modules")
+  });
+  return (data?.modules ?? [])
+    .filter((mod) => mod.lifecycle === "optional")
+    .map((mod) => ({ id: mod.id, name: mod.name, version: mod.version, scope: mod.scope }));
+}
+
 export function WorkshopPage() {
   const isInstanceAdmin = useIsInstanceAdmin();
+  const builds = useMyModuleBuilds();
+  const modules = useLiveModules();
 
   if (isInstanceAdmin === false) {
     return (
@@ -40,7 +63,7 @@ export function WorkshopPage() {
           See what Moss is building for you, and what's already running.
         </p>
       </header>
-      <WorkshopGroups builds={[]} modules={[]} />
+      <WorkshopGroups builds={builds} modules={modules} />
     </div>
   );
 }
