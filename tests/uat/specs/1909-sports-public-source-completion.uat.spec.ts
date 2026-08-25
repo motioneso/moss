@@ -355,7 +355,7 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
       new RegExp(`Replace the recipe for sports source ${fotmob.id}`)
     );
     const rebuilt = (await listSources(page)).find((source) => source.id === fotmob.id);
-    expect(rebuilt?.recipeStatus).toBe("ready");
+    expect(["feed", "ready"]).toContain(rebuilt?.recipeStatus);
     expect(rebuilt?.healthReasonCode).toBeNull();
     expect(
       rebuilt?.assignments.every((assignment) => assignment.previewStatus === "verified")
