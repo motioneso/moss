@@ -24,8 +24,11 @@ export {
 export { registerNotesSyncRoutes } from "./notes-sync-routes.js";
 export { NOTES_SYNC_CRON, reconcileNotesSchedule } from "./schedule.js";
 export {
+  assertInside,
   notesCreateExecute,
   notesDeleteExecute,
   notesEditExecute,
+  recheckInside,
+  resolveSource,
   type NotesSyncToolService
 } from "./write-tools.js";
