@@ -37,7 +37,9 @@ export function toMyModuleDto(
     hasPreferences: (manifest.preferences?.length ?? 0) > 0,
     // #1759: built-in module manifests have no credential slots at all — only the external
     // manifest type carries `auth` — so this is constant false rather than a lookup.
-    hasUserCredentials: false
+    hasUserCredentials: false,
+    // #1945: a built-in module is never private to one person.
+    scope: "everyone"
   };
 }
 
@@ -66,7 +68,10 @@ export function toMyModuleDtoFromExternal(
     userDisabled,
     active: !userDisabled,
     hasPreferences: module.hasPreferences,
-    hasUserCredentials: module.hasUserCredentials
+    hasUserCredentials: module.hasUserCredentials,
+    // #1945: a still-draft external module is visible only to its builder; a shipped one is
+    // on for everyone.
+    scope: module.status === "draft" ? "you" : "everyone"
   };
 }
 

@@ -590,7 +590,10 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
           hasUserCredentials: (
             externalModuleHolder.getDiscoveries().find((d) => d.id === module.id)?.manifest.auth ??
             []
-          ).some((declaration) => declaration.scope === "user")
+          ).some((declaration) => declaration.scope === "user"),
+          // #1945: the resolver above only ever returns "draft" or "enabled" here (its filter
+          // keeps `active` modules only, and drift-disabled/discovered ones are never active).
+          status: module.status as "draft" | "enabled"
         })),
       moduleDistribution,
       // #1263 Task 15: install-time self-operation grants also apply on (re-)enable. Built here

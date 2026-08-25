@@ -172,7 +172,8 @@ export const myModulesResponse: ListMyModulesResponse = {
     userDisabled: false,
     active: true,
     hasPreferences: false,
-    hasUserCredentials: false
+    hasUserCredentials: false,
+    scope: "everyone" as const
   }))
 };
 
@@ -267,7 +268,8 @@ export async function mockExternalWebModule(page: Page): Promise<void> {
           userDisabled: false,
           active: true,
           hasPreferences: false,
-          hasUserCredentials: false
+          hasUserCredentials: false,
+          scope: "everyone"
         }
       ]
     };

@@ -37,6 +37,12 @@ export interface MyModuleDto {
    * exactly that — so the personal settings page needs its own reason to be reachable.
    */
   readonly hasUserCredentials: boolean;
+  /**
+   * #1945: whether this module is visible only to the person who built it, or on for everyone.
+   * Always `"everyone"` for a built-in module. For an external module this reflects real
+   * install-state (`"you"` while still a draft, `"everyone"` once shipped or admin-enabled).
+   */
+  readonly scope: "you" | "everyone";
 }
 
 /**
@@ -120,7 +126,8 @@ const myModuleSchema = {
     "userDisabled",
     "active",
     "hasPreferences",
-    "hasUserCredentials"
+    "hasUserCredentials",
+    "scope"
   ],
   properties: {
     id: { type: "string" },
@@ -133,7 +140,8 @@ const myModuleSchema = {
     userDisabled: { type: "boolean" },
     active: { type: "boolean" },
     hasPreferences: { type: "boolean" },
-    hasUserCredentials: { type: "boolean" }
+    hasUserCredentials: { type: "boolean" },
+    scope: { type: "string", enum: ["you", "everyone"] }
   }
 } as const;
 
