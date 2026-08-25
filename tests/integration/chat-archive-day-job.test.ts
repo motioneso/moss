@@ -19,7 +19,7 @@ describe("chat archive-day job (real DB, worker function called directly)", () =
   const prefs = new PreferencesRepository();
   const chatRepo = new ChatRepository();
   let db: Kysely<MossDatabase>;
-  let migrationDb: Kysely<MossDatabase>;
+  let bootstrapDb: Kysely<MossDatabase>;
   let runner: DataContextRunner;
   let notesRoot: string;
 
@@ -28,10 +28,14 @@ describe("chat archive-day job (real DB, worker function called directly)", () =
   }
 
   // Each turn is recorded in its own committed transaction, then backdated by a
-  // separate query. If the backdate ran inside the same transaction as the insert
-  // (via a different connection, since the app runtime has no UPDATE grant on
-  // chat_messages), it would race the still-open transaction and silently touch
-  // zero rows, leaving the message stamped with the real insert-time "now".
+  // separate query on the bootstrap superuser connection (the only role that can
+  // bypass chat_messages's FORCE ROW LEVEL SECURITY — the table owner alone
+  // cannot, even with row_security off). The chat_messages_prevent_identity_change
+  // trigger still rejects any change to created_at regardless of role, so the
+  // backdate also disables that trigger, makes both updates, and re-enables it,
+  // all inside one transaction (rollback on any failure restores it; the whole
+  // database is reset before every test anyway, so the brief window is not
+  // shared with anything else).
   async function createTurnOnDay(input: {
     readonly title: string;
     readonly user: string;
@@ -48,12 +52,21 @@ describe("chat archive-day job (real DB, worker function called directly)", () =
       return { threadId: thread.id, ...result };
     });
 
-    await sql`UPDATE app.chat_messages SET created_at = ${new Date(input.userAt)} WHERE id = ${recorded.userMessage.id}::uuid`.execute(
-      migrationDb
-    );
-    await sql`UPDATE app.chat_messages SET created_at = ${new Date(input.assistantAt)} WHERE id = ${recorded.assistantMessage.id}::uuid`.execute(
-      migrationDb
-    );
+    await bootstrapDb.transaction().execute(async (trx) => {
+      await sql`SET LOCAL row_security = off`.execute(trx);
+      await sql`ALTER TABLE app.chat_messages DISABLE TRIGGER chat_messages_prevent_identity_change`.execute(
+        trx
+      );
+      await sql`UPDATE app.chat_messages SET created_at = ${new Date(input.userAt)} WHERE id = ${recorded.userMessage.id}::uuid`.execute(
+        trx
+      );
+      await sql`UPDATE app.chat_messages SET created_at = ${new Date(input.assistantAt)} WHERE id = ${recorded.assistantMessage.id}::uuid`.execute(
+        trx
+      );
+      await sql`ALTER TABLE app.chat_messages ENABLE TRIGGER chat_messages_prevent_identity_change`.execute(
+        trx
+      );
+    });
 
     return recorded;
   }
@@ -89,8 +102,8 @@ describe("chat archive-day job (real DB, worker function called directly)", () =
   beforeEach(async () => {
     await resetFoundationDatabase();
     db = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
-    migrationDb = createDatabase({
-      connectionString: connectionStrings.migration,
+    bootstrapDb = createDatabase({
+      connectionString: connectionStrings.bootstrap,
       maxConnections: 1
     });
     runner = new DataContextRunner(db);
@@ -104,7 +117,7 @@ describe("chat archive-day job (real DB, worker function called directly)", () =
   afterEach(async () => {
     delete process.env["JARVIS_NOTES_ROOTS"];
     await db.destroy();
-    await migrationDb.destroy();
+    await bootstrapDb.destroy();
     await rm(notesRoot, { recursive: true, force: true });
   });
 
