@@ -13,9 +13,8 @@ vi.mock("../../apps/web/src/api/module-builds-client.js", () => ({
   approveModuleBuild: (buildId: string) => approveModuleBuild(buildId)
 }));
 
-const { ModuleBuildPlanRecord } = await import(
-  "../../apps/web/src/chat/module-build-plan-record.js"
-);
+const { ModuleBuildPlanRecord } =
+  await import("../../apps/web/src/chat/module-build-plan-record.js");
 
 const plan = {
   whatItDoes: "A page called Mythical in your sidebar.",

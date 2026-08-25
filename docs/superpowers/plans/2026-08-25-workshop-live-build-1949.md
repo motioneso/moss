@@ -22,8 +22,8 @@ This plan carries decisions only — no function bodies. Citations verified agai
   Success path sets status at line ~218-221; failure path in `catch` at ~223-228. Existing
   notification-construction pattern to copy: lines 289-300 (`moduleNotifications` +
   `postModuleNotification`, `new NotificationsRepository(undefined,
-  createNotificationPreferencePort())`, then `dataContext.withDataContext(access, (scopedDb) =>
-  repo.create(scopedDb, input))`).
+createNotificationPreferencePort())`, then `dataContext.withDataContext(access, (scopedDb) =>
+repo.create(scopedDb, input))`).
 - `NotificationsRepository.create` always writes recipient = the access context's own actor
   (`packages/notifications/src/repository.ts:34-53` docblock) — the existing `access` object built
   at `worker.ts:190-193` from `payload.actorUserId` is already the build owner (builds are created
@@ -102,6 +102,7 @@ Ships alone. Proves navigation, polling, and notification end to end before phas
 buttons.
 
 **Task 1.1 — persist written files.**
+
 - New migration `packages/settings/sql/0190_module_builds_written_files.sql`:
   ```sql
   ALTER TABLE app.module_builds
@@ -117,7 +118,7 @@ buttons.
 - `apps/worker/src/worker.ts` wires `recordWrittenFile` next to the existing
   `recordFetchedUrl: (buildId, url) => appendModuleBuildFetchedUrl(scopedDb, buildId, url)`.
 - `ModuleBuildSummary` (`packages/shared/src/workshop-api.ts`) gets `readonly writtenFiles:
-  readonly string[]`, added to the JSON schema's `required`/`properties` the same way
+readonly string[]`, added to the JSON schema's `required`/`properties` the same way
   `fetchedUrls` is.
 - `packages/ai/src/module-build-routes.ts`'s `/mine` handler maps `writtenFiles: build.writtenFiles`.
 - `packages/workshop/src/web/workshop-groups.tsx`: `BuildingNowCard` renders `writtenFiles` (reuse
@@ -129,6 +130,7 @@ buttons.
   test in `tests/unit/*module-build*run-build-step*` — confirm exact filename at build time).
 
 **Task 1.2 — navigate to Workshop on approval, drawer stays open.**
+
 - `apps/web/src/chat/module-build-plan-record.tsx`: import `useNavigate` from `react-router`,
   call `navigate("/workshop")` inside `onBuildIt` only after `approveModuleBuild` resolves
   successfully (not before — a failed approve must not navigate away from the error message).
@@ -141,10 +143,11 @@ buttons.
   new unit test.
 
 **Task 1.3 — poll while a build is running.**
+
 - `packages/workshop/src/web/workshop-page.tsx`: `useMyModuleBuilds()`'s `useQuery` gets
   `refetchInterval: (query) => hasActiveBuild(query.state.data) ? 3000 : false` where
   `hasActiveBuild` is a small named function checking any build has `status === "planning" ||
-  status === "building"` (terminal-ish statuses `awaiting_plan_approval`/`awaiting_change` don't
+status === "building"` (terminal-ish statuses `awaiting_plan_approval`/`awaiting_change` don't
   need urgent polling per the spec's own reasoning — they're waiting on the human, not progressing
   on their own; `ready`/`failed`/`cancelled` are terminal).
 - Test: unit test asserting the query's `refetchInterval` function returns a truthy interval when
@@ -152,20 +155,19 @@ buttons.
   the extracted `hasActiveBuild` function directly, not the query itself).
 
 **Task 1.4 — finish/failure notification.**
+
 - `apps/worker/src/worker.ts`: add `@moss/workshop` to `apps/worker/package.json` dependencies;
   import `WORKSHOP_MODULE_ID`.
 - Inside `runModuleBuildStepForJob`, reuse the block's existing `scopedDb`/`access`:
   - Success path (`result.continuation` falsy, i.e. the 3-step sequence finished): after the
     existing `updateModuleBuildStatus(..., { status: "awaiting_change", ... })` call, call
     `moduleNotifications.create(scopedDb, { moduleId: WORKSHOP_MODULE_ID, title: "Your module is
-    ready for a look", href: "/workshop", eventKey: \`module-build:${build.id}:finished\` })` via
-    the same `postModuleNotification`-style helper (construct one `NotificationsRepository`
-    instance at composition time near the existing `moduleNotifications` one, or reuse it directly
-    if it's already in scope at this call site — confirm at build time whether
-    `runModuleBuildStepForJob` is defined before or after that instance in the file).
+ready for a look", href: "/workshop", eventKey: \`module-build:${build.id}:finished\` })`via
+the same`postModuleNotification`-style helper (construct one `NotificationsRepository`instance at composition time near the existing`moduleNotifications`one, or reuse it directly
+if it's already in scope at this call site — confirm at build time whether`runModuleBuildStepForJob` is defined before or after that instance in the file).
   - Failure path (the `catch` block): after `updateModuleBuildStatus(..., { status: "failed",
-    ... })`, call `.create` with `title: "Your module build failed"`, same `href`, `eventKey:
-    \`module-build:${build.id}:failed\``.
+... })`, call `.create` with `title: "Your module build failed"`, same `href`, `eventKey:
+\`module-build:${build.id}:failed\``.
   - `eventKey` matters for pg-boss retries: a retried job that fails again must update the same
     notification row, not create a duplicate.
 - Test: worker-level unit test (find the existing test file covering
@@ -180,10 +182,12 @@ becomes `/workshop`, assert the chat drawer is still visible, then poll the DOM 
 retrying `expect`, no manual sleep loop) for the build's status text to change at least once
 within the test's existing 300s budget, then assert a notification appears once the build finishes
 or fails. Run:
+
 ```bash
 LIVE_BASE_URL=http://127.0.0.1:5184 LIVE_API_URL=http://127.0.0.1:3033 \
   npx playwright test --config playwright.live.config.ts workshop-1888 > /tmp/live-1888.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected exit code 0.
 
 **Kill gate after phase 1.** If the extended live test does not observe at least one real status
@@ -197,22 +201,25 @@ rather than guessing.
 ## Phase 2 — the three buttons (spec items 3 and 4)
 
 **Task 2.1 — cancel build (Stop button).**
+
 - `packages/ai/src/module-build/start-build.ts`: add
   ```ts
   export interface CancelModuleBuildPlanDeps {
-    readonly getModuleBuild: (buildId: string) => Promise<{ readonly id: string; readonly ownerUserId: string } | null>;
+    readonly getModuleBuild: (
+      buildId: string
+    ) => Promise<{ readonly id: string; readonly ownerUserId: string } | null>;
     readonly updateModuleBuildStatus: (buildId: string, status: "cancelled") => Promise<void>;
   }
   export async function cancelModuleBuildPlan(
     deps: CancelModuleBuildPlanDeps,
     buildId: string,
     actorUserId: string
-  ): Promise<void>
+  ): Promise<void>;
   ```
   Same ownership check as `approveModuleBuildPlan` (`ModuleBuildNotFoundError` on missing or
   not-owned).
 - `packages/ai/src/routes.ts`: add `readonly cancelModuleBuild?: (scopedDb: DataContextDb,
-  buildId: string, actorUserId: string) => Promise<void>;` to `AiRoutesDependencies`, same shape as
+buildId: string, actorUserId: string) => Promise<void>;` to `AiRoutesDependencies`, same shape as
   `approveModuleBuild`.
 - `packages/ai/src/module-build-routes.ts`: add `POST /api/ai/module-builds/:buildId/cancel`,
   identical structure to the `/approve` route (503 when the dependency is absent, otherwise call
@@ -226,7 +233,7 @@ rather than guessing.
 - `apps/web/src/api/module-builds-client.ts`: add `cancelModuleBuild(buildId)`, same pattern as
   `approveModuleBuild`.
 - `packages/workshop/src/web/workshop-groups.tsx`: `BuildingNowCard` takes `onStop: (buildId:
-  string) => void`, wires the existing "Stop" button's `onClick`.
+string) => void`, wires the existing "Stop" button's `onClick`.
 - `packages/workshop/src/web/workshop-page.tsx`: owns the mutation (React Query `useMutation`
   calling `cancelModuleBuild`, invalidating `["workshop","module-builds","mine"]` on success),
   passes a bound callback down to `WorkshopGroups`.
@@ -238,10 +245,11 @@ rather than guessing.
   test: clicking Stop on a `BuildingNowCard` calls `onStop` with that build's id.
 
 **Task 2.2 — Ask for a change.**
+
 - `packages/workshop/src/web/workshop-groups.tsx`: `LiveModuleRow` takes `onAskForChange:
-  (moduleId: string) => void`, wires the existing button.
+(moduleId: string) => void`, wires the existing button.
 - `packages/workshop/src/web/workshop-page.tsx`: constructs the callback as `(moduleId) => {
-  navigate("/m/" + moduleId); openChat(); }` using `useNavigate()` (react-router) and
+navigate("/m/" + moduleId); openChat(); }` using `useNavigate()` (react-router) and
   `useChatControls()` (`apps/web/src/shell/chat-controls-context`), threaded down through
   `WorkshopGroups`.
 - Test: jsdom interaction test asserting clicking "Ask for a change" on a `LiveModuleRow` calls
@@ -249,8 +257,9 @@ rather than guessing.
   wiring — that composition is exercised live).
 
 **Task 2.3 — Turn on for everyone.**
+
 - `packages/workshop/src/web/workshop-groups.tsx`: `LiveModuleRow` takes `onTurnOnForEveryone:
-  (moduleId: string) => void`, wires the existing gated button (unchanged gating:
+(moduleId: string) => void`, wires the existing gated button (unchanged gating:
   `mod.scope === "you"`).
 - `packages/workshop/src/web/workshop-page.tsx`: `useMutation` calling the existing
   `shipExternalModule(moduleId)` client function (`apps/web/src/api/client.ts:451-460`, no changes
@@ -265,7 +274,7 @@ confirm and note the result rather than skip the check).
 
 **Phase 2 e2e test — same live spec, continued.** In the same `tests/live/workshop-1888-uat.spec.ts`
 test (not a new 300s build — reuse the one phase 1 already started, to avoid doubling live-AI
-cost): after the phase-1 assertions, click Stop on a *second* build started via a repeated chat ask
+cost): after the phase-1 assertions, click Stop on a _second_ build started via a repeated chat ask
 in the same test (Stop needs a build still in `building` status to be meaningful; cancelling the
 already-finished first build would only prove the ownership check, not the worker's mid-sequence
 stop check) — or, if a second full build is too slow for the budget, assert Stop against the first
@@ -274,20 +283,24 @@ flakiness risk, and note this tradeoff in the PR description. Click "Ask for a c
 for everyone" on the resulting draft's `LiveModuleRow` once each finish/ready and assert their
 effects (navigation to `/m/<id>` with drawer open; module's `scope` flips to `everyone` and its row
 moves out of "you only").
+
 ```bash
 LIVE_BASE_URL=http://127.0.0.1:5184 LIVE_API_URL=http://127.0.0.1:3033 \
   npx playwright test --config playwright.live.config.ts workshop-1888 > /tmp/live-1888-full.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected exit code 0.
 
 ## UAT trigger map
 
 Add to `.claude/skills/coordinate/uat-trigger-map.tsv`:
+
 ```
 blocking	packages/workshop/**	tests/live/workshop-1888-uat.spec.ts
 blocking	apps/web/src/chat/module-build-plan-record.tsx	tests/live/workshop-1888-uat.spec.ts
 blocking	packages/ai/src/module-build/**	tests/live/workshop-1888-uat.spec.ts
 ```
+
 (Existing rows for `tests/uat/specs/*` are a different, already-established directory — this repo's
 Workshop live tests live under `tests/live/*-uat.spec.ts`; point the map there rather than inventing
 a duplicate spec under `tests/uat/specs/`.)
@@ -299,6 +312,7 @@ pnpm format:check > /tmp/fmt.log 2>&1; echo "EXIT=$?"
 pnpm lint > /tmp/lint.log 2>&1; echo "EXIT=$?"
 pnpm typecheck > /tmp/tc.log 2>&1; echo "EXIT=$?"
 ```
+
 Full gate (`pnpm verify:foundation`) only through the `verify-gate` skill, never bare — it hits the
 live dev database unscoped.
 
