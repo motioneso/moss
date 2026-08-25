@@ -10,7 +10,7 @@ import {
   parseAiApiKeyCredential
 } from "@moss/ai";
 import type { AiSecretCipher, GenerateChatInput, ProviderKind } from "@moss/ai";
-import type { DataContextDb, DataContextRunner } from "@moss/db";
+import type { DataContextDb, DataContextRunner, PreferencesPort } from "@moss/db";
 import {
   createMemoryCandidateSignature,
   MemoryCandidatesRepository,
@@ -23,10 +23,27 @@ import {
 } from "@moss/memory";
 import {
   registerDataContextWorker,
+  sendJob,
   type ActorScopedJobPayload,
   type QueueDefinition
 } from "@moss/jobs";
+import {
+  NOTES_SYNC_QUEUE,
+  writeDailyChatArchive,
+  type ChatArchiveMessage,
+  type ChatArchiveSession,
+  type NotesSyncJobPayload,
+  type NotesSyncToolService
+} from "@moss/notes";
+import {
+  CHAT_ARCHIVE_DEFAULT_FOLDER,
+  CHAT_ARCHIVE_ENABLED_PREF_KEY,
+  CHAT_ARCHIVE_FOLDER_PREF_KEY
+} from "@moss/settings";
+import { localDay } from "@moss/shared";
+import { PreferencesRepository } from "@moss/structured-state";
 
+import { extractTimezone } from "./locale-utils.js";
 import { ChatRepository } from "./repository.js";
 import {
   buildDistillationPrompt,
@@ -43,10 +60,12 @@ import {
 
 export const CHAT_EMBED_TURN_QUEUE = "chat.embed-turn";
 export const CHAT_EXTRACT_FACTS_QUEUE = "chat.extract-facts";
+export const CHAT_ARCHIVE_DAY_QUEUE = "chat.archive-day";
 
 export const CHAT_QUEUE_DEFINITIONS: readonly QueueDefinition[] = [
   { name: CHAT_EMBED_TURN_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } },
-  { name: CHAT_EXTRACT_FACTS_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } }
+  { name: CHAT_EXTRACT_FACTS_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } },
+  { name: CHAT_ARCHIVE_DAY_QUEUE, options: { retryLimit: 2, deleteAfterSeconds: 600 } }
 ];
 
 // ── Payloads ──────────────────────────────────────────────────────────────────
@@ -60,6 +79,10 @@ export interface ExtractFactsJobPayload extends ActorScopedJobPayload {
   readonly threadId: string;
   readonly userMessageId: string;
   readonly assistantMessageId: string;
+}
+
+export interface ArchiveDayJobPayload extends ActorScopedJobPayload {
+  readonly localDate: string;
 }
 
 // ── Embed-turn handler ────────────────────────────────────────────────────────
@@ -269,6 +292,77 @@ export async function handleExtractFactsJob(
   }
 }
 
+// ── Archive-day handler ───────────────────────────────────────────────────────
+
+/**
+ * Generous UTC window around a local calendar date (`YYYY-MM-DD`) that is
+ * guaranteed to contain every instant that could fall on that date in any IANA
+ * timezone (offsets run from UTC-12 to UTC+14). The caller filters the returned
+ * rows precisely with `localDay`; this window only bounds the database query.
+ */
+function utcRangeForLocalDate(localDate: string): { rangeStartUtcIso: string; rangeEndUtcIso: string } {
+  const localMidnightUtc = new Date(`${localDate}T00:00:00.000Z`).getTime();
+  const ONE_HOUR_MS = 60 * 60 * 1000;
+  return {
+    rangeStartUtcIso: new Date(localMidnightUtc - 24 * ONE_HOUR_MS).toISOString(),
+    rangeEndUtcIso: new Date(localMidnightUtc + 48 * ONE_HOUR_MS).toISOString()
+  };
+}
+
+async function handleArchiveDayJob(
+  scopedDb: DataContextDb,
+  actorUserId: string,
+  localDate: string,
+  deps: { preferencesPort: PreferencesPort; chatRepo: ChatRepository; boss: PgBoss }
+): Promise<void> {
+  const enabled = await deps.preferencesPort.get(scopedDb, CHAT_ARCHIVE_ENABLED_PREF_KEY);
+  if (enabled !== true) return;
+
+  const folderRaw = await deps.preferencesPort.get(scopedDb, CHAT_ARCHIVE_FOLDER_PREF_KEY);
+  const folder =
+    typeof folderRaw === "string" && folderRaw.length > 0 ? folderRaw : CHAT_ARCHIVE_DEFAULT_FOLDER;
+
+  const localeRaw = await deps.preferencesPort.get(scopedDb, "locale");
+  const timezone = extractTimezone(localeRaw) ?? "UTC";
+
+  const { rangeStartUtcIso, rangeEndUtcIso } = utcRangeForLocalDate(localDate);
+  const rows = await deps.chatRepo.listStoredMessagesInRange(
+    scopedDb,
+    actorUserId,
+    rangeStartUtcIso,
+    rangeEndUtcIso
+  );
+  const sameDay = rows.filter((row) => localDay(row.createdAt, timezone) === localDate);
+  if (sameDay.length === 0) return;
+
+  const sessionsByThread = new Map<
+    string,
+    { threadFirstMessageAt: string; messages: ChatArchiveMessage[] }
+  >();
+  for (const row of sameDay) {
+    let session = sessionsByThread.get(row.threadId);
+    if (!session) {
+      session = { threadFirstMessageAt: row.threadFirstMessageAt, messages: [] };
+      sessionsByThread.set(row.threadId, session);
+    }
+    session.messages.push({ role: row.role, body: row.body, createdAt: row.createdAt });
+  }
+  const sessions: ChatArchiveSession[] = [...sessionsByThread.entries()]
+    .sort(([, a], [, b]) => a.threadFirstMessageAt.localeCompare(b.threadFirstMessageAt))
+    .map(([threadId, session]) => ({ threadId, messages: session.messages }));
+
+  const notesSync: NotesSyncToolService = {
+    enqueue: (enqueueActorUserId, sourcePath) => {
+      const payload: NotesSyncJobPayload = { actorUserId: enqueueActorUserId, sourcePath };
+      return sendJob(deps.boss, NOTES_SYNC_QUEUE, payload, {
+        singletonKey: `notes-sync:${enqueueActorUserId}`
+      });
+    }
+  };
+
+  await writeDailyChatArchive(scopedDb, actorUserId, localDate, folder, sessions, notesSync);
+}
+
 // ── Worker registration ───────────────────────────────────────────────────────
 
 export interface RegisterChatJobWorkersOptions {
@@ -280,6 +374,12 @@ export interface RegisterChatJobWorkersOptions {
    * mirroring the briefings worker's `composeDeps` default.
    */
   readonly extractFactsDeps?: ExtractFactsDeps;
+  /**
+   * Preferences accessor for the archive-day worker (reads `chat-archive.enabled`,
+   * `chat-archive.folder`, and `locale`). Defaults to a real PreferencesRepository —
+   * same key-agnostic port `localePreferences` already uses on the route side.
+   */
+  readonly preferencesPort?: PreferencesPort;
   readonly workOptions?: WorkOptions;
   /**
    * Structured logger for worker-path diagnostics (chat_extract_facts_failed).
@@ -305,6 +405,7 @@ export async function registerChatJobWorkers(
 ): Promise<string[]> {
   const memoryRepo = new MemoryRepository();
   const chatRepo = new ChatRepository();
+  const preferencesPort = options.preferencesPort ?? new PreferencesRepository();
   const extractFactsDeps = options.extractFactsDeps ?? defaultExtractFactsDeps();
   // Thread the worker logger into the extract-facts deps if the caller did not
   // supply its own extractFactsDeps with a logger (observability spec).
@@ -346,7 +447,20 @@ export async function registerChatJobWorkers(
     options.workOptions
   );
 
-  return [embedWorkId, extractWorkId];
+  const archiveWorkId = await registerDataContextWorker<ArchiveDayJobPayload, void>(
+    boss,
+    CHAT_ARCHIVE_DAY_QUEUE,
+    dataContext,
+    (job, scopedDb) =>
+      handleArchiveDayJob(scopedDb, job.data.actorUserId, job.data.localDate, {
+        preferencesPort,
+        chatRepo,
+        boss
+      }),
+    options.workOptions
+  );
+
+  return [embedWorkId, extractWorkId, archiveWorkId];
 }
 
 async function maybePromoteCandidate(

@@ -27,14 +27,18 @@ import type {
   SourceFreshnessEntry,
   SourceFreshnessV1
 } from "@moss/shared";
+import { localDay } from "@moss/shared";
+import { CHAT_ARCHIVE_ENABLED_PREF_KEY } from "@moss/settings";
 import type { ActionResultMetadata } from "./types.js";
 import type { PgBoss } from "pg-boss";
 
 import { sendJob } from "@moss/jobs";
 
 import {
+  CHAT_ARCHIVE_DAY_QUEUE,
   CHAT_EMBED_TURN_QUEUE,
   CHAT_EXTRACT_FACTS_QUEUE,
+  type ArchiveDayJobPayload,
   type EmbedTurnJobPayload,
   type ExtractFactsJobPayload
 } from "../jobs.js";
@@ -305,6 +309,20 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         };
         await sendJob(this.boss, CHAT_EMBED_TURN_QUEUE, embedPayload);
         await sendJob(this.boss, CHAT_EXTRACT_FACTS_QUEUE, extractPayload);
+
+        const archiveEnabled = await this.localePreferences?.get(
+          scopedDb,
+          CHAT_ARCHIVE_ENABLED_PREF_KEY
+        );
+        if (archiveEnabled === true) {
+          const localeRaw = await this.localePreferences?.get(scopedDb, "locale");
+          const timezone = extractTimezone(localeRaw) ?? "UTC";
+          const archivePayload: ArchiveDayJobPayload = {
+            actorUserId,
+            localDate: localDay(capturedAt, timezone)
+          };
+          await sendJob(this.boss, CHAT_ARCHIVE_DAY_QUEUE, archivePayload);
+        }
       }
       return result
         ? {
