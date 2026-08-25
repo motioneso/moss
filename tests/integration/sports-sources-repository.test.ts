@@ -11,6 +11,7 @@ import {
 import type { Kysely } from "kysely";
 
 import { NEWS_MAX_CUSTOM_SOURCES } from "@moss/news";
+import { SportsEspnCoverageRepository } from "../../packages/sports/src/source/espn-coverage-repository.js";
 import { SportsSourcesRepository } from "../../packages/sports/src/source/repository.js";
 import type { VerifiedSportsSourceCandidate } from "../../packages/sports/src/source/discovery.js";
 import { sportsModuleSqlMigrationDirectory } from "../../packages/sports/src/manifest.js";
@@ -23,6 +24,7 @@ import {
 
 const { Client } = pg;
 const repo = new SportsSourcesRepository();
+const espnRepo = new SportsEspnCoverageRepository();
 
 const candidate = (
   index: number
@@ -128,7 +130,7 @@ describe("sports sources repository", () => {
     await Promise.allSettled([appDb.destroy(), bootstrap.end()]);
   });
 
-  it("enables and forces RLS on all four #1572 tables", async () => {
+  it("enables and forces RLS on every sports source preference table", async () => {
     const result = await bootstrap.query(
       `SELECT relname, relrowsecurity, relforcerowsecurity
          FROM pg_class JOIN pg_namespace ON pg_namespace.oid = pg_class.relnamespace
@@ -136,6 +138,7 @@ describe("sports sources repository", () => {
       [
         [
           "sports_custom_sources",
+          "sports_espn_source_assignments",
           "sports_headline_prefs",
           "sports_policy_verdicts",
           "sports_source_assignments"
@@ -144,10 +147,57 @@ describe("sports sources repository", () => {
     );
     expect(result.rows).toEqual([
       { relname: "sports_custom_sources", relrowsecurity: true, relforcerowsecurity: true },
+      {
+        relname: "sports_espn_source_assignments",
+        relrowsecurity: true,
+        relforcerowsecurity: true
+      },
       { relname: "sports_headline_prefs", relrowsecurity: true, relforcerowsecurity: true },
       { relname: "sports_policy_verdicts", relrowsecurity: true, relforcerowsecurity: true },
       { relname: "sports_source_assignments", relrowsecurity: true, relforcerowsecurity: true }
     ]);
+  });
+
+  it("defaults ESPN to all sports and owner-isolates explicit coverage", async () => {
+    await expect(asActor(ids.userA, (db) => espnRepo.get(db))).resolves.toEqual({
+      enabled: true,
+      usesDefaultCoverage: true,
+      assignments: []
+    });
+    const follow = await bootstrap.query<{ id: string }>(
+      `INSERT INTO app.sports_follows (owner_user_id, competition_key, team_key)
+       VALUES ($1, 'eng.1', 'liverpool') RETURNING id`,
+      [ids.userA]
+    );
+    const followId = follow.rows[0]!.id;
+
+    const coverage = await asActor(ids.userA, (db) =>
+      espnRepo.replace(db, [
+        { kind: "sport", sportKey: "soccer" },
+        { kind: "follow", followId }
+      ])
+    );
+    expect(coverage).toMatchObject({ enabled: true, usesDefaultCoverage: false });
+    expect(coverage.assignments).toEqual(
+      expect.arrayContaining([
+        { kind: "sport", sportKey: "soccer" },
+        { kind: "follow", followId }
+      ])
+    );
+    await expect(
+      asActor(ids.userB, (db) => espnRepo.replace(db, [{ kind: "follow", followId }]))
+    ).rejects.toThrow("unavailable follow");
+    await expect(asActor(ids.userB, (db) => espnRepo.get(db))).resolves.toEqual({
+      enabled: true,
+      usesDefaultCoverage: true,
+      assignments: []
+    });
+
+    await expect(asActor(ids.userA, (db) => espnRepo.replace(db, []))).resolves.toEqual({
+      enabled: false,
+      usesDefaultCoverage: false,
+      assignments: []
+    });
   });
 
   it("caps sources at the shared custom-source limit per owner", async () => {
@@ -203,6 +253,30 @@ describe("sports sources repository", () => {
       confirmed_fetch_hosts: ["publisher-1.example.com"]
     });
     expect(result.rows[0].authorization_confirmed_at).toEqual(result.rows[0].validated_at);
+  });
+
+  it("persists one verified sport target without inventing a follow", async () => {
+    const created = await asActor(ids.userA, (db) => repo.create(db, { candidate: candidate(1) }));
+    if ("limitExceeded" in created) throw new Error("unexpected limit");
+    const updated = await asActor(ids.userA, (db) =>
+      repo.replaceScopeAssignments(
+        db,
+        created.id,
+        [],
+        [
+          {
+            target: { kind: "sport", sportKey: "soccer" },
+            targetUrl: "https://publisher-1.example.com/feed.xml",
+            parameters: {},
+            checkedAt: "2026-08-25T12:00:00.000Z"
+          }
+        ]
+      )
+    );
+    expect(updated).toMatchObject({
+      assignedFollowIds: [],
+      assignments: [{ followId: null, sportKey: "soccer", previewStatus: "verified" }]
+    });
   });
 
   it("atomically persists verified target identity and preview health", async () => {

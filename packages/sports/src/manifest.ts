@@ -99,13 +99,15 @@ export const sportsModuleManifest = {
       "sql/0190_sports_custom_sources.sql",
       "sql/0191_sports_public_source_runtime.sql",
       "sql/0192_sports_legacy_feed_assignments_verified.sql",
-      "sql/0193_sports_legacy_feed_assignment_repair.sql"
+      "sql/0193_sports_legacy_feed_assignment_repair.sql",
+      "sql/0195_sports_news_source_scopes.sql"
     ],
     migrationDirectories: ["packages/sports/sql"],
     ownedTables: [
       "app.sports_follows",
       "app.sports_custom_sources",
       "app.sports_source_assignments",
+      "app.sports_espn_source_assignments",
       "app.sports_policy_verdicts",
       "app.sports_headline_prefs"
     ]
@@ -503,6 +505,7 @@ export const sportsModuleManifest = {
         { table: "app.sports_follows" },
         { table: "app.sports_custom_sources" },
         { table: "app.sports_source_assignments" },
+        { table: "app.sports_espn_source_assignments" },
         { table: "app.sports_policy_verdicts" },
         { table: "app.sports_headline_prefs" }
       ]

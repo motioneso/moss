@@ -410,6 +410,7 @@ export class SportsSourceService {
     const teamsByCompetition = new Map<string, readonly TeamRef[]>();
     const targets: SportsDiscoveryTarget[] = [];
     for (const assignment of baseline.assignments) {
+      if (assignment.followId === null) return { status: "rejected", reason: "stale_source" };
       const follow = followById.get(assignment.followId);
       if (!follow) return { status: "rejected", reason: "stale_source" };
       const target = await this.resolveTarget(follow, teamsByCompetition);

@@ -59,6 +59,7 @@ export function makeSourcesRepo(
         assignments: input.candidate.targets.map((target, index) => ({
           id: `33333333-3333-3333-3333-33333333333${index}`,
           followId: target.followId,
+          sportKey: null,
           targetUrl: target.targetUrl,
           previewStatus: "verified",
           healthState: "healthy",

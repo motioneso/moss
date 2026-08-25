@@ -14,10 +14,25 @@ export type SportsSourceHealthState =
 
 export type SportsSourceRecipeStatus = "feed" | "ready" | "missing" | "drift";
 export type SportsSourceTargetPreviewStatus = "pending" | "verified" | "recipe_missing";
+export const SPORTS_SOURCE_ASSIGNMENT_LIMIT = 20;
+
+export const SPORTS_SPORT_KEYS = [
+  "football",
+  "hockey",
+  "soccer",
+  "baseball",
+  "basketball"
+] as const;
+export type SportsSportKey = (typeof SPORTS_SPORT_KEYS)[number];
+
+export type SportsSourceAssignmentTarget =
+  | { readonly kind: "sport"; readonly sportKey: SportsSportKey }
+  | { readonly kind: "follow"; readonly followId: string };
 
 export interface SportsSourceAssignmentDto {
   readonly id: string;
-  readonly followId: string;
+  readonly followId: string | null;
+  readonly sportKey: SportsSportKey | null;
   readonly targetUrl: string | null;
   readonly previewStatus: SportsSourceTargetPreviewStatus;
   readonly healthState: SportsSourceHealthState;
@@ -46,6 +61,19 @@ export interface SportsCustomSourceDto {
   readonly assignments: readonly SportsSourceAssignmentDto[];
   readonly createdAt: string;
 }
+
+export interface SportsBuiltinSourceDto {
+  readonly kind: "builtin";
+  readonly id: "espn";
+  readonly label: "ESPN";
+  readonly enabled: boolean;
+  readonly usesDefaultCoverage: boolean;
+  readonly assignments: readonly SportsSourceAssignmentTarget[];
+}
+
+export type SportsNewsSourceDto =
+  | SportsBuiltinSourceDto
+  | (SportsCustomSourceDto & { readonly kind: "custom" });
 
 export interface SportsCustomSourcesResponse {
   readonly sources: readonly SportsCustomSourceDto[];
@@ -131,6 +159,7 @@ const sportsSourceAssignmentDtoSchema = {
   required: [
     "id",
     "followId",
+    "sportKey",
     "targetUrl",
     "previewStatus",
     "healthState",
@@ -142,7 +171,8 @@ const sportsSourceAssignmentDtoSchema = {
   ],
   properties: {
     id: { type: "string", format: "uuid" },
-    followId: { type: "string", format: "uuid" },
+    followId: { type: ["string", "null"], format: "uuid" },
+    sportKey: { type: ["string", "null"], enum: [...SPORTS_SPORT_KEYS, null] },
     targetUrl: { type: ["string", "null"], maxLength: 2048, pattern: "^https://.+$" },
     previewStatus: { type: "string", enum: ["pending", "verified", "recipe_missing"] },
     healthState: sportsSourceHealthSchema,

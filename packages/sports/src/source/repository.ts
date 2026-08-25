@@ -6,11 +6,13 @@ import { assertDataContextDb, type DataContextDb } from "@moss/db";
 import { NEWS_MAX_CUSTOM_SOURCES } from "@moss/news";
 import type {
   SportsCustomSourceDto,
+  SportsSourceAssignmentTarget,
   SportsSourceAssignmentDto,
   SportsSourceHealthState
 } from "@moss/shared";
 
 import type { VerifiedSportsSourceCandidate, VerifiedSportsSourceTarget } from "./discovery.js";
+import { hasValidSportsSourceTargets, isSportsSportKey } from "./scope.js";
 
 export class SportsSourceLimitError extends Error {
   constructor() {
@@ -38,7 +40,8 @@ interface SportsCustomSourceRow {
 
 interface SportsSourceAssignmentRow {
   id: string;
-  follow_id: string;
+  follow_id: string | null;
+  sport_key: string | null;
   target_url: string | null;
   preview_status: "pending" | "verified" | "recipe_missing";
   health_state: SportsCustomSourceRow["health_state"];
@@ -58,7 +61,8 @@ export interface SportsSourceBaseline {
   readonly updatedAt: string;
   readonly assignments: readonly {
     readonly id: string;
-    readonly followId: string;
+    readonly followId: string | null;
+    readonly sportKey: string | null;
     readonly targetUrl: string | null;
     readonly parameters: Readonly<Record<string, unknown>>;
     readonly previewStatus: SportsSourceAssignmentDto["previewStatus"];
@@ -99,6 +103,13 @@ export interface SportsRuntimeTargetResult {
   readonly checkedAt: Date | null;
 }
 
+export interface VerifiedSportsSourceAssignment {
+  readonly target: SportsSourceAssignmentTarget;
+  readonly targetUrl: string;
+  readonly parameters: Readonly<Record<string, string>>;
+  readonly checkedAt: string;
+}
+
 const SOURCE_COLUMNS = [
   "id",
   "label",
@@ -119,6 +130,7 @@ const SOURCE_COLUMNS = [
 const ASSIGNMENT_COLUMNS = [
   "id",
   "follow_id",
+  "sport_key",
   "target_url",
   "preview_status",
   "health_state",
@@ -130,9 +142,13 @@ const ASSIGNMENT_COLUMNS = [
 ] as const;
 
 function assignmentToDto(row: SportsSourceAssignmentRow): SportsSourceAssignmentDto {
+  if (row.sport_key !== null && !isSportsSportKey(row.sport_key)) {
+    throw new Error("Unknown sports source assignment sport");
+  }
   return {
     id: row.id,
     followId: row.follow_id,
+    sportKey: row.sport_key,
     targetUrl: row.target_url,
     previewStatus: row.preview_status,
     healthState: row.health_state,
@@ -163,7 +179,9 @@ function toDto(
     lastCheckedAt: row.last_checked_at ? row.last_checked_at.toISOString() : null,
     lastSuccessAt: row.last_success_at ? row.last_success_at.toISOString() : null,
     recipeStatus: row.recipe_status,
-    assignedFollowIds: assignments.map((assignment) => assignment.followId),
+    assignedFollowIds: assignments.flatMap((assignment) =>
+      assignment.followId === null ? [] : [assignment.followId]
+    ),
     assignments,
     createdAt: row.created_at.toISOString()
   };
@@ -275,7 +293,7 @@ export class SportsSourcesRepository {
       confirmedFetchHosts: source.confirmed_fetch_hosts,
       assignments: (assignmentsBySource.get(source.id) ?? []).map((assignment) => ({
         id: assignment.id,
-        followId: assignment.follow_id,
+        followId: assignment.follow_id!,
         competitionKey: assignment.competition_key,
         teamKey: assignment.team_key,
         targetUrl: assignment.target_url,
@@ -412,6 +430,7 @@ export class SportsSourcesRepository {
       assignments: assignments.map((assignment) => ({
         id: assignment.id,
         followId: assignment.follow_id,
+        sportKey: assignment.sport_key,
         targetUrl: assignment.target_url,
         parameters: assignment.target_parameters,
         previewStatus: assignment.preview_status
@@ -481,6 +500,7 @@ export class SportsSourcesRepository {
               owner_user_id: sql<string>`app.current_actor_user_id()`,
               source_id: row.id,
               follow_id: target.followId,
+              sport_key: null,
               target_url: target.targetUrl,
               target_parameters: { ...target.parameters },
               preview_status: "verified" as const,
@@ -526,7 +546,29 @@ export class SportsSourcesRepository {
     reusedAssignmentIds: readonly string[],
     verifiedTargets: readonly VerifiedSportsSourceTarget[]
   ): Promise<SportsCustomSourceDto | null> {
+    return this.replaceScopeAssignments(
+      scopedDb,
+      sourceId,
+      reusedAssignmentIds,
+      verifiedTargets.map((target) => ({
+        target: { kind: "follow", followId: target.followId },
+        targetUrl: target.targetUrl,
+        parameters: target.parameters,
+        checkedAt: target.checkedAt
+      }))
+    );
+  }
+
+  async replaceScopeAssignments(
+    scopedDb: DataContextDb,
+    sourceId: string,
+    reusedAssignmentIds: readonly string[],
+    verifiedTargets: readonly VerifiedSportsSourceAssignment[]
+  ): Promise<SportsCustomSourceDto | null> {
     assertDataContextDb(scopedDb);
+    if (!hasValidSportsSourceTargets(verifiedTargets.map((target) => target.target))) {
+      throw new Error("Sports assignment preview contains invalid targets");
+    }
     const source = await scopedDb.db
       .selectFrom("app.sports_custom_sources")
       .select(SOURCE_COLUMNS)
@@ -535,7 +577,9 @@ export class SportsSourcesRepository {
       .executeTakeFirst();
     if (!source) return null;
 
-    const followIds = verifiedTargets.map((target) => target.followId);
+    const followIds = verifiedTargets.flatMap((target) =>
+      target.target.kind === "follow" ? [target.target.followId] : []
+    );
     const ownedFollows =
       followIds.length === 0
         ? []
@@ -565,7 +609,8 @@ export class SportsSourcesRepository {
             return {
               owner_user_id: sql<string>`app.current_actor_user_id()`,
               source_id: sourceId,
-              follow_id: target.followId,
+              follow_id: target.target.kind === "follow" ? target.target.followId : null,
+              sport_key: target.target.kind === "sport" ? target.target.sportKey : null,
               target_url: target.targetUrl,
               target_parameters: { ...target.parameters },
               preview_status: "verified" as const,
@@ -690,7 +735,8 @@ export class SportsSourcesRepository {
           [...ownedFollowIds].map((followId) => ({
             owner_user_id: sql<string>`app.current_actor_user_id()`,
             source_id: sourceId,
-            follow_id: followId
+            follow_id: followId,
+            sport_key: null
           }))
         )
         .execute();

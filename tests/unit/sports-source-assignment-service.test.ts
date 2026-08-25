@@ -40,6 +40,7 @@ const baseline: SportsSourceBaseline = {
       {
         id: assignmentId,
         followId,
+        sportKey: null,
         targetUrl: "https://publisher.example.com/feed.xml",
         previewStatus: "verified",
         healthState: "healthy",
@@ -61,6 +62,7 @@ const baseline: SportsSourceBaseline = {
     {
       id: assignmentId,
       followId,
+      sportKey: null,
       targetUrl: "https://publisher.example.com/feed.xml",
       parameters: {},
       previewStatus: "verified"
