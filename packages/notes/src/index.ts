@@ -32,3 +32,9 @@ export {
   resolveSource,
   type NotesSyncToolService
 } from "./write-tools.js";
+export {
+  writeDailyChatArchive,
+  type ChatArchiveMessage,
+  type ChatArchiveSession,
+  type WriteDailyChatArchiveResult
+} from "./daily-archive-writer.js";
