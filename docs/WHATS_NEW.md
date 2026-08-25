@@ -23,7 +23,7 @@
 
 - **Settings are closer to where you need them.** Finance, Job Search, and News pages now link to their own settings, so changing a connection or preference takes fewer clicks. [PR #1772](https://github.com/motioneso/moss/pull/1772)
 
-## Edge channel — 2026-08-24
+## Edge channel — 2026-08-25
 
 Edge builds include the stable history below plus the user-facing changes already available in
 the current edge image. This section is intentionally build-bundled so it never advertises a
@@ -57,6 +57,7 @@ feature that is not present in the image you are running.
 
 ### Fixed
 
+- **Sports source setup and status layout.** Custom sports sources now recover legacy feed assignments and show clearer controls, team labels, status details, and errors. [PR #1956](https://github.com/motioneso/moss/pull/1956)
 - **Custom sports sources now stay current.** Custom sports sources now refresh into Sports and Today, show accurate health, and offer clear recovery actions in Settings and through Moss. [PR #1929](https://github.com/motioneso/moss/pull/1929)
 - **Polished everyday app screens.** Settings, tasks, navigation, notifications, and several module pages now use clearer labels, cleaner layouts, and more consistent controls. [PR #1938](https://github.com/motioneso/moss/pull/1938)
 - **Latest releases appear first.** Recently Released now shows the newest Edge updates at the top, ahead of older weekly history. [PR #1908](https://github.com/motioneso/moss/pull/1908)
