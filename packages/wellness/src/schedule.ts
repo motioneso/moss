@@ -1,6 +1,13 @@
 import type { Medication, MedicationLog } from "@moss/db";
 import type { ScheduleSlotDto } from "@moss/shared";
 
+import {
+  expandOccurrences,
+  type MedicationSchedule,
+  type ScheduleAnchor,
+  type Weekday
+} from "./occurrence-engine.js";
+
 /**
  * Pure: given the actor's medications, their same-day dose logs, and a target date,
  * produce an ordered list of schedule slots. Scheduled (non-PRN) meds emit one slot per
@@ -11,11 +18,13 @@ import type { ScheduleSlotDto } from "@moss/shared";
  * Timezone model (deliberate, documented — Codex R1): this uses NAIVE CIVIL time. The
  * caller (web) sends its OWN LOCAL civil date (`YYYY-MM-DD`) as `?date=`; the server parses
  * it as a UTC midnight anchor and builds each slot by attaching the med's civil clock time
- * (`schedule_times`, a `time[]`) to that anchor IN UTC. Because both the slot instant and
- * the matched log's `scheduled_for` are constructed the same civil-as-UTC way, the
- * minute-level match is correct, and the displayed `HH:MM` (via `.slice(11,16)`) shows the
- * civil clock time the user entered. The only requirement is that the client sends its LOCAL
- * date (not a UTC date) so a near-midnight check lands on the right civil day. True
+ * (`schedule_times`, a `time[]`) to that anchor IN UTC. Dose instants are produced by the
+ * shared occurrence engine (#1950) with `timeZone: "UTC"`, which reproduces this same
+ * civil-as-UTC arithmetic exactly (a UTC anchor has no daylight-saving transitions). Because
+ * both the slot instant and the matched log's `scheduled_for` are constructed the same way,
+ * the minute-level match is correct, and the displayed `HH:MM` (via `.slice(11,16)`) shows
+ * the civil clock time the user entered. The only requirement is that the client sends its
+ * LOCAL date (not a UTC date) so a near-midnight check lands on the right civil day. True
  * per-user-timezone scheduling (DST-aware absolute instants) is explicitly out of scope.
  */
 export function computeSchedule(
@@ -24,7 +33,7 @@ export function computeSchedule(
   date: Date
 ): ScheduleSlotDto[] {
   const slots: ScheduleSlotDto[] = [];
-  const isoWeekday = isoWeekdayOf(date);
+  const dayRange = { from: date, to: new Date(date.getTime() + 24 * 60 * 60 * 1000 - 1) };
 
   for (const med of medications) {
     if (!med.active) continue;
@@ -41,30 +50,16 @@ export function computeSchedule(
       continue;
     }
 
-    if (med.frequency_type === "specific_weekdays") {
-      const weekdays = med.weekdays ?? [];
-      if (!weekdays.includes(isoWeekday)) continue;
-    }
+    const engineInput = toEngineInput(med);
+    const occurrences = expandOccurrences(engineInput.schedule, engineInput.anchor, dayRange);
 
-    if (med.frequency_type === "cyclical" && !isCyclicalOnDay(med, date)) {
-      continue;
-    }
-
-    // every_n_hours generates slots from interval_hours, anchored at the optional first
-    // schedule_time (else civil midnight), stepping across the civil day. All other
-    // scheduled families emit one slot per enumerated schedule_time.
-    const slotInstants =
-      med.frequency_type === "every_n_hours"
-        ? intervalSlots(date, med.interval_hours, med.schedule_times)
-        : (med.schedule_times ?? []).map((time) => combineDateAndTime(date, time));
-
-    for (const scheduledFor of slotInstants) {
+    for (const occurrence of occurrences) {
       slots.push({
         medicationId: med.id,
         name: med.name,
-        scheduledFor: scheduledFor.toISOString(),
+        scheduledFor: occurrence.at.toISOString(),
         asNeeded: false,
-        status: slotStatusFromLogs(med.id, scheduledFor, logs)
+        status: slotStatusFromLogs(med.id, occurrence.at, logs)
       });
     }
   }
@@ -75,56 +70,91 @@ export function computeSchedule(
   });
 }
 
+/** No schedule family here has a real "start date" concept of its own (unlike `cyclical`,
+ *  which is always counted from `cycle_anchor_date`), and the old date math never gated on
+ *  one either — so this is fixed far enough in the past to never filter out a real query day. */
+const NO_START_DATE_GATING = "1970-01-01";
+
 /**
- * Civil-day slots for an every_n_hours med. Anchored at the optional first schedule_time
- * (e.g. "06:00" → first dose at 06:00, then every interval); absent any schedule_time it
- * anchors at civil midnight. Steps forward by interval_hours and emits every slot whose
- * civil instant falls strictly before the next civil midnight. interval_hours is validated
- * 1–24 at the route + DB; an absent/<=0 interval yields no slots (defensive, never throws).
+ * Maps a medication row to the shared occurrence engine's schedule + anchor shape. Every
+ * family uses `timeZone: "UTC"` to match this module's naive-civil-time model (see the
+ * module doc comment above).
  */
-function intervalSlots(
-  date: Date,
-  intervalHours: number | null,
-  scheduleTimes: readonly string[] | null
-): Date[] {
-  if (!intervalHours || intervalHours <= 0) return [];
-  const anchorTime = scheduleTimes?.[0];
-  const start = anchorTime
-    ? combineDateAndTime(date, anchorTime)
-    : combineDateAndTime(date, "00:00");
-  const dayEnd = Date.UTC(
-    date.getUTCFullYear(),
-    date.getUTCMonth(),
-    date.getUTCDate() + 1,
-    0,
-    0,
-    0
-  );
-  const slots: Date[] = [];
-  const stepMs = intervalHours * 60 * 60 * 1000;
-  for (let t = start.getTime(); t < dayEnd; t += stepMs) {
-    slots.push(new Date(t));
+function toEngineInput(med: Medication): { schedule: MedicationSchedule; anchor: ScheduleAnchor } {
+  const doseTimes = med.schedule_times ?? [];
+  const openAnchor: ScheduleAnchor = { startDate: NO_START_DATE_GATING, timeZone: "UTC" };
+
+  if (med.frequency_type === "specific_weekdays") {
+    return {
+      schedule: { family: "selectedDays", weekdays: (med.weekdays ?? []) as Weekday[], doseTimes },
+      anchor: openAnchor
+    };
   }
-  return slots;
+
+  if (med.frequency_type === "every_n_hours") {
+    return {
+      schedule: {
+        family: "daily",
+        doseTimes: everyNHoursDoseTimes(med.interval_hours, doseTimes[0])
+      },
+      anchor: openAnchor
+    };
+  }
+
+  if (med.frequency_type === "cyclical") {
+    const cycleLength = (med.cycle_days_on ?? 0) + (med.cycle_days_off ?? 0);
+    // A misconfigured cycle (no anchor, no on-days, or a non-positive length) falls back to
+    // "always eligible" — matches the old isCyclicalOnDay's default.
+    if (!med.cycle_anchor_date || !med.cycle_days_on || cycleLength <= 0) {
+      return { schedule: { family: "daily", doseTimes }, anchor: openAnchor };
+    }
+    return {
+      schedule: {
+        family: "cycle",
+        daysOn: med.cycle_days_on,
+        daysOff: med.cycle_days_off ?? 0,
+        doseTimes
+      },
+      anchor: { startDate: dateKeyFromColumn(med.cycle_anchor_date), timeZone: "UTC" }
+    };
+  }
+
+  // once_daily, times_per_day
+  return { schedule: { family: "daily", doseTimes }, anchor: openAnchor };
 }
 
-function isoWeekdayOf(date: Date): number {
-  const day = date.getUTCDay(); // 0 = Sunday
-  return day === 0 ? 7 : day;
+/**
+ * `cycle_anchor_date` is typed `string` (a Postgres `date` column) but the driver actually
+ * hands back a JS `Date` at runtime, not a "YYYY-MM-DD" string — the old date math coerced it
+ * through a template literal (silently wrong, but never threw); the engine's `startDate`
+ * requires a real date-key string, so normalize explicitly here instead.
+ */
+function dateKeyFromColumn(value: string | Date): string {
+  return value instanceof Date ? value.toISOString().slice(0, 10) : value;
 }
 
-function combineDateAndTime(date: Date, time: string): Date {
-  const [hh, mm] = time.split(":");
-  return new Date(
-    Date.UTC(
-      date.getUTCFullYear(),
-      date.getUTCMonth(),
-      date.getUTCDate(),
-      Number(hh ?? 0),
-      Number(mm ?? 0),
-      0
-    )
-  );
+/**
+ * The clock times an every-N-hours medication fires at in one civil day. This is the same
+ * set every day (it only depends on the interval and the anchor time-of-day, never on the
+ * date), so it can be precomputed once and handed to the engine as a fixed `daily` schedule
+ * instead of extending the engine with an hours-based family.
+ */
+function everyNHoursDoseTimes(
+  intervalHours: number | null,
+  anchorTime: string | undefined
+): string[] {
+  if (!intervalHours || intervalHours <= 0) return [];
+  const [hourStr, minuteStr] = (anchorTime ?? "00:00").split(":");
+  const startMinutes = Number(hourStr ?? 0) * 60 + Number(minuteStr ?? 0);
+  const stepMinutes = intervalHours * 60;
+
+  const times: string[] = [];
+  for (let t = startMinutes; t < 24 * 60; t += stepMinutes) {
+    const hour = Math.floor(t / 60);
+    const minute = t % 60;
+    times.push(`${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`);
+  }
+  return times;
 }
 
 /**
@@ -159,15 +189,4 @@ function slotStatusFromLogs(
     }
   }
   return "pending";
-}
-
-function isCyclicalOnDay(med: Medication, date: Date): boolean {
-  if (!med.cycle_anchor_date || !med.cycle_days_on) return true;
-  const anchor = new Date(`${med.cycle_anchor_date}T00:00:00.000Z`);
-  const cycleLength = med.cycle_days_on + (med.cycle_days_off ?? 0);
-  if (cycleLength <= 0) return true;
-  const dayMs = 24 * 60 * 60 * 1000;
-  const elapsed = Math.floor((date.getTime() - anchor.getTime()) / dayMs);
-  if (elapsed < 0) return false;
-  return elapsed % cycleLength < med.cycle_days_on;
 }
