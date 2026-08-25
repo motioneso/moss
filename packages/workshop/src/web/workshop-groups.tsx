@@ -1,12 +1,11 @@
 import type { ReactNode } from "react";
 
 import { EmptyState } from "@moss/ui";
-
-import type { ExternalModuleSummary, ModuleBuildLogEntry, ModuleBuildSummary } from "./types.js";
+import type { ModuleBuildSummary, WorkshopLiveModuleSummary } from "@moss/shared";
 
 export interface WorkshopGroupsProps {
   readonly builds: readonly ModuleBuildSummary[];
-  readonly modules: readonly ExternalModuleSummary[];
+  readonly modules: readonly WorkshopLiveModuleSummary[];
 }
 
 const NEEDS_YOU_STATUSES = new Set<ModuleBuildSummary["status"]>([
@@ -25,13 +24,15 @@ function NeedsYouCard({ build }: { readonly build: ModuleBuildSummary }) {
     <div className="jds-rail-row workshop-row">
       <span className="jds-rail jds-rail--gold" />
       <div className="jds-card jds-card--raised">
-        <h3 className="jds-card-title jds-card-title--heavy">{build.title}</h3>
+        <h3 className="jds-card-title jds-card-title--heavy">
+          {build.plan?.whatItDoes ?? "New module"}
+        </h3>
         <span className="jds-badge jds-badge--amber jds-badge--pill">
           {build.status === "awaiting_plan_approval"
             ? "Plan ready · needs a look"
             : "Waiting on you"}
         </span>
-        <p className="jds-card__meta">{build.description}</p>
+        {build.plan?.whenItRuns ? <p className="jds-card__meta">{build.plan.whenItRuns}</p> : null}
         <div className="workshop-actions">
           <button type="button" className="jds-btn jds-btn--primary jds-btn--sm">
             Look at the draft
@@ -45,14 +46,12 @@ function NeedsYouCard({ build }: { readonly build: ModuleBuildSummary }) {
   );
 }
 
-function BuildLog({ entries }: { readonly entries: readonly ModuleBuildLogEntry[] }) {
-  if (entries.length === 0) return null;
+function FetchedUrls({ urls }: { readonly urls: readonly string[] }) {
+  if (urls.length === 0) return null;
   return (
     <ul className="workshop-log">
-      {entries.map((entry, index) => (
-        <li key={index}>
-          <b>{entry.verb}</b> {entry.text}
-        </li>
+      {urls.map((url) => (
+        <li key={url}>{url}</li>
       ))}
     </ul>
   );
@@ -63,33 +62,25 @@ function BuildingNowCard({ build }: { readonly build: ModuleBuildSummary }) {
     <div className="jds-rail-row workshop-row">
       <span className="jds-rail jds-rail--accent" />
       <div className="jds-card">
-        <h3 className="jds-card-title jds-card-title--heavy">{build.title}</h3>
+        <h3 className="jds-card-title jds-card-title--heavy">
+          {build.plan?.whatItDoes ?? "New module"}
+        </h3>
         <span className="jds-indicator jds-indicator--ready jds-indicator--live">
           <span className="jds-indicator__dot" />
           {build.step ?? "Working"}
         </span>
-        <p className="jds-card__meta">
-          {build.stepIndex !== null && build.totalSteps !== null
-            ? `Step ${build.stepIndex} of ${build.totalSteps}`
-            : null}
-          <span className="jds-meta-sep" />
-          {build.description}
-        </p>
-        {build.progressPercent !== null ? (
-          <div className="jds-progress">
-            <div className="jds-progress__fill" style={{ width: `${build.progressPercent}%` }} />
-          </div>
-        ) : null}
-        <BuildLog entries={build.log} />
+        <FetchedUrls urls={build.fetchedUrls} />
         <div className="workshop-actions">
           <button type="button" className="jds-btn jds-btn--secondary jds-btn--sm">
             See everything it wrote
           </button>
           <span className="workshop-spacer" />
-          <span className="jds-card__meta">
-            Spent so far {formatCents(build.costCents)} of your {formatCents(build.dailyLimitCents)}{" "}
-            daily limit
-          </span>
+          {build.plan ? (
+            <span className="jds-card__meta">
+              Spent so far {formatCents(build.costCents)} of your{" "}
+              {formatCents(build.plan.roughCost.budgetCents)} budget
+            </span>
+          ) : null}
           <button type="button" className="jds-btn jds-btn--quiet jds-btn--sm">
             Stop
           </button>
@@ -99,42 +90,24 @@ function BuildingNowCard({ build }: { readonly build: ModuleBuildSummary }) {
   );
 }
 
-function LiveModuleRow({ module: mod }: { readonly module: ExternalModuleSummary }) {
+function LiveModuleRow({ module: mod }: { readonly module: WorkshopLiveModuleSummary }) {
   return (
     <div className="jds-rail-row workshop-row">
-      <span className={`jds-rail ${mod.broken ? "jds-rail--danger" : "jds-rail--line-strong"}`} />
+      <span className="jds-rail jds-rail--line-strong" />
       <div className="jds-card">
-        <h3 className="jds-card-title">{mod.title}</h3>
-        {mod.broken ? (
-          <span className="jds-badge jds-badge--red jds-badge--pill">Stopped working</span>
-        ) : (
-          <span className="jds-badge jds-badge--forest jds-badge--pill">
-            {mod.scope === "everyone" ? "Live · everyone" : "Live · you only"}
-          </span>
-        )}
-        <p className="jds-card__meta">{mod.broken ? mod.brokenReason : mod.description}</p>
+        <h3 className="jds-card-title">{mod.name}</h3>
+        <span className="jds-badge jds-badge--forest jds-badge--pill">
+          {mod.scope === "everyone" ? "Live · everyone" : "Live · you only"}
+        </span>
         <div className="workshop-actions">
-          {mod.broken ? (
-            <>
-              <button type="button" className="jds-btn jds-btn--primary jds-btn--sm">
-                Ask Moss to fix it
-              </button>
-              <button type="button" className="jds-btn jds-btn--quiet jds-btn--sm">
-                Turn off
-              </button>
-            </>
-          ) : (
-            <>
-              <button type="button" className="jds-btn jds-btn--secondary jds-btn--sm">
-                Ask for a change
-              </button>
-              {mod.scope === "you" ? (
-                <button type="button" className="jds-btn jds-btn--quiet jds-btn--sm">
-                  Turn on for everyone
-                </button>
-              ) : null}
-            </>
-          )}
+          <button type="button" className="jds-btn jds-btn--secondary jds-btn--sm">
+            Ask for a change
+          </button>
+          {mod.scope === "you" ? (
+            <button type="button" className="jds-btn jds-btn--quiet jds-btn--sm">
+              Turn on for everyone
+            </button>
+          ) : null}
         </div>
       </div>
     </div>

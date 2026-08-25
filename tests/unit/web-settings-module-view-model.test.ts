@@ -18,6 +18,7 @@ const moduleRow = (input: Partial<SettingsModule> = {}): SettingsModule => ({
   active: true,
   hasPreferences: false,
   hasUserCredentials: false,
+  scope: "everyone",
   ...input
 });
 

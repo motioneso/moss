@@ -1,6 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { handleRouteError, HttpError } from "@moss/module-sdk";
-import { approveModuleBuildResponseSchema } from "@moss/shared";
+import {
+  approveModuleBuildResponseSchema,
+  listMyModuleBuildsResponseSchema,
+  type ListMyModuleBuildsResponse,
+  type ModuleBuildPlan
+} from "@moss/shared";
+import { listModuleBuildsForUser } from "@moss/settings";
 
 import type { AiRoutesDependencies } from "./routes.js";
 
@@ -20,6 +26,35 @@ export function registerModuleBuildRoutes(
   server: FastifyInstance,
   dependencies: AiRoutesDependencies
 ): void {
+  server.get(
+    "/api/ai/module-builds/mine",
+    { schema: { response: { 200: listMyModuleBuildsResponseSchema } } },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const builds = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+          listModuleBuildsForUser(scopedDb, accessContext.actorUserId)
+        );
+        const response: ListMyModuleBuildsResponse = {
+          builds: builds.map((build) => ({
+            id: build.id,
+            status: build.status,
+            step: build.step,
+            plan: build.plan as ModuleBuildPlan | null,
+            fetchedUrls: build.fetchedUrls,
+            costCents: build.costCents,
+            error: build.error,
+            createdAt: build.createdAt.toISOString(),
+            updatedAt: build.updatedAt.toISOString()
+          }))
+        };
+        return response;
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
   server.post<ApproveRequest>(
     "/api/ai/module-builds/:buildId/approve",
     { schema: { response: { 200: approveModuleBuildResponseSchema } } },
