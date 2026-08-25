@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -85,6 +85,7 @@ function expectSandboxedRenderer(services: Record<string, ComposeService>, appNa
   expect(services[appName]?.group_add).toEqual(["1001"]);
 
   const initializer = services["sports-browser-socket-init"];
+  expect(initializer?.image).toBe(renderer?.image);
   expect(initializer).toMatchObject({
     network_mode: "none",
     read_only: true,
@@ -110,10 +111,14 @@ describe("Sports source renderer Compose sandbox", () => {
 
     expectSandboxedRenderer(dev, "api");
     expectSandboxedRenderer(prod, "jarv1s");
-    expect(dev["sports-source-renderer"]?.build?.dockerfile).toBe("Dockerfile.sports-renderer");
-    expect(prod["sports-source-renderer"]?.image).toBe(
-      "ghcr.io/motioneso/moss-sports-renderer:test"
+    expect(dev["sports-browser-socket-init"]?.build?.dockerfile).toBe("Dockerfile");
+    expect(prod["sports-browser-socket-init"]?.build).toBeUndefined();
+    expect(dev["sports-source-renderer"]?.image).toBe("moss:dev");
+    expect(prod["sports-source-renderer"]?.image).toBe("ghcr.io/motioneso/moss:test");
+    expect(dev["sports-source-renderer"]?.command).toContain(
+      "HOME=/tmp exec node packages/sports/dist/browser-sidecar.mjs"
     );
+    expect(prod["sports-source-renderer"]?.command).toEqual(dev["sports-source-renderer"]?.command);
     expect(dev.api?.user).toBeUndefined();
     expect(prod.jarv1s?.environment).toMatchObject({
       JARVIS_HOST_UID: "1000",
@@ -131,12 +136,11 @@ describe("Sports source renderer Compose sandbox", () => {
 
   it("builds a setgid shared directory and group-writable sockets", () => {
     const root = resolve(import.meta.dirname, "../..");
-    expect(readFileSync(resolve(root, "Dockerfile"), "utf8")).toContain(
-      "chmod 2770 /run/moss-sports-browser"
-    );
-    expect(readFileSync(resolve(root, "Dockerfile.sports-renderer"), "utf8")).toContain(
-      "-o 0 -g 1001 -m 2770 /run/moss-sports-browser"
-    );
+    const dockerfile = readFileSync(resolve(root, "Dockerfile"), "utf8");
+    expect(dockerfile).toContain("chmod 2770 /run/moss-sports-browser");
+    expect(dockerfile).toContain("--outfile=packages/sports/dist/browser-sidecar.mjs");
+    expect(dockerfile).toContain("playwright install --with-deps chromium");
+    expect(existsSync(resolve(root, "Dockerfile.sports-renderer"))).toBe(false);
     for (const file of ["browser-broker.ts", "browser-sidecar.ts"]) {
       const source = readFileSync(resolve(root, "packages/sports/src/source", file), "utf8");
       expect(source).toContain("mode: 0o2770");
