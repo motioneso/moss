@@ -219,10 +219,7 @@ services:
       - jarv1s
 
   sports-browser-socket-init:
-    image: ghcr.io/motioneso/moss-sports-renderer:${JARVIS_IMAGE_TAG:?set JARVIS_IMAGE_TAG to a published version tag}
-    build:
-      context: ..
-      dockerfile: Dockerfile.sports-renderer
+    image: ghcr.io/motioneso/moss:${JARVIS_IMAGE_TAG:?set JARVIS_IMAGE_TAG to a published version tag}
     network_mode: none
     read_only: true
     user: "0:0"
@@ -236,10 +233,8 @@ services:
     restart: "no"
 
   sports-source-renderer:
-    image: ghcr.io/motioneso/moss-sports-renderer:${JARVIS_IMAGE_TAG:?set JARVIS_IMAGE_TAG to a published version tag}
-    build:
-      context: ..
-      dockerfile: Dockerfile.sports-renderer
+    image: ghcr.io/motioneso/moss:${JARVIS_IMAGE_TAG:?set JARVIS_IMAGE_TAG to a published version tag}
+    command: ["sh", "-c", "HOME=/tmp exec node packages/sports/dist/browser-sidecar.mjs"]
     network_mode: none
     read_only: true
     tmpfs:

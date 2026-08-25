@@ -4,6 +4,7 @@
 **Spec:** `docs/superpowers/specs/2026-08-23-1909-sports-public-source-completion.md` (Approved)
 **Repairs:** #1572
 **Separate future scope:** #1682
+**Packaging amendment:** #1946 supersedes the separate renderer image with the single Moss image.
 **Risk tier:** high (untrusted browser execution, arbitrary public URLs/SSRF boundary, owner-scoped
 RLS migration, and confirmed assistant writes)
 
@@ -73,9 +74,10 @@ requests, never stored, logged, placed in environment variables, or reused as a 
 not build a custom framing or general RPC layer unless standard Node HTTP is proven insufficient.
 Closing an ordinary renderer-to-broker request neither revokes nor extends the job capability.
 
-### Renderer release boundary
+### Renderer process boundary
 
-Publish a separate multi-architecture renderer image from `Dockerfile.sports-renderer`. The service:
+Bundle Chromium and the renderer entrypoint in the multi-architecture Moss image. Run that same
+image as a separate renderer service that:
 
 - has `network_mode: none`, no secrets/env file, no host mounts, a read-only root, writable tmpfs
   only for the browser profile, a shared UDS volume, non-root user, all capabilities dropped,
@@ -86,8 +88,8 @@ Publish a separate multi-architecture renderer image from `Dockerfile.sports-ren
 
 The main API probes the socket with a short timeout and never depends on renderer startup. Missing,
 stale, or unhealthy renderer means static/feed preview still works and browser-only preview returns
-`unsupported`. Dev and prod Compose must ship the same sandbox shape. CI publishes renderer tags in
-lockstep with the corresponding `moss` version/edge tag.
+`unsupported`. Dev and prod Compose must ship the same sandbox shape. CI publishes only the Moss
+image; release promotion of that digest covers both application and renderer processes.
 
 ### Minimal state choices
 
@@ -124,12 +126,12 @@ lockstep with the corresponding `moss` version/edge tag.
   - `browser-sidecar.ts` — the renderer entrypoint and Playwright request interception.
 - Add direct `playwright-core` and `tldts` dependencies to `packages/sports/package.json`. Use the
   existing root Playwright version; add no browser automation framework.
-- Add `Dockerfile.sports-renderer`, a `sports-source-renderer` service and shared socket volume to
-  `infra/docker-compose.yml` and `infra/docker-compose.prod.yml`, and the socket path only to the main
-  app service. The renderer receives no app env file or database/network membership.
-- Extend `.github/workflows/ci.yml` to build/test both architectures and publish
-  `ghcr.io/motioneso/moss-sports-renderer:<version|edge>` beside the main image. PR builds do not
-  push either image.
+- Bundle the renderer entrypoint and matching Playwright Chromium runtime in the root `Dockerfile`.
+  Add a `sports-source-renderer` service and shared socket volume to `infra/docker-compose.yml` and
+  `infra/docker-compose.prod.yml`, and the socket path only to the main app service. The renderer
+  uses the Moss image and receives no app env file or database/network membership.
+- Keep `.github/workflows/ci.yml` on one multi-architecture Moss image build and publication path.
+  PR builds do not push the image.
 - Keep `packages/module-registry/src/index.ts` to construction/wiring: create the Sports browser
   client and pass it into Sports routes. Do not place protocol or policy logic in the registry.
 - The sidecar owns exactly one `page.goto`. It rejects popups/new pages, service workers,
@@ -161,7 +163,8 @@ lockstep with the corresponding `moss` version/edge tag.
   mount, including exact `cpus: 1.0`, `mem_limit: 512m`, and bounded pids. Extend
   `scripts/smoke-compose.ts` to probe the socket, prove an outbound connection from the renderer
   container fails, and prove a missing/stale renderer does not prevent ordinary API/static operation.
-- Build both `linux/amd64` and `linux/arm64` renderer targets in CI before publication.
+- Build the Chromium-bearing Moss image for both `linux/amd64` and `linux/arm64` in CI before
+  publication.
 
 ### Kill gate
 
@@ -170,7 +173,7 @@ Stop and report #1909 blocked before Slice 2 if any of these fail:
 1. the exact production image cannot run Chromium as non-root with `network_mode: none`;
 2. intercepted page/XHR requests cannot complete solely through the bounded UDS broker;
 3. the renderer can reach any IP directly or receive an app secret; or
-4. the separate image cannot build for both published architectures.
+4. the single Moss image cannot build for both published architectures.
 
 Do not weaken the sandbox or let Playwright use direct networking as a workaround.
 
@@ -395,7 +398,7 @@ Do not weaken the sandbox or let Playwright use direct networking as a workaroun
   recipe-drift rebuild preview/confirm, legacy feed refresh, and legacy scrape rebuild. Use bounded
   textual/DOM/network assertions; do not attach screenshots.
 - On the implementation PR, add the user-facing release note and record the UAT command, exit code,
-  assertions, renderer image/tag, and no-egress proof before merge.
+  assertions, Moss image/tag, and renderer no-egress proof before merge.
 - After deployment, inspect the two original production source rows through `sports.listSources` or
   settings only. Exercise Retry/Rebuild through the application; do not update rows with SQL.
 

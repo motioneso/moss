@@ -6,6 +6,8 @@
 **GitHub:** [#1909](https://github.com/motioneso/moss/issues/1909)
 **Repairs:** [#1572](https://github.com/motioneso/moss/issues/1572)
 **Separate future scope:** [#1682](https://github.com/motioneso/moss/issues/1682)
+**Packaging amendment:** [#1946](https://github.com/motioneso/moss/issues/1946) supersedes the
+separate renderer image: Chromium and the renderer entrypoint ship in the single Moss image.
 
 ## Problem
 
@@ -45,6 +47,9 @@ Normal refresh uses only bounded safe HTTP. Custom headlines enter the existing 
 presentation path with trusted source identity and assignment scope. Source and target health report
 the last real fetch, and both settings and Moss expose the same preview, confirmation, retry, and
 recipe-rebuild paths.
+
+The browser remains a separate, restricted Compose process, but it runs from the same downloadable
+Moss image as the application. Operators do not pull or promote a second renderer package.
 
 ## Design Invariants
 

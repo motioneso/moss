@@ -174,10 +174,10 @@ services:
       - jarv1s
 
   sports-browser-socket-init:
-    image: moss-sports-renderer:dev
+    image: moss:dev
     build:
       context: ..
-      dockerfile: Dockerfile.sports-renderer
+      dockerfile: Dockerfile
     network_mode: none
     read_only: true
     user: "0:0"
@@ -191,10 +191,8 @@ services:
     restart: "no"
 
   sports-source-renderer:
-    image: moss-sports-renderer:dev
-    build:
-      context: ..
-      dockerfile: Dockerfile.sports-renderer
+    image: moss:dev
+    command: ["sh", "-c", "HOME=/tmp exec node packages/sports/dist/browser-sidecar.mjs"]
     network_mode: none
     read_only: true
     tmpfs:

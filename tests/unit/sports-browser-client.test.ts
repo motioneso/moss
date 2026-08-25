@@ -30,7 +30,7 @@ async function listen(server: Server, socketPath: string): Promise<void> {
 
 describe("SportsBrowserClient", () => {
   it("completes the API-owned job and fails soft when the renderer disconnects", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "moss-sports-renderer-"));
+    const directory = await mkdtemp(join(tmpdir(), "moss-sports-browser-"));
     const socketPath = join(directory, "renderer.sock");
     let disconnect = false;
     let receivedJobId: string | undefined;

@@ -12,7 +12,7 @@ describe("createComposeSmokePlan — prod variant", () => {
     expect(plan.commands.some((c) => c.args[0] === "build")).toBe(false);
   });
 
-  it("builds and exercises both production images when build is set", () => {
+  it("builds and exercises the single production image when build is set", () => {
     const plan = createComposeSmokePlan({
       composeFile: "infra/docker-compose.prod.yml",
       build: true
@@ -22,13 +22,9 @@ describe("createComposeSmokePlan — prod variant", () => {
     expect(composeCmds.length).toBeGreaterThan(0);
     expect(composeCmds.every((c) => c.args.includes("infra/docker-compose.prod.yml"))).toBe(true);
     const builds = plan.commands.filter((c) => c.args[0] === "build");
-    expect(builds).toHaveLength(2);
+    expect(builds).toHaveLength(1);
     expect(builds[0]?.args).toContain("Dockerfile");
     expect(builds[0]?.args.some((a) => a.startsWith("ghcr.io/motioneso/moss:"))).toBe(true);
-    expect(builds[1]?.args).toContain("Dockerfile.sports-renderer");
-    expect(
-      builds[1]?.args.some((a) => a.startsWith("ghcr.io/motioneso/moss-sports-renderer:"))
-    ).toBe(true);
     expect(plan.healthUrl).toBe("http://localhost:1533/health/ready");
     expect(plan.commands.some((c) => c.args.includes("api"))).toBe(false);
     expect(plan.commands.some((c) => c.args.includes("web"))).toBe(false);
@@ -46,7 +42,10 @@ describe("createComposeSmokePlan — prod variant", () => {
     ).toBe(true);
     expect(
       plan.commands.some(
-        (c) => c.args.includes("sports-source-renderer") && c.args.includes("--input-type=module")
+        (c) =>
+          c.args.includes("sports-source-renderer") &&
+          c.args.includes("--input-type=module") &&
+          c.args.includes("/app/packages/sports")
       )
     ).toBe(true);
     expect(

@@ -65,7 +65,7 @@ async function main(): Promise<void> {
       allowedHosts: ["publisher.example"]
     });
     if (!result.ok) {
-      throw new Error(`Exact renderer image did not complete brokered render: ${result.reason}`);
+      throw new Error(`Exact Moss image did not complete brokered render: ${result.reason}`);
     }
     if (!result.domHtml.includes("Liverpool team news")) {
       throw new Error("Exact renderer image omitted brokered XHR content");
@@ -92,7 +92,7 @@ async function main(): Promise<void> {
     }
     console.log(
       JSON.stringify({
-        event: "sports_renderer_exact_image_smoke_passed",
+        event: "sports_renderer_exact_moss_image_smoke_passed",
         directory: { gid: directory.gid, mode: mode(directory.mode).toString(8) },
         brokerSocket: { uid: brokerSocket.uid, gid: brokerSocket.gid, mode: "660" },
         rendererSocket: { uid: rendererSocket.uid, gid: rendererSocket.gid, mode: "660" },

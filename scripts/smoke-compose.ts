@@ -43,18 +43,6 @@ export function createComposeSmokePlan(input: ComposeSmokePlanInput = {}): Compo
           command: "docker",
           args: ["build", "-t", `ghcr.io/motioneso/moss:${imageTag}`, "-f", "Dockerfile", "."],
           description: "Build the Moss image locally and tag it to the prod GHCR ref"
-        },
-        {
-          command: "docker",
-          args: [
-            "build",
-            "-t",
-            `ghcr.io/motioneso/moss-sports-renderer:${imageTag}`,
-            "-f",
-            "Dockerfile.sports-renderer",
-            "."
-          ],
-          description: "Build the isolated Sports renderer image"
         }
       ]
     : [];
@@ -147,6 +135,8 @@ export function createComposeSmokePlan(input: ComposeSmokePlanInput = {}): Compo
           ...composeArgs,
           "exec",
           "-T",
+          "-w",
+          "/app/packages/sports",
           "sports-source-renderer",
           "node",
           "--input-type=module",

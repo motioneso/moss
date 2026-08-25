@@ -22,7 +22,6 @@ concurrency:
 
 env:
   IMAGE: ghcr.io/motioneso/moss
-  RENDERER_IMAGE: ghcr.io/motioneso/moss-sports-renderer
 
 jobs:
   release:
@@ -73,14 +72,6 @@ jobs:
             exit 1
           fi
 
-          renderer_edge_manifest=$(docker buildx imagetools inspect "$RENDERER_IMAGE:edge" --format '{{json .Manifest}}')
-          renderer_edge_digest=$(jq -er .digest <<< "$renderer_edge_manifest")
-          renderer_provenance=$(docker buildx imagetools inspect "$RENDERER_IMAGE:edge" --format '{{json .Provenance}}')
-          if ! jq -e --arg sha "$SOURCE_SHA" '([.. | objects | .["vcs:revision"]? // empty] | unique) == [$sha]' <<< "$renderer_provenance" >/dev/null; then
-            echo "::error::renderer edge provenance does not match $SOURCE_SHA"
-            exit 1
-          fi
-
           version_exists=false
           if version_manifest=$(docker buildx imagetools inspect "$IMAGE:$VERSION" --format '{{json .Manifest}}' 2>/dev/null); then
             version_digest=$(jq -er .digest <<< "$version_manifest")
@@ -89,16 +80,6 @@ jobs:
               exit 1
             fi
             version_exists=true
-          fi
-
-          renderer_version_exists=false
-          if renderer_version_manifest=$(docker buildx imagetools inspect "$RENDERER_IMAGE:$VERSION" --format '{{json .Manifest}}' 2>/dev/null); then
-            renderer_version_digest=$(jq -er .digest <<< "$renderer_version_manifest")
-            if [[ "$renderer_version_digest" != "$renderer_edge_digest" ]]; then
-              echo "::error::renderer $VERSION already points to a different digest"
-              exit 1
-            fi
-            renderer_version_exists=true
           fi
 
           tag_exists=false
@@ -111,16 +92,12 @@ jobs:
           fi
 
           echo "edge_digest=$edge_digest" >> "$GITHUB_OUTPUT"
-          echo "renderer_edge_digest=$renderer_edge_digest" >> "$GITHUB_OUTPUT"
-          echo "renderer_version_exists=$renderer_version_exists" >> "$GITHUB_OUTPUT"
           echo "tag_exists=$tag_exists" >> "$GITHUB_OUTPUT"
           echo "version_exists=$version_exists" >> "$GITHUB_OUTPUT"
 
       - name: Promote image without rebuilding
         env:
           EDGE_DIGEST: ${{ steps.source.outputs.edge_digest }}
-          RENDERER_EDGE_DIGEST: ${{ steps.source.outputs.renderer_edge_digest }}
-          RENDERER_VERSION_EXISTS: ${{ steps.source.outputs.renderer_version_exists }}
           VERSION: ${{ inputs.version }}
           VERSION_EXISTS: ${{ steps.source.outputs.version_exists }}
         run: |
@@ -143,7 +120,6 @@ jobs:
           }
 
           promote "$IMAGE" "$EDGE_DIGEST" "$VERSION_EXISTS"
-          promote "$RENDERER_IMAGE" "$RENDERER_EDGE_DIGEST" "$RENDERER_VERSION_EXISTS"
 
       - name: Create GitHub release
         env:
