@@ -36,10 +36,14 @@ beforeAll(async () => {
   const med = await dataContext.withDataContext(
     { actorUserId: userId, requestId: "req:range-seed" },
     (scopedDb) =>
-      repo.createMedication(scopedDb, {
-        name: "Testosterone",
-        frequencyType: "as_needed"
-      })
+      repo.createMedication(
+        scopedDb,
+        {
+          name: "Testosterone",
+          frequencyType: "as_needed"
+        },
+        "UTC"
+      )
   );
 
   // Window under test: [2026-02-01, 2026-02-28].

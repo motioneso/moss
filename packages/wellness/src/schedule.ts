@@ -5,7 +5,8 @@ import {
   expandOccurrences,
   type MedicationSchedule,
   type ScheduleAnchor,
-  type Weekday
+  type Weekday,
+  type WeekdayPosition
 } from "./occurrence-engine.js";
 
 /**
@@ -119,6 +120,64 @@ function toEngineInput(med: Medication): { schedule: MedicationSchedule; anchor:
     };
   }
 
+  if (med.frequency_type === "every_interval") {
+    const anchor: ScheduleAnchor = {
+      startDate: dateKeyFromColumn(med.schedule_start_date!),
+      endDate: med.schedule_end_date ? dateKeyFromColumn(med.schedule_end_date) : null,
+      timeZone: med.time_zone ?? "UTC"
+    };
+    if (med.interval_unit === "weeks") {
+      return {
+        schedule: {
+          family: "everyInterval",
+          unit: "weeks",
+          interval: med.interval_count!,
+          weekdays: (med.weekdays ?? []) as Weekday[],
+          doseTimes
+        },
+        anchor
+      };
+    }
+    return {
+      schedule: {
+        family: "everyInterval",
+        unit: med.interval_unit === "months" ? "months" : "days",
+        interval: med.interval_count!,
+        doseTimes
+      },
+      anchor
+    };
+  }
+
+  if (med.frequency_type === "monthly") {
+    const anchor: ScheduleAnchor = {
+      startDate: dateKeyFromColumn(med.schedule_start_date!),
+      endDate: med.schedule_end_date ? dateKeyFromColumn(med.schedule_end_date) : null,
+      timeZone: med.time_zone ?? "UTC"
+    };
+    if (med.month_kind === "weekdayPosition") {
+      return {
+        schedule: {
+          family: "monthly",
+          kind: "weekdayPosition",
+          position: med.month_weekday_position as WeekdayPosition,
+          weekday: med.month_weekday as Weekday,
+          doseTimes
+        },
+        anchor
+      };
+    }
+    return {
+      schedule: {
+        family: "monthly",
+        kind: "date",
+        dayOfMonth: med.month_day_is_last ? "last" : (med.month_day as number),
+        doseTimes
+      },
+      anchor
+    };
+  }
+
   // once_daily, times_per_day
   return { schedule: { family: "daily", doseTimes }, anchor: openAnchor };
 }
@@ -129,7 +188,7 @@ function toEngineInput(med: Medication): { schedule: MedicationSchedule; anchor:
  * through a template literal (silently wrong, but never threw); the engine's `startDate`
  * requires a real date-key string, so normalize explicitly here instead.
  */
-function dateKeyFromColumn(value: string | Date): string {
+export function dateKeyFromColumn(value: string | Date): string {
   return value instanceof Date ? value.toISOString().slice(0, 10) : value;
 }
 

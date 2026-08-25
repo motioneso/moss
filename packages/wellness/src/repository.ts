@@ -45,6 +45,15 @@ export interface CreateMedicationInput {
   readonly cycleDaysOff?: number | null;
   readonly cycleAnchorDate?: string | null;
   readonly notes?: string | null;
+  readonly intervalUnit?: "days" | "weeks" | "months" | null;
+  readonly intervalCount?: number | null;
+  readonly startDate?: string | null;
+  readonly endDate?: string | null;
+  readonly monthKind?: "date" | "weekdayPosition" | null;
+  readonly monthDay?: number | null;
+  readonly monthDayIsLast?: boolean | null;
+  readonly monthWeekdayPosition?: "first" | "second" | "third" | "fourth" | "last" | null;
+  readonly monthWeekday?: number | null;
 }
 
 export interface UpdateMedicationInput {
@@ -129,7 +138,8 @@ export class WellnessRepository {
   // ── Medications ────────────────────────────────────────────────────────
   async createMedication(
     scopedDb: DataContextDb,
-    input: CreateMedicationInput
+    input: CreateMedicationInput,
+    timeZone: string
   ): Promise<Medication> {
     assertDataContextDb(scopedDb);
     const row = await scopedDb.db
@@ -147,7 +157,17 @@ export class WellnessRepository {
         cycle_days_on: input.cycleDaysOn ?? null,
         cycle_days_off: input.cycleDaysOff ?? null,
         cycle_anchor_date: input.cycleAnchorDate ?? null,
-        notes: input.notes ?? null
+        notes: input.notes ?? null,
+        schedule_start_date: input.startDate ?? null,
+        schedule_end_date: input.endDate ?? null,
+        time_zone: timeZone,
+        interval_unit: input.intervalUnit ?? null,
+        interval_count: input.intervalCount ?? null,
+        month_kind: input.monthKind ?? null,
+        month_day: input.monthDay ?? null,
+        month_day_is_last: input.monthDayIsLast ?? false,
+        month_weekday_position: input.monthWeekdayPosition ?? null,
+        month_weekday: input.monthWeekday ?? null
       })
       .returningAll()
       .executeTakeFirstOrThrow();

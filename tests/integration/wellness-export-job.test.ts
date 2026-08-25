@@ -76,11 +76,15 @@ beforeAll(async () => {
   const med = await dataContext.withDataContext(
     { actorUserId: userId, requestId: "req:seed" },
     (scopedDb) =>
-      repo.createMedication(scopedDb, {
-        name: "Sertraline",
-        frequencyType: "once_daily",
-        scheduleTimes: ["08:00"]
-      })
+      repo.createMedication(
+        scopedDb,
+        {
+          name: "Sertraline",
+          frequencyType: "once_daily",
+          scheduleTimes: ["08:00"]
+        },
+        "UTC"
+      )
   );
   await dataContext.withDataContext(
     { actorUserId: userId, requestId: "req:seed" },
@@ -287,11 +291,15 @@ describe("Wellness export job + route (#484)", () => {
     const med = await dataContext.withDataContext(
       { actorUserId: workerRoleUserId, requestId: "req:worker-role-seed" },
       (scopedDb) =>
-        new WellnessRepository().createMedication(scopedDb, {
-          name: "WORKER-ROLE-MARKER-MEDICATION",
-          frequencyType: "once_daily",
-          scheduleTimes: ["08:00"]
-        })
+        new WellnessRepository().createMedication(
+          scopedDb,
+          {
+            name: "WORKER-ROLE-MARKER-MEDICATION",
+            frequencyType: "once_daily",
+            scheduleTimes: ["08:00"]
+          },
+          "UTC"
+        )
     );
     await dataContext.withDataContext(
       { actorUserId: workerRoleUserId, requestId: "req:worker-role-seed" },
@@ -377,11 +385,15 @@ describe("Wellness export job + route (#484)", () => {
     const med = await dataContext.withDataContext(
       { actorUserId: adherenceUserId, requestId: "req:adherence-seed" },
       (scopedDb) =>
-        repo.createMedication(scopedDb, {
-          name: "AdherenceTestMed",
-          frequencyType: "once_daily",
-          scheduleTimes: ["08:00"]
-        })
+        repo.createMedication(
+          scopedDb,
+          {
+            name: "AdherenceTestMed",
+            frequencyType: "once_daily",
+            scheduleTimes: ["08:00"]
+          },
+          "UTC"
+        )
     );
 
     await dataContext.withDataContext(
