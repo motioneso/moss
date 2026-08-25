@@ -78,6 +78,8 @@ async function mockSportsSettings(page: Page, scenario: MutationScenario = {}): 
     fulfillJson(route, { competitions: [NFL, EPL], degraded: false })
   );
 
+  await page.route("**/api/sports/sources", (route) => fulfillJson(route, { sources: [] }));
+
   await page.route("**/api/sports/follows", async (route) => {
     if (route.request().method() === "GET") return fulfillJson(route, { follows });
     if (route.request().method() === "POST") {
