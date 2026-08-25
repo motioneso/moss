@@ -3,7 +3,8 @@ import { createHash } from "node:crypto";
 import { Ajv } from "ajv";
 import { compile, selectAll, selectOne } from "css-select";
 import { DomUtils, Parser, parseDocument } from "htmlparser2";
-import { getDomain } from "tldts";
+
+import { publisherIdentity } from "./publisher-identity.js";
 
 export const SPORTS_SOURCE_RECIPE_VERSION = 1 as const;
 
@@ -271,15 +272,16 @@ function validateRecipeSemantics(recipe: SportsSourceRecipe): boolean {
   }
   try {
     const parsed = new URL(recipe.request.urlTemplate.replace(/\{[^{}]+\}/g, "slot"));
-    const requestDomain = getDomain(parsed.hostname) ?? parsed.hostname;
+    const requestDomain = publisherIdentity(parsed.hostname);
     const validRequest =
       parsed.protocol === "https:" &&
       !parsed.username &&
       !parsed.password &&
       !parsed.port &&
       !parsed.hash &&
+      requestDomain !== null &&
       recipe.fetchHosts.includes(parsed.hostname.toLowerCase()) &&
-      recipe.fetchHosts.every((host) => (getDomain(host) ?? host) === requestDomain) &&
+      recipe.fetchHosts.every((host) => publisherIdentity(host) === requestDomain) &&
       recipe.request.headers.accept ===
         (recipe.kind === "json" ? "application/json" : "text/html,application/xhtml+xml");
     if (!validRequest) return false;

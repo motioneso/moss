@@ -136,6 +136,11 @@ describe("Sports public source recipe", () => {
       { ...fotmobJsonRecipe, fetchHosts: ["www.fotmob.com", "evil.example"] },
       {
         ...fotmobJsonRecipe,
+        fetchHosts: ["github.io", "evil.github.io"],
+        request: { ...fotmobJsonRecipe.request, urlTemplate: "https://github.io/news" }
+      },
+      {
+        ...fotmobJsonRecipe,
         request: {
           ...fotmobJsonRecipe.request,
           urlTemplate: "https://www.fotmob.com:8443/api/tltv3/teams/{teamId}"

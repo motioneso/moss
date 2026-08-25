@@ -270,6 +270,7 @@ export class SportsSourceService {
         rawUrl: baseline.source.feedUrl ?? baseline.source.homepageUrl,
         targets: requestedTargets,
         persistedAuthority: {
+          canonicalDomain: baseline.source.canonicalDomain,
           recipeJson: baseline.recipeJson,
           recipeFingerprint: baseline.recipeFingerprint,
           confirmedFetchHosts: baseline.confirmedFetchHosts

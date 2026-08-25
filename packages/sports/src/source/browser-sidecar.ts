@@ -15,8 +15,6 @@ import {
   type Request as BrowserRequest,
   type Route
 } from "playwright-core";
-import { getDomain } from "tldts";
-
 import {
   type BrowserFetchRequest,
   type BrowserRenderRequest,
@@ -27,6 +25,7 @@ import {
   SPORTS_BROWSER_ROUTES,
   SPORTS_BROWSER_SOCKETS
 } from "./browser-protocol.js";
+import { sameSportsPublisher } from "./publisher-identity.js";
 
 export interface SportsBrowserSidecarDependencies {
   readonly brokerSocketPath?: string;
@@ -87,9 +86,7 @@ function sendJson(response: ServerResponse, status: number, value: unknown): voi
 }
 
 function isRelatedPublisherHost(initialUrl: URL, requestedUrl: URL): boolean {
-  const initialDomain = getDomain(initialUrl.hostname) ?? initialUrl.hostname;
-  const requestedDomain = getDomain(requestedUrl.hostname) ?? requestedUrl.hostname;
-  return initialDomain === requestedDomain;
+  return sameSportsPublisher(initialUrl.hostname, requestedUrl.hostname);
 }
 
 function allowedBrowserRequest(

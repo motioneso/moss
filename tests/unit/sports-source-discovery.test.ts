@@ -3,10 +3,21 @@ import { describe, expect, it, vi } from "vitest";
 import type { DataContextDb } from "@moss/db";
 import type { NewsAiPort, NewsSafeFetchPort } from "@moss/news";
 
-import { resolveSportsSourceInput } from "../../packages/sports/src/source/discovery.js";
+import {
+  resolveSportsSourceInput,
+  samePublisherIdentity
+} from "../../packages/sports/src/source/discovery.js";
 
 const db = {} as DataContextDb;
 const feed = `<rss><channel><item><title>A consequential sports headline today</title><link>https://one.example/story</link><pubDate>Fri, 11 Jul 2026 12:00:00 GMT</pubDate></item></channel></rss>`;
+
+describe("sports publisher identity", () => {
+  it("accepts sibling hosts but rejects public-suffix tenants", () => {
+    expect(samePublisherIdentity("www.publisher.com", "api.publisher.com")).toBe(true);
+    expect(samePublisherIdentity("github.io", "evil.github.io")).toBe(false);
+    expect(samePublisherIdentity("one.github.io", "two.github.io")).toBe(false);
+  });
+});
 
 function ai(): NewsAiPort {
   return {
@@ -106,6 +117,7 @@ describe("resolveSportsSourceInput", () => {
           }
         ],
         persistedAuthority: {
+          canonicalDomain: "one.example",
           recipeJson: null,
           recipeFingerprint: null,
           confirmedFetchHosts: ["www.one.example", "one.example"]
@@ -168,6 +180,30 @@ describe("resolveSportsSourceInput", () => {
       )
     ).resolves.toEqual({ status: "rejected", reason: "unsupported" });
     expect(generateJson).toHaveBeenCalledOnce();
+  });
+
+  it("rejects exact target hosts beyond the six-host confirmation cap before fetching them", async () => {
+    const fetch = vi.fn<NewsSafeFetchPort>(async (url: string) => ({
+      ok: true,
+      status: 200,
+      finalUrl: url,
+      contentType: "text/html",
+      body: "<main></main>",
+      truncated: false
+    }));
+    const targets = Array.from({ length: 6 }, (_, index) => ({
+      followId: `follow-${index}`,
+      competitionKey: "eng.1",
+      competitionLabel: "Premier League",
+      teamKey: `team-${index}`,
+      teamLabel: `Team ${index}`,
+      exactTargetUrl: `https://api${index}.one.example/news`
+    }));
+
+    await expect(
+      resolveSportsSourceInput(db, { fetch, ai: ai() }, { rawUrl: "https://one.example", targets })
+    ).resolves.toEqual({ status: "rejected", reason: "policy" });
+    expect(fetch).not.toHaveBeenCalledWith("https://api5.one.example/news", expect.anything());
   });
 
   it("rejects a non-HTTPS URL without making a network request", async () => {

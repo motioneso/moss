@@ -1,8 +1,11 @@
+import { createHash } from "node:crypto";
+
 import { describe, expect, it, vi } from "vitest";
 
 import type { DataContextDb } from "@moss/db";
 import { SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT } from "@moss/shared";
 
+import type { SportsSafeFetchPort } from "../../packages/sports/src/source/discovery.js";
 import { createSportsPreviewStore } from "../../packages/sports/src/source/preview-store.js";
 import { validateSportsSourceRecipe } from "../../packages/sports/src/source/recipe.js";
 import type {
@@ -65,20 +68,24 @@ const baseline: SportsSourceBaseline = {
   ]
 };
 
-function setup() {
+function setup(
+  currentBaseline: SportsSourceBaseline = baseline,
+  follows = [{ id: followId, competitionKey: "nfl", teamKey: "dal", createdAt: checkedAt }]
+) {
   const replaceAssignments = vi.fn(async () => baseline.source);
-  const fetch = vi.fn(async () => ({ ok: false as const, reason: "network" as const }));
+  const fetch = vi.fn<SportsSafeFetchPort>(async () => ({
+    ok: false as const,
+    reason: "network" as const
+  }));
   const sources = {
-    getBaseline: vi.fn(async () => baseline),
+    getBaseline: vi.fn(async () => currentBaseline),
     lockOwnerAssignments: vi.fn(async () => undefined),
     countAssignments: vi.fn(async () => 1),
     replaceAssignments
   } as unknown as SportsSourcesRepository;
   const service = new SportsSourceService({
     follows: {
-      list: async () => [
-        { id: followId, competitionKey: "nfl", teamKey: "dal", createdAt: checkedAt }
-      ]
+      list: async () => follows
     },
     sources,
     previews: createSportsPreviewStore(),
@@ -95,6 +102,13 @@ function setup() {
         competitionKey: "nfl",
         name: "Dallas Cowboys",
         shortName: "DAL",
+        crestUrl: null
+      },
+      {
+        teamKey: "phi",
+        competitionKey: "nfl",
+        name: "Philadelphia Eagles",
+        shortName: "PHI",
         crestUrl: null
       }
     ]
@@ -285,6 +299,60 @@ describe("SportsSourceService assignment replacement", () => {
     for (const [, options] of fetch.mock.calls) {
       expect(options?.allowedHosts).toEqual(["publisher.example.com"]);
     }
+  });
+
+  it("retains all persisted feed hosts while previewing an added assignment", async () => {
+    const feedBaseline: SportsSourceBaseline = {
+      ...baseline,
+      source: {
+        ...baseline.source,
+        canonicalDomain: "publisher.com",
+        homepageUrl: "https://www.publisher.com/",
+        feedUrl: "https://feeds.publisher.com/rss.xml",
+        assignments: baseline.source.assignments.map((assignment) => ({
+          ...assignment,
+          targetUrl: "https://feeds.publisher.com/rss.xml"
+        }))
+      },
+      validationFingerprint: createHash("sha256")
+        .update("https://feeds.publisher.com/rss.xml")
+        .digest("hex"),
+      confirmedFetchHosts: ["www.publisher.com", "feeds.publisher.com"],
+      assignments: baseline.assignments.map((assignment) => ({
+        ...assignment,
+        targetUrl: "https://feeds.publisher.com/rss.xml"
+      }))
+    };
+    const { service, fetch } = setup(feedBaseline, [
+      { id: followId, competitionKey: "nfl", teamKey: "dal", createdAt: checkedAt },
+      { id: addedFollowId, competitionKey: "nfl", teamKey: "phi", createdAt: checkedAt }
+    ]);
+    fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      finalUrl: "https://feeds.publisher.com/rss.xml",
+      contentType: "application/rss+xml",
+      body: "<rss><channel><title>Publisher</title></channel></rss>",
+      truncated: false
+    });
+
+    const preview = await service.previewAssignments({} as DataContextDb, "owner-1", sourceId, {
+      assignments: [{ followId }, { followId: addedFollowId }]
+    });
+
+    expect(preview).toMatchObject({
+      status: "ok",
+      candidate: {
+        confirmedFetchHosts: ["www.publisher.com", "feeds.publisher.com"],
+        targets: [
+          { followId, targetUrl: "https://feeds.publisher.com/rss.xml" },
+          { followId: addedFollowId, targetUrl: "https://feeds.publisher.com/rss.xml" }
+        ]
+      }
+    });
+    expect(fetch).toHaveBeenCalledWith("https://feeds.publisher.com/rss.xml", {
+      allowedHosts: ["www.publisher.com", "feeds.publisher.com"]
+    });
   });
 });
 

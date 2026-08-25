@@ -12,7 +12,6 @@ import {
   discoverFeedUrls,
   isPublicFeedDocument,
   normalizePublisherDomain,
-  publisherDomainMatches,
   sampleFeedHeadlines,
   sanitizeFeedText,
   TITLE_CHAR_CAP,
@@ -27,6 +26,7 @@ import {
   type SportsRecipeItem,
   type SportsSourceRecipe
 } from "./recipe.js";
+import { sameSportsPublisher } from "./publisher-identity.js";
 
 export interface SportsWebRequestHop {
   readonly url: URL;
@@ -185,9 +185,7 @@ function htmlMetadata(html: string): {
 }
 
 export function samePublisherIdentity(left: string, right: string): boolean {
-  return (
-    left === right || publisherDomainMatches(left, right) || publisherDomainMatches(right, left)
-  );
+  return sameSportsPublisher(left, right);
 }
 
 function acceptedFinalDomain(finalUrl: string, expectedDomain: string): string | null {
@@ -223,6 +221,7 @@ function boundedEvidenceBody(body: string): string {
 }
 
 const MAX_DISCOVERY_EVIDENCE = 5;
+const MAX_CONFIRMED_FETCH_HOSTS = 6;
 const MAX_FIRST_PARTY_CANDIDATES = 4;
 
 function publisherUrl(value: string, baseUrl: string, publisherDomain: string): string | null {
@@ -477,6 +476,7 @@ export async function resolveSportsSourceInput(
     rawUrl: string;
     targets?: readonly SportsDiscoveryTarget[];
     persistedAuthority?: {
+      readonly canonicalDomain: string;
       readonly recipeJson: Readonly<Record<string, unknown>> | null;
       readonly recipeFingerprint: string | null;
       readonly confirmedFetchHosts: readonly string[];
@@ -504,7 +504,9 @@ export async function resolveSportsSourceInput(
     ((fixedRecipeValidation && !fixedRecipeValidation.ok) ||
       (fixedRecipeValidation?.fingerprint ?? null) !== authority.recipeFingerprint ||
       authority.confirmedFetchHosts.length === 0 ||
-      !authority.confirmedFetchHosts.includes(exactHost(url)))
+      authority.confirmedFetchHosts.length > MAX_CONFIRMED_FETCH_HOSTS ||
+      !authority.confirmedFetchHosts.includes(exactHost(url)) ||
+      !samePublisherIdentity(requestedDomain.domain, authority.canonicalDomain))
   ) {
     return { status: "rejected", reason: "unsupported" };
   }
@@ -590,7 +592,9 @@ export async function resolveSportsSourceInput(
   }
   const metadata = htmlMetadata(homepageBody);
   const feedHosts = feedUrl
-    ? [...new Set([url, fetched.finalUrl, homepageUrl, feedUrl].map(exactHost))]
+    ? authority
+      ? [...authority.confirmedFetchHosts]
+      : [...new Set([url, fetched.finalUrl, homepageUrl, feedUrl].map(exactHost))]
     : undefined;
   if (feedUrl && feedHosts) {
     const checkedAt = new Date().toISOString();
@@ -604,7 +608,7 @@ export async function resolveSportsSourceInput(
       candidate: {
         candidateId: randomUUID(),
         label: metadata.title || domain.domain,
-        canonicalDomain: domain.domain,
+        canonicalDomain: authority?.canonicalDomain ?? domain.domain,
         homepageUrl,
         feedUrl,
         retrievalMethod: "feed",
@@ -653,6 +657,9 @@ export async function resolveSportsSourceInput(
     if (authority && !authority.confirmedFetchHosts.includes(targetHost)) {
       return { status: "rejected", reason: "policy" };
     }
+    if (!allowedHosts.includes(targetHost) && allowedHosts.length >= MAX_CONFIRMED_FETCH_HOSTS) {
+      return { status: "rejected", reason: "policy" };
+    }
     const targetResponse = await deps.fetch(normalizedTargetUrl, { allowedHosts: [targetHost] });
     if (
       !targetResponse.ok ||
@@ -678,6 +685,9 @@ export async function resolveSportsSourceInput(
     if (staticEvidence.length === MAX_DISCOVERY_EVIDENCE) break;
     const candidateHost = exactHost(candidateUrl);
     if (authority && !authority.confirmedFetchHosts.includes(candidateHost)) continue;
+    if (!allowedHosts.includes(candidateHost) && allowedHosts.length >= MAX_CONFIRMED_FETCH_HOSTS) {
+      continue;
+    }
     const response = await deps.fetch(candidateUrl, { allowedHosts: [candidateHost] });
     if (
       !response.ok ||
@@ -751,7 +761,7 @@ export async function resolveSportsSourceInput(
     candidate: {
       candidateId: randomUUID(),
       label: metadata.title || domain.domain,
-      canonicalDomain: domain.domain,
+      canonicalDomain: authority?.canonicalDomain ?? domain.domain,
       homepageUrl,
       feedUrl: null,
       retrievalMethod: "scrape",
