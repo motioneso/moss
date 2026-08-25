@@ -49,3 +49,23 @@ export {
 export { wellnessRecentCheckInsExecute, wellnessMedicationAdherenceExecute } from "./tools.js";
 export { deriveEnergyTrend, WellnessRecallContributor } from "./recall-context.js";
 export { wellnessFocusSignal } from "./focus-signal.js";
+export { expandOccurrences } from "./occurrence-engine.js";
+export type {
+  MedicationSchedule,
+  DailySchedule,
+  SelectedDaysSchedule,
+  EveryIntervalSchedule,
+  EveryNDaysSchedule,
+  EveryNWeeksSchedule,
+  EveryNMonthsSchedule,
+  MonthlySchedule,
+  MonthlyDateSchedule,
+  MonthlyWeekdaySchedule,
+  CycleSchedule,
+  AsNeededSchedule,
+  ScheduleAnchor,
+  DateRange,
+  Occurrence,
+  Weekday,
+  WeekdayPosition
+} from "./occurrence-engine.js";
