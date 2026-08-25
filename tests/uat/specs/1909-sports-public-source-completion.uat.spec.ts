@@ -457,6 +457,7 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
       .getByText(
         /FotMob - Football Live Scores|Issue 1909 fixture feed|Issue 1909 shared sports feed/i
       )
+      .and(page.locator(":visible"))
       .first()
   ).toBeVisible({
     timeout: SOURCE_DEADLINE_MS
@@ -467,6 +468,7 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
       .getByText(
         /BBC Sport|BBC legacy feed|FotMob - Football Live Scores|FotMob legacy scrape|Issue 1909 fixture feed/i
       )
+      .and(page.locator(":visible"))
       .first()
   ).toBeVisible({ timeout: SOURCE_DEADLINE_MS });
 
