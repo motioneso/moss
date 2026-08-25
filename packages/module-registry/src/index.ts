@@ -40,6 +40,7 @@ import {
   ModelDiscoveryService,
   registerAiMaintenanceWorkers,
   registerAiRoutes,
+  approveModuleBuildPlan,
   type AssistantToolGateway,
   type ProviderKind,
   type TerminalRpcConnectOptions,
@@ -164,6 +165,8 @@ import {
   assertMetadataOnlyPayload,
   FOUNDATION_QUEUES,
   registerDataContextWorker,
+  sendJob,
+  MODULE_BUILD_QUEUE,
   type QueueDefinition
 } from "@moss/jobs";
 import { createModuleLogger } from "@moss/module-sdk";
@@ -216,7 +219,9 @@ import {
   type HostRestartDependencies,
   type AppMapReadService,
   loadAppMap,
-  createAppMapReadService
+  createAppMapReadService,
+  getModuleBuild,
+  updateModuleBuildStatus
 } from "@moss/settings";
 import {
   TASKS_QUEUE_DEFINITIONS,
@@ -1485,7 +1490,35 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         resolveActionRequest: (actorUserId, id, status) => {
           const fn = deps.getResolveActionRequestFn?.() ?? unwiredActionResolver;
           return fn(actorUserId, id, status);
-        }
+        },
+        // #1888 — the "Build it" button. packages/ai owns the ownership check and the status
+        // transition; the queue lives out here, so the composition root supplies the send.
+        // No queue means the field stays undefined and the route answers 503.
+        approveModuleBuild: deps.boss
+          ? async (scopedDb, buildId, actorUserId) => {
+              const boss = deps.boss!;
+              await approveModuleBuildPlan(
+                {
+                  getModuleBuild: async (id) => {
+                    const build = await getModuleBuild(scopedDb, id);
+                    return build ? { id: build.id, ownerUserId: build.ownerUserId } : null;
+                  },
+                  updateModuleBuildStatus: (id, status) =>
+                    updateModuleBuildStatus(scopedDb, id, { status }),
+                  sendBuildJob: async (id, owner) => {
+                    await sendJob(
+                      boss,
+                      MODULE_BUILD_QUEUE,
+                      { buildId: id, actorUserId: owner },
+                      { singletonKey: `build:${id}` }
+                    );
+                  }
+                },
+                buildId,
+                actorUserId
+              );
+            }
+          : undefined
       });
     },
     registerWorkers: (boss, deps) => registerAiMaintenanceWorkers(boss, deps.rootDb)

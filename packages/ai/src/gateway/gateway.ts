@@ -245,7 +245,9 @@ export class AssistantToolGateway {
         actionRequestId: ctx.requestId,
         toolName: found.dto.name,
         outcome: result.ok && moduleReportedErrorClass === null ? "executed" : "error",
-        ...(result.ok ? { result: result.data } : { reason: gatewayFailureReason(result) }),
+        ...(result.ok
+          ? { result: liveStreamResult(found.tool, result) }
+          : { reason: gatewayFailureReason(result) }),
         ...(result.ok && found.tool.affectsQueryKeys
           ? { affectsQueryKeys: found.tool.affectsQueryKeys }
           : {})
@@ -290,7 +292,9 @@ export class AssistantToolGateway {
           actionRequestId: ctx.requestId,
           toolName: found.dto.name,
           outcome: result.ok && moduleReportedErrorClass === null ? "executed" : "error",
-          ...(result.ok ? { result: result.data } : { reason: gatewayFailureReason(result) }),
+          ...(result.ok
+            ? { result: liveStreamResult(found.tool, result) }
+            : { reason: gatewayFailureReason(result) }),
           ...(result.ok && found.tool.affectsQueryKeys
             ? { affectsQueryKeys: found.tool.affectsQueryKeys }
             : {})
@@ -754,7 +758,9 @@ export class AssistantToolGateway {
       actionRequestId: action.id,
       toolName: found.dto.name,
       outcome: result.ok && moduleReportedErrorClass === null ? "executed" : "error",
-      ...(result.ok ? { result: result.data } : { reason: gatewayFailureReason(result) }),
+      ...(result.ok
+        ? { result: liveStreamResult(found.tool, result) }
+        : { reason: gatewayFailureReason(result) }),
       ...(result.ok && found.tool.affectsQueryKeys
         ? { affectsQueryKeys: found.tool.affectsQueryKeys }
         : {})
@@ -915,4 +921,23 @@ export class AssistantToolGateway {
       opts
     );
   }
+}
+
+/**
+ * What rides the `action_result` live stream record as `result`.
+ *
+ * By default this is the rendered `{ text }` the model saw — deliberately narrow, so a module
+ * handler cannot push arbitrary shapes at the browser. A tool that owns an inline card opts in
+ * with `streamsStructuredResult`, and then gets the schema-sanitized structured result instead
+ * (`sanitizeAssistantToolResult` has already dropped every key the tool's own output schema does
+ * not declare, so this widens what reaches the browser only as far as that schema).
+ */
+export function liveStreamResult(
+  tool: { readonly streamsStructuredResult?: boolean },
+  result: Extract<GatewayToolResponse, { ok: true }>
+): Record<string, unknown> {
+  if (tool.streamsStructuredResult === true && result.structuredData !== undefined) {
+    return result.structuredData;
+  }
+  return result.data;
 }

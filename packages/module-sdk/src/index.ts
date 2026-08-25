@@ -608,6 +608,15 @@ export interface ModuleAssistantToolManifest {
    * per tool. Omit for read-only tools and for writes with no cached frontend read to refresh.
    */
   readonly affectsQueryKeys?: readonly string[];
+  /**
+   * When true, the gateway puts this tool's schema-sanitized structured result (not just the
+   * rendered text) on the `action_result` live stream record, so the frontend can render a
+   * module-owned inline card from it. Opt-in and default-off: every other tool keeps sending
+   * only the rendered `{ text }` to the browser. Only set this when a frontend surface reads
+   * the structured fields, and remember the value is owner-scoped live stream data — it is
+   * never persisted and never leaves the acting user's own session.
+   */
+  readonly streamsStructuredResult?: boolean;
 }
 
 export interface MossModuleManifest {

@@ -36,6 +36,8 @@ export * from "./adapters/root-workspace.js";
 export { redactSecrets, redactExact } from "./adapters/redact.js";
 export * from "./gateway/index.js";
 export * from "./module-build/run-build-step.js";
+export * from "./module-build/start-build.js";
+export * from "./module-build/write-plan.js";
 export {
   captureAckCursor,
   hasExactUserAck,

@@ -38,6 +38,7 @@ import { ChatRepository } from "./repository.js";
 import { ChatUserMemorySettingsRepository } from "./memory-settings-repository.js";
 import { buildCalendarWriteService } from "./calendar-write-impl.js";
 import { buildEmailWriteService } from "./email-write-impl.js";
+import { buildModuleBuildStartService } from "./module-build-start-impl.js";
 import { NATIVE_CONFIRM_TIMEOUT_MS } from "./live/claude-permission-hook.js";
 import type { CurrentViewReadService } from "./live/current-view.js";
 import type { ChatAttachmentsService } from "./attachments-service.js";
@@ -168,7 +169,23 @@ export function buildChatGatewayDependencies(args: {
         { actorUserId: ctx.actorUserId, requestId: ctx.requestId },
         resolveYoloMode
       ),
-    toolServices: buildChatToolServices(args.collaborators),
+    toolServices: {
+      ...buildChatToolServices(args.collaborators),
+      // #1888 — asking Moss for a module in chat. Built here rather than in
+      // buildChatToolServices because it needs the ai repository as well as the queue, and it
+      // reuses this file's resolveYoloMode so a module build follows exactly the same
+      // auto-approve rule as every other write. No queue means no service, which means the
+      // gateway hides workshop.buildModule entirely (fail closed).
+      ...(args.collaborators.boss
+        ? {
+            moduleBuildStart: buildModuleBuildStartService({
+              boss: args.collaborators.boss,
+              aiRepository: args.repository,
+              isYoloActive: resolveYoloMode
+            })
+          }
+        : {})
+    },
     readToolTrustBoundary: createNotesReadToolTrustBoundary({
       threads: new ChatRepository(),
       memorySettings: new ChatUserMemorySettingsRepository()

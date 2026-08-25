@@ -154,7 +154,7 @@ export async function generateStructured(
       });
       if ("rawText" in generated) {
         try {
-          result = { rawObject: JSON.parse(generated.rawText), usage: generated.usage };
+          result = { rawObject: JSON.parse(unfence(generated.rawText)), usage: generated.usage };
         } catch {
           throw new StructuredOutputParseError(
             "CLI output is not valid JSON",
@@ -214,6 +214,19 @@ export async function generateStructured(
   }
 
   return { ok: false, error: "validation_failed" };
+}
+
+/**
+ * #1888: a CLI-backed adapter returns whatever the CLI printed, and the Claude CLI wraps its answer
+ * in a markdown code fence even when the prompt says "No markdown or commentary" — and it does so
+ * again on every repair retry, so the repair loop can never talk it out of the fence. Unwrap a
+ * reply that is entirely one fenced block; anything else is passed through untouched so genuinely
+ * malformed output still fails and goes through repair. Deliberately NOT a "find the JSON-looking
+ * part of any text" scrape: that would silently accept a reply whose prose changed its meaning.
+ */
+function unfence(rawText: string): string {
+  const match = /^\s*```[A-Za-z0-9_-]*\s*\n([\s\S]*?)\n?\s*```\s*$/.exec(rawText);
+  return match ? match[1]! : rawText;
 }
 
 function formatValidationErrors(errors: readonly ErrorObject[]): string {
