@@ -342,7 +342,9 @@ describe("MVP foundation schema catalog", () => {
         { version: "0190", name: "0190_sports_custom_sources.sql" },
         { version: "0191", name: "0191_sports_public_source_runtime.sql" },
         { version: "0192", name: "0192_sports_legacy_feed_assignments_verified.sql" },
-        { version: "0193", name: "0193_sports_legacy_feed_assignment_repair.sql" }
+        { version: "0193", name: "0193_sports_legacy_feed_assignment_repair.sql" },
+        // Module-build jobs execute as jarvis_worker_runtime and need owner-scoped read/write.
+        { version: "0194", name: "0194_module_builds_worker_runtime.sql" }
       ]);
     } finally {
       await client.end();

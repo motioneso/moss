@@ -22,24 +22,24 @@ import { runModuleBuildStep } from "../../packages/ai/src/module-build/run-build
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 let appDb: Kysely<MossDatabase>;
+let workerDb: Kysely<MossDatabase>;
 let dataContext: DataContextRunner;
+let workerDataContext: DataContextRunner;
 let boss: PgBoss;
 
 beforeAll(async () => {
   await resetFoundationDatabase();
-  // module_builds is only granted to jarvis_app_runtime (RLS-scoped), so data-context queries use
-  // connectionStrings.app. pg-boss's own tables grant UPDATE/DELETE only to jarvis_worker_runtime
-  // (jarvis_app_runtime can insert/read but not claim or complete a job), so the boss that actually
-  // works the queue must connect as the worker role — same split as
-  // tests/integration/tasks-verticals.test.ts.
   appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 2 });
+  workerDb = createDatabase({ connectionString: connectionStrings.worker, maxConnections: 2 });
   dataContext = new DataContextRunner(appDb);
+  workerDataContext = new DataContextRunner(workerDb);
   boss = createPgBossClient(connectionStrings.worker);
   await boss.start();
 });
 
 afterAll(async () => {
   await boss.stop();
+  await workerDb.destroy();
   await appDb.destroy();
 });
 
@@ -48,7 +48,7 @@ describe("module build restart survival (#1754 seam 3)", () => {
     const realRunModuleBuildStep = async (
       payload: ModuleBuildPayload
     ): Promise<ModuleBuildStepResult> =>
-      dataContext.withDataContext(
+      workerDataContext.withDataContext(
         { actorUserId: payload.actorUserId, requestId: randomUUID() },
         async (scopedDb) => {
           const row = await getModuleBuild(scopedDb, payload.buildId);

@@ -36,7 +36,7 @@ function useLiveModules(): readonly WorkshopLiveModuleSummary[] {
     queryFn: () => requestJson<ListMyModulesResponse>("/api/me/modules")
   });
   return (data?.modules ?? [])
-    .filter((mod) => mod.lifecycle === "optional")
+    .filter((mod) => mod.lifecycle === "optional" && mod.scope === "you")
     .map((mod) => ({ id: mod.id, name: mod.name, version: mod.version, scope: mod.scope }));
 }
 
