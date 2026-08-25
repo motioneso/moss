@@ -14,26 +14,29 @@ import {
   previewSportsSourceRecipeSchema,
   retrySportsSourceSchema,
   sportsCatalogResponseSchema,
-  sportsCustomSourcesResponseSchema,
+  sportsNewsSourcesResponseSchema,
   sportsFollowsResponseSchema,
   sportsLeagueTeamsResponseSchema,
   sportsOverviewResponseSchema,
   sportsStandingsResponseSchema,
   sportsTeamSearchResponseSchema,
   updateSportsSourceAssignmentsSchema,
+  updateSportsEspnCoverageSchema,
   updateSportsSourceRecipeSchema,
   type ConfirmSportsSourceRecipeRequest,
   type ConfirmSportsSourceRequest,
   type ConfirmSportsSourceAssignmentsRequest,
   type CreateSportsFollowRequest,
   type PreviewSportsSourceRequest,
-  type PreviewSportsSourceAssignmentsRequest
+  type PreviewSportsSourceAssignmentsRequest,
+  type UpdateSportsEspnCoverageRequest
 } from "@moss/shared";
 
 import { SportsFollowsRepository } from "./repository.js";
 import { SportsService, type SportsFollowsWriter } from "./sports-service.js";
 import { catalogEntry } from "./source/catalog.js";
 import { type SportsDiscoveryBrowserPort, type SportsSafeFetchPort } from "./source/discovery.js";
+import { SportsEspnCoverageRepository } from "./source/espn-coverage-repository.js";
 import { SportsSourcesRepository } from "./source/repository.js";
 import type { SportsPublicSourceReader } from "./source/public-source-reader.js";
 import { createSportsPreviewStore } from "./source/preview-store.js";
@@ -62,6 +65,7 @@ export interface SportsRoutesDependencies {
   };
   /** Optional injection point for tests; defaults to a real `SportsSourcesRepository`. */
   readonly sourcesRepository?: SportsSourcesRepository;
+  readonly espnCoverageRepository?: SportsEspnCoverageRepository;
   readonly publicSourceReader?: Pick<SportsPublicSourceReader, "refresh">;
   readonly sourceService?: SportsSourceService;
   /** Optional injection point for tests; defaults to a private in-memory store. */
@@ -74,6 +78,8 @@ export function registerSportsRoutes(
 ): void {
   const repository: SportsFollowsWriter = dependencies.repository ?? new SportsFollowsRepository();
   const sourcesRepository = dependencies.sourcesRepository ?? new SportsSourcesRepository();
+  const espnCoverageRepository =
+    dependencies.espnCoverageRepository ?? new SportsEspnCoverageRepository();
   const service = new SportsService({
     datasetClient: dependencies.datasetClient,
     dataContext: dependencies.dataContext,
@@ -87,6 +93,7 @@ export function registerSportsRoutes(
     new SportsSourceService({
       follows: repository,
       sources: sourcesRepository,
+      espnCoverage: espnCoverageRepository,
       previews,
       discovery: dependencies.discovery,
       resolveTeams: async (competitionKey) => (await service.getLeagueTeams(competitionKey)).teams,
@@ -234,7 +241,7 @@ export function registerSportsRoutes(
 
   server.get(
     "/api/sports/sources",
-    { schema: sportsCustomSourcesResponseSchema },
+    { schema: sportsNewsSourcesResponseSchema },
     async (request, reply) => {
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
@@ -243,6 +250,26 @@ export function registerSportsRoutes(
         );
         return { sources };
       } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  server.put(
+    "/api/sports/sources/espn/coverage",
+    { schema: updateSportsEspnCoverageSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const input = request.body as UpdateSportsEspnCoverageRequest;
+        const source = await dependencies.dataContext.withDataContext(accessContext, (db) =>
+          sourceService.replaceEspnCoverage(db, input.assignments)
+        );
+        return { source };
+      } catch (error) {
+        if (error instanceof SportsSourceRequestError) {
+          return handleRouteError(new HttpError(error.statusCode, error.message), reply);
+        }
         return handleRouteError(error, reply);
       }
     }

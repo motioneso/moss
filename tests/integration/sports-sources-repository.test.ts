@@ -294,11 +294,8 @@ describe("sports sources repository", () => {
           checkedAt,
           targets: [
             {
-              followId: follow.rows[0].id,
-              competitionKey: "eng.1",
-              competitionLabel: "Premier League",
-              teamKey: "arsenal",
-              teamLabel: "Arsenal",
+              target: { kind: "follow", followId: follow.rows[0].id },
+              label: "Arsenal",
               scope: "team",
               targetUrl: base.feedUrl,
               parameters: {},
@@ -338,11 +335,8 @@ describe("sports sources repository", () => {
     const checkedAt = "2026-08-23T12:00:00.000Z";
     const base = candidate(1);
     const target = (followId: string, teamKey: string) => ({
-      followId,
-      competitionKey: "nfl",
-      competitionLabel: "NFL",
-      teamKey,
-      teamLabel: teamKey,
+      target: { kind: "follow" as const, followId },
+      label: teamKey,
       scope: "team" as const,
       targetUrl: base.feedUrl,
       parameters: {},
@@ -371,7 +365,12 @@ describe("sports sources repository", () => {
     );
 
     const result = await asActor(ids.userA, (db) =>
-      repo.replaceAssignments(db, created.id, [retained.id], [target(follows.rows[2].id, "three")])
+      repo.replaceScopeAssignments(
+        db,
+        created.id,
+        [retained.id],
+        [target(follows.rows[2].id, "three")]
+      )
     );
 
     expect(result).toMatchObject({
@@ -404,11 +403,8 @@ describe("sports sources repository", () => {
     );
     const base = candidate(1);
     const target = (targetUrl: string, targetCheckedAt: string) => ({
-      followId: follow.rows[0].id,
-      competitionKey: "eng.1",
-      competitionLabel: "Premier League",
-      teamKey: "arsenal",
-      teamLabel: "Arsenal",
+      target: { kind: "follow" as const, followId: follow.rows[0].id },
+      label: "Arsenal",
       scope: "team" as const,
       targetUrl,
       parameters: {},
@@ -467,11 +463,8 @@ describe("sports sources repository", () => {
     const base = candidate(1);
     const checkedAt = "2026-08-23T12:00:00.000Z";
     const target = (followId: string, teamKey: string) => ({
-      followId,
-      competitionKey: "nfl",
-      competitionLabel: "NFL",
-      teamKey,
-      teamLabel: teamKey,
+      target: { kind: "follow" as const, followId },
+      label: teamKey,
       scope: "team" as const,
       targetUrl: base.feedUrl,
       parameters: {},
@@ -577,11 +570,8 @@ describe("sports sources repository", () => {
           ...base,
           targets: [
             {
-              followId: follow.rows[0].id,
-              competitionKey: "eng.1",
-              competitionLabel: "Premier League",
-              teamKey: "arsenal",
-              teamLabel: "Arsenal",
+              target: { kind: "follow", followId: follow.rows[0].id },
+              label: "Arsenal",
               scope: "team",
               targetUrl: base.feedUrl,
               parameters: {},
@@ -639,11 +629,8 @@ describe("sports sources repository", () => {
           ...base,
           targets: [
             {
-              followId: follow.rows[0].id,
-              competitionKey: "eng.1",
-              competitionLabel: "Premier League",
-              teamKey: "arsenal",
-              teamLabel: "Arsenal",
+              target: { kind: "follow", followId: follow.rows[0].id },
+              label: "Arsenal",
               scope: "team",
               targetUrl: base.feedUrl,
               parameters: {},
@@ -783,6 +770,22 @@ describe("sports sources repository", () => {
         bootstrap.query(`SELECT ${column} FROM app.sports_source_assignments`)
       ).rejects.toMatchObject({ code: "42501" });
     }
+    await expect(
+      bootstrap.query("SELECT sport_key FROM app.sports_source_assignments")
+    ).resolves.toBeDefined();
+    await expect(
+      bootstrap.query(
+        "SELECT id, owner_user_id, follow_id, sport_key, created_at FROM app.sports_espn_source_assignments"
+      )
+    ).resolves.toBeDefined();
+    await expect(
+      bootstrap.query(
+        "SELECT owner_user_id, espn_headlines_enabled, updated_at FROM app.sports_headline_prefs"
+      )
+    ).resolves.toBeDefined();
+    await expect(
+      bootstrap.query("UPDATE app.sports_headline_prefs SET espn_headlines_enabled = false")
+    ).rejects.toMatchObject({ code: "42501" });
   });
 
   // Postgres FK checks bypass RLS, so setAssignments must not rely on the FK reference to

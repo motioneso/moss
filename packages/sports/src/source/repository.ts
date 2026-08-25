@@ -11,7 +11,7 @@ import type {
   SportsSourceHealthState
 } from "@moss/shared";
 
-import type { VerifiedSportsSourceCandidate, VerifiedSportsSourceTarget } from "./discovery.js";
+import type { VerifiedSportsSourceCandidate } from "./discovery.js";
 import { hasValidSportsSourceTargets, isSportsSportKey } from "./scope.js";
 
 export class SportsSourceLimitError extends Error {
@@ -453,7 +453,12 @@ export class SportsSourcesRepository {
     const { candidate } = input;
     const confirmedAt = new Date();
     const checkedAt = new Date(candidate.checkedAt);
-    const followIds = candidate.targets.map((target) => target.followId);
+    if (!hasValidSportsSourceTargets(candidate.targets.map((target) => target.target))) {
+      throw new Error("Sports source preview contains invalid targets");
+    }
+    const followIds = candidate.targets.flatMap((target) =>
+      target.target.kind === "follow" ? [target.target.followId] : []
+    );
     const ownedFollows =
       followIds.length === 0
         ? []
@@ -499,8 +504,8 @@ export class SportsSourcesRepository {
             candidate.targets.map((target) => ({
               owner_user_id: sql<string>`app.current_actor_user_id()`,
               source_id: row.id,
-              follow_id: target.followId,
-              sport_key: null,
+              follow_id: target.target.kind === "follow" ? target.target.followId : null,
+              sport_key: target.target.kind === "sport" ? target.target.sportKey : null,
               target_url: target.targetUrl,
               target_parameters: { ...target.parameters },
               preview_status: "verified" as const,
@@ -538,25 +543,6 @@ export class SportsSourcesRepository {
       .where("id", "=", id)
       .executeTakeFirst();
     return (result.numDeletedRows ?? 0n) > 0n;
-  }
-
-  async replaceAssignments(
-    scopedDb: DataContextDb,
-    sourceId: string,
-    reusedAssignmentIds: readonly string[],
-    verifiedTargets: readonly VerifiedSportsSourceTarget[]
-  ): Promise<SportsCustomSourceDto | null> {
-    return this.replaceScopeAssignments(
-      scopedDb,
-      sourceId,
-      reusedAssignmentIds,
-      verifiedTargets.map((target) => ({
-        target: { kind: "follow", followId: target.followId },
-        targetUrl: target.targetUrl,
-        parameters: target.parameters,
-        checkedAt: target.checkedAt
-      }))
-    );
   }
 
   async replaceScopeAssignments(
@@ -692,7 +678,7 @@ export class SportsSourcesRepository {
       .where("id", "=", sourceId)
       .executeTakeFirst();
     if (updated.numUpdatedRows === 0n) return null;
-    return this.replaceAssignments(scopedDb, sourceId, [], candidate.targets);
+    return this.replaceScopeAssignments(scopedDb, sourceId, [], candidate.targets);
   }
 
   /**

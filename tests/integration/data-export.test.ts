@@ -263,18 +263,13 @@ describe("Data export", () => {
     });
   });
 
-  // #953 Task 6: News personalization export. User-authored preferences (custom sources,
-  // custom topics, source exclusions) must appear in the account export; derived compilation
-  // snapshots and opaque validation fingerprints must NOT. A real snapshot row is seeded so
-  // the omission assertions are non-vacuous, and a second user's exclusion proves the export
-  // is actor-isolated (RLS + collector predicate).
+  // User-authored preferences appear in exports; snapshots and opaque validation data do not.
   describe("module-owned export sections", () => {
     const sourceId = "99999999-0000-4000-8000-000000000101";
     const topicId = "99999999-0000-4000-8000-000000000102";
     const exclusionId = "99999999-0000-4000-8000-000000000103";
     const userBExclusionId = "99999999-0000-4000-8000-000000000104";
-    // Marker strings: if any of these appear anywhere in an export payload, private/derived
-    // data leaked. Chosen to be greppable and impossible to collide with fixture prose.
+    // Greppable leak markers that cannot collide with fixture prose.
     const sourceFingerprint = "NEWS-FP-MARKER-SOURCE-A";
     const topicFingerprint = "NEWS-FP-MARKER-TOPIC-A";
     const snapshotMarker = "NEWS-SNAPSHOT-MARKER-A";
@@ -283,6 +278,7 @@ describe("Data export", () => {
     const sportsSourceId = "99999999-0000-4000-8000-000000000202";
     const sportsAssignmentId = "99999999-0000-4000-8000-000000000203";
     const userBSportsSourceId = "99999999-0000-4000-8000-000000000204";
+    const sportsEspnAssignmentId = "99999999-0000-4000-8000-000000000205";
     const sportsFingerprint = "SPORTS-FINGERPRINT-MARKER-A";
     const sportsRecipeMarker = "SPORTS-RECIPE-MARKER-A";
     const sportsParameterMarker = "SPORTS-PARAMETER-MARKER-A";
@@ -348,7 +344,8 @@ describe("Data export", () => {
       id: sportsAssignmentId,
       ownerUserId: ids.userA,
       sourceId: sportsSourceId,
-      followId: sportsFollowId,
+      followId: null,
+      sportKey: "football",
       targetUrl: "https://sports.example/team/7",
       healthState: "healthy",
       healthReasonCode: null,
@@ -356,6 +353,20 @@ describe("Data export", () => {
       lastCheckedAt: "2026-02-04T08:00:00.000Z",
       lastSuccessAt: "2026-02-04T08:00:00.000Z",
       createdAt: "2026-02-04T08:00:03.000Z"
+    };
+
+    const expectedSportsEspnAssignment = {
+      id: sportsEspnAssignmentId,
+      ownerUserId: ids.userA,
+      followId: sportsFollowId,
+      sportKey: null,
+      createdAt: "2026-02-04T08:00:04.000Z"
+    };
+
+    const expectedSportsHeadlinePreference = {
+      ownerUserId: ids.userA,
+      espnHeadlinesEnabled: false,
+      updatedAt: "2026-02-04T08:00:05.000Z"
     };
 
     beforeAll(async () => {
@@ -446,19 +457,36 @@ describe("Data export", () => {
         );
         await client.query(
           `INSERT INTO app.sports_source_assignments
-             (id, owner_user_id, source_id, follow_id, target_url, target_parameters,
+             (id, owner_user_id, source_id, sport_key, target_url, target_parameters,
               preview_status, health_state, last_checked_at, last_success_at, created_at)
            VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'verified', 'healthy', $7, $7, $8)`,
           [
             sportsAssignmentId,
             ids.userA,
             sportsSourceId,
-            sportsFollowId,
+            expectedSportsAssignment.sportKey,
             expectedSportsAssignment.targetUrl,
             JSON.stringify({ marker: sportsParameterMarker }),
             expectedSportsAssignment.lastCheckedAt,
             expectedSportsAssignment.createdAt
           ]
+        );
+        await client.query(
+          `INSERT INTO app.sports_espn_source_assignments
+             (id, owner_user_id, follow_id, created_at)
+           VALUES ($1, $2, $3, $4)`,
+          [
+            sportsEspnAssignmentId,
+            ids.userA,
+            sportsFollowId,
+            expectedSportsEspnAssignment.createdAt
+          ]
+        );
+        await client.query(
+          `INSERT INTO app.sports_headline_prefs
+             (owner_user_id, espn_headlines_enabled, updated_at)
+           VALUES ($1, false, $2)`,
+          [ids.userA, expectedSportsHeadlinePreference.updatedAt]
         );
         await client.query(
           `INSERT INTO app.sports_custom_sources
@@ -493,6 +521,12 @@ describe("Data export", () => {
         ]);
         await client.query("DELETE FROM app.news_custom_topics WHERE id = $1", [topicId]);
         await client.query("DELETE FROM app.news_custom_sources WHERE id = $1", [sourceId]);
+        await client.query("DELETE FROM app.sports_headline_prefs WHERE owner_user_id = $1", [
+          ids.userA
+        ]);
+        await client.query("DELETE FROM app.sports_espn_source_assignments WHERE id = $1", [
+          sportsEspnAssignmentId
+        ]);
         await client.query("DELETE FROM app.sports_custom_sources WHERE id = ANY($1::uuid[])", [
           [sportsSourceId, userBSportsSourceId]
         ]);
@@ -517,7 +551,12 @@ describe("Data export", () => {
             custom_topics: unknown[];
             source_exclusions: unknown[];
           };
-          sportsSources: { assignments: unknown[]; sources: unknown[] };
+          sportsSources: {
+            assignments: unknown[];
+            espnAssignments: unknown[];
+            headlinePreferences: unknown[];
+            sources: unknown[];
+          };
         };
       };
 
@@ -549,6 +588,12 @@ describe("Data export", () => {
           (row) => (row as { id: string }).id === sportsAssignmentId
         )
       ).toEqual(expectedSportsAssignment);
+      expect(body.tables.sportsSources.espnAssignments).toContainEqual(
+        expectedSportsEspnAssignment
+      );
+      expect(body.tables.sportsSources.headlinePreferences).toEqual([
+        expectedSportsHeadlinePreference
+      ]);
 
       // Leak sweep over the entire export payload, not just the news section.
       expect(res.payload).not.toContain(sourceFingerprint);
@@ -609,7 +654,10 @@ describe("Data export", () => {
               custom_topics: unknown[];
               source_exclusions: unknown[];
             };
-            sportsSources: { assignments: unknown[]; sources: unknown[] };
+            sportsSources: {
+              assignments: unknown[];
+              sources: unknown[];
+            };
           };
         };
 
@@ -634,7 +682,6 @@ describe("Data export", () => {
             (row) => (row as { id: string }).id === sportsAssignmentId
           )
         ).toEqual(expectedSportsAssignment);
-
         expect(archiveJson).not.toContain(sourceFingerprint);
         expect(archiveJson).not.toContain(topicFingerprint);
         expect(archiveJson).not.toContain(snapshotMarker);
@@ -649,25 +696,6 @@ describe("Data export", () => {
         else process.env.JARVIS_VAULT_ROOT = originalVaultRoot;
         await rm(vaultRoot, { recursive: true, force: true });
       }
-    });
-
-    it("module manifests declare their export-section collectors", async () => {
-      const { collectNewsExportSection } =
-        await import("../../packages/news/src/data-lifecycle.js");
-      const { collectSportsSourcesExportSection } =
-        await import("../../packages/sports/src/data-lifecycle.js");
-      const newsManifest = getBuiltInModuleManifests().find((manifest) => manifest.id === "news");
-      const sections = newsManifest?.dataLifecycle?.exportSections ?? [];
-      expect(sections).toHaveLength(1);
-      expect(sections[0]?.key).toBe("newsPersonalization");
-      expect(sections[0]?.collect).toBe(collectNewsExportSection);
-      const sportsManifest = getBuiltInModuleManifests().find(
-        (manifest) => manifest.id === "sports"
-      );
-      const sportsSections = sportsManifest?.dataLifecycle?.exportSections ?? [];
-      expect(sportsSections).toHaveLength(1);
-      expect(sportsSections[0]?.key).toBe("sportsSources");
-      expect(sportsSections[0]?.collect).toBe(collectSportsSourcesExportSection);
     });
   });
 

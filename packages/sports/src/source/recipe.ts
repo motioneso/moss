@@ -34,7 +34,7 @@ export interface SportsJsonSourceRecipe {
   readonly kind: "json";
   readonly fetchHosts: readonly string[];
   readonly request: SportsRecipeRequest;
-  readonly scopes: readonly ("team" | "competition")[];
+  readonly scopes: readonly ("sport" | "team" | "competition")[];
   readonly itemLimit: number;
   readonly extraction: {
     readonly itemsPath: readonly string[];
@@ -56,7 +56,7 @@ export interface SportsHtmlSourceRecipe {
   readonly kind: "html";
   readonly fetchHosts: readonly string[];
   readonly request: SportsRecipeRequest;
-  readonly scopes: readonly ("team" | "competition")[];
+  readonly scopes: readonly ("sport" | "team" | "competition")[];
   readonly itemLimit: number;
   readonly extraction: {
     readonly collectionSelector: string;
@@ -135,9 +135,9 @@ const COMMON_PROPERTIES = {
   scopes: {
     type: "array",
     minItems: 1,
-    maxItems: 2,
+    maxItems: 3,
     uniqueItems: true,
-    items: { type: "string", enum: ["team", "competition"] }
+    items: { type: "string", enum: ["sport", "team", "competition"] }
   },
   itemLimit: { type: "integer", minimum: 1, maximum: 50 }
 } as const;

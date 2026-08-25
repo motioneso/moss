@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { validateToolInput } from "@moss/ai";
+import { collectSportsSourcesExportSection } from "../../packages/sports/src/data-lifecycle.js";
 import { sportsModuleManifest } from "../../packages/sports/src/manifest.js";
 
 describe("sports manifest", () => {
@@ -33,6 +34,13 @@ describe("sports manifest", () => {
         "/api/sports/sources/:id/rebuild"
       ])
     );
+    expect(sportsModuleManifest.dataLifecycle?.exportSections).toEqual([
+      {
+        key: "sportsSources",
+        displayName: "Sports sources",
+        collect: collectSportsSourcesExportSection
+      }
+    ]);
   });
 
   it("exposes follows plus bounded actor-scoped source tools", () => {
@@ -91,7 +99,10 @@ describe("sports manifest", () => {
       confirmedFetchHosts: ["www.publisher.example"],
       targets: [
         {
-          followId: "11111111-1111-4111-8111-111111111111",
+          target: {
+            kind: "follow",
+            followId: "11111111-1111-4111-8111-111111111111"
+          },
           targetUrl: "https://www.publisher.example/feed?format=atom"
         }
       ]

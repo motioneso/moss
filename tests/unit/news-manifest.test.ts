@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { collectNewsExportSection } from "../../packages/news/src/data-lifecycle.js";
 import { newsModuleManifest } from "../../packages/news/src/manifest.js";
 
 describe("news manifest — addTopic guidance removal (#1265)", () => {
@@ -18,5 +19,15 @@ describe("news manifest — addTopic guidance removal (#1265)", () => {
     const schema = addTopic?.inputSchema as { required: string[] };
     expect(schema.required).toEqual(["label"]);
     expect(addTopic?.selfOperationGrant).toBe("granted_at_install");
+  });
+
+  it("declares its export collector", () => {
+    expect(newsModuleManifest.dataLifecycle?.exportSections).toEqual([
+      {
+        key: "newsPersonalization",
+        displayName: "News personalization",
+        collect: collectNewsExportSection
+      }
+    ]);
   });
 });

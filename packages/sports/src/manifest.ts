@@ -12,13 +12,14 @@ import {
   previewSportsSourceRecipeSchema,
   retrySportsSourceSchema,
   sportsCatalogResponseSchema,
-  sportsCustomSourcesResponseSchema,
+  sportsNewsSourcesResponseSchema,
   sportsFollowsResponseSchema,
   sportsLeagueTeamsResponseSchema,
   sportsOverviewResponseSchema,
   sportsStandingsResponseSchema,
   sportsTeamSearchResponseSchema,
   updateSportsSourceAssignmentsSchema,
+  updateSportsEspnCoverageSchema,
   updateSportsSourceRecipeSchema
 } from "@moss/shared";
 
@@ -212,8 +213,15 @@ export const sportsModuleManifest = {
     {
       method: "GET",
       path: "/api/sports/sources",
-      responseSchema: sportsCustomSourcesResponseSchema,
+      responseSchema: sportsNewsSourcesResponseSchema,
       permissionId: "sports.view"
+    },
+    {
+      method: "PUT",
+      path: "/api/sports/sources/espn/coverage",
+      requestSchema: updateSportsEspnCoverageSchema.body,
+      responseSchema: updateSportsEspnCoverageSchema,
+      permissionId: "sports.sources"
     },
     {
       method: "POST",

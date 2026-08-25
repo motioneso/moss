@@ -7,6 +7,7 @@ import {
   resolveSportsSourceInput,
   samePublisherIdentity
 } from "../../packages/sports/src/source/discovery.js";
+import { validateSportsSourceRecipe } from "../../packages/sports/src/source/recipe.js";
 
 const db = {} as DataContextDb;
 const feed = `<rss><channel><item><title>A consequential sports headline today</title><link>https://one.example/story</link><pubDate>Fri, 11 Jul 2026 12:00:00 GMT</pubDate></item></channel></rss>`;
@@ -109,11 +110,9 @@ describe("resolveSportsSourceInput", () => {
         rawUrl: "https://www.one.example/feed.xml",
         targets: [
           {
-            followId: "follow-1",
-            competitionKey: "eng.1",
-            competitionLabel: "Premier League",
-            teamKey: null,
-            teamLabel: null
+            target: { kind: "follow", followId: "follow-1" },
+            label: "Premier League",
+            scope: "competition"
           }
         ],
         persistedAuthority: {
@@ -129,7 +128,12 @@ describe("resolveSportsSourceInput", () => {
       candidate: {
         recipeFingerprint: null,
         confirmedFetchHosts: ["www.one.example", "one.example"],
-        targets: [{ followId: "follow-1", targetUrl: "https://one.example/feed.xml" }]
+        targets: [
+          {
+            target: { kind: "follow", followId: "follow-1" },
+            targetUrl: "https://one.example/feed.xml"
+          }
+        ]
       }
     });
     expect(fetch).toHaveBeenCalledWith("https://www.one.example/feed.xml", {
@@ -192,11 +196,9 @@ describe("resolveSportsSourceInput", () => {
       truncated: false
     }));
     const targets = Array.from({ length: 6 }, (_, index) => ({
-      followId: `follow-${index}`,
-      competitionKey: "eng.1",
-      competitionLabel: "Premier League",
-      teamKey: `team-${index}`,
-      teamLabel: `Team ${index}`,
+      target: { kind: "follow" as const, followId: `follow-${index}` },
+      label: `Team ${index}`,
+      scope: "team" as const,
       exactTargetUrl: `https://api${index}.one.example/news`
     }));
 
@@ -217,19 +219,15 @@ describe("resolveSportsSourceInput", () => {
     }));
     const targets = [
       ...Array.from({ length: 5 }, (_, index) => ({
-        followId: `follow-${index}`,
-        competitionKey: "eng.1",
-        competitionLabel: "Premier League",
-        teamKey: `team-${index}`,
-        teamLabel: `Team ${index}`,
+        target: { kind: "follow" as const, followId: `follow-${index}` },
+        label: `Team ${index}`,
+        scope: "team" as const,
         exactTargetUrl: `https://one.example/team/${index}/news`
       })),
       {
-        followId: "follow-sibling",
-        competitionKey: "eng.1",
-        competitionLabel: "Premier League",
-        teamKey: "team-sibling",
-        teamLabel: "Sibling Team",
+        target: { kind: "follow" as const, followId: "follow-sibling" },
+        label: "Sibling Team",
+        scope: "team" as const,
         exactTargetUrl: "https://api.one.example/news"
       }
     ];
@@ -478,8 +476,8 @@ describe("resolveSportsSourceInput", () => {
     const targetProposal = {
       recipe: targetedRecipe,
       targets: [
-        { followId: "team-follow", parameters: { scope: "team", targetId: "9825" } },
-        { followId: "league-follow", parameters: { scope: "league", targetId: "47" } }
+        { targetKey: "follow:team-follow", parameters: { scope: "team", targetId: "9825" } },
+        { targetKey: "follow:league-follow", parameters: { scope: "league", targetId: "47" } }
       ]
     };
     const generateJson = vi
@@ -526,19 +524,15 @@ describe("resolveSportsSourceInput", () => {
         rawUrl: "https://one.example",
         targets: [
           {
-            followId: "team-follow",
-            competitionKey: "eng.1",
-            competitionLabel: "Premier League",
-            teamKey: "arsenal",
-            teamLabel: "Arsenal",
+            target: { kind: "follow", followId: "team-follow" },
+            label: "Arsenal",
+            scope: "team",
             exactTargetUrl: "https://one.example/api/team/9825/news"
           },
           {
-            followId: "league-follow",
-            competitionKey: "eng.1",
-            competitionLabel: "Premier League",
-            teamKey: null,
-            teamLabel: null,
+            target: { kind: "follow", followId: "league-follow" },
+            label: "Premier League",
+            scope: "competition",
             exactTargetUrl: "https://one.example/api/league/47/news"
           }
         ]
@@ -552,14 +546,14 @@ describe("resolveSportsSourceInput", () => {
         sampleCount: 2,
         targets: [
           {
-            followId: "team-follow",
+            target: { kind: "follow", followId: "team-follow" },
             scope: "team",
             targetUrl: "https://one.example/api/team/9825/news",
             parameters: { scope: "team", targetId: "9825" },
             samples: [{ headline: "Arsenal story", url: "https://one.example/story/arsenal" }]
           },
           {
-            followId: "league-follow",
+            target: { kind: "follow", followId: "league-follow" },
             scope: "competition",
             targetUrl: "https://one.example/api/league/47/news",
             parameters: { scope: "league", targetId: "47" }
@@ -607,7 +601,7 @@ describe("resolveSportsSourceInput", () => {
             ok: true,
             object: {
               recipe,
-              targets: [{ followId: "team-follow", parameters: { teamId: "9825" } }]
+              targets: [{ targetKey: "follow:team-follow", parameters: { teamId: "9825" } }]
             }
           })
         }
@@ -616,11 +610,9 @@ describe("resolveSportsSourceInput", () => {
         rawUrl: "https://one.example",
         targets: [
           {
-            followId: "team-follow",
-            competitionKey: "eng.1",
-            competitionLabel: "Premier League",
-            teamKey: "arsenal",
-            teamLabel: "Arsenal",
+            target: { kind: "follow", followId: "team-follow" },
+            label: "Arsenal",
+            scope: "team",
             exactTargetUrl: "https://one.example/api/team/9825/news"
           }
         ]
@@ -633,7 +625,7 @@ describe("resolveSportsSourceInput", () => {
         sampleCount: 0,
         targets: [
           {
-            followId: "team-follow",
+            target: { kind: "follow", followId: "team-follow" },
             targetUrl: "https://one.example/api/team/9825/news",
             samples: []
           }
@@ -647,6 +639,73 @@ describe("resolveSportsSourceInput", () => {
       allowedHosts: ["one.example"],
       requestHeaders: { accept: "application/json" }
     });
+  });
+
+  it("reuses and replays a static persisted recipe for a sport without AI", async () => {
+    const recipe = {
+      version: 1,
+      kind: "json",
+      fetchHosts: ["one.example"],
+      request: {
+        urlTemplate: "https://one.example/soccer.json",
+        slots: [],
+        headers: { accept: "application/json" }
+      },
+      scopes: ["sport"],
+      itemLimit: 10,
+      extraction: {
+        itemsPath: ["news"],
+        headlinePath: ["title"],
+        normalize: ["trim"]
+      }
+    } as const;
+    const validated = validateSportsSourceRecipe(recipe);
+    if (!validated.ok) throw new Error("invalid test recipe");
+    const generateJson = vi.fn<NewsAiPort["generateJson"]>();
+    const result = await resolveSportsSourceInput(
+      db,
+      {
+        fetch: fetchMap({
+          "https://one.example/": { body: "<title>One</title>" },
+          "https://one.example/soccer.json": {
+            body: '{"news":[{"title":"Soccer story"}]}',
+            contentType: "application/json"
+          }
+        }),
+        ai: { fingerprint: async () => null, generateJson }
+      },
+      {
+        rawUrl: "https://one.example",
+        targets: [
+          {
+            target: { kind: "sport", sportKey: "soccer" },
+            label: "Soccer",
+            scope: "sport"
+          }
+        ],
+        persistedAuthority: {
+          canonicalDomain: "one.example",
+          recipeJson: recipe,
+          recipeFingerprint: validated.fingerprint,
+          confirmedFetchHosts: ["one.example"]
+        }
+      }
+    );
+
+    expect(result).toMatchObject({
+      status: "ok",
+      candidate: {
+        targets: [
+          {
+            target: { kind: "sport", sportKey: "soccer" },
+            targetUrl: "https://one.example/soccer.json",
+            parameters: {},
+            samples: [{ headline: "Soccer story" }]
+          }
+        ]
+      }
+    });
+    expect(generateJson).not.toHaveBeenCalled();
   });
 
   it("reports unavailable when recipe derivation needs an unconfigured model", async () => {

@@ -3,7 +3,10 @@ import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DataContextDb } from "@moss/db";
-import { SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT } from "@moss/shared";
+import {
+  SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT,
+  type SportsSourceAssignmentTarget
+} from "@moss/shared";
 
 import type { SportsSafeFetchPort } from "../../packages/sports/src/source/discovery.js";
 import { createSportsPreviewStore } from "../../packages/sports/src/source/preview-store.js";
@@ -80,16 +83,25 @@ function setup(
     reason: "network" as const
   }));
   const sources = {
+    list: vi.fn(async () => [baseline.source]),
     getBaseline: vi.fn(async () => currentBaseline),
     lockOwnerAssignments: vi.fn(async () => undefined),
     countAssignments: vi.fn(async () => 1),
-    replaceAssignments
+    replaceScopeAssignments: replaceAssignments
   } as unknown as SportsSourcesRepository;
   const service = new SportsSourceService({
     follows: {
       list: async () => follows
     },
     sources,
+    espnCoverage: {
+      get: async () => ({ enabled: true, usesDefaultCoverage: true, assignments: [] }),
+      replace: async (_db: DataContextDb, targets: readonly SportsSourceAssignmentTarget[]) => ({
+        enabled: targets.length > 0,
+        usesDefaultCoverage: false,
+        assignments: targets
+      })
+    },
     previews: createSportsPreviewStore(),
     discovery: {
       fetch,
@@ -132,13 +144,28 @@ async function confirm(
     canonicalDomain: preview.candidate.canonicalDomain,
     confirmedFetchHosts: preview.candidate.confirmedFetchHosts,
     targets: preview.candidate.targets.map((target) => ({
-      followId: target.followId,
+      target: target.target,
       targetUrl: target.targetUrl
     }))
   });
 }
 
 describe("SportsSourceService assignment replacement", () => {
+  it("lists ESPN first followed by custom publishers", async () => {
+    const { service } = setup();
+    await expect(service.listSources({} as DataContextDb)).resolves.toEqual([
+      {
+        kind: "builtin",
+        id: "espn",
+        label: "ESPN",
+        enabled: true,
+        usesDefaultCoverage: true,
+        assignments: []
+      },
+      { kind: "custom", ...baseline.source }
+    ]);
+  });
+
   it("confirms removals-only without an external request", async () => {
     const { service, fetch, replaceAssignments } = setup();
     const db = {} as DataContextDb;
@@ -160,7 +187,7 @@ describe("SportsSourceService assignment replacement", () => {
     const { service, fetch, replaceAssignments } = setup();
     const db = {} as DataContextDb;
     const preview = await service.previewAssignments(db, "owner-1", sourceId, {
-      assignments: [{ followId }]
+      assignments: [{ target: { kind: "follow", followId } }]
     });
     const source = await confirm(service, db, preview);
 
@@ -172,6 +199,51 @@ describe("SportsSourceService assignment replacement", () => {
       lastCheckedAt: checkedAt,
       lastSuccessAt: checkedAt
     });
+  });
+
+  it("previews and confirms a sport target without inventing a follow id", async () => {
+    const feedUrl = "https://publisher.example.com/feed.xml";
+    const { service, fetch, replaceAssignments } = setup({
+      ...baseline,
+      validationFingerprint: createHash("sha256").update(feedUrl).digest("hex")
+    });
+    fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      finalUrl: feedUrl,
+      contentType: "application/rss+xml",
+      body: "<rss><channel><item><title>Soccer story</title></item></channel></rss>",
+      truncated: false
+    });
+    const db = {} as DataContextDb;
+    const preview = await service.previewAssignments(db, "owner-1", sourceId, {
+      assignments: [
+        { target: { kind: "follow", followId } },
+        { target: { kind: "sport", sportKey: "soccer" } }
+      ]
+    });
+
+    expect(preview).toMatchObject({
+      status: "ok",
+      candidate: {
+        targets: [
+          { target: { kind: "follow", followId } },
+          {
+            target: { kind: "sport", sportKey: "soccer" },
+            label: "Soccer",
+            scope: "sport",
+            targetUrl: feedUrl
+          }
+        ]
+      }
+    });
+    await confirm(service, db, preview);
+    expect(replaceAssignments).toHaveBeenCalledWith(
+      db,
+      sourceId,
+      [assignmentId],
+      [expect.objectContaining({ target: { kind: "sport", sportKey: "soccer" } })]
+    );
   });
 
   it("maps an added assignment with the persisted recipe and exact saved hosts", async () => {
@@ -217,7 +289,7 @@ describe("SportsSourceService assignment replacement", () => {
     };
     const generateJson = vi.fn(async () => ({
       ok: true as const,
-      object: [{ followId: addedFollowId, parameters: { teamId: "42" } }]
+      object: [{ targetKey: `follow:${addedFollowId}`, parameters: { teamId: "42" } }]
     }));
     const fetch = vi.fn(async (url: string, options?: { allowedHosts?: readonly string[] }) => {
       if (url === "https://publisher.example.com/") {
@@ -276,16 +348,22 @@ describe("SportsSourceService assignment replacement", () => {
     });
 
     const preview = await service.previewAssignments({} as DataContextDb, "owner-1", sourceId, {
-      assignments: [{ followId }, { followId: addedFollowId }]
+      assignments: [
+        { target: { kind: "follow", followId } },
+        { target: { kind: "follow", followId: addedFollowId } }
+      ]
     });
 
     expect(preview).toMatchObject({
       status: "ok",
       candidate: {
         targets: [
-          { followId, targetUrl: "https://publisher.example.com/api/team/DAL/news" },
           {
-            followId: addedFollowId,
+            target: { kind: "follow", followId },
+            targetUrl: "https://publisher.example.com/api/team/DAL/news"
+          },
+          {
+            target: { kind: "follow", followId: addedFollowId },
             targetUrl: "https://publisher.example.com/api/team/42/news",
             sampleHeadlines: ["A persisted recipe headline"]
           }
@@ -339,7 +417,10 @@ describe("SportsSourceService assignment replacement", () => {
     });
 
     const preview = await service.previewAssignments({} as DataContextDb, "owner-1", sourceId, {
-      assignments: [{ followId }, { followId: addedFollowId }]
+      assignments: [
+        { target: { kind: "follow", followId } },
+        { target: { kind: "follow", followId: addedFollowId } }
+      ]
     });
 
     expect(preview).toMatchObject({
@@ -347,8 +428,14 @@ describe("SportsSourceService assignment replacement", () => {
       candidate: {
         confirmedFetchHosts: ["www.publisher.com", "feeds.publisher.com"],
         targets: [
-          { followId, targetUrl: "https://feeds.publisher.com/rss.xml" },
-          { followId: addedFollowId, targetUrl: "https://feeds.publisher.com/rss.xml" }
+          {
+            target: { kind: "follow", followId },
+            targetUrl: "https://feeds.publisher.com/rss.xml"
+          },
+          {
+            target: { kind: "follow", followId: addedFollowId },
+            targetUrl: "https://feeds.publisher.com/rss.xml"
+          }
         ]
       }
     });
@@ -416,7 +503,7 @@ describe("SportsSourceService recipe recovery", () => {
       canonicalDomain: preview.candidate.canonicalDomain,
       confirmedFetchHosts: preview.candidate.confirmedFetchHosts,
       targets: preview.candidate.targets.map((target) => ({
-        followId: target.followId,
+        target: target.target,
         targetUrl: target.targetUrl
       }))
     });
@@ -428,7 +515,7 @@ describe("SportsSourceService recipe recovery", () => {
       expect.objectContaining({
         canonicalDomain: baseline.source.canonicalDomain,
         retrievalMethod: "feed",
-        targets: [expect.objectContaining({ followId })]
+        targets: [expect.objectContaining({ target: { kind: "follow", followId } })]
       })
     );
   });
@@ -473,7 +560,7 @@ describe("SportsSourceService recipe recovery", () => {
         canonicalDomain: preview.candidate.canonicalDomain,
         confirmedFetchHosts: preview.candidate.confirmedFetchHosts,
         targets: preview.candidate.targets.map((target) => ({
-          followId: target.followId,
+          target: target.target,
           targetUrl: target.targetUrl
         }))
       })
@@ -494,7 +581,7 @@ describe("SportsSourceService recipe recovery", () => {
         getBaseline: async () => current,
         lockOwnerAssignments: async () => undefined,
         countAssignments: async () => 1,
-        replaceAssignments: async () => {
+        replaceScopeAssignments: async () => {
           current = { ...current, updatedAt: "2026-08-24T00:00:00.000Z" };
           return current.source;
         },
@@ -528,7 +615,7 @@ describe("SportsSourceService recipe recovery", () => {
     const db = {} as DataContextDb;
     const rebuild = await service.previewRecipeRebuild(db, "owner-1", sourceId);
     const assignments = await service.previewAssignments(db, "owner-1", sourceId, {
-      assignments: [{ followId }]
+      assignments: [{ target: { kind: "follow", followId } }]
     });
     await confirm(service, db, assignments);
     if (!rebuild.confirmationId || !rebuild.candidate || !rebuild.authorizationAcknowledgement) {
@@ -542,7 +629,7 @@ describe("SportsSourceService recipe recovery", () => {
         canonicalDomain: rebuild.candidate.canonicalDomain,
         confirmedFetchHosts: rebuild.candidate.confirmedFetchHosts,
         targets: rebuild.candidate.targets.map((target) => ({
-          followId: target.followId,
+          target: target.target,
           targetUrl: target.targetUrl
         }))
       })

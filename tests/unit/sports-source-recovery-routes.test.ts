@@ -63,6 +63,58 @@ function buildApp(sourceService: NonNullable<SportsRoutesDependencies["sourceSer
 }
 
 describe("sports source recovery routes", () => {
+  it("returns the normalized source list from the shared source service", async () => {
+    const sources = [
+      {
+        kind: "builtin" as const,
+        id: "espn" as const,
+        label: "ESPN" as const,
+        enabled: true,
+        usesDefaultCoverage: true,
+        assignments: []
+      }
+    ];
+    const sourceService = {
+      listSources: vi.fn(async () => sources)
+    } as unknown as NonNullable<SportsRoutesDependencies["sourceService"]>;
+    const app = buildApp(sourceService);
+    await app.ready();
+
+    const response = await app.inject({ method: "GET", url: "/api/sports/sources" });
+
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body)).toEqual({ sources });
+    expect(sourceService.listSources).toHaveBeenCalledWith({});
+    await app.close();
+  });
+
+  it("routes typed ESPN coverage through the shared source service", async () => {
+    const source = {
+      kind: "builtin" as const,
+      id: "espn" as const,
+      label: "ESPN" as const,
+      enabled: true,
+      usesDefaultCoverage: false,
+      assignments: [{ kind: "sport" as const, sportKey: "soccer" as const }]
+    };
+    const sourceService = {
+      replaceEspnCoverage: vi.fn(async () => source)
+    } as unknown as NonNullable<SportsRoutesDependencies["sourceService"]>;
+    const app = buildApp(sourceService);
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PUT",
+      url: "/api/sports/sources/espn/coverage",
+      payload: { assignments: source.assignments }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body)).toEqual({ source });
+    expect(sourceService.replaceEspnCoverage).toHaveBeenCalledWith({}, source.assignments);
+    await app.close();
+  });
+
   it("routes Retry and recipe rebuild through the shared source service", async () => {
     const id = "11111111-1111-1111-1111-111111111111";
     const source: SportsCustomSourceDto = {

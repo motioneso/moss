@@ -17,6 +17,7 @@ import {
   retrySportsSource
 } from "../web/sports-client.js";
 import { sportsQueryKeys } from "../web/query-keys.js";
+import { SPORTS_SPORT_LABELS, sportsSourceTargetKey } from "../source/scope.js";
 
 /* #1572: custom public news sources by team and league. Mirrors News' add-source flow
    (packages/news/src/settings/add-source.tsx), simplified for Sports' single-candidate,
@@ -155,7 +156,7 @@ export function AddSourceFlow(props: {
     previewMutation.mutate({
       url: trimmed,
       assignments: [...selectedFollowIds].map((followId) => ({
-        followId,
+        target: { kind: "follow" as const, followId },
         ...(exactTargetUrls.get(followId)?.trim()
           ? { exactTargetUrl: exactTargetUrls.get(followId)!.trim() }
           : {})
@@ -177,7 +178,7 @@ export function AddSourceFlow(props: {
       canonicalDomain: preview.candidate.canonicalDomain,
       confirmedFetchHosts: preview.candidate.confirmedFetchHosts,
       targets: preview.candidate.targets.map((target) => ({
-        followId: target.followId,
+        target: target.target,
         targetUrl: target.targetUrl
       }))
     });
@@ -300,9 +301,9 @@ export function AddSourceFlow(props: {
             </p>
           ))}
           {preview.candidate.targets.map((target) => (
-            <div key={target.followId}>
+            <div key={sportsSourceTargetKey(target.target)}>
               <p className="sp-src__hint">
-                {target.teamLabel ?? target.competitionLabel}: {target.targetUrl}
+                {target.label}: {target.targetUrl}
               </p>
               {target.sampleHeadlines.map((headline) => (
                 <p key={headline} className="sp-src__hint">
@@ -352,7 +353,10 @@ export function SportsSourcesSection(props: {
 }) {
   const queryClient = useQueryClient();
   const sourcesQuery = useQuery({ queryKey: sportsQueryKeys.sources, queryFn: listSportsSources });
-  const sources = sourcesQuery.data?.sources ?? [];
+  const sources = (sourcesQuery.data?.sources ?? []).filter(
+    (source): source is SportsCustomSourceDto & { readonly kind: "custom" } =>
+      source.kind === "custom"
+  );
   const [editingSourceId, setEditingSourceId] = useState<string | null>(null);
   const [editingSelection, setEditingSelection] = useState<Set<string>>(new Set());
   const [assignmentPreview, setAssignmentPreview] = useState<{
@@ -389,7 +393,9 @@ export function SportsSourcesSection(props: {
   const assignmentPreviewMutation = useMutation({
     mutationFn: (input: { id: string; followIds: readonly string[] }) =>
       previewSportsSourceAssignments(input.id, {
-        assignments: input.followIds.map((followId) => ({ followId }))
+        assignments: input.followIds.map((followId) => ({
+          target: { kind: "follow" as const, followId }
+        }))
       }),
     onSuccess: (result, input) => {
       setAssignmentPreview({ sourceId: input.id, result });
@@ -525,16 +531,18 @@ export function SportsSourcesSection(props: {
                   <ul className="sp-src__assign-list">
                     {source.assignments.map((assignment) => {
                       const assignmentBadge = HEALTH_BADGE[assignment.healthState];
-                      const follow = props.follows.find(
-                        (candidate) => candidate.id === assignment.followId
-                      );
-                      const followLabel = follow
-                        ? followDisplayLabel(
-                            follow,
-                            props.competitionsByKey,
-                            props.teamsByCompetition
-                          )
-                        : "Assigned team or league";
+                      const follow = assignment.followId
+                        ? props.follows.find((candidate) => candidate.id === assignment.followId)
+                        : null;
+                      const followLabel = assignment.sportKey
+                        ? SPORTS_SPORT_LABELS[assignment.sportKey]
+                        : follow
+                          ? followDisplayLabel(
+                              follow,
+                              props.competitionsByKey,
+                              props.teamsByCompetition
+                            )
+                          : "Assigned team or league";
                       return (
                         <li
                           key={assignment.id}
@@ -560,7 +568,7 @@ export function SportsSourcesSection(props: {
                     })}
                   </ul>
                 ) : null}
-                {source.assignedFollowIds.length === 0 ? (
+                {source.assignments.length === 0 ? (
                   <p className="sp-src__hint sp-src__hint--tight">Unassigned — not used yet.</p>
                 ) : null}
                 {recipePreview?.sourceId === source.id &&
@@ -576,8 +584,8 @@ export function SportsSourcesSection(props: {
                       Fetch hosts: {recipePreview.result.candidate.confirmedFetchHosts.join(", ")}
                     </p>
                     {recipePreview.result.candidate.targets.map((target) => (
-                      <p key={target.followId} className="sp-src__hint">
-                        {target.teamLabel ?? target.competitionLabel}: {target.targetUrl}
+                      <p key={sportsSourceTargetKey(target.target)} className="sp-src__hint">
+                        {target.label}: {target.targetUrl}
                       </p>
                     ))}
                     <label className="jds-check sp-src__check">
@@ -605,7 +613,7 @@ export function SportsSourcesSection(props: {
                             canonicalDomain: result.candidate!.canonicalDomain,
                             confirmedFetchHosts: result.candidate!.confirmedFetchHosts,
                             targets: result.candidate!.targets.map((target) => ({
-                              followId: target.followId,
+                              target: target.target,
                               targetUrl: target.targetUrl
                             }))
                           }
@@ -655,8 +663,8 @@ export function SportsSourcesSection(props: {
                     assignmentPreview.result.authorizationAcknowledgement ? (
                       <div className="sp-src__candidate">
                         {assignmentPreview.result.candidate.targets.map((target) => (
-                          <p key={target.followId} className="sp-src__hint">
-                            {target.teamLabel ?? target.competitionLabel}: {target.targetUrl}
+                          <p key={sportsSourceTargetKey(target.target)} className="sp-src__hint">
+                            {target.label}: {target.targetUrl}
                           </p>
                         ))}
                         {assignmentPreview.result.candidate.targets.length === 0 ? (
@@ -691,7 +699,7 @@ export function SportsSourcesSection(props: {
                                 canonicalDomain: result.candidate!.canonicalDomain,
                                 confirmedFetchHosts: result.candidate!.confirmedFetchHosts,
                                 targets: result.candidate!.targets.map((target) => ({
-                                  followId: target.followId,
+                                  target: target.target,
                                   targetUrl: target.targetUrl
                                 }))
                               }

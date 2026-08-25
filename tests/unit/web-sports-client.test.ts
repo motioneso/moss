@@ -7,10 +7,12 @@ import {
   deleteSportsFollow,
   getSportsCatalog,
   getSportsOverview,
+  listSportsSources,
   listSportsFollows,
   previewSportsSourceAssignments,
   previewSportsSourceRecipe,
-  retrySportsSource
+  retrySportsSource,
+  updateSportsEspnCoverage
 } from "../../packages/sports/src/web/sports-client.js";
 import { sportsQueryKeys } from "../../packages/sports/src/web/query-keys.js";
 
@@ -51,6 +53,8 @@ describe("sports API client", () => {
       confirmedFetchHosts: ["publisher.example"],
       targets: []
     });
+    await listSportsSources();
+    await updateSportsEspnCoverage({ assignments: [{ kind: "sport", sportKey: "soccer" }] });
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
@@ -104,6 +108,19 @@ describe("sports API client", () => {
       10,
       "/api/sports/sources/source-1/rebuild",
       expect.objectContaining({ method: "PATCH" })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      11,
+      "/api/sports/sources",
+      expect.objectContaining({ credentials: "include" })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      12,
+      "/api/sports/sources/espn/coverage",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ assignments: [{ kind: "sport", sportKey: "soccer" }] })
+      })
     );
   });
 });

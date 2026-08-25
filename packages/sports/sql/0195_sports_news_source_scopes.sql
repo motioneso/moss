@@ -92,6 +92,20 @@ CREATE POLICY sports_espn_source_assignments_delete
   ON app.sports_espn_source_assignments FOR DELETE TO jarvis_app_runtime
   USING (owner_user_id = app.current_actor_user_id());
 
+CREATE POLICY sports_espn_source_assignments_worker_select
+  ON app.sports_espn_source_assignments FOR SELECT TO jarvis_worker_runtime
+  USING (owner_user_id = app.current_actor_user_id());
+CREATE POLICY sports_headline_prefs_worker_select
+  ON app.sports_headline_prefs FOR SELECT TO jarvis_worker_runtime
+  USING (owner_user_id = app.current_actor_user_id());
+
 GRANT SELECT, INSERT, UPDATE, DELETE
   ON app.sports_espn_source_assignments TO jarvis_app_runtime;
 REVOKE ALL ON app.sports_espn_source_assignments FROM jarvis_worker_runtime;
+REVOKE ALL ON app.sports_headline_prefs FROM jarvis_worker_runtime;
+
+GRANT SELECT (sport_key) ON app.sports_source_assignments TO jarvis_worker_runtime;
+GRANT SELECT (id, owner_user_id, follow_id, sport_key, created_at)
+  ON app.sports_espn_source_assignments TO jarvis_worker_runtime;
+GRANT SELECT (owner_user_id, espn_headlines_enabled, updated_at)
+  ON app.sports_headline_prefs TO jarvis_worker_runtime;

@@ -102,6 +102,7 @@ describe("SportsSettings", () => {
     client.setQueryData(sportsQueryKeys.sources, {
       sources: [
         {
+          kind: "custom",
           id: "11111111-1111-1111-1111-111111111111",
           label: "Drifted publisher",
           canonicalDomain: "publisher.example.com",
@@ -133,6 +134,7 @@ describe("SportsSettings", () => {
           createdAt: "2026-08-24T12:00:00.000Z"
         },
         {
+          kind: "custom",
           id: "44444444-4444-4444-4444-444444444444",
           label: "Private publisher",
           canonicalDomain: "private.example.com",
