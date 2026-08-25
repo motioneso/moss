@@ -115,12 +115,22 @@ function toEngineInput(med: Medication): { schedule: MedicationSchedule; anchor:
         daysOff: med.cycle_days_off ?? 0,
         doseTimes
       },
-      anchor: { startDate: med.cycle_anchor_date, timeZone: "UTC" }
+      anchor: { startDate: dateKeyFromColumn(med.cycle_anchor_date), timeZone: "UTC" }
     };
   }
 
   // once_daily, times_per_day
   return { schedule: { family: "daily", doseTimes }, anchor: openAnchor };
+}
+
+/**
+ * `cycle_anchor_date` is typed `string` (a Postgres `date` column) but the driver actually
+ * hands back a JS `Date` at runtime, not a "YYYY-MM-DD" string — the old date math coerced it
+ * through a template literal (silently wrong, but never threw); the engine's `startDate`
+ * requires a real date-key string, so normalize explicitly here instead.
+ */
+function dateKeyFromColumn(value: string | Date): string {
+  return value instanceof Date ? value.toISOString().slice(0, 10) : value;
 }
 
 /**
