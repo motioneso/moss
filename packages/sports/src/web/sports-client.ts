@@ -1,8 +1,13 @@
 import type {
   ConfirmSportsSourceRequest,
+  ConfirmSportsSourceAssignmentsRequest,
+  ConfirmSportsSourceRecipeRequest,
   ConfirmSportsSourceResponse,
   CreateSportsFollowRequest,
   PreviewSportsSourceRequest,
+  PreviewSportsSourceAssignmentsRequest,
+  PreviewSportsSourceAssignmentsResponse,
+  PreviewSportsSourceRecipeResponse,
   PreviewSportsSourceResponse,
   SportsCatalogResponse,
   SportsCustomSourceDto,
@@ -10,8 +15,7 @@ import type {
   SportsFollowDto,
   SportsFollowsResponse,
   SportsOverviewResponse,
-  SportsStandingsResponse,
-  UpdateSportsSourceAssignmentsRequest
+  SportsStandingsResponse
 } from "@moss/shared";
 
 import { requestJson } from "@moss/module-web-sdk";
@@ -75,12 +79,48 @@ export async function confirmSportsSource(
   });
 }
 
-export async function updateSportsSourceAssignments(
+export async function previewSportsSourceAssignments(
   id: string,
-  input: UpdateSportsSourceAssignmentsRequest
+  input: PreviewSportsSourceAssignmentsRequest
+): Promise<PreviewSportsSourceAssignmentsResponse> {
+  return requestJson<PreviewSportsSourceAssignmentsResponse>(
+    `/api/sports/sources/${encodeURIComponent(id)}/assignments/preview`,
+    { method: "POST", body: input }
+  );
+}
+
+export async function confirmSportsSourceAssignments(
+  id: string,
+  input: ConfirmSportsSourceAssignmentsRequest
 ): Promise<{ source: SportsCustomSourceDto }> {
   return requestJson<{ source: SportsCustomSourceDto }>(
     `/api/sports/sources/${encodeURIComponent(id)}/assignments`,
+    { method: "PATCH", body: input }
+  );
+}
+
+export async function retrySportsSource(id: string): Promise<{ source: SportsCustomSourceDto }> {
+  return requestJson<{ source: SportsCustomSourceDto }>(
+    `/api/sports/sources/${encodeURIComponent(id)}/retry`,
+    { method: "POST" }
+  );
+}
+
+export async function previewSportsSourceRecipe(
+  id: string
+): Promise<PreviewSportsSourceRecipeResponse> {
+  return requestJson<PreviewSportsSourceRecipeResponse>(
+    `/api/sports/sources/${encodeURIComponent(id)}/rebuild/preview`,
+    { method: "POST" }
+  );
+}
+
+export async function confirmSportsSourceRecipe(
+  id: string,
+  input: ConfirmSportsSourceRecipeRequest
+): Promise<{ source: SportsCustomSourceDto }> {
+  return requestJson<{ source: SportsCustomSourceDto }>(
+    `/api/sports/sources/${encodeURIComponent(id)}/rebuild`,
     { method: "PATCH", body: input }
   );
 }

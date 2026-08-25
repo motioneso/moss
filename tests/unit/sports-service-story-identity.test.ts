@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { SportsFollowDto } from "@moss/shared";
 
 import type { SourceHeadline } from "../../packages/sports/src/source/sports-source.js";
+import { mergeHeadlineScope } from "../../packages/sports/src/headline-composition.js";
 import { SportsService } from "../../packages/sports/src/sports-service.js";
 import { makeDeps, makeSource, TODAY, userA } from "./sports-service.test.js";
 
@@ -10,6 +11,36 @@ import { makeDeps, makeSource, TODAY, userA } from "./sports-service.test.js";
 // these tests share that file's makeDeps/makeSource/userA/TODAY fixtures rather than duplicating
 // them.
 describe("id→url story keying (#858)", () => {
+  it("keeps the chosen ESPN identity while unioning trusted custom assignment scope", () => {
+    const espn: SourceHeadline = {
+      id: "espn-story",
+      competitionKey: "nfl",
+      competitionLabel: "NFL",
+      title: "Shared story",
+      url: "https://publisher.example/shared",
+      publishedAt: `${TODAY}T10:00:00.000Z`,
+      imageUrl: null,
+      summary: "",
+      teamKeys: [],
+      origin: "espn",
+      publisherLabel: "ESPN",
+      publisherDomain: "espn.com",
+      sourceTeamIds: []
+    };
+
+    expect(
+      mergeHeadlineScope([espn], {
+        ...espn,
+        id: "custom-story",
+        origin: "custom",
+        sourceId: "source-1",
+        teamKeys: ["dal"],
+        publisherLabel: "Publisher",
+        publisherDomain: "publisher.example"
+      })
+    ).toEqual([{ ...espn, teamKeys: ["dal"] }]);
+  });
+
   it("does not drop a distinct same-id story from leagueNews just because a different story with the same id became a top story", async () => {
     const nflLeagueFollow: SportsFollowDto = {
       id: "f1",
@@ -27,6 +58,9 @@ describe("id→url story keying (#858)", () => {
       imageUrl: null,
       summary: "",
       teamKeys: [],
+      origin: "espn",
+      publisherLabel: "ESPN",
+      publisherDomain: "espn.com",
       sourceTeamIds: []
     };
     const h1: SourceHeadline = {
@@ -39,6 +73,9 @@ describe("id→url story keying (#858)", () => {
       imageUrl: null,
       summary: "",
       teamKeys: [],
+      origin: "espn",
+      publisherLabel: "ESPN",
+      publisherDomain: "espn.com",
       sourceTeamIds: []
     };
     const service = new SportsService(
@@ -81,6 +118,9 @@ describe("id→url story keying (#858)", () => {
       imageUrl: null,
       summary: "",
       teamKeys: [],
+      origin: "espn",
+      publisherLabel: "ESPN",
+      publisherDomain: "espn.com",
       sourceTeamIds: []
     };
     const nflFeature: SourceHeadline = {
@@ -93,6 +133,9 @@ describe("id→url story keying (#858)", () => {
       imageUrl: "https://img.example.com/nfl.jpg",
       summary: "NFL summary text",
       teamKeys: [],
+      origin: "espn",
+      publisherLabel: "ESPN",
+      publisherDomain: "espn.com",
       sourceTeamIds: []
     };
     // nba feed: its own editorial lead (tier-1 top story, excluded), then a second, unrelated
@@ -107,6 +150,9 @@ describe("id→url story keying (#858)", () => {
       imageUrl: null,
       summary: "",
       teamKeys: [],
+      origin: "espn",
+      publisherLabel: "ESPN",
+      publisherDomain: "espn.com",
       sourceTeamIds: []
     };
     const nbaOther: SourceHeadline = {
@@ -119,10 +165,13 @@ describe("id→url story keying (#858)", () => {
       imageUrl: null,
       summary: "",
       teamKeys: [],
+      origin: "espn",
+      publisherLabel: "ESPN",
+      publisherDomain: "espn.com",
       sourceTeamIds: []
     };
-    const service = new SportsService(
-      makeDeps({
+    const service = new SportsService({
+      ...makeDeps({
         follows: [nflFollow, nbaFollow],
         source: makeSource({
           getHeadlines: async (competitionKey) => {
@@ -132,8 +181,31 @@ describe("id→url story keying (#858)", () => {
           },
           getArticleBody: async () => "Fetched real article body."
         })
-      })
-    );
+      }),
+      publicSourceReader: {
+        refresh: async () => ({
+          degraded: false,
+          persistedResults: 0,
+          headlines: [
+            {
+              id: "custom-shared-url",
+              sourceId: "source-1",
+              competitionKey: "nba",
+              competitionLabel: "NBA",
+              title: "Custom story sharing the ESPN feature URL",
+              url: nflFeature.url,
+              publishedAt: `${TODAY}T06:00:00.000Z`,
+              imageUrl: null,
+              summary: "Custom summary",
+              teamKeys: [],
+              origin: "custom",
+              publisherLabel: "Publisher",
+              publisherDomain: "publisher.example"
+            }
+          ]
+        })
+      }
+    });
     const overview = await service.getOverview(userA);
     const nflGroup = overview.leagueNews.find((g) => g.competitionKey === "nfl");
     expect(nflGroup?.headlines.find((h) => h.title === "NFL feature story")?.body).toBe(
@@ -143,6 +215,167 @@ describe("id→url story keying (#858)", () => {
     expect(
       nbaGroup?.headlines.find((h) => h.title === "NBA distinct story (colliding id)")?.body
     ).toBeUndefined();
+    expect(nbaGroup?.headlines.find((h) => h.id === "custom-shared-url")?.body).toBeUndefined();
+  });
+
+  it("never sends a custom feature id to ESPN when another competition has the same URL", async () => {
+    const nbaFollow: SportsFollowDto = {
+      id: "f-nba",
+      competitionKey: "nba",
+      teamKey: null,
+      createdAt: "2026-06-01T00:00:00.000Z"
+    };
+    const nflFollow: SportsFollowDto = {
+      id: "f-nfl",
+      competitionKey: "nfl",
+      teamKey: "dal",
+      createdAt: "2026-06-01T00:00:00.000Z"
+    };
+    const headline = (competitionKey: "nba" | "nfl", id: string, url: string): SourceHeadline => ({
+      id,
+      competitionKey,
+      competitionLabel: competitionKey.toUpperCase(),
+      title: id,
+      url,
+      publishedAt: `${TODAY}T10:00:00.000Z`,
+      imageUrl: null,
+      summary: "",
+      teamKeys: [],
+      origin: "espn",
+      publisherLabel: "ESPN",
+      publisherDomain: "espn.com",
+      sourceTeamIds: []
+    });
+    const sharedUrl = "https://example.com/shared";
+    const articleBodyIds: string[] = [];
+    const service = new SportsService({
+      ...makeDeps({
+        follows: [nbaFollow, nflFollow],
+        source: makeSource({
+          getHeadlines: async (competitionKey) => {
+            if (competitionKey === "nba") {
+              return [
+                headline("nba", "nba-lead", "https://example.com/nba-lead"),
+                headline("nba", "espn-same-url", sharedUrl)
+              ];
+            }
+            const fillers = Array.from({ length: 4 }, (_, index) => ({
+              ...headline("nfl", `nfl-filler-${index}`, `https://example.com/filler-${index}`),
+              sourceTeamIds: ["6"]
+            }));
+            return [headline("nfl", "nfl-lead", "https://example.com/nfl-lead"), ...fillers];
+          },
+          listTeams: async (competitionKey) =>
+            competitionKey === "nfl"
+              ? [
+                  {
+                    teamKey: "dal",
+                    competitionKey,
+                    name: "Dallas Cowboys",
+                    shortName: "Cowboys",
+                    crestUrl: null,
+                    sourceTeamId: "6"
+                  }
+                ]
+              : [],
+          getArticleBody: async (articleId) => {
+            articleBodyIds.push(articleId);
+            return "ESPN body";
+          }
+        })
+      }),
+      publicSourceReader: {
+        refresh: async () => ({
+          degraded: false,
+          persistedResults: 0,
+          headlines: [
+            {
+              id: "custom-feature",
+              sourceId: "source-1",
+              competitionKey: "nfl",
+              competitionLabel: "NFL",
+              title: "Custom feature",
+              url: sharedUrl,
+              publishedAt: `${TODAY}T11:00:00.000Z`,
+              imageUrl: null,
+              summary: "Custom summary",
+              teamKeys: ["dal"],
+              origin: "custom",
+              publisherLabel: "Publisher",
+              publisherDomain: "publisher.example"
+            }
+          ]
+        })
+      }
+    });
+
+    const overview = await service.getOverview(userA);
+
+    expect(
+      overview.leagueNews
+        .find((group) => group.competitionKey === "nfl")
+        ?.headlines.find((item) => item.id === "custom-feature")?.body
+    ).toBeUndefined();
+    expect(articleBodyIds).toEqual([]);
+  });
+
+  it("unions team scope when league and team assignments return the same custom URL", async () => {
+    const leagueFollow: SportsFollowDto = {
+      id: "league-follow",
+      competitionKey: "nfl",
+      teamKey: null,
+      createdAt: "2026-06-01T00:00:00.000Z"
+    };
+    const teamFollow: SportsFollowDto = {
+      id: "team-follow",
+      competitionKey: "nfl",
+      teamKey: "dal",
+      createdAt: "2026-06-02T00:00:00.000Z"
+    };
+    const sharedUrl = "https://publisher.example/shared-story";
+    const common = {
+      sourceId: "source-1",
+      competitionKey: "nfl",
+      competitionLabel: "NFL",
+      url: sharedUrl,
+      publishedAt: `${TODAY}T11:00:00.000Z`,
+      imageUrl: null,
+      summary: "",
+      origin: "custom" as const,
+      publisherLabel: "Publisher",
+      publisherDomain: "publisher.example"
+    };
+    const service = new SportsService({
+      ...makeDeps({
+        follows: [leagueFollow, teamFollow],
+        source: makeSource({
+          getScoreboard: async () => [],
+          getSchedule: async () => [],
+          getStandings: async () => ({ sections: [] }),
+          getHeadlines: async () => []
+        })
+      }),
+      publicSourceReader: {
+        refresh: async () => ({
+          degraded: false,
+          persistedResults: 0,
+          headlines: [
+            { ...common, id: "league-copy", title: "Shared story", teamKeys: [] },
+            { ...common, id: "team-copy", title: "Shared story", teamKeys: ["dal"] }
+          ]
+        })
+      }
+    });
+
+    const overview = await service.getOverview(userA);
+    const card = overview.followed.find((item) => item.teamKey === "dal");
+
+    expect(card?.stories.filter((story) => story.url === sharedUrl)).toHaveLength(1);
+    expect(
+      overview.leagueNews
+        .flatMap((group) => group.headlines)
+        .filter((item) => item.url === sharedUrl)
+    ).toHaveLength(0);
   });
 
   it("does not let a tier-1 lead's id block a distinct, team-matched story from tier 2 just because the ids collide", async () => {
@@ -168,6 +401,9 @@ describe("id→url story keying (#858)", () => {
       imageUrl: null,
       summary: "",
       teamKeys: [],
+      origin: "espn",
+      publisherLabel: "ESPN",
+      publisherDomain: "espn.com",
       sourceTeamIds: []
     };
     // h1 shares h0's id ("dup") but is a distinct story (different url) tagged to the followed
@@ -184,6 +420,9 @@ describe("id→url story keying (#858)", () => {
       imageUrl: null,
       summary: "",
       teamKeys: [],
+      origin: "espn",
+      publisherLabel: "ESPN",
+      publisherDomain: "espn.com",
       sourceTeamIds: ["6"]
     };
     const dalFiller = (n: number): SourceHeadline => ({
@@ -196,6 +435,9 @@ describe("id→url story keying (#858)", () => {
       imageUrl: null,
       summary: "",
       teamKeys: [],
+      origin: "espn",
+      publisherLabel: "ESPN",
+      publisherDomain: "espn.com",
       sourceTeamIds: ["6"]
     });
     const h2 = dalFiller(1);

@@ -31,6 +31,7 @@ export interface NewsFeedParams {
 }
 
 const ITEMS_PER_FEED_CAP = 30;
+const PUBLIC_FEED_XML_CHAR_CAP = 1_000_000;
 
 /** FNV-1a 32-bit over the URL — stable across processes (no per-boot salt), collision-tolerant
  *  because it's only a dedupe/React key, never a security boundary. */
@@ -182,6 +183,64 @@ export function parseFeedXml(xml: string): RawFeedItem[] {
 
 /** Parse + sanitize one feed's XML into ready-to-serve items (also the fixture-test entrypoint). */
 export function toFeedItems(xml: string, source: NewsSourceEntry): RssFeedItem[] {
+  return toSanitizedFeedItems(xml, source.imageHosts);
+}
+
+/** Public, catalog-independent RSS/Atom parser for other modules' confirmed public feeds. */
+export function parsePublicFeedItems(xml: string): RssFeedItem[] {
+  if (xml.length > PUBLIC_FEED_XML_CHAR_CAP) return [];
+  return toSanitizedFeedItems(xml, []);
+}
+
+export function isPublicFeedDocument(xml: string): boolean {
+  if (xml.length > PUBLIC_FEED_XML_CHAR_CAP) return false;
+  const stack: Array<{ name: string; selfClosing: boolean }> = [];
+  let root: string | null = null;
+  let rssChannel = false;
+  let invalid = false;
+  const parser = new Parser(
+    {
+      onopentag(name) {
+        const tag = name.toLowerCase();
+        stack.push({
+          name: tag,
+          selfClosing: xml
+            .slice(parser.startIndex, parser.endIndex + 1)
+            .trimEnd()
+            .endsWith("/>")
+        });
+        if (stack.length === 1) {
+          if (root !== null) invalid = true;
+          root = tag;
+        } else if (root === "rss" && stack.length === 2 && tag === "channel") {
+          rssChannel = true;
+        }
+      },
+      ontext(text) {
+        if (stack.length === 0 && text.replace(/^\uFEFF/, "").trim()) invalid = true;
+      },
+      onclosetag(name, isImplied) {
+        const opened = stack.pop();
+        if (opened?.name !== name.toLowerCase() || (isImplied && opened.selfClosing === false)) {
+          invalid = true;
+        }
+      },
+      onerror() {
+        invalid = true;
+      }
+    },
+    { xmlMode: true }
+  );
+  try {
+    parser.write(xml);
+    parser.end();
+  } catch {
+    return false;
+  }
+  return !invalid && stack.length === 0 && (root === "feed" || (root === "rss" && rssChannel));
+}
+
+function toSanitizedFeedItems(xml: string, imageHosts: readonly string[]): RssFeedItem[] {
   const items: RssFeedItem[] = [];
   const seen = new Set<string>();
   for (const raw of parseFeedXml(xml)) {
@@ -198,7 +257,7 @@ export function toFeedItems(xml: string, source: NewsSourceEntry): RssFeedItem[]
       title,
       url,
       publishedAt: sanitizePublishedAt(raw.publishedAt),
-      imageUrl: sanitizeImageUrl(raw.imageUrl, source.imageHosts),
+      imageUrl: sanitizeImageUrl(raw.imageUrl, imageHosts),
       summary: sanitizeFeedText(raw.summary || raw.contentFallback, SUMMARY_CHAR_CAP)
     });
   }

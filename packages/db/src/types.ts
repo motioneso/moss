@@ -1142,6 +1142,20 @@ export interface SportsCustomSourcesTable {
   last_success_at: TimestampColumn | null;
   validation_fingerprint: string;
   validated_at: TimestampColumn;
+  recipe_json: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >;
+  recipe_schema_version: 1 | null;
+  recipe_fingerprint: string | null;
+  recipe_status: ColumnType<
+    "feed" | "ready" | "missing" | "drift",
+    "feed" | "ready" | "missing" | "drift" | undefined,
+    "feed" | "ready" | "missing" | "drift"
+  >;
+  confirmed_fetch_hosts: string[];
+  authorization_confirmed_at: TimestampColumn;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
 }
@@ -1151,6 +1165,26 @@ export interface SportsSourceAssignmentsTable {
   owner_user_id: string;
   source_id: string;
   follow_id: string;
+  target_url: string | null;
+  target_parameters: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >;
+  preview_status: ColumnType<
+    "pending" | "verified" | "recipe_missing",
+    "pending" | "verified" | "recipe_missing" | undefined,
+    "pending" | "verified" | "recipe_missing"
+  >;
+  health_state: ColumnType<
+    SportsSourceHealthState,
+    SportsSourceHealthState | undefined,
+    SportsSourceHealthState
+  >;
+  health_reason_code: string | null;
+  health_message: string | null;
+  last_checked_at: TimestampColumn | null;
+  last_success_at: TimestampColumn | null;
   created_at: TimestampColumn;
 }
 

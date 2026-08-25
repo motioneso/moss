@@ -1,15 +1,19 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Badge, Note } from "@moss/settings-ui";
+import { Badge, Note, formatTimestamp } from "@moss/settings-ui";
 import { ApiError, Button } from "@moss/module-web-sdk";
 import type { CompetitionRef, SportsCustomSourceDto, SportsFollowDto, TeamRef } from "@moss/shared";
 
 import {
+  confirmSportsSourceAssignments,
+  confirmSportsSourceRecipe,
   confirmSportsSource,
   deleteSportsSource,
   listSportsSources,
+  previewSportsSourceAssignments,
   previewSportsSource,
-  updateSportsSourceAssignments
+  previewSportsSourceRecipe,
+  retrySportsSource
 } from "../web/sports-client.js";
 import { sportsQueryKeys } from "../web/query-keys.js";
 
@@ -30,8 +34,8 @@ const HEALTH_BADGE: Record<
   SportsCustomSourceDto["healthState"],
   { tone: "neutral" | "pine" | "amber" | "red" | "steel"; label: string } | null
 > = {
-  pending: { tone: "steel", label: "Checking…" },
-  healthy: null,
+  pending: { tone: "steel", label: "Awaiting first check" },
+  healthy: { tone: "pine", label: "Healthy" },
   failing: { tone: "amber", label: "Having trouble" },
   unsupported: { tone: "red", label: "Unsupported" },
   auth_required: { tone: "red", label: "Needs login" },
@@ -101,6 +105,8 @@ export function AddSourceFlow(props: {
     null
   );
   const [selectedFollowIds, setSelectedFollowIds] = useState<Set<string>>(new Set());
+  const [exactTargetUrls, setExactTargetUrls] = useState<Map<string, string>>(new Map());
+  const [authorizationAccepted, setAuthorizationAccepted] = useState(false);
   const [added, setAdded] = useState(false);
 
   const invalidate = () =>
@@ -108,7 +114,10 @@ export function AddSourceFlow(props: {
 
   const previewMutation = useMutation({
     mutationFn: previewSportsSource,
-    onSuccess: (result) => setPreview(result)
+    onSuccess: (result) => {
+      setPreview(result);
+      setAuthorizationAccepted(false);
+    }
   });
 
   const confirmMutation = useMutation({
@@ -117,6 +126,8 @@ export function AddSourceFlow(props: {
       setInput("");
       setPreview(null);
       setSelectedFollowIds(new Set());
+      setExactTargetUrls(new Map());
+      setAuthorizationAccepted(false);
       setAdded(true);
       invalidate();
     }
@@ -128,20 +139,42 @@ export function AddSourceFlow(props: {
     if (!trimmed) return;
     setAdded(false);
     setPreview(null);
-    previewMutation.mutate({ url: trimmed });
+    previewMutation.mutate({
+      url: trimmed,
+      assignments: [...selectedFollowIds].map((followId) => ({
+        followId,
+        ...(exactTargetUrls.get(followId)?.trim()
+          ? { exactTargetUrl: exactTargetUrls.get(followId)!.trim() }
+          : {})
+      }))
+    });
   }
 
   function confirm() {
-    if (!preview?.confirmationId) return;
+    if (
+      !preview?.confirmationId ||
+      !preview.candidate ||
+      !preview.authorizationAcknowledgement ||
+      !authorizationAccepted
+    )
+      return;
     confirmMutation.mutate({
       confirmationId: preview.confirmationId,
-      followIds: [...selectedFollowIds]
+      authorizationAcknowledgement: preview.authorizationAcknowledgement,
+      canonicalDomain: preview.candidate.canonicalDomain,
+      confirmedFetchHosts: preview.candidate.confirmedFetchHosts,
+      targets: preview.candidate.targets.map((target) => ({
+        followId: target.followId,
+        targetUrl: target.targetUrl
+      }))
     });
   }
 
   function reset() {
     setPreview(null);
     setSelectedFollowIds(new Set());
+    setExactTargetUrls(new Map());
+    setAuthorizationAccepted(false);
     confirmMutation.reset();
   }
 
@@ -150,6 +183,8 @@ export function AddSourceFlow(props: {
       const next = new Set(current);
       if (next.has(followId)) next.delete(followId);
       else next.add(followId);
+      setPreview(null);
+      setAuthorizationAccepted(false);
       return next;
     });
   }
@@ -197,6 +232,43 @@ export function AddSourceFlow(props: {
         </div>
       </form>
 
+      <p className="sp-src__hint">Assign to (optional — leave blank to add unassigned):</p>
+      <FollowAssignmentPicker
+        follows={props.follows}
+        competitionsByKey={props.competitionsByKey}
+        teamsByCompetition={props.teamsByCompetition}
+        selected={selectedFollowIds}
+        onToggle={toggleFollow}
+        disabled={busy}
+        idPrefix="sp-addsource-assign"
+      />
+      {[...selectedFollowIds].map((followId) => {
+        const follow = props.follows.find((candidate) => candidate.id === followId);
+        if (!follow) return null;
+        const id = `sp-target-${followId}`;
+        return (
+          <label key={followId} className="sp-src__label" htmlFor={id}>
+            Exact target URL for{" "}
+            {followDisplayLabel(follow, props.competitionsByKey, props.teamsByCompetition)}{" "}
+            (optional)
+            <input
+              id={id}
+              className="jds-input"
+              type="url"
+              placeholder="https://publisher.example/team-or-league-news"
+              value={exactTargetUrls.get(followId) ?? ""}
+              disabled={busy}
+              onChange={(event) => {
+                const value = event.target.value;
+                setExactTargetUrls((current) => new Map(current).set(followId, value));
+                setPreview(null);
+                setAuthorizationAccepted(false);
+              }}
+            />
+          </label>
+        );
+      })}
+
       {errorMessage ? (
         <p className="sp-src__err" role="alert">
           {errorMessage}
@@ -210,18 +282,43 @@ export function AddSourceFlow(props: {
           ) : null}
           <p className="sp-src__candidate-label">{preview.candidate.label}</p>
           <p className="sp-src__item-meta">{preview.candidate.canonicalDomain}</p>
-          <p className="sp-src__hint">Assign to (optional — leave blank to add unassigned):</p>
-          <FollowAssignmentPicker
-            follows={props.follows}
-            competitionsByKey={props.competitionsByKey}
-            teamsByCompetition={props.teamsByCompetition}
-            selected={selectedFollowIds}
-            onToggle={toggleFollow}
-            disabled={busy}
-            idPrefix="sp-addsource-assign"
-          />
+          <p className="sp-src__hint">
+            Fetch hosts: {preview.candidate.confirmedFetchHosts.join(", ")}
+          </p>
+          {preview.candidate.sampleHeadlines.map((headline) => (
+            <p key={headline} className="sp-src__hint">
+              {headline}
+            </p>
+          ))}
+          {preview.candidate.targets.map((target) => (
+            <div key={target.followId}>
+              <p className="sp-src__hint">
+                {target.teamLabel ?? target.competitionLabel}: {target.targetUrl}
+              </p>
+              {target.sampleHeadlines.map((headline) => (
+                <p key={headline} className="sp-src__hint">
+                  {headline}
+                </p>
+              ))}
+            </div>
+          ))}
+          {preview.authorizationAcknowledgement ? (
+            <label className="sp-src__label">
+              <input
+                type="checkbox"
+                checked={authorizationAccepted}
+                disabled={busy}
+                onChange={(event) => setAuthorizationAccepted(event.target.checked)}
+              />{" "}
+              {preview.authorizationAcknowledgement}
+            </label>
+          ) : null}
           <div className="sp-src__addrow">
-            <Button size="sm" disabled={busy} onClick={confirm}>
+            <Button
+              size="sm"
+              disabled={busy || !authorizationAccepted || Boolean(preview.duplicateOfSourceId)}
+              onClick={confirm}
+            >
               {confirmMutation.isPending ? "Adding…" : "Add this source"}
             </Button>
             <Button variant="secondary" size="sm" disabled={busy} onClick={reset}>
@@ -246,15 +343,56 @@ export function SportsSourcesSection(props: {
   const sources = sourcesQuery.data?.sources ?? [];
   const [editingSourceId, setEditingSourceId] = useState<string | null>(null);
   const [editingSelection, setEditingSelection] = useState<Set<string>>(new Set());
+  const [assignmentPreview, setAssignmentPreview] = useState<{
+    sourceId: string;
+    result: Awaited<ReturnType<typeof previewSportsSourceAssignments>>;
+  } | null>(null);
+  const [assignmentAuthorizationAccepted, setAssignmentAuthorizationAccepted] = useState(false);
+  const [recipePreview, setRecipePreview] = useState<{
+    sourceId: string;
+    result: Awaited<ReturnType<typeof previewSportsSourceRecipe>>;
+  } | null>(null);
+  const [recipeAuthorizationAccepted, setRecipeAuthorizationAccepted] = useState(false);
 
   const invalidate = () =>
     void queryClient.invalidateQueries({ queryKey: sportsQueryKeys.sources });
   const removeMutation = useMutation({ mutationFn: deleteSportsSource, onSuccess: invalidate });
-  const assignMutation = useMutation({
+  const retryMutation = useMutation({ mutationFn: retrySportsSource, onSuccess: invalidate });
+  const recipePreviewMutation = useMutation({
+    mutationFn: previewSportsSourceRecipe,
+    onSuccess: (result, sourceId) => {
+      setRecipePreview({ sourceId, result });
+      setRecipeAuthorizationAccepted(false);
+    }
+  });
+  const recipeConfirmMutation = useMutation({
+    mutationFn: (input: { id: string; request: Parameters<typeof confirmSportsSourceRecipe>[1] }) =>
+      confirmSportsSourceRecipe(input.id, input.request),
+    onSuccess: () => {
+      setRecipePreview(null);
+      setRecipeAuthorizationAccepted(false);
+      invalidate();
+    }
+  });
+  const assignmentPreviewMutation = useMutation({
     mutationFn: (input: { id: string; followIds: readonly string[] }) =>
-      updateSportsSourceAssignments(input.id, { followIds: input.followIds }),
+      previewSportsSourceAssignments(input.id, {
+        assignments: input.followIds.map((followId) => ({ followId }))
+      }),
+    onSuccess: (result, input) => {
+      setAssignmentPreview({ sourceId: input.id, result });
+      setAssignmentAuthorizationAccepted(false);
+    }
+  });
+  const assignmentConfirmMutation = useMutation({
+    mutationFn: (input: {
+      id: string;
+      request: Parameters<typeof confirmSportsSourceAssignments>[1];
+    }) => confirmSportsSourceAssignments(input.id, input.request),
     onSuccess: () => {
       setEditingSourceId(null);
+      setAssignmentPreview(null);
+      setAssignmentAuthorizationAccepted(false);
       invalidate();
     }
   });
@@ -262,6 +400,8 @@ export function SportsSourcesSection(props: {
   function startEditing(source: SportsCustomSourceDto) {
     setEditingSourceId(source.id);
     setEditingSelection(new Set(source.assignedFollowIds));
+    setAssignmentPreview(null);
+    setAssignmentAuthorizationAccepted(false);
   }
 
   function toggleEditingFollow(followId: string) {
@@ -269,6 +409,8 @@ export function SportsSourcesSection(props: {
       const next = new Set(current);
       if (next.has(followId)) next.delete(followId);
       else next.add(followId);
+      setAssignmentPreview(null);
+      setAssignmentAuthorizationAccepted(false);
       return next;
     });
   }
@@ -287,6 +429,16 @@ export function SportsSourcesSection(props: {
             const badge = HEALTH_BADGE[source.healthState];
             const editing = editingSourceId === source.id;
             const removing = removeMutation.isPending && removeMutation.variables === source.id;
+            const retrying = retryMutation.isPending && retryMutation.variables === source.id;
+            const rebuilding =
+              recipePreviewMutation.isPending && recipePreviewMutation.variables === source.id;
+            const recoveryBusy =
+              removing || retrying || rebuilding || recipeConfirmMutation.isPending;
+            const showRebuild =
+              source.retrievalMethod === "scrape" &&
+              (source.recipeStatus === "missing" ||
+                source.recipeStatus === "drift" ||
+                source.healthReasonCode === "recipe_drift");
             return (
               <li key={source.id} className="sp-src__item">
                 <div className="sp-src__item-row">
@@ -296,8 +448,28 @@ export function SportsSourcesSection(props: {
                   <Button
                     variant="secondary"
                     size="sm"
+                    aria-label={`Retry ${source.label}`}
+                    disabled={recoveryBusy}
+                    onClick={() => retryMutation.mutate(source.id)}
+                  >
+                    {retrying ? "Checking…" : "Retry"}
+                  </Button>
+                  {showRebuild ? (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      aria-label={`Rebuild ${source.label}`}
+                      disabled={recoveryBusy}
+                      onClick={() => recipePreviewMutation.mutate(source.id)}
+                    >
+                      {rebuilding ? "Checking…" : "Rebuild"}
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     aria-label={`Edit teams for ${source.label}`}
-                    disabled={removing}
+                    disabled={recoveryBusy}
                     onClick={() => (editing ? setEditingSourceId(null) : startEditing(source))}
                   >
                     {editing ? "Close" : "Edit teams"}
@@ -306,14 +478,105 @@ export function SportsSourcesSection(props: {
                     variant="secondary"
                     size="sm"
                     aria-label={`Remove ${source.label}`}
-                    disabled={removing}
+                    disabled={recoveryBusy}
                     onClick={() => removeMutation.mutate(source.id)}
                   >
                     Remove
                   </Button>
                 </div>
+                <p className="sp-src__hint sp-src__hint--tight">
+                  Last checked:{" "}
+                  {source.lastCheckedAt
+                    ? formatTimestamp(source.lastCheckedAt, "Unknown")
+                    : "Never"}
+                  {" · "}
+                  Last successful:{" "}
+                  {source.lastSuccessAt
+                    ? formatTimestamp(source.lastSuccessAt, "Unknown")
+                    : "Never"}
+                </p>
+                {source.healthMessage ? (
+                  <p className="sp-src__hint sp-src__hint--tight">{source.healthMessage}</p>
+                ) : null}
+                {source.healthState === "auth_required" ? (
+                  <Note>
+                    This publisher needs credentials. Authenticated sources are not supported yet.
+                  </Note>
+                ) : null}
+                {source.assignments.length > 0 ? (
+                  <ul className="sp-src__assign-list">
+                    {source.assignments.map((assignment) => {
+                      const assignmentBadge = HEALTH_BADGE[assignment.healthState];
+                      return (
+                        <li key={assignment.id} className="sp-src__assign-item">
+                          <span>{assignment.targetUrl ?? "Awaiting preview"}</span>
+                          {assignment.previewStatus !== "verified" ? (
+                            <Badge tone="steel">Awaiting preview</Badge>
+                          ) : assignmentBadge ? (
+                            <Badge tone={assignmentBadge.tone}>{assignmentBadge.label}</Badge>
+                          ) : (
+                            <Badge tone="pine">Healthy</Badge>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : null}
                 {source.assignedFollowIds.length === 0 ? (
                   <p className="sp-src__hint sp-src__hint--tight">Unassigned — not used yet.</p>
+                ) : null}
+                {recipePreview?.sourceId === source.id &&
+                recipePreview.result.status === "ok" &&
+                recipePreview.result.candidate &&
+                recipePreview.result.confirmationId &&
+                recipePreview.result.authorizationAcknowledgement ? (
+                  <div className="sp-src__candidate">
+                    <p className="sp-src__hint">
+                      Publisher: {recipePreview.result.candidate.canonicalDomain}
+                    </p>
+                    <p className="sp-src__hint">
+                      Fetch hosts: {recipePreview.result.candidate.confirmedFetchHosts.join(", ")}
+                    </p>
+                    {recipePreview.result.candidate.targets.map((target) => (
+                      <p key={target.followId} className="sp-src__hint">
+                        {target.teamLabel ?? target.competitionLabel}: {target.targetUrl}
+                      </p>
+                    ))}
+                    <label className="sp-src__label">
+                      <input
+                        type="checkbox"
+                        checked={recipeAuthorizationAccepted}
+                        disabled={recipeConfirmMutation.isPending}
+                        onChange={(event) => setRecipeAuthorizationAccepted(event.target.checked)}
+                      />{" "}
+                      {recipePreview.result.authorizationAcknowledgement}
+                    </label>
+                    <Button
+                      size="sm"
+                      disabled={!recipeAuthorizationAccepted || recipeConfirmMutation.isPending}
+                      onClick={() => {
+                        const result = recipePreview.result;
+                        recipeConfirmMutation.mutate({
+                          id: source.id,
+                          request: {
+                            confirmationId: result.confirmationId!,
+                            authorizationAcknowledgement: result.authorizationAcknowledgement!,
+                            canonicalDomain: result.candidate!.canonicalDomain,
+                            confirmedFetchHosts: result.candidate!.confirmedFetchHosts,
+                            targets: result.candidate!.targets.map((target) => ({
+                              followId: target.followId,
+                              targetUrl: target.targetUrl
+                            }))
+                          }
+                        });
+                      }}
+                    >
+                      {recipeConfirmMutation.isPending ? "Saving…" : "Confirm rebuild"}
+                    </Button>
+                  </div>
+                ) : null}
+                {recipePreview?.sourceId === source.id && recipePreview.result.status !== "ok" ? (
+                  <Note>The source recipe could not be rebuilt.</Note>
                 ) : null}
                 {editing ? (
                   <div className="sp-src__assign">
@@ -323,24 +586,83 @@ export function SportsSourcesSection(props: {
                       teamsByCompetition={props.teamsByCompetition}
                       selected={editingSelection}
                       onToggle={toggleEditingFollow}
-                      disabled={assignMutation.isPending}
+                      disabled={
+                        assignmentPreviewMutation.isPending || assignmentConfirmMutation.isPending
+                      }
                       idPrefix={`sp-edit-${source.id}`}
                     />
                     <div className="sp-src__addrow">
                       <Button
                         size="sm"
-                        disabled={assignMutation.isPending}
+                        disabled={
+                          assignmentPreviewMutation.isPending || assignmentConfirmMutation.isPending
+                        }
                         onClick={() =>
-                          assignMutation.mutate({
+                          assignmentPreviewMutation.mutate({
                             id: source.id,
                             followIds: [...editingSelection]
                           })
                         }
                       >
-                        {assignMutation.isPending ? "Saving…" : "Save"}
+                        {assignmentPreviewMutation.isPending ? "Checking…" : "Review changes"}
                       </Button>
                     </div>
-                    {assignMutation.isError ? (
+                    {assignmentPreview?.sourceId === source.id &&
+                    assignmentPreview.result.status === "ok" &&
+                    assignmentPreview.result.candidate &&
+                    assignmentPreview.result.confirmationId &&
+                    assignmentPreview.result.authorizationAcknowledgement ? (
+                      <div className="sp-src__candidate">
+                        {assignmentPreview.result.candidate.targets.map((target) => (
+                          <p key={target.followId} className="sp-src__hint">
+                            {target.teamLabel ?? target.competitionLabel}: {target.targetUrl}
+                          </p>
+                        ))}
+                        {assignmentPreview.result.candidate.targets.length === 0 ? (
+                          <p className="sp-src__hint">This source will be left unassigned.</p>
+                        ) : null}
+                        <label className="sp-src__label">
+                          <input
+                            type="checkbox"
+                            checked={assignmentAuthorizationAccepted}
+                            disabled={assignmentConfirmMutation.isPending}
+                            onChange={(event) =>
+                              setAssignmentAuthorizationAccepted(event.target.checked)
+                            }
+                          />{" "}
+                          {assignmentPreview.result.authorizationAcknowledgement}
+                        </label>
+                        <Button
+                          size="sm"
+                          disabled={
+                            !assignmentAuthorizationAccepted || assignmentConfirmMutation.isPending
+                          }
+                          onClick={() => {
+                            const result = assignmentPreview.result;
+                            assignmentConfirmMutation.mutate({
+                              id: source.id,
+                              request: {
+                                confirmationId: result.confirmationId!,
+                                authorizationAcknowledgement: result.authorizationAcknowledgement!,
+                                canonicalDomain: result.candidate!.canonicalDomain,
+                                confirmedFetchHosts: result.candidate!.confirmedFetchHosts,
+                                targets: result.candidate!.targets.map((target) => ({
+                                  followId: target.followId,
+                                  targetUrl: target.targetUrl
+                                }))
+                              }
+                            });
+                          }}
+                        >
+                          {assignmentConfirmMutation.isPending ? "Saving…" : "Save assignments"}
+                        </Button>
+                      </div>
+                    ) : null}
+                    {assignmentPreview?.sourceId === source.id &&
+                    assignmentPreview.result.status !== "ok" ? (
+                      <Note>Those assignments could not be verified.</Note>
+                    ) : null}
+                    {assignmentPreviewMutation.isError || assignmentConfirmMutation.isError ? (
                       <Note>Could not update assignments. Try again.</Note>
                     ) : null}
                   </div>
@@ -352,6 +674,10 @@ export function SportsSourcesSection(props: {
       ) : null}
       {sourcesQuery.isSuccess && sources.length === 0 ? <Note>No custom sources yet.</Note> : null}
       {removeMutation.isError ? <Note>Could not remove that source. Try again.</Note> : null}
+      {retryMutation.isError ? <Note>Could not retry that source. Try again.</Note> : null}
+      {recipePreviewMutation.isError || recipeConfirmMutation.isError ? (
+        <Note>Could not rebuild that source. Try again.</Note>
+      ) : null}
       <AddSourceFlow
         follows={props.follows}
         competitionsByKey={props.competitionsByKey}

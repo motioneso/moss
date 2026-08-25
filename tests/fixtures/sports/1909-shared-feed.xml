@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Issue 1909 shared sports feed</title>
+    <link>https://example.com/sports</link>
+    <description>Public-source live-path fixture</description>
+    <item>
+      <guid>issue-1909-shared-story</guid>
+      <title>Shared public-source story proves cross-publisher deduplication</title>
+      <link>https://example.com/issue-1909-shared-story</link>
+      <description>A bounded public headline used only by the issue 1909 live proof.</description>
+      <pubDate>Mon, 24 Aug 2026 12:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

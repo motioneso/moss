@@ -762,7 +762,7 @@ describe("AssistantToolGateway self-operation", () => {
     });
   });
 
-  it("the five built-in confirm_always tools remain the only confirmation declarations", () => {
+  it("the planned built-in confirm_always tools remain the only confirmation declarations", () => {
     const confirmAlwaysTools: string[] = [];
     for (const manifest of getBuiltInModuleManifests()) {
       for (const tool of manifest.assistantTools ?? []) {
@@ -772,16 +772,19 @@ describe("AssistantToolGateway self-operation", () => {
       }
     }
 
-    // web.read is the fifth (PR #1268 Opus security review): risk "write", not "destructive" —
-    // it is on this list because it has no actionFamilyId, so policy.ts:40 confirms every call,
-    // restoring the pre-PR guarantee that protected the v0.1.0 audit's web.read
-    // prompt-injection-to-exfiltration finding.
+    // web.read has no actionFamilyId, while Sports source writes share a non-promotable family;
+    // all remain explicit confirmation-only declarations.
     expect(confirmAlwaysTools.sort()).toEqual(
       [
         "email.sendReply",
         "memory.forget",
         "people.merge",
         "people.splitIdentity",
+        "sports.confirmSource",
+        "sports.confirmSourceAssignments",
+        "sports.confirmSourceRecipe",
+        "sports.removeSource",
+        "sports.retrySource",
         "web.read"
       ].sort()
     );

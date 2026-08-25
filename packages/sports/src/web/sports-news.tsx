@@ -65,7 +65,9 @@ function HeroSlide({ headline, active }: { readonly headline: Headline; active: 
               the head of the lead with an accent desk tag + hairline, not an orphaned label. */}
           <p className="sp-hero__kicker">
             <span className="sp-hero__kicker-desk">Top story</span>
-            <span className="sp-hero__kicker-comp">{headline.competitionLabel}</span>
+            <span className="sp-hero__kicker-comp">
+              {headline.competitionLabel} · {headline.publisherLabel}
+            </span>
           </p>
           <h2 className="sp-hero__headline">
             {/* Inactive slides stay in the DOM for the crossfade but must not be tab stops */}
@@ -248,7 +250,9 @@ function NewsArticle({
       {headline.imageUrl ? (
         <img className="sp-newsband__img" src={headline.imageUrl} alt="" loading="lazy" />
       ) : null}
-      <p className="sp-newsband__artkicker">{headline.competitionLabel}</p>
+      <p className="sp-newsband__artkicker">
+        {headline.competitionLabel} · {headline.publisherLabel}
+      </p>
       <h4 className="sp-newsband__title">{headline.title}</h4>
       {headline.summary ? <p className="sp-newsband__blurb">{headline.summary}</p> : null}
       <a className="sp-newsband__more" href={headline.url} target="_blank" rel="noreferrer">
@@ -288,7 +292,9 @@ function FeatureArticle({ headline }: { readonly headline: Headline }) {
         </div>
       ) : null}
       <div className="sp-newsband__featurebody">
-        <p className="sp-newsband__featurekicker">{headline.competitionLabel}</p>
+        <p className="sp-newsband__featurekicker">
+          {headline.competitionLabel} · {headline.publisherLabel}
+        </p>
         <h3 className="sp-newsband__title sp-newsband__title--feature">{headline.title}</h3>
         {/* Fill the hero with real article body (#857, Ben's "fill the height with more article
             body"). The service fetches + SANITIZES-to-plaintext the featured story's ESPN body and

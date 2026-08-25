@@ -86,14 +86,38 @@ services:
   api:
     image: node:24-bookworm-slim
     working_dir: /workspace
-    volumes: *workspace-volumes
+    volumes:
+      - ..:/workspace
+      - /workspace/node_modules
+      - /workspace/apps/api/node_modules
+      - /workspace/apps/web/node_modules
+      - /workspace/apps/worker/node_modules
+      - /workspace/packages/ai/node_modules
+      - /workspace/packages/auth/node_modules
+      - /workspace/packages/briefings/node_modules
+      - /workspace/packages/calendar/node_modules
+      - /workspace/packages/chat/node_modules
+      - /workspace/packages/connectors/node_modules
+      - /workspace/packages/db/node_modules
+      - /workspace/packages/email/node_modules
+      - /workspace/packages/jobs/node_modules
+      - /workspace/packages/module-registry/node_modules
+      - /workspace/packages/module-sdk/node_modules
+      - /workspace/packages/notes/node_modules
+      - /workspace/packages/notifications/node_modules
+      - /workspace/packages/settings/node_modules
+      - /workspace/packages/shared/node_modules
+      - /workspace/packages/tasks/node_modules
+      - jarv1s-sports-browser-socket:/run/moss-sports-browser
     environment:
       CI: "true"
       PORT: "3000"
       HOST: 0.0.0.0
+      MOSS_SPORTS_RENDERER_SOCKET: /run/moss-sports-browser/renderer.sock
       JARVIS_APP_DATABASE_URL: postgres://jarvis_app_runtime:app_password@postgres:5432/jarv1s
       JARVIS_AUTH_DATABASE_URL: postgres://jarvis_auth_runtime:auth_password@postgres:5432/jarv1s
     command: sh -c "corepack enable && apt-get update && apt-get install -y --no-install-recommends python3 make g++ && pnpm install --frozen-lockfile --store-dir /tmp/pnpm-store && pnpm start:api"
+    group_add: ["1001"]
     restart: unless-stopped
     healthcheck:
       test:
@@ -111,6 +135,8 @@ services:
       - "${JARVIS_API_PORT:-3000}:3000"
     depends_on:
       migrate:
+        condition: service_completed_successfully
+      sports-browser-socket-init:
         condition: service_completed_successfully
     networks:
       - jarv1s
@@ -147,8 +173,60 @@ services:
     networks:
       - jarv1s
 
+  sports-browser-socket-init:
+    image: moss-sports-renderer:dev
+    build:
+      context: ..
+      dockerfile: Dockerfile.sports-renderer
+    network_mode: none
+    read_only: true
+    user: "0:0"
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER, FSETID]
+    security_opt: [no-new-privileges:true]
+    command:
+      ["sh", "-c", "chown 0:1001 /run/moss-sports-browser && chmod 2770 /run/moss-sports-browser"]
+    volumes:
+      - jarv1s-sports-browser-socket:/run/moss-sports-browser
+    restart: "no"
+
+  sports-source-renderer:
+    image: moss-sports-renderer:dev
+    build:
+      context: ..
+      dockerfile: Dockerfile.sports-renderer
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=256m,uid=1001,gid=1001,mode=1770
+    user: "1001:1001"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 1.0
+    mem_limit: 512m
+    pids_limit: 128
+    volumes:
+      - jarv1s-sports-browser-socket:/run/moss-sports-browser
+    depends_on:
+      sports-browser-socket-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "process.exit(require('node:fs').statSync('/run/moss-sports-browser/renderer.sock').isSocket()?0:1)"
+        ]
+      interval: 1s
+      timeout: 2s
+      retries: 10
+      start_period: 2s
+    restart: unless-stopped
+
 volumes:
   jarv1s-postgres-data:
+  jarv1s-sports-browser-socket:
 
 networks:
   jarv1s:

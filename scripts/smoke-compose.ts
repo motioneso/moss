@@ -43,6 +43,18 @@ export function createComposeSmokePlan(input: ComposeSmokePlanInput = {}): Compo
           command: "docker",
           args: ["build", "-t", `ghcr.io/motioneso/moss:${imageTag}`, "-f", "Dockerfile", "."],
           description: "Build the Moss image locally and tag it to the prod GHCR ref"
+        },
+        {
+          command: "docker",
+          args: [
+            "build",
+            "-t",
+            `ghcr.io/motioneso/moss-sports-renderer:${imageTag}`,
+            "-f",
+            "Dockerfile.sports-renderer",
+            "."
+          ],
+          description: "Build the isolated Sports renderer image"
         }
       ]
     : [];
@@ -57,14 +69,32 @@ export function createComposeSmokePlan(input: ComposeSmokePlanInput = {}): Compo
   const upCommand: ComposeSmokeCommand = isProd
     ? {
         command: "docker",
-        args: [...composeArgs, "up", "-d", "postgres", "jarv1s", "--wait"],
-        description: "Start Postgres and Moss services"
+        args: [
+          ...composeArgs,
+          "up",
+          "-d",
+          "postgres",
+          "jarv1s",
+          "sports-source-renderer",
+          "--wait"
+        ],
+        description: "Start Postgres, Moss, and the Sports renderer"
       }
     : {
         command: "docker",
-        args: [...composeArgs, "up", "-d", "api", "web", "worker", "--wait"],
-        description: "Start API, web, and worker services"
+        args: [
+          ...composeArgs,
+          "up",
+          "-d",
+          "api",
+          "web",
+          "worker",
+          "sports-source-renderer",
+          "--wait"
+        ],
+        description: "Start API, web, worker, and Sports renderer services"
       };
+  const appService = isProd ? "jarv1s" : "api";
 
   return {
     // Use the readiness probe, not the liveness `/health`. `/health` returns
@@ -81,13 +111,55 @@ export function createComposeSmokePlan(input: ComposeSmokePlanInput = {}): Compo
         args: [...composeArgs, "config", "--quiet"],
         description: "Validate Docker Compose configuration"
       },
+      ...(isProd
+        ? [
+            {
+              command: "docker" as const,
+              args: [...composeArgs, "run", "--rm", "sports-renderer-smoke"],
+              description:
+                "Complete a FotMob-shaped document and XHR through both exact-image UDS sockets"
+            }
+          ]
+        : []),
       {
         command: "docker",
         args: [...composeArgs, "up", "-d", "postgres", "--wait"],
         description: "Start Postgres and wait for readiness"
       },
       ...(migrateCommand ? [migrateCommand] : []),
-      upCommand
+      upCommand,
+      {
+        command: "docker",
+        args: [
+          ...composeArgs,
+          "exec",
+          "-T",
+          appService,
+          "test",
+          "-S",
+          "/run/moss-sports-browser/renderer.sock"
+        ],
+        description: "Probe the Sports renderer socket from the app"
+      },
+      {
+        command: "docker",
+        args: [
+          ...composeArgs,
+          "exec",
+          "-T",
+          "sports-source-renderer",
+          "node",
+          "--input-type=module",
+          "-e",
+          "import{chromium}from'playwright-core';const b=await chromium.launch({headless:true});const p=await b.newPage();let reached=false;try{reached=Boolean(await p.goto('https://example.com',{timeout:5000}))}catch{}await b.close();if(reached)throw new Error('renderer direct egress succeeded')"
+        ],
+        description: "Prove Chromium cannot bypass the renderer network sandbox"
+      },
+      {
+        command: "docker",
+        args: [...composeArgs, "stop", "sports-source-renderer"],
+        description: "Stop the optional renderer before checking ordinary app readiness"
+      }
     ]
   };
 }
@@ -115,6 +187,7 @@ async function main(): Promise<void> {
 }
 
 function ensureProdSmokeEnv(composeFile: string): () => void {
+  if (composeFile === "infra/docker-compose.prod.yml") process.env.JARVIS_IMAGE_TAG ??= "smoke";
   if (composeFile !== "infra/docker-compose.prod.yml" || process.env.JARVIS_ENV_FILE) {
     process.env.POSTGRES_PASSWORD ??= "postgres";
     process.env.JARVIS_CLI_RUNNER_RPC_SECRET ??= "smoke-only-not-real";
@@ -142,6 +215,7 @@ function ensureProdSmokeEnv(composeFile: string): () => void {
       "BETTER_AUTH_SECRET=smoke-only-not-a-real-secret-0000000000",
       "JARVIS_CONNECTOR_SECRET_KEY=00000000000000000000000000000000",
       "JARVIS_AI_SECRET_KEY=11111111111111111111111111111111",
+      "JARVIS_MODULE_CREDENTIAL_SECRET_KEY=22222222222222222222222222222222",
       "JARVIS_CLI_RUNNER_RPC_SECRET=smoke-only-not-real",
       "JARVIS_EMBED_PROVIDER=stub",
       ""

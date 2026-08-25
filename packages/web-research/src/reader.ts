@@ -10,12 +10,24 @@ import type { RobotsGate } from "./robots.js";
 import { type HostResolver, type SafeHttpUrl, validateHttpUrl } from "./url-safety.js";
 
 type WebFetch = typeof fetch;
+export type WebRequestMethod = "GET" | "HEAD";
+
+export interface FetchWebResourceHop {
+  readonly url: URL;
+  readonly address: string;
+  readonly family: number;
+  readonly method: WebRequestMethod;
+  readonly redirectCount: number;
+}
+
 export interface WebHttpTransportRequest {
   readonly url: URL;
   readonly connectHost: string;
   readonly family: number;
   readonly hostHeader: string;
   readonly servername?: string;
+  readonly method: WebRequestMethod;
+  readonly headers: Readonly<Record<string, string>>;
   readonly signal: AbortSignal;
 }
 
@@ -36,24 +48,54 @@ function isRedirect(status: number): boolean {
   return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
 }
 
+const ALLOWED_REQUEST_HEADERS = new Set(["accept", "accept-language"]);
+
+function normalizeRequestHeaders(
+  headers: Readonly<Record<string, string>> | undefined
+): Readonly<Record<string, string>> | undefined {
+  const normalized: Record<string, string> = {};
+  for (const [rawName, value] of Object.entries(headers ?? {})) {
+    const name = rawName.toLowerCase();
+    if (!ALLOWED_REQUEST_HEADERS.has(name) || value.length > 1_024) return undefined;
+    try {
+      new Headers({ [name]: value });
+    } catch {
+      return undefined;
+    }
+    normalized[name] = value;
+  }
+  return normalized;
+}
+
+function declaredContentLength(response: Response): number | null | undefined {
+  const raw = response.headers.get("content-length");
+  if (raw === null) return undefined;
+  if (!/^(0|[1-9]\d*)$/.test(raw)) return null;
+  const value = Number(raw);
+  return Number.isSafeInteger(value) ? value : null;
+}
+
 async function readBytesCapped(
   response: Response,
   maxBytes: number
-): Promise<{ body: Uint8Array; truncated: boolean }> {
+): Promise<{ body: Uint8Array; truncated: boolean; bytesRead: number }> {
   if (!response.body) {
     const body = new Uint8Array(await response.arrayBuffer());
     return {
       body: body.slice(0, maxBytes),
-      truncated: body.byteLength > maxBytes
+      truncated: body.byteLength > maxBytes,
+      bytesRead: body.byteLength
     };
   }
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
+  let bytesRead = 0;
   let truncated = false;
   while (true) {
     const { done, value } = await reader.read();
     if (done || !value) break;
+    bytesRead += value.byteLength;
     const remaining = maxBytes - total;
     if (value.byteLength > remaining) {
       chunks.push(value.slice(0, Math.max(0, remaining)));
@@ -64,15 +106,19 @@ async function readBytesCapped(
     total += value.byteLength;
   }
   await reader.cancel().catch(() => {});
-  return { body: Buffer.concat(chunks), truncated };
+  return { body: Buffer.concat(chunks), truncated, bytesRead };
 }
 
 async function readTextCapped(
   response: Response,
   maxBytes: number
-): Promise<{ body: string; truncated: boolean }> {
+): Promise<{ body: string; truncated: boolean; bytesRead: number }> {
   const result = await readBytesCapped(response, maxBytes);
-  return { body: new TextDecoder().decode(result.body), truncated: result.truncated };
+  return {
+    body: new TextDecoder().decode(result.body),
+    truncated: result.truncated,
+    bytesRead: result.bytesRead
+  };
 }
 
 export function extractReadableText(html: string): { title: string; text: string } {
@@ -123,7 +169,12 @@ function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   });
 }
 
-async function requestCheckedUrl(checked: SafeHttpUrl, signal: AbortSignal): Promise<Response> {
+async function requestCheckedUrl(
+  checked: SafeHttpUrl,
+  signal: AbortSignal,
+  method: WebRequestMethod,
+  headers: Readonly<Record<string, string>>
+): Promise<Response> {
   if (signal.aborted) throw new Error("Request aborted");
   const hostHeader = checked.url.host;
   const servername =
@@ -134,14 +185,17 @@ async function requestCheckedUrl(checked: SafeHttpUrl, signal: AbortSignal): Pro
     family: checked.family,
     hostHeader,
     servername,
+    method,
+    headers,
     signal
   };
   if (testHttpTransport) return testHttpTransport(request);
   if (testFetch) {
     return testFetch(checked.url, {
       redirect: "manual",
+      method,
       signal,
-      headers: { host: hostHeader }
+      headers: { host: hostHeader, ...headers }
     });
   }
   return nodeHttpTransport(request);
@@ -149,10 +203,17 @@ async function requestCheckedUrl(checked: SafeHttpUrl, signal: AbortSignal): Pro
 
 export interface FetchWebResourceOptions {
   readonly requireHttps?: boolean;
+  readonly allowedHosts?: readonly string[];
+  readonly method?: WebRequestMethod;
+  readonly requestHeaders?: Readonly<Record<string, string>>;
+  readonly allowedContentTypes?: readonly string[];
+  readonly beforeRequest?: (hop: FetchWebResourceHop) => boolean | void | Promise<boolean | void>;
   readonly robots?: RobotsGate;
   readonly rateLimiter?: HostRateLimiter;
   readonly maxBytes?: number;
+  readonly rejectOversizedResponses?: boolean;
   readonly timeoutMs?: number;
+  readonly signal?: AbortSignal;
   readonly resolveHost?: HostResolver;
 }
 
@@ -163,6 +224,7 @@ export interface FetchWebResourceSuccess<TBody> {
   readonly contentType: string | null;
   readonly body: TBody;
   readonly truncated: boolean;
+  readonly bytesRead: number;
 }
 
 export type FetchWebResourceFailure = {
@@ -175,7 +237,15 @@ export type FetchWebResourceFailure = {
     | "timeout"
     | "network"
     | "http_error";
+  readonly detail?:
+    | "aborted"
+    | "invalid_response"
+    | "response_too_large"
+    | "unsupported_content_type";
   readonly status?: number;
+  /** Raw Retry-After value; callers must apply their own bounded retry policy. */
+  readonly retryAfter?: string;
+  readonly bytesRead?: number;
 };
 
 export type FetchWebResourceResult = FetchWebResourceSuccess<string> | FetchWebResourceFailure;
@@ -186,7 +256,10 @@ export type FetchWebResourceBytesResult =
 async function fetchWebResourceWithBody<TBody>(
   rawUrl: string,
   options: FetchWebResourceOptions,
-  readBody: (response: Response, maxBytes: number) => Promise<{ body: TBody; truncated: boolean }>
+  readBody: (
+    response: Response,
+    maxBytes: number
+  ) => Promise<{ body: TBody; truncated: boolean; bytesRead: number }>
 ): Promise<FetchWebResourceSuccess<TBody> | FetchWebResourceFailure> {
   let current: URL;
   try {
@@ -194,9 +267,30 @@ async function fetchWebResourceWithBody<TBody>(
   } catch {
     return { ok: false, reason: "blocked" };
   }
+  const allowedHosts = options.allowedHosts
+    ? new Set(options.allowedHosts.map((host) => host.toLowerCase()))
+    : undefined;
+  const method = options.method ?? "GET";
+  if (method !== "GET" && method !== "HEAD") return { ok: false, reason: "blocked" };
+  const requestHeaders = normalizeRequestHeaders(options.requestHeaders);
+  if (!requestHeaders) return { ok: false, reason: "blocked" };
+  const allowedContentTypes = options.allowedContentTypes
+    ? new Set(options.allowedContentTypes.map((value) => value.toLowerCase()))
+    : undefined;
+  if (options.signal?.aborted) {
+    return { ok: false, reason: "network", detail: "aborted" };
+  }
   const controller = new AbortController();
+  let abortReason: "caller" | "timeout" | undefined;
+  const abort = (reason: "caller" | "timeout"): void => {
+    if (controller.signal.aborted) return;
+    abortReason = reason;
+    controller.abort();
+  };
+  const onCallerAbort = (): void => abort("caller");
+  options.signal?.addEventListener("abort", onCallerAbort, { once: true });
   const timer = setTimeout(
-    () => controller.abort(),
+    () => abort("timeout"),
     options.timeoutMs ?? DEFAULT_WEB_RESEARCH_CONFIG.timeoutMs
   );
   try {
@@ -210,6 +304,9 @@ async function fetchWebResourceWithBody<TBody>(
         controller.signal
       );
       if (!safe.ok) return { ok: false, reason: "blocked" };
+      if (allowedHosts && !allowedHosts.has(safe.url.hostname.toLowerCase())) {
+        return { ok: false, reason: "blocked" };
+      }
       if (options.requireHttps && safe.url.protocol !== "https:") {
         return { ok: false, reason: "not_https" };
       }
@@ -226,7 +323,7 @@ async function fetchWebResourceWithBody<TBody>(
               controller.signal
             );
           }
-          const response = await requestCheckedUrl(robotsSafe, controller.signal);
+          const response = await requestCheckedUrl(robotsSafe, controller.signal, "GET", {});
           const { body } = await readTextCapped(
             response,
             options.maxBytes ?? DEFAULT_WEB_RESEARCH_CONFIG.maxDownloadBytes
@@ -238,36 +335,140 @@ async function fetchWebResourceWithBody<TBody>(
       if (options.rateLimiter) {
         await abortable(options.rateLimiter.acquire(safe.url.hostname), controller.signal);
       }
-      const response = await requestCheckedUrl(safe, controller.signal);
+      if (options.beforeRequest) {
+        const allowed = await abortable(
+          Promise.resolve(
+            options.beforeRequest({
+              url: new URL(safe.url),
+              address: safe.address,
+              family: safe.family,
+              method,
+              redirectCount: redirects
+            })
+          ),
+          controller.signal
+        );
+        if (allowed === false) return { ok: false, reason: "blocked" };
+      }
+      const response = await requestCheckedUrl(safe, controller.signal, method, requestHeaders);
+      const maxBytes = options.maxBytes ?? DEFAULT_WEB_RESEARCH_CONFIG.maxDownloadBytes;
       if (isRedirect(response.status)) {
+        await response.body?.cancel().catch(() => {});
+        if (options.rejectOversizedResponses) {
+          const contentLength = declaredContentLength(response);
+          if (contentLength === null) {
+            return {
+              ok: false,
+              reason: "blocked",
+              detail: "invalid_response",
+              status: response.status,
+              bytesRead: 0
+            };
+          }
+          if (contentLength !== undefined && contentLength > maxBytes) {
+            return {
+              ok: false,
+              reason: "blocked",
+              detail: "response_too_large",
+              status: response.status,
+              bytesRead: 0
+            };
+          }
+        }
         const location = response.headers.get("location");
         if (!location) return { ok: false, reason: "http_error", status: response.status };
         current = new URL(location, current);
         continue;
       }
-      if (response.status >= 400) {
-        return { ok: false, reason: "http_error", status: response.status };
+      const contentLength = declaredContentLength(response);
+      if (options.rejectOversizedResponses) {
+        if (contentLength === null) {
+          await response.body?.cancel().catch(() => {});
+          return {
+            ok: false,
+            reason: "blocked",
+            detail: "invalid_response",
+            status: response.status,
+            bytesRead: 0
+          };
+        }
+        if (contentLength !== undefined && contentLength > maxBytes) {
+          await response.body?.cancel().catch(() => {});
+          return {
+            ok: false,
+            reason: "blocked",
+            detail: "response_too_large",
+            status: response.status,
+            bytesRead: 0
+          };
+        }
       }
-      const { body, truncated } = await readBody(
-        response,
-        options.maxBytes ?? DEFAULT_WEB_RESEARCH_CONFIG.maxDownloadBytes
-      );
+      if (response.status >= 400) {
+        await response.body?.cancel().catch(() => {});
+        const retryAfter = response.headers.get("retry-after") ?? undefined;
+        return {
+          ok: false,
+          reason: "http_error",
+          status: response.status,
+          ...(retryAfter ? { retryAfter } : {})
+        };
+      }
+      const contentType = response.headers.get("content-type");
+      const mediaType = contentType?.split(";", 1)[0]?.trim().toLowerCase();
+      if (allowedContentTypes && (!mediaType || !allowedContentTypes.has(mediaType))) {
+        await response.body?.cancel().catch(() => {});
+        return {
+          ok: false,
+          reason: "blocked",
+          detail: "unsupported_content_type",
+          status: response.status
+        };
+      }
+      const { body, truncated, bytesRead } = await readBody(response, maxBytes);
+      if (options.rejectOversizedResponses && truncated) {
+        return {
+          ok: false,
+          reason: "blocked",
+          detail: "response_too_large",
+          status: response.status,
+          bytesRead
+        };
+      }
+      if (
+        options.rejectOversizedResponses &&
+        method !== "HEAD" &&
+        contentLength !== undefined &&
+        contentLength !== bytesRead
+      ) {
+        return {
+          ok: false,
+          reason: "blocked",
+          detail: "invalid_response",
+          status: response.status,
+          bytesRead
+        };
+      }
       return {
         ok: true,
         status: response.status,
         finalUrl: response.url || safe.url.toString(),
-        contentType: response.headers.get("content-type"),
+        contentType,
         body,
-        truncated
+        truncated,
+        bytesRead
       };
     }
     return { ok: false, reason: "network" };
   } catch (error) {
-    if (controller.signal.aborted) return { ok: false, reason: "timeout" };
+    if (abortReason === "caller") {
+      return { ok: false, reason: "network", detail: "aborted" };
+    }
+    if (abortReason === "timeout") return { ok: false, reason: "timeout" };
     if (error instanceof RateLimitExceededError) return { ok: false, reason: "rate_limited" };
     return { ok: false, reason: "network" };
   } finally {
     clearTimeout(timer);
+    options.signal?.removeEventListener("abort", onCallerAbort);
   }
 }
 
@@ -308,10 +509,11 @@ async function nodeHttpTransport(input: WebHttpTransportRequest): Promise<Respon
         hostname: input.connectHost,
         port: input.url.port || (isHttps ? 443 : 80),
         path: `${input.url.pathname}${input.url.search}`,
-        method: "GET",
+        method: input.method,
         headers: {
           host: input.hostHeader,
-          "user-agent": "Jarvis-WebResearch/0.1"
+          "user-agent": "Jarvis-WebResearch/0.1",
+          ...input.headers
         },
         servername: input.servername,
         lookup: (_hostname, _options, callback) => callback(null, input.connectHost, input.family)

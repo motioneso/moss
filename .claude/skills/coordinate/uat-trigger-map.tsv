@@ -85,9 +85,12 @@ blocking	packages/weather/**	tests/uat/specs/1571-weather-location-and-units.uat
 blocking	packages/settings/**	tests/uat/specs/1571-weather-location-and-units.uat.spec.ts
 blocking	packages/briefings/**	tests/uat/specs/1452-briefing-live-content.uat.spec.ts
 blocking	apps/web/src/today/**	tests/uat/specs/1452-briefing-live-content.uat.spec.ts
-# #1572 custom sports news sources. The always-on test proves the settings surface is live and
-# wired on every run; the full add/assign/edit/remove loop needs a real model and is gated behind
-# JARVIS_UAT_REAL_CHAT_ENV_FILE (see the spec's header) — same posture as 926-food-real-chat.
-blocking	packages/sports/src/settings/**	tests/uat/specs/1572-sports-custom-sources.uat.spec.ts
-blocking	packages/sports/src/source/**	tests/uat/specs/1572-sports-custom-sources.uat.spec.ts
-blocking	packages/sports/src/routes.ts	tests/uat/specs/1572-sports-custom-sources.uat.spec.ts
+# #1909 public Sports sources. The surface assertion is always on; real publisher discovery,
+# composition, recovery, and Moss status require JARVIS_UAT_REAL_CHAT_TOKEN_FILE.
+blocking	packages/sports/**	tests/uat/specs/1909-sports-public-source-completion.uat.spec.ts
+blocking	packages/shared/src/sports-sources-api.ts	tests/uat/specs/1909-sports-public-source-completion.uat.spec.ts
+blocking	packages/module-registry/src/index.ts	tests/uat/specs/1909-sports-public-source-completion.uat.spec.ts
+blocking	apps/web/src/today/**	tests/uat/specs/1909-sports-public-source-completion.uat.spec.ts
+blocking	infra/docker-compose.yml	tests/uat/specs/1909-sports-public-source-completion.uat.spec.ts
+blocking	infra/docker-compose.prod.yml	tests/uat/specs/1909-sports-public-source-completion.uat.spec.ts
+blocking	Dockerfile	tests/uat/specs/1909-sports-public-source-completion.uat.spec.ts

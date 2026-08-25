@@ -191,7 +191,7 @@ export function isSelfOperationExcluded(
 
 /**
  * The only tools ever allowed to declare `confirm_always` (planned, per #1263 chassis plan).
- * Five, not four: web.read is the deliberate odd one out, risk "write" not "destructive" — it's
+ * web.read is the deliberate odd one out, risk "write" not "destructive" — it's
  * here because no approved spec covers web-research and it is the v0.1.0 audit's web.read
  * prompt-injection-to-exfiltration finding; an auto-run family would reopen that HIGH. Do not
  * "tidy" it to risk "destructive" to match the other four, and do not give it a family (Opus
@@ -202,7 +202,12 @@ const PLANNED_CONFIRM_ALWAYS_TOOLS: readonly string[] = [
   "people.merge",
   "people.splitIdentity",
   "email.sendReply",
-  "web.read"
+  "web.read",
+  "sports.confirmSource",
+  "sports.confirmSourceAssignments",
+  "sports.confirmSourceRecipe",
+  "sports.retrySource",
+  "sports.removeSource"
 ];
 
 const GENERIC_INPUT_KEY_NAMES = new Set(["key", "preferenceKey", "settingKey"]);

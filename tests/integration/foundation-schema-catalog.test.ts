@@ -339,7 +339,9 @@ describe("MVP foundation schema catalog", () => {
         // #1754 — module build records and the queue worker's continuation state.
         { version: "0189", name: "0189_module_builds.sql" },
         // #1572 — custom sports news sources by team and league.
-        { version: "0190", name: "0190_sports_custom_sources.sql" }
+        { version: "0190", name: "0190_sports_custom_sources.sql" },
+        { version: "0191", name: "0191_sports_public_source_runtime.sql" },
+        { version: "0192", name: "0192_sports_legacy_feed_assignments_verified.sql" }
       ]);
     } finally {
       await client.end();

@@ -396,6 +396,7 @@ async function getHeadlines(
     const images = article.images ?? [];
     const image = images.find((i) => i.type === "header" && i.url) ?? images.find((i) => i.url);
     return {
+      origin: "espn",
       id: String(article.id ?? index),
       competitionKey,
       competitionLabel,
@@ -405,6 +406,8 @@ async function getHeadlines(
       imageUrl: image?.url ?? null,
       summary: article.description ?? "",
       teamKeys: [],
+      publisherLabel: "ESPN",
+      publisherDomain: "espn.com",
       sourceTeamIds: (article.categories ?? [])
         .filter((c) => c.type === "team" && c.teamId != null)
         .map((c) => String(c.teamId))

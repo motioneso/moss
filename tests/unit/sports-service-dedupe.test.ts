@@ -100,6 +100,9 @@ describe("SportsService.getOverview — followed-team dedupe (#855)", () => {
     imageUrl: null,
     summary: "",
     teamKeys: [],
+    origin: "espn",
+    publisherLabel: "ESPN",
+    publisherDomain: "espn.com",
     sourceTeamIds: ["364"]
   };
   const uclHeadlineDuplicateUrl: SourceHeadline = {
@@ -112,6 +115,9 @@ describe("SportsService.getOverview — followed-team dedupe (#855)", () => {
     imageUrl: null,
     summary: "",
     teamKeys: [],
+    origin: "espn",
+    publisherLabel: "ESPN",
+    publisherDomain: "espn.com",
     sourceTeamIds: ["364"]
   };
   const uclHeadlineUnique: SourceHeadline = {
@@ -124,6 +130,9 @@ describe("SportsService.getOverview — followed-team dedupe (#855)", () => {
     imageUrl: null,
     summary: "",
     teamKeys: [],
+    origin: "espn",
+    publisherLabel: "ESPN",
+    publisherDomain: "espn.com",
     sourceTeamIds: ["364"]
   };
 

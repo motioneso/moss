@@ -176,12 +176,14 @@ services:
       JARVIS_EMBED_PROVIDER: ${JARVIS_EMBED_PROVIDER:-local}
       JARVIS_EMBED_MODEL: ${JARVIS_EMBED_MODEL:-}
       JARVIS_MODULES_DIR: /data/modules
+      MOSS_SPORTS_RENDERER_SOCKET: /run/moss-sports-browser/renderer.sock
       # #1468: start-jarv1s.ts runs module-reconcile.ts as a mandatory boot one-shot, which
       # calls assertReconcileTargetIdentity — without this, prod crash-loops on boot the moment
       # app.users has a bootstrap owner (fresh installs are exempted). See the module-install
       # service above for why the default is empty, not a hardcoded email.
       MOSS_RECONCILE_CONFIRM_OWNER_EMAIL: ${MOSS_RECONCILE_CONFIRM_OWNER_EMAIL:-}
     restart: unless-stopped
+    group_add: ["1001"]
     healthcheck:
       test:
         [
@@ -206,12 +208,89 @@ services:
       - jarv1s-cli-tools:/data/cli-tools
       - jarv1s-cli-auth:/data/cli-auth
       - jarv1s-cli-socket:/run/jarv1s
+      - jarv1s-sports-browser-socket:/run/moss-sports-browser
       - jarv1s-modules:/data/modules
     depends_on:
       postgres:
         condition: service_healthy
+      sports-browser-socket-init:
+        condition: service_completed_successfully
     networks:
       - jarv1s
+
+  sports-browser-socket-init:
+    image: ghcr.io/motioneso/moss-sports-renderer:${JARVIS_IMAGE_TAG:?set JARVIS_IMAGE_TAG to a published version tag}
+    build:
+      context: ..
+      dockerfile: Dockerfile.sports-renderer
+    network_mode: none
+    read_only: true
+    user: "0:0"
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER, FSETID]
+    security_opt: [no-new-privileges:true]
+    command:
+      ["sh", "-c", "chown 0:1001 /run/moss-sports-browser && chmod 2770 /run/moss-sports-browser"]
+    volumes:
+      - jarv1s-sports-browser-socket:/run/moss-sports-browser
+    restart: "no"
+
+  sports-source-renderer:
+    image: ghcr.io/motioneso/moss-sports-renderer:${JARVIS_IMAGE_TAG:?set JARVIS_IMAGE_TAG to a published version tag}
+    build:
+      context: ..
+      dockerfile: Dockerfile.sports-renderer
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=256m,uid=1001,gid=1001,mode=1770
+    user: "1001:1001"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 1.0
+    mem_limit: 512m
+    pids_limit: 128
+    volumes:
+      - jarv1s-sports-browser-socket:/run/moss-sports-browser
+    depends_on:
+      sports-browser-socket-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "process.exit(require('node:fs').statSync('/run/moss-sports-browser/renderer.sock').isSocket()?0:1)"
+        ]
+      interval: 1s
+      timeout: 2s
+      retries: 10
+      start_period: 2s
+    restart: unless-stopped
+
+  sports-renderer-smoke:
+    image: ghcr.io/motioneso/moss:${JARVIS_IMAGE_TAG:?set JARVIS_IMAGE_TAG to a published version tag}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    command: ["node_modules/.bin/tsx", "scripts/smoke-sports-renderer-runtime.ts"]
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,uid=1000,gid=1000,mode=1770
+    user: "1000:1000"
+    group_add: ["1001"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - jarv1s-sports-browser-socket:/run/moss-sports-browser
+    depends_on:
+      sports-browser-socket-init:
+        condition: service_completed_successfully
+      sports-source-renderer:
+        condition: service_healthy
+    profiles: ["ops"]
 
   setup:
     image: ghcr.io/motioneso/moss:${JARVIS_IMAGE_TAG:?set JARVIS_IMAGE_TAG to a published version tag}
@@ -234,6 +313,7 @@ volumes:
   jarv1s-cli-tools:
   jarv1s-cli-auth:
   jarv1s-cli-socket:
+  jarv1s-sports-browser-socket:
   # #964: downloaded module packages survive image upgrades — modules are data, not image.
   jarv1s-modules:
 

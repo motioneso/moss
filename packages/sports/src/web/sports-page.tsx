@@ -291,6 +291,7 @@ function FeaturedStoryBand(props: { story: Headline }) {
       ) : null}
       <span className="sp-scorebar__storycopy">
         <span className="sp-scorebar__storytitle">{story.title}</span>
+        <span className="sp-scorebar__storydek">{story.publisherLabel}</span>
         {story.summary ? <span className="sp-scorebar__storydek">{story.summary}</span> : null}
       </span>
     </a>

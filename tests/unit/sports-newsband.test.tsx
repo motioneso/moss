@@ -17,6 +17,8 @@ function headline(over: Partial<Headline> = {}): Headline {
     imageUrl: "https://a.espncdn.com/photo/cowboys.jpg",
     summary: "Dallas wrapped up the division on Sunday.",
     teamKeys: [],
+    publisherLabel: "ESPN",
+    publisherDomain: "espn.com",
     ...over
   };
 }

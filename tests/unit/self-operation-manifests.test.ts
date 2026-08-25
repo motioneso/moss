@@ -308,7 +308,12 @@ const PLANNED_CONFIRM_ALWAYS_TOOL_NAMES = [
   "people.merge",
   "people.splitIdentity",
   "email.sendReply",
-  "web.read"
+  "web.read",
+  "sports.confirmSource",
+  "sports.confirmSourceAssignments",
+  "sports.confirmSourceRecipe",
+  "sports.retrySource",
+  "sports.removeSource"
 ];
 
 describe("Sports/News denylist check (#1265)", () => {
@@ -335,7 +340,7 @@ describe("Sports/News denylist check (#1265)", () => {
 });
 
 describe("Complete built-in self-operation inventory (#1263)", () => {
-  it("classifies every built-in write/destructive tool across exactly the three legal buckets, summing to 50", () => {
+  it("classifies every built-in write/destructive tool across exactly the three legal buckets, summing to 55", () => {
     // People declares its grants in packages/people/src/tools.ts, not a manifest.ts — this
     // walks the real getBuiltInModuleManifests() registry (which resolves that indirection),
     // so it does not undercount the way a manifest.ts-only grep would (34 instead of 38).
@@ -388,7 +393,7 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     // must press "Build it" on is the real gate. Admin-only is enforced separately in the host
     // service, not by this tier.
     expect(grantedAtInstall.length).toBe(40);
-    expect(confirmAlways.length).toBe(5);
+    expect(confirmAlways.length).toBe(10);
     expect(userPromotable.length).toBe(5);
 
     // Task 12a moved calendar.deleteEvent out of granted_at_install (33 -> ...). PR #1268's
@@ -406,8 +411,9 @@ describe("Complete built-in self-operation inventory (#1263)", () => {
     // sports.unfollowTeam (also granted_at_install) — 37 + 2 = 39 granted, 48 write/destructive
     // tools total. #1698's calendar lifecycle rebuild added calendar.rescheduleEvent as a new
     // user_promotable tool (same tier as the existing create/delete calendar tools) — 39 + 5 + 5
-    // = 49 total. #1888 added workshop.buildModule (granted_at_install) — 40 + 5 + 5 = 50 total.
-    expect(grantedAtInstall.length + confirmAlways.length + userPromotable.length).toBe(50);
+    // = 49 total. #1888 added workshop.buildModule (granted_at_install), and #1909 adds five
+    // confirmed Sports source writes — 40 + 10 + 5 = 55 total.
+    expect(grantedAtInstall.length + confirmAlways.length + userPromotable.length).toBe(55);
 
     expect(confirmAlways.sort()).toEqual([...PLANNED_CONFIRM_ALWAYS_TOOL_NAMES].sort());
     expect(userPromotable.sort()).toEqual(

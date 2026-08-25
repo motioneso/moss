@@ -326,6 +326,297 @@ describe("fetchWebResource", () => {
     });
   });
 
+  it("enforces an exact allowed host set on the initial request and every redirect", async () => {
+    const requests: string[] = [];
+    setWebHostResolverForTests(async () => [{ address: "93.184.216.34", family: 4 }]);
+    setWebHttpTransportForTests(async (request) => {
+      requests.push(request.url.hostname);
+      if (request.url.hostname === "publisher.example") {
+        return new Response(null, {
+          status: 302,
+          headers: { location: "https://static.publisher.example/news" }
+        });
+      }
+      return new Response("headline", { status: 200 });
+    });
+
+    await expect(
+      fetchWebResource("https://outside.example/news", {
+        allowedHosts: ["publisher.example"]
+      })
+    ).resolves.toEqual({ ok: false, reason: "blocked" });
+    expect(requests).toEqual([]);
+
+    await expect(
+      fetchWebResource("https://publisher.example/news", {
+        allowedHosts: ["publisher.example", "static.publisher.example"]
+      })
+    ).resolves.toMatchObject({ ok: true, body: "headline" });
+    expect(requests).toEqual(["publisher.example", "static.publisher.example"]);
+
+    requests.length = 0;
+    await expect(
+      fetchWebResource("https://publisher.example/news", {
+        allowedHosts: ["publisher.example"]
+      })
+    ).resolves.toEqual({ ok: false, reason: "blocked" });
+    expect(requests).toEqual(["publisher.example"]);
+  });
+
+  it("applies the fixed method, allowlisted headers, and policy hook on every request", async () => {
+    const requests: Array<{
+      method: string;
+      headers: Readonly<Record<string, string>>;
+    }> = [];
+    const hops: Array<{ hostname: string; address: string; redirectCount: number }> = [];
+    setWebHostResolverForTests(async () => [{ address: "93.184.216.34", family: 4 }]);
+    setWebHttpTransportForTests(async (request) => {
+      requests.push({ method: request.method, headers: request.headers });
+      if (request.url.hostname === "publisher.example") {
+        return new Response(null, {
+          status: 302,
+          headers: { location: "https://static.publisher.example/news" }
+        });
+      }
+      return new Response(null, { status: 200 });
+    });
+
+    await expect(
+      fetchWebResource("https://publisher.example/news", {
+        allowedHosts: ["publisher.example", "static.publisher.example"],
+        method: "HEAD",
+        requestHeaders: {
+          Accept: "text/html",
+          "Accept-Language": "en-US"
+        },
+        beforeRequest: (hop) => {
+          hops.push({
+            hostname: hop.url.hostname,
+            address: hop.address,
+            redirectCount: hop.redirectCount
+          });
+        }
+      })
+    ).resolves.toMatchObject({ ok: true, body: "" });
+    expect(requests).toEqual([
+      {
+        method: "HEAD",
+        headers: { accept: "text/html", "accept-language": "en-US" }
+      },
+      {
+        method: "HEAD",
+        headers: { accept: "text/html", "accept-language": "en-US" }
+      }
+    ]);
+    expect(hops).toEqual([
+      { hostname: "publisher.example", address: "93.184.216.34", redirectCount: 0 },
+      { hostname: "static.publisher.example", address: "93.184.216.34", redirectCount: 1 }
+    ]);
+
+    requests.length = 0;
+    await expect(
+      fetchWebResource("https://publisher.example/news", {
+        requestHeaders: { Authorization: "secret" }
+      })
+    ).resolves.toEqual({ ok: false, reason: "blocked" });
+    expect(requests).toEqual([]);
+  });
+
+  it("cancels redirect bodies and reports only the actual final bytes read", async () => {
+    let redirectBodyCancelled = false;
+    setWebHostResolverForTests(async () => [{ address: "93.184.216.34", family: 4 }]);
+    setWebHttpTransportForTests(async (request) => {
+      if (request.url.hostname === "publisher.example") {
+        return new Response(
+          new ReadableStream({
+            cancel: () => {
+              redirectBodyCancelled = true;
+            }
+          }),
+          {
+            status: 302,
+            headers: { location: "https://static.publisher.example/news" }
+          }
+        );
+      }
+      return new Response("hello", { status: 200 });
+    });
+
+    const result = await fetchWebResource("https://publisher.example/news", {
+      allowedHosts: ["publisher.example", "static.publisher.example"]
+    });
+
+    expect(redirectBodyCancelled).toBe(true);
+    expect(result).toMatchObject({ ok: true, body: "hello", bytesRead: 5 });
+  });
+
+  it("cancels HTTP error bodies and returns Retry-After even when cancellation fails", async () => {
+    let cancelled = false;
+    setWebHostResolverForTests(async () => [{ address: "93.184.216.34", family: 4 }]);
+    setWebHttpTransportForTests(
+      async () =>
+        new Response(
+          new ReadableStream({
+            cancel: () => {
+              cancelled = true;
+              throw new Error("synthetic cancellation failure");
+            }
+          }),
+          { status: 429, headers: { "retry-after": "2" } }
+        )
+    );
+
+    await expect(fetchWebResource("https://publisher.example/news")).resolves.toEqual({
+      ok: false,
+      reason: "http_error",
+      status: 429,
+      retryAfter: "2"
+    });
+    expect(cancelled).toBe(true);
+  });
+
+  it("accepts only explicitly allowed final response content types", async () => {
+    setWebHostResolverForTests(async () => [{ address: "93.184.216.34", family: 4 }]);
+    setWebHttpTransportForTests(
+      async () =>
+        new Response("<html>nope</html>", {
+          status: 200,
+          headers: { "content-type": "text/html; charset=utf-8" }
+        })
+    );
+
+    await expect(
+      fetchWebResource("https://example.com/news", {
+        allowedContentTypes: ["application/json"]
+      })
+    ).resolves.toEqual({
+      ok: false,
+      reason: "blocked",
+      detail: "unsupported_content_type",
+      status: 200
+    });
+
+    setWebHttpTransportForTests(
+      async () =>
+        new Response('{"items":[]}', {
+          status: 200,
+          headers: { "content-type": "application/json; charset=utf-8" }
+        })
+    );
+    await expect(
+      fetchWebResource("https://example.com/news", {
+        allowedContentTypes: ["application/json"]
+      })
+    ).resolves.toMatchObject({ ok: true, body: '{"items":[]}' });
+  });
+
+  it("rejects oversized declared response lengths before reading bodies", async () => {
+    let cancelledBodies = 0;
+    let requestCount = 0;
+    const oversizedBody = (): ReadableStream<Uint8Array> =>
+      new ReadableStream({
+        cancel: () => {
+          cancelledBodies += 1;
+        }
+      });
+    setWebHostResolverForTests(async () => [{ address: "93.184.216.34", family: 4 }]);
+    setWebHttpTransportForTests(async () => {
+      requestCount += 1;
+      return new Response(oversizedBody(), {
+        status: 302,
+        headers: {
+          "content-length": "9",
+          location: "https://example.com/final"
+        }
+      });
+    });
+
+    await expect(
+      fetchWebResource("https://example.com/news", {
+        maxBytes: 4,
+        rejectOversizedResponses: true
+      })
+    ).resolves.toEqual({
+      ok: false,
+      reason: "blocked",
+      detail: "response_too_large",
+      status: 302,
+      bytesRead: 0
+    });
+    expect(requestCount).toBe(1);
+    expect(cancelledBodies).toBe(1);
+
+    setWebHttpTransportForTests(
+      async () =>
+        new Response(oversizedBody(), {
+          status: 200,
+          headers: { "content-length": "9" }
+        })
+    );
+    await expect(
+      fetchWebResource("https://example.com/news", {
+        maxBytes: 4,
+        rejectOversizedResponses: true
+      })
+    ).resolves.toEqual({
+      ok: false,
+      reason: "blocked",
+      detail: "response_too_large",
+      status: 200,
+      bytesRead: 0
+    });
+    expect(cancelledBodies).toBe(2);
+  });
+
+  it("rejects streamed overflow and misleading final content lengths", async () => {
+    setWebHostResolverForTests(async () => [{ address: "93.184.216.34", family: 4 }]);
+    setWebHttpTransportForTests(
+      async () =>
+        new Response(
+          new ReadableStream({
+            start: (controller) => {
+              controller.enqueue(new TextEncoder().encode("abcdef"));
+              controller.close();
+            }
+          }),
+          { status: 200 }
+        )
+    );
+
+    await expect(
+      fetchWebResource("https://example.com/news", {
+        maxBytes: 4,
+        rejectOversizedResponses: true
+      })
+    ).resolves.toEqual({
+      ok: false,
+      reason: "blocked",
+      detail: "response_too_large",
+      status: 200,
+      bytesRead: 6
+    });
+
+    setWebHttpTransportForTests(
+      async () =>
+        new Response("hello", {
+          status: 200,
+          headers: { "content-length": "2" }
+        })
+    );
+    await expect(
+      fetchWebResource("https://example.com/news", {
+        maxBytes: 10,
+        rejectOversizedResponses: true
+      })
+    ).resolves.toEqual({
+      ok: false,
+      reason: "blocked",
+      detail: "invalid_response",
+      status: 200,
+      bytesRead: 5
+    });
+  });
+
   it("pins the validated address and blocks a rebind-shaped redirect", async () => {
     const requests: string[] = [];
     setWebHostResolverForTests(async (hostname) => [
@@ -411,6 +702,32 @@ describe("fetchWebResource", () => {
     await expect(fetchWebResource("https://example.com", { timeoutMs: 1 })).resolves.toMatchObject({
       ok: false,
       reason: "timeout"
+    });
+  });
+
+  it("propagates caller cancellation without reporting a timeout", async () => {
+    const caller = new AbortController();
+    let markStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    setWebHostResolverForTests(async () => [{ address: "93.184.216.34", family: 4 }]);
+    setWebHttpTransportForTests(
+      async ({ signal }) =>
+        new Promise((_resolve, reject) => {
+          markStarted?.();
+          signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+        })
+    );
+
+    const result = fetchWebResource("https://example.com", { signal: caller.signal });
+    await started;
+    caller.abort();
+
+    await expect(result).resolves.toEqual({
+      ok: false,
+      reason: "network",
+      detail: "aborted"
     });
   });
 
