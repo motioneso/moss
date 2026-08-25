@@ -453,13 +453,21 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
 
   await page.goto(`${requireBaseURL()}/sports`);
   await expect(
-    page.getByText(/Issue 1909 fixture feed|Issue 1909 shared sports feed/i).first()
+    page
+      .getByText(
+        /FotMob - Football Live Scores|Issue 1909 fixture feed|Issue 1909 shared sports feed/i
+      )
+      .first()
   ).toBeVisible({
     timeout: SOURCE_DEADLINE_MS
   });
   await page.goto(`${requireBaseURL()}/today`);
   await expect(
-    page.getByText(/BBC legacy feed|FotMob legacy scrape|Issue 1909 fixture feed/i).first()
+    page
+      .getByText(
+        /BBC Sport|BBC legacy feed|FotMob - Football Live Scores|FotMob legacy scrape|Issue 1909 fixture feed/i
+      )
+      .first()
   ).toBeVisible({ timeout: SOURCE_DEADLINE_MS });
 
   const mossSources = (
