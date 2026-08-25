@@ -8,10 +8,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Kysely } from "kysely";
 import { Client } from "pg";
 
-import { createDatabase, type MossDatabase } from "@moss/db";
+import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
 import { createPgBossClient } from "@moss/jobs";
 
 import { createApiServer } from "../../apps/api/src/server.js";
+import { deleteExternalModuleDraft } from "../../packages/settings/src/repository-external-modules.js";
 import { connectionStrings, resetEmptyFoundationDatabase } from "./test-database.js";
 
 // #917 Task 9: exercise the admin external-modules read/reconcile surface end-to-end
@@ -486,6 +487,78 @@ describe("throwing a draft away (#1890)", () => {
     });
     expect(res.statusCode).toBe(404);
   });
+
+  // QA round 1, gap 1: every other case here signs in first. The route declares a 401 answer,
+  // so pin the no-session case too — an unauthenticated caller must be turned away before any
+  // ownership branch runs, and must not delete anything.
+  it("denies a caller with no session at all with 401, and deletes nothing", async () => {
+    await insertDraft(adminUserId, "draft");
+
+    const res = await server.inject({
+      method: "DELETE",
+      url: "/api/admin/modules/throwaway-draft/draft"
+    });
+    expect(res.statusCode).toBe(401);
+    expect(await draftRowCount()).toBe(1);
+  });
+
+  // QA round 1, gap 4: the row delete and its audit entry must stand or fall together. Both
+  // halves are pinned here because the guarantee comes from withDataContext running the handler
+  // inside ONE transaction, and nothing else in the suite says so:
+  //   - a successful delete really does leave an audit entry behind, and
+  //   - a failing audit write takes the delete down with it, so a destructive admin action can
+  //     never succeed silently with no trail.
+  it("writes an audit entry for a successful delete", async () => {
+    await insertDraft(adminUserId, "draft");
+    const before = await auditEventCount();
+
+    const res = await server.inject({
+      method: "DELETE",
+      url: "/api/admin/modules/throwaway-draft/draft",
+      headers: { cookie: adminCookie }
+    });
+    expect(res.statusCode).toBe(200);
+    expect(await draftRowCount()).toBe(0);
+    expect(await auditEventCount()).toBe(before + 1);
+  });
+
+  it("rolls the delete back when the audit write fails, leaving row and audit trail intact", async () => {
+    await insertDraft(adminUserId, "draft");
+    const before = await auditEventCount();
+    const dataContext = new DataContextRunner(appDb);
+
+    await expect(
+      dataContext.withDataContext(
+        { actorUserId: adminUserId, requestId: randomUUID() },
+        async (scopedDb) =>
+          deleteExternalModuleDraft(
+            scopedDb,
+            {
+              id: "throwaway-draft",
+              actorUserId: adminUserId,
+              requestId: randomUUID()
+            },
+            async () => {
+              throw new Error("audit write failed");
+            }
+          )
+      )
+    ).rejects.toThrow("audit write failed");
+
+    expect(await draftRowCount()).toBe(1);
+    expect(await auditEventCount()).toBe(before);
+  });
+
+  async function auditEventCount(): Promise<number> {
+    const client = new Client({ connectionString: connectionStrings.bootstrap });
+    await client.connect();
+    const rows = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM app.admin_audit_events
+        WHERE action = 'module.external_draft_delete' AND target_id = 'throwaway-draft'`
+    );
+    await client.end();
+    return Number(rows.rows[0]?.count ?? "0");
+  }
 });
 
 async function signUp(
