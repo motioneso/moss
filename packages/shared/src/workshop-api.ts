@@ -114,7 +114,15 @@ export interface ModuleBuildSummary {
 
 const moduleBuildStatusSchema = {
   type: "string",
-  enum: ["planning", "awaiting_plan_approval", "building", "awaiting_change", "ready", "failed", "cancelled"]
+  enum: [
+    "planning",
+    "awaiting_plan_approval",
+    "building",
+    "awaiting_change",
+    "ready",
+    "failed",
+    "cancelled"
+  ]
 } as const;
 
 const moduleBuildSummarySchema = {

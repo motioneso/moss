@@ -29,9 +29,9 @@ Spec: `docs/specs/1945.md`. Single phase — this is deliberately the smallest u
 - The "you only" vs "everyone" distinction is real data, discarded before it reaches the
   frontend today. `reconcileExternalModules` (`packages/module-registry/src/external/reconcile.ts:69-79`)
   sets `status: "draft"` + `ownerUserId` for a module active only for its builder, `status:
-  "enabled"` + `ownerUserId: null` once shipped. The composition root has this on hand but drops
+"enabled"` + `ownerUserId: null` once shipped. The composition root has this on hand but drops
   it: `apps/api/src/server.ts:581-594` (`listInstalledExternalModules` maps to `{ id, name,
-  version, hasPreferences, hasUserCredentials }` — no `status`).
+version, hasPreferences, hasUserCredentials }` — no `status`).
 - Port type to extend: `InstalledExternalModuleSummary` — declared in
   `packages/settings/src/routes-external-module-types.ts` (re-exported from `routes.ts:106-115`).
 - Drift-disabled modules already go `active: false` and are excluded from the list entirely
@@ -46,6 +46,7 @@ Spec: `docs/specs/1945.md`. Single phase — this is deliberately the smallest u
    `created_at desc`).
 
 2. **Shared types**, added to `packages/shared/src/workshop-api.ts`:
+
    ```ts
    export type ModuleBuildStatus =
      | "planning" | "awaiting_plan_approval" | "building" | "awaiting_change"
@@ -71,6 +72,7 @@ Spec: `docs/specs/1945.md`. Single phase — this is deliberately the smallest u
    ```
 
 3. **"Live" group type**, same file:
+
    ```ts
    export interface WorkshopLiveModuleSummary {
      readonly id: string;
@@ -79,17 +81,18 @@ Spec: `docs/specs/1945.md`. Single phase — this is deliberately the smallest u
      readonly scope: "you" | "everyone";
    }
    ```
+
    Built from the existing `GET /api/me/modules` response, not a new route.
    - Extend `MyModuleDto` (`packages/shared/src/platform-api-modules.ts:22-40`) with
      `readonly scope: "you" | "everyone"`.
    - `toMyModuleDto` (built-in branch, `routes-serializers.ts`): `scope: "everyone"` always (a
      built-in module is never private).
    - `toMyModuleDtoFromExternal` (`routes-serializers.ts:54-70`): `scope: module.status ===
-     "draft" ? "you" : "everyone"` — needs `status` added to `InstalledExternalModuleSummary`.
+"draft" ? "you" : "everyone"` — needs `status` added to `InstalledExternalModuleSummary`.
    - Extend `InstalledExternalModuleSummary` with `readonly status: "draft" | "enabled"` (only
      these two values ever reach this already-filtered list).
    - Extend the composition-root map (`apps/api/src/server.ts:581-594`) to pass `status:
-     module.status` through (the raw `module` there already has it — no new query).
+module.status` through (the raw `module` there already has it — no new query).
    - Workshop page filters the existing `/api/me/modules` result to `lifecycle === "optional"`
      (external modules only) and maps to `WorkshopLiveModuleSummary`.
 
@@ -136,6 +139,7 @@ Extend the existing live proof pattern at `tests/live/workshop-1888-uat.spec.ts`
 signs in, opens chat, and gets a plan card) into a new `tests/live/workshop-1945-uat.spec.ts`:
 sign in, ask Moss to build a module, click "Build it" on the resulting plan card, then navigate to
 `/workshop` and assert:
+
 - the build appears in a "Building now" or "Needs you" group (not the empty state), and
 - if the account already has an external module installed, at least one "Live" row renders with a
   real "Live · you only" or "Live · everyone" badge (skip this assertion if none exist — do not
@@ -154,6 +158,7 @@ pnpm format:check > /tmp/1945-format.log 2>&1; echo "EXIT=$?"
 pnpm lint > /tmp/1945-lint.log 2>&1; echo "EXIT=$?"
 pnpm typecheck > /tmp/1945-typecheck.log 2>&1; echo "EXIT=$?"
 ```
+
 Full gate (`pnpm verify:foundation`) only through the `verify-gate` skill, not run directly.
 
 ## Kill gate

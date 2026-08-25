@@ -50,7 +50,8 @@ function fakeScopedDb(): DataContextDb {
       selectAll: () => ({
         where: (column: string, _op: string, value: string) => ({
           orderBy: () => ({
-            execute: async () => rows.filter((row) => (row as Record<string, unknown>)[column] === value)
+            execute: async () =>
+              rows.filter((row) => (row as Record<string, unknown>)[column] === value)
           })
         })
       })

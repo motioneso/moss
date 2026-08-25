@@ -2,11 +2,7 @@ import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
-import type {
-  ListMyModuleBuildsResponse,
-  ListMyModulesResponse,
-  MeResponse
-} from "@moss/shared";
+import type { ListMyModuleBuildsResponse, ListMyModulesResponse, MeResponse } from "@moss/shared";
 
 import { WorkshopPage } from "../../packages/workshop/src/web/workshop-page.js";
 
