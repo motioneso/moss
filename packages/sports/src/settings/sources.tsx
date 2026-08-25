@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, Note, formatTimestamp } from "@moss/settings-ui";
 import { ApiError, Button } from "@moss/module-web-sdk";
 import type { CompetitionRef, SportsCustomSourceDto, SportsFollowDto, TeamRef } from "@moss/shared";
+import { Check, CircleAlert } from "lucide-react";
 
 import {
   confirmSportsSourceAssignments,
@@ -59,6 +60,15 @@ function followDisplayLabel(
   return team?.shortName || team?.name || follow.teamKey || follow.competitionKey;
 }
 
+function SourceError(props: { children: string }) {
+  return (
+    <p className="sp-src__err" role="alert">
+      <CircleAlert size={16} aria-hidden="true" />
+      <span>{props.children}</span>
+    </p>
+  );
+}
+
 function FollowAssignmentPicker(props: {
   follows: readonly SportsFollowDto[];
   competitionsByKey: Map<string, CompetitionRef>;
@@ -77,14 +87,17 @@ function FollowAssignmentPicker(props: {
         const inputId = `${props.idPrefix}-${follow.id}`;
         return (
           <li key={follow.id} className="sp-src__assign-item">
-            <input
-              type="checkbox"
-              id={inputId}
-              checked={props.selected.has(follow.id)}
-              disabled={props.disabled}
-              onChange={() => props.onToggle(follow.id)}
-            />
-            <label htmlFor={inputId}>
+            <label className="jds-check sp-src__check" htmlFor={inputId}>
+              <input
+                type="checkbox"
+                id={inputId}
+                checked={props.selected.has(follow.id)}
+                disabled={props.disabled}
+                onChange={() => props.onToggle(follow.id)}
+              />
+              <span className="jds-check__box">
+                <Check size={13} aria-hidden="true" />
+              </span>
               {followDisplayLabel(follow, props.competitionsByKey, props.teamsByCompetition)}
             </label>
           </li>
@@ -269,11 +282,7 @@ export function AddSourceFlow(props: {
         );
       })}
 
-      {errorMessage ? (
-        <p className="sp-src__err" role="alert">
-          {errorMessage}
-        </p>
-      ) : null}
+      {errorMessage ? <SourceError>{errorMessage}</SourceError> : null}
 
       {preview?.status === "ok" && preview.candidate ? (
         <div className="sp-src__candidate">
@@ -303,13 +312,16 @@ export function AddSourceFlow(props: {
             </div>
           ))}
           {preview.authorizationAcknowledgement ? (
-            <label className="sp-src__label">
+            <label className="jds-check sp-src__check">
               <input
                 type="checkbox"
                 checked={authorizationAccepted}
                 disabled={busy}
                 onChange={(event) => setAuthorizationAccepted(event.target.checked)}
-              />{" "}
+              />
+              <span className="jds-check__box">
+                <Check size={13} aria-hidden="true" />
+              </span>
               {preview.authorizationAcknowledgement}
             </label>
           ) : null}
@@ -422,7 +434,9 @@ export function SportsSourcesSection(props: {
         Add your own public news sources for sports, and assign them to specific teams or leagues
         you follow.
       </p>
-      {sourcesQuery.isError ? <Note>Could not load your custom sources. Try again.</Note> : null}
+      {sourcesQuery.isError ? (
+        <SourceError>Could not load your custom sources. Try again.</SourceError>
+      ) : null}
       {sourcesQuery.isSuccess && sources.length > 0 ? (
         <ul className="sp-src__list">
           {sources.map((source) => {
@@ -442,49 +456,53 @@ export function SportsSourcesSection(props: {
             return (
               <li key={source.id} className="sp-src__item">
                 <div className="sp-src__item-row">
-                  <span className="sp-src__item-label">{source.label}</span>
-                  <span className="sp-src__item-meta">{source.canonicalDomain}</span>
-                  {badge ? <Badge tone={badge.tone}>{badge.label}</Badge> : null}
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    aria-label={`Retry ${source.label}`}
-                    disabled={recoveryBusy}
-                    onClick={() => retryMutation.mutate(source.id)}
-                  >
-                    {retrying ? "Checking…" : "Retry"}
-                  </Button>
-                  {showRebuild ? (
+                  <div className="sp-src__identity">
+                    <span className="sp-src__item-label">{source.label}</span>
+                    <span className="sp-src__item-meta">{source.canonicalDomain}</span>
+                    {badge ? <Badge tone={badge.tone}>{badge.label}</Badge> : null}
+                  </div>
+                  <div className="sp-src__actions">
                     <Button
                       variant="secondary"
                       size="sm"
-                      aria-label={`Rebuild ${source.label}`}
+                      aria-label={`Retry ${source.label}`}
                       disabled={recoveryBusy}
-                      onClick={() => recipePreviewMutation.mutate(source.id)}
+                      onClick={() => retryMutation.mutate(source.id)}
                     >
-                      {rebuilding ? "Checking…" : "Rebuild"}
+                      {retrying ? "Checking…" : "Retry"}
                     </Button>
-                  ) : null}
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    aria-label={`Edit teams for ${source.label}`}
-                    disabled={recoveryBusy}
-                    onClick={() => (editing ? setEditingSourceId(null) : startEditing(source))}
-                  >
-                    {editing ? "Close" : "Edit teams"}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    aria-label={`Remove ${source.label}`}
-                    disabled={recoveryBusy}
-                    onClick={() => removeMutation.mutate(source.id)}
-                  >
-                    Remove
-                  </Button>
+                    {showRebuild ? (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        aria-label={`Rebuild ${source.label}`}
+                        disabled={recoveryBusy}
+                        onClick={() => recipePreviewMutation.mutate(source.id)}
+                      >
+                        {rebuilding ? "Checking…" : "Rebuild"}
+                      </Button>
+                    ) : null}
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      aria-label={`Edit teams for ${source.label}`}
+                      disabled={recoveryBusy}
+                      onClick={() => (editing ? setEditingSourceId(null) : startEditing(source))}
+                    >
+                      {editing ? "Close" : "Edit teams"}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      aria-label={`Remove ${source.label}`}
+                      disabled={recoveryBusy}
+                      onClick={() => removeMutation.mutate(source.id)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
                 </div>
-                <p className="sp-src__hint sp-src__hint--tight">
+                <p className="sp-src__meta-line">
                   Last checked:{" "}
                   {source.lastCheckedAt
                     ? formatTimestamp(source.lastCheckedAt, "Unknown")
@@ -496,7 +514,7 @@ export function SportsSourcesSection(props: {
                     : "Never"}
                 </p>
                 {source.healthMessage ? (
-                  <p className="sp-src__hint sp-src__hint--tight">{source.healthMessage}</p>
+                  <p className="sp-src__health-message">{source.healthMessage}</p>
                 ) : null}
                 {source.healthState === "auth_required" ? (
                   <Note>
@@ -507,9 +525,29 @@ export function SportsSourcesSection(props: {
                   <ul className="sp-src__assign-list">
                     {source.assignments.map((assignment) => {
                       const assignmentBadge = HEALTH_BADGE[assignment.healthState];
+                      const follow = props.follows.find(
+                        (candidate) => candidate.id === assignment.followId
+                      );
+                      const followLabel = follow
+                        ? followDisplayLabel(
+                            follow,
+                            props.competitionsByKey,
+                            props.teamsByCompetition
+                          )
+                        : "Assigned team or league";
                       return (
-                        <li key={assignment.id} className="sp-src__assign-item">
-                          <span>{assignment.targetUrl ?? "Awaiting preview"}</span>
+                        <li
+                          key={assignment.id}
+                          className="sp-src__assign-item sp-src__assign-item--status"
+                        >
+                          <span className="sp-src__assignment-copy">
+                            <span className="sp-src__assignment-label">{followLabel}</span>
+                            {assignment.targetUrl ? (
+                              <span className="sp-src__assignment-target">
+                                {assignment.targetUrl}
+                              </span>
+                            ) : null}
+                          </span>
                           {assignment.previewStatus !== "verified" ? (
                             <Badge tone="steel">Awaiting preview</Badge>
                           ) : assignmentBadge ? (
@@ -542,13 +580,16 @@ export function SportsSourcesSection(props: {
                         {target.teamLabel ?? target.competitionLabel}: {target.targetUrl}
                       </p>
                     ))}
-                    <label className="sp-src__label">
+                    <label className="jds-check sp-src__check">
                       <input
                         type="checkbox"
                         checked={recipeAuthorizationAccepted}
                         disabled={recipeConfirmMutation.isPending}
                         onChange={(event) => setRecipeAuthorizationAccepted(event.target.checked)}
-                      />{" "}
+                      />
+                      <span className="jds-check__box">
+                        <Check size={13} aria-hidden="true" />
+                      </span>
                       {recipePreview.result.authorizationAcknowledgement}
                     </label>
                     <Button
@@ -576,7 +617,7 @@ export function SportsSourcesSection(props: {
                   </div>
                 ) : null}
                 {recipePreview?.sourceId === source.id && recipePreview.result.status !== "ok" ? (
-                  <Note>The source recipe could not be rebuilt.</Note>
+                  <SourceError>The source recipe could not be rebuilt.</SourceError>
                 ) : null}
                 {editing ? (
                   <div className="sp-src__assign">
@@ -621,7 +662,7 @@ export function SportsSourcesSection(props: {
                         {assignmentPreview.result.candidate.targets.length === 0 ? (
                           <p className="sp-src__hint">This source will be left unassigned.</p>
                         ) : null}
-                        <label className="sp-src__label">
+                        <label className="jds-check sp-src__check">
                           <input
                             type="checkbox"
                             checked={assignmentAuthorizationAccepted}
@@ -629,7 +670,10 @@ export function SportsSourcesSection(props: {
                             onChange={(event) =>
                               setAssignmentAuthorizationAccepted(event.target.checked)
                             }
-                          />{" "}
+                          />
+                          <span className="jds-check__box">
+                            <Check size={13} aria-hidden="true" />
+                          </span>
                           {assignmentPreview.result.authorizationAcknowledgement}
                         </label>
                         <Button
@@ -660,10 +704,10 @@ export function SportsSourcesSection(props: {
                     ) : null}
                     {assignmentPreview?.sourceId === source.id &&
                     assignmentPreview.result.status !== "ok" ? (
-                      <Note>Those assignments could not be verified.</Note>
+                      <SourceError>Those assignments could not be verified.</SourceError>
                     ) : null}
                     {assignmentPreviewMutation.isError || assignmentConfirmMutation.isError ? (
-                      <Note>Could not update assignments. Try again.</Note>
+                      <SourceError>Could not update assignments. Try again.</SourceError>
                     ) : null}
                   </div>
                 ) : null}
@@ -673,16 +717,23 @@ export function SportsSourcesSection(props: {
         </ul>
       ) : null}
       {sourcesQuery.isSuccess && sources.length === 0 ? <Note>No custom sources yet.</Note> : null}
-      {removeMutation.isError ? <Note>Could not remove that source. Try again.</Note> : null}
-      {retryMutation.isError ? <Note>Could not retry that source. Try again.</Note> : null}
-      {recipePreviewMutation.isError || recipeConfirmMutation.isError ? (
-        <Note>Could not rebuild that source. Try again.</Note>
+      {removeMutation.isError ? (
+        <SourceError>Could not remove that source. Try again.</SourceError>
       ) : null}
-      <AddSourceFlow
-        follows={props.follows}
-        competitionsByKey={props.competitionsByKey}
-        teamsByCompetition={props.teamsByCompetition}
-      />
+      {retryMutation.isError ? (
+        <SourceError>Could not retry that source. Try again.</SourceError>
+      ) : null}
+      {recipePreviewMutation.isError || recipeConfirmMutation.isError ? (
+        <SourceError>Could not rebuild that source. Try again.</SourceError>
+      ) : null}
+      <div className="sp-src__add-section">
+        <p className="sp-src__subheading">Add a source</p>
+        <AddSourceFlow
+          follows={props.follows}
+          competitionsByKey={props.competitionsByKey}
+          teamsByCompetition={props.teamsByCompetition}
+        />
+      </div>
     </section>
   );
 }

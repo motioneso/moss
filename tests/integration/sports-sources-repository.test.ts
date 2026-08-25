@@ -1,13 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import pg from "pg";
 
-import { createDatabase, DataContextRunner, type DataContextDb, type MossDatabase } from "@moss/db";
+import {
+  createDatabase,
+  DataContextRunner,
+  runSqlMigrations,
+  type DataContextDb,
+  type MossDatabase
+} from "@moss/db";
 import type { Kysely } from "kysely";
 
 import { NEWS_MAX_CUSTOM_SOURCES } from "@moss/news";
 import { SportsSourcesRepository } from "../../packages/sports/src/source/repository.js";
 import type { VerifiedSportsSourceCandidate } from "../../packages/sports/src/source/discovery.js";
-import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
+import { sportsModuleSqlMigrationDirectory } from "../../packages/sports/src/manifest.js";
+import {
+  connectionStrings,
+  ids,
+  resetEmptyFoundationDatabase,
+  resetFoundationDatabase
+} from "./test-database.js";
 
 const { Client } = pg;
 const repo = new SportsSourcesRepository();
@@ -29,6 +41,71 @@ const candidate = (
   targets: [],
   checkedAt: "2026-08-23T12:00:00.000Z",
   samples: []
+});
+
+describe("sports legacy feed assignment migration repair", () => {
+  it("backfills target identity under FORCE RLS and restores protection", async () => {
+    await resetEmptyFoundationDatabase();
+    const bootstrap = new Client({ connectionString: connectionStrings.bootstrap });
+    await bootstrap.connect();
+    try {
+      await bootstrap.query(`DELETE FROM app.schema_migrations WHERE version = '0193'`);
+      const ownerId = "60000000-0000-4000-8000-000000000003";
+      await bootstrap.query(
+        `INSERT INTO app.users (id, email, name, is_instance_admin)
+         VALUES ($1, 'sports-feed-upgrade@example.com', 'Feed Upgrade', false)`,
+        [ownerId]
+      );
+      const follow = await bootstrap.query<{ id: string }>(
+        `INSERT INTO app.sports_follows (owner_user_id, competition_key, team_key)
+         VALUES ($1, 'nhl', 'ana') RETURNING id`,
+        [ownerId]
+      );
+      const source = await bootstrap.query<{ id: string }>(
+        `INSERT INTO app.sports_custom_sources (
+           owner_user_id, label, canonical_domain, homepage_url, feed_url, retrieval_method,
+           validation_fingerprint, validated_at, recipe_status, confirmed_fetch_hosts,
+           authorization_confirmed_at
+         ) VALUES (
+           $1, 'Legacy feed', 'feed.example.com', 'https://feed.example.com/',
+           'https://feed.example.com/rss', 'feed', 'legacy-fingerprint', now(), 'feed',
+           ARRAY['feed.example.com'], now()
+         ) RETURNING id`,
+        [ownerId]
+      );
+      await bootstrap.query(
+        `INSERT INTO app.sports_source_assignments (owner_user_id, source_id, follow_id)
+         VALUES ($1, $2, $3)`,
+        [ownerId, source.rows[0]!.id, follow.rows[0]!.id]
+      );
+
+      const result = await runSqlMigrations({
+        connectionString: connectionStrings.migration,
+        migrationsDirectory: sportsModuleSqlMigrationDirectory
+      });
+      expect(result.applied.map((migration) => migration.version)).toEqual(["0193"]);
+
+      await expect(
+        bootstrap.query(
+          `SELECT target_url, preview_status
+             FROM app.sports_source_assignments
+            WHERE source_id = $1`,
+          [source.rows[0]!.id]
+        )
+      ).resolves.toMatchObject({
+        rows: [{ target_url: "https://feed.example.com/rss", preview_status: "verified" }]
+      });
+      await expect(
+        bootstrap.query(
+          `SELECT relrowsecurity, relforcerowsecurity
+             FROM pg_class JOIN pg_namespace ON pg_namespace.oid = pg_class.relnamespace
+            WHERE nspname = 'app' AND relname = 'sports_source_assignments'`
+        )
+      ).resolves.toMatchObject({ rows: [{ relrowsecurity: true, relforcerowsecurity: true }] });
+    } finally {
+      await bootstrap.end();
+    }
+  });
 });
 
 describe("sports sources repository", () => {
