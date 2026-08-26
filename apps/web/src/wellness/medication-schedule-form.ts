@@ -124,8 +124,9 @@ export function emptyMedForm(today: string): MedFormState {
  * Switch to a different schedule choice, REPLACING every schedule field with that choice's own
  * defaults rather than merging. A leftover value from the previous choice would be rejected by
  * the server (and, for some combinations, would trip a database check as a 500), so the form
- * never carries one across. Name, dose, start date and the reminder switch survive the switch,
- * because they mean the same thing whatever the schedule is.
+ * never carries one across. Name, dose, start date, the reminder switch and the dose times
+ * survive the switch, because they mean the same thing whatever the schedule is. As-needed is
+ * the exception for the last two: it has no dose time, so both are cleared.
  */
 export function withChoice(
   state: MedFormState,
@@ -140,13 +141,18 @@ export function withChoice(
     startDate: state.startDate,
     remindersEnabled: supportsReminders(choice) ? state.remindersEnabled : false,
     choice,
-    times: choice === "as_needed" ? [] : fresh.times
+    // Coming back from as-needed there are no times to keep, so fall back to the default one.
+    times: choice === "as_needed" ? [] : state.times.length > 0 ? state.times : fresh.times
   };
 }
 
-/** These two count their repeat from the start date, so the server insists on one. */
+/**
+ * These three count their repeat from the start date, so the server insists on one. A cycle is
+ * on the list because its days-on/days-off run counts from that same date: the request sends the
+ * start date as `cycleAnchorDate`, and the server rejects a cyclical medication without one.
+ */
 export function startDateRequired(choice: ScheduleChoice): boolean {
-  return choice === "every_interval" || choice === "monthly";
+  return choice === "every_interval" || choice === "monthly" || choice === "cycle";
 }
 
 /** An as-needed medication has no scheduled time, so there is nothing to remind anyone about. */
@@ -251,8 +257,10 @@ export function buildCreateRequest(state: MedFormState): CreateMedicationRequest
 
   switch (state.choice) {
     case "as_needed":
-      // Every scheduling field is rejected outright for as-needed, including the reminder
-      // switch; only the name, dose and start date go with it.
+      // Every scheduling field is rejected outright for as-needed, and a reminder switched on
+      // is rejected too (parseRemindersEnabled in
+      // packages/wellness/src/medication-request-parsing.ts), because there is no dose time for
+      // a reminder to fire at. Only the name, dose and start date go with it.
       return { ...base, frequencyType: "as_needed" };
 
     case "daily":
@@ -323,10 +331,10 @@ export function buildCreateRequest(state: MedFormState): CreateMedicationRequest
 
 /**
  * The form's values shaped as a saved medication row, so the shipped `describeSchedule` and
- * `nextDoses` can preview the schedule before anything is written. `timeZone` is the browser's
- * own zone, which is the same zone the server records when the medication is actually created
- * (packages/wellness/src/repository.ts). Nothing here is sent anywhere — it exists only to feed
- * the two preview functions.
+ * `nextDoses` can preview the schedule before anything is written. `timeZone` is the person's
+ * saved time zone, which is the same zone the server records when the medication is actually
+ * created (packages/wellness/src/repository.ts). Nothing here is sent anywhere — it exists only
+ * to feed the two preview functions.
  */
 export function previewMedication(state: MedFormState, timeZone: string): Medication {
   const request = buildCreateRequest(state) as CreateMedicationRequest & Record<string, unknown>;

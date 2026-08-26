@@ -539,6 +539,12 @@ export function ManageMedsModal({ open, onClose, theme = "light" }: Props) {
               </button>
               {problems.length > 0 ? (
                 <span className="wl-medmodal__error">{problems[0]}</span>
+              ) : addMutation.isError ? (
+                // Without this a rejected request looks like a dead button: the modal stays put,
+                // the form keeps its values, and nothing on screen says the save did not happen.
+                <span className="wl-medmodal__error">
+                  That did not save. Check the details and try again.
+                </span>
               ) : null}
             </div>
           </div>

@@ -153,6 +153,22 @@ describe("switching choice replaces the previous choice's fields", () => {
     expect(switched.name).toBe("Sertraline");
     expect(switched.dose).toBe("50 mg");
   });
+
+  it("keeps the dose times across a switch between scheduled choices", () => {
+    const state = { ...filled("daily"), times: ["08:00", "14:00", "20:00"] };
+    expect(withChoice(state, "selected_days", TODAY).times).toEqual(["08:00", "14:00", "20:00"]);
+    expect(withChoice(state, "cycle", TODAY).times).toEqual(["08:00", "14:00", "20:00"]);
+  });
+
+  it("clears the dose times for as-needed and puts one back on the way out", () => {
+    const asNeeded = withChoice(
+      { ...filled("daily"), times: ["08:00", "20:00"] },
+      "as_needed",
+      TODAY
+    );
+    expect(asNeeded.times).toEqual([]);
+    expect(withChoice(asNeeded, "daily", TODAY).times).toEqual(emptyMedForm(TODAY).times);
+  });
 });
 
 describe("daily splits on how many times a day", () => {
@@ -188,12 +204,26 @@ describe("what stops the form being saved", () => {
     }
   });
 
-  it("every so often and monthly need a start date, the other four do not", () => {
+  it("every so often, monthly and a cycle need a start date, the other three do not", () => {
     for (const choice of ALL_CHOICES) {
-      const required = choice === "every_interval" || choice === "monthly";
+      const required = choice === "every_interval" || choice === "monthly" || choice === "cycle";
       expect(startDateRequired(choice)).toBe(required);
       const problems = describeFormProblems({ ...filled(choice), startDate: "" });
       expect(problems.length > 0).toBe(required);
+    }
+  });
+
+  it("never calls a form valid that the server would then reject", () => {
+    // The form's whole job is to say what is missing before the request goes out. Anything it
+    // reports as ready to save has to survive the server's own validator, or the person presses
+    // the button and nothing happens.
+    for (const choice of ALL_CHOICES) {
+      for (const startDate of ["", TODAY]) {
+        const state = { ...filled(choice), startDate };
+        if (describeFormProblems(state).length > 0) continue;
+        const request = buildCreateRequest(state) as unknown as Record<string, unknown>;
+        expect(() => parseCreateMedicationBody(request)).not.toThrow();
+      }
     }
   });
 
