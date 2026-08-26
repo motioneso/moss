@@ -57,7 +57,8 @@ describe("module build restart survival (#1754 seam 3)", () => {
             {
               launchLiveAgent: async () => ({ wroteFiles: [], testsPassing: true }),
               resolveWorkingDir: () => "/tmp/fake-build-dir",
-              recordFetchedUrl: async () => {}
+              recordFetchedUrl: async () => {},
+              recordWrittenFile: async () => {}
             },
             row
           );

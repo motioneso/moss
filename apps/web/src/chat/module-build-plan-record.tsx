@@ -1,4 +1,5 @@
 import { useState, type ReactElement } from "react";
+import { useNavigate } from "react-router";
 
 import { approveModuleBuild } from "../api/module-builds-client";
 import { PlanApprovalCard, type ModuleBuildPlan } from "./plan-approval-card";
@@ -57,6 +58,7 @@ export function ModuleBuildPlanRecord(props: {
 }): ReactElement {
   const [decided, setDecided] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   return (
     <div>
@@ -66,10 +68,14 @@ export function ModuleBuildPlanRecord(props: {
         onBuildIt={() => {
           setError(null);
           setDecided(true);
-          approveModuleBuild(props.buildId).catch(() => {
-            setDecided(false);
-            setError("Could not start the build. Try Build it again.");
-          });
+          approveModuleBuild(props.buildId)
+            .then(() => {
+              navigate("/workshop");
+            })
+            .catch(() => {
+              setDecided(false);
+              setError("Could not start the build. Try Build it again.");
+            });
         }}
         onNotYet={() => {
           setError(null);

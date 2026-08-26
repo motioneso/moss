@@ -51,3 +51,9 @@
   list-style: none;
   font-size: var(--text-sm);
 }
+
+.workshop-log-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}

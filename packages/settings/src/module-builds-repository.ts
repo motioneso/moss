@@ -19,6 +19,7 @@ export interface ModuleBuild {
   readonly step: string | null;
   readonly moduleId: string | null;
   readonly fetchedUrls: readonly string[];
+  readonly writtenFiles: readonly string[];
   readonly costCents: number;
   readonly error: string | null;
   readonly createdAt: Date;
@@ -39,6 +40,7 @@ function toModuleBuild(row: {
   step: string | null;
   module_id: string | null;
   fetched_urls: string[];
+  written_files: string[];
   cost_cents: number;
   error: string | null;
   created_at: Date;
@@ -53,6 +55,7 @@ function toModuleBuild(row: {
     step: row.step,
     moduleId: row.module_id,
     fetchedUrls: row.fetched_urls,
+    writtenFiles: row.written_files,
     costCents: row.cost_cents,
     error: row.error,
     createdAt: row.created_at,
@@ -139,6 +142,21 @@ export async function appendModuleBuildFetchedUrl(
   await sql`
     UPDATE app.module_builds
     SET fetched_urls = fetched_urls || ${JSON.stringify([url])}::jsonb,
+        updated_at = now()
+    WHERE id = ${buildId}
+  `.execute(scopedDb.db);
+}
+
+/** Appends one path to the build's written-files trail (spec: "what it has written is shown"). */
+export async function appendModuleBuildWrittenFile(
+  scopedDb: DataContextDb,
+  buildId: string,
+  path: string
+): Promise<void> {
+  assertDataContextDb(scopedDb);
+  await sql`
+    UPDATE app.module_builds
+    SET written_files = written_files || ${JSON.stringify([path])}::jsonb,
         updated_at = now()
     WHERE id = ${buildId}
   `.execute(scopedDb.db);

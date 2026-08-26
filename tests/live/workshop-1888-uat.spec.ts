@@ -36,7 +36,7 @@ async function signInThroughUi(page: Page) {
 test("asking Moss for a module in the chat drawer returns a plan for approval", async ({
   page
 }) => {
-  test.setTimeout(300_000);
+  test.setTimeout(600_000);
 
   await signInThroughUi(page);
 
@@ -61,4 +61,35 @@ test("asking Moss for a module in the chat drawer returns a plan for approval", 
   await composer.press("Enter");
 
   await expect(planCards).toHaveCount(1, { timeout: 240_000 });
+
+  // #1949 Phase 1: approving the plan takes you straight to the Workshop page, the chat
+  // drawer stays open behind it, the build's status text changes at least once while it
+  // runs, and a notification shows up once it finishes or fails.
+  await planCards.click();
+
+  await expect(page).toHaveURL(/\/workshop$/, { timeout: 15_000 });
+  await expect(page.getByRole("dialog", { name: /^Chat with .+|^Chat$/ })).toBeVisible();
+
+  const statusIndicator = page
+    .locator(".jds-indicator.jds-indicator--live")
+    .filter({ hasText: /.+/ })
+    .first();
+  await expect(statusIndicator).toBeVisible({ timeout: 30_000 });
+  const firstStatus = (await statusIndicator.textContent())?.trim();
+  await expect(async () => {
+    const current = (await statusIndicator.textContent())?.trim();
+    expect(current).not.toBe(firstStatus);
+  }).toPass({ timeout: 240_000, intervals: [3_000] });
+
+  // Wait for the build to actually leave the "Building now" group (finished or failed) before
+  // loading /notifications - that page only fetches its list once, on mount, so navigating there
+  // while the build is still running and then waiting on the DOM would never see a notification
+  // created after the page already loaded.
+  await expect(statusIndicator).toHaveCount(0, { timeout: 240_000 });
+
+  await page.goto("/notifications");
+  const buildNotification = page.getByText(
+    /^Your module is ready for a look$|^Your module build failed$/
+  );
+  await expect(buildNotification.first()).toBeVisible({ timeout: 30_000 });
 });

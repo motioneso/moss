@@ -106,6 +106,7 @@ export interface ModuleBuildSummary {
   readonly step: string | null;
   readonly plan: ModuleBuildPlan | null;
   readonly fetchedUrls: readonly string[];
+  readonly writtenFiles: readonly string[];
   readonly costCents: number;
   readonly error: string | null;
   readonly createdAt: string;
@@ -134,6 +135,7 @@ const moduleBuildSummarySchema = {
     "step",
     "plan",
     "fetchedUrls",
+    "writtenFiles",
     "costCents",
     "error",
     "createdAt",
@@ -145,6 +147,7 @@ const moduleBuildSummarySchema = {
     step: { type: ["string", "null"] },
     plan: { anyOf: [moduleBuildPlanSchema, { type: "null" }] },
     fetchedUrls: { type: "array", items: { type: "string" } },
+    writtenFiles: { type: "array", items: { type: "string" } },
     costCents: { type: "number" },
     error: { type: ["string", "null"] },
     createdAt: { type: "string" },

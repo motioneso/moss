@@ -46,14 +46,23 @@ function NeedsYouCard({ build }: { readonly build: ModuleBuildSummary }) {
   );
 }
 
-function FetchedUrls({ urls }: { readonly urls: readonly string[] }) {
-  if (urls.length === 0) return null;
+function BuildLogList({
+  label,
+  items
+}: {
+  readonly label: string;
+  readonly items: readonly string[];
+}) {
+  if (items.length === 0) return null;
   return (
-    <ul className="workshop-log">
-      {urls.map((url) => (
-        <li key={url}>{url}</li>
-      ))}
-    </ul>
+    <div className="workshop-log-group">
+      <span className="jds-eyebrow jds-eyebrow--muted">{label}</span>
+      <ul className="workshop-log">
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -69,7 +78,8 @@ function BuildingNowCard({ build }: { readonly build: ModuleBuildSummary }) {
           <span className="jds-indicator__dot" />
           {build.step ?? "Working"}
         </span>
-        <FetchedUrls urls={build.fetchedUrls} />
+        <BuildLogList label="What it has written" items={build.writtenFiles} />
+        <BuildLogList label="What it has read" items={build.fetchedUrls} />
         <div className="workshop-actions">
           <button type="button" className="jds-btn jds-btn--secondary jds-btn--sm">
             See everything it wrote

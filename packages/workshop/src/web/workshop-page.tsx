@@ -22,10 +22,17 @@ function useIsInstanceAdmin(): boolean | undefined {
   return data?.user.isInstanceAdmin;
 }
 
+export function hasActiveBuild(data: ListMyModuleBuildsResponse | undefined): boolean {
+  return (data?.builds ?? []).some(
+    (build) => build.status === "planning" || build.status === "building"
+  );
+}
+
 function useMyModuleBuilds() {
   const { data } = useQuery({
     queryKey: ["workshop", "module-builds", "mine"],
-    queryFn: () => requestJson<ListMyModuleBuildsResponse>("/api/ai/module-builds/mine")
+    queryFn: () => requestJson<ListMyModuleBuildsResponse>("/api/ai/module-builds/mine"),
+    refetchInterval: (query) => (hasActiveBuild(query.state.data) ? 3000 : false)
   });
   return data?.builds ?? [];
 }
