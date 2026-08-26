@@ -7,6 +7,11 @@ import type { ChatArchiveSession } from "@moss/notes";
 import type { ChatRepository } from "./repository.js";
 
 let capturedSessions: readonly ChatArchiveSession[] | null = null;
+let writeResult: { written: boolean; path: string | null; reason?: string } = {
+  written: true,
+  path: "x.md"
+};
+let writeThrows = false;
 
 vi.mock("@moss/notes", async () => {
   const actual = await vi.importActual<typeof MossNotes>("@moss/notes");
@@ -20,7 +25,8 @@ vi.mock("@moss/notes", async () => {
       sessions: readonly ChatArchiveSession[]
     ) => {
       capturedSessions = sessions;
-      return { written: true, path: "x.md" };
+      if (writeThrows) throw new Error("both today's file and its fallback are taken");
+      return writeResult;
     }
   };
 });
@@ -41,7 +47,9 @@ function fakePreferencesPort(values: Record<string, unknown>): PreferencesPort {
   return {
     get: vi.fn(async (_scopedDb: DataContextDb, key: string) => values[key] ?? null),
     getWithMetadata: vi.fn(async () => null),
-    upsert: vi.fn(async () => {})
+    upsert: vi.fn(async (_scopedDb: DataContextDb, key: string, value: unknown) => {
+      values[key] = value;
+    })
   };
 }
 
@@ -164,5 +172,157 @@ describe("handleArchiveDayJob", () => {
     const sessions: readonly ChatArchiveSession[] = capturedSessions ?? [];
     const allBodies = sessions.flatMap((session) => session.messages.map((m) => m.body));
     expect(allBodies).toEqual(["sent today"]);
+  });
+
+  const oneRow: StoredMessageRow[] = [
+    {
+      threadId: "thread-1",
+      threadTitle: "Chat",
+      threadFirstMessageAt: "2026-08-20T09:00:00.000Z",
+      role: "user",
+      body: "hello",
+      createdAt: "2026-08-20T09:00:00.000Z"
+    }
+  ];
+
+  it("clears a previously-set status once a write succeeds", async () => {
+    capturedSessions = null;
+    writeThrows = false;
+    writeResult = { written: true, path: "x.md" };
+
+    const values: Record<string, unknown> = {
+      "chat-archive.enabled": true,
+      "chat-archive.folder": "Moss/Chats",
+      "chat-archive.status": { state: "failed", reason: "old problem" }
+    };
+    const preferencesPort = fakePreferencesPort(values);
+
+    await handleArchiveDayJob(SCOPED_DB, "user-1", "2026-08-20", {
+      preferencesPort,
+      chatRepo: fakeChatRepo(oneRow),
+      boss: BOSS
+    });
+
+    expect(values["chat-archive.status"]).toBeNull();
+  });
+
+  it("records a paused status when no notes folder is connected", async () => {
+    capturedSessions = null;
+    writeThrows = false;
+    writeResult = { written: false, path: null, reason: "no-notes-source" };
+
+    const values: Record<string, unknown> = {
+      "chat-archive.enabled": true,
+      "chat-archive.folder": "Moss/Chats"
+    };
+    const preferencesPort = fakePreferencesPort(values);
+
+    await handleArchiveDayJob(SCOPED_DB, "user-1", "2026-08-20", {
+      preferencesPort,
+      chatRepo: fakeChatRepo(oneRow),
+      boss: BOSS
+    });
+
+    expect(values["chat-archive.status"]).toEqual({
+      state: "paused",
+      reason: "No notes folder is connected."
+    });
+  });
+
+  it("records a failed status when the folder setting is invalid", async () => {
+    capturedSessions = null;
+    writeThrows = false;
+    writeResult = { written: false, path: null, reason: "bad-folder" };
+
+    const values: Record<string, unknown> = {
+      "chat-archive.enabled": true,
+      "chat-archive.folder": "../nope"
+    };
+    const preferencesPort = fakePreferencesPort(values);
+
+    await handleArchiveDayJob(SCOPED_DB, "user-1", "2026-08-20", {
+      preferencesPort,
+      chatRepo: fakeChatRepo(oneRow),
+      boss: BOSS
+    });
+
+    const status = values["chat-archive.status"] as { state: string; reason: string };
+    expect(status.state).toBe("failed");
+    expect(status.reason).not.toContain("/");
+  });
+
+  it("records a failed status when the write throws, with no file path in the reason", async () => {
+    capturedSessions = null;
+    writeThrows = true;
+
+    const values: Record<string, unknown> = {
+      "chat-archive.enabled": true,
+      "chat-archive.folder": "Moss/Chats"
+    };
+    const preferencesPort = fakePreferencesPort(values);
+
+    await handleArchiveDayJob(SCOPED_DB, "user-1", "2026-08-20", {
+      preferencesPort,
+      chatRepo: fakeChatRepo(oneRow),
+      boss: BOSS
+    });
+
+    const status = values["chat-archive.status"] as { state: string; reason: string };
+    expect(status.state).toBe("failed");
+    expect(status.reason).not.toContain("Moss/Chats");
+    expect(status.reason).not.toContain("hello");
+  });
+
+  it("leaves an existing status untouched when archiving is turned off", async () => {
+    capturedSessions = null;
+    writeThrows = false;
+
+    const values: Record<string, unknown> = {
+      "chat-archive.enabled": false,
+      "chat-archive.folder": "Moss/Chats",
+      "chat-archive.status": { state: "paused", reason: "No notes folder is connected." }
+    };
+    const preferencesPort = fakePreferencesPort(values);
+
+    await handleArchiveDayJob(SCOPED_DB, "user-1", "2026-08-20", {
+      preferencesPort,
+      chatRepo: fakeChatRepo(oneRow),
+      boss: BOSS
+    });
+
+    expect(values["chat-archive.status"]).toEqual({
+      state: "paused",
+      reason: "No notes folder is connected."
+    });
+  });
+
+  it("leaves an existing status untouched when there is nothing to archive that day", async () => {
+    capturedSessions = null;
+    writeThrows = false;
+
+    const yesterdayRow: StoredMessageRow[] = [
+      {
+        threadId: "thread-1",
+        threadTitle: "Chat",
+        threadFirstMessageAt: "2026-08-19T09:00:00.000Z",
+        role: "user",
+        body: "sent the day before",
+        createdAt: "2026-08-19T09:00:00.000Z"
+      }
+    ];
+    const values: Record<string, unknown> = {
+      "chat-archive.enabled": true,
+      "chat-archive.folder": "Moss/Chats",
+      "chat-archive.status": { state: "failed", reason: "old problem" }
+    };
+    const preferencesPort = fakePreferencesPort(values);
+
+    await handleArchiveDayJob(SCOPED_DB, "user-1", "2026-08-20", {
+      preferencesPort,
+      chatRepo: fakeChatRepo(yesterdayRow),
+      boss: BOSS
+    });
+
+    expect(values["chat-archive.status"]).toEqual({ state: "failed", reason: "old problem" });
   });
 });

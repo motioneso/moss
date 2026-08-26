@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, PencilLine, GitCommitHorizontal, NotebookText } from "lucide-react";
+import { Check, PencilLine, GitCommitHorizontal, NotebookText, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { getNotesSource } from "../api/notes-client";
@@ -514,6 +514,12 @@ function ChatArchive() {
           onBlur={() => mutation.mutate({ enabled: state.enabled, folder })}
         />
       </Field>
+      {state.status ? (
+        <Note icon={<TriangleAlert size={13} aria-hidden="true" />}>
+          {state.status.state === "paused" ? "Archiving is paused: " : "Archiving failed: "}
+          {state.status.reason}
+        </Note>
+      ) : null}
     </Group>
   );
 }

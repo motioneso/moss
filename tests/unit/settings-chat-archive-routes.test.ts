@@ -42,7 +42,7 @@ describe("chat archive settings routes (#1951)", () => {
   it("is off by default with no prior PUT", async () => {
     const response = await harness.server.inject({ method: "GET", url: "/api/me/chat-archive" });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ enabled: false, folder: "Moss/Chats" });
+    expect(response.json()).toEqual({ enabled: false, folder: "Moss/Chats", status: null });
   });
 
   it("rejects a bad folder and writes neither preference key", async () => {
@@ -62,9 +62,32 @@ describe("chat archive settings routes (#1951)", () => {
       payload: { enabled: true, folder: "Journal/Chats" }
     });
     expect(putResponse.statusCode).toBe(200);
-    expect(putResponse.json()).toEqual({ enabled: true, folder: "Journal/Chats" });
+    expect(putResponse.json()).toEqual({ enabled: true, folder: "Journal/Chats", status: null });
 
     const getResponse = await harness.server.inject({ method: "GET", url: "/api/me/chat-archive" });
-    expect(getResponse.json()).toEqual({ enabled: true, folder: "Journal/Chats" });
+    expect(getResponse.json()).toEqual({ enabled: true, folder: "Journal/Chats", status: null });
+  });
+
+  it("reports a status recorded by the archive job (#1992)", async () => {
+    harness.store.set("chat-archive.status", {
+      state: "paused",
+      reason: "No notes folder is connected."
+    });
+
+    const response = await harness.server.inject({ method: "GET", url: "/api/me/chat-archive" });
+
+    expect(response.json()).toEqual({
+      enabled: false,
+      folder: "Moss/Chats",
+      status: { state: "paused", reason: "No notes folder is connected." }
+    });
+  });
+
+  it("ignores a malformed stored status rather than surfacing it (#1992)", async () => {
+    harness.store.set("chat-archive.status", { nonsense: true });
+
+    const response = await harness.server.inject({ method: "GET", url: "/api/me/chat-archive" });
+
+    expect(response.json()).toEqual({ enabled: false, folder: "Moss/Chats", status: null });
   });
 });
