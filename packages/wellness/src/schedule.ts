@@ -36,8 +36,11 @@ export function computeSchedule(
   const slots: ScheduleSlotDto[] = [];
   const dayRange = { from: date, to: new Date(date.getTime() + 24 * 60 * 60 * 1000 - 1) };
 
+  const requestedDay = date.toISOString().slice(0, 10);
+
   for (const med of medications) {
     if (!med.active) continue;
+    if (!isWithinScheduleWindow(med, requestedDay)) continue;
 
     if (med.frequency_type === "as_needed") {
       slots.push({
@@ -69,6 +72,24 @@ export function computeSchedule(
     if (a.asNeeded !== b.asNeeded) return a.asNeeded ? 1 : -1;
     return (a.scheduledFor ?? "").localeCompare(b.scheduledFor ?? "");
   });
+}
+
+/**
+ * Is this medication's schedule running on the requested civil day? Every schedule type can now
+ * carry a start date and an optional end date (#1968), so a medication produces no dose before it
+ * starts or after it ends — including in the adherence counts, which would otherwise report
+ * missed doses for days the user had not begun taking it.
+ *
+ * Deliberately a day-level window rather than feeding the start date into the occurrence engine's
+ * anchor: for a cycle schedule the anchor is `cycle_anchor_date` and it decides which days are
+ * "on" days, so substituting a different date would shift the whole on/off pattern. Clamping the
+ * day leaves every family's repeat maths exactly as it was. Medications with neither date stored
+ * behave exactly as before.
+ */
+function isWithinScheduleWindow(med: Medication, dayKey: string): boolean {
+  if (med.schedule_start_date && dayKey < dateKeyFromColumn(med.schedule_start_date)) return false;
+  if (med.schedule_end_date && dayKey > dateKeyFromColumn(med.schedule_end_date)) return false;
+  return true;
 }
 
 /** No schedule family here has a real "start date" concept of its own (unlike `cyclical`,

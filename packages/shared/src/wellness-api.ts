@@ -101,6 +101,7 @@ export interface MedicationDto {
   readonly monthDayIsLast: boolean;
   readonly monthWeekdayPosition: "first" | "second" | "third" | "fourth" | "last" | null;
   readonly monthWeekday: number | null;
+  readonly remindersEnabled: boolean;
   readonly createdAt: string | null;
   readonly updatedAt: string | null;
 }
@@ -127,13 +128,40 @@ export interface CreateMedicationRequest {
   readonly monthDayIsLast?: boolean | null;
   readonly monthWeekdayPosition?: "first" | "second" | "third" | "fourth" | "last" | null;
   readonly monthWeekday?: number | null;
+  readonly remindersEnabled?: boolean | null;
 }
 
-// Update is intentionally limited to non-schedule fields this slice (Codex R3): editing
-// schedule_times without re-validating the whole frequency discriminator could trip the DB
-// CHECK as a 500. Schedule editing is deferred (delete + recreate the med, or a later slice
-// that re-validates the full discriminator on update).
-export interface UpdateMedicationRequest {
+/**
+ * The schedule half of a medication request. An update that changes the schedule sends this
+ * whole object — `frequencyType` plus every field that type needs — and the server validates it
+ * with exactly the same rules as a create (#1968). Partial schedule edits are rejected: a
+ * leftover column from the previous frequency type would trip a DB CHECK as a 500.
+ */
+export interface MedicationScheduleRequestFields {
+  readonly frequencyType: MedicationFrequencyTypeApi;
+  readonly timesPerDay?: number | null;
+  readonly intervalHours?: number | null;
+  readonly weekdays?: readonly number[] | null;
+  readonly scheduleTimes?: readonly string[] | null;
+  readonly cycleDaysOn?: number | null;
+  readonly cycleDaysOff?: number | null;
+  readonly cycleAnchorDate?: string | null;
+  readonly intervalUnit?: "days" | "weeks" | "months" | null;
+  readonly intervalCount?: number | null;
+  readonly startDate?: string | null;
+  readonly endDate?: string | null;
+  readonly monthKind?: "date" | "weekdayPosition" | null;
+  readonly monthDay?: number | null;
+  readonly monthDayIsLast?: boolean | null;
+  readonly monthWeekdayPosition?: "first" | "second" | "third" | "fourth" | "last" | null;
+  readonly monthWeekday?: number | null;
+  readonly remindersEnabled?: boolean | null;
+}
+
+// An update may change the schedule (#1968). Doing so is all-or-nothing: send `frequencyType`
+// together with every field that type needs, and the server re-validates the full discriminator
+// before writing. Omit `frequencyType` entirely to leave the schedule alone.
+export interface UpdateMedicationRequest extends Partial<MedicationScheduleRequestFields> {
   readonly name?: string;
   readonly dosage?: string | null;
   readonly form?: string | null;
@@ -576,6 +604,7 @@ export const medicationDtoSchema = {
     "monthDayIsLast",
     "monthWeekdayPosition",
     "monthWeekday",
+    "remindersEnabled",
     "createdAt",
     "updatedAt"
   ],
@@ -612,9 +641,45 @@ export const medicationDtoSchema = {
       ]
     },
     monthWeekday: { anyOf: [{ type: "number" }, { type: "null" }] },
+    remindersEnabled: { type: "boolean" },
     createdAt: nullableStringSchema,
     updatedAt: nullableStringSchema
   }
+} as const;
+
+/**
+ * The schedule half of a medication request body, shared by create and update so an edit is
+ * validated by exactly the same rules as a create (#1968). Ranges mirror the DB CHECKs, so an
+ * out-of-range value is a friendly 400 rather than a 500 from the database.
+ */
+export const medicationScheduleRequestProperties = {
+  frequencyType: medicationFrequencyTypeSchema,
+  timesPerDay: { anyOf: [{ type: "integer", minimum: 1, maximum: 24 }, { type: "null" }] },
+  intervalHours: { anyOf: [{ type: "integer", minimum: 1, maximum: 24 }, { type: "null" }] },
+  weekdays: {
+    anyOf: [{ type: "array", items: { type: "integer", minimum: 1, maximum: 7 } }, { type: "null" }]
+  },
+  scheduleTimes: { anyOf: [stringArraySchema, { type: "null" }] },
+  cycleDaysOn: { anyOf: [{ type: "integer", minimum: 1 }, { type: "null" }] },
+  cycleDaysOff: { anyOf: [{ type: "integer", minimum: 0 }, { type: "null" }] },
+  cycleAnchorDate: nullableStringSchema,
+  intervalUnit: {
+    anyOf: [{ type: "string", enum: ["days", "weeks", "months"] }, { type: "null" }]
+  },
+  intervalCount: { anyOf: [{ type: "integer", minimum: 1 }, { type: "null" }] },
+  startDate: nullableStringSchema,
+  endDate: nullableStringSchema,
+  monthKind: { anyOf: [{ type: "string", enum: ["date", "weekdayPosition"] }, { type: "null" }] },
+  monthDay: { anyOf: [{ type: "integer", minimum: 1, maximum: 31 }, { type: "null" }] },
+  monthDayIsLast: { anyOf: [{ type: "boolean" }, { type: "null" }] },
+  monthWeekdayPosition: {
+    anyOf: [
+      { type: "string", enum: ["first", "second", "third", "fourth", "last"] },
+      { type: "null" }
+    ]
+  },
+  monthWeekday: { anyOf: [{ type: "integer", minimum: 1, maximum: 7 }, { type: "null" }] },
+  remindersEnabled: { anyOf: [{ type: "boolean" }, { type: "null" }] }
 } as const;
 
 export const createMedicationRequestSchema = {
@@ -625,39 +690,14 @@ export const createMedicationRequestSchema = {
     name: { type: "string" },
     dosage: nullableStringSchema,
     form: nullableStringSchema,
-    frequencyType: medicationFrequencyTypeSchema,
-    timesPerDay: { anyOf: [{ type: "integer", minimum: 1, maximum: 24 }, { type: "null" }] },
-    intervalHours: { anyOf: [{ type: "integer", minimum: 1, maximum: 24 }, { type: "null" }] },
-    weekdays: {
-      anyOf: [
-        { type: "array", items: { type: "integer", minimum: 1, maximum: 7 } },
-        { type: "null" }
-      ]
-    },
-    scheduleTimes: { anyOf: [stringArraySchema, { type: "null" }] },
-    cycleDaysOn: { anyOf: [{ type: "integer", minimum: 1 }, { type: "null" }] },
-    cycleDaysOff: { anyOf: [{ type: "integer", minimum: 0 }, { type: "null" }] },
-    cycleAnchorDate: nullableStringSchema,
     notes: nullableStringSchema,
-    intervalUnit: {
-      anyOf: [{ type: "string", enum: ["days", "weeks", "months"] }, { type: "null" }]
-    },
-    intervalCount: { anyOf: [{ type: "integer", minimum: 1 }, { type: "null" }] },
-    startDate: nullableStringSchema,
-    endDate: nullableStringSchema,
-    monthKind: { anyOf: [{ type: "string", enum: ["date", "weekdayPosition"] }, { type: "null" }] },
-    monthDay: { anyOf: [{ type: "integer", minimum: 1, maximum: 31 }, { type: "null" }] },
-    monthDayIsLast: { anyOf: [{ type: "boolean" }, { type: "null" }] },
-    monthWeekdayPosition: {
-      anyOf: [
-        { type: "string", enum: ["first", "second", "third", "fourth", "last"] },
-        { type: "null" }
-      ]
-    },
-    monthWeekday: { anyOf: [{ type: "integer", minimum: 1, maximum: 7 }, { type: "null" }] }
+    ...medicationScheduleRequestProperties
   }
 } as const;
 
+// An update may now change the schedule (#1968). It accepts the same schedule properties as a
+// create; the route enforces the all-or-nothing rule (any schedule field requires frequencyType)
+// and the per-type required fields, because JSON Schema alone cannot express the discriminator.
 export const updateMedicationRequestSchema = {
   type: "object",
   additionalProperties: false,
@@ -666,7 +706,8 @@ export const updateMedicationRequestSchema = {
     dosage: nullableStringSchema,
     form: nullableStringSchema,
     active: { type: "boolean" },
-    notes: nullableStringSchema
+    notes: nullableStringSchema,
+    ...medicationScheduleRequestProperties
   }
 } as const;
 

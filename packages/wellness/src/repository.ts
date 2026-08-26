@@ -32,10 +32,12 @@ export interface ListCheckinsOptions {
   readonly limit?: number;
 }
 
-export interface CreateMedicationInput {
-  readonly name: string;
-  readonly dosage?: string | null;
-  readonly form?: string | null;
+/**
+ * Everything that describes WHEN a medication is taken. Create always supplies this; update
+ * supplies it only when the schedule itself is changing (#1968), in which case every column
+ * below is rewritten together — see `updateMedication`.
+ */
+export interface MedicationScheduleInput {
   readonly frequencyType: MedicationFrequencyTypeApi;
   readonly timesPerDay?: number | null;
   readonly intervalHours?: number | null;
@@ -44,7 +46,6 @@ export interface CreateMedicationInput {
   readonly cycleDaysOn?: number | null;
   readonly cycleDaysOff?: number | null;
   readonly cycleAnchorDate?: string | null;
-  readonly notes?: string | null;
   readonly intervalUnit?: "days" | "weeks" | "months" | null;
   readonly intervalCount?: number | null;
   readonly startDate?: string | null;
@@ -56,12 +57,28 @@ export interface CreateMedicationInput {
   readonly monthWeekday?: number | null;
 }
 
+export interface CreateMedicationInput extends MedicationScheduleInput {
+  readonly name: string;
+  readonly dosage?: string | null;
+  readonly form?: string | null;
+  readonly notes?: string | null;
+  readonly remindersEnabled?: boolean | null;
+}
+
 export interface UpdateMedicationInput {
   readonly name?: string;
   readonly dosage?: string | null;
   readonly form?: string | null;
   readonly active?: boolean;
   readonly notes?: string | null;
+  /**
+   * Present only when the caller is changing the schedule. All-or-nothing: the route rejects a
+   * request carrying any schedule field without a frequencyType, so this is always a complete,
+   * already-validated schedule.
+   */
+  readonly schedule?: MedicationScheduleInput;
+  /** Reminder on/off. Independent of the schedule, so it can be toggled on its own. */
+  readonly remindersEnabled?: boolean;
 }
 
 export interface LogDoseInput {
@@ -84,6 +101,36 @@ export interface CreateTherapyNoteInput {
   readonly body: string;
   readonly linkedCheckinId?: string | null;
   readonly linkedEmotion?: WellnessFeelingCore | null;
+}
+
+/**
+ * The full set of schedule columns for one medication, from an already-validated schedule input.
+ * Create and update both go through this so they cannot drift apart: EVERY column is listed, and
+ * a field the chosen frequency type does not use is written as NULL (or false), never left at its
+ * previous value. That is what makes an edit from one schedule type to another safe — a leftover
+ * column from the old type would trip one of the table's CHECK constraints.
+ */
+function scheduleColumns(input: MedicationScheduleInput, timeZone: string) {
+  return {
+    frequency_type: input.frequencyType,
+    times_per_day: input.timesPerDay ?? null,
+    interval_hours: input.intervalHours ?? null,
+    weekdays: input.weekdays ? [...input.weekdays] : null,
+    schedule_times: input.scheduleTimes ? [...input.scheduleTimes] : null,
+    cycle_days_on: input.cycleDaysOn ?? null,
+    cycle_days_off: input.cycleDaysOff ?? null,
+    cycle_anchor_date: input.cycleAnchorDate ?? null,
+    schedule_start_date: input.startDate ?? null,
+    schedule_end_date: input.endDate ?? null,
+    time_zone: timeZone,
+    interval_unit: input.intervalUnit ?? null,
+    interval_count: input.intervalCount ?? null,
+    month_kind: input.monthKind ?? null,
+    month_day: input.monthDay ?? null,
+    month_day_is_last: input.monthDayIsLast ?? false,
+    month_weekday_position: input.monthWeekdayPosition ?? null,
+    month_weekday: input.monthWeekday ?? null
+  };
 }
 
 export class WellnessRepository {
@@ -149,25 +196,9 @@ export class WellnessRepository {
         name: input.name,
         dosage: input.dosage ?? null,
         form: input.form ?? null,
-        frequency_type: input.frequencyType,
-        times_per_day: input.timesPerDay ?? null,
-        interval_hours: input.intervalHours ?? null,
-        weekdays: input.weekdays ? [...input.weekdays] : null,
-        schedule_times: input.scheduleTimes ? [...input.scheduleTimes] : null,
-        cycle_days_on: input.cycleDaysOn ?? null,
-        cycle_days_off: input.cycleDaysOff ?? null,
-        cycle_anchor_date: input.cycleAnchorDate ?? null,
         notes: input.notes ?? null,
-        schedule_start_date: input.startDate ?? null,
-        schedule_end_date: input.endDate ?? null,
-        time_zone: timeZone,
-        interval_unit: input.intervalUnit ?? null,
-        interval_count: input.intervalCount ?? null,
-        month_kind: input.monthKind ?? null,
-        month_day: input.monthDay ?? null,
-        month_day_is_last: input.monthDayIsLast ?? false,
-        month_weekday_position: input.monthWeekdayPosition ?? null,
-        month_weekday: input.monthWeekday ?? null
+        reminders_enabled: input.remindersEnabled ?? false,
+        ...scheduleColumns(input, timeZone)
       })
       .returningAll()
       .executeTakeFirstOrThrow();
@@ -195,10 +226,22 @@ export class WellnessRepository {
     return row as Medication | undefined;
   }
 
+  /**
+   * Update a medication. `input.schedule`, when present, REPLACES the whole schedule (#1968):
+   * every schedule column is rewritten, including setting the ones the new frequency type does
+   * not use back to NULL/false. A partial rewrite would leave a column from the previous type in
+   * place and trip a DB CHECK as a 500, which is why the route requires the complete schedule.
+   * `timeZone` is the caller's resolved time zone and is re-recorded on a schedule change, the
+   * same way createMedication records it on save.
+   *
+   * Row scoping is unchanged: this runs inside the actor's data context, so row-level security
+   * limits it to the actor's own rows and another user's id simply matches nothing.
+   */
   async updateMedication(
     scopedDb: DataContextDb,
     id: string,
-    input: UpdateMedicationInput
+    input: UpdateMedicationInput,
+    timeZone: string
   ): Promise<Medication | undefined> {
     assertDataContextDb(scopedDb);
     const updates: Record<string, unknown> = { updated_at: new Date() };
@@ -207,7 +250,8 @@ export class WellnessRepository {
     if (input.form !== undefined) updates["form"] = input.form;
     if (input.active !== undefined) updates["active"] = input.active;
     if (input.notes !== undefined) updates["notes"] = input.notes;
-    // schedule_times is NOT updatable in this slice (would need full discriminator re-validation).
+    if (input.remindersEnabled !== undefined) updates["reminders_enabled"] = input.remindersEnabled;
+    if (input.schedule) Object.assign(updates, scheduleColumns(input.schedule, timeZone));
     const row = await scopedDb.db
       .updateTable("app.medications")
       .set(updates)

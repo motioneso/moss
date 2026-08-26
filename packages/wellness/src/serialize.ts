@@ -54,7 +54,8 @@ export function serializeMedication(row: Medication): MedicationDto {
     monthDay: row.month_day,
     monthDayIsLast: row.month_day_is_last,
     monthWeekdayPosition: row.month_weekday_position,
-    monthWeekday: row.month_weekday
+    monthWeekday: row.month_weekday,
+    remindersEnabled: row.reminders_enabled
   };
 }
 

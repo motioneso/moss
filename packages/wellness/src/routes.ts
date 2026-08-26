@@ -40,6 +40,7 @@ import type {
   CreateMedicationInput,
   CreateTherapyNoteInput,
   LogDoseInput,
+  MedicationScheduleInput,
   UpdateMedicationInput
 } from "./repository.js";
 import { medicationLogBelongsToDate, WellnessRepository } from "./repository.js";
@@ -257,8 +258,21 @@ export function registerWellnessRoutes(
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
         const input = parseUpdateMedicationBody(request.body);
-        const med = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
-          repo.updateMedication(scopedDb, request.params.id, input)
+        const timeZone = await resolveRouteTimeZone(dependencies, request, accessContext);
+        const med = await dependencies.dataContext.withDataContext(
+          accessContext,
+          async (scopedDb) => {
+            // Turning reminders on without also changing the schedule: the request never named a
+            // frequency type, so check the STORED one. A PRN medication has no scheduled time for
+            // a reminder to fire on, and the DB CHECK would otherwise surface that as a 500.
+            if (input.remindersEnabled === true && !input.schedule) {
+              const existing = await repo.getMedication(scopedDb, request.params.id);
+              if (existing?.frequency_type === "as_needed") {
+                throw new HttpError(400, "remindersEnabled is not allowed for as_needed");
+              }
+            }
+            return repo.updateMedication(scopedDb, request.params.id, input, timeZone);
+          }
         );
         if (!med) return reply.code(404).send({ error: "Medication not found" });
         return { medication: serializeMedication(med) };
@@ -619,9 +633,16 @@ function parseUpdateCheckinBody(body: unknown): UpdateCheckinInput {
   };
 }
 
-function parseCreateMedicationBody(body: unknown): CreateMedicationInput {
-  const value = requireObject(body);
-  const name = requiredString(value["name"], "name");
+/**
+ * Validate the WHEN half of a medication request: the frequency type and every field that type
+ * needs. Shared by create and update (#1968) so an edit is held to exactly the same rules as a
+ * create — that shared validation is what made schedule editing safe to allow at all.
+ *
+ * Range-validates the numeric discriminator fields here so an out-of-range value surfaces as a
+ * friendly 400 rather than tripping the DB CHECK as a 500 (matching the DB bounds:
+ * times_per_day/interval_hours 1-24, cycle_days_on >= 1, cycle_days_off >= 0).
+ */
+function parseMedicationScheduleBody(value: Record<string, unknown>): MedicationScheduleInput {
   const frequencyType = value["frequencyType"];
   if (!isFrequencyType(frequencyType)) {
     throw new HttpError(
@@ -629,9 +650,6 @@ function parseCreateMedicationBody(body: unknown): CreateMedicationInput {
       `frequencyType must be one of ${MEDICATION_FREQUENCY_TYPES.join(", ")}`
     );
   }
-  // Range-validate the numeric discriminator fields at the route so an out-of-range value
-  // surfaces as a friendly 400 rather than tripping the DB CHECK as a 500 (matches the DB
-  // bounds: times_per_day/interval_hours 1–24, cycle_days_on >= 1, cycle_days_off >= 0).
   assertIntInRange(value["timesPerDay"], "timesPerDay", 1, 24);
   assertIntInRange(value["intervalHours"], "intervalHours", 1, 24);
   assertIntInRange(value["cycleDaysOn"], "cycleDaysOn", 1, 366);
@@ -646,9 +664,7 @@ function parseCreateMedicationBody(body: unknown): CreateMedicationInput {
     if (!isNonEmptyArray(value["weekdays"])) {
       throw new HttpError(400, "weekdays is required for specific_weekdays");
     }
-    if ((value["weekdays"] as number[]).some((d) => !Number.isInteger(d) || d < 1 || d > 7)) {
-      throw new HttpError(400, "weekdays must be ISO weekday integers 1 (Mon) to 7 (Sun)");
-    }
+    assertIsoWeekdays(value["weekdays"]);
   }
   // Scheduled families must carry at least one clock time (matches the DB CHECK).
   const scheduledFamilies = ["once_daily", "times_per_day", "specific_weekdays", "cyclical"];
@@ -687,15 +703,7 @@ function parseCreateMedicationBody(body: unknown): CreateMedicationInput {
       if (!isNonEmptyArray(value["weekdays"])) {
         throw new HttpError(400, "weekdays is required for every_interval with weeks unit");
       }
-      if ((value["weekdays"] as number[]).some((d) => !Number.isInteger(d) || d < 1 || d > 7)) {
-        throw new HttpError(400, "weekdays must be ISO weekday integers 1 (Mon) to 7 (Sun)");
-      }
-    }
-    if (typeof value["startDate"] !== "string" || !value["startDate"].trim()) {
-      throw new HttpError(400, "startDate is required for every_interval");
-    }
-    if (typeof value["endDate"] === "string" && value["endDate"] < (value["startDate"] as string)) {
-      throw new HttpError(400, "endDate must not be before startDate");
+      assertIsoWeekdays(value["weekdays"]);
     }
   }
   if (frequencyType === "monthly") {
@@ -729,14 +737,29 @@ function parseCreateMedicationBody(body: unknown): CreateMedicationInput {
     if (!isNonEmptyArray(value["scheduleTimes"])) {
       throw new HttpError(400, "scheduleTimes is required for monthly");
     }
+  }
+  // Start and end dates are available to EVERY schedule type (#1968). They stay REQUIRED for the
+  // two types that count their repeat from the start date; for the rest they are optional
+  // context ("I started this on the 3rd"), and the schedule engine simply produces no dose
+  // before the start date or after the end date.
+  assertDateKey(value["startDate"], "startDate");
+  assertDateKey(value["endDate"], "endDate");
+  assertDateKey(value["cycleAnchorDate"], "cycleAnchorDate");
+  if (frequencyType === "every_interval" || frequencyType === "monthly") {
     if (typeof value["startDate"] !== "string" || !value["startDate"].trim()) {
-      throw new HttpError(400, "startDate is required for monthly");
-    }
-    if (typeof value["endDate"] === "string" && value["endDate"] < (value["startDate"] as string)) {
-      throw new HttpError(400, "endDate must not be before startDate");
+      throw new HttpError(400, `startDate is required for ${frequencyType}`);
     }
   }
-  // as_needed (PRN) is unscheduled — reject scheduling/cycle fields (matches the DB CHECK).
+  if (
+    typeof value["endDate"] === "string" &&
+    typeof value["startDate"] === "string" &&
+    value["endDate"] < value["startDate"]
+  ) {
+    throw new HttpError(400, "endDate must not be before startDate");
+  }
+  // as_needed (PRN) is unscheduled — reject the scheduling/cycle fields (matches the DB CHECK).
+  // startDate and endDate are deliberately NOT on this list: an as-needed medication can still
+  // record when the user started and stopped taking it.
   if (frequencyType === "as_needed") {
     for (const f of [
       "scheduleTimes",
@@ -748,21 +771,18 @@ function parseCreateMedicationBody(body: unknown): CreateMedicationInput {
       "cycleDaysOff",
       "intervalUnit",
       "intervalCount",
-      "startDate",
-      "endDate",
       "monthKind",
       "monthDay",
       "monthDayIsLast",
       "monthWeekdayPosition",
       "monthWeekday"
     ]) {
-      if (value[f] != null) throw new HttpError(400, `${f} is not allowed for as_needed`);
+      if (value[f] != null && value[f] !== false) {
+        throw new HttpError(400, `${f} is not allowed for as_needed`);
+      }
     }
   }
   return {
-    name,
-    dosage: optionalNullableString(value["dosage"], "dosage"),
-    form: optionalNullableString(value["form"], "form"),
     frequencyType,
     timesPerDay: optionalNumber(value["timesPerDay"]),
     intervalHours: optionalNumber(value["intervalHours"]),
@@ -771,7 +791,6 @@ function parseCreateMedicationBody(body: unknown): CreateMedicationInput {
     cycleDaysOn: optionalNumber(value["cycleDaysOn"]),
     cycleDaysOff: optionalNumber(value["cycleDaysOff"]),
     cycleAnchorDate: optionalNullableString(value["cycleAnchorDate"], "cycleAnchorDate"),
-    notes: optionalNullableString(value["notes"], "notes"),
     intervalUnit: value["intervalUnit"] as "days" | "weeks" | "months" | null | undefined,
     intervalCount: optionalNumber(value["intervalCount"]),
     startDate: optionalNullableString(value["startDate"], "startDate"),
@@ -791,18 +810,114 @@ function parseCreateMedicationBody(body: unknown): CreateMedicationInput {
   };
 }
 
+/** ISO weekday integers, 1 (Mon) to 7 (Sun) — the DB enforces the same range. */
+function assertIsoWeekdays(value: unknown): void {
+  if ((value as number[]).some((d) => !Number.isInteger(d) || d < 1 || d > 7)) {
+    throw new HttpError(400, "weekdays must be ISO weekday integers 1 (Mon) to 7 (Sun)");
+  }
+}
+
+/**
+ * A calendar date the caller sent, as YYYY-MM-DD. Checked here so a malformed value is a 400
+ * instead of reaching Postgres and coming back as a 500. Absent or null is fine; the per-type
+ * rules decide whether the field was required.
+ */
+function assertDateKey(value: unknown, field: string): void {
+  if (value == null) return;
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new HttpError(400, `${field} must be a date in YYYY-MM-DD form`);
+  }
+  const [year, month, day] = value.split("-").map(Number) as [number, number, number];
+  const asDate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    asDate.getUTCFullYear() !== year ||
+    asDate.getUTCMonth() !== month - 1 ||
+    asDate.getUTCDate() !== day
+  ) {
+    throw new HttpError(400, `${field} must be a real calendar date`);
+  }
+}
+
+/** Reminder on/off. A PRN medication has no scheduled time, so nothing could fire. */
+function parseRemindersEnabled(
+  value: unknown,
+  frequencyType: MedicationFrequencyTypeApi | null
+): boolean | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "boolean") {
+    throw new HttpError(400, "remindersEnabled must be a boolean");
+  }
+  if (value && frequencyType === "as_needed") {
+    throw new HttpError(400, "remindersEnabled is not allowed for as_needed");
+  }
+  return value;
+}
+
+function parseCreateMedicationBody(body: unknown): CreateMedicationInput {
+  const value = requireObject(body);
+  const name = requiredString(value["name"], "name");
+  const schedule = parseMedicationScheduleBody(value);
+  return {
+    ...schedule,
+    name,
+    dosage: optionalNullableString(value["dosage"], "dosage"),
+    form: optionalNullableString(value["form"], "form"),
+    notes: optionalNullableString(value["notes"], "notes"),
+    remindersEnabled: parseRemindersEnabled(value["remindersEnabled"], schedule.frequencyType)
+  };
+}
+
+/** Every field that describes a schedule. Any one of them requires a frequencyType alongside. */
+const MEDICATION_SCHEDULE_FIELDS = [
+  "timesPerDay",
+  "intervalHours",
+  "weekdays",
+  "scheduleTimes",
+  "cycleDaysOn",
+  "cycleDaysOff",
+  "cycleAnchorDate",
+  "intervalUnit",
+  "intervalCount",
+  "startDate",
+  "endDate",
+  "monthKind",
+  "monthDay",
+  "monthDayIsLast",
+  "monthWeekdayPosition",
+  "monthWeekday"
+] as const;
+
+/**
+ * Parse an update. Changing the schedule is ALL-OR-NOTHING (#1968): send frequencyType together
+ * with every field that type needs, and it is validated exactly like a create. A request with a
+ * schedule field but no frequencyType is rejected, because a half-changed schedule would leave a
+ * column from the previous type in place and trip a DB CHECK as a 500.
+ */
 function parseUpdateMedicationBody(body: unknown): UpdateMedicationInput {
   const value = requireObject(body);
   const active = value["active"];
   if (active !== undefined && typeof active !== "boolean") {
     throw new HttpError(400, "active must be a boolean");
   }
+  const changesSchedule = value["frequencyType"] !== undefined;
+  if (!changesSchedule) {
+    const stray = MEDICATION_SCHEDULE_FIELDS.find((field) => value[field] !== undefined);
+    if (stray) {
+      throw new HttpError(400, `frequencyType is required when changing ${stray}`);
+    }
+  }
+  const schedule = changesSchedule ? parseMedicationScheduleBody(value) : undefined;
   return {
     name: value["name"] === undefined ? undefined : requiredString(value["name"], "name"),
     dosage: optionalNullableString(value["dosage"], "dosage"),
     form: optionalNullableString(value["form"], "form"),
     active: active as boolean | undefined,
-    notes: optionalNullableString(value["notes"], "notes")
+    notes: optionalNullableString(value["notes"], "notes"),
+    remindersEnabled: parseRemindersEnabled(
+      value["remindersEnabled"],
+      schedule?.frequencyType ?? null
+    ),
+    schedule
   };
 }
 
