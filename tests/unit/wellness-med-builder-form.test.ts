@@ -66,7 +66,7 @@ describe("every choice builds a request the server accepts", () => {
   }
 
   it("as needed sends no scheduling fields at all", () => {
-    const request = buildCreateRequest(filled("as_needed")) as Record<string, unknown>;
+    const request = buildCreateRequest(filled("as_needed")) as unknown as Record<string, unknown>;
     for (const banned of [
       "scheduleTimes",
       "timesPerDay",
@@ -98,7 +98,7 @@ describe("switching choice replaces the previous choice's fields", () => {
   it("drops the monthly fields when the user switches to daily", () => {
     const monthly = filled("monthly");
     const daily = withChoice(monthly, "daily", TODAY);
-    const request = buildCreateRequest(daily) as Record<string, unknown>;
+    const request = buildCreateRequest(daily) as unknown as Record<string, unknown>;
     expect(request["monthKind"] ?? null).toBeNull();
     expect(request["monthDay"] ?? null).toBeNull();
     expect(() => parseCreateMedicationBody(request)).not.toThrow();
@@ -106,7 +106,7 @@ describe("switching choice replaces the previous choice's fields", () => {
 
   it("drops the weekday list when the user switches away from selected days", () => {
     const weekly = { ...filled("selected_days"), weekdays: [2, 4] };
-    const request = buildCreateRequest(withChoice(weekly, "daily", TODAY)) as Record<
+    const request = buildCreateRequest(withChoice(weekly, "daily", TODAY)) as unknown as Record<
       string,
       unknown
     >;
