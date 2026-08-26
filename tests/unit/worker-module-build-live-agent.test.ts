@@ -28,7 +28,9 @@ describe("module build live-agent composition", () => {
         submittedPrompt = prompt;
       }),
       capturePane: vi.fn(async () =>
-        submittedPrompt ? `❯ ${submittedPrompt}\n────────────────────────────────\n` : "❯\n"
+        submittedPrompt
+          ? `❯ ${submittedPrompt.slice(0, 48)}…\n────────────────────────────────\n`
+          : "❯\n"
       ),
       pressEnter: vi.fn(async () => {}),
       kill: vi.fn(async () => {})

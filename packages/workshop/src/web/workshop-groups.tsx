@@ -1,7 +1,15 @@
 import type { ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { EmptyState } from "@moss/ui";
-import type { ModuleBuildSummary, WorkshopLiveModuleSummary } from "@moss/shared";
+import { requestJson } from "@moss/module-web-sdk";
+import {
+  formatInZone,
+  type GetLocaleSettingsResponse,
+  type LocaleSettingsDto,
+  type ModuleBuildSummary,
+  type WorkshopLiveModuleSummary
+} from "@moss/shared";
 
 export interface WorkshopGroupsProps {
   readonly builds: readonly ModuleBuildSummary[];
@@ -25,6 +33,20 @@ const NEEDS_YOU_STATUSES = new Set<ModuleBuildSummary["status"]>([
 ]);
 
 const BUILDING_STATUSES = new Set<ModuleBuildSummary["status"]>(["planning", "building"]);
+const LOCALE_QUERY_KEY = ["settings", "locale"] as const;
+const DEFAULT_LOCALE: LocaleSettingsDto = {
+  timezone: "UTC",
+  region: "en-US",
+  dateFormat: "12"
+};
+
+function useUserLocale(): LocaleSettingsDto {
+  const query = useQuery({
+    queryKey: LOCALE_QUERY_KEY,
+    queryFn: () => requestJson<GetLocaleSettingsResponse>("/api/me/locale")
+  });
+  return query.data?.locale ?? DEFAULT_LOCALE;
+}
 
 function NeedsYouCard({
   build,
@@ -117,6 +139,7 @@ function BuildingNowCard({
   readonly build: ModuleBuildSummary;
   readonly actions: WorkshopActions;
 }) {
+  const locale = useUserLocale();
   return (
     <div className="jds-rail-row workshop-row">
       <span className="jds-rail jds-rail--accent" />
@@ -133,6 +156,22 @@ function BuildingNowCard({
               : build.step === "writing_code"
                 ? "Building the module"
                 : (build.step ?? "Starting the build")}
+        </span>
+        <span className="jds-caption">
+          Last active at{" "}
+          <time dateTime={build.updatedAt}>
+            {formatInZone(
+              build.updatedAt,
+              locale.timezone,
+              {
+                hour: "numeric",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: locale.dateFormat === "12"
+              },
+              locale.region
+            )}
+          </time>
         </span>
         <BuildLogList label="What it has written" items={build.writtenFiles} />
         <BuildLogList label="What it has read" items={build.fetchedUrls} />

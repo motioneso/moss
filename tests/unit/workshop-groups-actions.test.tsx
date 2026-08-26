@@ -5,6 +5,7 @@
 // @vitest-environment jsdom
 import { createElement } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ModuleBuildSummary, WorkshopLiveModuleSummary } from "@moss/shared";
@@ -30,8 +31,18 @@ function renderGroups(
     onShip: vi.fn(),
     ...props.actions
   };
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(["settings", "locale"], {
+    locale: { timezone: "UTC", region: "en-US", dateFormat: "12" }
+  });
   act(() => {
-    renderer = create(createElement(WorkshopGroups, { ...props, actions }));
+    renderer = create(
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement(WorkshopGroups, { ...props, actions })
+      )
+    );
   });
   return renderer;
 }

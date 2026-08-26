@@ -4,7 +4,6 @@ import { join } from "node:path";
 import type { ModuleBuildStep, Multiplexer, ProviderKind, TmuxIo } from "@moss/ai";
 import {
   buildLaunchCommand,
-  composerHasExactEcho,
   isComposerEmpty,
   type EngineLaunchOpts,
   type LaunchCommandContext
@@ -94,7 +93,7 @@ export function createModuleBuildLiveAgent(deps: ModuleBuildLiveAgentDeps) {
         .join("\n\n");
       await deps.mux.submit(handle, prompt);
       await deps.io.sleep(250);
-      if (composerHasExactEcho(deps.provider, await deps.mux.capturePane(handle), prompt)) {
+      if (!isComposerEmpty(deps.provider, await deps.mux.capturePane(handle))) {
         await deps.mux.pressEnter(handle);
       }
 
