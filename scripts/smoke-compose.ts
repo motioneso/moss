@@ -22,6 +22,12 @@ export interface ComposeSmokePlan {
   readonly healthUrl: string;
 }
 
+/**
+ * Compose project for the dev smoke stack. Must match the teardown in
+ * .github/workflows/ci.yml, which tears the same project down with `down -v`.
+ */
+const DEV_SMOKE_PROJECT = "jarv1s-dev-smoke";
+
 export function createComposeSmokePlan(input: ComposeSmokePlanInput = {}): ComposeSmokePlan {
   const composeFile = input.composeFile ?? "infra/docker-compose.yml";
   const isProd = composeFile === "infra/docker-compose.prod.yml";
@@ -32,9 +38,13 @@ export function createComposeSmokePlan(input: ComposeSmokePlanInput = {}): Compo
   // not "moss": they're coupled to infra/docker-compose.prod.yml (service name, image
   // ref, POSTGRES_DB) and .github/workflows/ci.yml (the `-p` teardown project). Renaming
   // any one alone breaks the smoke; all four move together in the #1444 cutover PR.
+  // Both variants run under their own compose project. Without this the dev smoke
+  // inherited the project name from the compose file's directory ("infra"), which is
+  // identical in every git worktree, so `down -v` at the end of a smoke run in one
+  // worktree destroyed the shared dev Postgres container and its volume (2026-08-25).
   const composeArgs = isProd
     ? ["compose", "-p", "jarv1s-prod-smoke", "-f", composeFile]
-    : ["compose", "-f", composeFile];
+    : ["compose", "-p", DEV_SMOKE_PROJECT, "-f", composeFile];
 
   const imageTag = process.env.JARVIS_IMAGE_TAG ?? "smoke";
   const buildCommands: ComposeSmokeCommand[] = input.build
@@ -176,12 +186,24 @@ async function main(): Promise<void> {
   }
 }
 
+/**
+ * The dev compose file pins `container_name`, and a container name is global to the
+ * Docker daemon, so a smoke stack would otherwise adopt — and then delete — the
+ * long-running shared dev containers even under its own compose project. Point the
+ * smoke run at its own names instead.
+ */
+function applyDevSmokeContainerNames(): void {
+  process.env.JARVIS_PG_CONTAINER_NAME ??= `${DEV_SMOKE_PROJECT}-postgres`;
+  process.env.JARVIS_GREENMAIL_CONTAINER_NAME ??= `${DEV_SMOKE_PROJECT}-greenmail`;
+}
+
 function ensureProdSmokeEnv(composeFile: string): () => void {
   if (composeFile === "infra/docker-compose.prod.yml") process.env.JARVIS_IMAGE_TAG ??= "smoke";
   if (composeFile !== "infra/docker-compose.prod.yml" || process.env.JARVIS_ENV_FILE) {
     process.env.POSTGRES_PASSWORD ??= "postgres";
     process.env.JARVIS_CLI_RUNNER_RPC_SECRET ??= "smoke-only-not-real";
     process.env.JARVIS_DOCKER_SUBNET ??= "10.253.0.0/24";
+    if (composeFile !== "infra/docker-compose.prod.yml") applyDevSmokeContainerNames();
     return () => {};
   }
 

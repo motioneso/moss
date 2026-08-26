@@ -14,10 +14,25 @@ export type SportsSourceHealthState =
 
 export type SportsSourceRecipeStatus = "feed" | "ready" | "missing" | "drift";
 export type SportsSourceTargetPreviewStatus = "pending" | "verified" | "recipe_missing";
+export const SPORTS_SOURCE_ASSIGNMENT_LIMIT = 20;
+
+export const SPORTS_SPORT_KEYS = [
+  "football",
+  "hockey",
+  "soccer",
+  "baseball",
+  "basketball"
+] as const;
+export type SportsSportKey = (typeof SPORTS_SPORT_KEYS)[number];
+
+export type SportsSourceAssignmentTarget =
+  | { readonly kind: "sport"; readonly sportKey: SportsSportKey }
+  | { readonly kind: "follow"; readonly followId: string };
 
 export interface SportsSourceAssignmentDto {
   readonly id: string;
-  readonly followId: string;
+  readonly followId: string | null;
+  readonly sportKey: SportsSportKey | null;
   readonly targetUrl: string | null;
   readonly previewStatus: SportsSourceTargetPreviewStatus;
   readonly healthState: SportsSourceHealthState;
@@ -47,28 +62,52 @@ export interface SportsCustomSourceDto {
   readonly createdAt: string;
 }
 
+export interface SportsBuiltinSourceDto {
+  readonly kind: "builtin";
+  readonly id: "espn";
+  readonly label: "ESPN";
+  readonly enabled: boolean;
+  readonly usesDefaultCoverage: boolean;
+  readonly assignments: readonly SportsSourceAssignmentTarget[];
+}
+
+export type SportsNewsSourceDto =
+  | SportsBuiltinSourceDto
+  | (SportsCustomSourceDto & { readonly kind: "custom" });
+
 export interface SportsCustomSourcesResponse {
   readonly sources: readonly SportsCustomSourceDto[];
 }
 
+export interface SportsNewsSourcesResponse {
+  readonly sources: readonly SportsNewsSourceDto[];
+}
+
+export interface UpdateSportsEspnCoverageRequest {
+  readonly assignments: readonly SportsSourceAssignmentTarget[];
+}
+
+export interface UpdateSportsEspnCoverageResponse {
+  readonly source: SportsBuiltinSourceDto;
+}
+
+export interface SportsSourceAssignmentInput {
+  readonly target: SportsSourceAssignmentTarget;
+  readonly exactTargetUrl?: string;
+}
+
 export interface PreviewSportsSourceRequest {
   readonly url: string;
-  readonly assignments?: readonly {
-    readonly followId: string;
-    readonly exactTargetUrl?: string;
-  }[];
+  readonly assignments?: readonly SportsSourceAssignmentInput[];
 }
 
 export const SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT =
   "I confirm I am authorized to fetch this publisher's public, unauthenticated sports news.";
 
 export interface PreviewSportsSourceTarget {
-  readonly followId: string;
-  readonly competitionKey: string;
-  readonly competitionLabel: string;
-  readonly teamKey: string | null;
-  readonly teamLabel: string | null;
-  readonly scope: "team" | "competition";
+  readonly target: SportsSourceAssignmentTarget;
+  readonly label: string;
+  readonly scope: "sport" | "team" | "competition";
   readonly targetUrl: string;
   readonly sampleHeadlines: readonly string[];
 }
@@ -99,7 +138,7 @@ export interface ConfirmSportsSourceRequest {
   readonly canonicalDomain: string;
   readonly confirmedFetchHosts: readonly string[];
   readonly targets: readonly {
-    readonly followId: string;
+    readonly target: SportsSourceAssignmentTarget;
     readonly targetUrl: string;
   }[];
 }
@@ -109,10 +148,7 @@ export interface ConfirmSportsSourceResponse {
 }
 
 export interface PreviewSportsSourceAssignmentsRequest {
-  readonly assignments: readonly {
-    readonly followId: string;
-    readonly exactTargetUrl?: string;
-  }[];
+  readonly assignments: readonly SportsSourceAssignmentInput[];
 }
 
 export type PreviewSportsSourceAssignmentsResponse = PreviewSportsSourceResponse;
@@ -125,12 +161,46 @@ const sportsSourceHealthSchema = {
   enum: ["pending", "healthy", "failing", "unsupported", "auth_required", "disabled"]
 } as const;
 
+const sportsSourceAssignmentTargetSchema = {
+  oneOf: [
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind", "sportKey"],
+      properties: {
+        kind: { const: "sport" },
+        sportKey: { type: "string", enum: SPORTS_SPORT_KEYS }
+      }
+    },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind", "followId"],
+      properties: {
+        kind: { const: "follow" },
+        followId: { type: "string", format: "uuid" }
+      }
+    }
+  ]
+} as const;
+
+const sportsSourceAssignmentInputSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["target"],
+  properties: {
+    target: sportsSourceAssignmentTargetSchema,
+    exactTargetUrl: { type: "string", maxLength: 2048, pattern: "^https://.+$" }
+  }
+} as const;
+
 const sportsSourceAssignmentDtoSchema = {
   type: "object",
   additionalProperties: false,
   required: [
     "id",
     "followId",
+    "sportKey",
     "targetUrl",
     "previewStatus",
     "healthState",
@@ -142,7 +212,8 @@ const sportsSourceAssignmentDtoSchema = {
   ],
   properties: {
     id: { type: "string", format: "uuid" },
-    followId: { type: "string", format: "uuid" },
+    followId: { type: ["string", "null"], format: "uuid" },
+    sportKey: { type: ["string", "null"], enum: [...SPORTS_SPORT_KEYS, null] },
     targetUrl: { type: ["string", "null"], maxLength: 2048, pattern: "^https://.+$" },
     previewStatus: { type: "string", enum: ["pending", "verified", "recipe_missing"] },
     healthState: sportsSourceHealthSchema,
@@ -199,6 +270,33 @@ const sportsCustomSourceDtoSchema = {
   }
 } as const;
 
+const sportsNewsCustomSourceDtoSchema = {
+  ...sportsCustomSourceDtoSchema,
+  required: [...sportsCustomSourceDtoSchema.required, "kind"],
+  properties: {
+    ...sportsCustomSourceDtoSchema.properties,
+    kind: { const: "custom" }
+  }
+} as const;
+
+const sportsBuiltinSourceDtoSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["kind", "id", "label", "enabled", "usesDefaultCoverage", "assignments"],
+  properties: {
+    kind: { const: "builtin" },
+    id: { const: "espn" },
+    label: { const: "ESPN" },
+    enabled: { type: "boolean" },
+    usesDefaultCoverage: { type: "boolean" },
+    assignments: {
+      type: "array",
+      maxItems: SPORTS_SOURCE_ASSIGNMENT_LIMIT,
+      items: sportsSourceAssignmentTargetSchema
+    }
+  }
+} as const;
+
 export const sportsCustomSourcesResponseSchema = {
   response: {
     200: {
@@ -213,6 +311,48 @@ export const sportsCustomSourcesResponseSchema = {
   }
 } as const;
 
+export const sportsNewsSourcesResponseSchema = {
+  response: {
+    200: {
+      type: "object",
+      additionalProperties: false,
+      required: ["sources"],
+      properties: {
+        sources: {
+          type: "array",
+          items: { oneOf: [sportsBuiltinSourceDtoSchema, sportsNewsCustomSourceDtoSchema] }
+        }
+      }
+    },
+    401: errorResponseSchema
+  }
+} as const;
+
+export const updateSportsEspnCoverageSchema = {
+  body: {
+    type: "object",
+    additionalProperties: false,
+    required: ["assignments"],
+    properties: {
+      assignments: {
+        type: "array",
+        maxItems: SPORTS_SOURCE_ASSIGNMENT_LIMIT,
+        items: sportsSourceAssignmentTargetSchema
+      }
+    }
+  },
+  response: {
+    200: {
+      type: "object",
+      additionalProperties: false,
+      required: ["source"],
+      properties: { source: sportsBuiltinSourceDtoSchema }
+    },
+    400: errorResponseSchema,
+    401: errorResponseSchema
+  }
+} as const;
+
 export const previewSportsSourceSchema = {
   body: {
     type: "object",
@@ -223,19 +363,7 @@ export const previewSportsSourceSchema = {
       assignments: {
         type: "array",
         maxItems: 20,
-        items: {
-          type: "object",
-          additionalProperties: false,
-          required: ["followId"],
-          properties: {
-            followId: { type: "string", format: "uuid" },
-            exactTargetUrl: {
-              type: "string",
-              maxLength: 2048,
-              pattern: "^https://.+$"
-            }
-          }
-        }
+        items: sportsSourceAssignmentInputSchema
       }
     }
   },
@@ -282,23 +410,11 @@ export const previewSportsSourceSchema = {
               items: {
                 type: "object",
                 additionalProperties: false,
-                required: [
-                  "followId",
-                  "competitionKey",
-                  "competitionLabel",
-                  "teamKey",
-                  "teamLabel",
-                  "scope",
-                  "targetUrl",
-                  "sampleHeadlines"
-                ],
+                required: ["target", "label", "scope", "targetUrl", "sampleHeadlines"],
                 properties: {
-                  followId: { type: "string", format: "uuid" },
-                  competitionKey: { type: "string", minLength: 1, maxLength: 100 },
-                  competitionLabel: { type: "string", minLength: 1, maxLength: 120 },
-                  teamKey: { type: ["string", "null"], maxLength: 100 },
-                  teamLabel: { type: ["string", "null"], maxLength: 120 },
-                  scope: { type: "string", enum: ["team", "competition"] },
+                  target: sportsSourceAssignmentTargetSchema,
+                  label: { type: "string", minLength: 1, maxLength: 120 },
+                  scope: { type: "string", enum: ["sport", "team", "competition"] },
                   targetUrl: { type: "string", maxLength: 2048, pattern: "^https://.+$" },
                   sampleHeadlines: {
                     type: "array",
@@ -346,9 +462,9 @@ export const confirmSportsSourceSchema = {
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["followId", "targetUrl"],
+          required: ["target", "targetUrl"],
           properties: {
-            followId: { type: "string", format: "uuid" },
+            target: sportsSourceAssignmentTargetSchema,
             targetUrl: { type: "string", maxLength: 2048, pattern: "^https://.+$" }
           }
         }
@@ -410,15 +526,7 @@ export const previewSportsSourceAssignmentsSchema = {
       assignments: {
         type: "array",
         maxItems: 20,
-        items: {
-          type: "object",
-          additionalProperties: false,
-          required: ["followId"],
-          properties: {
-            followId: { type: "string", format: "uuid" },
-            exactTargetUrl: { type: "string", maxLength: 2048, pattern: "^https://.+$" }
-          }
-        }
+        items: sportsSourceAssignmentInputSchema
       }
     }
   },

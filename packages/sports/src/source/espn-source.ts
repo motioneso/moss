@@ -391,15 +391,17 @@ async function getHeadlines(
       categories?: readonly { type?: string; teamId?: number | string }[];
     }[];
   };
-  const competitionLabel = catalogEntry(competitionKey)?.label ?? competitionKey;
+  const competition = catalogEntry(competitionKey);
+  if (!competition) throw new Error(`Unknown sports competition: ${competitionKey}`);
   return (data.articles ?? []).map((article, index) => {
     const images = article.images ?? [];
     const image = images.find((i) => i.type === "header" && i.url) ?? images.find((i) => i.url);
     return {
       origin: "espn",
       id: String(article.id ?? index),
+      sportKey: competition.espnSport,
       competitionKey,
-      competitionLabel,
+      competitionLabel: competition.label,
       title: article.headline ?? "",
       url: article.links?.web?.href ?? "",
       publishedAt: article.published ?? "",

@@ -19,6 +19,7 @@ import {
   type SportsRuntimeTargetResult
 } from "./repository.js";
 import type { CustomSourceHeadline } from "./sports-source.js";
+import { SPORTS_SPORT_LABELS } from "./scope.js";
 
 const MAX_ASSIGNMENTS = 20;
 const MAX_REQUESTS = 30;
@@ -30,9 +31,10 @@ const REFRESH_DEADLINE_MS = 12_000;
 const MAX_RETRY_AFTER_MS = 5_000;
 const HEADLINE_TTL_MS = 10 * 60 * 1000;
 
-export interface SportsPublicSourceHeadline extends CustomSourceHeadline {
+export type SportsPublicSourceHeadline = CustomSourceHeadline & {
   readonly imageUrl: null;
-}
+  readonly sportKey: SportsRuntimeSource["assignments"][number]["scope"]["sportKey"];
+};
 
 interface ReaderDataContext {
   withDataContext<T>(
@@ -241,19 +243,24 @@ function publicHeadlines(
   checkedAt: Date | null
 ): SportsPublicSourceHeadline[] {
   const { source, assignment } = pair;
+  const competitionKey = assignment.scope.kind === "sport" ? null : assignment.scope.competitionKey;
   const fallbackTime = (checkedAt ?? new Date(0)).toISOString();
   return items.map((item) => ({
     origin: "custom",
     sourceId: source.id,
     id: `${source.id}:${item.id}`,
-    competitionKey: assignment.competitionKey,
-    competitionLabel: catalogEntry(assignment.competitionKey)?.label ?? assignment.competitionKey,
+    sportKey: assignment.scope.sportKey,
+    competitionKey,
+    competitionLabel:
+      assignment.scope.kind === "sport"
+        ? SPORTS_SPORT_LABELS[assignment.scope.sportKey]
+        : (catalogEntry(assignment.scope.competitionKey)?.label ?? assignment.scope.competitionKey),
     title: item.title,
     url: item.url,
     publishedAt: item.publishedAt ?? fallbackTime,
     imageUrl: null,
     summary: item.summary,
-    teamKeys: assignment.teamKey ? [assignment.teamKey] : [],
+    teamKeys: assignment.scope.kind === "team" ? [assignment.scope.teamKey] : [],
     publisherLabel: source.label,
     publisherDomain: source.canonicalDomain
   }));

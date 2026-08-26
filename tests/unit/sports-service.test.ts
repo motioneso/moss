@@ -215,6 +215,7 @@ const nflStandings: StandingsTable = {
 const nflHeadlines: SourceHeadline[] = [
   {
     id: "h1",
+    sportKey: "football",
     competitionKey: "nfl",
     competitionLabel: "NFL",
     title: "Cowboys clinch the division",
@@ -533,6 +534,7 @@ describe("SportsService.getOverview", () => {
   it("fills card news from the followed team's own feed when the league feed has none", async () => {
     const teamStory: SourceHeadline = {
       id: "t1",
+      sportKey: "football",
       competitionKey: "nfl",
       competitionLabel: "NFL",
       title: "Cowboys sign a new kicker",
@@ -609,6 +611,7 @@ describe("SportsService.getOverview", () => {
     // keys off feed POSITION now, not recency (mrb51pnq) — publishedAt only breaks cross-league ties.
     const manyHeadlines: SourceHeadline[] = Array.from({ length: 9 }, (_, i) => ({
       id: `h${i}`,
+      sportKey: "football",
       competitionKey: "nfl",
       competitionLabel: "NFL",
       title: `Story ${i}`,
@@ -664,6 +667,7 @@ describe("SportsService.getOverview", () => {
     };
     const nbaHeadline: SourceHeadline = {
       id: "hn1",
+      sportKey: "basketball",
       competitionKey: "nba",
       competitionLabel: "NBA",
       title: "NBA free agency shakes up the West",
@@ -732,6 +736,7 @@ describe("SportsService.getOverview", () => {
     };
     const nbaHeadline: SourceHeadline = {
       id: "hd1",
+      sportKey: "basketball",
       competitionKey: "nba",
       competitionLabel: "NBA",
       title: "Celtics roll past Heat",

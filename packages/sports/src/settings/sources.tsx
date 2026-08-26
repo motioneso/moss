@@ -2,7 +2,14 @@ import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, Note, formatTimestamp } from "@moss/settings-ui";
 import { ApiError, Button } from "@moss/module-web-sdk";
-import type { CompetitionRef, SportsCustomSourceDto, SportsFollowDto, TeamRef } from "@moss/shared";
+import type {
+  CompetitionRef,
+  SportsBuiltinSourceDto,
+  SportsCustomSourceDto,
+  SportsFollowDto,
+  SportsSourceAssignmentTarget,
+  TeamRef
+} from "@moss/shared";
 import { Check, CircleAlert } from "lucide-react";
 
 import {
@@ -14,9 +21,12 @@ import {
   previewSportsSourceAssignments,
   previewSportsSource,
   previewSportsSourceRecipe,
-  retrySportsSource
+  retrySportsSource,
+  updateSportsEspnCoverage
 } from "../web/sports-client.js";
 import { sportsQueryKeys } from "../web/query-keys.js";
+import { sportsSourceTargetKey, sportsSportOptions } from "../source/scope.js";
+import { SourceAssignmentPicker, sourceTargetDisplayLabel } from "./source-assignment-picker.js";
 
 /* #1572: custom public news sources by team and league. Mirrors News' add-source flow
    (packages/news/src/settings/add-source.tsx), simplified for Sports' single-candidate,
@@ -43,67 +53,12 @@ const HEALTH_BADGE: Record<
   disabled: { tone: "neutral", label: "Disabled" }
 };
 
-function followDisplayLabel(
-  follow: SportsFollowDto,
-  competitionsByKey: Map<string, CompetitionRef>,
-  teamsByCompetition: Map<string, readonly TeamRef[]>
-): string {
-  const competition = competitionsByKey.get(follow.competitionKey);
-  if (follow.teamKey === null) {
-    return competition
-      ? `All ${competition.label}`
-      : `Unrecognized league (${follow.competitionKey})`;
-  }
-  const team = teamsByCompetition
-    .get(follow.competitionKey)
-    ?.find((t) => t.teamKey === follow.teamKey);
-  return team?.shortName || team?.name || follow.teamKey || follow.competitionKey;
-}
-
 function SourceError(props: { children: string }) {
   return (
     <p className="sp-src__err" role="alert">
       <CircleAlert size={16} aria-hidden="true" />
       <span>{props.children}</span>
     </p>
-  );
-}
-
-function FollowAssignmentPicker(props: {
-  follows: readonly SportsFollowDto[];
-  competitionsByKey: Map<string, CompetitionRef>;
-  teamsByCompetition: Map<string, readonly TeamRef[]>;
-  selected: ReadonlySet<string>;
-  onToggle: (followId: string) => void;
-  disabled?: boolean;
-  idPrefix: string;
-}) {
-  if (props.follows.length === 0) {
-    return <Note>Follow a team or league first to assign sources to it.</Note>;
-  }
-  return (
-    <ul className="sp-src__assign-list">
-      {props.follows.map((follow) => {
-        const inputId = `${props.idPrefix}-${follow.id}`;
-        return (
-          <li key={follow.id} className="sp-src__assign-item">
-            <label className="jds-check sp-src__check" htmlFor={inputId}>
-              <input
-                type="checkbox"
-                id={inputId}
-                checked={props.selected.has(follow.id)}
-                disabled={props.disabled}
-                onChange={() => props.onToggle(follow.id)}
-              />
-              <span className="jds-check__box">
-                <Check size={13} aria-hidden="true" />
-              </span>
-              {followDisplayLabel(follow, props.competitionsByKey, props.teamsByCompetition)}
-            </label>
-          </li>
-        );
-      })}
-    </ul>
   );
 }
 
@@ -117,7 +72,9 @@ export function AddSourceFlow(props: {
   const [preview, setPreview] = useState<Awaited<ReturnType<typeof previewSportsSource>> | null>(
     null
   );
-  const [selectedFollowIds, setSelectedFollowIds] = useState<Set<string>>(new Set());
+  const [selectedTargets, setSelectedTargets] = useState<Map<string, SportsSourceAssignmentTarget>>(
+    new Map()
+  );
   const [exactTargetUrls, setExactTargetUrls] = useState<Map<string, string>>(new Map());
   const [authorizationAccepted, setAuthorizationAccepted] = useState(false);
   const [added, setAdded] = useState(false);
@@ -138,7 +95,7 @@ export function AddSourceFlow(props: {
     onSuccess: () => {
       setInput("");
       setPreview(null);
-      setSelectedFollowIds(new Set());
+      setSelectedTargets(new Map());
       setExactTargetUrls(new Map());
       setAuthorizationAccepted(false);
       setAdded(true);
@@ -154,10 +111,10 @@ export function AddSourceFlow(props: {
     setPreview(null);
     previewMutation.mutate({
       url: trimmed,
-      assignments: [...selectedFollowIds].map((followId) => ({
-        followId,
-        ...(exactTargetUrls.get(followId)?.trim()
-          ? { exactTargetUrl: exactTargetUrls.get(followId)!.trim() }
+      assignments: [...selectedTargets].map(([key, target]) => ({
+        target,
+        ...(exactTargetUrls.get(key)?.trim()
+          ? { exactTargetUrl: exactTargetUrls.get(key)!.trim() }
           : {})
       }))
     });
@@ -177,7 +134,7 @@ export function AddSourceFlow(props: {
       canonicalDomain: preview.candidate.canonicalDomain,
       confirmedFetchHosts: preview.candidate.confirmedFetchHosts,
       targets: preview.candidate.targets.map((target) => ({
-        followId: target.followId,
+        target: target.target,
         targetUrl: target.targetUrl
       }))
     });
@@ -185,17 +142,18 @@ export function AddSourceFlow(props: {
 
   function reset() {
     setPreview(null);
-    setSelectedFollowIds(new Set());
+    setSelectedTargets(new Map());
     setExactTargetUrls(new Map());
     setAuthorizationAccepted(false);
     confirmMutation.reset();
   }
 
-  function toggleFollow(followId: string) {
-    setSelectedFollowIds((current) => {
-      const next = new Set(current);
-      if (next.has(followId)) next.delete(followId);
-      else next.add(followId);
+  function toggleTarget(target: SportsSourceAssignmentTarget) {
+    setSelectedTargets((current) => {
+      const next = new Map(current);
+      const key = sportsSourceTargetKey(target);
+      if (next.has(key)) next.delete(key);
+      else next.set(key, target);
       setPreview(null);
       setAuthorizationAccepted(false);
       return next;
@@ -245,35 +203,38 @@ export function AddSourceFlow(props: {
         </div>
       </form>
 
-      <p className="sp-src__hint">Assign to (optional — leave blank to add unassigned):</p>
-      <FollowAssignmentPicker
+      <p className="sp-src__hint">Coverage (optional — leave blank to add unassigned):</p>
+      <SourceAssignmentPicker
         follows={props.follows}
         competitionsByKey={props.competitionsByKey}
         teamsByCompetition={props.teamsByCompetition}
-        selected={selectedFollowIds}
-        onToggle={toggleFollow}
+        selected={new Set(selectedTargets.keys())}
+        onToggle={toggleTarget}
         disabled={busy}
         idPrefix="sp-addsource-assign"
       />
-      {[...selectedFollowIds].map((followId) => {
-        const follow = props.follows.find((candidate) => candidate.id === followId);
-        if (!follow) return null;
-        const id = `sp-target-${followId}`;
+      {[...selectedTargets].map(([key, target]) => {
+        const id = `sp-target-${key}`;
         return (
-          <label key={followId} className="sp-src__label" htmlFor={id}>
+          <label key={key} className="sp-src__label" htmlFor={id}>
             Exact target URL for{" "}
-            {followDisplayLabel(follow, props.competitionsByKey, props.teamsByCompetition)}{" "}
+            {sourceTargetDisplayLabel(
+              target,
+              props.follows,
+              props.competitionsByKey,
+              props.teamsByCompetition
+            )}{" "}
             (optional)
             <input
               id={id}
               className="jds-input"
               type="url"
               placeholder="https://publisher.example/team-or-league-news"
-              value={exactTargetUrls.get(followId) ?? ""}
+              value={exactTargetUrls.get(key) ?? ""}
               disabled={busy}
               onChange={(event) => {
                 const value = event.target.value;
-                setExactTargetUrls((current) => new Map(current).set(followId, value));
+                setExactTargetUrls((current) => new Map(current).set(key, value));
                 setPreview(null);
                 setAuthorizationAccepted(false);
               }}
@@ -300,9 +261,9 @@ export function AddSourceFlow(props: {
             </p>
           ))}
           {preview.candidate.targets.map((target) => (
-            <div key={target.followId}>
+            <div key={sportsSourceTargetKey(target.target)}>
               <p className="sp-src__hint">
-                {target.teamLabel ?? target.competitionLabel}: {target.targetUrl}
+                {target.label}: {target.targetUrl}
               </p>
               {target.sampleHeadlines.map((headline) => (
                 <p key={headline} className="sp-src__hint">
@@ -352,9 +313,18 @@ export function SportsSourcesSection(props: {
 }) {
   const queryClient = useQueryClient();
   const sourcesQuery = useQuery({ queryKey: sportsQueryKeys.sources, queryFn: listSportsSources });
-  const sources = sourcesQuery.data?.sources ?? [];
+  const allSources = sourcesQuery.data?.sources ?? [];
+  const espn = allSources.find(
+    (source): source is SportsBuiltinSourceDto => source.kind === "builtin"
+  );
+  const sources = allSources.filter(
+    (source): source is SportsCustomSourceDto & { readonly kind: "custom" } =>
+      source.kind === "custom"
+  );
   const [editingSourceId, setEditingSourceId] = useState<string | null>(null);
-  const [editingSelection, setEditingSelection] = useState<Set<string>>(new Set());
+  const [editingSelection, setEditingSelection] = useState<
+    Map<string, SportsSourceAssignmentTarget>
+  >(new Map());
   const [assignmentPreview, setAssignmentPreview] = useState<{
     sourceId: string;
     result: Awaited<ReturnType<typeof previewSportsSourceAssignments>>;
@@ -368,6 +338,13 @@ export function SportsSourcesSection(props: {
 
   const invalidate = () =>
     void queryClient.invalidateQueries({ queryKey: sportsQueryKeys.sources });
+  const espnMutation = useMutation({
+    mutationFn: updateSportsEspnCoverage,
+    onSuccess: () => {
+      setEditingSourceId(null);
+      invalidate();
+    }
+  });
   const removeMutation = useMutation({ mutationFn: deleteSportsSource, onSuccess: invalidate });
   const retryMutation = useMutation({ mutationFn: retrySportsSource, onSuccess: invalidate });
   const recipePreviewMutation = useMutation({
@@ -387,9 +364,9 @@ export function SportsSourcesSection(props: {
     }
   });
   const assignmentPreviewMutation = useMutation({
-    mutationFn: (input: { id: string; followIds: readonly string[] }) =>
+    mutationFn: (input: { id: string; targets: readonly SportsSourceAssignmentTarget[] }) =>
       previewSportsSourceAssignments(input.id, {
-        assignments: input.followIds.map((followId) => ({ followId }))
+        assignments: input.targets.map((target) => ({ target }))
       }),
     onSuccess: (result, input) => {
       setAssignmentPreview({ sourceId: input.id, result });
@@ -411,16 +388,37 @@ export function SportsSourcesSection(props: {
 
   function startEditing(source: SportsCustomSourceDto) {
     setEditingSourceId(source.id);
-    setEditingSelection(new Set(source.assignedFollowIds));
+    setEditingSelection(
+      new Map(
+        source.assignments.flatMap((assignment) => {
+          const target: SportsSourceAssignmentTarget | null = assignment.sportKey
+            ? { kind: "sport", sportKey: assignment.sportKey }
+            : assignment.followId
+              ? { kind: "follow", followId: assignment.followId }
+              : null;
+          return target ? [[sportsSourceTargetKey(target), target] as const] : [];
+        })
+      )
+    );
     setAssignmentPreview(null);
     setAssignmentAuthorizationAccepted(false);
   }
 
-  function toggleEditingFollow(followId: string) {
+  function startEditingEspn(source: SportsBuiltinSourceDto) {
+    const targets = source.usesDefaultCoverage
+      ? sportsSportOptions().map(({ key }) => ({ kind: "sport", sportKey: key }) as const)
+      : source.assignments;
+    setEditingSourceId(source.id);
+    setEditingSelection(new Map(targets.map((target) => [sportsSourceTargetKey(target), target])));
+    espnMutation.reset();
+  }
+
+  function toggleEditingTarget(target: SportsSourceAssignmentTarget) {
     setEditingSelection((current) => {
-      const next = new Set(current);
-      if (next.has(followId)) next.delete(followId);
-      else next.add(followId);
+      const next = new Map(current);
+      const key = sportsSourceTargetKey(target);
+      if (next.has(key)) next.delete(key);
+      else next.set(key, target);
       setAssignmentPreview(null);
       setAssignmentAuthorizationAccepted(false);
       return next;
@@ -428,17 +426,94 @@ export function SportsSourcesSection(props: {
   }
 
   return (
-    <section className="sp-src" aria-label="Custom sports news sources">
-      <p className="sp-src__kicker">Custom sources</p>
+    <section className="sp-src" aria-label="Sports news sources">
+      <p className="sp-src__kicker">News sources</p>
       <p className="sp-src__hint">
-        Add your own public news sources for sports, and assign them to specific teams or leagues
-        you follow.
+        Choose which sports, leagues, and teams each source covers. Matching publishers are mixed
+        together in Sports news.
       </p>
       {sourcesQuery.isError ? (
-        <SourceError>Could not load your custom sources. Try again.</SourceError>
+        <SourceError>Could not load your sports news sources. Try again.</SourceError>
       ) : null}
-      {sourcesQuery.isSuccess && sources.length > 0 ? (
+      {sourcesQuery.isPending ? <Note>Loading sources…</Note> : null}
+      {sourcesQuery.isSuccess && allSources.length > 0 ? (
         <ul className="sp-src__list">
+          {espn ? (
+            <li className="sp-src__item">
+              <div className="sp-src__item-row">
+                <div className="sp-src__identity">
+                  <span className="sp-src__item-label">{espn.label}</span>
+                  <Badge tone="steel">Built-in</Badge>
+                </div>
+                <div className="sp-src__actions">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    aria-label="Edit coverage for ESPN"
+                    disabled={espnMutation.isPending}
+                    onClick={() =>
+                      editingSourceId === espn.id
+                        ? setEditingSourceId(null)
+                        : startEditingEspn(espn)
+                    }
+                  >
+                    {editingSourceId === espn.id ? "Close" : "Edit coverage"}
+                  </Button>
+                </div>
+              </div>
+              <p className="sp-src__meta-line">
+                {espn.usesDefaultCoverage
+                  ? "Coverage: All sports"
+                  : espn.enabled
+                    ? `Coverage: ${espn.assignments
+                        .map((target) =>
+                          sourceTargetDisplayLabel(
+                            target,
+                            props.follows,
+                            props.competitionsByKey,
+                            props.teamsByCompetition
+                          )
+                        )
+                        .join(", ")}`
+                    : "Inactive for headlines."}
+              </p>
+              {editingSourceId === espn.id ? (
+                <div className="sp-src__assign">
+                  <SourceAssignmentPicker
+                    follows={props.follows}
+                    competitionsByKey={props.competitionsByKey}
+                    teamsByCompetition={props.teamsByCompetition}
+                    selected={new Set(editingSelection.keys())}
+                    onToggle={toggleEditingTarget}
+                    disabled={espnMutation.isPending}
+                    idPrefix="sp-edit-espn"
+                  />
+                  <div className="sp-src__addrow">
+                    <Button
+                      size="sm"
+                      disabled={espnMutation.isPending}
+                      onClick={() =>
+                        espnMutation.mutate({ assignments: [...editingSelection.values()] })
+                      }
+                    >
+                      {espnMutation.isPending ? "Saving…" : "Save coverage"}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={espnMutation.isPending}
+                      onClick={() => setEditingSourceId(null)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                  {espnMutation.isError ? (
+                    <SourceError>Could not update ESPN coverage. Try again.</SourceError>
+                  ) : null}
+                </div>
+              ) : null}
+            </li>
+          ) : null}
           {sources.map((source) => {
             const badge = HEALTH_BADGE[source.healthState];
             const editing = editingSourceId === source.id;
@@ -485,11 +560,11 @@ export function SportsSourcesSection(props: {
                     <Button
                       variant="secondary"
                       size="sm"
-                      aria-label={`Edit teams for ${source.label}`}
+                      aria-label={`Edit coverage for ${source.label}`}
                       disabled={recoveryBusy}
                       onClick={() => (editing ? setEditingSourceId(null) : startEditing(source))}
                     >
-                      {editing ? "Close" : "Edit teams"}
+                      {editing ? "Close" : "Edit coverage"}
                     </Button>
                     <Button
                       variant="secondary"
@@ -525,12 +600,15 @@ export function SportsSourcesSection(props: {
                   <ul className="sp-src__assign-list">
                     {source.assignments.map((assignment) => {
                       const assignmentBadge = HEALTH_BADGE[assignment.healthState];
-                      const follow = props.follows.find(
-                        (candidate) => candidate.id === assignment.followId
-                      );
-                      const followLabel = follow
-                        ? followDisplayLabel(
-                            follow,
+                      const target: SportsSourceAssignmentTarget | null = assignment.sportKey
+                        ? { kind: "sport", sportKey: assignment.sportKey }
+                        : assignment.followId
+                          ? { kind: "follow", followId: assignment.followId }
+                          : null;
+                      const targetLabel = target
+                        ? sourceTargetDisplayLabel(
+                            target,
+                            props.follows,
                             props.competitionsByKey,
                             props.teamsByCompetition
                           )
@@ -541,7 +619,7 @@ export function SportsSourcesSection(props: {
                           className="sp-src__assign-item sp-src__assign-item--status"
                         >
                           <span className="sp-src__assignment-copy">
-                            <span className="sp-src__assignment-label">{followLabel}</span>
+                            <span className="sp-src__assignment-label">{targetLabel}</span>
                             {assignment.targetUrl ? (
                               <span className="sp-src__assignment-target">
                                 {assignment.targetUrl}
@@ -560,7 +638,7 @@ export function SportsSourcesSection(props: {
                     })}
                   </ul>
                 ) : null}
-                {source.assignedFollowIds.length === 0 ? (
+                {source.assignments.length === 0 ? (
                   <p className="sp-src__hint sp-src__hint--tight">Unassigned — not used yet.</p>
                 ) : null}
                 {recipePreview?.sourceId === source.id &&
@@ -576,8 +654,8 @@ export function SportsSourcesSection(props: {
                       Fetch hosts: {recipePreview.result.candidate.confirmedFetchHosts.join(", ")}
                     </p>
                     {recipePreview.result.candidate.targets.map((target) => (
-                      <p key={target.followId} className="sp-src__hint">
-                        {target.teamLabel ?? target.competitionLabel}: {target.targetUrl}
+                      <p key={sportsSourceTargetKey(target.target)} className="sp-src__hint">
+                        {target.label}: {target.targetUrl}
                       </p>
                     ))}
                     <label className="jds-check sp-src__check">
@@ -605,7 +683,7 @@ export function SportsSourcesSection(props: {
                             canonicalDomain: result.candidate!.canonicalDomain,
                             confirmedFetchHosts: result.candidate!.confirmedFetchHosts,
                             targets: result.candidate!.targets.map((target) => ({
-                              followId: target.followId,
+                              target: target.target,
                               targetUrl: target.targetUrl
                             }))
                           }
@@ -621,12 +699,12 @@ export function SportsSourcesSection(props: {
                 ) : null}
                 {editing ? (
                   <div className="sp-src__assign">
-                    <FollowAssignmentPicker
+                    <SourceAssignmentPicker
                       follows={props.follows}
                       competitionsByKey={props.competitionsByKey}
                       teamsByCompetition={props.teamsByCompetition}
-                      selected={editingSelection}
-                      onToggle={toggleEditingFollow}
+                      selected={new Set(editingSelection.keys())}
+                      onToggle={toggleEditingTarget}
                       disabled={
                         assignmentPreviewMutation.isPending || assignmentConfirmMutation.isPending
                       }
@@ -641,7 +719,7 @@ export function SportsSourcesSection(props: {
                         onClick={() =>
                           assignmentPreviewMutation.mutate({
                             id: source.id,
-                            followIds: [...editingSelection]
+                            targets: [...editingSelection.values()]
                           })
                         }
                       >
@@ -655,8 +733,8 @@ export function SportsSourcesSection(props: {
                     assignmentPreview.result.authorizationAcknowledgement ? (
                       <div className="sp-src__candidate">
                         {assignmentPreview.result.candidate.targets.map((target) => (
-                          <p key={target.followId} className="sp-src__hint">
-                            {target.teamLabel ?? target.competitionLabel}: {target.targetUrl}
+                          <p key={sportsSourceTargetKey(target.target)} className="sp-src__hint">
+                            {target.label}: {target.targetUrl}
                           </p>
                         ))}
                         {assignmentPreview.result.candidate.targets.length === 0 ? (
@@ -691,7 +769,7 @@ export function SportsSourcesSection(props: {
                                 canonicalDomain: result.candidate!.canonicalDomain,
                                 confirmedFetchHosts: result.candidate!.confirmedFetchHosts,
                                 targets: result.candidate!.targets.map((target) => ({
-                                  followId: target.followId,
+                                  target: target.target,
                                   targetUrl: target.targetUrl
                                 }))
                               }

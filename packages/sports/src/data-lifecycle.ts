@@ -9,6 +9,8 @@ type ExportRow = Record<string, JsonValue>;
 
 export interface SportsSourcesExportSectionData {
   readonly assignments: readonly ExportRow[];
+  readonly espnAssignments: readonly ExportRow[];
+  readonly headlinePreferences: readonly ExportRow[];
   readonly sources: readonly ExportRow[];
 }
 
@@ -52,6 +54,7 @@ export async function collectSportsSourcesExportSection(
       owner_user_id::text AS "ownerUserId",
       source_id::text AS "sourceId",
       follow_id::text AS "followId",
+      sport_key AS "sportKey",
       target_url AS "targetUrl",
       health_state AS "healthState",
       health_reason_code AS "healthReasonCode",
@@ -64,8 +67,31 @@ export async function collectSportsSourcesExportSection(
     ORDER BY created_at DESC, id
   `.execute(db);
 
+  const espnAssignments = await sql<Record<string, unknown>>`
+    SELECT
+      id::text AS id,
+      owner_user_id::text AS "ownerUserId",
+      follow_id::text AS "followId",
+      sport_key AS "sportKey",
+      created_at AS "createdAt"
+    FROM app.sports_espn_source_assignments
+    WHERE owner_user_id = ${userId}::uuid
+    ORDER BY created_at DESC, id
+  `.execute(db);
+
+  const headlinePreferences = await sql<Record<string, unknown>>`
+    SELECT
+      owner_user_id::text AS "ownerUserId",
+      espn_headlines_enabled AS "espnHeadlinesEnabled",
+      updated_at AS "updatedAt"
+    FROM app.sports_headline_prefs
+    WHERE owner_user_id = ${userId}::uuid
+  `.execute(db);
+
   return {
     assignments: assignments.rows.map(normalizeRow),
+    espnAssignments: espnAssignments.rows.map(normalizeRow),
+    headlinePreferences: headlinePreferences.rows.map(normalizeRow),
     sources: sources.rows.map(normalizeRow)
   };
 }

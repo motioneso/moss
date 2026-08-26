@@ -1177,7 +1177,8 @@ export interface SportsSourceAssignmentsTable {
   id: ColumnType<string, string | undefined, string>;
   owner_user_id: string;
   source_id: string;
-  follow_id: string;
+  follow_id: string | null;
+  sport_key: string | null;
   target_url: string | null;
   target_parameters: ColumnType<
     Record<string, unknown>,
@@ -1198,6 +1199,14 @@ export interface SportsSourceAssignmentsTable {
   health_message: string | null;
   last_checked_at: TimestampColumn | null;
   last_success_at: TimestampColumn | null;
+  created_at: TimestampColumn;
+}
+
+export interface SportsEspnSourceAssignmentsTable {
+  id: ColumnType<string, string | undefined, string>;
+  owner_user_id: string;
+  sport_key: string | null;
+  follow_id: string | null;
   created_at: TimestampColumn;
 }
 
@@ -1272,6 +1281,7 @@ export interface MossDatabase {
   "app.sports_follows": SportsFollowsTable;
   "app.sports_custom_sources": SportsCustomSourcesTable;
   "app.sports_source_assignments": SportsSourceAssignmentsTable;
+  "app.sports_espn_source_assignments": SportsEspnSourceAssignmentsTable;
   "app.sports_policy_verdicts": SportsPolicyVerdictsTable;
   "app.sports_headline_prefs": SportsHeadlinePrefsTable;
   "app.news_prefs": NewsPrefsTable;

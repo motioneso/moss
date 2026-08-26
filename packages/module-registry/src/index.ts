@@ -273,6 +273,7 @@ import {
   SportsBrowserBroker,
   SportsBrowserBrokerServer,
   SportsBrowserClient,
+  SportsEspnCoverageRepository,
   SportsPublicSourceReader,
   SportsService,
   SportsSourceService,
@@ -1833,6 +1834,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         browser
       );
       const sourcesRepository = new SportsSourcesRepository();
+      const espnCoverageRepository = new SportsEspnCoverageRepository();
       const publicSourceReader = new SportsPublicSourceReader({
         dataContext: deps.dataContext,
         repository: sourcesRepository,
@@ -1850,6 +1852,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       const sourceService = new SportsSourceService({
         follows: followsRepository,
         sources: sourcesRepository,
+        espnCoverage: espnCoverageRepository,
         previews,
         discovery,
         resolveTeams: async (competitionKey) =>
@@ -1865,6 +1868,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         discovery,
         repository: followsRepository,
         sourcesRepository,
+        espnCoverageRepository,
         publicSourceReader,
         previews,
         sourceService

@@ -1,6 +1,7 @@
 import type { AccessContext, DataContextDb } from "@moss/db";
 import type { NewsAiPort } from "@moss/news";
 import {
+  SPORTS_SOURCE_ASSIGNMENT_LIMIT,
   SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT,
   type ConfirmSportsSourceRecipeRequest,
   type ConfirmSportsSourceRequest,
@@ -11,8 +12,11 @@ import {
   type PreviewSportsSourceCandidate,
   type PreviewSportsSourceRecipeResponse,
   type PreviewSportsSourceResponse,
+  type SportsBuiltinSourceDto,
   type SportsCustomSourceDto,
   type SportsFollowDto,
+  type SportsNewsSourceDto,
+  type SportsSourceAssignmentTarget,
   type TeamRef
 } from "@moss/shared";
 
@@ -30,6 +34,13 @@ import {
 import type { createSportsPreviewStore } from "./preview-store.js";
 import type { SportsPublicSourceReader } from "./public-source-reader.js";
 import type { SportsSourceBaseline, SportsSourcesRepository } from "./repository.js";
+import type { SportsEspnCoverageRepository } from "./espn-coverage-repository.js";
+import {
+  hasValidSportsSourceTargets,
+  isSportsSportKey,
+  SPORTS_SPORT_LABELS,
+  sportsSourceTargetKey
+} from "./scope.js";
 
 type SportsPreviewStore = ReturnType<typeof createSportsPreviewStore>;
 
@@ -46,6 +57,7 @@ export class SportsSourceRequestError extends Error {
 interface SportsSourceServiceDependencies {
   readonly follows: SportsFollowsReader;
   readonly sources: SportsSourcesRepository;
+  readonly espnCoverage?: SportsEspnCoverageRepository;
   readonly previews: SportsPreviewStore;
   readonly discovery: {
     readonly fetch: SportsSafeFetchPort;
@@ -67,14 +79,22 @@ function sameStrings(left: readonly string[], right: readonly string[]): boolean
 }
 
 function targetIdentityMatches(
-  expected: readonly { readonly followId: string; readonly targetUrl: string }[],
-  actual: readonly { readonly followId: string; readonly targetUrl: string }[]
+  expected: readonly {
+    readonly target: SportsSourceAssignmentTarget;
+    readonly targetUrl: string;
+  }[],
+  actual: readonly {
+    readonly target: SportsSourceAssignmentTarget;
+    readonly targetUrl: string;
+  }[]
 ): boolean {
   return (
     expected.length === actual.length &&
     expected.every(
       (target, index) =>
-        target.followId === actual[index]?.followId && target.targetUrl === actual[index]?.targetUrl
+        sportsSourceTargetKey(target.target) ===
+          (actual[index] ? sportsSourceTargetKey(actual[index].target) : undefined) &&
+        target.targetUrl === actual[index]?.targetUrl
     )
   );
 }
@@ -86,6 +106,17 @@ function baselineMatches(left: SportsSourceBaseline, right: SportsSourceBaseline
     left.recipeFingerprint === right.recipeFingerprint &&
     JSON.stringify(left.assignments) === JSON.stringify(right.assignments)
   );
+}
+
+function baselineAssignmentTarget(
+  assignment: SportsSourceBaseline["assignments"][number]
+): SportsSourceAssignmentTarget | null {
+  if (assignment.sportKey !== null) {
+    return isSportsSportKey(assignment.sportKey)
+      ? { kind: "sport", sportKey: assignment.sportKey }
+      : null;
+  }
+  return assignment.followId === null ? null : { kind: "follow", followId: assignment.followId };
 }
 
 function candidateResponse(
@@ -100,11 +131,8 @@ function candidateResponse(
     confirmedFetchHosts: candidate.confirmedFetchHosts,
     sampleHeadlines: candidate.samples.slice(0, 10).map((sample) => sample.headline),
     targets: candidate.targets.map((target) => ({
-      followId: target.followId,
-      competitionKey: target.competitionKey,
-      competitionLabel: target.competitionLabel,
-      teamKey: target.teamKey,
-      teamLabel: target.teamLabel,
+      target: target.target,
+      label: target.label,
       scope: target.scope,
       targetUrl: target.targetUrl,
       sampleHeadlines: target.samples.slice(0, 10).map((sample) => sample.headline)
@@ -121,8 +149,7 @@ export class SportsSourceService {
     input: PreviewSportsSourceRequest
   ): Promise<PreviewSportsSourceResponse> {
     const assignments = input.assignments ?? [];
-    const selectedIds = new Set(assignments.map((assignment) => assignment.followId));
-    if (selectedIds.size !== assignments.length) {
+    if (!hasValidSportsSourceTargets(assignments.map((assignment) => assignment.target))) {
       return { status: "rejected", reason: "invalid_input" };
     }
 
@@ -131,9 +158,11 @@ export class SportsSourceService {
     const targets: SportsDiscoveryTarget[] = [];
     const teamsByCompetition = new Map<string, readonly TeamRef[]>();
     for (const assignment of assignments) {
-      const follow = followById.get(assignment.followId);
-      if (!follow) return { status: "rejected", reason: "invalid_input" };
-      const target = await this.resolveTarget(follow, teamsByCompetition);
+      const target = await this.resolveAssignmentTarget(
+        assignment.target,
+        followById,
+        teamsByCompetition
+      );
       if (!target) return { status: "rejected", reason: "invalid_input" };
       targets.push({
         ...target,
@@ -180,7 +209,7 @@ export class SportsSourceService {
       throw new SportsSourceRequestError(409, "Source preview expired or was not found");
     }
     const expectedTargets = preview.candidate.targets.map((target) => ({
-      followId: target.followId,
+      target: target.target,
       targetUrl: target.targetUrl
     }));
     if (
@@ -198,7 +227,7 @@ export class SportsSourceService {
       throw new SportsSourceRequestError(409, "Source already exists");
     }
     const assignmentCount = await this.dependencies.sources.countAssignments(scopedDb);
-    if (assignmentCount + preview.candidate.targets.length > 20) {
+    if (assignmentCount + preview.candidate.targets.length > SPORTS_SOURCE_ASSIGNMENT_LIMIT) {
       throw new SportsSourceRequestError(400, "A maximum of 20 source assignments is allowed");
     }
     const created = await this.dependencies.sources.create(scopedDb, {
@@ -216,8 +245,7 @@ export class SportsSourceService {
     sourceId: string,
     input: PreviewSportsSourceAssignmentsRequest
   ): Promise<PreviewSportsSourceAssignmentsResponse> {
-    const selectedIds = new Set(input.assignments.map((assignment) => assignment.followId));
-    if (selectedIds.size !== input.assignments.length) {
+    if (!hasValidSportsSourceTargets(input.assignments.map((assignment) => assignment.target))) {
       return { status: "rejected", reason: "invalid_input" };
     }
     const baseline = await this.dependencies.sources.getBaseline(scopedDb, sourceId);
@@ -225,8 +253,11 @@ export class SportsSourceService {
 
     const follows = await this.dependencies.follows.list(scopedDb);
     const followById = new Map(follows.map((follow) => [follow.id, follow]));
-    const currentByFollowId = new Map(
-      baseline.assignments.map((assignment) => [assignment.followId, assignment])
+    const currentByTargetKey = new Map(
+      baseline.assignments.flatMap((assignment) => {
+        const target = baselineAssignmentTarget(assignment);
+        return target ? [[sportsSourceTargetKey(target), assignment] as const] : [];
+      })
     );
     const teamsByCompetition = new Map<string, readonly TeamRef[]>();
     const requestedTargets: SportsDiscoveryTarget[] = [];
@@ -236,11 +267,14 @@ export class SportsSourceService {
     >();
 
     for (const assignment of input.assignments) {
-      const follow = followById.get(assignment.followId);
-      if (!follow) return { status: "rejected", reason: "invalid_input" };
-      const target = await this.resolveTarget(follow, teamsByCompetition);
+      const target = await this.resolveAssignmentTarget(
+        assignment.target,
+        followById,
+        teamsByCompetition
+      );
       if (!target) return { status: "rejected", reason: "invalid_input" };
-      const current = currentByFollowId.get(assignment.followId);
+      const targetKey = sportsSourceTargetKey(assignment.target);
+      const current = currentByTargetKey.get(targetKey);
       let exactTargetUrl: string | undefined;
       if (assignment.exactTargetUrl) {
         try {
@@ -254,7 +288,7 @@ export class SportsSourceService {
         current.targetUrl &&
         (!exactTargetUrl || exactTargetUrl === current.targetUrl)
       ) {
-        reused.set(assignment.followId, {
+        reused.set(targetKey, {
           id: current.id,
           targetUrl: current.targetUrl,
           parameters: current.parameters
@@ -288,23 +322,26 @@ export class SportsSourceService {
       discovered = result.candidate;
     }
 
-    const discoveredByFollowId = new Map(
-      (discovered?.targets ?? []).map((target) => [target.followId, target])
+    const discoveredByTargetKey = new Map(
+      (discovered?.targets ?? []).map((target) => [sportsSourceTargetKey(target.target), target])
     );
     const targets: VerifiedSportsSourceTarget[] = [];
     for (const assignment of input.assignments) {
-      const discoveredTarget = discoveredByFollowId.get(assignment.followId);
+      const targetKey = sportsSourceTargetKey(assignment.target);
+      const discoveredTarget = discoveredByTargetKey.get(targetKey);
       if (discoveredTarget) {
         targets.push(discoveredTarget);
         continue;
       }
-      const reusedTarget = reused.get(assignment.followId);
-      const follow = followById.get(assignment.followId)!;
-      const target = await this.resolveTarget(follow, teamsByCompetition);
+      const reusedTarget = reused.get(targetKey);
+      const target = await this.resolveAssignmentTarget(
+        assignment.target,
+        followById,
+        teamsByCompetition
+      );
       if (!reusedTarget || !target) return { status: "rejected", reason: "invalid_input" };
       targets.push({
         ...target,
-        scope: target.teamKey === null ? "competition" : "team",
         targetUrl: reusedTarget.targetUrl,
         parameters: Object.fromEntries(
           Object.entries(reusedTarget.parameters).filter(
@@ -326,11 +363,8 @@ export class SportsSourceService {
       confirmedFetchHosts: baseline.confirmedFetchHosts,
       sampleHeadlines: samples.slice(0, 10).map((sample) => sample.headline),
       targets: targets.map((target) => ({
-        followId: target.followId,
-        competitionKey: target.competitionKey,
-        competitionLabel: target.competitionLabel,
-        teamKey: target.teamKey,
-        teamLabel: target.teamLabel,
+        target: target.target,
+        label: target.label,
         scope: target.scope,
         targetUrl: target.targetUrl,
         sampleHeadlines: target.samples.slice(0, 10).map((sample) => sample.headline)
@@ -366,7 +400,7 @@ export class SportsSourceService {
       throw new SportsSourceRequestError(409, "Assignment preview expired or was not found");
     }
     const expectedTargets = preview.candidate.targets.map((target) => ({
-      followId: target.followId,
+      target: target.target,
       targetUrl: target.targetUrl
     }));
     if (
@@ -384,10 +418,13 @@ export class SportsSourceService {
       throw new SportsSourceRequestError(409, "Source changed after assignment preview");
     }
     const assignmentCount = await this.dependencies.sources.countAssignments(scopedDb);
-    if (assignmentCount - current.assignments.length + expectedTargets.length > 20) {
+    if (
+      assignmentCount - current.assignments.length + expectedTargets.length >
+      SPORTS_SOURCE_ASSIGNMENT_LIMIT
+    ) {
       throw new SportsSourceRequestError(400, "A maximum of 20 source assignments is allowed");
     }
-    const source = await this.dependencies.sources.replaceAssignments(
+    const source = await this.dependencies.sources.replaceScopeAssignments(
       scopedDb,
       sourceId,
       preview.reusedAssignmentIds,
@@ -410,9 +447,13 @@ export class SportsSourceService {
     const teamsByCompetition = new Map<string, readonly TeamRef[]>();
     const targets: SportsDiscoveryTarget[] = [];
     for (const assignment of baseline.assignments) {
-      const follow = followById.get(assignment.followId);
-      if (!follow) return { status: "rejected", reason: "stale_source" };
-      const target = await this.resolveTarget(follow, teamsByCompetition);
+      const assignmentTarget = baselineAssignmentTarget(assignment);
+      if (!assignmentTarget) return { status: "rejected", reason: "stale_source" };
+      const target = await this.resolveAssignmentTarget(
+        assignmentTarget,
+        followById,
+        teamsByCompetition
+      );
       if (!target) return { status: "rejected", reason: "stale_source" };
       targets.push(target);
     }
@@ -454,7 +495,7 @@ export class SportsSourceService {
       throw new SportsSourceRequestError(409, "Recipe preview expired or was not found");
     }
     const expectedTargets = preview.candidate.targets.map((target) => ({
-      followId: target.followId,
+      target: target.target,
       targetUrl: target.targetUrl
     }));
     if (
@@ -494,8 +535,40 @@ export class SportsSourceService {
     return baseline.source;
   }
 
-  listSources(scopedDb: DataContextDb): Promise<readonly SportsCustomSourceDto[]> {
-    return this.dependencies.sources.list(scopedDb);
+  async listSources(scopedDb: DataContextDb): Promise<readonly SportsNewsSourceDto[]> {
+    if (!this.dependencies.espnCoverage) {
+      throw new Error("ESPN sports source coverage is not configured");
+    }
+    const [coverage, customSources] = await Promise.all([
+      this.dependencies.espnCoverage.get(scopedDb),
+      this.dependencies.sources.list(scopedDb)
+    ]);
+    return [
+      { kind: "builtin", id: "espn", label: "ESPN", ...coverage },
+      ...customSources.map((source) => ({ kind: "custom" as const, ...source }))
+    ];
+  }
+
+  async replaceEspnCoverage(
+    scopedDb: DataContextDb,
+    targets: readonly SportsSourceAssignmentTarget[]
+  ): Promise<SportsBuiltinSourceDto> {
+    if (!this.dependencies.espnCoverage) {
+      throw new Error("ESPN sports source coverage is not configured");
+    }
+    if (!hasValidSportsSourceTargets(targets)) {
+      throw new SportsSourceRequestError(400, "Invalid ESPN sports coverage targets");
+    }
+    const visibleFollowIds = new Set(
+      (await this.dependencies.follows.list(scopedDb)).map((follow) => follow.id)
+    );
+    if (
+      targets.some((target) => target.kind === "follow" && !visibleFollowIds.has(target.followId))
+    ) {
+      throw new SportsSourceRequestError(400, "ESPN coverage contains an unavailable follow");
+    }
+    const coverage = await this.dependencies.espnCoverage.replace(scopedDb, targets);
+    return { kind: "builtin", id: "espn", label: "ESPN", ...coverage };
   }
 
   removeSource(scopedDb: DataContextDb, sourceId: string): Promise<boolean> {
@@ -510,11 +583,9 @@ export class SportsSourceService {
     if (!competition) return null;
     if (follow.teamKey === null) {
       return {
-        followId: follow.id,
-        competitionKey: follow.competitionKey,
-        competitionLabel: competition.label,
-        teamKey: null,
-        teamLabel: null
+        target: { kind: "follow", followId: follow.id },
+        label: competition.label,
+        scope: "competition"
       };
     }
     let teams = teamsByCompetition.get(follow.competitionKey);
@@ -525,11 +596,25 @@ export class SportsSourceService {
     const team = teams.find((candidate) => candidate.teamKey === follow.teamKey);
     if (!team) return null;
     return {
-      followId: follow.id,
-      competitionKey: follow.competitionKey,
-      competitionLabel: competition.label,
-      teamKey: follow.teamKey,
-      teamLabel: team.name
+      target: { kind: "follow", followId: follow.id },
+      label: team.name,
+      scope: "team"
     };
+  }
+
+  private resolveAssignmentTarget(
+    target: SportsSourceAssignmentTarget,
+    followById: ReadonlyMap<string, SportsFollowDto>,
+    teamsByCompetition: Map<string, readonly TeamRef[]>
+  ): Promise<SportsDiscoveryTarget | null> {
+    if (target.kind === "sport") {
+      return Promise.resolve({
+        target,
+        label: SPORTS_SPORT_LABELS[target.sportKey],
+        scope: "sport"
+      });
+    }
+    const follow = followById.get(target.followId);
+    return follow ? this.resolveTarget(follow, teamsByCompetition) : Promise.resolve(null);
   }
 }

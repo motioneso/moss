@@ -62,11 +62,8 @@ async function createFeedSource(
       checkedAt: FIXTURE_DATE,
       samples: [],
       targets: input.followIds.map((followId) => ({
-        followId,
-        competitionKey: "eng.1",
-        competitionLabel: "Premier League",
-        teamKey: null,
-        teamLabel: null,
+        target: { kind: "follow" as const, followId },
+        label: "Premier League",
         scope: "competition" as const,
         targetUrl: input.feedUrl,
         parameters: {},
@@ -171,11 +168,8 @@ export async function seedSportsPublicSourceFixtures(
         samples: [],
         targets: [
           {
-            followId: team.id,
-            competitionKey: "eng.1",
-            competitionLabel: "Premier League",
-            teamKey: ARSENAL_TEAM_KEY,
-            teamLabel: "Arsenal",
+            target: { kind: "follow", followId: team.id },
+            label: "Arsenal",
             scope: "team",
             targetUrl: "https://www.fotmob.com/",
             parameters: {},
@@ -240,11 +234,8 @@ export async function seedSportsPublicSourceFixtures(
         samples: [],
         targets: [
           {
-            followId: league.id,
-            competitionKey: "eng.1",
-            competitionLabel: "Premier League",
-            teamKey: null,
-            teamLabel: null,
+            target: { kind: "follow", followId: league.id },
+            label: "Premier League",
             scope: "competition",
             targetUrl: DRIFT_FEED_URL,
             parameters: {},

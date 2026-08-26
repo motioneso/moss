@@ -23,4 +23,5 @@ export { SPORTS_BROWSER_SOCKETS } from "./source/browser-protocol.js";
 export { SportsPublicSourceReader } from "./source/public-source-reader.js";
 export { createSportsPreviewStore } from "./source/preview-store.js";
 export { SportsSourcesRepository } from "./source/repository.js";
+export { SportsEspnCoverageRepository } from "./source/espn-coverage-repository.js";
 export { SportsSourceService } from "./source/service.js";
