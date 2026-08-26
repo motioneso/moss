@@ -31,7 +31,7 @@ x-workspace-volumes: &workspace-volumes
 services:
   postgres:
     image: pgvector/pgvector:pg17
-    container_name: jarv1s-postgres
+    container_name: ${JARVIS_PG_CONTAINER_NAME:-jarv1s-postgres}
     environment:
       POSTGRES_DB: jarv1s
       POSTGRES_USER: postgres
@@ -50,7 +50,7 @@ services:
 
   greenmail:
     image: greenmail/standalone:2.1.0
-    container_name: jarv1s-greenmail
+    container_name: ${JARVIS_GREENMAIL_CONTAINER_NAME:-jarv1s-greenmail}
     environment:
       GREENMAIL_OPTS: "-Dgreenmail.setup.test.imap -Dgreenmail.setup.test.smtp -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.users.login=email -Dgreenmail.users=probe:probe-pw@greenmail.test"
     ports:
