@@ -121,6 +121,15 @@ export function resolveExternalWorkerConfig(env: NodeJS.ProcessEnv = process.env
   return { modulesDir: resolveModulesDir(env) };
 }
 
+export function resolveModuleBuildCliHome(
+  env: NodeJS.ProcessEnv = process.env,
+  osHome: string = homedir()
+): string {
+  return (
+    resolveMossEnv(env, "JARVIS_CLI_HOME_BASE") ?? resolveMossEnv(env, "JARVIS_CLI_HOME") ?? osHome
+  );
+}
+
 /**
  * The notification posted when a module build reaches an end state (#1949 Task 1.4).
  * `eventKey` is per build+outcome so a pg-boss retry that fails again updates the
@@ -209,8 +218,9 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
 
   const moduleBuildsDir = resolveModuleBuildsDir(process.env);
   const modulesDir = resolveModulesDir(process.env);
-  const moduleBuildIo = createRealTmuxIo();
-  const moduleBuildMux = new TmuxMultiplexer(moduleBuildIo);
+  const moduleBuildCliHome = resolveModuleBuildCliHome(process.env);
+  const moduleBuildIo = createRealTmuxIo({ ...process.env, HOME: moduleBuildCliHome });
+  const moduleBuildMux = new TmuxMultiplexer(moduleBuildIo, { homeBase: moduleBuildCliHome });
   const aiRepository = new AiRepository();
   const moduleBuildNotifications = new NotificationsRepository(
     undefined,
@@ -230,7 +240,7 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
         mux: moduleBuildMux,
         provider: model.provider_kind as ProviderKind,
         ensureProviderLaunchReady: (provider, workingDir) =>
-          ensureProviderLaunchReady(homedir(), provider, workingDir)
+          ensureProviderLaunchReady(moduleBuildCliHome, provider, workingDir)
       });
       return {
         launchLiveAgent: moduleBuildLiveAgent,

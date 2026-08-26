@@ -37,7 +37,7 @@ const execFileAsync = promisify(execFile);
  * single shared production implementation used by both TmuxBridgeAdapter (one-shot
  * turns) and the live persistent-session engine; tests inject a fake instead.
  */
-export function createRealTmuxIo(): TmuxIo {
+export function createRealTmuxIo(baseEnv: NodeJS.ProcessEnv = process.env): TmuxIo {
   return {
     run: async (cmd, args, opts) => {
       // Use execFile (not exec) so arguments are passed directly to the process
@@ -45,7 +45,7 @@ export function createRealTmuxIo(): TmuxIo {
       // spaces, quotes, pipes, or redirects (e.g. the `bash -c "<pipeline>"` calls).
       try {
         const { stdout, stderr } = await execFileAsync(cmd, [...args], {
-          env: opts?.env ? { ...process.env, ...opts.env } : process.env,
+          env: opts?.env ? { ...baseEnv, ...opts.env } : baseEnv,
           cwd: opts?.cwd
         });
         return { code: 0, stdout, stderr };

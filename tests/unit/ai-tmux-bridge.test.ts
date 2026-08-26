@@ -452,6 +452,16 @@ describe("createRealTmuxIo — env/cwd passthrough", () => {
     const res = await io.run("true", [], { env: { JARVIS_TEST: "1" }, cwd: "/tmp" });
     expect(res.code).toBe(0);
   });
+
+  it("uses the supplied base environment for launched processes", async () => {
+    const io = createRealTmuxIo({ ...process.env, HOME: "/data/cli-auth" });
+    const res = await io.run(process.execPath, [
+      "-e",
+      "process.stdout.write(process.env.HOME ?? '')"
+    ]);
+
+    expect(res).toMatchObject({ code: 0, stdout: "/data/cli-auth" });
+  });
 });
 
 describe("transcriptGlobDir — homeBase override", () => {
