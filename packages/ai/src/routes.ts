@@ -143,6 +143,11 @@ export interface AiRoutesDependencies {
     buildId: string,
     actorUserId: string
   ) => Promise<void>;
+  readonly cancelModuleBuild?: (
+    scopedDb: DataContextDb,
+    buildId: string,
+    actorUserId: string
+  ) => Promise<boolean>;
 }
 
 type IdParams = { readonly id: string };

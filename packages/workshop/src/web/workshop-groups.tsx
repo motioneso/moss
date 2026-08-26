@@ -6,6 +6,16 @@ import type { ModuleBuildSummary, WorkshopLiveModuleSummary } from "@moss/shared
 export interface WorkshopGroupsProps {
   readonly builds: readonly ModuleBuildSummary[];
   readonly modules: readonly WorkshopLiveModuleSummary[];
+  readonly actions: WorkshopActions;
+}
+
+export interface WorkshopActions {
+  readonly onApprove: (buildId: string) => void;
+  readonly onCancel: (buildId: string) => void;
+  readonly onOpenDraft: (moduleId: string) => void;
+  readonly onDiscardDraft: (moduleId: string) => void;
+  readonly onAskForChange: (moduleId: string) => void;
+  readonly onShip: (moduleId: string) => void;
 }
 
 const NEEDS_YOU_STATUSES = new Set<ModuleBuildSummary["status"]>([
@@ -19,7 +29,14 @@ function formatCents(cents: number): string {
   return (cents / 100).toFixed(2);
 }
 
-function NeedsYouCard({ build }: { readonly build: ModuleBuildSummary }) {
+function NeedsYouCard({
+  build,
+  actions
+}: {
+  readonly build: ModuleBuildSummary;
+  readonly actions: WorkshopActions;
+}) {
+  const awaitingPlan = build.status === "awaiting_plan_approval";
   return (
     <div className="jds-rail-row workshop-row">
       <span className="jds-rail jds-rail--gold" />
@@ -28,16 +45,31 @@ function NeedsYouCard({ build }: { readonly build: ModuleBuildSummary }) {
           {build.plan?.whatItDoes ?? "New module"}
         </h3>
         <span className="jds-badge jds-badge--amber jds-badge--pill">
-          {build.status === "awaiting_plan_approval"
-            ? "Plan ready · needs a look"
-            : "Waiting on you"}
+          {awaitingPlan ? "Plan ready · needs a look" : "Waiting on you"}
         </span>
         {build.plan?.whenItRuns ? <p className="jds-card__meta">{build.plan.whenItRuns}</p> : null}
         <div className="workshop-actions">
-          <button type="button" className="jds-btn jds-btn--primary jds-btn--sm">
-            Look at the draft
+          <button
+            type="button"
+            className="jds-btn jds-btn--primary jds-btn--sm"
+            disabled={!awaitingPlan && !build.moduleId}
+            onClick={() =>
+              awaitingPlan
+                ? actions.onApprove(build.id)
+                : build.moduleId
+                  ? actions.onOpenDraft(build.moduleId)
+                  : undefined
+            }
+          >
+            {awaitingPlan ? "Build it" : build.moduleId ? "Look at the draft" : "Draft unavailable"}
           </button>
-          <button type="button" className="jds-btn jds-btn--quiet jds-btn--sm">
+          <button
+            type="button"
+            className="jds-btn jds-btn--quiet jds-btn--sm"
+            onClick={() =>
+              build.moduleId ? actions.onDiscardDraft(build.moduleId) : actions.onCancel(build.id)
+            }
+          >
             Discard
           </button>
         </div>
@@ -66,7 +98,13 @@ function BuildLogList({
   );
 }
 
-function BuildingNowCard({ build }: { readonly build: ModuleBuildSummary }) {
+function BuildingNowCard({
+  build,
+  actions
+}: {
+  readonly build: ModuleBuildSummary;
+  readonly actions: WorkshopActions;
+}) {
   return (
     <div className="jds-rail-row workshop-row">
       <span className="jds-rail jds-rail--accent" />
@@ -81,9 +119,6 @@ function BuildingNowCard({ build }: { readonly build: ModuleBuildSummary }) {
         <BuildLogList label="What it has written" items={build.writtenFiles} />
         <BuildLogList label="What it has read" items={build.fetchedUrls} />
         <div className="workshop-actions">
-          <button type="button" className="jds-btn jds-btn--secondary jds-btn--sm">
-            See everything it wrote
-          </button>
           <span className="workshop-spacer" />
           {build.plan ? (
             <span className="jds-card__meta">
@@ -91,7 +126,11 @@ function BuildingNowCard({ build }: { readonly build: ModuleBuildSummary }) {
               {formatCents(build.plan.roughCost.budgetCents)} budget
             </span>
           ) : null}
-          <button type="button" className="jds-btn jds-btn--quiet jds-btn--sm">
+          <button
+            type="button"
+            className="jds-btn jds-btn--quiet jds-btn--sm"
+            onClick={() => actions.onCancel(build.id)}
+          >
             Stop
           </button>
         </div>
@@ -100,7 +139,13 @@ function BuildingNowCard({ build }: { readonly build: ModuleBuildSummary }) {
   );
 }
 
-function LiveModuleRow({ module: mod }: { readonly module: WorkshopLiveModuleSummary }) {
+function LiveModuleRow({
+  module: mod,
+  actions
+}: {
+  readonly module: WorkshopLiveModuleSummary;
+  readonly actions: WorkshopActions;
+}) {
   return (
     <div className="jds-rail-row workshop-row">
       <span className="jds-rail jds-rail--line-strong" />
@@ -110,11 +155,19 @@ function LiveModuleRow({ module: mod }: { readonly module: WorkshopLiveModuleSum
           {mod.scope === "everyone" ? "Live · everyone" : "Live · you only"}
         </span>
         <div className="workshop-actions">
-          <button type="button" className="jds-btn jds-btn--secondary jds-btn--sm">
+          <button
+            type="button"
+            className="jds-btn jds-btn--secondary jds-btn--sm"
+            onClick={() => actions.onAskForChange(mod.id)}
+          >
             Ask for a change
           </button>
           {mod.scope === "you" ? (
-            <button type="button" className="jds-btn jds-btn--quiet jds-btn--sm">
+            <button
+              type="button"
+              className="jds-btn jds-btn--quiet jds-btn--sm"
+              onClick={() => actions.onShip(mod.id)}
+            >
               Turn on for everyone
             </button>
           ) : null}
@@ -142,7 +195,7 @@ function GroupSection({
   );
 }
 
-export function WorkshopGroups({ builds, modules }: WorkshopGroupsProps) {
+export function WorkshopGroups({ builds, modules, actions }: WorkshopGroupsProps) {
   const needsYou = builds.filter((build) => NEEDS_YOU_STATUSES.has(build.status));
   const buildingNow = builds.filter((build) => BUILDING_STATUSES.has(build.status));
 
@@ -160,21 +213,21 @@ export function WorkshopGroups({ builds, modules }: WorkshopGroupsProps) {
       {needsYou.length > 0 ? (
         <GroupSection label="Needs you">
           {needsYou.map((build) => (
-            <NeedsYouCard key={build.id} build={build} />
+            <NeedsYouCard key={build.id} build={build} actions={actions} />
           ))}
         </GroupSection>
       ) : null}
       {buildingNow.length > 0 ? (
         <GroupSection label="Building now">
           {buildingNow.map((build) => (
-            <BuildingNowCard key={build.id} build={build} />
+            <BuildingNowCard key={build.id} build={build} actions={actions} />
           ))}
         </GroupSection>
       ) : null}
       {modules.length > 0 ? (
         <GroupSection label="Live">
           {modules.map((mod) => (
-            <LiveModuleRow key={mod.id} module={mod} />
+            <LiveModuleRow key={mod.id} module={mod} actions={actions} />
           ))}
         </GroupSection>
       ) : null}

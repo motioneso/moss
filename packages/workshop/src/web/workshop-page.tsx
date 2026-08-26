@@ -1,6 +1,6 @@
 import "./workshop.css";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { EmptyState } from "@moss/ui";
 import { requestJson } from "@moss/module-web-sdk";
 import type {
@@ -48,9 +48,47 @@ function useLiveModules(): readonly WorkshopLiveModuleSummary[] {
 }
 
 export function WorkshopPage() {
+  const queryClient = useQueryClient();
   const isInstanceAdmin = useIsInstanceAdmin();
   const builds = useMyModuleBuilds();
   const modules = useLiveModules();
+  const refreshWorkshop = () => queryClient.invalidateQueries({ queryKey: ["workshop"] });
+  const approve = useMutation({
+    mutationFn: (buildId: string) =>
+      requestJson(`/api/ai/module-builds/${encodeURIComponent(buildId)}/approve`, {
+        method: "POST"
+      }),
+    onSuccess: refreshWorkshop
+  });
+  const cancel = useMutation({
+    mutationFn: (buildId: string) =>
+      requestJson(`/api/ai/module-builds/${encodeURIComponent(buildId)}/cancel`, {
+        method: "POST"
+      }),
+    onSuccess: refreshWorkshop
+  });
+  const openDraft = useMutation({
+    mutationFn: async (moduleId: string) => {
+      await requestJson("/api/admin/modules/rescan", { method: "POST" });
+      return moduleId;
+    },
+    onSuccess: (moduleId) => {
+      void refreshWorkshop();
+      window.location.assign(`/m/${encodeURIComponent(moduleId)}`);
+    }
+  });
+  const discardDraft = useMutation({
+    mutationFn: (moduleId: string) =>
+      requestJson(`/api/admin/modules/${encodeURIComponent(moduleId)}/draft`, {
+        method: "DELETE"
+      }),
+    onSuccess: refreshWorkshop
+  });
+  const ship = useMutation({
+    mutationFn: (moduleId: string) =>
+      requestJson(`/api/admin/modules/${encodeURIComponent(moduleId)}/ship`, { method: "POST" }),
+    onSuccess: refreshWorkshop
+  });
 
   if (isInstanceAdmin === false) {
     return (
@@ -70,7 +108,23 @@ export function WorkshopPage() {
           See what Moss is building for you, and what's already running.
         </p>
       </header>
-      <WorkshopGroups builds={builds} modules={modules} />
+      <WorkshopGroups
+        builds={builds}
+        modules={modules}
+        actions={{
+          onApprove: (buildId) => approve.mutate(buildId),
+          onCancel: (buildId) => cancel.mutate(buildId),
+          onOpenDraft: (moduleId) => openDraft.mutate(moduleId),
+          onDiscardDraft: (moduleId) => {
+            if (window.confirm("Discard this draft? This cannot be undone.")) {
+              discardDraft.mutate(moduleId);
+            }
+          },
+          onAskForChange: (moduleId) =>
+            window.location.assign(`/m/${encodeURIComponent(moduleId)}`),
+          onShip: (moduleId) => ship.mutate(moduleId)
+        }}
+      />
     </div>
   );
 }

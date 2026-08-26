@@ -55,6 +55,7 @@ function makeDeps(modulesDir: string): {
     deps: {
       modulesDir,
       validateExternalModuleManifest,
+      isModuleIdAvailable: async () => true,
       writeDraftRow: async (input) => {
         rows.push(input);
       }
@@ -66,13 +67,13 @@ function makeDeps(modulesDir: string): {
 describe("installModuleDraft (#1754)", () => {
   it("installs a valid generated module as a draft owned by its builder", async () => {
     const buildsRoot = tmp("install-draft-src-");
-    const modulesDir = tmp("install-draft-modules-");
+    const modulesDir = join(tmp("install-draft-modules-"), "modules");
     const buildDir = writeFakeGeneratedModule(buildsRoot, { id: "videos", valid: true });
     const { deps, rows } = makeDeps(modulesDir);
 
-    const result = await installModuleDraft(deps, buildDir, "videos", "user-a");
+    const result = await installModuleDraft(deps, buildDir, "user-a");
 
-    expect(result.ok).toBe(true);
+    expect(result).toEqual({ ok: true, moduleId: "videos" });
     expect(rows).toEqual([
       {
         id: "videos",
@@ -92,12 +93,26 @@ describe("installModuleDraft (#1754)", () => {
     const buildDir = writeFakeGeneratedModule(buildsRoot, { id: "videos", valid: false });
     const { deps, rows } = makeDeps(modulesDir);
 
-    const result = await installModuleDraft(deps, buildDir, "videos", "user-a");
+    const result = await installModuleDraft(deps, buildDir, "user-a");
 
     expect(result.ok).toBe(false);
     expect(rows).toEqual([]);
     // left untouched — no row write, no move
     expect(existsSync(buildDir)).toBe(true);
     expect(existsSync(join(modulesDir, "videos"))).toBe(false);
+  });
+
+  it("does not replace an existing module that chose the same id", async () => {
+    const buildsRoot = tmp("install-draft-src-");
+    const modulesDir = tmp("install-draft-modules-");
+    const buildDir = writeFakeGeneratedModule(buildsRoot, { id: "videos", valid: true });
+    mkdirSync(join(modulesDir, "videos"));
+    const { deps, rows } = makeDeps(modulesDir);
+
+    const result = await installModuleDraft(deps, buildDir, "user-a");
+
+    expect(result).toEqual({ ok: false, errors: ['module id "videos" is already in use'] });
+    expect(rows).toEqual([]);
+    expect(existsSync(buildDir)).toBe(true);
   });
 });

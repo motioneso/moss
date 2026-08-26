@@ -1,10 +1,20 @@
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
+import { act, create } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ModuleBuildSummary, WorkshopLiveModuleSummary } from "@moss/shared";
 
 import { WorkshopGroups } from "../../packages/workshop/src/web/workshop-groups.js";
+
+const actions = {
+  onApprove: vi.fn(),
+  onCancel: vi.fn(),
+  onOpenDraft: vi.fn(),
+  onDiscardDraft: vi.fn(),
+  onAskForChange: vi.fn(),
+  onShip: vi.fn()
+};
 
 function render(
   builds: readonly ModuleBuildSummary[],
@@ -15,7 +25,7 @@ function render(
     createElement(
       QueryClientProvider,
       { client },
-      createElement(WorkshopGroups, { builds, modules })
+      createElement(WorkshopGroups, { builds, modules, actions })
     )
   );
 }
@@ -25,6 +35,7 @@ function building(overrides: Partial<ModuleBuildSummary> = {}): ModuleBuildSumma
     id: "b-1",
     status: "building",
     step: "Writing the page",
+    moduleId: null,
     plan: {
       whatItDoes: "Allotment watering log",
       whatItReaches: ["the weather service"],
@@ -92,6 +103,58 @@ describe("WorkshopGroups", () => {
   it("renders the empty state when there is nothing to show", () => {
     const html = render([], []);
     expect(html).toContain("Nothing in the workshop yet");
+  });
+
+  it("wires every visible Workshop control to a real action", async () => {
+    const handlers = {
+      onApprove: vi.fn(),
+      onCancel: vi.fn(),
+      onOpenDraft: vi.fn(),
+      onDiscardDraft: vi.fn(),
+      onAskForChange: vi.fn(),
+      onShip: vi.fn()
+    };
+    let tree: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(
+        createElement(WorkshopGroups, {
+          builds: [
+            building({ id: "approve", status: "awaiting_plan_approval" }),
+            building({
+              id: "draft",
+              status: "awaiting_change",
+              moduleId: "videos"
+            }),
+            building({ id: "active" })
+          ],
+          modules: [liveModule({ id: "videos" })],
+          actions: handlers
+        })
+      );
+    });
+    const button = (label: string) =>
+      tree.root.findAllByType("button").find((node) => node.children.join("") === label)!;
+
+    await act(async () => {
+      button("Build it").props.onClick();
+      button("Look at the draft").props.onClick();
+      const discards = tree.root
+        .findAllByType("button")
+        .filter((node) => node.children.join("") === "Discard");
+      discards[0]?.props.onClick();
+      discards[1]?.props.onClick();
+      button("Stop").props.onClick();
+      button("Ask for a change").props.onClick();
+      button("Turn on for everyone").props.onClick();
+    });
+
+    expect(handlers.onApprove).toHaveBeenCalledWith("approve");
+    expect(handlers.onOpenDraft).toHaveBeenCalledWith("videos");
+    expect(handlers.onCancel).toHaveBeenCalledWith("approve");
+    expect(handlers.onDiscardDraft).toHaveBeenCalledWith("videos");
+    expect(handlers.onCancel).toHaveBeenCalledWith("active");
+    expect(handlers.onAskForChange).toHaveBeenCalledWith("videos");
+    expect(handlers.onShip).toHaveBeenCalledWith("videos");
   });
 
   it("only renders jds-* design system classes, no invented ones", () => {

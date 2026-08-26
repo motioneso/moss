@@ -43,9 +43,11 @@ import {
   ExternalModuleJobReconciler,
   ExternalModuleWorkerRuntime,
   createExternalModuleDiscoveryHolder,
+  installModuleDraft,
   resolveBuildSourceDir,
   resolveModuleBuildsDir,
-  resolveModulesDir
+  resolveModulesDir,
+  validateExternalModuleManifest
 } from "@moss/module-registry/node";
 import {
   AiRepository,
@@ -59,6 +61,7 @@ import { NotificationsRepository, type CreateNotificationInput } from "@moss/not
 import {
   createModuleCredentialSecretCipher,
   getModuleBuild,
+  SettingsRepository,
   updateModuleBuildStatus,
   appendModuleBuildFetchedUrl,
   appendModuleBuildWrittenFile
@@ -202,6 +205,7 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   }
 
   const moduleBuildsDir = resolveModuleBuildsDir(process.env);
+  const modulesDir = resolveModulesDir(process.env);
   const moduleBuildIo = createRealTmuxIo();
   const moduleBuildMux = new TmuxMultiplexer(moduleBuildIo);
   const aiRepository = new AiRepository();
@@ -209,6 +213,8 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
     undefined,
     createNotificationPreferencePort()
   );
+  const moduleBuildSettings = new SettingsRepository();
+  const builtInModuleIds = new Set(getBuiltInModuleManifests().map((manifest) => manifest.id));
   const runModuleBuildStepForJob = async (payload: ModuleBuildPayload) => {
     const access: AccessContext = {
       actorUserId: payload.actorUserId,
@@ -217,16 +223,13 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
     return dataContext.withDataContext(access, async (scopedDb) => {
       const build = await getModuleBuild(scopedDb, payload.buildId);
       if (!build) throw new Error("module build was not found");
+      if (build.status !== "building") return { deferred: false };
       const model = await aiRepository.selectChatModelForUser(scopedDb);
       if (!model) throw new Error("no chat model is configured for module build");
       const moduleBuildLiveAgent = createModuleBuildLiveAgent({
         io: moduleBuildIo,
         mux: moduleBuildMux,
-        provider: model.provider_kind as ProviderKind,
-        mcpToken: process.env.JARVIS_MCP_TOKEN,
-        mcpServerUrl:
-          process.env.JARVIS_MCP_SERVER_URL ??
-          `http://127.0.0.1:${process.env.PORT ?? "3000"}/api/mcp`
+        provider: model.provider_kind as ProviderKind
       });
 
       try {
@@ -236,13 +239,49 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
             resolveWorkingDir: (buildId) => resolveBuildSourceDir(moduleBuildsDir, buildId),
             recordFetchedUrl: (buildId, url) => appendModuleBuildFetchedUrl(scopedDb, buildId, url),
             recordWrittenFile: (buildId, path) =>
-              appendModuleBuildWrittenFile(scopedDb, buildId, path)
+              appendModuleBuildWrittenFile(scopedDb, buildId, path),
+            finishBuild: async (_buildId, workingDir) => {
+              const current = await getModuleBuild(scopedDb, build.id);
+              if (current?.status === "cancelled") throw new Error("module build was cancelled");
+              const installed = await installModuleDraft(
+                {
+                  modulesDir,
+                  validateExternalModuleManifest,
+                  isModuleIdAvailable: async (moduleId) =>
+                    !builtInModuleIds.has(moduleId) &&
+                    !(await moduleBuildSettings.listExternalModuleStates(scopedDb)).some(
+                      (module) => module.id === moduleId
+                    ),
+                  writeDraftRow: ({ id, manifestHash, packageHash, ownerUserId }) =>
+                    moduleBuildSettings.setExternalModuleDraft(scopedDb, {
+                      id,
+                      manifestHash,
+                      packageHash,
+                      ownerUserId,
+                      actorUserId: build.ownerUserId,
+                      requestId: access.requestId ?? `module-build:${build.id}:install`
+                    })
+                },
+                workingDir,
+                build.ownerUserId
+              );
+              if (!installed.ok) {
+                throw new Error(
+                  `generated module failed validation: ${installed.errors.join("; ")}`
+                );
+              }
+              return { moduleId: installed.moduleId };
+            }
           },
           build
         );
+        const current = await getModuleBuild(scopedDb, build.id);
+        if (current?.status === "cancelled") return { deferred: false };
         await updateModuleBuildStatus(scopedDb, build.id, {
           status: result.continuation ? "building" : "awaiting_change",
-          ...(result.continuation ? { step: result.continuation.step } : {})
+          ...(result.continuation
+            ? { step: result.continuation.step }
+            : { step: null, moduleId: result.moduleId })
         });
         if (!result.continuation) {
           await moduleBuildNotifications.create(
@@ -252,6 +291,8 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
         }
         return result;
       } catch (error) {
+        const current = await getModuleBuild(scopedDb, build.id);
+        if (current?.status === "cancelled") return { deferred: false };
         await updateModuleBuildStatus(scopedDb, build.id, {
           status: "failed",
           error: error instanceof Error ? error.name : "unknown error"

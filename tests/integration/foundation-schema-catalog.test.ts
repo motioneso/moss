@@ -350,7 +350,9 @@ describe("MVP foundation schema catalog", () => {
         // #1961 — assign ESPN and custom sports news sources by sport, league, or team.
         { version: "0196", name: "0196_sports_news_source_scopes.sql" },
         // #1949 — track the files a module build has written, for the Workshop build-progress view.
-        { version: "0198", name: "0198_module_builds_written_files.sql" }
+        { version: "0198", name: "0198_module_builds_written_files.sql" },
+        // #1949 — let the owner-scoped worker persist an admin-owned generated-module draft.
+        { version: "0199", name: "0199_external_modules_worker_draft_write.sql" }
       ]);
     } finally {
       await client.end();

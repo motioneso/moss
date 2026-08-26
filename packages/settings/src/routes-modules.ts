@@ -32,7 +32,7 @@ import { sendModuleControl } from "@moss/jobs";
 import type { SettingsRepository } from "./repository.js";
 import type { InstalledExternalModuleSummary, SettingsRoutesDependencies } from "./routes.js";
 import { deleteExternalModuleDraft, shipExternalModule } from "./repository-external-modules.js";
-import { listModuleBuildsForUser } from "./module-builds-repository.js";
+import { listModuleBuildsForUser, updateModuleBuildStatus } from "./module-builds-repository.js";
 import {
   computeMyModuleDto,
   handleRouteError,
@@ -326,6 +326,12 @@ export function registerModuleRoutes(server: FastifyInstance, ctx: ModuleRoutesC
             repository.externalModuleAuditWriter(scopedDb)
           );
           if (!shipped) throw new HttpError(404, "External module not found");
+          const builds = await listModuleBuildsForUser(scopedDb, accessContext.actorUserId);
+          for (const build of builds) {
+            if (build.moduleId === discovery.id && build.status === "awaiting_change") {
+              await updateModuleBuildStatus(scopedDb, build.id, { status: "ready", step: null });
+            }
+          }
         });
         return { shipped: true, restartRequired: true };
       } catch (error) {
@@ -363,7 +369,7 @@ export function registerModuleRoutes(server: FastifyInstance, ctx: ModuleRoutesC
               throw new HttpError(409, "External modules are not enabled on this instance");
             }
             const builds = await listModuleBuildsForUser(scopedDb, accessContext.actorUserId);
-            const ids = builds.filter((b) => b.moduleId === moduleId).map((b) => b.id);
+            const matchingBuilds = builds.filter((build) => build.moduleId === moduleId);
             const deleted = await deleteExternalModuleDraft(
               scopedDb,
               {
@@ -374,7 +380,13 @@ export function registerModuleRoutes(server: FastifyInstance, ctx: ModuleRoutesC
               repository.externalModuleAuditWriter(scopedDb)
             );
             if (!deleted) throw new HttpError(404, "External module not found");
-            return ids;
+            for (const build of matchingBuilds) {
+              await updateModuleBuildStatus(scopedDb, build.id, {
+                status: "cancelled",
+                step: null
+              });
+            }
+            return matchingBuilds.map((build) => build.id);
           }
         );
 

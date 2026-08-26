@@ -388,6 +388,12 @@ export const aiModuleManifest = {
       permissionId: "ai.assistant-actions"
     },
     {
+      method: "POST",
+      path: "/api/ai/module-builds/:buildId/cancel",
+      responseSchema: approveModuleBuildResponseSchema,
+      permissionId: "ai.assistant-actions"
+    },
+    {
       // #1945 — the Workshop page's own list of the caller's builds. The repository query
       // scopes to owner_user_id, so this is never a cross-user listing.
       method: "GET",

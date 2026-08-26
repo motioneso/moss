@@ -22,7 +22,8 @@ describe("runModuleBuildStep", () => {
       launchLiveAgent: fakeLaunchLiveAgent,
       resolveWorkingDir: (buildId: string) => `/data/module-builds/${buildId}`,
       recordFetchedUrl: vi.fn(async () => {}),
-      recordWrittenFile: vi.fn(async () => {})
+      recordWrittenFile: vi.fn(async () => {}),
+      finishBuild: vi.fn(async () => ({ moduleId: "videos" }))
     };
 
     const build = makeBuildRow();
@@ -34,6 +35,8 @@ describe("runModuleBuildStep", () => {
 
     const step3 = await runModuleBuildStep(deps, { ...build, step: "writing_code" });
     expect(step3.deferred).toBe(false);
+    expect(step3.moduleId).toBe("videos");
+    expect(deps.finishBuild).toHaveBeenCalledWith("b1", "/data/module-builds/b1");
   });
 
   it("skips spec and tests when the plan says to", async () => {
@@ -47,7 +50,8 @@ describe("runModuleBuildStep", () => {
       launchLiveAgent: fakeLaunchLiveAgent,
       resolveWorkingDir: (buildId: string) => `/data/module-builds/${buildId}`,
       recordFetchedUrl: vi.fn(async () => {}),
-      recordWrittenFile: vi.fn(async () => {})
+      recordWrittenFile: vi.fn(async () => {}),
+      finishBuild: vi.fn(async () => ({ moduleId: "videos" }))
     };
 
     const result = await runModuleBuildStep(
@@ -73,7 +77,8 @@ describe("runModuleBuildStep", () => {
       launchLiveAgent: fakeLaunchLiveAgent,
       resolveWorkingDir: (buildId: string) => `/data/module-builds/${buildId}`,
       recordFetchedUrl,
-      recordWrittenFile: vi.fn(async () => {})
+      recordWrittenFile: vi.fn(async () => {}),
+      finishBuild: vi.fn(async () => ({ moduleId: "videos" }))
     };
 
     await runModuleBuildStep(deps, makeBuildRow());
@@ -92,7 +97,8 @@ describe("runModuleBuildStep", () => {
       launchLiveAgent: fakeLaunchLiveAgent,
       resolveWorkingDir: (buildId: string) => `/data/module-builds/${buildId}`,
       recordFetchedUrl: vi.fn(async () => {}),
-      recordWrittenFile
+      recordWrittenFile,
+      finishBuild: vi.fn(async () => ({ moduleId: "videos" }))
     };
 
     await runModuleBuildStep(deps, makeBuildRow());

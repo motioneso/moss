@@ -1,5 +1,5 @@
 import Fastify, { type FastifyInstance } from "fastify";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { dataContextBrand, type DataContextDb } from "@moss/db";
 
@@ -62,7 +62,10 @@ function fakeScopedDb(): DataContextDb {
   return { db, [dataContextBrand]: true } as unknown as DataContextDb;
 }
 
-function buildServer(actorUserId: string): FastifyInstance {
+function buildServer(
+  actorUserId: string,
+  overrides: Partial<AiRoutesDependencies> = {}
+): FastifyInstance {
   const server = Fastify();
   const dependencies = {
     resolveAccessContext: async () => ({ actorUserId, requestId: "req-1" }),
@@ -70,7 +73,8 @@ function buildServer(actorUserId: string): FastifyInstance {
       withDataContext: async (_accessContext: unknown, run: (db: DataContextDb) => unknown) =>
         run(fakeScopedDb())
     },
-    resolveActiveModules: () => []
+    resolveActiveModules: () => [],
+    ...overrides
   } as unknown as AiRoutesDependencies;
   registerModuleBuildRoutes(server, dependencies);
   return server;
@@ -82,9 +86,12 @@ describe("GET /api/ai/module-builds/mine", () => {
     const response = await server.inject({ method: "GET", url: "/api/ai/module-builds/mine" });
 
     expect(response.statusCode).toBe(200);
-    const body = response.json() as { builds: Array<{ id: string; step: string | null }> };
+    const body = response.json() as {
+      builds: Array<{ id: string; step: string | null; moduleId: string | null }>;
+    };
     expect(body.builds.map((build) => build.id)).toEqual(["build-a"]);
     expect(body.builds[0]?.step).toBe("Writing the page");
+    expect(body.builds[0]?.moduleId).toBe(null);
   });
 
   it("returns a different user's own build for that user, proving the filter is real", async () => {
@@ -101,5 +108,30 @@ describe("GET /api/ai/module-builds/mine", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ builds: [] });
+  });
+});
+
+describe("POST /api/ai/module-builds/:buildId/cancel", () => {
+  it("cancels through the owner-scoped dependency", async () => {
+    const cancelModuleBuild = vi.fn(async () => true);
+    const server = buildServer(USER_A, { cancelModuleBuild });
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/ai/module-builds/build-a/cancel"
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ buildId: "build-a", status: "cancelled" });
+    expect(cancelModuleBuild).toHaveBeenCalledWith(expect.anything(), "build-a", USER_A);
+  });
+
+  it("returns the same 404 for a missing or unowned build", async () => {
+    const server = buildServer(USER_A, { cancelModuleBuild: async () => false });
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/ai/module-builds/build-b/cancel"
+    });
+    expect(response.statusCode).toBe(404);
   });
 });
