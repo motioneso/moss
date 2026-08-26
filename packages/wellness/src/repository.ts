@@ -251,7 +251,16 @@ export class WellnessRepository {
     if (input.active !== undefined) updates["active"] = input.active;
     if (input.notes !== undefined) updates["notes"] = input.notes;
     if (input.remindersEnabled !== undefined) updates["reminders_enabled"] = input.remindersEnabled;
-    if (input.schedule) Object.assign(updates, scheduleColumns(input.schedule, timeZone));
+    if (input.schedule) {
+      Object.assign(updates, scheduleColumns(input.schedule, timeZone));
+      // Editing a medication into as-needed also switches its reminder off, the same way the
+      // rewrite clears every schedule column the new type does not use. An as-needed medication
+      // has no scheduled time for a reminder to fire on, so a stored `true` left in place here
+      // would trip the table's CHECK and surface as a 500 (#1968). The route rejects an explicit
+      // remindersEnabled:true alongside an as_needed schedule with a 400, so this can never
+      // silently contradict what the caller asked for.
+      if (input.schedule.frequencyType === "as_needed") updates["reminders_enabled"] = false;
+    }
     const row = await scopedDb.db
       .updateTable("app.medications")
       .set(updates)

@@ -179,6 +179,16 @@ describe("wellness medications: start dates, reminders, and editing a saved sche
       });
       expect(later.statusCode, later.body).toBe(400);
       expect(later.body).toContain("remindersEnabled");
+
+      // And on an edit that switches to as-needed and asks for a reminder in the same breath.
+      const daily = await create(app, { name: "Daily then PRN with reminders", ...schedules["once_daily"] });
+      expect(daily.statusCode, daily.body).toBe(201);
+      const both = await patch(app, daily.json().medication.id as string, {
+        ...schedules["as_needed"],
+        remindersEnabled: true
+      });
+      expect(both.statusCode, both.body).toBe(400);
+      expect(both.body).toContain("remindersEnabled");
     } finally {
       await app.close();
     }
@@ -244,6 +254,42 @@ describe("wellness medications: start dates, reminders, and editing a saved sche
       expect(restored["frequencyType"]).toBe("monthly");
       expect(restored["scheduleTimes"]).toEqual(["08:00:00"]);
       expect(restored["monthDay"]).toBe(15);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("a medication with reminders on can be edited into as-needed, which turns the reminder off", async () => {
+    const app = await buildApp(userId);
+    try {
+      const created = await create(app, {
+        name: "Reminders then PRN",
+        ...schedules["once_daily"],
+        remindersEnabled: true
+      });
+      expect(created.statusCode, created.body).toBe(201);
+      const medId = created.json().medication.id as string;
+      expect(created.json().medication.remindersEnabled).toBe(true);
+
+      // The edit does not mention the reminder at all. Leaving the stored "on" value in place
+      // would break the table's rule that an as-needed medication cannot have one, and come back
+      // as a 500 instead of a saved medication.
+      const toPrn = await patch(app, medId, { ...schedules["as_needed"] });
+      expect(toPrn.statusCode, toPrn.body).toBe(200);
+      expect(toPrn.json().medication.remindersEnabled).toBe(false);
+
+      const asPrn = await reload(app, medId);
+      expect(asPrn["frequencyType"]).toBe("as_needed");
+      expect(asPrn["remindersEnabled"]).toBe(false);
+
+      // Going back to a scheduled type leaves the reminder off until it is asked for again.
+      const back = await patch(app, medId, { ...schedules["once_daily"] });
+      expect(back.statusCode, back.body).toBe(200);
+      expect(back.json().medication.remindersEnabled).toBe(false);
+
+      const turnedOn = await patch(app, medId, { remindersEnabled: true });
+      expect(turnedOn.statusCode, turnedOn.body).toBe(200);
+      expect(turnedOn.json().medication.remindersEnabled).toBe(true);
     } finally {
       await app.close();
     }
