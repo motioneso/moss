@@ -17,7 +17,7 @@ Risk tier: security. Scope: database and server only.
 | A cycle schedule's phase is counted from its anchor, so the anchor must not be repurposed | `packages/wellness/src/occurrence-engine.ts:232-236` (`isEligibleCycle` counts elapsed days from `anchor.startDate`)              |
 | `computeSchedule` is always called for exactly one day                                    | `packages/wellness/src/schedule.ts:38`                                                                                            |
 | Row-level security already scopes updates to the owner                                    | `packages/wellness/sql/0083_wellness_medications.sql:66-72`, and every route runs inside `withDataContext`                        |
-| Next free migration number is 0196                                                        | highest existing is `0195_module_builds_worker_runtime.sql`                                                                       |
+| Next free migration number is 0197                                                        | 0196 was taken by `0196_sports_news_source_scopes.sql` on main while this branch was open                                         |
 
 Open questions: none. No net-new platform capability is assumed; every change is to code that
 already exists.
@@ -50,7 +50,7 @@ Each task commits green.
 
 ### Task 1 — migration and database types
 
-`packages/wellness/sql/0196_wellness_medication_start_date_reminders.sql` (additive, re-runnable):
+`packages/wellness/sql/0197_wellness_medication_start_date_reminders.sql` (additive, re-runnable):
 
 ```sql
 ALTER TABLE app.medications
