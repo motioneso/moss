@@ -73,7 +73,7 @@ Resolved here (was flagged unresolved in the #1368 handoff):
   if it matches, the file is Moss's and gets overwritten. If the primary path exists with a
   different (or missing) first line, it is a real user file — leave it untouched and write to the
   fallback path instead: `<folder>/<YYYY-MM-DD> (moss).md`, itself marker-checked the same way.
-- If the fallback path is *also* occupied by a non-marker file, the job throws (surfaces in
+- If the fallback path is _also_ occupied by a non-marker file, the job throws (surfaces in
   pg-boss's own failure/retry accounting — no unbounded suffix search). This is a real but rare
   edge case (two independent naming collisions same day); acceptable for phase 1, not silently
   swallowed.
@@ -81,6 +81,7 @@ Resolved here (was flagged unresolved in the #1368 handoff):
 ## Tasks
 
 ### 1. `packages/shared/src/chat-archive-api.ts` (new file)
+
 - `export interface ChatArchiveSettingsResponse { readonly enabled: boolean; readonly folder: string }`
 - `export interface PutChatArchiveSettingsRequest { readonly enabled: boolean; readonly folder: string }`
 - `export function validateChatArchiveFolder(input: unknown): string` — pure, no I/O. Rejects:
@@ -99,6 +100,7 @@ Resolved here (was flagged unresolved in the #1368 handoff):
   rejection reason surfaces, not just "throws").
 
 ### 2. `packages/settings/src/chat-archive-routes.ts` (new file)
+
 - `export const CHAT_ARCHIVE_ENABLED_PREF_KEY = "chat-archive.enabled"`
 - `export const CHAT_ARCHIVE_FOLDER_PREF_KEY = "chat-archive.folder"`
 - `export const CHAT_ARCHIVE_DEFAULT_FOLDER = "Moss/Chats"`
@@ -116,6 +118,7 @@ Resolved here (was flagged unresolved in the #1368 handoff):
   reflects them.
 
 ### 3. `packages/notes/src/write-tools.ts` (edit — export three existing private functions)
+
 - Change `function resolveSource` → `export async function resolveSource` (line 68, no behavior
   change).
 - Change `function assertInside` → `export function assertInside` (line 96).
@@ -126,6 +129,7 @@ Resolved here (was flagged unresolved in the #1368 handoff):
   covers the underlying behavior and must stay green.
 
 ### 4. `packages/notes/src/daily-archive-writer.ts` (new file)
+
 - `export interface ChatArchiveSession { readonly threadId: string; readonly messages: readonly ChatArchiveMessage[] }`
 - `export interface ChatArchiveMessage { readonly role: "user" | "assistant"; readonly body: string; readonly createdAt: string }`
 - `export interface WriteDailyChatArchiveResult { readonly written: boolean; readonly path: string | null; readonly reason?: "no-notes-source" | "no-sessions" | "bad-folder" }`
@@ -154,6 +158,7 @@ Resolved here (was flagged unresolved in the #1368 handoff):
   files throws.
 
 ### 5. `packages/chat/src/repository.ts` (edit — add one method)
+
 - `async listStoredMessagesInRange(scopedDb: DataContextDb, actorUserId: string, rangeStartUtcIso: string, rangeEndUtcIso: string): Promise<Array<{ threadId: string; threadFirstMessageAt: string; role: "user" | "assistant"; body: string; createdAt: string }>>`
   — joins `app.chat_threads`/`app.chat_messages`, filters `incognito = false`, `status = 'stored'`,
   `role in ('user','assistant')`, `created_at` within range, ordered by thread's first message
@@ -164,6 +169,7 @@ Resolved here (was flagged unresolved in the #1368 handoff):
   has hit before).
 
 ### 6. `packages/chat/src/jobs.ts` (edit)
+
 - `export const CHAT_ARCHIVE_DAY_QUEUE = "chat.archive-day"`, add to `CHAT_QUEUE_DEFINITIONS`
   with `{ retryLimit: 2, deleteAfterSeconds: 600 }` (same shape as the embed-turn entry).
 - `export interface ArchiveDayJobPayload extends ActorScopedJobPayload { readonly localDate: string }`
@@ -182,11 +188,13 @@ Resolved here (was flagged unresolved in the #1368 handoff):
   means the function no-ops without calling the writer.
 
 ### 7. `packages/jobs/src/pg-boss.ts` (edit)
+
 - Add `"localDate"` to `ALLOWED_PAYLOAD_KEYS` (line ~86-99).
 - No new test — covered by the dispatch test in task 8 (a payload with `localDate` must actually
   send without `assertMetadataOnlyPayload` throwing).
 
 ### 8. `packages/chat/src/live/persistence.ts` (edit)
+
 - Inside the existing `if (this.boss && result && !thread.incognito) { ... }` block
   (lines 293-308): read `chat-archive.enabled` off `this.localePreferences` (same port, new key)
   and, if enabled, read `chat-archive.folder` is **not** needed here (the worker re-reads folder
@@ -204,12 +212,14 @@ Resolved here (was flagged unresolved in the #1368 handoff):
   guard, confirm it still holds for the new job too).
 
 ### 9. Dev/prod config
+
 - No new required env var — this feature uses existing preference-key storage (no new setting
   that fails closed without a value; `enabled` defaults to `false` when absent). Confirm at build
   time that no compose/env file needs a new mandatory key; if one does turn out to be needed
   (unexpected), add it to both dev and prod configs in this same PR per the hard invariant.
 
 ### 10. Release note
+
 - `Category: N/A` (backend-only, nothing user-visible yet — matches #1951's own spec text).
 
 ## Verification
@@ -220,10 +230,12 @@ pnpm --filter @moss/notes typecheck > /tmp/tc-notes.log 2>&1; echo "EXIT=$?"
 pnpm --filter @moss/settings typecheck > /tmp/tc-settings.log 2>&1; echo "EXIT=$?"
 pnpm --filter @moss/chat typecheck > /tmp/tc-chat.log 2>&1; echo "EXIT=$?"
 ```
+
 Each expected `EXIT=0`.
 
 Full scoped test run (via the `verify-gate` skill — never run `pnpm verify:foundation` or any
 DB-touching test command outside it):
+
 - unit: `chat-archive-folder-validation`, `settings-chat-archive-routes`, `daily-archive-writer`
 - integration: `chat-archive-day-job`, `chat-archive-dispatch` (or the extended `chat-live` test),
   plus the existing `notes-write-tools` suite (must stay green — task 3 touches shared code)

@@ -4,7 +4,12 @@ import { dirname, join } from "node:path";
 import type { DataContextDb } from "@moss/db";
 import { validateChatArchiveFolder } from "@moss/shared";
 
-import { assertInside, recheckInside, resolveSource, type NotesSyncToolService } from "./write-tools.js";
+import {
+  assertInside,
+  recheckInside,
+  resolveSource,
+  type NotesSyncToolService
+} from "./write-tools.js";
 
 const ARCHIVE_MARKER = "<!-- moss-chat-archive:v1 -->";
 

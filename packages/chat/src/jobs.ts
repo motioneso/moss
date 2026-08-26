@@ -300,7 +300,10 @@ export async function handleExtractFactsJob(
  * timezone (offsets run from UTC-12 to UTC+14). The caller filters the returned
  * rows precisely with `localDay`; this window only bounds the database query.
  */
-function utcRangeForLocalDate(localDate: string): { rangeStartUtcIso: string; rangeEndUtcIso: string } {
+function utcRangeForLocalDate(localDate: string): {
+  rangeStartUtcIso: string;
+  rangeEndUtcIso: string;
+} {
   const localMidnightUtc = new Date(`${localDate}T00:00:00.000Z`).getTime();
   const ONE_HOUR_MS = 60 * 60 * 1000;
   return {

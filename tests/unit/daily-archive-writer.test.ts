@@ -4,11 +4,12 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type * as WriteToolsModule from "../../packages/notes/src/write-tools.js";
+
 const resolveSourceMock = vi.fn<() => Promise<string>>();
 
 vi.mock("../../packages/notes/src/write-tools.js", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("../../packages/notes/src/write-tools.js")>();
+  const actual = await importOriginal<typeof WriteToolsModule>();
   return { ...actual, resolveSource: resolveSourceMock };
 });
 

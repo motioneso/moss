@@ -5,6 +5,7 @@ This is a live scratch note for context checkpointing, not a relay handoff — d
 `relays` in fleetctl for this. Session is continuing in place.
 
 ## Done and committed
+
 - Tasks 1-5: committed earlier (see git log on fleet/lane-1951 before this session).
 - Tasks 6-8: committed this session, commit "Chat archive: archive-day job, payload allowlist,
   and turn-hook dispatch (tasks 6-8 of #1951)".
@@ -28,6 +29,7 @@ This is a live scratch note for context checkpointing, not a relay handoff — d
     verify-gate skill, never directly.
 
 ## Not yet done
+
 1. `tests/integration/chat-archive-day-job.test.ts` (new file) — calls `handleArchiveDayJob`
    directly (real DB, not through pg-boss). Needs a real Notes source set up the same way
    `tests/integration/notes-write-tools.test.ts` does it: `mkdtemp`, set
@@ -64,6 +66,7 @@ This is a live scratch note for context checkpointing, not a relay handoff — d
    `LIVE-PATH PROOF`.
 
 ## Reminders (binding, carried from the brief)
+
 - Never run pnpm verify:foundation or any database-touching test outside the verify-gate
   skill. Never pipe a gate command — always capture exit code.
 - Plain English in every PR description, blocked reason, log message, and any spawn
