@@ -38,7 +38,7 @@ File: `apps/web/src/wellness/medication-schedule-form.ts`.
 Add:
 
 ```ts
-export function medFormFromMedication(medication: MedicationDto): MedFormState
+export function medFormFromMedication(medication: MedicationDto): MedFormState;
 ```
 
 Decisions the implementation must follow (mirrors `withChoice`'s "replace, don't merge" rule so a
@@ -84,17 +84,19 @@ Decisions:
   ```ts
   const updateScheduleMutation = useMutation({
     mutationFn: (id: string) => updateMedication(id, buildCreateRequest(form)),
-    onSuccess: () => { /* same four invalidations as addMutation, :157-160 */ cancelEdit(); }
+    onSuccess: () => {
+      /* same four invalidations as addMutation, :157-160 */ cancelEdit();
+    }
   });
   ```
 - Row loop (`:205-235`): add an Edit button next to the existing remove button
   (`aria-label={\`Edit ${m.name}\`}`), rendered only when `m.frequencyType !== "every_n_hours"`,
-  `onClick={() => startEdit(m)}`.
+`onClick={() => startEdit(m)}`.
 - `deactivateMutation`'s `onSuccess` (`:164-172`) additionally calls `cancelEdit()` when the
   removed id equals `editingId` (needs the mutated id — read it off `onSuccess(_data, id)`, the
   second callback argument tanstack query already provides).
 - Section heading (`:238-240`, "Add a medication") -> `editingId ? "Edit medication" :
-  "Add a medication"`.
+"Add a medication"`.
 - Primary action button (`:529-539`): label `editingId ? "Save changes" : "Add medication"`;
   `onClick` calls `updateScheduleMutation.mutate(editingId)` when editing, else the existing
   `addMutation.mutate()`; `disabled` also covers `updateScheduleMutation.isPending`.
