@@ -44,11 +44,11 @@ async function openManageMedications(page: Page) {
 /** Fill the shared fields, pick a schedule choice, then let the caller fill that choice's own. */
 async function startMedication(page: Page, name: string, choice: string) {
   const modal = page.locator(".wl-modal");
-  await modal.getByLabel("Medication name").fill(name);
+  await modal.getByLabel("Medication name", { exact: true }).fill(name);
   // Exact, or this also matches "Dose time 1", "Dose time 2", ...
   await modal.getByLabel("Dose", { exact: true }).fill("10 mg");
   await modal.getByRole("button", { name: choice, exact: true }).click();
-  await modal.getByLabel("Start date").fill(START_DATE);
+  await modal.getByLabel("Start date", { exact: true }).fill(START_DATE);
 }
 
 /** Press add and wait for the medication to show up in the list above the form. */
@@ -81,7 +81,17 @@ async function readSavedMedications(page: Page): Promise<Map<string, SavedMedica
   const response = await page.request.get(`${requireBaseURL()}/api/wellness/medications`);
   expect(response.ok(), `list medications -> ${response.status()}`).toBeTruthy();
   const body = (await response.json()) as { medications: SavedMedication[] };
-  return new Map(body.medications.map((medication) => [medication.name, medication]));
+  // Dose times are stored in a Postgres time column, so they come back as "08:00:00". Every
+  // reader in the app splits on the colon and uses the hour and minute, so trim to what we set.
+  return new Map(
+    body.medications.map((medication) => [
+      medication.name,
+      {
+        ...medication,
+        scheduleTimes: medication.scheduleTimes?.map((time) => time.slice(0, 5))
+      }
+    ])
+  );
 }
 
 test("every schedule choice can be created through the real form (#1970)", async ({ page }) => {
@@ -113,7 +123,7 @@ test("every schedule choice can be created through the real form (#1970)", async
 
   // 4. Every so often — every three days.
   await startMedication(page, "UAT Interval", "Every so often");
-  await modal.getByLabel("How many days, weeks or months between doses").fill("3");
+  await modal.getByLabel("How many days, weeks or months between doses", { exact: true }).fill("3");
   await modal.getByRole("button", { name: "days", exact: true }).click();
   await modal.getByLabel("Dose time 1", { exact: true }).fill("09:00");
   await addAndConfirm(page, "UAT Interval");
@@ -121,14 +131,14 @@ test("every schedule choice can be created through the real form (#1970)", async
   // 5. Monthly, on the 15th.
   await startMedication(page, "UAT Monthly", "Monthly");
   await modal.getByRole("button", { name: "On a date" }).click();
-  await modal.getByLabel("Day of the month").fill("15");
+  await modal.getByLabel("Day of the month", { exact: true }).fill("15");
   await modal.getByLabel("Dose time 1", { exact: true }).fill("10:00");
   await addAndConfirm(page, "UAT Monthly");
 
   // 6. A cycle — 21 days on, 7 off.
   await startMedication(page, "UAT Cycle", "In a cycle");
-  await modal.getByLabel("Days on").fill("21");
-  await modal.getByLabel("Days off").fill("7");
+  await modal.getByLabel("Days on", { exact: true }).fill("21");
+  await modal.getByLabel("Days off", { exact: true }).fill("7");
   await modal.getByLabel("Dose time 1", { exact: true }).fill("11:00");
   await addAndConfirm(page, "UAT Cycle");
 
