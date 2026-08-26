@@ -171,6 +171,7 @@ describe("sports manifest", () => {
     // comes from there, and a host absent from this list is a CSP-blocked blank image.
     expect(espn?.imageHosts).toEqual([
       "a.espncdn.com",
+      "s.espncdn.com",
       "s.secure.espncdn.com",
       "espnmedia-cdn.akamaized.net"
     ]);

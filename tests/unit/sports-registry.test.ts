@@ -25,6 +25,7 @@ describe("sports built-in registration", () => {
     // news catalog pre-sorts its union, so the news block below is alphabetical.
     expect(MODULE_IMAGE_CSP_HOSTS).toEqual([
       "a.espncdn.com",
+      "s.espncdn.com",
       "s.secure.espncdn.com",
       "espnmedia-cdn.akamaized.net",
       "cdn.arstechnica.net",
