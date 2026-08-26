@@ -21,6 +21,7 @@ export {
   serializeTherapyNote
 } from "./serialize.js";
 export { computeSchedule } from "./schedule.js";
+export { describeSchedule, nextDoses } from "./schedule-summary.js";
 export { computeInsights } from "./insights.js";
 export {
   escapeHtml,
