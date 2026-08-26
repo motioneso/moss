@@ -31,6 +31,7 @@ feature that is not present in the image you are running.
 
 ### Added
 
+- **Save your chats to Notes.** You can now turn on a setting that saves a daily written copy of your chats into your notes, off by default, in a folder you choose. [PR #1980](https://github.com/motioneso/moss/pull/1980)
 - **See your module build progress and get notified when it's done.** When you ask Moss to build you a new page and approve the plan, you're now taken straight to the Workshop page where you can watch it build, and you get a notification the moment it finishes or fails. [PR #1966](https://github.com/motioneso/moss/pull/1966)
 - **Sports news source coverage.** Choose ESPN or custom publishers for entire sports, leagues, and teams to build a mixed news feed. [PR #1967](https://github.com/motioneso/moss/pull/1967)
 - **Throw away a draft module.** If a module Moss built for you is not what you wanted, you can now delete it from the draft banner. [PR #1942](https://github.com/motioneso/moss/pull/1942)
@@ -60,6 +61,7 @@ feature that is not present in the image you are running.
 ### Fixed
 
 - **Workshop builds finish and respond.** The Workshop now completes builds, opens finished drafts, and responds when you stop, discard, revise, or share a module. [PR #1981](https://github.com/motioneso/moss/pull/1981)
+- **Workshop buttons now work.** The Stop, Ask for a change, and Turn on for everyone buttons on the Workshop page now actually do something. [PR #1978](https://github.com/motioneso/moss/pull/1978)
 - **Sports source assignment reviews.** Sports source coverage changes now work with existing feeds, and source cards show clean team and league badges instead of feed URLs. [PR #1977](https://github.com/motioneso/moss/pull/1977)
 - **Workshop module builds.** Module builds no longer stall, and the Workshop only shows modules created by the signed-in user. [PR #1964](https://github.com/motioneso/moss/pull/1964)
 - **Sports source setup and status layout.** Custom sports sources now recover legacy feed assignments and show clearer controls, team labels, status details, and errors. [PR #1956](https://github.com/motioneso/moss/pull/1956)

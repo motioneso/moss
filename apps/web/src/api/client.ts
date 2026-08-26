@@ -8,6 +8,8 @@ import type {
   CreateAiProviderConfigRequest,
   CreateAiProviderConfigResponse,
   AiDiscoverModelsResponse,
+  ChatArchiveSettingsResponse,
+  PutChatArchiveSettingsRequest,
   DiscoverAiProviderModelsResponse,
   AddTaskActivityResponse,
   AiModelCapability,
@@ -213,6 +215,19 @@ export async function getYoloSettings(): Promise<YoloSettingsResponse> {
 
 export async function putYoloSelf(input: PutYoloSelfRequest): Promise<YoloSettingsResponse> {
   return requestJson<YoloSettingsResponse>("/api/me/yolo", { method: "PUT", body: input });
+}
+
+export async function getChatArchiveSettings(): Promise<ChatArchiveSettingsResponse> {
+  return requestJson<ChatArchiveSettingsResponse>("/api/me/chat-archive");
+}
+
+export async function putChatArchiveSettings(
+  input: PutChatArchiveSettingsRequest
+): Promise<ChatArchiveSettingsResponse> {
+  return requestJson<ChatArchiveSettingsResponse>("/api/me/chat-archive", {
+    method: "PUT",
+    body: input
+  });
 }
 
 export async function listMySessions(): Promise<ListMySessionsResponse> {

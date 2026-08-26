@@ -388,6 +388,7 @@ export const aiModuleManifest = {
       permissionId: "ai.assistant-actions"
     },
     {
+      // The Workshop Stop/Discard actions re-check ownership and cancellable status server-side.
       method: "POST",
       path: "/api/ai/module-builds/:buildId/cancel",
       responseSchema: approveModuleBuildResponseSchema,

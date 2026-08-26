@@ -1,6 +1,7 @@
 import "./workshop.css";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router";
 import { EmptyState } from "@moss/ui";
 import { requestJson } from "@moss/module-web-sdk";
 import type {
@@ -11,6 +12,9 @@ import type {
 } from "@moss/shared";
 
 import { WorkshopGroups } from "./workshop-groups.js";
+
+const BUILDS_QUERY_KEY = ["workshop", "module-builds", "mine"];
+const MODULES_QUERY_KEY = ["workshop", "modules", "mine"];
 
 // The sidebar already hides this page's nav entry from non-admins (apps/web/src/shell/app-shell.tsx);
 // this is defense-in-depth for anyone who navigates to /workshop directly.
@@ -30,7 +34,7 @@ export function hasActiveBuild(data: ListMyModuleBuildsResponse | undefined): bo
 
 function useMyModuleBuilds() {
   const { data } = useQuery({
-    queryKey: ["workshop", "module-builds", "mine"],
+    queryKey: BUILDS_QUERY_KEY,
     queryFn: () => requestJson<ListMyModuleBuildsResponse>("/api/ai/module-builds/mine"),
     refetchInterval: (query) => (hasActiveBuild(query.state.data) ? 3000 : false)
   });
@@ -39,7 +43,7 @@ function useMyModuleBuilds() {
 
 function useLiveModules(): readonly WorkshopLiveModuleSummary[] {
   const { data } = useQuery({
-    queryKey: ["workshop", "modules", "mine"],
+    queryKey: MODULES_QUERY_KEY,
     queryFn: () => requestJson<ListMyModulesResponse>("/api/me/modules")
   });
   return (data?.modules ?? [])
@@ -49,10 +53,13 @@ function useLiveModules(): readonly WorkshopLiveModuleSummary[] {
 
 export function WorkshopPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const isInstanceAdmin = useIsInstanceAdmin();
   const builds = useMyModuleBuilds();
   const modules = useLiveModules();
-  const refreshWorkshop = () => queryClient.invalidateQueries({ queryKey: ["workshop"] });
+  const refreshWorkshop = () => {
+    void queryClient.invalidateQueries({ queryKey: ["workshop"] });
+  };
   const approve = useMutation({
     mutationFn: (buildId: string) =>
       requestJson(`/api/ai/module-builds/${encodeURIComponent(buildId)}/approve`, {
@@ -61,6 +68,7 @@ export function WorkshopPage() {
     onSuccess: refreshWorkshop
   });
   const cancel = useMutation({
+    // Stop prevents the build from continuing after its current in-flight step.
     mutationFn: (buildId: string) =>
       requestJson(`/api/ai/module-builds/${encodeURIComponent(buildId)}/cancel`, {
         method: "POST"
@@ -121,7 +129,7 @@ export function WorkshopPage() {
             }
           },
           onAskForChange: (moduleId) =>
-            window.location.assign(`/m/${encodeURIComponent(moduleId)}`),
+            navigate(`/m/${encodeURIComponent(moduleId)}`, { state: { openChat: true } }),
           onShip: (moduleId) => ship.mutate(moduleId)
         }}
       />

@@ -14,6 +14,10 @@ interface ApproveRequest {
   readonly Params: { readonly buildId: string };
 }
 
+interface CancelRequest {
+  readonly Params: { readonly buildId: string };
+}
+
 /**
  * #1888 — the "Build it" button on the plan card in chat.
  *
@@ -78,7 +82,7 @@ export function registerModuleBuildRoutes(
     }
   );
 
-  server.post<ApproveRequest>(
+  server.post<CancelRequest>(
     "/api/ai/module-builds/:buildId/cancel",
     { schema: { response: { 200: approveModuleBuildResponseSchema } } },
     async (request, reply) => {
