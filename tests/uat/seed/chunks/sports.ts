@@ -85,6 +85,21 @@ export async function seedSportsPublicSourceFixtures(
   await runner.withDataContext({ actorUserId }, async (db) => {
     const league = await follows.create(db, { competitionKey: "eng.1", teamKey: null });
     const team = await follows.create(db, { competitionKey: "eng.1", teamKey: ARSENAL_TEAM_KEY });
+    const nfl = await follows.create(db, { competitionKey: "nfl", teamKey: null });
+
+    const assignmentFixture = await createFeedSource(db, {
+      label: "FotMob assignment fixture",
+      canonicalDomain: "www.fotmob.com",
+      feedUrl: "https://www.fotmob.com/topnews/feed?format=atom",
+      followIds: [league.id, team.id, nfl.id]
+    });
+    await db.db
+      .updateTable("app.sports_custom_sources")
+      .set({
+        validation_fingerprint: "3cbe67830bfc90ce81369b2967871c241984c2d1ba52f69cb5fdd1fd48e6875c"
+      })
+      .where("id", "=", assignmentFixture.id)
+      .execute();
 
     const legacyFeed = await createFeedSource(db, {
       label: "BBC legacy feed",

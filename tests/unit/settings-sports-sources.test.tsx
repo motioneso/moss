@@ -51,6 +51,41 @@ const espn = {
   usesDefaultCoverage: true,
   assignments: []
 };
+const fotmobSourceId = "33333333-3333-3333-3333-333333333333";
+const fotmobFeedUrl = "https://fotmob.com/feed.xml";
+const fotmob = {
+  kind: "custom" as const,
+  id: fotmobSourceId,
+  label: "FotMob",
+  canonicalDomain: "fotmob.com",
+  homepageUrl: "https://fotmob.com/",
+  feedUrl: fotmobFeedUrl,
+  retrievalMethod: "feed" as const,
+  enabled: true,
+  healthState: "healthy" as const,
+  healthReasonCode: null,
+  healthMessage: null,
+  lastCheckedAt: "2026-08-25T12:00:00.000Z",
+  lastSuccessAt: "2026-08-25T12:00:00.000Z",
+  recipeStatus: "feed" as const,
+  assignedFollowIds: [FOLLOWS[0]!.id],
+  assignments: [
+    {
+      id: "44444444-4444-4444-4444-444444444444",
+      followId: FOLLOWS[0]!.id,
+      sportKey: null,
+      targetUrl: fotmobFeedUrl,
+      previewStatus: "verified" as const,
+      healthState: "healthy" as const,
+      healthReasonCode: null,
+      healthMessage: null,
+      lastCheckedAt: "2026-08-25T12:00:00.000Z",
+      lastSuccessAt: "2026-08-25T12:00:00.000Z",
+      createdAt: "2026-08-25T12:00:00.000Z"
+    }
+  ],
+  createdAt: "2026-08-25T12:00:00.000Z"
+};
 
 function renderSection(client: QueryClient): string {
   return renderToString(
@@ -187,7 +222,6 @@ describe("Sports source coverage settings", () => {
   });
 
   it("previews a Soccer assignment while retaining a custom source's league coverage", async () => {
-    const sourceId = "33333333-3333-3333-3333-333333333333";
     const fetchMock = vi.fn(
       async () =>
         new Response(JSON.stringify({ status: "rejected", reason: "unreachable" }), {
@@ -200,42 +234,7 @@ describe("Sports source coverage settings", () => {
       defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } }
     });
     client.setQueryData(sportsQueryKeys.sources, {
-      sources: [
-        espn,
-        {
-          kind: "custom",
-          id: sourceId,
-          label: "FotMob",
-          canonicalDomain: "fotmob.com",
-          homepageUrl: "https://fotmob.com/",
-          feedUrl: "https://fotmob.com/feed.xml",
-          retrievalMethod: "feed",
-          enabled: true,
-          healthState: "healthy",
-          healthReasonCode: null,
-          healthMessage: null,
-          lastCheckedAt: "2026-08-25T12:00:00.000Z",
-          lastSuccessAt: "2026-08-25T12:00:00.000Z",
-          recipeStatus: "feed",
-          assignedFollowIds: [FOLLOWS[0]!.id],
-          assignments: [
-            {
-              id: "44444444-4444-4444-4444-444444444444",
-              followId: FOLLOWS[0]!.id,
-              sportKey: null,
-              targetUrl: "https://fotmob.com/feed.xml",
-              previewStatus: "verified",
-              healthState: "healthy",
-              healthReasonCode: null,
-              healthMessage: null,
-              lastCheckedAt: "2026-08-25T12:00:00.000Z",
-              lastSuccessAt: "2026-08-25T12:00:00.000Z",
-              createdAt: "2026-08-25T12:00:00.000Z"
-            }
-          ],
-          createdAt: "2026-08-25T12:00:00.000Z"
-        }
-      ]
+      sources: [espn, fotmob]
     });
     let renderer!: ReactTestRenderer;
     await act(async () => {
@@ -252,13 +251,17 @@ describe("Sports source coverage settings", () => {
       );
     });
 
+    expect(renderedText(renderer.toJSON())).not.toContain(fotmobFeedUrl);
+    const assignmentLogo = renderer.root.findAllByType("img")[0];
+    expect(assignmentLogo?.props).toMatchObject({ alt: "", "aria-hidden": "true" });
+
     const edit = renderer.root
       .findAllByType("button")
       .find((candidate) => candidate.props["aria-label"] === "Edit coverage for FotMob");
     act(() => edit?.props.onClick());
     const soccer = renderer.root
       .findAllByType("input")
-      .find((input) => String(input.props.id).includes(`${sourceId}-sport-sport:soccer`));
+      .find((input) => String(input.props.id).includes(`${fotmobSourceId}-sport-sport:soccer`));
     act(() => soccer?.props.onChange());
     const review = renderer.root
       .findAllByType("button")
@@ -266,7 +269,7 @@ describe("Sports source coverage settings", () => {
     await act(async () => review?.props.onClick());
 
     expect(fetchMock).toHaveBeenCalledWith(
-      `/api/sports/sources/${sourceId}/assignments/preview`,
+      `/api/sports/sources/${fotmobSourceId}/assignments/preview`,
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
@@ -277,5 +280,88 @@ describe("Sports source coverage settings", () => {
         })
       })
     );
+    expect(renderedText(renderer.toJSON())).not.toContain(fotmobFeedUrl);
+    const error = renderer.root.findAllByProps({ role: "alert" })[0];
+    expect(error?.props.className).toBe("sp-src__err");
+    expect(renderedText(error)).toContain("Those assignments could not be verified.");
+  });
+
+  it("shows successful assignment previews as identities without raw feed URLs", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              status: "ok",
+              confirmationId: "confirmation-1",
+              authorizationAcknowledgement: "I confirm this public source.",
+              candidate: {
+                label: "FotMob",
+                canonicalDomain: "fotmob.com",
+                homepageUrl: "https://fotmob.com/",
+                retrievalMethod: "feed",
+                sampleCount: 0,
+                confirmedFetchHosts: ["fotmob.com"],
+                sampleHeadlines: [],
+                targets: [
+                  {
+                    target: { kind: "follow", followId: FOLLOWS[0]!.id },
+                    label: "All NFL",
+                    scope: "league",
+                    targetUrl: fotmobFeedUrl,
+                    sampleHeadlines: []
+                  },
+                  {
+                    target: { kind: "sport", sportKey: "soccer" },
+                    label: "Soccer",
+                    scope: "sport",
+                    targetUrl: fotmobFeedUrl,
+                    sampleHeadlines: []
+                  }
+                ]
+              }
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          )
+      )
+    );
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } }
+    });
+    client.setQueryData(sportsQueryKeys.sources, { sources: [espn, fotmob] });
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        createElement(
+          QueryClientProvider,
+          { client },
+          createElement(SportsSourcesSection, {
+            follows: FOLLOWS,
+            competitionsByKey: COMPETITIONS,
+            teamsByCompetition: TEAMS
+          })
+        )
+      );
+    });
+
+    const button = (label: string) =>
+      renderer.root
+        .findAllByType("button")
+        .find((candidate) => renderedText(candidate.props.children) === label);
+    const edit = renderer.root
+      .findAllByType("button")
+      .find((candidate) => candidate.props["aria-label"] === "Edit coverage for FotMob");
+    act(() => edit?.props.onClick());
+    const soccer = renderer.root
+      .findAllByType("input")
+      .find((input) => String(input.props.id).includes(`${fotmobSourceId}-sport-sport:soccer`));
+    act(() => soccer?.props.onChange());
+    await act(async () => button("Review changes")?.props.onClick());
+
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("All NFL");
+    expect(text).toContain("Soccer");
+    expect(text).not.toContain(fotmobFeedUrl);
   });
 });
