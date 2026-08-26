@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Badge, Note, formatTimestamp } from "@moss/settings-ui";
+import { Badge, Note } from "@moss/settings-ui";
 import { ApiError, Button } from "@moss/module-web-sdk";
 import type {
   CompetitionRef,
@@ -25,6 +25,7 @@ import {
   updateSportsEspnCoverage
 } from "../web/sports-client.js";
 import { sportsQueryKeys } from "../web/query-keys.js";
+import { competitionLogoUrl } from "../source/catalog.js";
 import { sportsSourceTargetKey, sportsSportOptions } from "../source/scope.js";
 import { SourceAssignmentPicker, sourceTargetDisplayLabel } from "./source-assignment-picker.js";
 
@@ -59,6 +60,38 @@ function SourceError(props: { children: string }) {
       <CircleAlert size={16} aria-hidden="true" />
       <span>{props.children}</span>
     </p>
+  );
+}
+
+function AssignmentIdentity(props: {
+  target: SportsSourceAssignmentTarget;
+  label: string;
+  follows: readonly SportsFollowDto[];
+  teamsByCompetition: Map<string, readonly TeamRef[]>;
+}) {
+  const target = props.target;
+  const follow =
+    target.kind === "follow" ? props.follows.find(({ id }) => id === target.followId) : undefined;
+  const team = follow?.teamKey
+    ? props.teamsByCompetition
+        .get(follow.competitionKey)
+        ?.find(({ teamKey }) => teamKey === follow.teamKey)
+    : undefined;
+  const logoUrl = team?.crestUrl ?? (follow ? competitionLogoUrl(follow.competitionKey) : null);
+  return (
+    <span className="sp-src__assignment-identity">
+      {logoUrl ? (
+        <img
+          className="sp-src__assignment-logo"
+          src={logoUrl}
+          alt=""
+          aria-hidden="true"
+          width={24}
+          height={24}
+        />
+      ) : null}
+      <span>{props.label}</span>
+    </span>
   );
 }
 
@@ -251,20 +284,27 @@ export function AddSourceFlow(props: {
             <Note>That publication is already one of your custom sources.</Note>
           ) : null}
           <p className="sp-src__candidate-label">{preview.candidate.label}</p>
-          <p className="sp-src__item-meta">{preview.candidate.canonicalDomain}</p>
-          <p className="sp-src__hint">
-            Fetch hosts: {preview.candidate.confirmedFetchHosts.join(", ")}
-          </p>
           {preview.candidate.sampleHeadlines.map((headline) => (
             <p key={headline} className="sp-src__hint">
               {headline}
             </p>
           ))}
+          {preview.candidate.targets.length > 0 ? (
+            <ul className="sp-src__assignments" aria-label="Coverage">
+              {preview.candidate.targets.map((target) => (
+                <li key={sportsSourceTargetKey(target.target)}>
+                  <AssignmentIdentity
+                    target={target.target}
+                    label={target.label}
+                    follows={props.follows}
+                    teamsByCompetition={props.teamsByCompetition}
+                  />
+                </li>
+              ))}
+            </ul>
+          ) : null}
           {preview.candidate.targets.map((target) => (
-            <div key={sportsSourceTargetKey(target.target)}>
-              <p className="sp-src__hint">
-                {target.label}: {target.targetUrl}
-              </p>
+            <div key={`samples-${sportsSourceTargetKey(target.target)}`}>
               {target.sampleHeadlines.map((headline) => (
                 <p key={headline} className="sp-src__hint">
                   {headline}
@@ -533,7 +573,6 @@ export function SportsSourcesSection(props: {
                 <div className="sp-src__item-row">
                   <div className="sp-src__identity">
                     <span className="sp-src__item-label">{source.label}</span>
-                    <span className="sp-src__item-meta">{source.canonicalDomain}</span>
                     {badge ? <Badge tone={badge.tone}>{badge.label}</Badge> : null}
                   </div>
                   <div className="sp-src__actions">
@@ -577,17 +616,6 @@ export function SportsSourcesSection(props: {
                     </Button>
                   </div>
                 </div>
-                <p className="sp-src__meta-line">
-                  Last checked:{" "}
-                  {source.lastCheckedAt
-                    ? formatTimestamp(source.lastCheckedAt, "Unknown")
-                    : "Never"}
-                  {" · "}
-                  Last successful:{" "}
-                  {source.lastSuccessAt
-                    ? formatTimestamp(source.lastSuccessAt, "Unknown")
-                    : "Never"}
-                </p>
                 {source.healthMessage ? (
                   <p className="sp-src__health-message">{source.healthMessage}</p>
                 ) : null}
@@ -597,9 +625,8 @@ export function SportsSourcesSection(props: {
                   </Note>
                 ) : null}
                 {source.assignments.length > 0 ? (
-                  <ul className="sp-src__assign-list">
+                  <ul className="sp-src__assignments" aria-label={`Coverage for ${source.label}`}>
                     {source.assignments.map((assignment) => {
-                      const assignmentBadge = HEALTH_BADGE[assignment.healthState];
                       const target: SportsSourceAssignmentTarget | null = assignment.sportKey
                         ? { kind: "sport", sportKey: assignment.sportKey }
                         : assignment.followId
@@ -614,24 +641,16 @@ export function SportsSourcesSection(props: {
                           )
                         : "Assigned team or league";
                       return (
-                        <li
-                          key={assignment.id}
-                          className="sp-src__assign-item sp-src__assign-item--status"
-                        >
-                          <span className="sp-src__assignment-copy">
-                            <span className="sp-src__assignment-label">{targetLabel}</span>
-                            {assignment.targetUrl ? (
-                              <span className="sp-src__assignment-target">
-                                {assignment.targetUrl}
-                              </span>
-                            ) : null}
-                          </span>
-                          {assignment.previewStatus !== "verified" ? (
-                            <Badge tone="steel">Awaiting preview</Badge>
-                          ) : assignmentBadge ? (
-                            <Badge tone={assignmentBadge.tone}>{assignmentBadge.label}</Badge>
+                        <li key={assignment.id}>
+                          {target ? (
+                            <AssignmentIdentity
+                              target={target}
+                              label={targetLabel}
+                              follows={props.follows}
+                              teamsByCompetition={props.teamsByCompetition}
+                            />
                           ) : (
-                            <Badge tone="pine">Healthy</Badge>
+                            <span className="sp-src__assignment-identity">{targetLabel}</span>
                           )}
                         </li>
                       );
@@ -647,17 +666,18 @@ export function SportsSourcesSection(props: {
                 recipePreview.result.confirmationId &&
                 recipePreview.result.authorizationAcknowledgement ? (
                   <div className="sp-src__candidate">
-                    <p className="sp-src__hint">
-                      Publisher: {recipePreview.result.candidate.canonicalDomain}
-                    </p>
-                    <p className="sp-src__hint">
-                      Fetch hosts: {recipePreview.result.candidate.confirmedFetchHosts.join(", ")}
-                    </p>
-                    {recipePreview.result.candidate.targets.map((target) => (
-                      <p key={sportsSourceTargetKey(target.target)} className="sp-src__hint">
-                        {target.label}: {target.targetUrl}
-                      </p>
-                    ))}
+                    <ul className="sp-src__assignments" aria-label="Rebuilt coverage">
+                      {recipePreview.result.candidate.targets.map((target) => (
+                        <li key={sportsSourceTargetKey(target.target)}>
+                          <AssignmentIdentity
+                            target={target.target}
+                            label={target.label}
+                            follows={props.follows}
+                            teamsByCompetition={props.teamsByCompetition}
+                          />
+                        </li>
+                      ))}
+                    </ul>
                     <label className="jds-check sp-src__check">
                       <input
                         type="checkbox"
@@ -732,11 +752,18 @@ export function SportsSourcesSection(props: {
                     assignmentPreview.result.confirmationId &&
                     assignmentPreview.result.authorizationAcknowledgement ? (
                       <div className="sp-src__candidate">
-                        {assignmentPreview.result.candidate.targets.map((target) => (
-                          <p key={sportsSourceTargetKey(target.target)} className="sp-src__hint">
-                            {target.label}: {target.targetUrl}
-                          </p>
-                        ))}
+                        <ul className="sp-src__assignments" aria-label="Coverage after saving">
+                          {assignmentPreview.result.candidate.targets.map((target) => (
+                            <li key={sportsSourceTargetKey(target.target)}>
+                              <AssignmentIdentity
+                                target={target.target}
+                                label={target.label}
+                                follows={props.follows}
+                                teamsByCompetition={props.teamsByCompetition}
+                              />
+                            </li>
+                          ))}
+                        </ul>
                         {assignmentPreview.result.candidate.targets.length === 0 ? (
                           <p className="sp-src__hint">This source will be left unassigned.</p>
                         ) : null}

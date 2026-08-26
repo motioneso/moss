@@ -489,7 +489,7 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
 
   const finalSection = await openSportsSettings(page);
   for (const source of sources) {
-    const row = finalSection.locator(".sp-src__item").filter({ hasText: source.canonicalDomain });
+    const row = finalSection.locator(".sp-src__item").filter({ hasText: source.label });
     await row.getByRole("button", { name: `Remove ${source.label}` }).click();
     await expect(row).toHaveCount(0, { timeout: 30_000 });
   }
