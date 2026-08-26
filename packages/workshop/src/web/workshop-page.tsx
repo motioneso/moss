@@ -1,6 +1,7 @@
 import "./workshop.css";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router";
 import { EmptyState } from "@moss/ui";
 import { requestJson } from "@moss/module-web-sdk";
 import type {
@@ -11,6 +12,9 @@ import type {
 } from "@moss/shared";
 
 import { WorkshopGroups } from "./workshop-groups.js";
+
+const BUILDS_QUERY_KEY = ["workshop", "module-builds", "mine"];
+const MODULES_QUERY_KEY = ["workshop", "modules", "mine"];
 
 // The sidebar already hides this page's nav entry from non-admins (apps/web/src/shell/app-shell.tsx);
 // this is defense-in-depth for anyone who navigates to /workshop directly.
@@ -30,7 +34,7 @@ export function hasActiveBuild(data: ListMyModuleBuildsResponse | undefined): bo
 
 function useMyModuleBuilds() {
   const { data } = useQuery({
-    queryKey: ["workshop", "module-builds", "mine"],
+    queryKey: BUILDS_QUERY_KEY,
     queryFn: () => requestJson<ListMyModuleBuildsResponse>("/api/ai/module-builds/mine"),
     refetchInterval: (query) => (hasActiveBuild(query.state.data) ? 3000 : false)
   });
@@ -39,7 +43,7 @@ function useMyModuleBuilds() {
 
 function useLiveModules(): readonly WorkshopLiveModuleSummary[] {
   const { data } = useQuery({
-    queryKey: ["workshop", "modules", "mine"],
+    queryKey: MODULES_QUERY_KEY,
     queryFn: () => requestJson<ListMyModulesResponse>("/api/me/modules")
   });
   return (data?.modules ?? [])
@@ -51,6 +55,28 @@ export function WorkshopPage() {
   const isInstanceAdmin = useIsInstanceAdmin();
   const builds = useMyModuleBuilds();
   const modules = useLiveModules();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const invalidateWorkshopLists = () => {
+    void queryClient.invalidateQueries({ queryKey: BUILDS_QUERY_KEY });
+    void queryClient.invalidateQueries({ queryKey: MODULES_QUERY_KEY });
+  };
+
+  // #1975: "Stop" cannot kill an in-flight build step instantly — it prevents the build
+  // from continuing past the step that is currently running. See cancelModuleBuild
+  // (packages/settings/src/module-builds-repository.ts) and the worker guard that keeps a
+  // step that finishes after the cancel from overwriting the cancelled status.
+  const stopMutation = useMutation({
+    mutationFn: (buildId: string) =>
+      requestJson(`/api/ai/module-builds/${buildId}/cancel`, { method: "POST" }),
+    onSuccess: invalidateWorkshopLists
+  });
+  const turnOnMutation = useMutation({
+    mutationFn: (moduleId: string) =>
+      requestJson(`/api/admin/modules/${moduleId}/ship`, { method: "POST" }),
+    onSuccess: invalidateWorkshopLists
+  });
 
   if (isInstanceAdmin === false) {
     return (
@@ -70,7 +96,13 @@ export function WorkshopPage() {
           See what Moss is building for you, and what's already running.
         </p>
       </header>
-      <WorkshopGroups builds={builds} modules={modules} />
+      <WorkshopGroups
+        builds={builds}
+        modules={modules}
+        onStop={(buildId) => stopMutation.mutate(buildId)}
+        onTurnOnForEveryone={(moduleId) => turnOnMutation.mutate(moduleId)}
+        onAskForChange={(moduleId) => navigate(`/m/${moduleId}`, { state: { openChat: true } })}
+      />
     </div>
   );
 }
