@@ -152,3 +152,142 @@
 .wl-medmodal__error {
   margin-top: 2px;
 }
+
+/* ── Add-a-medication builder (#1970) ── */
+
+.wl-medform__row2 {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 10px;
+}
+
+.wl-medform__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.wl-medform__stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wl-medform__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Six choices wrap rather than each stretching to an equal share of one line. */
+.wl-medform__choices .wl-freqbtn {
+  flex: 0 1 auto;
+  padding: 7px 12px;
+}
+
+.wl-freqbtn--active {
+  border-color: var(--accent);
+  background: var(--forest-soft);
+  color: var(--forest-ink);
+  font-weight: 600;
+}
+
+.wl-medform__hint {
+  color: var(--text-subtle);
+  font-size: 12px;
+}
+
+.wl-medform__inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.wl-medform__num {
+  flex: 0 0 auto;
+  width: 72px;
+}
+
+.wl-medform__date {
+  width: fit-content;
+}
+
+.wl-medform__check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.wl-medform__times {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wl-medform__timerow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wl-medform__timerow .wl-medmodal__timeinput {
+  width: 140px;
+}
+
+.wl-medmodal__timeinput--invalid {
+  border-color: var(--red);
+}
+
+.wl-medform__switchrow {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wl-medform__preview {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-sunken);
+}
+
+.wl-medform__previewline {
+  color: var(--text);
+}
+
+.wl-medform__previewdoses {
+  color: var(--text-subtle);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.wl-medform__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+@media (max-width: 480px) {
+  .wl-medform__row2 {
+    grid-template-columns: 1fr;
+  }
+
+  .wl-medform__inline {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .wl-medform__num,
+  .wl-medform__date {
+    width: 100%;
+  }
+}
