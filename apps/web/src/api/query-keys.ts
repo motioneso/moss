@@ -27,6 +27,7 @@ export const queryKeys = {
     registrationSettings: ["settings", "admin", "registration"] as const,
     chatMultiplexer: ["settings", "chat-multiplexer"] as const,
     yolo: ["settings", "yolo"] as const,
+    chatArchive: ["settings", "chat-archive"] as const,
     adminYolo: ["settings", "admin", "yolo"] as const,
     hostDiagnostics: ["settings", "host-diagnostics"] as const,
     hostRestart: ["settings", "host-restart"] as const,
