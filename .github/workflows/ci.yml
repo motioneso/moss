@@ -213,7 +213,7 @@ jobs:
 
       - name: Stop Compose stack
         if: always()
-        run: docker compose -f infra/docker-compose.yml down -v
+        run: docker compose -p jarv1s-dev-smoke -f infra/docker-compose.yml down -v
 
   prod-compose-smoke:
     name: Prod compose deployment smoke
