@@ -62,6 +62,7 @@ feature that is not present in the image you are running.
 
 ### Fixed
 
+- **Chat archive now includes the whole day.** When you turn on chat archiving partway through the day, today's archived note now includes everything you chatted about earlier that day, not just messages sent after you turned it on. [PR #1988](https://github.com/motioneso/moss/pull/1988)
 - **Readable chat archive headings, and no more backfilling old messages.** Each conversation in your daily chat archive note now shows a local time and the conversation's title instead of a raw computer timestamp. Also, turning archiving on partway through the day no longer pulls in messages you sent earlier that day before you turned it on. [PR #1984](https://github.com/motioneso/moss/pull/1984)
 - **Workshop builds finish and respond.** The Workshop now completes builds, opens finished drafts, and responds when you stop, discard, revise, or share a module. [PR #1981](https://github.com/motioneso/moss/pull/1981)
 - **Workshop buttons now work.** The Stop, Ask for a change, and Turn on for everyone buttons on the Workshop page now actually do something. [PR #1978](https://github.com/motioneso/moss/pull/1978)

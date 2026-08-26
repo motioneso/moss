@@ -48,13 +48,15 @@ export type UatChatScript =
   | "phase1-smoke"
   | "1533-surface-probe"
   | "1252-audit-truth-livepath"
-  | "1105-drawer-private";
+  | "1105-drawer-private"
+  | "1987-archive-backfill";
 
 export const UAT_CHAT_SCRIPTS: readonly UatChatScript[] = [
   "phase1-smoke",
   "1533-surface-probe",
   "1252-audit-truth-livepath",
-  "1105-drawer-private"
+  "1105-drawer-private",
+  "1987-archive-backfill"
 ];
 
 export interface SeedOptions {
