@@ -81,21 +81,17 @@ export function registerModuleBuildRoutes(
     }
   );
 
-  server.post<CancelRequest>(
-    "/api/ai/module-builds/:buildId/cancel",
-    async (request, reply) => {
-      try {
-        const accessContext = await dependencies.resolveAccessContext(request);
-        const { buildId } = request.params;
-        const cancelled = await dependencies.dataContext.withDataContext(
-          accessContext,
-          (scopedDb) => cancelModuleBuild(scopedDb, buildId, accessContext.actorUserId)
-        );
-        if (!cancelled) throw new HttpError(404, "Module build not found");
-        return { buildId, status: "cancelled" };
-      } catch (error) {
-        return handleRouteError(error, reply);
-      }
+  server.post<CancelRequest>("/api/ai/module-builds/:buildId/cancel", async (request, reply) => {
+    try {
+      const accessContext = await dependencies.resolveAccessContext(request);
+      const { buildId } = request.params;
+      const cancelled = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
+        cancelModuleBuild(scopedDb, buildId, accessContext.actorUserId)
+      );
+      if (!cancelled) throw new HttpError(404, "Module build not found");
+      return { buildId, status: "cancelled" };
+    } catch (error) {
+      return handleRouteError(error, reply);
     }
-  );
+  });
 }

@@ -12,7 +12,7 @@ Spec: `docs/specs/1975.md`. Risk tier: sensitive (adversarial QA + Ben merge sig
   (`packages/settings/sql/0189_module_builds.sql:7`). No migration needed.
 - Owner-scoped update-only pattern to copy exactly: `shipExternalModule`
   (`packages/settings/src/repository-external-modules.ts:492-514`) — one `UPDATE ... WHERE id = ?
-  AND status = ? AND owner_user_id = ?`, `numUpdatedRows === 0` means "not found or not yours",
+AND status = ? AND owner_user_id = ?`, `numUpdatedRows === 0` means "not found or not yours",
   route maps that to 404. Same non-leak discipline as the rest of that file.
 - 404-on-not-updated route pattern to copy: `packages/settings/src/routes-modules.ts:328`
   (`if (!shipped) throw new HttpError(404, "External module not found")`). Do **not** copy the
@@ -44,7 +44,7 @@ Spec: `docs/specs/1975.md`. Risk tier: sensitive (adversarial QA + Ben merge sig
   button (`:456`). Design: Workshop navigates to the module's own page with a flag in router state;
   `ExternalModuleMount` reads that flag once on mount and opens chat there. This keeps
   `packages/workshop` free of any host-internal import.
-- Route path for a running draft's own page: `` /m/${moduleId}/* `` (`apps/web/src/app.tsx:124`).
+- Route path for a running draft's own page: `/m/${moduleId}/*` (`apps/web/src/app.tsx:124`).
 - Query keys the Workshop page already reads and must invalidate on success:
   `["workshop", "module-builds", "mine"]` (`packages/workshop/src/web/workshop-page.tsx:33`) and
   `["workshop", "modules", "mine"]` (`:42`).
@@ -70,14 +70,15 @@ export async function cancelModuleBuild(
   scopedDb: DataContextDb,
   buildId: string,
   ownerUserId: string
-): Promise<boolean>
+): Promise<boolean>;
 ```
 
 - Single `UPDATE app.module_builds SET status = 'cancelled', updated_at = now() WHERE id = $1 AND
-  owner_user_id = $2 AND status IN ('planning', 'building')`, return whether a row was updated.
+owner_user_id = $2 AND status IN ('planning', 'building')`, return whether a row was updated.
 - Export `ModuleBuildStatus` already includes `'cancelled'` — no type change needed.
 
 Test cases (`tests/unit/settings-module-builds-repository.test.ts`, new `describe("cancelModuleBuild")`):
+
 - cancels a build the caller owns that is `"building"` — returns `true`, row's status becomes
   `"cancelled"`. Fails against a broken implementation that forgets the status filter (would also
   cancel a `"ready"` build).
@@ -96,6 +97,7 @@ File: `packages/ai/src/module-build-routes.ts`, added to `registerModuleBuildRou
 
 Test cases (`tests/unit/ai-module-build-routes.test.ts`, new `describe("POST
 /api/ai/module-builds/:buildId/cancel")`):
+
 - cancelling the caller's own in-progress build returns 200 with `status: "cancelled"`.
 - cancelling a build that does not exist, or belongs to another user, returns 404 — same response
   shape for both (no leak of which case it was).
@@ -105,13 +107,14 @@ Test cases (`tests/unit/ai-module-build-routes.test.ts`, new `describe("POST
 File: `apps/worker/src/worker.ts`, inside `runModuleBuildStepForJob`.
 
 - After `getModuleBuild` (`:218`) and the existing not-found check: if `build.status ===
-  "cancelled"`, return without calling `runModuleBuildStep` and without re-enqueuing.
+"cancelled"`, return without calling `runModuleBuildStep` and without re-enqueuing.
 - Before the success-path `updateModuleBuildStatus` call (`:243`): re-fetch the build; if its
   status is now `"cancelled"`, skip the status write and skip the "finished" notification.
 - Before the `catch` block's `updateModuleBuildStatus` call (`:255`): same re-fetch-and-skip, for
   the "failed" notification too.
 
 Test cases (new or extended worker test file covering `runModuleBuildStepForJob`):
+
 - a build already `"cancelled"` when the job runs never calls `runModuleBuildStep` and never
   writes a status.
 - a build cancelled by another request while `runModuleBuildStep` is in flight does not get its
@@ -135,7 +138,7 @@ Files: `packages/workshop/src/web/workshop-groups.tsx`, `packages/workshop/src/w
   `WorkshopGroups`.
 - `WorkshopPage` gets two `useMutation`s calling `requestJson` directly (same pattern
   `workshop-page.tsx:5,34` already uses), each invalidating `["workshop", "module-builds",
-  "mine"]` and `["workshop", "modules", "mine"]` on success:
+"mine"]` and `["workshop", "modules", "mine"]` on success:
   - `onStop`: `POST /api/ai/module-builds/${buildId}/cancel`.
   - `onTurnOnForEveryone`: `POST /api/admin/modules/${moduleId}/ship`.
 - No new "restart required" UI copy — the spec only requires the state to be reflected; reuse
@@ -144,6 +147,7 @@ Files: `packages/workshop/src/web/workshop-groups.tsx`, `packages/workshop/src/w
 
 Test cases (new file `tests/unit/workshop-groups-actions.test.tsx`, `react-test-renderer` +
 `// @vitest-environment jsdom`, copying `tests/unit/draft-banner.test.tsx`'s shape):
+
 - clicking "Stop" on a building card calls `onStop` with that build's id.
 - clicking "Turn on for everyone" on a `scope: "you"` module calls `onTurnOnForEveryone` with that
   module's id.
@@ -165,6 +169,7 @@ Files: `packages/workshop/package.json` (add `react-router-dom` dependency, vers
   not refire on a later re-render or back-navigation.
 
 Test cases:
+
 - `workshop-groups-actions.test.tsx`: clicking "Ask for a change" calls `onAskForChange` with that
   module's id (every scope, not just `"you"`).
 - New or extended `apps/web` test for `ExternalModuleMount` (or the closest existing test file that
@@ -186,6 +191,7 @@ per the brief.
 ```bash
 pnpm --filter @moss/settings --filter @moss/ai --filter @moss/workshop --filter web --filter worker typecheck > /tmp/tc.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`.
 
 Full gate before wrap-up: via the `verify-gate` skill only, never run directly. Expected: green.
