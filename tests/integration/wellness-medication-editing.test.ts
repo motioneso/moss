@@ -181,7 +181,10 @@ describe("wellness medications: start dates, reminders, and editing a saved sche
       expect(later.body).toContain("remindersEnabled");
 
       // And on an edit that switches to as-needed and asks for a reminder in the same breath.
-      const daily = await create(app, { name: "Daily then PRN with reminders", ...schedules["once_daily"] });
+      const daily = await create(app, {
+        name: "Daily then PRN with reminders",
+        ...schedules["once_daily"]
+      });
       expect(daily.statusCode, daily.body).toBe(201);
       const both = await patch(app, daily.json().medication.id as string, {
         ...schedules["as_needed"],
