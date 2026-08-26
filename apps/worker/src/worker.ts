@@ -71,6 +71,7 @@ import { createExternalBriefingInvoker } from "./external-module-invoke.js";
 import { createExternalModuleJobHandler } from "./external-module-job-handler.js";
 import { createIsModuleEnabled } from "./worker-module-gate.js";
 import { createModuleBuildLiveAgent } from "./module-build-live-agent.js";
+import { createRunModuleBuildStepForJob } from "./module-build-step-runner.js";
 import { WORKSHOP_MODULE_ID } from "@moss/workshop";
 
 // ---------------------------------------------------------------------------
@@ -209,14 +210,11 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
     undefined,
     createNotificationPreferencePort()
   );
-  const runModuleBuildStepForJob = async (payload: ModuleBuildPayload) => {
-    const access: AccessContext = {
-      actorUserId: payload.actorUserId,
-      requestId: `module-build:${payload.buildId}`
-    };
-    return dataContext.withDataContext(access, async (scopedDb) => {
-      const build = await getModuleBuild(scopedDb, payload.buildId);
-      if (!build) throw new Error("module build was not found");
+  const runModuleBuildStepForJob = createRunModuleBuildStepForJob({
+    dataContext,
+    getModuleBuild,
+    updateModuleBuildStatus,
+    prepareRunStepDeps: async (scopedDb) => {
       const model = await aiRepository.selectChatModelForUser(scopedDb);
       if (!model) throw new Error("no chat model is configured for module build");
       const moduleBuildLiveAgent = createModuleBuildLiveAgent({
@@ -228,42 +226,19 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
           process.env.JARVIS_MCP_SERVER_URL ??
           `http://127.0.0.1:${process.env.PORT ?? "3000"}/api/mcp`
       });
-
-      try {
-        const result = await runModuleBuildStep(
-          {
-            launchLiveAgent: moduleBuildLiveAgent,
-            resolveWorkingDir: (buildId) => resolveBuildSourceDir(moduleBuildsDir, buildId),
-            recordFetchedUrl: (buildId, url) => appendModuleBuildFetchedUrl(scopedDb, buildId, url),
-            recordWrittenFile: (buildId, path) =>
-              appendModuleBuildWrittenFile(scopedDb, buildId, path)
-          },
-          build
-        );
-        await updateModuleBuildStatus(scopedDb, build.id, {
-          status: result.continuation ? "building" : "awaiting_change",
-          ...(result.continuation ? { step: result.continuation.step } : {})
-        });
-        if (!result.continuation) {
-          await moduleBuildNotifications.create(
-            scopedDb,
-            buildModuleBuildNotification(build.id, "finished")
-          );
-        }
-        return result;
-      } catch (error) {
-        await updateModuleBuildStatus(scopedDb, build.id, {
-          status: "failed",
-          error: error instanceof Error ? error.name : "unknown error"
-        });
-        await moduleBuildNotifications.create(
-          scopedDb,
-          buildModuleBuildNotification(build.id, "failed")
-        );
-        throw error;
-      }
-    });
-  };
+      return {
+        launchLiveAgent: moduleBuildLiveAgent,
+        resolveWorkingDir: (buildId) => resolveBuildSourceDir(moduleBuildsDir, buildId),
+        recordFetchedUrl: (buildId, url) => appendModuleBuildFetchedUrl(scopedDb, buildId, url),
+        recordWrittenFile: (buildId, path) => appendModuleBuildWrittenFile(scopedDb, buildId, path)
+      };
+    },
+    runStep: runModuleBuildStep,
+    notifyFinished: (scopedDb, buildId) =>
+      moduleBuildNotifications.create(scopedDb, buildModuleBuildNotification(buildId, "finished")),
+    notifyFailed: (scopedDb, buildId) =>
+      moduleBuildNotifications.create(scopedDb, buildModuleBuildNotification(buildId, "failed"))
+  });
   await boss.work<ModuleBuildPayload>(
     MODULE_BUILD_QUEUE,
     createModuleBuildWorker({ boss, sendJob, runStep: runModuleBuildStepForJob })
