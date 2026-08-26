@@ -428,9 +428,8 @@ function YoloMode() {
 const DEFAULT_CHAT_ARCHIVE_FOLDER = "Moss/Chats";
 const CHAT_ARCHIVE_FOLDER_HINT = (
   <>
-    Relative to your connected notes folder. Nested folders like{" "}
-    <b>2 Area/Moss/Chats</b> are fine. A path starting with a slash or containing{" "}
-    <b>..</b> will be rejected.
+    Relative to your connected notes folder. Nested folders like <b>2 Area/Moss/Chats</b> are fine.
+    A path starting with a slash or containing <b>..</b> will be rejected.
   </>
 );
 
