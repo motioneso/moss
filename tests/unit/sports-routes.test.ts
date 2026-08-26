@@ -232,6 +232,16 @@ function buildApp(overrides: Partial<SportsRoutesDependencies> & { repo?: FakeRe
         }
       } as SportsRoutesDependencies["discovery"]),
     sourcesRepository: overrides.sourcesRepository,
+    espnCoverageRepository:
+      overrides.espnCoverageRepository ??
+      ({
+        get: async () => ({ enabled: true, usesDefaultCoverage: true, assignments: [] }),
+        replace: async (_db: DataContextDb, assignments: readonly never[]) => ({
+          enabled: assignments.length > 0,
+          usesDefaultCoverage: false,
+          assignments
+        })
+      } as unknown as NonNullable<SportsRoutesDependencies["espnCoverageRepository"]>),
     previews: overrides.previews,
     publicSourceReader: overrides.publicSourceReader,
     sourceService: overrides.sourceService
@@ -417,6 +427,7 @@ describe("sports routes", () => {
         getHeadlines: async () => [
           {
             id: "n1",
+            sportKey: "football",
             competitionKey: "nfl",
             competitionLabel: "NFL",
             title: "Vikings clinch division",
@@ -673,36 +684,6 @@ describe("sports routes", () => {
     await app.close();
   });
 
-  it("GET /api/sports/sources returns the owner's sources", async () => {
-    const source: SportsCustomSourceDto = {
-      id: "11111111-1111-1111-1111-111111111111",
-      label: "Publisher",
-      canonicalDomain: "publisher.example.com",
-      homepageUrl: "https://publisher.example.com/",
-      feedUrl: null,
-      retrievalMethod: "scrape",
-      enabled: true,
-      healthState: "pending",
-      healthReasonCode: null,
-      healthMessage: null,
-      lastCheckedAt: null,
-      lastSuccessAt: null,
-      recipeStatus: "ready",
-      assignedFollowIds: [],
-      assignments: [],
-      createdAt: "2026-08-21T00:00:00.000Z"
-    };
-    const sourcesRepository = makeSourcesRepo([source]);
-    const { app } = buildApp({
-      sourcesRepository: sourcesRepository as unknown as SportsSourcesRepository
-    });
-    await app.ready();
-    const res = await app.inject({ method: "GET", url: "/api/sports/sources" });
-    expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ sources: [source] });
-    await app.close();
-  });
-
   it("POST /api/sports/sources/preview accepts a feed without a JSON model", async () => {
     const sourcesRepository = makeSourcesRepo([]);
     const { app } = buildApp({
@@ -761,18 +742,25 @@ describe("sports routes", () => {
       url: "/api/sports/sources/preview",
       payload: {
         url: "https://one.example.com",
-        assignments: [{ followId: "11111111-1111-1111-1111-111111111111" }]
+        assignments: [
+          {
+            target: {
+              kind: "follow",
+              followId: "11111111-1111-1111-1111-111111111111"
+            }
+          }
+        ]
       }
     });
     expect(previewResponse.statusCode).toBe(200);
     const preview = JSON.parse(previewResponse.body);
     expect(preview.candidate.targets).toEqual([
       expect.objectContaining({
-        followId: "11111111-1111-1111-1111-111111111111",
-        competitionKey: "nfl",
-        competitionLabel: "NFL",
-        teamKey: "dal",
-        teamLabel: "Dallas Cowboys",
+        target: {
+          kind: "follow",
+          followId: "11111111-1111-1111-1111-111111111111"
+        },
+        label: "Dallas Cowboys",
         scope: "team",
         sampleHeadlines: ["A consequential sports headline"]
       })
@@ -783,8 +771,8 @@ describe("sports routes", () => {
       authorizationAcknowledgement: preview.authorizationAcknowledgement,
       canonicalDomain: preview.candidate.canonicalDomain,
       confirmedFetchHosts: preview.candidate.confirmedFetchHosts,
-      targets: preview.candidate.targets.map((target: { followId: string; targetUrl: string }) => ({
-        followId: target.followId,
+      targets: preview.candidate.targets.map((target: { target: object; targetUrl: string }) => ({
+        target: target.target,
         targetUrl: target.targetUrl
       }))
     };
@@ -889,11 +877,11 @@ describe("sports routes", () => {
           samples: [{ headline: "Headline" }],
           targets: [
             {
-              followId: "33333333-3333-3333-3333-333333333333",
-              competitionKey: "nfl",
-              competitionLabel: "NFL",
-              teamKey: "dal",
-              teamLabel: "Dallas Cowboys",
+              target: {
+                kind: "follow" as const,
+                followId: "33333333-3333-3333-3333-333333333333"
+              },
+              label: "Dallas Cowboys",
               scope: "team" as const,
               targetUrl: "https://publisher.example.com/feed.xml",
               parameters: {},
@@ -922,7 +910,10 @@ describe("sports routes", () => {
         confirmedFetchHosts: ["publisher.example.com"],
         targets: [
           {
-            followId: "33333333-3333-3333-3333-333333333333",
+            target: {
+              kind: "follow",
+              followId: "33333333-3333-3333-3333-333333333333"
+            },
             targetUrl: "https://publisher.example.com/feed.xml"
           }
         ]

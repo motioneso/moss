@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { validateToolInput } from "@moss/ai";
+import { collectSportsSourcesExportSection } from "../../packages/sports/src/data-lifecycle.js";
 import { sportsModuleManifest } from "../../packages/sports/src/manifest.js";
 
 describe("sports manifest", () => {
@@ -9,6 +10,7 @@ describe("sports manifest", () => {
       "app.sports_follows",
       "app.sports_custom_sources",
       "app.sports_source_assignments",
+      "app.sports_espn_source_assignments",
       "app.sports_policy_verdicts",
       "app.sports_headline_prefs"
     ]);
@@ -19,7 +21,8 @@ describe("sports manifest", () => {
       "sql/0190_sports_custom_sources.sql",
       "sql/0191_sports_public_source_runtime.sql",
       "sql/0192_sports_legacy_feed_assignments_verified.sql",
-      "sql/0193_sports_legacy_feed_assignment_repair.sql"
+      "sql/0193_sports_legacy_feed_assignment_repair.sql",
+      "sql/0196_sports_news_source_scopes.sql"
     ]);
     expect(sportsModuleManifest.navigation[0]?.path).toBe("/sports");
     expect(sportsModuleManifest.settings[0]?.path).toBe("/settings/modules/sports");
@@ -31,6 +34,13 @@ describe("sports manifest", () => {
         "/api/sports/sources/:id/rebuild"
       ])
     );
+    expect(sportsModuleManifest.dataLifecycle?.exportSections).toEqual([
+      {
+        key: "sportsSources",
+        displayName: "Sports sources",
+        collect: collectSportsSourcesExportSection
+      }
+    ]);
   });
 
   it("exposes follows plus bounded actor-scoped source tools", () => {
@@ -89,7 +99,10 @@ describe("sports manifest", () => {
       confirmedFetchHosts: ["www.publisher.example"],
       targets: [
         {
-          followId: "11111111-1111-4111-8111-111111111111",
+          target: {
+            kind: "follow",
+            followId: "11111111-1111-4111-8111-111111111111"
+          },
           targetUrl: "https://www.publisher.example/feed?format=atom"
         }
       ]

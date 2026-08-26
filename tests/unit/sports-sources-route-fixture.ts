@@ -55,10 +55,13 @@ export function makeSourcesRepo(
         lastCheckedAt: input.candidate.checkedAt,
         lastSuccessAt: input.candidate.checkedAt,
         recipeStatus: input.candidate.retrievalMethod === "feed" ? "feed" : "ready",
-        assignedFollowIds: input.candidate.targets.map((target) => target.followId),
+        assignedFollowIds: input.candidate.targets.flatMap((target) =>
+          target.target.kind === "follow" ? [target.target.followId] : []
+        ),
         assignments: input.candidate.targets.map((target, index) => ({
           id: `33333333-3333-3333-3333-33333333333${index}`,
-          followId: target.followId,
+          followId: target.target.kind === "follow" ? target.target.followId : null,
+          sportKey: target.target.kind === "sport" ? target.target.sportKey : null,
           targetUrl: target.targetUrl,
           previewStatus: "verified",
           healthState: "healthy",

@@ -128,6 +128,7 @@ describe("dataLifecycle cascade-truth (#801 Phase A)", () => {
         // #1572 custom sports news sources by team and league.
         "app.sports_custom_sources",
         "app.sports_source_assignments",
+        "app.sports_espn_source_assignments",
         "app.sports_policy_verdicts",
         "app.sports_headline_prefs",
         "app.news_prefs",

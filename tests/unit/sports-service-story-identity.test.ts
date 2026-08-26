@@ -14,6 +14,7 @@ describe("id→url story keying (#858)", () => {
   it("keeps the chosen ESPN identity while unioning trusted custom assignment scope", () => {
     const espn: SourceHeadline = {
       id: "espn-story",
+      sportKey: "football",
       competitionKey: "nfl",
       competitionLabel: "NFL",
       title: "Shared story",
@@ -50,6 +51,7 @@ describe("id→url story keying (#858)", () => {
     };
     const h0: SourceHeadline = {
       id: "dup",
+      sportKey: "football",
       competitionKey: "nfl",
       competitionLabel: "NFL",
       title: "Editorial lead (becomes the top story)",
@@ -65,6 +67,7 @@ describe("id→url story keying (#858)", () => {
     };
     const h1: SourceHeadline = {
       id: "dup",
+      sportKey: "football",
       competitionKey: "nfl",
       competitionLabel: "NFL",
       title: "Distinct story, colliding id",
@@ -110,6 +113,7 @@ describe("id→url story keying (#858)", () => {
     // bonus clears BIG_STORY_WEIGHT (4): 2 + 1 + 2 = 5.
     const nflLead: SourceHeadline = {
       id: "nfl-lead",
+      sportKey: "football",
       competitionKey: "nfl",
       competitionLabel: "NFL",
       title: "NFL editorial lead",
@@ -125,6 +129,7 @@ describe("id→url story keying (#858)", () => {
     };
     const nflFeature: SourceHeadline = {
       id: "dup",
+      sportKey: "football",
       competitionKey: "nfl",
       competitionLabel: "NFL",
       title: "NFL feature story",
@@ -142,6 +147,7 @@ describe("id→url story keying (#858)", () => {
     // story that happens to share `nflFeature`'s id "dup" but has a completely different url.
     const nbaLead: SourceHeadline = {
       id: "nba-lead",
+      sportKey: "basketball",
       competitionKey: "nba",
       competitionLabel: "NBA",
       title: "NBA editorial lead",
@@ -157,6 +163,7 @@ describe("id→url story keying (#858)", () => {
     };
     const nbaOther: SourceHeadline = {
       id: "dup",
+      sportKey: "basketball",
       competitionKey: "nba",
       competitionLabel: "NBA",
       title: "NBA distinct story (colliding id)",
@@ -190,6 +197,7 @@ describe("id→url story keying (#858)", () => {
             {
               id: "custom-shared-url",
               sourceId: "source-1",
+              sportKey: "basketball",
               competitionKey: "nba",
               competitionLabel: "NBA",
               title: "Custom story sharing the ESPN feature URL",
@@ -233,6 +241,7 @@ describe("id→url story keying (#858)", () => {
     };
     const headline = (competitionKey: "nba" | "nfl", id: string, url: string): SourceHeadline => ({
       id,
+      sportKey: competitionKey === "nfl" ? "football" : "basketball",
       competitionKey,
       competitionLabel: competitionKey.toUpperCase(),
       title: id,
@@ -292,6 +301,7 @@ describe("id→url story keying (#858)", () => {
             {
               id: "custom-feature",
               sourceId: "source-1",
+              sportKey: "football",
               competitionKey: "nfl",
               competitionLabel: "NFL",
               title: "Custom feature",
@@ -335,6 +345,7 @@ describe("id→url story keying (#858)", () => {
     const sharedUrl = "https://publisher.example/shared-story";
     const common = {
       sourceId: "source-1",
+      sportKey: "football" as const,
       competitionKey: "nfl",
       competitionLabel: "NFL",
       url: sharedUrl,
@@ -393,6 +404,7 @@ describe("id→url story keying (#858)", () => {
     // h0 is the tier-1 pick (front of feed, unconditional) — not tagged to any team.
     const h0: SourceHeadline = {
       id: "dup",
+      sportKey: "football",
       competitionKey: "nfl",
       competitionLabel: "NFL",
       title: "Editorial lead",
@@ -412,6 +424,7 @@ describe("id→url story keying (#858)", () => {
     // crops it once h2/h3/h4 exist.
     const h1: SourceHeadline = {
       id: "dup",
+      sportKey: "football",
       competitionKey: "nfl",
       competitionLabel: "NFL",
       title: "Distinct dal story, colliding id",
@@ -427,6 +440,7 @@ describe("id→url story keying (#858)", () => {
     };
     const dalFiller = (n: number): SourceHeadline => ({
       id: `filler-${n}`,
+      sportKey: "football",
       competitionKey: "nfl",
       competitionLabel: "NFL",
       title: `Dal filler story ${n}`,

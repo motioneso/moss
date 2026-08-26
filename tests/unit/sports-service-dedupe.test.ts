@@ -92,6 +92,7 @@ describe("SportsService.getOverview — followed-team dedupe (#855)", () => {
 
   const eplHeadline: SourceHeadline = {
     id: "h-epl",
+    sportKey: "soccer",
     competitionKey: "eng.1",
     competitionLabel: "Premier League",
     title: "Liverpool close in on the title",
@@ -107,6 +108,7 @@ describe("SportsService.getOverview — followed-team dedupe (#855)", () => {
   };
   const uclHeadlineDuplicateUrl: SourceHeadline = {
     id: "h-ucl-dup",
+    sportKey: "soccer",
     competitionKey: "uefa.champions",
     competitionLabel: "Champions League",
     title: "Liverpool close in on the title", // same story, same url, different feed/id
@@ -122,6 +124,7 @@ describe("SportsService.getOverview — followed-team dedupe (#855)", () => {
   };
   const uclHeadlineUnique: SourceHeadline = {
     id: "h-ucl-unique",
+    sportKey: "soccer",
     competitionKey: "uefa.champions",
     competitionLabel: "Champions League",
     title: "Liverpool through to the quarter-finals",

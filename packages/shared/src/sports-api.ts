@@ -1,5 +1,6 @@
 // packages/shared/src/sports-api.ts — BROWSER-SAFE. No node:* imports.
 import { errorResponseSchema } from "./schema-fragments.js";
+import type { SportsSportKey } from "./sports-sources-api.js";
 
 export type IsoDate = string; // "YYYY-MM-DD"
 
@@ -57,8 +58,10 @@ export interface StandingsSection {
 
 export interface Headline {
   readonly id: string;
-  readonly competitionKey: string;
-  readonly competitionLabel: string; // "NFL", "Premier League" — never render competitionKey raw (#765 M4)
+  readonly sportKey: SportsSportKey;
+  readonly competitionKey: string | null;
+  /** The human label for this story's sport or competition scope. */
+  readonly competitionLabel: string;
   readonly title: string;
   readonly url: string;
   readonly publishedAt: string;
@@ -241,18 +244,28 @@ export interface StandingsGroup {
   readonly sections: readonly StandingsSection[];
 }
 
-export interface LeagueNewsGroup {
-  readonly competitionKey: string;
-  readonly competitionLabel: string;
-  readonly headlines: readonly Headline[]; // no hard cap — bounded by the source fetch
-}
+export type SportsNewsGroup =
+  | {
+      readonly kind: "sport";
+      readonly sportKey: SportsSportKey;
+      readonly competitionKey: null;
+      readonly competitionLabel: string;
+      readonly headlines: readonly Headline[];
+    }
+  | {
+      readonly kind: "competition";
+      readonly sportKey: SportsSportKey;
+      readonly competitionKey: string;
+      readonly competitionLabel: string;
+      readonly headlines: readonly Headline[];
+    };
 
 export interface SportsOverviewResponse {
   readonly hero: OverviewHero;
   readonly followed: readonly FollowedTeamCard[];
   readonly scoreboard: readonly ScoreboardGroup[];
   readonly topStories: readonly Headline[]; // ranked, capped at 6
-  readonly leagueNews: readonly LeagueNewsGroup[];
+  readonly leagueNews: readonly SportsNewsGroup[];
   readonly standings: readonly StandingsGroup[];
   readonly followedTeams: readonly FollowedTeamRef[]; // for is-you marking on the client
   readonly followedLeagues: readonly FollowedLeagueRef[]; // whole-competition follows (#763)
@@ -399,6 +412,7 @@ const headlineSchema = {
   additionalProperties: false,
   required: [
     "id",
+    "sportKey",
     "competitionKey",
     "competitionLabel",
     "title",
@@ -412,7 +426,11 @@ const headlineSchema = {
   ],
   properties: {
     id: { type: "string" },
-    competitionKey: { type: "string" },
+    sportKey: {
+      type: "string",
+      enum: ["football", "hockey", "soccer", "baseball", "basketball"]
+    },
+    competitionKey: { type: ["string", "null"] },
     competitionLabel: { type: "string" },
     title: { type: "string" },
     url: { type: "string" },
@@ -657,15 +675,39 @@ const standingsGroupSchema = {
   }
 } as const;
 
-const leagueNewsGroupSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["competitionKey", "competitionLabel", "headlines"],
-  properties: {
-    competitionKey: { type: "string" },
-    competitionLabel: { type: "string" },
-    headlines: { type: "array", items: headlineSchema }
-  }
+const sportsNewsGroupSchema = {
+  oneOf: [
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind", "sportKey", "competitionKey", "competitionLabel", "headlines"],
+      properties: {
+        kind: { type: "string", enum: ["sport"] },
+        sportKey: {
+          type: "string",
+          enum: ["football", "hockey", "soccer", "baseball", "basketball"]
+        },
+        competitionKey: { type: "null" },
+        competitionLabel: { type: "string" },
+        headlines: { type: "array", items: headlineSchema }
+      }
+    },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind", "sportKey", "competitionKey", "competitionLabel", "headlines"],
+      properties: {
+        kind: { type: "string", enum: ["competition"] },
+        sportKey: {
+          type: "string",
+          enum: ["football", "hockey", "soccer", "baseball", "basketball"]
+        },
+        competitionKey: { type: "string" },
+        competitionLabel: { type: "string" },
+        headlines: { type: "array", items: headlineSchema }
+      }
+    }
+  ]
 } as const;
 
 const gamedayGameSchema = {
@@ -724,7 +766,7 @@ export const sportsOverviewResponseSchema = {
         followed: { type: "array", items: followedTeamCardSchema },
         scoreboard: { type: "array", items: scoreboardGroupSchema },
         topStories: { type: "array", items: headlineSchema },
-        leagueNews: { type: "array", items: leagueNewsGroupSchema },
+        leagueNews: { type: "array", items: sportsNewsGroupSchema },
         standings: { type: "array", items: standingsGroupSchema },
         followedTeams: {
           type: "array",

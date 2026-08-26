@@ -11,11 +11,13 @@ import type {
   PreviewSportsSourceResponse,
   SportsCatalogResponse,
   SportsCustomSourceDto,
-  SportsCustomSourcesResponse,
+  SportsNewsSourcesResponse,
   SportsFollowDto,
   SportsFollowsResponse,
   SportsOverviewResponse,
-  SportsStandingsResponse
+  SportsStandingsResponse,
+  UpdateSportsEspnCoverageRequest,
+  UpdateSportsEspnCoverageResponse
 } from "@moss/shared";
 
 import { requestJson } from "@moss/module-web-sdk";
@@ -57,8 +59,17 @@ export async function deleteSportsFollow(id: string): Promise<{ ok: boolean }> {
 
 // #1572: custom public news sources by team and league.
 
-export async function listSportsSources(): Promise<SportsCustomSourcesResponse> {
-  return requestJson<SportsCustomSourcesResponse>("/api/sports/sources");
+export async function listSportsSources(): Promise<SportsNewsSourcesResponse> {
+  return requestJson<SportsNewsSourcesResponse>("/api/sports/sources");
+}
+
+export async function updateSportsEspnCoverage(
+  input: UpdateSportsEspnCoverageRequest
+): Promise<UpdateSportsEspnCoverageResponse> {
+  return requestJson<UpdateSportsEspnCoverageResponse>("/api/sports/sources/espn/coverage", {
+    method: "PUT",
+    body: input
+  });
 }
 
 export async function previewSportsSource(

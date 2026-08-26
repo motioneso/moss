@@ -8,7 +8,7 @@
 // body would end up on the wrong article). Deliberately clock-free so SSR and tests stay
 // deterministic; ties fall back to feed order (roughly ESPN's editorial prominence).
 
-import type { Headline, LeagueNewsGroup } from "@moss/shared";
+import type { Headline, SportsNewsGroup } from "@moss/shared";
 
 export function isFollowed(
   pairs: ReadonlySet<string>,
@@ -32,9 +32,13 @@ export function isWrittenArticle(headline: Headline): boolean {
 // the pick depend on data it can't have yet and desync server vs client.
 export function storyWeight(headline: Headline, followedPairs: ReadonlySet<string>): number {
   let weight = 0;
+  const competitionKey = headline.competitionKey;
   if (headline.imageUrl) weight += 2;
   if (headline.summary) weight += 1;
-  if (headline.teamKeys.some((key) => isFollowed(followedPairs, headline.competitionKey, key))) {
+  if (
+    competitionKey !== null &&
+    headline.teamKeys.some((key) => isFollowed(followedPairs, competitionKey, key))
+  ) {
     weight += 2;
   }
   return weight;
@@ -54,7 +58,7 @@ export interface RankedStory {
 // the big story (mrb51pnq). Sort is stable, so equal weights keep league order across leagues and
 // feed order within one — deterministic for SSR and tests.
 export function rankStories(
-  groups: readonly LeagueNewsGroup[],
+  groups: readonly SportsNewsGroup[],
   followedPairs: ReadonlySet<string>
 ): RankedStory[] {
   return groups
@@ -72,7 +76,7 @@ export function rankStories(
 // default "all" filter state) to know which article's body to fetch (#857); NewsBand computes the
 // same pick from `rankStories` for its own filtered view.
 export function selectFeature(
-  groups: readonly LeagueNewsGroup[],
+  groups: readonly SportsNewsGroup[],
   followedPairs: ReadonlySet<string>
 ): Headline | null {
   const ranked = rankStories(groups, followedPairs);

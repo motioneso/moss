@@ -3,7 +3,8 @@ import type {
   CompetitionRef,
   CreateSportsFollowRequest,
   SportsFollowDto,
-  TeamRef
+  TeamRef,
+  UpdateSportsEspnCoverageRequest
 } from "@moss/shared";
 
 import { mockApi } from "./mock-api.js";
@@ -52,9 +53,21 @@ type MutationScenario = {
 
 /** Stateful mock local to this spec (spec Slice 3) — catalog, follows, search, roster, and
     create/delete follow, all in-memory. No ESPN call, no real account. */
-async function mockSportsSettings(page: Page, scenario: MutationScenario = {}): Promise<void> {
+async function mockSportsSettings(
+  page: Page,
+  scenario: MutationScenario = {}
+): Promise<{ sourceReads: () => number }> {
   let follows: SportsFollowDto[] = [];
   let nextId = 1;
+  let sourceReads = 0;
+  let espn = {
+    kind: "builtin" as const,
+    id: "espn" as const,
+    label: "ESPN" as const,
+    enabled: true,
+    usesDefaultCoverage: true,
+    assignments: [] as UpdateSportsEspnCoverageRequest["assignments"]
+  };
 
   await page.route("**/api/me/modules", (route) =>
     fulfillJson(route, {
@@ -78,7 +91,21 @@ async function mockSportsSettings(page: Page, scenario: MutationScenario = {}): 
     fulfillJson(route, { competitions: [NFL, EPL], degraded: false })
   );
 
-  await page.route("**/api/sports/sources", (route) => fulfillJson(route, { sources: [] }));
+  await page.route("**/api/sports/sources", (route) => {
+    sourceReads += 1;
+    return fulfillJson(route, { sources: [espn] });
+  });
+
+  await page.route("**/api/sports/sources/espn/coverage", (route) => {
+    const body = route.request().postDataJSON() as UpdateSportsEspnCoverageRequest;
+    espn = {
+      ...espn,
+      enabled: body.assignments.length > 0,
+      usesDefaultCoverage: false,
+      assignments: body.assignments
+    };
+    return fulfillJson(route, { source: espn });
+  });
 
   await page.route("**/api/sports/follows", async (route) => {
     if (route.request().method() === "GET") return fulfillJson(route, { follows });
@@ -118,6 +145,8 @@ async function mockSportsSettings(page: Page, scenario: MutationScenario = {}): 
     const teams = key === "nfl" ? [COWBOYS] : key === "epl" ? [ARSENAL] : [];
     return fulfillJson(route, { teams, degraded: false });
   });
+
+  return { sourceReads: () => sourceReads };
 }
 
 async function gotoSportsSettings(page: Page): Promise<void> {
@@ -281,5 +310,28 @@ test.describe("Sports settings follow picker (#989)", () => {
     await expect(page.getByRole("button", { name: "Unfollow Arsenal" })).toBeVisible();
     await page.getByRole("button", { name: "Unfollow Arsenal" }).click();
     await expect(page.getByRole("button", { name: "Follow Arsenal" })).toBeVisible();
+  });
+
+  test("clearing ESPN coverage refetches the normalized source list", async ({ page }) => {
+    await mockApi(page, {
+      authenticated: true,
+      connectorAccounts: [],
+      connectorProviders: [],
+      notifications: [],
+      tasks: []
+    });
+    const sportsApi = await mockSportsSettings(page);
+    await gotoSportsSettings(page);
+
+    await expect(page.getByText("Coverage: All sports")).toBeVisible();
+    await page.getByRole("button", { name: "Edit coverage for ESPN" }).click();
+    const sports = page.getByRole("group", { name: "Sports" }).first();
+    for (const label of ["Football", "Hockey", "Soccer", "Baseball", "Basketball"]) {
+      await sports.getByText(label, { exact: true }).click();
+    }
+    await page.getByRole("button", { name: "Save coverage" }).click();
+
+    await expect(page.getByText("Inactive for headlines.")).toBeVisible();
+    expect(sportsApi.sourceReads()).toBeGreaterThan(1);
   });
 });
