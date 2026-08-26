@@ -2,9 +2,14 @@ import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
-import type { ListMyModuleBuildsResponse, ListMyModulesResponse, MeResponse } from "@moss/shared";
+import type {
+  ListMyModuleBuildsResponse,
+  ListMyModulesResponse,
+  MeResponse,
+  ModuleBuildSummary
+} from "@moss/shared";
 
-import { WorkshopPage } from "../../packages/workshop/src/web/workshop-page.js";
+import { WorkshopPage, hasActiveBuild } from "../../packages/workshop/src/web/workshop-page.js";
 
 // Root suite renders @moss/web components with react-dom/server (no jsdom /
 // @testing-library — deliberately avoided repo-wide; see settings-appearance-pane.test.tsx).
@@ -70,6 +75,7 @@ describe("WorkshopPage", () => {
           step: "Writing the page",
           plan: null,
           fetchedUrls: [],
+          writtenFiles: [],
           costCents: 10,
           error: null,
           createdAt: "2026-08-20T09:00:00Z",
@@ -131,5 +137,48 @@ describe("WorkshopPage", () => {
     expect(html).toContain("GMM tracker");
     expect(html).not.toContain("Finance");
     expect(html).not.toContain("Someone else&#x27;s module");
+  });
+});
+
+function build(status: ModuleBuildSummary["status"]): ModuleBuildSummary {
+  return {
+    id: "b-1",
+    status,
+    step: null,
+    plan: null,
+    fetchedUrls: [],
+    writtenFiles: [],
+    costCents: 0,
+    error: null,
+    createdAt: "2026-08-20T09:00:00Z",
+    updatedAt: "2026-08-20T09:00:00Z"
+  };
+}
+
+describe("hasActiveBuild", () => {
+  it("is false when there is no data yet", () => {
+    expect(hasActiveBuild(undefined)).toBe(false);
+  });
+
+  it("is false when every build is terminal or waiting on the human", () => {
+    expect(
+      hasActiveBuild({
+        builds: [
+          build("awaiting_plan_approval"),
+          build("awaiting_change"),
+          build("ready"),
+          build("failed"),
+          build("cancelled")
+        ]
+      })
+    ).toBe(false);
+  });
+
+  it("is true when a build is planning", () => {
+    expect(hasActiveBuild({ builds: [build("planning")] })).toBe(true);
+  });
+
+  it("is true when a build is building", () => {
+    expect(hasActiveBuild({ builds: [build("building")] })).toBe(true);
   });
 });

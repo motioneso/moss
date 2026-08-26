@@ -203,6 +203,7 @@ export interface ModuleBuildsTable {
   step: string | null;
   module_id: string | null;
   fetched_urls: ColumnType<string[], string[] | undefined, string[]>;
+  written_files: ColumnType<string[], string[] | undefined, string[]>;
   cost_cents: ColumnType<number, number | undefined, number>;
   error: string | null;
   created_at: TimestampColumn;

@@ -33,6 +33,7 @@ function building(overrides: Partial<ModuleBuildSummary> = {}): ModuleBuildSumma
       roughCost: { time: "5 minutes", budgetCents: 500 }
     },
     fetchedUrls: [],
+    writtenFiles: [],
     costCents: 42,
     error: null,
     createdAt: "2026-08-20T09:00:00Z",
@@ -57,6 +58,13 @@ describe("WorkshopGroups", () => {
     expect(html).toContain("Building now");
     expect(html).toContain("Allotment watering log");
     expect(html).toContain("Writing the page");
+  });
+
+  it("shows what a build has written while it's in progress", () => {
+    const html = render([building({ writtenFiles: ["module.ts", "module.test.ts"] })], []);
+    expect(html).toContain("What it has written");
+    expect(html).toContain("module.ts");
+    expect(html).toContain("module.test.ts");
   });
 
   it("shows a build awaiting approval under Needs you", () => {

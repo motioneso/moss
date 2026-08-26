@@ -39,6 +39,7 @@ const baseRow = {
   step: null,
   module_id: null,
   fetched_urls: [],
+  written_files: [],
   cost_cents: 0,
   error: null,
   created_at: new Date("2026-08-21T00:00:00Z"),

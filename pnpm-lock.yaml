@@ -274,6 +274,9 @@ importers:
       '@moss/vault':
         specifier: workspace:*
         version: link:../../packages/vault
+      '@moss/workshop':
+        specifier: workspace:*
+        version: link:../../packages/workshop
       kysely:
         specifier: ^0.29.2
         version: 0.29.2

@@ -60,7 +60,8 @@ import {
   createModuleCredentialSecretCipher,
   getModuleBuild,
   updateModuleBuildStatus,
-  appendModuleBuildFetchedUrl
+  appendModuleBuildFetchedUrl,
+  appendModuleBuildWrittenFile
 } from "@moss/settings";
 import { getVaultBaseDir, VaultContextRunner } from "@moss/vault";
 
@@ -70,6 +71,7 @@ import { createExternalBriefingInvoker } from "./external-module-invoke.js";
 import { createExternalModuleJobHandler } from "./external-module-job-handler.js";
 import { createIsModuleEnabled } from "./worker-module-gate.js";
 import { createModuleBuildLiveAgent } from "./module-build-live-agent.js";
+import { WORKSHOP_MODULE_ID } from "@moss/workshop";
 
 // ---------------------------------------------------------------------------
 // Bounded graceful-shutdown timeout (ms). On SIGINT/SIGTERM the worker waits
@@ -111,6 +113,23 @@ export function resolveExternalWorkerConfig(env: NodeJS.ProcessEnv = process.env
   readonly modulesDir: string;
 } {
   return { modulesDir: resolveModulesDir(env) };
+}
+
+/**
+ * The notification posted when a module build reaches an end state (#1949 Task 1.4).
+ * `eventKey` is per build+outcome so a pg-boss retry that fails again updates the
+ * same notification row instead of creating a duplicate.
+ */
+export function buildModuleBuildNotification(
+  buildId: string,
+  outcome: "finished" | "failed"
+): CreateNotificationInput {
+  return {
+    moduleId: WORKSHOP_MODULE_ID,
+    title: outcome === "finished" ? "Your module is ready for a look" : "Your module build failed",
+    href: "/workshop",
+    eventKey: `module-build:${buildId}:${outcome}`
+  };
 }
 
 /**
@@ -186,6 +205,10 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   const moduleBuildIo = createRealTmuxIo();
   const moduleBuildMux = new TmuxMultiplexer(moduleBuildIo);
   const aiRepository = new AiRepository();
+  const moduleBuildNotifications = new NotificationsRepository(
+    undefined,
+    createNotificationPreferencePort()
+  );
   const runModuleBuildStepForJob = async (payload: ModuleBuildPayload) => {
     const access: AccessContext = {
       actorUserId: payload.actorUserId,
@@ -211,7 +234,9 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
           {
             launchLiveAgent: moduleBuildLiveAgent,
             resolveWorkingDir: (buildId) => resolveBuildSourceDir(moduleBuildsDir, buildId),
-            recordFetchedUrl: (buildId, url) => appendModuleBuildFetchedUrl(scopedDb, buildId, url)
+            recordFetchedUrl: (buildId, url) => appendModuleBuildFetchedUrl(scopedDb, buildId, url),
+            recordWrittenFile: (buildId, path) =>
+              appendModuleBuildWrittenFile(scopedDb, buildId, path)
           },
           build
         );
@@ -219,12 +244,22 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
           status: result.continuation ? "building" : "awaiting_change",
           ...(result.continuation ? { step: result.continuation.step } : {})
         });
+        if (!result.continuation) {
+          await moduleBuildNotifications.create(
+            scopedDb,
+            buildModuleBuildNotification(build.id, "finished")
+          );
+        }
         return result;
       } catch (error) {
         await updateModuleBuildStatus(scopedDb, build.id, {
           status: "failed",
           error: error instanceof Error ? error.name : "unknown error"
         });
+        await moduleBuildNotifications.create(
+          scopedDb,
+          buildModuleBuildNotification(build.id, "failed")
+        );
         throw error;
       }
     });
