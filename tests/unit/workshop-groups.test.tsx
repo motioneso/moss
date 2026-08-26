@@ -140,22 +140,30 @@ describe("WorkshopGroups", () => {
       onAskForChange: vi.fn(),
       onShip: vi.fn()
     };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(["settings", "locale"], {
+      locale: { timezone: "UTC", region: "en-US", dateFormat: "12" }
+    });
     let tree: ReturnType<typeof create>;
     await act(async () => {
       tree = create(
-        createElement(WorkshopGroups, {
-          builds: [
-            building({ id: "approve", status: "awaiting_plan_approval" }),
-            building({
-              id: "draft",
-              status: "awaiting_change",
-              moduleId: "videos"
-            }),
-            building({ id: "active" })
-          ],
-          modules: [liveModule({ id: "videos" })],
-          actions: handlers
-        })
+        createElement(
+          QueryClientProvider,
+          { client },
+          createElement(WorkshopGroups, {
+            builds: [
+              building({ id: "approve", status: "awaiting_plan_approval" }),
+              building({
+                id: "draft",
+                status: "awaiting_change",
+                moduleId: "videos"
+              }),
+              building({ id: "active" })
+            ],
+            modules: [liveModule({ id: "videos" })],
+            actions: handlers
+          })
+        )
       );
     });
     const button = (label: string) =>
