@@ -27,6 +27,7 @@ const CONTENT_BASE = "https://content.core.api.espn.com/v1/sports/news";
 // the sports module must be redeployed for the new CSP to reach the browser.
 export const ESPN_IMAGE_HOSTS: readonly string[] = [
   "a.espncdn.com",
+  "s.espncdn.com",
   "s.secure.espncdn.com",
   "espnmedia-cdn.akamaized.net"
 ];

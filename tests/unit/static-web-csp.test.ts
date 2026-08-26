@@ -6,7 +6,7 @@ import { SPA_CSP } from "../../apps/api/src/static-web.js";
 
 // Registration order: sports' ESPN hosts, then the news catalog's (sorted) artwork hosts.
 const EXPECTED_IMG_SRC =
-  "img-src 'self' data: https://a.espncdn.com https://s.secure.espncdn.com" +
+  "img-src 'self' data: https://a.espncdn.com https://s.espncdn.com https://s.secure.espncdn.com" +
   " https://espnmedia-cdn.akamaized.net" +
   " https://cdn.arstechnica.net https://i.guim.co.uk https://ichef.bbci.co.uk" +
   " https://media.npr.org https://media.wired.com https://npr.brightspotcdn.com" +

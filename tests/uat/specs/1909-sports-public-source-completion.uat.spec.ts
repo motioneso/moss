@@ -94,7 +94,7 @@ async function signIn(page: Page): Promise<void> {
 
 async function openSportsSettings(page: Page): Promise<Locator> {
   await page.goto(`${requireBaseURL()}/settings?section=modules&module=sports`);
-  const section = page.locator('section[aria-label="Custom sports news sources"]');
+  const section = page.locator('section[aria-label="Sports news sources"]');
   await expect(section).toBeVisible();
   return section;
 }
