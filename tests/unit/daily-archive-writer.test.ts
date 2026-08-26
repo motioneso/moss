@@ -17,9 +17,10 @@ const { writeDailyChatArchive } = await import("../../packages/notes/src/daily-a
 
 const ACTOR_ID = "11111111-1111-1111-1111-111111111111";
 
-function session(threadId: string, createdAt: string, body: string) {
+function session(threadId: string, createdAt: string, body: string, title = "Chat") {
   return {
     threadId,
+    title,
     messages: [{ role: "user" as const, body, createdAt }]
   };
 }
@@ -52,6 +53,7 @@ describe("writeDailyChatArchive (#1951)", () => {
       "2026-08-25",
       "Moss/Chats",
       [],
+      "UTC",
       notesSync
     );
     expect(result).toEqual({ written: false, path: null, reason: "no-sessions" });
@@ -69,6 +71,7 @@ describe("writeDailyChatArchive (#1951)", () => {
       "2026-08-25",
       "Moss/Chats",
       sessions,
+      "UTC",
       notesSync
     );
     expect(result.written).toBe(true);
@@ -76,11 +79,56 @@ describe("writeDailyChatArchive (#1951)", () => {
     const content = await readFile(join(root, "Moss/Chats", "2026-08-25.md"), "utf-8");
     const markerLine = content.split("\n")[0];
     expect(markerLine).toBe("<!-- moss-chat-archive:v1 -->");
-    expect(content.indexOf("2026-08-25T09:00:00.000Z")).toBeLessThan(
-      content.indexOf("2026-08-25T10:00:00.000Z")
-    );
     expect(content.indexOf("hello")).toBeLessThan(content.indexOf("world"));
     expect(enqueued).toEqual([{ actorUserId: ACTOR_ID, sourcePath: root }]);
+  });
+
+  it("titles each session heading with the local time and the conversation title", async () => {
+    const sessions = [
+      session("thread-1", "2026-08-25T09:00:00.000Z", "hello", "Vacation planning")
+    ];
+    await writeDailyChatArchive(
+      {} as never,
+      ACTOR_ID,
+      "2026-08-25",
+      "Moss/Chats",
+      sessions,
+      "UTC",
+      notesSync
+    );
+    const content = await readFile(join(root, "Moss/Chats", "2026-08-25.md"), "utf-8");
+    expect(content).toContain("## 9:00 AM — Vacation planning");
+  });
+
+  it("falls back to just the local time when the conversation has no usable title", async () => {
+    const sessions = [session("thread-1", "2026-08-25T09:00:00.000Z", "hello", "   ")];
+    await writeDailyChatArchive(
+      {} as never,
+      ACTOR_ID,
+      "2026-08-25",
+      "Moss/Chats",
+      sessions,
+      "UTC",
+      notesSync
+    );
+    const content = await readFile(join(root, "Moss/Chats", "2026-08-25.md"), "utf-8");
+    expect(content).toContain("## 9:00 AM\n");
+    expect(content).not.toContain("—");
+  });
+
+  it("renders the heading time in the timezone passed in, not raw UTC", async () => {
+    const sessions = [session("thread-1", "2026-08-25T09:00:00.000Z", "hello", "Standup")];
+    await writeDailyChatArchive(
+      {} as never,
+      ACTOR_ID,
+      "2026-08-25",
+      "Moss/Chats",
+      sessions,
+      "America/Los_Angeles",
+      notesSync
+    );
+    const content = await readFile(join(root, "Moss/Chats", "2026-08-25.md"), "utf-8");
+    expect(content).toContain("## 2:00 AM — Standup");
   });
 
   it("reports bad-folder without writing when the folder fails validation", async () => {
@@ -90,6 +138,7 @@ describe("writeDailyChatArchive (#1951)", () => {
       "2026-08-25",
       "/etc/passwd",
       [session("thread-1", "2026-08-25T09:00:00.000Z", "hello")],
+      "UTC",
       notesSync
     );
     expect(result).toEqual({ written: false, path: null, reason: "bad-folder" });
@@ -104,6 +153,7 @@ describe("writeDailyChatArchive (#1951)", () => {
       "2026-08-25",
       "Moss/Chats",
       [session("thread-1", "2026-08-25T09:00:00.000Z", "hello")],
+      "UTC",
       notesSync
     );
     expect(result).toEqual({ written: false, path: null, reason: "no-notes-source" });
@@ -123,6 +173,7 @@ describe("writeDailyChatArchive (#1951)", () => {
       "2026-08-25",
       "Moss/Chats",
       [session("thread-1", "2026-08-25T09:00:00.000Z", "fresh")],
+      "UTC",
       notesSync
     );
     expect(result.path).toBe(join("Moss/Chats", "2026-08-25.md"));
@@ -140,6 +191,7 @@ describe("writeDailyChatArchive (#1951)", () => {
       "2026-08-25",
       "Moss/Chats",
       [session("thread-1", "2026-08-25T09:00:00.000Z", "fresh")],
+      "UTC",
       notesSync
     );
     expect(result.path).toBe(join("Moss/Chats", "2026-08-25 (moss).md"));
@@ -160,6 +212,7 @@ describe("writeDailyChatArchive (#1951)", () => {
         "2026-08-25",
         "Moss/Chats",
         [session("thread-1", "2026-08-25T09:00:00.000Z", "fresh")],
+        "UTC",
         notesSync
       )
     ).rejects.toThrow();

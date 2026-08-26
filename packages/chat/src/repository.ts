@@ -320,6 +320,7 @@ export class ChatRepository {
   ): Promise<
     Array<{
       threadId: string;
+      threadTitle: string;
       threadFirstMessageAt: string;
       role: "user" | "assistant";
       body: string;
@@ -333,6 +334,7 @@ export class ChatRepository {
       .innerJoin("app.chat_threads as t", "t.id", "m.thread_id")
       .select([
         "m.thread_id as threadId",
+        "t.title as threadTitle",
         sql<Date>`min(m.created_at) over (partition by m.thread_id)`.as("threadFirstMessageAt"),
         "m.role as role",
         "m.body as body",
@@ -350,6 +352,7 @@ export class ChatRepository {
 
     return rows.map((row) => ({
       threadId: row.threadId,
+      threadTitle: row.threadTitle,
       threadFirstMessageAt: toIsoString(row.threadFirstMessageAt),
       role: row.role as "user" | "assistant",
       body: row.body,
