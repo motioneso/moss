@@ -92,44 +92,44 @@ test("every schedule choice can be created through the real form (#1970)", async
 
   // 1. Every day, one time — stored as once_daily.
   await startMedication(page, "UAT Daily", "Every day");
-  await modal.getByLabel("Dose time 1").fill("08:00");
+  await modal.getByLabel("Dose time 1", { exact: true }).fill("08:00");
   await addAndConfirm(page, "UAT Daily");
 
   // 2. Every day, three times — the same choice, stored as times_per_day.
   await startMedication(page, "UAT Three A Day", "Every day");
-  await modal.getByLabel("Dose time 1").fill("08:00");
+  await modal.getByLabel("Dose time 1", { exact: true }).fill("08:00");
   await modal.getByRole("button", { name: "Add another time" }).click();
-  await modal.getByLabel("Dose time 2").fill("14:00");
+  await modal.getByLabel("Dose time 2", { exact: true }).fill("14:00");
   await modal.getByRole("button", { name: "Add another time" }).click();
-  await modal.getByLabel("Dose time 3").fill("20:00");
+  await modal.getByLabel("Dose time 3", { exact: true }).fill("20:00");
   await addAndConfirm(page, "UAT Three A Day");
 
   // 3. Certain days of the week.
   await startMedication(page, "UAT Weekdays", "Certain days");
   await modal.getByRole("button", { name: "Tuesday" }).click();
   await modal.getByRole("button", { name: "Thursday" }).click();
-  await modal.getByLabel("Dose time 1").fill("07:30");
+  await modal.getByLabel("Dose time 1", { exact: true }).fill("07:30");
   await addAndConfirm(page, "UAT Weekdays");
 
   // 4. Every so often — every three days.
   await startMedication(page, "UAT Interval", "Every so often");
   await modal.getByLabel("How many days, weeks or months between doses").fill("3");
   await modal.getByRole("button", { name: "days", exact: true }).click();
-  await modal.getByLabel("Dose time 1").fill("09:00");
+  await modal.getByLabel("Dose time 1", { exact: true }).fill("09:00");
   await addAndConfirm(page, "UAT Interval");
 
   // 5. Monthly, on the 15th.
   await startMedication(page, "UAT Monthly", "Monthly");
   await modal.getByRole("button", { name: "On a date" }).click();
   await modal.getByLabel("Day of the month").fill("15");
-  await modal.getByLabel("Dose time 1").fill("10:00");
+  await modal.getByLabel("Dose time 1", { exact: true }).fill("10:00");
   await addAndConfirm(page, "UAT Monthly");
 
   // 6. A cycle — 21 days on, 7 off.
   await startMedication(page, "UAT Cycle", "In a cycle");
   await modal.getByLabel("Days on").fill("21");
   await modal.getByLabel("Days off").fill("7");
-  await modal.getByLabel("Dose time 1").fill("11:00");
+  await modal.getByLabel("Dose time 1", { exact: true }).fill("11:00");
   await addAndConfirm(page, "UAT Cycle");
 
   // 7. Only when needed — no times, and deliberately no reminder switch.

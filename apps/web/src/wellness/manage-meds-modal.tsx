@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { localDay } from "@moss/shared";
+import { Switch } from "@moss/ui";
 import { describeSchedule, nextDoses } from "@moss/wellness/schedule-summary";
+import { formatDateTime, useUserLocale } from "../locale/locale-format";
 import { createMedication, listMedications, updateMedication } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { medColor, type Theme } from "./emotion-taxonomy";
@@ -9,7 +12,6 @@ import {
   MONTH_POSITION_LABELS,
   SCHEDULE_CHOICES,
   WEEKDAY_LABELS,
-  browserTimeZone,
   buildCreateRequest,
   describeFormProblems,
   emptyMedForm,
@@ -17,7 +19,6 @@ import {
   previewMedication,
   startDateRequired,
   supportsReminders,
-  todayDateKey,
   usesClockTimes,
   usesWeekdays,
   withChoice,
@@ -75,18 +76,14 @@ function PlusIcon() {
   );
 }
 
-/** One upcoming dose, written the way it reads in the preview: "Mon 1 Sep, 08:00". */
-function formatDoseTime(when: Date, timeZone: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone
-  }).format(when);
-}
+/** Options for one upcoming dose, written the way it reads in the preview: "Mon 1 Sep, 08:00". */
+const DOSE_TIME_OPTS: Intl.DateTimeFormatOptions = {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit"
+};
 
 interface Props {
   open: boolean;
@@ -96,12 +93,16 @@ interface Props {
 
 export function ManageMedsModal({ open, onClose, theme = "light" }: Props) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<MedFormState>(() => emptyMedForm(todayDateKey()));
+  // #579: dates render and bucket in the user's *persisted* zone, never the browser's ambient one.
+  const locale = useUserLocale();
+  const timeZone = locale.timezone;
+  const [form, setForm] = useState<MedFormState>(() =>
+    emptyMedForm(localDay(new Date(), timeZone))
+  );
 
   const patch = (changes: Partial<MedFormState>) =>
     setForm((current) => ({ ...current, ...changes }));
 
-  const timeZone = browserTimeZone();
   const problems = describeFormProblems(form);
 
   // The preview is computed from form state alone — no network, no debounce — so the sentence
@@ -157,7 +158,7 @@ export function ManageMedsModal({ open, onClose, theme = "light" }: Props) {
       void queryClient.invalidateQueries({ queryKey: ["wellness", "schedule"] });
       void queryClient.invalidateQueries({ queryKey: ["wellness", "adherence-summary"] });
       void queryClient.invalidateQueries({ queryKey: queryKeys.wellness.insights });
-      setForm(emptyMedForm(todayDateKey()));
+      setForm(emptyMedForm(localDay(new Date(), timeZone)));
     }
   });
   const deactivateMutation = useMutation({
@@ -264,7 +265,9 @@ export function ManageMedsModal({ open, onClose, theme = "light" }: Props) {
                     type="button"
                     aria-pressed={form.choice === option.value}
                     onClick={() =>
-                      setForm((current) => withChoice(current, option.value, todayDateKey()))
+                      setForm((current) =>
+                        withChoice(current, option.value, localDay(new Date(), timeZone))
+                      )
                     }
                     className={`wl-freqbtn${form.choice === option.value ? " wl-freqbtn--active" : ""}`}
                   >
@@ -497,17 +500,11 @@ export function ManageMedsModal({ open, onClose, theme = "light" }: Props) {
             {supportsReminders(form.choice) ? (
               <div className="wl-medform__field wl-medform__switchrow">
                 <span className="wl-hdetail__lbl">Remind me when a dose is due</span>
-                <label className="jds-switch">
-                  <input
-                    type="checkbox"
-                    aria-label="Remind me when a dose is due"
-                    checked={form.remindersEnabled}
-                    onChange={(e) => patch({ remindersEnabled: e.target.checked })}
-                  />
-                  <span className="jds-switch__track">
-                    <span className="jds-switch__thumb" />
-                  </span>
-                </label>
+                <Switch
+                  ariaLabel="Remind me when a dose is due"
+                  checked={form.remindersEnabled}
+                  onChange={(checked) => patch({ remindersEnabled: checked })}
+                />
               </div>
             ) : null}
 
@@ -518,7 +515,7 @@ export function ManageMedsModal({ open, onClose, theme = "light" }: Props) {
                   <div className="wl-medform__previewline">{preview.sentence}</div>
                   {preview.doses.length > 0 ? (
                     <div className="wl-medform__previewdoses">
-                      {`Next: ${preview.doses.map((dose) => formatDoseTime(dose, timeZone)).join(" · ")}`}
+                      {`Next: ${preview.doses.map((dose) => formatDateTime(dose, locale, DOSE_TIME_OPTS)).join(" · ")}`}
                     </div>
                   ) : null}
                 </>
