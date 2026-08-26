@@ -72,8 +72,11 @@ test.describe.serial("chat archive settings section drives the real backend (#19
     await readJson(await page.request.put("/api/me/notes-source", { data: { path: NOTES_ROOT } }));
     await gotoAssistantSettings(page);
 
+    // <label.jds-switch> is the clickable/visible surface; the native checkbox itself is
+    // deliberately hidden by the design system (opacity: 0, zero size) for accessibility, so
+    // visibility is asserted on the label, same idiom as finance-shared.uat.spec.ts:149.
     const toggle = page.getByRole("checkbox", { name: "Save chats to Notes" });
-    await expect(toggle).toBeVisible();
+    await expect(page.locator("label.jds-switch", { has: toggle })).toBeVisible();
     await expect(toggle).not.toBeChecked();
     await expect(page.getByRole("textbox", { name: "Transcript folder" })).toHaveValue(
       "Moss/Chats"
@@ -85,7 +88,7 @@ test.describe.serial("chat archive settings section drives the real backend (#19
     await gotoAssistantSettings(page);
 
     const toggle = page.getByRole("checkbox", { name: "Save chats to Notes" });
-    await toggle.click();
+    await page.locator("label.jds-switch", { has: toggle }).click();
     await expect(page.getByText("Chat archiving enabled")).toBeVisible();
 
     await gotoAssistantSettings(page);
