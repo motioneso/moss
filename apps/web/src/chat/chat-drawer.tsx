@@ -204,10 +204,6 @@ export function ChatDrawer(props: {
     }
   }, [props.records, pendingUser]);
 
-  useEffect(() => {
-    setFallbackRecords((current) => reconcileFallbacks(current, props.records));
-  }, [props.records]);
-
   // #1533: switching surfaces (e.g. drawer <-> module-embedded chat) must not leak state from the
   // previous surface — reset all locally-derived state unconditionally on every surface change.
   useEffect(() => {
