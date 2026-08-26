@@ -7,7 +7,7 @@ import {
   type Weekday,
   type WeekdayPosition
 } from "./occurrence-engine.js";
-import { dateKeyFromColumn } from "./schedule.js";
+import { dateKeyFromColumn, isWithinScheduleWindow } from "./schedule.js";
 
 /**
  * #1969 — plain-language schedule summary and next-three-doses preview, for the medication
@@ -30,7 +30,14 @@ export function nextDoses(medication: Medication, from: Date, count = 3): Date[]
     from,
     to: new Date(from.getTime() + TWO_YEARS_MS)
   });
-  return occurrences.slice(0, count).map((o) => o.at);
+  // The five older schedule types hand the engine an open anchor (see `toSummaryEngineInput`),
+  // so their start and end dates are not applied inside it. Apply the same day-level window the
+  // day-grid screen uses, so a medication that starts next month does not preview doses today
+  // (#1968). Harmless for the two types whose anchor already carries the dates.
+  return occurrences
+    .filter((o) => isWithinScheduleWindow(medication, o.date))
+    .slice(0, count)
+    .map((o) => o.at);
 }
 
 /** Returns a plain-language sentence describing when `medication` is taken. */
@@ -44,20 +51,43 @@ export function describeSchedule(medication: Medication): string {
 
     case "once_daily":
     case "times_per_day":
-      return `${countPhrase(times.length)}, at ${formatTimeList(times, tz)}.`;
+      return withScheduleWindow(
+        `${countPhrase(times.length)}, at ${formatTimeList(times, tz)}.`,
+        medication,
+        tz
+      );
 
     case "specific_weekdays":
-      return `Every ${formatWeekdayList((medication.weekdays ?? []) as Weekday[])}, at ${formatTimeList(times, tz)}.`;
+      return withScheduleWindow(
+        `Every ${formatWeekdayList((medication.weekdays ?? []) as Weekday[])}, at ${formatTimeList(times, tz)}.`,
+        medication,
+        tz
+      );
 
     case "every_n_hours":
-      return `Every ${medication.interval_hours} hours, starting at ${formatTimeList(times, tz)}.`;
+      return withScheduleWindow(
+        `Every ${medication.interval_hours} hours, starting at ${formatTimeList(times, tz)}.`,
+        medication,
+        tz
+      );
 
     case "cyclical": {
       const anchorDate = medication.cycle_anchor_date
         ? formatDate(dateKeyFromColumn(medication.cycle_anchor_date), tz)
         : null;
-      const start = anchorDate ? `, starting ${anchorDate}` : "";
-      return `${medication.cycle_days_on} days on, ${medication.cycle_days_off} days off${start}, at ${formatTimeList(times, tz)}.`;
+      // The anchor date is where the on/off count begins, which is the same thing as the start
+      // date until a medication carries both (#1968). When it does, say "counting from" for the
+      // anchor so the two dates cannot be mistaken for each other.
+      const anchorPhrase = anchorDate
+        ? medication.schedule_start_date
+          ? `, counting from ${anchorDate}`
+          : `, starting ${anchorDate}`
+        : "";
+      return withScheduleWindow(
+        `${medication.cycle_days_on} days on, ${medication.cycle_days_off} days off${anchorPhrase}, at ${formatTimeList(times, tz)}.`,
+        medication,
+        tz
+      );
     }
 
     case "every_interval": {
@@ -318,4 +348,18 @@ function withEndDate(sentence: string, medication: Medication, tz: string): stri
   if (!medication.schedule_end_date) return sentence;
   const endDate = formatDate(dateKeyFromColumn(medication.schedule_end_date), tz);
   return `${sentence.slice(0, -1)}, until ${endDate}.`;
+}
+
+/**
+ * Appends the medication's start and end dates to a sentence whose schedule type does not already
+ * name a date of its own. Every schedule type can carry both since #1968, so a sentence that left
+ * them out would describe a medication as taken every day when it does not begin until next month.
+ */
+function withScheduleWindow(sentence: string, medication: Medication, tz: string): string {
+  let result = sentence;
+  if (medication.schedule_start_date) {
+    const startDate = formatDate(dateKeyFromColumn(medication.schedule_start_date), tz);
+    result = `${result.slice(0, -1)}, starting ${startDate}.`;
+  }
+  return withEndDate(result, medication, tz);
 }

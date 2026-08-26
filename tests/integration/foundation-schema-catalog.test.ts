@@ -349,6 +349,8 @@ describe("MVP foundation schema catalog", () => {
         { version: "0195", name: "0195_module_builds_worker_runtime.sql" },
         // #1961 — assign ESPN and custom sports news sources by sport, league, or team.
         { version: "0196", name: "0196_sports_news_source_scopes.sql" },
+        // #1968 — a start date for every medication schedule type, plus a reminder toggle.
+        { version: "0197", name: "0197_wellness_medication_start_date_reminders.sql" },
         // #1949 — track the files a module build has written, for the Workshop build-progress view.
         { version: "0198", name: "0198_module_builds_written_files.sql" }
       ]);

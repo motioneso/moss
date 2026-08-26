@@ -814,6 +814,7 @@ export interface MedicationsTable {
   month_day_is_last: ColumnType<boolean, boolean | undefined, boolean>;
   month_weekday_position: "first" | "second" | "third" | "fourth" | "last" | null;
   month_weekday: number | null;
+  reminders_enabled: ColumnType<boolean, boolean | undefined, boolean>;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
 }

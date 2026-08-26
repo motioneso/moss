@@ -207,6 +207,66 @@ describe("describeSchedule and nextDoses", () => {
       ).toBe("Every 3 days, starting 1 January 2026, at 8:00 AM, until 1 September 2026.");
     });
 
+    it("names the start and end dates on the schedule types that have no date of their own", () => {
+      // #1968 widened start and end dates to every schedule type. Before that these five could
+      // not carry one, so the sentence left them out.
+      expect(
+        describeSchedule(med({ schedule_times: ["08:00"], schedule_start_date: "2026-09-01" }))
+      ).toBe("Once a day, at 8:00 AM, starting 1 September 2026.");
+
+      expect(
+        describeSchedule(
+          med({
+            schedule_times: ["08:00"],
+            schedule_start_date: "2026-09-01",
+            schedule_end_date: "2026-10-01"
+          })
+        )
+      ).toBe("Once a day, at 8:00 AM, starting 1 September 2026, until 1 October 2026.");
+
+      expect(
+        describeSchedule(
+          med({
+            frequency_type: "specific_weekdays",
+            weekdays: [1, 4],
+            schedule_times: ["09:00"],
+            schedule_start_date: "2026-09-01"
+          })
+        )
+      ).toBe("Every Monday and Thursday, at 9:00 AM, starting 1 September 2026.");
+
+      expect(
+        describeSchedule(
+          med({
+            frequency_type: "every_n_hours",
+            interval_hours: 6,
+            schedule_times: ["08:00"],
+            schedule_end_date: "2026-10-01"
+          })
+        )
+      ).toBe("Every 6 hours, starting at 8:00 AM, until 1 October 2026.");
+    });
+
+    it("cyclical: keeps the cycle's counting date separate from the start date", () => {
+      const cycle = {
+        frequency_type: "cyclical" as const,
+        cycle_days_on: 2,
+        cycle_days_off: 3,
+        cycle_anchor_date: "2026-06-15",
+        schedule_times: ["07:00"]
+      };
+
+      // Anchor only: unchanged from before, the anchor IS when it starts.
+      expect(describeSchedule(med(cycle))).toBe(
+        "2 days on, 3 days off, starting 15 June 2026, at 7:00 AM."
+      );
+
+      // Both: the anchor is only where the on/off count begins, so it is worded differently.
+      expect(describeSchedule(med({ ...cycle, schedule_start_date: "2026-09-01" }))).toBe(
+        "2 days on, 3 days off, counting from 15 June 2026, at 7:00 AM, starting 1 September 2026."
+      );
+    });
+
     it("respects a non-UTC time zone for the printed clock time", () => {
       // 08:00 civil time in America/New_York in June (EDT, UTC-4) should print as 8:00 AM,
       // not shift when formatted — this guards against an implementation that formats the
@@ -244,6 +304,46 @@ describe("describeSchedule and nextDoses", () => {
         schedule_times: ["09:00"]
       });
       expect(nextDoses(m, monday)).toEqual([]);
+    });
+
+    it("previews no dose before the start date, and none after the end date", () => {
+      // #1968: these schedule types are handed an open anchor, so without the day-level window
+      // the preview would show doses from today for a medication that has not started yet.
+      const notYet = med({ schedule_times: ["08:00"], schedule_start_date: "2026-06-18" });
+      expect(nextDoses(notYet, monday, 3).map((d) => d.toISOString())).toEqual([
+        "2026-06-18T08:00:00.000Z",
+        "2026-06-19T08:00:00.000Z",
+        "2026-06-20T08:00:00.000Z"
+      ]);
+
+      const finished = med({ schedule_times: ["08:00"], schedule_end_date: "2026-06-16" });
+      expect(nextDoses(finished, monday, 3).map((d) => d.toISOString())).toEqual([
+        "2026-06-15T08:00:00.000Z",
+        "2026-06-16T08:00:00.000Z"
+      ]);
+    });
+
+    it("a cycle medication's on/off days do not move when it also has a start date", () => {
+      const cycle = {
+        frequency_type: "cyclical" as const,
+        cycle_days_on: 2,
+        cycle_days_off: 3,
+        cycle_anchor_date: "2026-06-15",
+        schedule_times: ["07:00"]
+      };
+      // On days from the 15th anchor: 15, 16, then 20, 21. A start date of the 16th must only
+      // trim the list, never re-anchor the pattern.
+      expect(nextDoses(med(cycle), monday, 4).map((d) => d.toISOString().slice(0, 10))).toEqual([
+        "2026-06-15",
+        "2026-06-16",
+        "2026-06-20",
+        "2026-06-21"
+      ]);
+      expect(
+        nextDoses(med({ ...cycle, schedule_start_date: "2026-06-16" }), monday, 3).map((d) =>
+          d.toISOString().slice(0, 10)
+        )
+      ).toEqual(["2026-06-16", "2026-06-20", "2026-06-21"]);
     });
 
     it("respects medication.time_zone: the UTC instant shifts by the zone's offset", () => {
