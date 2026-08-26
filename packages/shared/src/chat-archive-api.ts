@@ -1,0 +1,57 @@
+import { errorResponseSchema } from "./schema-fragments.js";
+
+export interface ChatArchiveSettingsResponse {
+  readonly enabled: boolean;
+  readonly folder: string;
+}
+
+export interface PutChatArchiveSettingsRequest {
+  readonly enabled: boolean;
+  readonly folder: string;
+}
+
+/**
+ * Validates a chat-archive folder value: a vault-relative path, no leading slash, no ".."
+ * segment, no embedded null byte. Nested folders are allowed. Throws a plain-English `Error` on
+ * rejection; callers decide how to surface it (route: 400, writer: no-op).
+ */
+export function validateChatArchiveFolder(input: unknown): string {
+  if (typeof input !== "string") {
+    throw new Error("Chat archive folder must be a string");
+  }
+  if (input.trim().length === 0) {
+    throw new Error("Chat archive folder cannot be empty");
+  }
+  if (input.includes("\u0000")) {
+    throw new Error("Chat archive folder cannot contain a null byte");
+  }
+  if (input.startsWith("/")) {
+    throw new Error("Chat archive folder cannot start with a leading slash");
+  }
+  if (input.split("/").includes("..")) {
+    throw new Error('Chat archive folder cannot contain a ".." segment');
+  }
+  return input;
+}
+
+const chatArchiveSettingsSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["enabled", "folder"],
+  properties: {
+    enabled: { type: "boolean" },
+    folder: { type: "string", minLength: 1 }
+  }
+} as const;
+
+export const getChatArchiveSettingsRouteSchema = {
+  response: {
+    200: chatArchiveSettingsSchema,
+    default: errorResponseSchema
+  }
+} as const;
+
+export const putChatArchiveSettingsRouteSchema = {
+  body: chatArchiveSettingsSchema,
+  response: getChatArchiveSettingsRouteSchema.response
+} as const;

@@ -65,7 +65,7 @@ async function resolveAllowedRoots(): Promise<string[]> {
   return resolved;
 }
 
-async function resolveSource(scopedDb: DataContextDb): Promise<string> {
+export async function resolveSource(scopedDb: DataContextDb): Promise<string> {
   const source = await preferences.get(scopedDb, NOTES_SOURCE_PREFERENCE_KEY);
   if (typeof source !== "string" || source.length === 0) {
     throw new HttpError(409, "Notes source is not configured");
@@ -93,7 +93,7 @@ function contains(root: string, path: string): boolean {
   }
 }
 
-function assertInside(root: string, path: string): void {
+export function assertInside(root: string, path: string): void {
   try {
     assertWithinRoot(root, path);
   } catch {
@@ -101,7 +101,7 @@ function assertInside(root: string, path: string): void {
   }
 }
 
-async function recheckInside(root: string, path: string): Promise<void> {
+export async function recheckInside(root: string, path: string): Promise<void> {
   try {
     await recheckWithinRoot(root, path);
   } catch (error) {

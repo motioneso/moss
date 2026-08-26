@@ -41,6 +41,7 @@ import { registerHostDiagnosticsRoutes } from "./host-diagnostics-routes.js";
 import type { HerdrInstallDependencies } from "./host-install-routes.js";
 import { registerHerdrInstallRoutes } from "./host-install-routes.js";
 import { registerHostRestartRoutes, type HostRestartDependencies } from "./host-restart-routes.js";
+import { registerChatArchiveRoutes } from "./chat-archive-routes.js";
 import { registerLocaleRoutes } from "./locale-routes.js";
 import { registerQuietHoursRoutes } from "./quiet-hours-routes.js";
 import { registerWeatherLocationRoutes } from "./weather-location-routes.js";
@@ -252,6 +253,7 @@ export function registerSettingsRoutes(
   registerWeatherUnitRoutes(server, { ...dependencies, preferencesRepository });
   registerThemeRoutes(server, { ...dependencies, preferencesRepository });
   registerNotesSourceRoutes(server, { ...dependencies, preferencesRepository });
+  registerChatArchiveRoutes(server, { ...dependencies, preferencesRepository });
   registerMeSessionsRoutes(server, {
     resolveAccessContext: dependencies.resolveAccessContext,
     meSessions: dependencies.meSessions

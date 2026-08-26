@@ -17,6 +17,7 @@ import type {
   SourceFreshnessV1
 } from "@moss/shared";
 import { normalizeChatSurface } from "./live/chat-surface.js";
+import { toIsoString } from "./memory-serializers.js";
 
 export interface CreateChatThreadInput {
   readonly title: string;
@@ -304,5 +305,55 @@ export class ChatRepository {
   async deleteThread(scopedDb: DataContextDb, threadId: string): Promise<void> {
     assertDataContextDb(scopedDb);
     await scopedDb.db.deleteFrom("app.chat_threads").where("id", "=", threadId).execute();
+  }
+
+  /**
+   * Stored, non-incognito user/assistant messages within a UTC instant range, for the chat
+   * archive job. Ordered by each thread's own first message time, then by message time within
+   * the thread — the caller groups consecutive rows sharing threadId into one archive session.
+   */
+  async listStoredMessagesInRange(
+    scopedDb: DataContextDb,
+    actorUserId: string,
+    rangeStartUtcIso: string,
+    rangeEndUtcIso: string
+  ): Promise<
+    Array<{
+      threadId: string;
+      threadFirstMessageAt: string;
+      role: "user" | "assistant";
+      body: string;
+      createdAt: string;
+    }>
+  > {
+    assertDataContextDb(scopedDb);
+
+    const rows = await scopedDb.db
+      .selectFrom("app.chat_messages as m")
+      .innerJoin("app.chat_threads as t", "t.id", "m.thread_id")
+      .select([
+        "m.thread_id as threadId",
+        sql<Date>`min(m.created_at) over (partition by m.thread_id)`.as("threadFirstMessageAt"),
+        "m.role as role",
+        "m.body as body",
+        "m.created_at as createdAt"
+      ])
+      .where("t.incognito", "=", false)
+      .where("m.owner_user_id", "=", actorUserId)
+      .where("m.status", "=", "stored")
+      .where("m.role", "in", ["user", "assistant"])
+      .where("m.created_at", ">=", new Date(rangeStartUtcIso))
+      .where("m.created_at", "<=", new Date(rangeEndUtcIso))
+      .orderBy("threadFirstMessageAt")
+      .orderBy("m.created_at")
+      .execute();
+
+    return rows.map((row) => ({
+      threadId: row.threadId,
+      threadFirstMessageAt: toIsoString(row.threadFirstMessageAt),
+      role: row.role as "user" | "assistant",
+      body: row.body,
+      createdAt: toIsoString(row.createdAt)
+    }));
   }
 }
