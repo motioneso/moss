@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "turns": [
+    {
+      "expectIncludes": ["UAT-1987-before"],
+      "calls": [],
+      "reply": "Scripted UAT-1987 before reply."
+    },
+    {
+      "expectIncludes": ["UAT-1987-after"],
+      "calls": [],
+      "reply": "Scripted UAT-1987 after reply."
+    },
+    {
+      "expectIncludes": ["UAT-1987-verify"],
+      "calls": [
+        {
+          "tool": "notes.edit",
+          "arguments": {
+            "path": "Moss/Chats/2026-08-26.md",
+            "oldText": "UAT-1987-before this message was sent while archiving was off",
+            "newText": "UAT-1987-before this message was sent while archiving was off [1987-verified-before]"
+          }
+        },
+        {
+          "tool": "notes.edit",
+          "arguments": {
+            "path": "Moss/Chats/2026-08-26.md",
+            "oldText": "UAT-1987-after this message was sent while archiving was on",
+            "newText": "UAT-1987-after this message was sent while archiving was on [1987-verified-after]"
+          }
+        }
+      ],
+      "reply": "Scripted UAT-1987 verify reply."
+    }
+  ]
+}
