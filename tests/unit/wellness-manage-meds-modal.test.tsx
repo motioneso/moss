@@ -325,7 +325,9 @@ describe("editing a saved medication (#1971)", () => {
     );
     expect(heading(renderer)).toBe("Edit medication");
     expect(
-      renderer.root.findAllByType("button").some((b) => renderedText(b.props.children) === "Save changes")
+      renderer.root
+        .findAllByType("button")
+        .some((b) => renderedText(b.props.children) === "Save changes")
     ).toBe(true);
     await act(async () => {
       renderer.unmount();
@@ -360,7 +362,9 @@ describe("editing a saved medication (#1971)", () => {
 
     expect(heading(renderer)).toBe("Add a medication");
     expect(
-      renderer.root.findAllByType("button").some((b) => renderedText(b.props.children) === "Add medication")
+      renderer.root
+        .findAllByType("button")
+        .some((b) => renderedText(b.props.children) === "Add medication")
     ).toBe(true);
     expect(updateMedicationMock).not.toHaveBeenCalled();
     await act(async () => {
