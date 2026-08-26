@@ -346,7 +346,9 @@ describe("MVP foundation schema catalog", () => {
         // #1959 — store all six medication schedule types and a real time zone.
         { version: "0194", name: "0194_wellness_medication_schedule_v2.sql" },
         // Module-build jobs execute as jarvis_worker_runtime and need owner-scoped read/write.
-        { version: "0195", name: "0195_module_builds_worker_runtime.sql" }
+        { version: "0195", name: "0195_module_builds_worker_runtime.sql" },
+        // #1949 — track the files a module build has written, for the Workshop build-progress view.
+        { version: "0196", name: "0196_module_builds_written_files.sql" }
       ]);
     } finally {
       await client.end();
