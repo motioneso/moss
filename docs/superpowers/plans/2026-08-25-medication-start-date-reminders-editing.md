@@ -5,19 +5,19 @@ Risk tier: security. Scope: database and server only.
 
 ## Seams check — every assumption cited on this branch
 
-| Assumption | Evidence |
-| --- | --- |
-| A start date is blocked for four of six types | `packages/wellness/sql/0194_wellness_medication_schedule_v2.sql:104` constraint `medications_v2_fields_scoped_to_v2_types` |
-| The route mirrors that block for `as_needed` | `packages/wellness/src/routes.ts:736-757` (`startDate`/`endDate` in the rejected-field list) |
-| No reminder column exists | absent from `app.medications` (0083, 0194) and from `MedicationsTable`, `packages/db/src/types.ts:790-818` |
-| No reminder worker exists to break | `packages/wellness/src/manifest.ts:224-229` — queue name declared, comment says no worker registered |
-| A saved schedule cannot be edited | `packages/shared/src/wellness-api.ts:655-665` (`updateMedicationRequestSchema`) and `packages/wellness/src/repository.ts:198-217` |
-| PATCH does not resolve a time zone today | `packages/wellness/src/routes.ts:252-268` — no `resolveRouteTimeZone` call, unlike POST at `:241` |
-| The schedule engine already gates on a start and end date | `packages/wellness/src/occurrence-engine.ts:133-151` |
-| A cycle schedule's phase is counted from its anchor, so the anchor must not be repurposed | `packages/wellness/src/occurrence-engine.ts:232-236` (`isEligibleCycle` counts elapsed days from `anchor.startDate`) |
-| `computeSchedule` is always called for exactly one day | `packages/wellness/src/schedule.ts:38` |
-| Row-level security already scopes updates to the owner | `packages/wellness/sql/0083_wellness_medications.sql:66-72`, and every route runs inside `withDataContext` |
-| Next free migration number is 0196 | highest existing is `0195_module_builds_worker_runtime.sql` |
+| Assumption                                                                                | Evidence                                                                                                                          |
+| ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| A start date is blocked for four of six types                                             | `packages/wellness/sql/0194_wellness_medication_schedule_v2.sql:104` constraint `medications_v2_fields_scoped_to_v2_types`        |
+| The route mirrors that block for `as_needed`                                              | `packages/wellness/src/routes.ts:736-757` (`startDate`/`endDate` in the rejected-field list)                                      |
+| No reminder column exists                                                                 | absent from `app.medications` (0083, 0194) and from `MedicationsTable`, `packages/db/src/types.ts:790-818`                        |
+| No reminder worker exists to break                                                        | `packages/wellness/src/manifest.ts:224-229` — queue name declared, comment says no worker registered                              |
+| A saved schedule cannot be edited                                                         | `packages/shared/src/wellness-api.ts:655-665` (`updateMedicationRequestSchema`) and `packages/wellness/src/repository.ts:198-217` |
+| PATCH does not resolve a time zone today                                                  | `packages/wellness/src/routes.ts:252-268` — no `resolveRouteTimeZone` call, unlike POST at `:241`                                 |
+| The schedule engine already gates on a start and end date                                 | `packages/wellness/src/occurrence-engine.ts:133-151`                                                                              |
+| A cycle schedule's phase is counted from its anchor, so the anchor must not be repurposed | `packages/wellness/src/occurrence-engine.ts:232-236` (`isEligibleCycle` counts elapsed days from `anchor.startDate`)              |
+| `computeSchedule` is always called for exactly one day                                    | `packages/wellness/src/schedule.ts:38`                                                                                            |
+| Row-level security already scopes updates to the owner                                    | `packages/wellness/sql/0083_wellness_medications.sql:66-72`, and every route runs inside `withDataContext`                        |
+| Next free migration number is 0196                                                        | highest existing is `0195_module_builds_worker_runtime.sql`                                                                       |
 
 Open questions: none. No net-new platform capability is assumed; every change is to code that
 already exists.
@@ -33,7 +33,7 @@ database check, so a bad write from any path is rejected.
 
 **Rejected: feed `schedule_start_date` into the schedule engine's anchor for every family.**
 Steelmanned: it is one line, it reuses the engine's existing start/end gating, and for the two new
-types the start date already *is* the anchor. Rejected because for a cycle schedule the anchor is
+types the start date already _is_ the anchor. Rejected because for a cycle schedule the anchor is
 `cycle_anchor_date` and it decides which days are "on" days
 (`packages/wellness/src/occurrence-engine.ts:232-236`); swapping in a different date silently
 shifts the whole on/off pattern. **Chosen instead:** a day-level window check in `computeSchedule`,
@@ -82,6 +82,7 @@ Verify: `pnpm --filter @moss/db typecheck > /tmp/t1.log 2>&1; echo "EXIT=$?"` �
 ### Task 2 — shared contract
 
 `packages/shared/src/wellness-api.ts`:
+
 - `MedicationDto`: add `readonly remindersEnabled: boolean`.
 - `medicationDtoSchema`: add `remindersEnabled` to `required` and to `properties`.
 - `createMedicationRequestSchema.properties`: add
@@ -144,6 +145,7 @@ async updateMedication(
 ```
 
 Behaviour decisions:
+
 - `createMedication` also writes `reminders_enabled` (default false when omitted).
 - When `input.schedule` is present, `updateMedication` writes every schedule column, setting the
   ones that do not apply to the new type to NULL and `month_day_is_last` to false, and refreshes
@@ -156,10 +158,10 @@ Behaviour decisions:
 `packages/wellness/src/routes.ts`:
 
 ```ts
-function parseMedicationScheduleBody(value: Record<string, unknown>): MedicationScheduleInput
-function parseCreateMedicationBody(body: unknown): CreateMedicationInput
-function parseUpdateMedicationBody(body: unknown): UpdateMedicationInput
-function assertDateKey(value: unknown, field: string): void   // YYYY-MM-DD, real calendar date
+function parseMedicationScheduleBody(value: Record<string, unknown>): MedicationScheduleInput;
+function parseCreateMedicationBody(body: unknown): CreateMedicationInput;
+function parseUpdateMedicationBody(body: unknown): UpdateMedicationInput;
+function assertDateKey(value: unknown, field: string): void; // YYYY-MM-DD, real calendar date
 ```
 
 Rules enforced (400 on each): `startDate` required for `every_interval` and `monthly`; both dates
@@ -184,25 +186,25 @@ Both are compared as `YYYY-MM-DD` calendar keys via the existing `dateKeyFromCol
 `tests/integration/wellness-medication-schedule-v2.test.ts`. Each case, and why it fails against a
 broken implementation:
 
-| Case | Fails if |
-| --- | --- |
-| A start date saves and reloads for each of the six types | the widened constraint was not applied, or the route still rejects the field |
-| `remindersEnabled` round-trips; omitted means false | the column, the contract, or the serializer is missing a link |
-| `remindersEnabled: true` on `as_needed` returns 400 | the route check is missing (a 500 would mean only the database caught it) |
-| `every_interval` edited into `monthly` reloads as monthly with the old type's columns empty | the update does not clear inapplicable columns |
-| `monthly` edited into `as_needed` and back | the same, in the direction that also clears dose times |
-| A schedule field without `frequencyType` returns 400 | the all-or-nothing rule is missing |
-| `frequencyType` with a missing required field returns 400 | create and update do not share validation |
-| An update of `name` alone still works | the widening broke the existing path |
-| A second user editing the first user's medication gets 404 | row-level security no longer covers the widened update path |
-| A malformed `startDate` returns 400, not 500 | the date-format check is missing |
+| Case                                                                                        | Fails if                                                                     |
+| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| A start date saves and reloads for each of the six types                                    | the widened constraint was not applied, or the route still rejects the field |
+| `remindersEnabled` round-trips; omitted means false                                         | the column, the contract, or the serializer is missing a link                |
+| `remindersEnabled: true` on `as_needed` returns 400                                         | the route check is missing (a 500 would mean only the database caught it)    |
+| `every_interval` edited into `monthly` reloads as monthly with the old type's columns empty | the update does not clear inapplicable columns                               |
+| `monthly` edited into `as_needed` and back                                                  | the same, in the direction that also clears dose times                       |
+| A schedule field without `frequencyType` returns 400                                        | the all-or-nothing rule is missing                                           |
+| `frequencyType` with a missing required field returns 400                                   | create and update do not share validation                                    |
+| An update of `name` alone still works                                                       | the widening broke the existing path                                         |
+| A second user editing the first user's medication gets 404                                  | row-level security no longer covers the widened update path                  |
+| A malformed `startDate` returns 400, not 500                                                | the date-format check is missing                                             |
 
 `tests/unit/wellness-schedule-start-window.test.ts` (new):
 
-| Case | Fails if |
-| --- | --- |
-| A daily medication starting tomorrow produces no slot today | the window check is missing |
-| A daily medication that ended yesterday produces no slot today | the same, upper bound |
+| Case                                                                                  | Fails if                                                            |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| A daily medication starting tomorrow produces no slot today                           | the window check is missing                                         |
+| A daily medication that ended yesterday produces no slot today                        | the same, upper bound                                               |
 | A cycle medication with a start date later than its anchor keeps the same on/off days | the start date was fed into the engine anchor and shifted the phase |
 
 ## Verification
@@ -212,6 +214,7 @@ pnpm format:check > /tmp/fmt.log 2>&1; echo "EXIT=$?"
 pnpm lint > /tmp/lint.log 2>&1; echo "EXIT=$?"
 pnpm typecheck > /tmp/tc.log 2>&1; echo "EXIT=$?"
 ```
+
 Each expects `EXIT=0`. The full gate runs through the `verify-gate` skill, never bare.
 
 ## Kill gate
