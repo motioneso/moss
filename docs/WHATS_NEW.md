@@ -23,7 +23,7 @@
 
 - **Settings are closer to where you need them.** Finance, Job Search, and News pages now link to their own settings, so changing a connection or preference takes fewer clicks. [PR #1772](https://github.com/motioneso/moss/pull/1772)
 
-## Edge channel — 2026-08-25
+## Edge channel — 2026-08-26
 
 Edge builds include the stable history below plus the user-facing changes already available in
 the current edge image. This section is intentionally build-bundled so it never advertises a
@@ -31,6 +31,7 @@ feature that is not present in the image you are running.
 
 ### Added
 
+- **Add medications on any schedule.** You can now set up a medication on any schedule the app supports - every day, only on certain days of the week, every few days or weeks or months, monthly, or in a cycle of days on and days off - and see in plain words what you picked, along with the next three doses, before you save it. [PR #1985](https://github.com/motioneso/moss/pull/1985)
 - **Save your chats to Notes.** You can now turn on a setting that saves a daily written copy of your chats into your notes, off by default, in a folder you choose. [PR #1980](https://github.com/motioneso/moss/pull/1980)
 - **See your module build progress and get notified when it's done.** When you ask Moss to build you a new page and approve the plan, you're now taken straight to the Workshop page where you can watch it build, and you get a notification the moment it finishes or fails. [PR #1966](https://github.com/motioneso/moss/pull/1966)
 - **Sports news source coverage.** Choose ESPN or custom publishers for entire sports, leagues, and teams to build a mixed news feed. [PR #1967](https://github.com/motioneso/moss/pull/1967)

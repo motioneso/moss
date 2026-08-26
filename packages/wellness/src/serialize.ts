@@ -40,7 +40,8 @@ export function serializeMedication(row: Medication): MedicationDto {
     scheduleTimes: row.schedule_times,
     cycleDaysOn: row.cycle_days_on,
     cycleDaysOff: row.cycle_days_off,
-    cycleAnchorDate: row.cycle_anchor_date,
+    // A date column, same as scheduleStartDate below: send "2026-09-01", not a timestamp.
+    cycleAnchorDate: row.cycle_anchor_date ? dateKeyFromColumn(row.cycle_anchor_date) : null,
     active: row.active,
     notes: row.notes,
     createdAt: toIso(row.created_at),
