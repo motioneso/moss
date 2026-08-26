@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 import type {
   ListMyModuleBuildsResponse,
@@ -44,7 +45,11 @@ function render(
   client.setQueryData(["workshop", "module-builds", "mine"], builds ?? { builds: [] });
   client.setQueryData(["workshop", "modules", "mine"], modules ?? { modules: [] });
   return renderToString(
-    createElement(QueryClientProvider, { client }, createElement(WorkshopPage))
+    createElement(
+      MemoryRouter,
+      null,
+      createElement(QueryClientProvider, { client }, createElement(WorkshopPage))
+    )
   );
 }
 
