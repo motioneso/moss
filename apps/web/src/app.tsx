@@ -381,6 +381,17 @@ function ModuleGatedRoute(props: {
  * at a host-controlled call site — the module never supplies its own id). Recomputed only when the
  * id or the callback identity changes.
  */
+/**
+ * #1975: pulled out of ExternalModuleMount's effect so it has a plain unit test — mounting
+ * ExternalModuleMount itself needs a chat-controls provider, an assistant-surface-host
+ * provider, a query client and a router all wired up together, and this repo's test
+ * convention (see app-shell-chat-surface.test.tsx) already prefers isolating the decision
+ * from that wiring where it can.
+ */
+export function shouldOpenChatFromNavigation(isDraft: boolean, locationState: unknown): boolean {
+  return isDraft && Boolean((locationState as { openChat?: boolean } | null)?.openChat);
+}
+
 function ExternalModuleMount(props: {
   readonly moduleId: string;
   readonly Component: ComponentType<ExternalWebContributionProps>;
@@ -393,7 +404,20 @@ function ExternalModuleMount(props: {
   const { subscribeRecords, seedComposer } = useAssistantSurfaceHost();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const location = useLocation();
   const [confirmingThrowAway, setConfirmingThrowAway] = useState(false);
+  // #1975: Workshop's "Ask for a change" button navigates here with { openChat: true } in
+  // router state (packages/workshop can't reach this file's openChat directly — see the
+  // spec's module-isolation note). Runs once on mount, then clears the flag via a
+  // history replace so it does not refire on a later re-render or on back-navigation into
+  // this same route.
+  useEffect(() => {
+    if (shouldOpenChatFromNavigation(props.isDraft, location.state)) {
+      openChat();
+      navigate(location.pathname, { replace: true, state: null });
+    }
+    // Intentionally run once on mount only — see the comment above.
+  }, []);
   // #1756: ships the draft for real — POST /api/admin/modules/:id/ship (packages/settings/src/
   // routes-modules.ts). Success flips the DB row from draft to enabled and clears its owner;
   // refetching /api/modules is what makes ModuleDto.draft disappear and the banner unmount.

@@ -162,6 +162,28 @@ export async function appendModuleBuildWrittenFile(
   `.execute(scopedDb.db);
 }
 
+/**
+ * Update-only, scoped to `owner_user_id = ownerUserId AND status IN ('planning', 'building')` —
+ * that WHERE clause is simultaneously the "does this build exist" and "is it yours" guard, and it
+ * also stops cancelling a build that has already finished, failed, or been cancelled. Same
+ * non-leak discipline as `shipExternalModule` / `deleteExternalModuleDraft`.
+ */
+export async function cancelModuleBuild(
+  scopedDb: DataContextDb,
+  buildId: string,
+  ownerUserId: string
+): Promise<boolean> {
+  assertDataContextDb(scopedDb);
+  const result = await scopedDb.db
+    .updateTable("app.module_builds")
+    .set({ status: "cancelled", updated_at: new Date() })
+    .where("id", "=", buildId)
+    .where("owner_user_id", "=", ownerUserId)
+    .where("status", "in", ["planning", "building"])
+    .executeTakeFirst();
+  return (result.numUpdatedRows ?? 0n) > 0n;
+}
+
 export async function listModuleBuildsForUser(
   scopedDb: DataContextDb,
   ownerUserId: string

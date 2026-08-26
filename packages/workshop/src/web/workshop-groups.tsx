@@ -6,6 +6,9 @@ import type { ModuleBuildSummary, WorkshopLiveModuleSummary } from "@moss/shared
 export interface WorkshopGroupsProps {
   readonly builds: readonly ModuleBuildSummary[];
   readonly modules: readonly WorkshopLiveModuleSummary[];
+  readonly onStop?: (buildId: string) => void;
+  readonly onTurnOnForEveryone?: (moduleId: string) => void;
+  readonly onAskForChange?: (moduleId: string) => void;
 }
 
 const NEEDS_YOU_STATUSES = new Set<ModuleBuildSummary["status"]>([
@@ -66,7 +69,13 @@ function BuildLogList({
   );
 }
 
-function BuildingNowCard({ build }: { readonly build: ModuleBuildSummary }) {
+function BuildingNowCard({
+  build,
+  onStop
+}: {
+  readonly build: ModuleBuildSummary;
+  readonly onStop?: (buildId: string) => void;
+}) {
   return (
     <div className="jds-rail-row workshop-row">
       <span className="jds-rail jds-rail--accent" />
@@ -91,7 +100,11 @@ function BuildingNowCard({ build }: { readonly build: ModuleBuildSummary }) {
               {formatCents(build.plan.roughCost.budgetCents)} budget
             </span>
           ) : null}
-          <button type="button" className="jds-btn jds-btn--quiet jds-btn--sm">
+          <button
+            type="button"
+            className="jds-btn jds-btn--quiet jds-btn--sm"
+            onClick={() => onStop?.(build.id)}
+          >
             Stop
           </button>
         </div>
@@ -100,7 +113,15 @@ function BuildingNowCard({ build }: { readonly build: ModuleBuildSummary }) {
   );
 }
 
-function LiveModuleRow({ module: mod }: { readonly module: WorkshopLiveModuleSummary }) {
+function LiveModuleRow({
+  module: mod,
+  onTurnOnForEveryone,
+  onAskForChange
+}: {
+  readonly module: WorkshopLiveModuleSummary;
+  readonly onTurnOnForEveryone?: (moduleId: string) => void;
+  readonly onAskForChange?: (moduleId: string) => void;
+}) {
   return (
     <div className="jds-rail-row workshop-row">
       <span className="jds-rail jds-rail--line-strong" />
@@ -110,11 +131,19 @@ function LiveModuleRow({ module: mod }: { readonly module: WorkshopLiveModuleSum
           {mod.scope === "everyone" ? "Live · everyone" : "Live · you only"}
         </span>
         <div className="workshop-actions">
-          <button type="button" className="jds-btn jds-btn--secondary jds-btn--sm">
+          <button
+            type="button"
+            className="jds-btn jds-btn--secondary jds-btn--sm"
+            onClick={() => onAskForChange?.(mod.id)}
+          >
             Ask for a change
           </button>
           {mod.scope === "you" ? (
-            <button type="button" className="jds-btn jds-btn--quiet jds-btn--sm">
+            <button
+              type="button"
+              className="jds-btn jds-btn--quiet jds-btn--sm"
+              onClick={() => onTurnOnForEveryone?.(mod.id)}
+            >
               Turn on for everyone
             </button>
           ) : null}
@@ -142,7 +171,13 @@ function GroupSection({
   );
 }
 
-export function WorkshopGroups({ builds, modules }: WorkshopGroupsProps) {
+export function WorkshopGroups({
+  builds,
+  modules,
+  onStop,
+  onTurnOnForEveryone,
+  onAskForChange
+}: WorkshopGroupsProps) {
   const needsYou = builds.filter((build) => NEEDS_YOU_STATUSES.has(build.status));
   const buildingNow = builds.filter((build) => BUILDING_STATUSES.has(build.status));
 
@@ -167,14 +202,19 @@ export function WorkshopGroups({ builds, modules }: WorkshopGroupsProps) {
       {buildingNow.length > 0 ? (
         <GroupSection label="Building now">
           {buildingNow.map((build) => (
-            <BuildingNowCard key={build.id} build={build} />
+            <BuildingNowCard key={build.id} build={build} onStop={onStop} />
           ))}
         </GroupSection>
       ) : null}
       {modules.length > 0 ? (
         <GroupSection label="Live">
           {modules.map((mod) => (
-            <LiveModuleRow key={mod.id} module={mod} />
+            <LiveModuleRow
+              key={mod.id}
+              module={mod}
+              onTurnOnForEveryone={onTurnOnForEveryone}
+              onAskForChange={onAskForChange}
+            />
           ))}
         </GroupSection>
       ) : null}
