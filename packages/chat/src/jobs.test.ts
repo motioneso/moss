@@ -296,7 +296,9 @@ describe("handleArchiveDayJob", () => {
 
     const status = values["chat-archive.status"] as { state: string; reason: string };
     expect(status.state).toBe("failed");
-    expect(status.reason).not.toBe("Today's note already exists and wasn't written by chat archiving.");
+    expect(status.reason).not.toBe(
+      "Today's note already exists and wasn't written by chat archiving."
+    );
     expect(status.reason).not.toContain("Moss/Chats");
     expect(status.reason).not.toContain("hello");
   });
