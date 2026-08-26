@@ -41,6 +41,7 @@ import {
   registerAiMaintenanceWorkers,
   registerAiRoutes,
   approveModuleBuildPlan,
+  cancelModuleBuild,
   type AssistantToolGateway,
   type ProviderKind,
   type TerminalRpcConnectOptions,
@@ -1519,7 +1520,27 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
                 actorUserId
               );
             }
-          : undefined
+          : undefined,
+        cancelModuleBuild: async (scopedDb, buildId, actorUserId) =>
+          cancelModuleBuild(
+            {
+              getModuleBuild: async (id) => {
+                const build = await getModuleBuild(scopedDb, id);
+                return build
+                  ? {
+                      id: build.id,
+                      ownerUserId: build.ownerUserId,
+                      status: build.status,
+                      moduleId: build.moduleId
+                    }
+                  : null;
+              },
+              updateModuleBuildStatus: (id, status) =>
+                updateModuleBuildStatus(scopedDb, id, { status })
+            },
+            buildId,
+            actorUserId
+          )
       });
     },
     registerWorkers: (boss, deps) => registerAiMaintenanceWorkers(boss, deps.rootDb)

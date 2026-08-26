@@ -258,12 +258,18 @@ describe("external-module admin routes (#917)", () => {
   // #1753 Task 10: shipping ends a draft's author-only exemption. All four cases share one
   // inserted draft row, owned by the admin — a fresh row per test keeps them independent.
   it("ships the admin's own draft: flips it to enabled, clears the owner", async () => {
+    const buildId = randomUUID();
     const client = new Client({ connectionString: connectionStrings.bootstrap });
     await client.connect();
     await client.query(
       `INSERT INTO app.external_modules (id, status, manifest_hash, package_hash, owner_user_id, created_at, updated_at)
        VALUES ('acme-widgets-draft', 'draft', 'sha256:stale', 'sha256:stale', $1, now(), now())`,
       [adminUserId]
+    );
+    await client.query(
+      `INSERT INTO app.module_builds (id, owner_user_id, status, module_id, created_at, updated_at)
+       VALUES ($1, $2, 'awaiting_change', 'acme-widgets-draft', now(), now())`,
+      [buildId, adminUserId]
     );
     await client.end();
 
@@ -284,9 +290,14 @@ describe("external-module admin routes (#917)", () => {
     }>(
       `SELECT status, owner_user_id, manifest_hash FROM app.external_modules WHERE id = 'acme-widgets-draft'`
     );
-    await verifyClient.end();
     expect(row.rows[0]).toMatchObject({ status: "enabled", owner_user_id: null });
     expect(row.rows[0]?.manifest_hash).not.toBe("sha256:stale");
+    const build = await verifyClient.query<{ status: string }>(
+      `SELECT status FROM app.module_builds WHERE id = $1`,
+      [buildId]
+    );
+    expect(build.rows[0]?.status).toBe("ready");
+    await verifyClient.end();
   });
 
   it("returns 404 shipping another user's draft (ownership, not existence)", async () => {
@@ -418,7 +429,7 @@ describe("throwing a draft away (#1890)", () => {
     await client.connect();
     await client.query(
       `INSERT INTO app.module_builds (id, owner_user_id, status, module_id, created_at, updated_at)
-       VALUES ($1, $2, 'ready', 'throwaway-draft', now(), now())`,
+       VALUES ($1, $2, 'awaiting_change', 'throwaway-draft', now(), now())`,
       [buildId, adminUserId]
     );
     await client.end();
@@ -441,6 +452,14 @@ describe("throwing a draft away (#1890)", () => {
     expect(await draftRowCount()).toBe(0);
     expect(existsSync(installedDir)).toBe(false);
     expect(existsSync(buildSourceDir)).toBe(false);
+    const verifyClient = new Client({ connectionString: connectionStrings.bootstrap });
+    await verifyClient.connect();
+    const build = await verifyClient.query<{ status: string }>(
+      `SELECT status FROM app.module_builds WHERE id = $1`,
+      [buildId]
+    );
+    await verifyClient.end();
+    expect(build.rows[0]?.status).toBe("cancelled");
   });
 
   it("returns 404 for another user's draft, and leaves that draft alone", async () => {

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   approveModuleBuildPlan,
+  cancelModuleBuild,
   startModuleBuild,
   ModuleBuildNotFoundError,
   type ApproveModuleBuildPlanDeps,
@@ -101,5 +102,65 @@ describe("approveModuleBuildPlan", () => {
       ModuleBuildNotFoundError
     );
     expect(deps.sendBuildJob).not.toHaveBeenCalled();
+  });
+});
+
+describe("cancelModuleBuild", () => {
+  it("cancels an owner's in-progress build", async () => {
+    const updateModuleBuildStatus = vi.fn(async () => {});
+    const cancelled = await cancelModuleBuild(
+      {
+        getModuleBuild: vi.fn(async () => ({
+          id: "b1",
+          ownerUserId: "user-a",
+          status: "building" as const,
+          moduleId: null
+        })),
+        updateModuleBuildStatus
+      },
+      "b1",
+      "user-a"
+    );
+
+    expect(cancelled).toBe(true);
+    expect(updateModuleBuildStatus).toHaveBeenCalledWith("b1", "cancelled");
+  });
+
+  it("does not reveal or cancel another owner's build", async () => {
+    const updateModuleBuildStatus = vi.fn(async () => {});
+    const cancelled = await cancelModuleBuild(
+      {
+        getModuleBuild: vi.fn(async () => ({
+          id: "b1",
+          ownerUserId: "user-b",
+          status: "building" as const,
+          moduleId: null
+        })),
+        updateModuleBuildStatus
+      },
+      "b1",
+      "user-a"
+    );
+
+    expect(cancelled).toBe(false);
+    expect(updateModuleBuildStatus).not.toHaveBeenCalled();
+  });
+
+  it("lets an owner clear a legacy finished build that never installed a module", async () => {
+    const updateModuleBuildStatus = vi.fn(async () => {});
+    const cancelled = await cancelModuleBuild(
+      {
+        getModuleBuild: vi.fn(async () => ({
+          id: "b1",
+          ownerUserId: "user-a",
+          status: "awaiting_change" as const,
+          moduleId: null
+        })),
+        updateModuleBuildStatus
+      },
+      "b1",
+      "user-a"
+    );
+    expect(cancelled).toBe(true);
   });
 });

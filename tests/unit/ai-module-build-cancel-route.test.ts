@@ -31,6 +31,7 @@ function buildServer(numUpdatedRows: bigint): FastifyInstance {
       withDataContext: async (_accessContext: unknown, run: (db: DataContextDb) => unknown) =>
         run(fakeScopedDb(numUpdatedRows))
     },
+    cancelModuleBuild: async () => numUpdatedRows > 0n,
     resolveActiveModules: () => []
   } as unknown as AiRoutesDependencies;
   registerModuleBuildRoutes(server, dependencies);

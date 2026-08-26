@@ -56,7 +56,9 @@ export function createRunModuleBuildStepForJob(
         }
         const statusInput: UpdateModuleBuildStatusInput = {
           status: result.continuation ? "building" : "awaiting_change",
-          ...(result.continuation ? { step: result.continuation.step } : {})
+          ...(result.continuation
+            ? { step: result.continuation.step }
+            : { step: null, moduleId: result.moduleId })
         };
         await deps.updateModuleBuildStatus(scopedDb, build.id, statusInput);
         if (!result.continuation) {

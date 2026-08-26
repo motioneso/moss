@@ -97,3 +97,31 @@ export async function approveModuleBuildPlan(
   await deps.updateModuleBuildStatus(buildId, "building");
   await deps.sendBuildJob(buildId, actorUserId);
 }
+
+export interface CancelModuleBuildDeps {
+  readonly getModuleBuild: (buildId: string) => Promise<{
+    readonly id: string;
+    readonly ownerUserId: string;
+    readonly status: "planning" | "awaiting_plan_approval" | "building" | string;
+    readonly moduleId: string | null;
+  } | null>;
+  readonly updateModuleBuildStatus: (buildId: string, status: "cancelled") => Promise<void>;
+}
+
+export async function cancelModuleBuild(
+  deps: CancelModuleBuildDeps,
+  buildId: string,
+  actorUserId: string
+): Promise<boolean> {
+  const build = await deps.getModuleBuild(buildId);
+  if (
+    !build ||
+    build.ownerUserId !== actorUserId ||
+    (!["planning", "awaiting_plan_approval", "building"].includes(build.status) &&
+      !(build.status === "awaiting_change" && build.moduleId === null))
+  ) {
+    return false;
+  }
+  await deps.updateModuleBuildStatus(buildId, "cancelled");
+  return true;
+}

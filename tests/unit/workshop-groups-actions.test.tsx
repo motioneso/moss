@@ -11,13 +11,27 @@ import type { ModuleBuildSummary, WorkshopLiveModuleSummary } from "@moss/shared
 
 import {
   WorkshopGroups,
+  type WorkshopActions,
   type WorkshopGroupsProps
 } from "../../packages/workshop/src/web/workshop-groups.js";
 
-function renderGroups(props: WorkshopGroupsProps): ReactTestRenderer {
+function renderGroups(
+  props: Omit<WorkshopGroupsProps, "actions"> & {
+    readonly actions?: Partial<WorkshopActions>;
+  }
+): ReactTestRenderer {
   let renderer!: ReactTestRenderer;
+  const actions: WorkshopActions = {
+    onApprove: vi.fn(),
+    onCancel: vi.fn(),
+    onOpenDraft: vi.fn(),
+    onDiscardDraft: vi.fn(),
+    onAskForChange: vi.fn(),
+    onShip: vi.fn(),
+    ...props.actions
+  };
   act(() => {
-    renderer = create(createElement(WorkshopGroups, props));
+    renderer = create(createElement(WorkshopGroups, { ...props, actions }));
   });
   return renderer;
 }
@@ -33,6 +47,7 @@ function buildingBuild(overrides: Partial<ModuleBuildSummary> = {}): ModuleBuild
     id: "build-1",
     status: "building",
     step: "writing_code",
+    moduleId: null,
     plan: null,
     fetchedUrls: [],
     writtenFiles: [],
@@ -51,7 +66,11 @@ function liveModule(overrides: Partial<WorkshopLiveModuleSummary> = {}): Worksho
 describe("WorkshopGroups actions", () => {
   it("calls onStop with the build's id when Stop is clicked on a building card", () => {
     const onStop = vi.fn();
-    const renderer = renderGroups({ builds: [buildingBuild()], modules: [], onStop });
+    const renderer = renderGroups({
+      builds: [buildingBuild()],
+      modules: [],
+      actions: { onCancel: onStop }
+    });
 
     const stopButton = findButton(renderer, "Stop");
     if (!stopButton) throw new Error("Stop button not found");
@@ -65,7 +84,7 @@ describe("WorkshopGroups actions", () => {
     const renderer = renderGroups({
       builds: [],
       modules: [liveModule({ scope: "you" })],
-      onTurnOnForEveryone
+      actions: { onShip: onTurnOnForEveryone }
     });
 
     const turnOnButton = findButton(renderer, "Turn on for everyone");
@@ -85,7 +104,7 @@ describe("WorkshopGroups actions", () => {
     const renderer = renderGroups({
       builds: [],
       modules: [liveModule({ id: "mod-2", scope: "everyone" })],
-      onAskForChange
+      actions: { onAskForChange }
     });
 
     const askButton = findButton(renderer, "Ask for a change");

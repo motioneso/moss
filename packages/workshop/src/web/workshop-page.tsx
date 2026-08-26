@@ -52,30 +52,50 @@ function useLiveModules(): readonly WorkshopLiveModuleSummary[] {
 }
 
 export function WorkshopPage() {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const isInstanceAdmin = useIsInstanceAdmin();
   const builds = useMyModuleBuilds();
   const modules = useLiveModules();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-
-  const invalidateWorkshopLists = () => {
-    void queryClient.invalidateQueries({ queryKey: BUILDS_QUERY_KEY });
-    void queryClient.invalidateQueries({ queryKey: MODULES_QUERY_KEY });
+  const refreshWorkshop = () => {
+    void queryClient.invalidateQueries({ queryKey: ["workshop"] });
   };
-
-  // #1975: "Stop" cannot kill an in-flight build step instantly — it prevents the build
-  // from continuing past the step that is currently running. See cancelModuleBuild
-  // (packages/settings/src/module-builds-repository.ts) and the worker guard that keeps a
-  // step that finishes after the cancel from overwriting the cancelled status.
-  const stopMutation = useMutation({
+  const approve = useMutation({
     mutationFn: (buildId: string) =>
-      requestJson(`/api/ai/module-builds/${buildId}/cancel`, { method: "POST" }),
-    onSuccess: invalidateWorkshopLists
+      requestJson(`/api/ai/module-builds/${encodeURIComponent(buildId)}/approve`, {
+        method: "POST"
+      }),
+    onSuccess: refreshWorkshop
   });
-  const turnOnMutation = useMutation({
+  const cancel = useMutation({
+    // Stop prevents the build from continuing after its current in-flight step.
+    mutationFn: (buildId: string) =>
+      requestJson(`/api/ai/module-builds/${encodeURIComponent(buildId)}/cancel`, {
+        method: "POST"
+      }),
+    onSuccess: refreshWorkshop
+  });
+  const openDraft = useMutation({
+    mutationFn: async (moduleId: string) => {
+      await requestJson("/api/admin/modules/rescan", { method: "POST" });
+      return moduleId;
+    },
+    onSuccess: (moduleId) => {
+      void refreshWorkshop();
+      window.location.assign(`/m/${encodeURIComponent(moduleId)}`);
+    }
+  });
+  const discardDraft = useMutation({
     mutationFn: (moduleId: string) =>
-      requestJson(`/api/admin/modules/${moduleId}/ship`, { method: "POST" }),
-    onSuccess: invalidateWorkshopLists
+      requestJson(`/api/admin/modules/${encodeURIComponent(moduleId)}/draft`, {
+        method: "DELETE"
+      }),
+    onSuccess: refreshWorkshop
+  });
+  const ship = useMutation({
+    mutationFn: (moduleId: string) =>
+      requestJson(`/api/admin/modules/${encodeURIComponent(moduleId)}/ship`, { method: "POST" }),
+    onSuccess: refreshWorkshop
   });
 
   if (isInstanceAdmin === false) {
@@ -99,9 +119,19 @@ export function WorkshopPage() {
       <WorkshopGroups
         builds={builds}
         modules={modules}
-        onStop={(buildId) => stopMutation.mutate(buildId)}
-        onTurnOnForEveryone={(moduleId) => turnOnMutation.mutate(moduleId)}
-        onAskForChange={(moduleId) => navigate(`/m/${moduleId}`, { state: { openChat: true } })}
+        actions={{
+          onApprove: (buildId) => approve.mutate(buildId),
+          onCancel: (buildId) => cancel.mutate(buildId),
+          onOpenDraft: (moduleId) => openDraft.mutate(moduleId),
+          onDiscardDraft: (moduleId) => {
+            if (window.confirm("Discard this draft? This cannot be undone.")) {
+              discardDraft.mutate(moduleId);
+            }
+          },
+          onAskForChange: (moduleId) =>
+            navigate(`/m/${encodeURIComponent(moduleId)}`, { state: { openChat: true } }),
+          onShip: (moduleId) => ship.mutate(moduleId)
+        }}
       />
     </div>
   );

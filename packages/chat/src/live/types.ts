@@ -47,6 +47,8 @@ export interface EngineKillOpts {
 export interface EngineLaunchOpts {
   readonly neutralDir: string;
   readonly personaPath: string; // rendered persona context file in neutralDir
+  /** Workshop builders may edit only their neutral working directory without a hidden prompt. */
+  readonly workspaceWrite?: boolean;
   readonly mcpConfigPath?: string; // Phase 2 (unused in Phase 1)
   /** Opaque per-session MCP bearer token (jst_<uuid>), minted at launch. */
   readonly mcpToken?: string;

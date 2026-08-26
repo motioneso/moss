@@ -13,6 +13,7 @@ export interface ModuleBuildPayload {
 export interface ModuleBuildStepResult {
   readonly deferred: boolean;
   readonly continuation?: { readonly buildId: string; readonly step: string };
+  readonly moduleId?: string;
 }
 
 type ModuleBuildJob = Pick<Job<ModuleBuildPayload>, "data">;

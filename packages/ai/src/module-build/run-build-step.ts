@@ -28,6 +28,10 @@ export interface RunModuleBuildStepDeps {
   readonly resolveWorkingDir: (buildId: string) => string;
   readonly recordFetchedUrl: (buildId: string, url: string) => Promise<void>;
   readonly recordWrittenFile: (buildId: string, path: string) => Promise<void>;
+  readonly finishBuild: (
+    buildId: string,
+    workingDir: string
+  ) => Promise<{ readonly moduleId: string }>;
 }
 
 export async function runModuleBuildStep(
@@ -49,7 +53,10 @@ export async function runModuleBuildStep(
   }
 
   const next = nextBuildStep(step);
-  if (next === null) return { deferred: false };
+  if (next === null) {
+    const finished = await deps.finishBuild(build.id, workingDir);
+    return { deferred: false, moduleId: finished.moduleId };
+  }
   return { deferred: true, continuation: { buildId: build.id, step: next } };
 }
 

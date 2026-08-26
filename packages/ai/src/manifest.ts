@@ -388,22 +388,18 @@ export const aiModuleManifest = {
       permissionId: "ai.assistant-actions"
     },
     {
+      // The Workshop Stop/Discard actions re-check ownership and cancellable status server-side.
+      method: "POST",
+      path: "/api/ai/module-builds/:buildId/cancel",
+      responseSchema: approveModuleBuildResponseSchema,
+      permissionId: "ai.assistant-actions"
+    },
+    {
       // #1945 — the Workshop page's own list of the caller's builds. The repository query
       // scopes to owner_user_id, so this is never a cross-user listing.
       method: "GET",
       path: "/api/ai/module-builds/mine",
       responseSchema: listMyModuleBuildsResponseSchema,
-      permissionId: "ai.assistant-actions"
-    },
-    {
-      // #1975 — the Workshop page's "Stop" button. cancelModuleBuild re-checks ownership and
-      // status server-side, same shape as approve above. Missing this entry does not fail a
-      // unit test: it fails assertRouteCoverage at server BOOT (apps/api/src/server.ts),
-      // which only shows up once something actually starts the real server — the compose
-      // deployment smoke, not the unit suite. See packages/chat/src/manifest.ts's #1284 note
-      // for the same trap.
-      method: "POST",
-      path: "/api/ai/module-builds/:buildId/cancel",
       permissionId: "ai.assistant-actions"
     }
   ],
