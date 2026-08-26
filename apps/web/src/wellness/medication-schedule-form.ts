@@ -365,23 +365,3 @@ export function previewMedication(state: MedFormState, timeZone: string): Medica
     updated_at: new Date()
   } as Medication;
 }
-
-/** The browser's own time zone, or UTC if it cannot be read. */
-export function browserTimeZone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-  } catch {
-    return "UTC";
-  }
-}
-
-/** Today's date in the browser's own zone, as "YYYY-MM-DD". */
-export function todayDateKey(now: Date = new Date()): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: browserTimeZone(),
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  }).format(now);
-  return parts;
-}
