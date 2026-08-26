@@ -80,7 +80,7 @@ async function serveStaticOrSpa(
 
   const url = request.url.split("?")[0] ?? "/";
   if (url.startsWith("/api/") || url === "/api" || url.startsWith("/health")) {
-    await reply.callNotFound();
+    sendNotFound(reply);
     return;
   }
 
@@ -93,11 +93,23 @@ async function serveStaticOrSpa(
   const accept = request.headers.accept ?? "";
   const acceptsHtml = accept === "" || accept.includes("text/html") || accept.includes("*/*");
   if (url.includes(".") || !acceptsHtml) {
-    await reply.callNotFound();
+    // A missing hashed asset (e.g. a stale page still referencing a replaced build's
+    // filename) must come back as a real 404 here. This handler IS the Fastify
+    // not-found handler, so calling reply.callNotFound() from inside it re-enters
+    // Fastify's generic fallback instead — still a 404, but mislabeled
+    // "text/plain", which the browser then refuses to use as a stylesheet/script
+    // under the app's nosniff header.
+    sendNotFound(reply);
     return;
   }
 
   sendFile(reply, indexPath);
+}
+
+function sendNotFound(reply: FastifyReply): void {
+  reply.header("Content-Type", "text/plain; charset=utf-8");
+  reply.header("X-Content-Type-Options", "nosniff");
+  reply.code(404).send("Not Found");
 }
 
 function resolveAssetPath(distDir: string, urlPath: string): string | undefined {
