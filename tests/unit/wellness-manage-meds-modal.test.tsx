@@ -6,7 +6,7 @@
 //
 // jsdom + react-test-renderer's `act` is this repo's established way to drive real handlers —
 // there is no @testing-library/react here. Same pattern as tests/unit/settings-ai-pane.test.tsx.
-import { createElement } from "react";
+import { createElement, useState } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -60,6 +60,39 @@ async function renderModal(): Promise<ReactTestRenderer> {
   });
   await flush();
   return renderer;
+}
+
+/**
+ * Renders the modal the way the real page does: a parent component owns the "open" flag and
+ * flips it in response to onClose, so tests can close and reopen the modal and see whether
+ * state carried over, instead of always getting a fresh instance.
+ */
+async function renderModalToggle(): Promise<{
+  renderer: ReactTestRenderer;
+  setOpen: (open: boolean) => void;
+}> {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const controls: { setOpen?: (open: boolean) => void } = {};
+  function Harness() {
+    const [open, setOpen] = useState(true);
+    controls.setOpen = setOpen;
+    return createElement(
+      QueryClientProvider,
+      { client },
+      createElement(ManageMedsModal, { open, onClose: () => setOpen(false) })
+    );
+  }
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(createElement(Harness));
+  });
+  await flush();
+  return {
+    renderer,
+    setOpen: (open: boolean) => {
+      controls.setOpen!(open);
+    }
+  };
 }
 
 /** Click the button whose visible label is exactly `label`. */
@@ -403,4 +436,44 @@ describe("editing a saved medication (#1971)", () => {
       renderer.unmount();
     });
   });
+
+  const closePaths: Array<{ name: string; close: (r: ReactTestRenderer) => Promise<void> }> = [
+    { name: "the X button", close: (r) => clickByAriaLabel(r, "Close") },
+    { name: "the Done button", close: (r) => clickButton(r, "Done") },
+    {
+      name: "clicking outside the window",
+      close: async (r) => {
+        const scrim = r.root.findByProps({ className: "wl-modal-scrim" });
+        const sameNode = {};
+        await act(async () => {
+          scrim.props.onMouseDown({ target: sameNode, currentTarget: sameNode });
+        });
+      }
+    }
+  ];
+
+  for (const { name, close } of closePaths) {
+    it(`closing with ${name} while mid-edit does not leave the window primed to edit that medication`, async () => {
+      listMedicationsMock.mockResolvedValue({ medications: [medDto({ name: "Sertraline" })] });
+      const { renderer, setOpen } = await renderModalToggle();
+
+      await clickByAriaLabel(renderer, "Edit Sertraline");
+      await setField(renderer, "Medication name", "Sertraline (unsaved change)");
+      expect(heading(renderer)).toBe("Edit medication");
+
+      await close(renderer);
+      await act(async () => {
+        setOpen(true);
+      });
+      await flush();
+
+      expect(heading(renderer)).toBe("Add a medication");
+      expect(renderer.root.findByProps({ "aria-label": "Medication name" }).props.value).toBe("");
+      expect(updateMedicationMock).not.toHaveBeenCalled();
+
+      await act(async () => {
+        renderer.unmount();
+      });
+    });
+  }
 });

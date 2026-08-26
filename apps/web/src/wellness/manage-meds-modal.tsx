@@ -130,6 +130,10 @@ export function ManageMedsModal({ open, onClose, theme = "light" }: Props) {
     setEditingId(null);
     setForm(emptyMedForm(localDay(new Date(), timeZone)));
   };
+  const handleClose = () => {
+    cancelEdit();
+    onClose();
+  };
 
   const problems = describeFormProblems(form);
 
@@ -218,7 +222,7 @@ export function ManageMedsModal({ open, onClose, theme = "light" }: Props) {
     <div
       className="wl-modal-scrim"
       onMouseDown={(ev) => {
-        if (ev.target === ev.currentTarget) onClose();
+        if (ev.target === ev.currentTarget) handleClose();
       }}
     >
       <div
@@ -235,7 +239,7 @@ export function ManageMedsModal({ open, onClose, theme = "light" }: Props) {
               Manage medications
             </div>
           </div>
-          <button type="button" className="wl-modal__x" aria-label="Close" onClick={onClose}>
+          <button type="button" className="wl-modal__x" aria-label="Close" onClick={handleClose}>
             <XIcon />
           </button>
         </div>
@@ -615,7 +619,7 @@ export function ManageMedsModal({ open, onClose, theme = "light" }: Props) {
         </div>
         <div className="wl-modal__foot">
           <span className="spacer" />
-          <button type="button" className="primary-button" onClick={onClose}>
+          <button type="button" className="primary-button" onClick={handleClose}>
             Done
           </button>
         </div>
