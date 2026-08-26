@@ -242,7 +242,7 @@ describe("wellness medications: start dates, reminders, and editing a saved sche
       expect(backToMonthly.statusCode, backToMonthly.body).toBe(200);
       const restored = await reload(app, medId);
       expect(restored["frequencyType"]).toBe("monthly");
-      expect(restored["scheduleTimes"]).toEqual(["08:00"]);
+      expect(restored["scheduleTimes"]).toEqual(["08:00:00"]);
       expect(restored["monthDay"]).toBe(15);
     } finally {
       await app.close();
@@ -314,7 +314,7 @@ describe("wellness medications: start dates, reminders, and editing a saved sche
       expect(reloaded["frequencyType"]).toBe("cyclical");
       expect(reloaded["cycleDaysOn"]).toBe(21);
       expect(reloaded["cycleDaysOff"]).toBe(7);
-      expect(reloaded["scheduleTimes"]).toEqual(["09:00"]);
+      expect(reloaded["scheduleTimes"]).toEqual(["09:00:00"]);
       expect(reloaded["scheduleStartDate"]).toBe("2026-01-05");
     } finally {
       await app.close();
