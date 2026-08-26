@@ -351,6 +351,7 @@ export default defineConfig({
       "packages/people/src/__tests__/**/*.test.ts",
       "packages/db/src/__tests__/**/*.test.ts",
       "packages/chat/src/live/*.test.ts",
+      "packages/chat/src/*.test.ts",
       "packages/calendar/src/*.test.ts",
       "packages/ai/src/structured/*.test.ts"
     ],

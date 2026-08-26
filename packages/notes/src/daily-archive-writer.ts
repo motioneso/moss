@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import type { DataContextDb } from "@moss/db";
-import { validateChatArchiveFolder } from "@moss/shared";
+import { formatInZone, validateChatArchiveFolder } from "@moss/shared";
 
 import {
   assertInside,
@@ -21,6 +21,7 @@ export interface ChatArchiveMessage {
 
 export interface ChatArchiveSession {
   readonly threadId: string;
+  readonly title: string;
   readonly messages: readonly ChatArchiveMessage[];
 }
 
@@ -36,6 +37,7 @@ export async function writeDailyChatArchive(
   localDate: string,
   folder: string,
   sessions: readonly ChatArchiveSession[],
+  timezone: string,
   notesSync: NotesSyncToolService
 ): Promise<WriteDailyChatArchiveResult> {
   if (sessions.length === 0) {
@@ -71,7 +73,7 @@ export async function writeDailyChatArchive(
     );
   }
 
-  const content = renderMarkdown(sessions);
+  const content = renderMarkdown(sessions, timezone);
   const file = join(root, targetRel);
   await mkdir(dirname(file), { recursive: true });
   assertInside(root, file);
@@ -94,14 +96,22 @@ async function isMossFileOrAbsent(root: string, rel: string): Promise<boolean> {
   return existing.split("\n", 1)[0] === ARCHIVE_MARKER;
 }
 
-function renderMarkdown(sessions: readonly ChatArchiveSession[]): string {
+function renderMarkdown(sessions: readonly ChatArchiveSession[], timezone: string): string {
   const lines: string[] = [ARCHIVE_MARKER, ""];
   for (const session of sessions) {
-    const first = session.messages[0];
-    lines.push(`## ${first ? first.createdAt : session.threadId}`, "");
+    lines.push(sessionHeading(session, timezone), "");
     for (const message of session.messages) {
       lines.push(`**${message.role}:** ${message.body}`, "");
     }
   }
   return lines.join("\n");
+}
+
+function sessionHeading(session: ChatArchiveSession, timezone: string): string {
+  const first = session.messages[0];
+  const time = first
+    ? formatInZone(first.createdAt, timezone, { hour: "numeric", minute: "2-digit" })
+    : session.threadId;
+  const title = session.title.trim();
+  return title.length > 0 ? `## ${time} — ${title}` : `## ${time}`;
 }

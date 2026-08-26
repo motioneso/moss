@@ -38,6 +38,7 @@ import {
 import {
   CHAT_ARCHIVE_DEFAULT_FOLDER,
   CHAT_ARCHIVE_ENABLED_PREF_KEY,
+  CHAT_ARCHIVE_ENABLED_SINCE_PREF_KEY,
   CHAT_ARCHIVE_FOLDER_PREF_KEY
 } from "@moss/settings";
 import { localDay } from "@moss/shared";
@@ -325,6 +326,15 @@ export async function handleArchiveDayJob(
   const folder =
     typeof folderRaw === "string" && folderRaw.length > 0 ? folderRaw : CHAT_ARCHIVE_DEFAULT_FOLDER;
 
+  const enabledSinceRaw = await deps.preferencesPort.get(
+    scopedDb,
+    CHAT_ARCHIVE_ENABLED_SINCE_PREF_KEY
+  );
+  const enabledSinceMs =
+    typeof enabledSinceRaw === "string" && !Number.isNaN(Date.parse(enabledSinceRaw))
+      ? Date.parse(enabledSinceRaw)
+      : null;
+
   const localeRaw = await deps.preferencesPort.get(scopedDb, "locale");
   const timezone = extractTimezone(localeRaw) ?? "UTC";
 
@@ -335,24 +345,36 @@ export async function handleArchiveDayJob(
     rangeStartUtcIso,
     rangeEndUtcIso
   );
-  const sameDay = rows.filter((row) => localDay(row.createdAt, timezone) === localDate);
+  const sameDay = rows
+    .filter((row) => localDay(row.createdAt, timezone) === localDate)
+    .filter(
+      (row) => enabledSinceMs === null || new Date(row.createdAt).getTime() >= enabledSinceMs
+    );
   if (sameDay.length === 0) return;
 
   const sessionsByThread = new Map<
     string,
-    { threadFirstMessageAt: string; messages: ChatArchiveMessage[] }
+    { threadTitle: string; threadFirstMessageAt: string; messages: ChatArchiveMessage[] }
   >();
   for (const row of sameDay) {
     let session = sessionsByThread.get(row.threadId);
     if (!session) {
-      session = { threadFirstMessageAt: row.threadFirstMessageAt, messages: [] };
+      session = {
+        threadTitle: row.threadTitle,
+        threadFirstMessageAt: row.threadFirstMessageAt,
+        messages: []
+      };
       sessionsByThread.set(row.threadId, session);
     }
     session.messages.push({ role: row.role, body: row.body, createdAt: row.createdAt });
   }
   const sessions: ChatArchiveSession[] = [...sessionsByThread.entries()]
     .sort(([, a], [, b]) => a.threadFirstMessageAt.localeCompare(b.threadFirstMessageAt))
-    .map(([threadId, session]) => ({ threadId, messages: session.messages }));
+    .map(([threadId, session]) => ({
+      threadId,
+      title: session.threadTitle,
+      messages: session.messages
+    }));
 
   const notesSync: NotesSyncToolService = {
     enqueue: (enqueueActorUserId, sourcePath) => {
@@ -363,7 +385,15 @@ export async function handleArchiveDayJob(
     }
   };
 
-  await writeDailyChatArchive(scopedDb, actorUserId, localDate, folder, sessions, notesSync);
+  await writeDailyChatArchive(
+    scopedDb,
+    actorUserId,
+    localDate,
+    folder,
+    sessions,
+    timezone,
+    notesSync
+  );
 }
 
 // ── Worker registration ───────────────────────────────────────────────────────

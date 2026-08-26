@@ -15,6 +15,7 @@ import { handleSettingsRouteError } from "./route-error.js";
 
 export const CHAT_ARCHIVE_ENABLED_PREF_KEY = "chat-archive.enabled";
 export const CHAT_ARCHIVE_FOLDER_PREF_KEY = "chat-archive.folder";
+export const CHAT_ARCHIVE_ENABLED_SINCE_PREF_KEY = "chat-archive.enabled-since";
 export const CHAT_ARCHIVE_DEFAULT_FOLDER = "Moss/Chats";
 
 interface ChatArchiveRoutesDependencies {
@@ -56,6 +57,11 @@ export function registerChatArchiveRoutes(
           throw new HttpError(400, (validationError as Error).message);
         }
         return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
+          const wasEnabled =
+            (await dependencies.preferencesRepository.get(
+              scopedDb,
+              CHAT_ARCHIVE_ENABLED_PREF_KEY
+            )) === true;
           await dependencies.preferencesRepository.upsert(
             scopedDb,
             CHAT_ARCHIVE_ENABLED_PREF_KEY,
@@ -66,6 +72,13 @@ export function registerChatArchiveRoutes(
             CHAT_ARCHIVE_FOLDER_PREF_KEY,
             folder
           );
+          if (body.enabled && !wasEnabled) {
+            await dependencies.preferencesRepository.upsert(
+              scopedDb,
+              CHAT_ARCHIVE_ENABLED_SINCE_PREF_KEY,
+              new Date().toISOString()
+            );
+          }
           return readCurrent(scopedDb, dependencies.preferencesRepository);
         });
       } catch (error) {
