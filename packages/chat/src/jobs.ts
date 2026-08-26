@@ -30,6 +30,7 @@ import {
 import {
   NOTES_SYNC_QUEUE,
   writeDailyChatArchive,
+  ChatArchiveConflictError,
   type ChatArchiveMessage,
   type ChatArchiveSession,
   type NotesSyncJobPayload,
@@ -383,10 +384,14 @@ export async function handleArchiveDayJob(
       timezone,
       notesSync
     );
-  } catch {
+  } catch (error) {
+    const reason =
+      error instanceof ChatArchiveConflictError
+        ? "Today's note already exists and wasn't written by chat archiving."
+        : "Something went wrong while saving today's chat archive.";
     await deps.preferencesPort.upsert(scopedDb, CHAT_ARCHIVE_STATUS_PREF_KEY, {
       state: "failed",
-      reason: "Today's note already exists and wasn't written by chat archiving."
+      reason
     } satisfies ChatArchiveStatus);
     return;
   }

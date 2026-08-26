@@ -11,7 +11,7 @@ let writeResult: { written: boolean; path: string | null; reason?: string } = {
   written: true,
   path: "x.md"
 };
-let writeThrows = false;
+let writeThrows: false | "conflict" | "other" = false;
 
 vi.mock("@moss/notes", async () => {
   const actual = await vi.importActual<typeof MossNotes>("@moss/notes");
@@ -25,7 +25,12 @@ vi.mock("@moss/notes", async () => {
       sessions: readonly ChatArchiveSession[]
     ) => {
       capturedSessions = sessions;
-      if (writeThrows) throw new Error("both today's file and its fallback are taken");
+      if (writeThrows === "conflict") {
+        throw new actual.ChatArchiveConflictError("both today's file and its fallback are taken");
+      }
+      if (writeThrows === "other") {
+        throw new Error("EACCES: permission denied, open '/some/path'");
+      }
       return writeResult;
     }
   };
@@ -251,9 +256,31 @@ describe("handleArchiveDayJob", () => {
     expect(status.reason).not.toContain("/");
   });
 
-  it("records a failed status when the write throws, with no file path in the reason", async () => {
+  it("records the file-conflict message when today's file and its backup are both already taken", async () => {
     capturedSessions = null;
-    writeThrows = true;
+    writeThrows = "conflict";
+
+    const values: Record<string, unknown> = {
+      "chat-archive.enabled": true,
+      "chat-archive.folder": "Moss/Chats"
+    };
+    const preferencesPort = fakePreferencesPort(values);
+
+    await handleArchiveDayJob(SCOPED_DB, "user-1", "2026-08-20", {
+      preferencesPort,
+      chatRepo: fakeChatRepo(oneRow),
+      boss: BOSS
+    });
+
+    expect(values["chat-archive.status"]).toEqual({
+      state: "failed",
+      reason: "Today's note already exists and wasn't written by chat archiving."
+    });
+  });
+
+  it("records a generic failed status, not the file-conflict message, for any other write error", async () => {
+    capturedSessions = null;
+    writeThrows = "other";
 
     const values: Record<string, unknown> = {
       "chat-archive.enabled": true,
@@ -269,6 +296,7 @@ describe("handleArchiveDayJob", () => {
 
     const status = values["chat-archive.status"] as { state: string; reason: string };
     expect(status.state).toBe("failed");
+    expect(status.reason).not.toBe("Today's note already exists and wasn't written by chat archiving.");
     expect(status.reason).not.toContain("Moss/Chats");
     expect(status.reason).not.toContain("hello");
   });

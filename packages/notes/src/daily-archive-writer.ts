@@ -31,6 +31,9 @@ export interface WriteDailyChatArchiveResult {
   readonly reason?: "no-notes-source" | "no-sessions" | "bad-folder";
 }
 
+/** Thrown when today's file and its fallback both already exist and neither was written by chat archiving. */
+export class ChatArchiveConflictError extends Error {}
+
 export async function writeDailyChatArchive(
   scopedDb: DataContextDb,
   actorUserId: string,
@@ -68,7 +71,7 @@ export async function writeDailyChatArchive(
       : null;
 
   if (targetRel === null) {
-    throw new Error(
+    throw new ChatArchiveConflictError(
       `Both ${primaryRel} and ${fallbackRel} are occupied by files not written by the chat archive`
     );
   }
