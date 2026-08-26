@@ -39,6 +39,7 @@ inline error, empty state) renders from the query/mutation result, never from an
 ## Task 1 — API client + query key
 
 Files:
+
 - `apps/web/src/api/client.ts`: add import of `ChatArchiveSettingsResponse`,
   `PutChatArchiveSettingsRequest` from `@moss/shared` (into the existing type-import block near
   the top), then:
@@ -62,6 +63,7 @@ Test (`tests/unit` or existing client test file, whichever this repo's conventio
 `client.ts` — check for an existing `client.test.ts`; if none exists, skip a dedicated unit test
 here since these are two one-line `requestJson` wrappers with no logic — the UAT spec in task 3
 exercises them for real):
+
 - No new unit test needed; behavior is proven by the UAT spec (task 3) hitting the real route.
 
 ## Task 2 — `ChatArchive` settings section
@@ -79,6 +81,7 @@ function ChatArchive() {
 ```
 
 Behavior contract (no function body — TDD writes it):
+
 - Queries `queryKeys.settings.chatArchive` via `getChatArchiveSettings`, and
   `queryKeys.settings.notesSource` via `getNotesSource` (same key the Sources pane already
   invalidates on connect, so this section updates automatically when a source is connected
@@ -99,11 +102,12 @@ Behavior contract (no function body — TDD writes it):
     exists in this file — otherwise a plain `<div className="jds-field-error">`), and do not
     overwrite the local folder input with the failed value's rejection — leave the user's typed
     text so they can fix it, matching the spec's "previous good value is not overwritten" case for
-    the *saved* value, while the input keeps their edit.
+    the _saved_ value, while the input keeps their edit.
   - On mutation success, toast a short confirmation and update the query cache with the result.
 
 Test cases (component/unit level, in whatever existing test file covers `settings-ai-pane.tsx`,
 or a new adjacent one if none exists — check first):
+
 1. Renders the empty state and no switch/field when `getNotesSource` resolves `path: null`.
 2. Renders the switch (unchecked) and folder field pre-filled `Moss/Chats` when
    `getChatArchiveSettings` resolves `{ enabled: false, folder: "Moss/Chats" }` and a source is
@@ -127,6 +131,7 @@ File: `tests/uat/specs/1974-chat-archive-settings.uat.spec.ts`.
 since this needs a connected Notes source).
 
 Test cases:
+
 1. Sign in, connect a Notes source via `PUT /api/me/notes-source` (same call as
    `notes-default-retrieval.uat.spec.ts:97`), open Settings → Assistant & AI. Assert the "Save
    chats to Notes" switch is visible, unchecked, and the folder field shows `Moss/Chats`.
@@ -145,9 +150,11 @@ Add a row to `.claude/skills/coordinate/uat-trigger-map.tsv`:
 `blocking	apps/web/src/settings/settings-ai-pane.tsx	tests/uat/specs/1974-chat-archive-settings.uat.spec.ts`
 
 Run and observe pass before wrap-up:
+
 ```bash
 JARVIS_UAT_BASE_URL=<dev-instance-url> pnpm exec playwright test tests/uat/specs/1974-chat-archive-settings.uat.spec.ts > /tmp/uat-1974.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected exit code: `0`.
 
 ## Kill gate
@@ -166,6 +173,7 @@ pnpm lint > /tmp/lint.log 2>&1; echo "EXIT=$?"
 pnpm typecheck > /tmp/tc.log 2>&1; echo "EXIT=$?"
 git fetch origin main && git rebase origin/main
 ```
+
 Then the `verify-gate` skill's recipe for the full local gate (never run `pnpm verify:foundation`
 directly), and the UAT command above against a live dev instance for the live-path proof.
 Expected exit code for each: `0`.

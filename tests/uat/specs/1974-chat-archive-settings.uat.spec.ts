@@ -100,9 +100,7 @@ test.describe.serial("chat archive settings section drives the real backend (#19
     await folderInput.fill("2 Area/Moss/Chats");
     await folderInput.blur();
 
-    await expect(
-      page.getByText("Chat archive folder cannot", { exact: false })
-    ).toHaveCount(0);
+    await expect(page.getByText("Chat archive folder cannot", { exact: false })).toHaveCount(0);
     await gotoAssistantSettings(page);
     await expect(folderInput).toHaveValue("2 Area/Moss/Chats");
   });
