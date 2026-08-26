@@ -6,11 +6,15 @@ import {
   type ListMyModuleBuildsResponse,
   type ModuleBuildPlan
 } from "@moss/shared";
-import { listModuleBuildsForUser } from "@moss/settings";
+import { cancelModuleBuild, listModuleBuildsForUser } from "@moss/settings";
 
 import type { AiRoutesDependencies } from "./routes.js";
 
 interface ApproveRequest {
+  readonly Params: { readonly buildId: string };
+}
+
+interface CancelRequest {
   readonly Params: { readonly buildId: string };
 }
 
@@ -71,6 +75,24 @@ export function registerModuleBuildRoutes(
           approve(scopedDb, buildId, accessContext.actorUserId)
         );
         return { buildId, status: "building" };
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  server.post<CancelRequest>(
+    "/api/ai/module-builds/:buildId/cancel",
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const { buildId } = request.params;
+        const cancelled = await dependencies.dataContext.withDataContext(
+          accessContext,
+          (scopedDb) => cancelModuleBuild(scopedDb, buildId, accessContext.actorUserId)
+        );
+        if (!cancelled) throw new HttpError(404, "Module build not found");
+        return { buildId, status: "cancelled" };
       } catch (error) {
         return handleRouteError(error, reply);
       }
