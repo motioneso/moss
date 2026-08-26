@@ -134,6 +134,16 @@ function BuildingNowCard({
                 ? "Building the module"
                 : (build.step ?? "Starting the build")}
         </span>
+        <span className="jds-caption">
+          Last active at{" "}
+          <time dateTime={build.updatedAt}>
+            {new Date(build.updatedAt).toLocaleTimeString([], {
+              hour: "numeric",
+              minute: "2-digit",
+              second: "2-digit"
+            })}
+          </time>
+        </span>
         <BuildLogList label="What it has written" items={build.writtenFiles} />
         <BuildLogList label="What it has read" items={build.fetchedUrls} />
         <div className="workshop-actions">

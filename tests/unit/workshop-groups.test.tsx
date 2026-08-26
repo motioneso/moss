@@ -69,6 +69,8 @@ describe("WorkshopGroups", () => {
     expect(html).toContain("Building now");
     expect(html).toContain("Allotment watering log");
     expect(html).toContain("Writing the plan");
+    expect(html).toContain("Last active");
+    expect(html).toContain('dateTime="2026-08-20T09:00:00Z"');
     expect(html).not.toContain("writing_spec");
     expect(html).not.toContain("5 minutes");
     expect(html).not.toContain("budget");

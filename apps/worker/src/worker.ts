@@ -64,6 +64,7 @@ import {
   createModuleCredentialSecretCipher,
   getModuleBuild,
   SettingsRepository,
+  touchModuleBuildActivity,
   updateModuleBuildStatus,
   appendModuleBuildFetchedUrl,
   appendModuleBuildWrittenFile
@@ -231,6 +232,7 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   const runModuleBuildStepForJob = createRunModuleBuildStepForJob({
     dataContext,
     getModuleBuild,
+    touchModuleBuildActivity,
     updateModuleBuildStatus,
     prepareRunStepDeps: async (scopedDb) => {
       const model = await aiRepository.selectChatModelForUser(scopedDb);

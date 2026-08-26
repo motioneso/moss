@@ -132,6 +132,19 @@ export async function updateModuleBuildStatus(
     .execute();
 }
 
+export async function touchModuleBuildActivity(
+  scopedDb: DataContextDb,
+  buildId: string
+): Promise<void> {
+  assertDataContextDb(scopedDb);
+  await scopedDb.db
+    .updateTable("app.module_builds")
+    .set({ updated_at: new Date() })
+    .where("id", "=", buildId)
+    .where("status", "=", "building")
+    .execute();
+}
+
 /** Appends one URL to the build's fetched-URL trail (spec: "what the build fetched is shown"). */
 export async function appendModuleBuildFetchedUrl(
   scopedDb: DataContextDb,

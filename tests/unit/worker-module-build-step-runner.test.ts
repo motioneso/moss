@@ -7,7 +7,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { dataContextBrand, type AccessContext, type DataContextDb } from "@moss/db";
-import type { ModuleBuildPayload } from "@moss/jobs";
+import type { ModuleBuildPayload, ModuleBuildStepResult } from "@moss/jobs";
 import type { ModuleBuild } from "@moss/settings";
 
 import { createRunModuleBuildStepForJob } from "../../apps/worker/src/module-build-step-runner.js";
@@ -50,6 +50,39 @@ function fakeDataContext() {
 }
 
 describe("createRunModuleBuildStepForJob", () => {
+  it("publishes fresh activity while a real build step is still running", async () => {
+    vi.useFakeTimers();
+    let finishStep!: (result: ModuleBuildStepResult) => void;
+    const touchModuleBuildActivity = vi.fn(async () => {});
+    const dependencies = {
+      dataContext: fakeDataContext(),
+      getModuleBuild: vi.fn(async () => build({ status: "building" })),
+      updateModuleBuildStatus: vi.fn(async () => {}),
+      touchModuleBuildActivity,
+      prepareRunStepDeps: async () => ({}) as never,
+      runStep: vi.fn(
+        async () =>
+          new Promise<ModuleBuildStepResult>((resolve) => {
+            finishStep = resolve;
+          })
+      ),
+      notifyFinished: vi.fn(async () => {}),
+      notifyFailed: vi.fn(async () => {})
+    };
+
+    try {
+      const pending = createRunModuleBuildStepForJob(dependencies)(payload());
+      await vi.advanceTimersByTimeAsync(15_000);
+
+      expect(touchModuleBuildActivity).toHaveBeenCalledWith(expect.anything(), "b-1");
+
+      finishStep({ deferred: false });
+      await pending;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("never runs the step or writes a status for a build that is already cancelled", async () => {
     const getModuleBuild = vi.fn(async () => build({ status: "cancelled" }));
     const updateModuleBuildStatus = vi.fn(async () => {});
@@ -60,6 +93,7 @@ describe("createRunModuleBuildStepForJob", () => {
     const runJob = createRunModuleBuildStepForJob({
       dataContext: fakeDataContext(),
       getModuleBuild,
+      touchModuleBuildActivity: vi.fn(async () => {}),
       updateModuleBuildStatus,
       prepareRunStepDeps: async () => ({}) as never,
       runStep,
@@ -91,6 +125,7 @@ describe("createRunModuleBuildStepForJob", () => {
     const runJob = createRunModuleBuildStepForJob({
       dataContext: fakeDataContext(),
       getModuleBuild,
+      touchModuleBuildActivity: vi.fn(async () => {}),
       updateModuleBuildStatus,
       prepareRunStepDeps: async () => ({}) as never,
       runStep,
@@ -122,6 +157,7 @@ describe("createRunModuleBuildStepForJob", () => {
     const runJob = createRunModuleBuildStepForJob({
       dataContext: fakeDataContext(),
       getModuleBuild,
+      touchModuleBuildActivity: vi.fn(async () => {}),
       updateModuleBuildStatus,
       prepareRunStepDeps: async () => ({}) as never,
       runStep,
@@ -144,6 +180,7 @@ describe("createRunModuleBuildStepForJob", () => {
     const runJob = createRunModuleBuildStepForJob({
       dataContext: fakeDataContext(),
       getModuleBuild,
+      touchModuleBuildActivity: vi.fn(async () => {}),
       updateModuleBuildStatus,
       prepareRunStepDeps: async () => ({}) as never,
       runStep,
@@ -176,6 +213,7 @@ describe("createRunModuleBuildStepForJob", () => {
     const runJob = createRunModuleBuildStepForJob({
       dataContext: fakeDataContext(),
       getModuleBuild,
+      touchModuleBuildActivity: vi.fn(async () => {}),
       updateModuleBuildStatus,
       prepareRunStepDeps: async () => ({}) as never,
       runStep,
@@ -209,6 +247,7 @@ describe("createRunModuleBuildStepForJob", () => {
     const runJob = createRunModuleBuildStepForJob({
       dataContext: fakeDataContext(),
       getModuleBuild,
+      touchModuleBuildActivity: vi.fn(async () => {}),
       updateModuleBuildStatus,
       prepareRunStepDeps: async () => ({}) as never,
       runStep,
@@ -246,6 +285,7 @@ describe("createRunModuleBuildStepForJob", () => {
     const runJob = createRunModuleBuildStepForJob({
       dataContext,
       getModuleBuild: vi.fn(async () => build({ status: committedStatus as "building" })),
+      touchModuleBuildActivity: vi.fn(async () => {}),
       updateModuleBuildStatus: vi.fn(async (_db, _id, input) => {
         stagedStatus = input.status;
       }),
@@ -271,6 +311,7 @@ describe("createRunModuleBuildStepForJob", () => {
     const runJob = createRunModuleBuildStepForJob({
       dataContext: fakeDataContext(),
       getModuleBuild,
+      touchModuleBuildActivity: vi.fn(async () => {}),
       updateModuleBuildStatus,
       prepareRunStepDeps: async () => ({}) as never,
       runStep,

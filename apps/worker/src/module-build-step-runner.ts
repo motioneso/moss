@@ -14,6 +14,7 @@ import type {
   ModuleBuild,
   UpdateModuleBuildStatusInput,
   getModuleBuild as getModuleBuildFn,
+  touchModuleBuildActivity as touchModuleBuildActivityFn,
   updateModuleBuildStatus as updateModuleBuildStatusFn
 } from "@moss/settings";
 import type { RunModuleBuildStepDeps } from "@moss/ai";
@@ -21,6 +22,7 @@ import type { RunModuleBuildStepDeps } from "@moss/ai";
 export interface RunModuleBuildStepForJobDeps {
   readonly dataContext: Pick<DataContextRunner, "withDataContext">;
   readonly getModuleBuild: typeof getModuleBuildFn;
+  readonly touchModuleBuildActivity: typeof touchModuleBuildActivityFn;
   readonly updateModuleBuildStatus: typeof updateModuleBuildStatusFn;
   /** Builds the step deps (live agent, working dir, fetched/written recorders) for this build. */
   readonly prepareRunStepDeps: (scopedDb: DataContextDb) => Promise<RunModuleBuildStepDeps>;
@@ -36,6 +38,8 @@ export function createRunModuleBuildStepForJob(
   deps: RunModuleBuildStepForJobDeps
 ): (payload: ModuleBuildPayload) => Promise<ModuleBuildStepResult> {
   return async (payload) => {
+    let heartbeat: ReturnType<typeof setInterval> | undefined;
+    let heartbeatPending = false;
     const access: AccessContext = {
       actorUserId: payload.actorUserId,
       requestId: `module-build:${payload.buildId}`
@@ -49,6 +53,18 @@ export function createRunModuleBuildStepForJob(
         }
 
         const stepDeps = await deps.prepareRunStepDeps(scopedDb);
+        heartbeat = setInterval(() => {
+          if (heartbeatPending) return;
+          heartbeatPending = true;
+          void deps.dataContext
+            .withDataContext(access, (heartbeatDb) =>
+              deps.touchModuleBuildActivity(heartbeatDb, build.id)
+            )
+            .catch(() => {})
+            .finally(() => {
+              heartbeatPending = false;
+            });
+        }, 5_000);
         const result = await deps.runStep(stepDeps, build);
         if (await wasCancelledSince(deps, scopedDb, build.id)) {
           return { deferred: false };
@@ -76,6 +92,8 @@ export function createRunModuleBuildStepForJob(
         await deps.notifyFailed(scopedDb, build.id);
       });
       throw error;
+    } finally {
+      if (heartbeat) clearInterval(heartbeat);
     }
   };
 }
