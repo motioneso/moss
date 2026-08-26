@@ -86,7 +86,7 @@ export function computeSchedule(
  * day leaves every family's repeat maths exactly as it was. Medications with neither date stored
  * behave exactly as before.
  */
-function isWithinScheduleWindow(med: Medication, dayKey: string): boolean {
+export function isWithinScheduleWindow(med: Medication, dayKey: string): boolean {
   if (med.schedule_start_date && dayKey < dateKeyFromColumn(med.schedule_start_date)) return false;
   if (med.schedule_end_date && dayKey > dateKeyFromColumn(med.schedule_end_date)) return false;
   return true;
