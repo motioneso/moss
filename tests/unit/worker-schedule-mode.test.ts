@@ -10,7 +10,11 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
-import { WORKER_BOSS_OPTIONS, logScheduleMode } from "../../apps/worker/src/worker.js";
+import {
+  WORKER_BOSS_OPTIONS,
+  logScheduleMode,
+  resolveModuleBuildCliHome
+} from "../../apps/worker/src/worker.js";
 import { resolvePgBossConstructorOptions } from "../../packages/jobs/src/pg-boss.js";
 
 describe("worker cron-engine ownership (F14 one-cron-owner)", () => {
@@ -48,5 +52,13 @@ describe("worker cron-engine ownership (F14 one-cron-owner)", () => {
     expect(workerOptions.supervise).toBe(true);
     expect(workerOptions.migrate).toBe(false);
     expect(workerOptions.createSchema).toBe(false);
+  });
+});
+
+describe("Workshop builder CLI home", () => {
+  it("uses the configured writable CLI home instead of the worker OS home", () => {
+    expect(resolveModuleBuildCliHome({ JARVIS_CLI_HOME_BASE: "/data/cli-auth" }, "/root")).toBe(
+      "/data/cli-auth"
+    );
   });
 });
