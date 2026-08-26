@@ -186,18 +186,6 @@
   padding: 7px 12px;
 }
 
-.wl-freqbtn--active {
-  border-color: var(--accent);
-  background: var(--forest-soft);
-  color: var(--forest-ink);
-  font-weight: 600;
-}
-
-.wl-medform__hint {
-  color: var(--text-subtle);
-  font-size: 12px;
-}
-
 .wl-medform__inline {
   display: flex;
   flex-wrap: wrap;
@@ -237,10 +225,6 @@
   width: 140px;
 }
 
-.wl-medmodal__timeinput--invalid {
-  border-color: var(--red);
-}
-
 .wl-medform__switchrow {
   flex-direction: row;
   align-items: center;
@@ -253,18 +237,9 @@
   gap: 4px;
   margin-top: 14px;
   padding: 10px 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--bg-sunken);
-}
-
-.wl-medform__previewline {
-  color: var(--text);
 }
 
 .wl-medform__previewdoses {
-  color: var(--text-subtle);
-  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
