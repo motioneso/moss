@@ -65,6 +65,7 @@ describe("startModuleBuild", () => {
     expect(deps.sendBuildJob).toHaveBeenCalledOnce();
     expect(deps.sendBuildJob).toHaveBeenCalledWith("b1", "user-a");
     expect(deps.statuses).toEqual(["building"]);
+    expect(deps.updateModuleBuildStatus).toHaveBeenCalledWith("b1", "building", "writing_spec");
   });
 });
 
@@ -84,7 +85,7 @@ describe("approveModuleBuildPlan", () => {
 
     await approveModuleBuildPlan(deps, "b1", "user-a");
 
-    expect(deps.updateModuleBuildStatus).toHaveBeenCalledWith("b1", "building");
+    expect(deps.updateModuleBuildStatus).toHaveBeenCalledWith("b1", "building", "writing_spec");
     expect(deps.sendBuildJob).toHaveBeenCalledWith("b1", "user-a");
   });
 
@@ -162,5 +163,25 @@ describe("cancelModuleBuild", () => {
       "user-a"
     );
     expect(cancelled).toBe(true);
+  });
+
+  it("lets an owner discard a failed build", async () => {
+    const updateModuleBuildStatus = vi.fn(async () => {});
+    const cancelled = await cancelModuleBuild(
+      {
+        getModuleBuild: vi.fn(async () => ({
+          id: "b1",
+          ownerUserId: "user-a",
+          status: "failed" as const,
+          moduleId: null
+        })),
+        updateModuleBuildStatus
+      },
+      "b1",
+      "user-a"
+    );
+
+    expect(cancelled).toBe(true);
+    expect(updateModuleBuildStatus).toHaveBeenCalledWith("b1", "cancelled");
   });
 });

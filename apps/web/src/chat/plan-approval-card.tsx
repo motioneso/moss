@@ -25,17 +25,12 @@ export interface PlanApprovalCardProps {
   readonly superseded?: boolean;
 }
 
-function formatRoughCost(cost: ModuleBuildPlan["roughCost"]): string {
-  return `${cost.time} to build, about $${(cost.budgetCents / 100).toFixed(2)}.`;
-}
-
 function planLines(plan: ModuleBuildPlan): ReadonlyArray<{ label: string; value: string }> {
   return [
     { label: "What it does", value: plan.whatItDoes },
     { label: "What it reaches", value: plan.whatItReaches.join(", ") },
     { label: "What it keeps", value: plan.whatItKeeps },
-    { label: "When it runs", value: plan.whenItRuns },
-    { label: "Roughly", value: formatRoughCost(plan.roughCost) }
+    { label: "When it runs", value: plan.whenItRuns }
   ];
 }
 

@@ -247,6 +247,9 @@ importers:
       '@moss/chat':
         specifier: workspace:*
         version: link:../../packages/chat
+      '@moss/cli-runner':
+        specifier: workspace:*
+        version: link:../../packages/cli-runner
       '@moss/connectors':
         specifier: workspace:*
         version: link:../../packages/connectors

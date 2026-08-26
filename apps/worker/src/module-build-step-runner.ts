@@ -40,16 +40,15 @@ export function createRunModuleBuildStepForJob(
       actorUserId: payload.actorUserId,
       requestId: `module-build:${payload.buildId}`
     };
-    return deps.dataContext.withDataContext(access, async (scopedDb) => {
-      const build = await deps.getModuleBuild(scopedDb, payload.buildId);
-      if (!build) throw new Error("module build was not found");
-      if (build.status === "cancelled") {
-        return { deferred: false };
-      }
+    try {
+      return await deps.dataContext.withDataContext(access, async (scopedDb) => {
+        const build = await deps.getModuleBuild(scopedDb, payload.buildId);
+        if (!build) throw new Error("module build was not found");
+        if (build.status === "cancelled") {
+          return { deferred: false };
+        }
 
-      const stepDeps = await deps.prepareRunStepDeps(scopedDb);
-
-      try {
+        const stepDeps = await deps.prepareRunStepDeps(scopedDb);
         const result = await deps.runStep(stepDeps, build);
         if (await wasCancelledSince(deps, scopedDb, build.id)) {
           return { deferred: false };
@@ -65,18 +64,19 @@ export function createRunModuleBuildStepForJob(
           await deps.notifyFinished(scopedDb, build.id);
         }
         return result;
-      } catch (error) {
-        if (await wasCancelledSince(deps, scopedDb, build.id)) {
-          throw error;
-        }
+      });
+    } catch (error) {
+      await deps.dataContext.withDataContext(access, async (scopedDb) => {
+        const build = await deps.getModuleBuild(scopedDb, payload.buildId);
+        if (!build || build.status === "cancelled") return;
         await deps.updateModuleBuildStatus(scopedDb, build.id, {
           status: "failed",
           error: error instanceof Error ? error.name : "unknown error"
         });
         await deps.notifyFailed(scopedDb, build.id);
-        throw error;
-      }
-    });
+      });
+      throw error;
+    }
   };
 }
 

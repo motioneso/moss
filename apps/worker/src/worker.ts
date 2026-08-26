@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import type { ConstructorOptions, PgBoss } from "pg-boss";
 import { pino, type Logger as PinoLogger } from "pino";
 import type { FastifyBaseLogger } from "fastify";
@@ -57,6 +58,7 @@ import {
   type ProviderKind
 } from "@moss/ai";
 import { ChatAttachmentsService } from "@moss/chat";
+import { ensureProviderLaunchReady } from "@moss/cli-runner/provider-first-run";
 import { NotificationsRepository, type CreateNotificationInput } from "@moss/notifications";
 import {
   createModuleCredentialSecretCipher,
@@ -226,7 +228,9 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
       const moduleBuildLiveAgent = createModuleBuildLiveAgent({
         io: moduleBuildIo,
         mux: moduleBuildMux,
-        provider: model.provider_kind as ProviderKind
+        provider: model.provider_kind as ProviderKind,
+        ensureProviderLaunchReady: (provider, workingDir) =>
+          ensureProviderLaunchReady(homedir(), provider, workingDir)
       });
       return {
         launchLiveAgent: moduleBuildLiveAgent,

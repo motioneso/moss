@@ -41,7 +41,7 @@ function renderCard(props: {
 }
 
 describe("PlanApprovalCard", () => {
-  it("renders all five plan lines", () => {
+  it("renders the plan without unreliable cost or time estimates", () => {
     const renderer = renderCard({ plan, onBuildIt: () => {}, onNotYet: () => {} });
     const text = renderedText(renderer.toJSON());
     expect(text).toContain("What it does");
@@ -52,8 +52,10 @@ describe("PlanApprovalCard", () => {
     expect(text).toContain(plan.whatItKeeps);
     expect(text).toContain("When it runs");
     expect(text).toContain(plan.whenItRuns);
-    expect(text).toContain("Roughly");
-    expect(text).toContain("Ten minutes");
+    expect(text).not.toContain("Roughly");
+    expect(text).not.toContain("Ten minutes");
+    expect(text).not.toContain("$");
+    expect(text.toLowerCase()).not.toContain("budget");
   });
 
   it("calls onBuildIt and onNotYet from their own buttons", () => {

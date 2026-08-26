@@ -1505,8 +1505,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
                     const build = await getModuleBuild(scopedDb, id);
                     return build ? { id: build.id, ownerUserId: build.ownerUserId } : null;
                   },
-                  updateModuleBuildStatus: (id, status) =>
-                    updateModuleBuildStatus(scopedDb, id, { status }),
+                  updateModuleBuildStatus: (id, status, step) =>
+                    updateModuleBuildStatus(scopedDb, id, { status, step }),
                   sendBuildJob: async (id, owner) => {
                     await sendJob(
                       boss,

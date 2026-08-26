@@ -34,7 +34,7 @@ function building(overrides: Partial<ModuleBuildSummary> = {}): ModuleBuildSumma
   return {
     id: "b-1",
     status: "building",
-    step: "Writing the page",
+    step: "writing_spec",
     moduleId: null,
     plan: {
       whatItDoes: "Allotment watering log",
@@ -68,7 +68,10 @@ describe("WorkshopGroups", () => {
     const html = render([building()], []);
     expect(html).toContain("Building now");
     expect(html).toContain("Allotment watering log");
-    expect(html).toContain("Writing the page");
+    expect(html).toContain("Writing the plan");
+    expect(html).not.toContain("writing_spec");
+    expect(html).not.toContain("5 minutes");
+    expect(html).not.toContain("budget");
   });
 
   it("shows what a build has written while it's in progress", () => {
@@ -81,6 +84,27 @@ describe("WorkshopGroups", () => {
   it("shows a build awaiting approval under Needs you", () => {
     const html = render([building({ id: "b-2", status: "awaiting_plan_approval" })], []);
     expect(html).toContain("Needs you");
+  });
+
+  it("shows a failed build under Needs you with a working discard action", async () => {
+    const handlers = { ...actions, onCancel: vi.fn() };
+    let tree: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(
+        createElement(WorkshopGroups, {
+          builds: [building({ status: "failed", error: "Error" })],
+          modules: [],
+          actions: handlers
+        })
+      );
+    });
+
+    expect(JSON.stringify(tree!.toJSON())).toContain("Build couldn’t start");
+    const discard = tree!.root
+      .findAllByType("button")
+      .find((node) => node.children.join("") === "Discard");
+    await act(async () => discard?.props.onClick());
+    expect(handlers.onCancel).toHaveBeenCalledWith("b-1");
   });
 
   it("renders a still-planning build without a plan, without throwing", () => {
