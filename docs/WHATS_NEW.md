@@ -62,6 +62,7 @@ feature that is not present in the image you are running.
 
 ### Fixed
 
+- **Workshop build activity.** Workshop builds now keep moving after they start and show the last time the builder was confirmed active. [PR #2009](https://github.com/motioneso/moss/pull/2009)
 - **ESPN images and stale page reloads.** Some ESPN game and team images were being blocked from loading, and a browser holding an old version of the page could get a confusing blank response instead of a clean "not found" when trying to reload; both are fixed. [PR #1996](https://github.com/motioneso/moss/pull/1996)
 - **Workshop builds recover visibly.** Workshop builds now start reliably, show useful progress and failures, allow failed attempts to be discarded, and no longer show unreliable cost or time estimates. [PR #1991](https://github.com/motioneso/moss/pull/1991)
 - **Chat archive now includes the whole day.** When you turn on chat archiving partway through the day, today's archived note now includes everything you chatted about earlier that day, not just messages sent after you turned it on. [PR #1988](https://github.com/motioneso/moss/pull/1988)
