@@ -52,7 +52,11 @@ vi.mock("../../apps/web/src/api/client.js", () => ({
   putChatArchiveSettings: (body: unknown) => chatArchivePut(body as never)
 }));
 
-const notesSourceGet = vi.fn(async () => ({ path: "/data/vaults/u1" }));
+const notesSourceGet = vi.fn(
+  async (): Promise<{ path: string | null }> => ({
+    path: "/data/vaults/u1"
+  })
+);
 vi.mock("../../apps/web/src/api/notes-client.js", () => ({
   getNotesSource: () => notesSourceGet()
 }));
