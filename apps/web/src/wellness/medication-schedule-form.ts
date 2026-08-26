@@ -1,4 +1,4 @@
-import type { CreateMedicationRequest } from "@moss/shared";
+import type { CreateMedicationRequest, MedicationDto } from "@moss/shared";
 import type { Medication } from "@moss/db";
 
 /**
@@ -143,6 +143,49 @@ export function withChoice(
     choice,
     // Coming back from as-needed there are no times to keep, so fall back to the default one.
     times: choice === "as_needed" ? [] : state.times.length > 0 ? state.times : fresh.times
+  };
+}
+
+const CHOICE_FOR_FREQUENCY_TYPE: Record<string, ScheduleChoice> = {
+  once_daily: "daily",
+  times_per_day: "daily",
+  specific_weekdays: "selected_days",
+  every_interval: "every_interval",
+  monthly: "monthly",
+  cyclical: "cycle",
+  as_needed: "as_needed"
+};
+
+/**
+ * Reads a saved medication back into the form's shape, for editing (#1971). Every field is
+ * replaced from the medication's own stored value, the same "replace, don't merge" rule
+ * `withChoice` follows, so a field left over from some other schedule type can never appear.
+ * `every_n_hours` is a legacy type this form has no screen for and never produces here — the
+ * caller (`ManageMedsModal`) does not offer Edit for a medication of that type.
+ */
+export function medFormFromMedication(medication: MedicationDto): MedFormState {
+  const choice = CHOICE_FOR_FREQUENCY_TYPE[medication.frequencyType] ?? "daily";
+  const fresh = emptyMedForm(medication.scheduleStartDate ?? "");
+  const storedTimes = (medication.scheduleTimes ?? []).map((time) => time.slice(0, 5));
+
+  return {
+    ...fresh,
+    name: medication.name,
+    dose: medication.dosage ?? "",
+    choice,
+    times: !usesClockTimes(choice) ? [] : storedTimes.length > 0 ? storedTimes : fresh.times,
+    weekdays: medication.weekdays ?? [],
+    intervalCount: medication.intervalCount ?? fresh.intervalCount,
+    intervalUnit: medication.intervalUnit ?? fresh.intervalUnit,
+    monthKind: medication.monthKind ?? fresh.monthKind,
+    monthDay: medication.monthDay ?? fresh.monthDay,
+    monthDayIsLast: medication.monthDayIsLast,
+    monthWeekdayPosition: medication.monthWeekdayPosition ?? fresh.monthWeekdayPosition,
+    monthWeekday: medication.monthWeekday ?? fresh.monthWeekday,
+    cycleDaysOn: medication.cycleDaysOn ?? fresh.cycleDaysOn,
+    cycleDaysOff: medication.cycleDaysOff ?? fresh.cycleDaysOff,
+    startDate: medication.scheduleStartDate ?? "",
+    remindersEnabled: medication.remindersEnabled
   };
 }
 
