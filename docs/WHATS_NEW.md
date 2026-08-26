@@ -59,6 +59,7 @@ feature that is not present in the image you are running.
 
 ### Fixed
 
+- **Workshop builds finish and respond.** The Workshop now completes builds, opens finished drafts, and responds when you stop, discard, revise, or share a module. [PR #1981](https://github.com/motioneso/moss/pull/1981)
 - **Sports source assignment reviews.** Sports source coverage changes now work with existing feeds, and source cards show clean team and league badges instead of feed URLs. [PR #1977](https://github.com/motioneso/moss/pull/1977)
 - **Workshop module builds.** Module builds no longer stall, and the Workshop only shows modules created by the signed-in user. [PR #1964](https://github.com/motioneso/moss/pull/1964)
 - **Sports source setup and status layout.** Custom sports sources now recover legacy feed assignments and show clearer controls, team labels, status details, and errors. [PR #1956](https://github.com/motioneso/moss/pull/1956)
