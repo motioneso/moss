@@ -126,7 +126,10 @@ function toSummaryEngineInput(
 
   if (medication.frequency_type === "every_n_hours") {
     return {
-      schedule: { family: "daily", doseTimes: everyNHoursDoseTimes(medication.interval_hours, doseTimes[0]) },
+      schedule: {
+        family: "daily",
+        doseTimes: everyNHoursDoseTimes(medication.interval_hours, doseTimes[0])
+      },
       anchor: openAnchor
     };
   }
@@ -150,7 +153,9 @@ function toSummaryEngineInput(
   if (medication.frequency_type === "every_interval") {
     const anchor: ScheduleAnchor = {
       startDate: dateKeyFromColumn(medication.schedule_start_date!),
-      endDate: medication.schedule_end_date ? dateKeyFromColumn(medication.schedule_end_date) : null,
+      endDate: medication.schedule_end_date
+        ? dateKeyFromColumn(medication.schedule_end_date)
+        : null,
       timeZone: tz
     };
     if (medication.interval_unit === "weeks") {
@@ -179,7 +184,9 @@ function toSummaryEngineInput(
   if (medication.frequency_type === "monthly") {
     const anchor: ScheduleAnchor = {
       startDate: dateKeyFromColumn(medication.schedule_start_date!),
-      endDate: medication.schedule_end_date ? dateKeyFromColumn(medication.schedule_end_date) : null,
+      endDate: medication.schedule_end_date
+        ? dateKeyFromColumn(medication.schedule_end_date)
+        : null,
       timeZone: tz
     };
     if (medication.month_kind === "weekdayPosition") {
@@ -209,7 +216,10 @@ function toSummaryEngineInput(
   return { schedule: { family: "daily", doseTimes }, anchor: openAnchor };
 }
 
-function everyNHoursDoseTimes(intervalHours: number | null, anchorTime: string | undefined): string[] {
+function everyNHoursDoseTimes(
+  intervalHours: number | null,
+  anchorTime: string | undefined
+): string[] {
   if (!intervalHours || intervalHours <= 0) return [];
   const [hourStr, minuteStr] = (anchorTime ?? "00:00").split(":");
   const startMinutes = Number(hourStr ?? 0) * 60 + Number(minuteStr ?? 0);

@@ -45,9 +45,7 @@ describe("describeSchedule and nextDoses", () => {
 
   describe("describeSchedule", () => {
     it("once_daily: one time", () => {
-      expect(describeSchedule(med({ schedule_times: ["08:00"] }))).toBe(
-        "Once a day, at 8:00 AM."
-      );
+      expect(describeSchedule(med({ schedule_times: ["08:00"] }))).toBe("Once a day, at 8:00 AM.");
     });
 
     it("times_per_day: three times, Oxford comma", () => {
@@ -214,9 +212,7 @@ describe("describeSchedule and nextDoses", () => {
       // not shift when formatted — this guards against an implementation that formats the
       // UTC instant directly instead of the stored civil time.
       expect(
-        describeSchedule(
-          med({ schedule_times: ["08:00"], time_zone: "America/New_York" })
-        )
+        describeSchedule(med({ schedule_times: ["08:00"], time_zone: "America/New_York" }))
       ).toBe("Once a day, at 8:00 AM.");
     });
   });
@@ -242,7 +238,11 @@ describe("describeSchedule and nextDoses", () => {
     });
 
     it("a schedule that never fires returns an empty array, not an error", () => {
-      const m = med({ frequency_type: "specific_weekdays", weekdays: [], schedule_times: ["09:00"] });
+      const m = med({
+        frequency_type: "specific_weekdays",
+        weekdays: [],
+        schedule_times: ["09:00"]
+      });
       expect(nextDoses(m, monday)).toEqual([]);
     });
 

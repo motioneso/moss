@@ -70,18 +70,18 @@ because it pins an exact string or exact Date):
 2. `times_per_day`, 3 entries -> `"3 times a day, at 8:00 AM, 2:00 PM, and 8:00 PM."`.
 3. `specific_weekdays`, `weekdays: [1, 4]` -> `"Every Monday and Thursday, at 9:00 AM."`.
 4. `every_n_hours`, `interval_hours: 6`, `schedule_times: ["08:00"]` -> `"Every 6 hours, starting
-   at 8:00 AM."`.
+at 8:00 AM."`.
 5. `cyclical`, `cycle_days_on: 2`, `cycle_days_off: 3`, `cycle_anchor_date: "2026-06-15"` ->
    `"2 days on, 3 days off, starting 15 June 2026, at 7:00 AM."`.
 6. `every_interval`/weeks, `interval_count: 2`, `weekdays: [1]`, `schedule_start_date:
-   "2026-03-03"` -> `"Every 2 weeks on Monday, starting 3 March 2026, at 9:00 AM."`.
+"2026-03-03"` -> `"Every 2 weeks on Monday, starting 3 March 2026, at 9:00 AM."`.
 7. `every_interval`/months -> `"Every 2 months, starting 3 March 2026, at 9:00 AM."`.
 8. `monthly`/date, `month_day: 15` -> `"On the 15th of each month, at 8:00 AM."`; `month_day_is_last:
-   true` -> `"On the last day of each month, at 8:00 AM."`.
+true` -> `"On the last day of each month, at 8:00 AM."`.
 9. `monthly`/weekdayPosition, `first`/Monday -> `"On the first Monday of each month, at 8:00 AM."`.
 10. `as_needed` -> `"As needed."`.
 11. `every_interval` with `schedule_end_date` set -> sentence ends `"... until 1 September
-    2026."`.
+2026."`.
 12. `nextDoses` for a simple daily medication, `from` = a known Monday -> exactly 3 `Date`s, one
     per day, at the expected UTC instants.
 13. `nextDoses` for `as_needed` -> `[]`.
@@ -103,6 +103,7 @@ Add to `packages/wellness/src/index.ts`: `export { describeSchedule, nextDoses }
 pnpm --filter @moss/wellness typecheck > /tmp/1969-typecheck.log 2>&1; echo "EXIT=$?"
 pnpm vitest run tests/unit/wellness-schedule-summary.test.ts > /tmp/1969-test.log 2>&1; echo "EXIT=$?"
 ```
+
 Both expect `EXIT=0`.
 
 Real-instance check (spec's "Done when" item 3): a throwaway `tsx` script against the dev
