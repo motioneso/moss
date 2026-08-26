@@ -58,8 +58,10 @@ export function registerChatArchiveRoutes(
         }
         return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
           const wasEnabled =
-            (await dependencies.preferencesRepository.get(scopedDb, CHAT_ARCHIVE_ENABLED_PREF_KEY)) ===
-            true;
+            (await dependencies.preferencesRepository.get(
+              scopedDb,
+              CHAT_ARCHIVE_ENABLED_PREF_KEY
+            )) === true;
           await dependencies.preferencesRepository.upsert(
             scopedDb,
             CHAT_ARCHIVE_ENABLED_PREF_KEY,

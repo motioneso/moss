@@ -326,7 +326,10 @@ export async function handleArchiveDayJob(
   const folder =
     typeof folderRaw === "string" && folderRaw.length > 0 ? folderRaw : CHAT_ARCHIVE_DEFAULT_FOLDER;
 
-  const enabledSinceRaw = await deps.preferencesPort.get(scopedDb, CHAT_ARCHIVE_ENABLED_SINCE_PREF_KEY);
+  const enabledSinceRaw = await deps.preferencesPort.get(
+    scopedDb,
+    CHAT_ARCHIVE_ENABLED_SINCE_PREF_KEY
+  );
   const enabledSinceMs =
     typeof enabledSinceRaw === "string" && !Number.isNaN(Date.parse(enabledSinceRaw))
       ? Date.parse(enabledSinceRaw)
@@ -344,7 +347,9 @@ export async function handleArchiveDayJob(
   );
   const sameDay = rows
     .filter((row) => localDay(row.createdAt, timezone) === localDate)
-    .filter((row) => enabledSinceMs === null || new Date(row.createdAt).getTime() >= enabledSinceMs);
+    .filter(
+      (row) => enabledSinceMs === null || new Date(row.createdAt).getTime() >= enabledSinceMs
+    );
   if (sameDay.length === 0) return;
 
   const sessionsByThread = new Map<
