@@ -82,9 +82,9 @@ test("today's archived note includes a message sent before archiving was turned 
   // Connect the notes folder (same pattern as 1974's settings spec) so the archive job has
   // somewhere to write, then confirm archiving starts off — the default the spec relies on.
   await readJson(await page.request.put("/api/me/notes-source", { data: { path: NOTES_ROOT } }));
-  const beforeState = (await readJson(
-    await page.request.get("/api/me/chat-archive")
-  )) as { enabled: boolean };
+  const beforeState = (await readJson(await page.request.get("/api/me/chat-archive"))) as {
+    enabled: boolean;
+  };
   expect(beforeState.enabled).toBe(false);
 
   const drawer = await openChat(page);
