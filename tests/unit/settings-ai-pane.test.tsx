@@ -15,7 +15,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 
-import type { MeResponse } from "@moss/shared";
+import type { ChatArchiveSettingsResponse, MeResponse } from "@moss/shared";
 
 const personaGet = vi.fn(async () => ({
   persona: { assistantName: "Moss", personaText: "Be direct and a little dry." }
@@ -61,11 +61,13 @@ vi.mock("../../apps/web/src/api/notes-client.js", () => ({
   getNotesSource: () => notesSourceGet()
 }));
 
-const chatArchiveGet = vi.fn(async () => ({
-  enabled: false,
-  folder: "Moss/Chats",
-  status: null
-}));
+const chatArchiveGet = vi.fn(
+  async (): Promise<ChatArchiveSettingsResponse> => ({
+    enabled: false,
+    folder: "Moss/Chats",
+    status: null
+  })
+);
 const chatArchivePut = vi.fn(async (body: { enabled: boolean; folder: string }) => body);
 
 import { AssistantPane } from "../../apps/web/src/settings/settings-ai-pane.js";
