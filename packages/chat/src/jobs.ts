@@ -38,7 +38,6 @@ import {
 import {
   CHAT_ARCHIVE_DEFAULT_FOLDER,
   CHAT_ARCHIVE_ENABLED_PREF_KEY,
-  CHAT_ARCHIVE_ENABLED_SINCE_PREF_KEY,
   CHAT_ARCHIVE_FOLDER_PREF_KEY
 } from "@moss/settings";
 import { localDay } from "@moss/shared";
@@ -326,15 +325,6 @@ export async function handleArchiveDayJob(
   const folder =
     typeof folderRaw === "string" && folderRaw.length > 0 ? folderRaw : CHAT_ARCHIVE_DEFAULT_FOLDER;
 
-  const enabledSinceRaw = await deps.preferencesPort.get(
-    scopedDb,
-    CHAT_ARCHIVE_ENABLED_SINCE_PREF_KEY
-  );
-  const enabledSinceMs =
-    typeof enabledSinceRaw === "string" && !Number.isNaN(Date.parse(enabledSinceRaw))
-      ? Date.parse(enabledSinceRaw)
-      : null;
-
   const localeRaw = await deps.preferencesPort.get(scopedDb, "locale");
   const timezone = extractTimezone(localeRaw) ?? "UTC";
 
@@ -345,11 +335,7 @@ export async function handleArchiveDayJob(
     rangeStartUtcIso,
     rangeEndUtcIso
   );
-  const sameDay = rows
-    .filter((row) => localDay(row.createdAt, timezone) === localDate)
-    .filter(
-      (row) => enabledSinceMs === null || new Date(row.createdAt).getTime() >= enabledSinceMs
-    );
+  const sameDay = rows.filter((row) => localDay(row.createdAt, timezone) === localDate);
   if (sameDay.length === 0) return;
 
   const sessionsByThread = new Map<

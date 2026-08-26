@@ -4,7 +4,6 @@ import type { PgBoss } from "pg-boss";
 import type { DataContextDb, PreferencesPort } from "@moss/db";
 import type * as MossNotes from "@moss/notes";
 import type { ChatArchiveSession } from "@moss/notes";
-import { CHAT_ARCHIVE_ENABLED_SINCE_PREF_KEY } from "@moss/settings";
 import type { ChatRepository } from "./repository.js";
 
 let capturedSessions: readonly ChatArchiveSession[] | null = null;
@@ -56,7 +55,7 @@ const SCOPED_DB = {} as DataContextDb;
 const BOSS = {} as PgBoss;
 
 describe("handleArchiveDayJob", () => {
-  it("does not backfill messages sent before archiving was turned on", async () => {
+  it("includes messages from before and after archiving was turned on, same day", async () => {
     capturedSessions = null;
 
     const rows: StoredMessageRow[] = [
@@ -80,8 +79,7 @@ describe("handleArchiveDayJob", () => {
 
     const preferencesPort = fakePreferencesPort({
       "chat-archive.enabled": true,
-      "chat-archive.folder": "Moss/Chats",
-      [CHAT_ARCHIVE_ENABLED_SINCE_PREF_KEY]: "2026-08-20T10:00:00.000Z"
+      "chat-archive.folder": "Moss/Chats"
     });
 
     await handleArchiveDayJob(SCOPED_DB, "user-1", "2026-08-20", {
@@ -93,10 +91,13 @@ describe("handleArchiveDayJob", () => {
     const sessions: readonly ChatArchiveSession[] = capturedSessions ?? [];
     expect(sessions.length).toBeGreaterThan(0);
     const allBodies = sessions.flatMap((session) => session.messages.map((m) => m.body));
-    expect(allBodies).toEqual(["sent after archiving was turned on"]);
+    expect(allBodies).toEqual([
+      "sent before archiving was turned on",
+      "sent after archiving was turned on"
+    ]);
   });
 
-  it("archives every message for the day when no enabled-since timestamp is set", async () => {
+  it("archives every message for the day", async () => {
     capturedSessions = null;
 
     const rows: StoredMessageRow[] = [
@@ -125,5 +126,43 @@ describe("handleArchiveDayJob", () => {
     expect(sessions.length).toBeGreaterThan(0);
     const allBodies = sessions.flatMap((session) => session.messages.map((m) => m.body));
     expect(allBodies).toEqual(["first message"]);
+  });
+
+  it("still excludes a message from a different day", async () => {
+    capturedSessions = null;
+
+    const rows: StoredMessageRow[] = [
+      {
+        threadId: "thread-1",
+        threadTitle: "Yesterday chat",
+        threadFirstMessageAt: "2026-08-19T23:00:00.000Z",
+        role: "user",
+        body: "sent the day before",
+        createdAt: "2026-08-19T23:00:00.000Z"
+      },
+      {
+        threadId: "thread-1",
+        threadTitle: "Yesterday chat",
+        threadFirstMessageAt: "2026-08-19T23:00:00.000Z",
+        role: "user",
+        body: "sent today",
+        createdAt: "2026-08-20T09:00:00.000Z"
+      }
+    ];
+
+    const preferencesPort = fakePreferencesPort({
+      "chat-archive.enabled": true,
+      "chat-archive.folder": "Moss/Chats"
+    });
+
+    await handleArchiveDayJob(SCOPED_DB, "user-1", "2026-08-20", {
+      preferencesPort,
+      chatRepo: fakeChatRepo(rows),
+      boss: BOSS
+    });
+
+    const sessions: readonly ChatArchiveSession[] = capturedSessions ?? [];
+    const allBodies = sessions.flatMap((session) => session.messages.map((m) => m.body));
+    expect(allBodies).toEqual(["sent today"]);
   });
 });
