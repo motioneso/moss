@@ -313,7 +313,6 @@ export class SportsSourceService {
       if (result.status !== "ok") return result;
       if (
         result.candidate.canonicalDomain !== baseline.source.canonicalDomain ||
-        result.candidate.validationFingerprint !== baseline.validationFingerprint ||
         result.candidate.recipeFingerprint !== baseline.recipeFingerprint ||
         !sameStrings(result.candidate.confirmedFetchHosts, baseline.confirmedFetchHosts)
       ) {

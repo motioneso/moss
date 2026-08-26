@@ -189,15 +189,15 @@ describe("SportsSettings", () => {
     );
 
     expect(html).toContain("Awaiting first check");
-    expect(html).toContain("Awaiting preview");
     expect(html).toContain("All NFL");
     expect(html).toContain("Soccer");
-    expect(html).toContain("Last checked:");
-    expect(html).toContain("Never");
+    expect(html).toContain("sp-src__assignment-identity");
     expect(html).toContain("The publisher changed its public response shape.");
     expect(html).toContain(">Retry<");
     expect(html).toContain(">Rebuild<");
     expect(html).toContain("Authenticated sources are not supported yet.");
+    expect(html).not.toContain("https://publisher.example.com/soccer");
+    expect(html).not.toContain("Last checked:");
     expect(html).not.toContain("Checking…");
   });
 

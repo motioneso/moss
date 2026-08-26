@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { DataContextDb } from "@moss/db";
 import {
   SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT,
+  type SportsFollowDto,
   type SportsSourceAssignmentTarget
 } from "@moss/shared";
 
@@ -75,7 +76,25 @@ const baseline: SportsSourceBaseline = {
 
 function setup(
   currentBaseline: SportsSourceBaseline = baseline,
-  follows = [{ id: followId, competitionKey: "nfl", teamKey: "dal", createdAt: checkedAt }]
+  follows: SportsFollowDto[] = [
+    { id: followId, competitionKey: "nfl", teamKey: "dal", createdAt: checkedAt }
+  ],
+  teams = [
+    {
+      teamKey: "dal",
+      competitionKey: "nfl",
+      name: "Dallas Cowboys",
+      shortName: "DAL",
+      crestUrl: null
+    },
+    {
+      teamKey: "phi",
+      competitionKey: "nfl",
+      name: "Philadelphia Eagles",
+      shortName: "PHI",
+      crestUrl: null
+    }
+  ]
 ) {
   const replaceAssignments = vi.fn(async () => baseline.source);
   const fetch = vi.fn<SportsSafeFetchPort>(async () => ({
@@ -110,22 +129,7 @@ function setup(
         fingerprint: async () => null
       }
     },
-    resolveTeams: async () => [
-      {
-        teamKey: "dal",
-        competitionKey: "nfl",
-        name: "Dallas Cowboys",
-        shortName: "DAL",
-        crestUrl: null
-      },
-      {
-        teamKey: "phi",
-        competitionKey: "nfl",
-        name: "Philadelphia Eagles",
-        shortName: "PHI",
-        crestUrl: null
-      }
-    ]
+    resolveTeams: async () => teams
   });
   return { service, fetch, replaceAssignments };
 }
@@ -244,6 +248,95 @@ describe("SportsSourceService assignment replacement", () => {
       [assignmentId],
       [expect.objectContaining({ target: { kind: "sport", sportKey: "soccer" } })]
     );
+  });
+
+  it("previews Soccer while retaining the production-shaped FotMob assignments", async () => {
+    const feedUrl = "https://www.fotmob.com/topnews/feed?format=atom";
+    const retained = [
+      { id: "760afbd3-2a5a-426a-b753-7490fa22b289", competitionKey: "usa.1", teamKey: "sd" },
+      { id: "65728b2d-843f-4d54-a69f-ddd2fb788ed5", competitionKey: "eng.1", teamKey: "liv" },
+      {
+        id: "f51b7138-b406-4216-a789-8cf246debaf2",
+        competitionKey: "uefa.champions",
+        teamKey: null
+      },
+      {
+        id: "7893b2d6-c4f5-40a7-ae71-fe9e613fd633",
+        competitionKey: "fifa.world",
+        teamKey: "usa"
+      }
+    ].map((follow) => ({ ...follow, createdAt: checkedAt }));
+    const fotmob: SportsSourceBaseline = {
+      ...baseline,
+      source: {
+        ...baseline.source,
+        label: "FotMob - Football Live Scores",
+        canonicalDomain: "www.fotmob.com",
+        homepageUrl: "https://www.fotmob.com/",
+        feedUrl,
+        assignedFollowIds: retained.map(({ id }) => id),
+        assignments: retained.map(({ id }, index) => ({
+          ...baseline.source.assignments[0]!,
+          id: `0c4ab51b-7829-44b4-860a-b2764aa0d5f${index}`,
+          followId: id,
+          targetUrl: feedUrl
+        }))
+      },
+      validationFingerprint: "3cbe67830bfc90ce81369b2967871c241984c2d1ba52f69cb5fdd1fd48e6875c",
+      confirmedFetchHosts: ["www.fotmob.com"],
+      assignments: retained.map(({ id }, index) => ({
+        ...baseline.assignments[0]!,
+        id: `0c4ab51b-7829-44b4-860a-b2764aa0d5f${index}`,
+        followId: id,
+        targetUrl: feedUrl
+      }))
+    };
+    const { service, fetch, replaceAssignments } = setup(fotmob, retained, [
+      {
+        teamKey: "sd",
+        competitionKey: "usa.1",
+        name: "San Diego FC",
+        shortName: "SDFC",
+        crestUrl: null
+      },
+      {
+        teamKey: "liv",
+        competitionKey: "eng.1",
+        name: "Liverpool",
+        shortName: "LIV",
+        crestUrl: null
+      },
+      {
+        teamKey: "usa",
+        competitionKey: "fifa.world",
+        name: "USA",
+        shortName: "USA",
+        crestUrl: null
+      }
+    ]);
+    fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      finalUrl: feedUrl,
+      contentType: "application/atom+xml",
+      body: "<feed><entry><title>Soccer story</title></entry></feed>",
+      truncated: false
+    });
+
+    const preview = await service.previewAssignments({} as DataContextDb, "owner-1", sourceId, {
+      assignments: [
+        ...retained.map(({ id }) => ({ target: { kind: "follow" as const, followId: id } })),
+        { target: { kind: "sport", sportKey: "soccer" } }
+      ]
+    });
+
+    expect(preview.status).toBe("ok");
+    expect(preview.confirmationId).toBeTruthy();
+    expect(preview.candidate?.targets.map(({ target }) => target)).toEqual([
+      ...retained.map(({ id }) => ({ kind: "follow", followId: id })),
+      { kind: "sport", sportKey: "soccer" }
+    ]);
+    expect(replaceAssignments).not.toHaveBeenCalled();
   });
 
   it("maps an added assignment with the persisted recipe and exact saved hosts", async () => {
