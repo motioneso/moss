@@ -14,7 +14,6 @@ import {
   normalizePublisherDomain,
   sampleFeedHeadlines,
   sanitizeFeedText,
-  TITLE_CHAR_CAP,
   type NewsAiPort
 } from "@moss/news";
 import type { SportsSourceAssignmentTarget } from "@moss/shared";
@@ -151,12 +150,16 @@ function htmlMetadata(html: string): {
 } {
   let title = "";
   let inTitle = false;
+  let titleSeen = false;
   let description = "";
   let canonicalUrl: string | null = null;
   const parser = new Parser({
     onopentag(name, attributes) {
       const tag = name.toLowerCase();
-      if (tag === "title") inTitle = true;
+      if (tag === "title" && !titleSeen) {
+        titleSeen = true;
+        inTitle = true;
+      }
       if (tag === "link" && (attributes.rel ?? "").toLowerCase() === "canonical") {
         canonicalUrl = attributes.href ?? null;
       }
@@ -177,7 +180,7 @@ function htmlMetadata(html: string): {
   });
   parser.end(html);
   return {
-    title: sanitizeFeedText(title, TITLE_CHAR_CAP),
+    title: sanitizeFeedText(title, 120),
     description: sanitizeFeedText(description, 300),
     canonicalUrl
   };

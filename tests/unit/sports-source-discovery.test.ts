@@ -10,7 +10,7 @@ import {
 import { validateSportsSourceRecipe } from "../../packages/sports/src/source/recipe.js";
 
 const db = {} as DataContextDb;
-const feed = `<rss><channel><item><title>A consequential sports headline today</title><link>https://one.example/story</link><pubDate>Fri, 11 Jul 2026 12:00:00 GMT</pubDate></item></channel></rss>`;
+const feed = `<rss><channel><title>One Sports News</title><item><title>A consequential sports headline today</title><link>https://one.example/story</link><pubDate>Fri, 11 Jul 2026 12:00:00 GMT</pubDate></item></channel></rss>`;
 
 describe("sports publisher identity", () => {
   it("accepts sibling hosts but rejects public-suffix tenants", () => {
@@ -83,6 +83,7 @@ describe("resolveSportsSourceInput", () => {
     expect(result).toMatchObject({
       status: "ok",
       candidate: {
+        label: "One Sports News",
         canonicalDomain: "one.example",
         feedUrl: "https://one.example/feed.xml",
         retrievalMethod: "feed",
