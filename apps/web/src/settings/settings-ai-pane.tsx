@@ -1,12 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, PencilLine, GitCommitHorizontal } from "lucide-react";
+import { Check, PencilLine, GitCommitHorizontal, NotebookText } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { getNotesSource } from "../api/notes-client";
 import {
+  getChatArchiveSettings,
   getChatModelOverrideSettings,
   getYoloSettings,
   getPersonaSettings,
   previewPersona,
+  putChatArchiveSettings,
   putChatModelOverride,
   putYoloSelf,
   putPersonaSettings
@@ -27,7 +30,7 @@ import {
   type RecoveryDial,
   type ToneDial
 } from "./settings-persona-preview";
-import { type PaneProps } from "./settings-types";
+import { readError, type PaneProps } from "./settings-types";
 import {
   Choice,
   Field,
@@ -422,6 +425,99 @@ function YoloMode() {
   );
 }
 
+const DEFAULT_CHAT_ARCHIVE_FOLDER = "Moss/Chats";
+const CHAT_ARCHIVE_FOLDER_HINT = (
+  <>
+    Relative to your connected notes folder. Nested folders like <b>2 Area/Moss/Chats</b> are fine.
+    A path starting with a slash or containing <b>..</b> will be rejected.
+  </>
+);
+
+function ChatArchive() {
+  const { toast } = useFeedback();
+  const queryClient = useQueryClient();
+  const notesSourceQuery = useQuery({
+    queryKey: queryKeys.settings.notesSource,
+    queryFn: getNotesSource,
+    retry: false
+  });
+  const archiveQuery = useQuery({
+    queryKey: queryKeys.settings.chatArchive,
+    queryFn: getChatArchiveSettings,
+    retry: false
+  });
+  const [folder, setFolder] = useState(DEFAULT_CHAT_ARCHIVE_FOLDER);
+  const [folderError, setFolderError] = useState<string | null>(null);
+  const receivedInitialFolder = useRef(false);
+  useEffect(() => {
+    if (!archiveQuery.data) return;
+    if (receivedInitialFolder.current) return;
+    setFolder(archiveQuery.data.folder || DEFAULT_CHAT_ARCHIVE_FOLDER);
+    receivedInitialFolder.current = true;
+  }, [archiveQuery.data]);
+
+  const mutation = useMutation({
+    mutationFn: (input: { enabled: boolean; folder: string }) => putChatArchiveSettings(input),
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.settings.chatArchive, data);
+      setFolderError(null);
+      toast(data.enabled ? "Chat archiving enabled" : "Chat archiving disabled");
+    },
+    onError: (error) => setFolderError(readError(error))
+  });
+
+  const linkedPath = notesSourceQuery.data?.path ?? null;
+  if (notesSourceQuery.data && linkedPath === null) {
+    return (
+      <Group title="Save chats to Notes">
+        <div className="ai-empty">
+          <div className="ai-empty__ic">
+            <NotebookText size={20} aria-hidden="true" />
+          </div>
+          <div className="ai-empty__main">
+            <div className="ai-empty__t">No notes folder connected</div>
+            <div className="ai-empty__d">
+              Connect a notes folder in <b>Data sources</b> before turning this on.
+            </div>
+          </div>
+        </div>
+      </Group>
+    );
+  }
+
+  const state = archiveQuery.data;
+  if (!state) return null;
+
+  return (
+    <Group
+      title="Save chats to Notes"
+      desc="Keep a daily written record of your chats in your notes."
+    >
+      <Row
+        name="Save chats to Notes"
+        desc="Writes today's chat as a note, once per day, in the folder below."
+        control={
+          <Switch
+            ariaLabel="Save chats to Notes"
+            checked={state.enabled}
+            disabled={mutation.isPending}
+            onChange={(value) => mutation.mutate({ enabled: value, folder })}
+          />
+        }
+      />
+      <Field label="Transcript folder" hint={folderError ?? CHAT_ARCHIVE_FOLDER_HINT}>
+        <input
+          className="jds-input"
+          aria-label="Transcript folder"
+          value={folder}
+          onChange={(e) => setFolder(e.target.value)}
+          onBlur={() => mutation.mutate({ enabled: state.enabled, folder })}
+        />
+      </Field>
+    </Group>
+  );
+}
+
 export function AssistantPane({ me }: PaneProps) {
   const who = (me.user.name ?? "").split(/\s+/)[0] || "there";
   const assistantName = useAssistantName();
@@ -434,6 +530,7 @@ export function AssistantPane({ me }: PaneProps) {
       <Persona who={who} />
       <ChatModel />
       <YoloMode />
+      <ChatArchive />
     </>
   );
 }
