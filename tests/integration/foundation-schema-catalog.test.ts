@@ -348,7 +348,9 @@ describe("MVP foundation schema catalog", () => {
         // Module-build jobs execute as jarvis_worker_runtime and need owner-scoped read/write.
         { version: "0195", name: "0195_module_builds_worker_runtime.sql" },
         // #1961 — assign ESPN and custom sports news sources by sport, league, or team.
-        { version: "0196", name: "0196_sports_news_source_scopes.sql" }
+        { version: "0196", name: "0196_sports_news_source_scopes.sql" },
+        // #1968 — a start date for every medication schedule type, plus a reminder toggle.
+        { version: "0197", name: "0197_wellness_medication_start_date_reminders.sql" }
       ]);
     } finally {
       await client.end();
