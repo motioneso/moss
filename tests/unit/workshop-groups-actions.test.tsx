@@ -9,7 +9,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { ModuleBuildSummary, WorkshopLiveModuleSummary } from "@moss/shared";
 
-import { WorkshopGroups, type WorkshopGroupsProps } from "../../packages/workshop/src/web/workshop-groups.js";
+import {
+  WorkshopGroups,
+  type WorkshopGroupsProps
+} from "../../packages/workshop/src/web/workshop-groups.js";
 
 function renderGroups(props: WorkshopGroupsProps): ReactTestRenderer {
   let renderer!: ReactTestRenderer;
@@ -20,7 +23,9 @@ function renderGroups(props: WorkshopGroupsProps): ReactTestRenderer {
 }
 
 function findButton(renderer: ReactTestRenderer, label: string) {
-  return renderer.root.findAllByType("button").find((instance) => instance.children.includes(label));
+  return renderer.root
+    .findAllByType("button")
+    .find((instance) => instance.children.includes(label));
 }
 
 function buildingBuild(overrides: Partial<ModuleBuildSummary> = {}): ModuleBuildSummary {
