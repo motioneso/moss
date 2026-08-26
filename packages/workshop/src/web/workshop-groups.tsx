@@ -20,14 +20,11 @@ export interface WorkshopActions {
 
 const NEEDS_YOU_STATUSES = new Set<ModuleBuildSummary["status"]>([
   "awaiting_plan_approval",
-  "awaiting_change"
+  "awaiting_change",
+  "failed"
 ]);
 
 const BUILDING_STATUSES = new Set<ModuleBuildSummary["status"]>(["planning", "building"]);
-
-function formatCents(cents: number): string {
-  return (cents / 100).toFixed(2);
-}
 
 function NeedsYouCard({
   build,
@@ -37,6 +34,7 @@ function NeedsYouCard({
   readonly actions: WorkshopActions;
 }) {
   const awaitingPlan = build.status === "awaiting_plan_approval";
+  const failed = build.status === "failed";
   return (
     <div className="jds-rail-row workshop-row">
       <span className="jds-rail jds-rail--gold" />
@@ -45,24 +43,38 @@ function NeedsYouCard({
           {build.plan?.whatItDoes ?? "New module"}
         </h3>
         <span className="jds-badge jds-badge--amber jds-badge--pill">
-          {awaitingPlan ? "Plan ready · needs a look" : "Waiting on you"}
+          {failed
+            ? "Build couldn’t start"
+            : awaitingPlan
+              ? "Plan ready · needs a look"
+              : "Waiting on you"}
         </span>
-        {build.plan?.whenItRuns ? <p className="jds-card__meta">{build.plan.whenItRuns}</p> : null}
+        {failed ? (
+          <p className="jds-card__meta">Discard this attempt, then ask Moss to try again.</p>
+        ) : build.plan?.whenItRuns ? (
+          <p className="jds-card__meta">{build.plan.whenItRuns}</p>
+        ) : null}
         <div className="workshop-actions">
-          <button
-            type="button"
-            className="jds-btn jds-btn--primary jds-btn--sm"
-            disabled={!awaitingPlan && !build.moduleId}
-            onClick={() =>
-              awaitingPlan
-                ? actions.onApprove(build.id)
+          {failed ? null : (
+            <button
+              type="button"
+              className="jds-btn jds-btn--primary jds-btn--sm"
+              disabled={!awaitingPlan && !build.moduleId}
+              onClick={() =>
+                awaitingPlan
+                  ? actions.onApprove(build.id)
+                  : build.moduleId
+                    ? actions.onOpenDraft(build.moduleId)
+                    : undefined
+              }
+            >
+              {awaitingPlan
+                ? "Build it"
                 : build.moduleId
-                  ? actions.onOpenDraft(build.moduleId)
-                  : undefined
-            }
-          >
-            {awaitingPlan ? "Build it" : build.moduleId ? "Look at the draft" : "Draft unavailable"}
-          </button>
+                  ? "Look at the draft"
+                  : "Draft unavailable"}
+            </button>
+          )}
           <button
             type="button"
             className="jds-btn jds-btn--quiet jds-btn--sm"
@@ -114,18 +126,18 @@ function BuildingNowCard({
         </h3>
         <span className="jds-indicator jds-indicator--ready jds-indicator--live">
           <span className="jds-indicator__dot" />
-          {build.step ?? "Working"}
+          {build.step === "writing_spec"
+            ? "Writing the plan"
+            : build.step === "writing_tests"
+              ? "Writing checks"
+              : build.step === "writing_code"
+                ? "Building the module"
+                : (build.step ?? "Starting the build")}
         </span>
         <BuildLogList label="What it has written" items={build.writtenFiles} />
         <BuildLogList label="What it has read" items={build.fetchedUrls} />
         <div className="workshop-actions">
           <span className="workshop-spacer" />
-          {build.plan ? (
-            <span className="jds-card__meta">
-              Spent so far {formatCents(build.costCents)} of your{" "}
-              {formatCents(build.plan.roughCost.budgetCents)} budget
-            </span>
-          ) : null}
           <button
             type="button"
             className="jds-btn jds-btn--quiet jds-btn--sm"

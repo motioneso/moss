@@ -12,6 +12,7 @@
     "@moss/ai": "workspace:*",
     "@moss/calendar": "workspace:*",
     "@moss/chat": "workspace:*",
+    "@moss/cli-runner": "workspace:*",
     "@moss/connectors": "workspace:*",
     "@moss/db": "workspace:*",
     "@moss/email": "workspace:*",

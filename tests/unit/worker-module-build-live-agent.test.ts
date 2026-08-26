@@ -33,11 +33,13 @@ describe("module build live-agent composition", () => {
       pressEnter: vi.fn(async () => {}),
       kill: vi.fn(async () => {})
     };
+    const ensureProviderLaunchReady = vi.fn(async () => {});
 
     const launch = createModuleBuildLiveAgent({
       io: io as never,
       mux: mux as never,
       provider: "anthropic",
+      ensureProviderLaunchReady,
       mcpToken: "jst_test-token",
       mcpServerUrl: "http://api:3000/api/mcp"
     });
@@ -48,6 +50,10 @@ describe("module build live-agent composition", () => {
       "Do not use Bash or shell commands"
     );
     expect(writes.has("/build/b1/.jarvis-claude-permission-hook.mjs")).toBe(false);
+    expect(ensureProviderLaunchReady).toHaveBeenCalledWith("anthropic", "/build/b1");
+    expect(ensureProviderLaunchReady.mock.invocationCallOrder[0]).toBeLessThan(
+      mux.open.mock.invocationCallOrder[0] ?? 0
+    );
     expect(mux.open).toHaveBeenCalledOnce();
     expect(mux.submit).toHaveBeenCalledOnce();
     expect(mux.pressEnter).toHaveBeenCalledOnce();
@@ -88,7 +94,8 @@ describe("module build live-agent composition", () => {
     const launch = createModuleBuildLiveAgent({
       io: io as never,
       mux: mux as never,
-      provider: "anthropic"
+      provider: "anthropic",
+      ensureProviderLaunchReady: vi.fn(async () => {})
     });
 
     const resultPromise = launch({
@@ -138,7 +145,12 @@ describe("module build live-agent composition", () => {
         capturePane: vi.fn(async () => (provider === "openai-compatible" ? "›\n" : ">\n")),
         kill: vi.fn(async () => {})
       };
-      const launch = createModuleBuildLiveAgent({ io: io as never, mux: mux as never, provider });
+      const launch = createModuleBuildLiveAgent({
+        io: io as never,
+        mux: mux as never,
+        provider,
+        ensureProviderLaunchReady: vi.fn(async () => {})
+      });
       await launch({ workingDir: "/build/b1", step: "writing_spec", plan: {} });
     }
   );

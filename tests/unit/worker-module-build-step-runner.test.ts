@@ -225,6 +225,42 @@ describe("createRunModuleBuildStepForJob", () => {
     expect(notifyFailed).toHaveBeenCalledTimes(1);
   });
 
+  it("commits the failed status after the step transaction rolls back", async () => {
+    let committedStatus = "building";
+    let stagedStatus: string | null = null;
+    const dataContext = {
+      withDataContext: async <T>(
+        _access: AccessContext,
+        work: (scopedDb: DataContextDb) => Promise<T>
+      ): Promise<T> => {
+        stagedStatus = null;
+        try {
+          const result = await work(fakeScopedDb());
+          if (stagedStatus) committedStatus = stagedStatus;
+          return result;
+        } finally {
+          stagedStatus = null;
+        }
+      }
+    };
+    const runJob = createRunModuleBuildStepForJob({
+      dataContext,
+      getModuleBuild: vi.fn(async () => build({ status: committedStatus as "building" })),
+      updateModuleBuildStatus: vi.fn(async (_db, _id, input) => {
+        stagedStatus = input.status;
+      }),
+      prepareRunStepDeps: async () => ({}) as never,
+      runStep: vi.fn(async () => {
+        throw new Error("live agent crashed");
+      }),
+      notifyFinished: vi.fn(async () => {}),
+      notifyFailed: vi.fn(async () => {})
+    });
+
+    await expect(runJob(payload())).rejects.toThrow("live agent crashed");
+    expect(committedStatus).toBe("failed");
+  });
+
   it("throws when the build cannot be found, without touching status or notifications", async () => {
     const getModuleBuild = vi.fn(async () => null);
     const updateModuleBuildStatus = vi.fn(async () => {});

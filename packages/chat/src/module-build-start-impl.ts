@@ -88,8 +88,8 @@ export function buildModuleBuildStartService(
               conversationId: createInput.conversationId
             }),
           updateModuleBuildPlan: (buildId, plan) => updateModuleBuildPlan(db, buildId, plan),
-          updateModuleBuildStatus: (buildId, status) =>
-            updateModuleBuildStatus(db, buildId, { status }),
+          updateModuleBuildStatus: (buildId, status, step) =>
+            updateModuleBuildStatus(db, buildId, { status, ...(step ? { step } : {}) }),
           isYoloActiveForActor: () => deps.isYoloActive(db),
           sendBuildJob: async (buildId, actorUserId) => {
             await sendJob(

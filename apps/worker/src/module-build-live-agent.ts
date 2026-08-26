@@ -14,6 +14,7 @@ export interface ModuleBuildLiveAgentDeps {
   readonly io: TmuxIo;
   readonly mux: Multiplexer;
   readonly provider: ProviderKind;
+  readonly ensureProviderLaunchReady: (provider: ProviderKind, workingDir: string) => Promise<void>;
   readonly mcpToken?: string;
   readonly mcpServerUrl?: string;
 }
@@ -30,6 +31,7 @@ export function createModuleBuildLiveAgent(deps: ModuleBuildLiveAgentDeps) {
     readonly plan: Record<string, unknown> | null;
   }) => {
     await deps.io.run("mkdir", ["-p", input.workingDir]);
+    await deps.ensureProviderLaunchReady(deps.provider, input.workingDir);
 
     const sessionId = randomUUID();
     const personaPath = join(input.workingDir, ".module-build-persona.md");

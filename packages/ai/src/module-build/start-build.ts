@@ -29,7 +29,8 @@ export interface StartModuleBuildDeps {
   readonly updateModuleBuildPlan: (buildId: string, plan: Record<string, unknown>) => Promise<void>;
   readonly updateModuleBuildStatus: (
     buildId: string,
-    status: "awaiting_plan_approval" | "building"
+    status: "awaiting_plan_approval" | "building",
+    step?: "writing_spec"
   ) => Promise<void>;
   readonly isYoloActiveForActor: (actorUserId: string) => Promise<boolean>;
   readonly sendBuildJob: (buildId: string, actorUserId: string) => Promise<void>;
@@ -56,7 +57,7 @@ export async function startModuleBuild(
 
   const yoloActive = await deps.isYoloActiveForActor(input.actorUserId);
   if (yoloActive) {
-    await deps.updateModuleBuildStatus(build.id, "building");
+    await deps.updateModuleBuildStatus(build.id, "building", "writing_spec");
     await deps.sendBuildJob(build.id, input.actorUserId);
     return { buildId: build.id, plan, awaitingApproval: false };
   }
@@ -76,7 +77,11 @@ export interface ApproveModuleBuildPlanDeps {
   readonly getModuleBuild: (
     buildId: string
   ) => Promise<{ readonly id: string; readonly ownerUserId: string } | null>;
-  readonly updateModuleBuildStatus: (buildId: string, status: "building") => Promise<void>;
+  readonly updateModuleBuildStatus: (
+    buildId: string,
+    status: "building",
+    step: "writing_spec"
+  ) => Promise<void>;
   readonly sendBuildJob: (buildId: string, actorUserId: string) => Promise<void>;
 }
 
@@ -94,7 +99,7 @@ export async function approveModuleBuildPlan(
   if (!build || build.ownerUserId !== actorUserId) {
     throw new ModuleBuildNotFoundError(buildId);
   }
-  await deps.updateModuleBuildStatus(buildId, "building");
+  await deps.updateModuleBuildStatus(buildId, "building", "writing_spec");
   await deps.sendBuildJob(buildId, actorUserId);
 }
 
@@ -117,7 +122,7 @@ export async function cancelModuleBuild(
   if (
     !build ||
     build.ownerUserId !== actorUserId ||
-    (!["planning", "awaiting_plan_approval", "building"].includes(build.status) &&
+    (!["planning", "awaiting_plan_approval", "building", "failed"].includes(build.status) &&
       !(build.status === "awaiting_change" && build.moduleId === null))
   ) {
     return false;
