@@ -47,6 +47,7 @@ function buildingBuild(overrides: Partial<ModuleBuildSummary> = {}): ModuleBuild
     id: "build-1",
     status: "building",
     step: "writing_code",
+    moduleId: null,
     plan: null,
     fetchedUrls: [],
     writtenFiles: [],
