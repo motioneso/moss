@@ -31,6 +31,7 @@ feature that is not present in the image you are running.
 
 ### Added
 
+- **Save your chats to Notes.** You can now turn on a setting that saves a daily written copy of your chats into your notes, off by default, in a folder you choose. [PR #1980](https://github.com/motioneso/moss/pull/1980)
 - **See your module build progress and get notified when it's done.** When you ask Moss to build you a new page and approve the plan, you're now taken straight to the Workshop page where you can watch it build, and you get a notification the moment it finishes or fails. [PR #1966](https://github.com/motioneso/moss/pull/1966)
 - **Sports news source coverage.** Choose ESPN or custom publishers for entire sports, leagues, and teams to build a mixed news feed. [PR #1967](https://github.com/motioneso/moss/pull/1967)
 - **Throw away a draft module.** If a module Moss built for you is not what you wanted, you can now delete it from the draft banner. [PR #1942](https://github.com/motioneso/moss/pull/1942)
