@@ -88,7 +88,9 @@ async function readSavedMedications(page: Page): Promise<Map<string, SavedMedica
       medication.name,
       {
         ...medication,
-        scheduleTimes: medication.scheduleTimes?.map((time) => time.slice(0, 5))
+        scheduleTimes: medication.scheduleTimes
+          ? medication.scheduleTimes.map((time) => time.slice(0, 5))
+          : null
       }
     ])
   );
