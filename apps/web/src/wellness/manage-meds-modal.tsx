@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { localDay } from "@moss/shared";
+import { localDay, type MedicationDto } from "@moss/shared";
 import { Switch } from "@moss/ui";
 import { describeSchedule, nextDoses } from "@moss/wellness/schedule-summary";
 import { formatDateTime, useUserLocale } from "../locale/locale-format";
@@ -16,6 +16,7 @@ import {
   describeFormProblems,
   emptyMedForm,
   isValidClockTime,
+  medFormFromMedication,
   previewMedication,
   startDateRequired,
   supportsReminders,
@@ -60,6 +61,23 @@ function Trash2Icon() {
     </svg>
   );
 }
+function PencilIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="15"
+      height="15"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
 function PlusIcon() {
   return (
     <svg
@@ -99,9 +117,23 @@ export function ManageMedsModal({ open, onClose, theme = "light" }: Props) {
   const [form, setForm] = useState<MedFormState>(() =>
     emptyMedForm(localDay(new Date(), timeZone))
   );
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const patch = (changes: Partial<MedFormState>) =>
     setForm((current) => ({ ...current, ...changes }));
+
+  const startEdit = (m: MedicationDto) => {
+    setEditingId(m.id);
+    setForm(medFormFromMedication(m));
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setForm(emptyMedForm(localDay(new Date(), timeZone)));
+  };
+  const handleClose = () => {
+    cancelEdit();
+    onClose();
+  };
 
   const problems = describeFormProblems(form);
 
@@ -163,11 +195,22 @@ export function ManageMedsModal({ open, onClose, theme = "light" }: Props) {
   });
   const deactivateMutation = useMutation({
     mutationFn: (id: string) => updateMedication(id, { active: false }),
+    onSuccess: (_data, id) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.wellness.medications });
+      void queryClient.invalidateQueries({ queryKey: ["wellness", "schedule"] });
+      void queryClient.invalidateQueries({ queryKey: ["wellness", "adherence-summary"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.wellness.insights });
+      if (id === editingId) cancelEdit();
+    }
+  });
+  const updateScheduleMutation = useMutation({
+    mutationFn: (id: string) => updateMedication(id, buildCreateRequest(form)),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.wellness.medications });
       void queryClient.invalidateQueries({ queryKey: ["wellness", "schedule"] });
       void queryClient.invalidateQueries({ queryKey: ["wellness", "adherence-summary"] });
       void queryClient.invalidateQueries({ queryKey: queryKeys.wellness.insights });
+      cancelEdit();
     }
   });
 
@@ -179,7 +222,7 @@ export function ManageMedsModal({ open, onClose, theme = "light" }: Props) {
     <div
       className="wl-modal-scrim"
       onMouseDown={(ev) => {
-        if (ev.target === ev.currentTarget) onClose();
+        if (ev.target === ev.currentTarget) handleClose();
       }}
     >
       <div
@@ -196,7 +239,7 @@ export function ManageMedsModal({ open, onClose, theme = "light" }: Props) {
               Manage medications
             </div>
           </div>
-          <button type="button" className="wl-modal__x" aria-label="Close" onClick={onClose}>
+          <button type="button" className="wl-modal__x" aria-label="Close" onClick={handleClose}>
             <XIcon />
           </button>
         </div>
@@ -221,6 +264,17 @@ export function ManageMedsModal({ open, onClose, theme = "light" }: Props) {
                         : m.frequencyType.replace(/_/g, " ")}
                     </span>
                   </span>
+                  {m.frequencyType !== "every_n_hours" ? (
+                    <button
+                      type="button"
+                      className="wl-tnote__x"
+                      style={{ opacity: 1 }}
+                      aria-label={`Edit ${m.name}`}
+                      onClick={() => startEdit(m)}
+                    >
+                      <PencilIcon />
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className="wl-tnote__x"
@@ -236,7 +290,7 @@ export function ManageMedsModal({ open, onClose, theme = "light" }: Props) {
           </div>
           <div className="wl-medmodal__addsection" style={{ paddingTop: 14, marginTop: 4 }}>
             <div className="wl-hdetail__lbl" style={{ marginBottom: 10 }}>
-              Add a medication
+              {editingId ? "Edit medication" : "Add a medication"}
             </div>
 
             <div className="wl-medform__row2">
@@ -531,15 +585,29 @@ export function ManageMedsModal({ open, onClose, theme = "light" }: Props) {
                 type="button"
                 className="secondary-button wl-fs13"
                 style={{ gap: 6, padding: "6px 14px", minHeight: "unset" }}
-                disabled={problems.length > 0 || addMutation.isPending}
-                onClick={() => addMutation.mutate()}
+                disabled={
+                  problems.length > 0 || addMutation.isPending || updateScheduleMutation.isPending
+                }
+                onClick={() =>
+                  editingId ? updateScheduleMutation.mutate(editingId) : addMutation.mutate()
+                }
               >
                 <PlusIcon />
-                Add medication
+                {editingId ? "Save changes" : "Add medication"}
               </button>
+              {editingId ? (
+                <button
+                  type="button"
+                  className="ghost-button wl-fs13"
+                  style={{ padding: "6px 14px", minHeight: "unset" }}
+                  onClick={cancelEdit}
+                >
+                  Cancel
+                </button>
+              ) : null}
               {problems.length > 0 ? (
                 <span className="wl-medmodal__error">{problems[0]}</span>
-              ) : addMutation.isError ? (
+              ) : addMutation.isError || updateScheduleMutation.isError ? (
                 // Without this a rejected request looks like a dead button: the modal stays put,
                 // the form keeps its values, and nothing on screen says the save did not happen.
                 <span className="wl-medmodal__error">
@@ -551,7 +619,7 @@ export function ManageMedsModal({ open, onClose, theme = "light" }: Props) {
         </div>
         <div className="wl-modal__foot">
           <span className="spacer" />
-          <button type="button" className="primary-button" onClick={onClose}>
+          <button type="button" className="primary-button" onClick={handleClose}>
             Done
           </button>
         </div>

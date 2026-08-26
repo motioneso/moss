@@ -97,3 +97,4 @@ blocking	infra/docker-compose.yml	tests/uat/specs/1909-sports-public-source-comp
 blocking	infra/docker-compose.prod.yml	tests/uat/specs/1909-sports-public-source-completion.uat.spec.ts
 blocking	Dockerfile	tests/uat/specs/1909-sports-public-source-completion.uat.spec.ts
 blocking	apps/web/src/wellness/**	tests/uat/specs/1970-medication-builder.uat.spec.ts
+blocking	apps/web/src/wellness/**	tests/uat/specs/1971-medication-edit.uat.spec.ts

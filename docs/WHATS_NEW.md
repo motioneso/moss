@@ -31,6 +31,7 @@ feature that is not present in the image you are running.
 
 ### Added
 
+- **Edit a saved medication.** You can now edit a medication's name, dose, or schedule after saving it, instead of removing it and adding it again. [PR #1989](https://github.com/motioneso/moss/pull/1989)
 - **Add medications on any schedule.** You can now set up a medication on any schedule the app supports - every day, only on certain days of the week, every few days or weeks or months, monthly, or in a cycle of days on and days off - and see in plain words what you picked, along with the next three doses, before you save it. [PR #1985](https://github.com/motioneso/moss/pull/1985)
 - **Save your chats to Notes.** You can now turn on a setting that saves a daily written copy of your chats into your notes, off by default, in a folder you choose. [PR #1980](https://github.com/motioneso/moss/pull/1980)
 - **See your module build progress and get notified when it's done.** When you ask Moss to build you a new page and approve the plan, you're now taken straight to the Workshop page where you can watch it build, and you get a notification the moment it finishes or fails. [PR #1966](https://github.com/motioneso/moss/pull/1966)

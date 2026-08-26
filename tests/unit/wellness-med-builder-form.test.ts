@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 
+import type { CreateMedicationRequest, MedicationDto } from "@moss/shared";
+
 import {
   buildCreateRequest,
   describeFormProblems,
   emptyMedForm,
+  medFormFromMedication,
   previewMedication,
   SCHEDULE_CHOICES,
   startDateRequired,
@@ -299,5 +302,72 @@ describe("the live preview", () => {
       1
     );
     expect(early[0]?.toISOString()).not.toBe(late[0]?.toISOString());
+  });
+});
+
+/**
+ * Stands in for what the server would have saved and read back, built from the exact request
+ * `buildCreateRequest` produced. Dose times come back with seconds, the way the database's time
+ * column reports them (matches the trim in tests/uat/specs/1970-medication-builder.uat.spec.ts).
+ */
+function medicationDtoFromRequest(request: CreateMedicationRequest): MedicationDto {
+  const r = request as CreateMedicationRequest & Record<string, unknown>;
+  return {
+    id: "m1",
+    ownerUserId: "u1",
+    name: r.name,
+    dosage: r.dosage ?? null,
+    form: null,
+    frequencyType: r.frequencyType,
+    timesPerDay: (r["timesPerDay"] as number | undefined) ?? null,
+    intervalHours: null,
+    weekdays: (r["weekdays"] as number[] | undefined) ?? null,
+    scheduleTimes: r["scheduleTimes"]
+      ? (r["scheduleTimes"] as string[]).map((t) => `${t}:00`)
+      : null,
+    cycleDaysOn: (r["cycleDaysOn"] as number | undefined) ?? null,
+    cycleDaysOff: (r["cycleDaysOff"] as number | undefined) ?? null,
+    cycleAnchorDate: (r["cycleAnchorDate"] as string | undefined) ?? null,
+    active: true,
+    notes: null,
+    scheduleStartDate: r.startDate ?? null,
+    scheduleEndDate: null,
+    timeZone: TZ,
+    intervalUnit: (r["intervalUnit"] as MedicationDto["intervalUnit"]) ?? null,
+    intervalCount: (r["intervalCount"] as number | undefined) ?? null,
+    monthKind: (r["monthKind"] as MedicationDto["monthKind"]) ?? null,
+    monthDay: (r["monthDay"] as number | undefined) ?? null,
+    monthDayIsLast: r["monthDayIsLast"] === true,
+    monthWeekdayPosition:
+      (r["monthWeekdayPosition"] as MedicationDto["monthWeekdayPosition"]) ?? null,
+    monthWeekday: (r["monthWeekday"] as number | undefined) ?? null,
+    remindersEnabled: r["remindersEnabled"] === true,
+    createdAt: null,
+    updatedAt: null
+  };
+}
+
+describe("medFormFromMedication reads a saved medication back into the form", () => {
+  for (const choice of ALL_CHOICES) {
+    it(`round-trips ${choice} through save and reopen`, () => {
+      const original = buildCreateRequest(filled(choice));
+      const saved = medicationDtoFromRequest(original);
+      const reopened = medFormFromMedication(saved);
+      expect(buildCreateRequest(reopened)).toEqual(original);
+    });
+  }
+
+  it("slices a stored HH:MM:SS dose time back to HH:MM", () => {
+    const saved = medicationDtoFromRequest(buildCreateRequest(filled("daily")));
+    expect(saved.scheduleTimes).toEqual(["08:00:00"]);
+    expect(medFormFromMedication(saved).times).toEqual(["08:00"]);
+  });
+
+  it("carries the reminder flag and the dosage across", () => {
+    const withReminders = { ...filled("monthly"), dose: "50 mg", remindersEnabled: true };
+    const saved = medicationDtoFromRequest(buildCreateRequest(withReminders));
+    const reopened = medFormFromMedication(saved);
+    expect(reopened.remindersEnabled).toBe(true);
+    expect(reopened.dose).toBe("50 mg");
   });
 });
