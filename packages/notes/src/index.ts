@@ -34,6 +34,7 @@ export {
 } from "./write-tools.js";
 export {
   writeDailyChatArchive,
+  ChatArchiveConflictError,
   type ChatArchiveMessage,
   type ChatArchiveSession,
   type WriteDailyChatArchiveResult

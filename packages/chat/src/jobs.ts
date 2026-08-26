@@ -30,6 +30,7 @@ import {
 import {
   NOTES_SYNC_QUEUE,
   writeDailyChatArchive,
+  ChatArchiveConflictError,
   type ChatArchiveMessage,
   type ChatArchiveSession,
   type NotesSyncJobPayload,
@@ -38,9 +39,10 @@ import {
 import {
   CHAT_ARCHIVE_DEFAULT_FOLDER,
   CHAT_ARCHIVE_ENABLED_PREF_KEY,
-  CHAT_ARCHIVE_FOLDER_PREF_KEY
+  CHAT_ARCHIVE_FOLDER_PREF_KEY,
+  CHAT_ARCHIVE_STATUS_PREF_KEY
 } from "@moss/settings";
-import { localDay } from "@moss/shared";
+import { localDay, type ChatArchiveStatus } from "@moss/shared";
 import { PreferencesRepository } from "@moss/structured-state";
 
 import { extractTimezone } from "./locale-utils.js";
@@ -371,15 +373,45 @@ export async function handleArchiveDayJob(
     }
   };
 
-  await writeDailyChatArchive(
-    scopedDb,
-    actorUserId,
-    localDate,
-    folder,
-    sessions,
-    timezone,
-    notesSync
-  );
+  let result: Awaited<ReturnType<typeof writeDailyChatArchive>>;
+  try {
+    result = await writeDailyChatArchive(
+      scopedDb,
+      actorUserId,
+      localDate,
+      folder,
+      sessions,
+      timezone,
+      notesSync
+    );
+  } catch (error) {
+    const reason =
+      error instanceof ChatArchiveConflictError
+        ? "Today's note already exists and wasn't written by chat archiving."
+        : "Something went wrong while saving today's chat archive.";
+    await deps.preferencesPort.upsert(scopedDb, CHAT_ARCHIVE_STATUS_PREF_KEY, {
+      state: "failed",
+      reason
+    } satisfies ChatArchiveStatus);
+    return;
+  }
+
+  if (result.written) {
+    await deps.preferencesPort.upsert(scopedDb, CHAT_ARCHIVE_STATUS_PREF_KEY, null);
+    return;
+  }
+
+  if (result.reason === "no-notes-source") {
+    await deps.preferencesPort.upsert(scopedDb, CHAT_ARCHIVE_STATUS_PREF_KEY, {
+      state: "paused",
+      reason: "No notes folder is connected."
+    } satisfies ChatArchiveStatus);
+  } else if (result.reason === "bad-folder") {
+    await deps.preferencesPort.upsert(scopedDb, CHAT_ARCHIVE_STATUS_PREF_KEY, {
+      state: "failed",
+      reason: "The transcript folder setting isn't valid."
+    } satisfies ChatArchiveStatus);
+  }
 }
 
 // ── Worker registration ───────────────────────────────────────────────────────

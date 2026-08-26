@@ -6,6 +6,7 @@ import {
   putChatArchiveSettingsRouteSchema,
   validateChatArchiveFolder,
   type ChatArchiveSettingsResponse,
+  type ChatArchiveStatus,
   type PutChatArchiveSettingsRequest
 } from "@moss/shared";
 import { HttpError } from "@moss/module-sdk";
@@ -15,7 +16,16 @@ import { handleSettingsRouteError } from "./route-error.js";
 
 export const CHAT_ARCHIVE_ENABLED_PREF_KEY = "chat-archive.enabled";
 export const CHAT_ARCHIVE_FOLDER_PREF_KEY = "chat-archive.folder";
+export const CHAT_ARCHIVE_STATUS_PREF_KEY = "chat-archive.status";
 export const CHAT_ARCHIVE_DEFAULT_FOLDER = "Moss/Chats";
+
+function isChatArchiveStatus(value: unknown): value is ChatArchiveStatus {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    (record.state === "paused" || record.state === "failed") && typeof record.reason === "string"
+  );
+}
 
 interface ChatArchiveRoutesDependencies {
   readonly dataContext: DataContextRunner;
@@ -81,8 +91,10 @@ async function readCurrent(
 ): Promise<ChatArchiveSettingsResponse> {
   const enabled = await preferencesRepository.get(scopedDb, CHAT_ARCHIVE_ENABLED_PREF_KEY);
   const folder = await preferencesRepository.get(scopedDb, CHAT_ARCHIVE_FOLDER_PREF_KEY);
+  const statusRaw = await preferencesRepository.get(scopedDb, CHAT_ARCHIVE_STATUS_PREF_KEY);
   return {
     enabled: enabled === true,
-    folder: typeof folder === "string" && folder.length > 0 ? folder : CHAT_ARCHIVE_DEFAULT_FOLDER
+    folder: typeof folder === "string" && folder.length > 0 ? folder : CHAT_ARCHIVE_DEFAULT_FOLDER,
+    status: isChatArchiveStatus(statusRaw) ? statusRaw : null
   };
 }

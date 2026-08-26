@@ -15,7 +15,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 
-import type { MeResponse } from "@moss/shared";
+import type { ChatArchiveSettingsResponse, MeResponse } from "@moss/shared";
 
 const personaGet = vi.fn(async () => ({
   persona: { assistantName: "Moss", personaText: "Be direct and a little dry." }
@@ -61,7 +61,13 @@ vi.mock("../../apps/web/src/api/notes-client.js", () => ({
   getNotesSource: () => notesSourceGet()
 }));
 
-const chatArchiveGet = vi.fn(async () => ({ enabled: false, folder: "Moss/Chats" }));
+const chatArchiveGet = vi.fn(
+  async (): Promise<ChatArchiveSettingsResponse> => ({
+    enabled: false,
+    folder: "Moss/Chats",
+    status: null
+  })
+);
 const chatArchivePut = vi.fn(async (body: { enabled: boolean; folder: string }) => body);
 
 import { AssistantPane } from "../../apps/web/src/settings/settings-ai-pane.js";
@@ -252,6 +258,34 @@ describe("Chat archive settings section", () => {
 
     const text = renderedText(renderer.toJSON());
     expect(text).toContain("Chat archive folder cannot start with a leading slash");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("shows a paused message next to the controls when archiving is paused (#1992)", async () => {
+    chatArchiveGet.mockResolvedValueOnce({
+      enabled: true,
+      folder: "Moss/Chats",
+      status: { state: "paused", reason: "No notes folder is connected." }
+    });
+    const renderer = await renderAssistantPane();
+
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("No notes folder is connected.");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("shows nothing extra when there is no status (#1992)", async () => {
+    const renderer = await renderAssistantPane();
+
+    const text = renderedText(renderer.toJSON());
+    expect(text).not.toContain("Archiving is paused");
+    expect(text).not.toContain("Archiving failed");
 
     await act(async () => {
       renderer.unmount();

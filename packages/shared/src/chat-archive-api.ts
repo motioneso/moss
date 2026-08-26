@@ -1,8 +1,14 @@
 import { errorResponseSchema } from "./schema-fragments.js";
 
+export interface ChatArchiveStatus {
+  readonly state: "paused" | "failed";
+  readonly reason: string;
+}
+
 export interface ChatArchiveSettingsResponse {
   readonly enabled: boolean;
   readonly folder: string;
+  readonly status: ChatArchiveStatus | null;
 }
 
 export interface PutChatArchiveSettingsRequest {
@@ -44,9 +50,30 @@ const chatArchiveSettingsSchema = {
   }
 } as const;
 
+const chatArchiveStatusSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["state", "reason"],
+  properties: {
+    state: { type: "string", enum: ["paused", "failed"] },
+    reason: { type: "string" }
+  }
+} as const;
+
+const chatArchiveSettingsResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["enabled", "folder", "status"],
+  properties: {
+    enabled: { type: "boolean" },
+    folder: { type: "string", minLength: 1 },
+    status: { anyOf: [chatArchiveStatusSchema, { type: "null" }] }
+  }
+} as const;
+
 export const getChatArchiveSettingsRouteSchema = {
   response: {
-    200: chatArchiveSettingsSchema,
+    200: chatArchiveSettingsResponseSchema,
     default: errorResponseSchema
   }
 } as const;
