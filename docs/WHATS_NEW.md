@@ -60,8 +60,8 @@ feature that is not present in the image you are running.
 
 ### Fixed
 
+- **Readable chat archive headings, and no more backfilling old messages.** Each conversation in your daily chat archive note now shows a local time and the conversation's title instead of a raw computer timestamp. Also, turning archiving on partway through the day no longer pulls in messages you sent earlier that day before you turned it on. [PR #1984](https://github.com/motioneso/moss/pull/1984)
 - **Workshop builds finish and respond.** The Workshop now completes builds, opens finished drafts, and responds when you stop, discard, revise, or share a module. [PR #1981](https://github.com/motioneso/moss/pull/1981)
-- **Readable chat archive headings.** Each conversation in your daily chat archive note now shows a local time and the conversation's title instead of a raw computer timestamp. [PR #1984](https://github.com/motioneso/moss/pull/1984)
 - **Workshop buttons now work.** The Stop, Ask for a change, and Turn on for everyone buttons on the Workshop page now actually do something. [PR #1978](https://github.com/motioneso/moss/pull/1978)
 - **Sports source assignment reviews.** Sports source coverage changes now work with existing feeds, and source cards show clean team and league badges instead of feed URLs. [PR #1977](https://github.com/motioneso/moss/pull/1977)
 - **Workshop module builds.** Module builds no longer stall, and the Workshop only shows modules created by the signed-in user. [PR #1964](https://github.com/motioneso/moss/pull/1964)
