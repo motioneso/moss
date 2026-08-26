@@ -142,6 +142,13 @@ test("every schedule choice can be created through the real form (#1970)", async
   await modal.getByLabel("Days on", { exact: true }).fill("21");
   await modal.getByLabel("Days off", { exact: true }).fill("7");
   await modal.getByLabel("Dose time 1", { exact: true }).fill("11:00");
+  // Review round 1 on PR #1985: with the start date cleared this used to look ready to save, and
+  // then the server rejected it, so pressing add did nothing. A cycle counts its days on and days
+  // off from that date, so the form has to say it is missing before the request goes out.
+  await modal.getByLabel("Start date", { exact: true }).fill("");
+  await expect(modal.getByRole("button", { name: "Add medication" })).toBeDisabled();
+  await expect(modal.locator(".wl-medmodal__error")).toContainText("Pick the date this starts");
+  await modal.getByLabel("Start date", { exact: true }).fill(START_DATE);
   await addAndConfirm(page, "UAT Cycle");
 
   // 7. Only when needed — no times, and deliberately no reminder switch.
