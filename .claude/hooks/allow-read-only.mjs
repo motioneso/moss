@@ -345,7 +345,14 @@ function hasParentSegment(value) {
  */
 function pathProblem(argument, roots) {
   if (argument.startsWith("-")) {
-    return null;
+    // An option can still carry a path in an attached value. `grep --file=/etc/shadow` reads a
+    // file that the separate form `grep --file /etc/shadow` is already stopped for, so the value
+    // after the first `=` gets the same check the operands get.
+    const equals = argument.indexOf("=");
+    if (equals === -1 || equals === argument.length - 1) {
+      return null;
+    }
+    return pathProblem(argument.slice(equals + 1), roots);
   }
 
   let candidate = argument;
@@ -486,7 +493,7 @@ function checkSed(args, roots) {
   );
 }
 
-function checkGit(args) {
+function checkGit(args, roots) {
   const [subcommand, ...rest] = args;
   if (subcommand === undefined) {
     return none("git-subcommand");
@@ -500,7 +507,11 @@ function checkGit(args) {
     return none("git-writes-a-file");
   }
   if (GIT_READ_SUBCOMMANDS.has(subcommand)) {
-    return null;
+    // Reporting subcommands take paths as well as revisions, and `git diff --no-index` will print
+    // any two files on the box. Revision syntax (`HEAD~1`, `main..dev`, `origin/main`) is left
+    // alone by this check, which only objects to an absolute path outside the allowed roots or a
+    // path that climbs out of the working directory.
+    return checkPaths(rest, roots);
   }
 
   const reporting = GIT_REPORTING_FORMS.get(subcommand);
@@ -549,7 +560,7 @@ function checkStep(step, index, roots) {
     return checkSed(args, roots);
   }
   if (name === "git") {
-    return checkGit(args);
+    return checkGit(args, roots);
   }
   if (PLAIN_READERS.has(name)) {
     const writeFlags = WRITE_FLAGS.get(name);

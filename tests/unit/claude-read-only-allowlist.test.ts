@@ -60,7 +60,10 @@ const APPROVED: readonly (readonly [string, string])[] = [
   ["counting repeated lines", "uniq -c notes.txt"],
   ["sed with its script behind -e", "sed -n -e '1,5p' notes.txt"],
   ["reading a file under the working directory", `cat ${CWD}/package.json`],
-  ["tail of a log in /tmp", "tail -n 40 /tmp/vf.log"]
+  ["tail of a log in /tmp", "tail -n 40 /tmp/vf.log"],
+  ["git log of one file in the repository", "git log --oneline -3 -- package.json"],
+  ["git show with a format option that contains an equals sign", "git show --pretty=format:%h -s"],
+  ["git diff of a path under the working directory", `git diff -- ${CWD}/package.json`]
 ];
 
 // Each of these is a near miss for one of the approved commands. The rule name is asserted so a
@@ -158,7 +161,35 @@ const REFUSED: readonly (readonly [string, string, string])[] = [
     "git-subcommand-mutates"
   ],
   ["git tag list, which creates a tag called list", "git tag list", "git-subcommand-mutates"],
-  ["git stash with a verb that drops work", "git stash pop", "git-subcommand-mutates"]
+  ["git stash with a verb that drops work", "git stash pop", "git-subcommand-mutates"],
+
+  // Round 2 of review: a git argument and an attached option value were both skipping the path
+  // check, so either could still read a file outside the allowed folders.
+  [
+    "git printing a file from outside the allowed folders",
+    "git log /etc/passwd",
+    "path-outside-allowed-roots"
+  ],
+  [
+    "git diff --no-index, which prints any two files on the box",
+    "git diff --no-index /etc/passwd /etc/shadow",
+    "path-outside-allowed-roots"
+  ],
+  [
+    "git reading a path that climbs out of the working directory",
+    "git log ../../etc/passwd",
+    "path-escapes-working-directory"
+  ],
+  [
+    "grep pointed outside the allowed folders by an attached option value",
+    "grep --file=/etc/shadow .",
+    "path-outside-allowed-roots"
+  ],
+  [
+    "ripgrep pointed outside the allowed folders by an attached option value",
+    "rg --file=/etc/shadow",
+    "path-outside-allowed-roots"
+  ]
 ];
 
 describe("read-only command approval", () => {
