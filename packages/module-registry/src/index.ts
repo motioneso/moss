@@ -832,6 +832,23 @@ function buildUatNewsPreviewOverride(): NewsRoutesDependencies["previewOverride"
 }
 
 /**
+ * #2018: saving, editing or taking back a story preference reshapes what the owning module
+ * shows, so it asks that module to recompile. Only News acts on it today — Sports attaches its
+ * own refresh in #2019. Several setups run with no queue at all, so a missing queue is a no-op
+ * rather than a failure: a preference is still saved, it just takes effect on the next refresh.
+ *
+ * Exported so the decision can be tested without booting the whole registry.
+ */
+export function buildStoryPreferenceRefresh(
+  boss: PgBoss | null
+): (input: { readonly ownerUserId: string; readonly targetKind: string }) => Promise<void> {
+  return async ({ ownerUserId, targetKind }) => {
+    if (targetKind !== "news_story" || boss === null) return;
+    await enqueueNewsRefresh(boss, ownerUserId);
+  };
+}
+
+/**
  * #2018: the composition root is the only place News and usefulness feedback meet. News never
  * imports the feedback package (module isolation, and the reference helper hashes with Node's
  * crypto, which must stay out of the browser bundle News also ships), so the concrete port is
@@ -1807,13 +1824,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         resolveAccessContext: deps.resolveAccessContext,
         registry,
         repository: usefulnessFeedbackRepository,
-        // #2018: saving, editing or taking back a News story preference reshapes what News
-        // shows, so it asks News to recompile. Sports is #2019's job; several setups run with
-        // no queue at all, so a missing queue is a no-op rather than a failure.
-        onStoryPreferenceChanged: async ({ ownerUserId, targetKind }) => {
-          if (targetKind !== "news_story" || deps.boss === null) return;
-          await enqueueNewsRefresh(deps.boss, ownerUserId);
-        },
+        onStoryPreferenceChanged: buildStoryPreferenceRefresh(deps.boss),
         manualMemoryCandidates: new ManualMemoryCandidateService(),
         cardSideEffects: {
           applyDismiss: (scopedDb, _actorUserId, cardId) =>

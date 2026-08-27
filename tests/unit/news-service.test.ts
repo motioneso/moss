@@ -600,13 +600,15 @@ describe("NewsService story feedback references (#2018)", () => {
   it("gives every story on the personalized page a reference feedback can be saved against", async () => {
     const port = recordingPort();
     const service = new NewsService(
-      makeDeps({ snapshot: snapshot([snapshotArticle("one"), snapshotArticle("two", { rank: 2 })]), storyFeedback: port })
+      makeDeps({
+        snapshot: snapshot([snapshotArticle("one"), snapshotArticle("two", { rank: 2 })]),
+        storyFeedback: port
+      })
     );
 
     const overview = await service.getOverview(userA);
 
-    expect(overview.rankedStories).toHaveLength(2);
-    expect(overview.rankedStories.map((story) => story.feedbackRef)).toEqual([
+    expect(overview.rankedStories?.map((story) => story.feedbackRef)).toEqual([
       "news:ref-for-https://preferred.example/one",
       "news:ref-for-https://preferred.example/two"
     ]);

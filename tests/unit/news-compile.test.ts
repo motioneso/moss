@@ -2,10 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { DataContextDb } from "@moss/db";
 
-import type {
-  StoryRelevanceCandidate,
-  StoryRelevanceResult
-} from "@moss/shared";
+import type { StoryRelevanceCandidate, StoryRelevanceResult } from "@moss/shared";
 
 import { compilePersonalizedNews } from "../../packages/news/src/compilation/compile.js";
 import type { NewsSnapshotPayload } from "../../packages/news/src/personalization-domain.js";
@@ -235,11 +232,15 @@ describe("compilePersonalizedNews", () => {
       );
 
       const withoutBoost: NewsSnapshotPayload[] = [];
-      await compilePersonalizedNews(db, dependencies({ sources: [source()], payloads: withoutBoost }), {
-        now,
-        generation: 1,
-        ownerUserId: "owner-1"
-      });
+      await compilePersonalizedNews(
+        db,
+        dependencies({ sources: [source()], payloads: withoutBoost }),
+        {
+          now,
+          generation: 1,
+          ownerUserId: "owner-1"
+        }
+      );
 
       expect(payloads[0]?.articles[0]?.url).toBe(boostedUrl);
       expect(withoutBoost[0]?.articles[0]?.url).not.toBe(boostedUrl);
