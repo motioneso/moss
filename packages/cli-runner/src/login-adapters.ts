@@ -122,6 +122,14 @@ const CODEX_AUTH_URLS: readonly LoginAuthUrlPattern[] = [
   { host: "auth.openai.com", pathPrefix: "/oauth" }
 ];
 
+const GOOGLE_AUTH_URLS: readonly LoginAuthUrlPattern[] = [
+  // `gemini` 0.57.0, when it cannot open a browser, prints the google-auth-library authorize
+  // URL (https://accounts.google.com/o/oauth2/v2/auth?…) and then waits for the code pasted
+  // back from the browser. Host+path both pinned: `/o/oauth2` is narrow enough to pass the
+  // §L.1.3 too-broad check and excludes the rest of accounts.google.com (ServiceLogin etc.).
+  { host: "accounts.google.com", pathPrefix: "/o/oauth2" }
+];
+
 /**
  * Opaque paste/device codes — bounded length, no whitespace. NOT used to surface the user's
  * pasted token (post-submit surfacing is suppressed, §L.6.2); only a device/pairing code a
@@ -142,6 +150,15 @@ const CODEX_DEVICE_CODE_PATTERN = /^[A-Z0-9]{4}-[A-Z0-9]{5}$/;
  * is a SECRET (never surfaced). Tight: the `sk-ant-oat` prefix + the token charset, bounded.
  */
 const ANTHROPIC_TOKEN_CAPTURE = /sk-ant-oat[A-Za-z0-9_-]{20,300}/;
+
+/**
+ * The gemini paste flow displays NO user code — it prints a link and waits for the code the
+ * BROWSER gives the user. So this pattern deliberately matches nothing: `(?!)` is a negative
+ * lookahead on the empty string, which can never succeed. Do NOT swap in
+ * {@link USER_CODE_PATTERN} here: it accepts any 6-128 char word, so the first ordinary word in
+ * the pane (`authorize`, `following`, …) would be surfaced to the user AS their sign-in code.
+ */
+const GEMINI_NO_DISPLAYED_CODE_PATTERN = /(?!)/;
 
 const RAW_ADAPTERS: Record<RpcProviderKind, LoginAdapter | undefined> = {
   anthropic: {
@@ -172,10 +189,25 @@ const RAW_ADAPTERS: Record<RpcProviderKind, LoginAdapter | undefined> = {
     userCodePattern: CODEX_DEVICE_CODE_PATTERN,
     extractSurface: makeExtractSurface(CODEX_AUTH_URLS, CODEX_DEVICE_CODE_PATTERN)
   },
-  // google: NO adapter — the login spike is still unresolved (§L.9), so absence = blocked here.
-  // #2026 pinned the INSTALL recipe only; installing the tool deliberately does not make it
-  // loginable.
-  google: undefined
+  google: {
+    provider: "google",
+    // (#2027) Bare `gemini` with no subcommand: on a home dir whose `.gemini/settings.json`
+    // already carries `security.auth.selectedType` (seeded on the login path — see
+    // provider-first-run.ts), the CLI goes straight into the OAuth flow. With NO_BROWSER set
+    // (sanitized-env.ts) it cannot open a browser, so it prints the authorize URL and waits on
+    // the keyboard for the pasted code. loginArgv[0] MUST stay `gemini` — the catalog binary —
+    // or §L.1.3 DROPS this adapter with nothing logged and login stays silently unavailable.
+    // Deliberately no `--prompt`/`-p`: that is the non-interactive path and it refuses to paste.
+    loginArgv: ["gemini"],
+    // Link + pasted-code round trip ⇒ paste, not poll: nothing here polls a backend.
+    mode: "paste",
+    authUrlAllowlist: GOOGLE_AUTH_URLS,
+    userCodePattern: GEMINI_NO_DISPLAYED_CODE_PATTERN,
+    extractSurface: makeExtractSurface(GOOGLE_AUTH_URLS, GEMINI_NO_DISPLAYED_CODE_PATTERN)
+    // Deliberately NO tokenCapturePattern: unlike claude's `setup-token`, gemini prints no
+    // credential — it writes its own oauth_creds.json. A capture pattern here could only ever
+    // lift something off the pane that should not be surfaced.
+  }
 };
 
 // ---------------------------------------------------------------------------
