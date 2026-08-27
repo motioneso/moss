@@ -26,7 +26,8 @@ const PROVIDER_BINARY: Record<ProviderKind, string> = {
 // Additional binary names operators may declare for a kind. install.sh records
 // whichever binary it finds on PATH; `gemini` is the upstream Gemini CLI while
 // the API execs `agy` (PROVIDER_BINARY), so both are accepted as the google kind
-// when consulting JARVIS_HOST_CLIS.
+// when consulting JARVIS_HOST_CLIS — and, since #2026 pinned the @google/gemini-cli
+// install recipe (whose only command is `gemini`), by the PATH probe too.
 const PROVIDER_BINARY_ALIASES: Record<ProviderKind, readonly string[]> = {
   anthropic: [],
   "openai-compatible": [],
@@ -73,16 +74,22 @@ function declaredHostCliAvailable(
  * Presence-only — no auth probing. In a containerized deploy, consults the
  * operator-declared `JARVIS_HOST_CLIS` contract FIRST (the container cannot see
  * host CLIs); when that is unset/empty it falls back to the local PATH
- * `command -v` probe (unchanged behavior for host installs + tests).
+ * `command -v` probe, which tries the kind's primary binary and then its
+ * aliases (unchanged behavior for host installs + tests: the primary name is
+ * still probed first).
  */
 export async function cliAvailable(providerKind: ProviderKind, deps?: WhichDeps): Promise<boolean> {
   const env = deps?.env ?? process.env;
   const declared = declaredHostCliAvailable(env, providerKind);
   if (declared !== null) return declared;
-  const binary = PROVIDER_BINARY[providerKind];
   const which = deps?.which ?? defaultWhich;
-  const result = await which(binary);
-  return result !== null;
+  // #2026: try the primary name first (unchanged behaviour), then the kind's aliases. The
+  // installed Gemini package only ever produces a command called `gemini`, so probing `agy`
+  // alone reports a successful install as missing forever.
+  for (const binary of [PROVIDER_BINARY[providerKind], ...PROVIDER_BINARY_ALIASES[providerKind]]) {
+    if ((await which(binary)) !== null) return true;
+  }
+  return false;
 }
 
 /**
