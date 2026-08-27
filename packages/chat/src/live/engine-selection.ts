@@ -139,6 +139,7 @@ async function admitPersistentOrFallback(
   const result = await pool.admit(sessionKey, ADMIT_PROBE_OPTS);
   if (result.kind === "admitted") {
     return new ClaudePersistentRuntimeEngine(sessionKey, io, {
+      provider,
       credentialFile: opts.credentialFile,
       runtime: result.runtime
     });
@@ -161,14 +162,20 @@ export function createChatEngine(
   io: TmuxIo,
   opts: ChatEngineSelectionOpts = {}
 ): CliChatEngine | Promise<CliChatEngine> {
-  // #1557 Phase 1: the persistent adapter is a third engine shape, checked ahead of the
+  // #1557 Phase 1 / #1558: the persistent adapter is a third engine shape, checked ahead of the
   // bounded-fallback/tmux fork below (ruling 2 — flag on + provider match wins outright,
-  // independent of `executionMode`). Phase 1 ships Claude only.
-  if (opts.persistentRuntimeEnabled && provider === "anthropic") {
-    if (opts.persistentPool) {
+  // independent of `executionMode`). Claude and Codex both build the unconditional-construct
+  // path; the shared warm pool (`persistentPool`) stays Claude-only — its `createRuntime` is
+  // wired Claude-only at the composition roots, out of scope for #1558 (see plan seams note).
+  if (
+    opts.persistentRuntimeEnabled &&
+    (provider === "anthropic" || provider === "openai-compatible")
+  ) {
+    if (opts.persistentPool && provider === "anthropic") {
       return admitPersistentOrFallback(opts.persistentPool, provider, sessionKey, io, opts);
     }
     return new ClaudePersistentRuntimeEngine(sessionKey, io, {
+      provider,
       credentialFile: opts.credentialFile
     });
   }

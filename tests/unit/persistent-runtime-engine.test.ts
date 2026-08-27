@@ -276,4 +276,23 @@ describe("ClaudePersistentRuntimeEngine", () => {
     await engine.interrupt();
     expect(runtime.cancelCalls).toEqual([turnId]);
   });
+
+  // #1558 — the wrapper is provider-agnostic: an injected runtime works the same regardless of
+  // which provider it belongs to, and `provider` defaults to "anthropic" for every call site
+  // that predates this option.
+  it("defaults provider to anthropic, and reports an injected provider's own value", () => {
+    const defaultEngine = new ClaudePersistentRuntimeEngine(
+      "session-1",
+      { run: async () => ({ code: 0, stdout: "", stderr: "" }), writeFile: async () => undefined },
+      { runtime: new FakeRuntime() }
+    );
+    expect(defaultEngine.provider).toBe("anthropic");
+
+    const codexEngine = new ClaudePersistentRuntimeEngine(
+      "session-1",
+      { run: async () => ({ code: 0, stdout: "", stderr: "" }), writeFile: async () => undefined },
+      { provider: "openai-compatible", runtime: new FakeRuntime() }
+    );
+    expect(codexEngine.provider).toBe("openai-compatible");
+  });
 });

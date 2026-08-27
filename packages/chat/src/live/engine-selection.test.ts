@@ -89,4 +89,15 @@ describe("createChatEngine", () => {
     });
     expect(engine).not.toBeInstanceOf(Promise);
   });
+
+  // #1558 — the Codex adapter takes the same unconditional-construct path as Claude when the
+  // flag is on and no pool is supplied (the shared pool stays Claude-only).
+  it("selects the persistent engine for openai-compatible when the flag is on", () => {
+    const engine = createChatEngine("openai-compatible", "session-1", fakeIo(), {
+      persistentRuntimeEnabled: true
+    });
+    expect(engine).not.toBeInstanceOf(Promise);
+    expect(engine).toBeInstanceOf(ClaudePersistentRuntimeEngine);
+    expect((engine as ClaudePersistentRuntimeEngine).provider).toBe("openai-compatible");
+  });
 });
