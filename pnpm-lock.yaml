@@ -810,6 +810,9 @@ importers:
       '@moss/wellness':
         specifier: workspace:*
         version: link:../wellness
+      '@moss/workflows':
+        specifier: workspace:*
+        version: link:../workflows
       '@moss/workshop':
         specifier: workspace:*
         version: link:../workshop
@@ -1315,6 +1318,24 @@ importers:
       react:
         specifier: ^19.0.0
         version: 19.2.7
+
+  packages/workflows:
+    dependencies:
+      '@moss/db':
+        specifier: workspace:*
+        version: link:../db
+      '@moss/module-sdk':
+        specifier: workspace:*
+        version: link:../module-sdk
+      '@sinclair/typebox':
+        specifier: ^0.34.13
+        version: 0.34.49
+      fastify:
+        specifier: ^5.8.5
+        version: 5.8.5
+      kysely:
+        specifier: ^0.29.2
+        version: 0.29.2
 
   packages/workshop:
     dependencies:

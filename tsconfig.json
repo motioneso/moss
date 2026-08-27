@@ -76,6 +76,8 @@
       "@moss/commitments/signature": ["packages/commitments/src/signature.ts"],
       "@moss/commitments/tools": ["packages/commitments/src/tools.ts"],
       "@moss/people": ["packages/people/src/index.ts"],
+      "@moss/workflows": ["packages/workflows/src/index.ts"],
+      "@moss/workflows/routes": ["packages/workflows/src/routes.ts"],
       "react": ["apps/web/node_modules/@types/react"],
       "react/jsx-runtime": ["apps/web/node_modules/@types/react/jsx-runtime.d.ts"],
       "react-dom": ["apps/web/node_modules/@types/react-dom"],

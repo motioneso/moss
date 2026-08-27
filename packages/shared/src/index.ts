@@ -26,6 +26,7 @@ export * from "./notifications-api.js";
 export * from "./tasks-api.js";
 export * from "./tasks-view.js";
 export * from "./wellness-api.js";
+export * from "./workflows-api.js";
 export * from "./onboarding-api.js";
 export * from "./platform-api.js";
 export * from "./me-api.js";

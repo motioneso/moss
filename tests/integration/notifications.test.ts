@@ -29,7 +29,12 @@ import {
   notificationsModuleManifest,
   registerNotificationsRoutes
 } from "@moss/notifications";
-import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
+import {
+  connectionStrings,
+  expectedBuiltInModuleIds,
+  ids,
+  resetFoundationDatabase
+} from "./test-database.js";
 import {
   notificationIds,
   seedNotificationData,
@@ -198,56 +203,8 @@ describe("Notifications module M5", () => {
     );
     const manifest = manifests.find((item) => item.id === notificationsModuleManifest.id);
 
-    expect(manifests.map((item) => item.id)).toEqual([
-      "settings",
-      "connectors",
-      "tasks",
-      "jarvis.goals",
-      "web",
-      "notifications",
-      "calendar",
-      "email",
-      "ai",
-      "chat",
-      "briefings",
-      "memory",
-      "usefulness-feedback",
-      "structured-state",
-      "wellness",
-      "weather",
-      "sports",
-      "news",
-      "notes",
-      "proactive-monitoring",
-      "jarvis.commitments",
-      "people",
-      "workshop"
-    ]);
-    expect(registrations.map((item) => item.manifest.id)).toEqual([
-      "settings",
-      "connectors",
-      "tasks",
-      "jarvis.goals",
-      "web",
-      "notifications",
-      "calendar",
-      "email",
-      "ai",
-      "chat",
-      "briefings",
-      "memory",
-      "usefulness-feedback",
-      "structured-state",
-      "wellness",
-      "weather",
-      "sports",
-      "news",
-      "notes",
-      "proactive-monitoring",
-      "jarvis.commitments",
-      "people",
-      "workshop"
-    ]);
+    expect(manifests.map((item) => item.id)).toEqual(expectedBuiltInModuleIds);
+    expect(registrations.map((item) => item.manifest.id)).toEqual(expectedBuiltInModuleIds);
     expect(manifest?.database?.ownedTables).toEqual([
       "app.notifications",
       "app.notification_reads"

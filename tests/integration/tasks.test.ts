@@ -32,7 +32,12 @@ import {
   generateNext
 } from "@moss/tasks";
 import type { TaskDto } from "@moss/shared";
-import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
+import {
+  connectionStrings,
+  expectedBuiltInModuleIds,
+  ids,
+  resetFoundationDatabase
+} from "./test-database.js";
 import {
   handleNextTaskJob,
   seedTaskData,
@@ -151,33 +156,10 @@ describe("Tasks module M1", () => {
     const registrations = getBuiltInModuleRegistrations();
     const tasksManifest = manifests.find((manifest) => manifest.id === "tasks");
 
-    const expectedIds = [
-      "settings",
-      "connectors",
-      "tasks",
-      "jarvis.goals",
-      "web",
-      "notifications",
-      "calendar",
-      "email",
-      "ai",
-      "chat",
-      "briefings",
-      "memory",
-      "usefulness-feedback",
-      "structured-state",
-      "wellness",
-      "weather",
-      "sports",
-      "news",
-      "notes",
-      "proactive-monitoring",
-      "jarvis.commitments",
-      "people",
-      "workshop"
-    ];
-    expect(manifests.map((manifest) => manifest.id)).toEqual(expectedIds);
-    expect(registrations.map((registration) => registration.manifest.id)).toEqual(expectedIds);
+    expect(manifests.map((manifest) => manifest.id)).toEqual(expectedBuiltInModuleIds);
+    expect(registrations.map((registration) => registration.manifest.id)).toEqual(
+      expectedBuiltInModuleIds
+    );
     expect(tasksManifest?.database?.ownedTables).toEqual(["app.tasks", "app.task_activity"]);
     expect(tasksManifest?.navigation?.[0]).toMatchObject({
       id: "tasks",

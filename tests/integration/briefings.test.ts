@@ -32,7 +32,7 @@ import {
 import { briefingRunPayloadSchema } from "@moss/shared";
 import { SOURCE_BEHAVIOR_PREFERENCE_KEY } from "@moss/source-behaviors";
 import { PreferencesRepository } from "@moss/structured-state";
-import { connectionStrings, ids } from "./test-database.js";
+import { connectionStrings, expectedBuiltInModuleIds, ids } from "./test-database.js";
 import {
   briefingIds,
   countPgBossJobs,
@@ -160,31 +160,7 @@ describe("Briefings module M6 read-only scheduled summaries", () => {
       (item) => item.manifest.id === briefingsModuleManifest.id
     );
 
-    expect(manifests.map((item) => item.id)).toEqual([
-      "settings",
-      "connectors",
-      "tasks",
-      "jarvis.goals",
-      "web",
-      "notifications",
-      "calendar",
-      "email",
-      "ai",
-      "chat",
-      "briefings",
-      "memory",
-      "usefulness-feedback",
-      "structured-state",
-      "wellness",
-      "weather",
-      "sports",
-      "news",
-      "notes",
-      "proactive-monitoring",
-      "jarvis.commitments",
-      "people",
-      "workshop"
-    ]);
+    expect(manifests.map((item) => item.id)).toEqual(expectedBuiltInModuleIds);
     expect(registration?.manifest.database?.ownedTables).toEqual([
       "app.briefing_definitions",
       "app.briefing_runs"

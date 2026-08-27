@@ -26,7 +26,12 @@ import {
   getBuiltInSqlMigrationDirectories
 } from "@moss/module-registry";
 import { createPgBossClient, type PgBoss } from "@moss/jobs";
-import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
+import {
+  connectionStrings,
+  expectedBuiltInModuleIds,
+  ids,
+  resetFoundationDatabase
+} from "./test-database.js";
 
 const { Client } = pg;
 
@@ -175,56 +180,8 @@ describe("Connectors encrypted foundation", () => {
     );
     const manifest = manifests.find((item) => item.id === connectorsModuleManifest.id);
 
-    expect(manifests.map((item) => item.id)).toEqual([
-      "settings",
-      "connectors",
-      "tasks",
-      "jarvis.goals",
-      "web",
-      "notifications",
-      "calendar",
-      "email",
-      "ai",
-      "chat",
-      "briefings",
-      "memory",
-      "usefulness-feedback",
-      "structured-state",
-      "wellness",
-      "weather",
-      "sports",
-      "news",
-      "notes",
-      "proactive-monitoring",
-      "jarvis.commitments",
-      "people",
-      "workshop"
-    ]);
-    expect(registrations.map((item) => item.manifest.id)).toEqual([
-      "settings",
-      "connectors",
-      "tasks",
-      "jarvis.goals",
-      "web",
-      "notifications",
-      "calendar",
-      "email",
-      "ai",
-      "chat",
-      "briefings",
-      "memory",
-      "usefulness-feedback",
-      "structured-state",
-      "wellness",
-      "weather",
-      "sports",
-      "news",
-      "notes",
-      "proactive-monitoring",
-      "jarvis.commitments",
-      "people",
-      "workshop"
-    ]);
+    expect(manifests.map((item) => item.id)).toEqual(expectedBuiltInModuleIds);
+    expect(registrations.map((item) => item.manifest.id)).toEqual(expectedBuiltInModuleIds);
     expect(manifest?.database?.ownedTables).toEqual([
       "app.connector_definitions",
       "app.connector_accounts",

@@ -17,6 +17,7 @@
     "@moss/chat": "workspace:*",
     "@moss/cli-runner": "workspace:*",
     "@moss/commitments": "workspace:*",
+    "@moss/workflows": "workspace:*",
     "@moss/connectors": "workspace:*",
     "@moss/datasets": "workspace:*",
     "@moss/db": "workspace:*",

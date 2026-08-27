@@ -361,6 +361,9 @@ describe("MVP foundation schema catalog", () => {
         // #2016 — story-level relevance feedback: News/Sports targets, a bounded reason,
         // revisions, and the superseded lifecycle state.
         { version: "0201", name: "0201_story_relevance_feedback.sql" },
+        // #2013 (819-B) Workflow run state — four owner-only FORCE RLS tables, worker
+        // grants land now for the queue slice (#2014) so no second grants-only migration.
+        { version: "0202", name: "0202_workflow_runs.sql" },
         // #2030 (part of #1586) News refresh history — columns added to the existing
         // owner-only FORCE-RLS refresh-state table; no new grant, no new policy.
         { version: "0203", name: "0203_news_refresh_history.sql" }

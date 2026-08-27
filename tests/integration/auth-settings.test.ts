@@ -9,6 +9,7 @@ import { createPgBossClient, type PgBoss } from "@moss/jobs";
 import type { ListAdminAuditEventsResponse, ListModulesResponse, MeResponse } from "@moss/shared";
 import {
   connectionStrings,
+  expectedBuiltInModuleIds,
   resetEmptyFoundationDatabase,
   setInstanceSetting
 } from "./test-database.js";
@@ -279,31 +280,7 @@ describe("M3 auth, users, settings", () => {
 
     expect(deniedResponse.statusCode).toBe(401);
     expect(allowedResponse.statusCode).toBe(200);
-    expect(modules.map((module) => module.id)).toEqual([
-      "settings",
-      "connectors",
-      "tasks",
-      "jarvis.goals",
-      "web",
-      "notifications",
-      "calendar",
-      "email",
-      "ai",
-      "chat",
-      "briefings",
-      "memory",
-      "usefulness-feedback",
-      "structured-state",
-      "wellness",
-      "weather",
-      "sports",
-      "news",
-      "notes",
-      "proactive-monitoring",
-      "jarvis.commitments",
-      "people",
-      "workshop"
-    ]);
+    expect(modules.map((module) => module.id)).toEqual(expectedBuiltInModuleIds);
     expect(modules.flatMap((module) => module.navigation).map((entry) => entry.path)).toEqual([
       "/settings",
       "/tasks",
