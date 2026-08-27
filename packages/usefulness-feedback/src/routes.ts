@@ -21,7 +21,8 @@ import {
 import { sanitizeFeedbackMetadata } from "./metadata.js";
 import { parseCreateBody, parseListQuery, parseReasonBody } from "./request-parsing.js";
 import { UsefulnessFeedbackRepository } from "./repository.js";
-import { isStoryTargetKind } from "./story-target.js";
+import { compileStoryRelevanceRule, storyRelevanceDirectionForKind } from "./relevance/compile.js";
+import { isStoryTargetKind, storyModuleForTargetKind } from "./story-target.js";
 import { isAllowedFeedbackPair, type FeedbackTargetVerifierRegistry } from "./target-verifiers.js";
 
 export interface UsefulnessFeedbackRoutesDependencies {
@@ -180,6 +181,9 @@ export function registerUsefulnessFeedbackRoutes(
           // and the one-active-preference-per-story index keeps holding.
           if (existing) await repository.supersede(scopedDb, access.actorUserId, existing.id);
 
+          // Compiling is pure and involves no model call, so a story preference is saved with its
+          // rule already attached and this adds no way for saving to fail.
+          const metadata = sanitizeFeedbackMetadata(verification.metadata);
           return {
             feedback: await repository.create(scopedDb, {
               ownerUserId: access.actorUserId,
@@ -188,10 +192,17 @@ export function registerUsefulnessFeedbackRoutes(
               surface: input.surface,
               kind: input.kind,
               verification,
-              metadata: sanitizeFeedbackMetadata(verification.metadata),
+              metadata,
               effectKind,
               effectRef,
-              reasonText: input.reason ?? null
+              reasonText: input.reason ?? null,
+              rule: buildStoryRule({
+                targetKind: input.targetKind,
+                targetRef: input.targetRef,
+                kind: input.kind,
+                context: metadata,
+                reasonText: input.reason ?? null
+              })
             }),
             created: true
           };
@@ -301,7 +312,21 @@ export function registerUsefulnessFeedbackRoutes(
             if (owned.kind !== "less_like_this") {
               throw new HttpError(400, "Only a Less like this reason can be edited");
             }
-            return repository.updateReason(scopedDb, access.actorUserId, owned.id, reason);
+            // The rule is rebuilt from the row's own stored story context and the new reason, and
+            // written in the same statement, so the two can never disagree.
+            return repository.updateReason(
+              scopedDb,
+              access.actorUserId,
+              owned.id,
+              reason,
+              buildStoryRule({
+                targetKind: owned.target_kind as FeedbackTargetKind,
+                targetRef: owned.target_ref,
+                kind: owned.kind,
+                context: owned.metadata_json,
+                reasonText: reason
+              })
+            );
           }
         );
         if (!feedback) throw new HttpError(404, "Feedback not found");
@@ -316,6 +341,29 @@ export function registerUsefulnessFeedbackRoutes(
       }
     }
   );
+}
+
+/**
+ * Compiles a saved story preference into a rule, or nothing at all when the row is not a story
+ * preference. Briefing, chat and card feedback keeps today's empty rule.
+ */
+function buildStoryRule(input: {
+  readonly targetKind: FeedbackTargetKind;
+  readonly targetRef: string;
+  readonly kind: UsefulnessFeedbackKind;
+  readonly context: Record<string, unknown>;
+  readonly reasonText: string | null;
+}): ReturnType<typeof compileStoryRelevanceRule> | null {
+  const moduleId = storyModuleForTargetKind(input.targetKind);
+  const direction = storyRelevanceDirectionForKind(input.kind);
+  if (!moduleId || !direction) return null;
+  return compileStoryRelevanceRule({
+    moduleId,
+    direction,
+    storyRef: input.targetRef,
+    context: input.context,
+    reasonText: input.reasonText
+  });
 }
 
 async function notifyStoryPreferenceChanged(

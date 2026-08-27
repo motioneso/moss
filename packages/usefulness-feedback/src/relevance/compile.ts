@@ -4,7 +4,8 @@ import {
   isStoryRelevanceRule,
   type StoryFeedbackModule,
   type StoryRelevanceDirection,
-  type StoryRelevanceRule
+  type StoryRelevanceRule,
+  type UsefulnessFeedbackKind
 } from "@moss/shared";
 
 /**
@@ -126,6 +127,18 @@ export function compileStoryRelevanceRule(
     storyRef: input.storyRef,
     terms: terms.slice(0, MAX_STORY_RULE_TERMS)
   };
+}
+
+/**
+ * Which way a saved action points. Every other kind of feedback compiles to nothing, which is how
+ * a dismissal or a "remember this" stays out of story relevance entirely.
+ */
+export function storyRelevanceDirectionForKind(
+  kind: UsefulnessFeedbackKind
+): StoryRelevanceDirection | null {
+  if (kind === "less_like_this") return "less";
+  if (kind === "more_like_this") return "more";
+  return null;
 }
 
 /**
