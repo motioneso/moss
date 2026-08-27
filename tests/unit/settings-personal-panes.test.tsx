@@ -50,6 +50,18 @@ describe("ProfilePane merged Account & preferences", () => {
     expect(html).not.toContain("Auth provider configuration");
   });
 
+  it("marks the selected temperature unit pressed in the segmented control", async () => {
+    const metricHtml = await renderProfilePane(undefined, "metric");
+    const metricUnit = metricHtml.slice(metricHtml.indexOf('aria-label="Unit"'));
+    expect(metricUnit).toMatch(/aria-pressed="true"[^>]*>Celsius/);
+    expect(metricUnit).toMatch(/aria-pressed="false"[^>]*>Fahrenheit/);
+
+    const imperialHtml = await renderProfilePane(undefined, "imperial");
+    const imperialUnit = imperialHtml.slice(imperialHtml.indexOf('aria-label="Unit"'));
+    expect(imperialUnit).toMatch(/aria-pressed="true"[^>]*>Fahrenheit/);
+    expect(imperialUnit).toMatch(/aria-pressed="false"[^>]*>Celsius/);
+  });
+
   it("reflects a primed weather location override in the current-location row", async () => {
     const html = await renderProfilePane({
       location: { label: "Home", lat: 51.5072, lon: -0.1276 }
@@ -79,7 +91,8 @@ describe("ProfilePane merged Account & preferences", () => {
 async function renderProfilePane(
   weatherLocation: { location: { label: string; lat: number; lon: number } | null } = {
     location: null
-  }
+  },
+  weatherUnit: "metric" | "imperial" = "metric"
 ): Promise<string> {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const { queryKeys } = await import("../../apps/web/src/api/query-keys.js");
@@ -90,7 +103,7 @@ async function renderProfilePane(
     quietHours: { enabled: false, start: "22:00", end: "07:00", timezone: null }
   });
   client.setQueryData(queryKeys.weather.location, weatherLocation);
-  client.setQueryData(queryKeys.weather.unit, { unit: "metric" });
+  client.setQueryData(queryKeys.weather.unit, { unit: weatherUnit });
   const { FeedbackProvider } = await import("../../apps/web/src/settings/settings-feedback.js");
   const { ProfilePane } = await import("../../apps/web/src/settings/settings-personal-panes.js");
   return renderToString(
