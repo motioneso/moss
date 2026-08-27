@@ -13,7 +13,12 @@ import {
 } from "../api/onboarding-connect-client";
 import { useAssistantName } from "../api/use-assistant-name";
 
-export type AutomatedLoginProviderKind = Extract<AiProviderKind, "anthropic" | "openai-compatible">;
+// #2027 added google: the Gemini command-line tool now has a sign-in adapter on the server, so the
+// dialog can drive its link-and-paste flow like the other two.
+export type AutomatedLoginProviderKind = Extract<
+  AiProviderKind,
+  "anthropic" | "openai-compatible" | "google"
+>;
 
 export type AutomatedLoginProvider = AiProviderConfigDto & {
   readonly providerKind: AutomatedLoginProviderKind;
@@ -56,7 +61,9 @@ export function supportsAutomatedProviderLogin(
   return (
     provider.authMethod === "cli" &&
     provider.cliAvailable &&
-    (provider.providerKind === "anthropic" || provider.providerKind === "openai-compatible")
+    (provider.providerKind === "anthropic" ||
+      provider.providerKind === "openai-compatible" ||
+      provider.providerKind === "google")
   );
 }
 

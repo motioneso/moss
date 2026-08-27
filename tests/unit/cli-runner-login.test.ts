@@ -323,9 +323,17 @@ describe("LoginService flow (§L.2/§L.3)", () => {
     expect(f.live.size).toBe(0);
   });
 
-  it("rejects beginLogin for a provider with no adapter (agy)", async () => {
+  it("rejects beginLogin for a provider with no adapter", async () => {
+    // #2027: google now HAS an adapter, so it can no longer stand in for "no adapter". The
+    // behaviour under test is the registry-is-the-allowlist rule itself: a provider absent from
+    // the registry handed to the service is not loginable. Build such a registry explicitly.
     const f = makeLoginIo();
-    const svc = makeService(f.io, makeProbe({ status: "needs_login" }).fn);
+    const svc = new LoginService({
+      io: f.io,
+      adapters: { anthropic: LOGIN_ADAPTERS.anthropic! },
+      probe: makeProbe({ status: "needs_login" }).fn,
+      homeBase: tmpdir()
+    });
     expect(svc.hasAdapter("google")).toBe(false);
     expect(() => svc.reserve("google")).toThrow(LoginBadRequestError);
   });
@@ -678,5 +686,182 @@ describe("codex device-auth login adapter", () => {
     const pane = "https://evil.example.com/codex/device\n" + "4DUN-GY7Y3\n";
     const surface = adapter!.extractSurface(pane);
     expect(surface.authorizationUrl).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #2027 — the google (Gemini CLI) login adapter
+// ---------------------------------------------------------------------------
+
+/**
+ * The real pane the Gemini CLI 0.57.0 paints when it cannot open a browser: it clears the screen,
+ * prints the instruction, a blank line, the Google authorize URL, a blank line, then the
+ * "Enter the authorization code:" prompt and waits on the keyboard. (Read out of the published
+ * package's `authWithUserCode`; the URL is the google-auth-library authorize endpoint.)
+ */
+const GEMINI_LOGIN_PANE =
+  "Please visit the following URL to authorize the application:\n\n" +
+  "https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=681255809395-" +
+  "oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com&redirect_uri=http%3A%2F%2F" +
+  "localhost%3A45289%2Foauth2callback&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2F" +
+  "cloud-platform&code_challenge=abcDEF123_-abcDEF123_-abcDEF123_-abcDEF12&" +
+  "code_challenge_method=S256&state=0123456789abcdef0123456789abcdef&access_type=offline\n\n" +
+  "Enter the authorization code: ";
+
+const GEMINI_AUTH_URL =
+  "https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=681255809395-" +
+  "oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com&redirect_uri=http%3A%2F%2F" +
+  "localhost%3A45289%2Foauth2callback&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2F" +
+  "cloud-platform&code_challenge=abcDEF123_-abcDEF123_-abcDEF123_-abcDEF12&" +
+  "code_challenge_method=S256&state=0123456789abcdef0123456789abcdef&access_type=offline";
+
+describe("#2027 google (Gemini CLI) login adapter", () => {
+  it("runs the pinned `gemini` command in paste mode", () => {
+    const adapter = LOGIN_ADAPTERS.google;
+    expect(adapter).toBeDefined();
+    // loginArgv[0] MUST equal PROVIDER_CATALOG.google.recipe.binary or §L.1.3 drops the adapter
+    // silently — the drop is not logged, so the only symptom is "not loginable" forever.
+    expect(adapter!.loginArgv).toEqual(["gemini"]);
+    // The flow prints a link and waits for a pasted code ⇒ paste, not poll. It also must NOT
+    // carry `--prompt`/`-p`: that makes the CLI non-interactive and it refuses the paste flow.
+    expect(adapter!.mode).toBe("paste");
+    expect(adapter!.loginArgv).not.toContain("--prompt");
+    expect(adapter!.loginArgv).not.toContain("-p");
+  });
+
+  it("extracts the Google authorization URL from the real pane output", () => {
+    const surface = LOGIN_ADAPTERS.google!.extractSurface(GEMINI_LOGIN_PANE);
+    expect(surface.authorizationUrl).toBe(GEMINI_AUTH_URL);
+  });
+
+  it("DROPS a look-alike authorization URL on another host", () => {
+    const pane =
+      "Please visit the following URL to authorize the application:\n\n" +
+      "https://accounts.google.evil.example.com/o/oauth2/v2/auth?state=abc\n\n" +
+      "Enter the authorization code: ";
+    expect(LOGIN_ADAPTERS.google!.extractSurface(pane).authorizationUrl).toBeUndefined();
+  });
+
+  it("DROPS a google-hosted URL outside the oauth path prefix", () => {
+    const pane = "https://accounts.google.com/ServiceLogin?continue=abc\n";
+    expect(LOGIN_ADAPTERS.google!.extractSurface(pane).authorizationUrl).toBeUndefined();
+  });
+
+  it("NEVER surfaces an ordinary pane word as a sign-in code (this flow displays none)", () => {
+    // The shared USER_CODE_PATTERN matches any 6-128 char word, so reusing it here would show
+    // the user "authorize" (or whatever word came first) as if it were their sign-in code.
+    const surface = LOGIN_ADAPTERS.google!.extractSurface(GEMINI_LOGIN_PANE);
+    expect(surface.userCode).toBeUndefined();
+    expect(
+      LOGIN_ADAPTERS.google!.extractSurface("PLEASE-VISIT authorize application").userCode
+    ).toBeUndefined();
+  });
+
+  it("has NO token-capture pattern (the CLI writes its own credential file)", () => {
+    // A capture pattern is how claude's minted setup-token is lifted off the pane. Gemini prints
+    // no credential, so a pattern here could only ever surface something it should not.
+    expect(LOGIN_ADAPTERS.google!.tokenCapturePattern).toBeUndefined();
+  });
+
+  it("begin surfaces the Google URL and awaits the pasted code", async () => {
+    const f = makeLoginIo(GEMINI_LOGIN_PANE);
+    const svc = makeService(f.io, makeProbe({ status: "needs_login" }).fn);
+    const loginId = svc.reserve("google");
+    const out = await svc.start(loginId);
+    expect(out.status).toBe("awaiting_token");
+    expect(out.authorizationUrl).toBe(GEMINI_AUTH_URL);
+    expect(out.userCode).toBeUndefined();
+    await svc.cancel("google", loginId);
+  });
+});
+
+describe("#2027 google adapter validation against the catalog", () => {
+  const googleCatalog = (status: "supported" | "blocked"): ProviderCatalog => ({
+    anthropic: { provider: "anthropic", status: "blocked", blockedReason: "n/a here" },
+    "openai-compatible": {
+      provider: "openai-compatible",
+      status: "blocked",
+      blockedReason: "n/a here"
+    },
+    google:
+      status === "supported"
+        ? {
+            provider: "google",
+            status,
+            recipe: {
+              kind: "npm",
+              pkg: "@google/gemini-cli",
+              version: "0.57.0",
+              lockfile: "packages/cli-runner/recipes/google/npm-shrinkwrap.json",
+              binary: "gemini",
+              selfUpdateDisable: { kind: "config", path: ".gemini/settings.json", content: "{}\n" }
+            }
+          }
+        : { provider: "google", status, blockedReason: "install blocked" }
+  });
+
+  it("keeps the google adapter while its catalog entry is installable", () => {
+    const { adapters, issues } = loadLoginAdapters(googleCatalog("supported"), {
+      anthropic: undefined,
+      "openai-compatible": undefined,
+      google: LOGIN_ADAPTERS.google
+    });
+    expect(adapters.google).toBeDefined();
+    expect(issues).toHaveLength(0);
+  });
+
+  it("DROPS the google adapter while its catalog entry is blocked", () => {
+    const { adapters, issues } = loadLoginAdapters(googleCatalog("blocked"), {
+      anthropic: undefined,
+      "openai-compatible": undefined,
+      google: LOGIN_ADAPTERS.google
+    });
+    expect(adapters.google).toBeUndefined();
+    expect(issues.some((i) => i.provider === "google")).toBe(true);
+  });
+});
+
+describe("#2027 first-run seeding runs before the login session opens", () => {
+  it("calls prepareProvider, and calls it BEFORE the CLI is launched", async () => {
+    const f = makeLoginIo(GEMINI_LOGIN_PANE);
+    const order: string[] = [];
+    const svc = new LoginService({
+      io: {
+        ...f.io,
+        run: (async (cmd: string, args: readonly string[]) => {
+          const verb = args[0] === "-S" ? args[2] : args[0];
+          if (cmd === "tmux" && verb === "new-session") order.push("launch");
+          return (f.io.run as unknown as (c: string, a: readonly string[]) => Promise<unknown>)(
+            cmd,
+            args
+          );
+        }) as unknown as TmuxIo["run"]
+      },
+      adapters: { google: LOGIN_ADAPTERS.google! },
+      probe: makeProbe({ status: "needs_login" }).fn,
+      homeBase,
+      // Seeding answers gemini's sign-in-method question. Once the CLI is running it is too late:
+      // it has already read its settings and painted the menu, and the authorization URL never
+      // prints — a live-only failure no other unit test would catch.
+      prepareProvider: async (provider) => {
+        order.push(`prepare:${provider}`);
+      }
+    });
+
+    const loginId = svc.reserve("google");
+    await svc.start(loginId);
+
+    expect(order[0]).toBe("prepare:google");
+    expect(order).toContain("launch");
+    expect(order.indexOf("prepare:google")).toBeLessThan(order.indexOf("launch"));
+    await svc.cancel("google", loginId);
+  });
+
+  it("still works when no prepareProvider is supplied (existing callers unchanged)", async () => {
+    const f = makeLoginIo(GEMINI_LOGIN_PANE);
+    const svc = makeService(f.io, makeProbe({ status: "needs_login" }).fn);
+    const loginId = svc.reserve("google");
+    expect((await svc.start(loginId)).status).toBe("awaiting_token");
+    await svc.cancel("google", loginId);
   });
 });

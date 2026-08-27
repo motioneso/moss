@@ -122,6 +122,23 @@ describe("buildCliRunnerChildEnv", () => {
     expect(result.code).toBe(0);
     expect(JSON.parse(result.stdout)).toEqual({ home: authHome, cliHome: authHome });
   });
+
+  it("SETS NO_BROWSER on the child env, not merely allowlisting the name (#2027)", async () => {
+    // The allowlist is a passthrough FILTER, not a setter: naming NO_BROWSER in sanitized-env.ts
+    // without setting a value delivers nothing, and gemini then tries to open a browser instead of
+    // printing the authorization URL the sign-in dialog needs. Source env deliberately omits it.
+    const authHome = "/tmp/jarv1s-test-cli-auth";
+    const env = buildCliRunnerChildEnv({ homeBase: authHome }, { PATH: process.env.PATH });
+    expect(env.NO_BROWSER).toBe("1");
+
+    const io = createSanitizedTmuxIo(env);
+    const result = await io.run(process.execPath, [
+      "-e",
+      "process.stdout.write(String(process.env.NO_BROWSER))"
+    ]);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toBe("1");
+  });
 });
 
 /**

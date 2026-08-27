@@ -188,7 +188,10 @@ describe("onboarding provider-login routes (§L.5)", () => {
     expect(res.body).not.toMatch(/token|secret|password|credential/i);
   });
 
-  it("rejects a non-loginable provider (agy) cleanly with 400 and persists NOTHING", async () => {
+  // #2027: google IS loginable now. This test still uses it, but only against its OWN stub whose
+  // loginable set excludes it — the behaviour under test is the route's rejection path, not any
+  // real claim about google. Named accordingly so the name stops asserting something untrue.
+  it("rejects a provider the loginable set excludes, with 400 and persists NOTHING", async () => {
     const res = await post(server, "/api/onboarding/provider-login/begin", ADMIN_TOKEN, {
       providerKind: "google"
     });

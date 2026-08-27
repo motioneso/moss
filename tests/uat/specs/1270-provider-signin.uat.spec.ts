@@ -91,8 +91,10 @@ function providerCard(page: Page, displayName: string) {
 // the presentation allowlist ONBOARDING_LOGINABLE_PROVIDER_KINDS = ["anthropic"]
 // (packages/settings/src/repository.ts) hid the other two, so this step rendered a single card; the
 // recovered f5b44c52 lifts it to ["anthropic","openai-compatible","google"]. The labels come from
-// cli-auth-step.tsx PROVIDER_LABELS — note the google kind renders as "Antigravity", not "Gemini".
-test("first-run wizard offers Claude, Codex and Antigravity — not Claude alone (#1270)", async ({
+// cli-auth-step.tsx PROVIDER_LABELS. #2027 renamed the google label "Antigravity" -> "Gemini":
+// the pinned recipe installs Google's Gemini command-line tool, and "Antigravity" named a tool
+// this project no longer installs.
+test("first-run wizard offers Claude, Codex and Gemini — not Claude alone (#1270)", async ({
   page
 }) => {
   await signIn(page);
@@ -104,7 +106,7 @@ test("first-run wizard offers Claude, Codex and Antigravity — not Claude alone
 
   const providerNames = page.locator(".onb-cli__name");
   await expect(providerNames).toHaveCount(3);
-  await expect(providerNames).toHaveText(["Claude", "Codex", "Antigravity"]);
+  await expect(providerNames).toHaveText(["Claude", "Codex", "Gemini"]);
   await shot(page, "01-wizard-three-cli-providers");
 });
 
