@@ -6,18 +6,19 @@ import { createRealTmuxIo } from "@moss/ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
-  AGY_IDENTITY_FILENAME,
-  AGY_SESSION_LOG_FILENAME,
   CODEX_IDENTITY_FILENAME,
-  captureAgyConversationIdentity,
+  GEMINI_IDENTITY_FILENAME,
+  GEMINI_OUTPUT_FILENAME,
+  GEMINI_STDERR_FILENAME,
   codexTranscriptPath,
   parseCodexSessionUuid,
-  parseAgyConversationUuid,
+  parseGeminiProjectShortId,
   persistCodexSessionIdentity,
-  purgeAgyBrainDir,
+  persistGeminiSessionIdentity,
+  purgeGeminiConversation,
   purgePrivateTranscripts,
   readCodexSessionIdentity,
-  readAgyConversationIdentity
+  readGeminiSessionIdentity
 } from "../../packages/chat/src/live/private-transcript-cleanup.js";
 
 function makeIo() {
@@ -133,38 +134,65 @@ describe("purgePrivateTranscripts", () => {
     );
   });
 
-  it("purges only the exact AGY marker directory engine-less", async () => {
-    const { io, neutralBase, neutralDir, homeBase } = await fixture();
-    const mine = "e099f770-a55c-432f-a9be-8cf254fd2d54";
-    const sibling = "922f315d-bff5-4d42-86a5-a96a8620350c";
-    const brain = join(homeBase, ".gemini", "antigravity-cli", "brain");
-    await mkdir(join(brain, mine), { recursive: true });
-    await mkdir(join(brain, sibling), { recursive: true });
-    await writeFile(join(brain, mine, "private"), "mine");
-    await writeFile(join(brain, sibling, "private"), "sibling");
-    await writeFile(join(neutralDir, AGY_IDENTITY_FILENAME), `${mine}\n`);
-
-    await purgePrivateTranscripts(io, neutralBase, "user-1", homeBase);
-
-    await expect(access(join(brain, mine))).rejects.toThrow();
-    await expect(readFile(join(brain, sibling, "private"), "utf8")).resolves.toBe("sibling");
-  });
-
-  it("purges AGY from the on-disk log when a crash happens before marker capture", async () => {
+  it("purges every place a Gemini conversation left state, and nobody else's", async () => {
+    // #2028 — a headless run writes THREE things outside the session folder: a saved-chat
+    // directory, a history directory, and a registry entry pointing at both. Removing only the
+    // first is the tempting half-fix and leaves the founder's conversation on disk.
     const { io, neutralBase, neutralDir, homeBase } = await fixture();
     const uuid = "e099f770-a55c-432f-a9be-8cf254fd2d54";
-    const brain = join(homeBase, ".gemini", "antigravity-cli", "brain", uuid);
-    await mkdir(brain, { recursive: true });
-    await writeFile(join(brain, "private"), "mine");
+    const geminiRoot = join(homeBase, ".gemini");
+    const mineShortId = "user-1";
+    const siblingShortId = "user-2";
+    for (const bucket of ["tmp", "history"]) {
+      await mkdir(join(geminiRoot, bucket, mineShortId), { recursive: true });
+      await mkdir(join(geminiRoot, bucket, siblingShortId), { recursive: true });
+      await writeFile(join(geminiRoot, bucket, mineShortId, "chat.json"), "mine");
+      await writeFile(join(geminiRoot, bucket, siblingShortId, "chat.json"), "sibling");
+    }
     await writeFile(
-      join(neutralDir, AGY_SESSION_LOG_FILENAME),
-      `Created conversation ${uuid}\nSending user message\n`
+      join(geminiRoot, "projects.json"),
+      JSON.stringify({
+        projects: { [neutralDir]: mineShortId, "/some/other/folder": siblingShortId }
+      })
     );
+    await writeFile(join(geminiRoot, "projects.json.abcd.tmp"), "{}");
+    await writeFile(join(neutralDir, GEMINI_OUTPUT_FILENAME), "{}\n");
+    await writeFile(join(neutralDir, GEMINI_STDERR_FILENAME), "warn\n");
+    await writeFile(join(neutralDir, "gemini-crash-1.json"), "the founder's prompt");
+    await writeFile(join(neutralDir, GEMINI_IDENTITY_FILENAME), `${uuid}\n`);
 
     await purgePrivateTranscripts(io, neutralBase, "user-1", homeBase);
 
-    await expect(access(brain)).rejects.toThrow();
-    await expect(access(join(neutralDir, AGY_IDENTITY_FILENAME))).rejects.toThrow();
+    await expect(access(join(geminiRoot, "tmp", mineShortId))).rejects.toThrow();
+    await expect(access(join(geminiRoot, "history", mineShortId))).rejects.toThrow();
+    await expect(access(join(neutralDir, GEMINI_OUTPUT_FILENAME))).rejects.toThrow();
+    await expect(access(join(neutralDir, GEMINI_STDERR_FILENAME))).rejects.toThrow();
+    await expect(access(join(neutralDir, "gemini-crash-1.json"))).rejects.toThrow();
+    await expect(access(join(neutralDir, GEMINI_IDENTITY_FILENAME))).rejects.toThrow();
+    await expect(access(join(geminiRoot, "projects.json.abcd.tmp"))).rejects.toThrow();
+
+    // Another folder's entry and state are untouched.
+    const registry = JSON.parse(await readFile(join(geminiRoot, "projects.json"), "utf8"));
+    expect(registry).toEqual({ projects: { "/some/other/folder": siblingShortId } });
+    await expect(
+      readFile(join(geminiRoot, "tmp", siblingShortId, "chat.json"), "utf8")
+    ).resolves.toBe("sibling");
+  });
+
+  it("leaves the Gemini marker in place when the purge could not finish", async () => {
+    // Fail-closed (#1086's rule): a marker that survives is the next boot sweep's second chance.
+    const { neutralBase, neutralDir, homeBase } = await fixture();
+    const uuid = "e099f770-a55c-432f-a9be-8cf254fd2d54";
+    await writeFile(join(neutralDir, GEMINI_IDENTITY_FILENAME), `${uuid}\n`);
+    await mkdir(join(homeBase, ".gemini"), { recursive: true });
+    await writeFile(join(homeBase, ".gemini", "projects.json"), "this is not json");
+
+    const io = createRealTmuxIo();
+    await expect(purgePrivateTranscripts(io, neutralBase, "user-1", homeBase)).rejects.toThrow();
+
+    await expect(readFile(join(neutralDir, GEMINI_IDENTITY_FILENAME), "utf8")).resolves.toContain(
+      uuid
+    );
   });
 });
 
@@ -205,102 +233,103 @@ describe("Codex session identity", () => {
   });
 });
 
-describe("purgeAgyBrainDir", () => {
-  it("removes only the captured conversation UUID subdirectory", async () => {
-    const io = makeIo();
-    const uuid = "e099f770-a55c-432f-a9be-8cf254fd2d54";
-
-    await purgeAgyBrainDir(io, uuid, "/host-home");
-
-    expect(io.run).toHaveBeenCalledOnce();
-    expect(io.run).toHaveBeenCalledWith("rm", [
-      "-rf",
-      `/host-home/.gemini/antigravity-cli/brain/${uuid}`
-    ]);
-    expect(JSON.stringify(io.run.mock.calls)).not.toContain(
-      '"/host-home/.gemini/antigravity-cli/brain"'
-    );
-  });
-
-  it.each([null, undefined, "", "../brain", "not-a-uuid"])(
-    "retains transcripts when no validated UUID was captured (%s)",
-    async (capturedUuid) => {
-      const io = makeIo();
-
-      await purgeAgyBrainDir(io, capturedUuid, "/host-home");
-
-      expect(io.run).not.toHaveBeenCalled();
-    }
-  );
-});
-
-describe("AGY conversation identity", () => {
-  const uuid = "e099f770-a55c-432f-a9be-8cf254fd2d54";
-  const otherUuid = "922f315d-bff5-4d42-86a5-a96a8620350c";
+describe("purgeGeminiConversation", () => {
   const neutralDir = "/data/cli-auth/chat/user-1";
 
-  it("accepts one unique Created conversation UUID and rejects missing or ambiguous logs", () => {
-    expect(parseAgyConversationUuid(`Created conversation ${uuid}\nSending user message`)).toBe(
-      uuid
-    );
-    expect(
-      parseAgyConversationUuid(`Created conversation ${uuid}\nCreated conversation ${uuid}`)
-    ).toBe(uuid);
-    expect(parseAgyConversationUuid("Sending user message")).toBeNull();
-    expect(
-      parseAgyConversationUuid(`Created conversation ${uuid}\nCreated conversation ${otherUuid}`)
-    ).toBeNull();
+  it("reports failure rather than success when a state directory cannot be removed", async () => {
+    const io = makeIo();
+    io.readFile.mockResolvedValue(JSON.stringify({ projects: { [neutralDir]: "user-1" } }));
+    io.run.mockImplementation(async (cmd: string, args: string[]) => ({
+      code: cmd === "rm" && args.includes("/host-home/.gemini/history/user-1") ? 1 : 0,
+      stdout: "",
+      stderr: ""
+    }));
+
+    await expect(purgeGeminiConversation(io, neutralDir, "/host-home")).resolves.toBe(false);
+    // The registry pointer must survive a failed removal, or the leftover becomes unfindable.
+    expect(io.writeFile).not.toHaveBeenCalled();
   });
 
-  it("atomically persists a session-owned log identity with mode 0600", async () => {
+  it("succeeds without touching the registry when the CLI never recorded this folder", async () => {
     const io = makeIo();
-    io.readFile.mockResolvedValue(`Created conversation ${uuid}\nSending user message`);
+    io.readFile.mockResolvedValue(JSON.stringify({ projects: { "/some/other/folder": "other" } }));
 
-    await expect(captureAgyConversationIdentity(io, neutralDir)).resolves.toBe(uuid);
-
-    const marker = `${neutralDir}/${AGY_IDENTITY_FILENAME}`;
-    const temp = `${marker}.tmp`;
-    expect(io.readFile).toHaveBeenCalledWith(`${neutralDir}/${AGY_SESSION_LOG_FILENAME}`);
-    expect(io.writeFile).toHaveBeenCalledWith(temp, `${uuid}\n`);
-    expect(io.run.mock.calls).toContainEqual(["chmod", ["600", temp]]);
-    expect(io.run.mock.calls).toContainEqual(["mv", ["-f", temp, marker]]);
-  });
-
-  it("does not create a marker when capture is missing or ambiguous", async () => {
-    const io = makeIo();
-    io.readFile.mockResolvedValue(
-      `Created conversation ${uuid}\nCreated conversation ${otherUuid}`
-    );
-
-    await expect(captureAgyConversationIdentity(io, neutralDir)).resolves.toBeNull();
+    await expect(purgeGeminiConversation(io, neutralDir, "/host-home")).resolves.toBe(true);
 
     expect(io.writeFile).not.toHaveBeenCalled();
-    expect(io.run).not.toHaveBeenCalled();
+    expect(JSON.stringify(io.run.mock.calls)).not.toContain("/host-home/.gemini/tmp/");
+  });
+
+  it("refuses to act on a registry it cannot read as the expected shape", async () => {
+    const io = makeIo();
+    io.readFile.mockResolvedValue("this is not json");
+
+    await expect(purgeGeminiConversation(io, neutralDir, "/host-home")).resolves.toBe(false);
+  });
+});
+
+describe("parseGeminiProjectShortId", () => {
+  const neutralDir = "/data/cli-auth/chat/user-1";
+
+  it("reads the short id out of the registry and rejects anything path-shaped", () => {
+    expect(
+      parseGeminiProjectShortId(
+        JSON.stringify({ projects: { [neutralDir]: "user-1" } }),
+        neutralDir
+      )
+    ).toBe("user-1");
+    expect(
+      parseGeminiProjectShortId(
+        JSON.stringify({ projects: { [neutralDir]: "../../escape" } }),
+        neutralDir
+      )
+    ).toBeNull();
+    expect(parseGeminiProjectShortId(JSON.stringify({ projects: {} }), neutralDir)).toBeNull();
+    expect(parseGeminiProjectShortId("not json", neutralDir)).toBeNull();
+  });
+});
+
+describe("Gemini session identity", () => {
+  const uuid = "e099f770-a55c-432f-a9be-8cf254fd2d54";
+  const neutralDir = "/data/cli-auth/chat/user-1";
+
+  it("atomically persists a 0600 marker and reads back only a validated one", async () => {
+    const io = makeIo();
+
+    await persistGeminiSessionIdentity(io, neutralDir, uuid);
+
+    const marker = `${neutralDir}/${GEMINI_IDENTITY_FILENAME}`;
+    expect(io.writeFile).toHaveBeenCalledWith(`${marker}.tmp`, `${uuid}\n`);
+    expect(io.run.mock.calls).toContainEqual(["chmod", ["600", `${marker}.tmp`]]);
+    expect(io.run.mock.calls).toContainEqual(["mv", ["-f", `${marker}.tmp`, marker]]);
+
+    io.readFile.mockResolvedValue(`${uuid}\n`);
+    await expect(readGeminiSessionIdentity(io, neutralDir)).resolves.toBe(uuid);
+    io.readFile.mockResolvedValue("../../shared-root\n");
+    await expect(readGeminiSessionIdentity(io, neutralDir)).resolves.toBeNull();
+  });
+
+  it("refuses to write a marker that is not a session id", async () => {
+    const io = makeIo();
+
+    await expect(persistGeminiSessionIdentity(io, neutralDir, "../escape")).rejects.toThrow();
+
+    expect(io.writeFile).not.toHaveBeenCalled();
   });
 
   it.each(["chmod", "mv"])("removes the temporary marker when %s fails", async (failedCmd) => {
     const io = makeIo();
-    io.readFile.mockResolvedValue(`Created conversation ${uuid}\n`);
     io.run.mockImplementation(async (cmd: string) => ({
       code: cmd === failedCmd ? 1 : 0,
       stdout: "",
       stderr: ""
     }));
 
-    await expect(captureAgyConversationIdentity(io, neutralDir)).rejects.toThrow();
+    await expect(persistGeminiSessionIdentity(io, neutralDir, uuid)).rejects.toThrow();
 
     expect(io.run.mock.calls).toContainEqual([
       "rm",
-      ["-f", `${neutralDir}/${AGY_IDENTITY_FILENAME}.tmp`]
+      ["-f", `${neutralDir}/${GEMINI_IDENTITY_FILENAME}.tmp`]
     ]);
-  });
-
-  it("reads only a validated exact marker", async () => {
-    const io = makeIo();
-    io.readFile.mockResolvedValue(`${uuid}\n`);
-    await expect(readAgyConversationIdentity(io, neutralDir)).resolves.toBe(uuid);
-
-    io.readFile.mockResolvedValue("../../shared-root\n");
-    await expect(readAgyConversationIdentity(io, neutralDir)).resolves.toBeNull();
   });
 });

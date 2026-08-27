@@ -226,7 +226,7 @@ export function makeProviderConnectionCheckProbe(deps: {
         );
       }
       if (kind === "google") {
-        return await checkGoogleProviderWithAgyAuthStatus(deps.commandIo ?? createRealTmuxIo());
+        return await checkGoogleProviderWithOneShotPrompt(deps.commandIo ?? createRealTmuxIo());
       }
 
       engine = await deps.engineFactory(kind, `onboarding-check-${kind}`);
@@ -282,16 +282,32 @@ async function checkOpenAiCompatibleProviderWithCodexLoginStatus(
   return { status: "needs_login" };
 }
 
-async function checkGoogleProviderWithAgyAuthStatus(
+/**
+ * #2028 — the same readiness check `provider-probe.ts` already uses. The pinned Gemini CLI has no
+ * auth subcommand at all, so the old `agy auth status` could only ever fail: it named a command
+ * that is never installed AND a subcommand that does not exist. A successful one-shot prompt IS
+ * the readiness signal, because answering at all requires working credentials.
+ */
+async function checkGoogleProviderWithOneShotPrompt(
   io: Pick<TmuxIo, "run">
 ): Promise<OnboardingProviderCheckResponse> {
-  const result = await withTimeout(io.run("agy", ["auth", "status"]), PROVIDER_CHECK_TIMEOUT_MS);
-  if (result.code !== 0) {
-    const output = `${result.stdout}\n${result.stderr ?? ""}`;
-    return isAuthenticationOutput(output) ? { status: "needs_login" } : { status: "error" };
-  }
-  return { status: "ready" };
+  const result = await withTimeout(
+    io.run("gemini", ["--prompt", "Reply with exactly OK."]),
+    PROVIDER_CHECK_TIMEOUT_MS
+  );
+  if (result.code === 0 && GEMINI_READY_ANSWER_RE.test(result.stdout)) return { status: "ready" };
+  // Same split as the Claude check above: only output that actually talks about signing in counts
+  // as "needs login". Anything else that fails is a fault, and calling it a login problem would
+  // send the founder round a sign-in loop that cannot fix it.
+  const output = `${result.stdout}\n${result.stderr ?? ""}`;
+  return isAuthenticationOutput(output) ? { status: "needs_login" } : { status: "error" };
 }
+
+/**
+ * A model told to reply "OK" usually does, but it may add a full stop, quote itself, or wrap the
+ * word in emphasis. Kept in step with the same rule in `provider-probe.ts`.
+ */
+const GEMINI_READY_ANSWER_RE = /^[\s"'`*_]*ok(ay)?\b/i;
 
 async function acknowledgeProviderPromptIfNeeded(
   engine: CliChatEngine,

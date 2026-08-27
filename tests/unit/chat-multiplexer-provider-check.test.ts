@@ -82,12 +82,12 @@ describe("makeProviderConnectionCheckProbe", () => {
     await expect(probe("openai-compatible")).resolves.toEqual({ status: "needs_login" });
   });
 
-  it("checks Google with agy auth status (local, non-inference)", async () => {
+  it("checks Google by asking the real Gemini command for a one-word answer", async () => {
     const runs: Array<{ cmd: string; args: readonly string[] }> = [];
     const commandIo = {
       run: async (cmd: string, args: readonly string[]) => {
         runs.push({ cmd, args });
-        return { code: 0, stdout: "", stderr: "" };
+        return { code: 0, stdout: "OK\n", stderr: "" };
       }
     } satisfies Pick<TmuxIo, "run">;
     const probe = makeProviderConnectionCheckProbe({
@@ -102,15 +102,31 @@ describe("makeProviderConnectionCheckProbe", () => {
     const result = await probe("google");
 
     expect(result).toEqual({ status: "ready" });
-    expect(runs).toEqual([{ cmd: "agy", args: ["auth", "status"] }]);
+    expect(runs).toEqual([{ cmd: "gemini", args: ["--prompt", "Reply with exactly OK."] }]);
   });
 
-  it("treats an agy auth status login signal as needing login", async () => {
+  it("accepts an answer the model dressed up with quotes or a full stop", async () => {
+    const commandIo = {
+      run: async () => ({ code: 0, stdout: '"Okay."\n', stderr: "" })
+    } satisfies Pick<TmuxIo, "run">;
+    const probe = makeProviderConnectionCheckProbe({
+      engineFactory: () => {
+        throw new Error("google checks must not open an interactive engine");
+      },
+      cliPresent: async () => true,
+      skipInstallCheck: true,
+      commandIo
+    });
+
+    await expect(probe("google")).resolves.toEqual({ status: "ready" });
+  });
+
+  it("treats a Google sign-in message as needing login", async () => {
     const commandIo = {
       run: async () => ({
         code: 1,
-        stdout: "Please sign in to continue\n",
-        stderr: ""
+        stdout: "",
+        stderr: "Please sign in to continue\n"
       })
     } satisfies Pick<TmuxIo, "run">;
     const probe = makeProviderConnectionCheckProbe({
@@ -129,8 +145,8 @@ describe("makeProviderConnectionCheckProbe", () => {
     const commandIo = {
       run: async () => ({
         code: 1,
-        stdout: "Fatal: agy binary crashed (segfault)\n",
-        stderr: ""
+        stdout: "",
+        stderr: "Fatal: gemini crashed (segfault)\n"
       })
     } satisfies Pick<TmuxIo, "run">;
     const probe = makeProviderConnectionCheckProbe({

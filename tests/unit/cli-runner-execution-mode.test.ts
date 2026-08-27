@@ -22,7 +22,7 @@ import {
   isBoundedFallbackEngine
 } from "../../packages/chat/src/live/engine-selection.js";
 import { ClaudePrintChatEngine } from "../../packages/chat/src/live/claude-print-chat-engine.js";
-import { AgyPrintChatEngine } from "../../packages/chat/src/live/agy-print-chat-engine.js";
+import { GeminiPrintChatEngine } from "../../packages/chat/src/live/gemini-print-chat-engine.js";
 import { CliChatEngineImpl } from "../../packages/chat/src/live/cli-chat-engine.js";
 
 const NEUTRAL_BASE = "/tmp/jarvis-1350-neutral";
@@ -75,7 +75,7 @@ describe("#1350 the shared engine selector", () => {
     ).toBeInstanceOf(ClaudePrintChatEngine);
     expect(
       createChatEngine("google", "alice", io, { executionMode: "non_interactive" })
-    ).toBeInstanceOf(AgyPrintChatEngine);
+    ).toBeInstanceOf(GeminiPrintChatEngine);
   });
 
   it("returns the interactive engine when the mode is interactive or absent", () => {

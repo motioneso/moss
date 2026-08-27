@@ -8,7 +8,6 @@ import type { Multiplexer } from "../../packages/ai/src/adapters/multiplexer.js"
 import { createRealTmuxIo } from "../../packages/ai/src/adapters/tmux-bridge.js";
 import { CliChatEngineImpl, probeProvider } from "../../packages/chat/src/live/cli-chat-engine.js";
 import { CliChatUnavailableError } from "../../packages/chat/src/live/errors.js";
-import { AGY_SESSION_LOG_FILENAME } from "../../packages/chat/src/live/private-transcript-cleanup.js";
 
 function makeIo() {
   return {
@@ -19,17 +18,12 @@ function makeIo() {
   };
 }
 
-function makeAgyIo() {
+function makeGeminiIo() {
   const io = makeIo();
   io.run.mockImplementation(async (cmd: string, args: string[]) =>
     cmd === "tmux" && args.includes("capture-pane")
       ? { code: 0, stdout: ">\n? for shortcuts\n", stderr: "" }
       : { code: 0, stdout: "", stderr: "" }
-  );
-  io.readFile.mockImplementation(async (path: string) =>
-    path.endsWith(AGY_SESSION_LOG_FILENAME)
-      ? "Created conversation e099f770-a55c-432f-a9be-8cf254fd2d54\n"
-      : ""
   );
   return io;
 }
@@ -250,7 +244,7 @@ describe("CliChatEngineImpl — §6.7 no secret on launch line / argv / tmux env
   });
 
   it("Gemini: launch line / argv carry no jst_/Bearer/Authorization and no tmux set-environment (§6.7 new)", async () => {
-    const io = makeAgyIo();
+    const io = makeGeminiIo();
     const engine = new CliChatEngineImpl("google", "gemini-secret", io);
     await engine.launch({
       neutralDir: "/tmp/neutral",
@@ -259,7 +253,7 @@ describe("CliChatEngineImpl — §6.7 no secret on launch line / argv / tmux env
       mcpServerUrl: "http://api:3000/api/mcp"
     });
     const launchLine = launchLineFrom(io);
-    // Gemini's token lives ONLY in .gemini/settings.json; the launch line is just `agy --sandbox`.
+    // Gemini's token lives ONLY in .gemini/settings.json; the launch line never carries it.
     expect(launchLine).not.toContain("jst_gemini_secret");
     expect(launchLine).not.toContain("Bearer");
     expect(launchLine).not.toContain("Authorization");

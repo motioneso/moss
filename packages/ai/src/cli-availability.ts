@@ -17,21 +17,22 @@ export interface WhichDeps {
   env?: NodeJS.ProcessEnv;
 }
 
+// #2028 — google's primary command is `gemini`. It used to be the Antigravity command, which
+// nothing this project installs has ever put on PATH, so a working Gemini install reported as
+// missing and the chat path launched a binary that was not there.
 const PROVIDER_BINARY: Record<ProviderKind, string> = {
   anthropic: "claude",
   "openai-compatible": "codex",
-  google: "agy"
+  google: "gemini"
 };
 
-// Additional binary names operators may declare for a kind. install.sh records
-// whichever binary it finds on PATH; `gemini` is the upstream Gemini CLI while
-// the API execs `agy` (PROVIDER_BINARY), so both are accepted as the google kind
-// when consulting JARVIS_HOST_CLIS — and, since #2026 pinned the @google/gemini-cli
-// install recipe (whose only command is `gemini`), by the PATH probe too.
+// Additional binary names operators may declare for a kind. install.sh records whichever binary it
+// finds on PATH. The old Antigravity name stays accepted here so a host that already declared it
+// in JARVIS_HOST_CLIS keeps resolving; nothing builds a command from it any more.
 const PROVIDER_BINARY_ALIASES: Record<ProviderKind, readonly string[]> = {
   anthropic: [],
   "openai-compatible": [],
-  google: ["gemini"]
+  google: ["agy"]
 };
 
 async function defaultWhich(binary: string): Promise<string | null> {
@@ -83,9 +84,9 @@ export async function cliAvailable(providerKind: ProviderKind, deps?: WhichDeps)
   const declared = declaredHostCliAvailable(env, providerKind);
   if (declared !== null) return declared;
   const which = deps?.which ?? defaultWhich;
-  // #2026: try the primary name first (unchanged behaviour), then the kind's aliases. The
-  // installed Gemini package only ever produces a command called `gemini`, so probing `agy`
-  // alone reports a successful install as missing forever.
+  // #2026/#2028: try the primary name first, then the kind's aliases. The installed Gemini package
+  // only ever produces a command called `gemini`, so probing the old Antigravity name alone
+  // reported a successful install as missing forever.
   for (const binary of [PROVIDER_BINARY[providerKind], ...PROVIDER_BINARY_ALIASES[providerKind]]) {
     if ((await which(binary)) !== null) return true;
   }

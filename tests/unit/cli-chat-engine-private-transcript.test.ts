@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 
 import { CliChatEngineImpl } from "../../packages/chat/src/live/cli-chat-engine.js";
 import {
-  AGY_SESSION_LOG_FILENAME,
   CODEX_IDENTITY_FILENAME,
   codexTranscriptPath
 } from "../../packages/chat/src/live/private-transcript-cleanup.js";
@@ -16,17 +15,12 @@ function makeIo() {
   };
 }
 
-const AGY_TEST_UUID = "e099f770-a55c-432f-a9be-8cf254fd2d54";
-
-function makeAgyIo() {
+function makeGeminiIo() {
   const io = makeIo();
   io.run.mockImplementation(async (cmd: string, args: string[]) =>
     cmd === "tmux" && args.includes("capture-pane")
       ? { code: 0, stdout: ">\n? for shortcuts\n", stderr: "" }
       : { code: 0, stdout: "", stderr: "" }
-  );
-  io.readFile.mockImplementation(async (path: string) =>
-    path.endsWith(AGY_SESSION_LOG_FILENAME) ? `Created conversation ${AGY_TEST_UUID}\n` : ""
   );
   return io;
 }
@@ -232,7 +226,7 @@ describe("CliChatEngineImpl — Claude MCP lockdown", () => {
   it.each(["openai-compatible", "google"] as const)(
     "passes --model for a concrete override on %s (#367)",
     async (provider) => {
-      const io = provider === "google" ? makeAgyIo() : makeCodexIo();
+      const io = provider === "google" ? makeGeminiIo() : makeCodexIo();
       const engine = new CliChatEngineImpl(provider, `${provider}-concrete-session`, io);
       await engine.launch({
         neutralDir: "/tmp/neutral",
@@ -254,7 +248,7 @@ describe("CliChatEngineImpl — Claude MCP lockdown", () => {
   it.each(["openai-compatible", "google"] as const)(
     "omits --model for the 'default' sentinel on %s (#367)",
     async (provider) => {
-      const io = provider === "google" ? makeAgyIo() : makeCodexIo();
+      const io = provider === "google" ? makeGeminiIo() : makeCodexIo();
       const engine = new CliChatEngineImpl(provider, `${provider}-default-session`, io);
       await engine.launch({
         neutralDir: "/tmp/neutral",
