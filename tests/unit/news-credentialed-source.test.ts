@@ -105,6 +105,23 @@ describe("credentialed publisher adapter — the key travels in the header only"
     ).rejects.toMatchObject({ failure: "temporarily_unavailable" });
     expect(calls).toHaveLength(0);
   });
+
+  for (const malformed of [
+    `${API_KEY}\r\nX-Injected: yes`,
+    "key\rvalue",
+    "key\u0000value",
+    "key\u00e9value"
+  ]) {
+    it(`makes no request when the key is not a valid header value (${JSON.stringify(
+      malformed
+    )})`, async () => {
+      const { fetchFn, calls } = recordingFetch(() => jsonResponse(okBody([article()])));
+      await expect(
+        callAdapter(newsApiConnection, fetchFn, { topicKey: null }, malformed)
+      ).rejects.toMatchObject({ failure: "temporarily_unavailable" });
+      expect(calls).toHaveLength(0);
+    });
+  }
 });
 
 describe("credentialed publisher adapter — the outgoing request is fully declared", () => {
@@ -131,6 +148,18 @@ describe("credentialed publisher adapter — the outgoing request is fully decla
 
       expect([...url.searchParams.keys()].sort()).toEqual([...expected.keys()].sort());
       for (const [name, value] of expected) {
+        expect(url.searchParams.get(name)).toBe(value);
+      }
+    });
+  }
+
+  for (const inherited of ["constructor", "__proto__", "toString", "valueOf", "hasOwnProperty"]) {
+    it(`falls back to the default query for the inherited name ${inherited}`, async () => {
+      const { fetchFn, calls } = recordingFetch(() => jsonResponse(okBody([article()])));
+      await callAdapter(newsApiConnection, fetchFn, { topicKey: inherited });
+
+      const url = new URL(calls[0]!.url);
+      for (const [name, value] of Object.entries(newsApiConnection.topicQuery.default!)) {
         expect(url.searchParams.get(name)).toBe(value);
       }
     });

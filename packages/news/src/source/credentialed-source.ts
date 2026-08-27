@@ -44,6 +44,14 @@ export interface CredentialedPublisherParams {
 /** Status codes that mean the person's own key was rejected, rather than the publisher wobbling. */
 const AUTH_FAILURE_STATUSES: readonly number[] = Object.freeze([401, 403]);
 
+/**
+ * A header value may only contain printable ASCII. A key carrying a line break could otherwise
+ * be an attempt to append a second header to the request. The fetch implementation refuses this
+ * too, but a refusal there arrives as a generic error, and this is not a thing to leave to a
+ * dependency's discretion.
+ */
+const SAFE_HEADER_VALUE = /^[\x20-\x7e]+$/;
+
 function readTopicKey(params: Record<string, unknown>): string | null {
   const value = params.topicKey;
   return typeof value === "string" && value.length > 0 ? value : null;
@@ -59,9 +67,14 @@ export function buildCredentialedRequestUrl(
   topicKey: string | null
 ): string {
   const url = new URL(connection.endpoint);
-  const topicValues =
-    (topicKey !== null ? connection.topicQuery[topicKey] : undefined) ??
-    connection.topicQuery.default;
+  // hasOwnProperty, not a plain index read: a topic key of "constructor" or "__proto__" would
+  // otherwise find something inherited from Object.prototype, and the request would silently go
+  // out with no topic values instead of the connection's own default set.
+  const declaredTopic =
+    topicKey !== null && Object.prototype.hasOwnProperty.call(connection.topicQuery, topicKey)
+      ? connection.topicQuery[topicKey]
+      : undefined;
+  const topicValues = declaredTopic ?? connection.topicQuery.default;
   if (!topicValues) {
     // The registry validator rejects a connection with no default set, so reaching this means
     // the declaration was built past that check. Refuse rather than send a bare endpoint.
@@ -83,9 +96,10 @@ async function fetchSanitizedItems(
   topicKey: string | null
 ): Promise<SanitizedPublisherItem[]> {
   const apiKey = typeof ctx.apiKey === "string" ? ctx.apiKey.trim() : "";
-  if (apiKey.length === 0) {
-    // No request is attempted: an unauthenticated fallback would quietly change who the
-    // publisher thinks is asking, and would look like success to everything downstream.
+  if (apiKey.length === 0 || !SAFE_HEADER_VALUE.test(apiKey)) {
+    // No request is attempted, for a missing key or a malformed one. An unauthenticated fallback
+    // would quietly change who the publisher thinks is asking, and would look like success to
+    // everything downstream.
     throw new CredentialedPublisherError("temporarily_unavailable");
   }
 
