@@ -21,6 +21,29 @@ const TIMEOUT_CODES = new Set([
   "UND_ERR_BODY_TIMEOUT"
 ]);
 
+/**
+ * Plain-English text for each cause, as the USER will eventually read it.
+ *
+ * The cause ids above are operator vocabulary and stay in the structured log, but the string this
+ * maps to is handed to the language model as the tool's error text, and a model will happily
+ * repeat that text back to the user word for word. "upstream_connection_refused" in a chat reply
+ * is internal jargon leaking to a non-technical reader, so the visible half is written in ordinary
+ * words while the loggable half stays machine-readable. Deliberately vague about WHICH service:
+ * naming the dependency would start leaking infrastructure detail into chat, which is exactly what
+ * this whole path exists to prevent.
+ */
+const CAUSE_TEXT: Record<ToolDependencyCause, string> = {
+  upstream_connection_refused: "could not connect to a service it needs",
+  upstream_unreachable: "could not reach a service it needs",
+  upstream_timeout: "a service it needs did not respond in time",
+  upstream_http_error: "a service it needs returned an error"
+};
+
+/** The user-visible half of a classified cause. Never includes the cause id itself. */
+export function describeToolDependencyCause(cause: ToolDependencyCause): string {
+  return CAUSE_TEXT[cause];
+}
+
 interface SafeErrorFields {
   code?: unknown;
   name?: unknown;
@@ -35,13 +58,21 @@ interface SafeErrorFields {
  * regardless of try/catch, so the brand check must happen before this, not instead of it.
  */
 function classifyBrandedFields(fields: SafeErrorFields): ToolDependencyCause | null {
-  const code = typeof fields.code === "string" ? fields.code : undefined;
-  const name = typeof fields.name === "string" ? fields.name : undefined;
+  // Each field is read into a local ONCE. A subclass of Error may define any of these as a getter,
+  // and a getter is code the dependency chose to run; reading twice would run it twice and would
+  // also let the value change between the type check and its use.
+  const rawCode = fields.code;
+  const rawName = fields.name;
+  const rawStatusCode = fields.statusCode;
+  const rawStatus = fields.status;
+
+  const code = typeof rawCode === "string" ? rawCode : undefined;
+  const name = typeof rawName === "string" ? rawName : undefined;
   const status =
-    typeof fields.statusCode === "number"
-      ? fields.statusCode
-      : typeof fields.status === "number"
-        ? fields.status
+    typeof rawStatusCode === "number"
+      ? rawStatusCode
+      : typeof rawStatus === "number"
+        ? rawStatus
         : undefined;
 
   if (code !== undefined && CONNECTION_REFUSED_CODES.has(code))

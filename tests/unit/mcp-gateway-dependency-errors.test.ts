@@ -6,8 +6,9 @@ import type { MossModuleManifest, ModuleAssistantToolManifest } from "@moss/modu
 
 const TOOL_NAME = "notes.search";
 
-function manifestWithFirstPartyTool(
-  execute: ModuleAssistantToolManifest["execute"]
+function manifestWithTool(
+  execute: ModuleAssistantToolManifest["execute"],
+  isExternal = false
 ): MossModuleManifest {
   return {
     id: "notes",
@@ -22,7 +23,7 @@ function manifestWithFirstPartyTool(
         description: "Search notes.",
         permissionId: "notes.search",
         risk: "read",
-        isExternal: false,
+        isExternal,
         execute
       }
     ]
@@ -30,14 +31,15 @@ function manifestWithFirstPartyTool(
 }
 
 async function callWithThrow(
-  thrown: unknown
+  thrown: unknown,
+  isExternal = false
 ): Promise<Awaited<ReturnType<AssistantToolGateway["callTool"]>>> {
   const tokens = new SessionTokenRegistry();
   const gateway = new AssistantToolGateway({
     resolveActiveModules: async () => [
-      manifestWithFirstPartyTool(async () => {
+      manifestWithTool(async () => {
         throw thrown;
-      })
+      }, isExternal)
     ],
     repository: { insertActionAuditLog: async () => undefined } as never,
     runner: {
@@ -61,20 +63,26 @@ describe("first-party tool dependency-failure classification (#1883)", () => {
     const result = await callWithThrow(thrown);
     expect(result).toEqual({
       ok: false,
-      error: `Tool ${TOOL_NAME} failed (upstream_connection_refused)`
+      error: `Tool ${TOOL_NAME} failed: could not connect to a service it needs.`
     });
   });
 
   it("classifies an HttpError by statusCode", async () => {
     const thrown = new HttpError(503, "Service Unavailable");
     const result = await callWithThrow(thrown);
-    expect(result).toEqual({ ok: false, error: `Tool ${TOOL_NAME} failed (upstream_http_error)` });
+    expect(result).toEqual({
+      ok: false,
+      error: `Tool ${TOOL_NAME} failed: a service it needs returned an error.`
+    });
   });
 
   it("classifies an AbortError as a timeout", async () => {
     const thrown = Object.assign(new Error("aborted"), { name: "AbortError" });
     const result = await callWithThrow(thrown);
-    expect(result).toEqual({ ok: false, error: `Tool ${TOOL_NAME} failed (upstream_timeout)` });
+    expect(result).toEqual({
+      ok: false,
+      error: `Tool ${TOOL_NAME} failed: a service it needs did not respond in time.`
+    });
   });
 
   it("leaves an unclassifiable error at the unchanged generic message", async () => {
@@ -136,6 +144,121 @@ describe("first-party tool dependency-failure classification (#1883)", () => {
       const serialized = JSON.stringify(result);
       expect(serialized).not.toContain("boom");
       expect(serialized).not.toContain("handler-secret-sentinel");
+    });
+  });
+  describe("the other side of the first-party gate", () => {
+    // The classification only ever runs for isExternal === false. Nothing tested the inverse, so
+    // an inverted condition would have shipped silently and started handing third-party module
+    // error detail to users. These pin the external path to the unchanged generic message.
+    it("gives a third-party (isExternal: true) tool the plain generic message", async () => {
+      const thrown = Object.assign(new TypeError("fetch failed"), {
+        cause: Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNREFUSED" })
+      });
+      const result = await callWithThrow(thrown, true);
+      expect(result).toEqual({ ok: false, error: `Tool ${TOOL_NAME} failed` });
+      expect(JSON.stringify(result)).not.toContain("could not connect");
+    });
+
+    it("gives a third-party tool the generic message for an HTTP status failure too", async () => {
+      const result = await callWithThrow(new HttpError(503, "Service Unavailable"), true);
+      expect(result).toEqual({ ok: false, error: `Tool ${TOOL_NAME} failed` });
+    });
+  });
+
+  describe("an error subclass that runs code when its fields are read", () => {
+    // isNativeError() accepts a subclass of Error, and a subclass can define `code` as a getter.
+    // Trusting a first-party dependency that far is deliberate, but it was untested. These pin
+    // what actually happens: the getter runs, it runs a bounded number of times, and whatever it
+    // does cannot crash the request or push its own text into the reply.
+    class SideEffectError extends Error {
+      static reads = 0;
+      get code(): string {
+        SideEffectError.reads += 1;
+        return "ECONNREFUSED";
+      }
+    }
+
+    class ThrowingFieldError extends Error {
+      get code(): string {
+        throw new Error("side-effect-secret-sentinel");
+      }
+    }
+
+    it("reads a getter-backed code at most twice and still classifies it", async () => {
+      SideEffectError.reads = 0;
+      const result = await callWithThrow(new SideEffectError("boom"));
+      expect(result).toEqual({
+        ok: false,
+        error: `Tool ${TOOL_NAME} failed: could not connect to a service it needs.`
+      });
+      // Once for the response classification, once for the safe-name/log read at most.
+      expect(SideEffectError.reads).toBeLessThanOrEqual(2);
+      expect(SideEffectError.reads).toBeGreaterThan(0);
+    });
+
+    it("contains a throwing getter: generic message, no crash, nothing of its text in the reply", async () => {
+      const result = await callWithThrow(new ThrowingFieldError("boom"));
+      expect(result).toEqual({ ok: false, error: `Tool ${TOOL_NAME} failed` });
+      const serialized = JSON.stringify(result);
+      expect(serialized).not.toContain("side-effect-secret-sentinel");
+      expect(serialized).not.toContain("boom");
+    });
+  });
+
+  describe("odd and conflicting field shapes", () => {
+    it("treats an absurdly large status number as an upstream HTTP error", async () => {
+      const thrown = Object.assign(new Error("weird"), { statusCode: Number.MAX_SAFE_INTEGER });
+      const result = await callWithThrow(thrown);
+      expect(result).toEqual({
+        ok: false,
+        error: `Tool ${TOOL_NAME} failed: a service it needs returned an error.`
+      });
+    });
+
+    it("ignores a status that is not a number", async () => {
+      const thrown = Object.assign(new Error("weird"), { statusCode: "503", status: "503" });
+      const result = await callWithThrow(thrown);
+      expect(result).toEqual({ ok: false, error: `Tool ${TOOL_NAME} failed` });
+    });
+
+    it("ignores a sub-400 status", async () => {
+      const thrown = Object.assign(new Error("weird"), { statusCode: 204 });
+      const result = await callWithThrow(thrown);
+      expect(result).toEqual({ ok: false, error: `Tool ${TOOL_NAME} failed` });
+    });
+
+    it("prefers the top-level code when it disagrees with the cause", async () => {
+      const thrown = Object.assign(new Error("outer"), {
+        code: "ETIMEDOUT",
+        cause: Object.assign(new Error("inner"), { code: "ECONNREFUSED" })
+      });
+      const result = await callWithThrow(thrown);
+      expect(result).toEqual({
+        ok: false,
+        error: `Tool ${TOOL_NAME} failed: a service it needs did not respond in time.`
+      });
+    });
+
+    it("falls through to the cause when the top level classifies to nothing", async () => {
+      const thrown = Object.assign(new Error("outer"), {
+        code: "ENOENT",
+        cause: Object.assign(new Error("inner"), { code: "ECONNREFUSED" })
+      });
+      const result = await callWithThrow(thrown);
+      expect(result).toEqual({
+        ok: false,
+        error: `Tool ${TOOL_NAME} failed: could not connect to a service it needs.`
+      });
+    });
+
+    it("does not look past the first cause", async () => {
+      const thrown = Object.assign(new Error("outer"), {
+        cause: Object.assign(new Error("middle"), {
+          cause: Object.assign(new Error("inner"), { code: "ECONNREFUSED" })
+        })
+      });
+      const result = await callWithThrow(thrown);
+      expect(result).toEqual({ ok: false, error: `Tool ${TOOL_NAME} failed` });
     });
   });
 });

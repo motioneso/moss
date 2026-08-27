@@ -17,7 +17,11 @@ import { summarizeAssistantToolInput } from "../assistant-tools.js";
 import { AiRepository, type InsertAuditLogInput } from "../repository.js";
 import { AutoRunRateLimiter } from "./auto-run-rate-limit.js";
 import type { ConfirmationRegistry } from "./confirmation-registry.js";
-import { classifyToolDependencyFailure, safeErrorName } from "./dependency-failure.js";
+import {
+  classifyToolDependencyFailure,
+  describeToolDependencyCause,
+  safeErrorName
+} from "./dependency-failure.js";
 import { validateToolInput } from "./input-validation.js";
 import { renderAndCap, sanitizeAssistantToolResult } from "./output-validation.js";
 import { resolvePolicy } from "./policy.js";
@@ -657,8 +661,10 @@ export class AssistantToolGateway {
       return {
         response: {
           ok: false,
+          // The cause id goes in the log above; the chat gets ordinary words. The model is free to
+          // repeat this text to the user, so it must already read like something a person wrote.
           error: cause
-            ? `Tool ${found.dto.name} failed (${cause})`
+            ? `Tool ${found.dto.name} failed: ${describeToolDependencyCause(cause)}.`
             : `Tool ${found.dto.name} failed`
         },
         moduleReportedErrorClass: null

@@ -7,7 +7,7 @@
         {
           "tool": "notes.search",
           "arguments": { "query": "UAT-1883-VAULT-SEARCH" },
-          "expectedError": "Tool notes.search failed (upstream_connection_refused)"
+          "expectedError": "Tool notes.search failed: could not connect to a service it needs."
         }
       ],
       "reply": "I couldn't search your notes right now - that service looks unavailable."

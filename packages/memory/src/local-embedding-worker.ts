@@ -3,6 +3,7 @@ import { parentPort } from "node:worker_threads";
 import { env as transformersEnv, pipeline } from "@huggingface/transformers";
 
 import { withEmbeddingCacheLoadLock } from "./embedding-cache-lock.js";
+import { applyTransformersCacheDir } from "./transformers-cache-dir.js";
 
 interface ExtractPipe {
   (text: string, options: Record<string, unknown>): Promise<{ data: Float32Array }>;
@@ -22,6 +23,9 @@ export function loadEmbeddingWorkerPipe(modelId: string): Promise<ExtractPipe> {
   const cached = pipeCache.get(modelId);
   if (cached) return cached;
 
+  // Must run before the cache dir is read: the library's default is unwritable in the
+  // container and the resulting EACCES is indistinguishable from an ordinary bug (#1883).
+  applyTransformersCacheDir(transformersEnv);
   const loading = withEmbeddingCacheLoadLock(transformersEnv.cacheDir, modelId, () =>
     Promise.resolve(
       pipeline("feature-extraction", modelId, {
