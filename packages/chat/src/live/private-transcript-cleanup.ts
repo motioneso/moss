@@ -57,10 +57,7 @@ export async function readGeminiSessionIdentity(
  * style suffix when two folders collide. `~/.gemini/projects.json` is the only place the mapping
  * exists, so a purge has to read it. Shape: `{ "projects": { "<absolute dir>": "<short id>" } }`.
  */
-export function parseGeminiProjectShortId(
-  registryJson: string,
-  neutralDir: string
-): string | null {
+export function parseGeminiProjectShortId(registryJson: string, neutralDir: string): string | null {
   const registry = parseGeminiRegistry(registryJson);
   if (registry === null) return null;
   const shortId = registry.projects[neutralDir];

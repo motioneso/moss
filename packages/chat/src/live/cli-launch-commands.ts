@@ -17,7 +17,6 @@ import type { AiProviderExecutionMode } from "@moss/shared";
 
 import { modelOverrideFlag, shellQuote } from "./cli-engine-helpers.js";
 import { writeClaudePermissionHook } from "./claude-permission-hook.js";
-import { AGY_SESSION_LOG_FILENAME } from "./private-transcript-cleanup.js";
 import type { EngineLaunchOpts } from "./types.js";
 import { vaultReadOnlyToolPatterns } from "./vault-allowlist.js";
 
@@ -53,7 +52,7 @@ export async function buildLaunchCommand(
     case "openai-compatible":
       return buildCodexCommand(ctx, opts);
     case "google":
-      return buildGeminiCommand(opts);
+      return buildGeminiCommand(opts, sessionId);
   }
 }
 
@@ -160,17 +159,37 @@ function buildCodexCommand(ctx: LaunchCommandContext, opts: EngineLaunchOpts): s
   return parts.join(" ");
 }
 
-function buildGeminiCommand(opts: EngineLaunchOpts): string {
-  // Token is already injected via .gemini/settings.json Authorization header — no env var needed.
+/**
+ * #2028 — the interactive Google launch line, built for `@google/gemini-cli@0.57.0`, the version
+ * pinned in the cli-runner catalog. It previously launched `agy` (Antigravity) with flags that
+ * version has never had, so no Google chat session could ever have started.
+ *
+ * Flag by flag, each one measured against `gemini --help` on the pinned version:
+ *
+ *   - `--session-id <uuid>` opens the conversation under the id we generate, which is what makes
+ *     the conversation purgeable by name later. `--resume <uuid>` continues one; the CLI refuses
+ *     to start if both are passed, so the launch line only ever carries `--session-id`.
+ *   - `--skip-trust` is required. Each session gets a freshly created folder, and the CLI treats
+ *     an unfamiliar folder as untrusted, which silently downgrades the approval mode back to
+ *     "default" and then blocks on a prompt no web user can answer.
+ *   - `--approval-mode` replaces the old `--mode`: `auto_edit` when the session may write to the
+ *     workspace, `default` when it may not.
+ *   - There is no `--log-file` and no `--sandbox` on this CLI. The reply is read from the CLI's
+ *     own saved state, never from a log file we asked it to write.
+ *
+ * Token is already injected via .gemini/settings.json Authorization header — no env var needed.
+ */
+function buildGeminiCommand(opts: EngineLaunchOpts, sessionId: string): string {
   const parts = [
     `cd ${shellQuote(opts.neutralDir)} &&`,
-    "agy",
-    "--sandbox",
-    ...(opts.workspaceWrite ? ["--mode", "accept-edits"] : []),
-    "--log-file",
-    shellQuote(join(opts.neutralDir, AGY_SESSION_LOG_FILENAME))
+    "gemini",
+    "--session-id",
+    sessionId,
+    "--skip-trust",
+    "--approval-mode",
+    opts.workspaceWrite ? "auto_edit" : "default"
   ];
-  const modelFlag = modelOverrideFlag(opts); // agy accepts --model
+  const modelFlag = modelOverrideFlag(opts); // gemini accepts --model
   if (modelFlag) parts.push(modelFlag);
   return parts.join(" ");
 }
@@ -228,8 +247,11 @@ export async function writeGeminiSettings(io: TmuxIo, opts: EngineLaunchOpts): P
         timeout: 180000
       }
     },
-    tools: { core: [] as string[] },
-    security: { disableYoloMode: true }
+    // An empty `core` list is an allowlist that matches nothing, so the CLI registers none of its
+    // own built-in tools — the only tools this session gets are the Jarv1s ones above. #2028 also
+    // removed `security.disableYoloMode` from here: the pinned CLI refuses to start when that
+    // setting is on and the launch line asks for an automatic approval mode.
+    tools: { core: [] as string[] }
   };
   const path = join(settingsDir, "settings.json");
   await io.writeFile(path, JSON.stringify(settings, null, 2));

@@ -72,7 +72,7 @@ Everything below was measured against the real tool, version 0.57.0, installed a
    `packages/ai/src/model-discovery.ts`. Both files currently carry a note saying Google is
    deliberately absent - replace those notes. Some tests assert Google is absent; update them.
 4. Wrap up: format check, lint, typecheck, each written as `<command> > /tmp/x.log 2>&1;
-   echo "EXIT=$?"` with no pipe. Rebase on `origin/main`. Full gate **only** through the
+echo "EXIT=$?"` with no pipe. Rebase on `origin/main`. Full gate **only** through the
    `verify-gate` skill - an unscoped run hits the live development database. Push, open the pull
    request, run `node scripts/append-release-note.mjs --pr <number>` and commit the result, then
    `node /home/ben/jarv1s-fleet/fleetctl.mjs set 2028 status=pr-open pr=<number>`.

@@ -20,14 +20,14 @@ and ran it. Everything below is from that run or from the package's own source, 
 
 Confirmed against `gemini --help` on the pinned version:
 
-| What the code uses today | What the pinned tool has |
-| --- | --- |
-| command `agy` | command `gemini` |
-| `--print` | `-p, --prompt <text>` |
-| `--conversation <uuid>` | `--session-id <uuid>` first turn, `--resume <uuid>` after |
-| `--log-file <path>` | nothing — use `-o stream-json` on standard output |
+| What the code uses today         | What the pinned tool has                                  |
+| -------------------------------- | --------------------------------------------------------- |
+| command `agy`                    | command `gemini`                                          |
+| `--print`                        | `-p, --prompt <text>`                                     |
+| `--conversation <uuid>`          | `--session-id <uuid>` first turn, `--resume <uuid>` after |
+| `--log-file <path>`              | nothing — use `-o stream-json` on standard output         |
 | `--dangerously-skip-permissions` | `--approval-mode default\|auto_edit\|yolo\|plan`, or `-y` |
-| `--mode accept-edits` | `--approval-mode auto_edit` |
+| `--mode accept-edits`            | `--approval-mode auto_edit`                               |
 
 `--resume` accepts `latest`, a full UUID, or a 1-based index — the UUID form is what we need, and
 it is real (`chunk-GPOBVDAD.js:10112`, `findSession` matches on `session.id`). The tool refuses to
@@ -153,17 +153,17 @@ says. No prompt guidance is added by this change.
 
 ## Seams — every capability this plan leans on, cited
 
-| Assumed | Cited |
-| --- | --- |
-| Google is installable, pinned and checksummed | `packages/cli-runner/src/catalog.ts:151` |
-| Google has a sign-in adapter | `packages/cli-runner/src/login-adapters.ts` (`google` entry) |
-| Readiness already runs the real `gemini --prompt` | `packages/chat/src/live/provider-probe.ts:81` |
-| `gemini` already accepted as an installed-command name | `packages/ai/src/cli-availability.ts:33` |
-| Settings already offers Google in the provider list | `apps/web/src/settings/settings-ai-admin-pane.tsx:69` |
-| New provider rows default to one-shot | `packages/ai/src/repository.ts:391` |
-| One-shot Google sessions reach the one-shot engine | `packages/chat/src/live/engine-selection.ts:89` |
-| Model names inferred for Google, tier included | `packages/ai/src/model-discovery.ts` (`inferModel`, `inferTierFromModelId`) |
-| Auto-register is data-driven per provider | `packages/ai/src/auto-register.ts:55` |
+| Assumed                                                | Cited                                                                       |
+| ------------------------------------------------------ | --------------------------------------------------------------------------- |
+| Google is installable, pinned and checksummed          | `packages/cli-runner/src/catalog.ts:151`                                    |
+| Google has a sign-in adapter                           | `packages/cli-runner/src/login-adapters.ts` (`google` entry)                |
+| Readiness already runs the real `gemini --prompt`      | `packages/chat/src/live/provider-probe.ts:81`                               |
+| `gemini` already accepted as an installed-command name | `packages/ai/src/cli-availability.ts:33`                                    |
+| Settings already offers Google in the provider list    | `apps/web/src/settings/settings-ai-admin-pane.tsx:69`                       |
+| New provider rows default to one-shot                  | `packages/ai/src/repository.ts:391`                                         |
+| One-shot Google sessions reach the one-shot engine     | `packages/chat/src/live/engine-selection.ts:89`                             |
+| Model names inferred for Google, tier included         | `packages/ai/src/model-discovery.ts` (`inferModel`, `inferTierFromModelId`) |
+| Auto-register is data-driven per provider              | `packages/ai/src/auto-register.ts:55`                                       |
 
 Open question, owner Ben: **there is no signed-in Google account on this machine.**
 `~/.gemini/google_accounts.json` reads `"active": null` and there are no stored credentials. The
@@ -189,18 +189,20 @@ export interface GeminiPrintChatEngineOpts {
   readonly homeBase?: string;
   readonly sessionId?: string;
 }
-export class GeminiPrintChatEngine implements CliChatEngine { /* provider = "google" */ }
+export class GeminiPrintChatEngine implements CliChatEngine {
+  /* provider = "google" */
+}
 ```
 
 Tests, in `tests/unit/gemini-print-chat-engine.test.ts`:
 
 - First turn's command contains `gemini`, `-p`, `--session-id <uuid>`, `-o stream-json`,
   `--approval-mode yolo`, `--skip-trust`, and sets `TMPDIR` to the session folder.
-  *Fails against today's code because the command says `agy --print --conversation`.*
+  _Fails against today's code because the command says `agy --print --conversation`._
 - Second turn's command contains `--resume <the same uuid>` and does **not** contain
-  `--session-id`. *Fails if someone passes both, which the tool refuses to start on.*
+  `--session-id`. _Fails if someone passes both, which the tool refuses to start on._
 - No command built anywhere under `packages/` begins with `agy`. A grep-style guard test.
-  *This is the test that catches the whole class of bug; it fails today in five places.*
+  _This is the test that catches the whole class of bug; it fails today in five places._
 
 ### Task 2 — reading the reply
 
@@ -211,8 +213,8 @@ line 49. Keep the exported signature of `parseTranscript` unchanged.
 Tests, in `tests/unit/transcript-reader-gemini.test.ts`, using a recorded sample of real output
 (`tests/fixtures/gemini-stream-json-sample.jsonl`, taken from the live run, not invented):
 
-- Several assistant chunks join into one reply in order. *Fails if a parser returns only the first
-  chunk — the most likely wrong implementation.*
+- Several assistant chunks join into one reply in order. _Fails if a parser returns only the first
+  chunk — the most likely wrong implementation._
 - The turn is not reported finished until the `result` event arrives.
 - A `result` with `status: "error"` finishes the turn and surfaces the message rather than hanging.
 - `tool_use` and `tool_result` become activity lines, not part of the reply text.
@@ -224,11 +226,15 @@ capture and folder purge with a purge keyed on the session's working folder.
 
 ```ts
 export async function readGeminiShortId(
-  io: Pick<TmuxIo, "readFile">, workingDir: string, homeBase?: string
+  io: Pick<TmuxIo, "readFile">,
+  workingDir: string,
+  homeBase?: string
 ): Promise<string | null>;
 
 export async function purgeGeminiConversation(
-  io: Pick<TmuxIo, "readFile" | "writeFile" | "run">, workingDir: string, homeBase?: string
+  io: Pick<TmuxIo, "readFile" | "writeFile" | "run">,
+  workingDir: string,
+  homeBase?: string
 ): Promise<boolean>;
 ```
 
@@ -239,8 +245,8 @@ reporting success.
 
 Tests in `tests/unit/private-transcript-cleanup.test.ts`:
 
-- All three locations are removed. *Fails if only the chats folder is removed, which is what the
-  current code's shape would tempt.*
+- All three locations are removed. _Fails if only the chats folder is removed, which is what the
+  current code's shape would tempt._
 - The registry entry for a **different** folder is left alone.
 - A removal that fails makes the purge report failure, never success.
 

@@ -65,15 +65,15 @@ import {
   writeGeminiSettings
 } from "./cli-launch-commands.js";
 import {
-  captureAgyConversationIdentity,
   codexTranscriptMatchesIdentity,
   codexTranscriptPath,
   parseCodexSessionUuid,
   persistCodexSessionIdentity,
-  purgeAgyBrainDir,
+  persistGeminiSessionIdentity,
   purgeCodexTranscript,
+  purgeGeminiConversation,
   readCodexSessionIdentity,
-  readAgyConversationIdentity
+  readGeminiSessionIdentity
 } from "./private-transcript-cleanup.js";
 import type {
   ChatRecordKind,
@@ -155,8 +155,8 @@ export class CliChatEngineImpl implements CliChatEngine {
   private codexExec: CodexExecSession | null = null;
   private codexExecLogicalAlive = false;
   private codexSessionUuid: string | null = null;
-  private agyConversationUuid: string | null = null;
-  private agyHasSubmitted = false;
+  private geminiSessionUuid: string | null = null;
+  private geminiHasSubmitted = false;
 
   constructor(
     public readonly provider: ProviderKind,
@@ -208,13 +208,14 @@ export class CliChatEngineImpl implements CliChatEngine {
   async launch(opts: EngineLaunchOpts): Promise<{ offset: number }> {
     // Generate the session id up front. For Claude this also pins the transcript
     // filename (`--session-id`), so no fragile newest-file globbing is needed there.
-    // Codex/AGY don't accept our session-id, so launch must capture their exact
-    // provider identity before a private turn can proceed.
+    // #2028 — the Gemini CLI takes the same flag, so Google gets the same treatment: the
+    // conversation is named by an id we chose before it exists. Only Codex refuses our id, so it
+    // alone still has to capture its provider identity before a private turn can proceed.
     const sessionId = randomUUID();
     this.neutralDir = opts.neutralDir;
     this.codexSessionUuid = null;
-    this.agyConversationUuid = null;
-    this.agyHasSubmitted = false;
+    this.geminiSessionUuid = this.provider === "google" ? sessionId : null;
+    this.geminiHasSubmitted = false;
 
     // ── PRE-mux-create setup (persona + per-provider secret files) ──────────────
     // Any failure here is a PRE-mux-create failure: no mux session exists yet, so
@@ -342,7 +343,7 @@ export class CliChatEngineImpl implements CliChatEngine {
         cause: redactCause(err)
       });
     }
-    if (this.provider === "google") this.agyHasSubmitted = true;
+    if (this.provider === "google") this.geminiHasSubmitted = true;
   }
 
   async verifiedSubmit(opts: VerifiedSubmitOpts): Promise<void> {
@@ -451,14 +452,6 @@ export class CliChatEngineImpl implements CliChatEngine {
       throw new Error("CliChatEngineImpl.readNew called before launch()");
     }
 
-    if (
-      this.provider === "google" &&
-      this.agyConversationUuid === null &&
-      this.neutralDir !== null
-    ) {
-      this.agyConversationUuid = await captureAgyConversationIdentity(this.io, this.neutralDir);
-    }
-
     const path = await this.resolveTranscriptPath();
     if (path === null) {
       // Provider transcript not created yet — keep the caller's offset.
@@ -529,16 +522,21 @@ export class CliChatEngineImpl implements CliChatEngine {
     }
 
     if (this.provider === "google") {
+      // #2028 — the Gemini CLI names its own state directories by a short id derived from the
+      // session folder, not by our session UUID, so the purge is keyed on the folder. The UUID is
+      // still required here: its absence means launch never got far enough to write the marker,
+      // and if a turn was nonetheless submitted that is a purge we cannot prove, so it fails loud.
       const uuid =
-        this.agyConversationUuid ??
-        (this.neutralDir ? await readAgyConversationIdentity(this.io, this.neutralDir) : null);
+        this.geminiSessionUuid ??
+        (this.neutralDir ? await readGeminiSessionIdentity(this.io, this.neutralDir) : null);
       if (uuid === null) {
-        if (this.agyHasSubmitted)
-          throw new Error("AGY conversation identity unavailable for purge");
+        if (this.geminiHasSubmitted)
+          throw new Error("Gemini session identity unavailable for purge");
         return;
       }
-      if (!(await purgeAgyBrainDir(this.io, uuid, this.homeBase))) {
-        throw new Error("Could not purge AGY conversation transcript");
+      if (this.neutralDir === null) return;
+      if (!(await purgeGeminiConversation(this.io, this.neutralDir, this.homeBase))) {
+        throw new Error("Could not purge Gemini conversation transcript");
       }
       return;
     }
@@ -605,7 +603,9 @@ export class CliChatEngineImpl implements CliChatEngine {
     // Missing Codex identity is never authority to fall back to a newest/cwd heuristic.
     if (this.provider === "openai-compatible") return null;
 
-    // Legacy Google reader only; production interactive AGY uses its exact own-log UUID for purge.
+    // #2028 — only the long-lived multiplexer path reaches here for Google, and its directory
+    // name is a guess (see transcriptGlobDir). The one-shot engine Google chat actually runs
+    // reads the reply from the process output instead and never calls this.
     const listed = await this.io.run("ls", ["-t", this.transcriptDir]);
     this.throwIfCanceled(signal);
     if (listed.code !== 0) return null;
@@ -635,14 +635,17 @@ export class CliChatEngineImpl implements CliChatEngine {
     }
     if (this.provider !== "google" || this.neutralDir === null) return;
 
+    // #2028 — nothing to scrape out of a pane any more: the launch line already opened the
+    // conversation under `this.geminiSessionUuid`. Wait for the CLI to be ready, then write the
+    // marker so a crash mid-turn still leaves the boot sweep a pointer to this session's state.
     const ready = await this.observePane(
       handle,
       (pane) => isComposerEmpty(this.provider, pane),
       new AbortController().signal
     );
     if (!ready) throw new VerifiedSubmitError("unavailable");
-    this.agyConversationUuid = await captureAgyConversationIdentity(this.io, this.neutralDir);
-    if (this.agyConversationUuid === null) throw new VerifiedSubmitError("unavailable");
+    if (this.geminiSessionUuid === null) throw new VerifiedSubmitError("unavailable");
+    await persistGeminiSessionIdentity(this.io, this.neutralDir, this.geminiSessionUuid);
   }
 
   private async ensureCodexSessionIdentity(handle: MuxHandle, signal: AbortSignal): Promise<void> {
@@ -843,8 +846,9 @@ export class CliChatEngineImpl implements CliChatEngine {
     }
 
     if (this.provider === "google") {
-      // AGY's production transcript schema is not the dead Gemini CLI reader schema. Keep its
-      // existing path until that separately adjudicated reader bug has its own approved scope.
+      // #2028 — the long-lived Google path replays with a plain submit rather than a verified
+      // one: verification reads the pane, and this path's transcript location is a guess. Google
+      // chat runs one-shot in practice, so this branch is kept honest rather than proven.
       await this.submit(replayBatch);
     } else {
       const controller = new AbortController();
