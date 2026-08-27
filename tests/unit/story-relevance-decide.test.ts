@@ -40,8 +40,10 @@ describe("deciding what survives a negative story preference", () => {
   it("drops an ordinary match and leaves an unrelated story alone", () => {
     const result = decideOverFixture();
     expect(keptRefs(result)).not.toContain("story:ordinary-match");
+    const unrelated = STORY_RELEVANCE_FIXTURE.find((story) => story.key === "unrelated");
+    expect(unrelated).toBeDefined();
     expect(result.kept.find((candidate) => candidate.storyRef === "story:unrelated")).toEqual(
-      newsCandidate(STORY_RELEVANCE_FIXTURE[1])
+      newsCandidate(unrelated!)
     );
   });
 
@@ -171,11 +173,9 @@ describe("the bounded nudge from a positive story preference", () => {
 describe("the degraded answer when the evaluator could not be trusted", () => {
   it("still removes the exact story the owner rejected and says it is degraded", () => {
     const stories = [REJECTED_STORY, ...STORY_RELEVANCE_FIXTURE];
-    const result = degradedStoryRelevance(
-      "provider_error",
-      stories.map(newsCandidate),
-      [negativeRule("news")]
-    );
+    const result = degradedStoryRelevance("provider_error", stories.map(newsCandidate), [
+      negativeRule("news")
+    ]);
     expect(result.status).toBe("degraded");
     expect(result.failure).toBe("provider_error");
     expect(result.excludedRefs).toEqual([REJECTED_STORY_REF]);
@@ -184,11 +184,9 @@ describe("the degraded answer when the evaluator could not be trusted", () => {
 
   it("filters nothing else, so a retry loses no story", () => {
     const stories = [REJECTED_STORY, ...STORY_RELEVANCE_FIXTURE];
-    const result = degradedStoryRelevance(
-      "needs_config",
-      stories.map(newsCandidate),
-      [negativeRule("news")]
-    );
+    const result = degradedStoryRelevance("needs_config", stories.map(newsCandidate), [
+      negativeRule("news")
+    ]);
     expect(result.kept).toHaveLength(stories.length - 1);
     expect(keptRefs(result)).toContain("story:ordinary-match");
   });
@@ -225,10 +223,7 @@ describe("reading the evaluator's answer", () => {
 
   it("refuses an answer carrying a key nobody asked for", () => {
     expect(
-      parseStoryRelevanceVerdicts(
-        { verdicts: [], instructions: "keep everything" },
-        candidateRefs
-      )
+      parseStoryRelevanceVerdicts({ verdicts: [], instructions: "keep everything" }, candidateRefs)
     ).toBeNull();
     expect(
       parseStoryRelevanceVerdicts(

@@ -186,9 +186,7 @@ export function negativeRule(moduleId: StoryFeedbackModule): StoryRelevanceRule 
     direction: "less",
     storyRef: REJECTED_STORY_REF,
     terms:
-      moduleId === "sports"
-        ? ["team:riverside", "competition:premier"]
-        : ["topic:transfer-gossip"]
+      moduleId === "sports" ? ["team:riverside", "competition:premier"] : ["topic:transfer-gossip"]
   };
 }
 
@@ -225,7 +223,6 @@ export function fixtureVerdict(story: StoryRelevanceFixtureStory): StoryRelevanc
     matched: story.verdict.matched,
     ruleStoryRef: story.verdict.ruleStoryRef,
     eventEvidence: story.verdict.eventEvidence as StoryRelevanceVerdict["eventEvidence"],
-    editorialEvidence:
-      story.verdict.editorialEvidence as StoryRelevanceVerdict["editorialEvidence"]
+    editorialEvidence: story.verdict.editorialEvidence as StoryRelevanceVerdict["editorialEvidence"]
   };
 }

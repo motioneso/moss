@@ -320,8 +320,8 @@ function boundedBoosts(
   const boosts: StoryRelevanceBoost[] = [];
   for (const candidates of liftable.values()) {
     const ordered = [...candidates].sort(
-      (left, right) => ageMillis(left, now) - ageMillis(right, now) ||
-        left.feedPosition - right.feedPosition
+      (left, right) =>
+        ageMillis(left, now) - ageMillis(right, now) || left.feedPosition - right.feedPosition
     );
     for (const candidate of ordered.slice(0, MAX_BOOSTED_PER_SUBJECT)) {
       boosts.push({ storyRef: candidate.storyRef, lift: STORY_RELEVANCE_BOOST });

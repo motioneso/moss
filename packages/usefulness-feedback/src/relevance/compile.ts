@@ -133,10 +133,7 @@ export function compileStoryRelevanceRule(
  * is the empty object every row saved before this change carries, it is malformed, or it was built
  * by an older version. Such a row is rebuilt on read and written back.
  */
-export function storyRelevanceRuleNeedsRecompile(
-  value: unknown,
-  version: number | null
-): boolean {
+export function storyRelevanceRuleNeedsRecompile(value: unknown, version: number | null): boolean {
   if (version === null || version < STORY_RELEVANCE_RULE_VERSION) return true;
   if (!isStoryRelevanceRule(value)) return true;
   return value.version < STORY_RELEVANCE_RULE_VERSION;
