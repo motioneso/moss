@@ -18,7 +18,11 @@ import {
   previewNewsSourceSchema,
   triggerNewsRefreshSchema,
   triggerNewsRevalidationSchema,
-  updateNewsTopicSchema
+  updateNewsTopicSchema,
+  connectNewsCredentialedSourceSchema,
+  listNewsSourceCredentialsSchema,
+  replaceNewsSourceCredentialSchema,
+  revokeNewsSourceCredentialSchema
 } from "@moss/shared";
 
 import { newsTopHeadlinesTodayExecute } from "./briefing-tool.js";
@@ -77,7 +81,9 @@ export const newsModuleManifest = {
       "sql/0159_news_personalization.sql",
       "sql/0160_news_discovery.sql",
       // #975 Slice 4 — column-scoped worker UPDATE grants for provider-change revalidation.
-      "sql/0161_news_revalidation.sql"
+      "sql/0161_news_revalidation.sql",
+      // #2005 (part of #950) — owner-only encrypted publisher credentials.
+      "sql/0200_news_source_credentials.sql"
     ],
     migrationDirectories: ["packages/news/sql"],
     ownedTables: [
@@ -88,7 +94,9 @@ export const newsModuleManifest = {
       "app.news_source_exclusions",
       "app.news_compilation_snapshots",
       "app.news_refresh_state",
-      "app.news_policy_verdicts"
+      "app.news_policy_verdicts",
+      // #2005 — owner-only FORCE RLS, no worker grant (see 0200).
+      "app.news_source_credentials"
     ]
   },
   navigation: [
@@ -130,6 +138,16 @@ export const newsModuleManifest = {
         "Create and delete the active actor's own news source and topic preferences, including excluded publisher domains.",
       scope: "user",
       actions: ["create", "delete"]
+    },
+    {
+      // #2005: deliberately NOT news.prefs. The assistant tools are declared under
+      // news.prefs, so credential routes sit behind a permission no assistant tool holds.
+      id: "news.credentials",
+      label: "Manage news publisher keys",
+      description:
+        "Add, replace, and revoke the active actor's own publisher access keys for news sources.",
+      scope: "user",
+      actions: ["create", "update", "delete"]
     }
   ],
   routes: [
@@ -240,6 +258,33 @@ export const newsModuleManifest = {
       method: "GET",
       path: "/api/news/images/:articleId",
       permissionId: "news.view"
+    },
+    // #2005 publisher credentials. news.credentials, never news.prefs.
+    {
+      method: "POST",
+      path: "/api/news/sources/credentialed",
+      requestSchema: connectNewsCredentialedSourceSchema.body,
+      responseSchema: connectNewsCredentialedSourceSchema,
+      permissionId: "news.credentials"
+    },
+    {
+      method: "POST",
+      path: "/api/news/sources/:id/credential",
+      requestSchema: replaceNewsSourceCredentialSchema.body,
+      responseSchema: replaceNewsSourceCredentialSchema,
+      permissionId: "news.credentials"
+    },
+    {
+      method: "DELETE",
+      path: "/api/news/sources/:id/credential",
+      responseSchema: revokeNewsSourceCredentialSchema,
+      permissionId: "news.credentials"
+    },
+    {
+      method: "GET",
+      path: "/api/news/credentials",
+      responseSchema: listNewsSourceCredentialsSchema,
+      permissionId: "news.credentials"
     }
   ],
   assistantActionFamilies: [
@@ -446,7 +491,9 @@ export const newsModuleManifest = {
         { table: "app.news_source_exclusions" },
         { table: "app.news_compilation_snapshots" },
         { table: "app.news_refresh_state" },
-        { table: "app.news_policy_verdicts" }
+        { table: "app.news_policy_verdicts" },
+        // #2005 — credentials cascade with the user and with the parent source.
+        { table: "app.news_source_credentials" }
       ]
     }
   },

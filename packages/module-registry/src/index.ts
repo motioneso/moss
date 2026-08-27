@@ -292,6 +292,7 @@ import {
   newsModuleSqlMigrationDirectory,
   registerNewsJobWorkers,
   registerNewsRoutes,
+  createEmptyNewsPublisherConnectionPort,
   type NewsRoutesDependencies
 } from "@moss/news";
 import { assertValidFetchHosts, createDatasetClient, DatasetCache } from "@moss/datasets";
@@ -338,6 +339,7 @@ import {
   createPersistentRuntimeConfigLiveReader,
   type LiveChatMultiplexerStatus
 } from "./chat-multiplexer.js";
+import { createNewsCredentialCipherPort } from "./news-credential-cipher.js";
 import { buildOnboardingInstall } from "./onboarding-install.js";
 import { buildOnboardingLogin } from "./onboarding-login.js";
 
@@ -1927,6 +1929,11 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         discovery,
         boss: deps.boss,
         previewOverride,
+        // #2005: the composition root owns key resolution; News only holds the port.
+        credentialCipher: createNewsCredentialCipherPort(),
+        // #2005: no reviewed publisher connection exists yet, so every connect attempt
+        // answers "unsupported" until #2007 replaces this.
+        publisherConnections: createEmptyNewsPublisherConnectionPort(),
         // #953: news receives capability BOOLEANS only — model identity and key material stay
         // behind the AI/Settings public APIs; nothing secret crosses this seam.
         availability: {

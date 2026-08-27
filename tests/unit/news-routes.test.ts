@@ -242,6 +242,12 @@ function buildApp(
         work({} as DataContextDb)
     } as unknown as DataContextRunner,
     resolveAccessContext: overrides.resolveAccessContext ?? (async () => userA),
+    // #2005: these tests do not exercise the credential routes; the cipher is required
+    // only because the route guard forbids a declared-but-unregistered route.
+    credentialCipher: {
+      encrypt: () => ({ version: 1, algorithm: "aes-256-gcm", iv: "", tag: "", ciphertext: "" }),
+      decrypt: () => ({ apiKey: "unused" })
+    },
     repository: repo,
     personalizationRepository: personalization,
     availability: {

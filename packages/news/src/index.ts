@@ -3,6 +3,20 @@ export { registerNewsRoutes } from "./routes.js";
 // repository (same precedent as @moss/auth's hashPassword re-export for admin.ts).
 export { NewsPrefsRepository } from "./repository.js";
 export type { NewsRoutesDependencies, NewsPrefsWriter } from "./routes.js";
+// #2005: the two seams the composition root must satisfy, plus the repository so the
+// integration tests can exercise the real read/write path.
+export type { NewsCredentialCipherPort } from "./credential-cipher-port.js";
+export {
+  NewsCredentialRepository,
+  type NewsCredentialStatusRow,
+  type NewsCredentialStore
+} from "./credential-repository.js";
+export {
+  createEmptyNewsPublisherConnectionPort,
+  type NewsConnectionDescriptor,
+  type NewsCredentialValidationOutcome,
+  type NewsPublisherConnectionPort
+} from "./publisher-connection-port.js";
 export {
   NEWS_QUEUE_DEFINITIONS,
   NEWS_REFRESH_QUEUE,

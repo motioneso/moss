@@ -230,6 +230,9 @@ export function writeUatEnvFile(input: {
         // (resolveKeyring enforces >=32 bytes) — matches .github/workflows/ci.yml's convention.
         // Caught live by Task 7 (this plan predates #918 landing on main).
         "JARVIS_MODULE_CREDENTIAL_SECRET_KEY=22222222222222222222222222222222",
+        // #2005 — same boot-crash class as the line above: resolveKeyring throws at
+        // startup when this is missing outside development/test.
+        "JARVIS_NEWS_CREDENTIAL_SECRET_KEY=22222222222222222222222222222222",
         `JARVIS_CLI_RUNNER_RPC_SECRET=${UAT_CLI_RUNNER_RPC_SECRET}`,
         // #1883: this one chat script needs a real, local embedding provider so notes.search
         // actually calls out over the network and can hit a real connection failure — every other
