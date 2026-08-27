@@ -775,7 +775,9 @@ test.describe("publisher keys (#2008)", () => {
     await expect(page.getByText("News will stop using this key.")).toBeVisible();
     await page.getByRole("button", { name: "Yes, revoke" }).click();
 
-    await expect(page.getByText("Access revoked")).toBeVisible();
+    // Two things say "Access revoked" after this: the badge on the row, and the sentence the
+    // page shows back. Match the badge exactly so the check names one of them.
+    await expect(page.getByText("Access revoked", { exact: true })).toBeVisible();
     // The key form closes on success, so the confirmation has to be shown by the page itself.
     await expect(page.getByText("Add a new key to reconnect this source.")).toBeVisible();
   });
