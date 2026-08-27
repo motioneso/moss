@@ -35,9 +35,14 @@ export function neutralizeSeedFraming(text: string): string {
 // markdown header hashes or blockquote/list decoration (which may repeat/nest, e.g. "> > " or
 // 7+ hashes), so an attacker-embedded fake transcript turn ("\n\nUser: ...\nAssistant: ...") or a
 // spoofed section header ("### System") cannot imitate real turn framing or system instructions.
-// Framing this codebase itself emits (`User: `, `Assistant: ` literals added by
-// chat-context-blocks.ts / codex-exec-session.ts) is added post-neutralization and is therefore
-// never matched here.
+//
+// Fresh `User: `, `Assistant: ` labels this codebase adds right before sending to the model
+// (chat-context-blocks.ts / codex-exec-session.ts) are added post-neutralization and are
+// therefore never matched here. But text that was SAVED to memory with those labels already
+// baked into it (see packages/chat/src/jobs.ts) is untrusted text like any other once it comes
+// back through recall — it does go back through this same check, and does get rewritten to
+// "[User]: ..." on the way back in. That's intentional: the label only becomes trustworthy once
+// this code has already run.
 //
 // Two passes: a role word followed by a colon is always neutralized (decoration optional). A
 // role word with NO colon is neutralized only when markdown header/blockquote decoration
@@ -48,18 +53,75 @@ export function neutralizeSeedFraming(text: string): string {
 // `[>\-*#]+`). An inner `+` under the outer quantifier makes the partitioning of a decoration run
 // ambiguous, so a plain markdown horizontal rule ("-" x 30) backtracks at ~2^n and blocks the event
 // loop for seconds. Matching one character at a time is unambiguous, linear, and byte-identical in
-// output.
-const ROLE_MARKER_COLON_RE = /^([ \t]*(?:[>\-*#][ \t]*)*)(user|assistant|system|human|ai)(\s*:)/gim;
-const ROLE_MARKER_HEADER_RE =
-  /^([ \t]*(?:[>\-*#][ \t]*)+)(user|assistant|system|human|ai)(?=[ \t]*(?:\r?\n|$))/gim;
+// output. The same reasoning applies to every character class below: each is a flat set matched by
+// a single quantifier, never nested, so the whole match stays linear even on adversarial input.
+const ROLE_WORDS = [
+  "user",
+  "assistant",
+  "system",
+  "human",
+  "ai",
+  "moss",
+  "developer",
+  "tool",
+  "function",
+  "model"
+] as const;
+const ALLOWED_ROLES = new Set<string>(ROLE_WORDS);
+
+// Zero-width space, zero-width non-joiner, zero-width joiner, word joiner, BOM / zero-width
+// no-break space — the invisible characters security testing used to split a role word so the
+// old ASCII-only regex would not recognize it.
+const INVISIBLE_CLASS = "\\u200B\\u200C\\u200D\\u2060\\uFEFF";
+// ASCII space/tab plus the Unicode space separators that can stand in for a real space before a
+// marker or its decoration.
+const SPACE_CLASS = " \\t\\u00A0\\u1680\\u2000-\\u200A\\u202F\\u205F\\u3000";
+// ASCII letters plus full-width Latin letters (U+FF21-FF3A, U+FF41-FF5A) — the lookalike-letter
+// form security testing used. A run of these plus invisible characters is a marker "token"
+// candidate. Letters from any other alphabet (e.g. Cyrillic) are deliberately excluded, so a
+// lookalike-letter word never forms a token in the first place — that keeps ordinary text with
+// mixed-script lookalikes from ever reaching the allow-list check.
+const MARKER_TOKEN_CLASS = `A-Za-z\\uFF21-\\uFF3A\\uFF41-\\uFF5A${INVISIBLE_CLASS}`;
+// ASCII colon plus the full-width colon lookalike (both normalize to ":" under NFKC; kept
+// explicit here so the regex can find the colon before normalization ever runs).
+const COLON_CLASS = ":\\uFF1A";
+
+// Each code point in these classes is matched individually as a standalone invisible character,
+// never as part of a joined grapheme, so the lint rule's "joined character sequence" concern
+// doesn't apply — disabled per line below since it fires on the template-literal line itself.
+const ROLE_MARKER_COLON_RE = new RegExp(
+  // eslint-disable-next-line no-misleading-character-class -- see comment above
+  `^([${SPACE_CLASS}]*(?:[>\\-*#][${SPACE_CLASS}]*)*)([${MARKER_TOKEN_CLASS}]+)([${SPACE_CLASS}${INVISIBLE_CLASS}]*[${COLON_CLASS}])`,
+  "gim"
+);
+const ROLE_MARKER_HEADER_RE = new RegExp(
+  // eslint-disable-next-line no-misleading-character-class -- see comment above
+  `^([${SPACE_CLASS}]*(?:[>\\-*#][${SPACE_CLASS}]*)+)([${MARKER_TOKEN_CLASS}]+)(?=[${SPACE_CLASS}${INVISIBLE_CLASS}]*(?:\\r?\\n|$))`,
+  "gim"
+);
+// eslint-disable-next-line no-misleading-character-class -- see comment above
+const INVISIBLE_RE = new RegExp(`[${INVISIBLE_CLASS}]`, "g");
+
+// Strips invisible characters and normalizes full-width lookalikes out of a matched token, then
+// checks it against the allow-list. Only the matched token/colon are ever touched — the prefix
+// (decoration) and everything outside the match is returned byte-for-byte as captured by the
+// regex above, so normalization never reaches the surrounding text.
+function resolveRoleToken(rawToken: string): string | null {
+  const normalized = rawToken.replace(INVISIBLE_RE, "").normalize("NFKC");
+  const roleKey = normalized.toLowerCase();
+  return ALLOWED_ROLES.has(roleKey) ? normalized : null;
+}
 
 function neutralizeRoleMarkers(text: string): string {
   return text
-    .replace(
-      ROLE_MARKER_COLON_RE,
-      (_m, prefix: string, role: string, colon: string) => `${prefix}[${role}]${colon}`
-    )
-    .replace(ROLE_MARKER_HEADER_RE, (_m, prefix: string, role: string) => `${prefix}[${role}]`);
+    .replace(ROLE_MARKER_COLON_RE, (match, prefix: string, rawToken: string, colon: string) => {
+      const role = resolveRoleToken(rawToken);
+      return role === null ? match : `${prefix}[${role}]${colon.normalize("NFKC")}`;
+    })
+    .replace(ROLE_MARKER_HEADER_RE, (match, prefix: string, rawToken: string) => {
+      const role = resolveRoleToken(rawToken);
+      return role === null ? match : `${prefix}[${role}]`;
+    });
 }
 
 /** #1194 — blanket XML defang for strings crossing from a module into a core-owned prompt. */
