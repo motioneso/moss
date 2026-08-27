@@ -42,7 +42,8 @@ const ANTHROPIC_STATIC_MODELS: readonly AiProviderDiscoveredModelDto[] = [
 // explicit pins. Keeping ids here makes Codex list upkeep a one-file data change.
 //   - anthropic (claude CLI): the same concrete ids as the API fallback.
 //   - openai-compatible (codex CLI): current ids from learn.chatgpt.com/docs/models, 2026-07-12.
-//   - google/gemini: intentionally absent — blocked + not loginable (auto-register.ts:75).
+//   - google/gemini: intentionally absent — installable since #2026, but still not loginable
+//     (see the NOTE in auto-register.ts).
 export const CLI_STATIC_MODELS: Partial<
   Record<AiProviderKind, readonly AiProviderDiscoveredModelDto[]>
 > = {

@@ -19,6 +19,31 @@ describe("cliAvailable", () => {
     expect(await cliAvailable("google", deps)).toBe(true);
   });
 
+  // #2026: the pinned @google/gemini-cli package only ever installs a command called `gemini`.
+  // Probing `agy` alone would report a successful install as missing forever.
+  it("counts `gemini` on PATH as the google provider", async () => {
+    const deps = { which: async (bin: string) => (bin === "gemini" ? "/usr/bin/gemini" : null) };
+    expect(await cliAvailable("google", deps)).toBe(true);
+  });
+
+  it("probes the primary name before any alias", async () => {
+    const probed: string[] = [];
+    const deps = {
+      which: async (bin: string) => {
+        probed.push(bin);
+        return bin === "agy" ? "/usr/bin/agy" : null;
+      }
+    };
+    expect(await cliAvailable("google", deps)).toBe(true);
+    expect(probed).toEqual(["agy"]);
+  });
+
+  it("does not let another kind's binary satisfy a kind with no aliases", async () => {
+    const deps = { which: async (bin: string) => (bin === "gemini" ? "/usr/bin/gemini" : null) };
+    expect(await cliAvailable("anthropic", deps)).toBe(false);
+    expect(await cliAvailable("openai-compatible", deps)).toBe(false);
+  });
+
   it("returns false when which returns null", async () => {
     const deps = { which: async (_bin: string) => null };
     expect(await cliAvailable("anthropic", deps)).toBe(false);

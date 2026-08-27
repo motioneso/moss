@@ -65,7 +65,7 @@ const REPO_ROOT = findRepoRoot(MODULE_DIR);
 const PLACEHOLDER_RE = /<PINNED_[A-Z0-9_]*>|<[A-Z0-9_]+_(URL|SHA512|PATH|PKG|VERSION)>/;
 
 // ---------------------------------------------------------------------------
-// §A.1.2 — The FROZEN catalog values (MVP: claude + codex supported, agy blocked)
+// §A.1.2 — The FROZEN catalog values (claude + codex + gemini all supported)
 // ---------------------------------------------------------------------------
 
 /**
@@ -149,14 +149,55 @@ const RAW_CATALOG: Record<RpcProviderKind, CatalogEntry> = {
     }
   },
   google: {
-    // agy = Antigravity CLI. SUPPORTED only if the pinning spike yields a VERSIONED
-    // artifact URL + a pinnable SHA512 AND a concrete honored self-update-disable
-    // (§A.4). Until then it ships BLOCKED (claude + codex are the certain MVP).
     provider: "google",
-    status: "blocked",
-    blockedReason:
-      "agy/Antigravity pinning spike unresolved — no checksummed versioned artifact yet",
-    recipe: undefined
+    status: "supported",
+    recipe: {
+      kind: "npm",
+      pkg: "@google/gemini-cli",
+      // PINNED 2026-08-27 (#2026): current stable published EXACT version, resolved against the
+      // LIVE registry (`npm view @google/gemini-cli version`) and rehearsed end-to-end outside the
+      // repo — `npm ci --ignore-scripts` against the committed lockfile exits 0, produces
+      // `node_modules/.bin/gemini`, and `gemini --version` prints 0.57.0.
+      version: "0.57.0",
+      // COMMITTED full-tree-sha512 lockfile (13 entries, every one carrying sha512).
+      lockfile: "packages/cli-runner/recipes/google/npm-shrinkwrap.json",
+      // The package's ONLY exposed command (`bin: { gemini: "bundle/gemini.js" }`). There is no
+      // `agy` command in it — naming the binary `agy` here fails verify with "installed package
+      // produced no executable". The API-side presence probe accepts both names (§ packages/ai
+      // cli-availability aliases), so the historical `agy` naming keeps working.
+      binary: "gemini",
+      // DELIBERATELY no archOptionalDeps / archBinaryPackage / archBinaryPlacement: unlike claude
+      // and codex, gemini ships ONE bundled JavaScript program (chunked, ~95 MB) rather than
+      // per-arch native binaries, and its command runs straight out of `npm ci --ignore-scripts`.
+      // Setting archOptionalDeps would make §A.1.4 demand per-arch packages that do not exist.
+      // The lockfile does cover linux x64 AND arm64 (the terminal helper pulls both), so the pin
+      // is not Intel-only.
+      //
+      // RESOLVED self-update-disable (kind:"config"): gemini 0.57.0 REALLY DOES replace itself —
+      // its update handler spawns `npm install -g @google/gemini-cli@<newer>` detached, which
+      // would silently swap the pinned bytes. Two settings gate that path, both under `general`
+      // and both defaulting to TRUE, so both are set false here:
+      //   * enableAutoUpdateNotification — checked FIRST in both the update check and the update
+      //     handler; false short-circuits before any install can be considered.
+      //   * enableAutoUpdate — false returns before the spawn even if a check somehow ran.
+      // Older spellings (disableAutoUpdate / disableUpdateNag) survive only as deprecated aliases
+      // that migrate onto these two names, so the new names are the correct ones to write.
+      // HOME is /data/cli-auth and the tool reads <HOME>/.gemini/settings.json (GEMINI_CLI_HOME
+      // would override that, but it is not in the §7.2 env allowlist and appears nowhere in this
+      // repo), so the installer writes /data/cli-auth/.gemini/settings.json. This is a DIFFERENT
+      // file from the per-session workspace settings chat writes at launch (`writeGeminiSettings`
+      // in packages/chat/src/live/cli-launch-commands.ts) — that one sets no `general` keys, so it
+      // cannot override these. Do not merge the two.
+      selfUpdateDisable: {
+        kind: "config",
+        path: ".gemini/settings.json",
+        content: `${JSON.stringify(
+          { general: { enableAutoUpdate: false, enableAutoUpdateNotification: false } },
+          null,
+          2
+        )}\n`
+      }
+    }
   }
 };
 

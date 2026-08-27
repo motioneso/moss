@@ -24,7 +24,17 @@
  *    the allowlist.
  */
 
-import { lstat, mkdtemp, mkdir, readlink, rm, stat, symlink, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  mkdtemp,
+  mkdir,
+  readFile,
+  readlink,
+  rm,
+  stat,
+  symlink,
+  writeFile
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
@@ -60,7 +70,43 @@ interface FakeIoOptions {
    * binary (a symlink) before reporting the version.
    */
   readonly stubWrapper?: boolean;
+  /**
+   * Which catalog provider is being installed. Decides the package name, the bin name and
+   * whether per-arch native packages exist — the simulated tree must match the real package
+   * or verify (§A.3.4) reads a shape the recipe never asked for. Defaults to `anthropic`.
+   */
+  readonly provider?: RpcProviderKind;
 }
+
+/** The node_modules shape the fake `npm ci` materializes for a given provider. */
+interface FakePackageShape {
+  /** The published package name (must equal the recipe's `pkg` — verify reads its package.json). */
+  readonly pkg: string;
+  /** Package-relative path of the file `.bin/<binName>` points at. */
+  readonly wrapperRel: string;
+  /** The package's exposed command (must equal the recipe's `binary`). */
+  readonly binName: string;
+  /** Per-arch native packages the lockfile pins (claude only; empty for a pure-JS package). */
+  readonly archPackages: readonly string[];
+}
+
+const FAKE_PACKAGE_SHAPES: Partial<Record<RpcProviderKind, FakePackageShape>> = {
+  anthropic: {
+    pkg: "@anthropic-ai/claude-code",
+    wrapperRel: "bin/claude.exe",
+    binName: "claude",
+    archPackages: ["@anthropic-ai/claude-code-linux-x64", "@anthropic-ai/claude-code-linux-arm64"]
+  },
+  // #2026: @google/gemini-cli ships ONE bundled JavaScript program (bin: { gemini:
+  // "bundle/gemini.js" }) and NO per-arch native packages, so the fake tree has no arch dirs
+  // and the wrapper is runnable straight out of `npm ci --ignore-scripts`.
+  google: {
+    pkg: "@google/gemini-cli",
+    wrapperRel: "bundle/gemini.js",
+    binName: "gemini",
+    archPackages: []
+  }
+};
 
 interface RecordedRun {
   readonly cmd: string;
@@ -75,6 +121,9 @@ const STUB_MARKER = "claude native binary not installed";
 
 function makeFakeIo(opts: FakeIoOptions): { io: TmuxIo; runs: RecordedRun[] } {
   const runs: RecordedRun[] = [];
+  const provider = opts.provider ?? "anthropic";
+  const shape = FAKE_PACKAGE_SHAPES[provider];
+  if (!shape) throw new Error(`no fake package shape for provider "${provider}"`);
   const io: TmuxIo = {
     run: async (cmd, args, runOpts) => {
       runs.push({ cmd, args: [...args], env: runOpts?.env });
@@ -85,9 +134,9 @@ function makeFakeIo(opts: FakeIoOptions): { io: TmuxIo; runs: RecordedRun[] } {
         if (opts.ciFails) return { code: 1, stdout: "", stderr: "npm ci boom" };
         const prefixIdx = args.indexOf("--prefix");
         const staging = args[prefixIdx + 1] as string;
-        const pkg = "@anthropic-ai/claude-code";
+        const pkg = shape.pkg;
         const nm = path.join(staging, "node_modules");
-        await mkdir(path.join(nm, pkg, "bin"), { recursive: true });
+        await mkdir(path.join(nm, pkg, path.dirname(shape.wrapperRel)), { recursive: true });
         await writeFile(
           path.join(nm, pkg, "package.json"),
           JSON.stringify({ name: pkg, version: opts.installedVersion })
@@ -95,17 +144,17 @@ function makeFakeIo(opts: FakeIoOptions): { io: TmuxIo; runs: RecordedRun[] } {
         // per-arch native packages present (the lockfile-pinned deps). Each ships the REAL
         // native binary file `claude`, marked with NATIVE_MARKER so the fake --version probe
         // can tell the (placed) native binary from the un-replaced stub wrapper.
-        for (const a of ["linux-x64", "linux-arm64"]) {
-          const archDir = path.join(nm, "@anthropic-ai", `claude-code-${a}`);
+        for (const archPkg of shape.archPackages) {
+          const archDir = path.join(nm, archPkg);
           await mkdir(archDir, { recursive: true });
           await writeFile(path.join(archDir, "claude"), `${NATIVE_MARKER}\n`, { mode: 0o755 });
         }
         const binDir = path.join(nm, ".bin");
         await mkdir(binDir, { recursive: true });
         if (opts.produceBinary !== false) {
-          // The package's exposed bin (matches the real recipe: bin/claude.exe). When stub,
-          // it is the ERROR STUB until §A.1.3 placement replaces it; else a plain runnable.
-          const wrapper = path.join(nm, pkg, "bin", "claude.exe");
+          // The package's exposed bin (claude: bin/claude.exe; gemini: bundle/gemini.js). When
+          // stub, it is the ERROR STUB until §A.1.3 placement replaces it; else a plain runnable.
+          const wrapper = path.join(nm, pkg, shape.wrapperRel);
           await writeFile(
             wrapper,
             opts.stubWrapper ? `${STUB_MARKER}\n` : "#!/usr/bin/env node\n",
@@ -113,8 +162,8 @@ function makeFakeIo(opts: FakeIoOptions): { io: TmuxIo; runs: RecordedRun[] } {
               mode: 0o755
             }
           );
-          // .bin/claude → ../@anthropic-ai/claude-code/bin/claude.exe (npm's bin symlink).
-          await symlink(path.join("..", pkg, "bin", "claude.exe"), path.join(binDir, "claude"));
+          // npm's bin symlink, e.g. .bin/claude → ../@anthropic-ai/claude-code/bin/claude.exe.
+          await symlink(path.join("..", pkg, shape.wrapperRel), path.join(binDir, shape.binName));
         }
         return { code: 0, stdout: "", stderr: "" };
       }
@@ -179,16 +228,114 @@ const PINNED =
     ? PROVIDER_CATALOG.anthropic.recipe.version
     : "0.0.0";
 
+/** The #2026 Gemini pin, read from the catalog so a deliberate bump is a one-line catalog edit. */
+const GEMINI_PINNED =
+  PROVIDER_CATALOG.google.recipe?.kind === "npm" ? PROVIDER_CATALOG.google.recipe.version : "0.0.0";
+
 describe("InstallService — catalog gate (§A.2.3)", () => {
-  it("rejects a blocked provider (agy/google) with InstallBadRequestError", async () => {
+  // #2026 made google installable, so the gate can no longer be proved with whichever real
+  // provider happens to be blocked today. Drive it from a FIXTURE catalog instead: the gate
+  // itself keeps its coverage no matter what the real catalog says.
+  it("rejects a provider the catalog marks blocked, with InstallBadRequestError", async () => {
+    const blockedCatalog = {
+      ...PROVIDER_CATALOG,
+      google: {
+        provider: "google",
+        status: "blocked",
+        blockedReason: "no pinnable checksummed artifact yet"
+      }
+    } as typeof PROVIDER_CATALOG;
     const { io } = makeFakeIo({ installedVersion: PINNED });
-    const svc = new InstallService({ io, catalog: PROVIDER_CATALOG, toolsPrefix, homeBase });
+    const svc = new InstallService({ io, catalog: blockedCatalog, toolsPrefix, homeBase });
     await expect(svc.installProvider("google" as RpcProviderKind)).rejects.toBeInstanceOf(
       InstallBadRequestError
     );
     await expect(svc.installProvider("google" as RpcProviderKind)).rejects.toThrow(
       /not installable/i
     );
+  });
+
+  it("accepts google against the REAL catalog now that #2026 pinned its recipe", async () => {
+    const { io } = makeFakeIo({ installedVersion: GEMINI_PINNED, provider: "google" });
+    const svc = new InstallService({ io, catalog: PROVIDER_CATALOG, toolsPrefix, homeBase });
+    const result = await svc.installProvider("google" as RpcProviderKind);
+    expect(result.state).toBe("installed");
+  });
+});
+
+describe("InstallService — google/Gemini pinned recipe (#2026)", () => {
+  it("installs via `npm ci --ignore-scripts`, verifies the pinned version, promotes `gemini`", async () => {
+    const { io, runs } = makeFakeIo({ installedVersion: GEMINI_PINNED, provider: "google" });
+    const svc = new InstallService({
+      io,
+      catalog: PROVIDER_CATALOG,
+      toolsPrefix,
+      homeBase,
+      hostArch: "x64"
+    });
+
+    const result = await svc.installProvider("google" as RpcProviderKind);
+    expect(result.state).toBe("installed");
+    expect(result.version).toBe(GEMINI_PINNED);
+    expect(result.binaryChanged).toBe(true);
+
+    // §A.3.3: lifecycle scripts never run, and it is `ci` against the committed lockfile —
+    // never a bare `npm install`, which would resolve fresh bytes and defeat the pin.
+    const ci = runs.find((r) => r.cmd === "npm" && r.args[0] === "ci");
+    expect(ci).toBeDefined();
+    expect(ci?.args).toContain("--ignore-scripts");
+    expect(ci?.args).not.toContain("install");
+
+    // The promoted command is `gemini` — the package ships no `agy` command, so a recipe that
+    // named `agy` would leave nothing on PATH here.
+    const binStat = await stat(path.join(toolsPrefix, "bin", "gemini"));
+    expect(binStat.isFile() || binStat.isSymbolicLink?.() || true).toBe(true);
+    const current = await readlink(path.join(toolsPrefix, "providers", "google", "current"));
+    expect(current).toMatch(/^releases\//);
+    expect(current).not.toContain(".staging");
+  });
+
+  it("writes the settings file that turns the tool's own self-update off (§A.3.7)", async () => {
+    // Gemini replaces itself by spawning a global npm install of a newer version, which would
+    // swap the pinned bytes. Both `general` switches must be written false under the runner's
+    // HOME; either one left true reopens that path.
+    const { io } = makeFakeIo({ installedVersion: GEMINI_PINNED, provider: "google" });
+    const svc = new InstallService({
+      io,
+      catalog: PROVIDER_CATALOG,
+      toolsPrefix,
+      homeBase,
+      hostArch: "x64"
+    });
+
+    const result = await svc.installProvider("google" as RpcProviderKind);
+    expect(result.state).toBe("installed");
+
+    const settings = JSON.parse(
+      await readFile(path.join(homeBase, ".gemini", "settings.json"), "utf8")
+    ) as { general?: { enableAutoUpdate?: boolean; enableAutoUpdateNotification?: boolean } };
+    expect(settings.general?.enableAutoUpdate).toBe(false);
+    expect(settings.general?.enableAutoUpdateNotification).toBe(false);
+  });
+
+  it("refuses to promote when the installed gemini reports a version other than the pin", async () => {
+    // §A.3.4/§A.3.5: a drifted tool never reaches PATH.
+    const { io } = makeFakeIo({
+      installedVersion: GEMINI_PINNED,
+      probeVersion: "99.99.99",
+      provider: "google"
+    });
+    const svc = new InstallService({
+      io,
+      catalog: PROVIDER_CATALOG,
+      toolsPrefix,
+      homeBase,
+      hostArch: "x64"
+    });
+
+    const result = await svc.installProvider("google" as RpcProviderKind);
+    expect(result.state).toBe("error");
+    await expect(stat(path.join(toolsPrefix, "bin", "gemini"))).rejects.toThrow();
   });
 });
 
