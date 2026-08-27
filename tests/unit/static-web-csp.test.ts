@@ -11,10 +11,20 @@ const EXPECTED_IMG_SRC =
   " https://cdn.arstechnica.net https://i.guim.co.uk https://ichef.bbci.co.uk" +
   " https://media.npr.org https://media.wired.com https://npr.brightspotcdn.com" +
   " https://platform.theverge.com https://static01.nyt.com";
+const EXPECTED_CONNECT_SRC =
+  "connect-src 'self' https://a.espncdn.com https://s.secure.espncdn.com" +
+  " https://espnmedia-cdn.akamaized.net" +
+  " https://cdn.arstechnica.net https://i.guim.co.uk https://ichef.bbci.co.uk" +
+  " https://media.npr.org https://media.wired.com https://npr.brightspotcdn.com" +
+  " https://platform.theverge.com https://static01.nyt.com";
 
 describe("SPA CSP image hosts", () => {
   it("folds every module's declared image hosts into img-src", () => {
     expect(SPA_CSP).toContain(EXPECTED_IMG_SRC);
+  });
+
+  it("allows the service worker to fetch every declared image host", () => {
+    expect(SPA_CSP).toContain(EXPECTED_CONNECT_SRC);
   });
 
   it("keeps every other directive unchanged", () => {
@@ -29,5 +39,6 @@ describe("SPA CSP image hosts", () => {
       "utf8"
     );
     expect(conf).toContain(EXPECTED_IMG_SRC);
+    expect(conf).toContain(EXPECTED_CONNECT_SRC);
   });
 });

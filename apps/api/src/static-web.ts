@@ -32,7 +32,9 @@ const MIME: Record<string, string> = {
 // LOADER-SEAM(sports): img-src extends to the hosts the composed SportsSource declares.
 // infra/nginx/jarv1s-web.conf must carry the same img-src (pinned by
 // tests/unit/static-web-csp.test.ts).
-const IMG_SRC = ["'self'", "data:", ...MODULE_IMAGE_CSP_HOSTS.map((h) => `https://${h}`)].join(" ");
+const IMAGE_CSP_HOSTS = MODULE_IMAGE_CSP_HOSTS.map((h) => `https://${h}`);
+const IMG_SRC = ["'self'", "data:", ...IMAGE_CSP_HOSTS].join(" ");
+const CONNECT_SRC = ["'self'", ...IMAGE_CSP_HOSTS].join(" ");
 
 export const SPA_CSP = [
   "default-src 'self'",
@@ -41,7 +43,7 @@ export const SPA_CSP = [
   `img-src ${IMG_SRC}`,
   "font-src 'self' data:",
   "worker-src 'self'",
-  "connect-src 'self'",
+  `connect-src ${CONNECT_SRC}`,
   "frame-ancestors 'none'",
   "base-uri 'self'"
 ].join("; ");
