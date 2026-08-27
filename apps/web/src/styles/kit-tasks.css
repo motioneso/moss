@@ -10,12 +10,20 @@
 /* ---- Control bar ---- */
 .tk-bar {
   display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 14px;
+  flex-wrap: wrap;
+}
+.tk-bar__left,
+.tk-bar__right {
+  display: flex;
   align-items: center;
   gap: 12px 14px;
   flex-wrap: wrap;
 }
-.tk-bar__spacer {
-  flex: 1 1 24px;
+.tk-bar__right {
+  justify-content: flex-end;
 }
 .tk-bar__sep {
   width: 1px;

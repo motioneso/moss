@@ -469,6 +469,7 @@ describe("AI read-only assistant tool execution foundation", () => {
       "ai-purge-audit-log",
       "chat.embed-turn",
       "chat.extract-facts",
+      "chat.archive-day",
       "briefings-run",
       "memory.vault-ingest-sweep",
       "memory.vault-ingest-nudge",

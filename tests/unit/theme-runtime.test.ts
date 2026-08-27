@@ -34,10 +34,10 @@ describe("theme runtime", () => {
     ]);
   });
 
-  it("validates only hex and rgb color values", () => {
+  it("validates hex, rgb, and rgba color values", () => {
     expect(isThemeColor("#f4f1de")).toBe(true);
     expect(isThemeColor("rgb(244, 241, 222)")).toBe(true);
-    expect(isThemeColor("rgba(244, 241, 222, 0.5)")).toBe(false);
+    expect(isThemeColor("rgba(244, 241, 222, 0.5)")).toBe(true);
     expect(isThemeColor("url(javascript:alert(1))")).toBe(false);
   });
 

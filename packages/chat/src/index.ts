@@ -5,6 +5,7 @@ export { chatCommitmentProvider } from "./commitment-provider.js";
 export { extractTimezone } from "./locale-utils.js";
 export * from "./calendar-write-impl.js";
 export * from "./email-write-impl.js";
+export * from "./module-build-start-impl.js";
 export * from "./jobs.js";
 export * from "./live-routes.js";
 export { DataContextChatPersistence } from "./live/persistence.js";

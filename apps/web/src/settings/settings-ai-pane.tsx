@@ -1,12 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CornerDownRight, PencilLine, GitCommitHorizontal } from "lucide-react";
+import { Check, PencilLine, GitCommitHorizontal, NotebookText, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { getNotesSource } from "../api/notes-client";
 import {
+  getChatArchiveSettings,
   getChatModelOverrideSettings,
   getYoloSettings,
   getPersonaSettings,
   previewPersona,
+  putChatArchiveSettings,
   putChatModelOverride,
   putYoloSelf,
   putPersonaSettings
@@ -19,17 +22,26 @@ import {
   createPersonaDraft,
   discardPersonaDraft,
   personaDraftIsDirty,
-  personaSeedText,
-  personaSample,
   type DirectnessDial,
   type HumorDial,
+  type PersonaDials,
   type PersonaDraft,
   type PersonaSnapshot,
   type RecoveryDial,
   type ToneDial
 } from "./settings-persona-preview";
-import { type PaneProps } from "./settings-types";
-import { Choice, Field, Group, Note, PaneHead, Row, Select, Switch } from "./settings-ui";
+import { readError, type PaneProps } from "./settings-types";
+import {
+  Choice,
+  Field,
+  Group,
+  Note,
+  PaneHead,
+  Row,
+  Segmented,
+  Select,
+  Switch
+} from "./settings-ui";
 import { Button } from "@moss/ui";
 
 type PersonaState = PersonaDraft;
@@ -61,6 +73,13 @@ function Persona({ who }: { readonly who: string }) {
   const receivedInitialSnapshot = useRef(false);
   const set = <K extends keyof PersonaState>(k: K, v: PersonaState[K]) =>
     setP((s) => ({ ...s, [k]: v }));
+  // Guided mode has no free-text editing happening alongside it, so a dial change can just
+  // write the seeded text straight through instead of asking the user to confirm and apply it.
+  const setDial = <K extends keyof PersonaDials>(k: K, v: PersonaDials[K]) =>
+    setP((s) => {
+      const next = { ...s, [k]: v };
+      return applyGuidedPersonaText(next, next);
+    });
   const personaQuery = useQuery({
     queryKey: queryKeys.settings.persona,
     queryFn: getPersonaSettings,
@@ -76,8 +95,6 @@ function Persona({ who }: { readonly who: string }) {
     setRev((r) => r + 1);
   }, [personaQuery.data]);
   const dirty = personaDraftIsDirty(p, saved);
-  const sample = useMemo(() => personaSample(p, who), [p, who]);
-  const seedText = useMemo(() => personaSeedText(p), [p]);
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -125,20 +142,12 @@ function Persona({ who }: { readonly who: string }) {
     setP(discardPersonaDraft(saved, p));
     setRev((r) => r + 1);
   };
-  const applySeed = () => {
-    if (
-      p.personaText.trim() !== saved.personaText.trim() &&
-      !window.confirm("Replace your edited persona text with the guided draft?")
-    )
-      return;
-    setP((draft) => applyGuidedPersonaText(draft, draft));
-  };
   const previewReply = previewMutation.data?.reply;
 
   return (
     <Group
       title="Persona"
-      desc={`How ${assistantName} sounds and carries itself — write it yourself, or set it with the dials below. The preview shows the effect.`}
+      desc={`How ${assistantName} sounds and carries itself: write it yourself, or set it with the dials below. The preview shows the effect.`}
     >
       <Field
         label="Assistant name"
@@ -152,27 +161,19 @@ function Persona({ who }: { readonly who: string }) {
         />
       </Field>
       <Field label="How to set your persona" hint="Switching methods keeps your current draft.">
-        <span className="psona-save__acts">
-          <Button
-            variant="quiet"
-            size="sm"
-            aria-pressed={mode === "authored"}
-            onClick={() => setMode("authored")}
-          >
-            Write it yourself
-          </Button>
-          <Button
-            variant="quiet"
-            size="sm"
-            aria-pressed={mode === "guided"}
-            onClick={() => setMode("guided")}
-          >
-            Use guided dials
-          </Button>
-        </span>
+        <Segmented
+          ariaLabel="How to set your persona"
+          value={mode}
+          options={[
+            { value: "authored", label: "Write it yourself" },
+            { value: "guided", label: "Use guided dials" }
+          ]}
+          onChange={setMode}
+        />
       </Field>
       {mode === "authored" ? (
         <Field
+          className="fld--no-border"
           label="In your own words"
           hint={`How should ${assistantName} interact with you? Its style, what to lean into, what to avoid.`}
         >
@@ -189,24 +190,25 @@ function Persona({ who }: { readonly who: string }) {
         <>
           <Choice
             key={`tone${rev}`}
+            className="fld--no-border"
             label="Tone"
             value={p.tone}
             options={["Warm", "Neutral", "Crisp"]}
-            onChange={(v) => set("tone", v as ToneDial)}
+            onChange={(v) => setDial("tone", v as ToneDial)}
           />
           <Choice
             key={`dir${rev}`}
             label="Directness"
             value={p.directness}
             options={["Gentle", "Balanced", "Direct"]}
-            onChange={(v) => set("directness", v as DirectnessDial)}
+            onChange={(v) => setDial("directness", v as DirectnessDial)}
           />
           <Choice
             key={`hum${rev}`}
             label="Humor"
             value={p.humor}
             options={["None", "Dry", "Playful"]}
-            onChange={(v) => set("humor", v as HumorDial)}
+            onChange={(v) => setDial("humor", v as HumorDial)}
           />
           <Choice
             key={`rec${rev}`}
@@ -214,39 +216,23 @@ function Persona({ who }: { readonly who: string }) {
             hint={`How ${assistantName} responds when you fall behind. Never shaming: that's a promise of the product.`}
             value={p.recovery}
             options={["Encouraging", "Matter-of-fact", "Firm"]}
-            onChange={(v) => set("recovery", v as RecoveryDial)}
+            onChange={(v) => setDial("recovery", v as RecoveryDial)}
           />
-          <Field
-            label="Apply dials"
-            hint="Overwrites the text above with a description built from these dials."
-          >
-            <Button variant="quiet" size="sm" onClick={applySeed}>
-              Use dials for text
-            </Button>
-          </Field>
         </>
       )}
 
-      <div className="ppv">
-        <div className="ppv__hd">
-          <GitCommitHorizontal size={13} aria-hidden="true" />
-          How {p.assistantName || "Moss"} would sound
-        </div>
-        <div className="ppv__bubble ppv__bubble--main">
-          <div className="ppv__cap">{previewReply ? "Response preview" : "Morning briefing"}</div>
-          <p className="ppv__say">{previewReply ?? sample.greeting}</p>
-        </div>
-        {previewReply ? null : (
-          <div className="ppv__bubble">
-            <div className="ppv__cap">When you fall behind</div>
-            <p className="ppv__say">{sample.recovery}</p>
+      {previewReply ? (
+        <div className="ppv">
+          <div className="ppv__hd">
+            <GitCommitHorizontal size={13} aria-hidden="true" />
+            How {p.assistantName || "Moss"} would sound
           </div>
-        )}
-        <div className="ppv__foot">
-          <CornerDownRight size={12} aria-hidden="true" />
-          {previewReply ? "Real preview from your chat route." : seedText}
+          <div className="ppv__bubble ppv__bubble--main">
+            <div className="ppv__cap">Response preview</div>
+            <p className="ppv__say">{previewReply}</p>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div className={`psona-save${dirty ? " is-dirty" : ""}`}>
         <span className="psona-save__state">
@@ -439,6 +425,105 @@ function YoloMode() {
   );
 }
 
+const DEFAULT_CHAT_ARCHIVE_FOLDER = "Moss/Chats";
+const CHAT_ARCHIVE_FOLDER_HINT = (
+  <>
+    Relative to your connected notes folder. Nested folders like <b>2 Area/Moss/Chats</b> are fine.
+    A path starting with a slash or containing <b>..</b> will be rejected.
+  </>
+);
+
+function ChatArchive() {
+  const { toast } = useFeedback();
+  const queryClient = useQueryClient();
+  const notesSourceQuery = useQuery({
+    queryKey: queryKeys.settings.notesSource,
+    queryFn: getNotesSource,
+    retry: false
+  });
+  const archiveQuery = useQuery({
+    queryKey: queryKeys.settings.chatArchive,
+    queryFn: getChatArchiveSettings,
+    retry: false
+  });
+  const [folder, setFolder] = useState(DEFAULT_CHAT_ARCHIVE_FOLDER);
+  const [folderError, setFolderError] = useState<string | null>(null);
+  const receivedInitialFolder = useRef(false);
+  useEffect(() => {
+    if (!archiveQuery.data) return;
+    if (receivedInitialFolder.current) return;
+    setFolder(archiveQuery.data.folder || DEFAULT_CHAT_ARCHIVE_FOLDER);
+    receivedInitialFolder.current = true;
+  }, [archiveQuery.data]);
+
+  const mutation = useMutation({
+    mutationFn: (input: { enabled: boolean; folder: string }) => putChatArchiveSettings(input),
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.settings.chatArchive, data);
+      setFolderError(null);
+      toast(data.enabled ? "Chat archiving enabled" : "Chat archiving disabled");
+    },
+    onError: (error) => setFolderError(readError(error))
+  });
+
+  const linkedPath = notesSourceQuery.data?.path ?? null;
+  if (notesSourceQuery.data && linkedPath === null) {
+    return (
+      <Group title="Save chats to Notes">
+        <div className="ai-empty">
+          <div className="ai-empty__ic">
+            <NotebookText size={20} aria-hidden="true" />
+          </div>
+          <div className="ai-empty__main">
+            <div className="ai-empty__t">No notes folder connected</div>
+            <div className="ai-empty__d">
+              Connect a notes folder in <b>Data sources</b> before turning this on.
+            </div>
+          </div>
+        </div>
+      </Group>
+    );
+  }
+
+  const state = archiveQuery.data;
+  if (!state) return null;
+
+  return (
+    <Group
+      title="Save chats to Notes"
+      desc="Keep a daily written record of your chats in your notes."
+    >
+      <Row
+        name="Save chats to Notes"
+        desc="Writes today's chat as a note, once per day, in the folder below."
+        control={
+          <Switch
+            ariaLabel="Save chats to Notes"
+            checked={state.enabled}
+            disabled={mutation.isPending}
+            onChange={(value) => mutation.mutate({ enabled: value, folder })}
+          />
+        }
+      />
+      <Field label="Transcript folder" hint={folderError ?? CHAT_ARCHIVE_FOLDER_HINT}>
+        <input
+          className="jds-input"
+          aria-label="Transcript folder"
+          value={folder}
+          onChange={(e) => setFolder(e.target.value)}
+          onBlur={() => mutation.mutate({ enabled: state.enabled, folder })}
+        />
+      </Field>
+      {state.status ? (
+        <Note icon={<TriangleAlert size={13} aria-hidden="true" />}>
+          {state.status.state === "paused" ? "Archiving is paused: " : "Archiving failed: "}
+          {state.status.reason}
+        </Note>
+      ) : null}
+    </Group>
+  );
+}
+
 export function AssistantPane({ me }: PaneProps) {
   const who = (me.user.name ?? "").split(/\s+/)[0] || "there";
   const assistantName = useAssistantName();
@@ -451,6 +536,7 @@ export function AssistantPane({ me }: PaneProps) {
       <Persona who={who} />
       <ChatModel />
       <YoloMode />
+      <ChatArchive />
     </>
   );
 }

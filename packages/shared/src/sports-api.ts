@@ -1,5 +1,6 @@
 // packages/shared/src/sports-api.ts — BROWSER-SAFE. No node:* imports.
 import { errorResponseSchema } from "./schema-fragments.js";
+import type { SportsSportKey } from "./sports-sources-api.js";
 
 export type IsoDate = string; // "YYYY-MM-DD"
 
@@ -57,14 +58,18 @@ export interface StandingsSection {
 
 export interface Headline {
   readonly id: string;
-  readonly competitionKey: string;
-  readonly competitionLabel: string; // "NFL", "Premier League" — never render competitionKey raw (#765 M4)
+  readonly sportKey: SportsSportKey;
+  readonly competitionKey: string | null;
+  /** The human label for this story's sport or competition scope. */
+  readonly competitionLabel: string;
   readonly title: string;
   readonly url: string;
   readonly publishedAt: string;
   readonly imageUrl: string | null; // first "header" image, else first image, else null
   readonly summary: string; // short article blurb from the source; "" when absent (#840)
   readonly teamKeys: readonly string[]; // filled by the service join (Task 4); source emits []
+  readonly publisherLabel: string;
+  readonly publisherDomain: string;
   // Sanitized plaintext excerpt of the full article body (#857). Populated ONLY for the single
   // NewsBand featured story (the service fetches its per-article ESPN body); every other headline
   // omits it and the UI falls back to `summary`. Already stripped of all HTML/tokens and length-
@@ -126,6 +131,8 @@ export interface FollowedTeamNews {
   readonly url: string;
   readonly publishedAt: string; // ISO — the ticker ranks idle teams by news freshness (mra54n4h)
   readonly imageUrl: string | null; // small thumbnail on non-live ticker cards (mra5xnt2)
+  readonly publisherLabel: string;
+  readonly publisherDomain: string;
 }
 
 export interface FollowedNextMatch {
@@ -237,18 +244,28 @@ export interface StandingsGroup {
   readonly sections: readonly StandingsSection[];
 }
 
-export interface LeagueNewsGroup {
-  readonly competitionKey: string;
-  readonly competitionLabel: string;
-  readonly headlines: readonly Headline[]; // no hard cap — bounded by the source fetch
-}
+export type SportsNewsGroup =
+  | {
+      readonly kind: "sport";
+      readonly sportKey: SportsSportKey;
+      readonly competitionKey: null;
+      readonly competitionLabel: string;
+      readonly headlines: readonly Headline[];
+    }
+  | {
+      readonly kind: "competition";
+      readonly sportKey: SportsSportKey;
+      readonly competitionKey: string;
+      readonly competitionLabel: string;
+      readonly headlines: readonly Headline[];
+    };
 
 export interface SportsOverviewResponse {
   readonly hero: OverviewHero;
   readonly followed: readonly FollowedTeamCard[];
   readonly scoreboard: readonly ScoreboardGroup[];
   readonly topStories: readonly Headline[]; // ranked, capped at 6
-  readonly leagueNews: readonly LeagueNewsGroup[];
+  readonly leagueNews: readonly SportsNewsGroup[];
   readonly standings: readonly StandingsGroup[];
   readonly followedTeams: readonly FollowedTeamRef[]; // for is-you marking on the client
   readonly followedLeagues: readonly FollowedLeagueRef[]; // whole-competition follows (#763)
@@ -395,6 +412,7 @@ const headlineSchema = {
   additionalProperties: false,
   required: [
     "id",
+    "sportKey",
     "competitionKey",
     "competitionLabel",
     "title",
@@ -402,11 +420,17 @@ const headlineSchema = {
     "publishedAt",
     "imageUrl",
     "summary",
-    "teamKeys"
+    "teamKeys",
+    "publisherLabel",
+    "publisherDomain"
   ],
   properties: {
     id: { type: "string" },
-    competitionKey: { type: "string" },
+    sportKey: {
+      type: "string",
+      enum: ["football", "hockey", "soccer", "baseball", "basketball"]
+    },
+    competitionKey: { type: ["string", "null"] },
     competitionLabel: { type: "string" },
     title: { type: "string" },
     url: { type: "string" },
@@ -414,6 +438,8 @@ const headlineSchema = {
     imageUrl: { type: ["string", "null"] },
     summary: { type: "string" },
     teamKeys: { type: "array", items: { type: "string" } },
+    publisherLabel: { type: "string" },
+    publisherDomain: { type: "string" },
     // Optional (not in `required`) — only the featured story carries it (#857). MUST be listed
     // here even though it's optional: this schema is used inside a oneOf (hero.headline), where
     // fast-json-stringify REJECTS the whole object for any emitted key it doesn't know — the same
@@ -486,12 +512,14 @@ const followedTeamCardSchema = {
         // Plain array items (no oneOf — an empty array replaces the old null), but keep every
         // emitted field listed: fast-json-stringify silently DROPS unknown keys outside oneOf,
         // and rejects the whole object inside one — see toPublicHeadline note.
-        required: ["title", "url", "publishedAt", "imageUrl"],
+        required: ["title", "url", "publishedAt", "imageUrl", "publisherLabel", "publisherDomain"],
         properties: {
           title: { type: "string" },
           url: { type: "string" },
           publishedAt: { type: "string" },
-          imageUrl: { type: ["string", "null"] }
+          imageUrl: { type: ["string", "null"] },
+          publisherLabel: { type: "string" },
+          publisherDomain: { type: "string" }
         }
       }
     },
@@ -647,15 +675,39 @@ const standingsGroupSchema = {
   }
 } as const;
 
-const leagueNewsGroupSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: ["competitionKey", "competitionLabel", "headlines"],
-  properties: {
-    competitionKey: { type: "string" },
-    competitionLabel: { type: "string" },
-    headlines: { type: "array", items: headlineSchema }
-  }
+const sportsNewsGroupSchema = {
+  oneOf: [
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind", "sportKey", "competitionKey", "competitionLabel", "headlines"],
+      properties: {
+        kind: { type: "string", enum: ["sport"] },
+        sportKey: {
+          type: "string",
+          enum: ["football", "hockey", "soccer", "baseball", "basketball"]
+        },
+        competitionKey: { type: "null" },
+        competitionLabel: { type: "string" },
+        headlines: { type: "array", items: headlineSchema }
+      }
+    },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind", "sportKey", "competitionKey", "competitionLabel", "headlines"],
+      properties: {
+        kind: { type: "string", enum: ["competition"] },
+        sportKey: {
+          type: "string",
+          enum: ["football", "hockey", "soccer", "baseball", "basketball"]
+        },
+        competitionKey: { type: "string" },
+        competitionLabel: { type: "string" },
+        headlines: { type: "array", items: headlineSchema }
+      }
+    }
+  ]
 } as const;
 
 const gamedayGameSchema = {
@@ -714,7 +766,7 @@ export const sportsOverviewResponseSchema = {
         followed: { type: "array", items: followedTeamCardSchema },
         scoreboard: { type: "array", items: scoreboardGroupSchema },
         topStories: { type: "array", items: headlineSchema },
-        leagueNews: { type: "array", items: leagueNewsGroupSchema },
+        leagueNews: { type: "array", items: sportsNewsGroupSchema },
         standings: { type: "array", items: standingsGroupSchema },
         followedTeams: {
           type: "array",

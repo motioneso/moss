@@ -47,4 +47,15 @@ describe("#1121 Task 4: chatScript arg-building", () => {
     const chatScriptArg = args.find((arg) => arg.startsWith("JARVIS_UAT_SEED_CHAT_SCRIPT="));
     expect(chatScriptArg).toBe("JARVIS_UAT_SEED_CHAT_SCRIPT=phase1-smoke");
   });
+
+  it("threads the opt-in #1909 public-source fixture seed", async () => {
+    const input = buildSeedHookInput("proj", "admin+data", {
+      withSportsPublicSourceFixtures: true
+    });
+    expect(input.sportsPublicSourceFixtures).toBe(true);
+    await composeSeedHook(input);
+
+    const args = mocks.spawn.mock.calls[0]?.[1] as string[];
+    expect(args).toContain("JARVIS_UAT_SPORTS_PUBLIC_SOURCE_FIXTURES=1");
+  });
 });

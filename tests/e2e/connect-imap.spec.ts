@@ -16,7 +16,6 @@ test("service picker offers Google, Email (IMAP), and GitHub coming soon — no 
 
   await page.goto("/settings");
   await page.getByRole("button", { name: "Connected accounts" }).click();
-  await page.getByRole("button", { name: "Connect account" }).click();
 
   await expect(page.getByRole("button", { name: "Google", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Email (IMAP)" })).toBeVisible();
@@ -37,7 +36,6 @@ test("connects an email account via the settings IMAP flow", async ({ page }) =>
 
   await page.goto("/settings");
   await page.getByRole("button", { name: "Connected accounts" }).click();
-  await page.getByRole("button", { name: "Connect account" }).click();
   await page.getByRole("button", { name: "Email (IMAP)" }).click();
 
   await page.getByRole("button", { name: /Fastmail/ }).click();

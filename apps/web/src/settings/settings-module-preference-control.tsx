@@ -70,7 +70,7 @@ function IntegerControl(props: {
 
   return (
     <input
-      className="jds-input jds-input--sm"
+      className="jds-input jds-input--sm jds-input--num"
       type="number"
       inputMode="numeric"
       aria-label={preference.label}

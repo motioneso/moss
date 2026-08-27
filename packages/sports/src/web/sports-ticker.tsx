@@ -329,6 +329,7 @@ function FeaturedTeamCard(props: { card: FollowedTeamCard }) {
           lead ? (
             <a className="sp-feat__lead" href={lead.url} target="_blank" rel="noreferrer">
               {lead.title}
+              {lead.publisherDomain === "espn.com" ? null : ` · ${lead.publisherLabel}`}
             </a>
           ) : (
             // Storyless pre-game/idle card: an honest placeholder, NEVER the matchup — the Next
@@ -363,6 +364,7 @@ function FeaturedTeamCard(props: { card: FollowedTeamCard }) {
               <li key={story.url}>
                 <a className="sp-feat__storylink" href={story.url} target="_blank" rel="noreferrer">
                   {story.title}
+                  {story.publisherDomain === "espn.com" ? null : ` · ${story.publisherLabel}`}
                 </a>
               </li>
             ))}
@@ -446,6 +448,7 @@ export function TickerTeam(props: { card: FollowedTeamCard }) {
             lead ? (
               <a className="sp-tk__newstx" href={lead.url} target="_blank" rel="noreferrer">
                 {lead.title}
+                {lead.publisherDomain === "espn.com" ? null : ` · ${lead.publisherLabel}`}
               </a>
             ) : (
               <span className="sp-tk__newstx sp-tk__newstx--empty">No recent news</span>
@@ -478,6 +481,7 @@ export function TickerTeam(props: { card: FollowedTeamCard }) {
                 <li key={story.url}>
                   <a className="sp-tk__storylink" href={story.url} target="_blank" rel="noreferrer">
                     {story.title}
+                    {story.publisherDomain === "espn.com" ? null : ` · ${story.publisherLabel}`}
                   </a>
                 </li>
               ))}
@@ -542,6 +546,7 @@ export function TickerLeague(props: { card: FollowedLeagueCard }) {
           {lead ? (
             <a className="sp-tk__newstx" href={lead.url} target="_blank" rel="noreferrer">
               {lead.title}
+              {lead.publisherDomain === "espn.com" ? null : ` · ${lead.publisherLabel}`}
             </a>
           ) : (
             <span className="sp-tk__newstx sp-tk__newstx--empty">No recent news</span>
@@ -552,6 +557,7 @@ export function TickerLeague(props: { card: FollowedLeagueCard }) {
                 <li key={story.url}>
                   <a className="sp-tk__storylink" href={story.url} target="_blank" rel="noreferrer">
                     {story.title}
+                    {story.publisherDomain === "espn.com" ? null : ` · ${story.publisherLabel}`}
                   </a>
                 </li>
               ))}

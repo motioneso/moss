@@ -27,6 +27,7 @@ const CONTENT_BASE = "https://content.core.api.espn.com/v1/sports/news";
 // the sports module must be redeployed for the new CSP to reach the browser.
 export const ESPN_IMAGE_HOSTS: readonly string[] = [
   "a.espncdn.com",
+  "s.espncdn.com",
   "s.secure.espncdn.com",
   "espnmedia-cdn.akamaized.net"
 ];
@@ -391,20 +392,25 @@ async function getHeadlines(
       categories?: readonly { type?: string; teamId?: number | string }[];
     }[];
   };
-  const competitionLabel = catalogEntry(competitionKey)?.label ?? competitionKey;
+  const competition = catalogEntry(competitionKey);
+  if (!competition) throw new Error(`Unknown sports competition: ${competitionKey}`);
   return (data.articles ?? []).map((article, index) => {
     const images = article.images ?? [];
     const image = images.find((i) => i.type === "header" && i.url) ?? images.find((i) => i.url);
     return {
+      origin: "espn",
       id: String(article.id ?? index),
+      sportKey: competition.espnSport,
       competitionKey,
-      competitionLabel,
+      competitionLabel: competition.label,
       title: article.headline ?? "",
       url: article.links?.web?.href ?? "",
       publishedAt: article.published ?? "",
       imageUrl: image?.url ?? null,
       summary: article.description ?? "",
       teamKeys: [],
+      publisherLabel: "ESPN",
+      publisherDomain: "espn.com",
       sourceTeamIds: (article.categories ?? [])
         .filter((c) => c.type === "team" && c.teamId != null)
         .map((c) => String(c.teamId))

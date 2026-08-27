@@ -6,7 +6,7 @@ import { seedAiProviderChunk } from "./chunks/ai.js";
 import { seedScriptedChatProviderChunk } from "./chunks/chat-script.js";
 import { seedJobSearchAiProviderChunk } from "./chunks/job-search-ai.js";
 import { seedNewsChunk } from "./chunks/news.js";
-import { seedSportsChunk } from "./chunks/sports.js";
+import { seedSportsChunk, seedSportsPublicSourceFixtures } from "./chunks/sports.js";
 import { seedTasksChunk } from "./chunks/tasks.js";
 import { seedCalendarChunk } from "./chunks/calendar.js";
 import { seedNotesChunk } from "./chunks/notes.js";
@@ -107,6 +107,9 @@ export async function seedLevel(options: SeedOptions): Promise<void> {
       await seedJobSearchAiProviderChunk(runner, adminUserId, options.jobSearchAiProviderBaseUrl);
     }
     await seedDataChunks(runner, adminUserId, exclude);
+    if (options.sportsPublicSourceFixtures) {
+      await seedSportsPublicSourceFixtures(runner, adminUserId);
+    }
 
     if (options.level === "multi-user") {
       if (secondOwnerUserId === undefined) {

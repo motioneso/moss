@@ -6,7 +6,7 @@ import type { ModuleBuildPlan } from "./write-plan.js";
 
 export interface StartModuleBuildInput {
   readonly actorUserId: string;
-  readonly conversationId: string;
+  readonly conversationId?: string;
   readonly description: string;
   readonly conversationExcerpt?: string;
 }
@@ -24,12 +24,13 @@ export interface StartModuleBuildDeps {
   }) => Promise<ModuleBuildPlan>;
   readonly createModuleBuild: (input: {
     readonly ownerUserId: string;
-    readonly conversationId: string;
+    readonly conversationId?: string;
   }) => Promise<{ readonly id: string }>;
   readonly updateModuleBuildPlan: (buildId: string, plan: Record<string, unknown>) => Promise<void>;
   readonly updateModuleBuildStatus: (
     buildId: string,
-    status: "awaiting_plan_approval" | "building"
+    status: "awaiting_plan_approval" | "building",
+    step?: "writing_spec"
   ) => Promise<void>;
   readonly isYoloActiveForActor: (actorUserId: string) => Promise<boolean>;
   readonly sendBuildJob: (buildId: string, actorUserId: string) => Promise<void>;
@@ -56,7 +57,7 @@ export async function startModuleBuild(
 
   const yoloActive = await deps.isYoloActiveForActor(input.actorUserId);
   if (yoloActive) {
-    await deps.updateModuleBuildStatus(build.id, "building");
+    await deps.updateModuleBuildStatus(build.id, "building", "writing_spec");
     await deps.sendBuildJob(build.id, input.actorUserId);
     return { buildId: build.id, plan, awaitingApproval: false };
   }
@@ -76,7 +77,11 @@ export interface ApproveModuleBuildPlanDeps {
   readonly getModuleBuild: (
     buildId: string
   ) => Promise<{ readonly id: string; readonly ownerUserId: string } | null>;
-  readonly updateModuleBuildStatus: (buildId: string, status: "building") => Promise<void>;
+  readonly updateModuleBuildStatus: (
+    buildId: string,
+    status: "building",
+    step: "writing_spec"
+  ) => Promise<void>;
   readonly sendBuildJob: (buildId: string, actorUserId: string) => Promise<void>;
 }
 
@@ -94,6 +99,34 @@ export async function approveModuleBuildPlan(
   if (!build || build.ownerUserId !== actorUserId) {
     throw new ModuleBuildNotFoundError(buildId);
   }
-  await deps.updateModuleBuildStatus(buildId, "building");
+  await deps.updateModuleBuildStatus(buildId, "building", "writing_spec");
   await deps.sendBuildJob(buildId, actorUserId);
+}
+
+export interface CancelModuleBuildDeps {
+  readonly getModuleBuild: (buildId: string) => Promise<{
+    readonly id: string;
+    readonly ownerUserId: string;
+    readonly status: "planning" | "awaiting_plan_approval" | "building" | string;
+    readonly moduleId: string | null;
+  } | null>;
+  readonly updateModuleBuildStatus: (buildId: string, status: "cancelled") => Promise<void>;
+}
+
+export async function cancelModuleBuild(
+  deps: CancelModuleBuildDeps,
+  buildId: string,
+  actorUserId: string
+): Promise<boolean> {
+  const build = await deps.getModuleBuild(buildId);
+  if (
+    !build ||
+    build.ownerUserId !== actorUserId ||
+    (!["planning", "awaiting_plan_approval", "building", "failed"].includes(build.status) &&
+      !(build.status === "awaiting_change" && build.moduleId === null))
+  ) {
+    return false;
+  }
+  await deps.updateModuleBuildStatus(buildId, "cancelled");
+  return true;
 }

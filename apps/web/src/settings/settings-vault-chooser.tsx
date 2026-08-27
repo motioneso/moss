@@ -131,7 +131,7 @@ export function VaultChooser(props: {
             {!loading && !displayError && directories.length === 0 ? (
               <div className="vlist__empty">
                 <FolderOpen size={16} aria-hidden="true" />
-                This folder has no subfolders.
+                No subfolders here — pick "Use this folder" below to choose it.
               </div>
             ) : null}
             {!loading && !displayError
@@ -152,8 +152,8 @@ export function VaultChooser(props: {
 
           {mode === "notes" && !loading && notesRootRecovery ? (
             <div className="vlist__empty">
-              No notes folders are available to Moss. Ask an operator to mount /data/external-notes,
-              set MOSS_NOTES_ROOTS, and recreate the container.
+              No notes folders are available to {assistantName}. Ask an operator to mount
+              /data/external-notes, set JARVIS_NOTES_ROOTS, and recreate the container.
               <a
                 href="/docs/operations/deploy.md#notes-mount"
                 target="_blank"

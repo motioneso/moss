@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { TaskDefaultView, TaskDto, TaskSearchIntent } from "@moss/shared";
-import { Chip, EmptyState, Segmented } from "@moss/ui";
+import { Chip, EmptyState, IconButton, Segmented } from "@moss/ui";
 import {
   CheckCheck,
   ChevronDown,
@@ -59,7 +59,7 @@ export function TasksPage() {
   const [searchWarning, setSearchWarning] = useState<string | null>(null);
   const [listStates, setListStates] = useState<Record<string, ListState>>({});
   const [tagFilter, setTagFilter] = useState<string[]>([]);
-  const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
   // Modal: null = closed; { id: string } = edit; { id: null, defaultName? } = create.
   const [dialog, setDialog] = useState<{
     readonly id: string | null;
@@ -167,101 +167,106 @@ export function TasksPage() {
     if (!query) return;
     interpretMutation.mutate(query);
   };
+  const isFiltered =
+    statusFilter !== "todo" ||
+    focus !== null ||
+    tagFilter.length > 0 ||
+    searchIntent !== null ||
+    Object.values(listStates).some((state) => state !== "included");
 
   return (
     <section className="tasks-wrap tasks--comfortable tasks--panels" aria-label="Tasks">
       <div className="tk-bar">
-        <div className="tk-bar__r1">
-          <ListFilterMenu
-            lists={lists}
-            stateOf={stateOf}
-            soloIds={soloIds}
-            counts={listCounts}
-            allCount={listCountTotal}
-            onCycle={cycleList}
-            onReset={() => setListStates({})}
-          />
-        </div>
-
-        {/* "" is the no-selection value: a URL focus overrides the status filter. */}
-        <Segmented<StatusFilter | "">
-          ariaLabel="Status filter"
-          options={statusFilters.map((status) => ({
-            value: status,
-            label: status === "all" ? "All" : statusLabels[status]
-          }))}
-          value={focus ? "" : statusFilter}
-          onChange={(next) => {
-            if (next === "") return;
-            setStatusFilter(next);
-            clearFocus();
-          }}
-        />
-
-        <span className="tk-bar__sep" />
-
-        <TagFilter
-          all={allTags}
-          active={tagFilter}
-          onAdd={(name) => setTagFilter((a) => (a.includes(name) ? a : [...a, name]))}
-        />
-
-        <div className={`tk-bar__search${showMobileSearch ? " is-open" : ""}`}>
-          <label className="tk-tagfield">
-            <span className="ic">
-              <Search size={14} aria-hidden="true" />
-            </span>
-            <input
-              aria-label="Search tasks"
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setSearchIntent(null);
-                setSearchWarning(null);
-              }}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter") return;
-                event.preventDefault();
-                submitSearchIntent();
-              }}
-              placeholder="Search tasks…"
-              type="search"
-              value={search}
+        <div className="tk-bar__left">
+          <div className="tk-bar__r1">
+            <ListFilterMenu
+              lists={lists}
+              stateOf={stateOf}
+              soloIds={soloIds}
+              counts={listCounts}
+              allCount={listCountTotal}
+              onCycle={cycleList}
+              onReset={() => setListStates({})}
             />
-            <button
-              aria-label="Interpret search"
-              className="tk-tagfield__action"
-              disabled={interpretMutation.isPending || !search.trim()}
-              onClick={submitSearchIntent}
-              type="button"
+
+            <Segmented<TaskDefaultView>
+              ariaLabel="View"
+              options={[
+                { value: "priority", label: "List" },
+                { value: "matrix", label: "Matrix" }
+              ]}
+              value={view}
+              onChange={(next) => {
+                if (viewMutation.isPending) return;
+                viewMutation.mutate(next);
+              }}
+            />
+
+            <IconButton
+              aria-label="Toggle search"
+              active={showSearch}
+              onClick={() => setShowSearch((v) => !v)}
             >
-              <GitCommitHorizontal size={14} aria-hidden="true" />
-            </button>
-          </label>
+              <Search size={15} aria-hidden="true" />
+            </IconButton>
+          </div>
+
+          {/* "" is the no-selection value: a URL focus overrides the status filter. */}
+          <Segmented<StatusFilter | "">
+            ariaLabel="Status filter"
+            options={statusFilters.map((status) => ({
+              value: status,
+              label: status === "all" ? "All" : statusLabels[status]
+            }))}
+            value={focus ? "" : statusFilter}
+            onChange={(next) => {
+              if (next === "") return;
+              setStatusFilter(next);
+              clearFocus();
+            }}
+          />
+
+          <span className="tk-bar__sep" />
+
+          <TagFilter
+            all={allTags}
+            active={tagFilter}
+            onAdd={(name) => setTagFilter((a) => (a.includes(name) ? a : [...a, name]))}
+          />
+
+          <div className={`tk-bar__search${showSearch ? " is-open" : ""}`}>
+            <label className="tk-tagfield">
+              <span className="ic">
+                <Search size={14} aria-hidden="true" />
+              </span>
+              <input
+                aria-label="Search tasks"
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setSearchIntent(null);
+                  setSearchWarning(null);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  submitSearchIntent();
+                }}
+                placeholder="Search tasks…"
+                type="search"
+                value={search}
+              />
+              <button
+                aria-label="Interpret search"
+                className="tk-tagfield__action"
+                disabled={interpretMutation.isPending || !search.trim()}
+                onClick={submitSearchIntent}
+                type="button"
+              >
+                <GitCommitHorizontal size={14} aria-hidden="true" />
+              </button>
+            </label>
+          </div>
         </div>
-
-        <button
-          aria-label="Toggle search"
-          className={`tk-msrch${showMobileSearch ? " is-active" : ""}`}
-          type="button"
-          onClick={() => setShowMobileSearch((v) => !v)}
-        >
-          <Search size={15} aria-hidden="true" />
-        </button>
-
-        <span className="tk-bar__spacer" />
-
-        <Segmented<TaskDefaultView>
-          ariaLabel="View"
-          options={[
-            { value: "priority", label: "List" },
-            { value: "matrix", label: "Matrix" }
-          ]}
-          value={view}
-          onChange={(next) => {
-            if (viewMutation.isPending) return;
-            viewMutation.mutate(next);
-          }}
-        />
       </div>
 
       {focus ? (
@@ -327,11 +332,17 @@ export function TasksPage() {
           icon={<LoaderCircle className="spin" size={24} aria-hidden="true" />}
           title="Loading tasks"
         />
-      ) : visibleTasks.length === 0 ? (
+      ) : visibleTasks.length === 0 && isFiltered ? (
         <EmptyState
           icon={<CheckCheck size={24} aria-hidden="true" />}
           title="No tasks match"
           description="Try clearing a filter or two."
+        />
+      ) : visibleTasks.length === 0 ? (
+        <EmptyState
+          icon={<CheckCheck size={24} aria-hidden="true" />}
+          title="No tasks yet"
+          description="Add one above to get started."
         />
       ) : view === "matrix" ? (
         <TaskMatrixView

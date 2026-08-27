@@ -14,6 +14,8 @@ function story(overrides: Partial<FollowedTeamNews> = {}): FollowedTeamNews {
     url: "https://example.com/n1",
     publishedAt: "2026-07-07T12:00:00Z",
     imageUrl: null,
+    publisherLabel: "ESPN",
+    publisherDomain: "espn.com",
     ...overrides
   };
 }

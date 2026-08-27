@@ -1,27 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Bell, ChevronUp, Layers3, LogOut, Menu, MessageSquare, Settings } from "lucide-react";
 import {
-  Bell,
-  Briefcase,
-  CalendarDays,
-  CheckSquare,
-  ChevronUp,
-  FileText,
-  HeartPulse,
-  House,
-  Landmark,
-  Layers3,
-  LogOut,
-  Mail,
-  Menu,
-  MessageSquare,
-  Newspaper,
-  Settings,
-  Trophy,
-  Utensils,
-  Wrench
-} from "lucide-react";
-import {
-  type ComponentType,
   type ReactNode,
   useCallback,
   useEffect,
@@ -53,6 +32,7 @@ import { ChatControlsProvider } from "./chat-controls-context";
 import { HeaderWeather } from "../today/header-weather";
 import { applyThemeTokens } from "../theme/theme-runtime";
 import { CommandPalette } from "./command-palette";
+import { NAV_ICON_MAP } from "./nav-icons";
 import { WORKSHOP_MODULE_ID } from "@moss/workshop";
 import {
   loadShellColorMode,
@@ -76,24 +56,6 @@ interface AppShellProps {
   readonly modulesLoading: boolean;
   readonly disabledModuleIds?: readonly string[];
 }
-
-const iconMap: Record<string, ComponentType<{ readonly size?: number }>> = {
-  house: House,
-  bell: Bell,
-  briefcase: Briefcase,
-  "calendar-days": CalendarDays,
-  "check-square": CheckSquare,
-  "file-text": FileText,
-  "heart-pulse": HeartPulse,
-  landmark: Landmark,
-  mail: Mail,
-  "message-square": MessageSquare,
-  newspaper: Newspaper,
-  settings: Settings,
-  trophy: Trophy,
-  utensils: Utensils,
-  wrench: Wrench
-};
 
 export function AppShell(props: AppShellProps) {
   usePageContextSync();
@@ -606,7 +568,7 @@ function NavItem(props: {
   readonly unreadByModule: Readonly<Record<string, number>>;
   readonly onClick: () => void;
 }) {
-  const Icon = props.entry.icon ? (iconMap[props.entry.icon] ?? Layers3) : Layers3;
+  const Icon = props.entry.icon ? (NAV_ICON_MAP[props.entry.icon] ?? Layers3) : Layers3;
   const entry = props.entry as NavEntryWithBadge;
   // #1285: a nav entry id is always exactly the owning module's id, or "<moduleId>.<slug>"
   // (validate.ts's #1019 anti-spoof rule enforces this at manifest-validation time), so

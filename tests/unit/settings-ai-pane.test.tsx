@@ -15,7 +15,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 
-import type { MeResponse } from "@moss/shared";
+import type { ChatArchiveSettingsResponse, MeResponse } from "@moss/shared";
 
 const personaGet = vi.fn(async () => ({
   persona: { assistantName: "Moss", personaText: "Be direct and a little dry." }
@@ -47,8 +47,28 @@ vi.mock("../../apps/web/src/api/client.js", () => ({
     instanceEnabled: false,
     self: { allowed: false, enabled: false, active: false }
   })),
-  putYoloSelf: vi.fn()
+  putYoloSelf: vi.fn(),
+  getChatArchiveSettings: () => chatArchiveGet(),
+  putChatArchiveSettings: (body: unknown) => chatArchivePut(body as never)
 }));
+
+const notesSourceGet = vi.fn(
+  async (): Promise<{ path: string | null }> => ({
+    path: "/data/vaults/u1"
+  })
+);
+vi.mock("../../apps/web/src/api/notes-client.js", () => ({
+  getNotesSource: () => notesSourceGet()
+}));
+
+const chatArchiveGet = vi.fn(
+  async (): Promise<ChatArchiveSettingsResponse> => ({
+    enabled: false,
+    folder: "Moss/Chats",
+    status: null
+  })
+);
+const chatArchivePut = vi.fn(async (body: { enabled: boolean; folder: string }) => body);
 
 import { AssistantPane } from "../../apps/web/src/settings/settings-ai-pane.js";
 import { FeedbackProvider } from "../../apps/web/src/settings/settings-feedback.js";
@@ -129,6 +149,143 @@ describe("Persona save acknowledgement", () => {
 
     const text = renderedText(renderer.toJSON());
     expect(text).toContain("Saved. This is Alfred's current voice.");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});
+
+async function renderAssistantPane(): Promise<ReactTestRenderer> {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement(
+          FeedbackProvider,
+          null,
+          createElement(AssistantPane, { me, onNavigate: () => {} })
+        )
+      )
+    );
+  });
+  await flush();
+  return renderer;
+}
+
+describe("Chat archive settings section", () => {
+  it("shows an empty state and no controls when no notes folder is connected", async () => {
+    notesSourceGet.mockResolvedValueOnce({ path: null });
+    const renderer = await renderAssistantPane();
+
+    expect(() => renderer.root.findByProps({ "aria-label": "Save chats to Notes" })).toThrow();
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("Connect a notes folder");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("shows the switch off and the folder pre-filled when a source is connected", async () => {
+    const renderer = await renderAssistantPane();
+
+    const toggle = renderer.root.findByProps({ "aria-label": "Save chats to Notes" });
+    expect(toggle.props.checked).toBe(false);
+    const folderInput = renderer.root.findByProps({ "aria-label": "Transcript folder" });
+    expect(folderInput.props.value).toBe("Moss/Chats");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("toggling the switch saves the current folder with the new enabled value", async () => {
+    const renderer = await renderAssistantPane();
+
+    const toggle = renderer.root.findByProps({ "aria-label": "Save chats to Notes" });
+    await act(async () => {
+      toggle.props.onChange({ target: { checked: true } });
+    });
+    await flush();
+
+    expect(chatArchivePut).toHaveBeenCalledWith({ enabled: true, folder: "Moss/Chats" });
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("blurring an edited folder field saves the new folder", async () => {
+    const renderer = await renderAssistantPane();
+
+    const folderInput = renderer.root.findByProps({ "aria-label": "Transcript folder" });
+    await act(async () => {
+      folderInput.props.onChange({ target: { value: "2 Area/Moss/Chats" } });
+    });
+    await act(async () => {
+      folderInput.props.onBlur();
+    });
+    await flush();
+
+    expect(chatArchivePut).toHaveBeenCalledWith({
+      enabled: false,
+      folder: "2 Area/Moss/Chats"
+    });
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("shows the server's rejection message inline when a folder is refused", async () => {
+    chatArchivePut.mockRejectedValueOnce(
+      new Error("Chat archive folder cannot start with a leading slash")
+    );
+    const renderer = await renderAssistantPane();
+
+    const folderInput = renderer.root.findByProps({ "aria-label": "Transcript folder" });
+    await act(async () => {
+      folderInput.props.onChange({ target: { value: "/etc/passwd" } });
+    });
+    await act(async () => {
+      folderInput.props.onBlur();
+    });
+    await flush();
+
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("Chat archive folder cannot start with a leading slash");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("shows a paused message next to the controls when archiving is paused (#1992)", async () => {
+    chatArchiveGet.mockResolvedValueOnce({
+      enabled: true,
+      folder: "Moss/Chats",
+      status: { state: "paused", reason: "No notes folder is connected." }
+    });
+    const renderer = await renderAssistantPane();
+
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("No notes folder is connected.");
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("shows nothing extra when there is no status (#1992)", async () => {
+    const renderer = await renderAssistantPane();
+
+    const text = renderedText(renderer.toJSON());
+    expect(text).not.toContain("Archiving is paused");
+    expect(text).not.toContain("Archiving failed");
 
     await act(async () => {
       renderer.unmount();

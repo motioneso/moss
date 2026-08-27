@@ -29,6 +29,7 @@ describe("ReleasedPane", () => {
 
     expect(html).toContain("Recently Released");
     expect(html).toContain("Edge channel");
+    expect(html.indexOf("Edge channel")).toBeLessThan(html.indexOf("2026-08-21"));
     expect(html).toContain("Recall relevant notes before answering");
     expect(html).toContain("Threaded chat routing");
     expect(html).toContain("v0.1.16");

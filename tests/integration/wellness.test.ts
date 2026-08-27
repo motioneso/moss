@@ -247,11 +247,15 @@ describe("WellnessRepository", () => {
 
   it("createMedication + logDose; getSchedule marks a slot taken from a same-day log", async () => {
     await dataContext.withDataContext(ctx(userId), async (scopedDb) => {
-      const med = await repo.createMedication(scopedDb, {
-        name: "Levothyroxine",
-        frequencyType: "once_daily",
-        scheduleTimes: ["08:00"]
-      });
+      const med = await repo.createMedication(
+        scopedDb,
+        {
+          name: "Levothyroxine",
+          frequencyType: "once_daily",
+          scheduleTimes: ["08:00"]
+        },
+        "UTC"
+      );
       const today = new Date();
       const scheduledFor = new Date(
         Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 8, 0, 0)
@@ -267,11 +271,15 @@ describe("WellnessRepository", () => {
 
   it("re-logging the same scheduled slot CORRECTS the status (upsert, reversible)", async () => {
     await dataContext.withDataContext(ctx(userId), async (scopedDb) => {
-      const med = await repo.createMedication(scopedDb, {
-        name: "Metformin",
-        frequencyType: "once_daily",
-        scheduleTimes: ["08:00"]
-      });
+      const med = await repo.createMedication(
+        scopedDb,
+        {
+          name: "Metformin",
+          frequencyType: "once_daily",
+          scheduleTimes: ["08:00"]
+        },
+        "UTC"
+      );
       const today = new Date();
       const scheduledFor = new Date(
         Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 8, 0, 0)

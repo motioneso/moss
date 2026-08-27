@@ -1,6 +1,5 @@
 import { useState } from "react";
 
-import { useAssistantName } from "../api/use-assistant-name";
 import type { PaneProps } from "./settings-types";
 import { PaneHead, Segmented } from "./settings-ui";
 import { MemoryDashboardPane } from "./settings-memory-dashboard";
@@ -10,19 +9,15 @@ type MemoryTab = "memory" | "people";
 
 const TAB_OPTIONS: readonly { value: MemoryTab; label: string }[] = [
   { value: "memory", label: "Memory" },
-  { value: "people", label: "People & context" }
+  { value: "people", label: "People" }
 ];
 
 export function MemoryPane(_props: PaneProps) {
   const [tab, setTab] = useState<MemoryTab>("memory");
-  const assistantName = useAssistantName();
 
   return (
     <>
-      <PaneHead
-        title="Memory & context"
-        desc={`Everything ${assistantName} remembers, believes, and infers: in the open, and yours to correct.`}
-      />
+      <PaneHead title="Memory & context" />
 
       <Segmented value={tab} options={TAB_OPTIONS} onChange={setTab} ariaLabel="Memory section" />
 

@@ -33,7 +33,16 @@ COPY . .
 # ---- build: compile resident entrypoints to dist/ -------------------------
 FROM deps AS build
 WORKDIR /app
-RUN pnpm build:api && pnpm build:worker && pnpm build:web
+RUN pnpm build:api \
+  && pnpm build:worker \
+  && pnpm build:web \
+  && pnpm exec esbuild packages/sports/src/source/browser-sidecar.ts \
+    --bundle \
+    --external:playwright-core \
+    --format=esm \
+    --outfile=packages/sports/dist/browser-sidecar.mjs \
+    --platform=node \
+    --target=node24
 
 # ---- runtime: FROM build (full, self-consistent deps incl. tsx + source) ---
 # DECISION (Codex R2): we do NOT prune to prod-deps and we do NOT cherry-pick
@@ -50,6 +59,7 @@ RUN pnpm build:api && pnpm build:worker && pnpm build:web
 FROM build AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 # Default cache location for the embedding model weights (§3); the prod Compose
 # mounts a named volume here so weights survive restarts.
 ENV HF_HOME=/app/.cache/huggingface
@@ -65,6 +75,7 @@ ENV JARVIS_WEB_DIST_DIR=/app/apps/web/dist
 # bundled helper. --no-install-recommends keeps the layer small.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends tmux git ca-certificates bubblewrap \
+  && pnpm exec playwright install --with-deps chromium \
   && rm -rf /var/lib/apt/lists/*
 # Put the installed provider CLIs (tools volume bin) on PATH for the tmux PANE shells
 # the cli-runner opens for chat + login (#342). The entrypoint exports PATH for the
@@ -86,9 +97,11 @@ RUN printf '%s\n' 'export PATH="${JARVIS_UAT_SCRIPTED_PROVIDER_BIN:+$JARVIS_UAT_
 # Only runtime-write paths receive ownership/mode changes. Do not recursively chown
 # /app: application files are read-only, and changing their metadata duplicates the
 # ~1.4 GB tree in a new layer. The HF cache is the one writable path under /app.
-RUN mkdir -p "$HF_HOME" /data/vaults /data/cli-tools /data/cli-auth /run/jarv1s \
+RUN mkdir -p "$HF_HOME" /data/vaults /data/cli-tools /data/cli-auth /run/jarv1s /run/moss-sports-browser \
   && chown -R node:node /data /run/jarv1s \
+  && chown root:1001 /run/moss-sports-browser \
   && chmod -R 0777 "$HF_HOME" /data/vaults /data/cli-tools /data/cli-auth \
-  && chmod 0700 /run/jarv1s
+  && chmod 0700 /run/jarv1s \
+  && chmod 2770 /run/moss-sports-browser
 EXPOSE 3000
 CMD ["node_modules/.bin/tsx", "scripts/start-jarv1s.ts"]

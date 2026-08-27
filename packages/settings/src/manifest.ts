@@ -450,6 +450,16 @@ export const settingsModuleManifest: MossModuleManifest = {
       method: "POST",
       path: "/api/onboarding/provider-login/cancel",
       permissionId: "settings.manage"
+    },
+    {
+      method: "GET",
+      path: "/api/me/chat-archive",
+      permissionId: "settings.view"
+    },
+    {
+      method: "PUT",
+      path: "/api/me/chat-archive",
+      permissionId: "settings.write"
     }
   ],
   assistantActionFamilies: [

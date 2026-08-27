@@ -339,7 +339,22 @@ describe("MVP foundation schema catalog", () => {
         // #1754 — module build records and the queue worker's continuation state.
         { version: "0189", name: "0189_module_builds.sql" },
         // #1572 — custom sports news sources by team and league.
-        { version: "0190", name: "0190_sports_custom_sources.sql" }
+        { version: "0190", name: "0190_sports_custom_sources.sql" },
+        { version: "0191", name: "0191_sports_public_source_runtime.sql" },
+        { version: "0192", name: "0192_sports_legacy_feed_assignments_verified.sql" },
+        { version: "0193", name: "0193_sports_legacy_feed_assignment_repair.sql" },
+        // #1959 — store all six medication schedule types and a real time zone.
+        { version: "0194", name: "0194_wellness_medication_schedule_v2.sql" },
+        // Module-build jobs execute as jarvis_worker_runtime and need owner-scoped read/write.
+        { version: "0195", name: "0195_module_builds_worker_runtime.sql" },
+        // #1961 — assign ESPN and custom sports news sources by sport, league, or team.
+        { version: "0196", name: "0196_sports_news_source_scopes.sql" },
+        // #1968 — a start date for every medication schedule type, plus a reminder toggle.
+        { version: "0197", name: "0197_wellness_medication_start_date_reminders.sql" },
+        // #1949 — track the files a module build has written, for the Workshop build-progress view.
+        { version: "0198", name: "0198_module_builds_written_files.sql" },
+        // #1949 — let the owner-scoped worker persist an admin-owned generated-module draft.
+        { version: "0199", name: "0199_external_modules_worker_draft_write.sql" }
       ]);
     } finally {
       await client.end();

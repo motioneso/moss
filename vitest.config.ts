@@ -317,12 +317,25 @@ export default defineConfig({
         )
       },
       {
+        // Subpath export (#1970); must precede the bare "@moss/wellness" alias below, same
+        // pairing requirement as the other subpath/bare alias pairs in this file. The web
+        // builder form imports this directly so the browser never pulls the wellness index.
+        find: "@moss/wellness/schedule-summary",
+        replacement: fileURLToPath(
+          new URL("./packages/wellness/src/schedule-summary.ts", import.meta.url)
+        )
+      },
+      {
         find: "@moss/wellness",
         replacement: fileURLToPath(new URL("./packages/wellness/src/index.ts", import.meta.url))
       },
       {
         find: "@moss/weather",
         replacement: fileURLToPath(new URL("./packages/weather/src/index.ts", import.meta.url))
+      },
+      {
+        find: "@moss/workshop",
+        replacement: fileURLToPath(new URL("./packages/workshop/src/index.ts", import.meta.url))
       },
       {
         find: "@moss/people",
@@ -338,7 +351,9 @@ export default defineConfig({
       "packages/people/src/__tests__/**/*.test.ts",
       "packages/db/src/__tests__/**/*.test.ts",
       "packages/chat/src/live/*.test.ts",
-      "packages/calendar/src/*.test.ts"
+      "packages/chat/src/*.test.ts",
+      "packages/calendar/src/*.test.ts",
+      "packages/ai/src/structured/*.test.ts"
     ],
     setupFiles: ["tests/setup-env.ts"],
     hookTimeout: 30_000,

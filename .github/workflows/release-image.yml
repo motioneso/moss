@@ -102,19 +102,24 @@ jobs:
           VERSION_EXISTS: ${{ steps.source.outputs.version_exists }}
         run: |
           set -euo pipefail
-          tags=(--tag "$IMAGE:stable")
-          if [[ "$VERSION_EXISTS" != "true" ]]; then
-            tags+=(--tag "$IMAGE:$VERSION")
-          fi
-          docker buildx imagetools create "${tags[@]}" "$IMAGE@$EDGE_DIGEST"
-
-          for tag in "$VERSION" stable; do
-            digest=$(docker buildx imagetools inspect "$IMAGE:$tag" --format '{{json .Manifest}}' | jq -er .digest)
-            if [[ "$digest" != "$EDGE_DIGEST" ]]; then
-              echo "::error::$tag resolved to $digest, expected $EDGE_DIGEST"
-              exit 1
+          promote() {
+            local image=$1 digest=$2 version_exists=$3
+            local tags=(--tag "$image:stable")
+            if [[ "$version_exists" != "true" ]]; then
+              tags+=(--tag "$image:$VERSION")
             fi
-          done
+            docker buildx imagetools create "${tags[@]}" "$image@$digest"
+
+            for tag in "$VERSION" stable; do
+              actual=$(docker buildx imagetools inspect "$image:$tag" --format '{{json .Manifest}}' | jq -er .digest)
+              if [[ "$actual" != "$digest" ]]; then
+                echo "::error::$image:$tag resolved to $actual, expected $digest"
+                exit 1
+              fi
+            done
+          }
+
+          promote "$IMAGE" "$EDGE_DIGEST" "$VERSION_EXISTS"
 
       - name: Create GitHub release
         env:

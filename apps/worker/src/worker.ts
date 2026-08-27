@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import type { ConstructorOptions, PgBoss } from "pg-boss";
 import { pino, type Logger as PinoLogger } from "pino";
 import type { FastifyBaseLogger } from "fastify";
@@ -43,9 +44,11 @@ import {
   ExternalModuleJobReconciler,
   ExternalModuleWorkerRuntime,
   createExternalModuleDiscoveryHolder,
+  installModuleDraft,
   resolveBuildSourceDir,
   resolveModuleBuildsDir,
-  resolveModulesDir
+  resolveModulesDir,
+  validateExternalModuleManifest
 } from "@moss/module-registry/node";
 import {
   AiRepository,
@@ -55,12 +58,16 @@ import {
   type ProviderKind
 } from "@moss/ai";
 import { ChatAttachmentsService } from "@moss/chat";
+import { ensureProviderLaunchReady } from "@moss/cli-runner/provider-first-run";
 import { NotificationsRepository, type CreateNotificationInput } from "@moss/notifications";
 import {
   createModuleCredentialSecretCipher,
   getModuleBuild,
+  SettingsRepository,
+  touchModuleBuildActivity,
   updateModuleBuildStatus,
-  appendModuleBuildFetchedUrl
+  appendModuleBuildFetchedUrl,
+  appendModuleBuildWrittenFile
 } from "@moss/settings";
 import { getVaultBaseDir, VaultContextRunner } from "@moss/vault";
 
@@ -70,6 +77,8 @@ import { createExternalBriefingInvoker } from "./external-module-invoke.js";
 import { createExternalModuleJobHandler } from "./external-module-job-handler.js";
 import { createIsModuleEnabled } from "./worker-module-gate.js";
 import { createModuleBuildLiveAgent } from "./module-build-live-agent.js";
+import { createRunModuleBuildStepForJob } from "./module-build-step-runner.js";
+import { WORKSHOP_MODULE_ID } from "@moss/workshop";
 
 // ---------------------------------------------------------------------------
 // Bounded graceful-shutdown timeout (ms). On SIGINT/SIGTERM the worker waits
@@ -111,6 +120,32 @@ export function resolveExternalWorkerConfig(env: NodeJS.ProcessEnv = process.env
   readonly modulesDir: string;
 } {
   return { modulesDir: resolveModulesDir(env) };
+}
+
+export function resolveModuleBuildCliHome(
+  env: NodeJS.ProcessEnv = process.env,
+  osHome: string = homedir()
+): string {
+  return (
+    resolveMossEnv(env, "JARVIS_CLI_HOME_BASE") ?? resolveMossEnv(env, "JARVIS_CLI_HOME") ?? osHome
+  );
+}
+
+/**
+ * The notification posted when a module build reaches an end state (#1949 Task 1.4).
+ * `eventKey` is per build+outcome so a pg-boss retry that fails again updates the
+ * same notification row instead of creating a duplicate.
+ */
+export function buildModuleBuildNotification(
+  buildId: string,
+  outcome: "finished" | "failed"
+): CreateNotificationInput {
+  return {
+    moduleId: WORKSHOP_MODULE_ID,
+    title: outcome === "finished" ? "Your module is ready for a look" : "Your module build failed",
+    href: "/workshop",
+    eventKey: `module-build:${buildId}:${outcome}`
+  };
 }
 
 /**
@@ -183,52 +218,77 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   }
 
   const moduleBuildsDir = resolveModuleBuildsDir(process.env);
-  const moduleBuildIo = createRealTmuxIo();
-  const moduleBuildMux = new TmuxMultiplexer(moduleBuildIo);
+  const modulesDir = resolveModulesDir(process.env);
+  const moduleBuildCliHome = resolveModuleBuildCliHome(process.env);
+  const moduleBuildIo = createRealTmuxIo({ ...process.env, HOME: moduleBuildCliHome });
+  const moduleBuildMux = new TmuxMultiplexer(moduleBuildIo, { homeBase: moduleBuildCliHome });
   const aiRepository = new AiRepository();
-  const runModuleBuildStepForJob = async (payload: ModuleBuildPayload) => {
-    const access: AccessContext = {
-      actorUserId: payload.actorUserId,
-      requestId: `module-build:${payload.buildId}`
-    };
-    return dataContext.withDataContext(access, async (scopedDb) => {
-      const build = await getModuleBuild(scopedDb, payload.buildId);
-      if (!build) throw new Error("module build was not found");
+  const moduleBuildNotifications = new NotificationsRepository(
+    undefined,
+    createNotificationPreferencePort()
+  );
+  const moduleBuildSettings = new SettingsRepository();
+  const builtInModuleIds = new Set(getBuiltInModuleManifests().map((manifest) => manifest.id));
+  const runModuleBuildStepForJob = createRunModuleBuildStepForJob({
+    dataContext,
+    getModuleBuild,
+    touchModuleBuildActivity,
+    updateModuleBuildStatus,
+    prepareRunStepDeps: async (scopedDb) => {
       const model = await aiRepository.selectChatModelForUser(scopedDb);
       if (!model) throw new Error("no chat model is configured for module build");
       const moduleBuildLiveAgent = createModuleBuildLiveAgent({
         io: moduleBuildIo,
         mux: moduleBuildMux,
         provider: model.provider_kind as ProviderKind,
-        mcpToken: process.env.JARVIS_MCP_TOKEN,
-        mcpServerUrl:
-          process.env.JARVIS_MCP_SERVER_URL ??
-          `http://127.0.0.1:${process.env.PORT ?? "3000"}/api/mcp`
+        ensureProviderLaunchReady: (provider, workingDir) =>
+          ensureProviderLaunchReady(moduleBuildCliHome, provider, workingDir)
       });
-
-      try {
-        const result = await runModuleBuildStep(
-          {
-            launchLiveAgent: moduleBuildLiveAgent,
-            resolveWorkingDir: (buildId) => resolveBuildSourceDir(moduleBuildsDir, buildId),
-            recordFetchedUrl: (buildId, url) => appendModuleBuildFetchedUrl(scopedDb, buildId, url)
-          },
-          build
-        );
-        await updateModuleBuildStatus(scopedDb, build.id, {
-          status: result.continuation ? "building" : "awaiting_change",
-          ...(result.continuation ? { step: result.continuation.step } : {})
-        });
-        return result;
-      } catch (error) {
-        await updateModuleBuildStatus(scopedDb, build.id, {
-          status: "failed",
-          error: error instanceof Error ? error.name : "unknown error"
-        });
-        throw error;
-      }
-    });
-  };
+      return {
+        launchLiveAgent: moduleBuildLiveAgent,
+        resolveWorkingDir: (buildId) => resolveBuildSourceDir(moduleBuildsDir, buildId),
+        recordFetchedUrl: (buildId, url) => appendModuleBuildFetchedUrl(scopedDb, buildId, url),
+        recordWrittenFile: (buildId, path) => appendModuleBuildWrittenFile(scopedDb, buildId, path),
+        finishBuild: async (buildId, workingDir) => {
+          const current = await getModuleBuild(scopedDb, buildId);
+          if (!current || current.status === "cancelled") {
+            throw new Error("module build was cancelled");
+          }
+          const installed = await installModuleDraft(
+            {
+              modulesDir,
+              validateExternalModuleManifest,
+              isModuleIdAvailable: async (moduleId) =>
+                !builtInModuleIds.has(moduleId) &&
+                !(await moduleBuildSettings.listExternalModuleStates(scopedDb)).some(
+                  (module) => module.id === moduleId
+                ),
+              writeDraftRow: ({ id, manifestHash, packageHash, ownerUserId }) =>
+                moduleBuildSettings.setExternalModuleDraft(scopedDb, {
+                  id,
+                  manifestHash,
+                  packageHash,
+                  ownerUserId,
+                  actorUserId: current.ownerUserId,
+                  requestId: `module-build:${buildId}:install`
+                })
+            },
+            workingDir,
+            current.ownerUserId
+          );
+          if (!installed.ok) {
+            throw new Error(`generated module failed validation: ${installed.errors.join("; ")}`);
+          }
+          return { moduleId: installed.moduleId };
+        }
+      };
+    },
+    runStep: runModuleBuildStep,
+    notifyFinished: (scopedDb, buildId) =>
+      moduleBuildNotifications.create(scopedDb, buildModuleBuildNotification(buildId, "finished")),
+    notifyFailed: (scopedDb, buildId) =>
+      moduleBuildNotifications.create(scopedDb, buildModuleBuildNotification(buildId, "failed"))
+  });
   await boss.work<ModuleBuildPayload>(
     MODULE_BUILD_QUEUE,
     createModuleBuildWorker({ boss, sendJob, runStep: runModuleBuildStepForJob })

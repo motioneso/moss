@@ -14,6 +14,7 @@ import type { FastifyInstance } from "fastify";
 
 import type { AccessContext, DataContextDb, User } from "@moss/db";
 import {
+  deleteExternalModuleDraftRouteSchema,
   listAdminModulesRouteSchema,
   listExternalModulesRouteSchema,
   listMyModulesRouteSchema,
@@ -30,7 +31,8 @@ import { sendModuleControl } from "@moss/jobs";
 
 import type { SettingsRepository } from "./repository.js";
 import type { InstalledExternalModuleSummary, SettingsRoutesDependencies } from "./routes.js";
-import { shipExternalModule } from "./repository-external-modules.js";
+import { deleteExternalModuleDraft, shipExternalModule } from "./repository-external-modules.js";
+import { listModuleBuildsForUser, updateModuleBuildStatus } from "./module-builds-repository.js";
 import {
   computeMyModuleDto,
   handleRouteError,
@@ -324,8 +326,92 @@ export function registerModuleRoutes(server: FastifyInstance, ctx: ModuleRoutesC
             repository.externalModuleAuditWriter(scopedDb)
           );
           if (!shipped) throw new HttpError(404, "External module not found");
+          const builds = await listModuleBuildsForUser(scopedDb, accessContext.actorUserId);
+          for (const build of builds) {
+            if (build.moduleId === discovery.id && build.status === "awaiting_change") {
+              await updateModuleBuildStatus(scopedDb, build.id, { status: "ready", step: null });
+            }
+          }
         });
         return { shipped: true, restartRequired: true };
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  // #1890 Workshop 8: throwing a draft away — the other end of a draft's life from ship, and
+  // built to the same rules. Authorize FIRST (a non-admin gets 403 whether or not the module
+  // exists), 409 if the feature is off, then ONE owner-and-draft-scoped delete that answers 404
+  // identically for "no such module", "that is shipped" and "that is someone else's draft".
+  //
+  // Deliberately NOT gated on ext.discoveries(): unlike ship, a throw-away must still work when
+  // the module is not in the current on-disk discovery snapshot — a half-installed or already
+  // hand-deleted draft is exactly the case where a user most needs the row cleaned up, and
+  // requiring a live discovery would strand it with no way off the instance from the UI.
+  server.delete<{ Params: { id: string } }>(
+    "/api/admin/modules/:id/draft",
+    { schema: deleteExternalModuleDraftRouteSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const moduleId = request.params.id;
+        const dist = dependencies.moduleDistribution;
+        // Build ids are read BEFORE the delete: app.module_builds.module_id is
+        // ON DELETE SET NULL, so once the external_modules row is gone the link from a
+        // build to the module it produced is gone with it and the build directory could
+        // never be found again. RLS already restricts this read to the caller's own builds.
+        const buildIds = await dependencies.dataContext.withDataContext(
+          accessContext,
+          async (scopedDb) => {
+            await assertAdminUser(repository, scopedDb, accessContext.actorUserId);
+            if (!dependencies.externalModules?.enabled) {
+              throw new HttpError(409, "External modules are not enabled on this instance");
+            }
+            const builds = await listModuleBuildsForUser(scopedDb, accessContext.actorUserId);
+            const matchingBuilds = builds.filter((build) => build.moduleId === moduleId);
+            const deleted = await deleteExternalModuleDraft(
+              scopedDb,
+              {
+                id: moduleId,
+                actorUserId: accessContext.actorUserId,
+                requestId: requireRequestId(accessContext)
+              },
+              repository.externalModuleAuditWriter(scopedDb)
+            );
+            if (!deleted) throw new HttpError(404, "External module not found");
+            for (const build of matchingBuilds) {
+              await updateModuleBuildStatus(scopedDb, build.id, {
+                status: "cancelled",
+                step: null
+              });
+            }
+            return matchingBuilds.map((build) => build.id);
+          }
+        );
+
+        // Files LAST, and only once the row is really gone — same ordering rule as admin
+        // Remove (routes-module-registry.ts). A leftover directory with no row is inert; a
+        // deleted directory with a live row would leave a broken module in everyone's nav.
+        await dist?.removeModuleFiles(moduleId);
+        for (const buildId of buildIds) {
+          await dist?.removeModuleBuildFiles?.(buildId);
+        }
+
+        // Rescan here and in the worker — this is what drops the module from the sidebar
+        // without a restart, the same path /api/admin/modules/rescan uses.
+        try {
+          await dependencies.externalModules?.rescan?.();
+          if (dependencies.boss) {
+            await sendModuleControl(dependencies.boss, { action: "rescan" });
+          }
+        } catch (error) {
+          request.log.warn(
+            { moduleId, errorName: (error as Error).name },
+            "rescan after draft delete failed (#1890)"
+          );
+        }
+        return { deleted: true };
       } catch (error) {
         return handleRouteError(error, reply);
       }

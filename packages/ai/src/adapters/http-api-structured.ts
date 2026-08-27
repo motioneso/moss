@@ -1,3 +1,5 @@
+import type { ModuleServiceKey } from "@moss/shared";
+
 import type { ProviderKind } from "./transcript-reader.js";
 
 // #915 D6: provider mechanics only. Routing policy and credentials stay outside feature code.
@@ -45,6 +47,8 @@ export type StructuredRunScope = {
 };
 
 export type GenerateStructuredProviderInput = {
+  /** Which module/service is calling — lets a CLI-backed adapter key a stable one-shot cwd. */
+  readonly service?: ModuleServiceKey;
   readonly model: { readonly provider_kind: ProviderKind; readonly provider_model_id: string };
   readonly messages: readonly StructuredChatTurn[];
   readonly schema: Record<string, unknown>;

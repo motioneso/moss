@@ -103,6 +103,7 @@ export const ALLOWED_PAYLOAD_KEYS: ReadonlySet<string> = new Set([
   "idempotencyKey",
   "sourcePath",
   "filePath",
+  "localDate",
   "chunkOffset",
   "fileHash",
   "op",

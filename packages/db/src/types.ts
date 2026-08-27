@@ -203,6 +203,7 @@ export interface ModuleBuildsTable {
   step: string | null;
   module_id: string | null;
   fetched_urls: ColumnType<string[], string[] | undefined, string[]>;
+  written_files: ColumnType<string[], string[] | undefined, string[]>;
   cost_cents: ColumnType<number, number | undefined, number>;
   error: string | null;
   created_at: TimestampColumn;
@@ -782,7 +783,9 @@ export type MedicationFrequencyType =
   | "specific_weekdays"
   | "every_n_hours"
   | "as_needed"
-  | "cyclical";
+  | "cyclical"
+  | "every_interval"
+  | "monthly";
 export type MedicationLogStatus = "taken" | "skipped" | "prn";
 
 export interface MedicationsTable {
@@ -801,6 +804,17 @@ export interface MedicationsTable {
   cycle_anchor_date: ColumnType<string | null, string | null | undefined, string | null>;
   active: ColumnType<boolean, boolean | undefined, boolean>;
   notes: string | null;
+  schedule_start_date: ColumnType<string | null, string | null | undefined, string | null>;
+  schedule_end_date: ColumnType<string | null, string | null | undefined, string | null>;
+  time_zone: string | null;
+  interval_unit: "days" | "weeks" | "months" | null;
+  interval_count: number | null;
+  month_kind: "date" | "weekdayPosition" | null;
+  month_day: number | null;
+  month_day_is_last: ColumnType<boolean, boolean | undefined, boolean>;
+  month_weekday_position: "first" | "second" | "third" | "fourth" | "last" | null;
+  month_weekday: number | null;
+  reminders_enabled: ColumnType<boolean, boolean | undefined, boolean>;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
 }
@@ -1142,6 +1156,20 @@ export interface SportsCustomSourcesTable {
   last_success_at: TimestampColumn | null;
   validation_fingerprint: string;
   validated_at: TimestampColumn;
+  recipe_json: ColumnType<
+    Record<string, unknown> | null,
+    Record<string, unknown> | null | undefined,
+    Record<string, unknown> | null
+  >;
+  recipe_schema_version: 1 | null;
+  recipe_fingerprint: string | null;
+  recipe_status: ColumnType<
+    "feed" | "ready" | "missing" | "drift",
+    "feed" | "ready" | "missing" | "drift" | undefined,
+    "feed" | "ready" | "missing" | "drift"
+  >;
+  confirmed_fetch_hosts: string[];
+  authorization_confirmed_at: TimestampColumn;
   created_at: TimestampColumn;
   updated_at: TimestampColumn;
 }
@@ -1150,7 +1178,36 @@ export interface SportsSourceAssignmentsTable {
   id: ColumnType<string, string | undefined, string>;
   owner_user_id: string;
   source_id: string;
-  follow_id: string;
+  follow_id: string | null;
+  sport_key: string | null;
+  target_url: string | null;
+  target_parameters: ColumnType<
+    Record<string, unknown>,
+    Record<string, unknown> | undefined,
+    Record<string, unknown>
+  >;
+  preview_status: ColumnType<
+    "pending" | "verified" | "recipe_missing",
+    "pending" | "verified" | "recipe_missing" | undefined,
+    "pending" | "verified" | "recipe_missing"
+  >;
+  health_state: ColumnType<
+    SportsSourceHealthState,
+    SportsSourceHealthState | undefined,
+    SportsSourceHealthState
+  >;
+  health_reason_code: string | null;
+  health_message: string | null;
+  last_checked_at: TimestampColumn | null;
+  last_success_at: TimestampColumn | null;
+  created_at: TimestampColumn;
+}
+
+export interface SportsEspnSourceAssignmentsTable {
+  id: ColumnType<string, string | undefined, string>;
+  owner_user_id: string;
+  sport_key: string | null;
+  follow_id: string | null;
   created_at: TimestampColumn;
 }
 
@@ -1225,6 +1282,7 @@ export interface MossDatabase {
   "app.sports_follows": SportsFollowsTable;
   "app.sports_custom_sources": SportsCustomSourcesTable;
   "app.sports_source_assignments": SportsSourceAssignmentsTable;
+  "app.sports_espn_source_assignments": SportsEspnSourceAssignmentsTable;
   "app.sports_policy_verdicts": SportsPolicyVerdictsTable;
   "app.sports_headline_prefs": SportsHeadlinePrefsTable;
   "app.news_prefs": NewsPrefsTable;

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { validateToolInput } from "@moss/ai";
+import { collectSportsSourcesExportSection } from "../../packages/sports/src/data-lifecycle.js";
 import { sportsModuleManifest } from "../../packages/sports/src/manifest.js";
 
 describe("sports manifest", () => {
@@ -8,6 +10,7 @@ describe("sports manifest", () => {
       "app.sports_follows",
       "app.sports_custom_sources",
       "app.sports_source_assignments",
+      "app.sports_espn_source_assignments",
       "app.sports_policy_verdicts",
       "app.sports_headline_prefs"
     ]);
@@ -15,15 +18,33 @@ describe("sports manifest", () => {
       "sql/0133_sports_follows.sql",
       "sql/0185_sports_whole_league_dedupe.sql",
       "sql/0186_sports_whole_league_unique.sql",
-      "sql/0190_sports_custom_sources.sql"
+      "sql/0190_sports_custom_sources.sql",
+      "sql/0191_sports_public_source_runtime.sql",
+      "sql/0192_sports_legacy_feed_assignments_verified.sql",
+      "sql/0193_sports_legacy_feed_assignment_repair.sql",
+      "sql/0196_sports_news_source_scopes.sql"
     ]);
     expect(sportsModuleManifest.navigation[0]?.path).toBe("/sports");
     expect(sportsModuleManifest.settings[0]?.path).toBe("/settings/modules/sports");
     expect(sportsModuleManifest.routes.map((r) => r.path)).toContain("/api/sports/overview");
+    expect(sportsModuleManifest.routes.map((r) => r.path)).toEqual(
+      expect.arrayContaining([
+        "/api/sports/sources/:id/retry",
+        "/api/sports/sources/:id/rebuild/preview",
+        "/api/sports/sources/:id/rebuild"
+      ])
+    );
+    expect(sportsModuleManifest.dataLifecycle?.exportSections).toEqual([
+      {
+        key: "sportsSources",
+        displayName: "Sports sources",
+        collect: collectSportsSourcesExportSection
+      }
+    ]);
   });
 
-  it("exposes one read-risk briefing tool and two write-risk follow tools", () => {
-    expect(sportsModuleManifest.assistantTools).toHaveLength(3);
+  it("exposes follows plus bounded actor-scoped source tools", () => {
+    expect(sportsModuleManifest.assistantTools).toHaveLength(12);
     const byName = Object.fromEntries(
       sportsModuleManifest.assistantTools.map((tool) => [tool.name, tool])
     );
@@ -39,6 +60,70 @@ describe("sports manifest", () => {
       expect(byName[name]?.executionPolicy).toBe("auto");
       expect(byName[name]?.selfOperationGrant).toBe("granted_at_install");
     }
+    for (const name of [
+      "sports.listSources",
+      "sports.previewSource",
+      "sports.previewSourceAssignments",
+      "sports.rebuildSourceRecipe"
+    ]) {
+      expect(byName[name]?.risk).toBe("read");
+    }
+    for (const name of [
+      "sports.previewSource",
+      "sports.previewSourceAssignments",
+      "sports.rebuildSourceRecipe"
+    ]) {
+      expect(byName[name]?.externalContent).toBe(true);
+    }
+    for (const name of [
+      "sports.confirmSource",
+      "sports.confirmSourceAssignments",
+      "sports.confirmSourceRecipe",
+      "sports.retrySource",
+      "sports.removeSource"
+    ]) {
+      expect(byName[name]?.actionFamilyId).toBe("sports.sources");
+      expect(byName[name]?.selfOperationGrant).toBe("confirm_always");
+    }
+  });
+
+  it("accepts a complete HTTPS target through the Moss confirmation boundary", async () => {
+    const tool = sportsModuleManifest.assistantTools.find(
+      ({ name }) => name === "sports.confirmSourceRecipe"
+    );
+    const input = {
+      sourceId: "22222222-2222-4222-8222-222222222222",
+      confirmationId: "confirmation-1",
+      authorizationAcknowledgement: "I am authorized.",
+      canonicalDomain: "www.publisher.example",
+      confirmedFetchHosts: ["www.publisher.example"],
+      targets: [
+        {
+          target: {
+            kind: "follow",
+            followId: "11111111-1111-4111-8111-111111111111"
+          },
+          targetUrl: "https://www.publisher.example/feed?format=atom"
+        }
+      ]
+    };
+
+    await expect(
+      validateToolInput(tool?.inputSchema, input, {
+        external: false,
+        toolName: "sports.confirmSourceRecipe"
+      })
+    ).resolves.toEqual(input);
+    await expect(
+      validateToolInput(
+        tool?.inputSchema,
+        {
+          ...input,
+          targets: [{ ...input.targets[0], targetUrl: "http://www.publisher.example/feed" }]
+        },
+        { external: false, toolName: "sports.confirmSourceRecipe" }
+      )
+    ).rejects.toThrow("targets[0].targetUrl has an invalid format");
   });
 
   // #1265 security QA BLOCKING-1(b): both follow tools auto-run under a granted_at_install grant,
@@ -67,11 +152,13 @@ describe("sports manifest", () => {
     }
   });
 
-  it("declares exactly one action family, sports_follows, with trusted_auto allowed", () => {
-    expect(sportsModuleManifest.assistantActionFamilies).toHaveLength(1);
-    const family = sportsModuleManifest.assistantActionFamilies?.[0];
-    expect(family?.id).toBe("sports_follows");
-    expect(family?.allowedTiers).toContain("trusted_auto");
+  it("keeps follow automation separate from confirmed source recovery", () => {
+    expect(sportsModuleManifest.assistantActionFamilies).toHaveLength(2);
+    const byId = Object.fromEntries(
+      (sportsModuleManifest.assistantActionFamilies ?? []).map((family) => [family.id, family])
+    );
+    expect(byId.sports_follows?.allowedTiers).toContain("trusted_auto");
+    expect(byId["sports.sources"]?.allowedTiers).not.toContain("trusted_auto");
   });
 
   it("declares the espn external source with credential none and pinned hosts", () => {
@@ -84,6 +171,7 @@ describe("sports manifest", () => {
     // comes from there, and a host absent from this list is a CSP-blocked blank image.
     expect(espn?.imageHosts).toEqual([
       "a.espncdn.com",
+      "s.espncdn.com",
       "s.secure.espncdn.com",
       "espnmedia-cdn.akamaized.net"
     ]);

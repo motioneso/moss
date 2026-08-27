@@ -1,4 +1,4 @@
-import type { Confederation, StandingsShape } from "@moss/shared";
+import type { Confederation, SportsSportKey, StandingsShape } from "@moss/shared";
 
 export interface CatalogEntry {
   readonly competitionKey: string;
@@ -6,7 +6,7 @@ export interface CatalogEntry {
   readonly kind: "league" | "tournament";
   readonly marquee: boolean;
   readonly standingsShape: StandingsShape;
-  readonly espnSport: string;
+  readonly espnSport: SportsSportKey;
   readonly espnLeague: string;
   // Official competition logo URL (Ben 2026-07-09 /today: "I'd prefer to have the logo to be clear",
   // then "pull the official logos from somewhere else if needed for World Cup, Champions League etc").

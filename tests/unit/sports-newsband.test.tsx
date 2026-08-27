@@ -1,7 +1,9 @@
+// @vitest-environment jsdom
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it } from "vitest";
-import type { Headline, LeagueNewsGroup } from "@moss/shared";
+import type { Headline, SportsNewsGroup } from "@moss/shared";
 import { NewsBand } from "../../packages/sports/src/web/sports-news.js";
 
 // A first-of-league headline with art (+2) + dek (+1) clears BIG_STORY_WEIGHT (4) on the
@@ -9,6 +11,7 @@ import { NewsBand } from "../../packages/sports/src/web/sports-news.js";
 function headline(over: Partial<Headline> = {}): Headline {
   return {
     id: "4567",
+    sportKey: "football",
     competitionKey: "nfl",
     competitionLabel: "NFL",
     title: "Cowboys clinch the NFC East",
@@ -17,12 +20,30 @@ function headline(over: Partial<Headline> = {}): Headline {
     imageUrl: "https://a.espncdn.com/photo/cowboys.jpg",
     summary: "Dallas wrapped up the division on Sunday.",
     teamKeys: [],
+    publisherLabel: "ESPN",
+    publisherDomain: "espn.com",
     ...over
   };
 }
 
-function group(h: Headline): LeagueNewsGroup {
-  return { competitionKey: "nfl", competitionLabel: "NFL", headlines: [h] };
+function group(h: Headline): SportsNewsGroup {
+  return {
+    kind: "competition",
+    sportKey: "football",
+    competitionKey: "nfl",
+    competitionLabel: "NFL",
+    headlines: [h]
+  };
+}
+
+function renderedText(node: unknown): string {
+  if (node === null || node === undefined) return "";
+  if (typeof node === "string") return node;
+  if (Array.isArray(node)) return node.map(renderedText).join("");
+  if (typeof node === "object" && "children" in (node as Record<string, unknown>)) {
+    return renderedText((node as { children: unknown }).children);
+  }
+  return "";
 }
 
 describe("NewsBand featured-article body (#857)", () => {
@@ -93,7 +114,15 @@ describe("NewsBand majors/mosaic url-keying (#858)", () => {
     ];
     const html = renderToString(
       createElement(NewsBand, {
-        groups: [{ competitionKey: "nfl", competitionLabel: "NFL", headlines: items }],
+        groups: [
+          {
+            kind: "competition",
+            sportKey: "football",
+            competitionKey: "nfl",
+            competitionLabel: "NFL",
+            headlines: items
+          }
+        ],
         followedPairs: new Set<string>()
       })
     );
@@ -107,5 +136,59 @@ describe("NewsBand majors/mosaic url-keying (#858)", () => {
     const majorCount = html.split("sp-newsband__art--major").length - 1;
     expect(majorCount).toBe(2);
     expect(html).toContain("Story Three Distinct");
+  });
+});
+
+describe("NewsBand sport filters", () => {
+  it("mixes sport-wide and competition stories for the selected sport", () => {
+    let renderer!: ReactTestRenderer;
+    act(() => {
+      renderer = create(
+        createElement(NewsBand, {
+          groups: [
+            {
+              kind: "sport",
+              sportKey: "soccer",
+              competitionKey: null,
+              competitionLabel: "Soccer",
+              headlines: [
+                headline({
+                  sportKey: "soccer",
+                  competitionKey: null,
+                  competitionLabel: "Soccer",
+                  title: "FotMob general soccer",
+                  url: "https://fotmob.example/general"
+                })
+              ]
+            },
+            {
+              kind: "competition",
+              sportKey: "soccer",
+              competitionKey: "eng.1",
+              competitionLabel: "Premier League",
+              headlines: [
+                headline({
+                  sportKey: "soccer",
+                  competitionKey: "eng.1",
+                  competitionLabel: "Premier League",
+                  title: "ESPN Premier League",
+                  url: "https://espn.example/premier-league"
+                })
+              ]
+            }
+          ],
+          followedPairs: new Set<string>()
+        })
+      );
+    });
+
+    const select = renderer.root.findByType("select");
+    act(() => select.props.onChange({ currentTarget: { value: "sport:soccer" } }));
+    expect(renderedText(renderer.toJSON())).toContain("FotMob general soccer");
+    expect(renderedText(renderer.toJSON())).toContain("ESPN Premier League");
+
+    act(() => select.props.onChange({ currentTarget: { value: "competition:eng.1" } }));
+    expect(renderedText(renderer.toJSON())).not.toContain("FotMob general soccer");
+    expect(renderedText(renderer.toJSON())).toContain("ESPN Premier League");
   });
 });

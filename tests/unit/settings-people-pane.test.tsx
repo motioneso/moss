@@ -53,10 +53,11 @@ describe("SettingsPeoplePane", () => {
     expect(html).toContain("Clear folder");
   });
 
-  it("renders People & context heading", () => {
+  it("starts directly with the People controls without a duplicate pane heading", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const html = renderWithQuery(createElement(SettingsPeoplePane), client);
-    expect(html).toContain("People &amp; context");
+    expect(html).toContain("People notes");
+    expect(html).not.toContain("People &amp; context");
   });
 
   it("shows Review matches section", () => {

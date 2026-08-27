@@ -40,31 +40,26 @@ describe("ProfilePane merged Account & preferences", () => {
     expect(html).toContain("Quiet hours");
     expect(html).toContain("Location");
     expect(html).toContain(">Weather<");
-    expect(html).not.toContain("Weather location");
-    expect(html).not.toContain(">Temperature<");
     expect(html).toContain(
       "Search for a place to use instead of approximate timezone-based detection."
     );
+    expect(html).toContain(">Unit<");
     expect(html).toContain(">Member<");
     expect(html).not.toContain(">Active<");
     expect(html).not.toContain(">Role<");
     expect(html).not.toContain("Auth provider configuration");
   });
 
-  it("shows only the active unit letter and a state-matching accessible name", async () => {
+  it("marks the selected temperature unit pressed in the segmented control", async () => {
     const metricHtml = await renderProfilePane(undefined, "metric");
-    expect(metricHtml).toContain('aria-label="Temperature units: Celsius"');
-    expect(metricHtml).not.toContain('aria-label="Temperature units: Fahrenheit"');
-    const metricSwitch = metricHtml.slice(metricHtml.indexOf("jds-switch"));
-    expect(metricSwitch.slice(0, metricSwitch.indexOf("</label>"))).toContain(">C<");
-    expect(metricSwitch.slice(0, metricSwitch.indexOf("</label>"))).not.toContain(">F<");
+    const metricUnit = metricHtml.slice(metricHtml.indexOf('aria-label="Unit"'));
+    expect(metricUnit).toMatch(/aria-pressed="true"[^>]*>Celsius/);
+    expect(metricUnit).toMatch(/aria-pressed="false"[^>]*>Fahrenheit/);
 
     const imperialHtml = await renderProfilePane(undefined, "imperial");
-    expect(imperialHtml).toContain('aria-label="Temperature units: Fahrenheit"');
-    expect(imperialHtml).not.toContain('aria-label="Temperature units: Celsius"');
-    const imperialSwitch = imperialHtml.slice(imperialHtml.indexOf("jds-switch"));
-    expect(imperialSwitch.slice(0, imperialSwitch.indexOf("</label>"))).toContain(">F<");
-    expect(imperialSwitch.slice(0, imperialSwitch.indexOf("</label>"))).not.toContain(">C<");
+    const imperialUnit = imperialHtml.slice(imperialHtml.indexOf('aria-label="Unit"'));
+    expect(imperialUnit).toMatch(/aria-pressed="true"[^>]*>Fahrenheit/);
+    expect(imperialUnit).toMatch(/aria-pressed="false"[^>]*>Celsius/);
   });
 
   it("reflects a primed weather location override in the current-location row", async () => {

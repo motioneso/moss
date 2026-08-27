@@ -19,6 +19,7 @@ export interface ModuleBuild {
   readonly step: string | null;
   readonly moduleId: string | null;
   readonly fetchedUrls: readonly string[];
+  readonly writtenFiles: readonly string[];
   readonly costCents: number;
   readonly error: string | null;
   readonly createdAt: Date;
@@ -39,6 +40,7 @@ function toModuleBuild(row: {
   step: string | null;
   module_id: string | null;
   fetched_urls: string[];
+  written_files: string[];
   cost_cents: number;
   error: string | null;
   created_at: Date;
@@ -53,6 +55,7 @@ function toModuleBuild(row: {
     step: row.step,
     moduleId: row.module_id,
     fetchedUrls: row.fetched_urls,
+    writtenFiles: row.written_files,
     costCents: row.cost_cents,
     error: row.error,
     createdAt: row.created_at,
@@ -129,6 +132,19 @@ export async function updateModuleBuildStatus(
     .execute();
 }
 
+export async function touchModuleBuildActivity(
+  scopedDb: DataContextDb,
+  buildId: string
+): Promise<void> {
+  assertDataContextDb(scopedDb);
+  await scopedDb.db
+    .updateTable("app.module_builds")
+    .set({ updated_at: new Date() })
+    .where("id", "=", buildId)
+    .where("status", "=", "building")
+    .execute();
+}
+
 /** Appends one URL to the build's fetched-URL trail (spec: "what the build fetched is shown"). */
 export async function appendModuleBuildFetchedUrl(
   scopedDb: DataContextDb,
@@ -142,6 +158,43 @@ export async function appendModuleBuildFetchedUrl(
         updated_at = now()
     WHERE id = ${buildId}
   `.execute(scopedDb.db);
+}
+
+/** Appends one path to the build's written-files trail (spec: "what it has written is shown"). */
+export async function appendModuleBuildWrittenFile(
+  scopedDb: DataContextDb,
+  buildId: string,
+  path: string
+): Promise<void> {
+  assertDataContextDb(scopedDb);
+  await sql`
+    UPDATE app.module_builds
+    SET written_files = written_files || ${JSON.stringify([path])}::jsonb,
+        updated_at = now()
+    WHERE id = ${buildId}
+  `.execute(scopedDb.db);
+}
+
+/**
+ * Update-only, scoped to `owner_user_id = ownerUserId AND status IN ('planning', 'building')` —
+ * that WHERE clause is simultaneously the "does this build exist" and "is it yours" guard, and it
+ * also stops cancelling a build that has already finished, failed, or been cancelled. Same
+ * non-leak discipline as `shipExternalModule` / `deleteExternalModuleDraft`.
+ */
+export async function cancelModuleBuild(
+  scopedDb: DataContextDb,
+  buildId: string,
+  ownerUserId: string
+): Promise<boolean> {
+  assertDataContextDb(scopedDb);
+  const result = await scopedDb.db
+    .updateTable("app.module_builds")
+    .set({ status: "cancelled", updated_at: new Date() })
+    .where("id", "=", buildId)
+    .where("owner_user_id", "=", ownerUserId)
+    .where("status", "in", ["planning", "building"])
+    .executeTakeFirst();
+  return (result.numUpdatedRows ?? 0n) > 0n;
 }
 
 export async function listModuleBuildsForUser(

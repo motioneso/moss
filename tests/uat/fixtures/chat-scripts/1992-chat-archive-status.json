@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "turns": [
+    {
+      "expectIncludes": ["UAT-1992 message while notes folder is connected"],
+      "calls": [],
+      "reply": "Scripted UAT-1992 reply 1."
+    },
+    {
+      "expectIncludes": ["UAT-1992 message while notes folder is disconnected"],
+      "calls": [],
+      "reply": "Scripted UAT-1992 reply 2."
+    },
+    {
+      "expectIncludes": ["UAT-1992 message after reconnecting the notes folder"],
+      "calls": [],
+      "reply": "Scripted UAT-1992 reply 3."
+    }
+  ]
+}

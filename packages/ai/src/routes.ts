@@ -85,6 +85,7 @@ import { registerAiServiceRoutes } from "./capability-route-routes.js";
 import { registerAiTranscriptionRoutes } from "./transcription-routes.js";
 import { registerAiVoiceEndpointRoutes } from "./voice-endpoint-routes.js";
 import { registerActionPolicyRoutes } from "./action-policy-routes.js";
+import { registerModuleBuildRoutes } from "./module-build-routes.js";
 import { registerProviderVisibilityRoutes } from "./provider-visibility-routes.js";
 import { createAiSecretCipher, type AiSecretCipher } from "./crypto.js";
 import { discoverAndPersistModels } from "./discover-and-persist-models.js";
@@ -133,6 +134,20 @@ export interface AiRoutesDependencies {
     actionRequestId: string,
     status: "confirmed" | "rejected" | "cancelled"
   ) => Promise<"resolved" | "expired" | "not_found">;
+  // #1888 — injected by the composition root: approving a module build starts it, which needs
+  // the job queue. packages/ai owns the rule (ownership check, status transition) but not the
+  // queue, so the wiring is handed in the same way resolveActionRequest is. Absent means the
+  // approve route answers 503 rather than pretending the build started.
+  readonly approveModuleBuild?: (
+    scopedDb: DataContextDb,
+    buildId: string,
+    actorUserId: string
+  ) => Promise<void>;
+  readonly cancelModuleBuild?: (
+    scopedDb: DataContextDb,
+    buildId: string,
+    actorUserId: string
+  ) => Promise<boolean>;
 }
 
 type IdParams = { readonly id: string };
@@ -433,6 +448,7 @@ export function registerAiRoutes(
   // #874: dedicated admin GET/PUT for the single instance-wide Voice (STT) endpoint (no discovery).
   registerAiVoiceEndpointRoutes(server, dependencies, repository, secretCipher);
   registerActionPolicyRoutes(server, dependencies, repository);
+  registerModuleBuildRoutes(server, dependencies);
   registerAiAdminPinRoutes(server, dependencies, repository);
 
   server.get(

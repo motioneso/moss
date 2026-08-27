@@ -113,6 +113,7 @@ function headline(
 ): Headline {
   return {
     id,
+    sportKey: "football",
     competitionKey,
     competitionLabel: TEST_COMPETITION_LABELS[competitionKey] ?? competitionKey.toUpperCase(),
     title,
@@ -121,6 +122,8 @@ function headline(
     imageUrl: null,
     summary: "",
     teamKeys: [],
+    publisherLabel: "ESPN",
+    publisherDomain: "espn.com",
     ...overrides
   };
 }
@@ -152,6 +155,8 @@ function makeOverview(overrides: Partial<SportsOverviewResponse> = {}): SportsOv
     topStories: [headline("h1", "nfl", "Vikings clinch division on late field goal")],
     leagueNews: [
       {
+        kind: "competition",
+        sportKey: "football",
         competitionKey: "nfl",
         competitionLabel: "NFL",
         headlines: [headline("h2", "nfl", "Cowboys sign veteran lineman")]
@@ -290,7 +295,9 @@ describe("SportsPage", () => {
                 title: "Cowboys clinch the division",
                 url: "https://example.com/h1",
                 publishedAt: "2026-07-01T12:00:00Z",
-                imageUrl: null
+                imageUrl: null,
+                publisherLabel: "ESPN",
+                publisherDomain: "espn.com"
               }
             ]
           })
@@ -564,6 +571,8 @@ describe("SportsPage", () => {
       makeOverview({
         leagueNews: [
           {
+            kind: "competition",
+            sportKey: "football",
             competitionKey: "nfl",
             competitionLabel: "NFL",
             headlines: [
@@ -604,6 +613,8 @@ describe("SportsPage", () => {
       makeOverview({
         leagueNews: [
           {
+            kind: "competition",
+            sportKey: "football",
             competitionKey: "nfl",
             competitionLabel: "NFL",
             headlines: [
@@ -731,7 +742,7 @@ describe("SportsPage", () => {
   it("renders the top-stories column and league news grid on gameday", () => {
     const html = render(makeOverview());
     expect(html).toContain("Top stories");
-    expect(html).toContain("League news");
+    expect(html).toContain("Sports news");
     expect(html).toContain("Cowboys sign veteran lineman");
   });
 
@@ -740,6 +751,8 @@ describe("SportsPage", () => {
       makeOverview({
         leagueNews: [
           {
+            kind: "competition",
+            sportKey: "football",
             competitionKey: "nfl",
             competitionLabel: "NFL",
             headlines: [

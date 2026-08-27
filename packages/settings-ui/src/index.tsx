@@ -165,9 +165,10 @@ export function Group(props: {
   readonly desc?: ReactNode;
   readonly action?: ReactNode;
   readonly children: ReactNode;
+  readonly tone?: "danger";
 }) {
   return (
-    <section className="pane__card">
+    <section className={props.tone === "danger" ? "pane__card pane__card--danger" : "pane__card"}>
       <header className="pane__cardhead">
         <div className="pane__cardheadmain">
           <div className="pane__cardtitle">{props.title}</div>
@@ -203,9 +204,10 @@ export function Field(props: {
   readonly label: string;
   readonly hint?: ReactNode;
   readonly children: ReactNode;
+  readonly className?: string;
 }) {
   return (
-    <div className="fld">
+    <div className={`fld${props.className ? ` ${props.className}` : ""}`}>
       <div className="fld__lbl">{props.label}</div>
       <div className="fld__row">{props.children}</div>
       {props.hint ? <div className="fld__hint">{props.hint}</div> : null}
@@ -219,10 +221,11 @@ export function Choice(props: {
   readonly value: string;
   readonly options: readonly string[];
   readonly onChange?: (value: string) => void;
+  readonly className?: string;
 }) {
   const [value, setValue] = useState(props.value);
   return (
-    <div className="fld">
+    <div className={`fld${props.className ? ` ${props.className}` : ""}`}>
       <div className="fld__lbl">{props.label}</div>
       <div className="fld__choice">
         <Segmented

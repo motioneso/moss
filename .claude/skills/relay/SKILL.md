@@ -33,6 +33,14 @@ Self-perceived context % is known-unreliable, so trigger on things you can **cou
 **Relay early, not at 99%** — you need enough headroom to write a clean continuation doc. The moment
 a trigger fires, message the coordinator that you are relaying, *then* do it.
 
+**Relay depth is budgeted at ONE for build/QA lanes** (Ben, 2026-08-23: one session per unit of
+work — "we handoff work waaaay too much"). Relaying is failure recovery, not a workflow. Count
+your depth (successor names carry it: `<slug>-relay<n>`); if you are already `-relay1`+ and your
+own trigger fires without an open PR, do NOT relay again — push what you have, write the state
+doc, and report to the coordinator that the slice needs re-scoping into smaller lanes. The
+coordinator is the only exception (its run outlives any window), and even it should be spawning
+smaller scoped lanes rather than carrying work itself.
+
 ## Steps
 
 **1. Bring the durable state fully current FIRST.** Everything the successor needs must live on

@@ -6,7 +6,8 @@ export type CommandPaletteGroupLabel = "Navigate" | "Tasks" | "Appearance" | "Se
 export type CommandPaletteAction =
   | { readonly kind: "navigate"; readonly to: string }
   | { readonly kind: "theme"; readonly themeId: string }
-  | { readonly kind: "create-task" };
+  | { readonly kind: "create-task" }
+  | { readonly kind: "set-color-mode"; readonly mode: "light" | "dark" };
 
 export interface CommandPaletteCommand {
   readonly id: string;
@@ -29,16 +30,8 @@ const GROUP_ORDER: readonly CommandPaletteGroupLabel[] = [
   "Appearance",
   "Settings"
 ] as const;
-const V1_NAV_ORDER: readonly string[] = [
-  "today",
-  "tasks",
-  "calendar",
-  "wellness",
-  "notifications",
-  "briefings",
-  "settings"
-] as const;
-const V1_NAV_IDS = new Set(V1_NAV_ORDER);
+// "briefings" has no web route of its own -- Today covers it -- and "chat" isn't a page.
+const PALETTE_HIDDEN_NAV_IDS = new Set(["chat", "briefings"]);
 
 export function buildCommandPaletteCommands(input: {
   readonly modules: readonly ModuleDto[];
@@ -101,6 +94,20 @@ export function buildCommandPaletteCommands(input: {
   }
   for (const theme of input.themes?.custom ?? []) {
     commands.push(themeCommand(theme.id, theme.name));
+  }
+  const activeThemeId = input.themes?.activeId;
+  const activeIsBuiltIn = input.themes?.builtIn.some((theme) => theme.id === activeThemeId) ?? true;
+  if (activeIsBuiltIn && input.themes) {
+    const otherMode = input.themes.mode === "dark" ? "light" : "dark";
+    commands.push({
+      id: `mode:${otherMode}`,
+      group: "Appearance",
+      label: `Switch to ${otherMode} mode`,
+      description: `Set color mode to ${otherMode}`,
+      keywords: ["appearance", "theme", "color mode", "light", "dark"],
+      icon: "palette",
+      action: { kind: "set-color-mode", mode: otherMode }
+    });
   }
   commands.push({
     id: "settings:appearance",
@@ -209,15 +216,17 @@ function paletteNavigationEntries(
 
   for (const module of modules) {
     for (const entry of module.navigation) {
-      if (!V1_NAV_IDS.has(entry.id)) continue;
+      if (PALETTE_HIDDEN_NAV_IDS.has(entry.id)) continue;
       entryById.set(entry.id, entry);
     }
   }
 
   return [...entryById.values()].sort((left, right) => {
-    const leftIndex = V1_NAV_ORDER.indexOf(left.id);
-    const rightIndex = V1_NAV_ORDER.indexOf(right.id);
-    return leftIndex - rightIndex;
+    if (left.id === "today" || right.id === "today") return left.id === "today" ? -1 : 1;
+    if (left.id === "settings" || right.id === "settings") return left.id === "settings" ? 1 : -1;
+    const leftOrder = left.order ?? Number.MAX_SAFE_INTEGER;
+    const rightOrder = right.order ?? Number.MAX_SAFE_INTEGER;
+    return leftOrder - rightOrder || left.label.localeCompare(right.label);
   });
 }
 

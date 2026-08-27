@@ -40,6 +40,8 @@ import {
   ModelDiscoveryService,
   registerAiMaintenanceWorkers,
   registerAiRoutes,
+  approveModuleBuildPlan,
+  cancelModuleBuild,
   type AssistantToolGateway,
   type ProviderKind,
   type TerminalRpcConnectOptions,
@@ -164,6 +166,8 @@ import {
   assertMetadataOnlyPayload,
   FOUNDATION_QUEUES,
   registerDataContextWorker,
+  sendJob,
+  MODULE_BUILD_QUEUE,
   type QueueDefinition
 } from "@moss/jobs";
 import { createModuleLogger } from "@moss/module-sdk";
@@ -216,7 +220,9 @@ import {
   type HostRestartDependencies,
   type AppMapReadService,
   loadAppMap,
-  createAppMapReadService
+  createAppMapReadService,
+  getModuleBuild,
+  updateModuleBuildStatus
 } from "@moss/settings";
 import {
   TASKS_QUEUE_DEFINITIONS,
@@ -261,9 +267,19 @@ import { workshopModuleManifest } from "@moss/workshop";
 import {
   configureSportsBriefingService,
   configureSportsChatTools,
+  createSportsPreviewStore,
   createEspnDatasetAdapter,
   registerSportsRoutes,
-  sportsAddSourceRequirement,
+  SportsFollowsRepository,
+  SportsBrowserBroker,
+  SportsBrowserBrokerServer,
+  SportsBrowserClient,
+  SportsEspnCoverageRepository,
+  SportsPublicSourceReader,
+  SportsService,
+  SportsSourceService,
+  SportsSourcesRepository,
+  SPORTS_BROWSER_SOCKETS,
   sportsModuleManifest,
   sportsModuleSqlMigrationDirectory
 } from "@moss/sports";
@@ -278,7 +294,7 @@ import {
   registerNewsRoutes,
   type NewsRoutesDependencies
 } from "@moss/news";
-import { assertValidFetchHosts, createDatasetClient } from "@moss/datasets";
+import { assertValidFetchHosts, createDatasetClient, DatasetCache } from "@moss/datasets";
 import {
   notesModuleManifest,
   notesCommitmentProvider,
@@ -706,20 +722,45 @@ function buildNewsDiscoveryPorts(
   };
 }
 
-const sportsRobotsGate = createRobotsGate();
 const sportsHostRateLimiter = createHostRateLimiter();
 
 /** #1572: Sports' own discovery ports — URL-only, so no `search` (unlike News). */
-function buildSportsDiscoveryPorts(logger?: Pick<FastifyBaseLogger, "info" | "warn">) {
+function buildSportsDiscoveryPorts(
+  logger?: Pick<FastifyBaseLogger, "info" | "warn">,
+  browser?: SportsBrowserClient
+) {
   const repository = new AiRepository();
   const cipher = createAiSecretCipher();
   return {
-    fetch: (url: string) =>
+    fetch: (
+      url: string,
+      options?: {
+        readonly allowedHosts?: readonly string[];
+        readonly requestHeaders?: Readonly<Record<string, string>>;
+        readonly allowedContentTypes?: readonly string[];
+        readonly beforeRequest?: (hop: {
+          readonly url: URL;
+          readonly redirectCount: number;
+        }) => boolean | void | Promise<boolean | void>;
+        readonly maxBytes?: number;
+        readonly rejectOversizedResponses?: boolean;
+        readonly timeoutMs?: number;
+        readonly signal?: AbortSignal;
+      }
+    ) =>
       fetchWebResource(url, {
         requireHttps: true,
-        robots: sportsRobotsGate,
-        rateLimiter: sportsHostRateLimiter
+        rateLimiter: sportsHostRateLimiter,
+        allowedHosts: options?.allowedHosts,
+        requestHeaders: options?.requestHeaders,
+        allowedContentTypes: options?.allowedContentTypes,
+        beforeRequest: options?.beforeRequest,
+        maxBytes: options?.maxBytes,
+        rejectOversizedResponses: options?.rejectOversizedResponses,
+        timeoutMs: options?.timeoutMs,
+        signal: options?.signal
       }),
+    ...(browser ? { browser } : {}),
     ai: {
       generateJson: (
         scopedDb: DataContextDb,
@@ -1451,7 +1492,55 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         resolveActionRequest: (actorUserId, id, status) => {
           const fn = deps.getResolveActionRequestFn?.() ?? unwiredActionResolver;
           return fn(actorUserId, id, status);
-        }
+        },
+        // #1888 — the "Build it" button. packages/ai owns the ownership check and the status
+        // transition; the queue lives out here, so the composition root supplies the send.
+        // No queue means the field stays undefined and the route answers 503.
+        approveModuleBuild: deps.boss
+          ? async (scopedDb, buildId, actorUserId) => {
+              const boss = deps.boss!;
+              await approveModuleBuildPlan(
+                {
+                  getModuleBuild: async (id) => {
+                    const build = await getModuleBuild(scopedDb, id);
+                    return build ? { id: build.id, ownerUserId: build.ownerUserId } : null;
+                  },
+                  updateModuleBuildStatus: (id, status, step) =>
+                    updateModuleBuildStatus(scopedDb, id, { status, step }),
+                  sendBuildJob: async (id, owner) => {
+                    await sendJob(
+                      boss,
+                      MODULE_BUILD_QUEUE,
+                      { buildId: id, actorUserId: owner },
+                      { singletonKey: `build:${id}` }
+                    );
+                  }
+                },
+                buildId,
+                actorUserId
+              );
+            }
+          : undefined,
+        cancelModuleBuild: async (scopedDb, buildId, actorUserId) =>
+          cancelModuleBuild(
+            {
+              getModuleBuild: async (id) => {
+                const build = await getModuleBuild(scopedDb, id);
+                return build
+                  ? {
+                      id: build.id,
+                      ownerUserId: build.ownerUserId,
+                      status: build.status,
+                      moduleId: build.moduleId
+                    }
+                  : null;
+              },
+              updateModuleBuildStatus: (id, status) =>
+                updateModuleBuildStatus(scopedDb, id, { status })
+            },
+            buildId,
+            actorUserId
+          )
       });
     },
     registerWorkers: (boss, deps) => registerAiMaintenanceWorkers(boss, deps.rootDb)
@@ -1734,31 +1823,76 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         fetchFn: deps.fetchFn,
         logger: createModuleLogger(server.log, "sports")
       });
+      const rendererSocket = process.env.MOSS_SPORTS_RENDERER_SOCKET;
+      let browser: SportsBrowserClient | undefined;
+      if (rendererSocket) {
+        const browserBroker = new SportsBrowserBroker({
+          fetch: (url, options) => fetchWebResourceBytes(url, options)
+        });
+        const browserBrokerServer = new SportsBrowserBrokerServer({
+          broker: browserBroker,
+          socketPath: SPORTS_BROWSER_SOCKETS.broker
+        });
+        browser = new SportsBrowserClient({ broker: browserBroker, socketPath: rendererSocket });
+        server.addHook("onReady", async () => {
+          try {
+            await browserBrokerServer.start();
+          } catch (error) {
+            server.log.warn(
+              { error: error instanceof Error ? error.message : String(error) },
+              "sports browser broker unavailable; static source discovery remains enabled"
+            );
+          }
+        });
+        server.addHook("onClose", async () => browserBrokerServer.stop());
+      }
       // LOADER-SEAM(sports) 3: the briefing tool (`briefing-tool.ts`) is constructed from
       // static manifest data at import time, before this wiring runs, so it adopts the client
       // via a late-bound setter (mirrors `adoptChatRpcConnection` above for the chat RPC path).
       configureSportsBriefingService(datasetClient);
-      configureSportsChatTools(datasetClient);
+      const discovery = buildSportsDiscoveryPorts(
+        createModuleLogger(server.log, "sports"),
+        browser
+      );
+      const sourcesRepository = new SportsSourcesRepository();
+      const espnCoverageRepository = new SportsEspnCoverageRepository();
+      const publicSourceReader = new SportsPublicSourceReader({
+        dataContext: deps.dataContext,
+        repository: sourcesRepository,
+        fetch: discovery.fetch,
+        cache: new DatasetCache({ maxEntries: 500 })
+      });
+      const followsRepository = new SportsFollowsRepository();
+      const previews = createSportsPreviewStore();
+      const sourceTeamResolver = new SportsService({
+        datasetClient,
+        dataContext: deps.dataContext,
+        repository: followsRepository,
+        publicSourceReader
+      });
+      const sourceService = new SportsSourceService({
+        follows: followsRepository,
+        sources: sourcesRepository,
+        espnCoverage: espnCoverageRepository,
+        previews,
+        discovery,
+        resolveTeams: async (competitionKey) =>
+          (await sourceTeamResolver.getLeagueTeams(competitionKey)).teams,
+        dataContext: deps.dataContext,
+        reader: publicSourceReader
+      });
+      configureSportsChatTools(datasetClient, followsRepository, sourceService);
       registerSportsRoutes(server, {
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext,
         datasetClient,
-        discovery: buildSportsDiscoveryPorts(createModuleLogger(server.log, "sports")),
-        // #953: same capability-boolean-only seam as News' availability gate — no model
-        // identity or key material crosses this seam.
-        availability: {
-          hasJsonModel: async (scopedDb) =>
-            (
-              await new AiRepository().resolveModelForService(
-                scopedDb,
-                sportsAddSourceRequirement.service,
-                {
-                  capability: sportsAddSourceRequirement.capability,
-                  tierHint: sportsAddSourceRequirement.tier
-                }
-              )
-            ).model !== null
-        }
+        discovery,
+        repository: followsRepository,
+        sourcesRepository,
+        espnCoverageRepository,
+        publicSourceReader,
+        previews,
+        sourceService
       });
     }
   },

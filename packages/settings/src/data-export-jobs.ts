@@ -115,6 +115,7 @@ export async function handleExportBuildJob(
         // #953 Task 6: authored News preferences only — snapshots/fingerprints excluded by
         // the news module's collector, never re-read here.
         newsPersonalization: userExport.tables.newsPersonalization,
+        sportsSources: userExport.tables.sportsSources,
         connector_metadata: userExport.tables.connectorAccounts,
         calendar_cache: userExport.tables.calendarEvents,
         email_cache: userExport.tables.emailMessages,

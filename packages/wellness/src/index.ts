@@ -21,6 +21,7 @@ export {
   serializeTherapyNote
 } from "./serialize.js";
 export { computeSchedule } from "./schedule.js";
+export { describeSchedule, nextDoses } from "./schedule-summary.js";
 export { computeInsights } from "./insights.js";
 export {
   escapeHtml,
@@ -49,3 +50,23 @@ export {
 export { wellnessRecentCheckInsExecute, wellnessMedicationAdherenceExecute } from "./tools.js";
 export { deriveEnergyTrend, WellnessRecallContributor } from "./recall-context.js";
 export { wellnessFocusSignal } from "./focus-signal.js";
+export { expandOccurrences } from "./occurrence-engine.js";
+export type {
+  MedicationSchedule,
+  DailySchedule,
+  SelectedDaysSchedule,
+  EveryIntervalSchedule,
+  EveryNDaysSchedule,
+  EveryNWeeksSchedule,
+  EveryNMonthsSchedule,
+  MonthlySchedule,
+  MonthlyDateSchedule,
+  MonthlyWeekdaySchedule,
+  CycleSchedule,
+  AsNeededSchedule,
+  ScheduleAnchor,
+  DateRange,
+  Occurrence,
+  Weekday,
+  WeekdayPosition
+} from "./occurrence-engine.js";

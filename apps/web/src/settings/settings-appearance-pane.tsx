@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Lock, Palette, Plus, Save, Trash2 } from "lucide-react";
+import { Copy, Palette, Plus, Save, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import {
@@ -19,6 +19,7 @@ import {
 } from "../theme/theme-runtime";
 import type { AestheticThemeTokenKey, AestheticThemeTokens } from "@moss/shared";
 import { AESTHETIC_THEME_TOKEN_KEYS } from "@moss/shared";
+import { useFeedback } from "./settings-feedback";
 import { Badge, Field, Group, Note, PaneHead } from "./settings-ui";
 import { Button, Segmented } from "@moss/ui";
 
@@ -58,6 +59,7 @@ const TOKEN_LABELS: Record<EditorTokenKey, string> = {
 
 export function AppearancePane() {
   const queryClient = useQueryClient();
+  const { toast } = useFeedback();
   const themesQuery = useQuery({ queryKey: queryKeys.settings.themes, queryFn: listThemes });
   const [draft, setDraft] = useState<DraftTheme | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<EditorTokenKey>("accent");
@@ -92,7 +94,7 @@ export function AppearancePane() {
       setDraft(null);
       await refreshThemes();
     },
-    onError: (err) => setError(readError(err))
+    onError: (err) => toast(readError(err))
   });
   const modeMutation = useMutation({
     mutationFn: setColorMode,
@@ -193,7 +195,6 @@ export function AppearancePane() {
               key={theme.id}
               name={theme.name}
               active={activeId === theme.id}
-              readonlyLabel="Built-in"
               onSelect={() => activateMutation.mutate({ id: theme.id })}
               onDuplicate={() => makeDraft(`${theme.name} copy`, readBuiltInTokens(theme.id))}
             />
@@ -208,7 +209,11 @@ export function AppearancePane() {
                 setDraft(theme);
               }}
               onDuplicate={() => makeDraft(`${theme.name} copy`, theme.tokens)}
-              onDelete={() => deleteMutation.mutate(theme.id)}
+              onDelete={() => {
+                if (window.confirm(`Delete "${theme.name}"? This can't be undone.`)) {
+                  deleteMutation.mutate(theme.id);
+                }
+              }}
             />
           ))}
         </div>
@@ -317,13 +322,6 @@ export function AppearancePane() {
                 ))}
               </div>
             ) : null}
-            <div
-              className="theme-locked"
-              title="Locked - red signals errors, amber signals caution. These stay consistent across all themes so warnings are never hidden."
-            >
-              <Lock size={15} aria-hidden="true" />
-              <span>Red, amber, and steel stay locked.</span>
-            </div>
             <div className="theme-preview" style={tokensToCssVars(draft.tokens)}>
               <div className="theme-preview__eyebrow">Preview</div>
               <h3>Daily plan</h3>
@@ -467,7 +465,7 @@ function parseRgb(value: string): Rgb | null {
       b: parseInt(raw.slice(4, 6), 16)
     };
   }
-  const rgb = /^rgb\((\d{1,3}),\s*(\d{1,3}),\s*(\d{1,3})\)$/.exec(value.trim());
+  const rgb = /^rgba?\((\d{1,3}),\s*(\d{1,3}),\s*(\d{1,3})(?:,\s*[\d.]+)?\)$/.exec(value.trim());
   if (!rgb) return null;
   const channels = rgb.slice(1).map(Number);
   if (channels.some((channel) => channel < 0 || channel > 255)) return null;

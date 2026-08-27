@@ -12,6 +12,7 @@ import SportsSettings, {
   searchLeagueRows,
   SearchResults
 } from "../../packages/sports/src/settings/index.js";
+import { AddSourceFlow, SportsSourcesSection } from "../../packages/sports/src/settings/sources.js";
 import { sportsQueryKeys } from "../../packages/sports/src/web/query-keys.js";
 
 const CATALOG_KEY = ["sports", "catalog"] as const;
@@ -94,6 +95,135 @@ describe("SportsSettings", () => {
     expect(html).toContain("sp-search__input");
     // ...and the old flat search hint is gone.
     expect(html).not.toContain("Search above to find teams or leagues to follow.");
+  });
+
+  it("renders persisted source health truthfully with recovery actions", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(sportsQueryKeys.sources, {
+      sources: [
+        {
+          kind: "custom",
+          id: "11111111-1111-1111-1111-111111111111",
+          label: "Drifted publisher",
+          canonicalDomain: "publisher.example.com",
+          homepageUrl: "https://publisher.example.com/",
+          feedUrl: null,
+          retrievalMethod: "scrape",
+          enabled: true,
+          healthState: "pending",
+          healthReasonCode: "recipe_drift",
+          healthMessage: "The publisher changed its public response shape.",
+          lastCheckedAt: null,
+          lastSuccessAt: null,
+          recipeStatus: "drift",
+          assignedFollowIds: ["22222222-2222-2222-2222-222222222222"],
+          assignments: [
+            {
+              id: "33333333-3333-3333-3333-333333333333",
+              followId: "22222222-2222-2222-2222-222222222222",
+              sportKey: null,
+              targetUrl: null,
+              previewStatus: "pending",
+              healthState: "pending",
+              healthReasonCode: null,
+              healthMessage: null,
+              lastCheckedAt: null,
+              lastSuccessAt: null,
+              createdAt: "2026-08-24T12:00:00.000Z"
+            },
+            {
+              id: "55555555-5555-5555-5555-555555555555",
+              followId: null,
+              sportKey: "soccer",
+              targetUrl: "https://publisher.example.com/soccer",
+              previewStatus: "verified",
+              healthState: "healthy",
+              healthReasonCode: null,
+              healthMessage: null,
+              lastCheckedAt: "2026-08-24T12:00:00.000Z",
+              lastSuccessAt: "2026-08-24T12:00:00.000Z",
+              createdAt: "2026-08-24T12:00:00.000Z"
+            }
+          ],
+          createdAt: "2026-08-24T12:00:00.000Z"
+        },
+        {
+          kind: "custom",
+          id: "44444444-4444-4444-4444-444444444444",
+          label: "Private publisher",
+          canonicalDomain: "private.example.com",
+          homepageUrl: "https://private.example.com/",
+          feedUrl: "https://private.example.com/feed.xml",
+          retrievalMethod: "feed",
+          enabled: true,
+          healthState: "auth_required",
+          healthReasonCode: "auth_required",
+          healthMessage: null,
+          lastCheckedAt: "2026-08-24T12:00:00.000Z",
+          lastSuccessAt: null,
+          recipeStatus: "feed",
+          assignedFollowIds: [],
+          assignments: [],
+          createdAt: "2026-08-24T12:00:00.000Z"
+        }
+      ]
+    });
+
+    const html = renderToString(
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement(SportsSourcesSection, {
+          follows: [
+            {
+              id: "22222222-2222-2222-2222-222222222222",
+              competitionKey: "nfl",
+              teamKey: null,
+              createdAt: "2026-08-24T12:00:00.000Z"
+            }
+          ],
+          competitionsByKey: new Map([["nfl", TWO_LEAGUES[0]!]]),
+          teamsByCompetition: new Map()
+        })
+      )
+    );
+
+    expect(html).toContain("Awaiting first check");
+    expect(html).toContain("All NFL");
+    expect(html).toContain("Soccer");
+    expect(html).toContain("sp-src__assignment-identity");
+    expect(html).toContain("The publisher changed its public response shape.");
+    expect(html).toContain(">Retry<");
+    expect(html).toContain(">Rebuild<");
+    expect(html).toContain("Authenticated sources are not supported yet.");
+    expect(html).not.toContain("https://publisher.example.com/soccer");
+    expect(html).not.toContain("Last checked:");
+    expect(html).not.toContain("Checking…");
+  });
+
+  it("uses the shared checkbox primitive for source assignments", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const html = renderToString(
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement(AddSourceFlow, {
+          follows: [
+            {
+              id: "22222222-2222-2222-2222-222222222222",
+              competitionKey: "nfl",
+              teamKey: null,
+              createdAt: "2026-08-24T12:00:00.000Z"
+            }
+          ],
+          competitionsByKey: new Map(),
+          teamsByCompetition: new Map()
+        })
+      )
+    );
+
+    expect(html).toContain('class="jds-check sp-src__check"');
+    expect(html).toContain('class="jds-check__box"');
   });
 
   it("empty-query view starts with browse leagues collapsed, not the full catalog", () => {

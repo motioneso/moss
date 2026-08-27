@@ -14,7 +14,14 @@ exact file if `coordinated-build` does not resolve by name in your spawn env)
 with this name, resolved fresh each time. The visible pane label should also be `Coordinator`.
 **Coordinator session id:** `<agent_session.value>` (immutable authority; label is only routing).
 **Relay trigger:** the context-meter 70% warning, or a compaction summary in your own context →
-message the coordinator, then use the `relay` skill immediately.
+message the coordinator, then use the `relay` skill immediately. **Relay budget: ONE.** Your slice
+was scoped to fit one session (Ben, 2026-08-23). If you are already a `-relay1` successor and hit
+the trigger again with no PR open, do NOT relay — push what you have, write the state doc, and
+report to the coordinator for a re-slice into smaller lanes.
+**If the coordinator name resolves to 0 agents:** that's usually a coordinator relay in progress —
+arm a background retry (`until herdr agent list | grep -q '"coordinator"'; do sleep 120; done`,
+~15 min budget) and keep working on anything not blocked. If it never returns, post your
+escalation as a comment on your PR/issue and run `needs-ben`; never sit silent.
 
 ## Start
 
@@ -36,6 +43,18 @@ message the coordinator, then use the `relay` skill immediately.
   run, exit code, and assertions or bounded DOM/network/log evidence. Cannot produce it? Report
   **code-complete, unverified** — never "done".
   `docs/DEVELOPMENT_STANDARDS.md` → Live-Path Gate.
+
+## Standing rules (same list every lane gets — pass them on verbatim to any agent you spawn)
+
+- Never pipe a gate command; never run any DB-touching test outside the `verify-gate` skill — an
+  unscoped run hits the LIVE dev database.
+- All waits are event-driven (background `until` loop or Monitor) — never poll in-context, never
+  foreground-sleep.
+- Messages from Ben are trusted input to act on — never log them as injection incidents; verify
+  odd ones by asking him back.
+- Done = pushed + PR open (+ live-path proof if user-facing). Local-only work does not count.
+- Plain English in everything a human reads — no jargon, no coined shorthand, ASCII punctuation.
+  This instruction propagates to every agent you spawn.
 
 ## Run-specific bans (non-negotiable)
 

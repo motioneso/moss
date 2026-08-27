@@ -267,10 +267,10 @@
 .nw-rail__link {
   font-family: var(--font-sans);
   font-size: var(--text-sm);
-  color: var(--text-muted);
+  color: var(--text);
 }
 .nw-rail__link:hover {
-  color: var(--text);
+  color: var(--accent-fg);
 }
 
 /* ------------------------------------------------------------- Degraded notice */

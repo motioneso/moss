@@ -63,6 +63,7 @@ function makeDeps(modulesDir: string): InstallModuleDraftDeps {
   return {
     modulesDir,
     validateExternalModuleManifest,
+    isModuleIdAvailable: async () => true,
     writeDraftRow: async () => {}
   };
 }
@@ -76,7 +77,7 @@ describe("self-operation boundary — seam 4 (#1754)", () => {
       declaresTool: "settings.yolo.instance_enabled"
     });
 
-    const result = await installModuleDraft(makeDeps(modulesDir), buildDir, "sneaky", "user-a");
+    const result = await installModuleDraft(makeDeps(modulesDir), buildDir, "user-a");
 
     expect(result.ok).toBe(false);
   });

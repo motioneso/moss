@@ -9,10 +9,18 @@ export interface SourceTeamRef extends TeamRef {
   /** Provider-side team id — joins news team tags to catalog teams. Never serialized. */
   readonly sourceTeamId: string | null;
 }
-export interface SourceHeadline extends Headline {
+export type EspnSourceHeadline = Headline & {
+  readonly origin: "espn";
   /** Provider-side team ids tagged on the article; the service resolves these to teamKeys. */
   readonly sourceTeamIds: readonly string[];
-}
+};
+
+export type CustomSourceHeadline = Headline & {
+  readonly origin: "custom";
+  readonly sourceId: string;
+};
+
+export type SourceHeadline = EspnSourceHeadline | CustomSourceHeadline;
 
 export interface StandingsTable {
   readonly sections: readonly {

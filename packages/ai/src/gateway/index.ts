@@ -30,6 +30,7 @@ export type {
 export {
   AssistantToolGateway,
   createUnwiredActionResolver,
+  liveStreamResult,
   type AssistantToolGatewayDependencies,
   type NativeToolPermissionRequest,
   type NativeToolPermissionResponse

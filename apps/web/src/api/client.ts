@@ -8,6 +8,8 @@ import type {
   CreateAiProviderConfigRequest,
   CreateAiProviderConfigResponse,
   AiDiscoverModelsResponse,
+  ChatArchiveSettingsResponse,
+  PutChatArchiveSettingsRequest,
   DiscoverAiProviderModelsResponse,
   AddTaskActivityResponse,
   AiModelCapability,
@@ -213,6 +215,19 @@ export async function getYoloSettings(): Promise<YoloSettingsResponse> {
 
 export async function putYoloSelf(input: PutYoloSelfRequest): Promise<YoloSettingsResponse> {
   return requestJson<YoloSettingsResponse>("/api/me/yolo", { method: "PUT", body: input });
+}
+
+export async function getChatArchiveSettings(): Promise<ChatArchiveSettingsResponse> {
+  return requestJson<ChatArchiveSettingsResponse>("/api/me/chat-archive");
+}
+
+export async function putChatArchiveSettings(
+  input: PutChatArchiveSettingsRequest
+): Promise<ChatArchiveSettingsResponse> {
+  return requestJson<ChatArchiveSettingsResponse>("/api/me/chat-archive", {
+    method: "PUT",
+    body: input
+  });
 }
 
 export async function listMySessions(): Promise<ListMySessionsResponse> {
@@ -459,6 +474,18 @@ export async function shipExternalModule(
     `/api/admin/modules/${encodeURIComponent(id)}/ship`,
     { method: "POST" }
   );
+}
+
+/**
+ * Admin: throw away a running draft (#1890) — deletes its database row, its installed module
+ * folder and any leftover build folder. Not undoable; the caller is expected to have confirmed
+ * first. 404 covers "no such module", "that is shipped" and "that draft is someone else's"
+ * alike, on purpose — see deleteExternalModuleDraft in @moss/settings.
+ */
+export async function throwAwayExternalModuleDraft(id: string): Promise<{ deleted: boolean }> {
+  return requestJson<{ deleted: boolean }>(`/api/admin/modules/${encodeURIComponent(id)}/draft`, {
+    method: "DELETE"
+  });
 }
 
 /** Admin: registry-backed module list — install/update/remove states (#964). */

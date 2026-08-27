@@ -83,6 +83,8 @@ async function main(): Promise<void> {
   // as every other optional docker -e value here.
   const jobSearchAiProviderBaseUrl =
     resolveMossEnv(process.env, "JARVIS_UAT_JOB_SEARCH_AI_BASE_URL") || undefined;
+  const sportsPublicSourceFixtures =
+    resolveMossEnv(process.env, "JARVIS_UAT_SPORTS_PUBLIC_SOURCE_FIXTURES") === "1";
   const chatScript = parseUatChatScript(
     resolveMossEnv(process.env, "JARVIS_UAT_SEED_CHAT_SCRIPT") ?? ""
   );
@@ -92,6 +94,7 @@ async function main(): Promise<void> {
     excludeChunks,
     withoutNewsJsonBinding,
     jobSearchAiProviderBaseUrl,
+    sportsPublicSourceFixtures,
     chatScript
   });
   console.log(

@@ -48,13 +48,17 @@ export type UatChatScript =
   | "phase1-smoke"
   | "1533-surface-probe"
   | "1252-audit-truth-livepath"
-  | "1105-drawer-private";
+  | "1105-drawer-private"
+  | "1987-archive-backfill"
+  | "1992-chat-archive-status";
 
 export const UAT_CHAT_SCRIPTS: readonly UatChatScript[] = [
   "phase1-smoke",
   "1533-surface-probe",
   "1252-audit-truth-livepath",
-  "1105-drawer-private"
+  "1105-drawer-private",
+  "1987-archive-backfill",
+  "1992-chat-archive-status"
 ];
 
 export interface SeedOptions {
@@ -70,6 +74,8 @@ export interface SeedOptions {
    * ADMIN_DATA_CHUNKS entry — see ./chunks/job-search-ai.ts's header and N33.
    */
   readonly jobSearchAiProviderBaseUrl?: string;
+  /** #1909: opt-in legacy public-source recovery fixtures for its dedicated live-path spec. */
+  readonly sportsPublicSourceFixtures?: boolean;
   /**
    * #1121: when set, seeds a neutral scripted AI provider/model (see
    * ./chunks/chat-script.ts) and writes JARVIS_UAT_SCRIPTED_PROVIDER_BIN (#1659 defect 4) so the

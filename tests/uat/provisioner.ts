@@ -319,6 +319,7 @@ export type SeedHook = (ctx: {
   /** N42/#57: the job-search fixture's docker-reachable base URL — see provisionForUat's
    *  jobSearchFixtureBaseUrl computation. Absent unless withJobSearchFixture is set. */
   readonly jobSearchAiProviderBaseUrl?: string;
+  readonly sportsPublicSourceFixtures?: boolean;
   /** #1121 Task 4: an id from UAT_CHAT_SCRIPTS. Consumed by Task 5's seed/cli.ts wiring
    *  (blocked on #1557) — until then this reaches the seed service but nothing reads it. */
   readonly chatScript?: string;
@@ -343,6 +344,7 @@ export const composeSeedHook: SeedHook = async ({
   excludeChunks,
   withoutNewsJsonBinding,
   jobSearchAiProviderBaseUrl,
+  sportsPublicSourceFixtures,
   chatScript
 }) => {
   await runCommand(
@@ -363,6 +365,8 @@ export const composeSeedHook: SeedHook = async ({
       // empty means off" shape as the other -e values here, rather than omitting the flag
       // entirely.
       `MOSS_UAT_JOB_SEARCH_AI_BASE_URL=${jobSearchAiProviderBaseUrl ?? ""}`,
+      "-e",
+      `JARVIS_UAT_SPORTS_PUBLIC_SOURCE_FIXTURES=${sportsPublicSourceFixtures === true ? "1" : "0"}`,
       "-e",
       // #1121 Task 4: same "always pass, empty means off" shape. Nothing reads this yet —
       // Task 5 (blocked on #1557) adds the cli.ts consumer.
@@ -622,6 +626,8 @@ export interface UatProvisionOptions {
   // `openai-compatible` AI provider seeded for scoring (same base URL, threaded into
   // composeSeedHook below) — both point at the one fixture origin this starts.
   readonly withJobSearchFixture?: boolean;
+  /** #1909: opt-in recovery fixtures used only by its dedicated live-path spec. */
+  readonly withSportsPublicSourceFixtures?: boolean;
   /** #1121 Task 4: an id from UAT_CHAT_SCRIPTS (tests/uat/seed/types.ts). Threads to
    *  composeSeedHook's chatScript ctx field, and (when set) writes JARVIS_UAT_SCRIPTED_PROVIDER_BIN
    *  (#1659 defect 4) so the container's profile.d script puts the scripted-provider fixture's
@@ -645,6 +651,7 @@ export function buildSeedHookInput(
   excludeChunks?: readonly string[];
   withoutNewsJsonBinding?: boolean;
   jobSearchAiProviderBaseUrl?: string;
+  sportsPublicSourceFixtures?: boolean;
   chatScript?: string;
 } {
   return {
@@ -653,6 +660,7 @@ export function buildSeedHookInput(
     excludeChunks: opts?.excludeChunks,
     withoutNewsJsonBinding: opts?.withoutNewsJsonBinding,
     jobSearchAiProviderBaseUrl,
+    sportsPublicSourceFixtures: opts?.withSportsPublicSourceFixtures,
     chatScript: opts?.chatScript
   };
 }

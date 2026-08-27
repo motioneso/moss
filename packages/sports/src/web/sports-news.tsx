@@ -1,6 +1,6 @@
 import { useCallback, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import type { Headline, LeagueNewsGroup } from "@moss/shared";
+import type { Headline, SportsNewsGroup } from "@moss/shared";
 import { useAutoAdvance } from "./use-auto-advance.js";
 // Ranking now lives in a shared pure module (#857) so the server computes the SAME featured pick
 // it needs to fetch the article body for. Re-export `isFollowed` because sports-around-ticker /
@@ -65,7 +65,9 @@ function HeroSlide({ headline, active }: { readonly headline: Headline; active: 
               the head of the lead with an accent desk tag + hairline, not an orphaned label. */}
           <p className="sp-hero__kicker">
             <span className="sp-hero__kicker-desk">Top story</span>
-            <span className="sp-hero__kicker-comp">{headline.competitionLabel}</span>
+            <span className="sp-hero__kicker-comp">
+              {headline.competitionLabel} · {headline.publisherLabel}
+            </span>
           </p>
           <h2 className="sp-hero__headline">
             {/* Inactive slides stay in the DOM for the crossfade but must not be tab stops */}
@@ -248,7 +250,9 @@ function NewsArticle({
       {headline.imageUrl ? (
         <img className="sp-newsband__img" src={headline.imageUrl} alt="" loading="lazy" />
       ) : null}
-      <p className="sp-newsband__artkicker">{headline.competitionLabel}</p>
+      <p className="sp-newsband__artkicker">
+        {headline.competitionLabel} · {headline.publisherLabel}
+      </p>
       <h4 className="sp-newsband__title">{headline.title}</h4>
       {headline.summary ? <p className="sp-newsband__blurb">{headline.summary}</p> : null}
       <a className="sp-newsband__more" href={headline.url} target="_blank" rel="noreferrer">
@@ -288,7 +292,9 @@ function FeatureArticle({ headline }: { readonly headline: Headline }) {
         </div>
       ) : null}
       <div className="sp-newsband__featurebody">
-        <p className="sp-newsband__featurekicker">{headline.competitionLabel}</p>
+        <p className="sp-newsband__featurekicker">
+          {headline.competitionLabel} · {headline.publisherLabel}
+        </p>
         <h3 className="sp-newsband__title sp-newsband__title--feature">{headline.title}</h3>
         {/* Fill the hero with real article body (#857, Ben's "fill the height with more article
             body"). The service fetches + SANITIZES-to-plaintext the featured story's ESPN body and
@@ -320,12 +326,19 @@ export function NewsBand({
   groups,
   followedPairs
 }: {
-  readonly groups: readonly LeagueNewsGroup[];
+  readonly groups: readonly SportsNewsGroup[];
   readonly followedPairs: ReadonlySet<string>;
 }) {
   const [filterKey, setFilterKey] = useState<string>("all");
   if (groups.length === 0) return null;
-  const shown = filterKey === "all" ? groups : groups.filter((g) => g.competitionKey === filterKey);
+  const groupKey = (group: SportsNewsGroup) =>
+    group.kind === "sport" ? `sport:${group.sportKey}` : `competition:${group.competitionKey}`;
+  const shown =
+    filterKey === "all"
+      ? groups
+      : filterKey.startsWith("sport:")
+        ? groups.filter((group) => `sport:${group.sportKey}` === filterKey)
+        : groups.filter((group) => groupKey(group) === filterKey);
 
   // Flatten every shown league into one weight-ranked pool (mrb5reqq: "we don't really need it
   // to be one column per sport"). Ranking lives in ../news-ranking.js so the server picks the
@@ -356,18 +369,18 @@ export function NewsBand({
   const briefs = flow.slice(STANDARDS_CAP, STANDARDS_CAP + BRIEFS_CAP);
 
   return (
-    <section className="sp-newsband" aria-label="League news">
+    <section className="sp-newsband" aria-label="Sports news">
       <div className="sp-newsband__head">
         <p className="sp-col__kicker">News</p>
         <select
           className="sp-newsband__filter"
-          aria-label="Filter news by league"
+          aria-label="Filter sports news"
           value={filterKey}
           onChange={(event) => setFilterKey(event.currentTarget.value)}
         >
-          <option value="all">All leagues</option>
+          <option value="all">All</option>
           {groups.map((group) => (
-            <option key={group.competitionKey} value={group.competitionKey}>
+            <option key={groupKey(group)} value={groupKey(group)}>
               {group.competitionLabel}
             </option>
           ))}

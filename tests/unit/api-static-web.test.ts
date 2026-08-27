@@ -92,6 +92,17 @@ describe("registerStaticWeb", () => {
     expect(res.body).not.toContain('<div id="root"></div>');
   });
 
+  it("answers a missing hashed asset with a real, correctly-labeled 404", async () => {
+    const app = Fastify({ logger: false });
+    registerStaticWeb(app, { distDir: makeDist() });
+
+    const res = await app.inject({ method: "GET", url: "/assets/index-doesnotexist.css" });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.headers["x-content-type-options"]).toBe("nosniff");
+    expect(res.body).not.toContain('<div id="root"></div>');
+  });
+
   it("rejects path traversal", async () => {
     const app = Fastify({ logger: false });
     registerStaticWeb(app, { distDir: makeDist() });

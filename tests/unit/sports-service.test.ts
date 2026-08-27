@@ -215,6 +215,7 @@ const nflStandings: StandingsTable = {
 const nflHeadlines: SourceHeadline[] = [
   {
     id: "h1",
+    sportKey: "football",
     competitionKey: "nfl",
     competitionLabel: "NFL",
     title: "Cowboys clinch the division",
@@ -223,6 +224,9 @@ const nflHeadlines: SourceHeadline[] = [
     imageUrl: null,
     summary: "",
     teamKeys: [],
+    origin: "espn",
+    publisherLabel: "ESPN",
+    publisherDomain: "espn.com",
     sourceTeamIds: ["6"]
   }
 ];
@@ -501,7 +505,9 @@ describe("SportsService.getOverview", () => {
       title: "Cowboys clinch the division",
       url: "https://example.com/h1",
       publishedAt: `${TODAY}T12:00:00.000Z`,
-      imageUrl: null
+      imageUrl: null,
+      publisherLabel: "ESPN",
+      publisherDomain: "espn.com"
     });
     expect(card?.name).toBe("Dallas Cowboys");
     expect(card?.crestUrl).toContain("dal.png");
@@ -528,6 +534,7 @@ describe("SportsService.getOverview", () => {
   it("fills card news from the followed team's own feed when the league feed has none", async () => {
     const teamStory: SourceHeadline = {
       id: "t1",
+      sportKey: "football",
       competitionKey: "nfl",
       competitionLabel: "NFL",
       title: "Cowboys sign a new kicker",
@@ -536,6 +543,9 @@ describe("SportsService.getOverview", () => {
       imageUrl: null,
       summary: "",
       teamKeys: [],
+      origin: "espn" as const,
+      publisherLabel: "ESPN",
+      publisherDomain: "espn.com",
       sourceTeamIds: ["6"]
     };
     const service = new SportsService(
@@ -599,8 +609,9 @@ describe("SportsService.getOverview", () => {
   it("ranks by editorial feed position, caps top stories at six, keeps league news distinct", async () => {
     // 9 stories, all tagged to dal ("6"), in ESPN feed order h0..h8 (h0 = editorial lead). Ranking
     // keys off feed POSITION now, not recency (mrb51pnq) — publishedAt only breaks cross-league ties.
-    const manyHeadlines = Array.from({ length: 9 }, (_, i) => ({
+    const manyHeadlines: SourceHeadline[] = Array.from({ length: 9 }, (_, i) => ({
       id: `h${i}`,
+      sportKey: "football",
       competitionKey: "nfl",
       competitionLabel: "NFL",
       title: `Story ${i}`,
@@ -609,6 +620,9 @@ describe("SportsService.getOverview", () => {
       imageUrl: null,
       summary: "",
       teamKeys: [],
+      origin: "espn",
+      publisherLabel: "ESPN",
+      publisherDomain: "espn.com",
       sourceTeamIds: ["6"]
     }));
     const service = new SportsService(
@@ -653,6 +667,7 @@ describe("SportsService.getOverview", () => {
     };
     const nbaHeadline: SourceHeadline = {
       id: "hn1",
+      sportKey: "basketball",
       competitionKey: "nba",
       competitionLabel: "NBA",
       title: "NBA free agency shakes up the West",
@@ -661,6 +676,9 @@ describe("SportsService.getOverview", () => {
       imageUrl: null,
       summary: "",
       teamKeys: [],
+      origin: "espn",
+      publisherLabel: "ESPN",
+      publisherDomain: "espn.com",
       sourceTeamIds: []
     };
     const service = new SportsService(
@@ -718,6 +736,7 @@ describe("SportsService.getOverview", () => {
     };
     const nbaHeadline: SourceHeadline = {
       id: "hd1",
+      sportKey: "basketball",
       competitionKey: "nba",
       competitionLabel: "NBA",
       title: "Celtics roll past Heat",
@@ -726,6 +745,9 @@ describe("SportsService.getOverview", () => {
       imageUrl: null,
       summary: "",
       teamKeys: [],
+      origin: "espn",
+      publisherLabel: "ESPN",
+      publisherDomain: "espn.com",
       sourceTeamIds: []
     };
     const service = new SportsService(

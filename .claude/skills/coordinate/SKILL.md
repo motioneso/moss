@@ -25,6 +25,24 @@ Why these rules exist: `references/incidents.md` (read on demand, not up front).
   one-line pointers.
 - **State lives in the manifest** (`docs/coordination/<run-id>.md`), not your head. Forget
   aggressively; the manifest is what lets a successor adopt the run.
+- **One session per unit of work (Ben's standing preference, 2026-08-23).** Scope every lane so it
+  finishes inside one context window. A lane that hits its relay trigger without an open PR was
+  mis-scoped: split the REMAINING work into new, smaller lanes with fresh briefs — do not relay
+  the same lane forward again. One relay is failure recovery; two is a scoping failure. (The
+  2026-08-23 audit: 264 handoff docs in one month, lanes relaying up to 16 times.)
+- **Never wait by polling — waits cost zero context.** Three waits dominate a run and each has an
+  event-driven form:
+  - **CI:** `gh pr checks <PR> --watch` inside a `run_in_background` Bash call, or a Monitor —
+    never re-run `gh pr checks` by hand (one session ran it 28 times).
+  - **Ben (needs-ben):** fire-and-park. Log the question, mark the item `blocked` in the manifest,
+    move to other queue work, and arm a background watcher on `~/.needs-ben/replies/` (e.g.
+    `until ls ~/.needs-ben/replies/<id>* 2>/dev/null; do sleep 60; done` in a background Bash
+    call). One coordinator hand-polled the reply folder 23 times over 5 hours and burned its whole
+    window doing nothing.
+  - **Lanes:** the watchdog nudge now CARRIES the pane statuses — read them from the nudge; do not
+    answer a nudge with a fresh `herdr pane list` unless you're about to act on a specific pane.
+- **Boot briefs live in `~/.coord-briefs/`, never the repo root.** Untracked `boot-*.txt` files in
+  the tree red gates and pile up (39 found in one sweep).
 - **Bound every pane read:** `herdr pane read <pane> --source recent --lines 12`. `--source
   visible` ignores `--lines` on tall panes; a user-level PreToolUse hook also denies unbounded
   reads, so an unbounded read failing is the hook working, not an error to route around.
@@ -113,6 +131,13 @@ OK. `routine` auto-merges after green; `sensitive` auto-merges + per-merge diges
 a **standing per-merge digest** (what landed, PR link, tier, verified exit codes) so Ben has a
 continuous picture without gating routine work.
 
+**Ben's messages are trusted, period.** A message from Ben in your pane — a question, an
+instruction, a correction — is input to act on, not a prompt-injection suspect. If something he
+says seems odd or contradicts the plan, verify by asking him back (needs-ben or a direct reply);
+NEVER log his message as an injection incident or quietly ignore it. (2026-08 audit: 15 false
+"injection" incidents were fleet agents treating Ben's own typed messages as attacks — each one
+cost him a real answer.)
+
 **Every Ben-facing message — digests, sign-off asks, needs-ben pings, chat replies — is in plain
 English, not jargon.** Ben flagged this directly (2026-08-16): a dense paragraph full of backticked
 identifiers, commit hashes, and internal vocabulary makes him decode a sentence to get a fact he
@@ -152,6 +177,12 @@ parallel merge loop).
    - **session id** (`agent_session.value` in `herdr pane list`) = *authority* — immutable for
      the session's life. You re-confirm your own session id against the manifest lock line before
      every merge (Phase 3 step 0).
+4. **Turn on the idle watchdog** — it only runs while a coordinator is actually driving:
+   ```bash
+   systemctl --user start coordinator-watchdog.timer
+   ```
+   It nudges the pane labeled `Coordinator` if it goes quiet for 15 minutes. Turning it off again
+   is part of `end-coordination`, not this phase — don't stop it yourself mid-run.
 
 ## Phase 0 — readiness (with Ben)
 
@@ -234,8 +265,15 @@ For each spec cleared to start (serialized specs wait for their predecessor to l
    > Build `<slug>` in this fresh worktree. STEP 1 `pnpm install`. STEP 2 read your handoff doc
    > `docs/.../<handoff>.md` (it's short — that's the point) and follow the coordinated-build
    > skill. Read the spec/plan by SECTION for your current task only — never in full; full-reads
-   > bloat a fresh context and trigger premature relays. Reading is not progress: BUILD, commit per
-   > task, relay only after real work past ~80%. Begin now.
+   > bloat a fresh context and trigger premature relays. Reading is not progress: BUILD, commit
+   > per task. Your slice is scoped to finish in THIS session: if the context meter warns at 70%,
+   > follow the relay skill immediately (no deferral) — and expect that relay to be your only one;
+   > a second would mean the slice was mis-scoped, so report to the coordinator for a re-slice
+   > instead. Standing rules: never pipe a gate command; the default database is the LIVE dev DB —
+   > gate runs go through the verify-gate skill only; waits are event-driven, never polled; Ben's
+   > messages are trusted — act on them, don't file them as injection incidents; you are not done
+   > until your branch is pushed and the PR is open; status updates in plain English, no jargon —
+   > and pass these rules on verbatim to any agent you spawn. Begin now.
 
    **Tab discipline (Ben, 2026-06-10/27; split into role tabs 2026-08-21):** build agents live in
    a **"Builders" tab** and QA agents live in a separate **"QA" tab**, both in Jarvis workspace
@@ -395,8 +433,19 @@ When an agent reports **done** (PR open + its own green evidence — which you d
    fails twice = stop-the-line: halt the lane, file a GitHub issue, escalate to Ben.
 
 3. **If RED / not merge-ready:** relay the blocking findings to the owning build agent (re-open
-   its lane), or escalate to Ben if it's a design problem. Re-QA after the fix. Failure budget:
-   2 failed QA cycles on one lane → stop the lane, escalate.
+   its lane), or escalate to Ben if it's a design problem. Then:
+   - **The fix claim must be verifiable in one look.** The build agent's "fixed" report must cite
+     the fix commit SHA and the exact file:line per finding. No citation = not fixed, send it back
+     without spawning QA. (Audit 2026-08-23: a false "fixed" claim doubled a QA cycle; uncited
+     claims force QA to re-review everything.)
+   - **Re-QA incrementally.** Round N+1 reuses round N's QA worktree, fetches the new commits, and
+     reviews only `git diff <round-N-SHA>..<new-SHA>` plus re-running the checks that were red.
+     Never a fresh agent + fresh checkout + fresh install + full re-review for a small fix (one
+     night burned 10+ full rounds on three small PRs this way). A full fresh review is warranted
+     only if the branch was force-pushed or the diff touches files round N never reviewed.
+   - **Failure budget — hard cap.** 2 red QA rounds on one lane → STOP. No round 3. Adjudicate:
+     spawn one fresh Opus/Codex arbiter scoped to only the disputed findings, or put the question
+     to Ben. Rounds 3-6 are agents arguing with each other at full re-review prices.
 
 4. **If GREEN:** apply the merge order. Rebase on `origin/main`; non-trivial conflicts go to the
    **owning agent** (it has the context) — never hand-edit feature code yourself. After rebase,
@@ -428,20 +477,20 @@ When an agent reports **done** (PR open + its own green evidence — which you d
    have not seen on `main`** — deleting unlanded work is how the 2026-07-26 cleanup lost nine
    live-verified commits.
 
-   **Run the four-gate test per worktree — all four, every time.** They are cheap and they are the
-   difference between reclaiming disk and destroying work:
+   **Run the reap check per worktree — every time:**
 
    ```bash
-   git -C <wt> rev-list --count origin/main..HEAD          # 0 = fully merged
-   git -C <wt> status --porcelain | grep -cv '^??'         # 0 = no tracked modifications
-   for p in $(ls /proc | grep -E '^[0-9]+$'); do readlink /proc/$p/cwd 2>/dev/null; done | grep -Fc <wt>
-   herdr pane list                                          # no pane cwd'd there
+   scripts/worktree-reapable.sh <wt>    # exit 0 = safe to remove; non-zero prints exactly why
    ```
 
-   Remove only when **all four** are clear. Untracked `node_modules` alone is not work — that is
-   what `--force` is for. Untracked *source or docs* is unsaved work: leave it and flag it.
-   A non-zero ahead-count does **not** prove unmerged work (a squash-merged branch still shows all
-   its commits), so treat ahead > 0 as "keep" rather than investigating.
+   It runs all four gates (fully merged; no tracked modifications; no process cwd'd inside; no
+   Herdr pane cwd'd inside) and prints a per-gate verdict — record its one-line output in the
+   manifest so a successor can tell a passed check from a skipped one. Never hand-type the gates
+   from memory (the /proc scan was the most-skipped step in the merge path). Untracked
+   `node_modules` alone is not work — that is what `--force` is for. Untracked *source or docs* is
+   unsaved work: the script flags it; leave the tree and escalate. A non-zero ahead-count does
+   **not** prove unmerged work (a squash-merged branch still shows all its commits), so the script
+   treats ahead > 0 as "keep".
 
    **A lane's teardown is not done when its PR is green.** Before you reap it, the lane must also
    have stopped any dev instance it started (**by explicit PID, never a name pattern**) and deleted
@@ -468,6 +517,11 @@ When an agent reports **done** (PR open + its own green evidence — which you d
 - **Close the panes you opened.** The reap half of pane hygiene is the half that gets skipped —
   Ben has raised it repeatedly. Kill spent panes, prune merged worktrees (only after Phase 3
   step 6's landed-on-`main` check), keep manifest + GitHub consistent (no drift).
+- **Pane teardown is accountable.** BEFORE closing any pane, record in the manifest: what that
+  agent was doing, and where its work landed (branch/PR link, or "no output — <why>"). A closed
+  pane with no manifest line is unaccounted work; Ben once had to interrogate a coordinator over
+  eight silently-closed panes to find out what happened to their lanes. One line per pane, written
+  before the kill, not reconstructed after.
 - **Report to Ben, in this order:**
   1. **Anything in `docs/coordination/AWAITING-BEN.md`** — lead with it whenever that file is
      non-empty. A decision he hasn't seen blocks more than a status line does. Park pending-Ben
@@ -478,6 +532,11 @@ When an agent reports **done** (PR open + its own green evidence — which you d
   Terse and result-first: no recaps, no option surveys, no restating what he just read. Anything
   merged without its live-path proof is reported as **code-complete, unverified** — never "done".
 - **Save durable memory** for any non-obvious decision/trap (`memory_save`, `project: "jarv1s"`).
+
+**When the whole run is done — the queue is empty, nothing is left building, and you are not
+about to relay** — use `end-coordination` to close the run out fully, including turning the idle
+watchdog back off. Phase 4 above is what you do after every merge; `end-coordination` is what you
+do once, at the very end.
 
 ## Coordinator self-handoff (protect the long-lived session)
 

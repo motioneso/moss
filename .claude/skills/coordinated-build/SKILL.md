@@ -17,9 +17,15 @@ This is the `start` skill's plan+build stages adapted for coordination mode.
   (normally the registered name `coordinator`, with visible pane label `Coordinator`) via
   `herdr-pane-message` — you do not sit silently and you do not decide
   product/architecture forks. **Before messaging, run `herdr agent list` and confirm EXACTLY ONE
-  live agent has that name.** If 0 or >1, do NOT guess a pane and do NOT message a
-  different one — halt and wait (a mis-routed escalation once woke a stale duplicate coordinator).
+  live agent has that name.** If >1, do NOT guess a pane and do NOT message a
+  different one (a mis-routed escalation once woke a stale duplicate coordinator).
   Never escalate by a raw `…-N` pane-id alone; those reflow when panes close.
+  **If 0 agents hold the name, that's almost always a coordinator relay in progress** (the name is
+  released for a few minutes during handoff). Don't halt in place: arm a background retry
+  (`until herdr agent list | grep -q '"coordinator"'; do sleep 120; done` as a background Bash
+  call, ~15 min budget) and keep working on anything not blocked by the escalation. If the name
+  never comes back, the coordinator likely died — post your escalation as a comment on your PR or
+  issue (durable, survives everything) and run `needs-ben` with a one-liner; never sit silent.
 - You **self-monitor context** and relay before you degrade.
 - You **never** move the project board, close issues/milestones, or merge — those are the
   coordinator's. Your closeout is `coordinated-wrap-up` (PR + report), nothing more.
@@ -110,12 +116,20 @@ This is the `start` skill's plan+build stages adapted for coordination mode.
 - **Escalate immediately** (don't burn turns spinning) if you hit a real blocker — a failing
   invariant, an ambiguous requirement, a missing dependency, a flaky gate you can't resolve.
   Message the coordinator with the specific question.
+- **Answering QA findings: every "fixed" must be checkable in one look.** Your report back cites,
+  per finding, the fix commit SHA and the exact `file:line`. An uncited "fixed" claim forces QA to
+  re-review the whole PR (and one false claim doubled a QA cycle on 2026-08-19) — the coordinator
+  will bounce it without spawning QA.
 
 **3. Self-monitor context on countable events.** Relay on the **context-meter 70% warning** (the
 user-level PostToolUse hook that fires in every session — don't trust felt %), or **immediately**
 if you see a compaction summary in your own context. Message the coordinator
 that you're relaying, then use the **`relay`** skill (commit work, write a continuation doc, spawn
 your successor in this same worktree, request reap). Relay early enough to write a clean handoff.
+**One relay is the budget** (Ben, 2026-08-23: one session per unit of work). Your slice was scoped
+to fit one window; if your SUCCESSOR also hits 70% without an open PR, the slice was mis-scoped —
+the successor reports that to the coordinator for a re-slice into smaller lanes instead of
+relaying again.
 
 **3b. Pre-push fast checks (before EVERY push).** Cheap trio + fresh rebase catch most CI
 round-trips locally:

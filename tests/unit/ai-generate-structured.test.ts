@@ -163,6 +163,52 @@ describe("generateStructured", () => {
     expect(generateStructured.mock.calls[1]![0].messages).toHaveLength(3);
   });
 
+  // #1888: the Claude CLI wraps its answer in a markdown code fence even when the prompt says
+  // "No markdown or commentary", and it does so on every repair retry — so a fenced reply is not
+  // a transient miss that the repair loop can recover from, it is the CLI's normal output shape.
+  // Live proof: asking Moss for a module failed three identical attempts, each a schema-valid plan
+  // inside a ```json fence. Accept the fence here, where CLI text is already parsed.
+  it("accepts a schema-valid CLI reply wrapped in a markdown code fence", async () => {
+    const generateStructured = vi.fn().mockResolvedValue({
+      rawText: '```json\n{"a":"fenced"}\n```',
+      usage: { inputTokens: 0, outputTokens: 0 }
+    });
+    const result = await generateStructuredResultWithCli(generateStructured);
+
+    expect(result).toMatchObject({ ok: true, object: { a: "fenced" } });
+    // No repair round-trip: the first reply is accepted as-is.
+    expect(generateStructured).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts a fenced CLI reply with no language tag", async () => {
+    const generateStructured = vi.fn().mockResolvedValue({
+      rawText: '```\n{"a":"plain-fence"}\n```',
+      usage: { inputTokens: 0, outputTokens: 0 }
+    });
+    const result = await generateStructuredResultWithCli(generateStructured);
+
+    expect(result).toMatchObject({ ok: true, object: { a: "plain-fence" } });
+  });
+
+  // Guard the narrowness of the fix: unfenced prose around JSON is still a parse failure that goes
+  // through the repair loop, so this never becomes "scrape a JSON-looking blob out of any text".
+  it("still repairs CLI text that is prose around JSON rather than a fenced block", async () => {
+    const generateStructured = vi
+      .fn()
+      .mockResolvedValueOnce({
+        rawText: 'Here you go: {"a":"loose"} - hope that helps',
+        usage: { inputTokens: 0, outputTokens: 0 }
+      })
+      .mockResolvedValueOnce({
+        rawText: '{"a":"fixed"}',
+        usage: { inputTokens: 0, outputTokens: 0 }
+      });
+    const result = await generateStructuredResultWithCli(generateStructured);
+
+    expect(result).toMatchObject({ ok: true, object: { a: "fixed" } });
+    expect(generateStructured).toHaveBeenCalledTimes(2);
+  });
+
   it("maps corrupt API credentials to needs_config without exposing cipher errors", async () => {
     const warn = vi.fn();
     const result = await generateStructured(

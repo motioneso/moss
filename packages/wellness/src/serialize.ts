@@ -1,6 +1,8 @@
 import type { Medication, MedicationLog, WellnessCheckin, WellnessTherapyNote } from "@moss/db";
 import type { CheckinDto, MedicationDto, MedicationLogDto, TherapyNoteDto } from "@moss/shared";
 
+import { dateKeyFromColumn } from "./schedule.js";
+
 function toIso(value: Date | string | null | undefined): string | null {
   if (value === null || value === undefined) return null;
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
@@ -38,11 +40,23 @@ export function serializeMedication(row: Medication): MedicationDto {
     scheduleTimes: row.schedule_times,
     cycleDaysOn: row.cycle_days_on,
     cycleDaysOff: row.cycle_days_off,
-    cycleAnchorDate: row.cycle_anchor_date,
+    // A date column, same as scheduleStartDate below: send "2026-09-01", not a timestamp.
+    cycleAnchorDate: row.cycle_anchor_date ? dateKeyFromColumn(row.cycle_anchor_date) : null,
     active: row.active,
     notes: row.notes,
     createdAt: toIso(row.created_at),
-    updatedAt: toIso(row.updated_at)
+    updatedAt: toIso(row.updated_at),
+    scheduleStartDate: row.schedule_start_date ? dateKeyFromColumn(row.schedule_start_date) : null,
+    scheduleEndDate: row.schedule_end_date ? dateKeyFromColumn(row.schedule_end_date) : null,
+    timeZone: row.time_zone,
+    intervalUnit: row.interval_unit,
+    intervalCount: row.interval_count,
+    monthKind: row.month_kind,
+    monthDay: row.month_day,
+    monthDayIsLast: row.month_day_is_last,
+    monthWeekdayPosition: row.month_weekday_position,
+    monthWeekday: row.month_weekday,
+    remindersEnabled: row.reminders_enabled
   };
 }
 

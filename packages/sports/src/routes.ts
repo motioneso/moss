@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import type { DatasetClient } from "@moss/datasets";
-import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
+import type { AccessContext, DataContextRunner } from "@moss/db";
 import { HttpError, handleRouteError } from "@moss/module-sdk";
 import type { NewsAiPort } from "@moss/news";
 import {
@@ -10,26 +10,37 @@ import {
   deleteSportsCustomSourceSchema,
   deleteSportsFollowResponseSchema,
   previewSportsSourceSchema,
+  previewSportsSourceAssignmentsSchema,
+  previewSportsSourceRecipeSchema,
+  retrySportsSourceSchema,
   sportsCatalogResponseSchema,
-  sportsCustomSourcesResponseSchema,
+  sportsNewsSourcesResponseSchema,
   sportsFollowsResponseSchema,
   sportsLeagueTeamsResponseSchema,
   sportsOverviewResponseSchema,
   sportsStandingsResponseSchema,
   sportsTeamSearchResponseSchema,
   updateSportsSourceAssignmentsSchema,
+  updateSportsEspnCoverageSchema,
+  updateSportsSourceRecipeSchema,
+  type ConfirmSportsSourceRecipeRequest,
   type ConfirmSportsSourceRequest,
+  type ConfirmSportsSourceAssignmentsRequest,
   type CreateSportsFollowRequest,
   type PreviewSportsSourceRequest,
-  type UpdateSportsSourceAssignmentsRequest
+  type PreviewSportsSourceAssignmentsRequest,
+  type UpdateSportsEspnCoverageRequest
 } from "@moss/shared";
 
 import { SportsFollowsRepository } from "./repository.js";
 import { SportsService, type SportsFollowsWriter } from "./sports-service.js";
 import { catalogEntry } from "./source/catalog.js";
-import { resolveSportsSourceInput, type SportsSafeFetchPort } from "./source/discovery.js";
+import { type SportsDiscoveryBrowserPort, type SportsSafeFetchPort } from "./source/discovery.js";
+import { SportsEspnCoverageRepository } from "./source/espn-coverage-repository.js";
 import { SportsSourcesRepository } from "./source/repository.js";
+import type { SportsPublicSourceReader } from "./source/public-source-reader.js";
 import { createSportsPreviewStore } from "./source/preview-store.js";
+import { SportsSourceRequestError, SportsSourceService } from "./source/service.js";
 
 type SportsSourcePreviewStore = ReturnType<typeof createSportsPreviewStore>;
 
@@ -47,15 +58,16 @@ export interface SportsRoutesDependencies {
   /** Clock seam forwarded to the service (default `() => new Date()`). */
   readonly now?: () => Date;
   /** #1572 custom source discovery — required for the preview/confirm/list/assign/delete routes. */
-  readonly availability: {
-    hasJsonModel(scopedDb: DataContextDb): Promise<boolean>;
-  };
   readonly discovery: {
     readonly fetch: SportsSafeFetchPort;
     readonly ai: NewsAiPort;
+    readonly browser?: SportsDiscoveryBrowserPort;
   };
   /** Optional injection point for tests; defaults to a real `SportsSourcesRepository`. */
   readonly sourcesRepository?: SportsSourcesRepository;
+  readonly espnCoverageRepository?: SportsEspnCoverageRepository;
+  readonly publicSourceReader?: Pick<SportsPublicSourceReader, "refresh">;
+  readonly sourceService?: SportsSourceService;
   /** Optional injection point for tests; defaults to a private in-memory store. */
   readonly previews?: SportsSourcePreviewStore;
 }
@@ -65,14 +77,30 @@ export function registerSportsRoutes(
   dependencies: SportsRoutesDependencies
 ): void {
   const repository: SportsFollowsWriter = dependencies.repository ?? new SportsFollowsRepository();
+  const sourcesRepository = dependencies.sourcesRepository ?? new SportsSourcesRepository();
+  const espnCoverageRepository =
+    dependencies.espnCoverageRepository ?? new SportsEspnCoverageRepository();
   const service = new SportsService({
     datasetClient: dependencies.datasetClient,
     dataContext: dependencies.dataContext,
     repository,
-    now: dependencies.now
+    espnCoverage: espnCoverageRepository,
+    now: dependencies.now,
+    publicSourceReader: dependencies.publicSourceReader
   });
-  const sourcesRepository = dependencies.sourcesRepository ?? new SportsSourcesRepository();
   const previews = dependencies.previews ?? createSportsPreviewStore();
+  const sourceService =
+    dependencies.sourceService ??
+    new SportsSourceService({
+      follows: repository,
+      sources: sourcesRepository,
+      espnCoverage: espnCoverageRepository,
+      previews,
+      discovery: dependencies.discovery,
+      resolveTeams: async (competitionKey) => (await service.getLeagueTeams(competitionKey)).teams,
+      dataContext: dependencies.dataContext,
+      reader: dependencies.publicSourceReader
+    });
 
   server.get(
     "/api/sports/catalog",
@@ -126,7 +154,14 @@ export function registerSportsRoutes(
     async (request, reply) => {
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
-        return await service.getOverview(accessContext);
+        const controller = new AbortController();
+        const abort = (): void => controller.abort();
+        request.raw.once("aborted", abort);
+        try {
+          return await service.getOverview(accessContext, controller.signal);
+        } finally {
+          request.raw.off("aborted", abort);
+        }
       } catch (error) {
         return handleRouteError(error, reply);
       }
@@ -207,15 +242,35 @@ export function registerSportsRoutes(
 
   server.get(
     "/api/sports/sources",
-    { schema: sportsCustomSourcesResponseSchema },
+    { schema: sportsNewsSourcesResponseSchema },
     async (request, reply) => {
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
         const sources = await dependencies.dataContext.withDataContext(accessContext, (db) =>
-          sourcesRepository.list(db)
+          sourceService.listSources(db)
         );
         return { sources };
       } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  server.put(
+    "/api/sports/sources/espn/coverage",
+    { schema: updateSportsEspnCoverageSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const input = request.body as UpdateSportsEspnCoverageRequest;
+        const source = await dependencies.dataContext.withDataContext(accessContext, (db) =>
+          sourceService.replaceEspnCoverage(db, input.assignments)
+        );
+        return { source };
+      } catch (error) {
+        if (error instanceof SportsSourceRequestError) {
+          return handleRouteError(new HttpError(error.statusCode, error.message), reply);
+        }
         return handleRouteError(error, reply);
       }
     }
@@ -228,40 +283,9 @@ export function registerSportsRoutes(
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
         const input = request.body as PreviewSportsSourceRequest;
-        return await dependencies.dataContext.withDataContext(accessContext, async (db) => {
-          const hasJsonModel = await dependencies.availability.hasJsonModel(db);
-          if (!hasJsonModel) {
-            return { status: "unavailable" as const };
-          }
-          const result = await resolveSportsSourceInput(
-            db,
-            { ...dependencies.discovery, repo: sourcesRepository },
-            { rawUrl: input.url }
-          );
-          if (result.status !== "ok") return result;
-
-          const confirmationId = previews.put({
-            ownerUserId: accessContext.actorUserId,
-            candidate: result.candidate,
-            createdAt: Date.now()
-          });
-          const existing = await sourcesRepository.list(db);
-          const duplicate = existing.find(
-            (source) => source.canonicalDomain === result.candidate.canonicalDomain
-          );
-          return {
-            status: "ok" as const,
-            confirmationId,
-            candidate: {
-              label: result.candidate.label,
-              canonicalDomain: result.candidate.canonicalDomain,
-              homepageUrl: result.candidate.homepageUrl,
-              retrievalMethod: result.candidate.retrievalMethod,
-              sampleCount: result.candidate.sampleCount
-            },
-            ...(duplicate ? { duplicateOfSourceId: duplicate.id } : {})
-          };
-        });
+        return await dependencies.dataContext.withDataContext(accessContext, (db) =>
+          sourceService.previewNewSource(db, accessContext.actorUserId, input)
+        );
       } catch (error) {
         return handleRouteError(error, reply);
       }
@@ -275,28 +299,15 @@ export function registerSportsRoutes(
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
         const input = request.body as ConfirmSportsSourceRequest;
-        const source = await dependencies.dataContext.withDataContext(accessContext, async (db) => {
-          const preview = previews.take(accessContext.actorUserId, input.confirmationId);
-          if (!preview) {
-            throw new HttpError(409, "Source preview expired or was not found");
-          }
-          const created = await sourcesRepository.create(db, { candidate: preview.candidate });
-          if ("limitExceeded" in created) {
-            throw new HttpError(400, "A maximum of 10 custom sources is allowed");
-          }
-          if (input.followIds && input.followIds.length > 0) {
-            const assigned = await sourcesRepository.setAssignments(
-              db,
-              created.id,
-              input.followIds
-            );
-            if (assigned) return assigned;
-          }
-          return created;
-        });
+        const source = await dependencies.dataContext.withDataContext(accessContext, (db) =>
+          sourceService.confirmNewSource(db, accessContext.actorUserId, input)
+        );
         reply.code(201);
         return { source };
       } catch (error) {
+        if (error instanceof SportsSourceRequestError) {
+          return handleRouteError(new HttpError(error.statusCode, error.message), reply);
+        }
         return handleRouteError(error, reply);
       }
     }
@@ -309,13 +320,92 @@ export function registerSportsRoutes(
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
         const { id } = request.params as { id: string };
-        const input = request.body as UpdateSportsSourceAssignmentsRequest;
+        const input = request.body as ConfirmSportsSourceAssignmentsRequest;
         const source = await dependencies.dataContext.withDataContext(accessContext, (db) =>
-          sourcesRepository.setAssignments(db, id, input.followIds)
+          sourceService.confirmAssignments(db, accessContext.actorUserId, id, input)
         );
-        if (!source) throw new HttpError(404, "Source not found");
         return { source };
       } catch (error) {
+        if (error instanceof SportsSourceRequestError) {
+          return handleRouteError(new HttpError(error.statusCode, error.message), reply);
+        }
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  server.post(
+    "/api/sports/sources/:id/assignments/preview",
+    { schema: previewSportsSourceAssignmentsSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const { id } = request.params as { id: string };
+        const input = request.body as PreviewSportsSourceAssignmentsRequest;
+        return await dependencies.dataContext.withDataContext(accessContext, (db) =>
+          sourceService.previewAssignments(db, accessContext.actorUserId, id, input)
+        );
+      } catch (error) {
+        if (error instanceof SportsSourceRequestError) {
+          return handleRouteError(new HttpError(error.statusCode, error.message), reply);
+        }
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  server.post(
+    "/api/sports/sources/:id/retry",
+    { schema: retrySportsSourceSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const { id } = request.params as { id: string };
+        return { source: await sourceService.retrySource(accessContext, id) };
+      } catch (error) {
+        if (error instanceof SportsSourceRequestError) {
+          return handleRouteError(new HttpError(error.statusCode, error.message), reply);
+        }
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  server.post(
+    "/api/sports/sources/:id/rebuild/preview",
+    { schema: previewSportsSourceRecipeSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const { id } = request.params as { id: string };
+        return await dependencies.dataContext.withDataContext(accessContext, (db) =>
+          sourceService.previewRecipeRebuild(db, accessContext.actorUserId, id)
+        );
+      } catch (error) {
+        if (error instanceof SportsSourceRequestError) {
+          return handleRouteError(new HttpError(error.statusCode, error.message), reply);
+        }
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  server.patch(
+    "/api/sports/sources/:id/rebuild",
+    { schema: updateSportsSourceRecipeSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const { id } = request.params as { id: string };
+        const input = request.body as ConfirmSportsSourceRecipeRequest;
+        const source = await dependencies.dataContext.withDataContext(accessContext, (db) =>
+          sourceService.confirmRecipeRebuild(db, accessContext.actorUserId, id, input)
+        );
+        return { source };
+      } catch (error) {
+        if (error instanceof SportsSourceRequestError) {
+          return handleRouteError(new HttpError(error.statusCode, error.message), reply);
+        }
         return handleRouteError(error, reply);
       }
     }
@@ -329,7 +419,7 @@ export function registerSportsRoutes(
         const accessContext = await dependencies.resolveAccessContext(request);
         const { id } = request.params as { id: string };
         const deleted = await dependencies.dataContext.withDataContext(accessContext, (db) =>
-          sourcesRepository.remove(db, id)
+          sourceService.removeSource(db, id)
         );
         return { deleted };
       } catch (error) {

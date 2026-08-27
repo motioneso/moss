@@ -83,22 +83,33 @@ async function buildClaudeCommand(
   // VerifiedSubmitError → 503. Confirmed by live prod-container test: the FULL flag set below
   // under `default` reaches a clean ready REPL and answers a turn (seeding +
   // HOME=/data/cli-auth already suppress the folder-trust wizard). Restores spike-F2 DiD.
-  const parts = [`cd ${shellQuote(opts.neutralDir)} &&`, claudeCmd, "--permission-mode default"];
+  const parts = [
+    `cd ${shellQuote(opts.neutralDir)} &&`,
+    claudeCmd,
+    `--permission-mode ${opts.workspaceWrite ? "acceptEdits" : "default"}`
+  ];
 
   if (opts.mcpToken && opts.mcpServerUrl) {
     const mcpConfigPath = await writeClaudeMcpConfig(ctx.io, opts);
-    const settingsPath = await writeClaudePermissionHook(ctx.io, {
-      neutralDir: opts.neutralDir,
-      mcpToken: opts.mcpToken,
-      mcpServerUrl: opts.mcpServerUrl
-    });
     parts.push(`--mcp-config ${shellQuote(mcpConfigPath)}`);
-    parts.push(`--settings ${shellQuote(settingsPath)}`);
-    const allowedTools = ["mcp__jarvis__*", ...vaultReadOnlyToolPatterns()].join(" ");
+    if (!opts.workspaceWrite) {
+      const settingsPath = await writeClaudePermissionHook(ctx.io, {
+        neutralDir: opts.neutralDir,
+        mcpToken: opts.mcpToken,
+        mcpServerUrl: opts.mcpServerUrl
+      });
+      parts.push(`--settings ${shellQuote(settingsPath)}`);
+    }
+    const allowedTools = opts.workspaceWrite
+      ? ["mcp__jarvis__*", "Read", "Glob", "Grep", "Write", "Edit"].join(" ")
+      : ["mcp__jarvis__*", ...vaultReadOnlyToolPatterns()].join(" ");
     parts.push(`--allowedTools ${shellQuote(allowedTools)}`);
+  } else if (opts.workspaceWrite) {
+    parts.push(`--allowedTools ${shellQuote("Read Glob Grep Write Edit")}`);
   } else {
     parts.push('--tools ""');
   }
+  if (opts.workspaceWrite) parts.push("--disallowedTools Bash");
 
   parts.push(
     `--append-system-prompt-file ${shellQuote(personaPath)}`,
@@ -120,7 +131,10 @@ function buildCodexCommand(ctx: LaunchCommandContext, opts: EngineLaunchOpts): s
 
   // #1083 F1: deny shell_tool/apply_patch_tool on EVERY launch (was gated behind the MCP check
   // below, so no-gateway launches kept native shell/patch tools); mirrors anthropic's `--tools ""`.
-  parts.push(`-c 'features.shell_tool=false'`, `-c 'features.apply_patch_tool=false'`);
+  parts.push(
+    `-c 'features.shell_tool=${opts.workspaceWrite ? "true" : "false"}'`,
+    `-c 'features.apply_patch_tool=${opts.workspaceWrite ? "true" : "false"}'`
+  );
 
   if (opts.mcpToken && opts.mcpServerUrl) {
     parts.push(
@@ -136,7 +150,12 @@ function buildCodexCommand(ctx: LaunchCommandContext, opts: EngineLaunchOpts): s
   // `-a never`/`approval_policy` cover shell approvals. MCP tool approval is
   // separate; auto-approve only the generated Jarv1s server so the hidden TUI
   // never blocks on a prompt the web user cannot see.
-  parts.push("--disable apps", "--sandbox read-only", "-a never", `-c 'approval_policy="never"'`);
+  parts.push(
+    "--disable apps",
+    `--sandbox ${opts.workspaceWrite ? "workspace-write" : "read-only"}`,
+    "-a never",
+    `-c 'approval_policy="never"'`
+  );
 
   return parts.join(" ");
 }
@@ -147,6 +166,7 @@ function buildGeminiCommand(opts: EngineLaunchOpts): string {
     `cd ${shellQuote(opts.neutralDir)} &&`,
     "agy",
     "--sandbox",
+    ...(opts.workspaceWrite ? ["--mode", "accept-edits"] : []),
     "--log-file",
     shellQuote(join(opts.neutralDir, AGY_SESSION_LOG_FILENAME))
   ];

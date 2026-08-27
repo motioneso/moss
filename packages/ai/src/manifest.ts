@@ -40,7 +40,9 @@ import {
   getAiActionPoliciesResponseSchema,
   patchAiActionPolicyRequestSchema,
   patchAiActionPolicyResponseSchema,
-  listActionAuditLogRouteSchema
+  listActionAuditLogRouteSchema,
+  approveModuleBuildResponseSchema,
+  listMyModuleBuildsResponseSchema
 } from "@moss/shared";
 
 import { aiExplainRecentErrorsExecute } from "./error-tools.js";
@@ -372,6 +374,32 @@ export const aiModuleManifest = {
       method: "GET",
       path: "/api/ai/action-audit",
       responseSchema: listActionAuditLogRouteSchema.response[200],
+      permissionId: "ai.assistant-actions"
+    },
+    {
+      // #1888 — the "Build it" button on the plan card the workshop.buildModule tool returns.
+      // The plan itself is written by a tool call inside a chat turn; this is the separate,
+      // explicit human confirmation that releases the build to the worker queue. Ownership is
+      // re-checked server-side against the build row, so approving another user's build is
+      // indistinguishable from approving one that does not exist.
+      method: "POST",
+      path: "/api/ai/module-builds/:buildId/approve",
+      responseSchema: approveModuleBuildResponseSchema,
+      permissionId: "ai.assistant-actions"
+    },
+    {
+      // The Workshop Stop/Discard actions re-check ownership and cancellable status server-side.
+      method: "POST",
+      path: "/api/ai/module-builds/:buildId/cancel",
+      responseSchema: approveModuleBuildResponseSchema,
+      permissionId: "ai.assistant-actions"
+    },
+    {
+      // #1945 — the Workshop page's own list of the caller's builds. The repository query
+      // scopes to owner_user_id, so this is never a cross-user listing.
+      method: "GET",
+      path: "/api/ai/module-builds/mine",
+      responseSchema: listMyModuleBuildsResponseSchema,
       permissionId: "ai.assistant-actions"
     }
   ],

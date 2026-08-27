@@ -532,3 +532,20 @@
   font-size: 12px;
   color: var(--danger-fg);
 }
+/* Add-a-medication builder (#1970). Layout lives in apps/web/src/styles/wellness-3.css. */
+.wl-medform__hint {
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+.wl-medform__preview {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-sunken);
+}
+.wl-medform__previewline {
+  color: var(--text);
+}
+.wl-medform__previewdoses {
+  font-size: 13px;
+  color: var(--text-subtle);
+}
