@@ -18,10 +18,10 @@
 import type { Multiplexer, ProviderKind, TmuxIo } from "@moss/ai";
 import type { AiProviderExecutionMode } from "@moss/shared";
 
-import { AgyPrintChatEngine } from "./agy-print-chat-engine.js";
 import { ClaudePrintChatEngine } from "./claude-print-chat-engine.js";
 import { CliChatEngineImpl } from "./cli-chat-engine.js";
 import type { CliChatEngineDiagnostic } from "./cli-chat-engine-opts.js";
+import { GeminiPrintChatEngine } from "./gemini-print-chat-engine.js";
 import { ClaudePersistentRuntimeEngine } from "./persistent-runtime-engine.js";
 import type { AdmitCapablePool } from "./persistent-runtime-pool.js";
 import type { CliChatEngine, EngineLaunchOpts } from "./types.js";
@@ -72,7 +72,7 @@ export interface ChatEngineSelectionOpts {
 }
 
 /**
- * True when this provider/mode pair runs bounded-fallback (`claude -p` / `agy` exec, one
+ * True when this provider/mode pair runs bounded-fallback (`claude -p` / `gemini -p`, one
  * process per turn) rather than driving a persistent REPL inside a multiplexer pane.
  * Exported so callers that need to know whether a mux session will exist (the runner's
  * orphan reaping, tests) can ask without reconstructing the rule.
@@ -108,7 +108,7 @@ function buildFallbackEngine(
         credentialFile: opts.credentialFile
       });
     }
-    return new AgyPrintChatEngine(sessionKey, io, {
+    return new GeminiPrintChatEngine(sessionKey, io, {
       mux: opts.mux,
       homeBase: opts.homeBase
     });

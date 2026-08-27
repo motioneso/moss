@@ -46,19 +46,27 @@
  *     type === "event_msg" AND payload.type === "task_complete"
  *     → payload.last_agent_message is the final reply string.
  *
- * ## Gemini CLI / google  (~/.gemini/tmp/<project>/chats/<session>.jsonl)
+ * ## Gemini CLI / google  (the process's own stdout, `--output-format stream-json`)
  *
- *   Each line is a JSON object with top-level fields:
- *     type : "gemini" | "user" | "info" | "error" | (absent for metadata lines)
- *     id, timestamp, content (string), thoughts (array), tokens, model
+ *   Re-derived 2026-08-27 for #2028 against `@google/gemini-cli@0.57.0`. The schema documented
+ *   here before described a saved chat file that no shipped Google CLI writes, and the reply is
+ *   no longer read from a file at all: the launch line redirects stdout into the session folder
+ *   and this reader parses that. One JSON object per line:
  *
- *   type === "gemini" records:
- *     content === "" (empty string) → intermediate: thoughts only
- *       thoughts[i] = { subject, description } → thinking activity per thought
- *     content !== "" → FINAL reply (content is the full reply string)
+ *     { type: "init",   session_id, model }                      → start of the run
+ *     { type: "message", role: "user",      content }            → the prompt echoed back
+ *     { type: "message", role: "assistant", content, delta: true } → ONE CHUNK of the reply
+ *     { type: "tool_use",    tool_name, tool_id, parameters }    → tool activity
+ *     { type: "tool_result", tool_id, status, output, error }    → tool activity
+ *     { type: "error",  severity, message }                      → status activity
+ *     { type: "result", status: "success" | "error", stats, error? } → END of the turn
+ *
+ *   The reply arrives ONLY as `delta: true` chunks and must be joined in arrival order — a single
+ *   chunk on its own is a fragment, not an answer. Verified in the CLI's own emitter: every
+ *   assistant message it writes carries `delta: true`.
  *
  *   Completion signal:
- *     type === "gemini" AND content is a non-empty string.
+ *     type === "result" → the joined assistant chunks are the final reply.
  * ───────────────────────────────────────────────────────────────────────────
  */
 
@@ -134,6 +142,7 @@ export function parseTranscript(
   const lines = slice.split("\n").filter((l) => l.trim().length > 0);
 
   const events: ChatActivityEvent[] = [];
+  const geminiTurn: GeminiTurnState = { assistant: "" };
   let reply: string | null = null;
   let complete = false;
 
@@ -160,7 +169,7 @@ export function parseTranscript(
         });
         break;
       case "google":
-        mapGeminiRecord(rec, events, (r) => {
+        mapGeminiRecord(rec, events, geminiTurn, (r) => {
           reply = r;
           complete = true;
         });
@@ -327,62 +336,61 @@ function mapCodexExecItem(
 
 // ─── google / Gemini CLI mapping ──────────────────────────────────────────────
 
+/**
+ * The reply is assembled across many lines, so the google mapper needs somewhere to keep the
+ * chunks it has seen so far. One of these per `parseTranscript` call.
+ */
+interface GeminiTurnState {
+  assistant: string;
+}
+
 function mapGeminiRecord(
   rec: Record<string, unknown>,
   events: ChatActivityEvent[],
+  turn: GeminiTurnState,
   onFinal: (text: string) => void
 ): void {
-  if (rec["type"] !== "gemini") {
-    mapAgyPrintRecord(rec, events, onFinal);
-    return;
-  }
-
-  const content = rec["content"];
-  const thoughts = rec["thoughts"];
-
-  if (typeof content === "string" && content.length > 0) {
-    // Non-empty content = final reply
-    onFinal(content);
-    return;
-  }
-
-  // Empty content = intermediate thoughts only
-  if (Array.isArray(thoughts)) {
-    for (const thought of thoughts) {
-      if (!isRecord(thought)) continue;
-      const subject = typeof thought["subject"] === "string" ? thought["subject"] : "";
-      const description = typeof thought["description"] === "string" ? thought["description"] : "";
-      const text = subject ? `${subject}: ${description}` : description;
-      events.push({ kind: "thinking", text });
+  switch (rec["type"]) {
+    case "message": {
+      // Only the assistant's own chunks build the reply. The user line is our prompt echoed back;
+      // treating it as reply text would answer the founder with their own question.
+      if (rec["role"] !== "assistant") return;
+      const content = rec["content"];
+      if (typeof content !== "string") return;
+      if (rec["delta"] === true) turn.assistant += content;
+      else turn.assistant = content;
+      return;
     }
-  }
-}
-
-function mapAgyPrintRecord(
-  rec: Record<string, unknown>,
-  events: ChatActivityEvent[],
-  onFinal: (text: string) => void
-): void {
-  const type = typeof rec["type"] === "string" ? rec["type"] : "";
-  if (type === "PLANNER_RESPONSE") {
-    const text =
-      typeof rec["content"] === "string"
-        ? rec["content"]
-        : typeof rec["text"] === "string"
-          ? rec["text"]
-          : "";
-    if (text.trim()) onFinal(text);
-    return;
-  }
-
-  if (type === "VIEW_FILE" || type === "RUN_COMMAND") {
-    const target =
-      typeof rec["path"] === "string"
-        ? rec["path"]
-        : typeof rec["command"] === "string"
-          ? rec["command"]
-          : "";
-    events.push({ kind: "tool", text: target ? `${type} ${target}` : type });
+    case "tool_use": {
+      const name = typeof rec["tool_name"] === "string" ? rec["tool_name"] : "tool";
+      events.push({ kind: "tool", text: name });
+      return;
+    }
+    case "tool_result": {
+      const status = typeof rec["status"] === "string" ? rec["status"] : "done";
+      events.push({ kind: "tool", text: `tool result: ${status}` });
+      return;
+    }
+    case "error": {
+      const message = typeof rec["message"] === "string" ? rec["message"] : "";
+      const severity = typeof rec["severity"] === "string" ? rec["severity"] : "error";
+      events.push({ kind: "status", text: message ? `${severity}: ${message}` : severity });
+      return;
+    }
+    case "result": {
+      // The turn is over either way. A failed run has no assistant chunks, so the joined text is
+      // empty and the caller sees "finished with no reply" rather than a silent hang.
+      const error = rec["error"];
+      if (rec["status"] === "error" && isRecord(error) && typeof error["message"] === "string") {
+        events.push({ kind: "status", text: error["message"] });
+      }
+      const reply = turn.assistant;
+      turn.assistant = "";
+      onFinal(reply);
+      return;
+    }
+    default:
+      return;
   }
 }
 
