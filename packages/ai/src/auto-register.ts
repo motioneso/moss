@@ -74,10 +74,12 @@ export const DEFAULT_CHAT_MODELS: Partial<Record<AiProviderKind, DefaultChatMode
     tier: "interactive",
     capabilities: ["chat"]
   }
-  // NOTE: google/gemini is intentionally absent. Since #2026 it IS installable (a pinned,
-  // checksummed recipe in the cli-runner catalog), but it still has NO login adapter, so it can
-  // never reach login `ready`. Add an entry here only once it is loginable too (the uniform
-  // sentinel rule already covers its launch).
+  // NOTE: google/gemini is intentionally absent, and that is still correct. Since #2026 it IS
+  // installable (a pinned, checksummed recipe in the cli-runner catalog), and since #2027 it DOES
+  // have a login adapter, so it can now reach login `ready`. What is still missing is the rest of
+  // the chat path for it (#2028): a signed-in gemini is not yet usable as a chat model, so
+  // registering a default model here would advertise a model chat cannot serve. Add an entry once
+  // that lands (the uniform sentinel rule already covers its launch).
 };
 
 /** The seam the login flow calls on `ready`. Generic over `providerKind`. */
