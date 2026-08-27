@@ -284,6 +284,7 @@ import {
   SportsEspnCoverageRepository,
   SportsPublicSourceReader,
   SportsService,
+  type RegisteredStory,
   SportsSourceService,
   SportsSourcesRepository,
   SPORTS_BROWSER_SOCKETS,
@@ -1969,6 +1970,48 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       });
       const followsRepository = new SportsFollowsRepository();
       const previews = createSportsPreviewStore();
+      // Story relevance feedback (#2019). Both ports are built here, in the composition root,
+      // because Sports must not reach into another module's code to get them. The model access
+      // is the same one Sports already uses for its other work, so the user's configured model is
+      // what runs; no provider or model is named anywhere.
+      const sportsStoryLogger = createModuleLogger(server.log, "sports");
+      const sportsStoryRelevance = createStoryRelevancePolicy({
+        ai: discovery.ai,
+        repository: usefulnessFeedbackRepository,
+        logger: sportsStoryLogger
+      });
+      const sportsStoryFeedback = {
+        refFor: (canonicalLink: string) => storyFeedbackTargetRef("sports", canonicalLink),
+        registerStories: async (
+          scopedDb: DataContextDb,
+          ownerUserId: string,
+          stories: readonly RegisteredStory[]
+        ) => {
+          await usefulnessFeedbackRepository.upsertTargets(
+            scopedDb,
+            stories.map((story) => ({
+              ownerUserId,
+              targetKind: "sports_story" as const,
+              targetRef: story.storyRef,
+              surface: story.surface,
+              sourceKind: "sports",
+              sourceLabel: story.sourceLabel,
+              // The bounded, allow-listed shape is the only thing a story row may carry. Anything
+              // outside it is dropped rather than stored.
+              metadata: buildStoryTargetContext({
+                moduleId: "sports",
+                headline: story.headline,
+                sourceLabel: story.sourceLabel,
+                publishedAt: story.publishedAt,
+                teamRef: story.teamRef,
+                competitionRef: story.competitionRef,
+                hasEditorialEvidence: story.hasEditorialEvidence,
+                isOpinion: story.isOpinion ?? null
+              })
+            }))
+          );
+        }
+      };
       const sourceTeamResolver = new SportsService({
         datasetClient,
         dataContext: deps.dataContext,
@@ -1997,7 +2040,9 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         espnCoverageRepository,
         publicSourceReader,
         previews,
-        sourceService
+        sourceService,
+        storyRelevance: sportsStoryRelevance,
+        storyFeedback: sportsStoryFeedback
       });
     }
   },

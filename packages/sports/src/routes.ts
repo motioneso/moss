@@ -33,7 +33,12 @@ import {
 } from "@moss/shared";
 
 import { SportsFollowsRepository } from "./repository.js";
-import { SportsService, type SportsFollowsWriter } from "./sports-service.js";
+import {
+  SportsService,
+  type SportsFollowsWriter,
+  type SportsStoryFeedbackPort,
+  type SportsStoryRelevancePort
+} from "./sports-service.js";
 import { catalogEntry } from "./source/catalog.js";
 import { type SportsDiscoveryBrowserPort, type SportsSafeFetchPort } from "./source/discovery.js";
 import { SportsEspnCoverageRepository } from "./source/espn-coverage-repository.js";
@@ -67,6 +72,13 @@ export interface SportsRoutesDependencies {
   readonly sourcesRepository?: SportsSourcesRepository;
   readonly espnCoverageRepository?: SportsEspnCoverageRepository;
   readonly publicSourceReader?: Pick<SportsPublicSourceReader, "refresh">;
+  /**
+   * Story relevance feedback (#2019). Both are optional and bound by the composition root; a
+   * server built without them behaves exactly as it did before, with no filtering and no story
+   * menu on the page.
+   */
+  readonly storyRelevance?: SportsStoryRelevancePort;
+  readonly storyFeedback?: SportsStoryFeedbackPort;
   readonly sourceService?: SportsSourceService;
   /** Optional injection point for tests; defaults to a private in-memory store. */
   readonly previews?: SportsSourcePreviewStore;
@@ -86,7 +98,9 @@ export function registerSportsRoutes(
     repository,
     espnCoverage: espnCoverageRepository,
     now: dependencies.now,
-    publicSourceReader: dependencies.publicSourceReader
+    publicSourceReader: dependencies.publicSourceReader,
+    ...(dependencies.storyRelevance ? { storyRelevance: dependencies.storyRelevance } : {}),
+    ...(dependencies.storyFeedback ? { storyFeedback: dependencies.storyFeedback } : {})
   });
   const previews = dependencies.previews ?? createSportsPreviewStore();
   const sourceService =
