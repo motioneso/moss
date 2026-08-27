@@ -77,7 +77,9 @@ function fakeMux(): Multiplexer & { opened: string[]; killed: MuxHandle[] } {
       return "handle-1";
     },
     async submit() {
-      throw new Error("GeminiPrintChatEngine should run one command per turn, not paste into a REPL");
+      throw new Error(
+        "GeminiPrintChatEngine should run one command per turn, not paste into a REPL"
+      );
     },
     async clearComposer() {},
     async clearComposerHard() {},
@@ -233,9 +235,7 @@ describe("GeminiPrintChatEngine — cleaning up", () => {
     expect(io.runs).toContain(`rm -rf /home/test/.gemini/tmp/${shortId}`);
     expect(io.runs).toContain(`rm -rf /home/test/.gemini/history/${shortId}`);
     expect(io.runs).toContain(`rm -f ${OUTPUT_PATH} ${NEUTRAL_DIR}/${GEMINI_STDERR_FILENAME}`);
-    expect(io.runs).toContain(
-      `find ${NEUTRAL_DIR} -maxdepth 1 -name gemini-*.json -delete`
-    );
+    expect(io.runs).toContain(`find ${NEUTRAL_DIR} -maxdepth 1 -name gemini-*.json -delete`);
     // Another folder's entry survives; ours is gone.
     const registry = JSON.parse(io.writes["/home/test/.gemini/projects.json"] ?? "{}");
     expect(registry).toEqual({ projects: { "/some/other/folder": "other" } });
@@ -287,7 +287,7 @@ describe("nothing under packages/ still runs the old Antigravity command", () =>
     const { dirname, join } = await import("node:path");
     const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-    let raw = "";
+    let raw: string;
     try {
       raw = execFileSync(
         "grep",

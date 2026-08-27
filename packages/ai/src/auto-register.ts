@@ -73,13 +73,18 @@ export const DEFAULT_CHAT_MODELS: Partial<Record<AiProviderKind, DefaultChatMode
     providerDisplayName: "Codex",
     tier: "interactive",
     capabilities: ["chat"]
+  },
+  // #2028 — google joins the other two now that chat can actually serve it. #2026 made the CLI
+  // installable and #2027 gave it a login adapter; what was missing until now was a working chat
+  // engine, which the one-shot Gemini engine supplies. The same sentinel rule applies: no
+  // `--model` for the default, `--model <id>` only for an explicit settings override.
+  google: {
+    providerModelId: DEFAULT_MODEL_SENTINEL,
+    displayName: "Gemini (default model)",
+    providerDisplayName: "Gemini",
+    tier: "interactive",
+    capabilities: ["chat"]
   }
-  // NOTE: google/gemini is intentionally absent, and that is still correct. Since #2026 it IS
-  // installable (a pinned, checksummed recipe in the cli-runner catalog), and since #2027 it DOES
-  // have a login adapter, so it can now reach login `ready`. What is still missing is the rest of
-  // the chat path for it (#2028): a signed-in gemini is not yet usable as a chat model, so
-  // registering a default model here would advertise a model chat cannot serve. Add an entry once
-  // that lands (the uniform sentinel rule already covers its launch).
 };
 
 /** The seam the login flow calls on `ready`. Generic over `providerKind`. */

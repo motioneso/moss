@@ -15,7 +15,6 @@ import {
   SESSION_PREFIX
 } from "../../packages/chat/src/live/cli-chat-engine.js";
 import { CliChatUnavailableError } from "../../packages/chat/src/live/errors.js";
-import { GEMINI_IDENTITY_FILENAME } from "../../packages/chat/src/live/private-transcript-cleanup.js";
 import type { Multiplexer } from "../../packages/ai/src/adapters/multiplexer.js";
 
 function makeIo() {
