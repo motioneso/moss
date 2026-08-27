@@ -7,15 +7,15 @@ spec here.
 
 ## Seams check — every assumption proved against this branch
 
-| Assumption | Evidence on this branch | Verdict |
-|---|---|---|
-| No approved-command list exists in shared settings | `.claude/settings.json` has no `permissions` key at all | still true |
-| A `PreToolUse` hook array for `Bash` already exists to extend | `.claude/settings.json:9-19` | still true |
-| The new script does not exist | `.claude/hooks/` holds only `check-gate-pipe.sh` | still true |
-| Allow-decision JSON shape to emit | `packages/chat/src/live/claude-permission-hook.ts:113-121` | confirmed |
-| Test pattern: spawn the script, feed JSON on stdin, read stdout | `tests/unit/claude-permission-hook.test.ts:50-66` | confirmed |
-| eslint lints `.claude/hooks/*.mjs` | `eslint.config.mjs:20-21` ignores only `.claude/worktrees/` and `.claude/workflows/` | true — must lint clean |
-| prettier checks `.claude/hooks/` | `.prettierignore:13-15` ignores only worktrees, workflows, skills | true — must format clean |
+| Assumption                                                      | Evidence on this branch                                                              | Verdict                  |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------ |
+| No approved-command list exists in shared settings              | `.claude/settings.json` has no `permissions` key at all                              | still true               |
+| A `PreToolUse` hook array for `Bash` already exists to extend   | `.claude/settings.json:9-19`                                                         | still true               |
+| The new script does not exist                                   | `.claude/hooks/` holds only `check-gate-pipe.sh`                                     | still true               |
+| Allow-decision JSON shape to emit                               | `packages/chat/src/live/claude-permission-hook.ts:113-121`                           | confirmed                |
+| Test pattern: spawn the script, feed JSON on stdin, read stdout | `tests/unit/claude-permission-hook.test.ts:50-66`                                    | confirmed                |
+| eslint lints `.claude/hooks/*.mjs`                              | `eslint.config.mjs:20-21` ignores only `.claude/worktrees/` and `.claude/workflows/` | true — must lint clean   |
+| prettier checks `.claude/hooks/`                                | `.prettierignore:13-15` ignores only worktrees, workflows, skills                    | true — must format clean |
 
 ### Two spec premises that drifted
 
