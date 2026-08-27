@@ -43,14 +43,13 @@ gate that had died at `db:migrate` looked alive all night). The runner does the 
 # 1. Start it. Returns immediately with a log path; the gate runs detached in its own session.
 scripts/run-gate.sh start                       # defaults to pnpm verify:foundation
 
-# 2. Poll to completion. Each call blocks up to 540s then exits 3 = "still running, call again".
-#    Give the Bash tool a 600000 ms timeout — its 120s default is shorter than the wait.
-scripts/run-gate.sh wait
-
-# 3. Read the verdict. Exit 0 = green, 1 = the gate failed, 2 = the run DIED (no sentinel,
-#    log gone stale), 3 = still running.
-scripts/run-gate.sh status
+# 2. Wait for it — launch as ONE Bash call with run_in_background: true. It never gives up
+#    early, so there's no foreground timeout to size, and your turn is free to keep working.
+scripts/run-gate.sh wait --follow
 ```
+Read the exit code the background call returns when its one completion notification arrives:
+0 = green, 1 = the gate failed, 2 = the run DIED (no sentinel, log gone stale). No separate
+`status` call needed.
 Useful flags: `--gate audit:release-hardening` to run a different pnpm script (each gate gets its
 own log), `--keep-db` to keep the gate DB for debugging, `--exclusive` to hold the DB lock for the
 whole run when a sibling lane is also gating. `scripts/run-gate.sh stop` terminates a run and still
@@ -165,7 +164,7 @@ or tell the coordinator so it's captured. Don't store secrets.
 - Claiming "green" from an exit code obtained through a pipe, or from a wrapper `echo $?` instead
   of the `### FINAL` line in the log.
 - **Waiting on `pgrep`/`ps` to decide a gate is still running.** It matches Claude's own bash
-  wrappers and never goes false — use `scripts/run-gate.sh wait`.
+  wrappers and never goes false — use `scripts/run-gate.sh wait --follow`, backgrounded.
 - **Hand-rolling the gate DB or the background run** instead of `scripts/run-gate.sh` — without an
   exported `JARVIS_PGDATABASE` you are writing to Ben's live dev instance.
 - Moving the board / closing an issue / **merging** — not yours; report instead.
@@ -182,7 +181,7 @@ or tell the coordinator so it's captured. Don't store secrets.
 | Need | Command |
 | ---- | ------- |
 | Clean tree (your paths) | `git status --porcelain` · `pnpm format` |
-| Gate (fresh DB + real exit) | `scripts/run-gate.sh start` → `scripts/run-gate.sh wait` → `scripts/run-gate.sh status` — never a pipe, never a wrapper `echo $?`, never `pgrep` |
+| Gate (fresh DB + real exit) | `scripts/run-gate.sh start` → `scripts/run-gate.sh wait --follow` backgrounded — never a pipe, never a wrapper `echo $?`, never `pgrep` |
 | Second gate | `scripts/run-gate.sh start --gate audit:release-hardening` (its own log) |
 | Pre-push trio + rebase | `pnpm format:check && pnpm lint && pnpm typecheck` · `git fetch origin main && git rebase origin/main` |
 | Push + PR | `git push -u origin <b>` · `gh pr create --base main` |

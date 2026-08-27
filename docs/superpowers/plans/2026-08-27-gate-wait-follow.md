@@ -46,6 +46,7 @@ No spec premise has drifted; all cited files match the spec's description.
 - No signature/CLI changes to `start`, `status`, `stop`.
 
 Test cases (behavior + why they'd fail against a broken implementation):
+
 - Fake gate finishes after ~2s; `wait --follow` run with a 1s poll interval override returns 0
   without ever hitting a timeout path. Fails against current code because current code has no
   `--follow` flag (usage error) and, if the flag were silently ignored, would still time out and
@@ -102,17 +103,21 @@ pattern (`readFile` + `describe`/`it` + `toContain`/`not.toMatch`).
 ```bash
 bash tests/scripts/test-run-gate-wait-follow.sh > /tmp/rg-wait-follow.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected exit code: 0.
 
 ```bash
 pnpm test:unit -- tests/unit/verify-gate-skill-doc.test.ts > /tmp/rg-wait-follow-unit.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected exit code: 0.
 
 Pre-push trio + full gate (via the `verify-gate` skill, backgrounded) before wrap-up:
+
 ```bash
 pnpm format:check && pnpm lint && pnpm typecheck > /tmp/rg-wait-follow-pretrio.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected exit code: 0.
 
 ## Manual real-run proof (spec's "what done looks like", item 3)
