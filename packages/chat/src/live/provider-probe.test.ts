@@ -76,3 +76,28 @@ describe("probeProvider anthropic HOME isolation", () => {
     expect(result).toEqual({ status: "ready" });
   });
 });
+
+describe("probeProvider google readiness check (#2027)", () => {
+  it("runs the pinned `gemini` command, not the old `agy --print`", async () => {
+    const { io, calls } = fakeRealMergeIo({ code: 0, stdout: "OK\n" });
+
+    const out = await probeProvider("google", { io, cliPresent: async () => true });
+
+    // Login only reports success when this probe returns `ready`. Naming a command the pinned
+    // install recipe does not place (`agy`) — or a flag the tool does not have (`--print`) —
+    // makes the probe unrunnable, so a user completes the whole browser round trip and is then
+    // told sign-in failed.
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.cmd).toBe("gemini");
+    expect(calls[0]?.args).toEqual(["--prompt", "Reply with exactly OK."]);
+    expect(out).toEqual({ status: "ready" });
+  });
+
+  it("reports needs_login when the one-shot cannot answer", async () => {
+    const { io } = fakeRealMergeIo({ code: 1, stdout: "", stderr: "not authenticated" });
+
+    expect(await probeProvider("google", { io, cliPresent: async () => true })).toEqual({
+      status: "needs_login"
+    });
+  });
+});
