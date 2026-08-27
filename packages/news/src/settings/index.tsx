@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, formatTimestamp, Note, PaneHead } from "@moss/settings-ui";
 import { Button } from "@moss/module-web-sdk";
@@ -36,6 +36,11 @@ import { ConnectPublisherForm, credentialStatusBadge } from "./connect-publisher
 import { DescribeTopics, PrereqGate } from "./describe-topics.js";
 import { StoryFeedbackSettings } from "./story-feedback.js";
 import "./news-settings.css";
+
+/* #2008: how long a "key saved" or "access revoked" confirmation stays on screen before it
+   clears itself. Long enough to read twice, short enough that it cannot be mistaken for the
+   result of something done much later. */
+const KEY_NOTICE_VISIBLE_MS = 8000;
 
 /* ----- Pure toggle planners (unit-tested). These must mirror the server's
    resolveEffectivePrefs semantics exactly: base = explicit `source` includes when any exist,
@@ -251,6 +256,14 @@ export default function NewsSettings() {
   // What the route said after a key was saved or revoked. Shown here rather than inside the
   // key form, which closes the moment the request succeeds.
   const [keyNotice, setKeyNotice] = useState<string | null>(null);
+  // The confirmation clears itself after a few seconds. Nothing else on this pane retires it -
+  // it used to sit there until somebody happened to open a key form again, so a "Connected"
+  // sentence from ten minutes ago read as if it had just happened.
+  useEffect(() => {
+    if (!keyNotice) return;
+    const timer = setTimeout(() => setKeyNotice(null), KEY_NOTICE_VISIBLE_MS);
+    return () => clearTimeout(timer);
+  }, [keyNotice]);
   const revokeCredentialMutation = useMutation({
     mutationFn: revokeNewsSourceCredential,
     onSuccess: (result) => {

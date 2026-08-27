@@ -781,4 +781,87 @@ test.describe("publisher keys (#2008)", () => {
     // The key form closes on success, so the confirmation has to be shown by the page itself.
     await expect(page.getByText("Add a new key to reconnect this source.")).toBeVisible();
   });
+
+  test("the ordinary Add button is greyed out while a key is being sent", async ({ page }) => {
+    await page.route("**/api/news/sources/preview", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          status: "ok",
+          confirmationId: "cccccccc-cccc-cccc-cccc-cccccccccccc",
+          candidates: [
+            {
+              label: "NewsAPI",
+              canonicalDomain: "newsapi.org",
+              homepageUrl: "https://newsapi.org/",
+              retrievalMethod: "scrape",
+              sampleCount: 5
+            }
+          ],
+          candidateIds: ["dddddddd-dddd-dddd-dddd-dddddddddddd"],
+          connection: OFFER
+        })
+      })
+    );
+
+    // Hold the key request open so the in-flight moment can actually be looked at. Without the
+    // form reporting that it is busy, the plain Add button stayed clickable right through this
+    // window and a fast pair of clicks could add the same publication twice.
+    let releaseConnect: (() => void) | undefined;
+    const connectHeld = new Promise<void>((resolve) => {
+      releaseConnect = resolve;
+    });
+    await page.route("**/api/news/sources/credentialed", async (route) => {
+      await connectHeld;
+      return route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          source: CONNECTED_SOURCE,
+          credential: {
+            sourceId: CONNECTED_SOURCE.id,
+            connectionId: OFFER.connectionId,
+            publisherName: "NewsAPI",
+            requestHost: "newsapi.org",
+            status: "configured",
+            lastValidatedAt: "2026-08-27T09:00:00.000Z",
+            revokedAt: null
+          },
+          message: "Connected. News will use this source on its next refresh."
+        })
+      });
+    });
+
+    // Count every ordinary add so a second one cannot slip through unnoticed. The plain add
+    // path is a POST to the sources collection itself, not to a separate address.
+    let confirmCalls = 0;
+    await page.route("**/api/news/sources", (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      confirmCalls += 1;
+      return route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({ source: CONNECTED_SOURCE })
+      });
+    });
+
+    await page.goto("/settings?section=modules&module=news");
+    await page.getByLabel("Publication homepage or domain").fill("newsapi.org");
+    await page.getByRole("button", { name: "Check" }).click();
+    await page.getByLabel("Access key").fill(FAKE_KEY);
+    await page.getByLabel("I have permission to use this key here.").check();
+
+    const addButton = page.getByRole("button", { name: "Add this source" });
+    await expect(addButton).toBeEnabled();
+    await page.getByRole("button", { name: "Connect", exact: true }).click();
+
+    // While the key is in flight the plain add path is closed.
+    await expect(addButton).toBeDisabled();
+    expect(confirmCalls).toBe(0);
+
+    releaseConnect?.();
+    await expect(page.getByText("News will use this source on its next refresh.")).toBeVisible();
+    expect(confirmCalls).toBe(0);
+  });
 });

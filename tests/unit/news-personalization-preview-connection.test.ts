@@ -368,10 +368,16 @@ describe("the running product actually gets the reviewed list (#2008)", () => {
   // rather than booting it, because booting it needs a database; a text check is a weak test in
   // general, but the mistake it catches - News quietly wired back to the do-nothing list, so no
   // key box ever appears - is exactly a one-word edit on this line.
-  const compositionRoot = readFileSync(
+  //
+  // Comments are stripped first. Commenting the line out is as easy an edit as changing it, and
+  // against the raw file both this check and its opposite would still pass.
+  const compositionRootSource = readFileSync(
     fileURLToPath(new URL("../../packages/module-registry/src/index.ts", import.meta.url)),
     "utf8"
   );
+  const compositionRoot = compositionRootSource
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:])\/\/.*$/gm, "$1");
 
   it("hands News the reviewed publisher list, not the do-nothing one", () => {
     expect(compositionRoot).toContain(
@@ -379,6 +385,19 @@ describe("the running product actually gets the reviewed list (#2008)", () => {
     );
     expect(compositionRoot).not.toContain(
       "publisherConnections: createEmptyNewsPublisherConnectionPort()"
+    );
+  });
+
+  it("fails if that line is commented out rather than changed", () => {
+    const commentedOut = compositionRootSource.replace(
+      "publisherConnections: createRegistryNewsPublisherConnectionPort()",
+      "// publisherConnections: createRegistryNewsPublisherConnectionPort()"
+    );
+    const stripped = commentedOut
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/(^|[^:])\/\/.*$/gm, "$1");
+    expect(stripped).not.toContain(
+      "publisherConnections: createRegistryNewsPublisherConnectionPort()"
     );
   });
 });

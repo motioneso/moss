@@ -65,7 +65,8 @@ export function ConnectPublisherForm({
   offer,
   mode,
   onDone,
-  onCancel
+  onCancel,
+  onBusyChange
 }: {
   readonly offer: NewsPublisherConnectionOfferDto;
   readonly mode: ConnectPublisherMode;
@@ -76,6 +77,12 @@ export function ConnectPublisherForm({
    */
   readonly onDone: (message: string) => void;
   readonly onCancel: () => void;
+  /**
+   * Reports whether a key is in flight, so the screen around this form can grey out its own
+   * buttons. Without it the ordinary "Add this source" button stays live while a key is being
+   * sent, and a fast pair of clicks adds the same publication twice.
+   */
+  readonly onBusyChange?: (busy: boolean) => void;
 }) {
   const queryClient = useQueryClient();
   // The key lives here and nowhere else. A ref is used rather than useState because a state
@@ -127,6 +134,19 @@ export function ConnectPublisherForm({
   useEffect(() => {
     if (submit.isSuccess || submit.isError) submit.reset();
   }, [submit.isSuccess, submit.isError, submit]);
+
+  // Tell the screen around us while a key is in flight, and always report "not busy" on the way
+  // out - unmounting mid-request must not leave the surrounding buttons greyed out forever.
+  const pending = submit.isPending;
+  useEffect(() => {
+    onBusyChange?.(pending);
+  }, [pending, onBusyChange]);
+  useEffect(
+    () => () => {
+      onBusyChange?.(false);
+    },
+    [onBusyChange]
+  );
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

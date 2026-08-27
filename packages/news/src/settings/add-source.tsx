@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useCallback, useState, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Note } from "@moss/settings-ui";
 import { ApiError, Button } from "@moss/module-web-sdk";
@@ -92,6 +92,11 @@ export function AddSourceFlow() {
   // The sentence to show after something was added, or null. A string rather than a flag so a
   // key connection can report what the publisher's own route said instead of generic copy.
   const [added, setAdded] = useState<string | null>(null);
+  // True while the key form below is sending a key. Its request is its own, so without this the
+  // ordinary Add button would stay live and the same publication could be added twice.
+  const [keyBusy, setKeyBusy] = useState(false);
+  // Stable so the key form is not told to report its state again on every re-render.
+  const handleKeyBusyChange = useCallback((value: boolean) => setKeyBusy(value), []);
 
   const previewMutation = useMutation({
     mutationFn: previewNewsSource,
@@ -138,7 +143,7 @@ export function AddSourceFlow() {
     confirmMutation.reset();
   }
 
-  const busy = previewMutation.isPending || confirmMutation.isPending;
+  const busy = previewMutation.isPending || confirmMutation.isPending || keyBusy;
   const previewFailure = preview ? previewOutcomeMessage(preview) : null;
   const candidates = preview ? zipPreviewCandidates(preview) : [];
   // Confirm failures carry friendly server copy (limit/duplicate/expired) in the error body;
@@ -238,6 +243,7 @@ export function AddSourceFlow() {
               <ConnectPublisherForm
                 offer={preview.connection}
                 mode={{ kind: "connect" }}
+                onBusyChange={handleKeyBusyChange}
                 onDone={(message) => {
                   setInput("");
                   setPreview(null);
