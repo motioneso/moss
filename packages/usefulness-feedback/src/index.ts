@@ -1,4 +1,7 @@
 export * from "./manifest.js";
+export * from "./relevance/compile.js";
+export * from "./relevance/evaluator.js";
+export * from "./relevance/policy.js";
 export * from "./repository.js";
 export * from "./story-target.js";
 export * from "./story-verifier.js";
