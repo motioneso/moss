@@ -31,6 +31,7 @@ import { getAllQueueDefinitions } from "@moss/module-registry";
 import {
   downloadAndStageModule,
   getExternalModuleRegistrations,
+  ModuleDownloadError,
   parseModulesEnsure,
   resolveModulesDir,
   sweepStagingDirs
@@ -51,7 +52,7 @@ export interface ReconcileReport {
   readonly installed: string[];
   readonly drifted: string[];
   /** Per-module failures that were logged and skipped (never fatal). */
-  readonly warnings: { moduleId: string; phase: string; message: string }[];
+  readonly warnings: { moduleId: string; phase: string; message: string; code?: string }[];
 }
 
 /**
@@ -211,8 +212,12 @@ export async function reconcileModules(options: ReconcileModulesOptions): Promis
   };
   const warn = (moduleId: string, phase: string, error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
-    report.warnings.push({ moduleId, phase, message });
-    console.warn(`[module-reconcile] ${phase} ${moduleId}: ${message}`);
+    // #1319: carry the download pipeline's failure code alongside the wording. Boot must keep
+    // going either way; this just gives operators (and the boot test) something stable to read
+    // instead of an English sentence.
+    const code = error instanceof ModuleDownloadError ? error.code : undefined;
+    report.warnings.push({ moduleId, phase, message, ...(code ? { code } : {}) });
+    console.warn(`[module-reconcile] ${phase} ${moduleId}${code ? ` [${code}]` : ""}: ${message}`);
   };
 
   const client = new Client({ connectionString: urls.bootstrap });

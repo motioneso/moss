@@ -128,9 +128,21 @@ export interface ModuleDistributionDependencies {
   readonly download: (input: {
     readonly moduleId: string;
     readonly version?: string;
+    /**
+     * #1319: SHA-256 hex digest of one exact catalog the admin deliberately accepted.
+     * Waives the catalog-signature requirement for that catalog alone; every other check
+     * (artifact hash and size, pinned hosts, safe unpacking, manifest, version) still runs.
+     */
+    readonly acceptedCatalogDigestSha256?: string;
   }) => Promise<
     | { readonly ok: true; readonly version: string; readonly packageHash: string }
-    | { readonly ok: false; readonly code: string; readonly message: string }
+    | {
+        readonly ok: false;
+        readonly code: string;
+        readonly message: string;
+        /** Set only when the catalog was fetched but could not be authenticated. */
+        readonly catalogDigestSha256?: string | null;
+      }
   >;
   /** Delete JARVIS_MODULES_DIR/<id>. Idempotent; missing dir is fine. */
   readonly removeModuleFiles: (moduleId: string) => Promise<void>;
