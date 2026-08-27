@@ -83,7 +83,9 @@ export const newsModuleManifest = {
       // #975 Slice 4 — column-scoped worker UPDATE grants for provider-change revalidation.
       "sql/0161_news_revalidation.sql",
       // #2005 (part of #950) — owner-only encrypted publisher credentials.
-      "sql/0200_news_source_credentials.sql"
+      "sql/0200_news_source_credentials.sql",
+      // #2030 (part of #1586) — refresh attempt/success/failure history columns.
+      "sql/0203_news_refresh_history.sql"
     ],
     migrationDirectories: ["packages/news/sql"],
     ownedTables: [

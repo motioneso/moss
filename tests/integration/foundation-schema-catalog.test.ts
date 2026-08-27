@@ -360,7 +360,10 @@ describe("MVP foundation schema catalog", () => {
         { version: "0200", name: "0200_news_source_credentials.sql" },
         // #2016 — story-level relevance feedback: News/Sports targets, a bounded reason,
         // revisions, and the superseded lifecycle state.
-        { version: "0201", name: "0201_story_relevance_feedback.sql" }
+        { version: "0201", name: "0201_story_relevance_feedback.sql" },
+        // #2030 (part of #1586) News refresh history — columns added to the existing
+        // owner-only FORCE-RLS refresh-state table; no new grant, no new policy.
+        { version: "0203", name: "0203_news_refresh_history.sql" }
       ]);
     } finally {
       await client.end();
