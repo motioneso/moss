@@ -60,6 +60,12 @@ export interface NewsHeadline {
   readonly publishedAt: string | null; // ISO instant; null when the feed omitted/garbled it
   readonly imageUrl: string | null; // curated allow-listed HTTPS URL or authenticated same-origin path
   readonly summary: string; // sanitized plaintext, "" when absent
+  /**
+   * #2018: the opaque reference the story-feedback API accepts for this story. Present only on
+   * stories that came from a published snapshot, because only those have a registered target row
+   * to verify against. Absent means the feedback menu does not render.
+   */
+  readonly feedbackRef?: string;
 }
 
 export interface NewsSourceGroup {
@@ -323,7 +329,11 @@ const newsHeadlineSchema = {
     url: { type: "string" },
     publishedAt: { type: ["string", "null"] },
     imageUrl: { type: ["string", "null"] },
-    summary: { type: "string" }
+    summary: { type: "string" },
+    // #2018: optional on purpose - the non-personalized fallback has no target row to verify
+    // against. This schema is additionalProperties:false, so an undeclared field is dropped at
+    // the wire with no error at all.
+    feedbackRef: { type: "string" }
   }
 } as const;
 

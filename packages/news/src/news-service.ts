@@ -18,6 +18,7 @@ import {
   type NewsSnapshotArticle
 } from "./personalization-domain.js";
 import type { NewsSnapshotRecord } from "./personalization-repository.js";
+import type { NewsStoryFeedbackPort, NewsStoryTargetRow } from "./story-feedback-port.js";
 import { rankStories, type RankInput } from "./ranking.js";
 import { NEWS_CATALOG, NEWS_TOPICS, topicOption, type NewsSourceEntry } from "./source/catalog.js";
 import type { RssFeedItem } from "./source/rss-source.js";
@@ -53,6 +54,12 @@ export interface NewsServiceDependencies {
   readonly dataContext: NewsDataContext;
   readonly repository: NewsPrefsReader;
   readonly personalization: NewsPersonalizationReader;
+  /**
+   * #2018: story usefulness feedback, injected by the composition root. Optional because plenty of
+   * existing setups compose News without it; when it is absent no story carries a feedback
+   * reference and nothing is registered, which is the honest state rather than a silent half-wire.
+   */
+  readonly storyFeedback?: NewsStoryFeedbackPort;
   readonly now?: () => Date;
 }
 
@@ -60,6 +67,9 @@ const TOP_STORIES_CAP = 6; // spec: cross-source ranked selection
 const GROUP_HEADLINES_CAP = 12; // per-source rail depth; keeps the payload bounded
 const NEWS_ARTICLE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1_000;
 export const NEWS_SNAPSHOT_FRESH_MS = 30 * 60 * 1_000;
+/** #2018: matches the snapshot article cap - we never register more than we could have shown. */
+const STORY_TARGET_CAP = 40;
+const STORY_TARGET_SURFACES = ["news", "today"] as const;
 
 export function isNewsSnapshotFresh(
   snapshot: NewsSnapshotRecord | null,
@@ -93,6 +103,7 @@ export class NewsService {
   private readonly dataContext: NewsDataContext;
   private readonly repository: NewsPrefsReader;
   private readonly personalization: NewsPersonalizationReader;
+  private readonly storyFeedback: NewsStoryFeedbackPort | undefined;
   private readonly now: () => Date;
 
   constructor(deps: NewsServiceDependencies) {
@@ -100,6 +111,7 @@ export class NewsService {
     this.dataContext = deps.dataContext;
     this.repository = deps.repository;
     this.personalization = deps.personalization;
+    this.storyFeedback = deps.storyFeedback;
     this.now = deps.now ?? (() => new Date());
   }
 
@@ -140,6 +152,13 @@ export class NewsService {
       );
       if (!isNewsSnapshotFresh(snapshot, now) || personalized === null) {
         await onStale?.(db);
+      }
+      if (personalized !== null) {
+        await this.registerStoryTargets(
+          db,
+          accessContext.actorUserId,
+          personalized.rankedStories ?? personalized.topStories
+        );
       }
       return personalized ?? this.composeOverview(prefs, exclusions);
     });
@@ -193,7 +212,8 @@ export class NewsService {
       seen.add(article.url);
       return true;
     });
-    const headlines = articles.map(toPersonalizedHeadline);
+    const storyRef = this.storyFeedback?.storyRef.bind(this.storyFeedback);
+    const headlines = articles.map((article) => toPersonalizedHeadline(article, storyRef));
     const configuredSources = personalizedSources(prefs, customSources, excludedDomains);
     const configuredByDomain = new Map(configuredSources.map((source) => [source.domain, source]));
     const preferredGroups = new Map<string, NewsSnapshotArticle[]>();
@@ -213,7 +233,9 @@ export class NewsService {
           sourceKey: source?.sourceKey ?? domain,
           sourceLabel: source?.label ?? group[0]!.publisher,
           homepageUrl: source?.homepageUrl ?? `https://${domain}`,
-          headlines: group.map(toPersonalizedHeadline).slice(0, GROUP_HEADLINES_CAP)
+          headlines: group
+            .map((article) => toPersonalizedHeadline(article, storyRef))
+            .slice(0, GROUP_HEADLINES_CAP)
         };
       }),
       activeTopics: [
@@ -303,6 +325,47 @@ export class NewsService {
     };
   }
 
+  /**
+   * #2018: record the stories this response actually put on screen, so the feedback API has
+   * something to verify a preference against. Both surfaces are registered because the Today
+   * widget renders this same response and the API keys a target on its surface.
+   *
+   * Registration failing must never take the news page down: it is logged as counts only by the
+   * injected port and the stories are returned regardless.
+   */
+  private async registerStoryTargets(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    headlines: readonly NewsHeadline[]
+  ): Promise<void> {
+    const port = this.storyFeedback;
+    if (!port) return;
+    const shown = headlines.slice(0, STORY_TARGET_CAP);
+    // "Led its publisher's list" is the closest honest reconstruction of editorial evidence from a
+    // published snapshot: the snapshot keeps rank order but not the original feed position, so the
+    // first story of each publisher in this response is the one that led it.
+    const leaders = new Set<string>();
+    const rows: NewsStoryTargetRow[] = [];
+    for (const headline of shown) {
+      if (headline.feedbackRef === undefined) continue;
+      const leads = !leaders.has(headline.sourceKey);
+      leaders.add(headline.sourceKey);
+      for (const surface of STORY_TARGET_SURFACES) {
+        rows.push({
+          storyRef: headline.feedbackRef,
+          surface,
+          headline: headline.title,
+          sourceLabel: headline.sourceLabel,
+          publishedAt: headline.publishedAt,
+          topicRef: headline.topicLabels?.[0] ?? headline.topicLabel ?? null,
+          hasEditorialEvidence: leads
+        });
+      }
+    }
+    if (rows.length === 0) return;
+    await port.registerTargets(scopedDb, ownerUserId, rows);
+  }
+
   private async feedFor(plan: FeedPlan, state: DegradeState): Promise<readonly RssFeedItem[]> {
     const result = await this.datasetClient.getDataset<RssFeedItem[]>(
       "feed",
@@ -314,9 +377,17 @@ export class NewsService {
   }
 }
 
-function toPersonalizedHeadline(article: NewsSnapshotArticle): NewsHeadline {
+function toPersonalizedHeadline(
+  article: NewsSnapshotArticle,
+  storyRef?: (canonicalUrl: string) => string
+): NewsHeadline {
   const topicLabels = article.topics.slice(0, 3);
+  // #2018: only a snapshot story gets a feedback reference. A story composed straight off a live
+  // feed has no registered target row, so offering feedback on it would be a promise we cannot
+  // keep - the API would refuse it.
+  const feedbackRef = safeStoryRef(article.url, storyRef);
   return {
+    ...(feedbackRef === null ? {} : { feedbackRef }),
     id: article.id,
     sourceKey: article.canonicalDomain,
     sourceLabel: article.publisher,
@@ -329,6 +400,23 @@ function toPersonalizedHeadline(article: NewsSnapshotArticle): NewsHeadline {
     imageUrl: article.imageUrl ? `/api/news/images/${encodeURIComponent(article.id)}` : null,
     summary: article.excerpt ?? ""
   };
+}
+
+/**
+ * A story reference is derived from a link, and a malformed link throws. One bad row must not take
+ * the whole page down, so the story simply goes without a feedback reference and its menu does not
+ * render.
+ */
+function safeStoryRef(
+  canonicalUrl: string,
+  storyRef?: (canonicalUrl: string) => string
+): string | null {
+  if (!storyRef) return null;
+  try {
+    return storyRef(canonicalUrl);
+  } catch {
+    return null;
+  }
 }
 
 interface PersonalizedSource {
