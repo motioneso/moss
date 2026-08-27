@@ -236,7 +236,7 @@ export function registerUsefulnessFeedbackRoutes(
     async (request, reply) => {
       try {
         const access = await dependencies.resolveAccessContext(request);
-        const feedback = await dependencies.dataContext.withDataContext(access, (scopedDb) =>
+        const outcome = await dependencies.dataContext.withDataContext(access, (scopedDb) =>
           repository.undo(scopedDb, access.actorUserId, request.params.id, {
             cancelMemoryCandidate: dependencies.manualMemoryCandidates
               ? (candidateId) =>
@@ -256,11 +256,16 @@ export function registerUsefulnessFeedbackRoutes(
               : undefined
           })
         );
-        if (!feedback) throw new HttpError(404, "Feedback not found");
-        if (isStoryTargetKind(feedback.target_kind as FeedbackTargetKind)) {
-          await notifyStoryPreferenceChanged(dependencies, feedback, "removed");
+        if (!outcome) throw new HttpError(404, "Feedback not found");
+        // Only tell News or Sports to refresh when the row really moved. Taking back a preference
+        // that was already retired changes nothing, so it owes nobody a refresh.
+        if (
+          outcome.changed &&
+          isStoryTargetKind(outcome.feedback.target_kind as FeedbackTargetKind)
+        ) {
+          await notifyStoryPreferenceChanged(dependencies, outcome.feedback, "removed");
         }
-        return { feedback: serializeFeedback(feedback) };
+        return { feedback: serializeFeedback(outcome.feedback) };
       } catch (error) {
         return handleRouteError(error, reply);
       }
@@ -269,7 +274,15 @@ export function registerUsefulnessFeedbackRoutes(
 
   server.patch<{ Params: { id: string } }>(
     "/api/me/usefulness-feedback/:id",
-    { schema: updateUsefulnessFeedbackReasonRouteSchema },
+    // Params and response only, matching the create route: the body is parsed by hand so that a
+    // reason is trimmed before its length is judged. Letting the schema check maxLength first
+    // would refuse a 500-character reason with a stray space that create happily accepts.
+    {
+      schema: {
+        params: updateUsefulnessFeedbackReasonRouteSchema.params,
+        response: updateUsefulnessFeedbackReasonRouteSchema.response
+      }
+    },
     async (request, reply) => {
       try {
         const access = await dependencies.resolveAccessContext(request);

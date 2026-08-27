@@ -9,7 +9,17 @@ import {
 } from "@moss/db";
 import type { FeedbackSurface, FeedbackTargetKind } from "@moss/shared";
 
+import { isStoryTargetKind, sanitizeStoryTargetMetadata } from "./story-target.js";
 import type { FeedbackTargetVerification } from "./target-verifiers.js";
+
+/**
+ * The outcome of taking a preference back. `changed` is false when the row was already undone or
+ * already superseded, so nothing actually moved and no follow-on refresh is owed.
+ */
+export interface UndoResult {
+  readonly feedback: UsefulnessFeedbackSignal;
+  readonly changed: boolean;
+}
 
 interface FeedbackRow {
   readonly id: string;
@@ -221,6 +231,12 @@ export class UsefulnessFeedbackRepository {
     }
   ): Promise<void> {
     assertDataContextDb(scopedDb);
+    // Story targets are bounded on the way in, not just on the way out. The read path cleans too,
+    // but a module registering a story must not be able to park anything wider than the agreed
+    // shape in the row. Briefing targets keep their existing block-list behaviour.
+    const metadata = isStoryTargetKind(input.targetKind)
+      ? sanitizeStoryTargetMetadata(input.metadata)
+      : (input.metadata ?? {});
     await sql`
       INSERT INTO app.usefulness_feedback_targets (
         owner_user_id,
@@ -241,7 +257,7 @@ export class UsefulnessFeedbackRepository {
         ${input.sourceKind ?? null},
         ${input.sourceLabel ?? null},
         ${input.priorityBand ?? null},
-        ${JSON.stringify(input.metadata ?? {})}::jsonb,
+        ${JSON.stringify(metadata)}::jsonb,
         now()
       )
       ON CONFLICT (owner_user_id, target_kind, target_ref, surface) DO UPDATE
@@ -318,7 +334,7 @@ export class UsefulnessFeedbackRepository {
       readonly cancelMemoryCandidate?: (candidateId: string) => Promise<boolean>;
       readonly undoDismissCard?: (cardId: string) => Promise<void>;
     } = {}
-  ): Promise<UsefulnessFeedbackSignal | undefined> {
+  ): Promise<UndoResult | undefined> {
     assertDataContextDb(scopedDb);
     const existing = await scopedDb.db
       .selectFrom("app.usefulness_feedback_signals")
@@ -328,19 +344,21 @@ export class UsefulnessFeedbackRepository {
       .executeTakeFirst();
     if (!existing) return undefined;
     // Only an active preference can be taken back; an undone or superseded one is already retired.
-    if (existing.status !== "active") return existing;
+    // `changed` is false in that case so callers can skip side effects for a row nothing happened to.
+    if (existing.status !== "active") return { feedback: existing, changed: false };
     if (existing.effect_kind === "memory_candidate" && existing.effect_ref) {
       await options.cancelMemoryCandidate?.(existing.effect_ref);
     }
     if (existing.effect_kind === "proactive_card_dismissed" && existing.effect_ref) {
       await options.undoDismissCard?.(existing.effect_ref);
     }
-    return scopedDb.db
+    const updated = await scopedDb.db
       .updateTable("app.usefulness_feedback_signals")
       .set({ status: "undone", resolved_at: new Date(), updated_at: new Date() })
       .where("owner_user_id", "=", ownerUserId)
       .where("id", "=", id)
       .returningAll()
       .executeTakeFirst();
+    return updated ? { feedback: updated, changed: true } : undefined;
   }
 }

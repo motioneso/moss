@@ -29,7 +29,7 @@ export const usefulnessFeedbackModuleManifest = {
   database: {
     migrations: [
       "sql/0120_usefulness_feedback_signals.sql",
-      "sql/0200_story_relevance_feedback.sql"
+      "sql/0201_story_relevance_feedback.sql"
     ],
     migrationDirectories: ["packages/usefulness-feedback/sql"],
     ownedTables: ["app.usefulness_feedback_signals", "app.usefulness_feedback_targets"]

@@ -51,6 +51,16 @@ export interface FeedbackTestServerOptions {
   readonly access?: AccessContext;
   /** Collects everything the server logs, so a test can prove a reason never reaches a log line. */
   readonly logLines?: string[];
+  /**
+   * Stands in for the refresh News or Sports will attach later, so a test can prove when the
+   * routes do and do not ask for one.
+   */
+  readonly onStoryPreferenceChanged?: (input: {
+    readonly ownerUserId: string;
+    readonly targetKind: string;
+    readonly targetRef: string;
+    readonly change: "created" | "updated" | "removed";
+  }) => Promise<void> | void;
 }
 
 export async function buildFeedbackTestServer(
@@ -97,7 +107,10 @@ export async function buildFeedbackTestServer(
     dataContext,
     registry,
     manualMemoryCandidates: new ManualMemoryCandidateService(),
-    resolveAccessContext: async () => access
+    resolveAccessContext: async () => access,
+    ...(options.onStoryPreferenceChanged === undefined
+      ? {}
+      : { onStoryPreferenceChanged: options.onStoryPreferenceChanged })
   });
   await server.ready();
   return { server, dataContext };

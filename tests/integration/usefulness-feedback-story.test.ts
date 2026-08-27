@@ -4,6 +4,7 @@ import type { Kysely } from "kysely";
 import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
 import { STORY_FEEDBACK_REASON_MAX_LENGTH, type UsefulnessFeedbackDto } from "@moss/shared";
 import { storyFeedbackTargetRef } from "../../packages/usefulness-feedback/src/index.js";
+import { UsefulnessFeedbackRepository } from "../../packages/usefulness-feedback/src/repository.js";
 import { exportUserData } from "../../scripts/export-user-data.js";
 
 import {
@@ -549,21 +550,129 @@ describe("story relevance feedback", () => {
     expect(JSON.stringify(userExport)).not.toContain("other owner export sentinel");
     expect(JSON.stringify(userExport)).not.toContain(otherRef);
   });
-});
 
-describe("story feedback identity helper", () => {
-  it("derives a stable, opaque story reference that differs per link and per module", () => {
-    const link = "https://news.example.com/2026/08/a-story?utm_source=feed";
-    expect(storyFeedbackTargetRef("news", link)).toBe(storyFeedbackTargetRef("news", link));
-    expect(storyFeedbackTargetRef("news", link)).not.toBe(
-      storyFeedbackTargetRef("news", "https://news.example.com/2026/08/another-story")
+  it("stores only the agreed story shape, even when the owning module sends more", async () => {
+    // The registration path bounds what a story row can carry, rather than trusting the caller and
+    // cleaning it up on the way out. News and Sports will register through this call.
+    const repository = new UsefulnessFeedbackRepository();
+    const dataContext = new DataContextRunner(appDb);
+    const targetRef = storyFeedbackTargetRef(
+      "news",
+      "https://news.example.com/story/bounded-write"
     );
-    expect(storyFeedbackTargetRef("news", link)).not.toBe(storyFeedbackTargetRef("sports", link));
+    await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.upsertTarget(scopedDb, {
+        ownerUserId: ids.userA,
+        targetKind: "news_story",
+        targetRef,
+        surface: "news",
+        sourceKind: "news",
+        sourceLabel: "News",
+        metadata: {
+          module: "news",
+          headline: "A headline the owner may see",
+          summary: "write path sentinel, the whole article body",
+          externalId: "provider-123"
+        }
+      })
+    );
 
-    const ref = storyFeedbackTargetRef("news", link);
-    expect(ref).not.toContain("news.example.com");
-    expect(ref).not.toContain("a-story");
-    expect(ref).not.toContain("utm_source");
-    expect(ref.startsWith("news:")).toBe(true);
+    const targetRows = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      scopedDb.db
+        .selectFrom("app.usefulness_feedback_targets")
+        .selectAll()
+        .where("target_ref", "=", targetRef)
+        .execute()
+    );
+    expect(targetRows).toHaveLength(1);
+    expect(targetRows[0]!.metadata_json).toEqual({
+      module: "news",
+      headline: "A headline the owner may see"
+    });
+    expect(JSON.stringify(targetRows)).not.toContain("write path sentinel");
+    expect(JSON.stringify(targetRows)).not.toContain("provider-123");
+  });
+
+  it("only asks the module to refresh when taking a preference back actually changed it", async () => {
+    const targetRef = await registerStoryTarget(appDb, {
+      ownerUserId: ids.userA,
+      moduleId: "news",
+      canonicalLink: "https://news.example.com/story/undo-twice"
+    });
+    const changes: string[] = [];
+    const { server } = await buildFeedbackTestServer(appDb, undefined, {
+      onStoryPreferenceChanged: (input) => {
+        changes.push(input.change);
+      }
+    });
+    try {
+      const created = await server.inject({
+        method: "POST",
+        url: "/api/me/usefulness-feedback",
+        headers: userAHeaders(),
+        payload: storyPayload("news", targetRef, "less_like_this", "Enough of this")
+      });
+      expect(created.statusCode).toBe(201);
+      const id = created.json().feedback.id;
+
+      const first = await server.inject({
+        method: "POST",
+        url: `/api/me/usefulness-feedback/${id}/undo`,
+        headers: userAHeaders()
+      });
+      expect(first.statusCode).toBe(200);
+      expect(first.json().feedback.status).toBe("undone");
+
+      const second = await server.inject({
+        method: "POST",
+        url: `/api/me/usefulness-feedback/${id}/undo`,
+        headers: userAHeaders()
+      });
+      expect(second.statusCode).toBe(200);
+      expect(second.json().feedback.status).toBe("undone");
+
+      expect(changes).toEqual(["created", "removed"]);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("judges the length of a reason after trimming, on both saving and editing", async () => {
+    const targetRef = await registerStoryTarget(appDb, {
+      ownerUserId: ids.userA,
+      moduleId: "news",
+      canonicalLink: "https://news.example.com/story/full-length-reason"
+    });
+    const fullLength = "a".repeat(STORY_FEEDBACK_REASON_MAX_LENGTH);
+    const { server } = await buildFeedbackTestServer(appDb);
+    try {
+      const created = await server.inject({
+        method: "POST",
+        url: "/api/me/usefulness-feedback",
+        headers: userAHeaders(),
+        payload: storyPayload("news", targetRef, "less_like_this", ` ${fullLength} `)
+      });
+      expect(created.statusCode).toBe(201);
+      expect(created.json().feedback.reason).toBe(fullLength);
+
+      const edited = await server.inject({
+        method: "PATCH",
+        url: `/api/me/usefulness-feedback/${created.json().feedback.id}`,
+        headers: userAHeaders(),
+        payload: { reason: ` ${"b".repeat(STORY_FEEDBACK_REASON_MAX_LENGTH)} ` }
+      });
+      expect(edited.statusCode).toBe(200);
+      expect(edited.json().feedback.reason).toBe("b".repeat(STORY_FEEDBACK_REASON_MAX_LENGTH));
+
+      const tooLong = await server.inject({
+        method: "PATCH",
+        url: `/api/me/usefulness-feedback/${created.json().feedback.id}`,
+        headers: userAHeaders(),
+        payload: { reason: "c".repeat(STORY_FEEDBACK_REASON_MAX_LENGTH + 1) }
+      });
+      expect(tooLong.statusCode).toBe(400);
+    } finally {
+      await server.close();
+    }
   });
 });

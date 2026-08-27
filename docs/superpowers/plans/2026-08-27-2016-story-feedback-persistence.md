@@ -25,7 +25,7 @@ Highest migration number on the branch is `0199`, so this slice takes `0200`.
 
 Each phase commits green.
 
-1. **Storage.** New migration `0200_story_relevance_feedback.sql`: widen the four vocabularies on
+1. **Storage.** New migration `0201_story_relevance_feedback.sql`: widen the four vocabularies on
    the signals table and the two on the targets table, add `reason_text`, `rule_json`,
    `rule_version`, `revision`, `updated_at`, add the "a reason is required for Less like this and
    forbidden otherwise" check, add a partial unique index giving one active story preference per
