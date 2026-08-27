@@ -60,7 +60,9 @@ const WRITE_FLAGS = new Map([
   // `sort -o out.txt in.txt` overwrites out.txt; `--compress-program` names a program to run.
   ["sort", ["-o", "--output", "--compress-program"]],
   // ripgrep's `--pre` runs a program of your choosing over every file it reads.
-  ["rg", ["--pre", "--hostname-bin"]]
+  ["rg", ["--pre", "--hostname-bin"]],
+  // `file -C` compiles a magic file, writing `<name>.mgc` next to it.
+  ["file", ["-C", "--compile"]]
 ]);
 
 /** sed options that edit the file instead of printing, or take the script somewhere we cannot see. */
@@ -74,6 +76,8 @@ const GIT_WRITE_FLAGS = ["--output"];
 /** find arguments that run or delete something. */
 const FIND_WRITE_ARGS = new Set([
   "-delete",
+  // A session's `find` is bfs, not GNU find, and bfs spells delete both ways.
+  "-rm",
   "-exec",
   "-execdir",
   "-fls",
@@ -349,10 +353,15 @@ function pathProblem(argument, roots) {
     // file that the separate form `grep --file /etc/shadow` is already stopped for, so the value
     // after the first `=` gets the same check the operands get.
     const equals = argument.indexOf("=");
-    if (equals === -1 || equals === argument.length - 1) {
-      return null;
+    if (equals !== -1) {
+      return equals === argument.length - 1 ? null : pathProblem(argument.slice(equals + 1), roots);
     }
-    return pathProblem(argument.slice(equals + 1), roots);
+    // A short option can carry the same path with no equals sign at all: `grep -f/etc/hosts` and
+    // `git diff -O/etc/passwd` both reach outside. Drop the dashes and the option letters; check
+    // whatever is left the way an operand is checked, which leaves ordinary attached values such
+    // as `rg -g'!node_modules/**'` and `tail -n+5` alone.
+    const attached = argument.replace(/^-+[A-Za-z0-9-]*/, "");
+    return attached === "" ? null : pathProblem(attached, roots);
   }
 
   let candidate = argument;
@@ -464,6 +473,11 @@ function expressionValue(flag) {
   return at <= 0 ? null : flag.slice(at + 1);
 }
 
+/** Is this argument sed's `-e` in one of its spellings, rather than an operand? */
+function isExpressionFlag(argument) {
+  return argument.startsWith("-") && expressionValue(argument) !== null;
+}
+
 function checkSed(args, roots) {
   const flags = args.filter((argument) => argument.startsWith("-"));
   // `-i`, `-i.bak`, `-ni`, `--in-place`, `--in-place=.bak` and getopt's `--in-pl` are all the
@@ -487,8 +501,10 @@ function checkSed(args, roots) {
     return none("sed-script-writes");
   }
 
+  // A script attached to `-e` (`-e's/a/b/p'`) is a script, not a path, so it must not reach the
+  // path check — the slashes inside it are sed's own, and it has already been read for `w` and `e`.
   return checkPaths(
-    args.filter((argument) => !scripts.includes(argument)),
+    args.filter((argument) => !scripts.includes(argument) && !isExpressionFlag(argument)),
     roots
   );
 }

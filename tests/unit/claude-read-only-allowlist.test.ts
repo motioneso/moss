@@ -63,7 +63,12 @@ const APPROVED: readonly (readonly [string, string])[] = [
   ["tail of a log in /tmp", "tail -n 40 /tmp/vf.log"],
   ["git log of one file in the repository", "git log --oneline -3 -- package.json"],
   ["git show with a format option that contains an equals sign", "git show --pretty=format:%h -s"],
-  ["git diff of a path under the working directory", `git diff -- ${CWD}/package.json`]
+  ["git diff of a path under the working directory", `git diff -- ${CWD}/package.json`],
+  // The rule that reads a value stuck to a short option must not start refusing these.
+  ["ripgrep with an exclude glob stuck to the option", "rg -g'!node_modules/**' -n foo ."],
+  ["sed with its script stuck to the option", "sed -n -e's/a/b/p' notes.txt"],
+  ["tail with its line count stuck to the option", "tail -n+5 notes.txt"],
+  ["file naming a magic file in this folder", "file -m custom.magic package.json"]
 ];
 
 // Each of these is a near miss for one of the approved commands. The rule name is asserted so a
@@ -155,6 +160,26 @@ const REFUSED: readonly (readonly [string, string, string])[] = [
   ["git log writing its output to a file", "git log --output=/tmp/anything", "git-writes-a-file"],
   // `git stash` on its own is not a listing, and every worktree on this box shares one stash stack.
   ["git stash on its own, which pockets your work", "git stash", "git-subcommand-mutates"],
+
+  // Round 3 review: the commands a session actually runs are the bundled ones, and their option
+  // lists are not the ones in the GNU manual.
+  [
+    "find deleting under the bundled find's other spelling",
+    "find . -name '*.tmp' -rm",
+    "find-writes"
+  ],
+  ["file compiling a magic file, which writes it", "file -C -m custom", "option-writes-a-file"],
+  ["file compiling under its long name", "file --compile", "option-writes-a-file"],
+  [
+    "grep reading a pattern file from outside, with the name stuck to the option",
+    "grep -f/etc/hosts .",
+    "path-outside-allowed-roots"
+  ],
+  [
+    "git reading a file from outside, with the name stuck to the option",
+    "git diff -O/etc/passwd",
+    "path-outside-allowed-roots"
+  ],
   [
     "git branch list, which creates a branch called list",
     "git branch list",
