@@ -1327,6 +1327,9 @@ importers:
       '@moss/module-sdk':
         specifier: workspace:*
         version: link:../module-sdk
+      '@moss/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@sinclair/typebox':
         specifier: ^0.34.13
         version: 0.34.49

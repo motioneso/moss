@@ -238,6 +238,43 @@ describe("WorkflowsRepository", () => {
     expect(secondAnswer.outcome).toBe("not-pending");
   });
 
+  it("refuses to put a finished step back on the queue when its approval is answered", async () => {
+    // Answering an approval moves its step back to queued. That has to go through the same
+    // guard every other step move goes through, or a step that had already failed while the
+    // approval sat waiting would come back to life.
+    const { run, firstStepRun } = await newRun();
+
+    const approval = await dataContext.withDataContext(userAContext(), async (scopedDb) =>
+      repo.createApproval(scopedDb, {
+        workflowRunId: run.id,
+        stepRunId: firstStepRun.id,
+        ownerUserId: userA,
+        summary: "Charge the card?"
+      })
+    );
+
+    await dataContext.withDataContext(userAContext(), async (scopedDb) =>
+      repo.recordStepFailure(scopedDb, firstStepRun.id, "step-blew-up")
+    );
+
+    const attempt = dataContext.withDataContext(userAContext(), async (scopedDb) =>
+      repo.resolveApproval(scopedDb, userA, approval.id, "approve")
+    );
+    await expect(attempt).rejects.toBeInstanceOf(WorkflowStateError);
+    await expect(attempt).rejects.toMatchObject({ code: "terminal-state" });
+
+    // The whole answer runs in one transaction, so the approval is still waiting.
+    const after = await dataContext.withDataContext(userAContext(), async (scopedDb) =>
+      repo.listApprovals(scopedDb, userA, run.id)
+    );
+    expect(after[0]?.status).toBe("pending");
+
+    const steps = await dataContext.withDataContext(userAContext(), async (scopedDb) =>
+      repo.listStepRuns(scopedDb, userA, run.id)
+    );
+    expect(steps[0]?.status).toBe("failed");
+  });
+
   it("rejects an oversized stored value with an error naming the field", async () => {
     const { run } = await newRun();
     const tooBig = { blob: "x".repeat(9000) };

@@ -9,6 +9,16 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { Type } from "@sinclair/typebox";
 import type { AccessContext, DataContextRunner } from "@moss/db";
+import type {
+  CancelWorkflowRunResponse,
+  ListWorkflowRunsResponse,
+  ResolveWorkflowApprovalResponse,
+  WorkflowApprovalDto,
+  WorkflowArtifactDto,
+  WorkflowRunDetailDto,
+  WorkflowRunDto,
+  WorkflowStepRunDto
+} from "@moss/shared";
 import { WorkflowsRepository } from "./repository.js";
 import { WORKFLOW_RUN_LIST_MAX_LIMIT } from "./types.js";
 import type {
@@ -48,7 +58,7 @@ export function registerWorkflowsRoutes(
   app.get(
     "/api/workflows/runs",
     { schema: { querystring: listQuerySchema, response: { 200: Type.Array(Type.Any()) } } },
-    async (request) => {
+    async (request): Promise<ListWorkflowRunsResponse> => {
       const accessContext = await deps.resolveAccessContext(request);
       const { status, limit } = request.query as { status?: WorkflowRunStatus; limit?: number };
       return deps.dataContext.withDataContext(accessContext, async (scopedDb) => {
@@ -70,12 +80,13 @@ export function registerWorkflowsRoutes(
         // Deliberately the same answer whether the run belongs to someone else or does not
         // exist: a 403 here would confirm that a given run id is real.
         if (!detail) return reply.code(404).send({ error: "Workflow run not found" });
-        return {
+        const body: WorkflowRunDetailDto = {
           ...safeRun(detail.run),
           steps: detail.stepRuns.map(safeStepRun),
           approvals: detail.approvals.map(safeApproval),
           artifacts: detail.artifacts.map(safeArtifact)
         };
+        return body;
       });
     }
   );
@@ -90,7 +101,11 @@ export function registerWorkflowsRoutes(
       return deps.dataContext.withDataContext(accessContext, async (scopedDb) => {
         const result = await repo.cancelRun(scopedDb, accessContext.actorUserId, id);
         if (!result.run) return reply.code(404).send({ error: "Workflow run not found" });
-        return { cancelled: result.cancelled, run: safeRun(result.run) };
+        const body: CancelWorkflowRunResponse = {
+          cancelled: result.cancelled,
+          run: safeRun(result.run)
+        };
+        return body;
       });
     }
   );
@@ -124,7 +139,11 @@ export function registerWorkflowsRoutes(
         if (result.outcome === "not-pending") {
           return reply.code(409).send({ error: "This approval has already been answered" });
         }
-        return { approval: safeApproval(result.approval), step: safeStepRun(result.stepRun) };
+        const body: ResolveWorkflowApprovalResponse = {
+          approval: safeApproval(result.approval),
+          step: safeStepRun(result.stepRun)
+        };
+        return body;
       });
     }
   );
@@ -132,14 +151,16 @@ export function registerWorkflowsRoutes(
 
 /**
  * Everything below is the single place responses are trimmed, so a reviewer can check the
- * redaction in one read.
+ * redaction in one read. Each one returns the matching shape from
+ * packages/shared/src/workflows-api.ts, so the published contract and what the endpoints
+ * actually send cannot drift apart without the typecheck failing.
  *
  * `inputJson` and `resultJson` never leave the server through these routes. Run input may
  * carry bounded origin metadata under `__origin` (see the spec's "Run Origins"), and result
  * payloads can name artifacts; neither is needed by a caller listing or inspecting runs, and
  * shipping them would be the easiest way for private content to leak into a client.
  */
-function safeRun(run: WorkflowRun) {
+function safeRun(run: WorkflowRun): WorkflowRunDto {
   return {
     id: run.id,
     workflowId: run.workflowId,
@@ -154,7 +175,7 @@ function safeRun(run: WorkflowRun) {
   };
 }
 
-function safeStepRun(step: WorkflowStepRun) {
+function safeStepRun(step: WorkflowStepRun): WorkflowStepRunDto {
   return {
     id: step.id,
     workflowRunId: step.workflowRunId,
@@ -168,7 +189,7 @@ function safeStepRun(step: WorkflowStepRun) {
   };
 }
 
-function safeApproval(approval: WorkflowApproval) {
+function safeApproval(approval: WorkflowApproval): WorkflowApprovalDto {
   return {
     id: approval.id,
     workflowRunId: approval.workflowRunId,
@@ -182,7 +203,7 @@ function safeApproval(approval: WorkflowApproval) {
 }
 
 /** `artifactRef` is dropped here on purpose: it addresses bytes in the vault. */
-function safeArtifact(artifact: WorkflowArtifact) {
+function safeArtifact(artifact: WorkflowArtifact): WorkflowArtifactDto {
   return {
     id: artifact.id,
     workflowRunId: artifact.workflowRunId,

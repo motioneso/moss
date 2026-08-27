@@ -51,12 +51,6 @@ export const ids = {
 } as const;
 
 /**
- * Defense-in-depth: catches any direct `vitest run tests/integration` invocation that
- * bypasses `scripts/test-integration.ts` (which is the thing that actually provisions an
- * isolated database and sets JARVIS_PGDATABASE before vitest ever loads this module). Without
- * this, a reset silently drops+reseeds the shared dev database (#854).
- */
-/**
  * Every built-in module, in registration order. Pinned on purpose: adding a module to the
  * registry is meant to be a conscious edit here, and the order is what the module list endpoint
  * and the navigation assertions depend on.
@@ -92,6 +86,12 @@ export const expectedBuiltInModuleIds = [
   "workshop"
 ];
 
+/**
+ * Defense-in-depth: catches any direct `vitest run tests/integration` invocation that
+ * bypasses `scripts/test-integration.ts` (which is the thing that actually provisions an
+ * isolated database and sets JARVIS_PGDATABASE before vitest ever loads this module). Without
+ * this, a reset silently drops+reseeds the shared dev database (#854).
+ */
 export function assertIsolatedTestDatabase(connectionString: string): void {
   const { pathname } = new URL(connectionString);
   const databaseName = pathname.replace(/^\//, "");

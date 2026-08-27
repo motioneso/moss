@@ -306,11 +306,14 @@ export class WorkflowsRepository {
     assertDataContextDb(scopedDb);
     const bounded = assertBoundedJson(resultJson, "resultJson");
 
+    // Locked for the rest of this transaction for the same reason cancelRun locks: two
+    // completions arriving at once must not both read the run as still live.
     const current = await scopedDb.db
       .selectFrom("app.workflow_runs")
       .select(["status"])
       .where("id", "=", runId)
       .where("owner_user_id", "=", ownerUserId)
+      .forUpdate()
       .executeTakeFirst();
     if (!current) throw runNotFound(runId);
     if (TERMINAL_RUN_STATUSES.includes(current.status)) {
@@ -481,23 +484,22 @@ export class WorkflowsRepository {
 
     // A denial is a completed approval outcome, not a failure: the step carries the decision
     // as its bounded result and goes back on the queue so edge routing can branch on it.
-    const stepRow = await scopedDb.db
-      .updateTable("app.workflow_step_runs")
-      .set({
-        status: "queued",
-        result_json: { status: resolvedStatus },
-        pgboss_job_id: null,
-        updated_at: now
-      })
-      .where("id", "=", approvalRow.step_run_id)
-      .where("owner_user_id", "=", actorUserId)
-      .returningAll()
-      .executeTakeFirstOrThrow();
+    //
+    // Routed through transitionStepRun rather than writing the row directly, so a step that
+    // somehow finished while its approval was still waiting cannot be put back on the queue.
+    // That case raises a state error (422), and because the whole route runs in one
+    // transaction the approval answer above rolls back with it.
+    const stepRun = await this.transitionStepRun(scopedDb, approvalRow.step_run_id, {
+      status: "queued",
+      result_json: { status: resolvedStatus },
+      // The old queue job is finished with; a fresh one is booked when #2015 continues the run.
+      pgboss_job_id: null
+    });
 
     return {
       outcome: "resolved",
       approval: rowToApproval(approvalRow),
-      stepRun: rowToStepRun(stepRow)
+      stepRun
     };
   }
 
@@ -563,6 +565,7 @@ export class WorkflowsRepository {
       status: WorkflowStepRunStatus;
       result_json?: WorkflowJson;
       error_code?: string | null;
+      pgboss_job_id?: string | null;
       started_at?: Date;
       suspended_at?: Date;
       completed_at?: Date;

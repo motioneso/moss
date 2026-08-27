@@ -18,7 +18,9 @@ import { WorkflowsRepository } from "@moss/workflows";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 let appDb: Kysely<MossDatabase>;
+let workerDb: Kysely<MossDatabase>;
 let dataContext: DataContextRunner;
+let workerDataContext: DataContextRunner;
 let repo: WorkflowsRepository;
 
 const userA = ids.userA;
@@ -40,7 +42,9 @@ let owned: OwnedRows;
 beforeAll(async () => {
   await resetFoundationDatabase();
   appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 2 });
+  workerDb = createDatabase({ connectionString: connectionStrings.worker, maxConnections: 2 });
   dataContext = new DataContextRunner(appDb);
+  workerDataContext = new DataContextRunner(workerDb);
   repo = new WorkflowsRepository();
 
   owned = await dataContext.withDataContext(contextFor(userA), async (scopedDb) => {
@@ -79,6 +83,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await appDb?.destroy();
+  await workerDb?.destroy();
 });
 
 describe("workflow run state is owner-only", () => {
@@ -180,6 +185,61 @@ describe("workflow run state is owner-only", () => {
       const steps = await repo.listStepRuns(scopedDb, userA, owned.runId);
       expect(steps).toHaveLength(1);
       expect(steps[0]?.id).toBe(owned.stepRunId);
+    });
+  });
+
+  it("scopes the background worker to whoever it is acting as, same as the app", async () => {
+    // The background job runner connects as a different database role from the web app. That
+    // role used to be allowed to read and write every row on these four tables. It does not
+    // need that: the job runner always sets who it is acting as before a handler runs, and
+    // refuses a job that does not say. Seven of the step-changing methods in the repository
+    // find a step by its id alone, so this database rule is the only thing standing between a
+    // wrong id and someone else's step.
+    await workerDataContext.withDataContext(contextFor(userB), async (scopedDb) => {
+      const db = (scopedDb as { db: Kysely<MossDatabase> }).db;
+
+      expect(await db.selectFrom("app.workflow_runs").selectAll().execute()).toEqual([]);
+      expect(await db.selectFrom("app.workflow_step_runs").selectAll().execute()).toEqual([]);
+      expect(await db.selectFrom("app.workflow_approvals").selectAll().execute()).toEqual([]);
+      expect(await db.selectFrom("app.workflow_artifacts").selectAll().execute()).toEqual([]);
+    });
+
+    // And it cannot change what it cannot see, even naming the row by its exact id.
+    await workerDataContext.withDataContext(contextFor(userB), async (scopedDb) => {
+      const db = (scopedDb as { db: Kysely<MossDatabase> }).db;
+
+      const touchedRuns = await db
+        .updateTable("app.workflow_runs")
+        .set({ status: "cancelled" })
+        .where("id", "=", owned.runId)
+        .returning("id")
+        .execute();
+      expect(touchedRuns).toEqual([]);
+
+      const touchedSteps = await db
+        .updateTable("app.workflow_step_runs")
+        .set({ status: "succeeded" })
+        .where("id", "=", owned.stepRunId)
+        .returning("id")
+        .execute();
+      expect(touchedSteps).toEqual([]);
+    });
+
+    // Nothing moved for the owner.
+    await dataContext.withDataContext(contextFor(userA), async (scopedDb) => {
+      const detail = await repo.getRunDetail(scopedDb, userA, owned.runId);
+      expect(detail?.run.status).toBe("pending");
+      expect(detail?.stepRuns[0]?.status).toBe("suspended");
+    });
+  });
+
+  it("still lets the worker reach the rows of the person it is acting as", async () => {
+    await workerDataContext.withDataContext(contextFor(userA), async (scopedDb) => {
+      const detail = await repo.getRunDetail(scopedDb, userA, owned.runId);
+      expect(detail?.run.id).toBe(owned.runId);
+      expect(detail?.stepRuns.map((step) => step.id)).toEqual([owned.stepRunId]);
+      expect(detail?.approvals.map((approval) => approval.id)).toEqual([owned.approvalId]);
+      expect(detail?.artifacts.map((artifact) => artifact.id)).toEqual([owned.artifactId]);
     });
   });
 

@@ -7,6 +7,13 @@
 -- patterns exist in the tree (packages/commitments uses enums, packages/wellness uses
 -- checks); this module deliberately picks checks.
 --
+-- The worker role is owner-scoped here, exactly like the app role. registerDataContextWorker
+-- (packages/jobs/src/pg-boss.ts) sets the acting user from the job before any handler runs and
+-- refuses a job that has none, so a worker never needs to reach a row it is not acting for. The
+-- spec rules out cross-person workflows and approvals in this version. This matters because
+-- seven step-changing repository methods find a step by id alone; the row rule is the only
+-- thing that stops a wrong id touching someone else's step.
+--
 -- Bounded metadata is enforced here, not just in application code: workflow run and step
 -- payloads are metadata by design, and the database is the last line that holds when a
 -- future caller forgets. WORKFLOW_MAX_JSON_BYTES in src/types.ts mirrors the 8192 below.
@@ -48,8 +55,8 @@ CREATE POLICY workflow_runs_worker_runtime ON app.workflow_runs
   AS PERMISSIVE
   FOR ALL
   TO jarvis_worker_runtime
-  USING (true)
-  WITH CHECK (true);
+  USING (owner_user_id = app.current_actor_user_id())
+  WITH CHECK (owner_user_id = app.current_actor_user_id());
 
 GRANT INSERT, SELECT, UPDATE, DELETE ON app.workflow_runs TO jarvis_app_runtime;
 GRANT INSERT, SELECT, UPDATE ON app.workflow_runs TO jarvis_worker_runtime;
@@ -95,8 +102,8 @@ CREATE POLICY workflow_step_runs_worker_runtime ON app.workflow_step_runs
   AS PERMISSIVE
   FOR ALL
   TO jarvis_worker_runtime
-  USING (true)
-  WITH CHECK (true);
+  USING (owner_user_id = app.current_actor_user_id())
+  WITH CHECK (owner_user_id = app.current_actor_user_id());
 
 GRANT INSERT, SELECT, UPDATE, DELETE ON app.workflow_step_runs TO jarvis_app_runtime;
 GRANT INSERT, SELECT, UPDATE ON app.workflow_step_runs TO jarvis_worker_runtime;
@@ -133,8 +140,8 @@ CREATE POLICY workflow_approvals_worker_runtime ON app.workflow_approvals
   AS PERMISSIVE
   FOR ALL
   TO jarvis_worker_runtime
-  USING (true)
-  WITH CHECK (true);
+  USING (owner_user_id = app.current_actor_user_id())
+  WITH CHECK (owner_user_id = app.current_actor_user_id());
 
 GRANT INSERT, SELECT, UPDATE, DELETE ON app.workflow_approvals TO jarvis_app_runtime;
 GRANT INSERT, SELECT, UPDATE ON app.workflow_approvals TO jarvis_worker_runtime;
@@ -170,8 +177,8 @@ CREATE POLICY workflow_artifacts_worker_runtime ON app.workflow_artifacts
   AS PERMISSIVE
   FOR ALL
   TO jarvis_worker_runtime
-  USING (true)
-  WITH CHECK (true);
+  USING (owner_user_id = app.current_actor_user_id())
+  WITH CHECK (owner_user_id = app.current_actor_user_id());
 
 GRANT INSERT, SELECT, UPDATE, DELETE ON app.workflow_artifacts TO jarvis_app_runtime;
 GRANT INSERT, SELECT, UPDATE ON app.workflow_artifacts TO jarvis_worker_runtime;
