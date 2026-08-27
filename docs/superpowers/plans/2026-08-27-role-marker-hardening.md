@@ -27,8 +27,16 @@ File: `packages/chat/src/live/prompt-safety.ts`. All changes inside this file on
 
 ```ts
 const ROLE_WORDS = [
-  "user", "assistant", "system", "human", "ai",
-  "moss", "developer", "tool", "function", "model"
+  "user",
+  "assistant",
+  "system",
+  "human",
+  "ai",
+  "moss",
+  "developer",
+  "tool",
+  "function",
+  "model"
 ] as const;
 const ALLOWED_ROLES = new Set<string>(ROLE_WORDS);
 
@@ -140,6 +148,7 @@ helper — check before creating a new one.
 ```bash
 npx vitest run tests/unit/chat-recall-seed.test.ts tests/unit/chat-cross-tool-reasoning.test.ts > /tmp/1508-vitest.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`, and the log shows all listed cases passing (no skips).
 
 ```bash
@@ -147,6 +156,7 @@ pnpm lint > /tmp/1508-lint.log 2>&1; echo "EXIT=$?"
 pnpm typecheck > /tmp/1508-typecheck.log 2>&1; echo "EXIT=$?"
 pnpm format:check > /tmp/1508-format.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0` for each.
 
 ## Kill gate
