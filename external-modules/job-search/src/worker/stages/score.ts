@@ -80,10 +80,10 @@ const CANDIDATE_POOL_LIMIT = 500;
  * "scored 73 of 158, more next time".
  *
  * The reserve is the longest model call this run has actually taken, floored at this constant,
- * rather than a fixed number — per-call latency on the reasoning tier has been observed between
- * ~7s and ~240s depending on how the host routes it, so any single hardcoded value is either
- * useless at the slow end or wastes minutes of scoring time at the fast end. Measuring is the
- * only thing that stays right across both. */
+ * rather than a fixed number — per-call latency varies with which tier the router picks (this
+ * stage now asks for the cheap "economy" tier, #1421) and how the host routes it, so any single
+ * hardcoded value is either useless at the slow end or wastes minutes of scoring time at the fast
+ * end. Measuring is the only thing that stays right regardless of which tier is configured. */
 const MIN_CALL_RESERVE_MS = 45_000;
 
 /** The most of the scoring window the UNMEASURED floor above is allowed to claim.
@@ -328,7 +328,7 @@ export async function runScore(deps: {
       const result = await ai.generateStructured({
         schema: SCORE_SCHEMA,
         prompt,
-        tierHint: "reasoning"
+        tierHint: "economy"
       });
       // Measured on every call including failed ones — a call that errored still consumed the
       // wall-clock time it took to error, and that is what the next reserve has to cover.
