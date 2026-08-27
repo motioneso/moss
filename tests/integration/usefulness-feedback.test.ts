@@ -1,15 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import Fastify, { type FastifyInstance } from "fastify";
 import pg from "pg";
 import { sql, type Kysely } from "kysely";
 
-import {
-  createDatabase,
-  DataContextRunner,
-  type AccessContext,
-  type DataContextDb,
-  type MossDatabase
-} from "@moss/db";
+import { createDatabase, DataContextRunner, type AccessContext, type MossDatabase } from "@moss/db";
 import {
   buildCalendarFollowThroughSideEffects,
   getBuiltInModuleManifests,
@@ -18,18 +11,17 @@ import {
 import { CalendarRepository, calendarFollowThroughSourceRef } from "@moss/calendar";
 import { ConnectorsRepository, createConnectorSecretCipher } from "@moss/connectors";
 import { TasksRepository } from "@moss/tasks";
-import {
-  FeedbackTargetVerifierRegistry,
-  registerUsefulnessFeedbackRoutes,
-  type FeedbackTargetVerifier,
-  type FeedbackTargetVerification
-} from "../../packages/usefulness-feedback/src/index.js";
-import { ManualMemoryCandidateService } from "../../packages/memory/src/index.js";
 import { ChatRepository, createChatFeedbackTargetVerifier } from "../../packages/chat/src/index.js";
 import { deriveBriefingFeedbackItems } from "../../packages/briefings/src/index.js";
 import { UsefulnessFeedbackRepository } from "../../packages/usefulness-feedback/src/repository.js";
 import { exportUserData } from "../../scripts/export-user-data.js";
 
+import {
+  buildFeedbackTestServer,
+  rememberableVerifier,
+  userAContext,
+  userAHeaders
+} from "./usefulness-feedback-helpers.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 const { Client } = pg;
@@ -45,14 +37,6 @@ interface MemoryCandidateTestRow {
   readonly confidence: string | number;
   readonly importance: string | number;
   readonly provenance: string;
-}
-
-function userAHeaders(): Record<string, string> {
-  return { authorization: "Bearer user-a" };
-}
-
-function userAContext(): AccessContext {
-  return { actorUserId: ids.userA, requestId: "req:feedback-a" };
 }
 
 beforeAll(async () => {
@@ -80,6 +64,7 @@ describe("usefulness feedback foundation", () => {
     expect(registration?.manifest.routes?.map((route) => `${route.method} ${route.path}`)).toEqual([
       "POST /api/me/usefulness-feedback",
       "GET /api/me/usefulness-feedback",
+      "PATCH /api/me/usefulness-feedback/:id",
       "POST /api/me/usefulness-feedback/:id/undo"
     ]);
 
@@ -786,49 +771,6 @@ describe("briefing feedback target helpers", () => {
     expect(items[0]?.metadata).toEqual({ signalType: "time_sensitive" });
   });
 });
-
-async function buildFeedbackTestServer(
-  appDb: Kysely<MossDatabase>,
-  verifier?: FeedbackTargetVerifier
-): Promise<{ server: FastifyInstance; dataContext: DataContextRunner }> {
-  const dataContext = new DataContextRunner(appDb);
-  const registry = new FeedbackTargetVerifierRegistry();
-  registry.register(
-    "chat_message",
-    verifier ??
-      (async (_scopedDb: DataContextDb, input): Promise<FeedbackTargetVerification | null> => ({
-        ownerUserId: input.actorUserId,
-        targetKind: input.targetKind,
-        targetRef: input.targetRef,
-        surface: input.surface,
-        canRemember: false
-      }))
-  );
-
-  const server = Fastify({ logger: false });
-  registerUsefulnessFeedbackRoutes(server, {
-    dataContext,
-    registry,
-    manualMemoryCandidates: new ManualMemoryCandidateService(),
-    resolveAccessContext: async () => userAContext()
-  });
-  await server.ready();
-  return { server, dataContext };
-}
-
-function rememberableVerifier(excerpt: string): FeedbackTargetVerifier {
-  return async (_scopedDb, input) => ({
-    ownerUserId: input.actorUserId,
-    targetKind: input.targetKind,
-    targetRef: input.targetRef,
-    surface: input.surface,
-    sourceKind: "chat",
-    sourceLabel: "Chat",
-    metadata: { role: "user" },
-    canRemember: true,
-    rememberExcerpt: excerpt
-  });
-}
 
 async function createStoredChatTurn(repository: ChatRepository, access: AccessContext) {
   const dataContext = new DataContextRunner(appDb);

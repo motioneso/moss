@@ -4,7 +4,8 @@ import type { MossModuleManifest } from "@moss/module-sdk";
 import {
   createUsefulnessFeedbackRequestSchema,
   createUsefulnessFeedbackResponseSchema,
-  listUsefulnessFeedbackResponseSchema
+  listUsefulnessFeedbackResponseSchema,
+  updateUsefulnessFeedbackReasonRequestSchema
 } from "@moss/shared";
 
 export const USEFULNESS_FEEDBACK_MODULE_ID = "usefulness-feedback";
@@ -26,7 +27,10 @@ export const usefulnessFeedbackModuleManifest = {
     required: true
   },
   database: {
-    migrations: ["sql/0120_usefulness_feedback_signals.sql"],
+    migrations: [
+      "sql/0120_usefulness_feedback_signals.sql",
+      "sql/0201_story_relevance_feedback.sql"
+    ],
     migrationDirectories: ["packages/usefulness-feedback/sql"],
     ownedTables: ["app.usefulness_feedback_signals", "app.usefulness_feedback_targets"]
   },
@@ -34,7 +38,7 @@ export const usefulnessFeedbackModuleManifest = {
     {
       id: "usefulness-feedback.manage",
       label: "Manage usefulness feedback",
-      description: "Create, list, and undo usefulness feedback owned by the active actor.",
+      description: "Create, list, edit, and undo usefulness feedback owned by the active actor.",
       scope: "user",
       actions: ["create", "view", "update"]
     }
@@ -51,6 +55,13 @@ export const usefulnessFeedbackModuleManifest = {
       method: "GET",
       path: "/api/me/usefulness-feedback",
       responseSchema: listUsefulnessFeedbackResponseSchema,
+      permissionId: "usefulness-feedback.manage"
+    },
+    {
+      method: "PATCH",
+      path: "/api/me/usefulness-feedback/:id",
+      requestSchema: updateUsefulnessFeedbackReasonRequestSchema,
+      responseSchema: createUsefulnessFeedbackResponseSchema,
       permissionId: "usefulness-feedback.manage"
     },
     {
