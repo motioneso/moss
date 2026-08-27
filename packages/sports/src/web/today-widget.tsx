@@ -105,11 +105,7 @@ export function SportsTodayWidget(): ReactNode {
             <span className="sp-lead__title">{lead.title}</span>
             {lead.summary ? <span className="sp-lead__dek">{lead.summary}</span> : null}
           </a>
-          <StoryFeedbackMenu
-            storyRef={lead.storyRef}
-            surface="today"
-            onChanged={onStoryChanged}
-          />
+          <StoryFeedbackMenu storyRef={lead.storyRef} surface="today" onChanged={onStoryChanged} />
           {briefs.length > 0 ? (
             <ul className="sp-brief">
               {briefs.map((story) => (

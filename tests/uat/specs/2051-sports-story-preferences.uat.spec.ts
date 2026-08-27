@@ -56,7 +56,9 @@ test("edits and removes a Less like this preference in Sports Settings", async (
   await expect(editor).toBeVisible();
   await editor.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText("Tell us why before saving.")).toBeVisible();
-  await editor.getByRole("textbox", { name: "Why less like this?" }).fill("Too much of this coverage");
+  await editor
+    .getByRole("textbox", { name: "Why less like this?" })
+    .fill("Too much of this coverage");
   await editor.getByRole("button", { name: "Save" }).click();
   await expect(editor).toHaveCount(0);
 
