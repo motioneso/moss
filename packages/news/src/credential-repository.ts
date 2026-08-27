@@ -100,6 +100,55 @@ export class NewsCredentialRepository implements NewsCredentialStore {
     return envelope === null ? null : (envelope as unknown as EncryptedSecret);
   }
 
+  /**
+   * The read that the outbound publisher request (#2007) actually uses. It answers three
+   * different questions in one round trip, because the runtime has to tell them apart before it
+   * decides whether to fetch:
+   *   - no row at all, or a configured row whose envelope has gone: the person has no key set up
+   *   - a revoked row: the person had a key and took it away
+   *   - a usable row: the envelope plus the generation number
+   *
+   * The generation comes back as text so it can be part of a cache key: rotating a key advances
+   * it, which makes every answer fetched with the old key unreachable rather than merely stale.
+   *
+   * Deliberately on the class only, not on {@link NewsCredentialStore}: the routes from #2005
+   * have no business reading key material, and their test fakes would stop compiling.
+   */
+  async readCredentialForUse(
+    scopedDb: DataContextDb,
+    sourceId: string
+  ): Promise<
+    | {
+        readonly status: "configured";
+        readonly envelope: EncryptedSecret;
+        readonly generation: string;
+      }
+    | { readonly status: "revoked" }
+    | null
+  > {
+    assertDataContextDb(scopedDb);
+    const result = await sql<{
+      status: "configured" | "revoked";
+      encrypted_secret: unknown;
+      generation: string;
+    }>`
+      SELECT status, encrypted_secret, generation::text AS generation
+        FROM app.news_source_credentials
+       WHERE source_id = ${sourceId}
+    `.execute(scopedDb.db);
+    const row = result.rows[0];
+    if (!row) return null;
+    if (row.status === "revoked") return { status: "revoked" };
+    // A configured row with no envelope is a broken row. Reported as "no key" so the person is
+    // pointed at the action that fixes it — adding a key again — rather than at a puzzle.
+    if (row.encrypted_secret === null || row.encrypted_secret === undefined) return null;
+    return {
+      status: "configured",
+      envelope: row.encrypted_secret as EncryptedSecret,
+      generation: row.generation
+    };
+  }
+
   async insertCredential(
     scopedDb: DataContextDb,
     input: {
