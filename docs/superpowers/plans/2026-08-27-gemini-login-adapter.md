@@ -8,24 +8,24 @@
 
 ## 1. Seams check — every assumption proved against this tree
 
-| Assumption the plan rests on | Evidence on this branch |
-| --- | --- |
-| The google catalog entry is install-`supported`, so an adapter for it is not an orphan | `packages/cli-runner/src/catalog.ts:151-153` |
-| The pinned command name is `gemini` | `packages/cli-runner/src/catalog.ts:168` (`binary: "gemini"`) |
-| An adapter's first argv element must equal the catalog binary or the adapter is dropped | `packages/cli-runner/src/login-adapters.ts:207-209` |
-| An allowlist entry with pathPrefix `/` is rejected as too broad | `packages/cli-runner/src/login-adapters.ts:213-215` |
-| google currently has no adapter | `packages/cli-runner/src/login-adapters.ts:178` (`google: undefined`) |
-| Surface extraction takes the first allowlisted https URL and the first token matching the provider's code pattern | `packages/cli-runner/src/login-adapters.ts:76-97` |
-| `paste` mode yields `awaiting_token`; `poll` mode yields `awaiting_authorization` | `packages/cli-runner/src/login-service.ts:212-214` |
-| Sign-in completion is decided by the provider probe, and the google branch runs `agy --print` today | `packages/chat/src/live/provider-probe.ts:82-87` |
-| The runner's child environment is an allowlist filter, not a setter — allowlisting a name alone does nothing | `packages/cli-runner/src/sanitized-env.ts:66-73`, and the comment at `:37-44` |
-| `HOME` for the runner's children is forced to the auth volume in one place | `packages/cli-runner/src/main.ts:124-134` |
-| First-run seeding exists for claude and codex, and does nothing for google | `packages/cli-runner/src/provider-first-run.ts:120-131` |
-| Nothing on the sign-in path calls that seeding — only chat launch and the worker do | grep for `ensureProviderLaunchReady`: `packages/cli-runner/src/engine-host.ts:405`, `apps/worker/src/worker.ts:244`; no hit in `login-service.ts` or `main.ts` |
-| The settings screen hardcodes which providers get the sign-in button | `apps/web/src/settings/settings-provider-login-dialog.tsx:16` and `:53-60` |
-| The onboarding screen labels this provider "Antigravity" | `apps/web/src/onboarding/cli-auth-step.tsx:39` |
-| The presence check already accepts the `gemini` command name (#2026 added the alias) | `packages/ai/src/cli-availability.ts:31-35`, `:86-92` — **no change needed here** |
-| The install step writes `.gemini/settings.json` under the same home folder, holding the two self-update keys | `packages/cli-runner/src/catalog.ts` selfUpdateDisable block — **so any seeding we add must merge, never overwrite** |
+| Assumption the plan rests on                                                                                      | Evidence on this branch                                                                                                                                        |
+| ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The google catalog entry is install-`supported`, so an adapter for it is not an orphan                            | `packages/cli-runner/src/catalog.ts:151-153`                                                                                                                   |
+| The pinned command name is `gemini`                                                                               | `packages/cli-runner/src/catalog.ts:168` (`binary: "gemini"`)                                                                                                  |
+| An adapter's first argv element must equal the catalog binary or the adapter is dropped                           | `packages/cli-runner/src/login-adapters.ts:207-209`                                                                                                            |
+| An allowlist entry with pathPrefix `/` is rejected as too broad                                                   | `packages/cli-runner/src/login-adapters.ts:213-215`                                                                                                            |
+| google currently has no adapter                                                                                   | `packages/cli-runner/src/login-adapters.ts:178` (`google: undefined`)                                                                                          |
+| Surface extraction takes the first allowlisted https URL and the first token matching the provider's code pattern | `packages/cli-runner/src/login-adapters.ts:76-97`                                                                                                              |
+| `paste` mode yields `awaiting_token`; `poll` mode yields `awaiting_authorization`                                 | `packages/cli-runner/src/login-service.ts:212-214`                                                                                                             |
+| Sign-in completion is decided by the provider probe, and the google branch runs `agy --print` today               | `packages/chat/src/live/provider-probe.ts:82-87`                                                                                                               |
+| The runner's child environment is an allowlist filter, not a setter — allowlisting a name alone does nothing      | `packages/cli-runner/src/sanitized-env.ts:66-73`, and the comment at `:37-44`                                                                                  |
+| `HOME` for the runner's children is forced to the auth volume in one place                                        | `packages/cli-runner/src/main.ts:124-134`                                                                                                                      |
+| First-run seeding exists for claude and codex, and does nothing for google                                        | `packages/cli-runner/src/provider-first-run.ts:120-131`                                                                                                        |
+| Nothing on the sign-in path calls that seeding — only chat launch and the worker do                               | grep for `ensureProviderLaunchReady`: `packages/cli-runner/src/engine-host.ts:405`, `apps/worker/src/worker.ts:244`; no hit in `login-service.ts` or `main.ts` |
+| The settings screen hardcodes which providers get the sign-in button                                              | `apps/web/src/settings/settings-provider-login-dialog.tsx:16` and `:53-60`                                                                                     |
+| The onboarding screen labels this provider "Antigravity"                                                          | `apps/web/src/onboarding/cli-auth-step.tsx:39`                                                                                                                 |
+| The presence check already accepts the `gemini` command name (#2026 added the alias)                              | `packages/ai/src/cli-availability.ts:31-35`, `:86-92` — **no change needed here**                                                                              |
+| The install step writes `.gemini/settings.json` under the same home folder, holding the two self-update keys      | `packages/cli-runner/src/catalog.ts` selfUpdateDisable block — **so any seeding we add must merge, never overwrite**                                           |
 
 ### Facts read out of the real published tool (version 0.57.0, unpacked outside the repo)
 
@@ -114,7 +114,7 @@ cannot run at all — wrong command, and a flag the tool does not have.
 New exported function:
 
 ```ts
-export async function ensureGeminiOnboarded(homeBase: string): Promise<void>
+export async function ensureGeminiOnboarded(homeBase: string): Promise<void>;
 ```
 
 Decisions: reads `<homeBase>/.gemini/settings.json`, sets `security.auth.selectedType` to
@@ -174,20 +174,20 @@ Gemini command-line tool, and the old name now names something we do not install
   goes.
 - New tests mirroring the codex block:
   - the google adapter's command is `["gemini"]` and its mode is `paste`.
-    *Fails against a broken build:* a wrong command name is exactly what the loader silently drops,
+    _Fails against a broken build:_ a wrong command name is exactly what the loader silently drops,
     leaving sign-in unavailable with nothing logged.
   - a realistic captured screen — the real "Please visit the following URL" wording plus a full
     Google authorize link — yields exactly that link.
-    *Fails against a broken build:* a wrong or absent allowlist entry drops the link and the dialog
+    _Fails against a broken build:_ a wrong or absent allowlist entry drops the link and the dialog
     shows nothing, which is the exact live symptom we are guarding against.
   - a look-alike link on another host is dropped.
-    *Fails against a broken build:* a too-loose allowlist would show a user an attacker-chosen link
+    _Fails against a broken build:_ a too-loose allowlist would show a user an attacker-chosen link
     from pane text.
   - ordinary words on the captured screen never come back as a sign-in code.
-    *Fails against a broken build:* reusing the shared loose pattern makes the first ordinary word
+    _Fails against a broken build:_ reusing the shared loose pattern makes the first ordinary word
     on screen appear to the user as their sign-in code.
   - the google adapter has no token-capture pattern.
-    *Fails against a broken build:* a capture pattern here would surface a secret from pane text.
+    _Fails against a broken build:_ a capture pattern here would surface a secret from pane text.
 - Loader tests both ways: the google adapter survives when its catalog entry is installable, and is
   dropped when it is not.
 
@@ -197,14 +197,15 @@ still passes, but its name now claims something untrue.
 
 **New coverage for tasks 3 and 4** (file chosen to match where each unit already lives; a new
 `tests/unit/` file if none fits):
+
 - seeding writes the sign-in-method setting and **preserves the install step's self-update keys in
-  the same file**. *Fails against a broken build:* a naive whole-file write silently re-enables the
+  the same file**. _Fails against a broken build:_ a naive whole-file write silently re-enables the
   tool replacing its own pinned bytes — the exact thing #2026 shipped to prevent.
 - seeding is a no-op on a second call.
 - the sign-in service calls `prepareProvider` before opening the session.
-  *Fails against a broken build:* the adapter is right, the setting is never written, and live
+  _Fails against a broken build:_ the adapter is right, the setting is never written, and live
   sign-in hangs on an unanswered question — a failure no unit test would otherwise catch.
-- the child environment carries `NO_BROWSER`. *Fails against a broken build:* allowlisting the name
+- the child environment carries `NO_BROWSER`. _Fails against a broken build:_ allowlisting the name
   without setting the value is a no-op, which is the trap the file's own comment describes.
 
 ---

@@ -36,7 +36,7 @@ import { StepHeader } from "./onboarding-ui";
 const PROVIDER_LABELS: Record<OnboardingProviderKind, string> = {
   anthropic: "Claude",
   "openai-compatible": "Codex",
-  google: "Antigravity"
+  google: "Gemini"
 };
 
 // Bounded login poll (login-contract: submit may not settle synchronously). Iteration-based so a
