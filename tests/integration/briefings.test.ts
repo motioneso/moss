@@ -32,7 +32,7 @@ import {
 import { briefingRunPayloadSchema } from "@moss/shared";
 import { SOURCE_BEHAVIOR_PREFERENCE_KEY } from "@moss/source-behaviors";
 import { PreferencesRepository } from "@moss/structured-state";
-import { connectionStrings, ids } from "./test-database.js";
+import { connectionStrings, expectedBuiltInModuleIds, ids } from "./test-database.js";
 import {
   briefingIds,
   countPgBossJobs,
@@ -160,31 +160,7 @@ describe("Briefings module M6 read-only scheduled summaries", () => {
       (item) => item.manifest.id === briefingsModuleManifest.id
     );
 
-    expect(manifests.map((item) => item.id)).toEqual([
-      "settings",
-      "connectors",
-      "tasks",
-      "jarvis.goals",
-      "web",
-      "notifications",
-      "calendar",
-      "email",
-      "ai",
-      "chat",
-      "briefings",
-      "memory",
-      "usefulness-feedback",
-      "structured-state",
-      "wellness",
-      "weather",
-      "sports",
-      "news",
-      "notes",
-      "proactive-monitoring",
-      "jarvis.commitments",
-      "people",
-      "workshop"
-    ]);
+    expect(manifests.map((item) => item.id)).toEqual(expectedBuiltInModuleIds);
     expect(registration?.manifest.database?.ownedTables).toEqual([
       "app.briefing_definitions",
       "app.briefing_runs"
@@ -208,19 +184,21 @@ describe("Briefings module M6 read-only scheduled summaries", () => {
     expect(registration?.queueDefinitions.map((queue) => queue.name)).toEqual([
       BRIEFINGS_RUN_QUEUE
     ]);
-    expect(getBuiltInSqlMigrationDirectories().at(-1)).toContain("packages/people/sql");
-    expect(getBuiltInSqlMigrationDirectories().at(-2)).toContain("packages/commitments/sql");
-    expect(getBuiltInSqlMigrationDirectories().at(-3)).toContain("packages/proactive-monitoring");
-    expect(getBuiltInSqlMigrationDirectories().at(-4)).toContain("packages/notes/sql");
-    expect(getBuiltInSqlMigrationDirectories().at(-5)).toContain("packages/news/sql");
-    expect(getBuiltInSqlMigrationDirectories().at(-6)).toContain("packages/sports/sql");
-    expect(getBuiltInSqlMigrationDirectories().at(-7)).toContain("packages/wellness/sql");
-    expect(getBuiltInSqlMigrationDirectories().at(-8)).toContain("packages/structured-state/sql");
-    expect(getBuiltInSqlMigrationDirectories().at(-9)).toContain(
+    // #2013 registers workflows after people, so it now runs last.
+    expect(getBuiltInSqlMigrationDirectories().at(-1)).toContain("packages/workflows/sql");
+    expect(getBuiltInSqlMigrationDirectories().at(-2)).toContain("packages/people/sql");
+    expect(getBuiltInSqlMigrationDirectories().at(-3)).toContain("packages/commitments/sql");
+    expect(getBuiltInSqlMigrationDirectories().at(-4)).toContain("packages/proactive-monitoring");
+    expect(getBuiltInSqlMigrationDirectories().at(-5)).toContain("packages/notes/sql");
+    expect(getBuiltInSqlMigrationDirectories().at(-6)).toContain("packages/news/sql");
+    expect(getBuiltInSqlMigrationDirectories().at(-7)).toContain("packages/sports/sql");
+    expect(getBuiltInSqlMigrationDirectories().at(-8)).toContain("packages/wellness/sql");
+    expect(getBuiltInSqlMigrationDirectories().at(-9)).toContain("packages/structured-state/sql");
+    expect(getBuiltInSqlMigrationDirectories().at(-10)).toContain(
       "packages/usefulness-feedback/sql"
     );
-    expect(getBuiltInSqlMigrationDirectories().at(-10)).toContain("packages/memory/sql");
-    expect(getBuiltInSqlMigrationDirectories().at(-11)).toContain("packages/briefings/sql");
+    expect(getBuiltInSqlMigrationDirectories().at(-11)).toContain("packages/memory/sql");
+    expect(getBuiltInSqlMigrationDirectories().at(-12)).toContain("packages/briefings/sql");
   });
 
   it("keeps definitions private by default and denies admin private-data bypass", async () => {

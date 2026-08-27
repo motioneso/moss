@@ -30,7 +30,12 @@ import {
   fakeEmailProvider,
   transientProviderError
 } from "./source-context-helpers.js";
-import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
+import {
+  connectionStrings,
+  expectedBuiltInModuleIds,
+  ids,
+  resetFoundationDatabase
+} from "./test-database.js";
 
 const { Client } = pg;
 
@@ -212,31 +217,7 @@ describe("Calendar and Email connector-backed read modules", () => {
       (item) => item.manifest.id === emailModuleManifest.id
     );
 
-    expect(manifests.map((item) => item.id)).toEqual([
-      "settings",
-      "connectors",
-      "tasks",
-      "jarvis.goals",
-      "web",
-      "notifications",
-      "calendar",
-      "email",
-      "ai",
-      "chat",
-      "briefings",
-      "memory",
-      "usefulness-feedback",
-      "structured-state",
-      "wellness",
-      "weather",
-      "sports",
-      "news",
-      "notes",
-      "proactive-monitoring",
-      "jarvis.commitments",
-      "people",
-      "workshop"
-    ]);
+    expect(manifests.map((item) => item.id)).toEqual(expectedBuiltInModuleIds);
     expect(calendarModuleManifest.database?.ownedTables).toEqual(["app.calendar_events"]);
     expect(emailModuleManifest.database?.ownedTables).toEqual(["app.email_messages"]);
     expect(calendarModuleManifest.navigation?.[0]).toMatchObject({

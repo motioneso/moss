@@ -141,7 +141,12 @@ describe("dataLifecycle cascade-truth (#801 Phase A)", () => {
         "app.news_refresh_state",
         "app.news_policy_verdicts",
         // #2005 News publisher credentials — cascade on the user and on the source.
-        "app.news_source_credentials"
+        "app.news_source_credentials",
+        // #2013 workflow run state — every table is owner-keyed and cascades with the user.
+        "app.workflow_runs",
+        "app.workflow_step_runs",
+        "app.workflow_approvals",
+        "app.workflow_artifacts"
       ].sort()
     );
   });

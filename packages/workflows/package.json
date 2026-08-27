@@ -1,0 +1,21 @@
+{
+  "name": "@moss/workflows",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./routes": "./src/routes.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@moss/db": "workspace:*",
+    "@moss/module-sdk": "workspace:*",
+    "@moss/shared": "workspace:*",
+    "fastify": "^5.8.5",
+    "kysely": "^0.29.2",
+    "@sinclair/typebox": "^0.34.13"
+  }
+}

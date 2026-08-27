@@ -58,7 +58,8 @@ const PLATFORM_PACKAGES = new Set([
   "@moss/structured-state", // generic preferences/state store used across features
   "@moss/ui", // authored jds-* component library (#1388), no independent product domain
   "@moss/usefulness-feedback", // cross-cutting feedback-loop signal, no product page of its own
-  "@moss/vault"
+  "@moss/vault",
+  "@moss/workflows" // durable run state for any module's workflow; no product page of its own
 ]);
 
 /** Feature: a distinct, user-recognizable product capability. */

@@ -51,6 +51,42 @@ export const ids = {
 } as const;
 
 /**
+ * Every built-in module, in registration order. Pinned on purpose: adding a module to the
+ * registry is meant to be a conscious edit here, and the order is what the module list endpoint
+ * and the navigation assertions depend on.
+ *
+ * This used to be nine hand-copied duplicates across seven integration test files, which meant
+ * adding one module needed nine identical edits and pushed one of those files past the
+ * file-length guard (#2013).
+ */
+export const expectedBuiltInModuleIds = [
+  "settings",
+  "connectors",
+  "tasks",
+  "jarvis.goals",
+  "web",
+  "notifications",
+  "calendar",
+  "email",
+  "ai",
+  "chat",
+  "briefings",
+  "memory",
+  "usefulness-feedback",
+  "structured-state",
+  "wellness",
+  "weather",
+  "sports",
+  "news",
+  "notes",
+  "proactive-monitoring",
+  "jarvis.commitments",
+  "people",
+  "workflows",
+  "workshop"
+];
+
+/**
  * Defense-in-depth: catches any direct `vitest run tests/integration` invocation that
  * bypasses `scripts/test-integration.ts` (which is the thing that actually provisions an
  * isolated database and sets JARVIS_PGDATABASE before vitest ever loads this module). Without

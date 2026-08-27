@@ -1022,6 +1022,104 @@ export interface CommitmentExtractionStateTable {
   updated_at: TimestampColumn;
 }
 
+// Workflow persistence (#2013, slice 819-B). Mirrors
+// packages/workflows/sql/0202_workflow_runs.sql. Status columns are TEXT + CHECK in the
+// database, so the union alias here is the only place the allowed values are named in
+// TypeScript.
+type WorkflowRunStatusDb =
+  | "pending"
+  | "running"
+  | "suspended"
+  | "succeeded"
+  | "failed"
+  | "cancelled";
+type WorkflowStepRunStatusDb =
+  | "pending"
+  | "queued"
+  | "running"
+  | "suspended"
+  | "succeeded"
+  | "failed"
+  | "cancelled";
+type WorkflowApprovalStatusDb = "pending" | "approved" | "denied" | "cancelled";
+type WorkflowRunStartedByDb = "user" | "module" | "system";
+
+export interface WorkflowRunsTable {
+  id: ColumnType<string, string | undefined, never>;
+  owner_user_id: string;
+  workflow_id: string;
+  workflow_version: number;
+  module_id: string;
+  status: ColumnType<WorkflowRunStatusDb, WorkflowRunStatusDb | undefined, WorkflowRunStatusDb>;
+  started_by: WorkflowRunStartedByDb;
+  input_json: JsonColumn;
+  result_json: JsonColumn;
+  started_at: TimestampColumn;
+  completed_at: NullableTimestampColumn;
+  created_at: TimestampColumn;
+  updated_at: TimestampColumn;
+}
+
+export interface WorkflowStepRunsTable {
+  id: ColumnType<string, string | undefined, never>;
+  workflow_run_id: string;
+  owner_user_id: string;
+  step_id: string;
+  status: ColumnType<
+    WorkflowStepRunStatusDb,
+    WorkflowStepRunStatusDb | undefined,
+    WorkflowStepRunStatusDb
+  >;
+  attempt_count: ColumnType<number, number | undefined, number>;
+  input_json: JsonColumn;
+  result_json: JsonColumn;
+  error_code: ColumnType<string | null, string | null | undefined, string | null>;
+  pgboss_job_id: ColumnType<string | null, string | null | undefined, string | null>;
+  started_at: NullableTimestampColumn;
+  suspended_at: NullableTimestampColumn;
+  completed_at: NullableTimestampColumn;
+  created_at: TimestampColumn;
+  updated_at: TimestampColumn;
+}
+
+export interface WorkflowApprovalsTable {
+  id: ColumnType<string, string | undefined, never>;
+  workflow_run_id: string;
+  step_run_id: string;
+  owner_user_id: string;
+  status: ColumnType<
+    WorkflowApprovalStatusDb,
+    WorkflowApprovalStatusDb | undefined,
+    WorkflowApprovalStatusDb
+  >;
+  summary: string;
+  details_json: JsonColumn;
+  resolved_by_user_id: ColumnType<string | null, string | null | undefined, string | null>;
+  created_at: TimestampColumn;
+  updated_at: TimestampColumn;
+}
+
+export interface WorkflowArtifactsTable {
+  id: ColumnType<string, string | undefined, never>;
+  workflow_run_id: string;
+  step_run_id: ColumnType<string | null, string | null | undefined, string | null>;
+  owner_user_id: string;
+  artifact_ref: string;
+  sha256: string;
+  content_type: string;
+  // BIGINT: node-postgres hands back a string, and callers pass a number on write.
+  size_bytes: ColumnType<string, number | string, number | string>;
+  created_at: TimestampColumn;
+  updated_at: TimestampColumn;
+}
+
+export type {
+  WorkflowRunStatusDb,
+  WorkflowStepRunStatusDb,
+  WorkflowApprovalStatusDb,
+  WorkflowRunStartedByDb
+};
+
 export type {
   PersonContextStatusDb,
   PersonContextIdentityKindDb,
@@ -1350,6 +1448,10 @@ export interface MossDatabase {
   "app.commitment_candidate_sources": CommitmentCandidateSourcesTable;
   "app.commitment_candidate_events": CommitmentCandidateEventsTable;
   "app.commitment_extraction_state": CommitmentExtractionStateTable;
+  "app.workflow_runs": WorkflowRunsTable;
+  "app.workflow_step_runs": WorkflowStepRunsTable;
+  "app.workflow_approvals": WorkflowApprovalsTable;
+  "app.workflow_artifacts": WorkflowArtifactsTable;
   "app.person_context_people": PersonContextPeopleTable;
   "app.person_context_identities": PersonContextIdentitiesTable;
   "app.person_context_links": PersonContextLinksTable;
