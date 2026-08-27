@@ -34,6 +34,8 @@ function connection(overrides: Partial<PublisherConnection> = {}): PublisherConn
     maxResponseBytes: 100_000,
     maxItems: 10,
     minIntervalMs: 1_000,
+    accessSummary: "Reads the fixture wire's public headline list.",
+    termsUrl: "https://fixture.example/terms",
     parse: () => [],
     ...overrides
   };
@@ -42,6 +44,24 @@ function connection(overrides: Partial<PublisherConnection> = {}): PublisherConn
 describe("publisher connection validation", () => {
   it("accepts a well-formed declaration", () => {
     expect(() => assertValidPublisherConnection(connection())).not.toThrow();
+  });
+
+  it("rejects a declaration with no access summary", () => {
+    // #2008: the summary is the only thing that tells a user what the key they are about to
+    // paste gives away. A blank one ships a key box with no explanation.
+    expect(() => assertValidPublisherConnection(connection({ accessSummary: "   " }))).toThrow(
+      /access summary/i
+    );
+  });
+
+  it("rejects a terms link that is not HTTPS", () => {
+    expect(() =>
+      assertValidPublisherConnection(connection({ termsUrl: "http://fixture.example/terms" }))
+    ).toThrow(/terms/i);
+  });
+
+  it("accepts a declaration with no terms link", () => {
+    expect(() => assertValidPublisherConnection(connection({ termsUrl: null }))).not.toThrow();
   });
 
   it("rejects an endpoint that is not HTTPS", () => {

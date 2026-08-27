@@ -46,7 +46,9 @@ const DESCRIPTOR: NewsConnectionDescriptor = {
   homepageUrl: "https://wire.example.com",
   feedUrl: null,
   retrievalMethod: "scrape",
-  host: "api.wire.example.com"
+  host: "api.wire.example.com",
+  accessSummary: "Reads the Example Wire headline list.",
+  termsUrl: "https://wire.example.com/terms"
 };
 
 const ENVELOPE: EncryptedSecret = {
@@ -115,6 +117,8 @@ function makeConnections(
   return {
     describe: (connectionId) =>
       options.known === false || connectionId !== DESCRIPTOR.connectionId ? undefined : DESCRIPTOR,
+    matchUrl: (homepageUrl) =>
+      options.known === false || homepageUrl !== DESCRIPTOR.homepageUrl ? undefined : DESCRIPTOR,
     validateKey: async (_connectionId, apiKey) => {
       recorder.validated.push(apiKey);
       if (options.throws) throw options.throws;
