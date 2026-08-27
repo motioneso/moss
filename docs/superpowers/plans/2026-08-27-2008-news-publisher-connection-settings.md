@@ -11,21 +11,21 @@ Risk tier: security. Adversarial QA and Ben's merge sign-off apply.
 
 Every capability this plan leans on, cited from the current tree.
 
-| Assumed | Actual | Citation |
-| --- | --- | --- |
-| Credential contracts exist | Yes | `packages/shared/src/news-credentials-api.ts:33-64` |
-| The five outcome sentences exist as constants | Yes — reuse, do not re-declare | `packages/shared/src/news-credentials-api.ts:20-26` |
-| Four credential routes exist | Yes | `packages/news/src/manifest.ts:262-288`; handlers `packages/news/src/credential-routes.ts:155,198,236,257` |
-| A publisher connection port exists | Yes, with `describe` + `validateKey` | `packages/news/src/publisher-connection-port.ts:23-30` |
-| The port has `matchUrl` | **No.** This plan adds it | `packages/news/src/publisher-connection-port.ts:23-30` |
-| The connection descriptor carries an access sentence and a terms link | **No.** It carries `host` only | `packages/news/src/publisher-connection-port.ts:8-17` |
-| The reviewed connection registry exists (#2007) | Yes | `packages/news/src/source/newsapi-connection.ts:106-153` |
-| The registry is wired into the running server | **No.** The composition root still passes the do-nothing port | `packages/module-registry/src/index.ts:1945` |
-| Preview response type and its Fastify schema | Yes, and the schema is `additionalProperties: false` | `packages/shared/src/news-api.ts:186-195` and `:621-676` |
-| Preview handler builds the candidate list in one place | Yes | `packages/news/src/personalization-routes.ts:391-402` |
-| React Query keys are module-owned | Yes | `packages/news/src/web/query-keys.ts:5-10` |
-| A house pattern for a write-only secret box | Yes | `apps/web/src/settings/module-credentials-section.tsx` |
-| No jsdom / Testing Library — unit tests render to a string | Yes | `tests/unit/news-settings-pane.test.tsx` |
+| Assumed                                                               | Actual                                                        | Citation                                                                                                   |
+| --------------------------------------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Credential contracts exist                                            | Yes                                                           | `packages/shared/src/news-credentials-api.ts:33-64`                                                        |
+| The five outcome sentences exist as constants                         | Yes — reuse, do not re-declare                                | `packages/shared/src/news-credentials-api.ts:20-26`                                                        |
+| Four credential routes exist                                          | Yes                                                           | `packages/news/src/manifest.ts:262-288`; handlers `packages/news/src/credential-routes.ts:155,198,236,257` |
+| A publisher connection port exists                                    | Yes, with `describe` + `validateKey`                          | `packages/news/src/publisher-connection-port.ts:23-30`                                                     |
+| The port has `matchUrl`                                               | **No.** This plan adds it                                     | `packages/news/src/publisher-connection-port.ts:23-30`                                                     |
+| The connection descriptor carries an access sentence and a terms link | **No.** It carries `host` only                                | `packages/news/src/publisher-connection-port.ts:8-17`                                                      |
+| The reviewed connection registry exists (#2007)                       | Yes                                                           | `packages/news/src/source/newsapi-connection.ts:106-153`                                                   |
+| The registry is wired into the running server                         | **No.** The composition root still passes the do-nothing port | `packages/module-registry/src/index.ts:1945`                                                               |
+| Preview response type and its Fastify schema                          | Yes, and the schema is `additionalProperties: false`          | `packages/shared/src/news-api.ts:186-195` and `:621-676`                                                   |
+| Preview handler builds the candidate list in one place                | Yes                                                           | `packages/news/src/personalization-routes.ts:391-402`                                                      |
+| React Query keys are module-owned                                     | Yes                                                           | `packages/news/src/web/query-keys.ts:5-10`                                                                 |
+| A house pattern for a write-only secret box                           | Yes                                                           | `apps/web/src/settings/module-credentials-section.tsx`                                                     |
+| No jsdom / Testing Library — unit tests render to a string            | Yes                                                           | `tests/unit/news-settings-pane.test.tsx`                                                                   |
 
 ### Three corrections to the spec, and the decision taken on each
 
@@ -107,7 +107,9 @@ export interface NewsPublisherConnectionOfferDto {
   readonly termsUrl: string | null;
 }
 
-export const newsPublisherConnectionOfferSchema: { /* additionalProperties: false, all five required, termsUrl nullable */ };
+export const newsPublisherConnectionOfferSchema: {
+  /* additionalProperties: false, all five required, termsUrl nullable */
+};
 ```
 
 In `packages/shared/src/news-api.ts` add `readonly connection?: NewsPublisherConnectionOfferDto;`
@@ -159,12 +161,18 @@ Files: `packages/news/src/web/news-client.ts`, `packages/news/src/web/query-keys
 
 ```ts
 export async function connectCredentialedNewsSource(
-  input: ConnectNewsCredentialedSourceRequest & { readonly confirmationId: string; readonly candidateId?: string }
+  input: ConnectNewsCredentialedSourceRequest & {
+    readonly confirmationId: string;
+    readonly candidateId?: string;
+  }
 ): Promise<ConnectNewsCredentialedSourceResponse>;
 export async function replaceNewsSourceCredential(
-  sourceId: string, input: ReplaceNewsSourceCredentialRequest
+  sourceId: string,
+  input: ReplaceNewsSourceCredentialRequest
 ): Promise<NewsSourceCredentialResponse>;
-export async function revokeNewsSourceCredential(sourceId: string): Promise<NewsSourceCredentialResponse>;
+export async function revokeNewsSourceCredential(
+  sourceId: string
+): Promise<NewsSourceCredentialResponse>;
 export async function listNewsSourceCredentials(): Promise<NewsSourceCredentialsResponse>;
 ```
 
@@ -184,13 +192,15 @@ New file `packages/news/src/settings/connect-publisher.tsx`. Its own file becaus
 ```ts
 export type CredentialOutcome = keyof typeof NEWS_CREDENTIAL_MESSAGES;
 export function credentialOutcomeMessage(outcome: string): string;
-export function credentialStatusBadge(
-  status: NewsSourceCredentialStatusDto["status"]
-): { readonly label: string; readonly tone: "pine" | "amber" | "neutral" };
+export function credentialStatusBadge(status: NewsSourceCredentialStatusDto["status"]): {
+  readonly label: string;
+  readonly tone: "pine" | "amber" | "neutral";
+};
 export function ConnectPublisherForm(props: {
   readonly offer: NewsPublisherConnectionOfferDto;
-  readonly mode: { readonly kind: "connect"; readonly confirmationId: string; readonly candidateId?: string }
-             | { readonly kind: "replace"; readonly sourceId: string };
+  readonly mode:
+    | { readonly kind: "connect"; readonly confirmationId: string; readonly candidateId?: string }
+    | { readonly kind: "replace"; readonly sourceId: string };
   readonly onDone: () => void;
   readonly onCancel: () => void;
 }): JSX.Element;
@@ -256,14 +266,14 @@ obviously fake.
 
 New `tests/unit/news-connect-publisher.test.tsx`, modelled on `tests/unit/news-settings-pane.test.tsx`.
 
-| Case | What a broken build does |
-| --- | --- |
-| Each of the five outcomes produces its exact sentence, and an unknown key the fallback | A reworded sentence drifts from what the route returned |
-| The key box renders `type="password"`, `autoComplete="off"`, and no `value` or `defaultValue` from server data | A "stored key" placeholder puts a secret back on screen |
-| A preview with no `connection` renders the ordinary Add row | Any URL gets asked for a secret |
-| A preview with two candidates and a matching connection shows no key box | A key is sent to a guessed publisher |
-| A source with no credential row renders no Replace or Revoke control | Credential controls appear on public sources |
-| Each credential status maps to its badge | A revoked source reading "connected" hides a broken feed |
+| Case                                                                                                           | What a broken build does                                 |
+| -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Each of the five outcomes produces its exact sentence, and an unknown key the fallback                         | A reworded sentence drifts from what the route returned  |
+| The key box renders `type="password"`, `autoComplete="off"`, and no `value` or `defaultValue` from server data | A "stored key" placeholder puts a secret back on screen  |
+| A preview with no `connection` renders the ordinary Add row                                                    | Any URL gets asked for a secret                          |
+| A preview with two candidates and a matching connection shows no key box                                       | A key is sent to a guessed publisher                     |
+| A source with no credential row renders no Replace or Revoke control                                           | Credential controls appear on public sources             |
+| Each credential status maps to its badge                                                                       | A revoked source reading "connected" hides a broken feed |
 
 Extend `tests/unit/news-manifest.test.ts`: no assistant tool holds the `news.credentials`
 permission. A key is only ever typed into this form.

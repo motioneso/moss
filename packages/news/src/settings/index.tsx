@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Badge, Note, PaneHead } from "@moss/settings-ui";
+import { Badge, formatTimestamp, Note, PaneHead } from "@moss/settings-ui";
 import { Button } from "@moss/module-web-sdk";
 import type {
   NewsCatalogSource,
+  NewsSourceCredentialStatusDto,
   NewsPersonalizationAvailabilityDto,
   NewsPrefDto,
   NewsPrefKind,
@@ -25,10 +26,13 @@ import {
   getNewsCatalog,
   getNewsPersonalization,
   listNewsPrefs,
+  listNewsSourceCredentials,
+  revokeNewsSourceCredential,
   triggerNewsRevalidation
 } from "../web/news-client.js";
 import { newsQueryKeys } from "../web/query-keys.js";
 import { AddSourceFlow } from "./add-source.js";
+import { ConnectPublisherForm, credentialStatusBadge } from "./connect-publisher.js";
 import { DescribeTopics, PrereqGate } from "./describe-topics.js";
 import { StoryFeedbackSettings } from "./story-feedback.js";
 import "./news-settings.css";
@@ -177,6 +181,16 @@ async function runOps(ops: readonly PrefOp[]): Promise<void> {
   }
 }
 
+/**
+ * #2008: "last checked" for a connected publisher, using the settings-wide timestamp helper.
+ * A missing or unreadable timestamp shows nothing rather than "Invalid Date" next to a key.
+ */
+export function lastCheckedLabel(isoTimestamp: string | null): string | null {
+  if (!isoTimestamp) return null;
+  const formatted = formatTimestamp(isoTimestamp, "");
+  return formatted ? `Last checked ${formatted}` : null;
+}
+
 export default function NewsSettings() {
   const queryClient = useQueryClient();
   const catalogQuery = useQuery({ queryKey: newsQueryKeys.catalog, queryFn: getNewsCatalog });
@@ -225,6 +239,24 @@ export default function NewsSettings() {
   // only change after the worker finishes, so an immediate refetch would show nothing new.
   const revalidateMutation = useMutation({ mutationFn: triggerNewsRevalidation });
 
+  // --- #2008: publisher keys. Status only; this route never returns key material. ---
+  const credentialsQuery = useQuery({
+    queryKey: newsQueryKeys.credentials,
+    queryFn: listNewsSourceCredentials
+  });
+  // Which source is mid-flow. Only one at a time, so a key typed for one publisher can never
+  // be left sitting in a form that is now pointing at a different one.
+  const [replacingSourceId, setReplacingSourceId] = useState<string | null>(null);
+  const [revokingSourceId, setRevokingSourceId] = useState<string | null>(null);
+  const revokeCredentialMutation = useMutation({
+    mutationFn: revokeNewsSourceCredential,
+    onSuccess: () => {
+      setRevokingSourceId(null);
+      void queryClient.invalidateQueries({ queryKey: newsQueryKeys.credentials });
+      invalidateAfterPersonalizationChange();
+    }
+  });
+
   const sources = catalogQuery.data?.sources ?? [];
   const topics = catalogQuery.data?.topics ?? [];
   const prefs = prefsQuery.data?.prefs ?? [];
@@ -232,6 +264,10 @@ export default function NewsSettings() {
   const availability: NewsPersonalizationAvailabilityDto | null =
     personalization?.availability ?? null;
   const customSources = personalization?.customSources ?? [];
+  // A source with no row here is an ordinary public publication and shows no key controls.
+  const credentialBySourceId = new Map<string, NewsSourceCredentialStatusDto>(
+    (credentialsQuery.data?.credentials ?? []).map((entry) => [entry.sourceId, entry])
+  );
   const customTopics = personalization?.customTopics ?? [];
   const exclusions = personalization?.sourceExclusions ?? [];
   const personalizationReady = personalizationQuery.isSuccess;
@@ -399,14 +435,48 @@ export default function NewsSettings() {
             {customSources.map((source) => {
               const removing =
                 removeSourceMutation.isPending && removeSourceMutation.variables === source.id;
+              // #2008: present only for a source that was connected with a key.
+              const credential = credentialBySourceId.get(source.id);
+              const badge = credential ? credentialStatusBadge(credential.status) : null;
+              const checked = credential ? lastCheckedLabel(credential.lastValidatedAt) : null;
               return (
                 <li key={source.id} className="nw-set__item">
                   <span className="nw-set__item-label">{source.label}</span>
                   <span className="nw-set__item-meta">{source.canonicalDomain}</span>
+                  {badge ? <Badge tone={badge.tone}>{badge.label}</Badge> : null}
+                  {checked ? <span className="nw-set__item-meta">{checked}</span> : null}
                   {source.validationStatus !== "approved" ? (
                     <Badge tone="amber">Needs revalidation</Badge>
                   ) : source.healthStatus === "unavailable" ? (
                     <Badge tone="red">Unavailable</Badge>
+                  ) : null}
+                  {credential ? (
+                    <>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        aria-label={`Replace key for ${source.label}`}
+                        disabled={replacingSourceId === source.id}
+                        onClick={() => {
+                          setRevokingSourceId(null);
+                          setReplacingSourceId(source.id);
+                        }}
+                      >
+                        Replace key
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        aria-label={`Revoke access for ${source.label}`}
+                        disabled={revokeCredentialMutation.isPending}
+                        onClick={() => {
+                          setReplacingSourceId(null);
+                          setRevokingSourceId(source.id);
+                        }}
+                      >
+                        Revoke access
+                      </Button>
+                    </>
                   ) : null}
                   <Button
                     variant="secondary"
@@ -417,6 +487,44 @@ export default function NewsSettings() {
                   >
                     Remove
                   </Button>
+                  {credential && revokingSourceId === source.id ? (
+                    // Revoking silently stops this source delivering, so it is confirmed once
+                    // rather than done on a single click.
+                    <span className="nw-set__addrow" role="group">
+                      <span className="nw-set__hint">
+                        Revoke access for {source.label}? News will stop using this key.
+                      </span>
+                      <Button
+                        size="sm"
+                        disabled={revokeCredentialMutation.isPending}
+                        onClick={() => revokeCredentialMutation.mutate(source.id)}
+                      >
+                        {revokeCredentialMutation.isPending ? "Revoking…" : "Yes, revoke"}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setRevokingSourceId(null)}
+                      >
+                        Keep it
+                      </Button>
+                    </span>
+                  ) : null}
+                  {credential && replacingSourceId === source.id ? (
+                    <ConnectPublisherForm
+                      offer={{
+                        connectionId: credential.connectionId,
+                        publisherName: credential.publisherName,
+                        requestHost: source.canonicalDomain,
+                        accessSummary:
+                          "Replacing the key keeps this source in your feed. The old key stops working.",
+                        termsUrl: null
+                      }}
+                      mode={{ kind: "replace", sourceId: source.id }}
+                      onDone={() => setReplacingSourceId(null)}
+                      onCancel={() => setReplacingSourceId(null)}
+                    />
+                  ) : null}
                 </li>
               );
             })}

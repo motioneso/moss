@@ -212,7 +212,10 @@ export function assertValidPublisherConnection(connection: PublisherConnection):
 
   // #2008: the settings screen shows this sentence as the whole explanation of what the user is
   // handing over. A declaration without one would render a key box with nothing above it.
-  if (typeof connection.accessSummary !== "string" || connection.accessSummary.trim().length === 0) {
+  if (
+    typeof connection.accessSummary !== "string" ||
+    connection.accessSummary.trim().length === 0
+  ) {
     throw new Error(`Publisher connection "${id}" declares no access summary`);
   }
   if (connection.termsUrl !== null) {

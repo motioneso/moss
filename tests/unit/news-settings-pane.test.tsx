@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import type {
   GetNewsPersonalizationResponse,
+  NewsSourceCredentialStatusDto,
   NewsCatalogResponse,
   NewsPersonalizationAvailabilityDto,
   NewsPrefsResponse
@@ -571,5 +572,69 @@ describe("NewsSettings adversarial content renders as inert text (#975 council r
     expect(hrefs.length).toBeGreaterThan(0);
     expect([...new Set(hrefs)]).toEqual(["/settings?section=assistant"]);
     expect(hrefs.some((href) => /^(javascript|data):/i.test(href))).toBe(false);
+  });
+});
+
+// #2008: publisher key controls appear ONLY on a source that was connected with a key. Every
+// other publication in this list is an ordinary public one and must look exactly as it did.
+describe("NewsSettings publisher key controls (#2008)", () => {
+  function renderWithCredentials(
+    data: GetNewsPersonalizationResponse,
+    credentials: readonly NewsSourceCredentialStatusDto[]
+  ): string {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(newsQueryKeys.catalog, catalog);
+    client.setQueryData(newsQueryKeys.prefs, prefs);
+    client.setQueryData(newsQueryKeys.personalization, data);
+    client.setQueryData(newsQueryKeys.credentials, { credentials });
+    return renderToString(
+      createElement(QueryClientProvider, { client }, createElement(NewsSettings))
+    );
+  }
+
+  const connected: NewsSourceCredentialStatusDto = {
+    sourceId: "11111111-1111-1111-1111-111111111111",
+    connectionId: "newsapi-top-headlines",
+    publisherName: "NewsAPI",
+    status: "configured",
+    lastValidatedAt: "2026-08-20T09:00:00.000Z",
+    revokedAt: null
+  };
+
+  it("shows no key controls on a publication with no key", () => {
+    const html = renderWithCredentials(
+      personalization({ availability: allOn, customSources: [storedSource("approved")] }),
+      []
+    );
+    expect(html).not.toContain("Replace key");
+    expect(html).not.toContain("Revoke access");
+    expect(html).toContain('aria-label="Remove The Atlantic"');
+  });
+
+  it("shows the status, when it was last checked, and both key controls on a connected one", () => {
+    const html = renderWithCredentials(
+      personalization({ availability: allOn, customSources: [storedSource("approved")] }),
+      [connected]
+    );
+    expect(html).toContain("Connected");
+    expect(html).toContain("Last checked");
+    expect(html).toContain('aria-label="Replace key for The Atlantic"');
+    expect(html).toContain('aria-label="Revoke access for The Atlantic"');
+  });
+
+  it("says plainly when a key has been revoked, so a dead source cannot read as connected", () => {
+    const html = renderWithCredentials(
+      personalization({ availability: allOn, customSources: [storedSource("approved")] }),
+      [{ ...connected, status: "revoked", revokedAt: "2026-08-21T09:00:00.000Z" }]
+    );
+    expect(html).toContain("Access revoked");
+  });
+
+  it("puts no key box on screen until Replace key is pressed", () => {
+    const html = renderWithCredentials(
+      personalization({ availability: allOn, customSources: [storedSource("approved")] }),
+      [connected]
+    );
+    expect(html).not.toContain('type="password"');
   });
 });

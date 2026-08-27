@@ -222,3 +222,33 @@
     margin-left: auto;
   }
 }
+
+/* ----- #2008 publisher key form. Layout only; every colour and size comes from a token or
+   from a shared component, so nothing here can drift from the design system. ----- */
+
+.nw-set__connect {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-3) 0;
+  max-width: 34rem;
+}
+
+.nw-set__connect-name {
+  margin: 0;
+}
+
+.nw-set__connect-where,
+.nw-set__connect-terms,
+.nw-set__connect-outcome {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.nw-set__connect-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  line-height: 1.5;
+}

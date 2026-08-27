@@ -10,6 +10,7 @@ import type {
 
 import { confirmNewsSource, previewNewsSource } from "../web/news-client.js";
 import { newsQueryKeys } from "../web/query-keys.js";
+import { ConnectPublisherForm } from "./connect-publisher.js";
 
 /* #975 Task 9: the add-source flow (input → preview → candidate pick → confirm) lives in its
    own file so settings/index.tsx stays well under the 1000-line gate. It wires the Slice-2
@@ -212,14 +213,31 @@ export function AddSourceFlow() {
               </li>
             ))}
           </ul>
-          <div className="nw-set__addrow">
-            <Button size="sm" disabled={busy || !selectedCandidateId} onClick={confirmSelected}>
-              {confirmMutation.isPending ? "Adding…" : "Add this source"}
-            </Button>
-            <Button variant="secondary" size="sm" disabled={busy} onClick={reset}>
-              Cancel
-            </Button>
-          </div>
+          {/* #2008: the server only puts an offer here when the preview found exactly one
+              candidate and that candidate is unmistakably a reviewed publisher's own homepage.
+              Any other preview keeps the ordinary Add row and is never asked for a key. */}
+          {preview?.connection ? (
+            <ConnectPublisherForm
+              offer={preview.connection}
+              mode={{ kind: "connect" }}
+              onDone={() => {
+                setInput("");
+                setPreview(null);
+                setSelectedCandidateId(null);
+                setAdded(true);
+              }}
+              onCancel={reset}
+            />
+          ) : (
+            <div className="nw-set__addrow">
+              <Button size="sm" disabled={busy || !selectedCandidateId} onClick={confirmSelected}>
+                {confirmMutation.isPending ? "Adding…" : "Add this source"}
+              </Button>
+              <Button variant="secondary" size="sm" disabled={busy} onClick={reset}>
+                Cancel
+              </Button>
+            </div>
+          )}
         </div>
       ) : null}
 

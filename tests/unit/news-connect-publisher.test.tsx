@@ -79,7 +79,10 @@ describe("the key box", () => {
 
   it("is never filled from server data", () => {
     // A "stored key" placeholder holding a real value is how a secret gets back on screen.
-    const box = markup.slice(markup.indexOf('type="password"'), markup.indexOf('type="password"') + 400);
+    const box = markup.slice(
+      markup.indexOf('type="password"'),
+      markup.indexOf('type="password"') + 400
+    );
     expect(box).not.toContain("value=");
   });
 
