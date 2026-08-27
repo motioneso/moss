@@ -363,7 +363,13 @@ export class NewsService {
       }
     }
     if (rows.length === 0) return;
-    await port.registerTargets(scopedDb, ownerUserId, rows);
+    try {
+      await port.registerTargets(scopedDb, ownerUserId, rows);
+    } catch {
+      // Deliberately swallowed. Recording what was shown is bookkeeping for a later preference;
+      // failing it must never turn a working news page into an error. The port logs the failure
+      // itself, as counts only.
+    }
   }
 
   private async feedFor(plan: FeedPlan, state: DegradeState): Promise<readonly RssFeedItem[]> {

@@ -17,6 +17,10 @@ import {
 import type { RssFeedItem } from "../../packages/news/src/source/rss-source.js";
 import type { NewsSnapshotRecord } from "../../packages/news/src/personalization-repository.js";
 import type { NewsSnapshotArticle } from "../../packages/news/src/personalization-domain.js";
+import type {
+  NewsStoryFeedbackPort,
+  NewsStoryTargetRow
+} from "../../packages/news/src/story-feedback-port.js";
 
 /**
  * Fake `DatasetClient` dispatching by (sourceKey, topicKey). Mirrors the sports-service stub's
@@ -97,6 +101,7 @@ function makeDeps(
     customTopics?: NewsCustomTopicDto[];
     snapshot?: NewsSnapshotRecord | null;
     now?: Date;
+    storyFeedback?: NewsStoryFeedbackPort;
   } = {}
 ): NewsServiceDependencies {
   const prefs = overrides.prefs ?? [];
@@ -116,7 +121,8 @@ function makeDeps(
       listCustomTopics: async () => overrides.customTopics ?? [],
       readLatestSnapshot: async () => overrides.snapshot ?? null
     },
-    now: () => overrides.now ?? new Date("2026-07-11T12:00:00.000Z")
+    now: () => overrides.now ?? new Date("2026-07-11T12:00:00.000Z"),
+    ...(overrides.storyFeedback ? { storyFeedback: overrides.storyFeedback } : {})
   };
 }
 
@@ -566,5 +572,118 @@ describe("NewsService.getTopHeadlinesForToday (#897)", () => {
     );
     const { facts } = await service.getTopHeadlinesForToday({} as DataContextDb);
     expect(facts).toEqual([]);
+  });
+});
+
+// #2018: a story can only be given a preference if it was actually shown to that user, and the
+// only thing that records "shown" is this overview.
+describe("NewsService story feedback references (#2018)", () => {
+  /** Records what the composition root's port would have been asked to write. */
+  function recordingPort(): NewsStoryFeedbackPort & { written: NewsStoryTargetRow[][] } {
+    const written: NewsStoryTargetRow[][] = [];
+    return {
+      written,
+      storyRef: (canonicalUrl: string) => `news:ref-for-${canonicalUrl}`,
+      registerTargets: async (_db, _ownerUserId, rows) => {
+        written.push([...rows]);
+      },
+      applyRelevance: async () => ({
+        status: "applied",
+        kept: [],
+        boosts: [],
+        suppressedCount: 0,
+        overriddenCount: 0
+      })
+    };
+  }
+
+  it("gives every story on the personalized page a reference feedback can be saved against", async () => {
+    const port = recordingPort();
+    const service = new NewsService(
+      makeDeps({ snapshot: snapshot([snapshotArticle("one"), snapshotArticle("two", { rank: 2 })]), storyFeedback: port })
+    );
+
+    const overview = await service.getOverview(userA);
+
+    expect(overview.rankedStories).toHaveLength(2);
+    expect(overview.rankedStories.map((story) => story.feedbackRef)).toEqual([
+      "news:ref-for-https://preferred.example/one",
+      "news:ref-for-https://preferred.example/two"
+    ]);
+  });
+
+  it("offers no reference on the live-feed fallback, which has no story to verify against", async () => {
+    const port = recordingPort();
+    const service = new NewsService(makeDeps({ snapshot: null, storyFeedback: port }));
+
+    const overview = await service.getOverview(userA);
+
+    // The fallback answer has no ranked list at all; its stories come straight off live feeds.
+    expect(overview.rankedStories).toBeUndefined();
+    expect(overview.topStories.length).toBeGreaterThan(0);
+    expect(overview.topStories.every((story) => story.feedbackRef === undefined)).toBe(true);
+    expect(port.written).toEqual([]);
+  });
+
+  it("records each story it returned, on both the news page and the Today widget", async () => {
+    const port = recordingPort();
+    const service = new NewsService(
+      makeDeps({ snapshot: snapshot([snapshotArticle("one")]), storyFeedback: port })
+    );
+
+    await service.getOverview(userA);
+
+    expect(port.written).toHaveLength(1);
+    expect(port.written[0]).toEqual([
+      {
+        storyRef: "news:ref-for-https://preferred.example/one",
+        surface: "news",
+        headline: "Headline one",
+        sourceLabel: "Preferred Wire",
+        publishedAt: "2026-07-11T10:00:00.000Z",
+        topicRef: "AI",
+        hasEditorialEvidence: true
+      },
+      {
+        storyRef: "news:ref-for-https://preferred.example/one",
+        surface: "today",
+        headline: "Headline one",
+        sourceLabel: "Preferred Wire",
+        publishedAt: "2026-07-11T10:00:00.000Z",
+        topicRef: "AI",
+        hasEditorialEvidence: true
+      }
+    ]);
+  });
+
+  it("records a full page of stories, on both surfaces", async () => {
+    const port = recordingPort();
+    // Forty is the most a published snapshot may hold, so it is also the most that can be shown.
+    const articles = Array.from({ length: 40 }, (_, index) =>
+      snapshotArticle(`story-${index}`, { rank: index + 1 })
+    );
+    const service = new NewsService(
+      makeDeps({ snapshot: snapshot(articles), storyFeedback: port })
+    );
+
+    await service.getOverview(userA);
+
+    // Two surfaces per story.
+    expect(port.written[0]).toHaveLength(80);
+    expect(new Set(port.written[0]?.map((row) => row.storyRef)).size).toBe(40);
+  });
+
+  it("still shows the news when recording the stories fails", async () => {
+    const port = recordingPort();
+    port.registerTargets = async () => {
+      throw new Error("target write failed");
+    };
+    const service = new NewsService(
+      makeDeps({ snapshot: snapshot([snapshotArticle("one")]), storyFeedback: port })
+    );
+
+    const overview = await service.getOverview(userA);
+
+    expect(overview.rankedStories).toHaveLength(1);
   });
 });
