@@ -294,7 +294,7 @@ import {
   newsModuleSqlMigrationDirectory,
   registerNewsJobWorkers,
   registerNewsRoutes,
-  createEmptyNewsPublisherConnectionPort,
+  createRegistryNewsPublisherConnectionPort,
   enqueueNewsRefresh,
   type NewsAiPort,
   type NewsRoutesDependencies,
@@ -2032,9 +2032,10 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         ),
         // #2005: the composition root owns key resolution; News only holds the port.
         credentialCipher: createNewsCredentialCipherPort(),
-        // #2005: no reviewed publisher connection exists yet, so every connect attempt
-        // answers "unsupported" until #2007 replaces this.
-        publisherConnections: createEmptyNewsPublisherConnectionPort(),
+        // #2008: the reviewed connection list from #2007, so the one reviewed publisher is
+        // actually reachable in the running product. Lookup only - connecting still answers
+        // "unsupported" until #2006 wires the live check.
+        publisherConnections: createRegistryNewsPublisherConnectionPort(),
         // #953: news receives capability BOOLEANS only — model identity and key material stay
         // behind the AI/Settings public APIs; nothing secret crosses this seam.
         availability: {

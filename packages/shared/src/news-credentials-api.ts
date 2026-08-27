@@ -26,6 +26,35 @@ export const NEWS_CREDENTIAL_MESSAGES = {
 } as const;
 
 /**
+ * #2008: what News tells the user about a reviewed publisher connection BEFORE they type a key.
+ *
+ * SECURITY: these five display fields are the whole offer. No header name, no endpoint, no
+ * query table and obviously no key. `requestHost` is the one technical detail the user needs,
+ * because it is the exact place their key will be sent.
+ */
+export interface NewsPublisherConnectionOfferDto {
+  readonly connectionId: string;
+  readonly publisherName: string;
+  /** Exact HTTPS host the key will be sent to. Shown before the user types anything. */
+  readonly requestHost: string;
+  readonly accessSummary: string;
+  readonly termsUrl: string | null;
+}
+
+export const newsPublisherConnectionOfferSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["connectionId", "publisherName", "requestHost", "accessSummary", "termsUrl"],
+  properties: {
+    connectionId: { type: "string" },
+    publisherName: { type: "string" },
+    requestHost: { type: "string" },
+    accessSummary: { type: "string" },
+    termsUrl: { type: ["string", "null"] }
+  }
+} as const;
+
+/**
  * What a user may learn about their own stored credential. There is no
  * 'not_configured' row in the database — a source with no credential has no row, and
  * this status reports not_configured for that case.
