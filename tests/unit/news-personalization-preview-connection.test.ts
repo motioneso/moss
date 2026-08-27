@@ -172,7 +172,12 @@ function emptyPersonalizationStore(): NewsPersonalizationStore {
     readLatestSnapshot: async () => null,
     readRefreshState: async (): Promise<NewsRefreshStateDto> => ({
       state: "idle",
-      updatedAt: null
+      updatedAt: null,
+      lastRequestedAt: null,
+      lastAttemptAt: null,
+      lastSuccessAt: null,
+      lastFailureAt: null,
+      lastFailureKind: null
     }),
     bumpRefreshRequest: async () => 1,
     pruneSnapshotDomain: async () => undefined,
