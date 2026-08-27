@@ -1,5 +1,7 @@
 import type {
   ConfirmNewsSourceRequest,
+  ConnectNewsCredentialedSourceRequest,
+  ConnectNewsCredentialedSourceResponse,
   ConfirmNewsSourceResponse,
   CreateNewsPrefRequest,
   CreateNewsSourceExclusionRequest,
@@ -14,8 +16,11 @@ import type {
   NewsOverviewResponse,
   NewsPrefDto,
   NewsPrefsResponse,
+  NewsSourceCredentialResponse,
+  NewsSourceCredentialsResponse,
   NewsSourcePreviewRequest,
   NewsSourcePreviewResponse,
+  ReplaceNewsSourceCredentialRequest,
   TriggerNewsRevalidationResponse,
   UpdateNewsTopicRequest,
   UpdateNewsTopicResponse
@@ -128,4 +133,43 @@ export async function triggerNewsRevalidation(): Promise<TriggerNewsRevalidation
   return requestJson<TriggerNewsRevalidationResponse>("/api/news/revalidation", {
     method: "POST"
   });
+}
+
+// #2008 publisher credentials.
+//
+// SECURITY: the three write wrappers below take the key as a plain argument and hand it
+// straight to the request body. None of them returns it, caches it, or logs it, and the key
+// never appears in a URL - which is why the source id, not the key, is what gets interpolated
+// into these paths. Paths mirror packages/news/src/manifest.ts.
+
+export async function connectCredentialedNewsSource(
+  input: ConnectNewsCredentialedSourceRequest
+): Promise<ConnectNewsCredentialedSourceResponse> {
+  return requestJson<ConnectNewsCredentialedSourceResponse>("/api/news/sources/credentialed", {
+    method: "POST",
+    body: input
+  });
+}
+
+export async function replaceNewsSourceCredential(
+  sourceId: string,
+  input: ReplaceNewsSourceCredentialRequest
+): Promise<NewsSourceCredentialResponse> {
+  return requestJson<NewsSourceCredentialResponse>(
+    `/api/news/sources/${encodeURIComponent(sourceId)}/credential`,
+    { method: "POST", body: input }
+  );
+}
+
+export async function revokeNewsSourceCredential(
+  sourceId: string
+): Promise<NewsSourceCredentialResponse> {
+  return requestJson<NewsSourceCredentialResponse>(
+    `/api/news/sources/${encodeURIComponent(sourceId)}/credential`,
+    { method: "DELETE" }
+  );
+}
+
+export async function listNewsSourceCredentials(): Promise<NewsSourceCredentialsResponse> {
+  return requestJson<NewsSourceCredentialsResponse>("/api/news/credentials");
 }
