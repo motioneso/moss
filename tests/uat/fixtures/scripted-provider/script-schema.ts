@@ -24,6 +24,12 @@ export interface ChatScriptCall {
    * always seeded by the caller from turn context, never declared here.
    */
   readonly captures?: Readonly<Record<string, string>>;
+  /**
+   * Optional: when set, this call is expected to fail with exactly this MCP error text (exact
+   * string equality, checked by claude-main.ts). #1883: lets a fixture assert a real dependency
+   * failure without ever logging the received payload.
+   */
+  readonly expectedError?: string;
 }
 
 export interface ChatScriptTurn {
@@ -39,7 +45,7 @@ export interface ChatScriptFixture {
 
 const KNOWN_FIXTURE_KEYS = new Set(["version", "turns"]);
 const KNOWN_TURN_KEYS = new Set(["expectIncludes", "calls", "reply"]);
-const KNOWN_CALL_KEYS = new Set(["tool", "arguments", "captures"]);
+const KNOWN_CALL_KEYS = new Set(["tool", "arguments", "captures", "expectedError"]);
 const RESERVED_CAPTURE_NAMES = new Set(["firstAttachmentId"]);
 
 function fail(id: string, reason: string): never {
@@ -121,7 +127,12 @@ export function loadChatScriptFixture(id: UatChatScript): ChatScriptFixture {
     for (const [j, call] of (t.calls as unknown[]).entries()) {
       if (!call || typeof call !== "object") fail(id, `turns[${i}].calls[${j}] must be an object`);
       assertNoUnknownKeys(id, call as object, KNOWN_CALL_KEYS, `turns[${i}].calls[${j}]`);
-      const c = call as { tool?: unknown; arguments?: unknown; captures?: unknown };
+      const c = call as {
+        tool?: unknown;
+        arguments?: unknown;
+        captures?: unknown;
+        expectedError?: unknown;
+      };
       if (typeof c.tool !== "string" || c.tool.length === 0) {
         fail(id, `turns[${i}].calls[${j}].tool must be a non-empty string`);
       }
@@ -139,6 +150,11 @@ export function loadChatScriptFixture(id: UatChatScript): ChatScriptFixture {
           if (typeof pointer !== "string" || !pointer.startsWith("/")) {
             fail(id, `turns[${i}].calls[${j}].captures.${name} must be an RFC 6901 JSON pointer`);
           }
+        }
+      }
+      if (c.expectedError !== undefined) {
+        if (typeof c.expectedError !== "string" || c.expectedError.length === 0) {
+          fail(id, `turns[${i}].calls[${j}].expectedError must be a non-empty string`);
         }
       }
     }

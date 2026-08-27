@@ -4,6 +4,7 @@ import { env as transformersEnv, pipeline } from "@huggingface/transformers";
 
 import type { EmbeddingProvider } from "./embedding-provider.js";
 import { withEmbeddingCacheLoadLock } from "./embedding-cache-lock.js";
+import { applyTransformersCacheDir } from "./transformers-cache-dir.js";
 
 const DEFAULT_MODEL_ID = "nomic-ai/nomic-embed-text-v1.5";
 
@@ -123,6 +124,9 @@ function loadPipe(modelId: string): Promise<ExtractPipe> {
   const cached = pipeCache.get(modelId);
   if (cached) return cached;
 
+  // Must run before the cache dir is read: the library's default is unwritable in the
+  // container and the resulting EACCES is indistinguishable from an ordinary bug (#1883).
+  applyTransformersCacheDir(transformersEnv);
   // pipeline() returns a complex union; we narrow to the callable shape we need.
   const loading = withEmbeddingCacheLoadLock(transformersEnv.cacheDir, modelId, () =>
     Promise.resolve(pipeline("feature-extraction", modelId))

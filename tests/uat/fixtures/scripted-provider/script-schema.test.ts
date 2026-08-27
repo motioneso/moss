@@ -70,6 +70,41 @@ describe("loadChatScriptFixture", () => {
     );
   });
 
+  it("loads a call with a valid expectedError", () => {
+    ids.push("__test-expected-error");
+    writeFixture("__test-expected-error", {
+      version: 1,
+      turns: [
+        {
+          expectIncludes: ["hello"],
+          calls: [
+            { tool: "notes.search", arguments: { query: "x" }, expectedError: "Tool failed" }
+          ],
+          reply: "sorry"
+        }
+      ]
+    });
+    const fixture = loadChatScriptFixture("__test-expected-error" as never);
+    expect(fixture.turns[0]?.calls[0]?.expectedError).toBe("Tool failed");
+  });
+
+  it("throws distinctly on an empty expectedError", () => {
+    ids.push("__test-empty-expected-error");
+    writeFixture("__test-empty-expected-error", {
+      version: 1,
+      turns: [
+        {
+          expectIncludes: [],
+          calls: [{ tool: "notes.search", arguments: {}, expectedError: "" }],
+          reply: "x"
+        }
+      ]
+    });
+    expect(() => loadChatScriptFixture("__test-empty-expected-error" as never)).toThrow(
+      /expectedError must be a non-empty string/
+    );
+  });
+
   it("throws distinctly on a reference to an undeclared capture", () => {
     ids.push("__test-undeclared-capture");
     writeFixture("__test-undeclared-capture", {
