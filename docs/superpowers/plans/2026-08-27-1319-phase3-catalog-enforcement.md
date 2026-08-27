@@ -8,18 +8,18 @@ PR #1897). Phase 1 is merged (PR #1684).
 
 ## What is already true (seams check, all cited on this branch)
 
-| Capability the plan assumes | Evidence |
-| --- | --- |
-| Fetch reports verification + a digest of the exact catalog bytes | `packages/module-registry/src/distribution/registry-source.ts:81-88` (`FetchRegistryIndexResult`), `:136-206` |
-| `trustedKeys` can be injected into a fetch | `packages/module-registry/src/distribution/registry-source.ts:75-79`, `:188` |
-| Pipeline fetches the catalog itself and has seven failure codes | `packages/module-registry/src/distribution/pipeline.ts:24-31`, `:60-68` |
-| Pipeline accepts a pre-fetched catalog (the input to delete) | `packages/module-registry/src/distribution/pipeline.ts:48` |
-| No production caller passes that input | `grep -rn "downloadAndStageModule(" --include=*.ts .` → only `apps/api/src/module-distribution-port.ts:62` and tests; neither passes `index` |
-| Failure code maps to HTTP status | `packages/settings/src/routes-module-registry.ts:29-38` |
-| Download route throws through a generic handler that cannot carry extra fields | `packages/settings/src/routes-module-registry.ts:137-139` |
-| Request body schema rejects undeclared fields | `packages/shared/src/platform-api-modules.ts:626-633` (`additionalProperties: false`) |
-| Boot-time install warns and continues | `scripts/module-reconcile.ts:268-292` |
-| Signed-catalog test fixtures already exist | `tests/unit/module-distribution-pipeline.test.ts:90-119`, `tests/integration/module-distribution.e2e.test.ts:47`, `:203`, `:224` |
+| Capability the plan assumes                                                    | Evidence                                                                                                                                     |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fetch reports verification + a digest of the exact catalog bytes               | `packages/module-registry/src/distribution/registry-source.ts:81-88` (`FetchRegistryIndexResult`), `:136-206`                                |
+| `trustedKeys` can be injected into a fetch                                     | `packages/module-registry/src/distribution/registry-source.ts:75-79`, `:188`                                                                 |
+| Pipeline fetches the catalog itself and has seven failure codes                | `packages/module-registry/src/distribution/pipeline.ts:24-31`, `:60-68`                                                                      |
+| Pipeline accepts a pre-fetched catalog (the input to delete)                   | `packages/module-registry/src/distribution/pipeline.ts:48`                                                                                   |
+| No production caller passes that input                                         | `grep -rn "downloadAndStageModule(" --include=*.ts .` → only `apps/api/src/module-distribution-port.ts:62` and tests; neither passes `index` |
+| Failure code maps to HTTP status                                               | `packages/settings/src/routes-module-registry.ts:29-38`                                                                                      |
+| Download route throws through a generic handler that cannot carry extra fields | `packages/settings/src/routes-module-registry.ts:137-139`                                                                                    |
+| Request body schema rejects undeclared fields                                  | `packages/shared/src/platform-api-modules.ts:626-633` (`additionalProperties: false`)                                                        |
+| Boot-time install warns and continues                                          | `scripts/module-reconcile.ts:268-292`                                                                                                        |
+| Signed-catalog test fixtures already exist                                     | `tests/unit/module-distribution-pipeline.test.ts:90-119`, `tests/integration/module-distribution.e2e.test.ts:47`, `:203`, `:224`             |
 
 Open questions: none. Every premise in the spec was re-checked against this branch and still holds.
 
@@ -127,24 +127,24 @@ prose, and gives operators the code in the boot log.
 `tests/unit/module-distribution-pipeline.test.ts` — reuses the existing signed fixture:
 
 1. Unverified catalog, no acceptance → fails with `index-unverified`, carries the digest, and the
-   modules directory is untouched. *Fails if the check runs after any download or write, or if the
-   digest is dropped.*
-2. Correct acceptance digest → installs normally. *Fails if acceptance is ignored.*
+   modules directory is untouched. _Fails if the check runs after any download or write, or if the
+   digest is dropped._
+2. Correct acceptance digest → installs normally. _Fails if acceptance is ignored._
 3. Correct acceptance, but the artifact bytes do not match the catalog → still rejected with
-   `integrity-mismatch`. *Fails if acceptance widens past the signature check.*
+   `integrity-mismatch`. _Fails if acceptance widens past the signature check._
 4. Acceptance from an older catalog, catalog has changed → blocked again, error carries the **new**
-   digest. *Fails if the error echoes the caller's digest.*
+   digest. _Fails if the error echoes the caller's digest._
 5. Catalog could not be fetched at all, with an acceptance → `index-unavailable`, nothing installed.
-   *Fails if acceptance is treated as a general bypass.*
-6. Verified catalog, no acceptance → installs, as today. *Fails if enforcement over-blocks.*
+   _Fails if acceptance is treated as a general bypass._
+6. Verified catalog, no acceptance → installs, as today. _Fails if enforcement over-blocks._
 
 `tests/integration/module-registry.test.ts`:
 
-7. The 409 body really carries `code` and `catalogDigestSha256` over the wire. *Fails if the
-   response schema strips them.*
+7. The 409 body really carries `code` and `catalogDigestSha256` over the wire. _Fails if the
+   response schema strips them._
 8. The other two 409s (distribution disabled, purge pending) still serialise their message.
 9. A non-admin posting a download with an acceptance digest is refused by the admin check and the
-   body contains no digest. *Fails if the acceptance path is reachable without admin.*
+   body contains no digest. _Fails if the acceptance path is reachable without admin._
 
 `tests/integration/module-distribution.e2e.test.ts` — through the real HTTP route:
 

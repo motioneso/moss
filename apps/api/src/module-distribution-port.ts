@@ -63,12 +63,20 @@ export function createModuleDistributionPort(
           version: input.version,
           modulesDir: externalModulesDir,
           env: process.env,
-          fetchFn
+          fetchFn,
+          acceptedCatalogDigestSha256: input.acceptedCatalogDigestSha256
         });
         return { ok: true as const, version: result.version, packageHash: result.packageHash };
       } catch (error) {
         if (error instanceof ModuleDownloadError) {
-          return { ok: false as const, code: error.code, message: error.message };
+          // #1319: the digest rides back so the screen can offer the admin a deliberate
+          // acceptance of that exact catalog. Only "index-unverified" carries one.
+          return {
+            ok: false as const,
+            code: error.code,
+            message: error.message,
+            catalogDigestSha256: error.catalogDigestSha256 ?? null
+          };
         }
         server.log.error(
           { moduleId: input.moduleId, errorName: (error as Error).name },

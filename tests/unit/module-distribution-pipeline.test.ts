@@ -239,7 +239,8 @@ describe("downloadAndStageModule (#964)", () => {
       moduleId: "demo-module",
       modulesDir,
       env: {} as NodeJS.ProcessEnv,
-      fetchFn: fakeFetch(index, tarballBytes)
+      fetchFn: fakeFetchSigned(index, tarballBytes),
+      trustedKeys: TEST_TRUSTED_KEYS
     });
     expect(result.version).toBe("1.2.0");
     expect(result.packageHash).toMatch(/^sha256:[a-f0-9]{64}$/);
@@ -262,7 +263,8 @@ describe("downloadAndStageModule (#964)", () => {
         moduleId: "demo-module",
         modulesDir,
         env: {} as NodeJS.ProcessEnv,
-        fetchFn: fakeFetch(tampered, tarballBytes)
+        fetchFn: fakeFetchSigned(tampered, tarballBytes),
+        trustedKeys: TEST_TRUSTED_KEYS
       })
     ).rejects.toMatchObject({ code: "integrity-mismatch" });
     expect(existsSync(join(modulesDir, "demo-module"))).toBe(false);
@@ -288,7 +290,8 @@ describe("downloadAndStageModule (#964)", () => {
         moduleId: "demo-module",
         modulesDir: tmp("pipe-mods-"),
         env: {} as NodeJS.ProcessEnv,
-        fetchFn: fakeFetch(lying, tarballBytes)
+        fetchFn: fakeFetchSigned(lying, tarballBytes),
+        trustedKeys: TEST_TRUSTED_KEYS
       })
     ).rejects.toMatchObject({ code: "version-mismatch" });
   });
@@ -300,8 +303,125 @@ describe("downloadAndStageModule (#964)", () => {
         moduleId: "nope",
         modulesDir: tmp("pipe-mods-"),
         env: {} as NodeJS.ProcessEnv,
-        fetchFn: fakeFetch(index, tarballBytes)
+        fetchFn: fakeFetchSigned(index, tarballBytes),
+        trustedKeys: TEST_TRUSTED_KEYS
       })
     ).rejects.toMatchObject({ code: "module-not-found" });
+  });
+});
+
+// #1319 phase 3 — the pipeline refuses to install from a catalog whose signature cannot be
+// verified. An admin may accept ONE exact catalog, identified by the SHA-256 of its bytes;
+// the acceptance covers the signature check only and nothing else.
+describe("downloadAndStageModule catalog enforcement (#1319)", () => {
+  const digestOf = (index: ModuleRegistryIndex): string =>
+    createHash("sha256")
+      .update(Buffer.from(JSON.stringify(index), "utf8"))
+      .digest("hex");
+
+  it("refuses an unverified catalog and leaves the modules dir untouched", async () => {
+    const { index, tarballBytes } = await makeFixture();
+    const modulesDir = tmp("pipe-mods-");
+    await expect(
+      downloadAndStageModule({
+        moduleId: "demo-module",
+        modulesDir,
+        env: {} as NodeJS.ProcessEnv,
+        // No .sig route → unverified.
+        fetchFn: fakeFetch(index, tarballBytes),
+        trustedKeys: TEST_TRUSTED_KEYS
+      })
+    ).rejects.toMatchObject({
+      code: "index-unverified",
+      catalogDigestSha256: digestOf(index)
+    });
+    expect(existsSync(join(modulesDir, "demo-module"))).toBe(false);
+    expect(existsSync(join(modulesDir, ".staging-demo-module"))).toBe(false);
+  });
+
+  it("installs from an unverified catalog when the admin accepted that exact catalog", async () => {
+    const { index, tarballBytes } = await makeFixture();
+    const modulesDir = tmp("pipe-mods-");
+    const result = await downloadAndStageModule({
+      moduleId: "demo-module",
+      modulesDir,
+      env: {} as NodeJS.ProcessEnv,
+      fetchFn: fakeFetch(index, tarballBytes),
+      trustedKeys: TEST_TRUSTED_KEYS,
+      acceptedCatalogDigestSha256: digestOf(index)
+    });
+    expect(result.version).toBe("1.2.0");
+    expect(existsSync(join(modulesDir, "demo-module", "jarvis.module.json"))).toBe(true);
+  });
+
+  it("still rejects an artifact whose bytes do not match, even with an accepted catalog", async () => {
+    const { index, tarballBytes } = await makeFixture();
+    const tampered = {
+      ...index,
+      modules: [{ ...index.modules[0]!, sha256: "b".repeat(64) }]
+    };
+    const modulesDir = tmp("pipe-mods-");
+    await expect(
+      downloadAndStageModule({
+        moduleId: "demo-module",
+        modulesDir,
+        env: {} as NodeJS.ProcessEnv,
+        fetchFn: fakeFetch(tampered, tarballBytes),
+        trustedKeys: TEST_TRUSTED_KEYS,
+        acceptedCatalogDigestSha256: digestOf(tampered)
+      })
+    ).rejects.toMatchObject({ code: "integrity-mismatch" });
+    expect(existsSync(join(modulesDir, "demo-module"))).toBe(false);
+  });
+
+  it("blocks again when the catalog changed since the admin accepted it, quoting the new digest", async () => {
+    const { index, tarballBytes } = await makeFixture();
+    const olderCatalog = { ...index, generatedAt: "2026-01-01T00:00:00.000Z" };
+    const modulesDir = tmp("pipe-mods-");
+    await expect(
+      downloadAndStageModule({
+        moduleId: "demo-module",
+        modulesDir,
+        env: {} as NodeJS.ProcessEnv,
+        fetchFn: fakeFetch(index, tarballBytes),
+        trustedKeys: TEST_TRUSTED_KEYS,
+        acceptedCatalogDigestSha256: digestOf(olderCatalog)
+      })
+    ).rejects.toMatchObject({
+      code: "index-unverified",
+      // The freshly fetched catalog's digest, never the stale one the caller sent.
+      catalogDigestSha256: digestOf(index)
+    });
+    expect(existsSync(join(modulesDir, "demo-module"))).toBe(false);
+  });
+
+  it("an acceptance never rescues a catalog that could not be fetched at all", async () => {
+    const gone: typeof fetch = async () => new Response("gone", { status: 404 });
+    const modulesDir = tmp("pipe-mods-");
+    await expect(
+      downloadAndStageModule({
+        moduleId: "demo-module",
+        modulesDir,
+        env: {} as NodeJS.ProcessEnv,
+        fetchFn: gone,
+        trustedKeys: TEST_TRUSTED_KEYS,
+        acceptedCatalogDigestSha256: "a".repeat(64)
+      })
+    ).rejects.toMatchObject({ code: "index-unavailable" });
+    expect(existsSync(join(modulesDir, "demo-module"))).toBe(false);
+  });
+
+  it("installs from a verified catalog with no acceptance at all", async () => {
+    const { index, tarballBytes } = await makeFixture();
+    const modulesDir = tmp("pipe-mods-");
+    const result = await downloadAndStageModule({
+      moduleId: "demo-module",
+      modulesDir,
+      env: {} as NodeJS.ProcessEnv,
+      fetchFn: fakeFetchSigned(index, tarballBytes),
+      trustedKeys: TEST_TRUSTED_KEYS
+    });
+    expect(result.version).toBe("1.2.0");
+    expect(existsSync(join(modulesDir, "demo-module", "jarvis.module.json"))).toBe(true);
   });
 });
