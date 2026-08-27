@@ -214,4 +214,96 @@ describe("gemini first-run: the sign-in-method setting (#2027)", () => {
     await ensureProviderLaunchReady(home, "google", "/data/cli-auth/chat/s3");
     expect((await readGeminiCfg()).security?.auth?.selectedType).toBe("oauth-personal");
   });
+
+  it("PRESERVES the self-update keys in a settings file that contains comments", async () => {
+    // The pinned tool accepts `//` comments here, so a real user's file can contain them. A strict
+    // JSON.parse throws on that, and seeding from an empty object would have written a brand new
+    // file — dropping both keys that stop the tool replacing its own pinned copy.
+    await mkdir(path.join(home, ".gemini"), { recursive: true });
+    await writeFile(
+      geminiPath(),
+      [
+        "{",
+        "  // pinned by the installer so the tool cannot replace itself",
+        '  "general": { "enableAutoUpdate": false, "enableAutoUpdateNotification": false },',
+        '  "security": { "auth": {} }',
+        "}"
+      ].join("\n")
+    );
+
+    await ensureGeminiOnboarded(home);
+
+    const cfg = await readGeminiCfg();
+    expect(cfg.general?.enableAutoUpdate).toBe(false);
+    expect(cfg.general?.enableAutoUpdateNotification).toBe(false);
+    expect(cfg.security?.auth?.selectedType).toBe("oauth-personal");
+  });
+
+  it("handles a block comment too, and keeps unrelated keys", async () => {
+    await mkdir(path.join(home, ".gemini"), { recursive: true });
+    await writeFile(
+      geminiPath(),
+      [
+        "{",
+        "  /* installer notes",
+        "     spanning lines */",
+        '  "ui": { "theme": "Default" }',
+        "}"
+      ].join("\n")
+    );
+
+    await ensureGeminiOnboarded(home);
+
+    const cfg = await readGeminiCfg();
+    expect(cfg.ui?.theme).toBe("Default");
+    expect(cfg.security?.auth?.selectedType).toBe("oauth-personal");
+  });
+
+  it("does not mistake the // inside a string value for a comment", async () => {
+    await mkdir(path.join(home, ".gemini"), { recursive: true });
+    await writeFile(
+      geminiPath(),
+      JSON.stringify({ mcpServers: { docs: { url: "https://example.com/sse" } } }, null, 2)
+    );
+
+    await ensureGeminiOnboarded(home);
+
+    const cfg = (await readGeminiCfg()) as GeminiSettings & {
+      readonly mcpServers?: { docs?: { url?: string } };
+    };
+    expect(cfg.mcpServers?.docs?.url).toBe("https://example.com/sse");
+    expect(cfg.security?.auth?.selectedType).toBe("oauth-personal");
+  });
+
+  it("leaves a file it cannot parse exactly as it found it", async () => {
+    // Trailing commas are the case the stripper deliberately does not handle. The safe answer is
+    // to touch nothing: sign-in then stops on the method menu, which the user can see and report,
+    // rather than silently un-pinning the tool's version.
+    await mkdir(path.join(home, ".gemini"), { recursive: true });
+    const original = '{\n  "general": { "enableAutoUpdate": false, },\n}';
+    await writeFile(geminiPath(), original);
+
+    await ensureGeminiOnboarded(home);
+
+    expect(await readFile(geminiPath(), "utf8")).toBe(original);
+  });
+
+  it("leaves a settings file whose top level is not an object alone", async () => {
+    await mkdir(path.join(home, ".gemini"), { recursive: true });
+    const original = '["not", "a", "settings", "object"]';
+    await writeFile(geminiPath(), original);
+
+    await ensureGeminiOnboarded(home);
+
+    expect(await readFile(geminiPath(), "utf8")).toBe(original);
+  });
+
+  it("still seeds from scratch when the file is missing or empty", async () => {
+    await mkdir(path.join(home, ".gemini"), { recursive: true });
+    await writeFile(geminiPath(), "   \n");
+
+    await ensureGeminiOnboarded(home);
+
+    expect((await readGeminiCfg()).security?.auth?.selectedType).toBe("oauth-personal");
+  });
 });

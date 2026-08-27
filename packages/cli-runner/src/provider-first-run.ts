@@ -115,6 +115,78 @@ export async function trustCodexProject(homeBase: string, dir: string): Promise<
 }
 
 /**
+ * Strip `//` line comments and block comments from settings text so a commented file still parses.
+ *
+ * (#2027) The pinned gemini tool accepts comments in its settings file; `JSON.parse` does not. A
+ * strict parse of a commented file throws, and the old catch branch then seeded from an empty
+ * object — a whole-file overwrite that dropped the installer's self-update keys.
+ *
+ * String-aware on purpose: a naive replace would eat the `//` inside a value like
+ * `"https://example.com"`. Comment bytes are dropped but newlines inside block comments are kept,
+ * so parse-error line numbers still line up with the original file. Trailing commas are NOT
+ * handled — a file the tool accepts but this cannot parse is left untouched by the caller, which
+ * is the safe outcome.
+ */
+function stripJsonComments(text: string): string {
+  let out = "";
+  let inString = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i]!;
+    const next = text[i + 1];
+
+    if (inLineComment) {
+      if (ch === "\n") {
+        inLineComment = false;
+        out += ch;
+      }
+      continue;
+    }
+    if (inBlockComment) {
+      if (ch === "*" && next === "/") {
+        inBlockComment = false;
+        i += 1;
+      } else if (ch === "\n") {
+        out += ch;
+      }
+      continue;
+    }
+    if (inString) {
+      out += ch;
+      if (ch === "\\") {
+        // Escape: copy the escaped char verbatim so a `\"` does not end the string.
+        if (next !== undefined) {
+          out += next;
+          i += 1;
+        }
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      out += ch;
+      continue;
+    }
+    if (ch === "/" && next === "/") {
+      inLineComment = true;
+      i += 1;
+      continue;
+    }
+    if (ch === "/" && next === "*") {
+      inBlockComment = true;
+      i += 1;
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
+/**
  * (#2027) Answer gemini's sign-in-method question ahead of time, so the login flow reaches the
  * "visit this URL" step instead of stopping on a menu nothing drives.
  *
@@ -125,21 +197,50 @@ export async function trustCodexProject(homeBase: string, dir: string): Promise<
  *
  * MERGE, NEVER OVERWRITE. The #2026 installer owns two keys in this SAME file
  * (`general.enableAutoUpdate` / `general.enableAutoUpdateNotification`) that stop the tool
- * replacing its own pinned bytes. A whole-file write here would silently undo that. Idempotent:
- * a no-op once the value is already right. Dir `0700`, file `0600`.
+ * replacing its own pinned bytes. A whole-file write here would silently undo that, so this
+ * function only ever writes a file it could first read in full:
+ *
+ *   - no file at all → seed from scratch (the installer may not have run yet);
+ *   - a file it can parse (comments included, see {@link stripJsonComments}) → merge one key in;
+ *   - a file it CANNOT parse, or one whose top level is not an object → leave the bytes alone,
+ *     warn, and skip the seed. Sign-in then stops on the method menu, which is a visible failure
+ *     the user can report — strictly better than silently un-pinning the tool's version.
+ *
+ * Comments in a file that IS parsed are dropped by the one write that adds the key (there is no
+ * comment-preserving writer here); every key survives, which is what the pin depends on.
+ * Idempotent: a no-op once the value is already right. Dir `0700`, file `0600`.
  */
 export async function ensureGeminiOnboarded(homeBase: string): Promise<void> {
   const configPath = path.join(homeBase, GEMINI_CONFIG);
-  let cfg: Record<string, unknown> = {};
+
+  let raw: string | undefined;
   try {
-    const parsed: unknown = JSON.parse(await readFile(configPath, "utf8"));
-    // Only an object is mergeable; anything else (array, scalar, corrupt) starts fresh rather
-    // than throwing on the login path.
-    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
-      cfg = parsed as Record<string, unknown>;
-    }
+    raw = await readFile(configPath, "utf8");
   } catch {
-    // missing or unparseable config — the installer may not have run yet; seed from scratch.
+    // Missing config — the installer may not have run yet; seeding from scratch loses nothing.
+  }
+
+  let cfg: Record<string, unknown> = {};
+  if (raw !== undefined && raw.trim() !== "") {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(stripJsonComments(raw));
+    } catch {
+      console.warn(
+        `[cli-runner] ${configPath} could not be parsed as JSON — leaving the file untouched ` +
+          "and skipping the gemini sign-in-method seed (overwriting it would drop the pinned " +
+          "self-update settings)"
+      );
+      return;
+    }
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      console.warn(
+        `[cli-runner] ${configPath} is not a JSON object — leaving the file untouched and ` +
+          "skipping the gemini sign-in-method seed"
+      );
+      return;
+    }
+    cfg = parsed as Record<string, unknown>;
   }
 
   const existingSecurity = cfg.security;
