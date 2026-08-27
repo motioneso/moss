@@ -596,11 +596,7 @@ export class SportsService {
       headlinesByComp,
       competitionKeys
     );
-    const rankedTopStories = rankTopStories(
-      rankingNewsGroups,
-      followedTeams,
-      relevance.liftFor
-    );
+    const rankedTopStories = rankTopStories(rankingNewsGroups, followedTeams, relevance.liftFor);
 
     // The hero must not echo what the followed strip already shows (mrb8ahf7). rankTopStories'
     // first tier IS followed-team stories — the same pool toTeamStories draws each card's ≤3

@@ -7,31 +7,31 @@ Branch: `fleet/lane-2019`, off `origin/main` @ `491148343`.
 
 ## Seams check — every assumed capability, cited
 
-| Assumption | Evidence | Status |
-| --- | --- | --- |
-| `storyFeedbackTargetRef(module, link)` builds the opaque ref | `packages/usefulness-feedback/src/story-target.ts:45` | exists |
-| `buildStoryTargetContext(...)` bounds the stored story detail | `packages/usefulness-feedback/src/story-target.ts:80` | exists |
-| Story metadata is allow-listed on write | `packages/usefulness-feedback/src/story-target.ts:119`, used at `repository.ts:366` | exists |
-| `upsertTarget` registers one story row | `packages/usefulness-feedback/src/repository.ts:347` | exists, singular only |
-| `createStoryRelevancePolicy` is the single filter entry point | `packages/usefulness-feedback/src/relevance/policy.ts:38` | exists |
-| Policy short-circuits with zero rules and makes no model call | `packages/usefulness-feedback/src/relevance/policy.ts:53-61` | exists |
-| Applied/degraded result shapes | `packages/shared/src/story-relevance.ts:98,111,116` | exists |
-| Candidate shape the policy consumes | `packages/shared/src/story-relevance.ts:27` | exists |
-| Shared test stories + `sportsCandidate` | `tests/fixtures/story-relevance.ts:49,207` | exists |
-| `SportsServiceDependencies` has no relevance/feedback port | `packages/sports/src/sports-service.ts:95-109` | gap is real |
-| `getOverview` pulls hero-team feeds AFTER `buildHero` | `packages/sports/src/sports-service.ts:457-509` | hoist needed |
-| `canonicalStoryUrl` is the module's cross-feed story identity | `packages/sports/src/headline-composition.ts:26` | exists |
-| `rankTopStories` tier 1 = each group's lead, tier 2 = followed-team stories by feed rank | `packages/sports/src/headline-composition.ts:145-168` | exists |
-| `toPublicHeadline` / `toTeamStories` are the public mappers | `packages/sports/src/headline-composition.ts:116`, `:60` (via import at `sports-service.ts:33,60`) | exists |
-| `isWrittenArticle(headline)` is the only written-vs-clip signal | `packages/sports/src/news-ranking.ts:24` | exists |
-| `DegradeState` threads the degraded flag through one pass | `packages/sports/src/sports-service.ts:154-157` | exists |
-| Feedback endpoints: create / list / edit reason / undo | `packages/usefulness-feedback/src/routes.ts:91,227,287,245` | exists, no API change needed |
-| `surface` accepts `"sports"` and `"today"` | `packages/shared/src/usefulness-feedback-api.ts:20` | exists |
-| `Menu` primitive (trigger, outside click, Escape, focus return) | `packages/ui/src/menu.tsx:23`, re-exported by `packages/module-web-sdk/src/index.ts:23` | exists |
-| Menu pattern to copy (not import) | `apps/web/src/today/briefing-feedback-menu.tsx` | exists |
-| One shared cache key for Sports page + Today widget | `packages/sports/src/web/query-keys.ts:9` | exists |
-| `buildSportsDiscoveryPorts` builds the owner-configured Sports model port | `packages/module-registry/src/index.ts:736`, called `:1864` | exists |
-| `usefulnessFeedbackRepository` is in scope at the sports registration | `packages/module-registry/src/index.ts:332,1896` | exists |
+| Assumption                                                                               | Evidence                                                                                           | Status                       |
+| ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `storyFeedbackTargetRef(module, link)` builds the opaque ref                             | `packages/usefulness-feedback/src/story-target.ts:45`                                              | exists                       |
+| `buildStoryTargetContext(...)` bounds the stored story detail                            | `packages/usefulness-feedback/src/story-target.ts:80`                                              | exists                       |
+| Story metadata is allow-listed on write                                                  | `packages/usefulness-feedback/src/story-target.ts:119`, used at `repository.ts:366`                | exists                       |
+| `upsertTarget` registers one story row                                                   | `packages/usefulness-feedback/src/repository.ts:347`                                               | exists, singular only        |
+| `createStoryRelevancePolicy` is the single filter entry point                            | `packages/usefulness-feedback/src/relevance/policy.ts:38`                                          | exists                       |
+| Policy short-circuits with zero rules and makes no model call                            | `packages/usefulness-feedback/src/relevance/policy.ts:53-61`                                       | exists                       |
+| Applied/degraded result shapes                                                           | `packages/shared/src/story-relevance.ts:98,111,116`                                                | exists                       |
+| Candidate shape the policy consumes                                                      | `packages/shared/src/story-relevance.ts:27`                                                        | exists                       |
+| Shared test stories + `sportsCandidate`                                                  | `tests/fixtures/story-relevance.ts:49,207`                                                         | exists                       |
+| `SportsServiceDependencies` has no relevance/feedback port                               | `packages/sports/src/sports-service.ts:95-109`                                                     | gap is real                  |
+| `getOverview` pulls hero-team feeds AFTER `buildHero`                                    | `packages/sports/src/sports-service.ts:457-509`                                                    | hoist needed                 |
+| `canonicalStoryUrl` is the module's cross-feed story identity                            | `packages/sports/src/headline-composition.ts:26`                                                   | exists                       |
+| `rankTopStories` tier 1 = each group's lead, tier 2 = followed-team stories by feed rank | `packages/sports/src/headline-composition.ts:145-168`                                              | exists                       |
+| `toPublicHeadline` / `toTeamStories` are the public mappers                              | `packages/sports/src/headline-composition.ts:116`, `:60` (via import at `sports-service.ts:33,60`) | exists                       |
+| `isWrittenArticle(headline)` is the only written-vs-clip signal                          | `packages/sports/src/news-ranking.ts:24`                                                           | exists                       |
+| `DegradeState` threads the degraded flag through one pass                                | `packages/sports/src/sports-service.ts:154-157`                                                    | exists                       |
+| Feedback endpoints: create / list / edit reason / undo                                   | `packages/usefulness-feedback/src/routes.ts:91,227,287,245`                                        | exists, no API change needed |
+| `surface` accepts `"sports"` and `"today"`                                               | `packages/shared/src/usefulness-feedback-api.ts:20`                                                | exists                       |
+| `Menu` primitive (trigger, outside click, Escape, focus return)                          | `packages/ui/src/menu.tsx:23`, re-exported by `packages/module-web-sdk/src/index.ts:23`            | exists                       |
+| Menu pattern to copy (not import)                                                        | `apps/web/src/today/briefing-feedback-menu.tsx`                                                    | exists                       |
+| One shared cache key for Sports page + Today widget                                      | `packages/sports/src/web/query-keys.ts:9`                                                          | exists                       |
+| `buildSportsDiscoveryPorts` builds the owner-configured Sports model port                | `packages/module-registry/src/index.ts:736`, called `:1864`                                        | exists                       |
+| `usefulnessFeedbackRepository` is in scope at the sports registration                    | `packages/module-registry/src/index.ts:332,1896`                                                   | exists                       |
 
 Open questions: none. Every spec premise was re-checked on this branch and still holds.
 
@@ -61,19 +61,24 @@ Open questions: none. Every spec premise was re-checked on this branch and still
 ## Phase 1 — server: story reference, registration, filter, wiring
 
 ### Task 1.1 — `storyRef` reaches the browser
+
 `packages/shared/src/sports-api.ts`
+
 - Add `readonly storyRef?: string` to `Headline` and to `FollowedTeamNews`.
 - Add `storyRef: { type: "string" }` to the matching response schemas in the same file.
   A field absent from the schema is stripped by the API server — this is the whole task.
 
 `packages/sports/src/headline-composition.ts`
+
 - `toPublicHeadline(headline: SourceHeadline, refFor?: (canonicalLink: string) => string): Headline`
 - `toTeamStories(headlines: readonly SourceHeadline[], refFor?: (canonicalLink: string) => string): FollowedTeamNews[]`
 - Both optional so every existing caller and test compiles unchanged. The ref is built from the
   canonical link, so the same story arriving from two feeds yields one reference.
 
 ### Task 1.2 — two injected ports
+
 `packages/sports/src/sports-service.ts`, added to `SportsServiceDependencies`:
+
 ```ts
 readonly storyRelevance?: StoryRelevancePolicy;
 readonly storyFeedback?: {
@@ -85,6 +90,7 @@ readonly storyFeedback?: {
   ) => Promise<void>;
 };
 ```
+
 `RegisteredStory` is declared in `packages/sports/src/sports-service.ts` and carries only:
 `storyRef`, `surface` (`"sports" | "today"`), `headline`, `sourceLabel`, `publishedAt`,
 `teamRef`, `competitionRef`, `hasEditorialEvidence`, `isOpinion`.
@@ -93,14 +99,18 @@ Both ports optional. Sports must not import `@moss/usefulness-feedback`; the typ
 structurally here. Module isolation.
 
 ### Task 1.3 — plural registration
+
 `packages/usefulness-feedback/src/repository.ts`
+
 - `upsertTargets(scopedDb: DataContextDb, inputs: readonly UpsertTargetInput[]): Promise<void>`
 - One multi-row insert, same `ON CONFLICT (owner_user_id, target_kind, target_ref, surface)`
   clause and the same metadata sanitiser as `upsertTarget`. `upsertTarget` stays and delegates.
 - Additive only; the News slice wants the same method, first one in wins.
 
 ### Task 1.4 — hoist the hero feed pull, then filter once
+
 `packages/sports/src/sports-service.ts` `getOverview`:
+
 1. Compute the gameday game list before `buildHero` (its gameday branch reads only scoreboards
    and follows), pull those teams' feeds, merge into `headlinesByComp`. Keep the existing
    comments explaining why the feeds are pulled at all.
@@ -118,13 +128,16 @@ structurally here. Module isolation.
    Live scores must keep updating through a relevance failure.
 
 ### Task 1.5 — the "more like this" lift
+
 `packages/sports/src/headline-composition.ts`
+
 - `rankTopStories(groups, followedTeams, boosts?: ReadonlyMap<string, number>, refFor?)`
 - Subtract the lift from `feedRank` in the second-tier sort only. Tier 1 is each league's
   editorial lead and a boost may never enter it. Comment that the league news band keeps its own
   ranking and boosts are a server-side top-stories effect in this slice.
 
 ### Task 1.6 — register what the page shows
+
 After the overview is composed, before returning: one `registerStories` call inside one data
 context, covering every story in the response, once for `surface: "sports"` and once for
 `surface: "today"` (the Today widget renders from the same response). Story detail built with
@@ -133,7 +146,9 @@ Add a comment where a reader would expect the `onStoryPreferenceChanged` wiring,
 Sports composes live on every request so there is no snapshot to rebuild and no queue to schedule.
 
 ### Task 1.7 — composition root
+
 `packages/module-registry/src/index.ts`, sports registration block (`:1896`):
+
 - Reuse the object `buildSportsDiscoveryPorts` already builds as the policy's model port. No
   provider or model name anywhere.
 - `createStoryRelevancePolicy({ ai, repository: usefulnessFeedbackRepository, logger })`.
@@ -141,14 +156,17 @@ Sports composes live on every request so there is no snapshot to rebuild and no 
   `registerStories` = `usefulnessFeedbackRepository.upsertTargets`.
 
 ### Phase 1 verification (expected `EXIT=0`)
+
 ```
 pnpm typecheck > /tmp/2019-tc.log 2>&1; echo "EXIT=$?"
 pnpm lint > /tmp/2019-lint.log 2>&1; echo "EXIT=$?"
 pnpm test:unit > /tmp/2019-unit.log 2>&1; echo "EXIT=$?"
 ```
+
 `module-sdk-worker` fails locally for everyone and is green in CI — not this branch.
 
 ### Phase 1 kill gate
+
 **Owner: the lane, escalating through `fleetctl`.** End the line and re-slice if hoisting the
 hero feed pull cannot be done without changing what the hero shows — that is, if an existing
 `sports-service` test that asserts hero content goes red and the only way to green it is to
@@ -181,21 +199,22 @@ Planned in detail only after phase 1 ships green.
 ## Tests — behaviour, and how each fails against a broken build
 
 `tests/unit/sports-service.test.ts` (extend):
+
 1. Fake policy suppresses the ordinary matching story, keeps the exceptional one → it is gone
    from followed cards, hero, top stories and league news; the exceptional one survives in all.
-   *Fails if the filter is applied per-pool instead of once over the merged candidate list.*
+   _Fails if the filter is applied per-pool instead of once over the merged candidate list._
 2. The suppressed story also arrives from a second feed → still absent.
-   *Fails if pools are filtered by object identity rather than by canonical link.*
+   _Fails if pools are filtered by object identity rather than by canonical link._
 3. Degraded result → every story except the explicitly rejected ones survives, `degraded` is
    true, the scoreboard is still returned. A throwing policy does not fail the request.
-   *Fails if the policy call is not wrapped like every other source call.*
+   _Fails if the policy call is not wrapped like every other source call._
 4. Every returned story's `storyRef` equals the ref built from its canonical link, and one story
-   from two feeds has one ref. *Fails if the schema drops the field, or the ref is built from the
-   raw url.*
+   from two feeds has one ref. _Fails if the schema drops the field, or the ref is built from the
+   raw url._
 5. A lift promotes a story inside the second tier and never above a league's lead.
-   *Fails if the lift is applied to the whole ranked list.*
+   _Fails if the lift is applied to the whole ranked list._
 6. A service built with no relevance port behaves exactly as today and makes no model call.
-   *Fails if the ports were made required.*
+   _Fails if the ports were made required._
 
 `tests/unit/sports-story-feedback-menu.test.tsx` (new): opens; offers both actions; refuses an
 empty or whitespace reason before sending; sends `sports_story`, the right ref and the right
