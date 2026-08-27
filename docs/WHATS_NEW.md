@@ -133,6 +133,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Sports honours your story preferences.** The Sports page now takes account of the stories you have asked to see more or less [PR #2050](https://github.com/motioneso/moss/pull/2050)
 - **Workshop page shows your real builds.** The Workshop page now shows your actual in-progress and finished module builds instead of a placeholder. [PR #1948](https://github.com/motioneso/moss/pull/1948)
 - **One image for Sports source previews.** Moss now includes Sports public-source previews in its existing download while keeping browser discovery isolated. [PR #1947](https://github.com/motioneso/moss/pull/1947)
 - **Weather chip now shows a 5-day forecast with hover detail.** The weather chip at the top of the Today page now shows a 5-day forecast strip instead of just current conditions. Hover or tab to any day to see humidity, dew point, wind, and high/low, and click a day to open the full forecast for your location in a new tab. [PR #1939](https://github.com/motioneso/moss/pull/1939)
