@@ -250,11 +250,11 @@ describe("purgeGeminiConversation", () => {
     expect(io.writeFile).not.toHaveBeenCalled();
   });
 
-  it("succeeds without touching the registry when the CLI never recorded this folder", async () => {
+  it("keeps the retry marker when the CLI registry has no entry for this folder", async () => {
     const io = makeIo();
     io.readFile.mockResolvedValue(JSON.stringify({ projects: { "/some/other/folder": "other" } }));
 
-    await expect(purgeGeminiConversation(io, neutralDir, "/host-home")).resolves.toBe(true);
+    await expect(purgeGeminiConversation(io, neutralDir, "/host-home")).resolves.toBe(false);
 
     expect(io.writeFile).not.toHaveBeenCalled();
     expect(JSON.stringify(io.run.mock.calls)).not.toContain("/host-home/.gemini/tmp/");

@@ -146,6 +146,23 @@ export function parseTranscript(
   let reply: string | null = null;
   let complete = false;
 
+  // Gemini emits assistant text in separate stream-json records. When a caller polls between
+  // those records, rebuild the in-flight answer from the already-consumed prefix before parsing
+  // the new suffix. Without this, a later `result` record only returns the last chunk seen.
+  if (provider === "google" && afterOffset > 0) {
+    const priorLines = jsonl.slice(0, Math.min(afterOffset, jsonl.length)).split("\n").slice(0, -1);
+    for (const line of priorLines) {
+      if (!line.trim()) continue;
+      let rec: Record<string, unknown>;
+      try {
+        rec = JSON.parse(line) as Record<string, unknown>;
+      } catch {
+        continue;
+      }
+      mapGeminiRecord(rec, [], geminiTurn, () => undefined);
+    }
+  }
+
   for (const line of lines) {
     let rec: Record<string, unknown>;
     try {

@@ -211,6 +211,34 @@ describe("GeminiPrintChatEngine — reading the reply", () => {
     expect(engine.constructor.name).toBe("GeminiPrintChatEngine");
   });
 
+  it("keeps streamed chunks seen in separate polls", async () => {
+    const first =
+      [
+        JSON.stringify({ type: "init", session_id: SESSION_ID, model: "auto" }),
+        JSON.stringify({ type: "message", role: "assistant", content: "alpha ", delta: true })
+      ].join("\n") + "\n";
+    const files = { [OUTPUT_PATH]: first };
+    const { engine } = await launchedEngine(files);
+
+    const firstRead = await engine.readNew(0);
+    expect(firstRead).toEqual({ records: [], offset: first.length, complete: false });
+
+    const complete =
+      first +
+      [
+        JSON.stringify({ type: "message", role: "assistant", content: "bravo", delta: true }),
+        JSON.stringify({ type: "result", status: "success", stats: {} })
+      ].join("\n") +
+      "\n";
+    files[OUTPUT_PATH] = complete;
+
+    await expect(engine.readNew(firstRead.offset)).resolves.toMatchObject({
+      records: [{ kind: "reply", text: "alpha bravo" }],
+      complete: true,
+      offset: complete.length
+    });
+  });
+
   it("reports nothing yet when the output file does not exist", async () => {
     const { engine } = await launchedEngine();
 
@@ -267,11 +295,11 @@ describe("GeminiPrintChatEngine — routing", () => {
     expect(engine.constructor.name).toBe("GeminiPrintChatEngine");
   });
 
-  it("preserves interactive routing to persistent engine", async () => {
+  it("uses the stream-reading engine for interactive Gemini too", async () => {
     const mux = fakeMux();
     const factory = createRealEngineFactory({ mux });
     const engine = await factory("google", "user-1", { executionMode: "interactive" });
-    expect(engine.constructor.name).toBe("CliChatEngineImpl");
+    expect(engine.constructor.name).toBe("GeminiPrintChatEngine");
   });
 });
 

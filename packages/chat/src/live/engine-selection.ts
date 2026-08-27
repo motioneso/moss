@@ -85,8 +85,9 @@ export function isBoundedFallbackEngine(
   provider: ProviderKind,
   executionMode: AiProviderExecutionMode | undefined
 ): boolean {
-  if (executionMode !== "non_interactive") return false;
-  return provider === "anthropic" || provider === "google";
+  // Gemini's interactive UI does not emit the stream-json transcript that its reader needs.
+  // Use the one-shot engine for every Gemini mode so replies always come from that stream.
+  return provider === "google" || (provider === "anthropic" && executionMode === "non_interactive");
 }
 
 /**
@@ -148,9 +149,9 @@ async function admitPersistentOrFallback(
 }
 
 /**
- * Build the engine for a session. `non_interactive` anthropic/google get the bounded-fallback
- * print engines (no multiplexer session is ever created); everything else — including any
- * provider explicitly configured `interactive` — gets the tmux-backed REPL engine.
+ * Build the engine for a session. `non_interactive` Anthropic and every Gemini session get the
+ * bounded-fallback print engines (no multiplexer session is ever created); everything else —
+ * including any provider explicitly configured `interactive` — gets the tmux-backed REPL engine.
  *
  * Synchronous for every call site that predates task #5 (no `persistentPool` supplied) — only
  * becomes a `Promise` when a real pool is wired in, i.e. only for the two composition roots task

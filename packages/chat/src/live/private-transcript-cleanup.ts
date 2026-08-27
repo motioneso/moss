@@ -103,13 +103,16 @@ export async function purgeGeminiConversation(
   try {
     registryJson = await io.readFile(registryPath);
   } catch {
-    // No registry at all means the CLI never recorded this folder, so it left nothing outside it.
-    return true;
+    // Missing registry is not proof that the CLI left no state behind. Keep the marker for a
+    // later sweep rather than claiming a purge that cannot be verified.
+    return false;
   }
   const registry = parseGeminiRegistry(registryJson);
   if (registry === null) return false;
   const recorded = registry.projects[neutralDir];
-  if (recorded === undefined) return true;
+  // A missing entry is not proof that the state directories are absent. Keep the marker so a
+  // later sweep can retry after the registry becomes readable and complete.
+  if (recorded === undefined) return false;
   if (typeof recorded !== "string" || !GEMINI_SHORT_ID_PATTERN.test(recorded)) return false;
 
   // State directories first, registry entry last: a crash in between leaves the pointer intact.
