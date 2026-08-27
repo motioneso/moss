@@ -68,7 +68,12 @@ N/A — this is a test-only change with no model-in-the-loop behavior and no new
     "lifecycle": "optional",
     "compatibility": { "jarv1s": ">=0.1.0" },
     "auth": [
-      { "id": "uat-1106-fixture.api", "displayName": "Fixture API key", "kind": "api-key", "scope": "instance" }
+      {
+        "id": "uat-1106-fixture.api",
+        "displayName": "Fixture API key",
+        "kind": "api-key",
+        "scope": "instance"
+      }
     ]
   }
   ```
@@ -91,9 +96,11 @@ a live docker stack. This IS the live-path proof — there is no separate "small
 first since the spec only has meaning against a live stack.
 
 Verification:
+
 ```bash
 JARVIS_UAT_SEED_LEVEL=solo-admin node_modules/.bin/tsx tests/uat/run-uat.ts tests/uat/specs/1106-external-module-trust-credentials.uat.spec.ts > /tmp/uat-1106.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected exit code: 0. (Exact invocation confirmed against `tests/uat/run-uat.ts` before running —
 adjust only the command-line shape if that file's actual CLI differs, not the assertions above.)
 
@@ -105,6 +112,7 @@ since there is no live coordinator in fleet-daemon mode.
 ## uat-trigger-map.tsv
 
 Add two rows (new spec covers these paths, not previously mapped):
+
 ```
 blocking	apps/web/src/settings/settings-instance-modules-pane.tsx	tests/uat/specs/1106-external-module-trust-credentials.uat.spec.ts
 blocking	apps/web/src/settings/module-credentials-section.tsx	tests/uat/specs/1106-external-module-trust-credentials.uat.spec.ts
@@ -117,4 +125,5 @@ pnpm format:check > /tmp/fmt.log 2>&1; echo "EXIT=$?"
 pnpm lint > /tmp/lint.log 2>&1; echo "EXIT=$?"
 pnpm typecheck > /tmp/tc.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected exit code: 0 for each.

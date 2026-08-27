@@ -100,3 +100,5 @@ blocking	infra/docker-compose.prod.yml	tests/uat/specs/1909-sports-public-source
 blocking	Dockerfile	tests/uat/specs/1909-sports-public-source-completion.uat.spec.ts
 blocking	apps/web/src/wellness/**	tests/uat/specs/1970-medication-builder.uat.spec.ts
 blocking	apps/web/src/wellness/**	tests/uat/specs/1971-medication-edit.uat.spec.ts
+blocking	apps/web/src/settings/settings-instance-modules-pane.tsx	tests/uat/specs/1106-external-module-trust-credentials.uat.spec.ts
+blocking	apps/web/src/settings/module-credentials-section.tsx	tests/uat/specs/1106-external-module-trust-credentials.uat.spec.ts
