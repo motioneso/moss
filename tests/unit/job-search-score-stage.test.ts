@@ -217,6 +217,18 @@ describe("runScore", () => {
     expect(result.scored).toBe(3);
   });
 
+  it("test 1b: scoring asks the router for the cheap tier, not the expensive one (#1421)", async () => {
+    const candidates = [makePosting("p-1")];
+    const store = createFakeStore({ profile: makeProfile(), candidates });
+    const ai = scriptedAi([{ ok: true, object: okResult }]);
+
+    await runScore(runDeps({ store, ai, budget: 1 }));
+
+    expect(ai.generateStructured).toHaveBeenCalledTimes(1);
+    const call = (ai.generateStructured as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    expect(call?.tierHint).toBe("economy");
+  });
+
   it("test 2: outsideFrame from triage is persisted onto the match", async () => {
     // Rig one posting so it lands in the recall bucket: low criteria similarity, high profile
     // similarity, by giving it an orthogonal-then-aligned embedding relative to the two query
