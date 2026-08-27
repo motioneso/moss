@@ -249,6 +249,7 @@ export function SportsTicker(props: {
               card={card}
               hiddenStoryRefs={props.hiddenStoryRefs}
               onStoryChanged={props.onStoryChanged}
+              surface="sports"
             />
           ))}
         </div>
@@ -276,8 +277,9 @@ function FeaturedTeamCard(props: {
   card: FollowedTeamCard;
   hiddenStoryRefs?: ReadonlySet<string>;
   onStoryChanged?: StoryFeedbackChange;
+  surface?: "sports" | "today";
 }) {
-  const { card } = props;
+  const { card, surface = "sports" } = props;
   // Body slot rule (#963 supersedes the live half of mrawrk0e): pre-game/idle AND live cards
   // lead with news — a live game's score lives in the footer strip now, not the body — while
   // a finished game still leads with its result.
@@ -347,7 +349,7 @@ function FeaturedTeamCard(props: {
               </a>
               <StoryFeedbackMenu
                 storyRef={lead.storyRef}
-                surface="sports"
+                surface={surface}
                 onChanged={props.onStoryChanged ?? (() => undefined)}
               />
             </>
@@ -388,7 +390,7 @@ function FeaturedTeamCard(props: {
                 </a>
                 <StoryFeedbackMenu
                   storyRef={story.storyRef}
-                  surface="sports"
+                  surface={surface}
                   onChanged={props.onStoryChanged ?? (() => undefined)}
                 />
               </li>
@@ -426,8 +428,9 @@ export function TickerTeam(props: {
   card: FollowedTeamCard;
   hiddenStoryRefs?: ReadonlySet<string>;
   onStoryChanged?: StoryFeedbackChange;
+  surface?: "sports" | "today";
 }) {
-  const { card } = props;
+  const { card, surface = "sports" } = props;
   // Pre-game today cards drop the matchup line (the Next footer already names the fixture,
   // mrawrk0e) — but blanking the whole primary slot left those cards a hollow void next to
   // their news-status neighbors (top-area feedback 2026-07-07). Only the matchup text was
@@ -483,7 +486,7 @@ export function TickerTeam(props: {
                 </a>
                 <StoryFeedbackMenu
                   storyRef={lead.storyRef}
-                  surface="today"
+                  surface={surface}
                   onChanged={props.onStoryChanged ?? (() => undefined)}
                 />
               </>
@@ -522,7 +525,7 @@ export function TickerTeam(props: {
                   </a>
                   <StoryFeedbackMenu
                     storyRef={story.storyRef}
-                    surface="today"
+                    surface={surface}
                     onChanged={props.onStoryChanged ?? (() => undefined)}
                   />
                 </li>
@@ -559,8 +562,9 @@ export function TickerLeague(props: {
   card: FollowedLeagueCard;
   hiddenStoryRefs?: ReadonlySet<string>;
   onStoryChanged?: StoryFeedbackChange;
+  surface?: "sports" | "today";
 }) {
-  const { card } = props;
+  const { card, surface = "sports" } = props;
   const stories = card.stories.filter((story) => !props.hiddenStoryRefs?.has(story.storyRef ?? ""));
   const lead = stories[0] ?? null;
   // Lead story owns the headline slot; bullets start at the next story. Two max — same air-not-wall
@@ -598,7 +602,7 @@ export function TickerLeague(props: {
               </a>
               <StoryFeedbackMenu
                 storyRef={lead.storyRef}
-                surface="today"
+                surface={surface}
                 onChanged={props.onStoryChanged ?? (() => undefined)}
               />
             </>
@@ -615,7 +619,7 @@ export function TickerLeague(props: {
                   </a>
                   <StoryFeedbackMenu
                     storyRef={story.storyRef}
-                    surface="today"
+                    surface={surface}
                     onChanged={props.onStoryChanged ?? (() => undefined)}
                   />
                 </li>

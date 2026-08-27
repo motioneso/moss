@@ -3,7 +3,7 @@ import "./styles/sports-3.css";
 import "./styles/sports-4-grid.css";
 import "./styles/sports-5-editorial.css";
 import "./styles/sports-6-newsband.css";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type {
@@ -115,6 +115,25 @@ export function SportsPage() {
     },
     [queryClient]
   );
+  useEffect(() => {
+    if (!data) return;
+    const responseStoryRefs = new Set([
+      ...data.topStories.flatMap((story) => (story.storyRef ? [story.storyRef] : [])),
+      ...data.followed.flatMap((card) =>
+        card.stories.flatMap((story) => (story.storyRef ? [story.storyRef] : []))
+      ),
+      ...data.followedLeagueCards.flatMap((card) =>
+        card.stories.flatMap((story) => (story.storyRef ? [story.storyRef] : []))
+      ),
+      ...data.leagueNews.flatMap((group) =>
+        group.headlines.flatMap((story) => (story.storyRef ? [story.storyRef] : []))
+      )
+    ]);
+    setHiddenStoryRefs((current) => {
+      const next = new Set([...current].filter((storyRef) => responseStoryRefs.has(storyRef)));
+      return next.size === current.size ? current : next;
+    });
+  }, [data]);
 
   const followedPairs = useMemo(
     () => new Set((data?.followedTeams ?? []).map((f) => `${f.competitionKey}:${f.teamKey}`)),

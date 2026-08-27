@@ -453,6 +453,83 @@ describe("story relevance feedback", () => {
     expect(stillOwned[0]?.reason_text).toBe("Owner only wording");
   });
 
+  it("keeps two owners' Sports story feedback apart for every write path", async () => {
+    const sportsRef = await registerStoryTarget(appDb, {
+      ownerUserId: ids.userA,
+      moduleId: "sports",
+      canonicalLink: "https://sports.example.com/story/owner-isolation"
+    });
+    const ownerServer = await buildFeedbackTestServer(appDb);
+    let feedbackId: string;
+    try {
+      const created = await ownerServer.server.inject({
+        method: "POST",
+        url: "/api/me/usefulness-feedback",
+        headers: userAHeaders(),
+        payload: storyPayload("sports", sportsRef, "less_like_this", "Sports owner wording")
+      });
+      expect(created.statusCode).toBe(201);
+      feedbackId = created.json().feedback.id;
+    } finally {
+      await ownerServer.server.close();
+    }
+
+    const { server: otherServer } = await buildFeedbackTestServer(appDb, undefined, {
+      access: userBContext()
+    });
+    try {
+      const list = await otherServer.inject({
+        method: "GET",
+        url: "/api/me/usefulness-feedback?module=sports",
+        headers: userBHeaders()
+      });
+      expect(list.statusCode).toBe(200);
+      expect(list.json().feedback).toEqual([]);
+
+      const edit = await otherServer.inject({
+        method: "PATCH",
+        url: `/api/me/usefulness-feedback/${feedbackId}`,
+        headers: userBHeaders(),
+        payload: { reason: "Not the owner's story" }
+      });
+      expect(edit.statusCode).toBe(404);
+
+      const undo = await otherServer.inject({
+        method: "POST",
+        url: `/api/me/usefulness-feedback/${feedbackId}/undo`,
+        headers: userBHeaders()
+      });
+      expect(undo.statusCode).toBe(404);
+
+      const create = await otherServer.inject({
+        method: "POST",
+        url: "/api/me/usefulness-feedback",
+        headers: userBHeaders(),
+        payload: storyPayload("sports", sportsRef, "more_like_this")
+      });
+      expect(create.statusCode).toBe(404);
+
+      const unregistered = await otherServer.inject({
+        method: "POST",
+        url: "/api/me/usefulness-feedback",
+        headers: userBHeaders(),
+        payload: storyPayload(
+          "sports",
+          storyFeedbackTargetRef("sports", "https://sports.example.com/story/not-registered"),
+          "more_like_this"
+        )
+      });
+      expect(unregistered.statusCode).toBe(404);
+    } finally {
+      await otherServer.server.close();
+    }
+
+    const stillOwned = await storySignalRows(appDb, sportsRef);
+    expect(stillOwned).toHaveLength(1);
+    expect(stillOwned[0]?.status).toBe("active");
+    expect(stillOwned[0]?.reason_text).toBe("Sports owner wording");
+  });
+
   it("stores an instruction-like reason as plain text and keeps it out of logs and metadata", async () => {
     const targetRef = await registerStoryTarget(appDb, {
       ownerUserId: ids.userA,

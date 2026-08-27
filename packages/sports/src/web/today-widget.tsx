@@ -1,11 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import { getSportsOverview } from "./sports-client.js";
 import { sportsQueryKeys } from "./query-keys.js";
 import { hasLiveGame, LIVE_REFETCH_INTERVAL_MS } from "./sports-page.js";
 import { orderFollowedCards, TickerLeague, TickerTeam } from "./sports-ticker.js";
-import { type StoryFeedbackChange } from "./story-feedback-menu.js";
+import { StoryFeedbackMenu, type StoryFeedbackChange } from "./story-feedback-menu.js";
 
 /**
  * Today "Sports desk" widget (#799 module-web-registry Phase A).
@@ -40,6 +40,22 @@ export function SportsTodayWidget(): ReactNode {
     refetchIntervalInBackground: false
   });
   const data = overviewQuery.data;
+  useEffect(() => {
+    if (!data) return;
+    const responseStoryRefs = new Set([
+      ...data.topStories.flatMap((story) => (story.storyRef ? [story.storyRef] : [])),
+      ...data.followed.flatMap((card) =>
+        card.stories.flatMap((story) => (story.storyRef ? [story.storyRef] : []))
+      ),
+      ...data.followedLeagueCards.flatMap((card) =>
+        card.stories.flatMap((story) => (story.storyRef ? [story.storyRef] : []))
+      )
+    ]);
+    setHiddenStoryRefs((current) => {
+      const next = new Set([...current].filter((storyRef) => responseStoryRefs.has(storyRef)));
+      return next.size === current.size ? current : next;
+    });
+  }, [data]);
   // League/tournament cards (Ben 2026-07-09): the service only emits these for followed
   // competitions that are active right now, so this is already the "when the league is active"
   // gate — no client-side season check needed. They join the team cards in the same grid.
@@ -89,6 +105,11 @@ export function SportsTodayWidget(): ReactNode {
             <span className="sp-lead__title">{lead.title}</span>
             {lead.summary ? <span className="sp-lead__dek">{lead.summary}</span> : null}
           </a>
+          <StoryFeedbackMenu
+            storyRef={lead.storyRef}
+            surface="today"
+            onChanged={onStoryChanged}
+          />
           {briefs.length > 0 ? (
             <ul className="sp-brief">
               {briefs.map((story) => (
@@ -99,6 +120,11 @@ export function SportsTodayWidget(): ReactNode {
                     </span>
                     <span className="sp-brief__title">{story.title}</span>
                   </a>
+                  <StoryFeedbackMenu
+                    storyRef={story.storyRef}
+                    surface="today"
+                    onChanged={onStoryChanged}
+                  />
                 </li>
               ))}
             </ul>
@@ -118,6 +144,7 @@ export function SportsTodayWidget(): ReactNode {
                 card={card}
                 hiddenStoryRefs={hiddenStoryRefs}
                 onStoryChanged={onStoryChanged}
+                surface="today"
               />
             ))}
             {/* League cards after teams: a follower's own clubs lead, the wider competition
@@ -128,6 +155,7 @@ export function SportsTodayWidget(): ReactNode {
                 card={card}
                 hiddenStoryRefs={hiddenStoryRefs}
                 onStoryChanged={onStoryChanged}
+                surface="today"
               />
             ))}
           </div>
