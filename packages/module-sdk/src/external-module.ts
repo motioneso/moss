@@ -397,9 +397,11 @@ export type ModuleExternalSourceCredential = "none" | "api-key";
 /**
  * Context an `ExternalSourceAdapter` receives per call. `fetchFn` is already host-pinned
  * (exact-hostname allowlist, https-only, redirect-hop re-validated) to the declaring source's
- * `fetchHosts` — adapters must use it instead of the global `fetch`. `apiKey` is present only
- * when the source declares `credential: "api-key"`; this slice rejects that credential at
- * registration, so it is always absent today (reserved for a future slice).
+ * `fetchHosts` — adapters must use it instead of the global `fetch`. `apiKey` carries the acting
+ * person's own credential and is set by exactly one caller: the keyed dataset runtime
+ * (`createKeyedDatasetClient` in @moss/datasets), which serves connections written into a
+ * reviewed registry in the owning module. The manifest-declared `externalSources` path still
+ * rejects `credential: "api-key"` at registration, so `apiKey` is always absent there.
  */
 export interface ExternalSourceAdapterContext {
   readonly fetchFn: typeof fetch;

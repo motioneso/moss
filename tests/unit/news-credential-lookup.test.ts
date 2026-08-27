@@ -24,7 +24,11 @@ const SCOPED_DB = { db: {} } as unknown as DataContextDb;
 
 function reader(
   result:
-    | { readonly status: "configured"; readonly envelope: EncryptedSecret; readonly generation: string }
+    | {
+        readonly status: "configured";
+        readonly envelope: EncryptedSecret;
+        readonly generation: string;
+      }
     | { readonly status: "revoked" }
     | null
 ): NewsCredentialEnvelopeReader & { calls: Array<{ sourceId: string }> } {
@@ -59,8 +63,7 @@ function lookupWith(
   });
   return {
     envelopeReader,
-    call: () =>
-      port({ actorUserId: "user-1", sourceId: "source-1", credentialContext: SCOPED_DB })
+    call: () => port({ actorUserId: "user-1", sourceId: "source-1", credentialContext: SCOPED_DB })
   };
 }
 

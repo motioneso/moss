@@ -56,9 +56,10 @@ function recordingAdapter(result: unknown = ["item"]): {
   };
 }
 
-function lookupReturning(
-  ...results: KeyedCredentialLookupResult[]
-): { lookup: KeyedCredentialLookup<null>; calls: number } {
+function lookupReturning(...results: KeyedCredentialLookupResult[]): {
+  lookup: KeyedCredentialLookup<null>;
+  calls: number;
+} {
   const state = { calls: 0 };
   const lookup: KeyedCredentialLookup<null> = async () => {
     const next = results[Math.min(state.calls, results.length - 1)]!;
@@ -92,10 +93,8 @@ function request(actorUserId: string, sourceId = "source-1") {
 describe("keyed dataset client — cache identity", () => {
   it("never serves one person's cached answer to another", async () => {
     const { adapter, calls } = recordingAdapter();
-    const client = createKeyedDatasetClient(
-      declaration(),
-      adapter,
-      async ({ actorUserId }) => OK(`key-for-${actorUserId}`, "1")
+    const client = createKeyedDatasetClient(declaration(), adapter, async ({ actorUserId }) =>
+      OK(`key-for-${actorUserId}`, "1")
     );
 
     await client.getDataset(request("user-a"));
@@ -163,10 +162,7 @@ describe("keyed dataset client — failing closed", () => {
 
   it("stops serving a cached answer as soon as the key is revoked", async () => {
     const { adapter, calls } = recordingAdapter();
-    const results: KeyedCredentialLookupResult[] = [
-      OK("k", "1"),
-      { ok: false, reason: "revoked" }
-    ];
+    const results: KeyedCredentialLookupResult[] = [OK("k", "1"), { ok: false, reason: "revoked" }];
     let call = 0;
     const client = createKeyedDatasetClient(
       declaration(),
@@ -227,7 +223,11 @@ describe("keyed dataset client — bounds and logging", () => {
       async () => OK("k", "1"),
       {
         createFetch: (hosts, options) => {
-          seen.push({ hosts, timeoutMs: options.timeoutMs, maxResponseBytes: options.maxResponseBytes });
+          seen.push({
+            hosts,
+            timeoutMs: options.timeoutMs,
+            maxResponseBytes: options.maxResponseBytes
+          });
           return (async () => new Response("{}")) as unknown as typeof fetch;
         }
       }

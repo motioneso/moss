@@ -62,6 +62,11 @@ export function buildCredentialedRequestUrl(
   const topicValues =
     (topicKey !== null ? connection.topicQuery[topicKey] : undefined) ??
     connection.topicQuery.default;
+  if (!topicValues) {
+    // The registry validator rejects a connection with no default set, so reaching this means
+    // the declaration was built past that check. Refuse rather than send a bare endpoint.
+    throw new Error("publisher connection has no default topic query");
+  }
 
   for (const [name, value] of Object.entries(connection.fixedQuery)) {
     url.searchParams.set(name, value);

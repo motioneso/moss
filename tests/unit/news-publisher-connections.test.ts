@@ -97,24 +97,29 @@ describe("publisher connection validation", () => {
   it("only allows key header names that are written down in the allow list", () => {
     expect(ALLOWED_API_KEY_HEADERS.length).toBeGreaterThan(0);
     for (const header of ALLOWED_API_KEY_HEADERS) {
-      expect(() => assertValidPublisherConnection(connection({ apiKeyHeader: header }))).not.toThrow();
+      expect(() =>
+        assertValidPublisherConnection(connection({ apiKeyHeader: header }))
+      ).not.toThrow();
     }
   });
 
-  it.each([["apiKey"], ["api_key"], ["api-key"], ["APIKEY"], ["key"], ["token"], ["authorization"]])(
-    "rejects a fixed query value named %s, because that is the key in the URL",
-    (name) => {
-      expect(() =>
-        assertValidPublisherConnection(connection({ fixedQuery: { [name]: "en" } }))
-      ).toThrow(/query/i);
-    }
-  );
+  it.each([
+    ["apiKey"],
+    ["api_key"],
+    ["api-key"],
+    ["APIKEY"],
+    ["key"],
+    ["token"],
+    ["authorization"]
+  ])("rejects a fixed query value named %s, because that is the key in the URL", (name) => {
+    expect(() =>
+      assertValidPublisherConnection(connection({ fixedQuery: { [name]: "en" } }))
+    ).toThrow(/query/i);
+  });
 
   it("rejects a secret-looking query name in the topic table too", () => {
     expect(() =>
-      assertValidPublisherConnection(
-        connection({ topicQuery: { default: { apiKey: "general" } } })
-      )
+      assertValidPublisherConnection(connection({ topicQuery: { default: { apiKey: "general" } } }))
     ).toThrow(/query/i);
   });
 
@@ -183,9 +188,9 @@ describe("the reviewed connection registry", () => {
 
   it("cannot be extended at runtime", () => {
     expect(Object.isFrozen(PUBLISHER_CONNECTIONS)).toBe(true);
-    expect(() =>
-      (PUBLISHER_CONNECTIONS as PublisherConnection[]).push(connection())
-    ).toThrow(TypeError);
+    expect(() => (PUBLISHER_CONNECTIONS as PublisherConnection[]).push(connection())).toThrow(
+      TypeError
+    );
   });
 
   it("looks a connection up by id and answers nothing for an unknown one", () => {

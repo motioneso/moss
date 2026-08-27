@@ -30,9 +30,7 @@ function recordingFetch(respond: (url: string) => Response | Promise<Response>):
   const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const headers: Record<string, string> = {};
-    for (const [name, value] of Object.entries(
-      (init?.headers ?? {}) as Record<string, string>
-    )) {
+    for (const [name, value] of Object.entries((init?.headers ?? {}) as Record<string, string>)) {
       headers[name] = value;
     }
     calls.push({ url, headers });
@@ -83,9 +81,10 @@ describe("credentialed publisher adapter — the key travels in the header only"
     await callAdapter(newsApiConnection, fetchFn, { topicKey: null });
 
     expect(calls).toHaveLength(1);
-    expect(calls[0].headers[newsApiConnection.apiKeyHeader]).toBe(API_KEY);
-    expect(calls[0].url).not.toContain(API_KEY);
-    expect(new URL(calls[0].url).search).not.toContain(API_KEY);
+    const call = calls[0]!;
+    expect(call.headers[newsApiConnection.apiKeyHeader]).toBe(API_KEY);
+    expect(call.url).not.toContain(API_KEY);
+    expect(new URL(call.url).search).not.toContain(API_KEY);
   });
 
   it("makes no request at all when the runtime supplied no key", async () => {
@@ -116,7 +115,7 @@ describe("credentialed publisher adapter — the outgoing request is fully decla
       const { fetchFn, calls } = recordingFetch(() => jsonResponse(okBody([article()])));
       await callAdapter(newsApiConnection, fetchFn, { topicKey: topic });
 
-      const url = new URL(calls[0].url);
+      const url = new URL(calls[0]!.url);
       expect(`${url.origin}${url.pathname}`).toBe(newsApiConnection.endpoint);
 
       const expected = new Map<string, string>();
@@ -124,8 +123,8 @@ describe("credentialed publisher adapter — the outgoing request is fully decla
         expected.set(name, value);
       }
       const topicValues =
-        (topic !== null && newsApiConnection.topicQuery[topic]) ||
-        newsApiConnection.topicQuery.default;
+        (topic !== null ? newsApiConnection.topicQuery[topic] : undefined) ??
+        newsApiConnection.topicQuery.default!;
       for (const [name, value] of Object.entries(topicValues)) {
         expected.set(name, value);
       }
@@ -146,7 +145,7 @@ describe("credentialed publisher adapter — the outgoing request is fully decla
       country: "ru"
     });
 
-    const url = new URL(calls[0].url);
+    const url = new URL(calls[0]!.url);
     expect(url.searchParams.get("q")).toBeNull();
     expect(url.searchParams.get("apiKey")).toBeNull();
     expect(url.searchParams.get("country")).toBeNull();
@@ -163,9 +162,9 @@ describe("credentialed publisher adapter — the response is sanitized and bound
     })) as SanitizedPublisherItem[];
 
     expect(items).toHaveLength(2);
-    expect(items[0].title).toBe("A headline");
-    expect(items[0].url).toBe("https://example.com/story-1");
-    expect(items[0].providerName).toBe("Example Times");
+    expect(items[0]!.title).toBe("A headline");
+    expect(items[0]!.url).toBe("https://example.com/story-1");
+    expect(items[0]!.providerName).toBe("Example Times");
   });
 
   it("caps the item count at the declared maximum", async () => {
@@ -206,7 +205,7 @@ describe("credentialed publisher adapter — the response is sanitized and bound
       topicKey: null
     })) as SanitizedPublisherItem[];
 
-    expect(items[0].imageUrl).toBeNull();
+    expect(items[0]!.imageUrl).toBeNull();
   });
 
   it("strips markup, caps over-long text and drops a garbled published time", async () => {
@@ -225,11 +224,11 @@ describe("credentialed publisher adapter — the response is sanitized and bound
       topicKey: null
     })) as SanitizedPublisherItem[];
 
-    expect(items[0].title).toBe("Bold & brash");
-    expect(items[0].title).not.toContain("<");
-    expect(items[0].summary.length).toBeLessThan(600);
-    expect(items[0].summary.endsWith("…")).toBe(true);
-    expect(items[0].publishedAt).toBeNull();
+    expect(items[0]!.title).toBe("Bold & brash");
+    expect(items[0]!.title).not.toContain("<");
+    expect(items[0]!.summary.length).toBeLessThan(600);
+    expect(items[0]!.summary.endsWith("…")).toBe(true);
+    expect(items[0]!.publishedAt).toBeNull();
   });
 
   it("reports a failure rather than an empty answer when the response is truncated", async () => {
@@ -242,7 +241,9 @@ describe("credentialed publisher adapter — the response is sanitized and bound
   });
 
   it("reports a failure when the response is not the documented shape", async () => {
-    const { fetchFn } = recordingFetch(() => jsonResponse({ status: "error", code: "apiKeyInvalid" }));
+    const { fetchFn } = recordingFetch(() =>
+      jsonResponse({ status: "error", code: "apiKeyInvalid" })
+    );
     await expect(callAdapter(newsApiConnection, fetchFn, { topicKey: null })).rejects.toMatchObject(
       { failure: "temporarily_unavailable" }
     );
