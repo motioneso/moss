@@ -7,11 +7,15 @@ import {
   deleteSportsFollow,
   getSportsCatalog,
   getSportsOverview,
+  createSportsStoryFeedback,
+  listSportsStoryFeedback,
   listSportsSources,
   listSportsFollows,
   previewSportsSourceAssignments,
   previewSportsSourceRecipe,
   retrySportsSource,
+  undoSportsStoryFeedback,
+  updateSportsStoryFeedbackReason,
   updateSportsEspnCoverage
 } from "../../packages/sports/src/web/sports-client.js";
 import { sportsQueryKeys } from "../../packages/sports/src/web/query-keys.js";
@@ -121,6 +125,52 @@ describe("sports API client", () => {
         method: "PUT",
         body: JSON.stringify({ assignments: [{ kind: "sport", sportKey: "soccer" }] })
       })
+    );
+  });
+
+  it("calls the story feedback endpoints with the shared request bodies", async () => {
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createSportsStoryFeedback({
+      targetKind: "sports_story",
+      targetRef: "story-ref-1",
+      surface: "today",
+      kind: "less_like_this",
+      reason: "Not useful today"
+    });
+    await listSportsStoryFeedback();
+    await updateSportsStoryFeedbackReason("feedback-1", { reason: "Updated reason" });
+    await undoSportsStoryFeedback("feedback-1");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/me/usefulness-feedback",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          targetKind: "sports_story",
+          targetRef: "story-ref-1",
+          surface: "today",
+          kind: "less_like_this",
+          reason: "Not useful today"
+        })
+      })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/me/usefulness-feedback?module=sports&status=active",
+      expect.objectContaining({ credentials: "include" })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/me/usefulness-feedback/feedback-1",
+      expect.objectContaining({ method: "PATCH", body: JSON.stringify({ reason: "Updated reason" }) })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "/api/me/usefulness-feedback/feedback-1/undo",
+      expect.objectContaining({ method: "POST" })
     );
   });
 });

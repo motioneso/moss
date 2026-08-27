@@ -3,7 +3,10 @@ import type {
   ConfirmSportsSourceAssignmentsRequest,
   ConfirmSportsSourceRecipeRequest,
   ConfirmSportsSourceResponse,
+  CreateUsefulnessFeedbackRequest,
+  CreateUsefulnessFeedbackResponse,
   CreateSportsFollowRequest,
+  ListUsefulnessFeedbackResponse,
   PreviewSportsSourceRequest,
   PreviewSportsSourceAssignmentsRequest,
   PreviewSportsSourceAssignmentsResponse,
@@ -16,6 +19,7 @@ import type {
   SportsFollowsResponse,
   SportsOverviewResponse,
   SportsStandingsResponse,
+  UpdateUsefulnessFeedbackReasonRequest,
   UpdateSportsEspnCoverageRequest,
   UpdateSportsEspnCoverageResponse
 } from "@moss/shared";
@@ -55,6 +59,40 @@ export async function deleteSportsFollow(id: string): Promise<{ ok: boolean }> {
   return requestJson<{ ok: boolean }>(`/api/sports/follows/${encodeURIComponent(id)}`, {
     method: "DELETE"
   });
+}
+
+export async function createSportsStoryFeedback(
+  input: CreateUsefulnessFeedbackRequest
+): Promise<CreateUsefulnessFeedbackResponse> {
+  return requestJson<CreateUsefulnessFeedbackResponse>("/api/me/usefulness-feedback", {
+    method: "POST",
+    body: input
+  });
+}
+
+export async function listSportsStoryFeedback(): Promise<ListUsefulnessFeedbackResponse> {
+  return requestJson<ListUsefulnessFeedbackResponse>(
+    "/api/me/usefulness-feedback?module=sports&status=active"
+  );
+}
+
+export async function updateSportsStoryFeedbackReason(
+  id: string,
+  input: UpdateUsefulnessFeedbackReasonRequest
+): Promise<CreateUsefulnessFeedbackResponse> {
+  return requestJson<CreateUsefulnessFeedbackResponse>(
+    `/api/me/usefulness-feedback/${encodeURIComponent(id)}`,
+    { method: "PATCH", body: input }
+  );
+}
+
+export async function undoSportsStoryFeedback(
+  id: string
+): Promise<CreateUsefulnessFeedbackResponse> {
+  return requestJson<CreateUsefulnessFeedbackResponse>(
+    `/api/me/usefulness-feedback/${encodeURIComponent(id)}/undo`,
+    { method: "POST" }
+  );
 }
 
 // #1572: custom public news sources by team and league.
