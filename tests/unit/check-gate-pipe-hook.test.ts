@@ -54,9 +54,7 @@ describe("check-gate-pipe.sh", () => {
   });
 
   it("allows a piped gate command through when PIPESTATUS is checked", async () => {
-    const { code } = await runHook(
-      "pnpm verify:foundation | tail -20; echo ${PIPESTATUS[0]}"
-    );
+    const { code } = await runHook("pnpm verify:foundation | tail -20; echo ${PIPESTATUS[0]}");
     expect(code).toBe(0);
   });
 
