@@ -69,7 +69,7 @@ Contracts:
 - `listSportsStoryFeedback(): Promise<ListUsefulnessFeedbackResponse>` using
   `/api/me/usefulness-feedback?module=sports&status=active`.
 - `updateSportsStoryFeedbackReason(id: string, input: UpdateUsefulnessFeedbackReasonRequest): Promise<CreateUsefulnessFeedbackResponse>`.
-- `undoSportsStoryFeedback(id: string): Promise<{ ok: boolean }>`.
+- `undoSportsStoryFeedback(id: string): Promise<CreateUsefulnessFeedbackResponse>`.
 - `StoryFeedbackMenu` accepts optional `storyRef`, `surface: "sports" | "today"`, and
   `onChanged: (storyRef: string, kind: "more_like_this" | "less_like_this") => void`.
 
@@ -165,4 +165,3 @@ Commands are unpiped and their expected result is explicit:
 
 Before pushing, run the cheap trio, fetch and rebase on `origin/main`, confirm no News or shared
 relevance files changed, push the branch, open the PR, and record it with `fleetctl`.
-
