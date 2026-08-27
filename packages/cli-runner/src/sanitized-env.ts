@@ -41,7 +41,12 @@ const ALLOWED_KEYS: readonly string[] = [
   // R6) — Lane A MUST boot-source `DISABLE_AUTOUPDATER=1` into the cli-runner
   // process.env in main.ts BEFORE createSanitizedTmuxIo() so this passthrough delivers
   // it to the forked tmux server + every launched CLI.
-  "DISABLE_AUTOUPDATER"
+  "DISABLE_AUTOUPDATER",
+  // (#2027) NO_BROWSER — a NAMED non-secret control telling gemini not to try to open a browser,
+  // so it prints the authorization URL and waits for the pasted code (the only flow that works in
+  // a headless container). Same R6 trap as DISABLE_AUTOUPDATER above: allowlisting the name is a
+  // NO-OP on its own; buildCliRunnerChildEnv SETS the value alongside the HOME override.
+  "NO_BROWSER"
 ];
 
 /** Key prefixes allowed (locale basics — `LC_*`, §7.2). */

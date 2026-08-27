@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   ensureClaudeOnboarded,
+  ensureGeminiOnboarded,
   ensureProviderLaunchReady,
   trustClaudeProject,
   trustCodexProject
@@ -63,7 +64,8 @@ describe("provider-first-run (#342 chat)", () => {
     expect(projects["/data/cli-auth/chat/s1"]!.hasTrustDialogAccepted).toBe(true);
   });
 
-  it("ensureProviderLaunchReady is a NO-OP for non-claude/codex providers (own first-run)", async () => {
+  it("ensureProviderLaunchReady never touches claude's config for another provider", async () => {
+    // #2027 gave google its own seeding (.gemini/settings.json). It must still leave claude alone.
     await ensureProviderLaunchReady(home, "google", "/data/cli-auth/chat/s3");
     await expect(readFile(path.join(home, ".claude.json"), "utf8")).rejects.toThrow();
   });
@@ -122,5 +124,94 @@ describe("codex first-run trust (#342 chat)", () => {
     const fileMode = (await stat(path.join(home, ".codex", "config.toml"))).mode & 0o777;
     expect(dirMode).toBe(0o700);
     expect(fileMode).toBe(0o600);
+  });
+});
+
+describe("gemini first-run: the sign-in-method setting (#2027)", () => {
+  const geminiPath = () => path.join(home, ".gemini", "settings.json");
+  interface GeminiSettings {
+    readonly general?: { enableAutoUpdate?: boolean; enableAutoUpdateNotification?: boolean };
+    readonly security?: {
+      readonly auth?: { selectedType?: string };
+      readonly folderTrust?: { enabled?: boolean };
+    };
+    readonly ui?: { theme?: string };
+  }
+  const readGeminiCfg = async () =>
+    JSON.parse(await readFile(geminiPath(), "utf8")) as GeminiSettings;
+
+  it("seeds the sign-in method into a fresh settings file", async () => {
+    await ensureGeminiOnboarded(home);
+    expect((await readGeminiCfg()).security?.auth?.selectedType).toBe("oauth-personal");
+  });
+
+  it("PRESERVES the installer's self-update keys in the same file", async () => {
+    // #2026 writes general.enableAutoUpdate / enableAutoUpdateNotification here to stop the tool
+    // replacing its own pinned bytes. A naive whole-file write would silently re-enable that.
+    await mkdir(path.join(home, ".gemini"), { recursive: true });
+    await writeFile(
+      geminiPath(),
+      JSON.stringify(
+        { general: { enableAutoUpdate: false, enableAutoUpdateNotification: false } },
+        null,
+        2
+      )
+    );
+
+    await ensureGeminiOnboarded(home);
+
+    const cfg = await readGeminiCfg();
+    expect(cfg.general?.enableAutoUpdate).toBe(false);
+    expect(cfg.general?.enableAutoUpdateNotification).toBe(false);
+    expect(cfg.security?.auth?.selectedType).toBe("oauth-personal");
+  });
+
+  it("never overwrites a sign-in method that is already set", async () => {
+    await mkdir(path.join(home, ".gemini"), { recursive: true });
+    await writeFile(
+      geminiPath(),
+      JSON.stringify({ security: { auth: { selectedType: "vertex-ai" } } }, null, 2)
+    );
+
+    await ensureGeminiOnboarded(home);
+
+    expect((await readGeminiCfg()).security?.auth?.selectedType).toBe("vertex-ai");
+  });
+
+  it("preserves unrelated keys nested beside the one it sets", async () => {
+    await mkdir(path.join(home, ".gemini"), { recursive: true });
+    await writeFile(
+      geminiPath(),
+      JSON.stringify(
+        { ui: { theme: "Default" }, security: { folderTrust: { enabled: true } } },
+        null,
+        2
+      )
+    );
+
+    await ensureGeminiOnboarded(home);
+
+    const cfg = await readGeminiCfg();
+    expect(cfg.ui?.theme).toBe("Default");
+    expect(cfg.security?.folderTrust?.enabled).toBe(true);
+    expect(cfg.security?.auth?.selectedType).toBe("oauth-personal");
+  });
+
+  it("is a no-op on a second call (same bytes)", async () => {
+    await ensureGeminiOnboarded(home);
+    const first = await readFile(geminiPath(), "utf8");
+    await ensureGeminiOnboarded(home);
+    expect(await readFile(geminiPath(), "utf8")).toBe(first);
+  });
+
+  it("writes .gemini dir 0700 and settings.json 0600", async () => {
+    await ensureGeminiOnboarded(home);
+    expect((await stat(path.join(home, ".gemini"))).mode & 0o777).toBe(0o700);
+    expect((await stat(geminiPath())).mode & 0o777).toBe(0o600);
+  });
+
+  it("ensureProviderLaunchReady seeds it for google", async () => {
+    await ensureProviderLaunchReady(home, "google", "/data/cli-auth/chat/s3");
+    expect((await readGeminiCfg()).security?.auth?.selectedType).toBe("oauth-personal");
   });
 });

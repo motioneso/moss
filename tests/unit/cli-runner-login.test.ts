@@ -752,7 +752,9 @@ describe("#2027 google (Gemini CLI) login adapter", () => {
     // the user "authorize" (or whatever word came first) as if it were their sign-in code.
     const surface = LOGIN_ADAPTERS.google!.extractSurface(GEMINI_LOGIN_PANE);
     expect(surface.userCode).toBeUndefined();
-    expect(LOGIN_ADAPTERS.google!.extractSurface("PLEASE-VISIT authorize application").userCode).toBeUndefined();
+    expect(
+      LOGIN_ADAPTERS.google!.extractSurface("PLEASE-VISIT authorize application").userCode
+    ).toBeUndefined();
   });
 
   it("has NO token-capture pattern (the CLI writes its own credential file)", () => {
@@ -816,5 +818,50 @@ describe("#2027 google adapter validation against the catalog", () => {
     });
     expect(adapters.google).toBeUndefined();
     expect(issues.some((i) => i.provider === "google")).toBe(true);
+  });
+});
+
+describe("#2027 first-run seeding runs before the login session opens", () => {
+  it("calls prepareProvider, and calls it BEFORE the CLI is launched", async () => {
+    const f = makeLoginIo(GEMINI_LOGIN_PANE);
+    const order: string[] = [];
+    const svc = new LoginService({
+      io: {
+        ...f.io,
+        run: (async (cmd: string, args: readonly string[]) => {
+          const verb = args[0] === "-S" ? args[2] : args[0];
+          if (cmd === "tmux" && verb === "new-session") order.push("launch");
+          return (f.io.run as unknown as (c: string, a: readonly string[]) => Promise<unknown>)(
+            cmd,
+            args
+          );
+        }) as unknown as TmuxIo["run"]
+      },
+      adapters: { google: LOGIN_ADAPTERS.google! },
+      probe: makeProbe({ status: "needs_login" }).fn,
+      homeBase,
+      // Seeding answers gemini's sign-in-method question. Once the CLI is running it is too late:
+      // it has already read its settings and painted the menu, and the authorization URL never
+      // prints — a live-only failure no other unit test would catch.
+      prepareProvider: async (provider) => {
+        order.push(`prepare:${provider}`);
+      }
+    });
+
+    const loginId = svc.reserve("google");
+    await svc.start(loginId);
+
+    expect(order[0]).toBe("prepare:google");
+    expect(order).toContain("launch");
+    expect(order.indexOf("prepare:google")).toBeLessThan(order.indexOf("launch"));
+    await svc.cancel("google", loginId);
+  });
+
+  it("still works when no prepareProvider is supplied (existing callers unchanged)", async () => {
+    const f = makeLoginIo(GEMINI_LOGIN_PANE);
+    const svc = makeService(f.io, makeProbe({ status: "needs_login" }).fn);
+    const loginId = svc.reserve("google");
+    expect((await svc.start(loginId)).status).toBe("awaiting_token");
+    await svc.cancel("google", loginId);
   });
 });

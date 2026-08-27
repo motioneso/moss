@@ -27,6 +27,7 @@ import { PROVIDER_CATALOG } from "./catalog.js";
 import { CliChatEngineHost, type PersistentRuntimeLiveConfig } from "./engine-host.js";
 import { InstallService } from "./install-service.js";
 import { LOGIN_ADAPTERS } from "./login-adapters.js";
+import { ensureGeminiOnboarded } from "./provider-first-run.js";
 import { readProviderCredentialEnv } from "./provider-token-store.js";
 import { LoginService } from "./login-service.js";
 import { createSanitizedTmuxIo } from "./runner-io.js";
@@ -128,6 +129,12 @@ export function buildCliRunnerChildEnv(
   return buildSanitizedCliEnv({
     ...source,
     HOME: config.homeBase,
+    // (#2027) Tell gemini not to try to open a browser. It decides it cannot open one when this
+    // holds any non-empty value, OR when Linux has no display — and this container has none, so
+    // the paste flow is already what happens. Setting it makes that deliberate rather than
+    // incidental, and set HERE rather than on the runner's own env because the sanitized-env
+    // allowlist is a filter, not a setter (see the comment in sanitized-env.ts).
+    NO_BROWSER: "1",
     JARVIS_CLI_HOME: config.homeBase,
     JARVIS_CLI_HOME_BASE: config.homeBase
   });
@@ -205,7 +212,14 @@ export function createCliRunner(
         multiplexerUsable: () => tmuxAvailable(),
         credentialEnv: await readProviderCredentialEnv(config.homeBase, provider),
         homeBase: config.homeBase
-      })
+      }),
+    // (#2027) Seed first-run state on the auth volume BEFORE the login session opens. gemini
+    // otherwise stops on its sign-in-method menu and never prints the authorization URL.
+    // Deliberately google-only: claude and codex need a working DIR to seed against (per-folder
+    // trust), which the login flow does not have, and both already log in without seeding.
+    prepareProvider: async (provider: RpcProviderKind) => {
+      if (provider === "google") await ensureGeminiOnboarded(config.homeBase);
+    }
   });
 
   // #1554 task #5 — the RPC topology's composition root for the warm pool. `PersistentRuntimePool`

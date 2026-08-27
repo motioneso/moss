@@ -77,6 +77,13 @@ export interface LoginServiceDeps {
   readonly settleMs?: number;
   /** Bound the poll for the authorization URL to appear in the pane (§L.2.2). */
   readonly surfaceTimeoutMs?: number;
+  /**
+   * (#2027) Seed whatever first-run state a provider's CLI needs BEFORE the login session opens.
+   * gemini asks which sign-in method to use on a fresh home dir, and stops there — nothing drives
+   * that menu, so the authorization URL never prints and login times out with no surface. Optional
+   * so an existing caller (and every existing test) keeps working unchanged.
+   */
+  readonly prepareProvider?: (provider: RpcProviderKind) => Promise<void>;
 }
 
 const DEFAULT_HOME_BASE = "/data/cli-auth";
@@ -171,6 +178,10 @@ export class LoginService {
     const flow = this.requireFlow(loginId);
     const session = `${LOGIN_SESSION_PREFIX}${flow.provider}`;
     try {
+      // (#2027) First-run seeding BEFORE the session opens: once the CLI is running it is too
+      // late — it has already read its settings and painted its menu.
+      if (this.deps.prepareProvider) await this.deps.prepareProvider(flow.provider);
+
       // Already authenticated? (a re-login of a ready provider) — short-circuit.
       const pre = await this.deps.probe(flow.provider);
       if (pre.status === "ready") {

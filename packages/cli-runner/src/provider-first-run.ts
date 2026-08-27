@@ -23,6 +23,8 @@ import path from "node:path";
 import type { ProviderKind } from "@moss/ai";
 
 const CLAUDE_CONFIG = ".claude.json";
+const GEMINI_CONFIG_DIR = ".gemini";
+const GEMINI_CONFIG = path.join(GEMINI_CONFIG_DIR, "settings.json");
 const CODEX_CONFIG_DIR = ".codex";
 const CODEX_CONFIG = path.join(CODEX_CONFIG_DIR, "config.toml");
 
@@ -113,9 +115,64 @@ export async function trustCodexProject(homeBase: string, dir: string): Promise<
 }
 
 /**
+ * (#2027) Answer gemini's sign-in-method question ahead of time, so the login flow reaches the
+ * "visit this URL" step instead of stopping on a menu nothing drives.
+ *
+ * The tool only asks which sign-in method to use when `security.auth.selectedType` is unset;
+ * seeding it to `oauth-personal` skips the question. Deliberately seeds nothing else: the tool
+ * only objects to a theme that is set and unknown, and sign-in happens before the main screen is
+ * drawn, so a seeded theme would be a value to keep correct across upgrades for no benefit.
+ *
+ * MERGE, NEVER OVERWRITE. The #2026 installer owns two keys in this SAME file
+ * (`general.enableAutoUpdate` / `general.enableAutoUpdateNotification`) that stop the tool
+ * replacing its own pinned bytes. A whole-file write here would silently undo that. Idempotent:
+ * a no-op once the value is already right. Dir `0700`, file `0600`.
+ */
+export async function ensureGeminiOnboarded(homeBase: string): Promise<void> {
+  const configPath = path.join(homeBase, GEMINI_CONFIG);
+  let cfg: Record<string, unknown> = {};
+  try {
+    const parsed: unknown = JSON.parse(await readFile(configPath, "utf8"));
+    // Only an object is mergeable; anything else (array, scalar, corrupt) starts fresh rather
+    // than throwing on the login path.
+    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+      cfg = parsed as Record<string, unknown>;
+    }
+  } catch {
+    // missing or unparseable config — the installer may not have run yet; seed from scratch.
+  }
+
+  const existingSecurity = cfg.security;
+  const security: Record<string, unknown> =
+    existingSecurity !== null &&
+    typeof existingSecurity === "object" &&
+    !Array.isArray(existingSecurity)
+      ? { ...(existingSecurity as Record<string, unknown>) }
+      : {};
+  const existingAuth = security.auth;
+  const auth: Record<string, unknown> =
+    existingAuth !== null && typeof existingAuth === "object" && !Array.isArray(existingAuth)
+      ? { ...(existingAuth as Record<string, unknown>) }
+      : {};
+
+  // Never overwrite a method the user (or a future step) already chose.
+  if (auth.selectedType !== undefined && auth.selectedType !== null) return;
+  auth.selectedType = "oauth-personal";
+  security.auth = auth;
+  cfg.security = security;
+
+  await mkdir(path.dirname(configPath), { recursive: true, mode: 0o700 });
+  await writeFile(configPath, `${JSON.stringify(cfg, null, 2)}\n`, {
+    encoding: "utf8",
+    mode: 0o600
+  });
+}
+
+/**
  * Seed whatever first-run state a provider's CLI needs before the engine launches it in `dir`.
- * Generic entry point called on every launch; per-provider specifics live here (claude + codex;
- * gemini persists its own first-run state at login and no-ops).
+ * Generic entry point called on every launch; per-provider specifics live here. gemini needs its
+ * sign-in-method question answered (#2027) but no per-folder trust — the tool asks about folder
+ * trust only after sign-in, on a screen the engine does not reach here.
  */
 export async function ensureProviderLaunchReady(
   homeBase: string,
@@ -127,5 +184,7 @@ export async function ensureProviderLaunchReady(
     await trustClaudeProject(homeBase, dir);
   } else if (provider === "openai-compatible") {
     await trustCodexProject(homeBase, dir);
+  } else if (provider === "google") {
+    await ensureGeminiOnboarded(homeBase);
   }
 }
