@@ -31,6 +31,7 @@ feature that is not present in the image you are running.
 
 ### Added
 
+- **Sign in to Gemini from Settings.** You can now sign in to Google's Gemini command-line tool from Settings or the first-run wizard, the same way you already sign in to Claude and Codex. [PR #2042](https://github.com/motioneso/moss/pull/2042)
 - **Install the Gemini command-line tool.** You can now install the Gemini command-line tool from the app, pinned to a known, verified version. [PR #2039](https://github.com/motioneso/moss/pull/2039)
 - **Archiving status in Settings.** Settings now shows a short message if the daily chat archive to Notes couldn't run, so you know when it needs attention. [PR #1995](https://github.com/motioneso/moss/pull/1995)
 - **Edit a saved medication.** You can now edit a medication's name, dose, or schedule after saving it, instead of removing it and adding it again. [PR #1989](https://github.com/motioneso/moss/pull/1989)
