@@ -18,22 +18,22 @@ registry. This slice exports a factory and a port type. It never imports News or
 
 ## Seams check — every assumption cited on this branch
 
-| Assumption | Evidence on this branch |
-| --- | --- |
-| The columns already exist; this slice adds no migration | `packages/usefulness-feedback/sql/0201_story_relevance_feedback.sql:44-47` adds `reason_text`, `rule_json` (jsonb, defaults `{}`), `rule_version`, `revision` |
-| `rule_json` must stay an object | `packages/usefulness-feedback/sql/0201_story_relevance_feedback.sql:78-80` check constraint |
-| Nothing writes a rule yet | `packages/usefulness-feedback/src/repository.ts:91-121` insert names neither column; `:192-202` reason update names neither |
-| The row already carries both columns to the API | `packages/usefulness-feedback/src/repository.ts:39-40`, serialized at `packages/usefulness-feedback/src/routes.ts:352` |
-| A rule can be compiled from a trusted story context | `packages/usefulness-feedback/src/story-target.ts:92-102` allow-list: `module`, `headline`, `sourceLabel`, `publishedAt`, `topicRef`, `teamRef`, `competitionRef`, `hasEditorialEvidence`, `isOpinion` |
-| That context is what a verified story preference stores | `packages/usefulness-feedback/src/story-verifier.ts:30-40` returns the cleaned target metadata; `packages/usefulness-feedback/src/routes.ts:184-195` stores it on the signal row |
-| The reason has exactly one home and must keep it | `packages/usefulness-feedback/src/metadata.ts:3-7` blocks a `reason` key from generic metadata |
-| The evaluator port shape to mirror | `packages/news/src/discovery/ports.ts` — `NewsAiPort.generateJson`, failures `needs_config`, `validation_failed`, `provider_error`, `aborted` |
-| The batched-call shape to copy | `packages/news/src/compilation/rank.ts:8-14` closed failure list plus `malformed_output`; `:16` character budget; `:19-37` bounded schema; `:75-80` strict key check |
-| The log shape to copy (counts only) | `packages/news/src/compilation/compile.ts:40-43` logger interface, `:89`/`:160` count-only fields |
-| `@moss/shared` must stay free of Node imports | `packages/usefulness-feedback/src/story-target.ts:9-13` records the past breakage; the hashing helper stays in the feedback package |
-| Nothing named `story-relevance` exists yet | `packages/shared/src/story-relevance.ts`, `packages/usefulness-feedback/src/relevance/`, `tests/fixtures/story-relevance.ts` all absent |
-| The integration file to extend | `tests/integration/usefulness-feedback-story.test.ts` exists |
-| A source file must stay under a thousand lines | `scripts/check-file-size.ts:6` |
+| Assumption                                              | Evidence on this branch                                                                                                                                                                                |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| The columns already exist; this slice adds no migration | `packages/usefulness-feedback/sql/0201_story_relevance_feedback.sql:44-47` adds `reason_text`, `rule_json` (jsonb, defaults `{}`), `rule_version`, `revision`                                          |
+| `rule_json` must stay an object                         | `packages/usefulness-feedback/sql/0201_story_relevance_feedback.sql:78-80` check constraint                                                                                                            |
+| Nothing writes a rule yet                               | `packages/usefulness-feedback/src/repository.ts:91-121` insert names neither column; `:192-202` reason update names neither                                                                            |
+| The row already carries both columns to the API         | `packages/usefulness-feedback/src/repository.ts:39-40`, serialized at `packages/usefulness-feedback/src/routes.ts:352`                                                                                 |
+| A rule can be compiled from a trusted story context     | `packages/usefulness-feedback/src/story-target.ts:92-102` allow-list: `module`, `headline`, `sourceLabel`, `publishedAt`, `topicRef`, `teamRef`, `competitionRef`, `hasEditorialEvidence`, `isOpinion` |
+| That context is what a verified story preference stores | `packages/usefulness-feedback/src/story-verifier.ts:30-40` returns the cleaned target metadata; `packages/usefulness-feedback/src/routes.ts:184-195` stores it on the signal row                       |
+| The reason has exactly one home and must keep it        | `packages/usefulness-feedback/src/metadata.ts:3-7` blocks a `reason` key from generic metadata                                                                                                         |
+| The evaluator port shape to mirror                      | `packages/news/src/discovery/ports.ts` — `NewsAiPort.generateJson`, failures `needs_config`, `validation_failed`, `provider_error`, `aborted`                                                          |
+| The batched-call shape to copy                          | `packages/news/src/compilation/rank.ts:8-14` closed failure list plus `malformed_output`; `:16` character budget; `:19-37` bounded schema; `:75-80` strict key check                                   |
+| The log shape to copy (counts only)                     | `packages/news/src/compilation/compile.ts:40-43` logger interface, `:89`/`:160` count-only fields                                                                                                      |
+| `@moss/shared` must stay free of Node imports           | `packages/usefulness-feedback/src/story-target.ts:9-13` records the past breakage; the hashing helper stays in the feedback package                                                                    |
+| Nothing named `story-relevance` exists yet              | `packages/shared/src/story-relevance.ts`, `packages/usefulness-feedback/src/relevance/`, `tests/fixtures/story-relevance.ts` all absent                                                                |
+| The integration file to extend                          | `tests/integration/usefulness-feedback-story.test.ts` exists                                                                                                                                           |
+| A source file must stay under a thousand lines          | `scripts/check-file-size.ts:6`                                                                                                                                                                         |
 
 No open questions. Every premise in the spec still holds on this branch.
 
@@ -264,7 +264,9 @@ export function evaluateStoryRelevance(
     readonly candidates: readonly StoryRelevanceCandidate[];
     readonly rules: readonly ActiveStoryRuleRow[];
   }
-): Promise<{ ok: true; verdicts: StoryRelevanceVerdict[] } | { ok: false; error: StoryRelevanceFailure }>;
+): Promise<
+  { ok: true; verdicts: StoryRelevanceVerdict[] } | { ok: false; error: StoryRelevanceFailure }
+>;
 ```
 
 - The caller supplies the port, so News runs on the user's News model and Sports on the user's
