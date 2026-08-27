@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
 import { MoreHorizontal, ThumbsDown, ThumbsUp } from "lucide-react";
 import { Menu } from "@moss/module-web-sdk";
 import type { FeedbackSurface } from "@moss/shared";
@@ -10,10 +9,12 @@ import { createSportsStoryFeedback } from "./sports-client.js";
 type StoryFeedbackKind = "more_like_this" | "less_like_this";
 type StoryFeedbackInput = { kind: StoryFeedbackKind; reason?: string };
 
+export type StoryFeedbackChange = (storyRef: string, kind: StoryFeedbackKind) => void;
+
 export interface StoryFeedbackMenuProps {
   readonly storyRef?: string;
   readonly surface: Extract<FeedbackSurface, "sports" | "today">;
-  readonly onChanged: (storyRef: string, kind: StoryFeedbackKind) => void;
+  readonly onChanged: StoryFeedbackChange;
 }
 
 export function StoryFeedbackMenu(props: StoryFeedbackMenuProps) {
@@ -23,24 +24,27 @@ export function StoryFeedbackMenu(props: StoryFeedbackMenuProps) {
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const mutation = useMutation({
-    mutationFn: (input: StoryFeedbackInput) =>
-      createSportsStoryFeedback({
-        targetKind: "sports_story",
-        targetRef: storyRef!,
-        surface: props.surface,
-        kind: input.kind,
-        ...(input.reason === undefined ? {} : { reason: input.reason })
-      }),
-    onSuccess: (_result, input) => {
-      setEditing(false);
-      setSaved(true);
-      props.onChanged(storyRef!, input.kind);
-    },
-    onError: (cause: unknown) => {
-      setError(cause instanceof Error ? cause.message : "Could not save story preference.");
-    }
-  });
+  const [pending, setPending] = useState(false);
+  const submit = (input: StoryFeedbackInput) => {
+    setError(null);
+    setPending(true);
+    void createSportsStoryFeedback({
+      targetKind: "sports_story",
+      targetRef: storyRef!,
+      surface: props.surface,
+      kind: input.kind,
+      ...(input.reason === undefined ? {} : { reason: input.reason })
+    })
+      .then(() => {
+        setEditing(false);
+        setSaved(true);
+        props.onChanged(storyRef!, input.kind);
+      })
+      .catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : "Could not save story preference.");
+      })
+      .finally(() => setPending(false));
+  };
 
   useEffect(() => {
     if (!editing) return;
@@ -69,7 +73,7 @@ export function StoryFeedbackMenu(props: StoryFeedbackMenuProps) {
       setError("Tell us why before saving.");
       return;
     }
-    mutation.mutate({ kind: "less_like_this", reason: trimmed });
+    submit({ kind: "less_like_this", reason: trimmed });
   };
 
   return (
@@ -82,17 +86,17 @@ export function StoryFeedbackMenu(props: StoryFeedbackMenuProps) {
             id: "more_like_this",
             label: "More like this",
             icon: <ThumbsUp size={13} aria-hidden="true" />,
-            disabled: mutation.isPending
+            disabled: pending
           },
           {
             id: "less_like_this",
             label: "Less like this",
             icon: <ThumbsDown size={13} aria-hidden="true" />,
-            disabled: mutation.isPending
+            disabled: pending
           }
         ]}
         onSelect={(id) => {
-          if (id === "more_like_this") mutation.mutate({ kind: "more_like_this" });
+          if (id === "more_like_this") submit({ kind: "more_like_this" });
           else {
             setEditing(true);
             setError(null);

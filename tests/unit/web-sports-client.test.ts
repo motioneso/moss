@@ -165,7 +165,10 @@ describe("sports API client", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
       "/api/me/usefulness-feedback/feedback-1",
-      expect.objectContaining({ method: "PATCH", body: JSON.stringify({ reason: "Updated reason" }) })
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ reason: "Updated reason" })
+      })
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       4,

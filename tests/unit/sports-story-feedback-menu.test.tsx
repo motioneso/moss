@@ -34,9 +34,9 @@ function text(value: unknown): string {
 }
 
 function button(renderer: ReactTestRenderer, label: string) {
-  return renderer.root.findAllByType("button").find(
-    (item) => item.props["aria-label"] === label || text(item.props.children) === label
-  )!;
+  return renderer.root
+    .findAllByType("button")
+    .find((item) => item.props["aria-label"] === label || text(item.props.children) === label)!;
 }
 
 describe("Sports story feedback menu", () => {
@@ -61,7 +61,9 @@ describe("Sports story feedback menu", () => {
   });
 
   it("trims a valid reason, sends the shared fields, and reports success", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ feedback: {} }), { status: 200 }));
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ feedback: {} }), { status: 200 })
+    );
     vi.stubGlobal("fetch", fetchMock);
     const onChanged = vi.fn();
     const renderer = await renderMenu("story-ref-2", onChanged);

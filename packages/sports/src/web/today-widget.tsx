@@ -1,10 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useState, type ReactNode } from "react";
 
 import { getSportsOverview } from "./sports-client.js";
 import { sportsQueryKeys } from "./query-keys.js";
 import { hasLiveGame, LIVE_REFETCH_INTERVAL_MS } from "./sports-page.js";
 import { orderFollowedCards, TickerLeague, TickerTeam } from "./sports-ticker.js";
+import { type StoryFeedbackChange } from "./story-feedback-menu.js";
 
 /**
  * Today "Sports desk" widget (#799 module-web-registry Phase A).
@@ -21,6 +22,17 @@ import { orderFollowedCards, TickerLeague, TickerTeam } from "./sports-ticker.js
  * idle — the widget's 4-card cap should spend itself on teams that matter today.
  */
 export function SportsTodayWidget(): ReactNode {
+  const queryClient = useQueryClient();
+  const [hiddenStoryRefs, setHiddenStoryRefs] = useState<ReadonlySet<string>>(new Set());
+  const onStoryChanged = useCallback<StoryFeedbackChange>(
+    (storyRef, kind) => {
+      if (kind === "less_like_this") {
+        setHiddenStoryRefs((current) => new Set(current).add(storyRef));
+      }
+      void queryClient.invalidateQueries({ queryKey: sportsQueryKeys.overview });
+    },
+    [queryClient]
+  );
   const overviewQuery = useQuery({
     queryKey: sportsQueryKeys.overview,
     queryFn: () => getSportsOverview(),
@@ -37,7 +49,9 @@ export function SportsTodayWidget(): ReactNode {
   // "main story" lead + a few other top sport headlines BEFORE the followed-team cards. topStories
   // is the same personalized ranking the /sports page leads with; already toPublicHeadline'd, so
   // every url is scheme-sanitized. lead = the editorial #1, briefs = the next three.
-  const topStories = data?.topStories ?? [];
+  const topStories = (data?.topStories ?? []).filter(
+    (story) => !hiddenStoryRefs.has(story.storyRef ?? "")
+  );
   const lead = topStories[0] ?? null;
   const briefs = topStories.slice(1, 4);
   // Show the desk if there's ANY content: top stories, followed teams, or an active league.
@@ -99,12 +113,22 @@ export function SportsTodayWidget(): ReactNode {
           <div className="sp-tksub">{cardsLabel}</div>
           <div className="sp-tkgrid">
             {teamCards.map((card) => (
-              <TickerTeam key={`${card.competitionKey}:${card.teamKey}`} card={card} />
+              <TickerTeam
+                key={`${card.competitionKey}:${card.teamKey}`}
+                card={card}
+                hiddenStoryRefs={hiddenStoryRefs}
+                onStoryChanged={onStoryChanged}
+              />
             ))}
             {/* League cards after teams: a follower's own clubs lead, the wider competition
                 follows. Cap at 3 so a many-league follower can't crowd out the team cards. */}
             {leagueCards.slice(0, 3).map((card) => (
-              <TickerLeague key={card.competitionKey} card={card} />
+              <TickerLeague
+                key={card.competitionKey}
+                card={card}
+                hiddenStoryRefs={hiddenStoryRefs}
+                onStoryChanged={onStoryChanged}
+              />
             ))}
           </div>
         </>

@@ -97,6 +97,69 @@ describe("SportsSettings", () => {
     expect(html).not.toContain("Search above to find teams or leagues to follow.");
   });
 
+  it("renders only active Sports story preferences with stored story details", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(CATALOG_KEY, { competitions: TWO_LEAGUES, degraded: false });
+    client.setQueryData(FOLLOWS_KEY, { follows: [] });
+    client.setQueryData(["sports", "story-feedback"], {
+      feedback: [
+        {
+          id: "sports-1",
+          ownerUserId: "owner-1",
+          targetKind: "sports_story",
+          targetRef: "sports-ref-1",
+          surface: "sports",
+          kind: "less_like_this",
+          sourceKind: null,
+          sourceLabel: null,
+          priorityBand: null,
+          effectKind: null,
+          effectRef: null,
+          metadata: { headline: "Cowboys clinch the NFC East", sourceLabel: "ESPN" },
+          status: "active",
+          reason: "Not useful today",
+          revision: 1,
+          ruleVersion: 1,
+          createdAt: "2026-08-27T12:00:00.000Z",
+          updatedAt: "2026-08-27T12:00:00.000Z",
+          resolvedAt: null
+        },
+        {
+          id: "news-1",
+          ownerUserId: "owner-1",
+          targetKind: "news_story",
+          targetRef: "news-ref-1",
+          surface: "news",
+          kind: "less_like_this",
+          sourceKind: null,
+          sourceLabel: null,
+          priorityBand: null,
+          effectKind: null,
+          effectRef: null,
+          metadata: { headline: "News must stay out" },
+          status: "active",
+          reason: "No",
+          revision: 1,
+          ruleVersion: 1,
+          createdAt: "2026-08-27T12:00:00.000Z",
+          updatedAt: "2026-08-27T12:00:00.000Z",
+          resolvedAt: null
+        }
+      ]
+    });
+
+    const html = renderWithQuery(client);
+    expect(html).toContain("Story preferences");
+    expect(html).toContain("Less");
+    expect(html).toContain("Cowboys clinch the NFC East");
+    expect(html).toContain("ESPN");
+    expect(html).toContain("Not useful today");
+    expect(html).toContain(
+      "A major story about a subject you asked to see less of may still appear."
+    );
+    expect(html).not.toContain("News must stay out");
+  });
+
   it("renders persisted source health truthfully with recovery actions", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(sportsQueryKeys.sources, {
