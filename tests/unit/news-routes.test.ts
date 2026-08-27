@@ -145,7 +145,18 @@ function makePersonalization(overrides: Partial<FakePersonalization> = {}): Fake
   const removedIds: string[] = [];
   const refreshBumps: number[] = [];
   const prunedDomains: string[] = [];
-  let refreshState: NewsRefreshStateDto = { state: "idle", updatedAt: null };
+  const NO_REFRESH_HISTORY = {
+    lastRequestedAt: null,
+    lastAttemptAt: null,
+    lastSuccessAt: null,
+    lastFailureAt: null,
+    lastFailureKind: null
+  } as const;
+  let refreshState: NewsRefreshStateDto = {
+    state: "idle",
+    updatedAt: null,
+    ...NO_REFRESH_HISTORY
+  };
   return {
     createdDomains,
     removedIds,
@@ -202,7 +213,12 @@ function makePersonalization(overrides: Partial<FakePersonalization> = {}): Fake
     readRefreshState: async () => refreshState,
     bumpRefreshRequest: async () => {
       refreshBumps.push(refreshBumps.length + 1);
-      refreshState = { state: "queued", updatedAt: "2026-07-11T00:00:00.000Z" };
+      refreshState = {
+        state: "queued",
+        updatedAt: "2026-07-11T00:00:00.000Z",
+        ...NO_REFRESH_HISTORY,
+        lastRequestedAt: "2026-07-11T00:00:00.000Z"
+      };
       return refreshBumps.length;
     },
     pruneSnapshotDomain: async (_db, domain) => {

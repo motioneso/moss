@@ -30,6 +30,52 @@ export { NEWS_MAX_CUSTOM_SOURCES, NEWS_MAX_CUSTOM_TOPICS } from "./personalizati
 /** Spec cap: at most 100 excluded domains per owner, enforced atomically in SQL. */
 export const NEWS_MAX_SOURCE_EXCLUSIONS = 100;
 
+/**
+ * #2030 — the refresh history an owner who has never asked for a refresh has: none of it.
+ * Kept as one constant so the no-row branch of readRefreshState cannot drift from the DTO.
+ */
+const EMPTY_REFRESH_HISTORY = {
+  lastRequestedAt: null,
+  lastAttemptAt: null,
+  lastSuccessAt: null,
+  lastFailureAt: null,
+  lastFailureKind: null
+} as const;
+
+/**
+ * #2030 — refresh status plus bounded freshness metadata for the current feed. Bounded is the
+ * point: an age in seconds and an item count, never the feed itself.
+ */
+export interface NewsRefreshDiagnostics {
+  readonly refresh: NewsRefreshStateDto;
+  readonly requestedGeneration: number;
+  readonly compiledGeneration: number;
+  readonly snapshotCompiledAt: string | null;
+  readonly snapshotExpiresAt: string | null;
+  /** Null when there is no snapshot yet. */
+  readonly snapshotAgeSeconds: number | null;
+  /** 0 when there is no snapshot, or its payload holds no article array. */
+  readonly itemCount: number;
+}
+
+/** Raw shape of the single diagnostics row. bigint columns arrive as strings from pg. */
+interface RefreshDiagnosticsRow {
+  state: "idle" | "queued" | "running" | "failed" | null;
+  failure_kind: "fetch" | "ai" | "internal" | null;
+  updated_at: Date | null;
+  requested_generation: string | null;
+  compiled_generation: string | null;
+  last_requested_at: Date | null;
+  last_attempt_at: Date | null;
+  last_success_at: Date | null;
+  last_failure_at: Date | null;
+  last_failure_kind: "fetch" | "ai" | "internal" | null;
+  snapshot_compiled_at: Date | null;
+  snapshot_expires_at: Date | null;
+  snapshot_age_seconds: string | null;
+  item_count: number | null;
+}
+
 export type NewsPersonalizationLimitResource =
   | "custom_sources"
   | "custom_topics"
@@ -495,13 +541,76 @@ export class NewsPersonalizationRepository {
     assertDataContextDb(scopedDb);
     const row = await scopedDb.db
       .selectFrom("app.news_refresh_state")
-      .select(["state", "failure_kind", "updated_at"])
+      .select([
+        "state",
+        "failure_kind",
+        "updated_at",
+        "last_requested_at",
+        "last_attempt_at",
+        "last_success_at",
+        "last_failure_at",
+        "last_failure_kind"
+      ])
       .executeTakeFirst();
-    if (!row) return { state: "idle", updatedAt: null };
+    if (!row) return { state: "idle", updatedAt: null, ...EMPTY_REFRESH_HISTORY };
     return {
       state: row.state,
       updatedAt: row.updated_at.toISOString(),
-      ...(row.failure_kind === null ? {} : { failureKind: row.failure_kind })
+      ...(row.failure_kind === null ? {} : { failureKind: row.failure_kind }),
+      lastRequestedAt: row.last_requested_at?.toISOString() ?? null,
+      lastAttemptAt: row.last_attempt_at?.toISOString() ?? null,
+      lastSuccessAt: row.last_success_at?.toISOString() ?? null,
+      lastFailureAt: row.last_failure_at?.toISOString() ?? null,
+      lastFailureKind: row.last_failure_kind
+    };
+  }
+
+  /**
+   * #2030 — one owner-scoped read that answers "when did this last run, did it work, and if not
+   * what kind of failure was it", together with how stale the current feed is and how big it is.
+   *
+   * Deliberately never selects `payload`: the item count is computed inside Postgres so article
+   * text never leaves the database. No owner filter is needed — row-level security already
+   * restricts both tables to the acting user's single row, the same way every other method here
+   * relies on it. The joins hang off a one-row select rather than off the refresh-state table so
+   * the read still works with no refresh row, no snapshot, either, or both.
+   */
+  async readRefreshDiagnostics(scopedDb: DataContextDb): Promise<NewsRefreshDiagnostics> {
+    assertDataContextDb(scopedDb);
+    const result = await sql<RefreshDiagnosticsRow>`
+      SELECT s.state, s.failure_kind, s.updated_at,
+             s.requested_generation, s.compiled_generation,
+             s.last_requested_at, s.last_attempt_at, s.last_success_at,
+             s.last_failure_at, s.last_failure_kind,
+             snap.compiled_at AS snapshot_compiled_at,
+             snap.expires_at  AS snapshot_expires_at,
+             EXTRACT(EPOCH FROM (now() - snap.compiled_at))::bigint AS snapshot_age_seconds,
+             CASE WHEN jsonb_typeof(snap.payload -> 'articles') = 'array'
+                  THEN jsonb_array_length(snap.payload -> 'articles') ELSE 0 END AS item_count
+        FROM (SELECT 1) AS one
+        LEFT JOIN app.news_refresh_state s ON true
+        LEFT JOIN app.news_compilation_snapshots snap ON true
+    `.execute(scopedDb.db);
+    const row = result.rows[0];
+    const iso = (value: Date | null | undefined) => value?.toISOString() ?? null;
+    return {
+      refresh: {
+        state: row?.state ?? "idle",
+        updatedAt: iso(row?.updated_at),
+        ...(row?.failure_kind == null ? {} : { failureKind: row.failure_kind }),
+        lastRequestedAt: iso(row?.last_requested_at),
+        lastAttemptAt: iso(row?.last_attempt_at),
+        lastSuccessAt: iso(row?.last_success_at),
+        lastFailureAt: iso(row?.last_failure_at),
+        lastFailureKind: row?.last_failure_kind ?? null
+      },
+      requestedGeneration: Number(row?.requested_generation ?? 0),
+      compiledGeneration: Number(row?.compiled_generation ?? 0),
+      snapshotCompiledAt: iso(row?.snapshot_compiled_at),
+      snapshotExpiresAt: iso(row?.snapshot_expires_at),
+      snapshotAgeSeconds:
+        row?.snapshot_age_seconds == null ? null : Number(row.snapshot_age_seconds),
+      itemCount: Number(row?.item_count ?? 0)
     };
   }
 
@@ -509,14 +618,17 @@ export class NewsPersonalizationRepository {
     assertDataContextDb(scopedDb);
     const result = await sql<{ requested_generation: string }>`
       INSERT INTO app.news_refresh_state
-        (owner_user_id, state, requested_generation, updated_at)
-      VALUES (app.current_actor_user_id(), 'queued', 1, now())
+        (owner_user_id, state, requested_generation, updated_at, last_requested_at)
+      VALUES (app.current_actor_user_id(), 'queued', 1, now(), now())
       ON CONFLICT (owner_user_id) DO UPDATE
         SET requested_generation = app.news_refresh_state.requested_generation + 1,
             state = CASE WHEN app.news_refresh_state.state = 'running'
                          THEN 'running' ELSE 'queued' END,
             failure_kind = NULL,
-            updated_at = now()
+            updated_at = now(),
+            -- History (#2030). failure_kind above is live status and is cleared here; the
+            -- last_failure_* columns are deliberately left alone.
+            last_requested_at = now()
       RETURNING requested_generation
     `.execute(scopedDb.db);
     return Number(result.rows[0]!.requested_generation);
@@ -525,10 +637,12 @@ export class NewsPersonalizationRepository {
   async beginRefreshRun(scopedDb: DataContextDb): Promise<number> {
     assertDataContextDb(scopedDb);
     const result = await sql<{ requested_generation: string }>`
-      INSERT INTO app.news_refresh_state (owner_user_id, state, updated_at)
-      VALUES (app.current_actor_user_id(), 'running', now())
+      INSERT INTO app.news_refresh_state (owner_user_id, state, updated_at, last_attempt_at)
+      VALUES (app.current_actor_user_id(), 'running', now(), now())
       ON CONFLICT (owner_user_id) DO UPDATE
-        SET state = 'running', failure_kind = NULL, updated_at = now()
+        SET state = 'running', failure_kind = NULL, updated_at = now(),
+            -- History (#2030). A superseded run re-enters here, and that is a new attempt.
+            last_attempt_at = now()
       RETURNING requested_generation
     `.execute(scopedDb.db);
     return Number(result.rows[0]!.requested_generation);
@@ -545,7 +659,10 @@ export class NewsPersonalizationRepository {
       WITH cas AS (
         UPDATE app.news_refresh_state
            SET compiled_generation = ${generation}, state = 'idle', failure_kind = NULL,
-               updated_at = now()
+               updated_at = now(),
+               -- History (#2030). This clears the LIVE failure_kind but must never touch
+               -- last_failure_at / last_failure_kind, or a past failure becomes unknowable.
+               last_success_at = now()
          WHERE owner_user_id = app.current_actor_user_id()
            AND requested_generation = ${generation}
         RETURNING owner_user_id
@@ -578,7 +695,11 @@ export class NewsPersonalizationRepository {
       const result = await sql<{ failed: boolean }>`
         WITH changed AS (
           UPDATE app.news_refresh_state
-             SET state = 'failed', failure_kind = ${failureKind}, updated_at = now()
+             SET state = 'failed', failure_kind = ${failureKind}, updated_at = now(),
+                 -- History (#2030). Runs as the worker role in a fresh data context (#1590);
+                 -- the 0160 grants and policies are table-level, so these columns are writable
+                 -- here without a new grant.
+                 last_failure_at = now(), last_failure_kind = ${failureKind}
            WHERE owner_user_id = app.current_actor_user_id()
              AND requested_generation = ${generation}
           RETURNING 1

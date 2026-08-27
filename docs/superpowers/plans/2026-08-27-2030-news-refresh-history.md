@@ -6,26 +6,26 @@ Branch: `fleet/lane-2030`. Risk tier: security.
 
 ## Problem
 
-`app.news_refresh_state` is one row per user holding *live* status only. `failure_kind` is cleared
+`app.news_refresh_state` is one row per user holding _live_ status only. `failure_kind` is cleared
 at the start of the next run and again on success, and `updated_at` only says when the row last
 moved at all. Once the state returns to `idle`, a run that failed an hour ago and a run that
 succeeded a minute ago are indistinguishable.
 
 ## Seams check — every assumption cited on this branch
 
-| Assumption | Evidence | Verdict |
-| --- | --- | --- |
-| Table exists, owner-only, FORCE RLS | `packages/news/sql/0160_news_discovery.sql:5-12`, `:29-33` | confirmed |
-| Policies are table-level for app **and** worker roles, so new columns are covered | `packages/news/sql/0160_news_discovery.sql:36-56` | confirmed |
-| Grants are table-wide (not column-scoped) for both roles | `packages/news/sql/0160_news_discovery.sql:60` inside the loop at `:29` | confirmed |
-| The column-scoped worker grants do **not** apply to this table | `packages/news/sql/0161_news_revalidation.sql:17-22` targets `news_custom_sources` / `news_custom_topics` only | confirmed — spec's "no GRANT needed" holds |
-| Four write points + one read | `packages/news/src/personalization-repository.ts:494,508,525,537,570` | confirmed |
-| Failure write runs in a fresh data context as the worker role | `packages/news/src/personalization-repository.ts:570-577` | confirmed |
-| Snapshot table has `compiled_at`, `expires_at`, `payload` | `packages/news/sql/0159_news_personalization.sql:81-88` | confirmed |
-| Column types live in one interface | `packages/db/src/types.ts:1148-1155` (spec said 1097 — drift, harmless) | confirmed |
-| Contract in two places, `additionalProperties: false` | `packages/shared/src/news-api.ts:231-235` and `:503-512` | confirmed |
-| Migration ledger test pins the exact file list | `tests/integration/foundation-schema-catalog.test.ts:363` ends at `0201` | confirmed |
-| Routes unit test builds a whole refresh DTO literal | `tests/unit/news-routes.test.ts:148,205` | confirmed — must be updated when fields become required |
+| Assumption                                                                        | Evidence                                                                                                       | Verdict                                                 |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Table exists, owner-only, FORCE RLS                                               | `packages/news/sql/0160_news_discovery.sql:5-12`, `:29-33`                                                     | confirmed                                               |
+| Policies are table-level for app **and** worker roles, so new columns are covered | `packages/news/sql/0160_news_discovery.sql:36-56`                                                              | confirmed                                               |
+| Grants are table-wide (not column-scoped) for both roles                          | `packages/news/sql/0160_news_discovery.sql:60` inside the loop at `:29`                                        | confirmed                                               |
+| The column-scoped worker grants do **not** apply to this table                    | `packages/news/sql/0161_news_revalidation.sql:17-22` targets `news_custom_sources` / `news_custom_topics` only | confirmed — spec's "no GRANT needed" holds              |
+| Four write points + one read                                                      | `packages/news/src/personalization-repository.ts:494,508,525,537,570`                                          | confirmed                                               |
+| Failure write runs in a fresh data context as the worker role                     | `packages/news/src/personalization-repository.ts:570-577`                                                      | confirmed                                               |
+| Snapshot table has `compiled_at`, `expires_at`, `payload`                         | `packages/news/sql/0159_news_personalization.sql:81-88`                                                        | confirmed                                               |
+| Column types live in one interface                                                | `packages/db/src/types.ts:1148-1155` (spec said 1097 — drift, harmless)                                        | confirmed                                               |
+| Contract in two places, `additionalProperties: false`                             | `packages/shared/src/news-api.ts:231-235` and `:503-512`                                                       | confirmed                                               |
+| Migration ledger test pins the exact file list                                    | `tests/integration/foundation-schema-catalog.test.ts:363` ends at `0201`                                       | confirmed                                               |
+| Routes unit test builds a whole refresh DTO literal                               | `tests/unit/news-routes.test.ts:148,205`                                                                       | confirmed — must be updated when fields become required |
 
 ### Corrections to the spec, already verified
 
@@ -80,8 +80,9 @@ ALTER TABLE app.news_refresh_state
   CHECK (last_failure_kind IS NULL OR last_failure_kind IN ('fetch', 'ai', 'internal'));
 ```
 
-  Drop-then-add on the constraint is deliberate: bare `ADD CONSTRAINT` is not re-runnable.
-  File header records the owner-only RLS classification and why no GRANT/POLICY is added.
+Drop-then-add on the constraint is deliberate: bare `ADD CONSTRAINT` is not re-runnable.
+File header records the owner-only RLS classification and why no GRANT/POLICY is added.
+
 - Declare `"sql/0203_news_refresh_history.sql"` in `database.migrations` in
   `packages/news/src/manifest.ts` (after the `0200` entry).
 - Add the file to the pinned ledger in `tests/integration/foundation-schema-catalog.test.ts`
@@ -134,8 +135,7 @@ returns `{ state: "idle", updatedAt: null }` plus `null` for each new field.
 `readRefreshDiagnostics` answers the freshness question in one query, joining refresh state and
 snapshot off a one-row select so it works with no refresh row, no snapshot, either or both. It
 selects `compiled_at`, `expires_at`, an epoch-seconds age, and a count computed as
-`jsonb_array_length(payload -> 'articles')` guarded by `jsonb_typeof(...) = 'array'`, defaulting to
-0. **It never selects `payload`.** No owner filter — row-level security already restricts each
+`jsonb_array_length(payload -> 'articles')` guarded by `jsonb_typeof(...) = 'array'`, defaulting to 0. **It never selects `payload`.** No owner filter — row-level security already restricts each
 table to the acting user's row, matching the style of the existing methods in this file.
 
 This method has no production caller in this slice; the diagnostics provider that consumes it is
@@ -174,18 +174,18 @@ In `tests/integration/news-discovery-repository.test.ts`:
    Asserts each of the four timestamps moves only on its own event, that the failure kind is
    stored, and that a following success clears the live `failure_kind` while leaving
    `last_failure_at` and `last_failure_kind` untouched.
-   *Fails against a broken implementation:* if a new run cleared history the way it clears live
+   _Fails against a broken implementation:_ if a new run cleared history the way it clears live
    status, the post-success assertion on `last_failure_at` goes null.
 2. **Freshness.** With no snapshot, `readRefreshDiagnostics` returns item count 0 and a null age.
    After publishing a snapshot with a known article count, the count matches and the age is small.
    Asserts the payload text never appears anywhere in the returned object.
-   *Fails against a broken implementation:* a `SELECT payload` or a JS-side `.length` puts article
+   _Fails against a broken implementation:_ a `SELECT payload` or a JS-side `.length` puts article
    text in the result and the payload-absence assertion trips.
 3. **Owner scoping and row-level security.** A second owner reading their own state sees an
    all-null history, never the first owner's. Extends the existing cross-owner case so an UPDATE
    naming the new columns on the other owner's row changes nothing, and a direct SELECT of that row
    returns no rows.
-   *Fails against a broken implementation:* any missed owner scoping or a policy gap on the new
+   _Fails against a broken implementation:_ any missed owner scoping or a policy gap on the new
    columns lets the second owner read or write the first owner's history.
 
 In `tests/integration/news-refresh-jobs.test.ts` (the worker path):
@@ -193,7 +193,7 @@ In `tests/integration/news-refresh-jobs.test.ts` (the worker path):
 4. A successful run records both an attempt and a success.
 5. A failing fetch records an attempt plus a failure time and the kind `"fetch"`, with the stored
    feed left alone.
-   *Fails against a broken implementation:* the failure path runs as the worker role in a fresh
+   _Fails against a broken implementation:_ the failure path runs as the worker role in a fresh
    data context; if the new columns were not writable there, this is where it shows.
 
 In `tests/integration/foundation-schema-catalog.test.ts`: the ledger entry from Task 1. Omitting it

@@ -127,6 +127,100 @@ describe("news refresh jobs", () => {
     });
   });
 
+  it("records an attempt and a success when a worker run finishes", async () => {
+    await asActor((db) => repository.bumpRefreshRequest(db));
+    await enqueueNewsRefresh(appBoss, ids.userA);
+    await registerNewsJobWorkers(workerBoss, workerContext, {
+      fetch: async (url) => ({
+        ok: true,
+        status: 200,
+        finalUrl: url,
+        contentType: "application/rss+xml",
+        body: feedFor(url),
+        truncated: false
+      }),
+      search: { search: async () => ({ results: [] }) },
+      ai: {
+        fingerprint: async () => "fp",
+        generateJson: async (_db, input) => ({
+          ok: true,
+          object: {
+            rankings: [...input.prompt.matchAll(/"id":"(c\d+)"/g)].map((match, index) => ({
+              id: match[1],
+              relevance: 100 - index,
+              eligible: true
+            }))
+          }
+        })
+      },
+      logger: { info: () => undefined }
+    });
+    await waitForIdle();
+
+    const state = await asActor((db) => repository.readRefreshState(db));
+    expect(state.state).toBe("idle");
+    expect(state.lastRequestedAt).not.toBeNull();
+    expect(state.lastAttemptAt).not.toBeNull();
+    expect(state.lastSuccessAt).not.toBeNull();
+    expect(state.lastFailureAt).toBeNull();
+    expect(state.lastFailureKind).toBeNull();
+  });
+
+  it("records an attempt and a fetch failure when every source fails, keeping the stored feed", async () => {
+    // The failure write runs as the WORKER role in a fresh data context, because the job's own
+    // transaction has already failed (#1590). If the new history columns were not writable there,
+    // this is the test that catches it.
+    await asActor(async (db) => {
+      await repository.bumpRefreshRequest(db);
+      const generation = await repository.beginRefreshRun(db);
+      await repository.publishSnapshotIfCurrent(db, generation, {
+        compiledAt: new Date("2026-07-11T10:00:00.000Z"),
+        expiresAt: new Date("2026-07-18T10:00:00.000Z"),
+        payload: {
+          articles: [
+            {
+              id: "last-good",
+              publisher: "Example",
+              canonicalDomain: "example.com",
+              headline: "Last good story",
+              url: "https://example.com/story",
+              publishedAt: "2026-07-11T09:00:00.000Z",
+              excerpt: null,
+              imageUrl: null,
+              topics: [],
+              preferred: true,
+              rank: 1
+            }
+          ]
+        }
+      });
+      await repository.bumpRefreshRequest(db);
+    });
+    const beforeRun = await asActor((db) => repository.readRefreshState(db));
+
+    await enqueueNewsRefresh(appBoss, ids.userA);
+    await registerNewsJobWorkers(workerBoss, workerContext, {
+      fetch: async () => ({ ok: false as const, reason: "network" as const, status: 503 }),
+      search: { search: async () => ({ results: [] }) },
+      ai: { fingerprint: async () => "fp", generateJson: async () => ({ ok: true, object: {} }) },
+      logger: { info: () => undefined, warn: () => undefined }
+    });
+    await waitForIdle();
+
+    const state = await asActor((db) => repository.readRefreshState(db));
+    expect(state.state).toBe("failed");
+    expect(state.failureKind).toBe("fetch");
+    expect(state.lastFailureKind).toBe("fetch");
+    expect(state.lastFailureAt).not.toBeNull();
+    expect(state.lastAttemptAt).not.toBeNull();
+    expect(state.lastAttemptAt! > beforeRun.lastAttemptAt!).toBe(true);
+    // The last good feed is left exactly where it was.
+    expect(state.lastSuccessAt).toBe(beforeRun.lastSuccessAt);
+    await expect(asActor((db) => repository.readLatestSnapshot(db))).resolves.toMatchObject({
+      payload: { articles: [{ headline: "Last good story" }] }
+    });
+  });
+
   it("publishes a deterministic snapshot and records an AI fallback warning", async () => {
     const warnings: Record<string, unknown>[] = [];
     await asActor(async (db) => {
