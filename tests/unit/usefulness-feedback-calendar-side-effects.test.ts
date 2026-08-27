@@ -49,7 +49,12 @@ function buildApp(args: {
       effect_ref: input.effectRef ?? null,
       metadata_json: input.metadata,
       status: "active",
+      reason_text: input.reasonText ?? null,
+      rule_json: null,
+      rule_version: null,
+      revision: 1,
       created_at: new Date("2026-07-04T00:00:00.000Z"),
+      updated_at: new Date("2026-07-04T00:00:00.000Z"),
       resolved_at: null
     })
   } as unknown as UsefulnessFeedbackRepository;
