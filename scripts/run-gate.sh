@@ -44,9 +44,19 @@
 #       meaning "still running, call me again". An agent polls with repeated
 #       `wait` calls and never exceeds a single tool call's budget.
 #
-#       AGENTS: the Bash tool's DEFAULT timeout is 120s, well under this
-#       command's default 540s. Pass an explicit tool timeout of 600000 ms when
-#       you call `wait`, or pass `--timeout 100` and call it more often.
+#   scripts/run-gate.sh wait --follow [--log <path>]
+#       Same sentinel check, same 15s poll, but never gives up early — it only
+#       returns once the run reaches a terminal state (0/1/2). This is the one
+#       supported way for an agent to wait on a gate: launch this exact command
+#       as a single Bash call with run_in_background: true. That call is not
+#       holding your turn open, so you can keep doing other work and you'll get
+#       exactly one completion notification with the final exit code — no
+#       foreground timeout to size, no repeated `wait`/`status` calls.
+#
+#       AGENTS: without --follow, the Bash tool's DEFAULT timeout is 120s, well
+#       under this command's default 540s. Pass an explicit tool timeout of
+#       600000 ms when you call plain `wait`, or pass `--timeout 100` and call
+#       it more often. Prefer `--follow` backgrounded instead.
 #
 #   scripts/run-gate.sh stop [--log <path>]
 #       Terminates a running gate and waits for its sentinel. Signals the whole
@@ -383,11 +393,12 @@ cmd_stop() {
 }
 
 cmd_wait() {
-  local timeout=540
+  local timeout=540 follow=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --log) OPT_LOG="${2:?--log needs a path}"; shift 2 ;;
       --timeout) timeout="${2:?--timeout needs seconds}"; shift 2 ;;
+      --follow) follow=1; shift ;;
       *) die "unknown option for wait: $1" ;;
     esac
   done
@@ -403,7 +414,7 @@ cmd_wait() {
       verdict "$log" || true
       return "$rc"
     fi
-    if [ "$(date +%s)" -ge "$deadline" ]; then
+    if [ "$follow" -eq 0 ] && [ "$(date +%s)" -ge "$deadline" ]; then
       verdict "$log" || true
       echo "(timeout after ${timeout}s — not a failure; call wait again)"
       return 3
