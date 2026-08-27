@@ -36,6 +36,12 @@ describe("news personalization routes", () => {
     const app = Fastify();
     registerNewsRoutes(app, {
       dataContext: new DataContextRunner(appDb),
+      // #2005: required by the route guard (a declared route must be registered); these
+      // tests exercise personalization, not credentials.
+      credentialCipher: {
+        encrypt: () => ({ version: 1, algorithm: "aes-256-gcm", iv: "", tag: "", ciphertext: "" }),
+        decrypt: () => ({ apiKey: "unused" })
+      },
       resolveAccessContext: async (request) => {
         if (request.headers.authorization === "none") throw new HttpError(401, "Unauthorized");
         return {

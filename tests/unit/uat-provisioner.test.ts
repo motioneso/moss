@@ -223,6 +223,7 @@ describe("writeUatEnvFile", () => {
       // #918 Slice 2 — a real boot crash Task 7's live run caught (JARVIS_MODULE_CREDENTIAL_SECRET_KEY
       // is required in production and any non-development/test NODE_ENV).
       expect(contents).toContain("JARVIS_MODULE_CREDENTIAL_SECRET_KEY=");
+      expect(contents).toContain("JARVIS_NEWS_CREDENTIAL_SECRET_KEY=");
     } finally {
       cleanup();
     }

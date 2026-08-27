@@ -25,7 +25,14 @@ import type {
   NewsSafeFetchPort,
   NewsWebSearchPort
 } from "./discovery/ports.js";
+import type { NewsCredentialCipherPort } from "./credential-cipher-port.js";
+import type { NewsCredentialStore } from "./credential-repository.js";
+import { registerNewsCredentialRoutes } from "./credential-routes.js";
 import { registerNewsImageRoute } from "./image-route.js";
+import {
+  createEmptyNewsPublisherConnectionPort,
+  type NewsPublisherConnectionPort
+} from "./publisher-connection-port.js";
 import {
   registerNewsPersonalizationRoutes,
   triggerNewsRefresh,
@@ -77,6 +84,20 @@ export interface NewsRoutesDependencies {
   readonly personalizationRepository?: NewsPersonalizationStore;
   /** #1110: UAT-only deterministic override for the source-preview route; see module-registry's buildUatNewsPreviewOverride(). */
   readonly previewOverride?: (input: string) => NewsSourcePreviewResponse | undefined;
+  /**
+   * #2005: the encryption seam for publisher access keys. Required, not optional: the
+   * route guard rejects a manifest routes[] entry with no registered route, so the
+   * credential routes must always register. News never resolves key material itself, so
+   * the composition root supplies this.
+   */
+  readonly credentialCipher: NewsCredentialCipherPort;
+  /**
+   * #2005: the reviewed publisher connections. Defaults to the implementation that knows
+   * no connections, so until #2007 lands every connect attempt answers "unsupported".
+   */
+  readonly publisherConnections?: NewsPublisherConnectionPort;
+  /** Optional injection point for tests; defaults to a real `NewsCredentialRepository`. */
+  readonly credentialRepository?: NewsCredentialStore;
 }
 
 /** POST /prefs key validation: the key must exist in the catalog for its kind. */
@@ -228,6 +249,16 @@ export function registerNewsRoutes(
     repository: personalization,
     previews,
     previewOverride: dependencies.previewOverride
+  });
+  // #2005: always registered. The route guard treats a manifest routes[] entry with no
+  // registered route as drift and stops the server, so this must not be conditional.
+  registerNewsCredentialRoutes(server, {
+    dataContext: dependencies.dataContext,
+    resolveAccessContext: dependencies.resolveAccessContext,
+    cipher: dependencies.credentialCipher,
+    connections: dependencies.publisherConnections ?? createEmptyNewsPublisherConnectionPort(),
+    sources: personalization,
+    credentials: dependencies.credentialRepository
   });
   registerNewsImageRoute(server, {
     dataContext: dependencies.dataContext,

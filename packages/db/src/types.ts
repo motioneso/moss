@@ -1077,6 +1077,26 @@ export interface NewsCustomSourcesTable {
   updated_at: TimestampColumn;
 }
 
+/**
+ * News publisher credentials (#2005). One row per (owner, custom source); a source
+ * with no credential simply has no row. encrypted_secret is an AES-256-GCM envelope
+ * produced in the composition root — News never resolves key material itself.
+ * generation is bigint, which the pg driver returns as a string.
+ */
+export interface NewsSourceCredentialsTable {
+  id: ColumnType<string, string | undefined, string>;
+  owner_user_id: string;
+  source_id: string;
+  connection_id: string;
+  encrypted_secret: JsonColumn | null;
+  status: "configured" | "revoked";
+  generation: ColumnType<string, string | undefined, string>;
+  last_validated_at: NullableTimestampColumn;
+  revoked_at: NullableTimestampColumn;
+  created_at: TimestampColumn;
+  updated_at: TimestampColumn;
+}
+
 export interface NewsCustomTopicsTable {
   id: ColumnType<string, string | undefined, string>;
   owner_user_id: string;
@@ -1292,6 +1312,7 @@ export interface MossDatabase {
   "app.news_compilation_snapshots": NewsCompilationSnapshotsTable;
   "app.news_refresh_state": NewsRefreshStateTable;
   "app.news_policy_verdicts": NewsPolicyVerdictsTable;
+  "app.news_source_credentials": NewsSourceCredentialsTable;
   "app.medications": MedicationsTable;
   "app.medication_logs": MedicationLogsTable;
   "app.wellness_therapy_notes": WellnessTherapyNotesTable;
@@ -1348,6 +1369,7 @@ export type DataExportJob = Selectable<DataExportJobsTable>;
 export type NewsCustomSource = Selectable<NewsCustomSourcesTable>;
 export type NewsCustomTopic = Selectable<NewsCustomTopicsTable>;
 export type NewsSourceExclusion = Selectable<NewsSourceExclusionsTable>;
+export type NewsSourceCredential = Selectable<NewsSourceCredentialsTable>;
 export type NewsCompilationSnapshot = Selectable<NewsCompilationSnapshotsTable>;
 export type NewsRefreshState = Selectable<NewsRefreshStateTable>;
 export type NewsPolicyVerdict = Selectable<NewsPolicyVerdictsTable>;
