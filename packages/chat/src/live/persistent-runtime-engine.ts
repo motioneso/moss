@@ -31,13 +31,17 @@ import {
   createMcpReadinessProbe,
   type ClaudePersistentRuntimeOpts
 } from "./claude-persistent-runtime.js";
+import { CodexPersistentRuntime } from "./codex-persistent-runtime.js";
 import { CliChatDeliveryUnknownError, CliChatUnavailableError } from "./errors.js";
 import type { ProviderChatRuntime, RecoveryOutcome } from "./provider-runtime.js";
 import type { CliChatEngine, EngineKillOpts, EngineLaunchOpts, TranscriptRecord } from "./types.js";
 
 export interface ClaudePersistentRuntimeEngineOpts {
   readonly credentialFile?: string;
-  /** Injected for tests; production callers rely on the default `ClaudePersistentRuntime`. */
+  /** Which provider's persistent adapter to build when `runtime` isn't injected. Defaults to
+   *  `"anthropic"` so every existing call site keeps today's behavior unchanged. */
+  readonly provider?: ProviderKind;
+  /** Injected for tests; production callers rely on the default runtime for `provider`. */
   readonly runtime?: ProviderChatRuntime;
   readonly spawnChild?: ClaudePersistentRuntimeOpts["spawnChild"];
 }
@@ -49,7 +53,7 @@ const NO_RESUMABLE_TRANSCRIPT_REASON =
   "no-op: --no-session-persistence means the provider keeps no resumable transcript to purge";
 
 export class ClaudePersistentRuntimeEngine implements CliChatEngine {
-  readonly provider: ProviderKind = "anthropic";
+  readonly provider: ProviderKind;
 
   private readonly runtime: ProviderChatRuntime;
 
@@ -65,13 +69,22 @@ export class ClaudePersistentRuntimeEngine implements CliChatEngine {
     io: Pick<TmuxIo, "run" | "writeFile">,
     opts: ClaudePersistentRuntimeEngineOpts = {}
   ) {
-    this.runtime =
-      opts.runtime ??
-      new ClaudePersistentRuntime({
+    this.provider = opts.provider ?? "anthropic";
+    if (opts.runtime) {
+      this.runtime = opts.runtime;
+    } else if (this.provider === "openai-compatible") {
+      this.runtime = new CodexPersistentRuntime({
+        io,
+        tokenEnvPath: opts.credentialFile,
+        spawnChild: opts.spawnChild
+      });
+    } else {
+      this.runtime = new ClaudePersistentRuntime({
         io,
         credentialFile: opts.credentialFile,
         spawnChild: opts.spawnChild
       });
+    }
   }
 
   async launch(opts: EngineLaunchOpts): Promise<{ offset: number }> {
