@@ -80,7 +80,15 @@ function personalization(
     customTopics: [],
     sourceExclusions: [],
     snapshot: null,
-    refresh: { state: "idle", updatedAt: null },
+    refresh: {
+      state: "idle",
+      updatedAt: null,
+      lastRequestedAt: null,
+      lastAttemptAt: null,
+      lastSuccessAt: null,
+      lastFailureAt: null,
+      lastFailureKind: null
+    },
     ...overrides
   };
 }

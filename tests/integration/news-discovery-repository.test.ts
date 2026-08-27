@@ -16,6 +16,31 @@ import { connectionStrings, ids, resetFoundationDatabase } from "./test-database
 const { Client } = pg;
 const repo = new NewsPersonalizationRepository();
 
+/** What readRefreshState returns for an owner who has never asked for a refresh. */
+const EMPTY_REFRESH_STATE = {
+  state: "idle",
+  updatedAt: null,
+  lastRequestedAt: null,
+  lastAttemptAt: null,
+  lastSuccessAt: null,
+  lastFailureAt: null,
+  lastFailureKind: null
+} as const;
+
+const article = (id: string, headline: string, rank: number) => ({
+  id,
+  publisher: "News Example",
+  canonicalDomain: "news.example.com",
+  headline,
+  url: `https://news.example.com/${id}`,
+  publishedAt: "2026-07-11T11:00:00.000Z",
+  excerpt: null,
+  imageUrl: null,
+  topics: [] as string[],
+  preferred: true,
+  rank
+});
+
 describe("news discovery repository", () => {
   let appDb: Kysely<MossDatabase>;
   let dataContext: DataContextRunner;
@@ -152,10 +177,9 @@ describe("news discovery repository", () => {
   });
 
   it("uses generations to reject stale publication and atomically prunes domains", async () => {
-    await expect(asActor(ids.userA, (db) => repo.readRefreshState(db))).resolves.toEqual({
-      state: "idle",
-      updatedAt: null
-    });
+    await expect(asActor(ids.userA, (db) => repo.readRefreshState(db))).resolves.toEqual(
+      EMPTY_REFRESH_STATE
+    );
     await expect(asActor(ids.userA, (db) => repo.bumpRefreshRequest(db))).resolves.toBe(1);
     const generation = await asActor<number>(ids.userA, (db) => repo.beginRefreshRun(db));
     await expect(asActor(ids.userA, (db) => repo.bumpRefreshRequest(db))).resolves.toBe(2);
@@ -204,10 +228,183 @@ describe("news discovery repository", () => {
     await expect(asActor(ids.userA, (db) => repo.readLatestSnapshot(db))).resolves.toMatchObject({
       payload: { articles: [{ canonicalDomain: "other.test", headline: "Two" }] }
     });
-    await expect(asActor(ids.userB, (db) => repo.readRefreshState(db))).resolves.toEqual({
-      state: "idle",
-      updatedAt: null
+    await expect(asActor(ids.userB, (db) => repo.readRefreshState(db))).resolves.toEqual(
+      EMPTY_REFRESH_STATE
+    );
+  });
+
+  it("records requests, attempts, successes and failures as four separate facts", async () => {
+    // The point of #2030: state/failure_kind say what is true RIGHT NOW and are wiped by the next
+    // run, so once the state returns to idle a run that failed and a run that succeeded look
+    // identical. The five history columns must survive that wipe.
+    const history = () => asActor(ids.userA, (db) => repo.readRefreshState(db));
+    const accessContext = { actorUserId: ids.userA, requestId: crypto.randomUUID() };
+    const snapshot = (compiledAt: Date) => ({
+      compiledAt,
+      expiresAt: new Date(compiledAt.getTime() + 30 * 60_000),
+      payload: { articles: [article("one", "One", 1)] }
     });
+
+    await expect(history()).resolves.toEqual(EMPTY_REFRESH_STATE);
+
+    // 1. Request. Only last_requested_at moves; nothing else has happened yet.
+    await expect(asActor(ids.userA, (db) => repo.bumpRefreshRequest(db))).resolves.toBe(1);
+    const requested = await history();
+    expect(requested.lastRequestedAt).not.toBeNull();
+    expect(requested.lastAttemptAt).toBeNull();
+    expect(requested.lastSuccessAt).toBeNull();
+    expect(requested.lastFailureAt).toBeNull();
+    expect(requested.lastFailureKind).toBeNull();
+
+    // 2. Attempt. last_attempt_at appears; the request time is left exactly where it was.
+    const firstRun = await asActor<number>(ids.userA, (db) => repo.beginRefreshRun(db));
+    const attempted = await history();
+    expect(attempted.lastAttemptAt).not.toBeNull();
+    expect(attempted.lastRequestedAt).toBe(requested.lastRequestedAt);
+    expect(attempted.lastSuccessAt).toBeNull();
+    expect(attempted.lastFailureAt).toBeNull();
+
+    // 3. Success. last_success_at appears; request and attempt times are untouched.
+    await expect(
+      asActor(ids.userA, (db) => repo.publishSnapshotIfCurrent(db, firstRun, snapshot(new Date())))
+    ).resolves.toBe(true);
+    const succeeded = await history();
+    expect(succeeded.state).toBe("idle");
+    expect(succeeded.lastSuccessAt).not.toBeNull();
+    expect(succeeded.lastRequestedAt).toBe(requested.lastRequestedAt);
+    expect(succeeded.lastAttemptAt).toBe(attempted.lastAttemptAt);
+    expect(succeeded.lastFailureAt).toBeNull();
+
+    // 4. A second request and attempt. Both must move PAST the success that happened in between —
+    // if the ON CONFLICT branch of either write forgot its timestamp, the old value would still
+    // sit before last_success_at and these two comparisons would fail.
+    await expect(asActor(ids.userA, (db) => repo.bumpRefreshRequest(db))).resolves.toBe(2);
+    const rerequested = await history();
+    expect(rerequested.lastRequestedAt! > succeeded.lastSuccessAt!).toBe(true);
+    expect(rerequested.lastSuccessAt).toBe(succeeded.lastSuccessAt);
+
+    const secondRun = await asActor<number>(ids.userA, (db) => repo.beginRefreshRun(db));
+    expect(secondRun).toBe(2);
+    const reattempted = await history();
+    expect(reattempted.lastAttemptAt! > succeeded.lastSuccessAt!).toBe(true);
+    expect(reattempted.lastSuccessAt).toBe(succeeded.lastSuccessAt);
+
+    // 5. Failure. The kind is stored in both the live column and the history column.
+    await expect(
+      repo.failRefreshRunIfCurrent(dataContext, accessContext, secondRun, "fetch")
+    ).resolves.toBe(true);
+    const failed = await history();
+    expect(failed.state).toBe("failed");
+    expect(failed.failureKind).toBe("fetch");
+    expect(failed.lastFailureKind).toBe("fetch");
+    expect(failed.lastFailureAt! > succeeded.lastSuccessAt!).toBe(true);
+    expect(failed.lastSuccessAt).toBe(succeeded.lastSuccessAt);
+
+    // 6. The rule this whole slice exists for: a later success clears the LIVE failure_kind but
+    // must leave the failure history exactly as it was.
+    await expect(asActor(ids.userA, (db) => repo.bumpRefreshRequest(db))).resolves.toBe(3);
+    const thirdRun = await asActor<number>(ids.userA, (db) => repo.beginRefreshRun(db));
+    await expect(
+      asActor(ids.userA, (db) => repo.publishSnapshotIfCurrent(db, thirdRun, snapshot(new Date())))
+    ).resolves.toBe(true);
+    const recovered = await history();
+    expect(recovered.state).toBe("idle");
+    expect(recovered.failureKind).toBeUndefined();
+    expect(recovered.lastFailureAt).toBe(failed.lastFailureAt);
+    expect(recovered.lastFailureKind).toBe("fetch");
+    expect(recovered.lastSuccessAt! > failed.lastFailureAt!).toBe(true);
+  });
+
+  it("reports feed freshness and item count without ever loading the feed", async () => {
+    // With no snapshot at all: no age to report, and nothing in the feed.
+    const empty = await asActor(ids.userA, (db) => repo.readRefreshDiagnostics(db));
+    expect(empty).toEqual({
+      refresh: EMPTY_REFRESH_STATE,
+      requestedGeneration: 0,
+      compiledGeneration: 0,
+      snapshotCompiledAt: null,
+      snapshotExpiresAt: null,
+      snapshotAgeSeconds: null,
+      itemCount: 0
+    });
+
+    await asActor(ids.userA, (db) => repo.bumpRefreshRequest(db));
+    const generation = await asActor<number>(ids.userA, (db) => repo.beginRefreshRun(db));
+    const compiledAt = new Date();
+    await expect(
+      asActor(ids.userA, (db) =>
+        repo.publishSnapshotIfCurrent(db, generation, {
+          compiledAt,
+          expiresAt: new Date(compiledAt.getTime() + 30 * 60_000),
+          payload: {
+            articles: [
+              article("one", "Secret headline one", 1),
+              article("two", "Secret headline two", 2),
+              article("three", "Secret headline three", 3)
+            ]
+          }
+        })
+      )
+    ).resolves.toBe(true);
+
+    const filled = await asActor(ids.userA, (db) => repo.readRefreshDiagnostics(db));
+    expect(filled.itemCount).toBe(3);
+    expect(filled.snapshotCompiledAt).toBe(compiledAt.toISOString());
+    expect(filled.snapshotAgeSeconds).not.toBeNull();
+    expect(filled.snapshotAgeSeconds!).toBeGreaterThanOrEqual(0);
+    expect(filled.snapshotAgeSeconds!).toBeLessThan(120);
+    expect(filled.requestedGeneration).toBe(1);
+    expect(filled.compiledGeneration).toBe(1);
+    expect(filled.refresh.lastSuccessAt).not.toBeNull();
+
+    // The count is computed inside Postgres, so no article text may ride along in the result.
+    const serialized = JSON.stringify(filled);
+    expect(serialized).not.toContain("Secret headline");
+    expect(serialized).not.toContain("articles");
+  });
+
+  it("keeps one owner's refresh history invisible to another owner", async () => {
+    await asActor(ids.userA, (db) => repo.bumpRefreshRequest(db));
+    const run = await asActor<number>(ids.userA, (db) => repo.beginRefreshRun(db));
+    await repo.failRefreshRunIfCurrent(
+      dataContext,
+      { actorUserId: ids.userA, requestId: crypto.randomUUID() },
+      run,
+      "ai"
+    );
+
+    // The second owner has their own empty history, and their own diagnostics read shows nothing
+    // of the first owner's failed run.
+    await expect(asActor(ids.userB, (db) => repo.readRefreshState(db))).resolves.toEqual(
+      EMPTY_REFRESH_STATE
+    );
+    await expect(
+      asActor(ids.userB, (db) => repo.readRefreshDiagnostics(db))
+    ).resolves.toMatchObject({
+      refresh: EMPTY_REFRESH_STATE,
+      itemCount: 0,
+      snapshotAgeSeconds: null
+    });
+
+    // Naming the new columns explicitly must not let the second owner rewrite the first owner's
+    // history, and a direct read of that row must return nothing.
+    await asActor(ids.userB, async (scopedDb) => {
+      const overwrite = await scopedDb.db
+        .updateTable("app.news_refresh_state")
+        .set({ last_failure_kind: null, last_failure_at: null, last_success_at: new Date() })
+        .where("owner_user_id", "=", ids.userA)
+        .executeTakeFirst();
+      expect(overwrite.numUpdatedRows).toBe(0n);
+      await expect(
+        sql`SELECT last_failure_kind, last_failure_at FROM app.news_refresh_state
+             WHERE owner_user_id = ${ids.userA}`.execute(scopedDb.db)
+      ).resolves.toMatchObject({ rows: [] });
+    });
+
+    const untouched = await asActor(ids.userA, (db) => repo.readRefreshState(db));
+    expect(untouched.lastFailureKind).toBe("ai");
+    expect(untouched.lastFailureAt).not.toBeNull();
+    expect(untouched.lastSuccessAt).toBeNull();
   });
 
   it("new-table RLS denies cross-owner updates and deletes", async () => {

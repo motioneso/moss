@@ -1152,6 +1152,16 @@ export interface NewsRefreshStateTable {
   requested_generation: ColumnType<string, string | number | undefined, string | number>;
   compiled_generation: ColumnType<string, string | number | undefined, string | number>;
   updated_at: TimestampColumn;
+  /**
+   * #2030 — history, not live status. `state` and `failure_kind` above say what is true right
+   * now; these five say when each event last happened, ever. A later success clears
+   * `failure_kind` but must leave `last_failure_at` / `last_failure_kind` alone.
+   */
+  last_requested_at: TimestampColumn | null;
+  last_attempt_at: TimestampColumn | null;
+  last_success_at: TimestampColumn | null;
+  last_failure_at: TimestampColumn | null;
+  last_failure_kind: "fetch" | "ai" | "internal" | null;
 }
 
 export interface NewsPolicyVerdictsTable {

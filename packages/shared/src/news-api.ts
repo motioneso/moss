@@ -229,9 +229,21 @@ export interface DeleteNewsTopicResponse {
 }
 
 export interface NewsRefreshStateDto {
+  /** What is true right now. Cleared and rewritten by every run. */
   readonly state: "idle" | "queued" | "running" | "failed";
   readonly updatedAt: string | null;
+  /** The live failure category. Cleared when the next run starts and again on success. */
   readonly failureKind?: "fetch" | "ai" | "internal";
+  /**
+   * #2030 — history, not live status: when each event last happened, ever. A later success
+   * clears `failureKind` above but must leave `lastFailureAt` / `lastFailureKind` alone, so a
+   * caller can still tell a run that failed an hour ago from one that succeeded a minute ago.
+   */
+  readonly lastRequestedAt: string | null;
+  readonly lastAttemptAt: string | null;
+  readonly lastSuccessAt: string | null;
+  readonly lastFailureAt: string | null;
+  readonly lastFailureKind: "fetch" | "ai" | "internal" | null;
 }
 
 export interface TriggerNewsRefreshResponse {
@@ -500,14 +512,31 @@ const newsSourceExclusionDtoSchema = {
   }
 } as const;
 
+// The five history fields must appear in BOTH `properties` and `required`, or in neither.
+// additionalProperties is false, so Fastify silently drops any field not listed here: the
+// repository would return the history, the response would not, and it would read as a
+// repository bug rather than a schema omission.
 const newsRefreshStateDtoSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["state", "updatedAt"],
+  required: [
+    "state",
+    "updatedAt",
+    "lastRequestedAt",
+    "lastAttemptAt",
+    "lastSuccessAt",
+    "lastFailureAt",
+    "lastFailureKind"
+  ],
   properties: {
     state: { type: "string", enum: ["idle", "queued", "running", "failed"] },
     updatedAt: { type: ["string", "null"] },
-    failureKind: { type: "string", enum: ["fetch", "ai", "internal"] }
+    failureKind: { type: "string", enum: ["fetch", "ai", "internal"] },
+    lastRequestedAt: { type: ["string", "null"] },
+    lastAttemptAt: { type: ["string", "null"] },
+    lastSuccessAt: { type: ["string", "null"] },
+    lastFailureAt: { type: ["string", "null"] },
+    lastFailureKind: { type: ["string", "null"], enum: ["fetch", "ai", "internal", null] }
   }
 } as const;
 
