@@ -340,6 +340,15 @@ export default defineConfig({
       {
         find: "@moss/people",
         replacement: fileURLToPath(new URL("./packages/people/src/index.ts", import.meta.url))
+      },
+      // Subpath export first, same pairing requirement as the other subpath/bare pairs above.
+      {
+        find: "@moss/workflows/routes",
+        replacement: fileURLToPath(new URL("./packages/workflows/src/routes.ts", import.meta.url))
+      },
+      {
+        find: "@moss/workflows",
+        replacement: fileURLToPath(new URL("./packages/workflows/src/index.ts", import.meta.url))
       }
     ]
   },
