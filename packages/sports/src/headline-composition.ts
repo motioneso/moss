@@ -23,6 +23,35 @@ export type SourceNewsGroup =
       readonly headlines: readonly SourceHeadline[];
     };
 
+/**
+ * Builds the opaque per-story feedback reference from a story's canonical link (#2019). Injected
+ * rather than imported: the hash lives in the usefulness-feedback package, and Sports must not
+ * reach into another module's internals (CLAUDE.md, module isolation). The composition root binds
+ * it; every caller here treats it as optional so a service built without the port is unchanged.
+ */
+export type StoryRefFor = (canonicalLink: string) => string;
+
+/**
+ * `{ storyRef }` when a reference can be built, `{}` otherwise, so the field is simply absent
+ * rather than present-and-empty. Keyed on the CANONICAL link, which is why the same story reached
+ * from a league feed and from a team feed carries one reference.
+ */
+export function storyRefFields(
+  url: string,
+  refFor: StoryRefFor | undefined
+): { storyRef?: string } {
+  if (!refFor) return {};
+  const canonical = canonicalStoryUrl(url);
+  if (!canonical) return {};
+  try {
+    return { storyRef: refFor(canonical) };
+  } catch {
+    // A link the hash refuses (empty after normalising) must not take the whole page down; the
+    // story simply renders without a feedback menu.
+    return {};
+  }
+}
+
 export function canonicalStoryUrl(value: string): string | null {
   try {
     const url = new URL(value);
@@ -113,7 +142,7 @@ export function composeSportsNewsGroups(
   return deduplicateNewsGroups([...sportGroups, ...competitionGroups]);
 }
 
-export function toPublicHeadline(headline: SourceHeadline): Headline {
+export function toPublicHeadline(headline: SourceHeadline, refFor?: StoryRefFor): Headline {
   const sportKey =
     headline.sportKey ??
     (headline.competitionKey ? catalogEntry(headline.competitionKey)?.espnSport : undefined);
@@ -131,13 +160,25 @@ export function toPublicHeadline(headline: SourceHeadline): Headline {
     teamKeys: headline.teamKeys,
     publisherLabel: headline.publisherLabel,
     publisherDomain: headline.publisherDomain,
-    ...(headline.body === undefined ? {} : { body: headline.body })
+    ...(headline.body === undefined ? {} : { body: headline.body }),
+    ...storyRefFields(headline.url, refFor)
   };
 }
 
+/**
+ * Top stories, in two tiers: each group's editorial lead first, then followed-team stories by
+ * feed rank.
+ *
+ * `liftFor` is the "more like this" nudge (#2019), and it applies to the SECOND tier only. Tier
+ * one is each league's own editorial lead, and a positive preference must never buy a place
+ * there — that is what keeps a preference a nudge rather than a takeover. The league news band on
+ * the client keeps its own ranking; in this slice a lift is a server-side top-stories effect and
+ * nothing else.
+ */
 export function rankTopStories(
   groups: readonly SourceNewsGroup[],
-  followedTeams: readonly ResolvedFollow[]
+  followedTeams: readonly ResolvedFollow[],
+  liftFor?: (headline: SourceHeadline) => number
 ): SourceHeadline[] {
   const pairs = new Set(
     followedTeams.map((follow) => `${follow.competitionKey}:${follow.teamKey}`)
@@ -152,7 +193,12 @@ export function rankTopStories(
     }
   }
   const remaining = groups
-    .flatMap((group) => group.headlines.map((headline, feedRank) => ({ headline, feedRank })))
+    .flatMap((group) =>
+      group.headlines.map((headline, feedRank) => ({
+        headline,
+        feedRank: feedRank - (liftFor?.(headline) ?? 0)
+      }))
+    )
     .sort(
       (left, right) =>
         left.feedRank - right.feedRank ||

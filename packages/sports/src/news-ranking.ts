@@ -21,7 +21,7 @@ export function isFollowed(
 // Written-article detector (mrb5reqq "some can have more text (especially if they are a written
 // article)"): ESPN's written pieces live under /story/ URLs while clips live under /video/; a long
 // dek is the fallback signal for sources that don't encode type in the URL.
-export function isWrittenArticle(headline: Headline): boolean {
+export function isWrittenArticle(headline: Pick<Headline, "url" | "summary">): boolean {
   return headline.url.includes("/story/") || headline.summary.length >= 160;
 }
 
