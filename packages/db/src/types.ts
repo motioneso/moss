@@ -621,16 +621,25 @@ export type UsefulnessFeedbackTargetKind =
   | "chat_message"
   | "briefing_run"
   | "briefing_item"
-  | "proactive_card";
-export type UsefulnessFeedbackSurface = "chat" | "briefing" | "today" | "proactive";
+  | "proactive_card"
+  | "news_story"
+  | "sports_story";
+export type UsefulnessFeedbackSurface =
+  | "chat"
+  | "briefing"
+  | "today"
+  | "proactive"
+  | "news"
+  | "sports";
 export type UsefulnessFeedbackKind =
   | "more_like_this"
+  | "less_like_this"
   | "too_much"
   | "wrong_priority"
   | "not_useful"
   | "remember_this"
   | "dismiss";
-export type UsefulnessFeedbackStatus = "active" | "undone";
+export type UsefulnessFeedbackStatus = "active" | "undone" | "superseded";
 export type UsefulnessFeedbackPriorityBand = "critical" | "high" | "normal" | "low";
 
 export interface UsefulnessFeedbackSignalsTable {
@@ -651,7 +660,15 @@ export interface UsefulnessFeedbackSignalsTable {
     UsefulnessFeedbackStatus | undefined,
     UsefulnessFeedbackStatus
   >;
+  /** Bounded free text, required for `less_like_this` and forbidden for every other action. */
+  reason_text: string | null;
+  /** Compiled relevance rule. Written by #2017 (906-B); always `{}` in this slice. */
+  rule_json: JsonColumn;
+  /** Version of the rule compiler that produced `rule_json`. Null until #2017 fills it. */
+  rule_version: number | null;
+  revision: ColumnType<number, number | undefined, number>;
   created_at: TimestampColumn;
+  updated_at: TimestampColumn;
   resolved_at: NullableTimestampColumn;
 }
 

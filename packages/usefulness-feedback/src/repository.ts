@@ -4,7 +4,8 @@ import {
   assertDataContextDb,
   type DataContextDb,
   type UsefulnessFeedbackKind,
-  type UsefulnessFeedbackSignal
+  type UsefulnessFeedbackSignal,
+  type UsefulnessFeedbackStatus
 } from "@moss/db";
 import type { FeedbackSurface, FeedbackTargetKind } from "@moss/shared";
 
@@ -23,8 +24,13 @@ interface FeedbackRow {
   readonly effect_kind: string | null;
   readonly effect_ref: string | null;
   readonly metadata_json: Record<string, unknown>;
-  readonly status: "active" | "undone";
+  readonly status: UsefulnessFeedbackStatus;
+  readonly reason_text: string | null;
+  readonly rule_json: Record<string, unknown>;
+  readonly rule_version: number | null;
+  readonly revision: number;
   readonly created_at: Date;
+  readonly updated_at: Date;
   readonly resolved_at: Date | null;
 }
 
@@ -38,6 +44,13 @@ export interface CreateFeedbackInput {
   readonly metadata: Record<string, unknown>;
   readonly effectKind?: string | null;
   readonly effectRef?: string | null;
+  /** Already trimmed and length-checked by the route; stored verbatim. */
+  readonly reasonText?: string | null;
+}
+
+export interface ListFeedbackOptions {
+  readonly targetKinds?: readonly FeedbackTargetKind[];
+  readonly status?: UsefulnessFeedbackStatus;
 }
 
 export class UsefulnessFeedbackRepository {
@@ -77,7 +90,8 @@ export class UsefulnessFeedbackRepository {
         priority_band,
         effect_kind,
         effect_ref,
-        metadata_json
+        metadata_json,
+        reason_text
       )
       VALUES (
         ${input.ownerUserId}::uuid,
@@ -90,7 +104,8 @@ export class UsefulnessFeedbackRepository {
         ${input.verification.priorityBand ?? null},
         ${input.effectKind ?? null},
         ${input.effectRef ?? null},
-        ${JSON.stringify(input.metadata)}::jsonb
+        ${JSON.stringify(input.metadata)}::jsonb,
+        ${input.reasonText ?? null}
       )
       RETURNING *
     `.execute(scopedDb.db);
@@ -100,16 +115,96 @@ export class UsefulnessFeedbackRepository {
     return row;
   }
 
-  async list(scopedDb: DataContextDb, ownerUserId: string): Promise<UsefulnessFeedbackSignal[]> {
+  async list(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    options: ListFeedbackOptions = {}
+  ): Promise<UsefulnessFeedbackSignal[]> {
+    assertDataContextDb(scopedDb);
+    let query = scopedDb.db
+      .selectFrom("app.usefulness_feedback_signals")
+      .selectAll()
+      .where("owner_user_id", "=", ownerUserId);
+    if (options.targetKinds && options.targetKinds.length > 0) {
+      query = query.where("target_kind", "in", [...options.targetKinds]);
+    }
+    if (options.status) query = query.where("status", "=", options.status);
+    return query.orderBy("created_at", "desc").orderBy("id").limit(100).execute();
+  }
+
+  /**
+   * The active story preference for one story, in either direction. The per-direction
+   * `findActive` cannot see the opposite one, which is exactly what flipping a preference needs.
+   */
+  async findActiveStoryPreference(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    targetKind: FeedbackTargetKind,
+    targetRef: string
+  ): Promise<UsefulnessFeedbackSignal | undefined> {
     assertDataContextDb(scopedDb);
     return scopedDb.db
       .selectFrom("app.usefulness_feedback_signals")
       .selectAll()
       .where("owner_user_id", "=", ownerUserId)
-      .orderBy("created_at", "desc")
-      .orderBy("id")
-      .limit(100)
-      .execute();
+      .where("target_kind", "=", targetKind)
+      .where("target_ref", "=", targetRef)
+      .where("status", "=", "active")
+      .executeTakeFirst();
+  }
+
+  /** Retires a preference that the opposite direction has just replaced. */
+  async supersede(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    id: string
+  ): Promise<UsefulnessFeedbackSignal | undefined> {
+    assertDataContextDb(scopedDb);
+    const now = new Date();
+    return scopedDb.db
+      .updateTable("app.usefulness_feedback_signals")
+      .set({ status: "superseded", resolved_at: now, updated_at: now })
+      .where("owner_user_id", "=", ownerUserId)
+      .where("id", "=", id)
+      .where("status", "=", "active")
+      .returningAll()
+      .executeTakeFirst();
+  }
+
+  /** Rewrites the reason on an active row, keeping the same id and bumping the revision. */
+  async updateReason(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    id: string,
+    reasonText: string
+  ): Promise<UsefulnessFeedbackSignal | undefined> {
+    assertDataContextDb(scopedDb);
+    const result = await sql<FeedbackRow>`
+      UPDATE app.usefulness_feedback_signals
+      SET reason_text = ${reasonText},
+          revision = revision + 1,
+          updated_at = now()
+      WHERE owner_user_id = ${ownerUserId}::uuid
+        AND id = ${id}::uuid
+        AND status = 'active'
+        AND kind = 'less_like_this'
+      RETURNING *
+    `.execute(scopedDb.db);
+    return result.rows[0];
+  }
+
+  async findOwned(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    id: string
+  ): Promise<UsefulnessFeedbackSignal | undefined> {
+    assertDataContextDb(scopedDb);
+    return scopedDb.db
+      .selectFrom("app.usefulness_feedback_signals")
+      .selectAll()
+      .where("owner_user_id", "=", ownerUserId)
+      .where("id", "=", id)
+      .executeTakeFirst();
   }
 
   async upsertTarget(
@@ -232,7 +327,8 @@ export class UsefulnessFeedbackRepository {
       .where("id", "=", id)
       .executeTakeFirst();
     if (!existing) return undefined;
-    if (existing.status === "undone") return existing;
+    // Only an active preference can be taken back; an undone or superseded one is already retired.
+    if (existing.status !== "active") return existing;
     if (existing.effect_kind === "memory_candidate" && existing.effect_ref) {
       await options.cancelMemoryCandidate?.(existing.effect_ref);
     }
@@ -241,7 +337,7 @@ export class UsefulnessFeedbackRepository {
     }
     return scopedDb.db
       .updateTable("app.usefulness_feedback_signals")
-      .set({ status: "undone", resolved_at: new Date() })
+      .set({ status: "undone", resolved_at: new Date(), updated_at: new Date() })
       .where("owner_user_id", "=", ownerUserId)
       .where("id", "=", id)
       .returningAll()

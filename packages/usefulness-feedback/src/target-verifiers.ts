@@ -55,14 +55,20 @@ const KINDS_BY_TARGET: Readonly<Record<FeedbackTargetKind, ReadonlySet<Usefulnes
     "not_useful",
     "dismiss",
     "remember_this"
-  ])
+  ]),
+  // Story feedback is an ongoing preference, so it takes only the two directions. `not_useful`
+  // stays off the list on purpose: it describes one item that was shown, not a standing rule.
+  news_story: new Set(["more_like_this", "less_like_this"]),
+  sports_story: new Set(["more_like_this", "less_like_this"])
 };
 
 const SURFACES_BY_TARGET: Readonly<Record<FeedbackTargetKind, ReadonlySet<FeedbackSurface>>> = {
   chat_message: new Set(["chat"]),
   briefing_run: new Set(["briefing"]),
   briefing_item: new Set(["briefing", "today"]),
-  proactive_card: new Set(["proactive", "today"])
+  proactive_card: new Set(["proactive", "today"]),
+  news_story: new Set(["news", "today"]),
+  sports_story: new Set(["sports", "today"])
 };
 
 export function isAllowedFeedbackPair(

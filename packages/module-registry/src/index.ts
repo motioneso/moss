@@ -308,6 +308,7 @@ import {
 } from "@moss/notes";
 import {
   FeedbackTargetVerifierRegistry,
+  createStoryFeedbackTargetVerifier,
   registerUsefulnessFeedbackRoutes,
   usefulnessFeedbackModuleManifest,
   usefulnessFeedbackModuleSqlMigrationDirectory
@@ -1737,6 +1738,9 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         )
       );
       registry.register("proactive_card", makeProactiveCardVerifier(cardRepository));
+      const storyVerifier = createStoryFeedbackTargetVerifier(usefulnessFeedbackRepository);
+      registry.register("news_story", storyVerifier);
+      registry.register("sports_story", storyVerifier);
       registerUsefulnessFeedbackRoutes(server, {
         dataContext: deps.dataContext,
         resolveAccessContext: deps.resolveAccessContext,

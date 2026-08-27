@@ -1,7 +1,10 @@
 const MAX_METADATA_BYTES = 2048;
 const MAX_STRING_LENGTH = 200;
+// `reason` has its own column on the signals table and belongs only to its owner. Blocking it here
+// stops a verifier from also smuggling a copy into the generic metadata object, where it would
+// reach anywhere metadata travels (#2016).
 const UNSAFE_METADATA_KEY =
-  /(?:body|excerpt|external_?id|prompt|raw|secret|source_?ids?|summary|token)/i;
+  /(?:body|excerpt|external_?id|prompt|raw|reason|secret|source_?ids?|summary|token)/i;
 
 export function sanitizeFeedbackMetadata(
   input: Record<string, unknown> | undefined

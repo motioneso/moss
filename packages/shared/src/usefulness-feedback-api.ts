@@ -2,6 +2,7 @@ import { errorResponseSchema, idParamsSchema, jsonObjectSchema } from "./schema-
 
 export type UsefulnessFeedbackKind =
   | "more_like_this"
+  | "less_like_this"
   | "too_much"
   | "wrong_priority"
   | "not_useful"
@@ -12,16 +13,34 @@ export type FeedbackTargetKind =
   | "chat_message"
   | "briefing_run"
   | "briefing_item"
-  | "proactive_card";
+  | "proactive_card"
+  | "news_story"
+  | "sports_story";
 
-export type FeedbackSurface = "chat" | "briefing" | "today" | "proactive";
-export type FeedbackStatus = "active" | "undone";
+export type FeedbackSurface = "chat" | "briefing" | "today" | "proactive" | "news" | "sports";
+export type FeedbackStatus = "active" | "undone" | "superseded";
+
+/** Modules that own story targets; the query filter on the list route maps through this. */
+export type StoryFeedbackModule = "news" | "sports";
+
+export const STORY_FEEDBACK_REASON_MAX_LENGTH = 500;
 
 export interface CreateUsefulnessFeedbackRequest {
   readonly targetKind: FeedbackTargetKind;
   readonly targetRef: string;
   readonly surface: FeedbackSurface;
   readonly kind: UsefulnessFeedbackKind;
+  /** Required for `less_like_this` and rejected for every other action. */
+  readonly reason?: string;
+}
+
+export interface UpdateUsefulnessFeedbackReasonRequest {
+  readonly reason: string;
+}
+
+export interface ListUsefulnessFeedbackQuery {
+  readonly module?: StoryFeedbackModule;
+  readonly status?: FeedbackStatus;
 }
 
 export interface UsefulnessFeedbackDto {
@@ -38,7 +57,11 @@ export interface UsefulnessFeedbackDto {
   readonly effectRef: string | null;
   readonly metadata: Record<string, unknown>;
   readonly status: FeedbackStatus;
+  readonly reason: string | null;
+  readonly revision: number;
+  readonly ruleVersion: number | null;
   readonly createdAt: string;
+  readonly updatedAt: string;
   readonly resolvedAt: string | null;
 }
 
@@ -52,17 +75,42 @@ export interface ListUsefulnessFeedbackResponse {
 
 export const usefulnessFeedbackKindSchema = {
   type: "string",
-  enum: ["more_like_this", "too_much", "wrong_priority", "not_useful", "remember_this", "dismiss"]
+  enum: [
+    "more_like_this",
+    "less_like_this",
+    "too_much",
+    "wrong_priority",
+    "not_useful",
+    "remember_this",
+    "dismiss"
+  ]
 } as const;
 
 export const feedbackTargetKindSchema = {
   type: "string",
-  enum: ["chat_message", "briefing_run", "briefing_item", "proactive_card"]
+  enum: [
+    "chat_message",
+    "briefing_run",
+    "briefing_item",
+    "proactive_card",
+    "news_story",
+    "sports_story"
+  ]
 } as const;
 
 export const feedbackSurfaceSchema = {
   type: "string",
-  enum: ["chat", "briefing", "today", "proactive"]
+  enum: ["chat", "briefing", "today", "proactive", "news", "sports"]
+} as const;
+
+export const feedbackStatusSchema = {
+  type: "string",
+  enum: ["active", "undone", "superseded"]
+} as const;
+
+export const storyFeedbackModuleSchema = {
+  type: "string",
+  enum: ["news", "sports"]
 } as const;
 
 export const createUsefulnessFeedbackRequestSchema = {
@@ -73,7 +121,26 @@ export const createUsefulnessFeedbackRequestSchema = {
     targetKind: feedbackTargetKindSchema,
     targetRef: { type: "string", minLength: 1, maxLength: 1024 },
     surface: feedbackSurfaceSchema,
-    kind: usefulnessFeedbackKindSchema
+    kind: usefulnessFeedbackKindSchema,
+    reason: { type: "string", minLength: 1, maxLength: STORY_FEEDBACK_REASON_MAX_LENGTH }
+  }
+} as const;
+
+export const updateUsefulnessFeedbackReasonRequestSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["reason"],
+  properties: {
+    reason: { type: "string", minLength: 1, maxLength: STORY_FEEDBACK_REASON_MAX_LENGTH }
+  }
+} as const;
+
+export const listUsefulnessFeedbackQuerySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    module: storyFeedbackModuleSchema,
+    status: feedbackStatusSchema
   }
 } as const;
 
@@ -94,7 +161,11 @@ export const usefulnessFeedbackSchema = {
     "effectRef",
     "metadata",
     "status",
+    "reason",
+    "revision",
+    "ruleVersion",
     "createdAt",
+    "updatedAt",
     "resolvedAt"
   ],
   properties: {
@@ -110,8 +181,12 @@ export const usefulnessFeedbackSchema = {
     effectKind: { type: ["string", "null"] },
     effectRef: { type: ["string", "null"] },
     metadata: jsonObjectSchema,
-    status: { type: "string", enum: ["active", "undone"] },
+    status: feedbackStatusSchema,
+    reason: { type: ["string", "null"] },
+    revision: { type: "integer" },
+    ruleVersion: { type: ["integer", "null"] },
     createdAt: { type: "string" },
+    updatedAt: { type: "string" },
     resolvedAt: { type: ["string", "null"] }
   }
 } as const;
@@ -142,9 +217,22 @@ export const createUsefulnessFeedbackRouteSchema = {
 } as const;
 
 export const listUsefulnessFeedbackRouteSchema = {
+  querystring: listUsefulnessFeedbackQuerySchema,
   response: {
     200: listUsefulnessFeedbackResponseSchema,
+    400: errorResponseSchema,
     401: errorResponseSchema
+  }
+} as const;
+
+export const updateUsefulnessFeedbackReasonRouteSchema = {
+  params: idParamsSchema,
+  body: updateUsefulnessFeedbackReasonRequestSchema,
+  response: {
+    200: createUsefulnessFeedbackResponseSchema,
+    400: errorResponseSchema,
+    401: errorResponseSchema,
+    404: errorResponseSchema
   }
 } as const;
 

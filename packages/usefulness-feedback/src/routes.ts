@@ -11,7 +11,7 @@ import {
   createUsefulnessFeedbackRouteSchema,
   listUsefulnessFeedbackRouteSchema,
   undoUsefulnessFeedbackRouteSchema,
-  type CreateUsefulnessFeedbackRequest,
+  updateUsefulnessFeedbackReasonRouteSchema,
   type FeedbackSurface,
   type FeedbackTargetKind,
   type UsefulnessFeedbackDto,
@@ -19,7 +19,9 @@ import {
 } from "@moss/shared";
 
 import { sanitizeFeedbackMetadata } from "./metadata.js";
+import { parseCreateBody, parseListQuery, parseReasonBody } from "./request-parsing.js";
 import { UsefulnessFeedbackRepository } from "./repository.js";
+import { isStoryTargetKind } from "./story-target.js";
 import { isAllowedFeedbackPair, type FeedbackTargetVerifierRegistry } from "./target-verifiers.js";
 
 export interface UsefulnessFeedbackRoutesDependencies {
@@ -46,6 +48,18 @@ export interface UsefulnessFeedbackRoutesDependencies {
       metadata: Record<string, unknown>
     ): Promise<string | null>;
   };
+  /**
+   * Called after a story preference is saved, edited or taken back, so the owning module can
+   * refresh what it shows. Deliberately unwired in this slice: #2018 (News) and #2019 (Sports)
+   * attach their refresh here, which keeps queue work out of this module while giving them a seam
+   * that does not require re-opening this file.
+   */
+  readonly onStoryPreferenceChanged?: (input: {
+    readonly ownerUserId: string;
+    readonly targetKind: FeedbackTargetKind;
+    readonly targetRef: string;
+    readonly change: "created" | "updated" | "removed";
+  }) => Promise<void> | void;
   readonly manualMemoryCandidates?: {
     createPendingManualCandidate(
       scopedDb: Parameters<Parameters<DataContextRunner["withDataContext"]>[1]>[0],
@@ -83,15 +97,29 @@ export function registerUsefulnessFeedbackRoutes(
           throw new HttpError(400, "Feedback target/action pair is invalid");
         }
 
+        const isStory = isStoryTargetKind(input.targetKind);
+
         const result = await dependencies.dataContext.withDataContext(access, async (scopedDb) => {
-          const existing = await repository.findActive(
-            scopedDb,
-            access.actorUserId,
-            input.targetKind,
-            input.targetRef,
-            input.kind
-          );
-          if (existing) return { feedback: existing, created: false };
+          // This lookup only ever sees rows the caller already owns, so returning one early can
+          // disclose nothing about anyone else, and it keeps a repeated tap from re-running the
+          // verifier. Nothing is written on any path below without a successful verification.
+          const existing = isStory
+            ? await repository.findActiveStoryPreference(
+                scopedDb,
+                access.actorUserId,
+                input.targetKind,
+                input.targetRef
+              )
+            : await repository.findActive(
+                scopedDb,
+                access.actorUserId,
+                input.targetKind,
+                input.targetRef,
+                input.kind
+              );
+          if (existing && existing.kind === input.kind) {
+            return { feedback: existing, created: false };
+          }
 
           const verifier = dependencies.registry.get(input.targetKind);
           if (!verifier) throw new HttpError(404, "Feedback target not found");
@@ -148,6 +176,10 @@ export function registerUsefulnessFeedbackRoutes(
             }
           }
 
+          // The opposite direction is retired rather than deleted, so the history stays readable
+          // and the one-active-preference-per-story index keeps holding.
+          if (existing) await repository.supersede(scopedDb, access.actorUserId, existing.id);
+
           return {
             feedback: await repository.create(scopedDb, {
               ownerUserId: access.actorUserId,
@@ -158,11 +190,16 @@ export function registerUsefulnessFeedbackRoutes(
               verification,
               metadata: sanitizeFeedbackMetadata(verification.metadata),
               effectKind,
-              effectRef
+              effectRef,
+              reasonText: input.reason ?? null
             }),
             created: true
           };
         });
+
+        if (isStory && result.created) {
+          await notifyStoryPreferenceChanged(dependencies, result.feedback, "created");
+        }
 
         return reply
           .code(result.created ? 201 : 200)
@@ -175,14 +212,16 @@ export function registerUsefulnessFeedbackRoutes(
     }
   );
 
-  server.get(
+  server.get<{ Querystring: { module?: string; status?: string } }>(
     "/api/me/usefulness-feedback",
     { schema: listUsefulnessFeedbackRouteSchema },
     async (request, reply) => {
       try {
         const access = await dependencies.resolveAccessContext(request);
+        // News settings must never show Sports preferences, or the other way round.
+        const filters = parseListQuery(request.query);
         const feedback = await dependencies.dataContext.withDataContext(access, (scopedDb) =>
-          repository.list(scopedDb, access.actorUserId)
+          repository.list(scopedDb, access.actorUserId, filters)
         );
         return { feedback: feedback.map(serializeFeedback) };
       } catch (error) {
@@ -218,67 +257,66 @@ export function registerUsefulnessFeedbackRoutes(
           })
         );
         if (!feedback) throw new HttpError(404, "Feedback not found");
+        if (isStoryTargetKind(feedback.target_kind as FeedbackTargetKind)) {
+          await notifyStoryPreferenceChanged(dependencies, feedback, "removed");
+        }
         return { feedback: serializeFeedback(feedback) };
       } catch (error) {
         return handleRouteError(error, reply);
       }
     }
   );
+
+  server.patch<{ Params: { id: string } }>(
+    "/api/me/usefulness-feedback/:id",
+    { schema: updateUsefulnessFeedbackReasonRouteSchema },
+    async (request, reply) => {
+      try {
+        const access = await dependencies.resolveAccessContext(request);
+        const reason = parseReasonBody(request.body);
+        const feedback = await dependencies.dataContext.withDataContext(
+          access,
+          async (scopedDb) => {
+            // Owner-scoped: another person's row is simply not found, which is also what a caller
+            // guessing ids should be told.
+            const owned = await repository.findOwned(
+              scopedDb,
+              access.actorUserId,
+              request.params.id
+            );
+            if (!owned || owned.status !== "active") throw new HttpError(404, "Feedback not found");
+            if (owned.kind !== "less_like_this") {
+              throw new HttpError(400, "Only a Less like this reason can be edited");
+            }
+            return repository.updateReason(scopedDb, access.actorUserId, owned.id, reason);
+          }
+        );
+        if (!feedback) throw new HttpError(404, "Feedback not found");
+        if (isStoryTargetKind(feedback.target_kind as FeedbackTargetKind)) {
+          await notifyStoryPreferenceChanged(dependencies, feedback, "updated");
+        }
+        return { feedback: serializeFeedback(feedback) };
+      } catch (error) {
+        return handleRouteError(error, reply, {
+          invalidRequestMessage: "Usefulness feedback request is invalid"
+        });
+      }
+    }
+  );
 }
 
-const FEEDBACK_TARGET_KINDS = new Set<FeedbackTargetKind>([
-  "chat_message",
-  "briefing_run",
-  "briefing_item",
-  "proactive_card"
-]);
-const FEEDBACK_SURFACES = new Set<FeedbackSurface>(["chat", "briefing", "today", "proactive"]);
-const FEEDBACK_KINDS = new Set<UsefulnessFeedbackKind>([
-  "more_like_this",
-  "too_much",
-  "wrong_priority",
-  "not_useful",
-  "remember_this",
-  "dismiss"
-]);
-
-function parseCreateBody(body: unknown): CreateUsefulnessFeedbackRequest {
-  if (!body || typeof body !== "object" || Array.isArray(body)) {
-    throw new HttpError(400, "Usefulness feedback request is invalid");
-  }
-  const value = body as Record<string, unknown>;
-  const keys = Object.keys(value).sort();
-  if (keys.join("|") !== "kind|surface|targetKind|targetRef") {
-    throw new HttpError(400, "Usefulness feedback request is invalid");
-  }
-  if (
-    typeof value.targetRef !== "string" ||
-    value.targetRef.length < 1 ||
-    value.targetRef.length > 1024
-  ) {
-    throw new HttpError(400, "Usefulness feedback request is invalid");
-  }
-  if (
-    typeof value.targetKind !== "string" ||
-    !FEEDBACK_TARGET_KINDS.has(value.targetKind as FeedbackTargetKind)
-  ) {
-    throw new HttpError(400, "Usefulness feedback request is invalid");
-  }
-  if (
-    typeof value.surface !== "string" ||
-    !FEEDBACK_SURFACES.has(value.surface as FeedbackSurface)
-  ) {
-    throw new HttpError(400, "Usefulness feedback request is invalid");
-  }
-  if (typeof value.kind !== "string" || !FEEDBACK_KINDS.has(value.kind as UsefulnessFeedbackKind)) {
-    throw new HttpError(400, "Usefulness feedback request is invalid");
-  }
-  return {
-    targetKind: value.targetKind as FeedbackTargetKind,
-    targetRef: value.targetRef,
-    surface: value.surface as FeedbackSurface,
-    kind: value.kind as UsefulnessFeedbackKind
-  };
+async function notifyStoryPreferenceChanged(
+  dependencies: UsefulnessFeedbackRoutesDependencies,
+  feedback: UsefulnessFeedbackSignal,
+  change: "created" | "updated" | "removed"
+): Promise<void> {
+  // Carries ids and the kind of change only. The reason never travels through this seam.
+  await dependencies.onStoryPreferenceChanged?.({
+    ownerUserId: feedback.owner_user_id,
+    targetKind: feedback.target_kind as FeedbackTargetKind,
+    targetRef: feedback.target_ref,
+    change
+  });
 }
 
 function serializeFeedback(row: UsefulnessFeedbackSignal): UsefulnessFeedbackDto {
@@ -296,7 +334,11 @@ function serializeFeedback(row: UsefulnessFeedbackSignal): UsefulnessFeedbackDto
     effectRef: row.effect_ref,
     metadata: row.metadata_json,
     status: row.status,
+    reason: row.reason_text,
+    revision: row.revision,
+    ruleVersion: row.rule_version,
     createdAt: toIsoString(row.created_at),
+    updatedAt: toIsoString(row.updated_at),
     resolvedAt: row.resolved_at ? toIsoString(row.resolved_at) : null
   };
 }

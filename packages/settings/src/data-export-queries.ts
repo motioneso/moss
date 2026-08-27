@@ -648,7 +648,12 @@ export function usefulnessFeedbackSignalsQuery(userId: string) {
       effect_ref AS "effectRef",
       metadata_json AS "metadata",
       status,
+      reason_text AS "reason",
+      rule_json AS "rule",
+      rule_version AS "ruleVersion",
+      revision,
       created_at AS "createdAt",
+      updated_at AS "updatedAt",
       resolved_at AS "resolvedAt"
     FROM app.usefulness_feedback_signals
     WHERE owner_user_id = ${userId}::uuid

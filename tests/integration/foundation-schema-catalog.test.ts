@@ -357,7 +357,10 @@ describe("MVP foundation schema catalog", () => {
         { version: "0199", name: "0199_external_modules_worker_draft_write.sql" },
         // #2005 (part of #950) News publisher credentials — owner-only FORCE RLS, no
         // admin branch, no worker grant; revoke is an UPDATE that scrubs the envelope.
-        { version: "0200", name: "0200_news_source_credentials.sql" }
+        { version: "0200", name: "0200_news_source_credentials.sql" },
+        // #2016 — story-level relevance feedback: News/Sports targets, a bounded reason,
+        // revisions, and the superseded lifecycle state.
+        { version: "0200", name: "0200_story_relevance_feedback.sql" }
       ]);
     } finally {
       await client.end();
