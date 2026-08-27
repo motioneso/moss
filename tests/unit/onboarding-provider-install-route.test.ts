@@ -18,8 +18,9 @@ import {
 // bare Fastify, with every injected dependency faked — no DB, no cli-runner. It
 // proves: the route triggers installProvider + persists `installing` BEFORE and
 // the terminal state AFTER (the §A.4 ORDER), the admin gate is enforced BEFORE any
-// state write, and a blocked provider (agy/google) is rejected cleanly with a 400
-// before any `installing` row is persisted.
+// state write, and a provider the catalog marks blocked is rejected cleanly with a
+// 400 before any `installing` row is persisted. (The blocked provider here is a
+// FIXTURE, not a claim about the real catalog: #2026 made google installable.)
 // ---------------------------------------------------------------------------
 
 const ADMIN_TOKEN = "admin-token";
@@ -83,7 +84,7 @@ function buildServer(options: BuildOptions = {}): {
     options.installability ??
     ((provider: OnboardingProviderKind) =>
       provider === "google"
-        ? { installable: false, blockedReason: "agy/Antigravity pinning spike unresolved" }
+        ? { installable: false, blockedReason: "fixture: no pinned recipe for this provider" }
         : { installable: true });
 
   const installClient: OnboardingInstallDependencies["installClient"] =
@@ -221,7 +222,7 @@ describe("onboarding provider-install route (§A.5)", () => {
     });
   });
 
-  it("rejects a blocked provider (agy/google) cleanly with 400 and persists NOTHING", async () => {
+  it("rejects a provider the catalog marks blocked, cleanly with 400 and persists NOTHING", async () => {
     const res = await postInstall(server, ADMIN_TOKEN, { providerKind: "google" });
 
     expect(res.statusCode).toBe(400);

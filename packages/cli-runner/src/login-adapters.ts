@@ -172,7 +172,9 @@ const RAW_ADAPTERS: Record<RpcProviderKind, LoginAdapter | undefined> = {
     userCodePattern: CODEX_DEVICE_CODE_PATTERN,
     extractSurface: makeExtractSurface(CODEX_AUTH_URLS, CODEX_DEVICE_CODE_PATTERN)
   },
-  // google (agy): NO adapter — install-blocked + login spike unresolved (§L.9). Absence = blocked.
+  // google: NO adapter — the login spike is still unresolved (§L.9), so absence = blocked here.
+  // #2026 pinned the INSTALL recipe only; installing the tool deliberately does not make it
+  // loginable.
   google: undefined
 };
 

@@ -74,9 +74,10 @@ export const DEFAULT_CHAT_MODELS: Partial<Record<AiProviderKind, DefaultChatMode
     tier: "interactive",
     capabilities: ["chat"]
   }
-  // NOTE: google/gemini is intentionally absent — it is `blocked` in the cli-runner catalog AND has
-  // no login adapter (not loginable), so it can never reach login `ready`. Add an entry here only if
-  // it becomes installable + loginable (then the uniform sentinel rule already covers its launch).
+  // NOTE: google/gemini is intentionally absent. Since #2026 it IS installable (a pinned,
+  // checksummed recipe in the cli-runner catalog), but it still has NO login adapter, so it can
+  // never reach login `ready`. Add an entry here only once it is loginable too (the uniform
+  // sentinel rule already covers its launch).
 };
 
 /** The seam the login flow calls on `ready`. Generic over `providerKind`. */

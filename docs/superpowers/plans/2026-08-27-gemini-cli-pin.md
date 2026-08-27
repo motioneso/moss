@@ -11,19 +11,19 @@ out of scope (spec section "Explicitly out of scope").
 
 ## Seams check — every assumed capability, cited on this branch
 
-| Assumption | Citation | Verified |
-| --- | --- | --- |
-| Catalog validates recipes at load and demotes bad ones to `blocked` | `packages/cli-runner/src/catalog.ts:286-318` (`validateEntry`), `:329-341` (`loadCatalog`) | yes |
-| Lockfile must exist, parse, and carry sha512 on every non-root, non-link entry | `packages/cli-runner/src/catalog.ts:184-227` (`validateLockfileIntegrity`) | yes |
-| `kind:"config"` self-update-disable is written at install, HOME-relative | `packages/cli-runner/src/install-service.ts:610-618` (`writeSelfUpdateConfig`) | yes |
-| HOME for installed tools is `/data/cli-auth` | `packages/cli-runner/src/main.ts:68` (`DEFAULT_HOME`) | yes |
-| `archOptionalDeps` demands both per-arch entries when set | `packages/cli-runner/src/catalog.ts:239-246` | yes |
-| Presence probe uses only the primary binary name, never the aliases | `packages/ai/src/cli-availability.ts:78-86` (`cliAvailable`) | yes |
-| Aliases exist for `google` but are consulted only for the declared-host contract | `packages/ai/src/cli-availability.ts:29-33`, `:65-69` | yes |
-| `google` is currently `blocked` with the pinning-spike reason | `packages/cli-runner/src/catalog.ts:151-158` | yes |
-| No `recipes/google/` folder exists | `packages/cli-runner/recipes/` holds only `anthropic/` and `openai-compatible/` | yes |
-| Catalog-path test excludes `google` from its no-demotion assertion | `tests/unit/cli-runner-catalog-path.test.ts:58` | yes |
-| Install test asserts `google` is rejected by the catalog gate | `tests/unit/cli-runner-install.test.ts:183` | yes |
+| Assumption                                                                       | Citation                                                                                   | Verified |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | -------- |
+| Catalog validates recipes at load and demotes bad ones to `blocked`              | `packages/cli-runner/src/catalog.ts:286-318` (`validateEntry`), `:329-341` (`loadCatalog`) | yes      |
+| Lockfile must exist, parse, and carry sha512 on every non-root, non-link entry   | `packages/cli-runner/src/catalog.ts:184-227` (`validateLockfileIntegrity`)                 | yes      |
+| `kind:"config"` self-update-disable is written at install, HOME-relative         | `packages/cli-runner/src/install-service.ts:610-618` (`writeSelfUpdateConfig`)             | yes      |
+| HOME for installed tools is `/data/cli-auth`                                     | `packages/cli-runner/src/main.ts:68` (`DEFAULT_HOME`)                                      | yes      |
+| `archOptionalDeps` demands both per-arch entries when set                        | `packages/cli-runner/src/catalog.ts:239-246`                                               | yes      |
+| Presence probe uses only the primary binary name, never the aliases              | `packages/ai/src/cli-availability.ts:78-86` (`cliAvailable`)                               | yes      |
+| Aliases exist for `google` but are consulted only for the declared-host contract | `packages/ai/src/cli-availability.ts:29-33`, `:65-69`                                      | yes      |
+| `google` is currently `blocked` with the pinning-spike reason                    | `packages/cli-runner/src/catalog.ts:151-158`                                               | yes      |
+| No `recipes/google/` folder exists                                               | `packages/cli-runner/recipes/` holds only `anthropic/` and `openai-compatible/`            | yes      |
+| Catalog-path test excludes `google` from its no-demotion assertion               | `tests/unit/cli-runner-catalog-path.test.ts:58`                                            | yes      |
+| Install test asserts `google` is rejected by the catalog gate                    | `tests/unit/cli-runner-install.test.ts:183`                                                | yes      |
 
 ### Facts established against the real published package (not from memory)
 
@@ -45,8 +45,8 @@ Rehearsed outside the repo in `/tmp/gemini-pin` and `/tmp/gemini-stage`:
     (`bundle/interactiveCli-5O6FZS57.js:31401`) and the handler
     (`bundle/chunk-LQJHQ4BU.js:188`); false returns before anything else happens.
   - `enableAutoUpdate` — false returns before the spawn (`bundle/chunk-LQJHQ4BU.js:208`).
-  Both are set false. Deprecated spellings (`disableAutoUpdate`, `disableUpdateNag`) migrate onto
-  these two names, so the new names are correct.
+    Both are set false. Deprecated spellings (`disableAutoUpdate`, `disableUpdateNag`) migrate onto
+    these two names, so the new names are correct.
 - Settings are read from `<HOME>/.gemini/settings.json` unless `GEMINI_CLI_HOME` overrides it.
   `GEMINI_CLI_HOME` appears nowhere in this repo and is not in the sanitized env allowlist, so
   `/data/cli-auth/.gemini/settings.json` is the file the installer must write.
@@ -95,6 +95,7 @@ Each task commits green.
 - Update the file's opening comment (`:67`) — "claude + codex supported, agy blocked" is no longer true.
 
 Tests (behaviour, and why each fails against a broken implementation):
+
 - `tests/unit/cli-runner-catalog-path.test.ts`: remove the `google` exclusion at `:58` and assert the
   `google` entry loads `supported` with a recipe and records no validation issue. Fails if the
   lockfile is missing, has a gap in sha512 coverage, the version is a range, or `archOptionalDeps`

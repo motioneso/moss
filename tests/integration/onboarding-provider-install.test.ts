@@ -212,16 +212,30 @@ describe("Phase 2 onboarding — provider-install seam (REAL wiring)", () => {
     expect(row).toMatchObject({ provider: "anthropic", state: "installed", version: "2.1.183" });
   });
 
-  it("rejects a blocked provider (google/agy) with 400 and persists NOTHING", async () => {
+  // #2026: google carries a pinned, checksummed recipe now, so the REAL catalog lets it
+  // through — this case used to assert the opposite. The route's clean 400 for a provider the
+  // catalog marks blocked is still covered, against an injected catalog, in
+  // tests/unit/onboarding-provider-install-route.test.ts and in the install service's own tests.
+  it("installs the google provider through the REAL catalog and persists the row", async () => {
+    // The version is whatever the fake connection echoes back; the real pin is asserted against
+    // the catalog in tests/unit/cli-runner-catalog-path.test.ts.
+    fake.installResult = { state: "installed", version: "0.57.0" };
     const res = await server.inject({
       method: "POST",
       url: "/api/onboarding/provider-install",
       headers: { "content-type": "application/json" },
       payload: { providerKind: "google" }
     });
-    expect(res.statusCode).toBe(400);
-    expect((res.json() as { error: string }).error).toMatch(/not installable/i);
-    expect(await readPersisted("google")).toBeUndefined();
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      providerKind: "google",
+      installState: "installed",
+      version: "0.57.0"
+    });
+    expect(fake.installCalls).toContain("google");
+
+    const row = await readPersisted("google");
+    expect(row).toMatchObject({ provider: "google", state: "installed", version: "0.57.0" });
   });
 
   it("status load reads provider_install_state and surfaces installState", async () => {
