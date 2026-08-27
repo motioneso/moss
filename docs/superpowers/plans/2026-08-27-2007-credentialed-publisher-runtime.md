@@ -9,23 +9,23 @@ composition-root wiring. #2006 (refresh) and #2008 (settings) consume what it ex
 
 ## Seams check — every assumed capability, cited on this branch
 
-| Assumed capability | Citation | State |
-|---|---|---|
-| Host-pinned outbound fetch with timeout + response cap + redirect re-check | `packages/host-fetch/src/index.ts:156` (`createHostPinnedFetch`, options `timeoutMs`/`maxResponseBytes`/`maxRedirects`) | exists |
-| Host allowlist validation (no IP, no port, no uppercase, non-empty) | `packages/host-fetch/src/policy.ts:6` (`assertValidFetchHosts`) | exists |
-| Re-export of both into `@moss/datasets` | `packages/datasets/src/host-pinning.ts:1` | exists |
-| TTL + stale cache primitive | `packages/datasets/src/cache.ts` (`DatasetCache`) | exists |
-| Sanitized-logging convention (source id, dataset key, outcome, error class only) | `packages/datasets/src/client.ts:158` | exists |
-| `credential: "api-key"` refusal that must stay | `packages/datasets/src/client.ts:83`; `packages/module-registry/src/index.ts` registration guard | exists |
-| Adapter contract + per-call `apiKey` slot | `packages/module-sdk/src/external-module.ts:404` and `:414` | exists, comment stale |
-| Text/link/date/image sanitizers | `packages/news/src/source/sanitize.ts` | exists |
-| Stable headline id from a URL | `packages/news/src/source/rss-source.ts:38` (`stableIdForUrl`) | exists |
-| Headline shape delivered to the page | `packages/shared/src/news-api.ts:48` (`NewsHeadline`) | exists |
-| Topic vocabulary | `packages/shared/src/news-api.ts:7` (`NewsTopicKey`, 8 keys) | exists |
-| Encryption seam for stored keys | `packages/news/src/credential-cipher-port.ts` (`NewsCredentialCipherPort`) | exists (#2005) |
-| Stored credential table with a generation counter | `packages/news/sql/0200_news_source_credentials.sql:26` | exists (#2005) |
-| Repository read of the stored envelope | `packages/news/src/credential-repository.ts` (`readEnvelope`) | exists but returns no generation |
-| `@moss/news` already depends on `@moss/datasets` | `packages/news/package.json` dependencies | exists |
+| Assumed capability                                                               | Citation                                                                                                                | State                            |
+| -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| Host-pinned outbound fetch with timeout + response cap + redirect re-check       | `packages/host-fetch/src/index.ts:156` (`createHostPinnedFetch`, options `timeoutMs`/`maxResponseBytes`/`maxRedirects`) | exists                           |
+| Host allowlist validation (no IP, no port, no uppercase, non-empty)              | `packages/host-fetch/src/policy.ts:6` (`assertValidFetchHosts`)                                                         | exists                           |
+| Re-export of both into `@moss/datasets`                                          | `packages/datasets/src/host-pinning.ts:1`                                                                               | exists                           |
+| TTL + stale cache primitive                                                      | `packages/datasets/src/cache.ts` (`DatasetCache`)                                                                       | exists                           |
+| Sanitized-logging convention (source id, dataset key, outcome, error class only) | `packages/datasets/src/client.ts:158`                                                                                   | exists                           |
+| `credential: "api-key"` refusal that must stay                                   | `packages/datasets/src/client.ts:83`; `packages/module-registry/src/index.ts` registration guard                        | exists                           |
+| Adapter contract + per-call `apiKey` slot                                        | `packages/module-sdk/src/external-module.ts:404` and `:414`                                                             | exists, comment stale            |
+| Text/link/date/image sanitizers                                                  | `packages/news/src/source/sanitize.ts`                                                                                  | exists                           |
+| Stable headline id from a URL                                                    | `packages/news/src/source/rss-source.ts:38` (`stableIdForUrl`)                                                          | exists                           |
+| Headline shape delivered to the page                                             | `packages/shared/src/news-api.ts:48` (`NewsHeadline`)                                                                   | exists                           |
+| Topic vocabulary                                                                 | `packages/shared/src/news-api.ts:7` (`NewsTopicKey`, 8 keys)                                                            | exists                           |
+| Encryption seam for stored keys                                                  | `packages/news/src/credential-cipher-port.ts` (`NewsCredentialCipherPort`)                                              | exists (#2005)                   |
+| Stored credential table with a generation counter                                | `packages/news/sql/0200_news_source_credentials.sql:26`                                                                 | exists (#2005)                   |
+| Repository read of the stored envelope                                           | `packages/news/src/credential-repository.ts` (`readEnvelope`)                                                           | exists but returns no generation |
+| `@moss/news` already depends on `@moss/datasets`                                 | `packages/news/package.json` dependencies                                                                               | exists                           |
 
 ### Drift found against the spec, and how this plan answers it
 
@@ -142,7 +142,7 @@ New `packages/news/src/source/newsapi-connection.ts`.
 export const NEWSAPI_CONNECTION_ID = "newsapi-top-headlines";
 export const NEWSAPI_DATASET_KEY = "headlines";
 export const newsApiConnection: PublisherConnection;
-export const PUBLISHER_CONNECTIONS: readonly PublisherConnection[];   // Object.freeze'd
+export const PUBLISHER_CONNECTIONS: readonly PublisherConnection[]; // Object.freeze'd
 export function publisherConnection(id: string): PublisherConnection | undefined;
 ```
 
@@ -338,7 +338,11 @@ export interface NewsCredentialEnvelopeReader {
     scopedDb: DataContextDb,
     sourceId: string
   ): Promise<
-    | { readonly status: "configured"; readonly envelope: EncryptedSecret; readonly generation: string }
+    | {
+        readonly status: "configured";
+        readonly envelope: EncryptedSecret;
+        readonly generation: string;
+      }
     | { readonly status: "revoked" }
     | null
   >;

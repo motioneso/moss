@@ -23,6 +23,7 @@ Branch fleet/lane-2007. Spec = the SPEC comment on issue 2007 (saved at /tmp/spe
 ## DRIFT: issue 2005 has already merged (commit 3a24b3d3e)
 
 The spec was written assuming 2005 had not landed. It has. What 2005 shipped:
+
 - packages/news/src/publisher-connection-port.ts - NewsPublisherConnectionPort,
   NewsConnectionDescriptor, NewsCredentialValidationOutcome, createEmptyNewsPublisherConnectionPort.
   Its comment says 2007 replaces the empty implementation with the real NewsAPI one.
