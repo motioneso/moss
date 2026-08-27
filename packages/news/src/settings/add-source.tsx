@@ -89,7 +89,9 @@ export function AddSourceFlow() {
   const [input, setInput] = useState("");
   const [preview, setPreview] = useState<NewsSourcePreviewResponse | null>(null);
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
-  const [added, setAdded] = useState(false);
+  // The sentence to show after something was added, or null. A string rather than a flag so a
+  // key connection can report what the publisher's own route said instead of generic copy.
+  const [added, setAdded] = useState<string | null>(null);
 
   const previewMutation = useMutation({
     mutationFn: previewNewsSource,
@@ -106,7 +108,7 @@ export function AddSourceFlow() {
       setInput("");
       setPreview(null);
       setSelectedCandidateId(null);
-      setAdded(true);
+      setAdded("Source added — it now contributes to your News page.");
       // New source reshapes both the personalization pane and the composed front page.
       void queryClient.invalidateQueries({ queryKey: newsQueryKeys.personalization });
       void queryClient.invalidateQueries({ queryKey: newsQueryKeys.overview });
@@ -117,7 +119,7 @@ export function AddSourceFlow() {
     event.preventDefault();
     const trimmed = input.trim();
     if (!trimmed) return;
-    setAdded(false);
+    setAdded(null);
     setPreview(null);
     previewMutation.mutate({ input: trimmed });
   }
@@ -167,7 +169,7 @@ export function AddSourceFlow() {
             disabled={busy}
             onChange={(event) => {
               setInput(event.target.value);
-              setAdded(false);
+              setAdded(null);
             }}
           />
           <Button type="submit" size="sm" disabled={busy || !input.trim()}>
@@ -213,35 +215,43 @@ export function AddSourceFlow() {
               </li>
             ))}
           </ul>
+          {/* The ordinary Add row is always here. A publication that also offers a key
+              connection can still be added as a plain public source, exactly as before. */}
+          <div className="nw-set__addrow">
+            <Button size="sm" disabled={busy || !selectedCandidateId} onClick={confirmSelected}>
+              {confirmMutation.isPending ? "Adding…" : "Add this source"}
+            </Button>
+            <Button variant="secondary" size="sm" disabled={busy} onClick={reset}>
+              Cancel
+            </Button>
+          </div>
           {/* #2008: the server only puts an offer here when the preview found exactly one
               candidate and that candidate is unmistakably a reviewed publisher's own homepage.
-              Any other preview keeps the ordinary Add row and is never asked for a key. */}
+              Any other preview shows the Add row alone and is never asked for a key. */}
           {preview?.connection ? (
-            <ConnectPublisherForm
-              offer={preview.connection}
-              mode={{ kind: "connect" }}
-              onDone={() => {
-                setInput("");
-                setPreview(null);
-                setSelectedCandidateId(null);
-                setAdded(true);
-              }}
-              onCancel={reset}
-            />
-          ) : (
-            <div className="nw-set__addrow">
-              <Button size="sm" disabled={busy || !selectedCandidateId} onClick={confirmSelected}>
-                {confirmMutation.isPending ? "Adding…" : "Add this source"}
-              </Button>
-              <Button variant="secondary" size="sm" disabled={busy} onClick={reset}>
-                Cancel
-              </Button>
-            </div>
-          )}
+            <>
+              <p className="nw-set__hint">
+                {preview.connection.publisherName} can also be connected with your own access
+                key, which brings in more of what they publish. That is optional - adding it
+                above works without one.
+              </p>
+              <ConnectPublisherForm
+                offer={preview.connection}
+                mode={{ kind: "connect" }}
+                onDone={(message) => {
+                  setInput("");
+                  setPreview(null);
+                  setSelectedCandidateId(null);
+                  setAdded(message);
+                }}
+                onCancel={reset}
+              />
+            </>
+          ) : null}
         </div>
       ) : null}
 
-      {added ? <Note>Source added — it now contributes to your News page.</Note> : null}
+      {added ? <Note>{added}</Note> : null}
     </div>
   );
 }

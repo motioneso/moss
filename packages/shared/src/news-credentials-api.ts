@@ -63,6 +63,16 @@ export interface NewsSourceCredentialStatusDto {
   readonly sourceId: string;
   readonly connectionId: string;
   readonly publisherName: string;
+  /**
+   * #2008: the exact HTTPS host this stored key is sent to, taken from the reviewed connection
+   * itself. Null when the connection is no longer declared, in which case News cannot honestly
+   * say where a replacement key would go and does not offer to take one.
+   *
+   * This is the same field as the offer's `requestHost`, and for the same reason: a screen that
+   * promises where a secret goes must build that promise from the request, not from whatever
+   * domain happens to be stored next to it.
+   */
+  readonly requestHost: string | null;
   readonly status: "not_configured" | "configured" | "revoked";
   readonly lastValidatedAt: string | null;
   readonly revokedAt: string | null;
@@ -95,11 +105,20 @@ export interface NewsSourceCredentialsResponse {
 const newsSourceCredentialStatusDtoSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["sourceId", "connectionId", "publisherName", "status", "lastValidatedAt", "revokedAt"],
+  required: [
+    "sourceId",
+    "connectionId",
+    "publisherName",
+    "requestHost",
+    "status",
+    "lastValidatedAt",
+    "revokedAt"
+  ],
   properties: {
     sourceId: { type: "string" },
     connectionId: { type: "string" },
     publisherName: { type: "string" },
+    requestHost: { type: ["string", "null"] },
     status: { type: "string", enum: ["not_configured", "configured", "revoked"] },
     lastValidatedAt: { type: ["string", "null"] },
     revokedAt: { type: ["string", "null"] }

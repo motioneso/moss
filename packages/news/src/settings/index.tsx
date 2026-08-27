@@ -248,10 +248,14 @@ export default function NewsSettings() {
   // be left sitting in a form that is now pointing at a different one.
   const [replacingSourceId, setReplacingSourceId] = useState<string | null>(null);
   const [revokingSourceId, setRevokingSourceId] = useState<string | null>(null);
+  // What the route said after a key was saved or revoked. Shown here rather than inside the
+  // key form, which closes the moment the request succeeds.
+  const [keyNotice, setKeyNotice] = useState<string | null>(null);
   const revokeCredentialMutation = useMutation({
     mutationFn: revokeNewsSourceCredential,
-    onSuccess: () => {
+    onSuccess: (result) => {
       setRevokingSourceId(null);
+      setKeyNotice(result.message);
       void queryClient.invalidateQueries({ queryKey: newsQueryKeys.credentials });
       invalidateAfterPersonalizationChange();
     }
@@ -452,18 +456,24 @@ export default function NewsSettings() {
                   ) : null}
                   {credential ? (
                     <>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        aria-label={`Replace key for ${source.label}`}
-                        disabled={replacingSourceId === source.id}
-                        onClick={() => {
-                          setRevokingSourceId(null);
-                          setReplacingSourceId(source.id);
-                        }}
-                      >
-                        Replace key
-                      </Button>
+                      {/* Offered only when News still knows where this publisher's key is
+                          sent. Without that, the form could not honestly say where a new key
+                          would go, and the route would refuse it anyway. */}
+                      {credential.requestHost ? (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          aria-label={`Replace key for ${source.label}`}
+                          disabled={replacingSourceId === source.id}
+                          onClick={() => {
+                            setRevokingSourceId(null);
+                            setKeyNotice(null);
+                            setReplacingSourceId(source.id);
+                          }}
+                        >
+                          Replace key
+                        </Button>
+                      ) : null}
                       <Button
                         variant="secondary"
                         size="sm"
@@ -471,6 +481,7 @@ export default function NewsSettings() {
                         disabled={revokeCredentialMutation.isPending}
                         onClick={() => {
                           setReplacingSourceId(null);
+                          setKeyNotice(null);
                           setRevokingSourceId(source.id);
                         }}
                       >
@@ -510,18 +521,24 @@ export default function NewsSettings() {
                       </Button>
                     </span>
                   ) : null}
-                  {credential && replacingSourceId === source.id ? (
+                  {credential && credential.requestHost && replacingSourceId === source.id ? (
                     <ConnectPublisherForm
                       offer={{
                         connectionId: credential.connectionId,
                         publisherName: credential.publisherName,
-                        requestHost: source.canonicalDomain,
+                        // The reviewed connection's own request host, reported by the route.
+                        // Never the stored publication domain: the sentence above the box is a
+                        // promise about where a secret goes, so it is built from the request.
+                        requestHost: credential.requestHost,
                         accessSummary:
                           "Replacing the key keeps this source in your feed. The old key stops working.",
                         termsUrl: null
                       }}
                       mode={{ kind: "replace", sourceId: source.id }}
-                      onDone={() => setReplacingSourceId(null)}
+                      onDone={(message) => {
+                        setReplacingSourceId(null);
+                        setKeyNotice(message);
+                      }}
                       onCancel={() => setReplacingSourceId(null)}
                     />
                   ) : null}
@@ -530,6 +547,9 @@ export default function NewsSettings() {
             })}
           </ul>
         ) : null}
+        {/* #2008: what happened to a publisher key. The key form closes as soon as the request
+            succeeds, so this is the only place a "Connected" sentence can actually be read. */}
+        {keyNotice ? <Note>{keyNotice}</Note> : null}
         {personalizationReady && removeSourceMutation.isError ? (
           <Note>Could not remove that source. Try again.</Note>
         ) : null}

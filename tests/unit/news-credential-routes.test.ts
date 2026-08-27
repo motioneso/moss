@@ -259,6 +259,8 @@ describe("news credential routes (#2005)", () => {
       sourceId: SOURCE_ID,
       connectionId: DESCRIPTOR.connectionId,
       publisherName: DESCRIPTOR.publisherName,
+      // The reviewed connection's own request host, not the publication's domain.
+      requestHost: DESCRIPTOR.host,
       status: "configured",
       lastValidatedAt: "2026-08-27T09:00:00.000Z",
       revokedAt: null
@@ -418,6 +420,7 @@ describe("news credential routes (#2005)", () => {
       "connectionId",
       "lastValidatedAt",
       "publisherName",
+      "requestHost",
       "revokedAt",
       "sourceId",
       "status"
@@ -491,6 +494,7 @@ describe("news credential routes (#2005)", () => {
       "connectionId",
       "lastValidatedAt",
       "publisherName",
+      "requestHost",
       "revokedAt",
       "sourceId",
       "status"

@@ -533,6 +533,9 @@ test.describe("publisher keys (#2008)", () => {
     await input.fill("newsapi.org");
     await page.getByRole("button", { name: "Check" }).click();
     await expect(page.getByLabel("Access key")).toBeVisible();
+    // The key box is an extra offer, not a replacement: a reviewed publisher can still be
+    // added as a plain public source, exactly as it could before this change.
+    await expect(page.getByRole("button", { name: "Add this source" })).toBeVisible();
     await expect(page.getByText("newsapi.org", { exact: false }).first()).toBeVisible();
     await expect(page.getByText(OFFER.accessSummary)).toBeVisible();
     await expect(page.getByRole("link", { name: /terms/i })).toHaveAttribute(
@@ -580,6 +583,7 @@ test.describe("publisher keys (#2008)", () => {
             sourceId: CONNECTED_SOURCE.id,
             connectionId: OFFER.connectionId,
             publisherName: "NewsAPI",
+            requestHost: "newsapi.org",
             status: "configured",
             lastValidatedAt: "2026-08-27T09:00:00.000Z",
             revokedAt: null
@@ -659,6 +663,7 @@ test.describe("publisher keys (#2008)", () => {
               sourceId: CONNECTED_SOURCE.id,
               connectionId: OFFER.connectionId,
               publisherName: "NewsAPI",
+              requestHost: "newsapi.org",
               status: "configured",
               lastValidatedAt: "2026-08-27T09:00:00.000Z",
               revokedAt: null
@@ -689,6 +694,10 @@ test.describe("publisher keys (#2008)", () => {
     await page.getByRole("button", { name: "Save key" }).click();
 
     await expect(page.getByText("Your previous key is still active.")).toBeVisible();
+    // The box is emptied on submit, so a rejected attempt starts from a blank box rather
+    // than showing characters that are no longer held anywhere.
+    await expect(page.getByLabel("Access key")).toHaveValue("");
+    await expect(page.getByRole("button", { name: "Save key" })).toBeDisabled();
     // The stored key was not replaced, so the source still reads as connected.
     await expect(page.getByText("Connected", { exact: true })).toBeVisible();
     await expect(page.getByText("Access revoked")).toHaveCount(0);
@@ -726,6 +735,7 @@ test.describe("publisher keys (#2008)", () => {
               sourceId: CONNECTED_SOURCE.id,
               connectionId: OFFER.connectionId,
               publisherName: "NewsAPI",
+              requestHost: "newsapi.org",
               status: revoked ? "revoked" : "configured",
               lastValidatedAt: "2026-08-27T09:00:00.000Z",
               revokedAt: revoked ? "2026-08-27T10:00:00.000Z" : null
@@ -745,6 +755,7 @@ test.describe("publisher keys (#2008)", () => {
             sourceId: CONNECTED_SOURCE.id,
             connectionId: OFFER.connectionId,
             publisherName: "NewsAPI",
+            requestHost: "newsapi.org",
             status: "revoked",
             lastValidatedAt: "2026-08-27T09:00:00.000Z",
             revokedAt: "2026-08-27T10:00:00.000Z"
@@ -765,5 +776,7 @@ test.describe("publisher keys (#2008)", () => {
     await page.getByRole("button", { name: "Yes, revoke" }).click();
 
     await expect(page.getByText("Access revoked")).toBeVisible();
+    // The key form closes on success, so the confirmation has to be shown by the page itself.
+    await expect(page.getByText("Add a new key to reconnect this source.")).toBeVisible();
   });
 });

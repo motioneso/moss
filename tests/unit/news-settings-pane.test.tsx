@@ -596,6 +596,7 @@ describe("NewsSettings publisher key controls (#2008)", () => {
     sourceId: "11111111-1111-1111-1111-111111111111",
     connectionId: "newsapi-top-headlines",
     publisherName: "NewsAPI",
+    requestHost: "newsapi.org",
     status: "configured",
     lastValidatedAt: "2026-08-20T09:00:00.000Z",
     revokedAt: null
@@ -636,5 +637,17 @@ describe("NewsSettings publisher key controls (#2008)", () => {
       [connected]
     );
     expect(html).not.toContain('type="password"');
+  });
+
+  it("does not offer to take a new key when it no longer knows where that key would be sent", () => {
+    // A connection that has been withdrawn since the key was stored. Revoking must stay
+    // available; taking a replacement must not, because nothing could honestly be promised
+    // about where it would go.
+    const html = renderWithCredentials(
+      personalization({ availability: allOn, customSources: [storedSource("approved")] }),
+      [{ ...connected, requestHost: null }]
+    );
+    expect(html).not.toContain("Replace key");
+    expect(html).toContain('aria-label="Revoke access for The Atlantic"');
   });
 });

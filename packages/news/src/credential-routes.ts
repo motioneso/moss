@@ -91,12 +91,13 @@ async function validateKeySafely(
 /** Built field by field: a row is never spread into a response. */
 function toStatusDto(
   row: NewsCredentialStatusRow,
-  publisherName: string
+  display: { readonly publisherName: string; readonly requestHost: string | null }
 ): NewsSourceCredentialStatusDto {
   return {
     sourceId: row.sourceId,
     connectionId: row.connectionId,
-    publisherName,
+    publisherName: display.publisherName,
+    requestHost: display.requestHost,
     status: row.status,
     lastValidatedAt: row.lastValidatedAt ? row.lastValidatedAt.toISOString() : null,
     revokedAt: row.revokedAt ? row.revokedAt.toISOString() : null
@@ -104,12 +105,22 @@ function toStatusDto(
 }
 
 /**
- * The publisher's display name, or the connection id when #2007 has not defined that
- * connection. Falling back to the id keeps a stored credential readable after a
- * connection is withdrawn, rather than rendering an empty name.
+ * How a stored credential is described on screen.
+ *
+ * The name falls back to the connection id when the connection is no longer declared, so a
+ * stored credential stays readable rather than rendering an empty name. The host has no such
+ * fallback: it is either the reviewed connection's own request host or nothing, because a
+ * guessed host would turn "your key is sent only to X" into a false promise.
  */
-function publisherNameFor(connections: NewsPublisherConnectionPort, connectionId: string): string {
-  return connections.describe(connectionId)?.publisherName ?? connectionId;
+function displayFor(
+  connections: NewsPublisherConnectionPort,
+  connectionId: string
+): { readonly publisherName: string; readonly requestHost: string | null } {
+  const descriptor = connections.describe(connectionId);
+  return {
+    publisherName: descriptor?.publisherName ?? connectionId,
+    requestHost: descriptor?.host ?? null
+  };
 }
 
 /** Stable fingerprint so the source row records which connection vouched for it. */
@@ -186,7 +197,10 @@ export function registerNewsCredentialRoutes(
         reply.code(201);
         return {
           source: created.source,
-          credential: toStatusDto(created.row, descriptor.publisherName),
+          credential: toStatusDto(created.row, {
+            publisherName: descriptor.publisherName,
+            requestHost: descriptor.host
+          }),
           message: NEWS_CREDENTIAL_MESSAGES.connected
         };
       } catch (error) {
@@ -221,10 +235,7 @@ export function registerNewsCredentialRoutes(
         if (!rotated) throw new HttpError(404, "No stored key for this source");
 
         return {
-          credential: toStatusDto(
-            rotated.row,
-            publisherNameFor(connections, rotated.row.connectionId)
-          ),
+          credential: toStatusDto(rotated.row, displayFor(connections, rotated.row.connectionId)),
           message: NEWS_CREDENTIAL_MESSAGES.connected
         };
       } catch (error) {
@@ -245,7 +256,7 @@ export function registerNewsCredentialRoutes(
         );
         if (!revoked) throw new HttpError(404, "No stored key for this source");
         return {
-          credential: toStatusDto(revoked, publisherNameFor(connections, revoked.connectionId)),
+          credential: toStatusDto(revoked, displayFor(connections, revoked.connectionId)),
           message: NEWS_CREDENTIAL_MESSAGES.revoked
         };
       } catch (error) {
@@ -264,9 +275,7 @@ export function registerNewsCredentialRoutes(
           credentials.readStatuses(db)
         );
         return {
-          credentials: rows.map((row) =>
-            toStatusDto(row, publisherNameFor(connections, row.connectionId))
-          )
+          credentials: rows.map((row) => toStatusDto(row, displayFor(connections, row.connectionId)))
         };
       } catch (error) {
         return handleRouteError(error, reply);

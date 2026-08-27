@@ -69,7 +69,12 @@ export function ConnectPublisherForm({
 }: {
   readonly offer: NewsPublisherConnectionOfferDto;
   readonly mode: ConnectPublisherMode;
-  readonly onDone: () => void;
+  /**
+   * Called after the publisher accepted the key. The sentence the route chose is handed up
+   * rather than shown here, because this form unmounts on success - a confirmation rendered
+   * inside it would never reach the screen.
+   */
+  readonly onDone: (message: string) => void;
   readonly onCancel: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -77,6 +82,9 @@ export function ConnectPublisherForm({
   // value would be captured in the mutation's `variables`, which React Query keeps readable
   // after the request settles - the key would still be in memory long after it was needed.
   const keyRef = useRef("");
+  // The box is uncontrolled, so clearing keyRef alone leaves the typed characters on screen.
+  // This handle is only ever used to blank it.
+  const boxRef = useRef<HTMLInputElement | null>(null);
   // Only whether the box has something in it drives the button, never the value itself.
   const [hasKey, setHasKey] = useState(false);
   const [authorised, setAuthorised] = useState(false);
@@ -86,6 +94,7 @@ export function ConnectPublisherForm({
 
   function forgetKey(): void {
     keyRef.current = "";
+    if (boxRef.current) boxRef.current.value = "";
     setHasKey(false);
   }
 
@@ -106,11 +115,10 @@ export function ConnectPublisherForm({
       return connectCredentialedNewsSource({ connectionId: offer.connectionId, apiKey });
     },
     onSuccess: (result) => {
-      setOutcome(result.message);
       void queryClient.invalidateQueries({ queryKey: newsQueryKeys.credentials });
       void queryClient.invalidateQueries({ queryKey: newsQueryKeys.personalization });
       void queryClient.invalidateQueries({ queryKey: newsQueryKeys.overview });
-      onDone();
+      onDone(result.message);
     },
     onError: (error) => setOutcome(requestFailureMessage(error))
   });
@@ -152,6 +160,7 @@ export function ConnectPublisherForm({
           stored key can never be put back on screen. It starts empty and ends empty. */}
       <input
         id={boxId}
+        ref={boxRef}
         className="jds-input"
         type="password"
         autoComplete="off"
