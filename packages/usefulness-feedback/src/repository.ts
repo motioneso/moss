@@ -98,6 +98,18 @@ export interface ListFeedbackOptions {
   readonly status?: UsefulnessFeedbackStatus;
 }
 
+/** One row of the "this owner may give feedback on this thing, on this surface" table. */
+export interface UpsertTargetInput {
+  readonly ownerUserId: string;
+  readonly targetKind: FeedbackTargetKind;
+  readonly targetRef: string;
+  readonly surface: FeedbackSurface;
+  readonly sourceKind?: string | null;
+  readonly sourceLabel?: string | null;
+  readonly priorityBand?: "critical" | "high" | "normal" | "low" | null;
+  readonly metadata?: Record<string, unknown>;
+}
+
 export class UsefulnessFeedbackRepository {
   async findActive(
     scopedDb: DataContextDb,
@@ -344,26 +356,44 @@ export class UsefulnessFeedbackRepository {
       .executeTakeFirst();
   }
 
-  async upsertTarget(
+  async upsertTarget(scopedDb: DataContextDb, input: UpsertTargetInput): Promise<void> {
+    await this.upsertTargets(scopedDb, [input]);
+  }
+
+  /**
+   * Records many targets in one statement. A module that composes a page live registers every
+   * story that page shows on every request, which is easily a hundred rows once each story is
+   * registered for more than one surface; one row at a time would be a hundred round-trips per
+   * page load (#2019).
+   *
+   * Identical in every other respect to a single upsert, including the bounding of story
+   * metadata, so the two paths cannot drift apart.
+   */
+  async upsertTargets(
     scopedDb: DataContextDb,
-    input: {
-      readonly ownerUserId: string;
-      readonly targetKind: FeedbackTargetKind;
-      readonly targetRef: string;
-      readonly surface: FeedbackSurface;
-      readonly sourceKind?: string | null;
-      readonly sourceLabel?: string | null;
-      readonly priorityBand?: "critical" | "high" | "normal" | "low" | null;
-      readonly metadata?: Record<string, unknown>;
-    }
+    inputs: readonly UpsertTargetInput[]
   ): Promise<void> {
     assertDataContextDb(scopedDb);
-    // Story targets are bounded on the way in, not just on the way out. The read path cleans too,
-    // but a module registering a story must not be able to park anything wider than the agreed
-    // shape in the row. Briefing targets keep their existing block-list behaviour.
-    const metadata = isStoryTargetKind(input.targetKind)
-      ? sanitizeStoryTargetMetadata(input.metadata)
-      : (input.metadata ?? {});
+    if (inputs.length === 0) return;
+    const rows = inputs.map((input) => {
+      // Story targets are bounded on the way in, not just on the way out. The read path cleans
+      // too, but a module registering a story must not be able to park anything wider than the
+      // agreed shape in the row. Briefing targets keep their existing block-list behaviour.
+      const metadata = isStoryTargetKind(input.targetKind)
+        ? sanitizeStoryTargetMetadata(input.metadata)
+        : (input.metadata ?? {});
+      return sql`(
+        ${input.ownerUserId}::uuid,
+        ${input.targetKind},
+        ${input.targetRef},
+        ${input.surface},
+        ${input.sourceKind ?? null},
+        ${input.sourceLabel ?? null},
+        ${input.priorityBand ?? null},
+        ${JSON.stringify(metadata)}::jsonb,
+        now()
+      )`;
+    });
     await sql`
       INSERT INTO app.usefulness_feedback_targets (
         owner_user_id,
@@ -376,17 +406,7 @@ export class UsefulnessFeedbackRepository {
         metadata_json,
         last_seen_at
       )
-      VALUES (
-        ${input.ownerUserId}::uuid,
-        ${input.targetKind},
-        ${input.targetRef},
-        ${input.surface},
-        ${input.sourceKind ?? null},
-        ${input.sourceLabel ?? null},
-        ${input.priorityBand ?? null},
-        ${JSON.stringify(metadata)}::jsonb,
-        now()
-      )
+      VALUES ${sql.join(rows, sql`, `)}
       ON CONFLICT (owner_user_id, target_kind, target_ref, surface) DO UPDATE
       SET source_kind = EXCLUDED.source_kind,
           source_label = EXCLUDED.source_label,
