@@ -231,9 +231,9 @@ export function AddSourceFlow() {
           {preview?.connection ? (
             <>
               <p className="nw-set__hint">
-                {preview.connection.publisherName} can also be connected with your own access
-                key, which brings in more of what they publish. That is optional - adding it
-                above works without one.
+                {preview.connection.publisherName} can also be connected with your own access key,
+                which brings in more of what they publish. That is optional - adding it above works
+                without one.
               </p>
               <ConnectPublisherForm
                 offer={preview.connection}

@@ -275,7 +275,9 @@ export function registerNewsCredentialRoutes(
           credentials.readStatuses(db)
         );
         return {
-          credentials: rows.map((row) => toStatusDto(row, displayFor(connections, row.connectionId)))
+          credentials: rows.map((row) =>
+            toStatusDto(row, displayFor(connections, row.connectionId))
+          )
         };
       } catch (error) {
         return handleRouteError(error, reply);

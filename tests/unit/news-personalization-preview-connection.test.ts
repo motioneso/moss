@@ -129,7 +129,9 @@ function feedPage(title: string): string {
  * resolution path shows up as a failed preview rather than passing silently.
  */
 function servePages(pages: Readonly<Record<string, string>>): NewsSafeFetchPort {
-  const byUrl = new Map(Object.entries(pages).map(([url, body]) => [new URL(url).toString(), body]));
+  const byUrl = new Map(
+    Object.entries(pages).map(([url, body]) => [new URL(url).toString(), body])
+  );
   return async (url: string) => {
     const body = byUrl.get(new URL(url).toString());
     if (!body) return { ok: false, reason: "network" };
@@ -168,7 +170,10 @@ function emptyPersonalizationStore(): NewsPersonalizationStore {
     },
     removeExclusion: async () => true,
     readLatestSnapshot: async () => null,
-    readRefreshState: async (): Promise<NewsRefreshStateDto> => ({ state: "idle", updatedAt: null }),
+    readRefreshState: async (): Promise<NewsRefreshStateDto> => ({
+      state: "idle",
+      updatedAt: null
+    }),
     bumpRefreshRequest: async () => 1,
     pruneSnapshotDomain: async () => undefined,
     readPolicyVerdict: async () => null,
