@@ -109,6 +109,7 @@ function promptRow(candidate: StoryRelevanceCandidate): Record<string, unknown> 
     sourceLabel: candidate.sourceLabel,
     publishedAt: candidate.publishedAt,
     feedPosition: candidate.feedPosition,
+    editorialEvidence: candidate.editorialEvidence ?? [],
     topicRef: candidate.topicRef ?? null,
     teamRef: candidate.teamRef ?? null,
     competitionRef: candidate.competitionRef ?? null

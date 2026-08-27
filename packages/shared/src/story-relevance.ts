@@ -34,6 +34,8 @@ export interface StoryRelevanceCandidate {
   readonly teamRef?: string | null;
   readonly competitionRef?: string | null;
   readonly isOpinion?: boolean;
+  /** Trusted server evidence. The evaluator may not invent editorial prominence. */
+  readonly editorialEvidence?: readonly StoryEditorialEvidenceCode[];
 }
 
 /**
@@ -305,7 +307,7 @@ function isExceptional(
 ): boolean {
   if (candidate.isOpinion === true) return false;
   if (!verdict) return false;
-  return verdict.eventEvidence.length > 0 && verdict.editorialEvidence.length > 0;
+  return verdict.eventEvidence.length > 0 && (candidate.editorialEvidence?.length ?? 0) > 0;
 }
 
 /**

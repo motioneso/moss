@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 
 import { getNewsOverview } from "./news-client.js";
 import { newsQueryKeys } from "./query-keys.js";
+import { StoryFeedbackMenu } from "./story-feedback-menu.js";
 
 // One lead + three brief lines keeps Today compact while sharing News' exact ranking.
 const WIDGET_CAP = 4;
@@ -44,22 +45,28 @@ export function NewsTodayWidget(): ReactNode {
       <div className="jds-brief__title">Top stories</div>
       {/* Lead story — broadsheet treatment. Photo (when present), source tag, display headline,
           and a one-line dek clamped so a long summary can't push the brief list off the fold. */}
-      <a className="nw-twlead" href={lead.url} target="_blank" rel="noreferrer">
-        {lead.imageUrl ? (
-          <img className="nw-twlead__photo" src={lead.imageUrl} alt="" loading="lazy" />
-        ) : null}
-        <span className="nw-twlead__tag">{lead.sourceLabel}</span>
-        <span className="nw-twlead__title">{lead.title}</span>
-        {lead.summary ? <span className="nw-twlead__dek">{lead.summary}</span> : null}
-      </a>
+      <div className="nw-twlead-wrap">
+        <a className="nw-twlead" href={lead.url} target="_blank" rel="noreferrer">
+          {lead.imageUrl ? (
+            <img className="nw-twlead__photo" src={lead.imageUrl} alt="" loading="lazy" />
+          ) : null}
+          <span className="nw-twlead__tag">{lead.sourceLabel}</span>
+          <span className="nw-twlead__title">{lead.title}</span>
+          {lead.summary ? <span className="nw-twlead__dek">{lead.summary}</span> : null}
+        </a>
+        <StoryFeedbackMenu headline={lead} surface="today" />
+      </div>
       {rest.length > 0 ? (
         <ul className="nw-twlist">
           {rest.map((headline) => (
             <li className="nw-twlist__item" key={headline.id}>
-              <a className="nw-twlist__link" href={headline.url} target="_blank" rel="noreferrer">
-                <span className="nw-twlist__tag">{headline.sourceLabel}</span>
-                <span className="nw-twlist__title">{headline.title}</span>
-              </a>
+              <div className="nw-twlist__row">
+                <a className="nw-twlist__link" href={headline.url} target="_blank" rel="noreferrer">
+                  <span className="nw-twlist__tag">{headline.sourceLabel}</span>
+                  <span className="nw-twlist__title">{headline.title}</span>
+                </a>
+                <StoryFeedbackMenu headline={headline} surface="today" />
+              </div>
             </li>
           ))}
         </ul>

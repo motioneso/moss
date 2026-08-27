@@ -154,11 +154,12 @@ export class NewsService {
         await onStale?.(db);
       }
       if (personalized !== null) {
-        await this.registerStoryTargets(
+        const targetsRegistered = await this.registerStoryTargets(
           db,
           accessContext.actorUserId,
           personalized.rankedStories ?? personalized.topStories
         );
+        if (!targetsRegistered) return withoutStoryFeedbackRefs(personalized);
       }
       return personalized ?? this.composeOverview(prefs, exclusions);
     });
@@ -337,9 +338,9 @@ export class NewsService {
     scopedDb: DataContextDb,
     ownerUserId: string,
     headlines: readonly NewsHeadline[]
-  ): Promise<void> {
+  ): Promise<boolean> {
     const port = this.storyFeedback;
-    if (!port) return;
+    if (!port) return true;
     const shown = headlines.slice(0, STORY_TARGET_CAP);
     // "Led its publisher's list" is the closest honest reconstruction of editorial evidence from a
     // published snapshot: the snapshot keeps rank order but not the original feed position, so the
@@ -362,13 +363,16 @@ export class NewsService {
         });
       }
     }
-    if (rows.length === 0) return;
+    if (rows.length === 0) return true;
     try {
       await port.registerTargets(scopedDb, ownerUserId, rows);
+      return true;
     } catch {
       // Deliberately swallowed. Recording what was shown is bookkeeping for a later preference;
       // failing it must never turn a working news page into an error. The port logs the failure
       // itself, as counts only.
+      port.recordTargetRegistrationFailure?.({ targetCount: rows.length });
+      return false;
     }
   }
 
@@ -381,6 +385,23 @@ export class NewsService {
     if (result.degraded) state.degraded = true;
     return result.data;
   }
+}
+
+function withoutStoryFeedbackRefs(overview: NewsOverviewResponse): NewsOverviewResponse {
+  const strip = (headline: NewsHeadline): NewsHeadline => {
+    const copy = { ...headline };
+    delete copy.feedbackRef;
+    return copy;
+  };
+  return {
+    ...overview,
+    topStories: overview.topStories.map(strip),
+    rankedStories: overview.rankedStories?.map(strip),
+    sourceGroups: overview.sourceGroups.map((group) => ({
+      ...group,
+      headlines: group.headlines.map(strip)
+    }))
+  };
 }
 
 function toPersonalizedHeadline(

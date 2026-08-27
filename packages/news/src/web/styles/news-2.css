@@ -290,3 +290,14 @@
 .nw-twlist__title {
   line-height: 1.4;
 }
+
+.nw-twlead-wrap,
+.nw-twlist__row {
+  position: relative;
+}
+.nw-feedback {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 2;
+}

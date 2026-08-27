@@ -4,6 +4,8 @@ import type { NewsHeadline, NewsSourceGroup } from "@moss/shared";
 
 import { featureEligible } from "../ranking.js";
 
+import { StoryFeedbackMenu } from "./story-feedback-menu.js";
+
 /* --------------------------------------------------------------- Pool helpers */
 
 // The mosaic draws on every source group, but a straight concat would let the first source
@@ -120,6 +122,7 @@ function HeroSlide({ headline, active }: { readonly headline: NewsHeadline; acti
           >
             Continue reading<span aria-hidden="true"> →</span>
           </a>
+          <StoryFeedbackMenu headline={headline} surface="news" />
         </div>
       </div>
     </article>
@@ -230,6 +233,7 @@ function MosaicArticle({
       <a className="nw-more" href={headline.url} target="_blank" rel="noreferrer">
         Continue reading →
       </a>
+      <StoryFeedbackMenu headline={headline} surface="news" />
     </article>
   );
 }
@@ -247,6 +251,7 @@ function FeatureArticle({ headline }: { readonly headline: NewsHeadline }) {
         <a className="nw-more" href={headline.url} target="_blank" rel="noreferrer">
           Continue reading →
         </a>
+        <StoryFeedbackMenu headline={headline} surface="news" />
       </div>
     </article>
   );
@@ -289,6 +294,7 @@ export function NewsBriefs({ briefs }: { readonly briefs: readonly NewsHeadline[
               <span className="nw-briefs__tag">{headline.sourceLabel}</span>
               {headline.title}
             </a>
+            <StoryFeedbackMenu headline={headline} surface="news" />
           </li>
         ))}
       </ul>
@@ -334,6 +340,7 @@ export function SourceRail({ groups }: { readonly groups: readonly NewsSourceGro
                 <a className="nw-rail__link" href={headline.url} target="_blank" rel="noreferrer">
                   {headline.title}
                 </a>
+                <StoryFeedbackMenu headline={headline} surface="news" />
               </li>
             ))}
           </ul>

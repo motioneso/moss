@@ -212,6 +212,7 @@ describe("compilePersonalizedNews", () => {
       expect(payloads[0]?.articles.map((article) => article.url)).not.toContain(suppressedUrl);
       // The relevance layer was shown every surviving candidate, not a sample.
       expect(port.seen[0]).toHaveLength(15);
+      expect(port.seen[0]?.[0]?.editorialEvidence).toEqual(["source_lead_position"]);
     });
 
     it("lets a boosted story outrank an equal-scoring one", async () => {

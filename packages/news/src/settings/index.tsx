@@ -30,6 +30,7 @@ import {
 import { newsQueryKeys } from "../web/query-keys.js";
 import { AddSourceFlow } from "./add-source.js";
 import { DescribeTopics, PrereqGate } from "./describe-topics.js";
+import { StoryFeedbackSettings } from "./story-feedback.js";
 import "./news-settings.css";
 
 /* ----- Pure toggle planners (unit-tested). These must mirror the server's
@@ -308,6 +309,8 @@ export default function NewsSettings() {
         title="News"
         desc="Pick the publications your front page draws from, and optionally narrow it to the topics you follow. These choices also shape news in briefings."
       />
+
+      <StoryFeedbackSettings />
 
       <section className="nw-set" aria-label="News sources">
         <p className="nw-set__kicker">Publications</p>

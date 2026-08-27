@@ -146,13 +146,18 @@ export async function compilePersonalizedNews(
         if (ref !== null) storyRefs.set(candidate.url, ref);
       }
       const relevanceStartedAt = Date.now();
+      const leadDomains = new Set<string>();
       const relevance = await port.applyRelevance(scopedDb, {
         ownerUserId: opts.ownerUserId,
         candidates: filtered.flatMap((candidate, index) => {
           const ref = storyRefs.get(candidate.url);
           // A story whose link cannot be turned into a reference is never shown to the relevance
           // layer, and is never suppressed by it either. It simply carries on unjudged.
-          return ref === undefined ? [] : [toRelevanceCandidate(candidate, ref, index)];
+          const leadsPublisher = !leadDomains.has(candidate.canonicalDomain);
+          leadDomains.add(candidate.canonicalDomain);
+          return ref === undefined
+            ? []
+            : [toRelevanceCandidate(candidate, ref, index, leadsPublisher)];
         }),
         now: opts.now
       });
@@ -274,7 +279,8 @@ function toRelevanceCandidate(
     readonly matchedTopics: readonly string[];
   },
   storyRef: string,
-  feedPosition: number
+  feedPosition: number,
+  leadsPublisher: boolean
 ): StoryRelevanceCandidate {
   return {
     storyRef,
@@ -282,7 +288,8 @@ function toRelevanceCandidate(
     sourceLabel: candidate.publisher,
     publishedAt: candidate.publishedAt,
     feedPosition,
-    topicRef: candidate.matchedTopics[0] ?? null
+    topicRef: candidate.matchedTopics[0] ?? null,
+    editorialEvidence: leadsPublisher ? ["source_lead_position"] : []
     // News has no opinion flag on a candidate, so `isOpinion` is deliberately left unset rather
     // than guessed.
   };

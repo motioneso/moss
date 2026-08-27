@@ -844,7 +844,12 @@ export function buildStoryPreferenceRefresh(
 ): (input: { readonly ownerUserId: string; readonly targetKind: string }) => Promise<void> {
   return async ({ ownerUserId, targetKind }) => {
     if (targetKind !== "news_story" || boss === null) return;
-    await enqueueNewsRefresh(boss, ownerUserId);
+    try {
+      await enqueueNewsRefresh(boss, ownerUserId);
+    } catch {
+      // Saving the preference is still truthful when the optional queue is unavailable. A later
+      // idempotent request calls this callback again, so a transient send failure cannot strand it.
+    }
   };
 }
 
@@ -891,6 +896,8 @@ function buildNewsStoryFeedbackPort(
         });
       }
     },
+    recordTargetRegistrationFailure: ({ targetCount }) =>
+      logger?.warn({ event: "news_story_target_registration_failed", targetCount }),
     applyRelevance: (scopedDb, input) =>
       policy(scopedDb, {
         ownerUserId: input.ownerUserId,

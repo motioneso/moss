@@ -687,5 +687,6 @@ describe("NewsService story feedback references (#2018)", () => {
     const overview = await service.getOverview(userA);
 
     expect(overview.rankedStories).toHaveLength(1);
+    expect(overview.rankedStories?.[0]?.feedbackRef).toBeUndefined();
   });
 });

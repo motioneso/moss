@@ -46,7 +46,9 @@ export function storyFeedbackTargetRef(
   moduleId: StoryFeedbackModule,
   canonicalLink: string
 ): string {
-  const normalized = canonicalLink.trim().toLowerCase().replace(/\s+/g, "");
+  // Hostnames are already canonicalized by the owning module; preserve path and query case because
+  // many publishers treat those bytes as distinct story identities.
+  const normalized = canonicalLink.trim().replace(/\s+/g, "");
   if (normalized.length === 0) throw new Error("story feedback target needs a canonical link");
   const digest = createHash("sha256")
     .update([moduleId, normalized].join("|"))

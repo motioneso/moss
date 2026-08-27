@@ -42,6 +42,8 @@ export interface NewsStoryFeedbackPort {
     ownerUserId: string,
     rows: readonly NewsStoryTargetRow[]
   ): Promise<void>;
+  /** Metadata-only failure signal; the story response must remain usable. */
+  recordTargetRegistrationFailure?(input: { readonly targetCount: number }): void;
   /** The shared relevance policy, bound to the News module and the owner's configured model. */
   applyRelevance(
     scopedDb: DataContextDb,

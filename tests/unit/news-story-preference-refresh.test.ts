@@ -58,4 +58,15 @@ describe("story preference refresh (#2018)", () => {
       })
     ).resolves.toBeUndefined();
   });
+
+  it("does not let a failed queue send turn a saved preference into an error", async () => {
+    const queue = {
+      send: async () => {
+        throw new Error("queue unavailable");
+      }
+    } as unknown as PgBoss;
+    await expect(
+      buildStoryPreferenceRefresh(queue)({ ownerUserId: "owner-1", targetKind: "news_story" })
+    ).resolves.toBeUndefined();
+  });
 });

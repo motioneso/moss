@@ -44,7 +44,9 @@ describe("personalized News page", () => {
               sourceLabel: "Neutral Journal",
               title: "Neutral ranked story"
             }
-          : {}
+          : index === 0
+            ? { feedbackRef: "news:story-1" }
+            : {}
       )
     );
     const data: NewsOverviewResponse = {
@@ -69,6 +71,7 @@ describe("personalized News page", () => {
     expect(html).toContain("From your sources");
     expect(html).toContain("/api/news/images/1");
     expect(html).toContain("Preferred Wire · AI · Watches · 3D printing");
+    expect(html).toContain("Feedback for Story 1");
     expect(html).not.toContain("images.example");
   });
 

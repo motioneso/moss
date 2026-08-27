@@ -142,6 +142,38 @@
   margin: calc(-1 * var(--space-2)) 0 var(--space-3);
 }
 
+.nw-set__feedback-item {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.nw-set__feedback-item > div:first-child {
+  min-width: 12rem;
+  flex: 1;
+}
+.nw-set__feedback-reason,
+.nw-set__feedback-edit {
+  flex-basis: 100%;
+}
+.nw-set__feedback-edit textarea {
+  display: block;
+  width: 100%;
+  max-width: 32rem;
+  min-height: 4.5rem;
+  resize: vertical;
+}
+.nw-set__feedback-edit label {
+  display: block;
+  margin-bottom: var(--space-1);
+}
+.nw-set__feedback-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  margin-top: var(--space-2);
+}
+
 /* ----- #975 Task 9: add-source/topic write flows ----- */
 
 /* Stacked label/row pairs inside one form (topic label + guidance) need breathing room
