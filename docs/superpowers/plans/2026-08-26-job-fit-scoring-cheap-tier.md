@@ -15,7 +15,7 @@ repo — #1421 itself is the build target, confirmed via `gh api repos/motioneso
   valid value — `packages/module-registry/src/external/worker-rpc-host.ts:519` validates
   `tierHint` against `AI_TIERS`, which includes `economy` (confirmed via
   `packages/module-sdk/src/ai-capabilities.ts:6`: `AiModelTier = "reasoning" | "interactive" |
-  "economy"`). No change needed on the host side — this is purely a caller-side value change.
+"economy"`). No change needed on the host side — this is purely a caller-side value change.
 - No test currently pins which tier job-fit scoring asks for:
   `grep -n "tierHint" tests/unit/job-search-score-stage.test.ts` returns nothing.
 - A comment at `external-modules/job-search/src/worker/stages/score.ts:82-86` explains
@@ -29,15 +29,18 @@ seam.
 ## Task 1 — change the tier hint and fix the stale comment
 
 Files:
+
 - `external-modules/job-search/src/worker/stages/score.ts`
 
 Changes (decisions, not bodies):
+
 - Line 331: `tierHint: "reasoning"` -> `tierHint: "economy"`.
 - Lines 82-86 comment: rewrite the sentence that currently asserts "reasoning tier" latency
   numbers to instead say the reserve is measured live per run regardless of which tier is
   configured, so the comment doesn't assert a specific tier's timing as if it were still true.
 
 Test (new — today nothing pins this):
+
 - In `tests/unit/job-search-score-stage.test.ts`, add a test using the existing `scriptedAi`
   helper (or a plain `vi.fn`) that runs `runScore` for one candidate posting and asserts the
   captured `generateStructured` call's first argument has `tierHint: "economy"`. This test would
@@ -45,6 +48,7 @@ Test (new — today nothing pins this):
   tautology.
 
 Verification (unpiped, expected exit code 0):
+
 ```bash
 pnpm vitest run tests/unit/job-search-score-stage.test.ts > /tmp/job-search-score-test.log 2>&1; echo "EXIT=$?"
 ```

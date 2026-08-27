@@ -225,8 +225,8 @@ describe("runScore", () => {
     await runScore(runDeps({ store, ai, budget: 1 }));
 
     expect(ai.generateStructured).toHaveBeenCalledTimes(1);
-    const call = (ai.generateStructured as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(call.tierHint).toBe("economy");
+    const call = (ai.generateStructured as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    expect(call?.tierHint).toBe("economy");
   });
 
   it("test 2: outsideFrame from triage is persisted onto the match", async () => {
