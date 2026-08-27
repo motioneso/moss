@@ -20,7 +20,11 @@
 
 import { homedir } from "node:os";
 
-/** Commands that only read and print, with no argument able to make them write. */
+/**
+ * Commands that only read and print. Two of them need argument checks even so: `sort -o` writes
+ * a file, and `uniq`'s second operand is an output file. Everything else here is safe whatever
+ * arguments it is given.
+ */
 const PLAIN_READERS = new Set([
   "basename",
   "cat",
@@ -46,6 +50,26 @@ const PLAIN_READERS = new Set([
 ]);
 
 // `awk` is deliberately absent: its print statement can redirect to a file.
+
+/**
+ * Options that turn one of the readers above into something that writes a file or runs a program
+ * of its own. This is the case a prefix allowlist in settings.json cannot express, and the reason
+ * this hook reads arguments at all.
+ */
+const WRITE_FLAGS = new Map([
+  // `sort -o out.txt in.txt` overwrites out.txt; `--compress-program` names a program to run.
+  ["sort", ["-o", "--output", "--compress-program"]],
+  // ripgrep's `--pre` runs a program of your choosing over every file it reads.
+  ["rg", ["--pre", "--hostname-bin"]]
+]);
+
+/** sed options that edit the file instead of printing, or take the script somewhere we cannot see. */
+const SED_IN_PLACE_FLAGS = ["-i", "--in-place"];
+const SED_SCRIPT_FILE_FLAGS = ["-f", "--file"];
+const SED_QUIET_FLAGS = ["-n", "--quiet", "--silent"];
+
+/** git options that write a file, whatever the subcommand. */
+const GIT_WRITE_FLAGS = ["--output"];
 
 /** find arguments that run or delete something. */
 const FIND_WRITE_ARGS = new Set([
@@ -75,9 +99,22 @@ const GIT_READ_SUBCOMMANDS = new Set([
   "status"
 ]);
 
-/** git subcommands that report only when asked to list; they can also mutate. */
-const GIT_LIST_SUBCOMMANDS = new Set(["branch", "stash", "tag", "worktree"]);
-const GIT_LIST_ARGS = new Set(["-l", "--list", "-v", "list"]);
+/**
+ * git subcommands that report in one form and change the repository in another, with the exact
+ * arguments that keep them reporting. `bare` says whether the form with no arguments reports:
+ * `git branch` lists branches, but `git stash` on its own pockets your uncommitted work — and
+ * every worktree on this box shares one stash stack, so that one belongs to somebody else.
+ */
+const GIT_REPORTING_FORMS = new Map([
+  [
+    "branch",
+    { bare: true, args: new Set(["-l", "--list", "-v", "-vv", "-a", "--all", "-r", "--remotes"]) }
+  ],
+  ["tag", { bare: true, args: new Set(["-l", "--list", "-n"]) }],
+  // `list` is a verb for these two and a new branch or tag name for the two above.
+  ["stash", { bare: false, args: new Set(["list"]) }],
+  ["worktree", { bare: false, args: new Set(["list", "-v", "--porcelain"]) }]
+]);
 
 /** Words that can turn any command into any other command. */
 const BANNED_WORDS = new Set(["eval", "exec", "source", "sudo", "xargs"]);
@@ -273,6 +310,29 @@ function allowedRoots(cwd) {
   return roots;
 }
 
+/**
+ * Does `flag` name one of `names`? Catches the separate form (`-o out`), the attached form
+ * (`-oout`, `--output=out`), a short cluster (`-ro out`), and the abbreviations getopt accepts for
+ * long options (`--out`, `--o`). Matching loosely is deliberate: a false match only sends the
+ * command to the user as it is sent today, while a missed one approves a write.
+ */
+function namesFlag(flag, names) {
+  if (!flag.startsWith("-") || flag === "-" || flag === "--") {
+    return false;
+  }
+  const equals = flag.indexOf("=");
+  const base = equals === -1 ? flag : flag.slice(0, equals);
+
+  return names.some((name) => {
+    if (name.startsWith("--")) {
+      return (
+        base.startsWith("--") && base.length > 2 && (name.startsWith(base) || base.startsWith(name))
+      );
+    }
+    return !base.startsWith("--") && base.includes(name.slice(1));
+  });
+}
+
 function hasParentSegment(value) {
   return value.split("/").includes("..");
 }
@@ -329,26 +389,99 @@ function checkFind(args, roots) {
   return checkPaths(args, roots);
 }
 
+/**
+ * uniq is the odd one out among the plain readers: its second operand is an OUTPUT file, so
+ * `uniq input.txt notes.ts` empties notes.ts. More than one operand goes to the user, which also
+ * covers the options that take a separate value (`uniq -f 1 input.txt`).
+ */
+function checkUniq(args, roots) {
+  const operands = args.filter((argument) => !argument.startsWith("-"));
+  if (operands.length > 1) {
+    return none("uniq-writes-second-operand");
+  }
+  return checkPaths(args, roots);
+}
+
+/**
+ * Everything sed will read as a script: the first operand when there is no `-e`, the value after
+ * `-e`, and the value attached to it (`-e'1p'`). All of them have to be checked, because any one
+ * of them can carry a `w` command. `-f` is not here; checkSed refuses it outright, since the
+ * script then lives in a file this hook never sees.
+ */
+function sedScripts(args) {
+  const scripts = [];
+  let expectScript = false;
+  let fromFlag = false;
+
+  for (const argument of args) {
+    if (expectScript) {
+      scripts.push(argument);
+      expectScript = false;
+      continue;
+    }
+    if (!argument.startsWith("-") || argument === "-") {
+      if (!fromFlag && scripts.length === 0) {
+        scripts.push(argument);
+      }
+      continue;
+    }
+    const attached = expressionValue(argument);
+    if (attached === null) {
+      continue;
+    }
+    fromFlag = true;
+    if (attached === "") {
+      expectScript = true;
+    } else {
+      scripts.push(attached);
+    }
+  }
+
+  return scripts;
+}
+
+/**
+ * @returns null when the flag is not sed's `-e`, "" when the script is the next argument, and the
+ * script itself when it is attached to the flag.
+ */
+function expressionValue(flag) {
+  if (flag.startsWith("--")) {
+    const equals = flag.indexOf("=");
+    const base = equals === -1 ? flag : flag.slice(0, equals);
+    if (base.length > 2 && "--expression".startsWith(base)) {
+      return equals === -1 ? "" : flag.slice(equals + 1);
+    }
+    return null;
+  }
+  const at = flag.indexOf("e");
+  return at <= 0 ? null : flag.slice(at + 1);
+}
+
 function checkSed(args, roots) {
   const flags = args.filter((argument) => argument.startsWith("-"));
-  if (flags.some((flag) => flag === "-i" || flag === "--in-place" || flag.startsWith("-i"))) {
+  // `-i`, `-i.bak`, `-ni`, `--in-place`, `--in-place=.bak` and getopt's `--in-pl` are all the
+  // same option: rewrite the file instead of printing it.
+  if (flags.some((flag) => namesFlag(flag, SED_IN_PLACE_FLAGS))) {
     return none("sed-in-place");
   }
-  if (!flags.includes("-n") && !flags.includes("--quiet") && !flags.includes("--silent")) {
+  if (flags.some((flag) => namesFlag(flag, SED_SCRIPT_FILE_FLAGS))) {
+    return none("sed-script-from-file");
+  }
+  if (!flags.some((flag) => namesFlag(flag, SED_QUIET_FLAGS))) {
     return none("sed-needs-quiet");
   }
 
-  const script = args.find((argument) => !argument.startsWith("-"));
-  if (script === undefined) {
+  const scripts = sedScripts(args);
+  if (scripts.length === 0) {
     return none("sed-needs-quiet");
   }
   // `w` and `W` write files; `e` runs a shell command.
-  if (/[wWe]/.test(script)) {
+  if (scripts.some((script) => /[wWe]/.test(script))) {
     return none("sed-script-writes");
   }
 
   return checkPaths(
-    args.filter((argument) => argument !== script),
+    args.filter((argument) => !scripts.includes(argument)),
     roots
   );
 }
@@ -362,13 +495,24 @@ function checkGit(args) {
   if (subcommand.startsWith("-")) {
     return none("git-global-flag");
   }
+  // `git diff --output=<file>` writes that file, and the diff family accepts it everywhere.
+  if (rest.some((argument) => namesFlag(argument, GIT_WRITE_FLAGS))) {
+    return none("git-writes-a-file");
+  }
   if (GIT_READ_SUBCOMMANDS.has(subcommand)) {
     return null;
   }
-  if (GIT_LIST_SUBCOMMANDS.has(subcommand) && rest.every((arg) => GIT_LIST_ARGS.has(arg))) {
-    return null;
+
+  const reporting = GIT_REPORTING_FORMS.get(subcommand);
+  if (reporting === undefined) {
+    return none("git-subcommand");
   }
-  return none("git-subcommand");
+  if (rest.length === 0) {
+    return reporting.bare ? null : none("git-subcommand-mutates");
+  }
+  return rest.every((argument) => reporting.args.has(argument))
+    ? null
+    : none("git-subcommand-mutates");
 }
 
 function checkStep(step, index, roots) {
@@ -408,6 +552,13 @@ function checkStep(step, index, roots) {
     return checkGit(args);
   }
   if (PLAIN_READERS.has(name)) {
+    const writeFlags = WRITE_FLAGS.get(name);
+    if (writeFlags !== undefined && args.some((argument) => namesFlag(argument, writeFlags))) {
+      return none("option-writes-a-file");
+    }
+    if (name === "uniq") {
+      return checkUniq(args, roots);
+    }
     return checkPaths(args, roots);
   }
 

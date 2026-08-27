@@ -52,6 +52,13 @@ const APPROVED: readonly (readonly [string, string])[] = [
   ],
   ["git log", "git log --oneline -5"],
   ["listing branches", "git branch --list"],
+  ["listing branches with no arguments at all", "git branch"],
+  ["listing tags", "git tag -l"],
+  ["listing worktrees", "git worktree list"],
+  ["listing the stash", "git stash list"],
+  ["sorting a file to the screen", "sort -u notes.txt"],
+  ["counting repeated lines", "uniq -c notes.txt"],
+  ["sed with its script behind -e", "sed -n -e '1,5p' notes.txt"],
   ["reading a file under the working directory", `cat ${CWD}/package.json`],
   ["tail of a log in /tmp", "tail -n 40 /tmp/vf.log"]
 ];
@@ -91,7 +98,67 @@ const REFUSED: readonly (readonly [string, string, string])[] = [
   ["cd as a later step", "ls && cd /tmp", "cd-not-first"],
   ["cd somewhere outside the allowed folders", "cd /etc && ls", "path-outside-allowed-roots"],
   ["git with a directory-changing global flag", "git -C /etc log", "git-global-flag"],
-  ["a variable expansion we cannot check", "cat $SECRET_FILE", "expansion"]
+  ["a variable expansion we cannot check", "cat $SECRET_FILE", "expansion"],
+
+  // Everything below was approved by the first version of this hook and found by review. Each one
+  // is an option or an operand that turns a look-only command into one that writes.
+  ["sort writing its result to a file", "sort --output=/tmp/out notes.txt", "option-writes-a-file"],
+  ["sort writing with the short option", "sort -o notes.txt other.txt", "option-writes-a-file"],
+  [
+    "sort naming a program to run",
+    "sort --compress-program=/tmp/evil notes.txt",
+    "option-writes-a-file"
+  ],
+  [
+    "ripgrep naming a program to run on every file",
+    "rg --pre /tmp/evil.sh foo .",
+    "option-writes-a-file"
+  ],
+  [
+    "uniq, whose second file is where it writes",
+    "uniq input.txt victim.ts",
+    "uniq-writes-second-operand"
+  ],
+  [
+    "sed editing in place under its long name with a suffix",
+    "sed -n --in-place=.bak 's/a/b/' package.json",
+    "sed-in-place"
+  ],
+  [
+    "sed editing in place under a shortened long name",
+    "sed -n --in-pl=.bak 's/a/b/' package.json",
+    "sed-in-place"
+  ],
+  [
+    "sed editing in place inside a bundle of flags",
+    "sed -ni 's/a/b/' package.json",
+    "sed-in-place"
+  ],
+  [
+    "sed whose second script writes a file",
+    "sed -n -e '1p' -e 'w /tmp/out' package.json",
+    "sed-script-writes"
+  ],
+  [
+    "sed taking its script from a file we cannot read",
+    "sed -n -f script.sd input.txt",
+    "sed-script-from-file"
+  ],
+  [
+    "git diff writing the diff to a file",
+    "git diff HEAD~1 --output=/tmp/anything",
+    "git-writes-a-file"
+  ],
+  ["git log writing its output to a file", "git log --output=/tmp/anything", "git-writes-a-file"],
+  // `git stash` on its own is not a listing, and every worktree on this box shares one stash stack.
+  ["git stash on its own, which pockets your work", "git stash", "git-subcommand-mutates"],
+  [
+    "git branch list, which creates a branch called list",
+    "git branch list",
+    "git-subcommand-mutates"
+  ],
+  ["git tag list, which creates a tag called list", "git tag list", "git-subcommand-mutates"],
+  ["git stash with a verb that drops work", "git stash pop", "git-subcommand-mutates"]
 ];
 
 describe("read-only command approval", () => {
