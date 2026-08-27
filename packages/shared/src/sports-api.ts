@@ -75,6 +75,11 @@ export interface Headline {
   // omits it and the UI falls back to `summary`. Already stripped of all HTML/tokens and length-
   // capped in the source layer — the client renders it as text, never as HTML.
   readonly body?: string;
+  // Opaque per-story identifier for usefulness feedback (#2019). Built server-side from the
+  // canonical link with a Node-only hash, so the browser cannot compute it and never sends a raw
+  // link. Optional: a payload cached in a browser from before this shipped has no ref, and the
+  // story menu renders nothing rather than sending feedback the server would refuse.
+  readonly storyRef?: string;
 }
 
 /** FIFA confederation grouping for the follow picker's browse mode (#907). "INTL" covers the
@@ -133,6 +138,10 @@ export interface FollowedTeamNews {
   readonly imageUrl: string | null; // small thumbnail on non-live ticker cards (mra5xnt2)
   readonly publisherLabel: string;
   readonly publisherDomain: string;
+  // Same opaque feedback identifier as `Headline.storyRef` (#2019), and optional for the same
+  // reason. A story reached from a followed card carries the SAME ref as the identical story
+  // reached from top stories: both derive from the canonical link.
+  readonly storyRef?: string;
 }
 
 export interface FollowedNextMatch {
@@ -444,7 +453,11 @@ const headlineSchema = {
     // here even though it's optional: this schema is used inside a oneOf (hero.headline), where
     // fast-json-stringify REJECTS the whole object for any emitted key it doesn't know — the same
     // trap documented on `nextMatch`/`stories` below that has 500'd /overview before.
-    body: { type: "string" }
+    body: { type: "string" },
+    // Optional for the same reason as `body`, and declared here for the same reason: a field the
+    // schema does not know is stripped on the wire, so the story menu would never see a ref
+    // (#2019).
+    storyRef: { type: "string" }
   }
 } as const;
 
@@ -519,7 +532,9 @@ const followedTeamCardSchema = {
           publishedAt: { type: "string" },
           imageUrl: { type: ["string", "null"] },
           publisherLabel: { type: "string" },
-          publisherDomain: { type: "string" }
+          publisherDomain: { type: "string" },
+          // Optional, declared: an undeclared key is silently dropped here (#2019).
+          storyRef: { type: "string" }
         }
       }
     },
@@ -631,7 +646,9 @@ const followedLeagueCardSchema = {
           title: { type: "string" },
           url: { type: "string" },
           publishedAt: { type: "string" },
-          imageUrl: { type: ["string", "null"] }
+          imageUrl: { type: ["string", "null"] },
+          // Optional, declared: an undeclared key is silently dropped here (#2019).
+          storyRef: { type: "string" }
         }
       }
     },
