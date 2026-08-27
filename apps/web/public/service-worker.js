@@ -1,3 +1,4 @@
+// 2026-08-27: bump script bytes so existing clients reload the worker after CSP changes.
 const CACHE_NAME = "jarv1s-shell-v1";
 const APP_SHELL_URLS = ["/", "/offline.html", "/manifest.webmanifest", "/icons/icon.svg"];
 const IMAGE_RETRY_DELAYS_MS = [250, 1000];
