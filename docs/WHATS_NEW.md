@@ -32,6 +32,7 @@ feature that is not present in the image you are running.
 ### Added
 
 - **News story feedback.** You can now ask News for more or less of a story and manage those choices in News Settings. [PR #2049](https://github.com/motioneso/moss/pull/2049)
+- **Chat with Google's Gemini.** You can now sign in to Google's Gemini and pick it for chat, alongside Claude and Codex. [PR #2048](https://github.com/motioneso/moss/pull/2048)
 - **Sign in to Gemini from Settings.** You can now sign in to Google's Gemini command-line tool from Settings or the first-run wizard, the same way you already sign in to Claude and Codex. [PR #2042](https://github.com/motioneso/moss/pull/2042)
 - **Install the Gemini command-line tool.** You can now install the Gemini command-line tool from the app, pinned to a known, verified version. [PR #2039](https://github.com/motioneso/moss/pull/2039)
 - **Archiving status in Settings.** Settings now shows a short message if the daily chat archive to Notes couldn't run, so you know when it needs attention. [PR #1995](https://github.com/motioneso/moss/pull/1995)
