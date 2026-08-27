@@ -67,9 +67,10 @@ gh pr checks <PR>          # required checks pass/fail
   live dev database `jarv1s` and has taken his instance down:
   ```bash
   scripts/run-gate.sh start --exclusive       # fresh gate DB, flock'd, detached
-  scripts/run-gate.sh wait                    # give the Bash tool a 600000 ms timeout
-  scripts/run-gate.sh status                  # 0 green · 1 failed · 2 DIED · 3 running
+  scripts/run-gate.sh wait --follow           # run_in_background: true; no timeout to size
   ```
+  Read the exit code the background call returns: 0 green · 1 failed · 2 DIED — you keep working
+  and get exactly one completion notification instead of polling.
   Never decide a gate is still alive from `pgrep`/`ps` — it matches Claude's own bash wrappers and
   stays true forever (that cost lane #1273 19 hours). Never pipe a gate to `tail`/`grep` as the
   final stage, and never trust a wrapper `echo $?`. Don't start a gate while a build lane is

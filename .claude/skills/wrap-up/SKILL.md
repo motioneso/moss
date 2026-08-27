@@ -74,13 +74,16 @@ Push the branch if it is meant to land. Never force-push a shared branch.
 ```bash
 scripts/run-gate.sh start                              # fresh isolated gate DB, detached
 scripts/run-gate.sh start --gate audit:release-hardening
-scripts/run-gate.sh wait                               # Bash tool timeout: 600000 ms
-scripts/run-gate.sh status                             # 0 green · 1 failed · 2 DIED · 3 running
+scripts/run-gate.sh wait --follow                      # run_in_background: true; no timeout to size
 ```
 
+Read the exit code the backgrounded call returns — 0 green · 1 failed · 2 DIED — while you keep
+doing other work; you get exactly one completion notification.
+
 - **Use the runner; don't hand-roll a background run and a wait loop.** A full
-  `verify:foundation` runs 15–25 min and the Bash tool caps a call at 10 min, so the foreground
-  recipe is unrunnable — every hand-rolled wait improvises, and that is where it breaks.
+  `verify:foundation` runs 15–25 min and the Bash tool caps a call at 10 min, so a foreground
+  `wait` is unrunnable — every hand-rolled wait improvises, and that is where it breaks. Use
+  `wait --follow` backgrounded instead.
 - **NEVER decide liveness from `pgrep`/`ps`.** Every Claude Bash call is wrapped in a shell whose
   command line contains your worktree path and command text, so `pgrep -f` matches wrappers — and
   the wait loop itself — forever. Lane #1273 lost 19 hours to exactly this. The runner decides
@@ -154,7 +157,7 @@ anything awaiting the user.
 | Who else is in the tree | `git worktree list` · `herdr pane list`                                                         |
 | Uncommitted?            | `git status --porcelain` · `pnpm format`                                                        |
 | Unpushed?               | `git status -sb` · `git log --oneline @{u}..HEAD`                                               |
-| Gate (real exit)        | `scripts/run-gate.sh start` → `wait` → `status` (never `pgrep`, never a pipe) |
+| Gate (real exit)        | `scripts/run-gate.sh start` → `wait --follow` backgrounded (never `pgrep`, never a pipe) |
 | Board / issues          | `gh project item-list 2 --owner motioneso --format json --limit 800` · `gh issue …` · `gh pr …` |
 | Coordinate / hand off   | `herdr-pane-message` · `tmux-pane-message` · `herdr-handoff`                                    |
 | Memory                  | `memory_save` (project: jarv1s) or file-based memory + MEMORY.md                                |

@@ -19,20 +19,17 @@ hand. The script does all of it correctly.
 # 1. Launch — creates a fresh isolated gate DB, detaches, prints the log path, returns at once.
 scripts/run-gate.sh start            # add --gate <pnpm-script> for a narrower gate
 
-# 2. Wait — blocks until the gate reaches a terminal state or the timeout.
-#    Pass an explicit Bash tool timeout of 600000 ms; the command's own default is 540s.
-scripts/run-gate.sh wait             # exit 3 = still running, call wait again
-
-# 3. Verdict — exit code is the answer; never parse prose, never pipe.
-scripts/run-gate.sh status
+# 2. Wait — launch this as ONE Bash call with run_in_background: true. It never gives up
+#    early, so no foreground timeout to size. You keep working; you get exactly one
+#    completion notification when the gate reaches a terminal state.
+scripts/run-gate.sh wait --follow
 ```
 
-Exit codes for `status`/`wait`: `0` passed, `1` failed (gate's rc printed), `2` dead (no sentinel
-and the run is gone), `3` still running. **Check the exit code, not the text.**
-
-A long wait costs zero context if you run it as a background Bash task with an `until` loop
-around `wait`, and let the completion notification bring you back — never foreground-sleep or
-re-run `status` in a loop.
+Read the exit code the background call returns — that's the verdict, no separate `status` call
+needed. Exit codes: `0` passed, `1` failed (gate's rc printed), `2` dead (no sentinel and the run
+is gone). **Check the exit code, not the text.** (`status` and plain `wait` without `--follow`
+still exist for a one-shot check or a bounded foreground wait, but `wait --follow` backgrounded is
+the one procedure to use here.)
 
 ## Rules that still apply around the script
 
