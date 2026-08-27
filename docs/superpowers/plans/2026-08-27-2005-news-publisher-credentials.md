@@ -21,22 +21,22 @@ Everything else in the spec was checked file-by-file and still holds.
 
 ## Seams check — every assumed capability, cited
 
-| Assumption | Evidence |
-| --- | --- |
-| `withDataContext` opens one real transaction, so a source row and a credential row commit or roll back together | `packages/db/src/data-context.ts:63` |
-| Repositories can reject an unscoped handle | `assertDataContextDb`, `packages/db/src/data-context.ts:74` |
-| An AES-256-GCM JSON envelope type and cipher already exist | `EncryptedSecret` `packages/db/src/secret-cipher.ts:10`; `JsonSecretCipher` `:63`; `encryptJson` `:72`; `decryptJson` `:136` |
-| A rotating keyring resolver already exists | `resolveKeyring`, `packages/db/src/keyring.ts:22` |
-| A per-domain cipher subclass is an established pattern | `packages/settings/src/module-credential-crypto.ts:12` |
-| Soft-revoke RLS (no DELETE grant) is an established table posture | `packages/settings/sql/0153_module_credentials.sql` |
-| Metadata can be listed without selecting the ciphertext column | `packages/settings/src/repository-module-credentials.ts:69` |
-| The per-user source cap and duplicate-publisher rule live in one method we can reuse | `createCustomSource`, `packages/news/src/personalization-repository.ts:157` |
-| News routes have a sub-registration seam | `registerNewsPersonalizationRoutes` called at `packages/news/src/routes.ts:222` |
-| The manifest declares migrations, owned tables, routes, permissions and deletion tables | `packages/news/src/manifest.ts:75`, `:83`, `:117`, `:135`, `:437` |
-| The composition root wires News dependencies | `packages/module-registry/src/index.ts:1923` |
-| Route errors have a shared shape | `HttpError` / `handleRouteError` from `@moss/module-sdk`, used at `packages/news/src/personalization-routes.ts:5` |
-| A shared error response schema fragment exists | `errorResponseSchema`, `packages/shared/src/schema-fragments.ts:8` |
-| Two existing tests pin lists that a new table/migration must join | `tests/integration/module-data-lifecycle-cascade.test.ts:136`, `tests/integration/foundation-schema-catalog.test.ts:278` |
+| Assumption                                                                                                      | Evidence                                                                                                                     |
+| --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `withDataContext` opens one real transaction, so a source row and a credential row commit or roll back together | `packages/db/src/data-context.ts:63`                                                                                         |
+| Repositories can reject an unscoped handle                                                                      | `assertDataContextDb`, `packages/db/src/data-context.ts:74`                                                                  |
+| An AES-256-GCM JSON envelope type and cipher already exist                                                      | `EncryptedSecret` `packages/db/src/secret-cipher.ts:10`; `JsonSecretCipher` `:63`; `encryptJson` `:72`; `decryptJson` `:136` |
+| A rotating keyring resolver already exists                                                                      | `resolveKeyring`, `packages/db/src/keyring.ts:22`                                                                            |
+| A per-domain cipher subclass is an established pattern                                                          | `packages/settings/src/module-credential-crypto.ts:12`                                                                       |
+| Soft-revoke RLS (no DELETE grant) is an established table posture                                               | `packages/settings/sql/0153_module_credentials.sql`                                                                          |
+| Metadata can be listed without selecting the ciphertext column                                                  | `packages/settings/src/repository-module-credentials.ts:69`                                                                  |
+| The per-user source cap and duplicate-publisher rule live in one method we can reuse                            | `createCustomSource`, `packages/news/src/personalization-repository.ts:157`                                                  |
+| News routes have a sub-registration seam                                                                        | `registerNewsPersonalizationRoutes` called at `packages/news/src/routes.ts:222`                                              |
+| The manifest declares migrations, owned tables, routes, permissions and deletion tables                         | `packages/news/src/manifest.ts:75`, `:83`, `:117`, `:135`, `:437`                                                            |
+| The composition root wires News dependencies                                                                    | `packages/module-registry/src/index.ts:1923`                                                                                 |
+| Route errors have a shared shape                                                                                | `HttpError` / `handleRouteError` from `@moss/module-sdk`, used at `packages/news/src/personalization-routes.ts:5`            |
+| A shared error response schema fragment exists                                                                  | `errorResponseSchema`, `packages/shared/src/schema-fragments.ts:8`                                                           |
+| Two existing tests pin lists that a new table/migration must join                                               | `tests/integration/module-data-lifecycle-cascade.test.ts:136`, `tests/integration/foundation-schema-catalog.test.ts:278`     |
 
 No open questions. Nothing in this slice needs a capability that does not exist today.
 
@@ -58,7 +58,7 @@ record because the risk tier demands it:
    serializer strips one even if a future bug tried to return it. Pinned by a test.
 2. **Route to database.** Only the composition root can resolve key material. News holds an
    interface it cannot satisfy by itself, so News can never reach the keyring.
-3. **Database row to actor.** Row security is enabled *and* forced, policies name
+3. **Database row to actor.** Row security is enabled _and_ forced, policies name
    `jarvis_app_runtime` only, and every policy is `owner_user_id = app.current_actor_user_id()`.
    No admin branch: admin power over News credentials is nil, not read-only.
 4. **Worker.** No worker grant at all in this slice. #2007 adds the narrowest one it needs.
@@ -183,7 +183,9 @@ export interface ConnectNewsCredentialedSourceRequest {
   readonly connectionId: string;
   readonly apiKey: string;
 }
-export interface ReplaceNewsSourceCredentialRequest { readonly apiKey: string; }
+export interface ReplaceNewsSourceCredentialRequest {
+  readonly apiKey: string;
+}
 export interface ConnectNewsCredentialedSourceResponse {
   readonly source: NewsCustomSourceDto;
   readonly credential: NewsSourceCredentialStatusDto;
@@ -223,13 +225,23 @@ export interface NewsCredentialStatusRow {
 export class NewsCredentialRepository {
   readStatuses(scopedDb: DataContextDb): Promise<NewsCredentialStatusRow[]>;
   readEnvelope(scopedDb: DataContextDb, sourceId: string): Promise<EncryptedSecret | null>;
-  insertCredential(scopedDb: DataContextDb, input: {
-    sourceId: string; connectionId: string; envelope: EncryptedSecret;
-  }): Promise<NewsCredentialStatusRow>;
-  rotateCredential(scopedDb: DataContextDb, sourceId: string, envelope: EncryptedSecret):
-    Promise<{ generation: string } | null>;
-  revokeCredential(scopedDb: DataContextDb, sourceId: string):
-    Promise<NewsCredentialStatusRow | null>;
+  insertCredential(
+    scopedDb: DataContextDb,
+    input: {
+      sourceId: string;
+      connectionId: string;
+      envelope: EncryptedSecret;
+    }
+  ): Promise<NewsCredentialStatusRow>;
+  rotateCredential(
+    scopedDb: DataContextDb,
+    sourceId: string,
+    envelope: EncryptedSecret
+  ): Promise<{ generation: string } | null>;
+  revokeCredential(
+    scopedDb: DataContextDb,
+    sourceId: string
+  ): Promise<NewsCredentialStatusRow | null>;
 }
 ```
 
@@ -271,16 +283,17 @@ export interface NewsCredentialRouteDependencies {
   readonly credentials?: NewsCredentialStore;
 }
 export function registerNewsCredentialRoutes(
-  server: FastifyInstance, dependencies: NewsCredentialRouteDependencies
+  server: FastifyInstance,
+  dependencies: NewsCredentialRouteDependencies
 ): void;
 ```
 
-| Route | Behaviour |
-| --- | --- |
-| `POST /api/news/sources/credentialed` | Describe the connection; unknown id gives the unsupported answer. Validate the key. Only on success, inside ONE `withDataContext` call, create the source row through `createCustomSource` (so the per-user cap and duplicate rule keep working) with fingerprint `connection:<connectionId>:v1`, then insert the credential. On any failure nothing is written. |
-| `POST /api/news/sources/:id/credential` | Validate the candidate first. On failure return the "previous key is still active" outcome with the stored row untouched. On success rotate and bump the generation. |
-| `DELETE /api/news/sources/:id/credential` | Revoke. Idempotent. Returns status only. |
-| `GET /api/news/credentials` | The actor's credential statuses. |
+| Route                                     | Behaviour                                                                                                                                                                                                                                                                                                                                                        |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/news/sources/credentialed`     | Describe the connection; unknown id gives the unsupported answer. Validate the key. Only on success, inside ONE `withDataContext` call, create the source row through `createCustomSource` (so the per-user cap and duplicate rule keep working) with fingerprint `connection:<connectionId>:v1`, then insert the credential. On any failure nothing is written. |
+| `POST /api/news/sources/:id/credential`   | Validate the candidate first. On failure return the "previous key is still active" outcome with the stored row untouched. On success rotate and bump the generation.                                                                                                                                                                                             |
+| `DELETE /api/news/sources/:id/credential` | Revoke. Idempotent. Returns status only.                                                                                                                                                                                                                                                                                                                         |
+| `GET /api/news/credentials`               | The actor's credential statuses.                                                                                                                                                                                                                                                                                                                                 |
 
 Fixed user-facing wording, chosen by branching on the typed outcome:
 
@@ -327,26 +340,26 @@ New `tests/unit/news-credential-routes.test.ts` and `tests/unit/news-credential-
 modelled on `tests/unit/news-routes.test.ts` with fake ports. Each case, and how it fails against a
 broken implementation:
 
-| Case | What a broken build does |
-| --- | --- |
-| A validator that rejects writes no source row and no credential row | A build that creates the source first, then validates, leaves an orphan source behind |
-| A rejected replacement leaves envelope and generation exactly as they were | A build that rotates before validating destroys a working key on a typo |
-| An accepted replacement increments the generation | A build that forgets the bump lets #2007 serve a cached response under a rotated-away key |
-| Revoking twice succeeds both times with the same reported state | A build that reads-then-writes raises on the second call |
-| The status object's exact key set contains no key, envelope, header name, or generation | A build that spreads the row into the response leaks the ciphertext |
-| An error raised inside the validator does not carry the submitted key in its message | A build that interpolates the request body into an error writes the key into the logs |
+| Case                                                                                    | What a broken build does                                                                  |
+| --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| A validator that rejects writes no source row and no credential row                     | A build that creates the source first, then validates, leaves an orphan source behind     |
+| A rejected replacement leaves envelope and generation exactly as they were              | A build that rotates before validating destroys a working key on a typo                   |
+| An accepted replacement increments the generation                                       | A build that forgets the bump lets #2007 serve a cached response under a rotated-away key |
+| Revoking twice succeeds both times with the same reported state                         | A build that reads-then-writes raises on the second call                                  |
+| The status object's exact key set contains no key, envelope, header name, or generation | A build that spreads the row into the response leaks the ciphertext                       |
+| An error raised inside the validator does not carry the submitted key in its message    | A build that interpolates the request body into an error writes the key into the logs     |
 
 New `tests/integration/news-credentials.test.ts`, modelled on
 `tests/integration/news-personalization-repository.test.ts`:
 
-| Case | What a broken build does |
-| --- | --- |
-| Row security is both enabled and forced; policies name `jarvis_app_runtime` only; `jarvis_worker_runtime` has no grant | Enabled-but-not-forced silently exempts the table owner |
-| User B cannot read, rotate, or revoke user A's credential and gets no row back | A missing `WITH CHECK` lets B rotate A's key |
-| An administrator actor gets no row either | An admin branch copied from `0153` would turn configuration power into data access |
-| The stored envelope records aes-256-gcm and the plaintext key appears nowhere in the row | A build that stores the key in a stray column |
-| Deleting the user removes the credential row; deleting the source removes it too | A missing cascade orphans ciphertext after account deletion |
-| The News export for a user with a credential contains no credential fields | A future edit to the export collector leaks the envelope |
+| Case                                                                                                                   | What a broken build does                                                           |
+| ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Row security is both enabled and forced; policies name `jarvis_app_runtime` only; `jarvis_worker_runtime` has no grant | Enabled-but-not-forced silently exempts the table owner                            |
+| User B cannot read, rotate, or revoke user A's credential and gets no row back                                         | A missing `WITH CHECK` lets B rotate A's key                                       |
+| An administrator actor gets no row either                                                                              | An admin branch copied from `0153` would turn configuration power into data access |
+| The stored envelope records aes-256-gcm and the plaintext key appears nowhere in the row                               | A build that stores the key in a stray column                                      |
+| Deleting the user removes the credential row; deleting the source removes it too                                       | A missing cascade orphans ciphertext after account deletion                        |
+| The News export for a user with a credential contains no credential fields                                             | A future edit to the export collector leaks the envelope                           |
 
 ## Verification
 
