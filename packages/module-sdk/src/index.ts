@@ -35,6 +35,8 @@ import type {
   ModuleExternalSourceManifest
 } from "./external-module.js";
 
+import type { ModuleWorkflowDefinition } from "./workflow.js";
+
 export type ModuleLifecycle = "required" | "optional" | "user-toggleable" | "workspace-toggleable";
 export type ModuleScope = "user" | "admin" | "system";
 export type ModulePermissionAction = "view" | "create" | "update" | "delete" | "manage" | "execute";
@@ -653,6 +655,13 @@ export interface MossModuleManifest {
   readonly dataLifecycle?: ModuleDataLifecycleManifest;
   readonly externalSources?: readonly ModuleExternalSourceManifest[];
   readonly assistantOnboarding?: ModuleAssistantOnboardingManifest;
+  /**
+   * #2012 (epic #819): developer-authored workflow graphs, validated at boot by
+   * `assertModuleRegistryConsistency`. Built-in modules only, on purpose — a downloadable module
+   * runs in a separate worker and cannot hand a TypeScript handler function across that boundary,
+   * so `JsonMossModuleManifest` deliberately has no equivalent field.
+   */
+  readonly workflows?: readonly ModuleWorkflowDefinition[];
 }
 
 /** Declarative, untrusted module guidance embedded only inside core-owned onboarding framing. */
@@ -697,6 +706,25 @@ export {
   type ModuleWebDeclaration,
   type ModuleWorkerDeclaration
 } from "./external-module.js";
+
+// #2012 (epic #819): workflow definition contracts, split out of this barrel for the same reason
+// external-module.ts was — the file-size gate. Named explicitly rather than `export *` so that
+// widening the SDK's public surface stays visible in review.
+export {
+  MAX_WORKFLOW_STEP_ATTEMPTS,
+  type ModuleWorkflowDefinition,
+  type WorkflowApprovalSpec,
+  type WorkflowArtifactPort,
+  type WorkflowBackoffStrategy,
+  type WorkflowEdgeCondition,
+  type WorkflowEdgeDefinition,
+  type WorkflowStepContext,
+  type WorkflowStepDefinition,
+  type WorkflowStepHandler,
+  type WorkflowStepKind,
+  type WorkflowStepRetryPolicy,
+  type WorkflowTrigger
+} from "./workflow.js";
 
 /** Context passed to a module's data-lifecycle hooks (export collect, etc.). */
 export interface ModuleLifecycleContext {

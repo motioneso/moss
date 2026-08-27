@@ -332,6 +332,11 @@ import {
 } from "./built-in-module-helpers.js";
 import { assertModulesCompatible } from "./compat-gate.js";
 import {
+  buildWorkflowRegistry,
+  validateModuleWorkflows,
+  type WorkflowRegistry
+} from "./workflow-registry.js";
+import {
   makeCliPresentProbe,
   makeChatMultiplexerStatusProbe,
   makeProviderConnectionCheckProbe,
@@ -2182,6 +2187,21 @@ export const MODULE_IMAGE_CSP_HOSTS: readonly string[] = Array.from(
   )
 );
 
+/**
+ * #2012 (epic #819): the validated workflow lookup, built once at module load for the same reason
+ * MODULE_IMAGE_CSP_HOSTS is -- so an invalid definition takes the process down here rather than
+ * quietly going missing from the registry later. `assertModuleRegistryConsistency` above has
+ * already run and would have thrown first; this rebuild is what a consumer actually reads.
+ *
+ * No module declares a workflow yet, so this is currently empty. That is the expected result.
+ */
+const BUILT_IN_WORKFLOW_REGISTRY: WorkflowRegistry = buildWorkflowRegistry(BUILT_IN_MODULES);
+
+/** Validated workflow definitions, keyed by workflow id. Only definitions that passed appear. */
+export function getWorkflowRegistry(): WorkflowRegistry {
+  return BUILT_IN_WORKFLOW_REGISTRY;
+}
+
 export function assertModuleRegistryConsistency(
   registrations: readonly BuiltInModuleRegistration[] = BUILT_IN_MODULES
 ): void {
@@ -2192,6 +2212,10 @@ export function assertModuleRegistryConsistency(
   const routeKeys = new Map<string, string>();
   const ownedTables = new Map<string, string>();
   const externalSourceIds = new Map<string, string>();
+
+  // #2012 (epic #819): workflow graphs are checked here so the existing module-load-time call
+  // above fails the API and the worker closed on a broken definition. No separate boot hook.
+  validateModuleWorkflows(registrations);
 
   for (const registration of registrations) {
     assertAppMapDeclarations(registration.manifest);
