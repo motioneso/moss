@@ -794,8 +794,16 @@ describe("story relevance feedback", () => {
       })
     );
 
-    expect(news.map((row) => row.targetRef)).toEqual([newsRef]);
-    expect(sports.map((row) => row.targetRef)).toEqual([sportsRef]);
+    // Membership plus separation, not an exact list: earlier cases in this file leave their own
+    // active preferences behind for this owner, so pinning the whole list would only test the
+    // order the cases happen to run in.
+    const newsRefs = news.map((row) => row.targetRef);
+    const sportsRefs = sports.map((row) => row.targetRef);
+    expect(newsRefs).toContain(newsRef);
+    expect(sportsRefs).toContain(sportsRef);
+    expect(newsRefs).not.toContain(sportsRef);
+    expect(sportsRefs).not.toContain(newsRef);
+    expect(newsRefs.filter((ref) => sportsRefs.includes(ref))).toEqual([]);
   });
 
   // Case 19. Fails if a row saved before this change stays unusable forever.
