@@ -122,9 +122,12 @@ describe("module build live-agent composition", () => {
     cwd.mockRestore();
   });
 
+  // #2028 — google's flag is the real Gemini CLI's `--approval-mode auto_edit`, not the old
+  // Antigravity `--mode accept-edits`. Same property under test: the builder may write inside its
+  // own workspace unattended and nowhere else.
   it.each([
     ["openai-compatible", "--sandbox workspace-write"],
-    ["google", "--mode accept-edits"]
+    ["google", "--approval-mode auto_edit"]
   ] as const)(
     "gives the %s builder unattended write access only in its workspace",
     async (provider, flag) => {
