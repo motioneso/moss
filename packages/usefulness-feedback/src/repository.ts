@@ -7,9 +7,24 @@ import {
   type UsefulnessFeedbackSignal,
   type UsefulnessFeedbackStatus
 } from "@moss/db";
-import type { FeedbackSurface, FeedbackTargetKind } from "@moss/shared";
+import type {
+  FeedbackSurface,
+  FeedbackTargetKind,
+  StoryFeedbackModule,
+  StoryRelevanceDirection,
+  StoryRelevanceRule
+} from "@moss/shared";
 
-import { isStoryTargetKind, sanitizeStoryTargetMetadata } from "./story-target.js";
+import {
+  compileStoryRelevanceRule,
+  storyRelevanceDirectionForKind,
+  storyRelevanceRuleNeedsRecompile
+} from "./relevance/compile.js";
+import {
+  STORY_TARGET_KIND_BY_MODULE,
+  isStoryTargetKind,
+  sanitizeStoryTargetMetadata
+} from "./story-target.js";
 import type { FeedbackTargetVerification } from "./target-verifiers.js";
 
 /**
@@ -56,7 +71,27 @@ export interface CreateFeedbackInput {
   readonly effectRef?: string | null;
   /** Already trimmed and length-checked by the route; stored verbatim. */
   readonly reasonText?: string | null;
+  /**
+   * The compiled preference, for a story row. Compiling is pure, so it happens in the route before
+   * this call and can never make saving fail. Anything else keeps today's empty default.
+   */
+  readonly rule?: StoryRelevanceRule | null;
 }
+
+/**
+ * One owner preference, ready to evaluate candidate stories against. The reason travels with it as
+ * data, read from its own column: it is never copied into the rule and never logged.
+ */
+export interface ActiveStoryRuleRow {
+  readonly id: string;
+  readonly targetRef: string;
+  readonly direction: StoryRelevanceDirection;
+  readonly reasonText: string | null;
+  readonly rule: StoryRelevanceRule;
+}
+
+/** The most preferences one owner's feed is ever judged against, matching the existing list cap. */
+const MAX_ACTIVE_STORY_RULES = 100;
 
 export interface ListFeedbackOptions {
   readonly targetKinds?: readonly FeedbackTargetKind[];
@@ -101,7 +136,9 @@ export class UsefulnessFeedbackRepository {
         effect_kind,
         effect_ref,
         metadata_json,
-        reason_text
+        reason_text,
+        rule_json,
+        rule_version
       )
       VALUES (
         ${input.ownerUserId}::uuid,
@@ -115,7 +152,9 @@ export class UsefulnessFeedbackRepository {
         ${input.effectKind ?? null},
         ${input.effectRef ?? null},
         ${JSON.stringify(input.metadata)}::jsonb,
-        ${input.reasonText ?? null}
+        ${input.reasonText ?? null},
+        ${JSON.stringify(input.rule ?? {})}::jsonb,
+        ${input.rule?.version ?? null}
       )
       RETURNING *
     `.execute(scopedDb.db);
@@ -181,17 +220,24 @@ export class UsefulnessFeedbackRepository {
       .executeTakeFirst();
   }
 
-  /** Rewrites the reason on an active row, keeping the same id and bumping the revision. */
+  /**
+   * Rewrites the reason on an active row, keeping the same id and bumping the revision. The
+   * rebuilt rule is written in the same statement, so a row can never carry a reason and a rule
+   * that disagree with each other.
+   */
   async updateReason(
     scopedDb: DataContextDb,
     ownerUserId: string,
     id: string,
-    reasonText: string
+    reasonText: string,
+    rule: StoryRelevanceRule | null
   ): Promise<UsefulnessFeedbackSignal | undefined> {
     assertDataContextDb(scopedDb);
     const result = await sql<FeedbackRow>`
       UPDATE app.usefulness_feedback_signals
       SET reason_text = ${reasonText},
+          rule_json = ${JSON.stringify(rule ?? {})}::jsonb,
+          rule_version = ${rule?.version ?? null},
           revision = revision + 1,
           updated_at = now()
       WHERE owner_user_id = ${ownerUserId}::uuid
@@ -201,6 +247,87 @@ export class UsefulnessFeedbackRepository {
       RETURNING *
     `.execute(scopedDb.db);
     return result.rows[0];
+  }
+
+  /**
+   * Every active story preference this owner holds for one module, ready to judge candidates
+   * against. Owner-scoped and module-scoped, so a News refresh can never see a Sports preference
+   * and the other way round.
+   *
+   * A row whose stored rule is missing, empty or built by an older version is rebuilt here from
+   * that row's own verified story context and reason, and written back. That repairs every row
+   * saved before this change and makes a later change of rule shape safe, without a migration.
+   */
+  async listActiveStoryRules(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    moduleId: StoryFeedbackModule
+  ): Promise<ActiveStoryRuleRow[]> {
+    assertDataContextDb(scopedDb);
+    const targetKind = STORY_TARGET_KIND_BY_MODULE[moduleId];
+    const result = await sql<{
+      readonly id: string;
+      readonly target_ref: string;
+      readonly kind: UsefulnessFeedbackKind;
+      readonly metadata_json: Record<string, unknown>;
+      readonly reason_text: string | null;
+      readonly rule_json: Record<string, unknown>;
+      readonly rule_version: number | null;
+    }>`
+      SELECT id, target_ref, kind, metadata_json, reason_text, rule_json, rule_version
+      FROM app.usefulness_feedback_signals
+      WHERE owner_user_id = ${ownerUserId}::uuid
+        AND target_kind = ${targetKind}
+        AND status = 'active'
+        AND kind IN ('less_like_this', 'more_like_this')
+      ORDER BY created_at DESC, id
+      LIMIT ${MAX_ACTIVE_STORY_RULES}
+    `.execute(scopedDb.db);
+
+    const rules: ActiveStoryRuleRow[] = [];
+    for (const row of result.rows) {
+      const direction = storyRelevanceDirectionForKind(row.kind);
+      if (!direction) continue;
+      let rule = row.rule_json as unknown as StoryRelevanceRule;
+      if (storyRelevanceRuleNeedsRecompile(row.rule_json, row.rule_version)) {
+        rule = compileStoryRelevanceRule({
+          moduleId,
+          direction,
+          storyRef: row.target_ref,
+          context: sanitizeStoryTargetMetadata(row.metadata_json),
+          reasonText: row.reason_text
+        });
+        await this.writeRule(scopedDb, ownerUserId, row.id, rule);
+      }
+      rules.push({
+        id: row.id,
+        targetRef: row.target_ref,
+        direction,
+        reasonText: row.reason_text,
+        rule
+      });
+    }
+    return rules;
+  }
+
+  /**
+   * Stores a rebuilt rule without touching the revision: repairing a rule is our own housekeeping,
+   * not a change the owner made, so nothing downstream should read it as an edit.
+   */
+  private async writeRule(
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    id: string,
+    rule: StoryRelevanceRule
+  ): Promise<void> {
+    await sql`
+      UPDATE app.usefulness_feedback_signals
+      SET rule_json = ${JSON.stringify(rule)}::jsonb,
+          rule_version = ${rule.version}
+      WHERE owner_user_id = ${ownerUserId}::uuid
+        AND id = ${id}::uuid
+        AND status = 'active'
+    `.execute(scopedDb.db);
   }
 
   async findOwned(

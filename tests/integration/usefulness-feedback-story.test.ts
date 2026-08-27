@@ -2,7 +2,13 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Kysely } from "kysely";
 
 import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
-import { STORY_FEEDBACK_REASON_MAX_LENGTH, type UsefulnessFeedbackDto } from "@moss/shared";
+import {
+  STORY_FEEDBACK_REASON_MAX_LENGTH,
+  STORY_RELEVANCE_RULE_VERSION,
+  isStoryRelevanceRule,
+  type StoryRelevanceRule,
+  type UsefulnessFeedbackDto
+} from "@moss/shared";
 import { storyFeedbackTargetRef } from "../../packages/usefulness-feedback/src/index.js";
 import { UsefulnessFeedbackRepository } from "../../packages/usefulness-feedback/src/repository.js";
 import { exportUserData } from "../../scripts/export-user-data.js";
@@ -674,5 +680,225 @@ describe("story relevance feedback", () => {
     } finally {
       await server.close();
     }
+  });
+
+  // Case 16. Fails if saving a preference leaves the row with the empty rule #2016 wrote.
+  it("stores a compiled rule and its version when a Less like this is saved", async () => {
+    const targetRef = await registerStoryTarget(appDb, {
+      ownerUserId: ids.userA,
+      moduleId: "news",
+      canonicalLink: "https://news.example.com/story/compiles-a-rule",
+      headline: "A headline the owner may see"
+    });
+    const { server } = await buildFeedbackTestServer(appDb);
+    try {
+      const created = await server.inject({
+        method: "POST",
+        url: "/api/me/usefulness-feedback",
+        headers: userAHeaders(),
+        payload: storyPayload("news", targetRef, "less_like_this", "Too many transfer rumours")
+      });
+      expect(created.statusCode).toBe(201);
+
+      const rows = await storySignalRows(appDb, targetRef);
+      const row = rows.find((candidate) => candidate.status === "active");
+      if (!row) throw new Error("expected an active row");
+      expect(row.rule_version).toBe(STORY_RELEVANCE_RULE_VERSION);
+      expect(isStoryRelevanceRule(row.rule_json)).toBe(true);
+      const rule = row.rule_json as unknown as StoryRelevanceRule;
+      expect(rule.direction).toBe("less");
+      expect(rule.storyRef).toBe(targetRef);
+      expect(rule.terms).toContain("transfer");
+      // The reason keeps its own column and is never copied into the rule.
+      expect(JSON.stringify(rule)).not.toContain("Too many transfer rumours");
+    } finally {
+      await server.close();
+    }
+  });
+
+  // Case 17. Fails if a reason and its rule can drift apart across an edit.
+  it("rebuilds the rule and bumps the revision together when the reason is edited", async () => {
+    const targetRef = await registerStoryTarget(appDb, {
+      ownerUserId: ids.userA,
+      moduleId: "news",
+      canonicalLink: "https://news.example.com/story/rule-follows-the-reason"
+    });
+    const { server } = await buildFeedbackTestServer(appDb);
+    try {
+      const created = await server.inject({
+        method: "POST",
+        url: "/api/me/usefulness-feedback",
+        headers: userAHeaders(),
+        payload: storyPayload("news", targetRef, "less_like_this", "Too much cricket")
+      });
+      expect(created.statusCode).toBe(201);
+
+      const edited = await server.inject({
+        method: "PATCH",
+        url: `/api/me/usefulness-feedback/${created.json().feedback.id}`,
+        headers: userAHeaders(),
+        payload: { reason: "Too much snooker" }
+      });
+      expect(edited.statusCode).toBe(200);
+      expect(edited.json().feedback.revision).toBe(2);
+
+      const rows = await storySignalRows(appDb, targetRef);
+      const row = rows.find((candidate) => candidate.status === "active");
+      if (!row) throw new Error("expected an active row");
+      const rule = row.rule_json as unknown as StoryRelevanceRule;
+      expect(rule.terms).toContain("snooker");
+      expect(rule.terms).not.toContain("cricket");
+      expect(row.revision).toBe(2);
+    } finally {
+      await server.close();
+    }
+  });
+
+  // Case 18. Fails if a News refresh could ever be judged against a Sports preference.
+  it("keeps one module's preferences out of the other module's rules", async () => {
+    const newsRef = await registerStoryTarget(appDb, {
+      ownerUserId: ids.userA,
+      moduleId: "news",
+      canonicalLink: "https://news.example.com/story/news-only-rule"
+    });
+    const sportsRef = await registerStoryTarget(appDb, {
+      ownerUserId: ids.userA,
+      moduleId: "sports",
+      canonicalLink: "https://sports.example.com/story/sports-only-rule"
+    });
+    const { server } = await buildFeedbackTestServer(appDb);
+    try {
+      for (const [moduleId, targetRef] of [
+        ["news", newsRef],
+        ["sports", sportsRef]
+      ] as const) {
+        const created = await server.inject({
+          method: "POST",
+          url: "/api/me/usefulness-feedback",
+          headers: userAHeaders(),
+          payload: storyPayload(moduleId, targetRef, "less_like_this", "Less of this please")
+        });
+        expect(created.statusCode).toBe(201);
+      }
+    } finally {
+      await server.close();
+    }
+
+    const repository = new UsefulnessFeedbackRepository();
+    const dataContext = new DataContextRunner(appDb);
+    const { news, sports } = await dataContext.withDataContext(
+      userAContext(),
+      async (scopedDb) => ({
+        news: await repository.listActiveStoryRules(scopedDb, ids.userA, "news"),
+        sports: await repository.listActiveStoryRules(scopedDb, ids.userA, "sports")
+      })
+    );
+
+    // Membership plus separation, not an exact list: earlier cases in this file leave their own
+    // active preferences behind for this owner, so pinning the whole list would only test the
+    // order the cases happen to run in.
+    const newsRefs = news.map((row) => row.targetRef);
+    const sportsRefs = sports.map((row) => row.targetRef);
+    expect(newsRefs).toContain(newsRef);
+    expect(sportsRefs).toContain(sportsRef);
+    expect(newsRefs).not.toContain(sportsRef);
+    expect(sportsRefs).not.toContain(newsRef);
+    expect(newsRefs.filter((ref) => sportsRefs.includes(ref))).toEqual([]);
+  });
+
+  // Case 19. Fails if a row saved before this change stays unusable forever.
+  it("rebuilds a rule left empty by an earlier release and writes it back", async () => {
+    const targetRef = await registerStoryTarget(appDb, {
+      ownerUserId: ids.userA,
+      moduleId: "news",
+      canonicalLink: "https://news.example.com/story/legacy-empty-rule"
+    });
+    const { server } = await buildFeedbackTestServer(appDb);
+    try {
+      const created = await server.inject({
+        method: "POST",
+        url: "/api/me/usefulness-feedback",
+        headers: userAHeaders(),
+        payload: storyPayload("news", targetRef, "less_like_this", "Endless celebrity noise")
+      });
+      expect(created.statusCode).toBe(201);
+    } finally {
+      await server.close();
+    }
+
+    const repository = new UsefulnessFeedbackRepository();
+    const dataContext = new DataContextRunner(appDb);
+    // Put the row back the way the previous release left it: an empty rule and no version.
+    await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      scopedDb.db
+        .updateTable("app.usefulness_feedback_signals")
+        .set({ rule_json: {}, rule_version: null })
+        .where("owner_user_id", "=", ids.userA)
+        .where("target_ref", "=", targetRef)
+        .execute()
+    );
+
+    const rules = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.listActiveStoryRules(scopedDb, ids.userA, "news")
+    );
+    const rebuilt = rules.find((row) => row.targetRef === targetRef);
+    if (!rebuilt) throw new Error("expected the repaired rule to come back");
+    expect(rebuilt.rule.terms).toContain("celebrity");
+
+    // And the repair is stored, so the next read costs nothing.
+    const rows = await storySignalRows(appDb, targetRef);
+    const row = rows.find((candidate) => candidate.status === "active");
+    expect(row?.rule_version).toBe(STORY_RELEVANCE_RULE_VERSION);
+    // Repairing a rule is our own housekeeping, not an edit the owner made.
+    expect(row?.revision).toBe(1);
+  });
+
+  // Case 20. Fails if anyone but the owner can read what a person asked to see less of.
+  it("hides one person's rules from another person and from an admin", async () => {
+    const targetRef = await registerStoryTarget(appDb, {
+      ownerUserId: ids.userA,
+      moduleId: "news",
+      canonicalLink: "https://news.example.com/story/owner-only-rules"
+    });
+    const { server } = await buildFeedbackTestServer(appDb);
+    try {
+      const created = await server.inject({
+        method: "POST",
+        url: "/api/me/usefulness-feedback",
+        headers: userAHeaders(),
+        payload: storyPayload("news", targetRef, "less_like_this", "Private preference")
+      });
+      expect(created.statusCode).toBe(201);
+    } finally {
+      await server.close();
+    }
+
+    const repository = new UsefulnessFeedbackRepository();
+    const dataContext = new DataContextRunner(appDb);
+
+    const asOwner = await dataContext.withDataContext(userAContext(), (scopedDb) =>
+      repository.listActiveStoryRules(scopedDb, ids.userA, "news")
+    );
+    expect(asOwner.map((row) => row.targetRef)).toContain(targetRef);
+
+    // A second person asking about their own rules sees nothing of the first person's.
+    const asOtherPerson = await dataContext.withDataContext(userBContext(), (scopedDb) =>
+      repository.listActiveStoryRules(scopedDb, ids.userB, "news")
+    );
+    expect(asOtherPerson).toEqual([]);
+
+    // And a second person asking about the first person's rules by name still sees nothing:
+    // row-level security answers to who is asking, not to whose id is in the query.
+    const asOtherPersonProbing = await dataContext.withDataContext(userBContext(), (scopedDb) =>
+      repository.listActiveStoryRules(scopedDb, ids.userA, "news")
+    );
+    expect(asOtherPersonProbing).toEqual([]);
+
+    // Admin power is configuration power only; it never reads someone's private preferences.
+    const asAdmin = await dataContext.withDataContext(
+      { actorUserId: ids.adminUser, requestId: "req:story-rules-admin" },
+      (scopedDb) => repository.listActiveStoryRules(scopedDb, ids.userA, "news")
+    );
+    expect(asAdmin).toEqual([]);
   });
 });

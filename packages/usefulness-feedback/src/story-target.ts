@@ -32,6 +32,15 @@ export function isStoryTargetKind(targetKind: FeedbackTargetKind): boolean {
   return STORY_TARGET_KINDS.has(targetKind);
 }
 
+/** Which module a story row belongs to, or nothing at all when the row is not a story. */
+export function storyModuleForTargetKind(
+  targetKind: FeedbackTargetKind
+): StoryFeedbackModule | null {
+  if (targetKind === "news_story") return "news";
+  if (targetKind === "sports_story") return "sports";
+  return null;
+}
+
 /** Turns a module id plus a story's canonical link into an opaque, repeatable reference. */
 export function storyFeedbackTargetRef(
   moduleId: StoryFeedbackModule,
