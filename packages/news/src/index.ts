@@ -63,3 +63,31 @@ export {
   publisherDomainMatches
 } from "./personalization-domain.js";
 export { decideSourcePolicy, NEWS_POLICY_VERDICT_TTL_MS } from "./discovery/policy-validation.js";
+
+// #2007 — the reviewed API-key publisher connection runtime. Nothing here is wired into a
+// route or the module manifest yet; #2006 and #2008 own that.
+export {
+  ALLOWED_API_KEY_HEADERS,
+  assertValidPublisherConnection,
+  assertValidPublisherConnectionRegistry
+} from "./source/publisher-connection.js";
+export type { PublisherConnection, SanitizedPublisherItem } from "./source/publisher-connection.js";
+export {
+  NEWSAPI_CONNECTION_ID,
+  NEWSAPI_DATASET_KEY,
+  newsApiConnection,
+  publisherConnection,
+  PUBLISHER_CONNECTIONS
+} from "./source/newsapi-connection.js";
+export {
+  createCredentialedPublisherAdapter,
+  CredentialedPublisherError,
+  toCredentialedHeadline
+} from "./source/credentialed-source.js";
+export type { CredentialedPublisherFailure } from "./source/credentialed-source.js";
+export { createNewsCredentialLookup } from "./source/credential-lookup.js";
+export type { NewsCredentialEnvelopeReader } from "./source/credential-lookup.js";
+export type {
+  NewsCredentialLookupPort,
+  NewsCredentialLookupResult
+} from "./source/credential-lookup-port.js";

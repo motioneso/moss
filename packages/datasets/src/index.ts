@@ -20,3 +20,15 @@ export {
   HostPinningViolationError,
   isPinnableHost
 } from "./host-pinning.js";
+export {
+  createKeyedDatasetClient,
+  KeyedCredentialUnavailableError,
+  type KeyedCredentialFailureReason,
+  type KeyedCredentialLookup,
+  type KeyedCredentialLookupResult,
+  type KeyedDatasetClient,
+  type KeyedDatasetClientDeps,
+  type KeyedDatasetEnvelope,
+  type KeyedDatasetRequest,
+  type KeyedSourceDeclaration
+} from "./keyed-client.js";
