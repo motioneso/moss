@@ -378,7 +378,7 @@ describe("Data export", () => {
             (id, owner_user_id, label, canonical_domain, homepage_url, feed_url,
              retrieval_method, validation_status, health_status, validation_fingerprint,
              validated_at, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, 'feed', 'approved', 'available', $7, $8, $9, $10)`,
+           VALUES ($1, $2, $3, $4, $5, $6, 'feed', 'approved', 'healthy', $7, $8, $9, $10)`,
           [
             sourceId,
             ids.userA,
