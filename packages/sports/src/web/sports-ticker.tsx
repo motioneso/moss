@@ -383,7 +383,7 @@ function FeaturedTeamCard(props: {
         {secondary.length > 0 ? (
           <ul className="sp-feat__stories">
             {secondary.map((story) => (
-              <li key={story.url}>
+              <li key={story.storyRef}>
                 <a className="sp-feat__storylink" href={story.url} target="_blank" rel="noreferrer">
                   {story.title}
                   {story.publisherDomain === "espn.com" ? null : ` · ${story.publisherLabel}`}
@@ -516,9 +516,9 @@ export function TickerTeam(props: {
           )}
           {secondary.length > 0 ? (
             <ul className="sp-tk__stories">
-              {/* Old cached stories have no opaque reference, so retain their URL fallback. */}
+              {/* Old cached stories have no opaque reference, so their feedback menu stays hidden. */}
               {secondary.map((story) => (
-                <li key={story.storyRef ?? story.url}>
+                <li key={story.storyRef}>
                   <a className="sp-tk__storylink" href={story.url} target="_blank" rel="noreferrer">
                     {story.title}
                     {story.publisherDomain === "espn.com" ? null : ` · ${story.publisherLabel}`}
@@ -612,7 +612,7 @@ export function TickerLeague(props: {
           {secondary.length > 0 ? (
             <ul className="sp-tk__stories">
               {secondary.map((story) => (
-                <li key={story.storyRef ?? story.url}>
+                <li key={story.storyRef}>
                   <a className="sp-tk__storylink" href={story.url} target="_blank" rel="noreferrer">
                     {story.title}
                     {story.publisherDomain === "espn.com" ? null : ` · ${story.publisherLabel}`}

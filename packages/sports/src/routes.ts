@@ -72,13 +72,9 @@ export interface SportsRoutesDependencies {
   readonly sourcesRepository?: SportsSourcesRepository;
   readonly espnCoverageRepository?: SportsEspnCoverageRepository;
   readonly publicSourceReader?: Pick<SportsPublicSourceReader, "refresh">;
-  /**
-   * Story relevance feedback (#2019). Both are optional and bound by the composition root; a
-   * server built without them behaves exactly as it did before, with no filtering and no story
-   * menu on the page.
-   */
+  /** Story relevance feedback is required on the live route so story references reach the browser. */
   readonly storyRelevance?: SportsStoryRelevancePort;
-  readonly storyFeedback?: SportsStoryFeedbackPort;
+  readonly storyFeedback: SportsStoryFeedbackPort;
   readonly sourceService?: SportsSourceService;
   /** Optional injection point for tests; defaults to a private in-memory store. */
   readonly previews?: SportsSourcePreviewStore;
@@ -100,7 +96,7 @@ export function registerSportsRoutes(
     now: dependencies.now,
     publicSourceReader: dependencies.publicSourceReader,
     ...(dependencies.storyRelevance ? { storyRelevance: dependencies.storyRelevance } : {}),
-    ...(dependencies.storyFeedback ? { storyFeedback: dependencies.storyFeedback } : {})
+    storyFeedback: dependencies.storyFeedback
   });
   const previews = dependencies.previews ?? createSportsPreviewStore();
   const sourceService =

@@ -57,6 +57,10 @@ function buildApp(sourceService: NonNullable<SportsRoutesDependencies["sourceSer
         fingerprint: async () => null
       }
     } as SportsRoutesDependencies["discovery"],
+    storyFeedback: {
+      refFor: () => "sports:test-ref",
+      registerStories: async () => undefined
+    },
     sourceService
   });
   return app;

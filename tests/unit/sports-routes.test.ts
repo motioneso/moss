@@ -242,6 +242,12 @@ function buildApp(overrides: Partial<SportsRoutesDependencies> & { repo?: FakeRe
           assignments
         })
       } as unknown as NonNullable<SportsRoutesDependencies["espnCoverageRepository"]>),
+    storyFeedback:
+      overrides.storyFeedback ??
+      ({
+        refFor: () => "sports:test-ref",
+        registerStories: async () => undefined
+      } as SportsRoutesDependencies["storyFeedback"]),
     previews: overrides.previews,
     publicSourceReader: overrides.publicSourceReader,
     sourceService: overrides.sourceService

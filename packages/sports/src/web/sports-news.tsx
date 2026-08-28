@@ -9,8 +9,8 @@ import { isWrittenArticle, rankStories, BIG_STORY_WEIGHT } from "../news-ranking
 import { StoryFeedbackMenu, type StoryFeedbackChange } from "./story-feedback-menu.js";
 export { isFollowed } from "../news-ranking.js";
 
-function storyKey(headline: Headline): string {
-  return headline.storyRef ?? headline.url;
+function storyKey(headline: Headline): string | undefined {
+  return headline.storyRef;
 }
 
 export function NewsIcon(): ReactNode {
@@ -428,17 +428,13 @@ export function NewsBand({
   // Majors need art — a double-column slot with no image is just a wide gap. Standards take
   // the next slice of the pool; everything past the caps collapses into the brief rail so a
   // busy day widens the tail instead of running the mosaic forever (mrb5reqq).
-  const majorIds = new Set(
-    rest
-      .filter((s) => s.headline.imageUrl)
-      .slice(0, MAJORS_CAP)
-      .map((s) => storyKey(s.headline))
-  );
-  const flow = rest.filter((s) => !majorIds.has(storyKey(s.headline)));
+  const majorStories = rest.filter((s) => s.headline.imageUrl).slice(0, MAJORS_CAP);
+  const majorStoriesSet = new Set(majorStories.map((s) => s.headline));
+  const flow = rest.filter((s) => !majorStoriesSet.has(s.headline));
   const standards = flow.slice(0, STANDARDS_CAP);
-  const mosaicIds = new Set([...majorIds, ...standards.map((s) => storyKey(s.headline))]);
+  const mosaicStoriesSet = new Set([...majorStories, ...standards].map((s) => s.headline));
   // Weight order preserved across both tiers so the page reads big → small.
-  const mosaic = rest.filter((s) => mosaicIds.has(storyKey(s.headline)));
+  const mosaic = rest.filter((s) => mosaicStoriesSet.has(s.headline));
   const briefs = flow.slice(STANDARDS_CAP, STANDARDS_CAP + BRIEFS_CAP);
 
   return (
@@ -468,7 +464,7 @@ export function NewsBand({
           <NewsArticle
             key={storyKey(headline)}
             headline={headline}
-            major={majorIds.has(storyKey(headline))}
+            major={majorStoriesSet.has(headline)}
             onStoryChanged={onStoryChanged}
           />
         ))}

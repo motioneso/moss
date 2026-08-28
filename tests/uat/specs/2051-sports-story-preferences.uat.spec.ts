@@ -138,6 +138,15 @@ test("edits and removes a Less like this preference in Sports Settings", async (
   await assertRemovedAndReplaced(page, sportsBefore, sportsAfter, sportsStory!.title);
   console.log("[live proof] empty reason was rejected, then Sports saved the real reason");
 
+  const sportsReloadResponse = page.waitForResponse(isSportsOverview);
+  await page.reload();
+  const sportsReloaded = (await (await sportsReloadResponse).json()) as SportsOverview;
+  expect(sportsReloaded.topStories.some((story) => story.storyRef === sportsStory!.storyRef)).toBe(
+    false
+  );
+  await expect(page.getByText(sportsStory!.title, { exact: true })).toHaveCount(0);
+  console.log("[live proof] the removed Sports story stayed hidden after reload");
+
   await page.goto(`${requireBaseURL()}/settings?section=modules&module=sports`);
   const preferences = page.locator('section[aria-label="Story preferences"]');
   await expect(preferences).toBeVisible();
