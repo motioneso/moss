@@ -237,7 +237,13 @@ function ProviderCard(props: {
             ) : (
               <KeyRound size={12} aria-hidden="true" />
             )}
-            {provider.authMethod === "cli" ? `${provider.displayName} CLI` : "API key stored"}
+            {provider.authMethod === "cli"
+              ? provider.cliAvailable
+                ? `${provider.displayName} CLI`
+                : `${provider.displayName} CLI unavailable`
+              : provider.hasCredential
+                ? "API key stored"
+                : "API key needed"}
           </div>
         </div>
         <div className="prov__acts">
@@ -415,6 +421,7 @@ function ServiceRow(props: {
   readonly service: (typeof SERVICE_ROWS)[number];
   readonly binding: AiServiceBinding | undefined;
   readonly models: readonly AiConfiguredModelDto[];
+  readonly providers: readonly AiProviderConfigDto[];
 }) {
   const { toast } = useFeedback();
   const queryClient = useQueryClient();
@@ -441,12 +448,18 @@ function ServiceRow(props: {
   });
 
   // Active models that can actually serve this service (a "model" binding must be capability-valid).
-  const capableModels = props.models.filter(
-    (model) =>
+  const capableModels = props.models.filter((model) => {
+    const provider = props.providers.find((candidate) => candidate.id === model.providerConfigId);
+    const providerReady =
+      provider?.status === "active" &&
+      (provider.authMethod === "cli" ? provider.cliAvailable : provider.hasCredential);
+    return (
       model.status === "active" &&
       model.providerStatus === "active" &&
+      providerReady &&
       model.capabilities.includes(props.service.capability)
-  );
+    );
+  });
 
   // The <select> value encodes the binding kind: `mode:<tier>` or `model:<id>`.
   const binding = props.binding;
@@ -883,6 +896,7 @@ export function AiProvidersPane() {
               service={service}
               binding={serviceBindingsQuery.data?.bindings[service.k]}
               models={models}
+              providers={providers}
             />
           ))}
         </Group>
