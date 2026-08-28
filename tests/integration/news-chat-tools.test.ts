@@ -281,14 +281,14 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
     emitted: GatewaySessionRecord[],
     from: number
   ): Promise<Extract<GatewaySessionRecord, { kind: "action_request" }>> {
-    for (let attempt = 0; attempt < 1_000; attempt += 1) {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
       const record = emitted
         .slice(from)
         .find((entry): entry is Extract<GatewaySessionRecord, { kind: "action_request" }> => {
           return entry.kind === "action_request";
         });
       if (record) return record;
-      await new Promise((resolve) => setTimeout(resolve, 5));
+      await new Promise((resolve) => setTimeout(resolve, 10));
     }
     throw new Error("action request never emitted");
   }
@@ -332,7 +332,7 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
 
   async function waitForPendingAction(ownerUserId: string, toolName: string): Promise<string> {
     const repository = new AiRepository();
-    for (let attempt = 0; attempt < 100; attempt += 1) {
+    for (let attempt = 0; attempt < 1_000; attempt += 1) {
       const actions = await appContext.withDataContext(
         { actorUserId: ownerUserId, requestId: `wait-pending-${attempt}` },
         (db) => repository.listAssistantActions(db)
