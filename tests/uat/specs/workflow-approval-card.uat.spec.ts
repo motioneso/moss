@@ -16,7 +16,14 @@ test("owner reaches a live workflow approval card and resumes the run (#2015)", 
   await page.getByLabel("Email").fill(UAT_ADMIN_EMAIL);
   await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
-  await expect(page.locator(".jds-usermenu__trigger")).toBeVisible();
+  const skipSetup = page.getByRole("button", { name: "Skip setup" });
+  const userMenu = page.locator(".jds-usermenu__trigger");
+  await expect(skipSetup.or(userMenu).first()).toBeVisible();
+  if (await skipSetup.isVisible()) {
+    await skipSetup.click();
+    await page.getByRole("button", { name: "Skip anyway" }).click();
+  }
+  await expect(userMenu).toBeVisible();
   await page.getByRole("button", { name: "Chat with Moss" }).click();
   await page
     .getByRole("region", { name: "Workflow approval" })
