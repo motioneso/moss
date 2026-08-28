@@ -150,7 +150,7 @@ describe("WorkflowsRepository", () => {
       const queued = await dataContext.withDataContext(userAContext(), async (scopedDb) =>
         repo.setStepQueueJobId(scopedDb, firstStepRun.id, randomUUID())
       );
-      expect(queued.queueJobId).not.toBeNull();
+      expect(queued?.queueJobId).not.toBeNull();
 
       const after = await dataContext.withDataContext(userAContext(), async (scopedDb) => {
         if (settle === "suspend") return repo.suspendStepRun(scopedDb, firstStepRun.id);

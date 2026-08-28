@@ -53,10 +53,19 @@ export async function runWorkflowStep(
 
   const claim = await deps.dataContext.withDataContext(accessContext, async (scopedDb) => {
     const run = await repo.getRun(scopedDb, actorUserId, workflowRunId);
-    const step = await repo.getStepRun(scopedDb, actorUserId, stepRunId);
+    const step = await repo.getStepRun(scopedDb, actorUserId, workflowRunId, stepRunId);
     if (!run || !step) throw new Error(`Workflow step ${stepRunId} could not be loaded`);
     if (run.status === "cancelled" || TERMINAL_RUN_STATUSES.includes(run.status)) {
       return { action: "skip" as const, run, step };
+    }
+    if (TERMINAL_STEP_RUN_STATUSES.includes(step.status)) {
+      const entry = deps.registry.get(run.workflowId);
+      const definition = entry?.definition;
+      const stepDefinition = definition?.steps.find((candidate) => candidate.id === step.stepId);
+      if (!definition || definition.version !== run.workflowVersion || !stepDefinition) {
+        return { action: "skip" as const, run, step };
+      }
+      return { action: "route" as const, run, step, definition, stepDefinition };
     }
     const entry = deps.registry.get(run.workflowId);
     const definition = entry?.definition;
@@ -68,9 +77,6 @@ export async function runWorkflowStep(
       });
       return { action: "skip" as const, run, step };
     }
-    if (TERMINAL_STEP_RUN_STATUSES.includes(step.status)) {
-      return { action: "route" as const, run, step, definition, stepDefinition };
-    }
     if (step.status === "suspended") {
       const approvals = await repo.listApprovals(scopedDb, actorUserId, run.id);
       if (
@@ -81,9 +87,9 @@ export async function runWorkflowStep(
         return { action: "skip" as const, run, step };
       }
     }
-    if (step.status === "running") return { action: "skip" as const, run, step };
     await repo.markRunRunning(scopedDb, run.id);
     const claimed = await repo.claimStepRun(scopedDb, step.id, job.id);
+    if (!claimed) return { action: "skip" as const, run, step };
     return { action: "run" as const, run, step: claimed, definition, stepDefinition };
   });
 
@@ -158,7 +164,7 @@ export async function runWorkflowStep(
     const retry = await deps.dataContext.withDataContext(accessContext, async (scopedDb) => {
       const run = await repo.lockRun(scopedDb, actorUserId, workflowRunId);
       if (!run || TERMINAL_RUN_STATUSES.includes(run.status)) return null;
-      const step = await repo.getStepRun(scopedDb, actorUserId, stepRunId);
+      const step = await repo.getStepRun(scopedDb, actorUserId, workflowRunId, stepRunId);
       if (!step || TERMINAL_STEP_RUN_STATUSES.includes(step.status)) return null;
       const maxAttempts = claim.stepDefinition.retry?.maxAttempts ?? 1;
       if (step.attemptCount < maxAttempts) {
@@ -169,7 +175,7 @@ export async function runWorkflowStep(
     });
     if (retry !== null && retry >= 0) {
       const queued = await deps.dataContext.withDataContext(accessContext, (scopedDb) =>
-        repo.getStepRun(scopedDb, actorUserId, stepRunId)
+        repo.getStepRun(scopedDb, actorUserId, workflowRunId, stepRunId)
       );
       if (!queued) throw new Error(`Workflow step ${stepRunId} disappeared before retry`);
       const jobId = await enqueueWorkflowStep(deps.boss, queued, { startAfter: retry });
@@ -188,7 +194,7 @@ export async function runWorkflowStep(
     if (!run || TERMINAL_RUN_STATUSES.includes(run.status)) {
       return { outcome: "skipped" as const, successors: [] };
     }
-    const step = await repo.getStepRun(scopedDb, actorUserId, stepRunId);
+    const step = await repo.getStepRun(scopedDb, actorUserId, workflowRunId, stepRunId);
     if (!step || TERMINAL_STEP_RUN_STATUSES.includes(step.status)) {
       return { outcome: "skipped" as const, successors: [] };
     }
@@ -289,11 +295,20 @@ async function routeStepInTransaction(
       successors.push(created.stepRun);
     }
   }
-  const live = (await repo.listStepRuns(scopedDb, run.ownerUserId, run.id)).some(
-    (candidate) => !TERMINAL_STEP_RUN_STATUSES.includes(candidate.status)
-  );
+  const stepRuns = await repo.listStepRuns(scopedDb, run.ownerUserId, run.id);
+  const live = stepRuns.some((candidate) => !TERMINAL_STEP_RUN_STATUSES.includes(candidate.status));
   if (successors.length === 0 && !live) {
-    const finalStatus = status === "failure" && edges.length === 0 ? "failed" : "succeeded";
+    const hasUnroutedFailure = stepRuns.some(
+      (candidate) =>
+        candidate.status === "failed" &&
+        !definition.edges.some(
+          (edge) =>
+            edge.from === candidate.stepId &&
+            edgeMatches(edge, "failure", candidate.resultJson) &&
+            stepRuns.some((successor) => successor.stepId === edge.to)
+        )
+    );
+    const finalStatus = hasUnroutedFailure ? "failed" : "succeeded";
     await repo.completeRun(scopedDb, run.ownerUserId, run.id, finalStatus, {});
     return { outcome: finalStatus === "failed" ? "failed" : "succeeded", successors };
   }

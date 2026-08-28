@@ -37,6 +37,8 @@ import {
   type WorkflowStepRunStatus
 } from "./types.js";
 
+const WORKFLOW_STEP_STALE_AFTER_MS = 5 * 60 * 1000;
+
 export class WorkflowsRepository {
   /**
    * Creates the run and its first step run together. Both start `pending`; nothing is
@@ -146,6 +148,7 @@ export class WorkflowsRepository {
   async getStepRun(
     scopedDb: unknown,
     ownerUserId: string,
+    workflowRunId: string,
     stepRunId: string
   ): Promise<WorkflowStepRun | null> {
     assertDataContextDb(scopedDb);
@@ -153,6 +156,7 @@ export class WorkflowsRepository {
       .selectFrom("app.workflow_step_runs")
       .selectAll()
       .where("id", "=", stepRunId)
+      .where("workflow_run_id", "=", workflowRunId)
       .where("owner_user_id", "=", ownerUserId)
       .executeTakeFirst();
     return row ? rowToStepRun(row) : null;
@@ -239,11 +243,10 @@ export class WorkflowsRepository {
     scopedDb: unknown,
     stepRunId: string,
     queueJobId: string
-  ): Promise<WorkflowStepRun> {
+  ): Promise<WorkflowStepRun | null> {
     assertDataContextDb(scopedDb);
-    const current = await this.requireStepRunRow(scopedDb, stepRunId);
-    assertStepRunNotTerminal(current.status, stepRunId);
     const now = new Date();
+    const staleBefore = new Date(now.getTime() - WORKFLOW_STEP_STALE_AFTER_MS);
     const row = await scopedDb.db
       .updateTable("app.workflow_step_runs")
       .set({
@@ -254,9 +257,18 @@ export class WorkflowsRepository {
         updated_at: now
       })
       .where("id", "=", stepRunId)
+      .where((eb) =>
+        eb.or([
+          eb("status", "in", ["pending", "queued"]),
+          eb.and([
+            eb("status", "=", "running"),
+            eb.or([eb("started_at", "is", null), eb("started_at", "<", staleBefore)])
+          ])
+        ])
+      )
       .returningAll()
-      .executeTakeFirstOrThrow();
-    return rowToStepRun(row);
+      .executeTakeFirst();
+    return row ? rowToStepRun(row) : null;
   }
 
   async queueStepRetry(
@@ -363,21 +375,22 @@ export class WorkflowsRepository {
     });
   }
 
-  /** Marks a live step as queued while recording the job that will deliver it. */
+  /** Marks an unclaimed live step as queued while recording the job that will deliver it. */
   async setStepQueueJobId(
     scopedDb: unknown,
     stepRunId: string,
     queueJobId: string
-  ): Promise<WorkflowStepRun> {
+  ): Promise<WorkflowStepRun | null> {
     assertDataContextDb(scopedDb);
     const row = await scopedDb.db
       .updateTable("app.workflow_step_runs")
       .set({ status: "queued", pgboss_job_id: queueJobId, updated_at: new Date() })
       .where("id", "=", stepRunId)
+      .where("status", "in", ["pending", "queued"])
+      .where("pgboss_job_id", "is", null)
       .returningAll()
       .executeTakeFirst();
-    if (!row) throw stepRunNotFound(stepRunId);
-    return rowToStepRun(row);
+    return row ? rowToStepRun(row) : null;
   }
 
   async clearStepQueueJobId(scopedDb: unknown, stepRunId: string): Promise<WorkflowStepRun> {

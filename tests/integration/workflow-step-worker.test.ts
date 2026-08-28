@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Kysely } from "kysely";
+import { sql, type Kysely } from "kysely";
 import type { Job, PgBoss } from "@moss/jobs";
 
 import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
@@ -124,5 +124,236 @@ describe("workflow step worker", () => {
     );
     expect(detail?.run.status).toBe("succeeded");
     expect(detail?.stepRuns.map((step) => step.status)).toEqual(["succeeded", "succeeded"]);
+  });
+
+  it("claims a step once and reclaims a stale running step", async () => {
+    const repo = new WorkflowsRepository();
+    const created = await dataContext.withDataContext(
+      { actorUserId: ownerUserId, requestId: "workflow-claim-test" },
+      (scopedDb) =>
+        repo.createRun(scopedDb, {
+          ownerUserId,
+          workflowId: "workflows.claim",
+          workflowVersion: 1,
+          moduleId: "workflows",
+          startedBy: "user",
+          startStepId: "claim"
+        })
+    );
+
+    const claims = await Promise.all(
+      ["claim-a", "claim-b"].map((queueJobId) =>
+        dataContext.withDataContext(
+          { actorUserId: ownerUserId, requestId: `workflow-claim-${queueJobId}` },
+          (scopedDb) => repo.claimStepRun(scopedDb, created.firstStepRun.id, queueJobId)
+        )
+      )
+    );
+    expect(claims.filter(Boolean)).toHaveLength(1);
+
+    await dataContext.withDataContext(
+      { actorUserId: ownerUserId, requestId: "workflow-stale-test" },
+      (scopedDb) =>
+        sql`
+          update app.workflow_step_runs
+          set status = 'running', started_at = now() - interval '1 hour', pgboss_job_id = 'crashed-job'
+          where id = ${created.firstStepRun.id}
+        `.execute(scopedDb.db)
+    );
+
+    const recovered = await dataContext.withDataContext(
+      { actorUserId: ownerUserId, requestId: "workflow-recovery-test" },
+      (scopedDb) => repo.claimStepRun(scopedDb, created.firstStepRun.id, "recovered-job")
+    );
+    expect(recovered?.status).toBe("running");
+    expect(recovered?.queueJobId).toBe("recovered-job");
+  });
+
+  it("does not execute a running step again after a crash window has not expired", async () => {
+    const repo = new WorkflowsRepository();
+    let calls = 0;
+    const definition: ModuleWorkflowDefinition = {
+      id: "workflows.active-claim",
+      displayName: "Active claim workflow",
+      version: 1,
+      startStepId: "only",
+      trigger: "manual",
+      steps: [{ id: "only", kind: "task", handler: async () => ({ calls: ++calls }) }],
+      edges: []
+    };
+    const deps = {
+      boss: {} as PgBoss,
+      dataContext,
+      registry: new Map([[definition.id, { moduleId: "workflows", definition }]])
+    };
+    const created = await dataContext.withDataContext(
+      { actorUserId: ownerUserId, requestId: "workflow-active-claim-test" },
+      (scopedDb) =>
+        repo.createRun(scopedDb, {
+          ownerUserId,
+          workflowId: definition.id,
+          workflowVersion: 1,
+          moduleId: "workflows",
+          startedBy: "user",
+          startStepId: "only"
+        })
+    );
+
+    await dataContext.withDataContext(
+      { actorUserId: ownerUserId, requestId: "workflow-active-claim-test" },
+      (scopedDb) => repo.claimStepRun(scopedDb, created.firstStepRun.id, "active-job")
+    );
+
+    await expect(
+      runWorkflowStep(job("duplicate-job", created.run.id, created.firstStepRun.id), deps)
+    ).resolves.toMatchObject({ outcome: "skipped" });
+    expect(calls).toBe(0);
+  });
+
+  it("ignores late queue bookkeeping for finished and cancelled steps", async () => {
+    const repo = new WorkflowsRepository();
+    const makeRun = (workflowId: string) =>
+      dataContext.withDataContext(
+        { actorUserId: ownerUserId, requestId: `workflow-late-${workflowId}` },
+        (scopedDb) =>
+          repo.createRun(scopedDb, {
+            ownerUserId,
+            workflowId,
+            workflowVersion: 1,
+            moduleId: "workflows",
+            startedBy: "user",
+            startStepId: "only"
+          })
+      );
+    const succeeded = await makeRun("workflows.late-success");
+    await dataContext.withDataContext(
+      { actorUserId: ownerUserId, requestId: "workflow-late-success" },
+      (scopedDb) => repo.recordStepSuccess(scopedDb, succeeded.firstStepRun.id, {})
+    );
+    const lateSuccess = await dataContext.withDataContext(
+      { actorUserId: ownerUserId, requestId: "workflow-late-success" },
+      (scopedDb) => repo.setStepQueueJobId(scopedDb, succeeded.firstStepRun.id, "late-success")
+    );
+    expect(lateSuccess).toBeNull();
+
+    const cancelled = await makeRun("workflows.late-cancel");
+    await dataContext.withDataContext(
+      { actorUserId: ownerUserId, requestId: "workflow-late-cancel" },
+      (scopedDb) => repo.cancelRun(scopedDb, ownerUserId, cancelled.run.id)
+    );
+    const lateCancel = await dataContext.withDataContext(
+      { actorUserId: ownerUserId, requestId: "workflow-late-cancel" },
+      (scopedDb) => repo.setStepQueueJobId(scopedDb, cancelled.firstStepRun.id, "late-cancel")
+    );
+    expect(lateCancel).toBeNull();
+  });
+
+  it("rejects a job whose step belongs to another workflow run", async () => {
+    const repo = new WorkflowsRepository();
+    let calls = 0;
+    const definition: ModuleWorkflowDefinition = {
+      id: "workflows.run-binding",
+      displayName: "Run binding workflow",
+      version: 1,
+      startStepId: "only",
+      trigger: "manual",
+      steps: [{ id: "only", kind: "task", handler: async () => ({ calls: ++calls }) }],
+      edges: []
+    };
+    const deps = {
+      boss: {} as PgBoss,
+      dataContext,
+      registry: new Map([[definition.id, { moduleId: "workflows", definition }]])
+    };
+    const create = (requestId: string) =>
+      dataContext.withDataContext({ actorUserId: ownerUserId, requestId }, (scopedDb) =>
+        repo.createRun(scopedDb, {
+          ownerUserId,
+          workflowId: definition.id,
+          workflowVersion: 1,
+          moduleId: "workflows",
+          startedBy: "user",
+          startStepId: "only"
+        })
+      );
+    const first = await create("workflow-run-binding-a");
+    const second = await create("workflow-run-binding-b");
+
+    await expect(
+      runWorkflowStep(job("mismatch", first.run.id, second.firstStepRun.id), deps)
+    ).rejects.toThrow(`Workflow step ${second.firstStepRun.id} could not be loaded`);
+    expect(calls).toBe(0);
+  });
+
+  it("fails a run when a failed branch has no failure edge even if a sibling finishes", async () => {
+    const repo = new WorkflowsRepository();
+    const sent: string[] = [];
+    const boss = {
+      send: async () => {
+        const id = `branch-job-${sent.length + 1}`;
+        sent.push(id);
+        return id;
+      }
+    } as unknown as PgBoss;
+    const definition: ModuleWorkflowDefinition = {
+      id: "workflows.failed-branch",
+      displayName: "Failed branch workflow",
+      version: 1,
+      startStepId: "start",
+      trigger: "manual",
+      steps: [
+        { id: "start", kind: "task", handler: async () => ({}) },
+        {
+          id: "failed",
+          kind: "task",
+          handler: async () => {
+            throw new Error("boom");
+          }
+        },
+        { id: "sibling", kind: "task", handler: async () => ({ done: true }) }
+      ],
+      edges: [
+        { from: "start", to: "failed", condition: { type: "onSuccess" } },
+        { from: "start", to: "sibling", condition: { type: "onSuccess" } }
+      ]
+    };
+    const deps = {
+      boss,
+      dataContext,
+      registry: new Map([[definition.id, { moduleId: "workflows", definition }]])
+    };
+    const created = await dataContext.withDataContext(
+      { actorUserId: ownerUserId, requestId: "workflow-failed-branch" },
+      (scopedDb) =>
+        repo.createRun(scopedDb, {
+          ownerUserId,
+          workflowId: definition.id,
+          workflowVersion: 1,
+          moduleId: "workflows",
+          startedBy: "user",
+          startStepId: "start"
+        })
+    );
+    const firstJob = await enqueueWorkflowStep(boss, created.firstStepRun);
+    await dataContext.withDataContext(
+      { actorUserId: ownerUserId, requestId: "workflow-failed-branch" },
+      (scopedDb) => repo.setStepQueueJobId(scopedDb, created.firstStepRun.id, firstJob!)
+    );
+    await runWorkflowStep(job(firstJob!, created.run.id, created.firstStepRun.id), deps);
+
+    const branches = await dataContext.withDataContext(
+      { actorUserId: ownerUserId, requestId: "workflow-failed-branch" },
+      (scopedDb) => repo.listStepRuns(scopedDb, ownerUserId, created.run.id)
+    );
+    const failed = branches.find((step) => step.stepId === "failed")!;
+    const sibling = branches.find((step) => step.stepId === "sibling")!;
+    await runWorkflowStep(job("failed-job", created.run.id, failed.id), deps);
+    await runWorkflowStep(job("sibling-job", created.run.id, sibling.id), deps);
+
+    const detail = await dataContext.withDataContext(
+      { actorUserId: ownerUserId, requestId: "workflow-failed-branch" },
+      (scopedDb) => repo.getRunDetail(scopedDb, ownerUserId, created.run.id)
+    );
+    expect(detail?.run.status).toBe("failed");
   });
 });

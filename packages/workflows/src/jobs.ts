@@ -79,6 +79,6 @@ export async function enqueueWorkflowStep(
   assertWorkflowStepJobPayload(payload);
   return sendJob(boss, WORKFLOW_STEP_EXECUTE_QUEUE, payload, {
     singletonKey: workflowStepSingletonKey(stepRun.id, stepRun.attemptCount),
-    ...(options?.startAfter === undefined ? {} : { startAfter: options.startAfter })
+    ...(options?.startAfter === undefined ? {} : { startAfter: options.startAfter / 1000 })
   });
 }

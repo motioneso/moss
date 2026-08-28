@@ -38,7 +38,7 @@ describe("workflow step jobs", () => {
       [
         WORKFLOW_STEP_EXECUTE_QUEUE,
         { actorUserId: "user-1", workflowRunId: "run-1", stepRunId: "step-1" },
-        { singletonKey: "step-1:2", startAfter: 100 }
+        { singletonKey: "step-1:2", startAfter: 0.1 }
       ]
     ]);
     await expect(enqueueWorkflowStep(boss, { ...step, status: "succeeded" })).resolves.toBeNull();
