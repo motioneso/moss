@@ -260,15 +260,28 @@ export class WorkflowsRepository {
       .where((eb) =>
         eb.or([
           eb("status", "in", ["pending", "queued"]),
-          eb.and([
-            eb("status", "=", "running"),
-            eb.or([eb("started_at", "is", null), eb("started_at", "<", staleBefore)])
-          ])
+          eb.and([eb("status", "=", "running"), eb("updated_at", "<", staleBefore)])
         ])
       )
       .returningAll()
       .executeTakeFirst();
     return row ? rowToStepRun(row) : null;
+  }
+
+  async heartbeatStepRun(
+    scopedDb: unknown,
+    stepRunId: string,
+    queueJobId: string
+  ): Promise<boolean> {
+    assertDataContextDb(scopedDb);
+    const result = await scopedDb.db
+      .updateTable("app.workflow_step_runs")
+      .set({ updated_at: new Date() })
+      .where("id", "=", stepRunId)
+      .where("status", "=", "running")
+      .where("pgboss_job_id", "=", queueJobId)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows) > 0;
   }
 
   async queueStepRetry(

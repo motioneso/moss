@@ -22,6 +22,10 @@ export const WORKFLOW_QUEUE_DEFINITIONS: readonly QueueDefinition[] = [
       policy: "exclusive",
       retryLimit: 3,
       deadLetter: WORKFLOW_STEP_DEADLETTER_QUEUE,
+      expireInSeconds: 23 * 60 * 60,
+      // Keep queue redelivery after the database's five-minute recovery window. The worker
+      // refreshes the database lease every minute while a handler is still running.
+      heartbeatSeconds: 10 * 60,
       deleteAfterSeconds: 60,
       retentionSeconds: 60
     }

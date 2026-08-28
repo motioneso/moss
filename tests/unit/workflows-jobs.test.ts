@@ -50,7 +50,12 @@ describe("workflow step jobs", () => {
       WORKFLOW_QUEUE_DEFINITIONS.find((queue) => queue.name === WORKFLOW_STEP_EXECUTE_QUEUE)
     ).toMatchObject({
       name: WORKFLOW_STEP_EXECUTE_QUEUE,
-      options: { policy: "exclusive", deadLetter: "workflow.step.deadletter" }
+      options: {
+        policy: "exclusive",
+        deadLetter: "workflow.step.deadletter",
+        expireInSeconds: 23 * 60 * 60,
+        heartbeatSeconds: 10 * 60
+      }
     });
   });
 });

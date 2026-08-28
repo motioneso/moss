@@ -41,6 +41,8 @@ interface RouteResult {
   readonly successors: readonly WorkflowStepRun[];
 }
 
+const WORKFLOW_STEP_HEARTBEAT_MS = 60 * 1000;
+
 export async function runWorkflowStep(
   job: Job<WorkflowStepJobPayload>,
   deps: WorkflowWorkerDependencies,
@@ -127,37 +129,51 @@ export async function runWorkflowStep(
 
   let result: WorkflowJson;
   let handlerError = false;
-  if (mode === "deadletter") {
-    result = { error: "transport_failure" };
-    handlerError = true;
-  } else if (claim.stepDefinition.kind === "approval") {
-    result = claim.step.resultJson;
-  } else {
-    try {
-      result = await claim.stepDefinition.handler!({
-        actorUserId,
-        requestId: accessContext.requestId ?? `pgboss:${job.id}`,
-        workflowRunId,
-        stepRunId,
-        runInput: claim.run.inputJson,
-        stepInput: claim.step.inputJson,
-        getStepResult: (stepId) =>
-          deps.dataContext.withDataContext(accessContext, (scopedDb) =>
-            repo.getStepResult(scopedDb, actorUserId, workflowRunId, stepId)
-          ),
-        artifacts: {
-          write: async () => {
-            throw new Error("Workflow artifacts are not available in this slice");
-          },
-          read: async () => {
-            throw new Error("Workflow artifacts are not available in this slice");
-          }
-        }
-      });
-    } catch (error) {
-      result = { error: error instanceof Error ? error.name : "handler_error" };
+  const heartbeat =
+    mode === "execute"
+      ? setInterval(() => {
+          void deps.dataContext
+            .withDataContext(accessContext, (scopedDb) =>
+              repo.heartbeatStepRun(scopedDb, stepRunId, job.id)
+            )
+            .catch(() => undefined);
+        }, WORKFLOW_STEP_HEARTBEAT_MS)
+      : undefined;
+  try {
+    if (mode === "deadletter") {
+      result = { error: "transport_failure" };
       handlerError = true;
+    } else if (claim.stepDefinition.kind === "approval") {
+      result = claim.step.resultJson;
+    } else {
+      try {
+        result = await claim.stepDefinition.handler!({
+          actorUserId,
+          requestId: accessContext.requestId ?? `pgboss:${job.id}`,
+          workflowRunId,
+          stepRunId,
+          runInput: claim.run.inputJson,
+          stepInput: claim.step.inputJson,
+          getStepResult: (stepId) =>
+            deps.dataContext.withDataContext(accessContext, (scopedDb) =>
+              repo.getStepResult(scopedDb, actorUserId, workflowRunId, stepId)
+            ),
+          artifacts: {
+            write: async () => {
+              throw new Error("Workflow artifacts are not available in this slice");
+            },
+            read: async () => {
+              throw new Error("Workflow artifacts are not available in this slice");
+            }
+          }
+        });
+      } catch (error) {
+        result = { error: error instanceof Error ? error.name : "handler_error" };
+        handlerError = true;
+      }
     }
+  } finally {
+    if (heartbeat) clearInterval(heartbeat);
   }
 
   if (handlerError && mode !== "deadletter" && claim.stepDefinition.kind === "task") {

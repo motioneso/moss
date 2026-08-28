@@ -156,7 +156,8 @@ describe("workflow step worker", () => {
       (scopedDb) =>
         sql`
           update app.workflow_step_runs
-          set status = 'running', started_at = now() - interval '1 hour', pgboss_job_id = 'crashed-job'
+          set status = 'running', started_at = now() - interval '1 hour',
+              updated_at = now() - interval '1 hour', pgboss_job_id = 'crashed-job'
           where id = ${created.firstStepRun.id}
         `.execute(scopedDb.db)
     );
@@ -208,6 +209,49 @@ describe("workflow step worker", () => {
       runWorkflowStep(job("duplicate-job", created.run.id, created.firstStepRun.id), deps)
     ).resolves.toMatchObject({ outcome: "skipped" });
     expect(calls).toBe(0);
+  });
+
+  it("does not reclaim a long-running step whose heartbeat is current", async () => {
+    const repo = new WorkflowsRepository();
+    const created = await dataContext.withDataContext(
+      { actorUserId: ownerUserId, requestId: "workflow-heartbeat-test" },
+      (scopedDb) =>
+        repo.createRun(scopedDb, {
+          ownerUserId,
+          workflowId: "workflows.heartbeat",
+          workflowVersion: 1,
+          moduleId: "workflows",
+          startedBy: "user",
+          startStepId: "heartbeat"
+        })
+    );
+
+    await dataContext.withDataContext(
+      { actorUserId: ownerUserId, requestId: "workflow-heartbeat-test" },
+      (scopedDb) => repo.claimStepRun(scopedDb, created.firstStepRun.id, "long-job")
+    );
+    await dataContext.withDataContext(
+      { actorUserId: ownerUserId, requestId: "workflow-heartbeat-test" },
+      (scopedDb) =>
+        sql`
+          update app.workflow_step_runs
+          set started_at = now() - interval '1 hour'
+          where id = ${created.firstStepRun.id}
+        `.execute(scopedDb.db)
+    );
+
+    expect(
+      await dataContext.withDataContext(
+        { actorUserId: ownerUserId, requestId: "workflow-heartbeat-test" },
+        (scopedDb) => repo.heartbeatStepRun(scopedDb, created.firstStepRun.id, "long-job")
+      )
+    ).toBe(true);
+    expect(
+      await dataContext.withDataContext(
+        { actorUserId: ownerUserId, requestId: "workflow-heartbeat-test" },
+        (scopedDb) => repo.claimStepRun(scopedDb, created.firstStepRun.id, "duplicate-job")
+      )
+    ).toBeNull();
   });
 
   it("ignores late queue bookkeeping for finished and cancelled steps", async () => {
