@@ -297,6 +297,13 @@ describe("workflow step worker", () => {
         stepRunId: "also-not-a-uuid"
       });
       expect(deadLetter).toHaveLength(1);
+      const processedDeadLetter = await waitForJobState(
+        boss,
+        WORKFLOW_STEP_DEADLETTER_QUEUE,
+        deadLetter[0]!.id,
+        "failed"
+      );
+      expect(processedDeadLetter.state).toBe("failed");
       expect(deadLetter[0]?.data).toMatchObject({
         actorUserId: ownerUserId,
         workflowRunId: "not-a-uuid",
