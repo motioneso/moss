@@ -363,7 +363,7 @@ export class WorkflowsRepository {
     });
   }
 
-  /** Written here even though nothing fills it until the queue slice (#2014). */
+  /** Marks a live step as queued while recording the job that will deliver it. */
   async setStepQueueJobId(
     scopedDb: unknown,
     stepRunId: string,
@@ -372,7 +372,7 @@ export class WorkflowsRepository {
     assertDataContextDb(scopedDb);
     const row = await scopedDb.db
       .updateTable("app.workflow_step_runs")
-      .set({ pgboss_job_id: queueJobId, updated_at: new Date() })
+      .set({ status: "queued", pgboss_job_id: queueJobId, updated_at: new Date() })
       .where("id", "=", stepRunId)
       .returningAll()
       .executeTakeFirst();
@@ -554,7 +554,6 @@ export class WorkflowsRepository {
       status: "suspended",
       suspended_at: new Date()
     });
-    await this.suspendRun(scopedDb, input.workflowRunId);
 
     return rowToApproval(row);
   }
