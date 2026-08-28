@@ -64,8 +64,28 @@ test.beforeEach(async ({ page }) => {
   );
 
   // Medications list (Manage-meds modal) + add path.
+  let createdMedication: Record<string, unknown> | null = null;
   await page.route("**/api/wellness/medications", (route) => {
     if (route.request().method() === "POST") {
+      createdMedication = {
+        id: "m-new",
+        ownerUserId: "user-1",
+        name: "New Med",
+        dosage: null,
+        form: null,
+        frequencyType: "once_daily",
+        timesPerDay: null,
+        intervalHours: null,
+        weekdays: null,
+        scheduleTimes: ["08:00"],
+        cycleDaysOn: null,
+        cycleDaysOff: null,
+        cycleAnchorDate: null,
+        active: true,
+        notes: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
       return route.fulfill({
         status: 201,
         contentType: "application/json",
@@ -95,7 +115,7 @@ test.beforeEach(async ({ page }) => {
     return route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ medications: [] })
+      body: JSON.stringify({ medications: createdMedication ? [createdMedication] : [] })
     });
   });
 
@@ -246,6 +266,7 @@ test("manage-meds modal can add a medication", async ({ page }) => {
   const body = request.postDataJSON() as Record<string, unknown>;
   expect(body.name).toBe("Bupropion");
   expect(body.frequencyType).toBe("once_daily");
+  await expect(dialog.getByText("New Med")).toBeVisible();
 });
 
 test("a therapy note can be added", async ({ page }) => {

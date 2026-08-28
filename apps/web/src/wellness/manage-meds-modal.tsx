@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import type { MedicationFrequencyTypeApi } from "@moss/shared";
+import type { ListMedicationsResponse, MedicationFrequencyTypeApi } from "@moss/shared";
 import { createMedication, listMedications, updateMedication } from "../api/client";
 import { queryKeys } from "../api/query-keys";
 import { medColor, type Theme } from "./emotion-taxonomy";
@@ -109,7 +109,16 @@ export function ManageMedsModal({ open, onClose, theme = "light" }: Props) {
       }
       return createMedication({ ...base, scheduleTimes });
     },
-    onSuccess: () => {
+    onSuccess: ({ medication }) => {
+      queryClient.setQueryData<ListMedicationsResponse>(
+        queryKeys.wellness.medications,
+        (current) => ({
+          medications: [
+            ...(current?.medications ?? []).filter((existing) => existing.id !== medication.id),
+            medication
+          ]
+        })
+      );
       void queryClient.invalidateQueries({ queryKey: queryKeys.wellness.medications });
       void queryClient.invalidateQueries({ queryKey: ["wellness", "schedule"] });
       void queryClient.invalidateQueries({ queryKey: ["wellness", "adherence-summary"] });
@@ -330,6 +339,11 @@ export function ManageMedsModal({ open, onClose, theme = "light" }: Props) {
                 Add medication
               </button>
             </div>
+            {addMutation.isError ? (
+              <div className="wl-medmodal__error" role="alert">
+                Couldn&apos;t save this medication. Try again.
+              </div>
+            ) : null}
           </div>
         </div>
         <div className="wl-modal__foot">
