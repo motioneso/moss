@@ -86,10 +86,14 @@ describe("CI phase deadlines (#1534, #1724)", () => {
     );
   });
 
-  it("leaves enough job-level time for every bounded verify and browser phase", () => {
+  it("leaves enough time for the measured integration suite and every bounded job", () => {
     const verifyJob = source.slice(
       source.indexOf("\n  verify:"),
       source.indexOf("\n  integration:")
+    );
+    const integrationJob = source.slice(
+      source.indexOf("\n  integration:"),
+      source.indexOf("\n  browser:")
     );
     const browserJob = source.slice(
       source.indexOf("\n  browser:"),
@@ -97,6 +101,9 @@ describe("CI phase deadlines (#1534, #1724)", () => {
     );
 
     expect(verifyJob).toContain("timeout-minutes: 45");
+    expect(integrationJob).toContain("timeout-minutes: 45");
+    expect(steps.get("Run integration shard")).toContain("timeout --verbose --signal=TERM 30m");
+    expect(steps.get("Run integration shard")).toContain("budget=30m");
     expect(browserJob).toContain("timeout-minutes: 45");
   });
 });

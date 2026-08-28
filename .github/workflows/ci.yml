@@ -144,7 +144,7 @@ jobs:
   integration:
     name: Verify integration tests (${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
     strategy:
@@ -186,9 +186,9 @@ jobs:
       - name: Run integration shard
         run: |
           status=0
-          timeout --verbose --signal=TERM 20m pnpm test:integration tests/integration --shard=${{ matrix.shard }}/2 || status=$?
+          timeout --verbose --signal=TERM 30m pnpm test:integration tests/integration --shard=${{ matrix.shard }}/2 || status=$?
           if [ "$status" -eq 124 ]; then
-            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=integration-${{ matrix.shard }}-of-2 budget=20m issue=#1534"
+            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=integration-${{ matrix.shard }}-of-2 budget=30m issue=#1534"
           fi
           exit "$status"
 
