@@ -78,6 +78,8 @@ export interface SeedOptions {
   readonly jobSearchAiProviderBaseUrl?: string;
   /** #1909: opt-in legacy public-source recovery fixtures for its dedicated live-path spec. */
   readonly sportsPublicSourceFixtures?: boolean;
+  /** #2015: seed one owner-scoped pending approval for the live card path. */
+  readonly workflowApprovalFixture?: boolean;
   /**
    * #1121: when set, seeds a neutral scripted AI provider/model (see
    * ./chunks/chat-script.ts) and writes JARVIS_UAT_SCRIPTED_PROVIDER_BIN (#1659 defect 4) so the

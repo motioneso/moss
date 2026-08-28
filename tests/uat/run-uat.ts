@@ -43,20 +43,22 @@ async function readUatLevel(specPath: string): Promise<{
   // either, both, or neither without this function growing a second code path.
   withJobSearchFixture: boolean;
   withSportsPublicSourceFixtures: boolean;
+  withWorkflowApprovalFixture: boolean;
   // #1121 Task 4: same trailing-optional-key pattern as withJobSearchFixture above — an id from
   // UAT_CHAT_SCRIPTS, parsed by the same regex rather than a second one.
   chatScript: UatChatScript | undefined;
 }> {
   const source = await readFile(specPath, "utf8");
   const match = source.match(
-    /export\s+const\s+uatLevel\s*=\s*\{\s*level:\s*["']([^"']+)["']\s*,\s*without:\s*\[([^\]]*)\]\s*(?:,\s*withoutNewsJsonBinding:\s*(true|false))?\s*(?:,\s*withJobSearchFixture:\s*(true|false))?\s*(?:,\s*withSportsPublicSourceFixtures:\s*(true|false))?\s*(?:,\s*chatScript:\s*["']([a-zA-Z0-9_-]+)["'])?\s*\}\s+as const/
+    /export\s+const\s+uatLevel\s*=\s*\{\s*level:\s*["']([^"']+)["']\s*,\s*without:\s*\[([^\]]*)\]\s*(?:,\s*withoutNewsJsonBinding:\s*(true|false))?\s*(?:,\s*withJobSearchFixture:\s*(true|false))?\s*(?:,\s*withSportsPublicSourceFixtures:\s*(true|false))?\s*(?:,\s*withWorkflowApprovalFixture:\s*(true|false))?\s*(?:,\s*chatScript:\s*["']([a-zA-Z0-9_-]+)["'])?\s*\}\s+as const/
   );
   const level = match?.[1];
   const withoutSource = match?.[2];
   const withoutNewsJsonBindingSource = match?.[3];
   const withJobSearchFixtureSource = match?.[4];
   const withSportsPublicSourceFixturesSource = match?.[5];
-  const chatScriptSource = match?.[6];
+  const withWorkflowApprovalFixtureSource = match?.[6];
+  const chatScriptSource = match?.[7];
   if (!level || withoutSource === undefined) {
     throw new Error(`${specPath} must export uatLevel per harness spec §5`);
   }
@@ -78,6 +80,7 @@ async function readUatLevel(specPath: string): Promise<{
     withoutNewsJsonBinding: withoutNewsJsonBindingSource === "true",
     withJobSearchFixture: withJobSearchFixtureSource === "true",
     withSportsPublicSourceFixtures: withSportsPublicSourceFixturesSource === "true",
+    withWorkflowApprovalFixture: withWorkflowApprovalFixtureSource === "true",
     chatScript: chatScriptSource as UatChatScript | undefined
   };
 }
@@ -89,6 +92,7 @@ async function runSpec(specPath: string): Promise<number> {
     withoutNewsJsonBinding: uatLevel.withoutNewsJsonBinding,
     withJobSearchFixture: uatLevel.withJobSearchFixture,
     withSportsPublicSourceFixtures: uatLevel.withSportsPublicSourceFixtures,
+    withWorkflowApprovalFixture: uatLevel.withWorkflowApprovalFixture,
     chatScript: uatLevel.chatScript
   });
 

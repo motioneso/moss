@@ -29,6 +29,7 @@ import { ActionRequestCard } from "./action-request-card";
 import { formatAttachmentSize } from "./attachments";
 import { MarkdownMessage } from "./markdown-message";
 import { ModuleBuildPlanRecord, parseModuleBuildPlanResult } from "./module-build-plan-record";
+import { WorkflowApprovalCard } from "./workflow-approval-card";
 import type { ChatRecordKind, TranscriptRecord } from "./use-chat-stream";
 
 /**
@@ -170,6 +171,16 @@ function RecordRow(props: {
         preview={props.record.preview}
         focusRequested={props.record.actionRequestId === props.focusActionRequestId}
         onFocusComplete={props.onActionRequestFocused}
+      />
+    );
+  }
+
+  if (kind === "workflow_approval" && props.record.workflowApprovalId) {
+    return (
+      <WorkflowApprovalCard
+        approvalId={props.record.workflowApprovalId}
+        summary={props.record.summary ?? text}
+        status={props.record.status}
       />
     );
   }

@@ -1,9 +1,13 @@
 import { expect, test } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 
-export const uatLevel = { level: "solo-admin", without: [] } as const;
+export const uatLevel = {
+  level: "solo-admin",
+  without: [],
+  withWorkflowApprovalFixture: true
+} as const;
 
-test.fixme("owner reaches a live workflow approval card and resumes the run (#2015)", async ({
+test("owner reaches a live workflow approval card and resumes the run (#2015)", async ({
   page
 }) => {
   const baseURL = process.env.JARVIS_UAT_BASE_URL;
@@ -13,10 +17,12 @@ test.fixme("owner reaches a live workflow approval card and resumes the run (#20
   await page.getByLabel("Password").fill(UAT_ADMIN_PASSWORD);
   await page.locator("form.auth-form").getByRole("button", { name: "Sign in" }).click();
   await expect(page.locator(".jds-usermenu__trigger")).toBeVisible();
+  await page.getByRole("button", { name: "Chat with Moss" }).click();
   await page
     .getByRole("region", { name: "Workflow approval" })
     .getByRole("button", {
       name: "Approve"
     })
     .click();
+  await expect(page.getByRole("region", { name: "Workflow approval" })).toContainText("Approved");
 });

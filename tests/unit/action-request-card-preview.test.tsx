@@ -120,4 +120,22 @@ describe("parseRecord preview parsing", () => {
     );
     expect(record?.outcome).toBe("allowed");
   });
+
+  it("parses a workflow approval record for the chat thread", () => {
+    const record = parseRecord(
+      JSON.stringify({
+        kind: "workflow_approval",
+        text: "Approve the seeded workflow action",
+        workflowApprovalId: "approval-1",
+        summary: "Approve the seeded workflow action",
+        status: "pending"
+      })
+    );
+    expect(record).toMatchObject({
+      kind: "workflow_approval",
+      workflowApprovalId: "approval-1",
+      summary: "Approve the seeded workflow action",
+      status: "pending"
+    });
+  });
 });
