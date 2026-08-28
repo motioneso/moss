@@ -8,26 +8,26 @@ Branch: `fleet/lane-2031`. Risk tier: security.
 Verified by reading the tree at `491148343` before planning. Every premise the spec relies on is
 still true; nothing it asks for already exists.
 
-| Capability assumed | Citation | State |
-| --- | --- | --- |
-| Read tools get a separate service bag from write tools | `packages/ai/src/gateway/gateway.ts:562` (`servicesFor`), `:566` returns `readToolServices` | Present, unchanged |
-| The two bags are assembled in one place | `packages/chat/src/gateway-services.ts:172` (`toolServices`), `:193` (`readToolServices`) | Present |
-| Generic per-provider aggregator to copy | `packages/module-sdk/src/index.ts:344` `aggregateFocusSignals`; fresh context per provider, 250 ms deadline, sanitized drop hook at `:317` | Present |
-| Manifest seam pattern | `packages/module-sdk/src/index.ts:652` `focusSignal?` | Present |
-| External manifests must reject function fields | `packages/module-registry/src/external/validate.ts:61` `FORBIDDEN_FIELDS` contains `focusSignal`, `proactiveMonitor`, `personContextProvider` | Present; `diagnosticsProvider` absent |
-| Host diagnostics builder plus its guard | `packages/settings/src/host-diagnostics.ts:61` `buildHostDiagnostics`, `:116` `assertDiagnosticsSafe`, `:59` `CREDS_IN_URL` | Present |
-| Host diagnostics assembly is inline in the route | `packages/settings/src/host-diagnostics-routes.ts:38-93` | Present, still inline |
-| App map exposes build info and resolves admin the same way | `packages/settings/src/app-map.ts:22` `getBuildInfo`, `:53` `is_instance_admin` via `getUser` | Present |
-| Actor-scoped error rows | `packages/ai/src/repository.ts:2065` `listRecentErrors` | Present |
-| Actor-scoped audit rows | `packages/ai/src/repository.ts:2004` `listActionAuditLog` | Present |
-| Reviewed error projection to copy exactly | `packages/ai/src/error-tools.ts:59-69` | Present |
-| News freshness read that never selects the payload | `packages/news/src/personalization-repository.ts:578` `readRefreshDiagnostics`, shape at `:49` | Present (landed in #2045) |
-| Workspace root discovery to copy | `packages/module-registry/src/index.ts:407` `findWorkspaceRoot` | Present |
-| Path containment precedent, and its symlink hole | `packages/vault/src/vault-path.ts` — resolves, never calls `realpath` | Present; our reader must close that hole |
-| Composition points | `packages/module-registry/src/index.ts:2381` `focusSignalProvidersFor`, `:2570` `appMapService`, `:554` `hostDiagnostics` dep | Present |
-| Chat threading pattern | `packages/chat/src/routes.ts:121`, `:259` | Present |
-| Package edges allow the placement | `@moss/ai` depends on `@moss/settings`; `@moss/news` on `@moss/module-sdk` + `@moss/db`; `@moss/module-sdk` only on `@moss/db` | Verified from each `package.json`; no new declaration needed |
-| Test harness to copy | `tests/integration/error-log.test.ts:1-25` (`resetFoundationDatabase`, `DataContextRunner`, `ids.userA`/`userB`) | Present |
+| Capability assumed                                         | Citation                                                                                                                                      | State                                                        |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Read tools get a separate service bag from write tools     | `packages/ai/src/gateway/gateway.ts:562` (`servicesFor`), `:566` returns `readToolServices`                                                   | Present, unchanged                                           |
+| The two bags are assembled in one place                    | `packages/chat/src/gateway-services.ts:172` (`toolServices`), `:193` (`readToolServices`)                                                     | Present                                                      |
+| Generic per-provider aggregator to copy                    | `packages/module-sdk/src/index.ts:344` `aggregateFocusSignals`; fresh context per provider, 250 ms deadline, sanitized drop hook at `:317`    | Present                                                      |
+| Manifest seam pattern                                      | `packages/module-sdk/src/index.ts:652` `focusSignal?`                                                                                         | Present                                                      |
+| External manifests must reject function fields             | `packages/module-registry/src/external/validate.ts:61` `FORBIDDEN_FIELDS` contains `focusSignal`, `proactiveMonitor`, `personContextProvider` | Present; `diagnosticsProvider` absent                        |
+| Host diagnostics builder plus its guard                    | `packages/settings/src/host-diagnostics.ts:61` `buildHostDiagnostics`, `:116` `assertDiagnosticsSafe`, `:59` `CREDS_IN_URL`                   | Present                                                      |
+| Host diagnostics assembly is inline in the route           | `packages/settings/src/host-diagnostics-routes.ts:38-93`                                                                                      | Present, still inline                                        |
+| App map exposes build info and resolves admin the same way | `packages/settings/src/app-map.ts:22` `getBuildInfo`, `:53` `is_instance_admin` via `getUser`                                                 | Present                                                      |
+| Actor-scoped error rows                                    | `packages/ai/src/repository.ts:2065` `listRecentErrors`                                                                                       | Present                                                      |
+| Actor-scoped audit rows                                    | `packages/ai/src/repository.ts:2004` `listActionAuditLog`                                                                                     | Present                                                      |
+| Reviewed error projection to copy exactly                  | `packages/ai/src/error-tools.ts:59-69`                                                                                                        | Present                                                      |
+| News freshness read that never selects the payload         | `packages/news/src/personalization-repository.ts:578` `readRefreshDiagnostics`, shape at `:49`                                                | Present (landed in #2045)                                    |
+| Workspace root discovery to copy                           | `packages/module-registry/src/index.ts:407` `findWorkspaceRoot`                                                                               | Present                                                      |
+| Path containment precedent, and its symlink hole           | `packages/vault/src/vault-path.ts` — resolves, never calls `realpath`                                                                         | Present; our reader must close that hole                     |
+| Composition points                                         | `packages/module-registry/src/index.ts:2381` `focusSignalProvidersFor`, `:2570` `appMapService`, `:554` `hostDiagnostics` dep                 | Present                                                      |
+| Chat threading pattern                                     | `packages/chat/src/routes.ts:121`, `:259`                                                                                                     | Present                                                      |
+| Package edges allow the placement                          | `@moss/ai` depends on `@moss/settings`; `@moss/news` on `@moss/module-sdk` + `@moss/db`; `@moss/module-sdk` only on `@moss/db`                | Verified from each `package.json`; no new declaration needed |
+| Test harness to copy                                       | `tests/integration/error-log.test.ts:1-25` (`resetFoundationDatabase`, `DataContextRunner`, `ids.userA`/`userB`)                              | Present                                                      |
 
 Two extra constraints found while reading, not stated in the spec:
 
@@ -133,7 +133,7 @@ export const SOURCE_INSPECTOR_ALLOWED_ROOTS: readonly string[];
 export const SOURCE_INSPECTOR_EXCLUDED_SEGMENTS: readonly string[];
 
 export interface SourceExcerpt {
-  readonly path: string;      // relative to the workspace root, never absolute
+  readonly path: string; // relative to the workspace root, never absolute
   readonly startLine: number;
   readonly endLine: number;
   readonly text: string;
@@ -152,11 +152,7 @@ export interface SourceInspector {
     pathPrefix?: string;
     limit?: number;
   }): Promise<SourceSearchResult>;
-  read(input: {
-    path: string;
-    startLine?: number;
-    lineCount?: number;
-  }): Promise<SourceExcerpt>;
+  read(input: { path: string; startLine?: number; lineCount?: number }): Promise<SourceExcerpt>;
 }
 
 export function createSourceInspector(options?: { workspaceRoot?: string }): SourceInspector;
@@ -305,12 +301,12 @@ only — nothing in this piece can execute it).
 
 Status mapping:
 
-| Condition | Status |
-| --- | --- |
-| No refresh row and no snapshot (`refresh.updatedAt` null and `snapshotCompiledAt` null) | `unknown` |
-| `refresh.state === "failed"`, or `lastFailureAt` newer than `lastSuccessAt` | `failed` |
+| Condition                                                                                                            | Status     |
+| -------------------------------------------------------------------------------------------------------------------- | ---------- |
+| No refresh row and no snapshot (`refresh.updatedAt` null and `snapshotCompiledAt` null)                              | `unknown`  |
+| `refresh.state === "failed"`, or `lastFailureAt` newer than `lastSuccessAt`                                          | `failed`   |
 | No snapshot, or `snapshotAgeSeconds` over 86400, or `requestedGeneration > compiledGeneration` while state is `idle` | `degraded` |
-| Otherwise | `ok` |
+| Otherwise                                                                                                            | `ok`       |
 
 `facts` carries only: the live state, the failure kind, the four history timestamps, the snapshot age
 in seconds, the item count and the two generation numbers. No headline, no source name, no article
@@ -321,7 +317,7 @@ text — which is exactly why `readRefreshDiagnostics` never selects the payload
 In `packages/module-registry/src/index.ts`:
 
 - `moduleDiagnosticProvidersFor(manifests: readonly MossModuleManifest[]):
-  RegisteredModuleDiagnosticProvider[]` next to `focusSignalProvidersFor` at `:2381`, same generic
+RegisteredModuleDiagnosticProvider[]` next to `focusSignalProvidersFor` at `:2381`, same generic
   shape, fed the actor's active manifests so a module the user turned off does not report.
 - Build the service next to `appMapService` at `:2570`, feeding it `appMapService`,
   `deps.hostDiagnostics`, an `AiRepository`, and the provider list.
