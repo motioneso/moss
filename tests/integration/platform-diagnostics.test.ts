@@ -93,7 +93,7 @@ describe("platform diagnostics", () => {
               imageUrl: null,
               topics: [],
               preferred: true,
-              rank: index
+              rank: index + 1
             }))
           }
         });
