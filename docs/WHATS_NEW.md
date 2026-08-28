@@ -89,6 +89,7 @@ feature that is not present in the image you are running.
 - **Polished everyday app screens.** Settings, tasks, navigation, notifications, and several module pages now use clearer labels, cleaner layouts, and more consistent controls. [PR #1938](https://github.com/motioneso/moss/pull/1938)
 - **Latest releases appear first.** Recently Released now shows the newest Edge updates at the top, ahead of older weekly history. [PR #1908](https://github.com/motioneso/moss/pull/1908)
 - **Clearer error messages when a built-in tool's connection breaks.** When a built-in assistant tool (like note search) fails because it can't reach something it depends on, the chat now shows a short, specific reason instead of a generic error. Note search also no longer fails outright when the built-in text-matching engine is in use. [PR #1892](https://github.com/motioneso/moss/pull/1892)
+
 ### 2026-08-22
 
 #### Fixed
