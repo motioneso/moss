@@ -171,4 +171,35 @@ describe("platform diagnostics service", () => {
 
     expect(report.modules).toHaveLength(10);
   });
+
+  it("uses the bounded source inspector only for an explicit source request", async () => {
+    const source = {
+      matches: [{ path: "packages/news/src/jobs.ts", startLine: 1, endLine: 1, text: "news" }],
+      filesScanned: 1,
+      truncated: false,
+      rejected: []
+    };
+    const search = vi.fn().mockResolvedValue(source);
+    const service = createPlatformDiagnosticsService({
+      appMap: { getBuildInfo: () => ({ version: "1.2.3", buildId: "build-1" }) },
+      sourceInspector: { search },
+      repository: {
+        listRecentErrors: vi.fn().mockResolvedValue([]),
+        listActionAuditLog: vi.fn().mockResolvedValue([])
+      },
+      moduleProviders: async () => [],
+      runInContext: async (work) => work({}),
+      isInstanceAdmin: vi.fn().mockResolvedValue(false),
+      assertDiagnosticsSafe: vi.fn()
+    });
+
+    const report = await service.observe(
+      scopedDb,
+      { actorUserId: "user-a", requestId: "req-1" },
+      { include: ["source"], query: "news", limit: 2 }
+    );
+
+    expect(report.source).toBe(source);
+    expect(search).toHaveBeenCalledWith({ query: "news", limit: 2 });
+  });
 });

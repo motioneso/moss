@@ -16,7 +16,7 @@
 //
 // Harness skeleton: tests/integration/js08-decide-confirm-audit.test.ts.
 // Discovery/availability stubs: tests/integration/news-personalization-routes.test.ts.
-import { beforeAll, afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import pg from "pg";
 import type { Kysely } from "kysely";
 
@@ -25,9 +25,11 @@ import {
   AssistantToolGateway,
   ConfirmationRegistry,
   SessionTokenRegistry,
+  type PlatformDiagnosticsService,
   type GatewaySessionRecord
 } from "@moss/ai";
 import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
+import { settingsModuleManifest } from "@moss/settings";
 
 import { configureNewsChatTools } from "../../packages/news/src/chat-tools.js";
 import { createPreviewStore } from "../../packages/news/src/discovery/preview-store.js";
@@ -115,17 +117,24 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
 
   afterAll(async () => Promise.allSettled([bootstrap?.end(), appDb?.destroy()]));
 
-  function makeGateway() {
+  function makeGateway(options: { diagnostics?: PlatformDiagnosticsService } = {}) {
     const tokens = new SessionTokenRegistry();
     const emitted: GatewaySessionRecord[] = [];
     const gateway = new AssistantToolGateway({
-      resolveActiveModules: async () => [newsModuleManifest],
+      resolveActiveModules: async () => [
+        newsModuleManifest,
+        ...(options.diagnostics ? [settingsModuleManifest] : [])
+      ],
       repository: new AiRepository(),
       runner: new DataContextRunner(appDb),
       tokens,
       confirmations: new ConfirmationRegistry(),
       notifier: { emit: (_session, record) => emitted.push(record) },
-      confirmTimeoutMs: 5_000
+      confirmTimeoutMs: 5_000,
+      readToolServices: options.diagnostics
+        ? { platformDiagnostics: options.diagnostics }
+        : undefined,
+      toolServices: { writeOnly: { secret: "never passed to read tools" } }
     });
     const mint = (actorUserId: string, chatSessionId: string) =>
       tokens.mint({ actorUserId, chatSessionId, allowedToolNames: null });
@@ -204,6 +213,79 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
     expect(payload.candidates[0]).toMatchObject({ domain: "example.com" });
     // Validation fingerprints are provider/model-derived — never in tool output.
     expect(JSON.stringify(result)).not.toContain("fingerprint");
+  }, 30_000);
+
+  it("runs self-diagnostics through the gateway with actor-scoped redacted output", async () => {
+    const observed: Array<{ actorUserId: string; query?: Record<string, unknown> }> = [];
+    const diagnostics = {
+      observe: vi.fn(async (_db: unknown, ctx: { actorUserId: string }, query?: unknown) => {
+        observed.push({ actorUserId: ctx.actorUserId, query: query as Record<string, unknown> });
+        return {
+          observedAt: "2026-08-28T00:00:00.000Z",
+          build: { version: "test", buildId: "test-build" },
+          runtime: null,
+          modules: [
+            {
+              domain: "news",
+              providerId: "news.refresh",
+              observedAt: "2026-08-28T00:00:00.000Z",
+              status: "degraded",
+              summary: `Only ${ctx.actorUserId} can see this diagnosis.`,
+              facts: {
+                lastSuccessAt: "2026-08-27T23:00:00.000Z",
+                lastAttemptAt: "2026-08-28T00:00:00.000Z",
+                itemCount: 2,
+                privateArticleText: "must not cross the tool boundary"
+              }
+            }
+          ],
+          errors: [],
+          actions: [],
+          source: null,
+          redactions: ["runtime"],
+          privateRecord: "must not cross the tool boundary"
+        };
+      })
+    } as PlatformDiagnosticsService;
+    const { gateway, emitted, mint } = makeGateway({ diagnostics });
+
+    const resultA = await gateway.callTool(
+      mint(ids.userA, "diagnostics-a"),
+      "settings.platformDiagnostics",
+      {
+        question: "  Is news fresh?  ",
+        module: "news",
+        include: ["modules", "errors", "actions"],
+        limit: 10
+      }
+    );
+    expect(resultA).toMatchObject({ ok: true });
+    expect(emitted).toHaveLength(0);
+    const payloadA = parseToolText(resultA);
+    expect(JSON.stringify(payloadA)).toContain(ids.userA);
+    expect(JSON.stringify(payloadA)).not.toContain("privateArticleText");
+    expect(JSON.stringify(payloadA)).not.toContain("privateRecord");
+    expect(payloadA).toMatchObject({ redactions: ["runtime"] });
+    expect(observed[0]).toMatchObject({
+      actorUserId: ids.userA,
+      query: {
+        query: "Is news fresh?",
+        domain: "news",
+        include: ["modules", "errors", "actions"],
+        limit: 10
+      }
+    });
+
+    const resultB = await gateway.callTool(
+      mint(ids.userB, "diagnostics-b"),
+      "settings.platformDiagnostics",
+      {}
+    );
+    expect(resultB).toMatchObject({ ok: true });
+    const payloadB = parseToolText(resultB);
+    expect(JSON.stringify(payloadB)).toContain(ids.userB);
+    expect(JSON.stringify(payloadB)).not.toContain(ids.userA);
+    expect(diagnostics.observe).toHaveBeenCalledTimes(2);
   }, 30_000);
 
   it("confirmSource is confirm-gated: nothing executes until the owner confirms, then row + audit", async () => {
@@ -302,6 +384,40 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
     expect(result).toMatchObject({ ok: true });
     expect(JSON.stringify(result)).toContain("expired");
     expect(await sourceRowCount()).toBe(before);
+  }, 30_000);
+
+  it("refreshNews is confirmed, audited, and honest about asynchronous work", async () => {
+    const { gateway, emitted, mint } = makeGateway();
+    const token = mint(ids.userA, "news-chat-refresh");
+    const pending = gateway.callTool(token, "news.refreshNews", {});
+    const request = await waitForActionRequest(emitted, 0);
+
+    expect(request.toolName).toBe("news.refreshNews");
+    expect(request.summary).toBe("Refresh news");
+    const before = await bootstrap.query(
+      `SELECT last_requested_at FROM app.news_refresh_state WHERE owner_user_id = $1`,
+      [ids.userA]
+    );
+    expect(before.rowCount).toBeLessThanOrEqual(1);
+    const beforeRequestedAt = before.rows[0]?.last_requested_at ?? null;
+    const whilePending = await bootstrap.query(
+      `SELECT last_requested_at FROM app.news_refresh_state WHERE owner_user_id = $1`,
+      [ids.userA]
+    );
+    expect(whilePending.rows[0]?.last_requested_at?.getTime?.() ?? null).toBe(
+      beforeRequestedAt?.getTime?.() ?? null
+    );
+
+    await gateway.resolveActionRequest(ids.userA, request.actionRequestId, "confirmed");
+    const result = await pending;
+    expect(result).toMatchObject({ ok: true });
+    const payload = parseToolText(result);
+    expect(payload).toMatchObject({ status: "accepted", asynchronous: true });
+    expect(JSON.stringify(result)).not.toMatch(/completed|complete/i);
+    expect(await waitForAudit({ toolName: "news.refreshNews", outcome: "success" })).toMatchObject({
+      owner_user_id: ids.userA,
+      approval_mode: "confirmed"
+    });
   }, 30_000);
 
   // #975 Task 8 — the four remaining write tools. All confirm-gated by default (write

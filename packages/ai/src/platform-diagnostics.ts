@@ -1,6 +1,6 @@
 import type { DataContextDb, MossActionAuditLog, MossErrorLog } from "@moss/db";
 import type { HostDiagnosticsDto } from "@moss/shared";
-import type { AppMapReadService } from "@moss/settings";
+import type { AppMapReadService, SourceSearchResult, SourceInspector } from "@moss/settings";
 import { aggregateModuleDiagnostics } from "@moss/module-sdk";
 import type {
   ModuleDiagnosticContextRunner,
@@ -36,7 +36,14 @@ export interface ActionAuditObservation {
 
 export interface PlatformDiagnosticsQuery {
   readonly domain?: string;
-  readonly include?: readonly ("version" | "runtime" | "modules" | "errors" | "actions")[];
+  readonly include?: readonly (
+    | "version"
+    | "runtime"
+    | "modules"
+    | "errors"
+    | "actions"
+    | "source"
+  )[];
   readonly query?: string;
   readonly limit?: number;
 }
@@ -48,6 +55,7 @@ export interface PlatformDiagnosticsReport {
   readonly modules: readonly ModuleDiagnosticObservation[];
   readonly errors: readonly StructuredErrorObservation[];
   readonly actions: readonly ActionAuditObservation[];
+  readonly source: SourceSearchResult | null;
   readonly redactions: readonly string[];
 }
 
@@ -103,6 +111,7 @@ function includeSet(query: PlatformDiagnosticsQuery | undefined): ReadonlySet<Di
 
 export function createPlatformDiagnosticsService(dependencies: {
   readonly appMap: Pick<AppMapReadService, "getBuildInfo">;
+  readonly sourceInspector?: Pick<SourceInspector, "search">;
   readonly collectHostDiagnostics?: (scopedDb: DataContextDb) => Promise<HostDiagnosticsDto>;
   readonly repository: Pick<AiRepository, "listRecentErrors" | "listActionAuditLog">;
   readonly moduleProviders: (
@@ -162,6 +171,11 @@ export function createPlatformDiagnosticsService(dependencies: {
             .slice(0, limit)
             .map(projectAction)
         : [];
+      const source =
+        include.has("source") && query?.query && dependencies.sourceInspector
+          ? await dependencies.sourceInspector.search({ query: query.query, limit })
+          : null;
+      if (include.has("source") && !dependencies.sourceInspector) redactions.push("source");
 
       return {
         observedAt: new Date().toISOString(),
@@ -170,6 +184,7 @@ export function createPlatformDiagnosticsService(dependencies: {
         modules,
         errors,
         actions,
+        source,
         redactions
       };
     }

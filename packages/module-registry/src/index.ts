@@ -233,6 +233,7 @@ import {
   assertDiagnosticsSafe,
   loadAppMap,
   createAppMapReadService,
+  createSourceInspector,
   getModuleBuild,
   updateModuleBuildStatus
 } from "@moss/settings";
@@ -2779,6 +2780,7 @@ export function registerBuiltInApiRoutes(
 
   const platformDiagnostics = createPlatformDiagnosticsService({
     appMap: appMapService,
+    sourceInspector: createSourceInspector(),
     collectHostDiagnostics: dependencies.hostDiagnostics
       ? (scopedDb) =>
           collectHostDiagnostics(

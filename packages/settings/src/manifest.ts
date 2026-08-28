@@ -7,6 +7,11 @@ import {
   appGetMapSliceOutputSchema
 } from "./app-map-tool.js";
 import {
+  platformDiagnosticsExecute,
+  platformDiagnosticsInputSchema,
+  platformDiagnosticsOutputSchema
+} from "./platform-diagnostics-tool.js";
+import {
   localeOutputSchema,
   localeSetRegionAndDateFormatExecute,
   localeSetRegionAndDateFormatInputSchema,
@@ -481,6 +486,16 @@ export const settingsModuleManifest: MossModuleManifest = {
       inputSchema: appGetMapSliceInputSchema,
       outputSchema: appGetMapSliceOutputSchema,
       execute: appGetMapSliceExecute
+    },
+    {
+      name: "settings.platformDiagnostics",
+      description:
+        "Inspect bounded platform health and actor-scoped operational observations. Source provenance is returned only when requested and is limited to safe relative excerpts.",
+      permissionId: "settings.view",
+      risk: "read",
+      inputSchema: platformDiagnosticsInputSchema,
+      outputSchema: platformDiagnosticsOutputSchema,
+      execute: platformDiagnosticsExecute
     },
     {
       name: "settings.themeMode.set",

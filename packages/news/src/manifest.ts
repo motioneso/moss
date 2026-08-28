@@ -33,12 +33,14 @@ import {
   newsPreviewSourceExecute,
   newsRemoveSourceExecute,
   newsRemoveTopicExecute,
+  newsRefreshNewsExecute,
   summarizeNewsAddExclusion,
   summarizeNewsAddTopic,
   summarizeNewsConfirmSource,
   summarizeNewsRemoveSource,
   summarizeNewsRemoveTopic,
-  newsCredentialedSourceStatusExecute
+  newsCredentialedSourceStatusExecute,
+  summarizeNewsRefresh
 } from "./chat-tools.js";
 import { collectNewsExportSection } from "./data-lifecycle.js";
 import { createNewsDiagnosticsProvider } from "./diagnostics-provider.js";
@@ -323,6 +325,28 @@ export const newsModuleManifest = {
       risk: "read",
       inputSchema: { type: "object", properties: {} },
       execute: newsCredentialedSourceStatusExecute
+    },
+    {
+      name: "news.refreshNews",
+      description:
+        "Ask the news service to refresh the actor's feed. The work runs asynchronously.",
+      permissionId: "news.prefs",
+      actionFamilyId: "news_personalization",
+      risk: "write",
+      executionPolicy: "auto",
+      selfOperationGrant: "granted_at_install",
+      inputSchema: { type: "object", properties: {}, required: [], additionalProperties: false },
+      outputSchema: {
+        type: "object",
+        properties: {
+          status: { type: "string", enum: ["queued", "accepted"] },
+          asynchronous: { type: "boolean" }
+        },
+        required: ["status", "asynchronous"],
+        additionalProperties: false
+      },
+      summarize: summarizeNewsRefresh,
+      execute: newsRefreshNewsExecute
     },
     // #975 Slice 4 — chat preview/confirm for custom sources. Same two-phase shape as the
     // REST settings flow: preview verifies and stores candidates server-side; confirm writes.
