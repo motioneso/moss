@@ -109,7 +109,7 @@ export function SportsTodayWidget(): ReactNode {
           {briefs.length > 0 ? (
             <ul className="sp-brief">
               {briefs.map((story) => (
-                <li className="sp-brief__item" key={story.id}>
+                <li className="sp-brief__item" key={story.storyRef ?? story.url}>
                   <a className="sp-brief__link" href={story.url} target="_blank" rel="noreferrer">
                     <span className="sp-brief__tag">
                       {story.competitionLabel} · {story.publisherLabel}

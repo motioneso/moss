@@ -9,6 +9,10 @@ import { isWrittenArticle, rankStories, BIG_STORY_WEIGHT } from "../news-ranking
 import { StoryFeedbackMenu, type StoryFeedbackChange } from "./story-feedback-menu.js";
 export { isFollowed } from "../news-ranking.js";
 
+function storyKey(headline: Headline): string {
+  return headline.storyRef ?? headline.url;
+}
+
 export function NewsIcon(): ReactNode {
   return (
     <svg
@@ -172,7 +176,7 @@ export function HeroCarousel({
       <div className="sp-carousel__stage">
         {slides.map((headline, i) => (
           <HeroSlide
-            key={headline.url}
+            key={storyKey(headline)}
             headline={headline}
             active={i === active}
             onStoryChanged={onStoryChanged}
@@ -192,7 +196,7 @@ export function HeroCarousel({
           <div className="sp-carousel__dots">
             {slides.map((headline, i) => (
               <button
-                key={headline.url}
+                key={storyKey(headline)}
                 type="button"
                 className="sp-carousel__dot"
                 aria-label={`Story ${i + 1} of ${count}`}
@@ -233,7 +237,7 @@ export function LatestColumn(props: {
       <p className="sp-col__kicker">Top stories</p>
       <ol className="sp-latest__list">
         {headlines.slice(0, 6).map((headline) => (
-          <li className="sp-latest__item" key={headline.url}>
+          <li className="sp-latest__item" key={storyKey(headline)}>
             <a className="sp-hl" href={headline.url} target="_blank" rel="noreferrer">
               {headline.imageUrl ? (
                 <img className="sp-hl__thumb" src={headline.imageUrl} alt="" loading="lazy" />
@@ -358,7 +362,7 @@ function FeatureArticle({
           headline.body.split("\n\n").map((paragraph, index) => (
             <p
               className="sp-newsband__blurb sp-newsband__blurb--feature"
-              key={`${headline.url}-p${index}`}
+              key={`${storyKey(headline)}-p${index}`}
             >
               {paragraph}
             </p>
@@ -428,13 +432,13 @@ export function NewsBand({
     rest
       .filter((s) => s.headline.imageUrl)
       .slice(0, MAJORS_CAP)
-      .map((s) => s.headline.url)
+      .map((s) => storyKey(s.headline))
   );
-  const flow = rest.filter((s) => !majorIds.has(s.headline.url));
+  const flow = rest.filter((s) => !majorIds.has(storyKey(s.headline)));
   const standards = flow.slice(0, STANDARDS_CAP);
-  const mosaicIds = new Set([...majorIds, ...standards.map((s) => s.headline.url)]);
+  const mosaicIds = new Set([...majorIds, ...standards.map((s) => storyKey(s.headline))]);
   // Weight order preserved across both tiers so the page reads big → small.
-  const mosaic = rest.filter((s) => mosaicIds.has(s.headline.url));
+  const mosaic = rest.filter((s) => mosaicIds.has(storyKey(s.headline)));
   const briefs = flow.slice(STANDARDS_CAP, STANDARDS_CAP + BRIEFS_CAP);
 
   return (
@@ -462,9 +466,9 @@ export function NewsBand({
       <div className="sp-newsband__mosaic">
         {mosaic.map(({ headline }) => (
           <NewsArticle
-            key={headline.url}
+            key={storyKey(headline)}
             headline={headline}
-            major={majorIds.has(headline.url)}
+            major={majorIds.has(storyKey(headline))}
             onStoryChanged={onStoryChanged}
           />
         ))}
@@ -474,7 +478,7 @@ export function NewsBand({
           <p className="sp-newsband__briefslabel">In brief</p>
           <ul className="sp-newsband__brieflist">
             {briefs.map(({ headline }) => (
-              <li className="sp-newsband__brief" key={headline.url}>
+              <li className="sp-newsband__brief" key={storyKey(headline)}>
                 <a
                   className="sp-newsband__brieflink"
                   href={headline.url}
