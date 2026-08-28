@@ -481,7 +481,9 @@ describe("AI read-only assistant tool execution foundation", () => {
       "proactive-scan-source",
       "commitment-extraction",
       "person-index",
-      "sync-person-memory"
+      "sync-person-memory",
+      "workflow.step.deadletter",
+      "workflow.step.execute"
     ]);
     await expect(tasksRepository.listVisible({} as never)).rejects.toThrow(
       "Repository access requires withDataContext"

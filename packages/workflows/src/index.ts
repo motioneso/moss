@@ -7,6 +7,20 @@ export {
 export { WorkflowsRepository } from "./repository.js";
 
 export {
+  WORKFLOW_QUEUE_DEFINITIONS,
+  WORKFLOW_STEP_EXECUTE_QUEUE,
+  WORKFLOW_STEP_DEADLETTER_QUEUE,
+  assertWorkflowStepJobPayload,
+  enqueueWorkflowStep,
+  workflowStepBackoffMs,
+  workflowStepSingletonKey
+} from "./jobs.js";
+
+export type { WorkflowStepJobPayload } from "./jobs.js";
+
+export { registerWorkflowWorkers, runWorkflowStep } from "./workers.js";
+
+export {
   WORKFLOW_MAX_JSON_BYTES,
   WORKFLOW_RUN_LIST_MAX_LIMIT,
   TERMINAL_RUN_STATUSES,

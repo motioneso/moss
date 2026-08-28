@@ -143,6 +143,38 @@ export class WorkflowsRepository {
     return rows.map(rowToStepRun);
   }
 
+  async getStepRun(
+    scopedDb: unknown,
+    ownerUserId: string,
+    stepRunId: string
+  ): Promise<WorkflowStepRun | null> {
+    assertDataContextDb(scopedDb);
+    const row = await scopedDb.db
+      .selectFrom("app.workflow_step_runs")
+      .selectAll()
+      .where("id", "=", stepRunId)
+      .where("owner_user_id", "=", ownerUserId)
+      .executeTakeFirst();
+    return row ? rowToStepRun(row) : null;
+  }
+
+  async getStepResult(
+    scopedDb: unknown,
+    ownerUserId: string,
+    workflowRunId: string,
+    stepId: string
+  ): Promise<WorkflowJson | null> {
+    assertDataContextDb(scopedDb);
+    const row = await scopedDb.db
+      .selectFrom("app.workflow_step_runs")
+      .select(["status", "result_json"])
+      .where("workflow_run_id", "=", workflowRunId)
+      .where("owner_user_id", "=", ownerUserId)
+      .where("step_id", "=", stepId)
+      .executeTakeFirst();
+    return row && row.status === "succeeded" ? (row.result_json as WorkflowJson) : null;
+  }
+
   async listApprovals(
     scopedDb: unknown,
     ownerUserId: string,
@@ -201,6 +233,89 @@ export class WorkflowsRepository {
       status: "running",
       started_at: new Date()
     });
+  }
+
+  async claimStepRun(
+    scopedDb: unknown,
+    stepRunId: string,
+    queueJobId: string
+  ): Promise<WorkflowStepRun> {
+    assertDataContextDb(scopedDb);
+    const current = await this.requireStepRunRow(scopedDb, stepRunId);
+    assertStepRunNotTerminal(current.status, stepRunId);
+    const now = new Date();
+    const row = await scopedDb.db
+      .updateTable("app.workflow_step_runs")
+      .set({
+        status: "running",
+        attempt_count: sql<number>`app.workflow_step_runs.attempt_count + 1`,
+        pgboss_job_id: queueJobId,
+        started_at: now,
+        updated_at: now
+      })
+      .where("id", "=", stepRunId)
+      .returningAll()
+      .executeTakeFirstOrThrow();
+    return rowToStepRun(row);
+  }
+
+  async queueStepRetry(
+    scopedDb: unknown,
+    stepRunId: string,
+    errorCode: string
+  ): Promise<WorkflowStepRun> {
+    assertDataContextDb(scopedDb);
+    return this.transitionStepRun(scopedDb, stepRunId, {
+      status: "queued",
+      error_code: errorCode,
+      pgboss_job_id: null
+    });
+  }
+
+  async markRunRunning(scopedDb: unknown, runId: string): Promise<WorkflowRun> {
+    assertDataContextDb(scopedDb);
+    const row = await scopedDb.db
+      .updateTable("app.workflow_runs")
+      .set({ status: "running", updated_at: new Date() })
+      .where("id", "=", runId)
+      .where("status", "in", ["pending", "suspended"])
+      .returningAll()
+      .executeTakeFirst();
+    if (row) return rowToRun(row);
+    const existing = await scopedDb.db
+      .selectFrom("app.workflow_runs")
+      .selectAll()
+      .where("id", "=", runId)
+      .executeTakeFirstOrThrow();
+    return rowToRun(existing);
+  }
+
+  async suspendRun(scopedDb: unknown, runId: string): Promise<WorkflowRun> {
+    assertDataContextDb(scopedDb);
+    const row = await scopedDb.db
+      .updateTable("app.workflow_runs")
+      .set({ status: "suspended", updated_at: new Date() })
+      .where("id", "=", runId)
+      .where("status", "not in", [...TERMINAL_RUN_STATUSES])
+      .returningAll()
+      .executeTakeFirstOrThrow();
+    return rowToRun(row);
+  }
+
+  async lockRun(
+    scopedDb: unknown,
+    ownerUserId: string,
+    runId: string
+  ): Promise<WorkflowRun | null> {
+    assertDataContextDb(scopedDb);
+    const row = await scopedDb.db
+      .selectFrom("app.workflow_runs")
+      .selectAll()
+      .where("id", "=", runId)
+      .where("owner_user_id", "=", ownerUserId)
+      .forUpdate()
+      .executeTakeFirst();
+    return row ? rowToRun(row) : null;
   }
 
   async recordStepSuccess(
@@ -439,6 +554,7 @@ export class WorkflowsRepository {
       status: "suspended",
       suspended_at: new Date()
     });
+    await this.suspendRun(scopedDb, input.workflowRunId);
 
     return rowToApproval(row);
   }

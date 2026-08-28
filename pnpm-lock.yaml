@@ -1324,6 +1324,9 @@ importers:
       '@moss/db':
         specifier: workspace:*
         version: link:../db
+      '@moss/jobs':
+        specifier: workspace:*
+        version: link:../jobs
       '@moss/module-sdk':
         specifier: workspace:*
         version: link:../module-sdk
