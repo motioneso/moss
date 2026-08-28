@@ -75,6 +75,7 @@ feature that is not present in the image you are running.
 
 #### Fixed
 
+- **Workshop module builds start reliably.** Moss no longer submits a module-build step twice, so modules can be created reliably from the Workshop. [PR #2060](https://github.com/motioneso/moss/pull/2060)
 - **Workshop build activity.** Workshop builds now keep moving after they start and show the last time the builder was confirmed active. [PR #2009](https://github.com/motioneso/moss/pull/2009)
 - **ESPN images and stale page reloads.** Some ESPN game and team images were being blocked from loading, and a browser holding an old version of the page could get a confusing blank response instead of a clean "not found" when trying to reload; both are fixed. [PR #1996](https://github.com/motioneso/moss/pull/1996)
 - **Workshop builds recover visibly.** Workshop builds now start reliably, show useful progress and failures, allow failed attempts to be discarded, and no longer show unreliable cost or time estimates. [PR #1991](https://github.com/motioneso/moss/pull/1991)

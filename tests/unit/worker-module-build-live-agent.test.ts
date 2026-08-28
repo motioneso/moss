@@ -5,6 +5,41 @@ import { describe, expect, it, vi } from "vitest";
 import { createModuleBuildLiveAgent } from "../../apps/worker/src/module-build-live-agent.js";
 
 describe("module build live-agent composition", () => {
+  it("does not press Enter twice when the multiplexer submit already sends it", async () => {
+    let enterPresses = 0;
+    let submittedPrompt = "";
+    const io = {
+      run: vi.fn(async (command: string) => ({
+        code: 0,
+        stdout: command === "find" ? "./jarvis.module.json\n" : "",
+        stderr: ""
+      })),
+      writeFile: vi.fn(async () => {}),
+      sleep: vi.fn(async () => {})
+    };
+    const mux = {
+      open: vi.fn(async () => "module-build-session"),
+      submit: vi.fn(async (_handle: string, prompt: string) => {
+        submittedPrompt = prompt;
+        enterPresses += 1;
+      }),
+      capturePane: vi.fn(async () => (submittedPrompt ? `❯ ${submittedPrompt}\n` : "❯\n")),
+      pressEnter: vi.fn(async () => {
+        enterPresses += 1;
+      }),
+      kill: vi.fn(async () => {})
+    };
+
+    await createModuleBuildLiveAgent({
+      io: io as never,
+      mux: mux as never,
+      provider: "anthropic",
+      ensureProviderLaunchReady: vi.fn(async () => {})
+    })({ workingDir: "/build/b1", step: "writing_spec", plan: null });
+
+    expect(enterPresses).toBe(1);
+  });
+
   it("uses the real launch command and permission hook in the build directory", async () => {
     const writes = new Map<string, string>();
     let submittedPrompt = "";
@@ -58,7 +93,6 @@ describe("module build live-agent composition", () => {
     );
     expect(mux.open).toHaveBeenCalledOnce();
     expect(mux.submit).toHaveBeenCalledOnce();
-    expect(mux.pressEnter).toHaveBeenCalledOnce();
   });
 
   it("waits for the builder's completion marker and returns the files it actually wrote", async () => {
