@@ -92,7 +92,7 @@ jobs:
   verify:
     name: Verify static checks and unit tests
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
 
@@ -141,9 +141,6 @@ jobs:
           fi
           exit "$status"
 
-      - name: Audit release hardening
-        run: pnpm audit:release-hardening
-
   integration:
     name: Verify integration tests (${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
@@ -178,6 +175,10 @@ jobs:
       - name: Migrate database
         run: pnpm db:migrate
 
+      - name: Audit release hardening
+        if: matrix.shard == 1
+        run: pnpm audit:release-hardening
+
       - name: Verify UAT seed
         if: matrix.shard == 1
         run: pnpm test:uat-seed
@@ -198,7 +199,7 @@ jobs:
   browser:
     name: Verify web and browser tests
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
 

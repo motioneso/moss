@@ -66,4 +66,37 @@ describe("CI phase deadlines (#1534, #1724)", () => {
     );
     expect(source).toContain("if: github.event_name == 'push' && github.ref == 'refs/heads/main'");
   });
+
+  it("runs the release-hardening audit after migration in integration shard 1", () => {
+    const verifyJob = source.slice(
+      source.indexOf("\n  verify:"),
+      source.indexOf("\n  integration:")
+    );
+    const integrationJob = source.slice(
+      source.indexOf("\n  integration:"),
+      source.indexOf("\n  browser:")
+    );
+
+    expect(verifyJob).not.toContain("pnpm audit:release-hardening");
+    expect(integrationJob).toContain(
+      "if: matrix.shard == 1\n        run: pnpm audit:release-hardening"
+    );
+    expect(integrationJob.indexOf("pnpm db:migrate")).toBeLessThan(
+      integrationJob.indexOf("pnpm audit:release-hardening")
+    );
+  });
+
+  it("leaves enough job-level time for every bounded verify and browser phase", () => {
+    const verifyJob = source.slice(
+      source.indexOf("\n  verify:"),
+      source.indexOf("\n  integration:")
+    );
+    const browserJob = source.slice(
+      source.indexOf("\n  browser:"),
+      source.indexOf("\n  compose-smoke:")
+    );
+
+    expect(verifyJob).toContain("timeout-minutes: 45");
+    expect(browserJob).toContain("timeout-minutes: 45");
+  });
 });
