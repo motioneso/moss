@@ -474,7 +474,7 @@ const CONNECTED_SOURCE = {
   feedUrl: null,
   retrievalMethod: "scrape" as const,
   validationStatus: "approved" as const,
-  healthStatus: "available" as const,
+  healthStatus: "healthy" as const,
   createdAt: "2026-08-20T00:00:00.000Z"
 };
 

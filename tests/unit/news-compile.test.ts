@@ -20,7 +20,7 @@ function source(index = 1) {
     feedUrl: `https://publisher-${index}.example.com/feed.xml`,
     retrievalMethod: "feed" as const,
     validationStatus: "approved" as const,
-    healthStatus: "available" as const,
+    healthStatus: "healthy" as const,
     createdAt: now.toISOString()
   };
 }

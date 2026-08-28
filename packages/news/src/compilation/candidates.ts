@@ -38,6 +38,25 @@ export interface NewsCandidate {
 
 type CandidateWithoutId = Omit<NewsCandidate, "id">;
 
+export type NewsSourceFailureReason = "authentication_failed" | "temporarily_unavailable";
+
+export interface NewsCredentialedSourceReader {
+  (
+    scopedDb: DataContextDb,
+    input: { readonly actorUserId: string; readonly sourceId: string }
+  ): Promise<
+    { readonly items: readonly CredentialedItem[] } | { readonly failure: NewsSourceFailureReason }
+  >;
+}
+
+export interface CredentialedItem {
+  readonly title: string;
+  readonly url: string;
+  readonly publishedAt: string | null;
+  readonly imageUrl: string | null;
+  readonly summary: string;
+}
+
 export type CandidateRepository = Pick<
   NewsPersonalizationRepository,
   | "listCustomSources"
@@ -142,20 +161,59 @@ function articleMetadata(html: string): {
 }
 
 async function collectCustomSource(
+  scopedDb: DataContextDb,
   source: Awaited<ReturnType<NewsPersonalizationRepository["listCustomSources"]>>[number],
-  deps: { fetch: NewsSafeFetchPort },
-  input: { now: Date; exclusions: readonly string[] }
-): Promise<{ candidates: CandidateWithoutId[]; failed: boolean }> {
+  deps: {
+    fetch: NewsSafeFetchPort;
+    credentialedSource?: NewsCredentialedSourceReader;
+  },
+  input: { now: Date; exclusions: readonly string[]; actorUserId?: string; credentialed: boolean }
+): Promise<{ candidates: CandidateWithoutId[]; failure: NewsSourceFailureReason | null }> {
+  if (input.credentialed) {
+    if (!input.actorUserId || !deps.credentialedSource) {
+      return { candidates: [], failure: "authentication_failed" };
+    }
+    const result = await deps.credentialedSource(scopedDb, {
+      actorUserId: input.actorUserId,
+      sourceId: source.id
+    });
+    if ("failure" in result) return { candidates: [], failure: result.failure };
+    return {
+      candidates: result.items.flatMap((item) => {
+        const url = httpsUrl(item.url);
+        const domain = url ? articleDomain(url) : null;
+        const publishedAt = publicationTime(item.publishedAt, input.now);
+        if (!url || !domain || !publishedAt || excluded(domain, input.exclusions)) {
+          return [];
+        }
+        return [
+          {
+            publisher: source.label,
+            canonicalDomain: source.canonicalDomain,
+            headline: sanitizeFeedText(item.title, TITLE_CHAR_CAP),
+            url,
+            publishedAt,
+            excerpt: sanitizeFeedText(item.summary, SUMMARY_CHAR_CAP) || null,
+            imageUrl: httpsUrl(item.imageUrl),
+            origin: "preferred_source" as const,
+            matchedTopics: []
+          }
+        ];
+      }),
+      failure: null
+    };
+  }
+
   const target = source.feedUrl ?? source.homepageUrl;
   const response = await deps.fetch(target);
-  if (!response.ok) return { candidates: [], failed: true };
+  if (!response.ok) return { candidates: [], failure: "temporarily_unavailable" };
   const finalDomain = articleDomain(response.finalUrl);
   if (!finalDomain || excluded(finalDomain, input.exclusions)) {
-    return { candidates: [], failed: true };
+    return { candidates: [], failure: "temporarily_unavailable" };
   }
   if (source.feedUrl) {
     if (!samePublisher(source.canonicalDomain, finalDomain)) {
-      return { candidates: [], failed: true };
+      return { candidates: [], failure: "temporarily_unavailable" };
     }
     return {
       candidates: feedCandidates(response.body, {
@@ -165,7 +223,7 @@ async function collectCustomSource(
         matchedTopics: [],
         ...input
       }),
-      failed: false
+      failure: null
     };
   }
 
@@ -204,7 +262,7 @@ async function collectCustomSource(
       matchedTopics: []
     });
   }
-  return { candidates, failed: false };
+  return { candidates, failure: null };
 }
 
 export async function collectCandidates(
@@ -216,12 +274,17 @@ export async function collectCandidates(
     repo: CandidateRepository;
     prefs: NewsPrefsReader;
     catalog: readonly NewsSourceEntry[];
+    credentials?: {
+      readStatuses(scopedDb: DataContextDb): Promise<readonly { sourceId: string }[]>;
+    };
+    credentialedSource?: NewsCredentialedSourceReader;
   },
-  opts: { now: Date }
+  opts: { now: Date; actorUserId?: string }
 ): Promise<{
   candidates: NewsCandidate[];
   fetchFailures: number;
   sourcesMarkedUnavailable: string[];
+  sourceFailures: readonly { sourceId: string; reason: NewsSourceFailureReason }[];
 }> {
   const [sources, topics, exclusionRows, prefs] = await Promise.all([
     deps.repo.listCustomSources(scopedDb),
@@ -233,20 +296,32 @@ export async function collectCandidates(
   const collected: CandidateWithoutId[] = [];
   let fetchFailures = 0;
   const sourcesMarkedUnavailable: string[] = [];
+  const sourceFailures: { sourceId: string; reason: NewsSourceFailureReason }[] = [];
+  const credentialedSourceIds = new Set(
+    (deps.credentials ? await deps.credentials.readStatuses(scopedDb) : []).map(
+      (credential) => credential.sourceId
+    )
+  );
 
   for (const source of sources) {
     if (
       source.validationStatus !== "approved" ||
-      source.healthStatus !== "available" ||
+      source.healthStatus !== "healthy" ||
       excluded(source.canonicalDomain, exclusions)
     ) {
       continue;
     }
-    const result = await collectCustomSource(source, deps, { now: opts.now, exclusions });
+    const result = await collectCustomSource(scopedDb, source, deps, {
+      now: opts.now,
+      exclusions,
+      actorUserId: opts.actorUserId,
+      credentialed: credentialedSourceIds.has(source.id)
+    });
     collected.push(...result.candidates);
-    if (result.failed) {
+    if (result.failure) {
       fetchFailures += 1;
-      sourcesMarkedUnavailable.push(source.id);
+      sourceFailures.push({ sourceId: source.id, reason: result.failure });
+      if (result.failure === "temporarily_unavailable") sourcesMarkedUnavailable.push(source.id);
     }
   }
 
@@ -357,6 +432,7 @@ export async function collectCandidates(
       ...candidate
     })),
     fetchFailures,
-    sourcesMarkedUnavailable: [...new Set(sourcesMarkedUnavailable)]
+    sourcesMarkedUnavailable: [...new Set(sourcesMarkedUnavailable)],
+    sourceFailures
   };
 }

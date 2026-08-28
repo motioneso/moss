@@ -473,7 +473,7 @@ function personalizedSources(
     .filter(
       (source) =>
         source.validationStatus === "approved" &&
-        source.healthStatus === "available" &&
+        source.healthStatus === "healthy" &&
         !hostnameIsExcluded(source.canonicalDomain, excludedDomains)
     )
     .map((source) => ({

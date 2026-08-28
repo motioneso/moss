@@ -108,7 +108,8 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
         hasWebSearch: async () => true
       },
       boss: null,
-      repository: new NewsPersonalizationRepository()
+      repository: new NewsPersonalizationRepository(),
+      credentials: { readStatuses: async () => [] }
     });
   }, 60_000);
 

@@ -294,7 +294,7 @@ describe("Data export", () => {
       feedUrl: "https://gazette.example/feed.xml",
       retrievalMethod: "feed",
       validationStatus: "approved",
-      healthStatus: "available",
+      healthStatus: "healthy",
       validatedAt: "2026-02-01T08:00:00.000Z",
       createdAt: "2026-02-01T08:00:01.000Z",
       updatedAt: "2026-02-01T08:00:02.000Z"
@@ -378,7 +378,7 @@ describe("Data export", () => {
             (id, owner_user_id, label, canonical_domain, homepage_url, feed_url,
              retrieval_method, validation_status, health_status, validation_fingerprint,
              validated_at, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, 'feed', 'approved', 'available', $7, $8, $9, $10)`,
+           VALUES ($1, $2, $3, $4, $5, $6, 'feed', 'approved', 'healthy', $7, $8, $9, $10)`,
           [
             sourceId,
             ids.userA,

@@ -4,6 +4,7 @@ import { assertDataContextDb, type DataContextDb } from "@moss/db";
 import type { ToolExecute, ToolResult, ToolSummarize } from "@moss/module-sdk";
 
 import type { NewsAiPort, NewsSafeFetchPort, NewsWebSearchPort } from "./discovery/ports.js";
+import type { NewsCredentialStore } from "./credential-repository.js";
 import { validateTopic } from "./discovery/policy-validation.js";
 import { resolveSourceInput, type SourceResolutionResult } from "./discovery/source-resolution.js";
 import { normalizePublisherDomain } from "./personalization-domain.js";
@@ -46,6 +47,7 @@ export interface NewsChatToolDependencies {
   };
   readonly boss: PgBoss | null;
   readonly repository: NewsPersonalizationStore;
+  readonly credentials?: Pick<NewsCredentialStore, "readStatuses">;
 }
 
 let deps: NewsChatToolDependencies | undefined;
@@ -62,6 +64,65 @@ function requireDeps(): NewsChatToolDependencies {
   }
   return deps;
 }
+
+function credentialedSourceGuidance(
+  healthStatus:
+    | "healthy"
+    | "authentication_failed"
+    | "temporarily_unavailable"
+    | "unsupported"
+    | "disabled",
+  credentialStatus: "configured" | "revoked" | "not_configured"
+): string {
+  if (credentialStatus === "not_configured") {
+    return "No key is configured. Connect one in News settings.";
+  }
+  switch (healthStatus) {
+    case "authentication_failed":
+      return "Authentication failed. Replace the key in News settings.";
+    case "disabled":
+      return "Access is disabled. Replace the key in News settings.";
+    case "temporarily_unavailable":
+      return "The publisher is temporarily unavailable. Try again later.";
+    case "unsupported":
+      return "This publisher is unsupported. Choose another source.";
+    default:
+      return "This source is connected and healthy.";
+  }
+}
+
+/** Read-only, display-safe source diagnostics. It never reads an envelope or provider response. */
+export const newsCredentialedSourceStatusExecute: ToolExecute = async (
+  scopedDb,
+  _input,
+  _ctx
+): Promise<ToolResult> => {
+  assertDataContextDb(scopedDb);
+  const d = requireDeps();
+  const [sources, credentials] = await Promise.all([
+    d.repository.listCustomSources(scopedDb),
+    d.credentials?.readStatuses(scopedDb) ?? Promise.resolve([])
+  ]);
+  const credentialBySourceId = new Map(credentials.map((entry) => [entry.sourceId, entry]));
+  return {
+    data: {
+      sources: sources.map((source) => {
+        const credential = credentialBySourceId.get(source.id);
+        return {
+          sourceId: source.id,
+          label: source.label,
+          domain: source.canonicalDomain,
+          healthStatus: source.healthStatus,
+          credentialStatus: credential?.status ?? "not_configured",
+          guidance: credentialedSourceGuidance(
+            source.healthStatus,
+            credential?.status ?? "not_configured"
+          )
+        };
+      })
+    }
+  };
+};
 
 /** Benign resolution failures become tool data the model can relay — never throws. */
 function describeResolutionFailure(result: SourceResolutionResult): string {

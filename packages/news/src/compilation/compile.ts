@@ -13,7 +13,7 @@ import type { NewsSourceEntry } from "../source/catalog.js";
 import { stableIdForUrl } from "../source/rss-source.js";
 import type { NewsStoryFeedbackPort } from "../story-feedback-port.js";
 
-import { collectCandidates } from "./candidates.js";
+import { collectCandidates, type NewsCredentialedSourceReader } from "./candidates.js";
 import { applyDeterministicFilters } from "./filters.js";
 import { orderRanked, rankCandidates, type RankingFailure, type RankedCandidate } from "./rank.js";
 
@@ -90,6 +90,10 @@ export async function compilePersonalizedNews(
      * composes News without the feedback module needs.
      */
     storyFeedback?: NewsStoryFeedbackPort;
+    credentials?: {
+      readStatuses(scopedDb: DataContextDb): Promise<readonly { sourceId: string }[]>;
+    };
+    credentialedSource?: NewsCredentialedSourceReader;
   },
   opts: { now: Date; generation: number; ownerUserId?: string }
 ): Promise<{
@@ -106,12 +110,14 @@ export async function compilePersonalizedNews(
         ai: deps.ai,
         repo: deps.repo,
         prefs: deps.prefs,
-        catalog: deps.catalog
+        catalog: deps.catalog,
+        ...(deps.credentials ? { credentials: deps.credentials } : {}),
+        ...(deps.credentialedSource ? { credentialedSource: deps.credentialedSource } : {})
       },
-      { now: opts.now }
+      { now: opts.now, actorUserId: opts.ownerUserId }
     );
-    for (const sourceId of collection.sourcesMarkedUnavailable) {
-      await deps.repo.updateSourceHealth(scopedDb, sourceId, "unavailable");
+    for (const failure of collection.sourceFailures) {
+      await deps.repo.updateSourceHealth(scopedDb, failure.sourceId, failure.reason);
     }
     deps.logger.info({
       event: "news_compile_collection",

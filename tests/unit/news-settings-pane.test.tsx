@@ -98,7 +98,12 @@ function personalization(
 /** A stored custom source in the given validation/health state (Task 9 Retry fixtures). */
 function storedSource(
   validationStatus: "approved" | "needs_revalidation" | "rejected",
-  healthStatus: "available" | "unavailable" = "available"
+  healthStatus:
+    | "healthy"
+    | "authentication_failed"
+    | "temporarily_unavailable"
+    | "unsupported"
+    | "disabled" = "healthy"
 ) {
   return {
     id: "11111111-1111-1111-1111-111111111111",
@@ -243,7 +248,7 @@ describe("NewsSettings personalization sections (#953)", () => {
             feedUrl: null,
             retrievalMethod: "scrape",
             validationStatus: "approved",
-            healthStatus: "available",
+            healthStatus: "healthy",
             createdAt: "2026-07-11T00:00:00.000Z"
           }
         ],
@@ -377,10 +382,26 @@ describe("NewsSettings write flows (#975 Task 9)", () => {
     const html = render(
       personalization({
         availability: allOn,
-        customSources: [storedSource("approved", "unavailable")]
+        customSources: [storedSource("approved", "temporarily_unavailable")]
       })
     );
     expect(html).toContain("Retry validation");
+  });
+
+  it.each([
+    ["healthy", "Healthy"],
+    ["authentication_failed", "Key rejected"],
+    ["temporarily_unavailable", "Temporarily unavailable"],
+    ["unsupported", "Unsupported"],
+    ["disabled", "Disabled"]
+  ] as const)("renders the %s health badge", (healthStatus, label) => {
+    const html = render(
+      personalization({
+        availability: allOn,
+        customSources: [storedSource("approved", healthStatus)]
+      })
+    );
+    expect(html).toContain(label);
   });
 
   it("shows Retry validation when a described topic needs revalidation", () => {

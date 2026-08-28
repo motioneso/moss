@@ -312,7 +312,7 @@ describe("news personalization repository (#953 Task 3)", () => {
          (owner_user_id, label, canonical_domain, homepage_url, feed_url, retrieval_method,
           validation_status, health_status, validation_fingerprint, validated_at)
        VALUES ($1, 'The Example Times', 'news.example.com', 'https://news.example.com', NULL,
-               'scrape', 'approved', 'available', 'fp-secret-marker', now())`,
+               'scrape', 'approved', 'healthy', 'fp-secret-marker', now())`,
       [alice]
     );
     await bootstrap.query(
@@ -487,7 +487,7 @@ describe("news validation state repository (#975 Slice 4)", () => {
          (owner_user_id, label, canonical_domain, homepage_url, feed_url, retrieval_method,
           validation_status, health_status, validation_fingerprint, validated_at, updated_at)
        VALUES ($1, 'The Example Times', 'news.example.com', 'https://news.example.com', NULL,
-               'scrape', 'approved', 'available', 'fp-old', now() - interval '1 day',
+               'scrape', 'approved', 'healthy', 'fp-old', now() - interval '1 day',
                now() - interval '1 day')
        RETURNING id`,
       [ownerId]
@@ -551,7 +551,7 @@ describe("news validation state repository (#975 Slice 4)", () => {
         retrievalMethod: "scrape",
         validationStatus: "approved",
         validationFingerprint: "fp-old",
-        healthStatus: "available"
+        healthStatus: "healthy"
       }
     ]);
 

@@ -43,4 +43,14 @@ describe("news assistant tools and publisher keys (#2008)", () => {
       .map((tool) => tool.name);
     expect(holders).toEqual([]);
   });
+
+  it("declares credentialed source status as an empty-input read-only tool", () => {
+    const tool = (newsModuleManifest.assistantTools ?? []).find(
+      (candidate) => candidate.name === "news.credentialedSourceStatus"
+    );
+    expect(tool).toBeDefined();
+    expect(tool?.permissionId).toBe("news.view");
+    expect(tool?.risk).toBe("read");
+    expect(tool?.inputSchema).toEqual({ type: "object", properties: {} });
+  });
 });

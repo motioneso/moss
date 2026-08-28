@@ -326,7 +326,7 @@ export default function NewsSettings() {
       : null);
 
   const sourcesNeedAttention = customSources.some(
-    (source) => source.validationStatus !== "approved" || source.healthStatus === "unavailable"
+    (source) => source.validationStatus !== "approved" || source.healthStatus !== "healthy"
   );
   const topicsNeedAttention = customTopics.some((topic) => topic.validationStatus !== "approved");
 
@@ -464,8 +464,16 @@ export default function NewsSettings() {
                   {checked ? <span className="nw-set__item-meta">{checked}</span> : null}
                   {source.validationStatus !== "approved" ? (
                     <Badge tone="amber">Needs revalidation</Badge>
-                  ) : source.healthStatus === "unavailable" ? (
-                    <Badge tone="red">Unavailable</Badge>
+                  ) : source.healthStatus === "healthy" ? (
+                    <Badge tone="pine">Healthy</Badge>
+                  ) : source.healthStatus === "authentication_failed" ? (
+                    <Badge tone="red">Key rejected</Badge>
+                  ) : source.healthStatus === "temporarily_unavailable" ? (
+                    <Badge tone="amber">Temporarily unavailable</Badge>
+                  ) : source.healthStatus === "disabled" ? (
+                    <Badge tone="neutral">Disabled</Badge>
+                  ) : source.healthStatus === "unsupported" ? (
+                    <Badge tone="amber">Unsupported</Badge>
                   ) : null}
                   {credential ? (
                     <>

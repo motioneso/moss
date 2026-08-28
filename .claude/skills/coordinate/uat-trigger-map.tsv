@@ -52,6 +52,7 @@ blocking	apps/web/src/styles/kit-today.css	tests/uat/specs/1497-today-css-residu
 blocking	apps/web/src/styles/kit-today-feeds.css	tests/uat/specs/1497-today-css-residue.uat.spec.ts
 blocking	apps/web/src/styles/kit-today-misc.css	tests/uat/specs/1497-today-css-residue.uat.spec.ts
 blocking	packages/news/**	tests/uat/specs/1185-news-layout.uat.spec.ts
+blocking	packages/news/**	tests/uat/specs/2006-news-credentialed-source.uat.spec.ts
 blocking	packages/news/**	tests/uat/specs/app-map-grounding.uat.spec.ts
 blocking	packages/vault/**	tests/uat/specs/1217-uat-vault-ownership.uat.spec.ts
 blocking	packages/cli-runner/**	tests/uat/specs/cli-terminal.uat.spec.ts

@@ -56,7 +56,7 @@ describe("collectCandidates", () => {
               feedUrl: "https://news.example.com/feed.xml",
               retrievalMethod: "feed",
               validationStatus: "approved",
-              healthStatus: "available",
+              healthStatus: "healthy",
               createdAt: now.toISOString()
             }
           ],
@@ -111,7 +111,7 @@ describe("collectCandidates", () => {
               feedUrl: "https://example.com/feed.xml",
               retrievalMethod: "feed",
               validationStatus: "approved",
-              healthStatus: "available",
+              healthStatus: "healthy",
               createdAt: now.toISOString()
             }
           ]

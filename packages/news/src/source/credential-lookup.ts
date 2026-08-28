@@ -18,6 +18,7 @@ export interface NewsCredentialEnvelopeReader {
   ): Promise<
     | {
         readonly status: "configured";
+        readonly connectionId: string;
         readonly envelope: EncryptedSecret;
         readonly generation: string;
       }

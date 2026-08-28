@@ -61,7 +61,7 @@ describe("news credential schema posture (#2005)", () => {
     expect(result.rows[0]).toEqual({ relrowsecurity: true, relforcerowsecurity: true });
   });
 
-  it("has owner-scoped read, insert and update policies for the app only, and no delete policy", async () => {
+  it("has owner-scoped app policies and a worker read policy, with no delete policy", async () => {
     const result = await client.query<{
       policyname: string;
       roles: string[];
@@ -77,8 +77,22 @@ describe("news credential schema posture (#2005)", () => {
     );
 
     // Revoking a key is an update that wipes it out, so there is deliberately no delete.
-    expect(result.rows.map((row) => row.cmd).sort()).toEqual(["INSERT", "SELECT", "UPDATE"]);
-    for (const policy of result.rows) {
+    expect(result.rows.map((row) => row.cmd).sort()).toEqual([
+      "INSERT",
+      "SELECT",
+      "SELECT",
+      "UPDATE"
+    ]);
+    const appPolicies = result.rows.filter((row) => row.roles.includes("jarvis_app_runtime"));
+    expect(appPolicies.map((row) => row.cmd).sort()).toEqual(["INSERT", "SELECT", "UPDATE"]);
+    expect(result.rows).toContainEqual(
+      expect.objectContaining({
+        policyname: "news_source_credentials_worker_select",
+        roles: ["jarvis_worker_runtime"],
+        cmd: "SELECT"
+      })
+    );
+    for (const policy of appPolicies) {
       expect(policy.roles, policy.policyname).toEqual(["jarvis_app_runtime"]);
       const predicates = [policy.qual, policy.with_check].filter(
         (predicate): predicate is string => predicate !== null
@@ -168,7 +182,7 @@ describe("news credential storage behaviour (#2005)", () => {
          (owner_user_id, label, canonical_domain, homepage_url, feed_url, retrieval_method,
           validation_status, health_status, validation_fingerprint, validated_at)
        VALUES ($1, 'Example Wire', $2, 'https://' || $2, NULL, 'scrape', 'approved',
-               'available', 'connection:example-wire:v1', now())
+               'healthy', 'connection:example-wire:v1', now())
        RETURNING id`,
       [ownerUserId, domain]
     );

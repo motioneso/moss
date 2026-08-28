@@ -141,7 +141,12 @@ export interface NewsSourceValidationState {
   readonly retrievalMethod: "feed" | "scrape";
   readonly validationStatus: "approved" | "needs_revalidation" | "rejected";
   readonly validationFingerprint: string | null;
-  readonly healthStatus: "available" | "unavailable";
+  readonly healthStatus:
+    | "healthy"
+    | "authentication_failed"
+    | "temporarily_unavailable"
+    | "unsupported"
+    | "disabled";
 }
 
 export interface NewsTopicValidationState {
@@ -213,7 +218,7 @@ export class NewsPersonalizationRepository {
       feed_url: string | null;
       retrieval_method: "feed" | "scrape";
       validation_status: "approved";
-      health_status: "available";
+      health_status: "healthy";
       created_at: Date;
     }>`
       INSERT INTO app.news_custom_sources
@@ -221,7 +226,7 @@ export class NewsPersonalizationRepository {
          validation_status, health_status, validation_fingerprint, validated_at)
       SELECT app.current_actor_user_id(), ${input.label}, ${input.canonicalDomain},
              ${input.homepageUrl}, ${input.feedUrl}, ${input.retrievalMethod},
-             'approved', 'available', ${input.validationFingerprint}, now()
+             'approved', 'healthy', ${input.validationFingerprint}, now()
        WHERE (SELECT count(*) FROM app.news_custom_sources) < ${NEWS_MAX_CUSTOM_SOURCES}
       ON CONFLICT (owner_user_id, canonical_domain) DO NOTHING
       RETURNING id, label, canonical_domain, homepage_url, feed_url, retrieval_method,
@@ -253,7 +258,7 @@ export class NewsPersonalizationRepository {
         feed_url: input.feedUrl,
         retrieval_method: input.retrievalMethod,
         validation_status: "approved",
-        health_status: "available",
+        health_status: "healthy",
         validation_fingerprint: input.validationFingerprint,
         validated_at: sql`now()`,
         updated_at: sql`now()`
@@ -286,7 +291,12 @@ export class NewsPersonalizationRepository {
   async updateSourceHealth(
     scopedDb: DataContextDb,
     sourceId: string,
-    health: "available" | "unavailable"
+    health:
+      | "healthy"
+      | "authentication_failed"
+      | "temporarily_unavailable"
+      | "unsupported"
+      | "disabled"
   ): Promise<void> {
     assertDataContextDb(scopedDb);
     await scopedDb.db
@@ -815,7 +825,12 @@ function toCustomSourceDto(row: {
   feed_url: string | null;
   retrieval_method: "feed" | "scrape";
   validation_status: "approved" | "needs_revalidation" | "rejected";
-  health_status: "available" | "unavailable";
+  health_status:
+    | "healthy"
+    | "authentication_failed"
+    | "temporarily_unavailable"
+    | "unsupported"
+    | "disabled";
   created_at: Date;
 }): NewsCustomSourceDto {
   return {

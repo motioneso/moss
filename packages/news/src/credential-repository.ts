@@ -120,6 +120,7 @@ export class NewsCredentialRepository implements NewsCredentialStore {
   ): Promise<
     | {
         readonly status: "configured";
+        readonly connectionId: string;
         readonly envelope: EncryptedSecret;
         readonly generation: string;
       }
@@ -129,10 +130,11 @@ export class NewsCredentialRepository implements NewsCredentialStore {
     assertDataContextDb(scopedDb);
     const result = await sql<{
       status: "configured" | "revoked";
+      connection_id: string;
       encrypted_secret: unknown;
       generation: string;
     }>`
-      SELECT status, encrypted_secret, generation::text AS generation
+      SELECT status, connection_id, encrypted_secret, generation::text AS generation
         FROM app.news_source_credentials
        WHERE source_id = ${sourceId}
     `.execute(scopedDb.db);
@@ -144,6 +146,7 @@ export class NewsCredentialRepository implements NewsCredentialStore {
     if (row.encrypted_secret === null || row.encrypted_secret === undefined) return null;
     return {
       status: "configured",
+      connectionId: row.connection_id,
       envelope: row.encrypted_secret as EncryptedSecret,
       generation: row.generation
     };

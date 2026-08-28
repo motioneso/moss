@@ -23,6 +23,8 @@ import type { NewsStoryFeedbackPort } from "./story-feedback-port.js";
 import { NewsPrefsRepository } from "./repository.js";
 import { revalidateOwnerNews, type NewsRevalidationLogger } from "./revalidation.js";
 import { NEWS_CATALOG } from "./source/catalog.js";
+import type { NewsCredentialedSourceReader } from "./compilation/candidates.js";
+import type { NewsCredentialStore } from "./credential-repository.js";
 
 export const NEWS_REFRESH_QUEUE = "news.refresh";
 export const NEWS_REVALIDATE_QUEUE = "news.revalidate";
@@ -105,6 +107,8 @@ export async function registerNewsJobWorkers(
     // composition root always passes one. Pick keeps the seam minimal and stubbable.
     readonly notificationsRepository?: Pick<NotificationsRepository, "create">;
     readonly revalidationLogger?: NewsRevalidationLogger;
+    readonly credentials?: Pick<NewsCredentialStore, "readStatuses">;
+    readonly credentialedSource?: NewsCredentialedSourceReader;
     /**
      * #2018: story usefulness feedback. Optional so existing callers without it keep working;
      * the composition root always passes one.
@@ -137,6 +141,8 @@ export async function registerNewsJobWorkers(
                 prefs,
                 catalog: NEWS_CATALOG,
                 logger: deps.logger,
+                ...(deps.credentials ? { credentials: deps.credentials } : {}),
+                ...(deps.credentialedSource ? { credentialedSource: deps.credentialedSource } : {}),
                 ...(deps.storyFeedback ? { storyFeedback: deps.storyFeedback } : {})
               },
               { now: new Date(), generation, ownerUserId: accessContext.actorUserId }
