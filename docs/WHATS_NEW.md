@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Sports story preferences.** You can now tell Sports which stories you want to see more or less of and manage those choices in Sports Settings. [PR #2052](https://github.com/motioneso/moss/pull/2052)
 - **News story feedback.** You can now ask News for more or less of a story and manage those choices in News Settings. [PR #2049](https://github.com/motioneso/moss/pull/2049)
 - **Sign in to Gemini from Settings.** You can now sign in to Google's Gemini command-line tool from Settings or the first-run wizard, the same way you already sign in to Claude and Codex. [PR #2042](https://github.com/motioneso/moss/pull/2042)
 - **Install the Gemini command-line tool.** You can now install the Gemini command-line tool from the app, pinned to a known, verified version. [PR #2039](https://github.com/motioneso/moss/pull/2039)
