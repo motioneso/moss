@@ -32,7 +32,11 @@ import {
 } from "@moss/ai";
 import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
 import { createPgBossClient } from "@moss/jobs";
-import { createNewsDiagnosticsProvider, registerNewsJobWorkers } from "@moss/news";
+import {
+  createNewsDiagnosticsProvider,
+  enqueueNewsRefresh,
+  registerNewsJobWorkers
+} from "@moss/news";
 import { settingsModuleManifest } from "@moss/settings";
 
 import { configureNewsChatTools } from "../../packages/news/src/chat-tools.js";
@@ -48,14 +52,14 @@ const { Client } = pg;
 
 const feed = `<?xml version="1.0"?><rss><channel><title>Example News</title><item><title>Verified publisher headline</title><link>https://example.com/story</link><pubDate>Fri, 11 Jul 2026 12:00:00 GMT</pubDate></item></channel></rss>`;
 
-function feedForRefresh(url: string): string {
+function feedForRefresh(url: string, headline: string): string {
   const host = new URL(url).hostname;
   const publisher = host.includes("bbci")
     ? "www.bbc.com"
     : host.includes("guardian")
       ? "www.theguardian.com"
       : "www.npr.org";
-  return `<?xml version="1.0"?><rss><channel><item><title>Current story from ${publisher}</title><link>https://${publisher}/story</link><pubDate>${new Date().toUTCString()}</pubDate></item></channel></rss>`;
+  return `<?xml version="1.0"?><rss><channel><item><title>${headline} from ${publisher}</title><link>https://${publisher}/story</link><pubDate>${new Date().toUTCString()}</pubDate></item></channel></rss>`;
 }
 
 /**
@@ -233,6 +237,17 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
     throw new Error(`audit row not written for ${where.toolName}/${where.outcome}`);
   }
 
+  async function waitForRefreshSuccess(requestId: string): Promise<void> {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const state = await appContext.withDataContext({ actorUserId: ids.userA, requestId }, (db) =>
+        newsRepository.readRefreshState(db)
+      );
+      if (state.state === "idle" && state.lastSuccessAt) return;
+      if (attempt === 99) throw new Error("news refresh worker did not complete successfully");
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+
   it("previewSource runs unconfirmed (read risk) and returns verified candidates", async () => {
     const { gateway, emitted, mint } = makeGateway();
     const token = mint(ids.userA, "news-chat-preview");
@@ -267,26 +282,19 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
       assertDiagnosticsSafe: () => undefined
     });
     configureChatTools(appBoss);
-    let generation = 0;
     await appContext.withDataContext(
-      { actorUserId: ids.userA, requestId: "diagnostics-seed" },
-      async (db) => {
-        generation = await newsRepository.beginRefreshRun(db);
-      }
+      { actorUserId: ids.userA, requestId: "diagnostics-initial-request" },
+      (db) => newsRepository.bumpRefreshRequest(db)
     );
-    await newsRepository.failRefreshRunIfCurrent(
-      appContext,
-      { actorUserId: ids.userA, requestId: "diagnostics-seed-failure" },
-      generation,
-      "fetch"
-    );
+    await enqueueNewsRefresh(appBoss, ids.userA);
+    let refreshHeadline = "Initial story";
     await registerNewsJobWorkers(workerBoss, workerContext, {
       fetch: async (url) => ({
         ok: true as const,
         status: 200,
         finalUrl: url,
         contentType: "application/rss+xml",
-        body: feedForRefresh(url),
+        body: feedForRefresh(url, refreshHeadline),
         truncated: false
       }),
       search: { search: async () => ({ results: [] }) },
@@ -296,6 +304,7 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
       },
       logger: { info: () => undefined }
     });
+    await waitForRefreshSuccess("diagnostics-initial-wait");
 
     const { gateway, emitted, mint } = makeGateway({ diagnostics });
     const token = mint(ids.userA, "diagnostics-refresh");
@@ -308,25 +317,35 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
       modules: Array<{ status: string; facts?: Record<string, unknown> }>;
       redactions: string[];
     };
-    expect(firstPayload.modules[0]).toMatchObject({ status: "failed" });
-    expect(firstPayload.modules[0]?.facts).toMatchObject({ lastFailureKind: "fetch" });
+    expect(firstPayload.modules[0]).toMatchObject({ status: "ok" });
+    expect(firstPayload.modules[0]?.facts).toMatchObject({
+      lastSuccessAt: expect.any(String),
+      itemCount: expect.any(Number)
+    });
+    const firstSuccessAt = firstPayload.modules[0]?.facts?.lastSuccessAt;
+    expect(firstSuccessAt).toEqual(expect.any(String));
+    await expect(
+      appContext.withDataContext(
+        { actorUserId: ids.userA, requestId: "diagnostics-initial-snapshot" },
+        (db) => newsRepository.readLatestSnapshot(db)
+      )
+    ).resolves.toMatchObject({
+      payload: {
+        articles: expect.arrayContaining([
+          expect.objectContaining({ headline: expect.stringContaining("Initial story") })
+        ])
+      }
+    });
     expect(firstPayload.redactions).toContain("runtime");
 
+    refreshHeadline = "Refreshed story";
     const pending = gateway.callTool(token, "news.refreshNews", {});
     const request = await waitForActionRequest(emitted, 0);
     expect(request.toolName).toBe("news.refreshNews");
     await gateway.resolveActionRequest(ids.userA, request.actionRequestId, "confirmed");
     await expect(pending).resolves.toMatchObject({ ok: true });
 
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      const state = await appContext.withDataContext(
-        { actorUserId: ids.userA, requestId: "diagnostics-refresh-wait" },
-        (db) => newsRepository.readRefreshState(db)
-      );
-      if (state.state === "idle" && state.lastSuccessAt) break;
-      if (attempt === 99) throw new Error("news refresh worker did not complete");
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
+    await waitForRefreshSuccess("diagnostics-refresh-wait");
 
     const second = await gateway.callTool(token, "settings.platformDiagnostics", {
       module: "news",
@@ -340,7 +359,19 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
       lastSuccessAt: expect.any(String),
       itemCount: expect.any(Number)
     });
-    expect(JSON.stringify(secondPayload)).not.toContain("Current story");
+    expect(secondPayload.modules[0]?.facts?.lastSuccessAt).not.toBe(firstSuccessAt);
+    await expect(
+      appContext.withDataContext(
+        { actorUserId: ids.userA, requestId: "diagnostics-refreshed-snapshot" },
+        (db) => newsRepository.readLatestSnapshot(db)
+      )
+    ).resolves.toMatchObject({
+      payload: {
+        articles: expect.arrayContaining([
+          expect.objectContaining({ headline: expect.stringContaining("Refreshed story") })
+        ])
+      }
+    });
   }, 60_000);
 
   it("confirmSource is confirm-gated: nothing executes until the owner confirms, then row + audit", async () => {

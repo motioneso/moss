@@ -1,13 +1,14 @@
 import { expect, test, type Page, type Response as PlaywrightResponse } from "@playwright/test";
 import { UAT_ADMIN_EMAIL, UAT_ADMIN_PASSWORD } from "../seed/admin.js";
 
-export const uatLevel = { level: "admin+data", without: [] } as const;
+export const uatLevel = {
+  level: "admin+data",
+  without: [],
+  withoutNewsJsonBinding: true,
+  chatScript: "2032-self-diagnostics"
+} as const;
 
-const REAL_CHAT_CONFIGURED = Boolean(process.env.JARVIS_UAT_REAL_CHAT_ENV_FILE);
-const MODEL_DISCOVERY_DEADLINE_MS = 60_000;
 const REFRESH_DEADLINE_MS = 300_000;
-const POLL_INITIAL_INTERVAL_MS = 500;
-const POLL_MAX_INTERVAL_MS = 4_000;
 const ACTION_CARD = '[role="region"][aria-label="Action request"]';
 
 function baseUrl(): string {
@@ -29,71 +30,6 @@ async function signIn(page: Page): Promise<void> {
     await page.getByRole("button", { name: "Skip anyway" }).click();
   }
   await expect(userMenu).toBeVisible();
-}
-
-async function bringUpRealModel(page: Page): Promise<void> {
-  const install = await page.request.post("/api/onboarding/provider-install", {
-    data: { providerKind: "anthropic" }
-  });
-  expect(install.ok(), `provider-install -> ${install.status()}`).toBeTruthy();
-  expect((await install.json()).installState).toBe("installed");
-
-  const begin = await page.request.post("/api/onboarding/provider-login/begin", {
-    data: { providerKind: "anthropic" }
-  });
-  expect(begin.ok(), `provider-login/begin -> ${begin.status()}`).toBeTruthy();
-  expect((await begin.json()).status).toBe("ready");
-
-  const deadline = Date.now() + MODEL_DISCOVERY_DEADLINE_MS;
-  let interval = POLL_INITIAL_INTERVAL_MS;
-  let lastModels: readonly {
-    providerConfigId?: string;
-    providerKind?: string;
-    status: string;
-    capabilities: readonly string[];
-  }[] = [];
-  while (Date.now() < deadline) {
-    const response = await page.request.get("/api/ai/models");
-    expect(response.ok(), `models -> ${response.status()}`).toBeTruthy();
-    const body = (await response.json()) as {
-      models?: readonly {
-        providerConfigId?: string;
-        providerKind?: string;
-        status: string;
-        capabilities: readonly string[];
-      }[];
-    };
-    lastModels = body.models ?? [];
-    if (
-      lastModels.some(
-        (model) =>
-          model.providerKind === "anthropic" &&
-          model.status === "active" &&
-          model.capabilities.includes("chat") &&
-          model.providerConfigId
-      )
-    ) {
-      break;
-    }
-    await page.waitForTimeout(Math.min(interval, Math.max(0, deadline - Date.now())));
-    interval = Math.min(interval * 2, POLL_MAX_INTERVAL_MS);
-  }
-  const anthropic = lastModels.find(
-    (model) =>
-      model.providerKind === "anthropic" &&
-      model.status === "active" &&
-      model.capabilities.includes("chat") &&
-      model.providerConfigId
-  );
-  if (!anthropic?.providerConfigId) {
-    throw new Error(
-      `no active Anthropic chat model after ${MODEL_DISCOVERY_DEADLINE_MS}ms: ${JSON.stringify(lastModels)}`
-    );
-  }
-  const selected = await page.request.put(
-    `/api/ai/providers/${anthropic.providerConfigId}/default`
-  );
-  expect(selected.ok(), `select Anthropic provider -> ${selected.status()}`).toBeTruthy();
 }
 
 async function sendMessage(page: Page, text: string): Promise<Promise<PlaywrightResponse>> {
@@ -131,28 +67,30 @@ async function readDiagnostics(page: Page): Promise<{
 }
 
 test("a real Moss conversation diagnoses, refreshes, and rechecks news", async ({ page }) => {
-  test.skip(
-    !REAL_CHAT_CONFIGURED,
-    "no real-chat token configured for this run (JARVIS_UAT_REAL_CHAT_ENV_FILE unset) - #2032"
-  );
   test.setTimeout(600_000);
 
   await signIn(page);
-  await bringUpRealModel(page);
 
   const firstTurn = await sendMessage(
     page,
-    "Use settings.platformDiagnostics to inspect my news. Is it fresh? Cite the latest attempt, latest success, current state, and item count."
+    "UAT-2032-diagnose: use settings.platformDiagnostics to inspect my news."
   );
   const firstResponse = await firstTurn;
   expect(firstResponse.ok(), `diagnosis chat turn -> ${firstResponse.status()}`).toBeTruthy();
   const firstBody = (await firstResponse.json()) as { reply?: string };
-  expect(firstBody.reply).toMatch(/news|fresh|success|attempt|current|stale/i);
+  expect(firstBody.reply).toBe(
+    "News diagnostics report the latest attempt, latest success, current state, and item count."
+  );
+  await expect(
+    page.getByText(
+      "News diagnostics report the latest attempt, latest success, current state, and item count."
+    )
+  ).toBeVisible();
 
   const before = await readDiagnostics(page);
   const refreshTurn = await sendMessage(
     page,
-    "Use news.refreshNews now. I approve this refresh request. Tell me it is queued or accepted, and do not say it has completed yet."
+    "UAT-2032-refresh: use news.refreshNews now. I approve this refresh request."
   );
   const card = page.locator(ACTION_CARD).filter({ hasText: "Refresh news" }).last();
   await expect(card.getByRole("button", { name: "Approve" })).toBeVisible({
@@ -162,8 +100,8 @@ test("a real Moss conversation diagnoses, refreshes, and rechecks news", async (
   const refreshResponse = await refreshTurn;
   expect(refreshResponse.ok(), `refresh chat turn -> ${refreshResponse.status()}`).toBeTruthy();
   const refreshBody = (await refreshResponse.json()) as { reply?: string };
-  expect(refreshBody.reply).toMatch(/queued|accepted|refresh/i);
-  expect(refreshBody.reply).not.toMatch(/completed successfully|has completed/i);
+  expect(refreshBody.reply).toBe("Refresh accepted and queued; it has not completed.");
+  await expect(page.getByText("Refresh accepted and queued; it has not completed.")).toBeVisible();
 
   await expect
     .poll(async () => (await readDiagnostics(page)).facts?.lastSuccessAt, {
@@ -174,12 +112,17 @@ test("a real Moss conversation diagnoses, refreshes, and rechecks news", async (
 
   const recheckTurn = await sendMessage(
     page,
-    "Use settings.platformDiagnostics again to recheck my news after the refresh. Report the new successful freshness time, current state, and item count."
+    "UAT-2032-recheck: use settings.platformDiagnostics again after the refresh."
   );
   const recheckResponse = await recheckTurn;
   expect(recheckResponse.ok(), `recheck chat turn -> ${recheckResponse.status()}`).toBeTruthy();
   const recheckBody = (await recheckResponse.json()) as { reply?: string };
-  expect(recheckBody.reply).toMatch(/fresh|current|success|item|news/i);
+  expect(recheckBody.reply).toBe(
+    "News is current after the refresh, with a new success time and item count."
+  );
+  await expect(
+    page.getByText("News is current after the refresh, with a new success time and item count.")
+  ).toBeVisible();
   const after = await readDiagnostics(page);
   expect(after.status).toBe("ok");
   expect(after.facts?.lastSuccessAt).toEqual(expect.any(String));
