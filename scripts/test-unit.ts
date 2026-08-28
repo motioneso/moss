@@ -7,10 +7,11 @@ import { fileURLToPath } from "node:url";
 // `vitest run tests/unit <file>` — the whole directory glob plus the one file, silently. This is
 // the same flaw #1314 fixed for `test:integration`; mirroring that fix here so "no args" and
 // "args" are two distinct, deliberate cases instead of one string pnpm can accidentally extend.
+const UNIT_VITEST_ARGS: readonly string[] = ["--fileParallelism", "--maxWorkers=2"];
 const DEFAULT_VITEST_ARGS: readonly string[] = ["tests/unit"];
 
 export function resolveVitestArgs(cliArgs: readonly string[]): string[] {
-  return cliArgs.length > 0 ? [...cliArgs] : [...DEFAULT_VITEST_ARGS];
+  return [...UNIT_VITEST_ARGS, ...(cliArgs.length > 0 ? cliArgs : DEFAULT_VITEST_ARGS)];
 }
 
 function runVitest(args: readonly string[]): Promise<void> {

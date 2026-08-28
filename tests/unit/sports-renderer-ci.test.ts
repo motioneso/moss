@@ -12,7 +12,7 @@ describe("Sports renderer image release", () => {
     expect(workflow).not.toContain("moss-sports-renderer");
     expect(workflow).not.toContain("Dockerfile.sports-renderer");
     expect(workflow).toMatch(
-      /name: Build \(and push on main\) Moss image[\s\S]*?file: \.\/Dockerfile[\s\S]*?platforms: linux\/amd64,linux\/arm64[\s\S]*?push: \$\{\{ steps\.tags\.outputs\.push == 'true' \}\}[\s\S]*?tags: \$\{\{ steps\.tags\.outputs\.image_tags \}\}/
+      /name: Build and push Moss image[\s\S]*?file: \.\/Dockerfile[\s\S]*?platforms: linux\/amd64,linux\/arm64[\s\S]*?push: true[\s\S]*?tags: ghcr\.io\/motioneso\/moss:edge/
     );
   });
 

@@ -19,7 +19,9 @@ const CI_WORKFLOW = fileURLToPath(new URL("../../.github/workflows/ci.yml", impo
  * Add to this list when a new long phase appears; that is the point of the list.
  */
 const PHASES_NEEDING_A_DEADLINE = [
-  "Verify foundation",
+  "Install Chromium for unit tests",
+  "Run unit tests",
+  "Run integration shard",
   "Install Playwright browsers",
   "Run Playwright smoke tests"
 ] as const;
@@ -37,7 +39,8 @@ function stepBodies(source: string): Map<string, string> {
 }
 
 describe("CI phase deadlines (#1534, #1724)", () => {
-  const steps = stepBodies(readFileSync(CI_WORKFLOW, "utf8"));
+  const source = readFileSync(CI_WORKFLOW, "utf8");
+  const steps = stepBodies(source);
 
   it.each(PHASES_NEEDING_A_DEADLINE)("%s runs under a timeout", (name) => {
     const body = steps.get(name);
@@ -50,5 +53,17 @@ describe("CI phase deadlines (#1534, #1724)", () => {
     // Without this the failure looks like an ordinary non-zero exit and the reader has to guess
     // which phase died — exactly the situation #1724 was reported from.
     expect(steps.get(name)).toContain("CI_PHASE_TIMEOUT phase=");
+  });
+
+  it("keeps publish behind every full main verification lane", () => {
+    expect(source).toContain("shard: [1, 2]");
+    expect(source.match(/if: needs\.changes\.outputs\.docs_only != 'true'/g)).toHaveLength(5);
+    expect(source).not.toContain(
+      "if: github.event_name == 'push' && needs.changes.outputs.docs_only"
+    );
+    expect(source).toContain(
+      "needs: [verify, integration, browser, compose-smoke, prod-compose-smoke]"
+    );
+    expect(source).toContain("if: github.event_name == 'push' && github.ref == 'refs/heads/main'");
   });
 });
