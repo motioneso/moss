@@ -679,8 +679,8 @@ describe("M7 release hardening lifecycle scripts", () => {
   it("defines CI automation for foundation, release hardening, audit, web, and Compose smoke", async () => {
     const workflow = await readFile(".github/workflows/ci.yml", "utf8");
 
-    expect(workflow).toContain("pnpm verify:foundation");
-    expect(workflow).toContain("pnpm test:release-hardening");
+    expect(workflow).toContain("pnpm verify:static");
+    expect(workflow).toContain("pnpm test:integration tests/integration --shard=");
     expect(workflow).toContain("pnpm audit:release-hardening");
     expect(workflow).toContain("pnpm build:web");
     expect(workflow).toContain("pnpm test:e2e");

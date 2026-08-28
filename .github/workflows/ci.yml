@@ -90,9 +90,9 @@ jobs:
         run: pnpm check:file-size
 
   verify:
-    name: Verify foundation and app
+    name: Verify static checks and unit tests
     runs-on: ubuntu-latest
-    timeout-minutes: 45 # #1534: phase deadlines preserve fast failure within this backstop
+    timeout-minutes: 45
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
 
@@ -114,12 +114,117 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Verify static checks
+        run: pnpm verify:static
+
+      # The brokered Sports renderer unit smoke launches Chromium.
+      - name: Install Chromium for unit tests
+        run: |
+          status=0
+          for attempt in 1 2; do
+            status=0
+            timeout --verbose --signal=TERM 5m pnpm exec playwright install --with-deps chromium \
+              || status=$?
+            if [ "$status" -eq 0 ]; then break; fi
+          done
+          if [ "$status" -eq 124 ]; then
+            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=unit-chromium-install budget=5m issue=#1534"
+          fi
+          exit "$status"
+
+      - name: Run unit tests
+        run: |
+          status=0
+          timeout --verbose --signal=TERM 10m pnpm test:unit || status=$?
+          if [ "$status" -eq 124 ]; then
+            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=unit budget=10m issue=#1534"
+          fi
+          exit "$status"
+
+  integration:
+    name: Verify integration tests (${{ matrix.shard }}/2)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    strategy:
+      matrix:
+        shard: [1, 2]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build app map
+        run: pnpm build:app-map
+
       - name: Start database
         run: pnpm db:up
 
-      # #1724: `--with-deps` can stall in apt, so bound and retry the install. The foundation suite
-      # now includes the brokered Sports renderer smoke, so Chromium must exist before unit tests;
-      # the later Playwright suites reuse this cached install.
+      - name: Migrate database
+        run: pnpm db:migrate
+
+      - name: Audit release hardening
+        if: matrix.shard == 1
+        run: pnpm audit:release-hardening
+
+      - name: Verify UAT seed
+        if: matrix.shard == 1
+        run: pnpm test:uat-seed
+
+      - name: Run integration shard
+        run: |
+          status=0
+          timeout --verbose --signal=TERM 30m pnpm test:integration tests/integration --shard=${{ matrix.shard }}/2 || status=$?
+          if [ "$status" -eq 124 ]; then
+            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=integration-${{ matrix.shard }}-of-2 budget=30m issue=#1534"
+          fi
+          exit "$status"
+
+      - name: Stop database
+        if: always()
+        run: docker compose -f infra/docker-compose.yml down -v
+
+  browser:
+    name: Verify web and browser tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # #1724: `--with-deps` can stall in apt, so bound and retry the install.
       - name: Install Playwright browsers
         run: |
           status=0
@@ -136,21 +241,6 @@ jobs:
             echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=playwright-install budget=5m issue=#1534"
           fi
           exit "$status"
-
-      - name: Verify foundation
-        run: |
-          status=0
-          timeout --verbose --signal=TERM 30m pnpm verify:foundation || status=$?
-          if [ "$status" -eq 124 ]; then
-            echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=verify-foundation budget=30m issue=#1534"
-          fi
-          exit "$status"
-
-      - name: Verify release hardening
-        run: pnpm test:release-hardening
-
-      - name: Audit release hardening
-        run: pnpm audit:release-hardening
 
       - name: Build web
         run: pnpm build:web
@@ -175,10 +265,6 @@ jobs:
             echo "::error title=CI phase timeout::CI_PHASE_TIMEOUT phase=playwright-sw budget=5m issue=#1872"
           fi
           exit "$status"
-
-      - name: Stop database
-        if: always()
-        run: docker compose -f infra/docker-compose.yml down -v
 
   compose-smoke:
     name: Compose deployment smoke
@@ -280,9 +366,8 @@ jobs:
         if: always()
         run: JARVIS_IMAGE_TAG=ci-${{ github.run_id }} JARVIS_ENV_FILE=./env.production.local POSTGRES_PASSWORD=postgres JARVIS_CLI_RUNNER_RPC_SECRET=ci-smoke-only-not-real docker compose -p jarv1s-prod-smoke -f infra/docker-compose.prod.yml down -v
 
-  # #895: the single required status check. `docs-gate`/`verify`/`compose-smoke`/
-  # `prod-compose-smoke` are each conditional on `docs_only`, so exactly one of
-  # `docs-gate` vs. the other three actually runs on any given PR — naming an
+  # #895: the single required status check. Every heavy job is conditional on
+  # `docs_only`, so naming an
   # individual job as required would deadlock whichever path skips it. This job
   # aggregates all of them under one name that is correct on both paths and fails
   # closed on `cancelled` (a 35-minute job timeout in this repo, not a benign skip).
@@ -290,7 +375,7 @@ jobs:
     name: CI gate
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [changes, docs-gate, verify, compose-smoke, prod-compose-smoke]
+    needs: [changes, docs-gate, verify, integration, browser, compose-smoke, prod-compose-smoke]
     if: always()
 
     steps:
@@ -300,7 +385,7 @@ jobs:
         run: |
           set -euo pipefail
           failed=""
-          for job in changes docs-gate verify compose-smoke prod-compose-smoke; do
+          for job in changes docs-gate verify integration browser compose-smoke prod-compose-smoke; do
             result=$(echo "$NEEDS_JSON" | jq -r --arg job "$job" '.[$job].result')
             echo "$job: $result"
             case "$result" in
@@ -318,7 +403,8 @@ jobs:
     name: Build and publish images
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: [verify, compose-smoke, prod-compose-smoke]
+    needs: [verify, integration, browser, compose-smoke, prod-compose-smoke]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
       packages: write
@@ -348,24 +434,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Compute image tags
-        id: tags
-        run: |
-          if [[ "${GITHUB_REF}" == refs/heads/main ]]; then
-            echo "image_tags=ghcr.io/motioneso/moss:edge" >> "$GITHUB_OUTPUT"
-            echo "push=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "image_tags=ghcr.io/motioneso/moss:pr-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
-            echo "push=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Build (and push on main) Moss image
+      - name: Build and push Moss image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: ${{ steps.tags.outputs.push == 'true' }}
-          tags: ${{ steps.tags.outputs.image_tags }}
+          push: true
+          tags: ghcr.io/motioneso/moss:edge
           cache-from: type=gha,scope=moss
           cache-to: type=gha,mode=max,scope=moss

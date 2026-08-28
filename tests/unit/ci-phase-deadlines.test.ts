@@ -19,7 +19,9 @@ const CI_WORKFLOW = fileURLToPath(new URL("../../.github/workflows/ci.yml", impo
  * Add to this list when a new long phase appears; that is the point of the list.
  */
 const PHASES_NEEDING_A_DEADLINE = [
-  "Verify foundation",
+  "Install Chromium for unit tests",
+  "Run unit tests",
+  "Run integration shard",
   "Install Playwright browsers",
   "Run Playwright smoke tests"
 ] as const;
@@ -37,7 +39,8 @@ function stepBodies(source: string): Map<string, string> {
 }
 
 describe("CI phase deadlines (#1534, #1724)", () => {
-  const steps = stepBodies(readFileSync(CI_WORKFLOW, "utf8"));
+  const source = readFileSync(CI_WORKFLOW, "utf8");
+  const steps = stepBodies(source);
 
   it.each(PHASES_NEEDING_A_DEADLINE)("%s runs under a timeout", (name) => {
     const body = steps.get(name);
@@ -50,5 +53,72 @@ describe("CI phase deadlines (#1534, #1724)", () => {
     // Without this the failure looks like an ordinary non-zero exit and the reader has to guess
     // which phase died — exactly the situation #1724 was reported from.
     expect(steps.get(name)).toContain("CI_PHASE_TIMEOUT phase=");
+  });
+
+  it("keeps publish behind every full main verification lane", () => {
+    expect(source).toContain("shard: [1, 2]");
+    expect(source.match(/if: needs\.changes\.outputs\.docs_only != 'true'/g)).toHaveLength(5);
+    expect(source).not.toContain(
+      "if: github.event_name == 'push' && needs.changes.outputs.docs_only"
+    );
+    expect(source).toContain(
+      "needs: [verify, integration, browser, compose-smoke, prod-compose-smoke]"
+    );
+    expect(source).toContain("if: github.event_name == 'push' && github.ref == 'refs/heads/main'");
+  });
+
+  it("builds the app map on each integration runner before DB-backed tests", () => {
+    const integrationJob = source.slice(
+      source.indexOf("\n  integration:"),
+      source.indexOf("\n  browser:")
+    );
+
+    expect(integrationJob).toContain("- name: Build app map\n        run: pnpm build:app-map");
+    expect(integrationJob.indexOf("pnpm install --frozen-lockfile")).toBeLessThan(
+      integrationJob.indexOf("pnpm build:app-map")
+    );
+    expect(integrationJob.indexOf("pnpm build:app-map")).toBeLessThan(
+      integrationJob.indexOf("pnpm db:up")
+    );
+  });
+
+  it("runs the release-hardening audit after migration in integration shard 1", () => {
+    const verifyJob = source.slice(
+      source.indexOf("\n  verify:"),
+      source.indexOf("\n  integration:")
+    );
+    const integrationJob = source.slice(
+      source.indexOf("\n  integration:"),
+      source.indexOf("\n  browser:")
+    );
+
+    expect(verifyJob).not.toContain("pnpm audit:release-hardening");
+    expect(integrationJob).toContain(
+      "if: matrix.shard == 1\n        run: pnpm audit:release-hardening"
+    );
+    expect(integrationJob.indexOf("pnpm db:migrate")).toBeLessThan(
+      integrationJob.indexOf("pnpm audit:release-hardening")
+    );
+  });
+
+  it("leaves enough time for the measured integration suite and every bounded job", () => {
+    const verifyJob = source.slice(
+      source.indexOf("\n  verify:"),
+      source.indexOf("\n  integration:")
+    );
+    const integrationJob = source.slice(
+      source.indexOf("\n  integration:"),
+      source.indexOf("\n  browser:")
+    );
+    const browserJob = source.slice(
+      source.indexOf("\n  browser:"),
+      source.indexOf("\n  compose-smoke:")
+    );
+
+    expect(verifyJob).toContain("timeout-minutes: 45");
+    expect(integrationJob).toContain("timeout-minutes: 45");
+    expect(steps.get("Run integration shard")).toContain("timeout --verbose --signal=TERM 30m");
+    expect(steps.get("Run integration shard")).toContain("budget=30m");
+    expect(browserJob).toContain("timeout-minutes: 45");
   });
 });
