@@ -120,12 +120,13 @@ export function transcriptGlobDir(
       return join(homeBase, ".codex", "sessions", String(y), m, d);
     }
     case "google": {
+      // #2028 — best effort, and only the long-lived multiplexer path still asks for it. The real
+      // Gemini CLI names this directory by a short id of its own that lives only in
+      // ~/.gemini/projects.json, so it cannot be computed from the folder name. The one-shot
+      // engine that Google chat actually runs does not use this at all: it reads the reply from
+      // the process's own output instead.
       const projectDir = basename(cwd).toLowerCase();
       return join(homeBase, ".gemini", "tmp", projectDir, "chats");
     }
   }
-}
-
-export function agyPrintTranscriptRoot(homeBase: string = homedir()): string {
-  return join(homeBase, ".gemini", "antigravity-cli", "brain");
 }

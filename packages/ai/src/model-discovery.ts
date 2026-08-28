@@ -42,16 +42,24 @@ const ANTHROPIC_STATIC_MODELS: readonly AiProviderDiscoveredModelDto[] = [
 // explicit pins. Keeping ids here makes Codex list upkeep a one-file data change.
 //   - anthropic (claude CLI): the same concrete ids as the API fallback.
 //   - openai-compatible (codex CLI): current ids from learn.chatgpt.com/docs/models, 2026-07-12.
-//   - google/gemini: intentionally absent — installable since #2026 and sign-in-able since #2027,
-//     but not yet usable as a chat model (#2028), so there is nothing to list. See the NOTE in
-//     auto-register.ts.
+//   - google (gemini CLI): current ids the pinned CLI accepts for `--model`, 2026-08-27 (#2028).
+//     These serve an explicit pin and the json/summarization routes; unpinned chat still rides the
+//     `"default"` sentinel and therefore the account's own model.
 export const CLI_STATIC_MODELS: Partial<
   Record<AiProviderKind, readonly AiProviderDiscoveredModelDto[]>
 > = {
   anthropic: ANTHROPIC_STATIC_MODELS,
   "openai-compatible": ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6"].map(
     (id) => inferModel(id, "openai-compatible")!
-  )
+  ),
+  google: [
+    "gemini-3.1-pro-preview",
+    "gemini-3-pro-preview",
+    "gemini-3-flash-preview",
+    "gemini-2.5-pro",
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite"
+  ].map((id) => inferModel(id, "google")!)
 };
 
 /** #982/#869: only providers backed by curated CLI data are safe to clean-slate reconcile. */
@@ -223,7 +231,14 @@ function inferTierFromModelId(providerKind: AiProviderKind, modelId: string): Ai
     if (id.includes("3.5") || id.includes("3-5")) return "economy";
     return "interactive";
   }
-  // google, ollama, custom: use name hints
+  if (providerKind === "google") {
+    // #2028: Gemini names its own tiers in the model id. "flash-lite" and "flash" are the cheap
+    // fast ones, "pro" is the slow careful one; anything unrecognised is treated as everyday.
+    if (id.includes("flash") || id.includes("lite")) return "economy";
+    if (id.includes("pro") || id.includes("ultra")) return "reasoning";
+    return "interactive";
+  }
+  // ollama, custom: use name hints
   if (id.includes("mini") || id.includes("flash") || id.includes("haiku")) return "economy";
   if (id.includes("opus") || id.includes("reason")) return "reasoning";
   return "interactive";

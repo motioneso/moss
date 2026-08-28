@@ -15,7 +15,6 @@ import {
   SESSION_PREFIX
 } from "../../packages/chat/src/live/cli-chat-engine.js";
 import { CliChatUnavailableError } from "../../packages/chat/src/live/errors.js";
-import { AGY_SESSION_LOG_FILENAME } from "../../packages/chat/src/live/private-transcript-cleanup.js";
 import type { Multiplexer } from "../../packages/ai/src/adapters/multiplexer.js";
 
 function makeIo() {
@@ -27,17 +26,12 @@ function makeIo() {
   };
 }
 
-const AGY_TEST_UUID = "e099f770-a55c-432f-a9be-8cf254fd2d54";
-
-function makeAgyIo() {
+function makeGeminiIo() {
   const io = makeIo();
   io.run.mockImplementation(async (cmd: string, args: string[]) =>
     cmd === "tmux" && args.includes("capture-pane")
       ? { code: 0, stdout: ">\n? for shortcuts\n", stderr: "" }
       : { code: 0, stdout: "", stderr: "" }
-  );
-  io.readFile.mockImplementation(async (path: string) =>
-    path.endsWith(AGY_SESSION_LOG_FILENAME) ? `Created conversation ${AGY_TEST_UUID}\n` : ""
   );
   return io;
 }
@@ -178,17 +172,25 @@ describe("CliChatEngineImpl — purgeable identity launch gate", () => {
     expect(mux.kill).toHaveBeenCalled();
   });
 
-  it("refuses interactive AGY launch when its exact own-log UUID is unavailable", async () => {
+  it("refuses interactive Gemini launch when the purge marker cannot be written", async () => {
+    // #2028 — the session id is ours now, so nothing is scraped out of a log. What launch still
+    // MUST prove is that the marker landed on disk: without it a crash mid-turn leaves the
+    // founder's conversation with no pointer for the boot sweep to purge by.
     const mux = stateMachineMux({ panes: [">\n? for shortcuts\n"] });
     const io = makeIo();
-    io.readFile.mockRejectedValue(new Error("missing"));
-    const engine = new CliChatEngineImpl("google", "agy-no-identity", io, {
+    io.run.mockImplementation(async (cmd: string, args: string[]) => {
+      if (cmd === "tmux" && args.includes("capture-pane"))
+        return { code: 0, stdout: ">\n? for shortcuts\n", stderr: "" };
+      if (cmd === "chmod") return { code: 1, stdout: "", stderr: "denied" };
+      return { code: 0, stdout: "", stderr: "" };
+    });
+    const engine = new CliChatEngineImpl("google", "gemini-no-marker", io, {
       mux,
       echoMs: 0
     });
 
     await expect(
-      engine.launch({ neutralDir: "/tmp/agy-no-identity", personaPath: "/p.md" })
+      engine.launch({ neutralDir: "/tmp/gemini-no-marker", personaPath: "/p.md" })
     ).rejects.toBeInstanceOf(CliChatUnavailableError);
     expect(mux.kill).toHaveBeenCalled();
   });
@@ -458,8 +460,8 @@ describe("CliChatEngineImpl — Codex launch", () => {
 });
 
 describe("CliChatEngineImpl — Gemini launch", () => {
-  it("writes .gemini/settings.json and launches agy with supported flags", async () => {
-    const io = makeAgyIo();
+  it("writes .gemini/settings.json and launches the real gemini command", async () => {
+    const io = makeGeminiIo();
     const engine = new CliChatEngineImpl("google", "gemini-session", io);
     await engine.launch({
       neutralDir: "/tmp/neutral",
@@ -483,21 +485,33 @@ describe("CliChatEngineImpl — Gemini launch", () => {
       const a = sendKeysCall![1] as string[];
       return a[a.indexOf("-t") + 2];
     })();
-    expect(launchLine).toContain("agy");
-    expect(launchLine).not.toContain("gemini");
-    expect(launchLine).toContain("--sandbox");
-    expect(launchLine).toContain(`--log-file '/tmp/neutral/${AGY_SESSION_LOG_FILENAME}'`);
+    // #2028 — the CLI this launches is `@google/gemini-cli`. It has no `--sandbox` and no
+    // `--log-file`; passing the old Antigravity flags meant no Google session could ever start.
+    expect(settingsContent.tools.core).toEqual([]);
+    expect(settingsContent.security).toBeUndefined();
+    expect(launchLine).toMatch(/(^|\s|&&\s)gemini(\s|$)/);
+    expect(launchLine).not.toContain("agy");
+    expect(launchLine).not.toContain("--sandbox");
+    expect(launchLine).not.toContain("--log-file");
+    expect(launchLine).toContain("--skip-trust");
+    expect(launchLine).toMatch(
+      /--session-id [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/
+    );
+    expect(launchLine).not.toContain("--resume");
+    expect(launchLine).toContain("--approval-mode default");
     expect(launchLine).not.toContain("--allowed-mcp-server-names");
     expect(launchLine).not.toContain("web_search");
     expect(launchLine).not.toContain("browser");
     expect(launchLine).not.toContain("browse");
   });
 
-  it("purges only the UUID captured from its own AGY log before kill", async () => {
-    const uuid = "e099f770-a55c-432f-a9be-8cf254fd2d54";
-    const io = makeAgyIo();
+  it("purges the Gemini state this session created, and nothing above it, before kill", async () => {
+    const shortId = "gemini-private";
+    const io = makeGeminiIo();
     io.readFile.mockImplementation(async (path: string) =>
-      path.endsWith(AGY_SESSION_LOG_FILENAME) ? `Created conversation ${uuid}\n` : ""
+      path.endsWith("projects.json")
+        ? JSON.stringify({ projects: { "/tmp/gemini-private": shortId } })
+        : ""
     );
     const engine = new CliChatEngineImpl("google", "gemini-private", io, {
       homeBase: "/host-home"
@@ -512,12 +526,13 @@ describe("CliChatEngineImpl — Gemini launch", () => {
     await engine.purgeTranscripts();
     await engine.kill();
 
+    expect(io.run.mock.calls).toContainEqual(["rm", ["-rf", `/host-home/.gemini/tmp/${shortId}`]]);
     expect(io.run.mock.calls).toContainEqual([
       "rm",
-      ["-rf", `/host-home/.gemini/antigravity-cli/brain/${uuid}`]
+      ["-rf", `/host-home/.gemini/history/${shortId}`]
     ]);
     expect(JSON.stringify(io.run.mock.calls)).not.toContain(
-      '["rm",["-rf","/host-home/.gemini/antigravity-cli/brain"]]'
+      '["rm",["-rf","/host-home/.gemini/tmp"]]'
     );
   });
 });
@@ -562,7 +577,7 @@ describe("CliChatEngineImpl — provider transcript resolution", () => {
   });
 
   it("Gemini resolves the newest .jsonl under the cwd-specific ~/.gemini/tmp project chats dir", async () => {
-    const io = makeAgyIo();
+    const io = makeGeminiIo();
     const engine = new CliChatEngineImpl("google", "gemini-session", io, {
       homeBase: "/host-home"
     });

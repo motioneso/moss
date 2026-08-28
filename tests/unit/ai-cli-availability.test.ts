@@ -14,15 +14,16 @@ describe("cliAvailable", () => {
     expect(await cliAvailable("openai-compatible", deps)).toBe(true);
   });
 
-  it("maps google to agy binary and returns true when found", async () => {
-    const deps = { which: async (bin: string) => (bin === "agy" ? "/usr/bin/agy" : null) };
+  it("maps google to the gemini binary and returns true when found", async () => {
+    const deps = { which: async (bin: string) => (bin === "gemini" ? "/usr/bin/gemini" : null) };
     expect(await cliAvailable("google", deps)).toBe(true);
   });
 
-  // #2026: the pinned @google/gemini-cli package only ever installs a command called `gemini`.
-  // Probing `agy` alone would report a successful install as missing forever.
-  it("counts `gemini` on PATH as the google provider", async () => {
-    const deps = { which: async (bin: string) => (bin === "gemini" ? "/usr/bin/gemini" : null) };
+  // #2026/#2028: the pinned @google/gemini-cli package only ever installs a command called
+  // `gemini`, so that is the name the provider maps to now. The old Antigravity name survives as
+  // an alias so a host that already declared it keeps resolving.
+  it("still counts the old Antigravity name on PATH as the google provider", async () => {
+    const deps = { which: async (bin: string) => (bin === "agy" ? "/usr/bin/agy" : null) };
     expect(await cliAvailable("google", deps)).toBe(true);
   });
 
@@ -31,11 +32,11 @@ describe("cliAvailable", () => {
     const deps = {
       which: async (bin: string) => {
         probed.push(bin);
-        return bin === "agy" ? "/usr/bin/agy" : null;
+        return bin === "gemini" ? "/usr/bin/gemini" : null;
       }
     };
     expect(await cliAvailable("google", deps)).toBe(true);
-    expect(probed).toEqual(["agy"]);
+    expect(probed).toEqual(["gemini"]);
   });
 
   it("does not let another kind's binary satisfy a kind with no aliases", async () => {

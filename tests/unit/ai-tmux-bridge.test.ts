@@ -9,11 +9,7 @@ import {
   hasExactUserAck,
   parseTranscript
 } from "../../packages/ai/src/adapters/transcript-reader.js";
-import {
-  createRealTmuxIo,
-  transcriptGlobDir,
-  agyPrintTranscriptRoot
-} from "../../packages/ai/src/adapters/tmux-bridge.js";
+import { createRealTmuxIo, transcriptGlobDir } from "../../packages/ai/src/adapters/tmux-bridge.js";
 
 // ---------------------------------------------------------------------------
 // Fixtures: real JSONL schema per provider (discovered 2026-06-07)
@@ -152,40 +148,62 @@ const CODEX_EXECJSON_TURN_DONE = JSON.stringify({
 });
 
 // ─── google / Gemini CLI fixtures ────────────────────────────────────────────
+//
+// #2028 — the real `-o stream-json` output of `@google/gemini-cli@0.57.0`, recorded from a live
+// run. The reply arrives ONLY as `delta: true` chunks and the turn ends on `result`.
 
-const GEMINI_FIXTURE_THINKING = JSON.stringify({
-  id: "g1",
-  timestamp: "2026-05-13T19:08:00.000Z",
-  type: "gemini",
-  content: "",
-  thoughts: [
-    {
-      subject: "Analyzing Code",
-      description: "I am examining the codebase carefully."
-    }
-  ]
+const GEMINI_FIXTURE_INIT = JSON.stringify({
+  type: "init",
+  timestamp: "2026-08-27T12:00:00.000Z",
+  session_id: "11111111-2222-4333-8444-555555555555",
+  model: "auto"
 });
 
-const GEMINI_FIXTURE_FINAL = JSON.stringify({
-  id: "g2",
-  timestamp: "2026-05-13T19:09:12.000Z",
-  type: "gemini",
-  content: "Here is the Gemini answer.",
-  thoughts: []
+const GEMINI_FIXTURE_USER = JSON.stringify({
+  type: "message",
+  timestamp: "2026-08-27T12:00:00.100Z",
+  role: "user",
+  content: "say the alphabet"
 });
 
-// ─── google / Agy print-mode fixtures ────────────────────────────────────────
+const geminiChunk = (content: string) =>
+  JSON.stringify({
+    type: "message",
+    timestamp: "2026-08-27T12:00:01.000Z",
+    role: "assistant",
+    content,
+    delta: true
+  });
 
-const AGY_PRINT_FIXTURE_TOOL = JSON.stringify({
-  type: "VIEW_FILE",
-  timestamp: "2026-06-26T21:00:00.000Z",
-  path: "./word.txt"
+const GEMINI_FIXTURE_TOOL_USE = JSON.stringify({
+  type: "tool_use",
+  timestamp: "2026-08-27T12:00:02.000Z",
+  tool_name: "read_file",
+  tool_id: "t1",
+  parameters: { path: "./word.txt" }
 });
 
-const AGY_PRINT_FIXTURE_REPLY = JSON.stringify({
-  type: "PLANNER_RESPONSE",
-  timestamp: "2026-06-26T21:00:01.000Z",
-  content: "alpha-bravo-charlie"
+const GEMINI_FIXTURE_TOOL_RESULT = JSON.stringify({
+  type: "tool_result",
+  timestamp: "2026-08-27T12:00:02.500Z",
+  tool_id: "t1",
+  status: "success",
+  output: "alpha"
+});
+
+const GEMINI_FIXTURE_RESULT_OK = JSON.stringify({
+  type: "result",
+  timestamp: "2026-08-27T12:00:03.000Z",
+  status: "success",
+  stats: { turns: 1 }
+});
+
+const GEMINI_FIXTURE_RESULT_ERROR = JSON.stringify({
+  type: "result",
+  timestamp: "2026-08-27T12:00:03.000Z",
+  status: "error",
+  stats: { turns: 1 },
+  error: { message: "quota exhausted" }
 });
 
 // ===========================================================================
@@ -356,19 +374,35 @@ describe("exact user ACK evidence", () => {
   );
 });
 
-describe("parseTranscript — google (Gemini CLI JSONL schema)", () => {
-  it("returns thinking activity events and the final reply when content is non-empty", () => {
-    const jsonl = [GEMINI_FIXTURE_THINKING, GEMINI_FIXTURE_FINAL].join("\n");
+describe("parseTranscript — google (Gemini CLI stream-json schema)", () => {
+  it("joins the assistant chunks in arrival order into one reply", () => {
+    // The single most likely wrong implementation returns the FIRST chunk, which is one word.
+    const jsonl = [
+      GEMINI_FIXTURE_INIT,
+      GEMINI_FIXTURE_USER,
+      geminiChunk("alpha "),
+      geminiChunk("bravo "),
+      geminiChunk("charlie"),
+      GEMINI_FIXTURE_RESULT_OK
+    ].join("\n");
 
     const result = parseTranscript("google", jsonl, 0);
 
-    expect(result.events.map((e) => e.kind)).toEqual(["thinking"]);
-    expect(result.reply).toBe("Here is the Gemini answer.");
+    expect(result.reply).toBe("alpha bravo charlie");
     expect(result.complete).toBe(true);
   });
 
-  it("reports incomplete when all gemini records have empty content", () => {
-    const jsonl = GEMINI_FIXTURE_THINKING;
+  it("never treats the echoed user prompt as reply text", () => {
+    const jsonl = [GEMINI_FIXTURE_INIT, GEMINI_FIXTURE_USER, GEMINI_FIXTURE_RESULT_OK].join("\n");
+
+    const result = parseTranscript("google", jsonl, 0);
+
+    expect(result.reply).toBe("");
+    expect(result.reply).not.toContain("say the alphabet");
+  });
+
+  it("does not report the turn finished until the result line arrives", () => {
+    const jsonl = [GEMINI_FIXTURE_INIT, geminiChunk("alpha "), geminiChunk("bravo")].join("\n");
 
     const result = parseTranscript("google", jsonl, 0);
 
@@ -376,14 +410,32 @@ describe("parseTranscript — google (Gemini CLI JSONL schema)", () => {
     expect(result.reply).toBeNull();
   });
 
-  it("maps Agy print-mode records to tool activity and final reply", () => {
-    const jsonl = [AGY_PRINT_FIXTURE_TOOL, AGY_PRINT_FIXTURE_REPLY].join("\n");
+  it("finishes the turn and surfaces the message when the run failed", () => {
+    // Without this the turn hangs until the idle watchdog fires and the founder sees nothing.
+    const jsonl = [GEMINI_FIXTURE_INIT, GEMINI_FIXTURE_RESULT_ERROR].join("\n");
 
     const result = parseTranscript("google", jsonl, 0);
 
-    expect(result.events).toEqual([{ kind: "tool", text: "VIEW_FILE ./word.txt" }]);
-    expect(result.reply).toBe("alpha-bravo-charlie");
     expect(result.complete).toBe(true);
+    expect(result.events).toEqual([{ kind: "status", text: "quota exhausted" }]);
+  });
+
+  it("reports tool lines as activity, never as part of the reply", () => {
+    const jsonl = [
+      GEMINI_FIXTURE_INIT,
+      GEMINI_FIXTURE_TOOL_USE,
+      GEMINI_FIXTURE_TOOL_RESULT,
+      geminiChunk("done"),
+      GEMINI_FIXTURE_RESULT_OK
+    ].join("\n");
+
+    const result = parseTranscript("google", jsonl, 0);
+
+    expect(result.events).toEqual([
+      { kind: "tool", text: "read_file" },
+      { kind: "tool", text: "tool result: success" }
+    ]);
+    expect(result.reply).toBe("done");
   });
 });
 
@@ -492,13 +544,5 @@ describe("transcriptGlobDir — Codex date directory", () => {
     } finally {
       vi.useRealTimers();
     }
-  });
-});
-
-describe("agyPrintTranscriptRoot", () => {
-  it("points at the Antigravity brain transcript root under the selected home base", () => {
-    expect(agyPrintTranscriptRoot("/custom/home")).toBe(
-      "/custom/home/.gemini/antigravity-cli/brain"
-    );
   });
 });

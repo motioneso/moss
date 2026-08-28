@@ -27,7 +27,7 @@ import { TerminalHost } from "../../packages/cli-runner/src/terminal-host.js";
 import type { InstallService } from "../../packages/cli-runner/src/install-service.js";
 import { CliChatUnavailableError } from "../../packages/chat/src/live/errors.js";
 import {
-  AGY_IDENTITY_FILENAME,
+  GEMINI_IDENTITY_FILENAME,
   CODEX_IDENTITY_FILENAME,
   codexTranscriptPath
 } from "../../packages/chat/src/live/private-transcript-cleanup.js";
@@ -36,7 +36,7 @@ import {
   SESSION_PREFIX,
   VerifiedSubmitError
 } from "../../packages/chat/src/live/cli-chat-engine.js";
-import { AgyPrintChatEngine } from "../../packages/chat/src/live/agy-print-chat-engine.js";
+import { GeminiPrintChatEngine } from "../../packages/chat/src/live/gemini-print-chat-engine.js";
 import { ClaudePrintChatEngine } from "../../packages/chat/src/live/claude-print-chat-engine.js";
 import { ClaudePersistentRuntimeEngine } from "../../packages/chat/src/live/persistent-runtime-engine.js";
 import { createChatEngine } from "../../packages/chat/src/live/engine-selection.js";
@@ -138,20 +138,27 @@ function makeBootSweepIo(opts: { codexMismatch?: boolean } = {}): {
   neutralDir: string;
   homeBase: string;
   codexPath: string;
-  brainDir: string;
+  geminiChatsDir: string;
 } {
   const calls: string[] = [];
   const neutralBase = "/data/cli-auth/chat";
   const neutralDir = `${neutralBase}/stale-user`;
   const homeBase = "/home/ben";
   const codexUuid = "019f5af9-3c61-7f72-af47-09514db9892c";
-  const agyUuid = "e099f770-a55c-432f-a9be-8cf254fd2d54";
+  const geminiUuid = "e099f770-a55c-432f-a9be-8cf254fd2d54";
+  const geminiShortId = "stale-user";
   const codexPath = codexTranscriptPath(codexUuid, homeBase);
-  const brainDir = join(homeBase, ".gemini", "antigravity-cli", "brain", agyUuid);
+  // #2028 — the Gemini CLI names its own state directory by a short id that only exists in its
+  // registry file, so the sweep has to read that file rather than compute the path.
+  const geminiChatsDir = join(homeBase, ".gemini", "tmp", geminiShortId);
 
   const markerValues = new Map<string, string>([
     [`${neutralDir}/${CODEX_IDENTITY_FILENAME}`, `${codexUuid}\n`],
-    [`${neutralDir}/${AGY_IDENTITY_FILENAME}`, `${agyUuid}\n`],
+    [`${neutralDir}/${GEMINI_IDENTITY_FILENAME}`, `${geminiUuid}\n`],
+    [
+      join(homeBase, ".gemini", "projects.json"),
+      JSON.stringify({ projects: { [neutralDir]: geminiShortId } })
+    ],
     [
       codexPath,
       `${JSON.stringify({
@@ -197,7 +204,7 @@ function makeBootSweepIo(opts: { codexMismatch?: boolean } = {}): {
     neutralDir,
     homeBase,
     codexPath,
-    brainDir
+    geminiChatsDir
   };
 }
 
@@ -223,7 +230,7 @@ describe("§4.1.0a single-active-user gate", () => {
 
   it.each([
     ["anthropic", ClaudePrintChatEngine],
-    ["google", AgyPrintChatEngine]
+    ["google", GeminiPrintChatEngine]
   ] as const)(
     "counts a %s bounded-fallback engine as live and does not reap it",
     async (provider, Engine) => {
@@ -608,11 +615,11 @@ describe("§6.5 startup CLEAN-SLATE sweep", () => {
     await host.startupSweep();
 
     expect(success.calls).toContain(`rm -f ${success.codexPath}`);
-    expect(success.calls).toContain(`rm -rf ${success.brainDir}`);
+    expect(success.calls).toContain(`rm -rf ${success.geminiChatsDir}`);
     expect(success.calls.indexOf(`rm -f ${success.codexPath}`)).toBeLessThan(
       success.calls.indexOf(`rm -rf ${success.neutralDir}`)
     );
-    expect(success.calls.indexOf(`rm -rf ${success.brainDir}`)).toBeLessThan(
+    expect(success.calls.indexOf(`rm -rf ${success.geminiChatsDir}`)).toBeLessThan(
       success.calls.indexOf(`rm -rf ${success.neutralDir}`)
     );
 

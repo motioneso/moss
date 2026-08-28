@@ -18,10 +18,10 @@
 import type { Multiplexer, ProviderKind, TmuxIo } from "@moss/ai";
 import type { AiProviderExecutionMode } from "@moss/shared";
 
-import { AgyPrintChatEngine } from "./agy-print-chat-engine.js";
 import { ClaudePrintChatEngine } from "./claude-print-chat-engine.js";
 import { CliChatEngineImpl } from "./cli-chat-engine.js";
 import type { CliChatEngineDiagnostic } from "./cli-chat-engine-opts.js";
+import { GeminiPrintChatEngine } from "./gemini-print-chat-engine.js";
 import { ClaudePersistentRuntimeEngine } from "./persistent-runtime-engine.js";
 import type { AdmitCapablePool } from "./persistent-runtime-pool.js";
 import type { CliChatEngine, EngineLaunchOpts } from "./types.js";
@@ -72,7 +72,7 @@ export interface ChatEngineSelectionOpts {
 }
 
 /**
- * True when this provider/mode pair runs bounded-fallback (`claude -p` / `agy` exec, one
+ * True when this provider/mode pair runs bounded-fallback (`claude -p` / `gemini -p`, one
  * process per turn) rather than driving a persistent REPL inside a multiplexer pane.
  * Exported so callers that need to know whether a mux session will exist (the runner's
  * orphan reaping, tests) can ask without reconstructing the rule.
@@ -85,8 +85,9 @@ export function isBoundedFallbackEngine(
   provider: ProviderKind,
   executionMode: AiProviderExecutionMode | undefined
 ): boolean {
-  if (executionMode !== "non_interactive") return false;
-  return provider === "anthropic" || provider === "google";
+  // Gemini's interactive UI does not emit the stream-json transcript that its reader needs.
+  // Use the one-shot engine for every Gemini mode so replies always come from that stream.
+  return provider === "google" || (provider === "anthropic" && executionMode === "non_interactive");
 }
 
 /**
@@ -108,7 +109,7 @@ function buildFallbackEngine(
         credentialFile: opts.credentialFile
       });
     }
-    return new AgyPrintChatEngine(sessionKey, io, {
+    return new GeminiPrintChatEngine(sessionKey, io, {
       mux: opts.mux,
       homeBase: opts.homeBase
     });
@@ -148,9 +149,9 @@ async function admitPersistentOrFallback(
 }
 
 /**
- * Build the engine for a session. `non_interactive` anthropic/google get the bounded-fallback
- * print engines (no multiplexer session is ever created); everything else — including any
- * provider explicitly configured `interactive` — gets the tmux-backed REPL engine.
+ * Build the engine for a session. `non_interactive` Anthropic and every Gemini session get the
+ * bounded-fallback print engines (no multiplexer session is ever created); everything else —
+ * including any provider explicitly configured `interactive` — gets the tmux-backed REPL engine.
  *
  * Synchronous for every call site that predates task #5 (no `persistentPool` supplied) — only
  * becomes a `Promise` when a real pool is wired in, i.e. only for the two composition roots task
