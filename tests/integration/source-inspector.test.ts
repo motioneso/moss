@@ -65,6 +65,23 @@ describe("source inspector", () => {
     );
   });
 
+  it("checks the resolved path for excluded folders", async () => {
+    const root = fixtureRoot();
+    mkdirSync(join(root, "external-modules"), { recursive: true });
+    writeFileSync(join(root, "external-modules", "hidden.ts"), "needle from excluded source\n");
+    symlinkSync(
+      join(root, "external-modules", "hidden.ts"),
+      join(root, "packages/settings/src/link-to-excluded.ts")
+    );
+    const inspector = createSourceInspector({ workspaceRoot: root });
+
+    await expect(
+      inspector.read({ path: "packages/settings/src/link-to-excluded.ts" })
+    ).rejects.toThrow("allowed source file");
+    const result = await inspector.search({ query: "needle" });
+    expect(result.matches).toEqual([]);
+  });
+
   it("enforces excerpt, match, and response limits and rejects secret-shaped text", async () => {
     const root = fixtureRoot();
     const lines = Array.from({ length: 60 }, (_, index) => `needle ${index}`);
@@ -78,6 +95,10 @@ describe("source inspector", () => {
       "private = -----BEGIN PRIVATE KEY-----\n"
     );
     writeFileSync(join(root, "packages/settings/src/.env"), "TOKEN=secret\n");
+    writeFileSync(
+      join(root, "packages/settings/src/multiple-assignments.ts"),
+      "TOKEN=process.env.TOKEN API_KEY=1234567890123456\n"
+    );
     const inspector = createSourceInspector({ workspaceRoot: root });
 
     const result = await inspector.search({ query: "needle", limit: 100 });
@@ -96,6 +117,9 @@ describe("source inspector", () => {
     await expect(inspector.read({ path: "packages/settings/src/key.ts" })).rejects.toThrow(
       "private key header"
     );
+    await expect(
+      inspector.read({ path: "packages/settings/src/multiple-assignments.ts" })
+    ).rejects.toThrow("secret-looking assignment");
     const hostExcerpt = await inspector.read({ path: "packages/settings/src/host-diagnostics.ts" });
     expect(hostExcerpt.text).toContain("DATABASE_URL");
   });

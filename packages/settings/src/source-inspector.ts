@@ -57,7 +57,7 @@ const EXCLUDED_EXTENSIONS = new Set([
   ".gz"
 ]);
 const SECRET_ASSIGNMENT =
-  /\b[\w-]*(?:key|secret|token|password|passwd|credential|api[_-]?key)[\w-]*\b\s*[:=]\s*(?:["'`]([^"'`\r\n]{16,})["'`]|([A-Za-z0-9_./+=:-]{16,}))/i;
+  /\b[\w-]*(?:key|secret|token|password|passwd|credential|api[_-]?key)[\w-]*\b\s*[:=]\s*(?:["'`]([^"'`\r\n]{16,})["'`]|([A-Za-z0-9_./+=:-]{16,}))/gi;
 const PLACEHOLDER = /^(?:changeme|example|process\.env\b)|<[^>]*>/i;
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 
@@ -130,8 +130,9 @@ function isExcludedFile(relativePath: string): boolean {
 
 function rejectReason(text: string): string | null {
   if (CREDS_IN_URL.test(text)) return "excerpt contains credentials in a URL";
-  const assignment = SECRET_ASSIGNMENT.exec(text);
-  if (assignment) {
+  SECRET_ASSIGNMENT.lastIndex = 0;
+  let assignment: RegExpExecArray | null;
+  while ((assignment = SECRET_ASSIGNMENT.exec(text)) !== null) {
     const value = assignment[1] ?? assignment[2] ?? "";
     if (!PLACEHOLDER.test(value) && !/^(?:process\.env\b)/i.test(value)) {
       return "excerpt contains a secret-looking assignment";
@@ -193,7 +194,7 @@ export function createSourceInspector(options: { workspaceRoot?: string } = {}):
     }
     const real = realpathSync(absolute);
     if (!isContained(real, rootReal)) throw new Error("source path resolves outside the workspace");
-    const relativePath = relative(root, absolute);
+    const relativePath = relative(rootReal, real);
     if (!relativePath && allowRoot) return { absolute: real, relative: relativePath };
     if (!isAllowedRelative(relativePath) || isExcludedFile(relativePath)) {
       throw new Error("source path is not an allowed source file");
@@ -273,7 +274,7 @@ export function createSourceInspector(options: { workspaceRoot?: string } = {}):
         addRejected(relative(root, absolute), "path resolves outside the workspace");
         return;
       }
-      const relativePath = relative(root, absolute);
+      const relativePath = relative(rootReal, real);
       if (relativePath && (!isAllowedRelative(relativePath) || isExcludedFile(relativePath)))
         return;
       const stat = statSync(real);

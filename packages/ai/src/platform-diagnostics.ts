@@ -140,7 +140,7 @@ export function createPlatformDiagnosticsService(dependencies: {
             dependencies.runInContext,
             ctx,
             { onProviderError: dependencies.onProviderError }
-          )
+          ).then((observations) => observations.slice(0, limit))
         : [];
       const errors = include.has("errors")
         ? (

@@ -135,4 +135,40 @@ describe("platform diagnostics service", () => {
     expect(onProviderError).toHaveBeenCalledWith("broken", "ProviderFailure");
     expect(JSON.stringify(onProviderError.mock.calls)).not.toContain("private provider details");
   });
+
+  it("limits module observations to the requested result count", async () => {
+    const service = createPlatformDiagnosticsService({
+      appMap: { getBuildInfo: () => ({ version: "1.2.3", buildId: "build-1" }) },
+      repository: {
+        listRecentErrors: vi.fn().mockResolvedValue([]),
+        listActionAuditLog: vi.fn().mockResolvedValue([])
+      },
+      moduleProviders: async () =>
+        Array.from({ length: 11 }, (_, index) => ({
+          moduleId: `module-${index}`,
+          provider: {
+            domain: "demo",
+            providerId: `demo.${index}`,
+            observe: async () => ({
+              domain: "demo",
+              providerId: `demo.${index}`,
+              observedAt: "2026-08-27T10:00:00.000Z",
+              status: "ok" as const,
+              summary: "Everything is fine."
+            })
+          }
+        })),
+      runInContext: async (work) => work({}),
+      isInstanceAdmin: vi.fn().mockResolvedValue(false),
+      assertDiagnosticsSafe: vi.fn()
+    });
+
+    const report = await service.observe(
+      scopedDb,
+      { actorUserId: "user-a", requestId: "req-1" },
+      { include: ["modules"], limit: 10 }
+    );
+
+    expect(report.modules).toHaveLength(10);
+  });
 });
