@@ -8,7 +8,7 @@ import {
   createMockTask,
   mockApi
 } from "./mock-api.js";
-import { createMockAiModel } from "./mock-ai-api.js";
+import { createMockAiModel, createMockAiProvider } from "./mock-ai-api.js";
 
 test("signs in and renders shell navigation", async ({ page }) => {
   await mockApi(page, {
@@ -304,6 +304,32 @@ test("configures chat and email extraction models through settings", async ({ pa
   await page.getByRole("button", { name: "Remove Anthropic" }).click();
   await page.getByRole("button", { name: "Remove", exact: true }).click();
   await expect(page.getByText("No providers yet")).toBeVisible();
+});
+
+test("shows missing AI credentials as email-extraction configuration", async ({ page }) => {
+  await mockApi(page, {
+    authenticated: true,
+    aiProviders: [createMockAiProvider("ai-provider-1", { hasCredential: false })],
+    aiModels: [
+      createMockAiModel("ai-model-mailbox", {
+        providerConfigId: "ai-provider-1",
+        capabilities: ["json"]
+      })
+    ],
+    connectorAccounts: [],
+    connectorProviders: createMockConnectorProviders(),
+    notifications: [],
+    tasks: []
+  });
+
+  await page.goto("/settings");
+  await page.getByRole("button", { name: "Admin / Setup" }).click();
+  await page.getByRole("button", { name: "Assistant & AI" }).click();
+
+  await expect(page.getByText("API key needed", { exact: true })).toBeVisible();
+  const emailBinding = page.getByLabel("Binding for Email extraction");
+  await expect(emailBinding).toHaveValue("");
+  await expect(emailBinding.locator("xpath=../..").getByText("Needs configuration")).toBeVisible();
 });
 
 test("serves PWA metadata", async ({ page }) => {

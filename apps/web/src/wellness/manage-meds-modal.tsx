@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { localDay, type MedicationDto } from "@moss/shared";
+import { localDay, type ListMedicationsResponse, type MedicationDto } from "@moss/shared";
 import { Switch } from "@moss/ui";
 import { describeSchedule, nextDoses } from "@moss/wellness/schedule-summary";
 import { formatDateTime, useUserLocale } from "../locale/locale-format";
@@ -185,7 +185,16 @@ export function ManageMedsModal({ open, onClose, theme = "light" }: Props) {
 
   const addMutation = useMutation({
     mutationFn: () => createMedication(buildCreateRequest(form)),
-    onSuccess: () => {
+    onSuccess: ({ medication }) => {
+      queryClient.setQueryData<ListMedicationsResponse>(
+        queryKeys.wellness.medications,
+        (current) => ({
+          medications: [
+            ...(current?.medications ?? []).filter((existing) => existing.id !== medication.id),
+            medication
+          ]
+        })
+      );
       void queryClient.invalidateQueries({ queryKey: queryKeys.wellness.medications });
       void queryClient.invalidateQueries({ queryKey: ["wellness", "schedule"] });
       void queryClient.invalidateQueries({ queryKey: ["wellness", "adherence-summary"] });

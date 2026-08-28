@@ -256,6 +256,8 @@ describe("runGoogleSync email orchestration", () => {
       "https://www.googleapis.com/auth/gmail.modify"
     ]);
     const ctx = { actorUserId: ids.userA, requestId: "pgboss:email-needs-config" };
+    const warnings: string[] = [];
+    const infos: string[] = [];
     const result = await handles.workerDataContext.withDataContext(ctx, (db) =>
       runGoogleSync(db, {
         getFreshAccessToken: async () => "tok",
@@ -280,6 +282,10 @@ describe("runGoogleSync email orchestration", () => {
           runChat: async () => {
             throw new EmailExtractNeedsConfigurationError();
           }
+        },
+        logger: {
+          warn: (_data, message) => warnings.push(message),
+          info: (_data, message) => infos.push(message)
         }
       })
     );
@@ -289,6 +295,8 @@ describe("runGoogleSync email orchestration", () => {
       errors: ["email-needs-config"],
       truncated: false
     });
+    expect(warnings).not.toContain("google-sync email failed");
+    expect(infos).toContain("google-sync email extraction unavailable; continuing metadata-only");
   });
 
   it("ingests a representative current-day mailbox as sequential compact classifications", async () => {

@@ -345,24 +345,37 @@ export async function runGoogleEmailPhase(
     let processed = 0;
     const batches = pending.map((message) => [message]);
     for (const [batchIndex, batch] of batches.entries()) {
-      const batchResults = await extractEmailSignalsBatch(batch, context.deps.emailExtractDeps, {
-        priority: phase === "email-current-day" ? "foreground" : "background",
-        scope: extractionScope,
-        closeScope: batchIndex === batches.length - 1,
-        telemetry: (telemetryBatchIndex, telemetryBatchSize) => ({
-          emit: (event) =>
-            context.logger.info(
-              {
-                stage: "email-extraction",
-                jobId: context.runId,
-                batchIndex: telemetryBatchIndex,
-                batchSize: telemetryBatchSize,
-                ...event
-              },
-              "google-sync email extraction telemetry"
-            )
-        })
-      });
+      let batchResults: EmailExtractResult[];
+      try {
+        batchResults = await extractEmailSignalsBatch(batch, context.deps.emailExtractDeps, {
+          priority: phase === "email-current-day" ? "foreground" : "background",
+          scope: extractionScope,
+          closeScope: batchIndex === batches.length - 1,
+          telemetry: (telemetryBatchIndex, telemetryBatchSize) => ({
+            emit: (event) =>
+              context.logger.info(
+                {
+                  stage: "email-extraction",
+                  jobId: context.runId,
+                  batchIndex: telemetryBatchIndex,
+                  batchSize: telemetryBatchSize,
+                  ...event
+                },
+                "google-sync email extraction telemetry"
+              )
+          })
+        });
+      } catch (error) {
+        if (!(error instanceof EmailExtractNeedsConfigurationError)) throw error;
+        if (!context.progress.errors.includes("email-needs-config")) {
+          context.progress.errors.push("email-needs-config");
+        }
+        context.logger.info(
+          { stage: "email-extraction", name: error.name },
+          "google-sync email extraction unavailable; continuing metadata-only"
+        );
+        break;
+      }
       const projectedKeys: string[] = [];
       for (let index = 0; index < batch.length; index += 1) {
         try {
@@ -408,14 +421,20 @@ export async function runGoogleEmailPhase(
     }
     const errorLabel =
       error instanceof EmailExtractNeedsConfigurationError ? "email-needs-config" : "email-error";
-    context.logger.warn(
-      {
-        stage: "email",
-        name: (error as Error).name,
-        status: (error as { statusCode?: number }).statusCode ?? null
-      },
-      "google-sync email failed"
-    );
+    const isNeedsConfig = error instanceof EmailExtractNeedsConfigurationError;
+    const logData = {
+      stage: "email",
+      name: (error as Error).name,
+      status: (error as { statusCode?: number }).statusCode ?? null
+    };
+    if (isNeedsConfig) {
+      context.logger.info(
+        logData,
+        "google-sync email extraction unavailable; continuing metadata-only"
+      );
+    } else {
+      context.logger.warn(logData, "google-sync email failed");
+    }
     if (!context.progress.errors.includes(errorLabel)) context.progress.errors.push(errorLabel);
   }
   return { nextCursor, retry: false };
