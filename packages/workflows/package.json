@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@moss/db": "workspace:*",
+    "@moss/jobs": "workspace:*",
     "@moss/module-sdk": "workspace:*",
     "@moss/shared": "workspace:*",
     "fastify": "^5.8.5",

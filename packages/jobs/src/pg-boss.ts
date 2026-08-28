@@ -130,7 +130,9 @@ export const ALLOWED_PAYLOAD_KEYS: ReadonlySet<string> = new Set([
   "escalations",
   "errors",
   "buildId",
-  "step"
+  "step",
+  "workflowRunId",
+  "stepRunId"
 ]);
 
 export function assertMetadataOnlyPayload(payload: unknown): void {

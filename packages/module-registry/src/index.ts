@@ -26,7 +26,12 @@ import {
   SYNC_PERSON_MEMORY_QUEUE
 } from "@moss/people";
 import { getVaultBaseDir, VaultContextRunner } from "@moss/vault";
-import { workflowsModuleManifest, workflowsModuleSqlMigrationDirectory } from "@moss/workflows";
+import {
+  workflowsModuleManifest,
+  workflowsModuleSqlMigrationDirectory,
+  WORKFLOW_QUEUE_DEFINITIONS,
+  registerWorkflowWorkers
+} from "@moss/workflows";
 import { registerWorkflowsRoutes } from "@moss/workflows/routes";
 import { registerCommitmentsRoutes } from "@moss/commitments/routes";
 import { registerCommitmentExtractionWorker } from "@moss/commitments/workers";
@@ -2198,16 +2203,20 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     }
   },
   {
-    // Durable workflow run state (#2013). Registered with no workers and no queues on
-    // purpose: this slice owns the store and the owner-scoped endpoints only. The step
-    // worker and its queues arrive with #2014.
+    // Durable workflow run state and step worker (#2013/#2014).
     manifest: workflowsModuleManifest,
     sqlMigrationDirectories: [workflowsModuleSqlMigrationDirectory],
-    queueDefinitions: [],
+    queueDefinitions: WORKFLOW_QUEUE_DEFINITIONS,
     registerRoutes: (server, deps) =>
       registerWorkflowsRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
         dataContext: deps.dataContext
+      }),
+    registerWorkers: (boss, deps) =>
+      registerWorkflowWorkers(boss, {
+        boss,
+        dataContext: deps.dataContext,
+        registry: getWorkflowRegistry()
       })
   },
   {

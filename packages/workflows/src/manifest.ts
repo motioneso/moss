@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import type { MossModuleManifest } from "@moss/module-sdk";
+import { WORKFLOW_STEP_DEADLETTER_QUEUE, WORKFLOW_STEP_EXECUTE_QUEUE } from "./jobs.js";
 
 export const WORKFLOWS_MODULE_ID = "workflows";
 
@@ -27,6 +28,10 @@ export const workflowsModuleManifest = {
       "app.workflow_artifacts"
     ]
   },
+  jobs: [
+    { queueName: WORKFLOW_STEP_EXECUTE_QUEUE, metadataOnly: true },
+    { queueName: WORKFLOW_STEP_DEADLETTER_QUEUE, metadataOnly: true }
+  ],
   permissions: [
     {
       id: "workflows.view",
