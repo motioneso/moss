@@ -21,6 +21,7 @@ import pg from "pg";
 import type { Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
 
+import { createApiServer } from "../../apps/api/src/server.js";
 import {
   AiRepository,
   AssistantToolGateway,
@@ -38,6 +39,12 @@ import {
   registerNewsJobWorkers
 } from "@moss/news";
 import { settingsModuleManifest } from "@moss/settings";
+import type { ChatEngineFactory } from "@moss/module-registry";
+import type {
+  CliChatEngine,
+  EngineLaunchOpts,
+  TranscriptRecord
+} from "../../packages/chat/src/live/types.js";
 
 import { configureNewsChatTools } from "../../packages/news/src/chat-tools.js";
 import { createPreviewStore } from "../../packages/news/src/discovery/preview-store.js";
@@ -49,6 +56,81 @@ import {
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 const { Client } = pg;
+
+type McpResponse = {
+  readonly result?: {
+    readonly content?: readonly { readonly text?: string }[];
+    readonly isError?: boolean;
+  };
+};
+
+class DeterministicDiagnosticsEngine implements CliChatEngine {
+  private launchOptions: EngineLaunchOpts | undefined;
+  private pending: TranscriptRecord[] = [];
+
+  constructor(
+    public readonly provider: CliChatEngine["provider"],
+    private readonly invokeMcp: (
+      token: string,
+      request: { readonly name: string; readonly arguments: Record<string, unknown> }
+    ) => Promise<McpResponse>
+  ) {}
+
+  async launch(options: EngineLaunchOpts): Promise<{ offset: number }> {
+    this.launchOptions = options;
+    return { offset: 0 };
+  }
+
+  async submit(text: string): Promise<void> {
+    const toolName = text.includes("UAT-2032-refresh")
+      ? "news.refreshNews"
+      : "settings.platformDiagnostics";
+    const response = await this.invokeMcp(this.launchOptions?.mcpToken ?? "", {
+      name: toolName,
+      arguments: toolName === "settings.platformDiagnostics" ? { module: "news" } : {}
+    });
+    const content = response.result?.content?.[0]?.text;
+    if (response.result?.isError || !content) throw new Error(`MCP ${toolName} failed`);
+
+    if (toolName === "news.refreshNews") {
+      this.pending = [
+        { kind: "tool", text: toolName, toolName },
+        { kind: "reply", text: "Refresh accepted and queued; it has not completed." }
+      ];
+      return;
+    }
+
+    const report = JSON.parse(content) as {
+      readonly modules?: readonly {
+        readonly status?: string;
+        readonly facts?: Record<string, unknown>;
+      }[];
+    };
+    const facts = report.modules?.[0]?.facts ?? {};
+    this.pending = [
+      { kind: "tool", text: toolName, toolName },
+      {
+        kind: "reply",
+        text: `News is ${report.modules?.[0]?.status ?? "unknown"}; last success ${String(facts.lastSuccessAt)}, latest attempt ${String(facts.lastAttemptAt)}, ${String(facts.itemCount)} items.`
+      }
+    ];
+  }
+
+  async readNew(afterOffset: number) {
+    if (this.pending.length === 0) return { records: [], offset: afterOffset, complete: false };
+    const records = this.pending;
+    this.pending = [];
+    return { records, offset: afterOffset + records.length, complete: true };
+  }
+
+  async isAlive(): Promise<boolean> {
+    return true;
+  }
+
+  async kill(): Promise<void> {}
+
+  async interrupt(): Promise<void> {}
+}
 
 const feed = `<?xml version="1.0"?><rss><channel><title>Example News</title><item><title>Verified publisher headline</title><link>https://example.com/story</link><pubDate>Fri, 11 Jul 2026 12:00:00 GMT</pubDate></item></channel></rss>`;
 
@@ -248,6 +330,29 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
     }
   }
 
+  async function waitForPendingAction(ownerUserId: string, toolName: string): Promise<string> {
+    const repository = new AiRepository();
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const actions = await appContext.withDataContext(
+        { actorUserId: ownerUserId, requestId: `wait-pending-${attempt}` },
+        (db) => repository.listAssistantActions(db)
+      );
+      const action = actions.find(
+        (entry) => entry.status === "pending" && entry.tool_name === toolName
+      );
+      if (action) return action.id;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error(`no pending action request appeared for ${toolName}`);
+  }
+
+  async function listActorAudits(ownerUserId: string): Promise<readonly unknown[]> {
+    return appContext.withDataContext(
+      { actorUserId: ownerUserId, requestId: `list-audits-${ownerUserId}` },
+      (db) => new AiRepository().listActionAuditLog(db, { since: new Date(0), limit: 100 })
+    );
+  }
+
   it("previewSource runs unconfirmed (read risk) and returns verified candidates", async () => {
     const { gateway, emitted, mint } = makeGateway();
     const token = mint(ids.userA, "news-chat-preview");
@@ -370,6 +475,143 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
       itemCount: expect.any(Number)
     });
     expect(secondPayload.modules[0]?.facts?.lastSuccessAt).not.toBe(firstSuccessAt);
+
+    expect(await listActorAudits(ids.userB)).toEqual([]);
+  }, 60_000);
+
+  it("carries a real assistant conversation through chat, MCP, confirmation, and the worker", async () => {
+    configureChatTools(appBoss);
+    const initialRequestId = "diagnostics-chat-initial-request";
+    await appContext.withDataContext(
+      { actorUserId: ids.userA, requestId: initialRequestId },
+      (db) => newsRepository.bumpRefreshRequest(db)
+    );
+    await enqueueNewsRefresh(appBoss, ids.userA);
+    await waitForRefreshSuccess("diagnostics-chat-initial-wait");
+
+    const serverRef: { current?: ReturnType<typeof createApiServer> } = {};
+    const engineFactory: ChatEngineFactory = (provider) =>
+      new DeterministicDiagnosticsEngine(provider, async (token, request) => {
+        const server = serverRef.current;
+        if (!server) throw new Error("chat test server is not ready");
+        const response = await server.inject({
+          method: "POST",
+          url: "/api/mcp",
+          headers: { authorization: `Bearer ${token}` },
+          payload: {
+            jsonrpc: "2.0",
+            id: 1,
+            method: "tools/call",
+            params: request
+          }
+        });
+        return response.json<McpResponse>();
+      });
+    const server = createApiServer({
+      appDb,
+      workerDb,
+      boss: appBoss,
+      logger: false,
+      chatEngineFactory: engineFactory,
+      apiServerConfig: {
+        host: "127.0.0.1",
+        port: 0,
+        mcpServerUrl: "http://test.invalid/api/mcp",
+        externalModulesDir: "/tmp"
+      }
+    });
+    serverRef.current = server;
+    await server.ready();
+
+    try {
+      const provider = await server.inject({
+        method: "POST",
+        url: "/api/ai/providers",
+        headers: { authorization: `Bearer ${ids.sessionAdmin}` },
+        payload: {
+          providerKind: "anthropic",
+          displayName: "Diagnostics test provider",
+          authMethod: "cli"
+        }
+      });
+      expect(provider.statusCode).toBe(201);
+      const providerId = provider.json<{ provider: { id: string } }>().provider.id;
+      const model = await server.inject({
+        method: "POST",
+        url: "/api/ai/models",
+        headers: { authorization: `Bearer ${ids.sessionAdmin}` },
+        payload: {
+          providerConfigId: providerId,
+          providerModelId: "diagnostics-test-model",
+          displayName: "Diagnostics test model",
+          capabilities: ["chat"]
+        }
+      });
+      expect(model.statusCode).toBe(201);
+
+      const first = await server.inject({
+        method: "POST",
+        url: "/api/chat/turn",
+        headers: { authorization: `Bearer ${ids.sessionA}` },
+        payload: { text: "UAT-2032-diagnose: is my news fresh?" }
+      });
+      expect(first.statusCode).toBe(200);
+      const firstReply = first.json<{ reply: string }>().reply;
+      expect(firstReply).toMatch(/last success .*latest attempt .*items/i);
+      expect(firstReply).not.toMatch(/Refresh test item|opaque-test-fingerprint|secret/i);
+
+      const before = await appContext.withDataContext(
+        { actorUserId: ids.userA, requestId: "diagnostics-chat-before" },
+        (db) => newsRepository.readRefreshState(db)
+      );
+      const refresh = server.inject({
+        method: "POST",
+        url: "/api/chat/turn",
+        headers: { authorization: `Bearer ${ids.sessionA}` },
+        payload: { text: "UAT-2032-refresh: refresh my news" }
+      });
+      const actionId = await waitForPendingAction(ids.userA, "news.refreshNews");
+      const pendingState = await appContext.withDataContext(
+        { actorUserId: ids.userA, requestId: "diagnostics-chat-pending" },
+        (db) => newsRepository.readRefreshState(db)
+      );
+      expect(pendingState.lastRequestedAt).toEqual(before.lastRequestedAt);
+      const resolution = await server.inject({
+        method: "POST",
+        url: `/api/chat/action-requests/${actionId}/resolve`,
+        headers: { authorization: `Bearer ${ids.sessionA}` },
+        payload: { status: "confirmed" }
+      });
+      expect(resolution.statusCode).toBe(204);
+      const refreshResponse = await refresh;
+      expect(refreshResponse.statusCode).toBe(200);
+      expect(refreshResponse.json<{ reply: string }>().reply).toMatch(/accepted and queued/i);
+      expect(refreshResponse.json<{ reply: string }>().reply).not.toMatch(/complete/i);
+
+      await waitForRefreshSuccess("diagnostics-chat-refresh-wait");
+      const recheck = await server.inject({
+        method: "POST",
+        url: "/api/chat/turn",
+        headers: { authorization: `Bearer ${ids.sessionA}` },
+        payload: { text: "UAT-2032-recheck: is my news current now?" }
+      });
+      expect(recheck.statusCode).toBe(200);
+      expect(recheck.json<{ reply: string }>().reply).toMatch(
+        /last success .*latest attempt .*items/i
+      );
+
+      const other = await server.inject({
+        method: "POST",
+        url: "/api/chat/turn",
+        headers: { authorization: `Bearer ${ids.sessionB}` },
+        payload: { text: "UAT-2032-diagnose: is my news fresh?" }
+      });
+      expect(other.statusCode).toBe(200);
+      expect(other.json<{ reply: string }>().reply).toMatch(/null.*null.*0 items/i);
+      expect(await listActorAudits(ids.userB)).toEqual([]);
+    } finally {
+      await server.close();
+    }
   }, 60_000);
 
   it("confirmSource is confirm-gated: nothing executes until the owner confirms, then row + audit", async () => {
