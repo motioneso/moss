@@ -481,6 +481,11 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
 
   it("carries a real assistant conversation through chat, MCP, confirmation, and the worker", async () => {
     configureChatTools(appBoss);
+    await appContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "diagnostics-chat-policy" },
+      (db) =>
+        new AiRepository().setActionPolicy(db, "news", "news_personalization", "ask_each_time")
+    );
     const initialRequestId = "diagnostics-chat-initial-request";
     await appContext.withDataContext(
       { actorUserId: ids.userA, requestId: initialRequestId },
