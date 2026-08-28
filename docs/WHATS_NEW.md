@@ -23,13 +23,15 @@
 
 - **Settings are closer to where you need them.** Finance, Job Search, and News pages now link to their own settings, so changing a connection or preference takes fewer clicks. [PR #1772](https://github.com/motioneso/moss/pull/1772)
 
-## Edge channel — 2026-08-27
+## Edge channel
 
 Edge builds include the stable history below plus the user-facing changes already available in
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
-### Added
+### 2026-08-27
+
+#### Added
 
 - **News story feedback.** You can now ask News for more or less of a story and manage those choices in News Settings. [PR #2049](https://github.com/motioneso/moss/pull/2049)
 - **Sign in to Gemini from Settings.** You can now sign in to Google's Gemini command-line tool from Settings or the first-run wizard, the same way you already sign in to Claude and Codex. [PR #2042](https://github.com/motioneso/moss/pull/2042)
@@ -43,6 +45,11 @@ feature that is not present in the image you are running.
 - **Throw away a draft module.** If a module Moss built for you is not what you wanted, you can now delete it from the draft banner. [PR #1942](https://github.com/motioneso/moss/pull/1942)
 - **Ask Moss for a new module right in chat.** Tell Moss what you want a new module to do and it will come back with a plan you can read and approve before any work starts. [PR #1940](https://github.com/motioneso/moss/pull/1940)
 - **Fleet launcher and overnight viewer.** Start the fleet from one terminal screen, follow its lanes, pause work safely, and preview a rescue before starting it. [PR #1911](https://github.com/motioneso/moss/pull/1911)
+
+### 2026-08-22
+
+#### Added
+
 - **Choose your weather place and temperature units.** You can choose the place used for your weather and switch temperatures between Celsius and Fahrenheit. [PR #1826](https://github.com/motioneso/moss/pull/1826)
 - **Custom sports news sources.** You can now add your own sports news sources by URL in Sports settings, preview what Moss found, and assign them to your followed teams and leagues. [PR #1825](https://github.com/motioneso/moss/pull/1825)
 - **Workshop page.** Admins now have a Workshop page showing which modules Moss is building, has finished, or has made live, with anything waiting on a decision from you called out first. [PR #1804](https://github.com/motioneso/moss/pull/1804)
@@ -64,7 +71,9 @@ feature that is not present in the image you are running.
 - **Approval-card summaries.** Action cards now prefer a module's user-facing action label when
   one is available. [PR #1492](https://github.com/motioneso/moss/pull/1492)
 
-### Fixed
+### 2026-08-27
+
+#### Fixed
 
 - **Workshop build activity.** Workshop builds now keep moving after they start and show the last time the builder was confirmed active. [PR #2009](https://github.com/motioneso/moss/pull/2009)
 - **ESPN images and stale page reloads.** Some ESPN game and team images were being blocked from loading, and a browser holding an old version of the page could get a confusing blank response instead of a clean "not found" when trying to reload; both are fixed. [PR #1996](https://github.com/motioneso/moss/pull/1996)
@@ -80,6 +89,11 @@ feature that is not present in the image you are running.
 - **Polished everyday app screens.** Settings, tasks, navigation, notifications, and several module pages now use clearer labels, cleaner layouts, and more consistent controls. [PR #1938](https://github.com/motioneso/moss/pull/1938)
 - **Latest releases appear first.** Recently Released now shows the newest Edge updates at the top, ahead of older weekly history. [PR #1908](https://github.com/motioneso/moss/pull/1908)
 - **Clearer error messages when a built-in tool's connection breaks.** When a built-in assistant tool (like note search) fails because it can't reach something it depends on, the chat now shows a short, specific reason instead of a generic error. Note search also no longer fails outright when the built-in text-matching engine is in use. [PR #1892](https://github.com/motioneso/moss/pull/1892)
+
+### 2026-08-22
+
+#### Fixed
+
 - **Photos and logos recover on their own.** A news photo or sports logo that failed to load because of a brief network hiccup now recovers on its own, instead of staying broken until you refresh the page. [PR #1874](https://github.com/motioneso/moss/pull/1874)
 - **Job board shows a count when some roles can't be displayed.** The job-search board now tells you if it couldn't show some roles instead of leaving them out with no explanation. [PR #1844](https://github.com/motioneso/moss/pull/1844)
 - **Activity log now shows failed actions as failed.** When the assistant tried to do something and the relevant app said it could not (for example, updating a task that no longer exists), the activity log used to record it as a success. It now correctly shows it as failed. [PR #1654](https://github.com/motioneso/moss/pull/1654)
@@ -115,11 +129,18 @@ feature that is not present in the image you are running.
 - **Chat availability and approval recovery.** Chat now waits for the selected model route and
   restores approval cards reliably after the drawer is reopened. [PR #1482](https://github.com/motioneso/moss/pull/1482) · [PR #1494](https://github.com/motioneso/moss/pull/1494)
 
-### Changed
+### 2026-08-27
+
+#### Changed
 
 - **Workshop page shows your real builds.** The Workshop page now shows your actual in-progress and finished module builds instead of a placeholder. [PR #1948](https://github.com/motioneso/moss/pull/1948)
 - **One image for Sports source previews.** Moss now includes Sports public-source previews in its existing download while keeping browser discovery isolated. [PR #1947](https://github.com/motioneso/moss/pull/1947)
 - **Weather chip now shows a 5-day forecast with hover detail.** The weather chip at the top of the Today page now shows a 5-day forecast strip instead of just current conditions. Hover or tab to any day to see humidity, dew point, wind, and high/low, and click a day to open the full forecast for your location in a new tab. [PR #1939](https://github.com/motioneso/moss/pull/1939)
+
+### 2026-08-22
+
+#### Changed
+
 - **A new look for the weekly What's New page.** The weekly summary of what shipped now has a new design and is published again every Friday morning. [PR #1830](https://github.com/motioneso/moss/pull/1830)
 - **The Food page uses the full width.** The Food page now lines up with the Finance and Job Search pages instead of sitting in a narrower column. [PR #1793](https://github.com/motioneso/moss/pull/1793)
 

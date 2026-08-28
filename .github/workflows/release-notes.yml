@@ -1,0 +1,93 @@
+# Publishes each merged pull request's usable release note through a normal pull request.
+# The workflow never writes main directly; the serial branch update keeps queued merges intact.
+name: release-notes
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-notes
+  cancel-in-progress: false
+
+jobs:
+  append:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Check release-note transformer
+        run: node scripts/append-release-note.mjs --self-test
+
+      - name: Update release-note branch
+        id: update
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          branch=automation/release-notes
+          if git ls-remote --exit-code origin "refs/heads/$branch" >/dev/null 2>&1; then
+            git fetch origin "$branch"
+            git switch --create "$branch" --track "origin/$branch"
+            git merge --no-edit origin/main
+          else
+            git switch --create "$branch" origin/main
+          fi
+
+          node scripts/append-release-note.mjs
+          if git diff --quiet -- docs/WHATS_NEW.md; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No usable release note or note already present."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/WHATS_NEW.md
+          git commit -m "docs(release-notes): append note for PR #$PR_NUMBER"
+          git push origin "$branch"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update release-note pull request
+        if: steps.update.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          branch=automation/release-notes
+          pull_request=$(gh pr list --repo "$REPOSITORY" --base main --head "$branch" --state open --json number --jq '.[0].number')
+          if [ -n "$pull_request" ]; then
+            echo "Updated release-note pull request #$pull_request."
+            exit 0
+          fi
+
+          gh pr create \
+            --repo "$REPOSITORY" \
+            --base main \
+            --head "$branch" \
+            --title "docs(release-notes): publish merged notes" \
+            --body "Automated release-note update from merged pull requests. This branch is intentionally merged through the protected main pull-request path."
