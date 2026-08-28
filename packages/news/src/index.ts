@@ -6,6 +6,11 @@ export type { NewsRoutesDependencies, NewsPrefsWriter } from "./routes.js";
 // #2005: the two seams the composition root must satisfy, plus the repository so the
 // integration tests can exercise the real read/write path.
 export type { NewsCredentialCipherPort } from "./credential-cipher-port.js";
+export type {
+  NewsStoryFeedbackPort,
+  NewsStorySurface,
+  NewsStoryTargetRow
+} from "./story-feedback-port.js";
 export {
   NewsCredentialRepository,
   type NewsCredentialStatusRow,

@@ -129,7 +129,12 @@ describe("story relevance feedback", () => {
       moduleId: "news",
       canonicalLink: "https://news.example.com/story/repeat-tap"
     });
-    const { server } = await buildFeedbackTestServer(appDb);
+    const changes: string[] = [];
+    const { server } = await buildFeedbackTestServer(appDb, undefined, {
+      onStoryPreferenceChanged: (input) => {
+        changes.push(input.change);
+      }
+    });
     try {
       const first = await server.inject({
         method: "POST",
@@ -147,6 +152,7 @@ describe("story relevance feedback", () => {
       expect(second.statusCode).toBe(200);
       expect(second.json().feedback.id).toBe(first.json().feedback.id);
       expect(await storySignalRows(appDb, targetRef)).toHaveLength(1);
+      expect(changes).toEqual(["created", "created"]);
     } finally {
       await server.close();
     }

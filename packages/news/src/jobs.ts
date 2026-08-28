@@ -19,6 +19,7 @@ import {
 import type { NewsAiPort, NewsSafeFetchPort, NewsWebSearchPort } from "./discovery/ports.js";
 import { NEWS_MODULE_ID } from "./module-id.js";
 import { NewsPersonalizationRepository } from "./personalization-repository.js";
+import type { NewsStoryFeedbackPort } from "./story-feedback-port.js";
 import { NewsPrefsRepository } from "./repository.js";
 import { revalidateOwnerNews, type NewsRevalidationLogger } from "./revalidation.js";
 import { NEWS_CATALOG } from "./source/catalog.js";
@@ -104,6 +105,11 @@ export async function registerNewsJobWorkers(
     // composition root always passes one. Pick keeps the seam minimal and stubbable.
     readonly notificationsRepository?: Pick<NotificationsRepository, "create">;
     readonly revalidationLogger?: NewsRevalidationLogger;
+    /**
+     * #2018: story usefulness feedback. Optional so existing callers without it keep working;
+     * the composition root always passes one.
+     */
+    readonly storyFeedback?: NewsStoryFeedbackPort;
   }
 ): Promise<string[]> {
   const repository = deps.repository ?? new NewsPersonalizationRepository();
@@ -130,9 +136,10 @@ export async function registerNewsJobWorkers(
                 repo: repository,
                 prefs,
                 catalog: NEWS_CATALOG,
-                logger: deps.logger
+                logger: deps.logger,
+                ...(deps.storyFeedback ? { storyFeedback: deps.storyFeedback } : {})
               },
-              { now: new Date(), generation }
+              { now: new Date(), generation, ownerUserId: accessContext.actorUserId }
             );
             if (result.outcome === "stale") return { outcome: "stale" as const };
 

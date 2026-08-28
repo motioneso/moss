@@ -295,7 +295,10 @@ import {
   registerNewsJobWorkers,
   registerNewsRoutes,
   createEmptyNewsPublisherConnectionPort,
-  type NewsRoutesDependencies
+  enqueueNewsRefresh,
+  type NewsAiPort,
+  type NewsRoutesDependencies,
+  type NewsStoryFeedbackPort
 } from "@moss/news";
 import { assertValidFetchHosts, createDatasetClient, DatasetCache } from "@moss/datasets";
 import {
@@ -310,8 +313,11 @@ import {
 } from "@moss/notes";
 import {
   FeedbackTargetVerifierRegistry,
+  buildStoryTargetContext,
   createStoryFeedbackTargetVerifier,
+  createStoryRelevancePolicy,
   registerUsefulnessFeedbackRoutes,
+  storyFeedbackTargetRef,
   usefulnessFeedbackModuleManifest,
   usefulnessFeedbackModuleSqlMigrationDirectory
 } from "@moss/usefulness-feedback";
@@ -823,6 +829,83 @@ function buildUatNewsPreviewOverride(): NewsRoutesDependencies["previewOverride"
           error: { code: "news.add_source.discovery_unavailable", class: "transient" }
         }
       : undefined;
+}
+
+/**
+ * #2018: saving, editing or taking back a story preference reshapes what the owning module
+ * shows, so it asks that module to recompile. Only News acts on it today — Sports attaches its
+ * own refresh in #2019. Several setups run with no queue at all, so a missing queue is a no-op
+ * rather than a failure: a preference is still saved, it just takes effect on the next refresh.
+ *
+ * Exported so the decision can be tested without booting the whole registry.
+ */
+export function buildStoryPreferenceRefresh(
+  boss: PgBoss | null
+): (input: { readonly ownerUserId: string; readonly targetKind: string }) => Promise<void> {
+  return async ({ ownerUserId, targetKind }) => {
+    if (targetKind !== "news_story" || boss === null) return;
+    try {
+      await enqueueNewsRefresh(boss, ownerUserId);
+    } catch {
+      // Saving the preference is still truthful when the optional queue is unavailable. A later
+      // idempotent request calls this callback again, so a transient send failure cannot strand it.
+    }
+  };
+}
+
+/**
+ * #2018: the composition root is the only place News and usefulness feedback meet. News never
+ * imports the feedback package (module isolation, and the reference helper hashes with Node's
+ * crypto, which must stay out of the browser bundle News also ships), so the concrete port is
+ * assembled here and injected into both the News routes and the News workers.
+ */
+function buildNewsStoryFeedbackPort(
+  ai: NewsAiPort,
+  logger?: Pick<FastifyBaseLogger, "info" | "warn">
+): NewsStoryFeedbackPort {
+  const policy = createStoryRelevancePolicy({
+    // #953/provider-agnostic: News hands over the same router-backed port it already uses. The
+    // policy never names a provider or a model.
+    ai,
+    repository: usefulnessFeedbackRepository,
+    // Counts and names only. A reason, a headline, a link or a story reference never reaches here.
+    logger: {
+      info: (fields) => logger?.info(fields, "story relevance"),
+      warn: (fields) => logger?.warn(fields, "story relevance")
+    }
+  });
+  return {
+    storyRef: (canonicalUrl) => storyFeedbackTargetRef("news", canonicalUrl),
+    registerTargets: async (scopedDb, ownerUserId, rows) => {
+      for (const row of rows) {
+        await usefulnessFeedbackRepository.upsertTarget(scopedDb, {
+          ownerUserId,
+          targetKind: "news_story",
+          targetRef: row.storyRef,
+          surface: row.surface,
+          sourceKind: "news",
+          sourceLabel: row.sourceLabel,
+          metadata: buildStoryTargetContext({
+            moduleId: "news",
+            headline: row.headline,
+            sourceLabel: row.sourceLabel,
+            publishedAt: row.publishedAt,
+            topicRef: row.topicRef,
+            hasEditorialEvidence: row.hasEditorialEvidence
+          })
+        });
+      }
+    },
+    recordTargetRegistrationFailure: ({ targetCount }) =>
+      logger?.warn({ event: "news_story_target_registration_failed", targetCount }),
+    applyRelevance: (scopedDb, input) =>
+      policy(scopedDb, {
+        ownerUserId: input.ownerUserId,
+        moduleId: "news",
+        candidates: input.candidates,
+        now: input.now
+      })
+  };
 }
 
 /** Recurring per-user/per-source scheduled check — at most every 30 minutes (spec §7). */
@@ -1748,6 +1831,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         resolveAccessContext: deps.resolveAccessContext,
         registry,
         repository: usefulnessFeedbackRepository,
+        onStoryPreferenceChanged: buildStoryPreferenceRefresh(deps.boss),
         manualMemoryCandidates: new ManualMemoryCandidateService(),
         cardSideEffects: {
           applyDismiss: (scopedDb, _actorUserId, cardId) =>
@@ -1940,6 +2024,12 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         discovery,
         boss: deps.boss,
         previewOverride,
+        // #2018: the overview records the stories it showed, so the feedback API can accept a
+        // preference on one. Nothing else writes those rows.
+        storyFeedback: buildNewsStoryFeedbackPort(
+          discovery.ai,
+          createModuleLogger(server.log, "news")
+        ),
         // #2005: the composition root owns key resolution; News only holds the port.
         credentialCipher: createNewsCredentialCipherPort(),
         // #2005: no reviewed publisher connection exists yet, so every connect attempt
@@ -1967,8 +2057,11 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
       const discovery = buildNewsDiscoveryPorts(
         deps.logger ? createModuleLogger(deps.logger, "news") : undefined
       );
+      const newsLogger = deps.logger ? createModuleLogger(deps.logger, "news") : undefined;
       return registerNewsJobWorkers(boss, deps.dataContext, {
         ...discovery,
+        // #2018: compilation applies the owner's story preferences through this port.
+        storyFeedback: buildNewsStoryFeedbackPort(discovery.ai, newsLogger),
         logger: {
           info: (fields) => deps.logger?.info(fields, "news compilation"),
           warn: (fields) => deps.logger?.warn(fields, "news compilation")

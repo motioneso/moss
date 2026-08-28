@@ -27,6 +27,7 @@ import type {
 } from "./discovery/ports.js";
 import type { NewsCredentialCipherPort } from "./credential-cipher-port.js";
 import type { NewsCredentialStore } from "./credential-repository.js";
+import type { NewsStoryFeedbackPort } from "./story-feedback-port.js";
 import { registerNewsCredentialRoutes } from "./credential-routes.js";
 import { registerNewsImageRoute } from "./image-route.js";
 import {
@@ -98,6 +99,12 @@ export interface NewsRoutesDependencies {
   readonly publisherConnections?: NewsPublisherConnectionPort;
   /** Optional injection point for tests; defaults to a real `NewsCredentialRepository`. */
   readonly credentialRepository?: NewsCredentialStore;
+  /**
+   * #2018: the seam to story usefulness feedback, supplied by the composition root. Optional
+   * because most route tests exercise nothing that needs it; when it is absent the overview
+   * simply records no stories and headlines carry no feedback reference.
+   */
+  readonly storyFeedback?: NewsStoryFeedbackPort;
 }
 
 /** POST /prefs key validation: the key must exist in the catalog for its kind. */
@@ -117,7 +124,8 @@ export function registerNewsRoutes(
     datasetClient: dependencies.datasetClient,
     dataContext: dependencies.dataContext,
     repository,
-    personalization
+    personalization,
+    ...(dependencies.storyFeedback ? { storyFeedback: dependencies.storyFeedback } : {})
   });
 
   server.get("/api/news/catalog", { schema: newsCatalogResponseSchema }, async (request, reply) => {

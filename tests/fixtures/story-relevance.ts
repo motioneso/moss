@@ -35,6 +35,7 @@ export interface StoryRelevanceFixtureStory {
   readonly teamRef: string | null;
   readonly competitionRef: string | null;
   readonly isOpinion: boolean;
+  readonly trustedEditorialEvidence?: readonly string[];
   /** What the evaluator is expected to say about this story. */
   readonly verdict: {
     readonly matched: boolean;
@@ -97,6 +98,7 @@ export const STORY_RELEVANCE_FIXTURE: readonly StoryRelevanceFixtureStory[] = [
       eventEvidence: ["championship_outcome"],
       editorialEvidence: ["source_lead_position"]
     },
+    trustedEditorialEvidence: ["source_lead_position"],
     expectKept: true
   },
   {
@@ -199,6 +201,8 @@ export function newsCandidate(story: StoryRelevanceFixtureStory): StoryRelevance
     publishedAt: story.publishedAt,
     feedPosition: story.feedPosition,
     topicRef: story.topicRef,
+    editorialEvidence:
+      story.trustedEditorialEvidence as StoryRelevanceCandidate["editorialEvidence"],
     isOpinion: story.isOpinion
   };
 }
@@ -213,6 +217,8 @@ export function sportsCandidate(story: StoryRelevanceFixtureStory): StoryRelevan
     feedPosition: story.feedPosition,
     teamRef: story.teamRef,
     competitionRef: story.competitionRef,
+    editorialEvidence:
+      story.trustedEditorialEvidence as StoryRelevanceCandidate["editorialEvidence"],
     isOpinion: story.isOpinion
   };
 }

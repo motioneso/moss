@@ -37,6 +37,25 @@ function keptRefs(result: { kept: readonly StoryRelevanceCandidate[] }): string[
 }
 
 describe("deciding what survives a negative story preference", () => {
+  it("does not trust model editorial claims without server evidence", () => {
+    const candidate = plainCandidate("story:claimed-lead", 1, "2026-08-26T09:00:00.000Z");
+    const result = decideStoryRelevance({
+      candidates: [candidate],
+      rules: [negativeRule("news")],
+      verdicts: [
+        {
+          storyRef: candidate.storyRef,
+          matched: true,
+          ruleStoryRef: REJECTED_STORY_REF,
+          eventEvidence: ["championship_outcome"],
+          editorialEvidence: ["source_lead_position"]
+        }
+      ],
+      now: NOW
+    });
+    expect(result.kept).toEqual([]);
+  });
+
   it("drops an ordinary match and leaves an unrelated story alone", () => {
     const result = decideOverFixture();
     expect(keptRefs(result)).not.toContain("story:ordinary-match");

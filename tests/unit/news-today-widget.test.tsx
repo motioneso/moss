@@ -17,7 +17,8 @@ function story(index: number): NewsHeadline {
     url: `https://example.com/${index}`,
     publishedAt: "2026-07-11T10:00:00.000Z",
     imageUrl: index === 1 ? "/api/news/images/today-1" : null,
-    summary: "Summary"
+    summary: "Summary",
+    feedbackRef: `news:today-${index}`
   };
 }
 

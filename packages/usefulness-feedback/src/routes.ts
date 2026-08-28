@@ -119,7 +119,7 @@ export function registerUsefulnessFeedbackRoutes(
                 input.kind
               );
           if (existing && existing.kind === input.kind) {
-            return { feedback: existing, created: false };
+            return { feedback: existing, created: false, notify: isStory };
           }
 
           const verifier = dependencies.registry.get(input.targetKind);
@@ -204,11 +204,12 @@ export function registerUsefulnessFeedbackRoutes(
                 reasonText: input.reason ?? null
               })
             }),
-            created: true
+            created: true,
+            notify: isStory
           };
         });
 
-        if (isStory && result.created) {
+        if (result.notify) {
           await notifyStoryPreferenceChanged(dependencies, result.feedback, "created");
         }
 

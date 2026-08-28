@@ -25,6 +25,12 @@ describe("story feedback identity helper", () => {
   it("refuses a story with no canonical link", () => {
     expect(() => storyFeedbackTargetRef("news", "   ")).toThrow(/canonical link/);
   });
+
+  it("keeps case-sensitive paths as different story identities", () => {
+    expect(storyFeedbackTargetRef("news", "https://news.example.com/Story")).not.toBe(
+      storyFeedbackTargetRef("news", "https://news.example.com/story")
+    );
+  });
 });
 
 describe("story target context cleaner", () => {

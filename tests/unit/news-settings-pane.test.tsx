@@ -9,6 +9,7 @@ import type {
   NewsPersonalizationAvailabilityDto,
   NewsPrefsResponse
 } from "@moss/shared";
+import type { ListUsefulnessFeedbackResponse } from "@moss/shared";
 
 import { ApiError } from "@moss/module-web-sdk";
 
@@ -121,15 +122,53 @@ function storedTopic(validationStatus: "approved" | "needs_revalidation" | "reje
   };
 }
 
-function render(data: GetNewsPersonalizationResponse): string {
+function render(
+  data: GetNewsPersonalizationResponse,
+  feedback: ListUsefulnessFeedbackResponse = { feedback: [] }
+): string {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(newsQueryKeys.catalog, catalog);
   client.setQueryData(newsQueryKeys.prefs, prefs);
   client.setQueryData(newsQueryKeys.personalization, data);
+  client.setQueryData(newsQueryKeys.feedback, feedback);
   return renderToString(
     createElement(QueryClientProvider, { client }, createElement(NewsSettings))
   );
 }
+
+describe("News story feedback settings (#2018)", () => {
+  it("shows active context and the edit/remove controls", () => {
+    const html = render(personalization(), {
+      feedback: [
+        {
+          id: "feedback-1",
+          ownerUserId: "owner-1",
+          targetKind: "news_story",
+          targetRef: "news:story-1",
+          surface: "news",
+          kind: "less_like_this",
+          sourceKind: "news",
+          sourceLabel: "Example Wire",
+          priorityBand: null,
+          effectKind: null,
+          effectRef: null,
+          metadata: { headline: "A routine story", sourceLabel: "Example Wire" },
+          status: "active",
+          reason: "I do not follow this subject",
+          revision: 1,
+          ruleVersion: 1,
+          createdAt: "2026-08-26T12:00:00.000Z",
+          updatedAt: "2026-08-26T12:00:00.000Z",
+          resolvedAt: null
+        }
+      ]
+    });
+    expect(html).toContain("What shapes your News");
+    expect(html).toContain("A routine story");
+    expect(html).toContain("Edit reason");
+    expect(html).toContain("Remove");
+  });
+});
 
 function renderPersonalizationState(state: "pending" | "error"): string {
   const client = new QueryClient({

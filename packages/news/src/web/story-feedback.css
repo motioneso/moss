@@ -1,0 +1,32 @@
+.nw-feedback__form {
+  width: min(19rem, calc(100vw - 3rem));
+  padding: var(--space-3);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-md);
+}
+
+.nw-feedback__form label {
+  display: block;
+  margin-bottom: var(--space-1);
+}
+
+.nw-feedback__form textarea {
+  display: block;
+  width: 100%;
+  min-height: 4.5rem;
+  resize: vertical;
+}
+
+.nw-feedback__form [role="alert"] {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--danger-fg);
+}
+
+.nw-feedback__actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  margin-top: var(--space-2);
+}
