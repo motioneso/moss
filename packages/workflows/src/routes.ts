@@ -2,13 +2,14 @@
  * Owner-scoped workflow run endpoints (#2013, slice 819-B).
  *
  * There is no route that creates a workflow definition and no route that starts a run:
- * starting is module/server code, per the spec's "API Surface" section. There is no queue
- * dependency here either — resolving an approval records the decision and stops; continuing
- * the run is #2015.
+ * starting is module/server code, per the spec's "API Surface" section. Approval resolution
+ * continues the same owner-scoped step through the metadata-only workflow queue.
  */
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { Type } from "@sinclair/typebox";
 import type { AccessContext, DataContextRunner } from "@moss/db";
+import { enqueueWorkflowStep } from "./jobs.js";
+import type { PgBoss } from "@moss/jobs";
 import type {
   CancelWorkflowRunResponse,
   ListWorkflowRunsResponse,
@@ -32,6 +33,7 @@ import type {
 export interface WorkflowsRouteDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
   readonly dataContext: DataContextRunner;
+  readonly boss: PgBoss;
   readonly repository?: WorkflowsRepository;
 }
 
@@ -126,25 +128,28 @@ export function registerWorkflowsRoutes(
       const { id } = request.params as { id: string };
       const { decision } = request.body as { decision: "approve" | "deny" };
       const accessContext = await deps.resolveAccessContext(request);
-      return deps.dataContext.withDataContext(accessContext, async (scopedDb) => {
-        const result = await repo.resolveApproval(
-          scopedDb,
-          accessContext.actorUserId,
-          id,
-          decision
+      const result = await deps.dataContext.withDataContext(accessContext, (scopedDb) =>
+        repo.resolveApproval(scopedDb, accessContext.actorUserId, id, decision)
+      );
+      if (result.outcome === "not-found") {
+        return reply.code(404).send({ error: "Approval not found" });
+      }
+      if (result.outcome === "not-pending") {
+        return reply.code(409).send({ error: "This approval has already been answered" });
+      }
+
+      const jobId = await enqueueWorkflowStep(deps.boss, result.stepRun);
+      if (jobId) {
+        await deps.dataContext.withDataContext(accessContext, (scopedDb) =>
+          repo.setStepQueueJobId(scopedDb, result.stepRun.id, jobId)
         );
-        if (result.outcome === "not-found") {
-          return reply.code(404).send({ error: "Approval not found" });
-        }
-        if (result.outcome === "not-pending") {
-          return reply.code(409).send({ error: "This approval has already been answered" });
-        }
-        const body: ResolveWorkflowApprovalResponse = {
-          approval: safeApproval(result.approval),
-          step: safeStepRun(result.stepRun)
-        };
-        return body;
-      });
+      }
+
+      const body: ResolveWorkflowApprovalResponse = {
+        approval: safeApproval(result.approval),
+        step: safeStepRun(result.stepRun)
+      };
+      return body;
     }
   );
 }

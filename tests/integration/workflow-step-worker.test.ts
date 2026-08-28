@@ -3,6 +3,7 @@ import { sql, type Kysely } from "kysely";
 import { createPgBossClient, type Job, type PgBoss } from "@moss/jobs";
 
 import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
+import { VaultContextRunner } from "@moss/vault";
 import {
   enqueueWorkflowStep,
   registerWorkflowWorkers,
@@ -19,6 +20,7 @@ import { connectionStrings, ids, resetFoundationDatabase } from "./test-database
 const ownerUserId = ids.userA;
 let db: Kysely<MossDatabase>;
 let dataContext: DataContextRunner;
+const vaultRunner = new VaultContextRunner("/tmp/jarvis-workflows-test-vault");
 
 function job(jobId: string, workflowRunId: string, stepRunId: string): Job<WorkflowStepJobPayload> {
   return {
@@ -103,6 +105,7 @@ describe("workflow step worker", () => {
     const deps = {
       boss,
       dataContext,
+      vaultRunner,
       registry: new Map([[definition.id, { moduleId: "workflows", definition }]])
     };
     const created = await dataContext.withDataContext(
@@ -150,6 +153,115 @@ describe("workflow step worker", () => {
     );
     expect(detail?.run.status).toBe("succeeded");
     expect(detail?.stepRuns.map((step) => step.status)).toEqual(["succeeded", "succeeded"]);
+  });
+
+  it.each([
+    { decision: "approve" as const, branch: "approved" },
+    { decision: "deny" as const, branch: "denied" }
+  ])("suspends and resumes an approval after $decision", async ({ decision, branch }) => {
+    const repo = new WorkflowsRepository();
+    const sent: Array<{ queue: string; data: unknown }> = [];
+    const boss = {
+      send: async (queue: string, data: object) => {
+        sent.push({ queue, data });
+        return `approval-job-${sent.length}`;
+      }
+    } as unknown as PgBoss;
+    let branchCalls = 0;
+    const definition: ModuleWorkflowDefinition = {
+      id: `workflows.approval-${decision}`,
+      displayName: "Approval workflow",
+      version: 1,
+      startStepId: "approval",
+      trigger: "manual",
+      steps: [
+        {
+          id: "approval",
+          kind: "approval",
+          approval: { summary: "Approve this workflow" }
+        },
+        {
+          id: branch,
+          kind: "task",
+          handler: async () => {
+            branchCalls += 1;
+            return { complete: true };
+          }
+        }
+      ],
+      edges: [
+        {
+          from: "approval",
+          to: branch,
+          condition: {
+            type: "resultEquals",
+            field: "status",
+            equals: decision === "approve" ? "approved" : "denied"
+          }
+        }
+      ]
+    };
+    const deps = {
+      boss,
+      dataContext,
+      registry: new Map([[definition.id, { moduleId: "workflows", definition }]]),
+      vaultRunner
+    };
+    const created = await dataContext.withDataContext(
+      { actorUserId: ownerUserId, requestId: `workflow-approval-${decision}` },
+      (scopedDb) =>
+        repo.createRun(scopedDb, {
+          ownerUserId,
+          workflowId: definition.id,
+          workflowVersion: definition.version,
+          moduleId: "workflows",
+          startedBy: "user",
+          startStepId: definition.startStepId
+        })
+    );
+    const initialJobId = await enqueueWorkflowStep(boss, created.firstStepRun);
+    await dataContext.withDataContext(
+      { actorUserId: ownerUserId, requestId: `workflow-approval-${decision}` },
+      (scopedDb) => repo.setStepQueueJobId(scopedDb, created.firstStepRun.id, initialJobId!)
+    );
+
+    await expect(
+      runWorkflowStep(job(initialJobId!, created.run.id, created.firstStepRun.id), deps)
+    ).resolves.toMatchObject({ outcome: "suspended" });
+    const pending = await dataContext.withDataContext(
+      { actorUserId: ownerUserId, requestId: `workflow-approval-${decision}` },
+      (scopedDb) => repo.listApprovals(scopedDb, ownerUserId, created.run.id)
+    );
+    expect(pending).toHaveLength(1);
+    const resolved = await dataContext.withDataContext(
+      { actorUserId: ownerUserId, requestId: `workflow-approval-${decision}` },
+      (scopedDb) => repo.resolveApproval(scopedDb, ownerUserId, pending[0]!.id, decision)
+    );
+    expect(resolved.outcome).toBe("resolved");
+    if (resolved.outcome !== "resolved") throw new Error("Approval did not resolve");
+    const continuationJobId = await enqueueWorkflowStep(boss, resolved.stepRun);
+    expect(sent[1]?.data).toEqual({
+      actorUserId: ownerUserId,
+      workflowRunId: created.run.id,
+      stepRunId: created.firstStepRun.id
+    });
+    await dataContext.withDataContext(
+      { actorUserId: ownerUserId, requestId: `workflow-approval-${decision}` },
+      (scopedDb) => repo.setStepQueueJobId(scopedDb, created.firstStepRun.id, continuationJobId!)
+    );
+    await runWorkflowStep(job(continuationJobId!, created.run.id, created.firstStepRun.id), deps);
+    const branchRuns = await dataContext.withDataContext(
+      { actorUserId: ownerUserId, requestId: `workflow-approval-${decision}` },
+      (scopedDb) => repo.listStepRuns(scopedDb, ownerUserId, created.run.id)
+    );
+    expect(branchCalls).toBe(0);
+    expect(branchRuns).toHaveLength(2);
+    expect(branchRuns[0]?.resultJson).toEqual({
+      status: decision === "approve" ? "approved" : "denied"
+    });
+    expect(branchRuns[1]?.stepId).toBe(branch);
+    await runWorkflowStep(job(`branch-job-${decision}`, created.run.id, branchRuns[1]!.id), deps);
+    expect(branchCalls).toBe(1);
   });
 
   it("claims a step once and reclaims a stale running step", async () => {
@@ -232,6 +344,7 @@ describe("workflow step worker", () => {
       const deps = {
         boss: {} as PgBoss,
         dataContext,
+        vaultRunner,
         registry: new Map([[definition.id, { moduleId: "workflows", definition }]])
       };
       const created = await dataContext.withDataContext(
@@ -274,6 +387,7 @@ describe("workflow step worker", () => {
       await registerWorkflowWorkers(boss, {
         boss,
         dataContext,
+        vaultRunner,
         registry: new Map()
       });
 
@@ -410,6 +524,7 @@ describe("workflow step worker", () => {
     const deps = {
       boss: {} as PgBoss,
       dataContext,
+      vaultRunner,
       registry: new Map([[definition.id, { moduleId: "workflows", definition }]])
     };
     const create = (requestId: string) =>
@@ -467,6 +582,7 @@ describe("workflow step worker", () => {
     const deps = {
       boss,
       dataContext,
+      vaultRunner,
       registry: new Map([[definition.id, { moduleId: "workflows", definition }]])
     };
     const created = await dataContext.withDataContext(

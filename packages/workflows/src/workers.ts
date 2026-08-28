@@ -1,6 +1,7 @@
 import type { DataContextDb, DataContextRunner } from "@moss/db";
 import { toAccessContext, type Job, type PgBoss } from "@moss/jobs";
 import type { ModuleWorkflowDefinition, WorkflowEdgeDefinition } from "@moss/module-sdk";
+import type { VaultContextRunner } from "@moss/vault";
 import {
   assertWorkflowStepJobPayload,
   enqueueWorkflowStep,
@@ -10,6 +11,7 @@ import {
   type WorkflowStepJobPayload
 } from "./jobs.js";
 import { WorkflowsRepository } from "./repository.js";
+import { createWorkflowArtifactPort } from "./artifacts.js";
 import {
   TERMINAL_RUN_STATUSES,
   TERMINAL_STEP_RUN_STATUSES,
@@ -28,6 +30,7 @@ export interface WorkflowWorkerDependencies {
   readonly boss: PgBoss;
   readonly dataContext: DataContextRunner;
   readonly registry: WorkflowRegistryLike;
+  readonly vaultRunner: VaultContextRunner;
   readonly repository?: WorkflowsRepository;
 }
 
@@ -158,14 +161,14 @@ export async function runWorkflowStep(
             deps.dataContext.withDataContext(accessContext, (scopedDb) =>
               repo.getStepResult(scopedDb, actorUserId, workflowRunId, stepId)
             ),
-          artifacts: {
-            write: async () => {
-              throw new Error("Workflow artifacts are not available in this slice");
-            },
-            read: async () => {
-              throw new Error("Workflow artifacts are not available in this slice");
-            }
-          }
+          artifacts: createWorkflowArtifactPort({
+            ownerUserId: actorUserId,
+            workflowRunId,
+            stepRunId,
+            dataContext: deps.dataContext,
+            vaultRunner: deps.vaultRunner,
+            repository: repo
+          })
         });
       } catch (error) {
         result = { error: error instanceof Error ? error.name : "handler_error" };

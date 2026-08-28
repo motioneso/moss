@@ -2268,13 +2268,15 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
     registerRoutes: (server, deps) =>
       registerWorkflowsRoutes(server, {
         resolveAccessContext: deps.resolveAccessContext,
-        dataContext: deps.dataContext
+        dataContext: deps.dataContext,
+        boss: deps.boss
       }),
     registerWorkers: (boss, deps) =>
       registerWorkflowWorkers(boss, {
         boss,
         dataContext: deps.dataContext,
-        registry: getWorkflowRegistry()
+        registry: getWorkflowRegistry(),
+        vaultRunner: new VaultContextRunner(getVaultBaseDir())
       })
   },
   {

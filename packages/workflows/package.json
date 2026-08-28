@@ -15,6 +15,7 @@
     "@moss/jobs": "workspace:*",
     "@moss/module-sdk": "workspace:*",
     "@moss/shared": "workspace:*",
+    "@moss/vault": "workspace:*",
     "fastify": "^5.8.5",
     "kysely": "^0.29.2",
     "@sinclair/typebox": "^0.34.13"

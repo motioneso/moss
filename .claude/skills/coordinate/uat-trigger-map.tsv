@@ -40,6 +40,9 @@ blocking	packages/chat/src/mcp-transport.ts	tests/uat/specs/1883-vault-search-de
 blocking	apps/web/src/chat/**	tests/uat/specs/1089-1090-chat-drawer-private.uat.spec.ts
 blocking	apps/web/src/chat/**	tests/uat/specs/1133-chat-attachments.uat.spec.ts
 blocking	apps/web/src/chat/**	tests/uat/specs/runtime-context.uat.spec.ts
+blocking	apps/web/src/chat/workflow-approval-card.tsx	tests/uat/specs/workflow-approval-card.uat.spec.ts
+blocking	apps/web/src/api/workflows-client.ts	tests/uat/specs/workflow-approval-card.uat.spec.ts
+blocking	packages/workflows/**	tests/uat/specs/workflow-approval-card.uat.spec.ts
 # #1520 is fully test.fixme'd: no UAT seed level configures a chat-capable AI provider (#1121),
 # and a no-model turn never publishes any SSE record (traced in the spec's header), so no real
 # tick -- content-bearing or a bare reconnect -- is observable on this harness. Advisory below;

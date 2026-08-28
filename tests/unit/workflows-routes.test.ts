@@ -11,6 +11,7 @@ import Fastify from "fastify";
 import { describe, expect, it } from "vitest";
 
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
+import type { PgBoss } from "@moss/jobs";
 
 import {
   registerWorkflowsRoutes,
@@ -118,9 +119,10 @@ type FakeRepo = Partial<{
   getRunDetail: WorkflowsRepository["getRunDetail"];
   cancelRun: WorkflowsRepository["cancelRun"];
   resolveApproval: WorkflowsRepository["resolveApproval"];
+  setStepQueueJobId: WorkflowsRepository["setStepQueueJobId"];
 }>;
 
-function buildApp(repo: FakeRepo) {
+function buildApp(repo: FakeRepo, boss: PgBoss = {} as PgBoss) {
   const app = Fastify();
   const deps: WorkflowsRouteDependencies = {
     resolveAccessContext: async (): Promise<AccessContext> =>
@@ -129,6 +131,7 @@ function buildApp(repo: FakeRepo) {
       withDataContext: async <T>(_ac: AccessContext, work: (db: DataContextDb) => Promise<T>) =>
         work({} as DataContextDb)
     } as unknown as DataContextRunner,
+    boss,
     repository: repo as unknown as WorkflowsRepository
   };
   registerWorkflowsRoutes(app, deps);
@@ -251,20 +254,37 @@ describe("workflow run endpoints", () => {
     expect(res.json()).toEqual({ error: "Workflow run not found" });
   });
 
-  it("records an approval decision and returns the step without its payloads", async () => {
-    const app = buildApp({
-      resolveApproval: async () => ({
-        outcome: "resolved",
-        approval: makeApproval({ status: "approved", resolvedByUserId: OWNER_ID }),
-        stepRun: makeStepRun({ status: "queued", queueJobId: null, suspendedAt: null })
-      })
-    });
+  it.each([
+    { decision: "approve" as const, status: "approved" as const },
+    { decision: "deny" as const, status: "denied" as const }
+  ])("records a $decision and queues one owner-only continuation", async ({ decision, status }) => {
+    const sent: Array<{ queue: string; data: unknown }> = [];
+    const app = buildApp(
+      {
+        resolveApproval: async () => ({
+          outcome: "resolved",
+          approval: makeApproval({ status, resolvedByUserId: OWNER_ID }),
+          stepRun: makeStepRun({ status: "queued", queueJobId: null, suspendedAt: null })
+        }),
+        setStepQueueJobId: async (_scopedDb, stepRunId, jobId) => {
+          expect(stepRunId).toBe(STEP_RUN_ID);
+          expect(jobId).toBe("continuation-job");
+          return makeStepRun({ status: "queued", queueJobId: jobId });
+        }
+      },
+      {
+        send: async (queue: string, data: object | null | undefined, _options?: unknown) => {
+          sent.push({ queue, data });
+          return "continuation-job";
+        }
+      } as unknown as PgBoss
+    );
     await app.ready();
 
     const res = await app.inject({
       method: "POST",
       url: `/api/workflows/approvals/${APPROVAL_ID}/resolve`,
-      payload: { decision: "approve" }
+      payload: { decision }
     });
 
     expect(res.statusCode).toBe(200);
@@ -272,8 +292,14 @@ describe("workflow run endpoints", () => {
       approval: Record<string, unknown>;
       step: Record<string, unknown>;
     };
-    expect(body.approval.status).toBe("approved");
+    expect(body.approval.status).toBe(status);
     expect(body.step.status).toBe("queued");
+    expect(sent).toEqual([
+      {
+        queue: "workflow.step.execute",
+        data: { actorUserId: OWNER_ID, workflowRunId: RUN_ID, stepRunId: STEP_RUN_ID }
+      }
+    ]);
     expect(res.body).not.toContain(SECRET_APPROVAL_DETAIL);
     expect(res.body).not.toContain(SECRET_STEP_RESULT);
   });
