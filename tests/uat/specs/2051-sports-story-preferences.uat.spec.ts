@@ -168,6 +168,17 @@ test("edits and removes a Less like this preference in Sports Settings", async (
   await expect(updatedRow).toHaveCount(0);
   console.log("[live proof] Sports Settings edited and removed the preference");
 
+  const restoredSportsResponse = page.waitForResponse(isSportsOverview);
+  await page.goto(`${requireBaseURL()}/sports`);
+  const restoredSports = (await (await restoredSportsResponse).json()) as SportsOverview;
+  expect(restoredSports.topStories.some((story) => story.storyRef === sportsStory!.storyRef)).toBe(
+    true
+  );
+  await expect(
+    page.locator(".sp-hero__link").filter({ hasText: sportsStory!.title })
+  ).toBeVisible();
+  console.log("[live proof] removing the Sports preference restored story eligibility");
+
   const todayBefore = await openTodayWidget(page);
   const todayStory = todayBefore.topStories[0];
   expect(todayStory?.storyRef).toBeTruthy();
