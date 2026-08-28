@@ -46,25 +46,54 @@ async function bringUpRealModel(page: Page): Promise<void> {
 
   const deadline = Date.now() + MODEL_DISCOVERY_DEADLINE_MS;
   let interval = POLL_INITIAL_INTERVAL_MS;
-  let lastModels: unknown = null;
+  let lastModels: readonly {
+    providerConfigId?: string;
+    providerKind?: string;
+    status: string;
+    capabilities: readonly string[];
+  }[] = [];
   while (Date.now() < deadline) {
     const response = await page.request.get("/api/ai/models");
     expect(response.ok(), `models -> ${response.status()}`).toBeTruthy();
     const body = (await response.json()) as {
-      models?: readonly { status: string; capabilities: readonly string[] }[];
+      models?: readonly {
+        providerConfigId?: string;
+        providerKind?: string;
+        status: string;
+        capabilities: readonly string[];
+      }[];
     };
-    lastModels = body.models;
+    lastModels = body.models ?? [];
     if (
-      body.models?.some((model) => model.status === "active" && model.capabilities.includes("chat"))
+      lastModels.some(
+        (model) =>
+          model.providerKind === "anthropic" &&
+          model.status === "active" &&
+          model.capabilities.includes("chat") &&
+          model.providerConfigId
+      )
     ) {
-      return;
+      break;
     }
     await page.waitForTimeout(Math.min(interval, Math.max(0, deadline - Date.now())));
     interval = Math.min(interval * 2, POLL_MAX_INTERVAL_MS);
   }
-  throw new Error(
-    `no chat-capable active model after ${MODEL_DISCOVERY_DEADLINE_MS}ms: ${JSON.stringify(lastModels)}`
+  const anthropic = lastModels.find(
+    (model) =>
+      model.providerKind === "anthropic" &&
+      model.status === "active" &&
+      model.capabilities.includes("chat") &&
+      model.providerConfigId
   );
+  if (!anthropic?.providerConfigId) {
+    throw new Error(
+      `no active Anthropic chat model after ${MODEL_DISCOVERY_DEADLINE_MS}ms: ${JSON.stringify(lastModels)}`
+    );
+  }
+  const selected = await page.request.put(
+    `/api/ai/providers/${anthropic.providerConfigId}/default`
+  );
+  expect(selected.ok(), `select Anthropic provider -> ${selected.status()}`).toBeTruthy();
 }
 
 async function sendMessage(page: Page, text: string): Promise<Promise<PlaywrightResponse>> {
