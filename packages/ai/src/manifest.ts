@@ -40,7 +40,8 @@ import {
   getAiActionPoliciesResponseSchema,
   patchAiActionPolicyRequestSchema,
   patchAiActionPolicyResponseSchema,
-  listActionAuditLogRouteSchema
+  listActionAuditLogRouteSchema,
+  listMyModuleBuildsResponseSchema
 } from "@moss/shared";
 
 import { aiExplainRecentErrorsExecute } from "./error-tools.js";
@@ -372,6 +373,14 @@ export const aiModuleManifest = {
       method: "GET",
       path: "/api/ai/action-audit",
       responseSchema: listActionAuditLogRouteSchema.response[200],
+      permissionId: "ai.assistant-actions"
+    },
+    {
+      // #1945 — the Workshop page's own list of the caller's builds. The repository query
+      // scopes to owner_user_id, so this is never a cross-user listing.
+      method: "GET",
+      path: "/api/ai/module-builds/mine",
+      responseSchema: listMyModuleBuildsResponseSchema,
       permissionId: "ai.assistant-actions"
     }
   ],

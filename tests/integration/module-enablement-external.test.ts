@@ -58,7 +58,8 @@ describe("installed external modules appear in the personal Modules list (#1762)
           name: "Ext Fixture",
           version: "0.3.0",
           hasPreferences: true,
-          hasUserCredentials: false
+          hasUserCredentials: false,
+          status: "enabled"
         }
       ]
     });

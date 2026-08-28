@@ -224,15 +224,6 @@ function ServicePicker(props: { readonly onGoogle: () => void; readonly onImap: 
           <span className="provpick__dot" />
           Email (IMAP)
         </button>
-        <button
-          type="button"
-          className="provpick__item"
-          disabled
-          aria-label="GitHub — coming soon, tracked in issue #1061"
-        >
-          <span className="provpick__dot" />
-          GitHub <span className="provpick__on">Coming soon · #1061</span>
-        </button>
       </div>
       <div className="provpick__foot">
         Google and email (IMAP) connect through your own credentials — nothing passes through anyone

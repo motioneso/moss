@@ -86,6 +86,7 @@ import { registerAiTranscriptionRoutes } from "./transcription-routes.js";
 import { registerAiVoiceEndpointRoutes } from "./voice-endpoint-routes.js";
 import { registerActionPolicyRoutes } from "./action-policy-routes.js";
 import { registerProviderVisibilityRoutes } from "./provider-visibility-routes.js";
+import { registerModuleBuildRoutes } from "./module-build-routes.js";
 import { createAiSecretCipher, type AiSecretCipher } from "./crypto.js";
 import { discoverAndPersistModels } from "./discover-and-persist-models.js";
 import { ModelDiscoveryService } from "./model-discovery.js";
@@ -434,6 +435,7 @@ export function registerAiRoutes(
   registerAiVoiceEndpointRoutes(server, dependencies, repository, secretCipher);
   registerActionPolicyRoutes(server, dependencies, repository);
   registerAiAdminPinRoutes(server, dependencies, repository);
+  registerModuleBuildRoutes(server, dependencies);
 
   server.get(
     "/api/ai/chat-model-override",

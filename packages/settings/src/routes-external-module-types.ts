@@ -45,6 +45,13 @@ export interface InstalledExternalModuleSummary {
    * credentials and no switches — and either one on its own is a reason to offer a settings page.
    */
   readonly hasUserCredentials: boolean;
+  /**
+   * #1945: whether this module is active only for the person who built it (still a draft) or
+   * shipped/admin-enabled for everyone. Only these two statuses ever reach this list — a
+   * discovered-but-not-installed or admin-disabled module is filtered out before this type is
+   * built.
+   */
+  readonly status: "draft" | "enabled";
 }
 
 /**
@@ -112,6 +119,16 @@ export interface ModuleDistributionDependencies {
   >;
   /** Delete JARVIS_MODULES_DIR/<id>. Idempotent; missing dir is fine. */
   readonly removeModuleFiles: (moduleId: string) => Promise<void>;
+  /**
+   * #1890: delete the build's own source directory under the module-builds directory.
+   * Separate from removeModuleFiles because the two live under DIFFERENT roots and are
+   * keyed by DIFFERENT ids — this one takes a build id, not a module id. Usually a no-op
+   * for an installed draft (installModuleDraft renames the build tree INTO the modules
+   * dir, so nothing is left at the build path), but a build that failed after writing
+   * files and before installing leaves one behind. Idempotent; missing dir is fine.
+   * Optional so a composition that does not wire module builds still type-checks.
+   */
+  readonly removeModuleBuildFiles?: (buildId: string) => Promise<void>;
   /** LIVE readdir of JARVIS_MODULES_DIR (module dirs only, no dot-dirs). */
   readonly listOnDiskModuleIds: () => Promise<readonly string[]>;
   /** Ids declared in JARVIS_MODULES_ENSURE (for declared-not-present rows). */

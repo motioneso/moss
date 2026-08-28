@@ -37,6 +37,12 @@ export interface MyModuleDto {
    * exactly that — so the personal settings page needs its own reason to be reachable.
    */
   readonly hasUserCredentials: boolean;
+  /**
+   * #1945: whether this module is visible only to the person who built it, or on for everyone.
+   * Always `"everyone"` for a built-in module. For an external module this reflects real
+   * install-state (`"you"` while still a draft, `"everyone"` once shipped or admin-enabled).
+   */
+  readonly scope: "you" | "everyone";
 }
 
 /**
@@ -120,7 +126,8 @@ const myModuleSchema = {
     "userDisabled",
     "active",
     "hasPreferences",
-    "hasUserCredentials"
+    "hasUserCredentials",
+    "scope"
   ],
   properties: {
     id: { type: "string" },
@@ -133,7 +140,8 @@ const myModuleSchema = {
     userDisabled: { type: "boolean" },
     active: { type: "boolean" },
     hasPreferences: { type: "boolean" },
-    hasUserCredentials: { type: "boolean" }
+    hasUserCredentials: { type: "boolean" },
+    scope: { type: "string", enum: ["you", "everyone"] }
   }
 } as const;
 
@@ -345,6 +353,26 @@ export const shipExternalModuleRouteSchema = {
         shipped: { type: "boolean" },
         restartRequired: { type: "boolean" }
       }
+    },
+    401: errorResponseSchema,
+    403: errorResponseSchema,
+    404: errorResponseSchema,
+    409: errorResponseSchema
+  }
+} as const;
+
+// #1890: throwing a draft away. One answer shape whether or not anything was on disk — the
+// endpoint either deleted the caller's own draft or it 404s, and the 404 deliberately cannot be
+// told apart from "that is a shipped module" or "that draft is someone else's" (see
+// deleteExternalModuleDraft's doc-comment for why).
+export const deleteExternalModuleDraftRouteSchema = {
+  params: adminModuleParamsSchema,
+  response: {
+    200: {
+      type: "object",
+      additionalProperties: false,
+      required: ["deleted"],
+      properties: { deleted: { type: "boolean" } }
     },
     401: errorResponseSchema,
     403: errorResponseSchema,
