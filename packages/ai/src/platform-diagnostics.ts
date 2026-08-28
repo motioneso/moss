@@ -1,14 +1,14 @@
 import type { DataContextDb, MossActionAuditLog, MossErrorLog } from "@moss/db";
 import type { HostDiagnosticsDto } from "@moss/shared";
 import type { AppMapReadService } from "@moss/settings";
-import {
-  aggregateModuleDiagnostics,
-  type ModuleDiagnosticContextRunner,
-  type ModuleDiagnosticObservation,
-  type RegisteredModuleDiagnosticProvider
+import { aggregateModuleDiagnostics } from "@moss/module-sdk";
+import type {
+  ModuleDiagnosticContextRunner,
+  ModuleDiagnosticObservation,
+  RegisteredModuleDiagnosticProvider
 } from "@moss/module-sdk";
 
-import { AiRepository } from "./repository.js";
+import type { AiRepository } from "./repository.js";
 
 export type HostRuntimeObservation = HostDiagnosticsDto;
 
