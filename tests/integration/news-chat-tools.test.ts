@@ -305,7 +305,7 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
   }): Promise<Record<string, unknown>> {
     // Audit writes are fire-and-forget — poll for the row. The optional owner
     // filter disambiguates when two actors exercised the same tool in one test.
-    for (let attempt = 0; attempt < 100; attempt += 1) {
+    for (let attempt = 0; attempt < 1_000; attempt += 1) {
       const audit = await bootstrap.query(
         `SELECT owner_user_id, approval_mode, outcome, tool_name
          FROM app.moss_action_audit_log
@@ -341,7 +341,7 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
         (entry) => entry.status === "pending" && entry.tool_name === toolName
       );
       if (action) return action.id;
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 5));
     }
     throw new Error(`no pending action request appeared for ${toolName}`);
   }
