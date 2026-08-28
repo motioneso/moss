@@ -1,5 +1,7 @@
+import Fastify from "fastify";
 import { describe, expect, it } from "vitest";
 
+import { downloadExternalModuleRouteSchema } from "@moss/shared";
 import type { QueueDefinition } from "@moss/jobs";
 import type { MossModuleManifest } from "@moss/module-sdk";
 import {
@@ -229,5 +231,66 @@ describe("getExternalModuleDeletionTables (#914)", () => {
       { table: "app.acme_widgets", countPredicate: "owner_user_id = $1::uuid" },
       { table: "app.acme_gadgets", countPredicate: "owner_user_id = $1::uuid" }
     ]);
+  });
+});
+
+// #1319 phase 3: the blocked-install refusal travels over the wire intact.
+// Fastify serialises every response through fast-json-stringify against the route's
+// response schema, and that serialiser SILENTLY DROPS any property the schema does not
+// declare. The catalog digest is the whole point of this 409 — without it the screen has
+// nothing to offer the admin to accept — so it gets its own wire-level test rather than
+// relying on the handler's return value.
+describe("download refusal response schema (#1319)", () => {
+  async function refusalServer(
+    body: Record<string, unknown>
+  ): Promise<{ statusCode: number; json: Record<string, unknown> }> {
+    const app = Fastify();
+    app.post(
+      "/api/admin/external-modules/:id/download",
+      { schema: downloadExternalModuleRouteSchema },
+      async (_request, reply) => reply.code(409).send(body)
+    );
+    try {
+      await app.ready();
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/admin/external-modules/acme-widgets/download",
+        headers: { "content-type": "application/json" },
+        payload: {}
+      });
+      return { statusCode: res.statusCode, json: res.json() };
+    } finally {
+      await app.close();
+    }
+  }
+
+  it("keeps the failure code and the catalog digest on the unverified-catalog 409", async () => {
+    const digest = "b".repeat(64);
+    const res = await refusalServer({
+      error:
+        "Moss could not confirm this module list came from us, so it will not install from it.",
+      code: "index-unverified",
+      catalogDigestSha256: digest
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json).toEqual({
+      error:
+        "Moss could not confirm this module list came from us, so it will not install from it.",
+      code: "index-unverified",
+      catalogDigestSha256: digest
+    });
+  });
+
+  it("still serialises the message-only 409s (distribution disabled, purge pending)", async () => {
+    for (const message of [
+      "External modules are not enabled on this instance",
+      "A data purge is pending for this module — cancel it first"
+    ]) {
+      const res = await refusalServer({ error: message });
+      expect(res.statusCode).toBe(409);
+      // Exactly the message — the optional catalog fields must not be invented for a
+      // refusal that has no catalog behind it.
+      expect(res.json).toEqual({ error: message });
+    }
   });
 });

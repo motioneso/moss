@@ -1,9 +1,16 @@
 // #964: where the registry lives and how we talk to it. The index URL and host list
 // are HARDCODED — an env override exists for tests only and is refused outright in
 // production so no runtime configuration can redirect module downloads.
+import { createHash } from "node:crypto";
+
 import { resolveMossEnv } from "@moss/db";
 import { createHostPinnedFetch } from "@moss/host-fetch";
 
+import {
+  resolveCatalogTrustedKeys,
+  verifyCatalogBytes,
+  type ModuleCatalogPublicKey
+} from "./catalog-signing.js";
 import { validateRegistryIndex, type ModuleRegistryIndex } from "./index-schema.js";
 
 export const REGISTRY_INDEX_URL =
@@ -18,6 +25,20 @@ export const REGISTRY_ALLOWED_HOSTS = [
 ] as const;
 
 export const REGISTRY_INDEX_MAX_BYTES = 1024 * 1024;
+
+export const REGISTRY_SIGNATURE_MAX_BYTES = 4 * 1024;
+
+export type CatalogVerification = "verified" | "unverified" | "unavailable";
+
+export type CatalogVerificationFailureReason =
+  | "index-fetch-failed"
+  | "index-too-large"
+  | "index-invalid"
+  | "signature-fetch-failed"
+  | "signature-too-large"
+  | "signature-malformed"
+  | "signature-unknown-key"
+  | "signature-mismatch";
 
 export function resolveRegistryIndexUrl(env: NodeJS.ProcessEnv): string {
   const override = resolveMossEnv(env, "JARVIS_MODULE_REGISTRY_URL");
@@ -54,24 +75,134 @@ export function createRegistryFetch(env: NodeJS.ProcessEnv, fetchFn?: typeof fet
 export interface FetchRegistryIndexOptions {
   readonly env: NodeJS.ProcessEnv;
   readonly fetchFn?: typeof fetch;
+  readonly trustedKeys?: readonly ModuleCatalogPublicKey[];
 }
 
-/** Never throws for remote/shape problems — returns { index: null, errors } instead. */
+export interface FetchRegistryIndexResult {
+  readonly index: ModuleRegistryIndex | null;
+  readonly verification: CatalogVerification;
+  readonly digestSha256: string | null;
+  readonly failureReason: CatalogVerificationFailureReason | null;
+  readonly errors: string[];
+}
+
+/**
+ * Verifies the fetched signature document against the exact index bytes. Any signature-side
+ * problem (fetch, size, shape, unknown key, mismatch) folds to "unverified" with a reason —
+ * never throws, so an unsigned or misconfigured registry still lists (unverified), it just
+ * never lists as verified.
+ */
+async function verifyIndexSignature(
+  indexBytes: Uint8Array,
+  url: string,
+  doFetch: typeof fetch,
+  trustedKeys: readonly ModuleCatalogPublicKey[]
+): Promise<{ verified: boolean; failureReason: CatalogVerificationFailureReason | null }> {
+  let response: Response;
+  try {
+    response = await doFetch(`${url}.sig`);
+  } catch {
+    return { verified: false, failureReason: "signature-fetch-failed" };
+  }
+  if (!response.ok) return { verified: false, failureReason: "signature-fetch-failed" };
+
+  let sigBytes: ArrayBuffer;
+  try {
+    sigBytes = await response.arrayBuffer();
+  } catch {
+    return { verified: false, failureReason: "signature-fetch-failed" };
+  }
+  if (sigBytes.byteLength > REGISTRY_SIGNATURE_MAX_BYTES) {
+    return { verified: false, failureReason: "signature-too-large" };
+  }
+
+  let signatureDocument: unknown;
+  try {
+    signatureDocument = JSON.parse(Buffer.from(sigBytes).toString("utf8"));
+  } catch {
+    return { verified: false, failureReason: "signature-malformed" };
+  }
+
+  const result = verifyCatalogBytes(indexBytes, signatureDocument, trustedKeys);
+  if (result.verified) return { verified: true, failureReason: null };
+  if (result.reason === "malformed")
+    return { verified: false, failureReason: "signature-malformed" };
+  if (result.reason === "unknown-key")
+    return { verified: false, failureReason: "signature-unknown-key" };
+  return { verified: false, failureReason: "signature-mismatch" };
+}
+
+/** Never throws for remote/shape/signature problems — folds every failure into the result. */
 export async function fetchRegistryIndex(
   options: FetchRegistryIndexOptions
-): Promise<{ index: ModuleRegistryIndex | null; errors: readonly string[] }> {
+): Promise<FetchRegistryIndexResult> {
   try {
     const url = resolveRegistryIndexUrl(options.env);
     const doFetch = createRegistryFetch(options.env, options.fetchFn);
     const response = await doFetch(url);
-    if (!response.ok) return { index: null, errors: [`registry index HTTP ${response.status}`] };
-    const text = await response.text();
-    if (Buffer.byteLength(text, "utf8") > REGISTRY_INDEX_MAX_BYTES) {
-      return { index: null, errors: ["registry index exceeds 1 MiB cap"] };
+    if (!response.ok) {
+      return {
+        index: null,
+        verification: "unavailable",
+        digestSha256: null,
+        failureReason: "index-fetch-failed",
+        errors: [`registry index HTTP ${response.status}`]
+      };
     }
-    return validateRegistryIndex(JSON.parse(text));
+    const indexBytes = new Uint8Array(await response.arrayBuffer());
+    if (indexBytes.byteLength > REGISTRY_INDEX_MAX_BYTES) {
+      return {
+        index: null,
+        verification: "unavailable",
+        digestSha256: null,
+        failureReason: "index-too-large",
+        errors: ["registry index exceeds 1 MiB cap"]
+      };
+    }
+    const digestSha256 = createHash("sha256").update(indexBytes).digest("hex");
+
+    let parsed: unknown;
+    let validated: { index: ModuleRegistryIndex | null; errors: readonly string[] };
+    try {
+      parsed = JSON.parse(Buffer.from(indexBytes).toString("utf8"));
+      validated = validateRegistryIndex(parsed);
+    } catch (error) {
+      return {
+        index: null,
+        verification: "unavailable",
+        digestSha256,
+        failureReason: "index-invalid",
+        errors: [`registry index unavailable: ${String(error)}`]
+      };
+    }
+    if (!validated.index) {
+      return {
+        index: null,
+        verification: "unavailable",
+        digestSha256,
+        failureReason: "index-invalid",
+        errors: [...validated.errors]
+      };
+    }
+
+    const trustedKeys = options.trustedKeys ?? resolveCatalogTrustedKeys(options.env);
+    const signatureResult = await verifyIndexSignature(indexBytes, url, doFetch, trustedKeys);
+
+    return {
+      index: validated.index,
+      verification: signatureResult.verified ? "verified" : "unverified",
+      digestSha256,
+      failureReason: signatureResult.verified ? null : signatureResult.failureReason,
+      errors: [...validated.errors]
+    };
   } catch (error) {
-    return { index: null, errors: [`registry index unavailable: ${String(error)}`] };
+    return {
+      index: null,
+      verification: "unavailable",
+      digestSha256: null,
+      failureReason: "index-fetch-failed",
+      errors: [`registry index unavailable: ${String(error)}`]
+    };
   }
 }
 

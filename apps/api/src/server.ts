@@ -127,6 +127,12 @@ export interface CreateApiServerOptions {
   readonly fetchFn?: typeof fetch;
   /** TEST-ONLY. Overrides the real Herdr install executor (avoids real network/exec in tests). */
   readonly installHerdr?: HerdrInstallDependencies["install"];
+  /**
+   * TEST-ONLY. Overrides externalModules.enabled below (default true in production —
+   * see #996/#860). Never set outside tests; proves the `enabled:false` module-registry
+   * envelope without a real production toggle for this setting.
+   */
+  readonly __testExternalModulesEnabled?: boolean;
 }
 
 export interface ApiServerConfig {
@@ -567,7 +573,9 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
         // packages/settings routes-module-registry.ts / routes-modules.ts gate on this
         // field with `if (!ext?.enabled) throw 409`; hardcoding true here means those
         // guards simply never fire, which is correct (verified — no change needed there).
-        enabled: true,
+        // #1319 D6: options.__testExternalModulesEnabled is TEST-ONLY (undefined in
+        // production, so `?? true` keeps the always-on default).
+        enabled: options.__testExternalModulesEnabled ?? true,
         // #1752: pass the live getter, not a called-once snapshot — otherwise an admin who
         // triggers a rescan still sees the stale list on this exact page until a restart.
         discoveries: externalModuleHolder.getDiscoveries,

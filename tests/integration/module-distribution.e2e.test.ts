@@ -5,7 +5,16 @@
 // tarball produced by the SAME packer the publish workflow uses (Task 4), so the
 // hash/format contract is tested against the real artifact shape, not a hand-rolled one.
 import { createServer, type Server } from "node:http";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  readFileSync,
+  readdirSync,
+  existsSync
+} from "node:fs";
+import { generateKeyPairSync } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AddressInfo } from "node:net";
@@ -17,7 +26,7 @@ import { Client } from "pg";
 
 import { createDatabase, type MossDatabase } from "@moss/db";
 import { createPgBossClient, type PgBoss } from "@moss/jobs";
-import { getExternalModuleRegistrations } from "@moss/module-registry/node";
+import { getExternalModuleRegistrations, signCatalogBytes } from "@moss/module-registry/node";
 
 import { createApiServer } from "../../apps/api/src/server.js";
 import { packModuleArtifact } from "../../scripts/publish-module-registry.js";
@@ -39,6 +48,34 @@ let boss: PgBoss;
 let server: ReturnType<typeof createApiServer>;
 let adminCookie: string;
 let memberCookie: string;
+// #1319 D6: the mock registry signs every index.json it serves with this ephemeral
+// test key, so the e2e proves the verified-listing path end to end. The test-only key
+// is wired in via MOSS_MODULE_CATALOG_TEST_PUBLIC_KEY (resolveCatalogTrustedKeys),
+// never the pinned production keyring.
+const catalogTestKeypair = generateKeyPairSync("ed25519", {
+  publicKeyEncoding: { type: "spki", format: "pem" },
+  privateKeyEncoding: { type: "pkcs8", format: "pem" }
+});
+const CATALOG_TEST_KEY_ID = "test";
+// #1319 phase 3: a second key the instance does NOT trust. resolveCatalogTrustedKeys only ever
+// adds the key in MOSS_MODULE_CATALOG_TEST_PUBLIC_KEY (under the id "test"), so a catalog signed
+// with this one is a genuine stranger's signature, not a mislabelled test key.
+const untrustedKeypair = generateKeyPairSync("ed25519", {
+  publicKeyEncoding: { type: "spki", format: "pem" },
+  privateKeyEncoding: { type: "pkcs8", format: "pem" }
+});
+// How the mock registry answers /index.json.sig. Every mode other than "valid" is a catalog the
+// instance cannot authenticate, which is exactly what phase 3 must refuse to install from.
+type CatalogSignatureMode = "valid" | "missing" | "tampered" | "unknown-key";
+let catalogSignatureMode: CatalogSignatureMode = "valid";
+// Changing this changes the catalog bytes, and therefore the catalog's digest, without touching
+// any version or artifact — the cheapest way to stand in for "the published list moved on".
+let catalogDescription = "Fixture module";
+// When true the registry serves a tarball that does not match the sha256 the catalog declares.
+let serveCorruptArtifact = false;
+// Counts requests actually reaching the mock registry — used to prove authorization
+// runs before the registry is ever fetched (non-admin-before-fetch ordering).
+let registryIndexRequestCount = 0;
 
 // #1625: derived from this test lane's own database identity, so two concurrent
 // integration-test lanes never fight over the same cluster-global module roles for
@@ -133,8 +170,13 @@ beforeAll(async () => {
 
   // Mock registry on an ephemeral port. The index is built PER REQUEST from the
   // mutable `latestVersion` so the update test can "publish" 0.3.0 mid-suite.
+  // The pipeline always fetches /index.json.sig immediately after /index.json, so
+  // caching the freshest served bytes here (no real concurrency) is sufficient to sign
+  // exactly what was just served.
+  let lastServedIndexBytes: Buffer | null = null;
   registry = createServer((req, res) => {
     if (req.url === "/index.json") {
+      registryIndexRequestCount += 1;
       const latest = refs[latestVersion];
       const index = {
         schemaVersion: 1,
@@ -143,7 +185,7 @@ beforeAll(async () => {
           {
             id: FIXTURE_MODULE_ID,
             name: "Acme Widgets",
-            description: "Fixture module",
+            description: catalogDescription,
             version: latestVersion,
             requiresCore: ">=0.1.0",
             // Bare filename only (schema-enforced, ARTIFACT_FILENAME_RE) — the pipeline
@@ -173,15 +215,47 @@ beforeAll(async () => {
           }
         ]
       };
+      const indexBytes = Buffer.from(JSON.stringify(index), "utf8");
+      lastServedIndexBytes = indexBytes;
       res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify(index));
+      res.end(indexBytes);
+      return;
+    }
+    if (req.url === "/index.json.sig") {
+      if (catalogSignatureMode === "missing") {
+        res.statusCode = 404;
+        res.end();
+        return;
+      }
+      const servedIndexBytes = lastServedIndexBytes ?? Buffer.alloc(0);
+      const signature =
+        catalogSignatureMode === "unknown-key"
+          ? signCatalogBytes(servedIndexBytes, untrustedKeypair.privateKey, "someone-elses-key")
+          : signCatalogBytes(
+              // "tampered" signs bytes that are NOT the ones served, which is what an
+              // altered catalog looks like from the instance's side: a well-formed
+              // signature from the right key that does not cover these bytes.
+              catalogSignatureMode === "tampered"
+                ? Buffer.concat([servedIndexBytes, Buffer.from(" ", "utf8")])
+                : servedIndexBytes,
+              catalogTestKeypair.privateKey,
+              CATALOG_TEST_KEY_ID
+            );
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify(signature));
       return;
     }
     if (req.url?.endsWith(".tgz")) {
       const file = join(outDir, req.url.slice(1));
       if (existsSync(file)) {
         res.setHeader("content-type", "application/gzip");
-        res.end(readFileSync(file));
+        // #1319 phase 3: an extra byte makes the artifact's real hash disagree with the one
+        // the catalog declares, without changing the catalog itself.
+        res.end(
+          serveCorruptArtifact
+            ? Buffer.concat([readFileSync(file), Buffer.from([0])])
+            : readFileSync(file)
+        );
         return;
       }
     }
@@ -191,6 +265,7 @@ beforeAll(async () => {
   await new Promise<void>((resolve) => registry.listen(0, "127.0.0.1", resolve));
   registryUrl = `http://127.0.0.1:${(registry.address() as AddressInfo).port}`;
   process.env.JARVIS_MODULE_REGISTRY_URL = `${registryUrl}/index.json`;
+  process.env.MOSS_MODULE_CATALOG_TEST_PUBLIC_KEY = catalogTestKeypair.publicKey;
 
   appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 1 });
   boss = createPgBossClient(connectionStrings.app, { connectionTimeoutMillis: 25_000 });
@@ -212,6 +287,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   delete process.env.JARVIS_MODULE_REGISTRY_URL;
+  delete process.env.MOSS_MODULE_CATALOG_TEST_PUBLIC_KEY;
   delete process.env.MOSS_RECONCILE_CONFIRM_OWNER_EMAIL;
   await Promise.allSettled([server?.close(), appDb?.destroy(), boss?.stop({ graceful: false })]);
   await new Promise((resolve) => registry?.close(resolve));
@@ -220,6 +296,9 @@ afterAll(async () => {
 
 describe("module distribution e2e (#964)", () => {
   it("denies non-admin access to every registry route", async () => {
+    // Proves assertAdminUser runs before fetchRegistryEntries ever calls out to the
+    // registry: the mock registry's request count must not move.
+    const requestCountBefore = registryIndexRequestCount;
     // Bodies must satisfy each route's request schema — an invalid/missing body would
     // 400 at schema validation before ever reaching assertAdminUser, which would make
     // this test pass for the wrong reason (not proving authz is enforced).
@@ -243,6 +322,7 @@ describe("module distribution e2e (#964)", () => {
       });
       expect(res.statusCode, `${method} ${url}`).toBe(403);
     }
+    expect(registryIndexRequestCount).toBe(requestCountBefore);
   });
 
   it("lists the registry module as not-installed with full capabilities", async () => {
@@ -255,6 +335,8 @@ describe("module distribution e2e (#964)", () => {
     const body = res.json();
     expect(body.enabled).toBe(true);
     expect(body.registryUnavailable).toBe(false);
+    expect(body.catalogVerification).toBe("verified");
+    expect(typeof body.catalogDigestSha256).toBe("string");
     const row = body.modules.find((m: { id: string }) => m.id === FIXTURE_MODULE_ID);
     // Every DTO field must survive fast-json-stringify (additionalProperties:false
     // drops undeclared fields SILENTLY — the recurring trap; assert them all).
@@ -276,6 +358,41 @@ describe("module distribution e2e (#964)", () => {
       lastInstallError: null,
       purgePending: false
     });
+  });
+
+  it("returns the disabled envelope when external modules are turned off", async () => {
+    // #1319 D6: __testExternalModulesEnabled is a TEST-ONLY createApiServer() override
+    // (apps/api/src/server.ts) — production always runs with modules enabled.
+    const disabledServer = createApiServer({
+      appDb,
+      boss,
+      logger: false,
+      __testExternalModulesEnabled: false,
+      apiServerConfig: {
+        host: "0.0.0.0",
+        port: 0,
+        mcpServerUrl: "http://127.0.0.1:0/api/mcp",
+        externalModulesDir: modulesDir
+      }
+    });
+    try {
+      await disabledServer.ready();
+      const res = await disabledServer.inject({
+        method: "GET",
+        url: "/api/admin/module-registry",
+        headers: { cookie: adminCookie }
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({
+        enabled: false,
+        registryUnavailable: false,
+        catalogVerification: "unavailable",
+        catalogDigestSha256: null,
+        modules: []
+      });
+    } finally {
+      await disabledServer.close();
+    }
   });
 
   it("downloads + stages via the admin route → pending-restart, files on disk", async () => {
@@ -546,6 +663,157 @@ describe("module distribution e2e (#964)", () => {
     ).toMatchObject({
       state: "installed-disabled"
     });
+  });
+
+  // ---------------------------------------------------------------------------
+  // #1319 phase 3 — refusing to install from a module list the instance cannot
+  // confirm came from us. These run last on purpose: by now the fixture module is
+  // already on disk, so "nothing was written" is a sharper claim than an empty
+  // directory would be — a bad list must not overwrite an existing install either.
+  // ---------------------------------------------------------------------------
+
+  /** Runs `body` with the mock registry answering /index.json.sig the given way. */
+  async function withCatalogSignature<T>(
+    mode: CatalogSignatureMode,
+    body: () => Promise<T>
+  ): Promise<T> {
+    catalogSignatureMode = mode;
+    try {
+      return await body();
+    } finally {
+      catalogSignatureMode = "valid";
+    }
+  }
+
+  function requestDownload(
+    payload: Record<string, unknown>,
+    cookie: string = adminCookie
+  ): Promise<Awaited<ReturnType<typeof server.inject>>> {
+    return server.inject({
+      method: "POST",
+      url: `/api/admin/external-modules/${FIXTURE_MODULE_ID}/download`,
+      headers: { cookie, "content-type": "application/json" },
+      payload
+    });
+  }
+
+  interface BlockedBody {
+    error: string;
+    code?: string;
+    catalogDigestSha256?: string;
+  }
+
+  /** Enough of the modules directory to prove the pipeline wrote nothing at all. */
+  function modulesDirSnapshot(): { names: readonly string[]; worker: string } {
+    return {
+      names: readdirSync(modulesDir).sort(),
+      worker: readFileSync(join(modulesDir, FIXTURE_MODULE_ID, "dist", "worker.js"), "utf8")
+    };
+  }
+
+  it("a non-admin cannot reach the accept-this-list path and gets no fingerprint back", async () => {
+    // The digest is the one thing this refusal must never hand out to a non-admin: it is
+    // the token that waives the signature check. Authorization also has to run before the
+    // registry is contacted at all, so the request count must not move.
+    const requestCountBefore = registryIndexRequestCount;
+    const res = await withCatalogSignature("missing", () =>
+      requestDownload({ acceptedCatalogDigestSha256: "c".repeat(64) }, memberCookie)
+    );
+    expect(res.statusCode).toBe(403);
+    expect(res.body).not.toContain("catalogDigestSha256");
+    expect(registryIndexRequestCount).toBe(requestCountBefore);
+  });
+
+  it("an install from a properly signed list still goes through", async () => {
+    const res = await requestDownload({});
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("no signature, an altered list, or a stranger's signature is refused with nothing written", async () => {
+    for (const mode of ["missing", "tampered", "unknown-key"] as const) {
+      const before = modulesDirSnapshot();
+      const res = await withCatalogSignature(mode, () => requestDownload({}));
+      expect(res.statusCode, mode).toBe(409);
+      const body = res.json<BlockedBody>();
+      expect(body.code, mode).toBe("index-unverified");
+      expect(body.catalogDigestSha256, mode).toMatch(/^[0-9a-f]{64}$/);
+      // Security-sensitive area: an admin-facing message must not carry signing-library or
+      // cryptography detail, so the plain refusal wording is asserted to stay plain.
+      expect(body.error, mode).not.toMatch(/ed25519|signature|public key|keyid/i);
+      // Nothing downloaded, nothing extracted, nothing staged, nothing overwritten.
+      expect(modulesDirSnapshot(), mode).toEqual(before);
+    }
+  });
+
+  it("accepting that exact list lets the install proceed", async () => {
+    const blocked = await withCatalogSignature("missing", () => requestDownload({}));
+    expect(blocked.statusCode).toBe(409);
+    const digest = blocked.json<BlockedBody>().catalogDigestSha256;
+    expect(digest).toMatch(/^[0-9a-f]{64}$/);
+
+    const accepted = await withCatalogSignature("missing", () =>
+      requestDownload({ acceptedCatalogDigestSha256: digest })
+    );
+    expect(accepted.statusCode).toBe(200);
+    expect(accepted.json().module).toMatchObject({ stagedVersion: "0.3.0" });
+  });
+
+  it("an acceptance stops working once the published list moves on, and reports the new fingerprint", async () => {
+    const blocked = await withCatalogSignature("missing", () => requestDownload({}));
+    expect(blocked.statusCode).toBe(409);
+    const staleDigest = blocked.json<BlockedBody>().catalogDigestSha256;
+
+    catalogDescription = "Fixture module, revised";
+    try {
+      const retry = await withCatalogSignature("missing", () =>
+        requestDownload({ acceptedCatalogDigestSha256: staleDigest })
+      );
+      expect(retry.statusCode).toBe(409);
+      const body = retry.json<BlockedBody>();
+      expect(body.code).toBe("index-unverified");
+      // The fingerprint reported back is the freshly fetched list's, never the caller's —
+      // otherwise the admin would keep re-accepting a value that means nothing.
+      expect(body.catalogDigestSha256).toMatch(/^[0-9a-f]{64}$/);
+      expect(body.catalogDigestSha256).not.toBe(staleDigest);
+    } finally {
+      catalogDescription = "Fixture module";
+    }
+  });
+
+  it("accepting a list does not waive the check on the module file itself", async () => {
+    const blocked = await withCatalogSignature("missing", () => requestDownload({}));
+    expect(blocked.statusCode).toBe(409);
+    const digest = blocked.json<BlockedBody>().catalogDigestSha256;
+
+    serveCorruptArtifact = true;
+    try {
+      const before = modulesDirSnapshot();
+      const res = await withCatalogSignature("missing", () =>
+        requestDownload({ acceptedCatalogDigestSha256: digest })
+      );
+      // 422 is the integrity failure, not the 409 catalog refusal — the acceptance covered
+      // the list and only the list.
+      expect(res.statusCode).toBe(422);
+      expect(modulesDirSnapshot()).toEqual(before);
+    } finally {
+      serveCorruptArtifact = false;
+    }
+  });
+
+  it("boot skips a module whose list cannot be confirmed, records why, and finishes", async () => {
+    const report = await withCatalogSignature("tampered", () =>
+      reconcileModules({
+        modulesDir,
+        env: { ...process.env, JARVIS_MODULES_ENSURE: "some-other-module" }
+      })
+    );
+    const warning = report.warnings.find((w) => w.moduleId === "some-other-module");
+    expect(warning).toBeDefined();
+    // Assert the stable failure code, never the English wording.
+    expect(warning?.code).toBe("index-unverified");
+    expect(report.ensured).not.toContain("some-other-module");
+    expect(report.installed).not.toContain("some-other-module");
+    expect(existsSync(join(modulesDir, "some-other-module"))).toBe(false);
   });
 });
 

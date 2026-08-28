@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { createHash } from "node:crypto";
+import { createHash, generateKeyPairSync } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -10,7 +10,10 @@ import {
   downloadAndStageModule,
   fetchRegistryIndex,
   REGISTRY_INDEX_URL,
+  REGISTRY_SIGNATURE_MAX_BYTES,
   resolveRegistryIndexUrl,
+  signCatalogBytes,
+  type ModuleCatalogPublicKey,
   type ModuleRegistryIndex
 } from "../../packages/module-registry/src/node.js";
 
@@ -85,6 +88,38 @@ const fakeFetch =
     return new Response("not found", { status: 404 });
   };
 
+const ephemeralKeypair = generateKeyPairSync("ed25519", {
+  publicKeyEncoding: { type: "spki", format: "pem" },
+  privateKeyEncoding: { type: "pkcs8", format: "pem" }
+});
+const TEST_KEY_ID = "test-catalog-key";
+const TEST_TRUSTED_KEYS: readonly ModuleCatalogPublicKey[] = [
+  { keyId: TEST_KEY_ID, publicKeyPem: ephemeralKeypair.publicKey }
+];
+
+/** Fake fetch additionally serving a signature over the exact served index bytes. */
+const fakeFetchSigned = (
+  index: ModuleRegistryIndex,
+  tarballBytes: Buffer,
+  options?: { readonly signatureOverride?: unknown; readonly indexBytesOverride?: Buffer }
+): typeof fetch => {
+  const indexBytes = Buffer.from(JSON.stringify(index), "utf8");
+  const signature =
+    options?.signatureOverride ??
+    signCatalogBytes(indexBytes, ephemeralKeypair.privateKey, TEST_KEY_ID);
+  const servedIndexBytes = options?.indexBytesOverride ?? indexBytes;
+  return async (input) => {
+    const url = String(input);
+    if (url.endsWith("/index.json.sig")) {
+      return new Response(JSON.stringify(signature), { status: 200 });
+    }
+    if (url.endsWith("/index.json"))
+      return new Response(new Uint8Array(servedIndexBytes), { status: 200 });
+    if (url.endsWith(".tgz")) return new Response(new Uint8Array(tarballBytes), { status: 200 });
+    return new Response("not found", { status: 404 });
+  };
+};
+
 describe("resolveRegistryIndexUrl (#964)", () => {
   it("defaults to the pinned release URL", () => {
     expect(resolveRegistryIndexUrl({} as NodeJS.ProcessEnv)).toBe(REGISTRY_INDEX_URL);
@@ -124,6 +159,75 @@ describe("fetchRegistryIndex (#964)", () => {
     const nope: typeof fetch = async () => new Response("gone", { status: 404 });
     const result = await fetchRegistryIndex({ env: {} as NodeJS.ProcessEnv, fetchFn: nope });
     expect(result.index).toBeNull();
+    expect(result.verification).toBe("unavailable");
+    expect(result.digestSha256).toBeNull();
+  });
+
+  it("verifies a correctly signed index over the exact served bytes", async () => {
+    const { index, tarballBytes } = await makeFixture();
+    const indexBytes = Buffer.from(JSON.stringify(index), "utf8");
+    const result = await fetchRegistryIndex({
+      env: {} as NodeJS.ProcessEnv,
+      fetchFn: fakeFetchSigned(index, tarballBytes),
+      trustedKeys: TEST_TRUSTED_KEYS
+    });
+    expect(result.index?.modules[0]?.id).toBe("demo-module");
+    expect(result.verification).toBe("verified");
+    expect(result.digestSha256).toBe(createHash("sha256").update(indexBytes).digest("hex"));
+    expect(result.failureReason).toBeNull();
+  });
+
+  it("is unverified with signature-fetch-failed when no .sig route exists, but index still parses", async () => {
+    const { index, tarballBytes } = await makeFixture();
+    const result = await fetchRegistryIndex({
+      env: {} as NodeJS.ProcessEnv,
+      fetchFn: fakeFetch(index, tarballBytes),
+      trustedKeys: TEST_TRUSTED_KEYS
+    });
+    expect(result.index?.modules[0]?.id).toBe("demo-module");
+    expect(result.verification).toBe("unverified");
+    expect(result.failureReason).toBe("signature-fetch-failed");
+  });
+
+  it("is unverified with signature-mismatch when index bytes are tampered under a stale signature", async () => {
+    const { index, tarballBytes } = await makeFixture();
+    const indexBytes = Buffer.from(JSON.stringify(index), "utf8");
+    const staleSignature = signCatalogBytes(indexBytes, ephemeralKeypair.privateKey, TEST_KEY_ID);
+    const tamperedIndex = { ...index, modules: [...index.modules] };
+    const tamperedBytes = Buffer.from(JSON.stringify(tamperedIndex) + " ", "utf8");
+    const result = await fetchRegistryIndex({
+      env: {} as NodeJS.ProcessEnv,
+      fetchFn: fakeFetchSigned(index, tarballBytes, {
+        signatureOverride: staleSignature,
+        indexBytesOverride: tamperedBytes
+      }),
+      trustedKeys: TEST_TRUSTED_KEYS
+    });
+    expect(result.verification).toBe("unverified");
+    expect(result.failureReason).toBe("signature-mismatch");
+  });
+
+  it("is unverified with signature-unknown-key when the signature names an untrusted key", async () => {
+    const { index, tarballBytes } = await makeFixture();
+    const result = await fetchRegistryIndex({
+      env: {} as NodeJS.ProcessEnv,
+      fetchFn: fakeFetchSigned(index, tarballBytes),
+      trustedKeys: []
+    });
+    expect(result.verification).toBe("unverified");
+    expect(result.failureReason).toBe("signature-unknown-key");
+  });
+
+  it("is unverified with signature-too-large when the signature body exceeds the cap", async () => {
+    const { index, tarballBytes } = await makeFixture();
+    const oversizeSignature = { padding: "x".repeat(REGISTRY_SIGNATURE_MAX_BYTES + 1) };
+    const result = await fetchRegistryIndex({
+      env: {} as NodeJS.ProcessEnv,
+      fetchFn: fakeFetchSigned(index, tarballBytes, { signatureOverride: oversizeSignature }),
+      trustedKeys: TEST_TRUSTED_KEYS
+    });
+    expect(result.verification).toBe("unverified");
+    expect(result.failureReason).toBe("signature-too-large");
   });
 });
 
@@ -135,7 +239,8 @@ describe("downloadAndStageModule (#964)", () => {
       moduleId: "demo-module",
       modulesDir,
       env: {} as NodeJS.ProcessEnv,
-      fetchFn: fakeFetch(index, tarballBytes)
+      fetchFn: fakeFetchSigned(index, tarballBytes),
+      trustedKeys: TEST_TRUSTED_KEYS
     });
     expect(result.version).toBe("1.2.0");
     expect(result.packageHash).toMatch(/^sha256:[a-f0-9]{64}$/);
@@ -158,7 +263,8 @@ describe("downloadAndStageModule (#964)", () => {
         moduleId: "demo-module",
         modulesDir,
         env: {} as NodeJS.ProcessEnv,
-        fetchFn: fakeFetch(tampered, tarballBytes)
+        fetchFn: fakeFetchSigned(tampered, tarballBytes),
+        trustedKeys: TEST_TRUSTED_KEYS
       })
     ).rejects.toMatchObject({ code: "integrity-mismatch" });
     expect(existsSync(join(modulesDir, "demo-module"))).toBe(false);
@@ -184,7 +290,8 @@ describe("downloadAndStageModule (#964)", () => {
         moduleId: "demo-module",
         modulesDir: tmp("pipe-mods-"),
         env: {} as NodeJS.ProcessEnv,
-        fetchFn: fakeFetch(lying, tarballBytes)
+        fetchFn: fakeFetchSigned(lying, tarballBytes),
+        trustedKeys: TEST_TRUSTED_KEYS
       })
     ).rejects.toMatchObject({ code: "version-mismatch" });
   });
@@ -196,8 +303,125 @@ describe("downloadAndStageModule (#964)", () => {
         moduleId: "nope",
         modulesDir: tmp("pipe-mods-"),
         env: {} as NodeJS.ProcessEnv,
-        fetchFn: fakeFetch(index, tarballBytes)
+        fetchFn: fakeFetchSigned(index, tarballBytes),
+        trustedKeys: TEST_TRUSTED_KEYS
       })
     ).rejects.toMatchObject({ code: "module-not-found" });
+  });
+});
+
+// #1319 phase 3 — the pipeline refuses to install from a catalog whose signature cannot be
+// verified. An admin may accept ONE exact catalog, identified by the SHA-256 of its bytes;
+// the acceptance covers the signature check only and nothing else.
+describe("downloadAndStageModule catalog enforcement (#1319)", () => {
+  const digestOf = (index: ModuleRegistryIndex): string =>
+    createHash("sha256")
+      .update(Buffer.from(JSON.stringify(index), "utf8"))
+      .digest("hex");
+
+  it("refuses an unverified catalog and leaves the modules dir untouched", async () => {
+    const { index, tarballBytes } = await makeFixture();
+    const modulesDir = tmp("pipe-mods-");
+    await expect(
+      downloadAndStageModule({
+        moduleId: "demo-module",
+        modulesDir,
+        env: {} as NodeJS.ProcessEnv,
+        // No .sig route → unverified.
+        fetchFn: fakeFetch(index, tarballBytes),
+        trustedKeys: TEST_TRUSTED_KEYS
+      })
+    ).rejects.toMatchObject({
+      code: "index-unverified",
+      catalogDigestSha256: digestOf(index)
+    });
+    expect(existsSync(join(modulesDir, "demo-module"))).toBe(false);
+    expect(existsSync(join(modulesDir, ".staging-demo-module"))).toBe(false);
+  });
+
+  it("installs from an unverified catalog when the admin accepted that exact catalog", async () => {
+    const { index, tarballBytes } = await makeFixture();
+    const modulesDir = tmp("pipe-mods-");
+    const result = await downloadAndStageModule({
+      moduleId: "demo-module",
+      modulesDir,
+      env: {} as NodeJS.ProcessEnv,
+      fetchFn: fakeFetch(index, tarballBytes),
+      trustedKeys: TEST_TRUSTED_KEYS,
+      acceptedCatalogDigestSha256: digestOf(index)
+    });
+    expect(result.version).toBe("1.2.0");
+    expect(existsSync(join(modulesDir, "demo-module", "jarvis.module.json"))).toBe(true);
+  });
+
+  it("still rejects an artifact whose bytes do not match, even with an accepted catalog", async () => {
+    const { index, tarballBytes } = await makeFixture();
+    const tampered = {
+      ...index,
+      modules: [{ ...index.modules[0]!, sha256: "b".repeat(64) }]
+    };
+    const modulesDir = tmp("pipe-mods-");
+    await expect(
+      downloadAndStageModule({
+        moduleId: "demo-module",
+        modulesDir,
+        env: {} as NodeJS.ProcessEnv,
+        fetchFn: fakeFetch(tampered, tarballBytes),
+        trustedKeys: TEST_TRUSTED_KEYS,
+        acceptedCatalogDigestSha256: digestOf(tampered)
+      })
+    ).rejects.toMatchObject({ code: "integrity-mismatch" });
+    expect(existsSync(join(modulesDir, "demo-module"))).toBe(false);
+  });
+
+  it("blocks again when the catalog changed since the admin accepted it, quoting the new digest", async () => {
+    const { index, tarballBytes } = await makeFixture();
+    const olderCatalog = { ...index, generatedAt: "2026-01-01T00:00:00.000Z" };
+    const modulesDir = tmp("pipe-mods-");
+    await expect(
+      downloadAndStageModule({
+        moduleId: "demo-module",
+        modulesDir,
+        env: {} as NodeJS.ProcessEnv,
+        fetchFn: fakeFetch(index, tarballBytes),
+        trustedKeys: TEST_TRUSTED_KEYS,
+        acceptedCatalogDigestSha256: digestOf(olderCatalog)
+      })
+    ).rejects.toMatchObject({
+      code: "index-unverified",
+      // The freshly fetched catalog's digest, never the stale one the caller sent.
+      catalogDigestSha256: digestOf(index)
+    });
+    expect(existsSync(join(modulesDir, "demo-module"))).toBe(false);
+  });
+
+  it("an acceptance never rescues a catalog that could not be fetched at all", async () => {
+    const gone: typeof fetch = async () => new Response("gone", { status: 404 });
+    const modulesDir = tmp("pipe-mods-");
+    await expect(
+      downloadAndStageModule({
+        moduleId: "demo-module",
+        modulesDir,
+        env: {} as NodeJS.ProcessEnv,
+        fetchFn: gone,
+        trustedKeys: TEST_TRUSTED_KEYS,
+        acceptedCatalogDigestSha256: "a".repeat(64)
+      })
+    ).rejects.toMatchObject({ code: "index-unavailable" });
+    expect(existsSync(join(modulesDir, "demo-module"))).toBe(false);
+  });
+
+  it("installs from a verified catalog with no acceptance at all", async () => {
+    const { index, tarballBytes } = await makeFixture();
+    const modulesDir = tmp("pipe-mods-");
+    const result = await downloadAndStageModule({
+      moduleId: "demo-module",
+      modulesDir,
+      env: {} as NodeJS.ProcessEnv,
+      fetchFn: fakeFetchSigned(index, tarballBytes),
+      trustedKeys: TEST_TRUSTED_KEYS
+    });
+    expect(result.version).toBe("1.2.0");
+    expect(existsSync(join(modulesDir, "demo-module", "jarvis.module.json"))).toBe(true);
   });
 });

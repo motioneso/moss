@@ -548,11 +548,33 @@ export interface ModuleRegistryRowDto {
 export interface GetModuleRegistryResponse {
   readonly enabled: boolean;
   readonly registryUnavailable: boolean;
+  /** #1319: whether the pinned signing key verified this fetch's catalog bytes. */
+  readonly catalogVerification: "verified" | "unverified" | "unavailable";
+  /** SHA-256 hex digest of the exact catalog bytes this response was derived from; null when unavailable. */
+  readonly catalogDigestSha256: string | null;
   readonly modules: readonly ModuleRegistryRowDto[];
 }
 
 export interface DownloadExternalModuleRequest {
   readonly version?: string;
+  /**
+   * #1319: SHA-256 hex digest of one exact catalog the admin reviewed and deliberately
+   * accepted. Only ever waives the catalog-signature check, and only for that catalog.
+   * Never stored anywhere — it covers a single install attempt.
+   */
+  readonly acceptedCatalogDigestSha256?: string;
+}
+
+/**
+ * #1319: the 409 returned when the module catalog could not be authenticated. It carries the
+ * digest of the catalog that was actually fetched, so the screen can offer a deliberate
+ * acceptance of that exact catalog. `error` alone is required, because the same 409 slot also
+ * serves the "external modules disabled" and "purge pending" refusals, which send a message only.
+ */
+export interface DownloadExternalModuleBlockedResponse {
+  readonly error: string;
+  readonly code?: string;
+  readonly catalogDigestSha256?: string;
 }
 
 export interface RemoveExternalModuleRequest {
@@ -620,10 +642,18 @@ export const getModuleRegistryRouteSchema = {
     200: {
       type: "object",
       additionalProperties: false,
-      required: ["enabled", "registryUnavailable", "modules"],
+      required: [
+        "enabled",
+        "registryUnavailable",
+        "catalogVerification",
+        "catalogDigestSha256",
+        "modules"
+      ],
       properties: {
         enabled: { type: "boolean" },
         registryUnavailable: { type: "boolean" },
+        catalogVerification: { type: "string", enum: ["verified", "unverified", "unavailable"] },
+        catalogDigestSha256: { type: ["string", "null"] },
         modules: { type: "array", items: moduleRegistryRowSchema }
       }
     },
@@ -639,12 +669,32 @@ const moduleRegistryRowResponseSchema = {
   properties: { module: { ...moduleRegistryRowSchema } }
 } as const;
 
+/**
+ * #1319: `additionalProperties: false` on the request body means an undeclared field is
+ * rejected with a 400 before the route runs, and Fastify strips any response field the
+ * response schema does not declare. Both halves of the catalog acceptance therefore have to
+ * be declared here or the feature silently does nothing.
+ */
+const downloadBlockedResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["error"],
+  properties: {
+    error: { type: "string" },
+    code: { type: "string" },
+    catalogDigestSha256: { type: "string" }
+  }
+} as const;
+
 export const downloadExternalModuleRouteSchema = {
   params: adminModuleParamsSchema,
   body: {
     type: "object",
     additionalProperties: false,
-    properties: { version: { type: "string", minLength: 1, maxLength: 100 } }
+    properties: {
+      version: { type: "string", minLength: 1, maxLength: 100 },
+      acceptedCatalogDigestSha256: { type: "string", pattern: "^[0-9a-f]{64}$" }
+    }
   },
   response: {
     200: moduleRegistryRowResponseSchema,
@@ -652,7 +702,7 @@ export const downloadExternalModuleRouteSchema = {
     401: errorResponseSchema,
     403: errorResponseSchema,
     404: errorResponseSchema,
-    409: errorResponseSchema,
+    409: downloadBlockedResponseSchema,
     422: errorResponseSchema,
     502: errorResponseSchema,
     503: errorResponseSchema

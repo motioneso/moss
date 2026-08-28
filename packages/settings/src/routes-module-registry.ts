@@ -28,6 +28,9 @@ import type { ModuleRoutesContext } from "./routes-modules.js";
 // Task 5 pipeline error code → HTTP status. Codes are strings across the port boundary
 // (settings cannot import module-registry's ModuleDownloadError); unknown codes → 502.
 const DOWNLOAD_ERROR_STATUS: Record<string, number> = {
+  // #1319: the catalog was fetched but could not be authenticated. 409 (not 422) because the
+  // admin can resolve it by reviewing that exact catalog and accepting it deliberately.
+  "index-unverified": 409,
   "module-not-found": 404,
   "version-mismatch": 422,
   "integrity-mismatch": 422,
@@ -92,17 +95,21 @@ export function registerModuleRegistryRoutes(
           const body: GetModuleRegistryResponse = {
             enabled: false,
             registryUnavailable: false,
+            catalogVerification: "unavailable",
+            catalogDigestSha256: null,
             modules: []
           };
           return body;
         }
-        const entries = await dist.fetchRegistryEntries({
+        const snapshot = await dist.fetchRegistryEntries({
           refresh: request.query.refresh === "1"
         });
         const body: GetModuleRegistryResponse = {
           enabled: true,
-          registryUnavailable: entries === null,
-          modules: await deriveRows(entries, adminStates)
+          registryUnavailable: snapshot.catalogVerification === "unavailable",
+          catalogVerification: snapshot.catalogVerification,
+          catalogDigestSha256: snapshot.catalogDigestSha256,
+          modules: await deriveRows(snapshot.entries, adminStates)
         };
         return body;
       } catch (error) {
@@ -111,7 +118,10 @@ export function registerModuleRegistryRoutes(
     }
   );
 
-  server.post<{ Params: { id: string }; Body: { version?: string } }>(
+  server.post<{
+    Params: { id: string };
+    Body: { version?: string; acceptedCatalogDigestSha256?: string };
+  }>(
     "/api/admin/external-modules/:id/download",
     { schema: downloadExternalModuleRouteSchema },
     async (request, reply) => {
@@ -130,8 +140,24 @@ export function registerModuleRegistryRoutes(
         }
 
         // Network + fs pipeline, OUTSIDE any DB context.
-        const result = await dist.download({ moduleId, version: request.body?.version });
+        const result = await dist.download({
+          moduleId,
+          version: request.body?.version,
+          acceptedCatalogDigestSha256: request.body?.acceptedCatalogDigestSha256
+        });
         if (!result.ok) {
+          // #1319: the generic error path can only carry a message, so the blocked-catalog
+          // refusal replies here directly — the admin needs the digest to be able to review
+          // and accept that exact catalog. Admin authorization already ran, above.
+          if (result.code === "index-unverified") {
+            return reply.code(409).send({
+              error: result.message,
+              code: result.code,
+              ...(result.catalogDigestSha256
+                ? { catalogDigestSha256: result.catalogDigestSha256 }
+                : {})
+            });
+          }
           throw new HttpError(DOWNLOAD_ERROR_STATUS[result.code] ?? 502, result.message);
         }
 
@@ -154,8 +180,8 @@ export function registerModuleRegistryRoutes(
             return listExternalModuleAdminStates(scopedDb);
           }
         );
-        const entries = await dist.fetchRegistryEntries({ refresh: false });
-        const rows = await deriveRows(entries, adminStates);
+        const snapshot = await dist.fetchRegistryEntries({ refresh: false });
+        const rows = await deriveRows(snapshot.entries, adminStates);
         const row = rows.find((r) => r.id === moduleId);
         if (!row) throw new HttpError(404, "External module not found");
         return { module: row };
@@ -218,8 +244,8 @@ export function registerModuleRegistryRoutes(
         // fs delete LAST — if it fails the module is already pinned disabled (safe),
         // and the admin can retry Remove.
         await dist!.removeModuleFiles(moduleId);
-        const entries = await dist!.fetchRegistryEntries({ refresh: false });
-        const rows = await deriveRows(entries, adminStates);
+        const snapshot = await dist!.fetchRegistryEntries({ refresh: false });
+        const rows = await deriveRows(snapshot.entries, adminStates);
         const row = rows.find((r) => r.id === moduleId);
         if (!row) throw new HttpError(404, "External module not found");
         return { module: row };
@@ -258,8 +284,8 @@ export function registerModuleRegistryRoutes(
             return listExternalModuleAdminStates(scopedDb);
           }
         );
-        const entries = await dist!.fetchRegistryEntries({ refresh: false });
-        const rows = await deriveRows(entries, adminStates);
+        const snapshot = await dist!.fetchRegistryEntries({ refresh: false });
+        const rows = await deriveRows(snapshot.entries, adminStates);
         const row = rows.find((r) => r.id === moduleId);
         if (!row) throw new HttpError(404, "External module not found");
         return { module: row };
