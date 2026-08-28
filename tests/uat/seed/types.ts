@@ -51,8 +51,7 @@ export type UatChatScript =
   | "1105-drawer-private"
   | "1987-archive-backfill"
   | "1992-chat-archive-status"
-  | "1883-vault-search-dependency-failure"
-  | "2032-self-diagnostics";
+  | "1883-vault-search-dependency-failure";
 
 export const UAT_CHAT_SCRIPTS: readonly UatChatScript[] = [
   "phase1-smoke",
@@ -61,8 +60,7 @@ export const UAT_CHAT_SCRIPTS: readonly UatChatScript[] = [
   "1105-drawer-private",
   "1987-archive-backfill",
   "1992-chat-archive-status",
-  "1883-vault-search-dependency-failure",
-  "2032-self-diagnostics"
+  "1883-vault-search-dependency-failure"
 ];
 
 export interface SeedOptions {

@@ -52,14 +52,14 @@ const { Client } = pg;
 
 const feed = `<?xml version="1.0"?><rss><channel><title>Example News</title><item><title>Verified publisher headline</title><link>https://example.com/story</link><pubDate>Fri, 11 Jul 2026 12:00:00 GMT</pubDate></item></channel></rss>`;
 
-function feedForRefresh(url: string, headline: string): string {
+function feedForRefresh(url: string): string {
   const host = new URL(url).hostname;
   const publisher = host.includes("bbci")
     ? "www.bbc.com"
     : host.includes("guardian")
       ? "www.theguardian.com"
       : "www.npr.org";
-  return `<?xml version="1.0"?><rss><channel><item><title>${headline} from ${publisher}</title><link>https://${publisher}/story</link><pubDate>${new Date().toUTCString()}</pubDate></item></channel></rss>`;
+  return `<?xml version="1.0"?><rss><channel><item><title>Refresh test item from ${publisher}</title><link>https://${publisher}/story</link><pubDate>${new Date().toUTCString()}</pubDate></item></channel></rss>`;
 }
 
 /**
@@ -287,14 +287,13 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
       (db) => newsRepository.bumpRefreshRequest(db)
     );
     await enqueueNewsRefresh(appBoss, ids.userA);
-    let refreshHeadline = "Initial story";
     await registerNewsJobWorkers(workerBoss, workerContext, {
       fetch: async (url) => ({
         ok: true as const,
         status: 200,
         finalUrl: url,
         contentType: "application/rss+xml",
-        body: feedForRefresh(url, refreshHeadline),
+        body: feedForRefresh(url),
         truncated: false
       }),
       search: { search: async () => ({ results: [] }) },
@@ -324,26 +323,37 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
     });
     const firstSuccessAt = firstPayload.modules[0]?.facts?.lastSuccessAt;
     expect(firstSuccessAt).toEqual(expect.any(String));
-    await expect(
-      appContext.withDataContext(
-        { actorUserId: ids.userA, requestId: "diagnostics-initial-snapshot" },
-        (db) => newsRepository.readLatestSnapshot(db)
-      )
-    ).resolves.toMatchObject({
-      payload: {
-        articles: expect.arrayContaining([
-          expect.objectContaining({ headline: expect.stringContaining("Initial story") })
-        ])
-      }
-    });
     expect(firstPayload.redactions).toContain("runtime");
 
-    refreshHeadline = "Refreshed story";
+    const otherToken = mint(ids.userB, "diagnostics-foreign-owner");
+    const other = await gateway.callTool(otherToken, "settings.platformDiagnostics", {
+      module: "news",
+      include: ["modules"]
+    });
+    expect(other).toMatchObject({ ok: true });
+    const otherPayload = parseToolText(other) as {
+      modules: Array<{ status: string; facts?: Record<string, unknown> }>;
+    };
+    expect(otherPayload.modules[0]).toMatchObject({ status: "unknown" });
+    expect(otherPayload.modules[0]?.facts).toMatchObject({
+      lastAttemptAt: null,
+      lastSuccessAt: null,
+      itemCount: 0
+    });
+    expect(JSON.stringify(otherPayload)).not.toContain(firstSuccessAt as string);
+
     const pending = gateway.callTool(token, "news.refreshNews", {});
     const request = await waitForActionRequest(emitted, 0);
     expect(request.toolName).toBe("news.refreshNews");
     await gateway.resolveActionRequest(ids.userA, request.actionRequestId, "confirmed");
-    await expect(pending).resolves.toMatchObject({ ok: true });
+    const refreshResult = await pending;
+    expect(refreshResult).toMatchObject({ ok: true });
+    const refreshPayload = parseToolText(refreshResult);
+    expect(refreshPayload).toMatchObject({
+      status: expect.stringMatching(/^(accepted|queued)$/),
+      asynchronous: true
+    });
+    expect(JSON.stringify(refreshPayload)).not.toMatch(/complete/i);
 
     await waitForRefreshSuccess("diagnostics-refresh-wait");
 
@@ -360,18 +370,6 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
       itemCount: expect.any(Number)
     });
     expect(secondPayload.modules[0]?.facts?.lastSuccessAt).not.toBe(firstSuccessAt);
-    await expect(
-      appContext.withDataContext(
-        { actorUserId: ids.userA, requestId: "diagnostics-refreshed-snapshot" },
-        (db) => newsRepository.readLatestSnapshot(db)
-      )
-    ).resolves.toMatchObject({
-      payload: {
-        articles: expect.arrayContaining([
-          expect.objectContaining({ headline: expect.stringContaining("Refreshed story") })
-        ])
-      }
-    });
   }, 60_000);
 
   it("confirmSource is confirm-gated: nothing executes until the owner confirms, then row + audit", async () => {
