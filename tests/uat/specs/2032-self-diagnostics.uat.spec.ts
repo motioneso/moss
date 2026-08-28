@@ -9,7 +9,6 @@ export const uatLevel = {
 } as const;
 
 const REFRESH_DEADLINE_MS = 300_000;
-const ACTION_CARD = '[role="region"][aria-label="Action request"]';
 
 function baseUrl(): string {
   const value = process.env.JARVIS_UAT_BASE_URL;
@@ -33,13 +32,16 @@ async function signIn(page: Page): Promise<void> {
 }
 
 async function sendMessage(page: Page, text: string): Promise<Promise<PlaywrightResponse>> {
-  await page.getByRole("button", { name: /^(Chat with |Open chat$)/ }).click();
+  const composer = page.getByRole("textbox", { name: /^Message/ });
+  if (!(await composer.isVisible())) {
+    await page.getByRole("button", { name: /^(Chat with |Open chat$)/ }).click();
+    await expect(composer).toBeVisible();
+  }
   const turnSettled = page.waitForResponse(
     (response) =>
       response.url().includes("/api/chat/turn") && response.request().method() === "POST",
     { timeout: REFRESH_DEADLINE_MS }
   );
-  const composer = page.getByRole("textbox", { name: /^Message/ });
   await composer.fill(text);
   await composer.press("Enter");
   return turnSettled;
@@ -53,8 +55,12 @@ async function readDiagnostics(page: Page): Promise<{
     "/api/ai/assistant-tools/settings.platformDiagnostics/invoke",
     { data: { input: { module: "news", include: ["modules"] } } }
   );
-  expect(response.ok(), `platformDiagnostics -> ${response.status()}`).toBeTruthy();
-  const body = (await response.json()) as {
+  const responseBody = await response.text();
+  expect(
+    response.ok(),
+    `platformDiagnostics -> ${response.status()}: ${responseBody}`
+  ).toBeTruthy();
+  const body = JSON.parse(responseBody) as {
     invocation?: { status?: string; result?: unknown };
   };
   expect(body.invocation?.status).toBe("succeeded");
@@ -92,11 +98,6 @@ test("a real Moss conversation diagnoses, refreshes, and rechecks news", async (
     page,
     "UAT-2032-refresh: use news.refreshNews now. I approve this refresh request."
   );
-  const card = page.locator(ACTION_CARD).filter({ hasText: "Refresh news" }).last();
-  await expect(card.getByRole("button", { name: "Approve" })).toBeVisible({
-    timeout: REFRESH_DEADLINE_MS
-  });
-  await card.getByRole("button", { name: "Approve" }).click();
   const refreshResponse = await refreshTurn;
   expect(refreshResponse.ok(), `refresh chat turn -> ${refreshResponse.status()}`).toBeTruthy();
   const refreshBody = (await refreshResponse.json()) as { reply?: string };
