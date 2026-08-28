@@ -9,8 +9,8 @@ import { isWrittenArticle, rankStories, BIG_STORY_WEIGHT } from "../news-ranking
 import { StoryFeedbackMenu, type StoryFeedbackChange } from "./story-feedback-menu.js";
 export { isFollowed } from "../news-ranking.js";
 
-function storyKey(headline: Headline): string | undefined {
-  return headline.storyRef;
+function storyKey(headline: Headline): string {
+  return headline.storyRef || headline.url;
 }
 
 export function NewsIcon(): ReactNode {
