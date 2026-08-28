@@ -56,7 +56,7 @@ const FORBIDDEN_SECRET_KEYS: readonly string[] = [
 // Any URL scheme (postgres://, postgresql://, redis://, https://…) — connection
 // strings and creds-in-URL (scheme://user:pass@host) must not leak.
 const CONNECTION_URL = /\b[a-z][a-z0-9+.-]*:\/\//i;
-const CREDS_IN_URL = /\b[a-z][a-z0-9+.-]*:\/\/[^\s/@]+:[^\s/@]+@/i;
+export const CREDS_IN_URL = /\b[a-z][a-z0-9+.-]*:\/\/[^\s/@]+:[^\s/@]+@/i;
 
 export function buildHostDiagnostics(input: BuildHostDiagnosticsInput): HostDiagnosticsDto {
   const { info, multiplexer, available, dbOk, pgBossOk, latestAvailableVersion, releaseNotes } =
