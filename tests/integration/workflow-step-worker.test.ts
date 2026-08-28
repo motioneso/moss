@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { sql, type Kysely } from "kysely";
 import type { Job, PgBoss } from "@moss/jobs";
 
@@ -170,45 +170,75 @@ describe("workflow step worker", () => {
     expect(recovered?.queueJobId).toBe("recovered-job");
   });
 
-  it("does not execute a running step again after a crash window has not expired", async () => {
-    const repo = new WorkflowsRepository();
-    let calls = 0;
-    const definition: ModuleWorkflowDefinition = {
-      id: "workflows.active-claim",
-      displayName: "Active claim workflow",
-      version: 1,
-      startStepId: "only",
-      trigger: "manual",
-      steps: [{ id: "only", kind: "task", handler: async () => ({ calls: ++calls }) }],
-      edges: []
-    };
-    const deps = {
-      boss: {} as PgBoss,
-      dataContext,
-      registry: new Map([[definition.id, { moduleId: "workflows", definition }]])
-    };
-    const created = await dataContext.withDataContext(
-      { actorUserId: ownerUserId, requestId: "workflow-active-claim-test" },
-      (scopedDb) =>
-        repo.createRun(scopedDb, {
-          ownerUserId,
-          workflowId: definition.id,
-          workflowVersion: 1,
-          moduleId: "workflows",
-          startedBy: "user",
-          startStepId: "only"
-        })
-    );
+  it("does not execute a long-running step twice after the recovery window", async () => {
+    vi.useFakeTimers();
+    let releaseHandler!: () => void;
+    let handlerStarted!: () => void;
+    const handlerReady = new Promise<void>((resolve) => {
+      handlerStarted = resolve;
+    });
+    const handlerFinished = new Promise<void>((resolve) => {
+      releaseHandler = resolve;
+    });
+    try {
+      const repo = new WorkflowsRepository();
+      let calls = 0;
+      const definition: ModuleWorkflowDefinition = {
+        id: "workflows.active-claim",
+        displayName: "Active claim workflow",
+        version: 1,
+        startStepId: "only",
+        trigger: "manual",
+        steps: [
+          {
+            id: "only",
+            kind: "task",
+            handler: async () => {
+              calls += 1;
+              handlerStarted();
+              await handlerFinished;
+              return { calls };
+            }
+          }
+        ],
+        edges: []
+      };
+      const deps = {
+        boss: {} as PgBoss,
+        dataContext,
+        registry: new Map([[definition.id, { moduleId: "workflows", definition }]])
+      };
+      const created = await dataContext.withDataContext(
+        { actorUserId: ownerUserId, requestId: "workflow-active-claim-test" },
+        (scopedDb) =>
+          repo.createRun(scopedDb, {
+            ownerUserId,
+            workflowId: definition.id,
+            workflowVersion: 1,
+            moduleId: "workflows",
+            startedBy: "user",
+            startStepId: "only"
+          })
+      );
 
-    await dataContext.withDataContext(
-      { actorUserId: ownerUserId, requestId: "workflow-active-claim-test" },
-      (scopedDb) => repo.claimStepRun(scopedDb, created.firstStepRun.id, "active-job")
-    );
+      const firstDelivery = runWorkflowStep(
+        job("active-job", created.run.id, created.firstStepRun.id),
+        deps
+      );
+      await handlerReady;
+      await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
 
-    await expect(
-      runWorkflowStep(job("duplicate-job", created.run.id, created.firstStepRun.id), deps)
-    ).resolves.toMatchObject({ outcome: "skipped" });
-    expect(calls).toBe(0);
+      await expect(
+        runWorkflowStep(job("duplicate-job", created.run.id, created.firstStepRun.id), deps)
+      ).resolves.toMatchObject({ outcome: "skipped" });
+      expect(calls).toBe(1);
+
+      releaseHandler();
+      await firstDelivery;
+    } finally {
+      releaseHandler();
+      vi.useRealTimers();
+    }
   });
 
   it("does not reclaim a long-running step whose heartbeat is current", async () => {
