@@ -95,7 +95,7 @@ class DeterministicDiagnosticsEngine implements CliChatEngine {
     if (toolName === "news.refreshNews") {
       this.pending = [
         { kind: "tool", text: toolName, toolName },
-        { kind: "reply", text: "Refresh accepted and queued; it has not completed." }
+        { kind: "reply", text: "Refresh accepted and queued; work is still pending." }
       ];
       return;
     }
@@ -239,7 +239,10 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
     ])
   );
 
-  function makeGateway(options: { diagnostics?: PlatformDiagnosticsService } = {}) {
+  function makeGateway(
+    options: { diagnostics?: PlatformDiagnosticsService; boss?: PgBoss | null } = {}
+  ) {
+    configureChatTools(options.boss ?? null);
     const tokens = new SessionTokenRegistry();
     const emitted: GatewaySessionRecord[] = [];
     const gateway = new AssistantToolGateway({
@@ -410,7 +413,7 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
     });
     await waitForRefreshSuccess("diagnostics-initial-wait");
 
-    const { gateway, emitted, mint } = makeGateway({ diagnostics });
+    const { gateway, emitted, mint } = makeGateway({ diagnostics, boss: appBoss });
     const token = mint(ids.userA, "diagnostics-refresh");
     const first = await gateway.callTool(token, "settings.platformDiagnostics", {
       module: "news",
@@ -617,6 +620,7 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
     } finally {
       await server.close();
     }
+    configureChatTools(null);
   }, 60_000);
 
   it("confirmSource is confirm-gated: nothing executes until the owner confirms, then row + audit", async () => {
