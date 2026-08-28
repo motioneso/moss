@@ -90,7 +90,9 @@ export const newsModuleManifest = {
       // #2030 (part of #1586) — refresh attempt/success/failure history columns.
       "sql/0203_news_refresh_history.sql",
       // #2006 — health states distinguish rejected credentials from temporary outages.
-      "sql/0204_news_source_health_states.sql"
+      "sql/0204_news_source_health_states.sql",
+      // #2006 QA fix — complete the worker's narrow credential-status read grant.
+      "sql/0205_news_credential_status_worker_grant.sql"
     ],
     migrationDirectories: ["packages/news/sql"],
     ownedTables: [

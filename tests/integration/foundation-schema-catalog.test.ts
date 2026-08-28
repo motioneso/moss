@@ -367,7 +367,8 @@ describe("MVP foundation schema catalog", () => {
         // #2030 (part of #1586) News refresh history — columns added to the existing
         // owner-only FORCE-RLS refresh-state table; no new grant, no new policy.
         { version: "0203", name: "0203_news_refresh_history.sql" },
-        { version: "0204", name: "0204_news_source_health_states.sql" }
+        { version: "0204", name: "0204_news_source_health_states.sql" },
+        { version: "0205", name: "0205_news_credential_status_worker_grant.sql" }
       ]);
     } finally {
       await client.end();
