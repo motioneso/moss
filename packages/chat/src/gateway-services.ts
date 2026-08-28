@@ -9,6 +9,7 @@ import {
   type SessionTokenRegistry,
   type ActiveModulesResolver,
   type AssistantToolGatewayDependencies,
+  type PlatformDiagnosticsService,
   type SessionNotifier
 } from "@moss/ai";
 import { CalendarRepository, sendCalendarCacheEvictJob } from "@moss/calendar";
@@ -131,6 +132,7 @@ export function buildChatGatewayDependencies(args: {
   agencyPreferences?: PreferencesPort;
   localePreferences?: PreferencesPort;
   appMapService?: AppMapReadService;
+  platformDiagnostics?: PlatformDiagnosticsService;
   collaborators: {
     googleConnectionService?: GoogleConnectionService;
     googleApiClient?: GoogleApiClient;
@@ -195,7 +197,8 @@ export function buildChatGatewayDependencies(args: {
       args.collaborators.sourceContextService ||
       args.collaborators.currentViewService ||
       args.collaborators.attachmentsService ||
-      args.appMapService
+      args.appMapService ||
+      args.platformDiagnostics
         ? {
             ...(args.collaborators.featureGrantService
               ? { featureGrants: args.collaborators.featureGrantService }
@@ -211,7 +214,8 @@ export function buildChatGatewayDependencies(args: {
             ...(args.collaborators.attachmentsService
               ? { chatAttachments: args.collaborators.attachmentsService }
               : {}),
-            ...(args.appMapService ? { appMap: args.appMapService } : {})
+            ...(args.appMapService ? { appMap: args.appMapService } : {}),
+            ...(args.platformDiagnostics ? { platformDiagnostics: args.platformDiagnostics } : {})
           }
         : undefined,
     resolveLocalTimezone: args.localePreferences

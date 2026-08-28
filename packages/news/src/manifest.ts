@@ -40,6 +40,7 @@ import {
   summarizeNewsRemoveTopic
 } from "./chat-tools.js";
 import { collectNewsExportSection } from "./data-lifecycle.js";
+import { createNewsDiagnosticsProvider } from "./diagnostics-provider.js";
 import type { NEWS_MODULE_ID } from "./module-id.js";
 import { NEWS_FETCH_HOSTS, NEWS_IMAGE_HOSTS } from "./source/catalog.js";
 
@@ -67,6 +68,7 @@ export const newsModuleManifest = {
   version: "0.1.0",
   publisher: "Moss",
   lifecycle: "user-toggleable",
+  diagnosticsProvider: createNewsDiagnosticsProvider(),
   compatibility: {
     jarv1s: ">=0.0.0"
   },

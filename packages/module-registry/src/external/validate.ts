@@ -70,6 +70,8 @@ const FORBIDDEN_FIELDS: readonly string[] = [
   "sourceBehaviors",
   "focusSignal",
   "proactiveMonitor",
+  // #2031: a diagnostics provider is a function; a worker-hosted module cannot supply one.
+  "diagnosticsProvider",
   "personContextProvider",
   "dataLifecycle",
   "externalSources"

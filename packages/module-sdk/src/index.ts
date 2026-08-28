@@ -27,6 +27,17 @@ export {
 // #1723 item 3: the shape a module's list tool returns, so the next one does not have to decide
 // which end of an over-long list to drop.
 export { DEFAULT_LIST_LIMIT, applyListLimit, type LimitedList } from "./list-limits.js";
+// #2031 (epic #1586): the module diagnostics seam and its aggregator. Own file so index.ts stays
+// under the file-size gate, and exported by name so a wider SDK surface is visible in review.
+export {
+  aggregateModuleDiagnostics,
+  MODULE_DIAGNOSTIC_LIMITS,
+  type ModuleDiagnosticAggregateOptions,
+  type ModuleDiagnosticContextRunner,
+  type ModuleDiagnosticObservation,
+  type ModuleDiagnosticProvider,
+  type RegisteredModuleDiagnosticProvider
+} from "./diagnostics.js";
 export * from "./module-params.js";
 export type { VaultIngestRootProvider } from "./vault-ingest-provider.js";
 
@@ -36,6 +47,8 @@ import type {
 } from "./external-module.js";
 
 import type { ModuleWorkflowDefinition } from "./workflow.js";
+
+import type { ModuleDiagnosticProvider } from "./diagnostics.js";
 
 export type ModuleLifecycle = "required" | "optional" | "user-toggleable" | "workspace-toggleable";
 export type ModuleScope = "user" | "admin" | "system";
@@ -650,6 +663,12 @@ export interface MossModuleManifest {
   readonly assistantTools?: readonly ModuleAssistantToolManifest[];
   readonly sourceBehaviors?: readonly SourceBehaviorSourceDecl[];
   readonly focusSignal?: FocusSignalProvider;
+  /**
+   * #2031: a small, safe diagnostic view of this module's own domain. Built-in modules only — a
+   * downloadable module runs in a separate worker and cannot hand a function across that boundary,
+   * which is why "diagnosticsProvider" is in the external validator's FORBIDDEN_FIELDS.
+   */
+  readonly diagnosticsProvider?: ModuleDiagnosticProvider;
   readonly proactiveMonitor?: ProactiveMonitorProvider;
   readonly personContextProvider?: PersonContextProvider;
   readonly dataLifecycle?: ModuleDataLifecycleManifest;
