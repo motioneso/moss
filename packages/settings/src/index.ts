@@ -19,6 +19,7 @@ export * from "./me-account-routes.js";
 export * from "./source-behavior-routes.js";
 export * from "./bootstrap.js";
 export * from "./host-diagnostics.js";
+export * from "./host-diagnostics-collect.js";
 export * from "./source-inspector.js";
 export * from "./host-install-routes.js";
 export * from "./host-restart-routes.js";

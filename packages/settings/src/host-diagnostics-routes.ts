@@ -4,7 +4,8 @@ import type { AccessContext, DataContextDb, DataContextRunner, User } from "@mos
 import { HttpError } from "@moss/module-sdk";
 import { getHostDiagnosticsRouteSchema } from "@moss/shared";
 
-import { buildHostDiagnostics, type HostDiagnosticsProvider } from "./host-diagnostics.js";
+import { collectHostDiagnostics } from "./host-diagnostics-collect.js";
+import type { HostDiagnosticsProvider } from "./host-diagnostics.js";
 import type { SettingsRepository } from "./repository.js";
 import type { GetChatMultiplexerStatus } from "./routes.js";
 
@@ -37,60 +38,21 @@ export function registerHostDiagnosticsRoutes(
     async (request, reply) => {
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
-        const { dbOk, multiplexer, latestAvailableVersion, releaseNotes } =
-          await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
-            await dependencies.assertAdminUser(scopedDb, accessContext.actorUserId);
-            // Authorization passed — only now is it safe to surface the 503 if the
-            // provider is missing, so a non-admin can never distinguish the states.
-            if (!dependencies.hostDiagnostics) {
-              throw new HttpError(503, "Host diagnostics are not available");
-            }
-            let ok = true;
-            try {
-              await dependencies.repository.pingDatabase(scopedDb);
-            } catch {
-              ok = false;
-            }
-            const { multiplexer: mux } =
-              await dependencies.repository.getChatMultiplexerSetting(scopedDb);
-
-            const latestReleaseRaw = await scopedDb.db
-              .selectFrom("app.instance_settings")
-              .select("value")
-              .where("key", "=", "latest_release")
-              .executeTakeFirst();
-
-            let latestAvailableVersion: string | null = null;
-            let releaseNotes: string | null = null;
-
-            if (latestReleaseRaw?.value) {
-              const val = latestReleaseRaw.value as Record<string, unknown>;
-              if (typeof val.version === "string") latestAvailableVersion = val.version;
-              if (typeof val.notes === "string") releaseNotes = val.notes;
-            }
-
-            return { dbOk: ok, multiplexer: mux, latestAvailableVersion, releaseNotes };
-          });
-
-        // hostDiagnostics is guaranteed defined here (the closure throws otherwise).
-        const provider = dependencies.hostDiagnostics as HostDiagnosticsProvider;
-        const pgBossOk = await provider.pgBossInstalled().catch(() => false);
-        const status = (await dependencies.getChatMultiplexerStatus?.(multiplexer)) ?? {
-          available: { tmux: false, herdr: false },
-          herdrInstalled: false,
-          active: null,
-          activeSource: null,
-          envOverride: null
-        };
-
-        return buildHostDiagnostics({
-          info: provider.info(),
-          multiplexer,
-          available: status.available,
-          dbOk,
-          pgBossOk,
-          latestAvailableVersion,
-          releaseNotes
+        return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
+          await dependencies.assertAdminUser(scopedDb, accessContext.actorUserId);
+          // Authorization passed — only now is it safe to surface the 503 if the
+          // provider is missing, so a non-admin can never distinguish the states.
+          if (!dependencies.hostDiagnostics) {
+            throw new HttpError(503, "Host diagnostics are not available");
+          }
+          return collectHostDiagnostics(
+            {
+              repository: dependencies.repository,
+              hostDiagnostics: dependencies.hostDiagnostics,
+              getChatMultiplexerStatus: dependencies.getChatMultiplexerStatus
+            },
+            scopedDb
+          );
         });
       } catch (error) {
         return dependencies.handleRouteError(error, reply);
