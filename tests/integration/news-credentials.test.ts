@@ -168,7 +168,7 @@ describe("news credential storage behaviour (#2005)", () => {
          (owner_user_id, label, canonical_domain, homepage_url, feed_url, retrieval_method,
           validation_status, health_status, validation_fingerprint, validated_at)
        VALUES ($1, 'Example Wire', $2, 'https://' || $2, NULL, 'scrape', 'approved',
-               'available', 'connection:example-wire:v1', now())
+               'healthy', 'connection:example-wire:v1', now())
        RETURNING id`,
       [ownerUserId, domain]
     );

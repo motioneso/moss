@@ -149,7 +149,16 @@ const credentialedNewsSourceDtoSchema = {
     feedUrl: { type: ["string", "null"] },
     retrievalMethod: { type: "string", enum: ["feed", "scrape"] },
     validationStatus: { type: "string", enum: ["approved", "needs_revalidation", "rejected"] },
-    healthStatus: { type: "string", enum: ["available", "unavailable"] },
+    healthStatus: {
+      type: "string",
+      enum: [
+        "healthy",
+        "authentication_failed",
+        "temporarily_unavailable",
+        "unsupported",
+        "disabled"
+      ]
+    },
     createdAt: { type: "string" }
   }
 } as const;

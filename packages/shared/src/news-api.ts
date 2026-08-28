@@ -146,7 +146,12 @@ export interface NewsCustomSourceDto {
   readonly feedUrl: string | null;
   readonly retrievalMethod: "feed" | "scrape";
   readonly validationStatus: "approved" | "needs_revalidation" | "rejected";
-  readonly healthStatus: "available" | "unavailable";
+  readonly healthStatus:
+    | "healthy"
+    | "authentication_failed"
+    | "temporarily_unavailable"
+    | "unsupported"
+    | "disabled";
   readonly createdAt: string;
 }
 
@@ -503,7 +508,16 @@ const newsCustomSourceDtoSchema = {
     feedUrl: { type: ["string", "null"] },
     retrievalMethod: { type: "string", enum: ["feed", "scrape"] },
     validationStatus: { type: "string", enum: ["approved", "needs_revalidation", "rejected"] },
-    healthStatus: { type: "string", enum: ["available", "unavailable"] },
+    healthStatus: {
+      type: "string",
+      enum: [
+        "healthy",
+        "authentication_failed",
+        "temporarily_unavailable",
+        "unsupported",
+        "disabled"
+      ]
+    },
     createdAt: { type: "string" }
   }
 } as const;

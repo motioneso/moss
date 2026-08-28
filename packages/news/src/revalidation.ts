@@ -70,7 +70,7 @@ export interface NewsRevalidationOutcome {
 const HEADLINE_SAMPLE_CAP = 10;
 
 function sourceNeedsAttention(source: NewsSourceValidationState): boolean {
-  return source.validationStatus !== "approved" || source.healthStatus === "unavailable";
+  return source.validationStatus !== "approved" || source.healthStatus !== "healthy";
 }
 
 function topicNeedsAttention(topic: NewsTopicValidationState): boolean {
@@ -109,7 +109,9 @@ export async function revalidateOwnerNews(
     if (!fetched.ok) {
       // Unreachable → owner action required: surface both the health problem and that the
       // verdict is stale under the new fingerprint (so retry re-checks it).
-      await deps.repository.updateSourceHealth(scopedDb, source.id, "unavailable");
+      if (source.healthStatus !== "authentication_failed") {
+        await deps.repository.updateSourceHealth(scopedDb, source.id, "temporarily_unavailable");
+      }
       await deps.repository.updateSourceValidation(scopedDb, source.id, {
         validationStatus: "needs_revalidation",
         validationFingerprint: fingerprint
@@ -132,7 +134,11 @@ export async function revalidateOwnerNews(
         validationStatus: "approved",
         validationFingerprint: policy.fingerprint
       });
-      await deps.repository.updateSourceHealth(scopedDb, source.id, "available");
+      // A public homepage can be healthy while the reviewed credential is still rejected.
+      // Only the credentialed refresh path may clear authentication_failed.
+      if (source.healthStatus !== "authentication_failed") {
+        await deps.repository.updateSourceHealth(scopedDb, source.id, "healthy");
+      }
     } else if (policy.verdict === "rejected") {
       await deps.repository.updateSourceValidation(scopedDb, source.id, {
         validationStatus: "rejected",

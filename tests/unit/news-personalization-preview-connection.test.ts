@@ -35,7 +35,9 @@ import {
   NEWSAPI_CONNECTION_ID
 } from "../../packages/news/src/source/newsapi-connection.js";
 
-const port = createRegistryNewsPublisherConnectionPort();
+const port = createRegistryNewsPublisherConnectionPort({
+  createFetch: () => async () => new Response(null, { status: 401 })
+});
 
 describe("reviewed publisher lookup", () => {
   it("describes the one reviewed connection with its display fields", () => {
@@ -91,10 +93,10 @@ describe("reviewed publisher lookup", () => {
     expect(port.matchUrl("javascript:alert(1)")).toBeUndefined();
   });
 
-  it("still refuses to connect, because the live check belongs to #2006", async () => {
+  it("rejects a key when the reviewed publisher rejects it", async () => {
     await expect(port.validateKey(NEWSAPI_CONNECTION_ID, "fake-key-not-real")).resolves.toEqual({
       ok: false,
-      reason: "unsupported"
+      reason: "rejected"
     });
   });
 
@@ -181,6 +183,7 @@ function emptyPersonalizationStore(): NewsPersonalizationStore {
     }),
     bumpRefreshRequest: async () => 1,
     pruneSnapshotDomain: async () => undefined,
+    updateSourceHealth: async () => undefined,
     readPolicyVerdict: async () => null,
     upsertPolicyVerdict: async () => undefined
   };

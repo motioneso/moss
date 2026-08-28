@@ -294,7 +294,7 @@ describe("Data export", () => {
       feedUrl: "https://gazette.example/feed.xml",
       retrievalMethod: "feed",
       validationStatus: "approved",
-      healthStatus: "available",
+      healthStatus: "healthy",
       validatedAt: "2026-02-01T08:00:00.000Z",
       createdAt: "2026-02-01T08:00:01.000Z",
       updatedAt: "2026-02-01T08:00:02.000Z"

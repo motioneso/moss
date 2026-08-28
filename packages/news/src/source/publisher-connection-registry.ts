@@ -8,13 +8,19 @@
 //
 // `validateKey` deliberately still answers "unsupported". Performing the real outbound check is
 // new runtime behaviour and belongs to #2006.
-import {
-  type NewsConnectionDescriptor,
-  type NewsCredentialValidationOutcome,
-  type NewsPublisherConnectionPort
+import { createHostPinnedFetch } from "@moss/datasets";
+
+import type {
+  NewsConnectionDescriptor,
+  NewsCredentialValidationOutcome,
+  NewsPublisherConnectionPort
 } from "../publisher-connection-port.js";
 
 import { PUBLISHER_CONNECTIONS } from "./newsapi-connection.js";
+import {
+  CredentialedPublisherError,
+  validateCredentialedPublisherKey
+} from "./credentialed-source.js";
 import type { PublisherConnection } from "./publisher-connection.js";
 
 /**
@@ -48,7 +54,14 @@ function matchesConnection(connection: PublisherConnection, host: string): boole
   return host === connection.canonicalDomain || host === `www.${connection.canonicalDomain}`;
 }
 
-export function createRegistryNewsPublisherConnectionPort(): NewsPublisherConnectionPort {
+export function createRegistryNewsPublisherConnectionPort(
+  deps: {
+    readonly createFetch?: (
+      hosts: readonly string[],
+      options: { readonly timeoutMs?: number; readonly maxResponseBytes?: number }
+    ) => typeof fetch;
+  } = {}
+): NewsPublisherConnectionPort {
   const byId = new Map(PUBLISHER_CONNECTIONS.map((entry) => [entry.id, entry]));
 
   return {
@@ -70,10 +83,28 @@ export function createRegistryNewsPublisherConnectionPort(): NewsPublisherConnec
       return connection ? toDescriptor(connection) : undefined;
     },
 
-    // #2006 replaces this with the real outbound check. Until then connecting is refused, and
-    // the settings screen says so in plain words rather than pretending the key was accepted.
-    async validateKey(): Promise<NewsCredentialValidationOutcome> {
-      return { ok: false, reason: "unsupported" };
+    async validateKey(
+      connectionId: string,
+      apiKey: string
+    ): Promise<NewsCredentialValidationOutcome> {
+      const connection = byId.get(connectionId);
+      if (!connection) return { ok: false, reason: "unsupported" };
+      try {
+        const fetchFn = (deps.createFetch ?? createHostPinnedFetch)(connection.fetchHosts, {
+          timeoutMs: connection.timeoutMs,
+          maxResponseBytes: connection.maxResponseBytes
+        });
+        await validateCredentialedPublisherKey(connection, apiKey, fetchFn);
+        return { ok: true };
+      } catch (error) {
+        if (error instanceof CredentialedPublisherError) {
+          return {
+            ok: false,
+            reason: error.failure === "authentication_failed" ? "rejected" : "unavailable"
+          };
+        }
+        return { ok: false, reason: "unavailable" };
+      }
     }
   };
 }

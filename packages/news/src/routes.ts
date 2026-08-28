@@ -26,7 +26,7 @@ import type {
   NewsWebSearchPort
 } from "./discovery/ports.js";
 import type { NewsCredentialCipherPort } from "./credential-cipher-port.js";
-import type { NewsCredentialStore } from "./credential-repository.js";
+import { NewsCredentialRepository, type NewsCredentialStore } from "./credential-repository.js";
 import type { NewsStoryFeedbackPort } from "./story-feedback-port.js";
 import { registerNewsCredentialRoutes } from "./credential-routes.js";
 import { registerNewsImageRoute } from "./image-route.js";
@@ -120,6 +120,8 @@ export function registerNewsRoutes(
   const repository: NewsPrefsWriter = dependencies.repository ?? new NewsPrefsRepository();
   const personalization: NewsPersonalizationStore =
     dependencies.personalizationRepository ?? new NewsPersonalizationRepository();
+  const credentials: NewsCredentialStore =
+    dependencies.credentialRepository ?? new NewsCredentialRepository();
   const service = new NewsService({
     datasetClient: dependencies.datasetClient,
     dataContext: dependencies.dataContext,
@@ -246,7 +248,8 @@ export function registerNewsRoutes(
     },
     availability: dependencies.availability,
     boss: dependencies.boss,
-    repository: personalization
+    repository: personalization,
+    credentials
   });
   // #2005/#2008: one port instance, shared by the preview (which asks "does this publisher
   // need a key?") and the credential routes (which ask "what is this connection?").
@@ -271,7 +274,8 @@ export function registerNewsRoutes(
     cipher: dependencies.credentialCipher,
     connections: publisherConnections,
     sources: personalization,
-    credentials: dependencies.credentialRepository
+    boss: dependencies.boss,
+    credentials
   });
   registerNewsImageRoute(server, {
     dataContext: dependencies.dataContext,

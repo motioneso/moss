@@ -299,6 +299,10 @@ import {
   newsModuleSqlMigrationDirectory,
   registerNewsJobWorkers,
   registerNewsRoutes,
+  NewsCredentialRepository,
+  createNewsCredentialedSourceReader,
+  NEWSAPI_CONNECTION_ID,
+  publisherConnection,
   createRegistryNewsPublisherConnectionPort,
   enqueueNewsRefresh,
   type NewsAiPort,
@@ -2040,10 +2044,9 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         ),
         // #2005: the composition root owns key resolution; News only holds the port.
         credentialCipher: createNewsCredentialCipherPort(),
-        // #2008: the reviewed connection list from #2007, so the one reviewed publisher is
-        // actually reachable in the running product. Lookup only - connecting still answers
-        // "unsupported" until #2006 wires the live check.
+        // #2008/#2006: the reviewed connection list and its bounded key check.
         publisherConnections: createRegistryNewsPublisherConnectionPort(),
+        credentialRepository: new NewsCredentialRepository(),
         // #953: news receives capability BOOLEANS only — model identity and key material stay
         // behind the AI/Settings public APIs; nothing secret crosses this seam.
         availability: {
@@ -2067,8 +2070,18 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         deps.logger ? createModuleLogger(deps.logger, "news") : undefined
       );
       const newsLogger = deps.logger ? createModuleLogger(deps.logger, "news") : undefined;
+      const connection = publisherConnection(NEWSAPI_CONNECTION_ID);
+      if (!connection) throw new Error("news module is missing its reviewed NewsAPI connection");
+      const credentials = new NewsCredentialRepository();
+      const credentialedSource = createNewsCredentialedSourceReader({
+        connection,
+        credentials,
+        cipher: createNewsCredentialCipherPort()
+      });
       return registerNewsJobWorkers(boss, deps.dataContext, {
         ...discovery,
+        credentials,
+        credentialedSource,
         // #2018: compilation applies the owner's story preferences through this port.
         storyFeedback: buildNewsStoryFeedbackPort(discovery.ai, newsLogger),
         logger: {

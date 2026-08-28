@@ -12,6 +12,7 @@
 //  - These routes sit behind the news.credentials permission, which no assistant tool
 //    holds, and no assistant tool is registered for credentials.
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { PgBoss } from "pg-boss";
 
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import { HttpError, handleRouteError } from "@moss/module-sdk";
@@ -37,7 +38,7 @@ import {
   NewsDuplicateSourceError,
   NewsPersonalizationLimitError
 } from "./personalization-repository.js";
-import type { NewsPersonalizationStore } from "./personalization-routes.js";
+import { triggerNewsRefresh, type NewsPersonalizationStore } from "./personalization-routes.js";
 import type {
   NewsConnectionDescriptor,
   NewsCredentialValidationOutcome,
@@ -47,7 +48,13 @@ import type {
 /** Only the two source methods this file needs, so a test fake stays small. */
 export type NewsCredentialSourceStore = Pick<
   NewsPersonalizationStore,
-  "createCustomSource" | "listCustomSources"
+  | "createCustomSource"
+  | "listCustomSources"
+  | "pruneSnapshotDomain"
+  | "updateSourceHealth"
+  | "bumpRefreshRequest"
+  | "countCustomSources"
+  | "countCustomTopics"
 >;
 
 export interface NewsCredentialRouteDependencies {
@@ -56,6 +63,7 @@ export interface NewsCredentialRouteDependencies {
   readonly cipher: NewsCredentialCipherPort;
   readonly connections: NewsPublisherConnectionPort;
   readonly sources: NewsCredentialSourceStore;
+  readonly boss?: PgBoss | null;
   readonly credentials?: NewsCredentialStore;
 }
 
@@ -190,6 +198,13 @@ export function registerNewsCredentialRoutes(
               connectionId: descriptor.connectionId,
               envelope
             });
+            await sources.updateSourceHealth(db, source.id, "healthy");
+            await triggerNewsRefresh(
+              db,
+              sources,
+              dependencies.boss ?? null,
+              accessContext.actorUserId
+            );
             return { source, row };
           }
         );
@@ -218,19 +233,43 @@ export function registerNewsCredentialRoutes(
         const { id } = request.params as { id: string };
         const input = request.body as ReplaceNewsSourceCredentialRequest;
 
-        const existing = await dependencies.dataContext.withDataContext(accessContext, async (db) =>
-          (await credentials.readStatuses(db)).find((row) => row.sourceId === id)
+        const existing = await dependencies.dataContext.withDataContext(
+          accessContext,
+          async (db) => {
+            const [credential, source] = await Promise.all([
+              credentials.readStatuses(db).then((rows) => rows.find((row) => row.sourceId === id)),
+              sources.listCustomSources(db).then((rows) => rows.find((row) => row.id === id))
+            ]);
+            return credential && source ? { credential, source } : null;
+          }
         );
         if (!existing) throw new HttpError(404, "No stored key for this source");
 
         // Validate the candidate first. On failure the stored row is left completely
         // untouched, so a typo cannot destroy a working key.
-        const outcome = await validateKeySafely(connections, existing.connectionId, input.apiKey);
+        const outcome = await validateKeySafely(
+          connections,
+          existing.credential.connectionId,
+          input.apiKey
+        );
         if (!outcome.ok) throw validationFailure(outcome.reason);
 
         const envelope = cipher.encrypt({ apiKey: input.apiKey });
-        const rotated = await dependencies.dataContext.withDataContext(accessContext, (db) =>
-          credentials.rotateCredential(db, id, envelope)
+        const rotated = await dependencies.dataContext.withDataContext(
+          accessContext,
+          async (db) => {
+            const result = await credentials.rotateCredential(db, id, envelope);
+            if (!result) return null;
+            await sources.updateSourceHealth(db, id, "healthy");
+            await triggerNewsRefresh(
+              db,
+              sources,
+              dependencies.boss ?? null,
+              accessContext.actorUserId,
+              () => sources.pruneSnapshotDomain(db, existing.source.canonicalDomain)
+            );
+            return result;
+          }
         );
         if (!rotated) throw new HttpError(404, "No stored key for this source");
 
@@ -251,8 +290,25 @@ export function registerNewsCredentialRoutes(
       try {
         const accessContext = await dependencies.resolveAccessContext(request);
         const { id } = request.params as { id: string };
-        const revoked = await dependencies.dataContext.withDataContext(accessContext, (db) =>
-          credentials.revokeCredential(db, id)
+        const source = await dependencies.dataContext.withDataContext(accessContext, async (db) =>
+          (await sources.listCustomSources(db)).find((row) => row.id === id)
+        );
+        if (!source) throw new HttpError(404, "News source not found");
+        const revoked = await dependencies.dataContext.withDataContext(
+          accessContext,
+          async (db) => {
+            const result = await credentials.revokeCredential(db, id);
+            if (!result) return null;
+            await sources.updateSourceHealth(db, id, "disabled");
+            await triggerNewsRefresh(
+              db,
+              sources,
+              dependencies.boss ?? null,
+              accessContext.actorUserId,
+              () => sources.pruneSnapshotDomain(db, source.canonicalDomain)
+            );
+            return result;
+          }
         );
         if (!revoked) throw new HttpError(404, "No stored key for this source");
         return {

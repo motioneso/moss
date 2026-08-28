@@ -91,6 +91,16 @@ export interface NewsPersonalizationStore {
   readRefreshState(scopedDb: DataContextDb): Promise<NewsRefreshStateDto>;
   bumpRefreshRequest(scopedDb: DataContextDb): Promise<number>;
   pruneSnapshotDomain(scopedDb: DataContextDb, domain: string): Promise<void>;
+  updateSourceHealth(
+    scopedDb: DataContextDb,
+    sourceId: string,
+    health:
+      | "healthy"
+      | "authentication_failed"
+      | "temporarily_unavailable"
+      | "unsupported"
+      | "disabled"
+  ): Promise<void>;
   readPolicyVerdict(
     scopedDb: DataContextDb,
     domain: string,

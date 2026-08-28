@@ -477,7 +477,7 @@ describe("news discovery repository", () => {
     await bootstrap.query("SET ROLE jarvis_worker_runtime");
     await bootstrap.query("SELECT set_config('app.actor_user_id', $1, false)", [ids.userA]);
     const changed = await bootstrap.query(
-      `UPDATE app.news_custom_sources SET health_status = 'unavailable' WHERE id = $1`,
+      `UPDATE app.news_custom_sources SET health_status = 'temporarily_unavailable' WHERE id = $1`,
       [created.id]
     );
     expect(changed.rowCount).toBe(1);
@@ -504,7 +504,7 @@ describe("news discovery repository", () => {
     ]);
     expect(visible.rows).toEqual([]);
     const changed = await bootstrap.query(
-      `UPDATE app.news_custom_sources SET health_status = 'unavailable' WHERE id = $1`,
+      `UPDATE app.news_custom_sources SET health_status = 'temporarily_unavailable' WHERE id = $1`,
       [other.id]
     );
     expect(changed.rowCount).toBe(0);

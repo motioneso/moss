@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
+import type { DataContextDb } from "@moss/db";
+
 import {
   createCredentialedPublisherAdapter,
   CredentialedPublisherError,
+  createNewsCredentialedSourceReader,
   toCredentialedHeadline
 } from "../../packages/news/src/source/credentialed-source.js";
 import {
@@ -364,6 +367,64 @@ describe("credentialed publisher adapter — failures say only what the person c
     expect(new CredentialedPublisherError("temporarily_unavailable").message).toBe(
       "temporarily unavailable"
     );
+  });
+});
+
+describe("News credentialed source reader", () => {
+  const db = {} as DataContextDb;
+
+  function readerWith(
+    credential:
+      | {
+          readonly status: "configured";
+          readonly connectionId: string;
+          readonly envelope: {
+            readonly version: 1;
+            readonly algorithm: "aes-256-gcm";
+            readonly iv: string;
+            readonly tag: string;
+            readonly ciphertext: string;
+          };
+          readonly generation: string;
+        }
+      | { readonly status: "revoked" }
+      | null,
+    fetchFn: typeof fetch
+  ) {
+    return createNewsCredentialedSourceReader({
+      connection: newsApiConnection,
+      credentials: { readCredentialForUse: async () => credential },
+      cipher: { encrypt: () => credential as never, decrypt: () => ({ apiKey: API_KEY }) },
+      createFetch: () => fetchFn
+    });
+  }
+
+  it("uses the keyed runtime and maps sanitized NewsAPI items", async () => {
+    const { fetchFn, calls } = recordingFetch(() => jsonResponse(okBody([article()])));
+    const result = await readerWith(
+      {
+        status: "configured",
+        connectionId: newsApiConnection.id,
+        envelope: { version: 1, algorithm: "aes-256-gcm", iv: "a", tag: "b", ciphertext: "c" },
+        generation: "1"
+      },
+      fetchFn
+    )(db, { actorUserId: "owner-1", sourceId: "source-1" });
+
+    expect(result).toMatchObject({ items: [{ title: "A headline" }] });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.headers[newsApiConnection.apiKeyHeader]).toBe(API_KEY);
+  });
+
+  it("makes no network call when the credential is missing", async () => {
+    const { fetchFn, calls } = recordingFetch(() => jsonResponse(okBody([article()])));
+    const result = await readerWith(null, fetchFn)(db, {
+      actorUserId: "owner-1",
+      sourceId: "source-1"
+    });
+
+    expect(result).toEqual({ failure: "authentication_failed" });
+    expect(calls).toHaveLength(0);
   });
 });
 

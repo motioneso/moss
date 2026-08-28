@@ -89,7 +89,9 @@ export {
 } from "./source/newsapi-connection.js";
 export {
   createCredentialedPublisherAdapter,
+  createNewsCredentialedSourceReader,
   CredentialedPublisherError,
+  validateCredentialedPublisherKey,
   toCredentialedHeadline
 } from "./source/credentialed-source.js";
 export type { CredentialedPublisherFailure } from "./source/credentialed-source.js";

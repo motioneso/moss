@@ -10,9 +10,20 @@
 //      text routinely echoes the request, and the request carries the key, so no upstream
 //      message, header, body or URL is ever attached to what we throw.
 import type { NewsHeadline } from "@moss/shared";
+import {
+  createKeyedDatasetClient,
+  KeyedCredentialUnavailableError,
+  type DatasetLogger
+} from "@moss/datasets";
+import type { KeyedDatasetClientDeps } from "@moss/datasets";
+import type { DataContextDb } from "@moss/db";
 import type { ExternalSourceAdapter, ExternalSourceAdapterContext } from "@moss/module-sdk";
 
+import type { NewsCredentialCipherPort } from "../credential-cipher-port.js";
+import type { NewsCredentialEnvelopeReader } from "./credential-lookup.js";
+import { createNewsCredentialLookup } from "./credential-lookup.js";
 import type { PublisherConnection, SanitizedPublisherItem } from "./publisher-connection.js";
+import { NEWSAPI_DATASET_KEY } from "./newsapi-connection.js";
 import { stableIdForUrl } from "./rss-source.js";
 
 /** The only two outcomes a person is ever told about. */
@@ -139,6 +150,15 @@ async function fetchSanitizedItems(
   }
 }
 
+/** Validate a candidate key without storing it or exposing the provider response. */
+export async function validateCredentialedPublisherKey(
+  connection: PublisherConnection,
+  apiKey: string,
+  fetchFn: typeof fetch = fetch
+): Promise<void> {
+  await fetchSanitizedItems(connection, { fetchFn, apiKey }, null);
+}
+
 /**
  * The `ExternalSourceAdapter` the keyed dataset runtime dispatches to. It uses only the pinned
  * `fetchFn` and the per-call key it is handed; it holds neither beyond the call.
@@ -153,6 +173,66 @@ export function createCredentialedPublisherAdapter(
       ctx: ExternalSourceAdapterContext
     ): Promise<unknown> {
       return fetchSanitizedItems(connection, ctx, readTopicKey(params));
+    }
+  };
+}
+
+const CREDENTIAL_DATASET_TTL_MS = 10 * 60 * 1_000;
+
+/**
+ * Builds the News-owned reader used by compilation workers. The keyed dataset runtime performs
+ * the credential lookup before every cache read, so revocation is immediate and cache entries
+ * are isolated by owner, source, and generation.
+ */
+export function createNewsCredentialedSourceReader(deps: {
+  readonly connection: PublisherConnection;
+  readonly credentials: NewsCredentialEnvelopeReader;
+  readonly cipher: NewsCredentialCipherPort;
+  readonly logger?: DatasetLogger;
+  readonly createFetch?: KeyedDatasetClientDeps["createFetch"];
+}) {
+  const { connection } = deps;
+  const client = createKeyedDatasetClient<DataContextDb>(
+    {
+      id: connection.id,
+      fetchHosts: connection.fetchHosts,
+      timeoutMs: connection.timeoutMs,
+      maxResponseBytes: connection.maxResponseBytes,
+      minIntervalMs: connection.minIntervalMs,
+      datasets: [{ key: NEWSAPI_DATASET_KEY, ttlMs: CREDENTIAL_DATASET_TTL_MS }]
+    },
+    createCredentialedPublisherAdapter(connection),
+    createNewsCredentialLookup({ reader: deps.credentials, cipher: deps.cipher }),
+    {
+      ...(deps.logger ? { logger: deps.logger } : {}),
+      ...(deps.createFetch ? { createFetch: deps.createFetch } : {})
+    }
+  );
+
+  return async (
+    scopedDb: DataContextDb,
+    input: { readonly actorUserId: string; readonly sourceId: string }
+  ): Promise<
+    | { readonly items: readonly SanitizedPublisherItem[] }
+    | { readonly failure: CredentialedPublisherFailure }
+  > => {
+    try {
+      const result = await client.getDataset<SanitizedPublisherItem[]>({
+        actorUserId: input.actorUserId,
+        sourceId: input.sourceId,
+        datasetKey: NEWSAPI_DATASET_KEY,
+        params: { topicKey: null },
+        credentialContext: scopedDb
+      });
+      return { items: result.data };
+    } catch (error) {
+      if (error instanceof KeyedCredentialUnavailableError) {
+        return { failure: "authentication_failed" };
+      }
+      if (error instanceof CredentialedPublisherError) {
+        return { failure: error.failure };
+      }
+      return { failure: "temporarily_unavailable" };
     }
   };
 }

@@ -26,6 +26,7 @@ function reader(
   result:
     | {
         readonly status: "configured";
+        readonly connectionId: string;
         readonly envelope: EncryptedSecret;
         readonly generation: string;
       }
@@ -81,6 +82,7 @@ describe("news credential lookup", () => {
   it("returns the decrypted key and the generation when the row is usable", async () => {
     const result = await lookupWith({
       status: "configured",
+      connectionId: "connection-1",
       envelope: ENVELOPE,
       generation: "4"
     }).call();
@@ -91,6 +93,7 @@ describe("news credential lookup", () => {
   it("carries the generation through as text so it can key a cache", async () => {
     const result = await lookupWith({
       status: "configured",
+      connectionId: "connection-1",
       envelope: ENVELOPE,
       generation: "12"
     }).call();
@@ -101,7 +104,7 @@ describe("news credential lookup", () => {
 
   it("reports an unreadable key when decryption fails, and says nothing about why", async () => {
     const result = await lookupWith(
-      { status: "configured", envelope: ENVELOPE, generation: "1" },
+      { status: "configured", connectionId: "connection-1", envelope: ENVELOPE, generation: "1" },
       "throws"
     ).call();
 
@@ -114,7 +117,7 @@ describe("news credential lookup", () => {
 
   it("reports an unreadable key when decryption produces an empty key", async () => {
     const result = await lookupWith(
-      { status: "configured", envelope: ENVELOPE, generation: "1" },
+      { status: "configured", connectionId: "connection-1", envelope: ENVELOPE, generation: "1" },
       "empty"
     ).call();
 
@@ -125,7 +128,10 @@ describe("news credential lookup", () => {
     const failures = await Promise.all([
       lookupWith(null).call(),
       lookupWith({ status: "revoked" }).call(),
-      lookupWith({ status: "configured", envelope: ENVELOPE, generation: "1" }, "throws").call()
+      lookupWith(
+        { status: "configured", connectionId: "connection-1", envelope: ENVELOPE, generation: "1" },
+        "throws"
+      ).call()
     ]);
 
     for (const failure of failures) {
@@ -137,6 +143,7 @@ describe("news credential lookup", () => {
   it("asks the reader for the source it was given", async () => {
     const { envelopeReader, call } = lookupWith({
       status: "configured",
+      connectionId: "connection-1",
       envelope: ENVELOPE,
       generation: "1"
     });

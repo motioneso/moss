@@ -54,7 +54,7 @@ function makeSource(overrides: Partial<MutableSource> = {}): MutableSource {
     retrievalMethod: "feed",
     validationStatus: "approved",
     validationFingerprint: "fp2",
-    healthStatus: "available",
+    healthStatus: "healthy",
     ...overrides
   };
 }
@@ -208,7 +208,7 @@ describe("news revalidation core (#975 Slice 4)", () => {
     expect(sources[0]).toMatchObject({
       validationStatus: "approved",
       validationFingerprint: "fp2",
-      healthStatus: "available"
+      healthStatus: "healthy"
     });
     expect(topics[0]).toMatchObject({
       validationStatus: "approved",
@@ -235,7 +235,7 @@ describe("news revalidation core (#975 Slice 4)", () => {
     });
     expect(sources[0]).toMatchObject({
       validationStatus: "needs_revalidation",
-      healthStatus: "unavailable"
+      healthStatus: "temporarily_unavailable"
     });
   });
 
@@ -368,7 +368,7 @@ describe("news revalidation jobs (#975 Slice 4)", () => {
          (owner_user_id, label, canonical_domain, homepage_url, feed_url, retrieval_method,
           validation_status, health_status, validation_fingerprint, validated_at, updated_at)
        VALUES ($1, $3, 'news.example.com', 'https://news.example.com',
-               'https://news.example.com/feed', 'feed', 'approved', 'available', $2,
+               'https://news.example.com/feed', 'feed', 'approved', 'healthy', $2,
                now() - interval '1 day', now() - interval '1 day')`,
       [ids.userA, fingerprint, `The Example Times${suffix}`]
     );

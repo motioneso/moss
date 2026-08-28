@@ -117,7 +117,7 @@ const LEAKED_SOURCE_ROW = {
   feedUrl: null,
   retrievalMethod: "scrape",
   validationStatus: "approved",
-  healthStatus: "available",
+  healthStatus: "healthy",
   createdAt: "2026-07-10T00:00:00.000Z",
   // Module-private fields that must NEVER survive serialization:
   validationFingerprint: "vfp-SECRET-MARKER",
@@ -181,14 +181,14 @@ function makePersonalization(overrides: Partial<FakePersonalization> = {}): Fake
       id: "77777777-7777-7777-7777-777777777777",
       ...input,
       validationStatus: "approved",
-      healthStatus: "available",
+      healthStatus: "healthy",
       createdAt: "2026-07-11T00:00:00.000Z"
     }),
     replaceCustomSource: async (_db, id, input) => ({
       id,
       ...input,
       validationStatus: "approved",
-      healthStatus: "available",
+      healthStatus: "healthy",
       createdAt: "2026-07-11T00:00:00.000Z"
     }),
     deleteCustomSource: async () => true,
@@ -224,6 +224,7 @@ function makePersonalization(overrides: Partial<FakePersonalization> = {}): Fake
     pruneSnapshotDomain: async (_db, domain) => {
       prunedDomains.push(domain);
     },
+    updateSourceHealth: async () => undefined,
     readPolicyVerdict: async () => null,
     upsertPolicyVerdict: async () => undefined,
     readLatestSnapshot: async () => ({
@@ -479,7 +480,7 @@ describe("news personalization routes (#953 Slice 1)", () => {
         feedUrl: null,
         retrievalMethod: "scrape",
         validationStatus: "approved",
-        healthStatus: "available",
+        healthStatus: "healthy",
         createdAt: "2026-07-10T00:00:00.000Z"
       }
     ]);

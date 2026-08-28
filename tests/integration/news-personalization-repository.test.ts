@@ -551,7 +551,7 @@ describe("news validation state repository (#975 Slice 4)", () => {
         retrievalMethod: "scrape",
         validationStatus: "approved",
         validationFingerprint: "fp-old",
-        healthStatus: "available"
+        healthStatus: "healthy"
       }
     ]);
 

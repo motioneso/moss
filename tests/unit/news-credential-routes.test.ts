@@ -67,7 +67,7 @@ const CREATED_SOURCE: NewsCustomSourceDto = {
   feedUrl: null,
   retrievalMethod: "scrape",
   validationStatus: "approved",
-  healthStatus: "available",
+  healthStatus: "healthy",
   createdAt: "2026-08-27T09:00:00.000Z"
 };
 
@@ -134,13 +134,21 @@ interface FakeSources extends NewsCredentialSourceStore {
 function makeSources(recorder: Recorder, failWith?: Error): FakeSources {
   const sources: FakeSources = {
     created: 0,
-    listCustomSources: async () => [],
+    listCustomSources: async () => [CREATED_SOURCE],
     createCustomSource: async (db) => {
       if (failWith) throw failWith;
       sources.created += 1;
       trackWrite(db, "source");
       return CREATED_SOURCE;
-    }
+    },
+    countCustomSources: async () => 0,
+    countCustomTopics: async () => 0,
+    bumpRefreshRequest: async (db) => {
+      trackWrite(db, "refresh");
+      return 1;
+    },
+    pruneSnapshotDomain: async (db) => trackWrite(db, "prune"),
+    updateSourceHealth: async (db, _sourceId, health) => trackWrite(db, `health:${health}`)
   };
   return sources;
 }
@@ -231,6 +239,7 @@ function buildApp(
     cipher: makeCipher(recorder),
     connections: overrides.connections ?? makeConnections(recorder),
     sources,
+    boss: null,
     credentials
   };
   registerNewsCredentialRoutes(app, dependencies);
@@ -283,7 +292,7 @@ describe("news credential routes (#2005)", () => {
     // Both writes in a single opened transaction. Splitting them would let a failure on
     // the second one leave a source row with no key attached to it.
     expect(recorder.transactions).toHaveLength(1);
-    expect(recorder.transactions[0]).toEqual(["source", "credential"]);
+    expect(recorder.transactions[0]).toEqual(["source", "credential", "health:healthy", "refresh"]);
     await app.close();
   });
 

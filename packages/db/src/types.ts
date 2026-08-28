@@ -1185,7 +1185,12 @@ export interface NewsCustomSourcesTable {
   feed_url: string | null;
   retrieval_method: "feed" | "scrape";
   validation_status: NewsValidationStatus;
-  health_status: "available" | "unavailable";
+  health_status:
+    | "healthy"
+    | "authentication_failed"
+    | "temporarily_unavailable"
+    | "unsupported"
+    | "disabled";
   validation_fingerprint: string;
   validated_at: TimestampColumn;
   created_at: TimestampColumn;

@@ -37,7 +37,8 @@ import {
   summarizeNewsAddTopic,
   summarizeNewsConfirmSource,
   summarizeNewsRemoveSource,
-  summarizeNewsRemoveTopic
+  summarizeNewsRemoveTopic,
+  newsCredentialedSourceStatusExecute
 } from "./chat-tools.js";
 import { collectNewsExportSection } from "./data-lifecycle.js";
 import { createNewsDiagnosticsProvider } from "./diagnostics-provider.js";
@@ -87,7 +88,9 @@ export const newsModuleManifest = {
       // #2005 (part of #950) — owner-only encrypted publisher credentials.
       "sql/0200_news_source_credentials.sql",
       // #2030 (part of #1586) — refresh attempt/success/failure history columns.
-      "sql/0203_news_refresh_history.sql"
+      "sql/0203_news_refresh_history.sql",
+      // #2006 — health states distinguish rejected credentials from temporary outages.
+      "sql/0204_news_source_health_states.sql"
     ],
     migrationDirectories: ["packages/news/sql"],
     ownedTables: [
@@ -309,6 +312,15 @@ export const newsModuleManifest = {
       risk: "read",
       inputSchema: { type: "object", properties: {} },
       execute: newsTopHeadlinesTodayExecute
+    },
+    {
+      name: "news.credentialedSourceStatus",
+      description:
+        "Show the actor's News source health and credential status. Read-only; if access failed, directs the actor to replace the key in News settings.",
+      permissionId: "news.view",
+      risk: "read",
+      inputSchema: { type: "object", properties: {} },
+      execute: newsCredentialedSourceStatusExecute
     },
     // #975 Slice 4 — chat preview/confirm for custom sources. Same two-phase shape as the
     // REST settings flow: preview verifies and stores candidates server-side; confirm writes.
