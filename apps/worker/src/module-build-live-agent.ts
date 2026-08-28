@@ -92,10 +92,6 @@ export function createModuleBuildLiveAgent(deps: ModuleBuildLiveAgentDeps) {
         .filter(Boolean)
         .join("\n\n");
       await deps.mux.submit(handle, prompt);
-      await deps.io.sleep(250);
-      if (!isComposerEmpty(deps.provider, await deps.mux.capturePane(handle))) {
-        await deps.mux.pressEnter(handle);
-      }
 
       const deadline = Date.now() + STEP_TIMEOUT_MS;
       while ((await deps.io.run("test", ["-f", completionMarkerPath])).code !== 0) {
