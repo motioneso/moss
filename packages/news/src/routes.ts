@@ -248,6 +248,10 @@ export function registerNewsRoutes(
     boss: dependencies.boss,
     repository: personalization
   });
+  // #2005/#2008: one port instance, shared by the preview (which asks "does this publisher
+  // need a key?") and the credential routes (which ask "what is this connection?").
+  const publisherConnections =
+    dependencies.publisherConnections ?? createEmptyNewsPublisherConnectionPort();
   registerNewsPersonalizationRoutes(server, {
     dataContext: dependencies.dataContext,
     resolveAccessContext: dependencies.resolveAccessContext,
@@ -256,7 +260,8 @@ export function registerNewsRoutes(
     boss: dependencies.boss,
     repository: personalization,
     previews,
-    previewOverride: dependencies.previewOverride
+    previewOverride: dependencies.previewOverride,
+    connections: publisherConnections
   });
   // #2005: always registered. The route guard treats a manifest routes[] entry with no
   // registered route as drift and stops the server, so this must not be conditional.
@@ -264,7 +269,7 @@ export function registerNewsRoutes(
     dataContext: dependencies.dataContext,
     resolveAccessContext: dependencies.resolveAccessContext,
     cipher: dependencies.credentialCipher,
-    connections: dependencies.publisherConnections ?? createEmptyNewsPublisherConnectionPort(),
+    connections: publisherConnections,
     sources: personalization,
     credentials: dependencies.credentialRepository
   });

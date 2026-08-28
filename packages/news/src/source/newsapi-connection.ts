@@ -108,6 +108,10 @@ export const newsApiConnection: PublisherConnection = Object.freeze({
   publisherName: "NewsAPI",
   canonicalDomain: "newsapi.org",
   homepageUrl: "https://newsapi.org/",
+  accessSummary:
+    "Reads the top headlines this publisher already publishes. It cannot post, change anything, " +
+    "or see the rest of your account.",
+  termsUrl: "https://newsapi.org/terms",
   fetchHosts: Object.freeze(["newsapi.org"]),
   endpoint: "https://newsapi.org/v2/top-headlines",
   method: "GET",

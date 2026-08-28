@@ -31,3 +31,16 @@ describe("news manifest — addTopic guidance removal (#1265)", () => {
     ]);
   });
 });
+
+// #2008: a publisher key is only ever typed into the News settings form by the person who owns
+// it. No assistant tool may hold the permission that guards the credential routes, or the model
+// would be able to connect, replace or revoke a key on somebody's behalf.
+describe("news assistant tools and publisher keys (#2008)", () => {
+  it("gives no assistant tool the news.credentials permission", () => {
+    const tools = newsModuleManifest.assistantTools ?? [];
+    const holders = tools
+      .filter((tool) => tool.permissionId === "news.credentials")
+      .map((tool) => tool.name);
+    expect(holders).toEqual([]);
+  });
+});

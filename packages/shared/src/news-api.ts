@@ -2,6 +2,10 @@
 import type { MossError } from "@moss/module-sdk/errors";
 
 import { errorResponseSchema } from "./schema-fragments.js";
+import {
+  newsPublisherConnectionOfferSchema,
+  type NewsPublisherConnectionOfferDto
+} from "./news-credentials-api.js";
 
 /** Cross-source topic vocabulary; each source maps topics to its own feeds (see news catalog). */
 export type NewsTopicKey =
@@ -197,6 +201,12 @@ export interface NewsSourcePreviewResponse {
   readonly candidateIds?: readonly string[];
   readonly reason?: string;
   readonly duplicateOfSourceId?: string;
+  /**
+   * #2008: present only when the preview found EXACTLY ONE candidate and that candidate's
+   * homepage matched a reviewed publisher connection. Its absence is what stops News asking
+   * for a key on an ambiguous or unreviewed match.
+   */
+  readonly connection?: NewsPublisherConnectionOfferDto;
 }
 
 export interface ConfirmNewsSourceRequest {
@@ -708,7 +718,8 @@ export const previewNewsSourceSchema = {
         },
         candidateIds: { type: "array", items: { type: "string" } },
         reason: { type: "string" },
-        duplicateOfSourceId: { type: "string", format: "uuid" }
+        duplicateOfSourceId: { type: "string", format: "uuid" },
+        connection: newsPublisherConnectionOfferSchema
       }
     },
     400: errorResponseSchema,

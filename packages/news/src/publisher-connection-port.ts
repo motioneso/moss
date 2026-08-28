@@ -14,6 +14,10 @@ export interface NewsConnectionDescriptor {
   readonly retrievalMethod: "feed" | "scrape";
   /** Exact host the key will be sent to, shown to the user before they submit it. */
   readonly host: string;
+  /** #2008: one plain sentence saying what a key here can read. Display-safe by construction. */
+  readonly accessSummary: string;
+  /** #2008: the publisher's own terms, linked next to the key box. https only, or null. */
+  readonly termsUrl: string | null;
 }
 
 export type NewsCredentialValidationOutcome =
@@ -22,6 +26,12 @@ export type NewsCredentialValidationOutcome =
 
 export interface NewsPublisherConnectionPort {
   describe(connectionId: string): NewsConnectionDescriptor | undefined;
+  /**
+   * #2008: does this publisher homepage resolve to a reviewed connection? Exact match only —
+   * a near match, a subdomain or an unknown host must answer undefined, because the answer is
+   * what decides whether News asks the user for a secret.
+   */
+  matchUrl(homepageUrl: string): NewsConnectionDescriptor | undefined;
   /**
    * SECURITY: implementations must never put the key, or any part of it, into a returned
    * value, a thrown error, or a log line. Callers treat a thrown error as "unavailable".
@@ -37,6 +47,7 @@ export interface NewsPublisherConnectionPort {
 export function createEmptyNewsPublisherConnectionPort(): NewsPublisherConnectionPort {
   return {
     describe: () => undefined,
+    matchUrl: () => undefined,
     validateKey: async () => ({ ok: false, reason: "unsupported" })
   };
 }

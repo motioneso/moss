@@ -79,6 +79,7 @@ export {
   assertValidPublisherConnectionRegistry
 } from "./source/publisher-connection.js";
 export type { PublisherConnection, SanitizedPublisherItem } from "./source/publisher-connection.js";
+export { createRegistryNewsPublisherConnectionPort } from "./source/publisher-connection-registry.js";
 export {
   NEWSAPI_CONNECTION_ID,
   NEWSAPI_DATASET_KEY,

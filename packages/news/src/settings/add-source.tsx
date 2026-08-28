@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useCallback, useState, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Note } from "@moss/settings-ui";
 import { ApiError, Button } from "@moss/module-web-sdk";
@@ -10,6 +10,7 @@ import type {
 
 import { confirmNewsSource, previewNewsSource } from "../web/news-client.js";
 import { newsQueryKeys } from "../web/query-keys.js";
+import { ConnectPublisherForm } from "./connect-publisher.js";
 
 /* #975 Task 9: the add-source flow (input → preview → candidate pick → confirm) lives in its
    own file so settings/index.tsx stays well under the 1000-line gate. It wires the Slice-2
@@ -88,7 +89,14 @@ export function AddSourceFlow() {
   const [input, setInput] = useState("");
   const [preview, setPreview] = useState<NewsSourcePreviewResponse | null>(null);
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
-  const [added, setAdded] = useState(false);
+  // The sentence to show after something was added, or null. A string rather than a flag so a
+  // key connection can report what the publisher's own route said instead of generic copy.
+  const [added, setAdded] = useState<string | null>(null);
+  // True while the key form below is sending a key. Its request is its own, so without this the
+  // ordinary Add button would stay live and the same publication could be added twice.
+  const [keyBusy, setKeyBusy] = useState(false);
+  // Stable so the key form is not told to report its state again on every re-render.
+  const handleKeyBusyChange = useCallback((value: boolean) => setKeyBusy(value), []);
 
   const previewMutation = useMutation({
     mutationFn: previewNewsSource,
@@ -105,7 +113,7 @@ export function AddSourceFlow() {
       setInput("");
       setPreview(null);
       setSelectedCandidateId(null);
-      setAdded(true);
+      setAdded("Source added — it now contributes to your News page.");
       // New source reshapes both the personalization pane and the composed front page.
       void queryClient.invalidateQueries({ queryKey: newsQueryKeys.personalization });
       void queryClient.invalidateQueries({ queryKey: newsQueryKeys.overview });
@@ -116,7 +124,7 @@ export function AddSourceFlow() {
     event.preventDefault();
     const trimmed = input.trim();
     if (!trimmed) return;
-    setAdded(false);
+    setAdded(null);
     setPreview(null);
     previewMutation.mutate({ input: trimmed });
   }
@@ -135,7 +143,7 @@ export function AddSourceFlow() {
     confirmMutation.reset();
   }
 
-  const busy = previewMutation.isPending || confirmMutation.isPending;
+  const busy = previewMutation.isPending || confirmMutation.isPending || keyBusy;
   const previewFailure = preview ? previewOutcomeMessage(preview) : null;
   const candidates = preview ? zipPreviewCandidates(preview) : [];
   // Confirm failures carry friendly server copy (limit/duplicate/expired) in the error body;
@@ -166,7 +174,7 @@ export function AddSourceFlow() {
             disabled={busy}
             onChange={(event) => {
               setInput(event.target.value);
-              setAdded(false);
+              setAdded(null);
             }}
           />
           <Button type="submit" size="sm" disabled={busy || !input.trim()}>
@@ -212,6 +220,8 @@ export function AddSourceFlow() {
               </li>
             ))}
           </ul>
+          {/* The ordinary Add row is always here. A publication that also offers a key
+              connection can still be added as a plain public source, exactly as before. */}
           <div className="nw-set__addrow">
             <Button size="sm" disabled={busy || !selectedCandidateId} onClick={confirmSelected}>
               {confirmMutation.isPending ? "Adding…" : "Add this source"}
@@ -220,10 +230,34 @@ export function AddSourceFlow() {
               Cancel
             </Button>
           </div>
+          {/* #2008: the server only puts an offer here when the preview found exactly one
+              candidate and that candidate is unmistakably a reviewed publisher's own homepage.
+              Any other preview shows the Add row alone and is never asked for a key. */}
+          {preview?.connection ? (
+            <>
+              <p className="nw-set__hint">
+                {preview.connection.publisherName} can also be connected with your own access key,
+                which brings in more of what they publish. That is optional - adding it above works
+                without one.
+              </p>
+              <ConnectPublisherForm
+                offer={preview.connection}
+                mode={{ kind: "connect" }}
+                onBusyChange={handleKeyBusyChange}
+                onDone={(message) => {
+                  setInput("");
+                  setPreview(null);
+                  setSelectedCandidateId(null);
+                  setAdded(message);
+                }}
+                onCancel={reset}
+              />
+            </>
+          ) : null}
         </div>
       ) : null}
 
-      {added ? <Note>Source added — it now contributes to your News page.</Note> : null}
+      {added ? <Note>{added}</Note> : null}
     </div>
   );
 }

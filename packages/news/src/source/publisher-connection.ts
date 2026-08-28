@@ -66,6 +66,14 @@ export interface PublisherConnection {
   readonly publisherName: string;
   readonly canonicalDomain: string;
   readonly homepageUrl: string;
+  /**
+   * One plain sentence describing what a key for this connection can read. #2008 shows it in
+   * News settings before the user pastes anything, so it is required and display-safe: it may
+   * never name the header, the endpoint or any part of the request.
+   */
+  readonly accessSummary: string;
+  /** The publisher's own terms, shown as a link next to the key box. https only, or null. */
+  readonly termsUrl: string | null;
   /** Exact hosts the pinned fetch may reach. The endpoint host must be one of them. */
   readonly fetchHosts: readonly string[];
   readonly endpoint: string;
@@ -200,6 +208,26 @@ export function assertValidPublisherConnection(connection: PublisherConnection):
       `Publisher connection "${id}" must declare a minimum request interval of at least ` +
         `${PUBLISHER_MIN_INTERVAL_FLOOR_MS}ms`
     );
+  }
+
+  // #2008: the settings screen shows this sentence as the whole explanation of what the user is
+  // handing over. A declaration without one would render a key box with nothing above it.
+  if (
+    typeof connection.accessSummary !== "string" ||
+    connection.accessSummary.trim().length === 0
+  ) {
+    throw new Error(`Publisher connection "${id}" declares no access summary`);
+  }
+  if (connection.termsUrl !== null) {
+    let terms: URL;
+    try {
+      terms = new URL(connection.termsUrl);
+    } catch {
+      throw new Error(`Publisher connection "${id}" declares an unparseable terms link`);
+    }
+    if (terms.protocol !== "https:") {
+      throw new Error(`Publisher connection "${id}" terms link must use https`);
+    }
   }
 
   if (typeof connection.parse !== "function") {

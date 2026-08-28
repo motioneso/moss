@@ -46,7 +46,9 @@ const DESCRIPTOR: NewsConnectionDescriptor = {
   homepageUrl: "https://wire.example.com",
   feedUrl: null,
   retrievalMethod: "scrape",
-  host: "api.wire.example.com"
+  host: "api.wire.example.com",
+  accessSummary: "Reads the Example Wire headline list.",
+  termsUrl: "https://wire.example.com/terms"
 };
 
 const ENVELOPE: EncryptedSecret = {
@@ -115,6 +117,8 @@ function makeConnections(
   return {
     describe: (connectionId) =>
       options.known === false || connectionId !== DESCRIPTOR.connectionId ? undefined : DESCRIPTOR,
+    matchUrl: (homepageUrl) =>
+      options.known === false || homepageUrl !== DESCRIPTOR.homepageUrl ? undefined : DESCRIPTOR,
     validateKey: async (_connectionId, apiKey) => {
       recorder.validated.push(apiKey);
       if (options.throws) throw options.throws;
@@ -255,6 +259,8 @@ describe("news credential routes (#2005)", () => {
       sourceId: SOURCE_ID,
       connectionId: DESCRIPTOR.connectionId,
       publisherName: DESCRIPTOR.publisherName,
+      // The reviewed connection's own request host, not the publication's domain.
+      requestHost: DESCRIPTOR.host,
       status: "configured",
       lastValidatedAt: "2026-08-27T09:00:00.000Z",
       revokedAt: null
@@ -414,6 +420,7 @@ describe("news credential routes (#2005)", () => {
       "connectionId",
       "lastValidatedAt",
       "publisherName",
+      "requestHost",
       "revokedAt",
       "sourceId",
       "status"
@@ -487,6 +494,7 @@ describe("news credential routes (#2005)", () => {
       "connectionId",
       "lastValidatedAt",
       "publisherName",
+      "requestHost",
       "revokedAt",
       "sourceId",
       "status"

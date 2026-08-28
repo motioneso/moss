@@ -22,6 +22,7 @@ import {
   type NewsCustomSourceDto,
   type NewsCustomTopicDto,
   type NewsRefreshStateDto,
+  type NewsPublisherConnectionOfferDto,
   type NewsSourceExclusionDto,
   type NewsSourcePreviewRequest,
   type NewsSourcePreviewResponse,
@@ -41,6 +42,7 @@ import {
   type NewsSnapshotRecord
 } from "./personalization-repository.js";
 import { isNewsSnapshotFresh } from "./news-service.js";
+import type { NewsPublisherConnectionPort } from "./publisher-connection-port.js";
 import { reconcileNewsRevalidationSchedule } from "./schedule.js";
 
 export interface NewsPersonalizationStore {
@@ -130,6 +132,36 @@ export interface PersonalizationRouteDependencies {
   readonly previews?: NewsSourcePreviewStore;
   /** #1110: UAT-only deterministic override for the source-preview route; see module-registry's buildUatNewsPreviewOverride(). */
   readonly previewOverride?: (input: string) => NewsSourcePreviewResponse | undefined;
+  /**
+   * #2008: the reviewed publisher connections, so a preview can tell the user up front that
+   * this publisher needs a key. Optional: with no port the preview answers exactly as before.
+   */
+  readonly connections?: NewsPublisherConnectionPort;
+}
+
+/**
+ * #2008: the offer News shows above the key box.
+ *
+ * Two rules live here rather than in the caller. The offer is only ever built for a preview that
+ * found EXACTLY ONE candidate, because asking for a key on an ambiguous match means asking
+ * someone to send a secret to a guessed publisher. And the offer carries five display fields
+ * only — never the endpoint, the header name, or anything else about the outgoing request.
+ */
+function connectionOfferFor(
+  connections: NewsPublisherConnectionPort | undefined,
+  candidates: readonly { readonly homepageUrl: string }[]
+): NewsPublisherConnectionOfferDto | undefined {
+  const only = candidates.length === 1 ? candidates[0] : undefined;
+  if (!connections || !only) return undefined;
+  const descriptor = connections.matchUrl(only.homepageUrl);
+  if (!descriptor) return undefined;
+  return {
+    connectionId: descriptor.connectionId,
+    publisherName: descriptor.publisherName,
+    requestHost: descriptor.host,
+    accessSummary: descriptor.accessSummary,
+    termsUrl: descriptor.termsUrl
+  };
 }
 
 function toSnapshotMeta(record: NewsSnapshotRecord | null): NewsSnapshotMetaDto | null {
@@ -387,6 +419,7 @@ export function registerNewsPersonalizationRoutes(
               existing.find((source) => source.canonicalDomain === candidate.canonicalDomain)
             )
             .find(Boolean);
+          const connection = connectionOfferFor(dependencies.connections, result.candidates);
           return {
             status: result.status,
             confirmationId,
@@ -398,7 +431,8 @@ export function registerNewsPersonalizationRoutes(
               sampleCount: candidate.sampleCount
             })),
             candidateIds: result.candidates.map((candidate) => candidate.candidateId),
-            ...(duplicate ? { duplicateOfSourceId: duplicate.id } : {})
+            ...(duplicate ? { duplicateOfSourceId: duplicate.id } : {}),
+            ...(connection ? { connection } : {})
           };
         });
       } catch (error) {
