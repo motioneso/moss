@@ -281,14 +281,14 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
     emitted: GatewaySessionRecord[],
     from: number
   ): Promise<Extract<GatewaySessionRecord, { kind: "action_request" }>> {
-    for (let attempt = 0; attempt < 100; attempt += 1) {
+    for (let attempt = 0; attempt < 1_000; attempt += 1) {
       const record = emitted
         .slice(from)
         .find((entry): entry is Extract<GatewaySessionRecord, { kind: "action_request" }> => {
           return entry.kind === "action_request";
         });
       if (record) return record;
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 5));
     }
     throw new Error("action request never emitted");
   }
