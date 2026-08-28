@@ -12,6 +12,7 @@ import { localDay, type LocaleSettingsDto } from "@moss/shared";
 import { TOURNAMENT_COMPETITIONS } from "./competitions.js";
 import { formatDate, formatTime, useUserLocale } from "./locale.js";
 import { Crest, FormPips, LiveDot } from "./sports-parts.js";
+import { StoryFeedbackMenu, type StoryFeedbackChange } from "./story-feedback-menu.js";
 
 // Server sends "#0 · -7.5 pts" when ESPN has no real rank/points for a league (MLB GB leaks
 // into points) — a nonsense line is worse than none. Also hidden for knockout tournaments,
@@ -132,7 +133,11 @@ export function nextMatchIsToday(
 // module's settings section.
 const SETTINGS_HREF = "/settings?section=modules&module=sports";
 
-export function SportsTicker(props: { followed: readonly FollowedTeamCard[] }) {
+export function SportsTicker(props: {
+  followed: readonly FollowedTeamCard[];
+  hiddenStoryRefs?: ReadonlySet<string>;
+  onStoryChanged?: StoryFeedbackChange;
+}) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [atStart, setAtStart] = useState(true);
   const [atEnd, setAtEnd] = useState(false);
@@ -239,7 +244,13 @@ export function SportsTicker(props: { followed: readonly FollowedTeamCard[] }) {
           aria-label="Followed teams"
         >
           {ordered.map((card) => (
-            <FeaturedTeamCard key={`${card.competitionKey}:${card.teamKey}`} card={card} />
+            <FeaturedTeamCard
+              key={`${card.competitionKey}:${card.teamKey}`}
+              card={card}
+              hiddenStoryRefs={props.hiddenStoryRefs}
+              onStoryChanged={props.onStoryChanged}
+              surface="sports"
+            />
           ))}
         </div>
         <button
@@ -262,8 +273,13 @@ export function SportsTicker(props: { followed: readonly FollowedTeamCard[] }) {
 // banner, a serif team name at display size, and generous spacing. /today keeps the dense
 // TickerTeam below. The team-semantics helpers (standingIsSane, NextGameContent, Crest/FormPips)
 // are shared so the two layouts can't drift on what a team's status/standing means.
-function FeaturedTeamCard(props: { card: FollowedTeamCard }) {
-  const { card } = props;
+function FeaturedTeamCard(props: {
+  card: FollowedTeamCard;
+  hiddenStoryRefs?: ReadonlySet<string>;
+  onStoryChanged?: StoryFeedbackChange;
+  surface?: "sports" | "today";
+}) {
+  const { card, surface = "sports" } = props;
   // Body slot rule (#963 supersedes the live half of mrawrk0e): pre-game/idle AND live cards
   // lead with news — a live game's score lives in the footer strip now, not the body — while
   // a finished game still leads with its result.
@@ -271,7 +287,8 @@ function FeaturedTeamCard(props: { card: FollowedTeamCard }) {
     card.status === "news" ||
     card.status === "live" ||
     (card.status === "today" && card.todayGameState !== "final");
-  const lead = card.stories[0] ?? null;
+  const stories = card.stories.filter((story) => !props.hiddenStoryRefs?.has(story.storyRef ?? ""));
+  const lead = stories[0] ?? null;
   // The footer bar renders for an upcoming fixture OR a live game (#963). A card with no
   // footer at all spends that space on one more headline instead of leaving a gap (Ben
   // 2026-07-09 /sports: "for teams/leagues not active and without the next game bar, add
@@ -281,9 +298,7 @@ function FeaturedTeamCard(props: { card: FollowedTeamCard }) {
   // A score card never spent stories[0] on its headline, so its link list starts at 0; a news
   // card already showed stories[0] as the headline, so its list starts at 1. Cap governed by
   // hasNextBar above — air, not a wall of headlines (mrb7mwhv).
-  const secondary = showNews
-    ? card.stories.slice(1, 1 + storyCap)
-    : card.stories.slice(0, storyCap);
+  const secondary = showNews ? stories.slice(1, 1 + storyCap) : stories.slice(0, storyCap);
   const isScore = !showNews && /\d/.test(card.primary);
 
   return (
@@ -327,10 +342,17 @@ function FeaturedTeamCard(props: { card: FollowedTeamCard }) {
             lead story headline carries it, set in the display face. */}
         {showNews ? (
           lead ? (
-            <a className="sp-feat__lead" href={lead.url} target="_blank" rel="noreferrer">
-              {lead.title}
-              {lead.publisherDomain === "espn.com" ? null : ` · ${lead.publisherLabel}`}
-            </a>
+            <>
+              <a className="sp-feat__lead" href={lead.url} target="_blank" rel="noreferrer">
+                {lead.title}
+                {lead.publisherDomain === "espn.com" ? null : ` · ${lead.publisherLabel}`}
+              </a>
+              <StoryFeedbackMenu
+                storyRef={lead.storyRef}
+                surface={surface}
+                onChanged={props.onStoryChanged ?? (() => undefined)}
+              />
+            </>
           ) : (
             // Storyless pre-game/idle card: an honest placeholder, NEVER the matchup — the Next
             // footer already carries the fixture, so echoing card.primary here is the duplication
@@ -361,11 +383,16 @@ function FeaturedTeamCard(props: { card: FollowedTeamCard }) {
         {secondary.length > 0 ? (
           <ul className="sp-feat__stories">
             {secondary.map((story) => (
-              <li key={story.url}>
+              <li key={story.storyRef}>
                 <a className="sp-feat__storylink" href={story.url} target="_blank" rel="noreferrer">
                   {story.title}
                   {story.publisherDomain === "espn.com" ? null : ` · ${story.publisherLabel}`}
                 </a>
+                <StoryFeedbackMenu
+                  storyRef={story.storyRef}
+                  surface={surface}
+                  onChanged={props.onStoryChanged ?? (() => undefined)}
+                />
               </li>
             ))}
           </ul>
@@ -397,8 +424,13 @@ function FeaturedTeamCard(props: { card: FollowedTeamCard }) {
 // column with the headline + bulleted secondary links beside it; footer = full-width inverted
 // "Next game" bar. Supersedes the mrawlzb7 standing/form sub-row and the mra5xnt2 40px inline
 // thumb. Never-red form pips and the news-or-score primary-slot rule (mrawrk0e) are unchanged.
-export function TickerTeam(props: { card: FollowedTeamCard }) {
-  const { card } = props;
+export function TickerTeam(props: {
+  card: FollowedTeamCard;
+  hiddenStoryRefs?: ReadonlySet<string>;
+  onStoryChanged?: StoryFeedbackChange;
+  surface?: "sports" | "today";
+}) {
+  const { card, surface = "sports" } = props;
   // Pre-game today cards drop the matchup line (the Next footer already names the fixture,
   // mrawrk0e) — but blanking the whole primary slot left those cards a hollow void next to
   // their news-status neighbors (top-area feedback 2026-07-07). Only the matchup text was
@@ -409,12 +441,13 @@ export function TickerTeam(props: { card: FollowedTeamCard }) {
     card.status === "news" ||
     card.status === "live" ||
     (card.status === "today" && card.todayGameState !== "final");
-  const lead = card.stories[0] ?? null;
+  const stories = card.stories.filter((story) => !props.hiddenStoryRefs?.has(story.storyRef ?? ""));
+  const lead = stories[0] ?? null;
   // Same slicing rule as FeaturedTeamCard: a news card spent stories[0] on its headline so
   // bullets start at 1; a score/result card never did, so its freshest story leads the bullets
   // (the old flat slice(1) silently dropped it on score cards). Two bullets max — the V3
   // mockup's card is air, not a wall of links.
-  const secondary = showNews ? card.stories.slice(1, 3) : card.stories.slice(0, 2);
+  const secondary = showNews ? stories.slice(1, 3) : stories.slice(0, 2);
   return (
     <article className="sp-tk">
       {/* Identity header (V3): crest at md so it anchors the row, name with the standing
@@ -446,10 +479,17 @@ export function TickerTeam(props: { card: FollowedTeamCard }) {
         <div className="sp-tk__col">
           {showNews ? (
             lead ? (
-              <a className="sp-tk__newstx" href={lead.url} target="_blank" rel="noreferrer">
-                {lead.title}
-                {lead.publisherDomain === "espn.com" ? null : ` · ${lead.publisherLabel}`}
-              </a>
+              <>
+                <a className="sp-tk__newstx" href={lead.url} target="_blank" rel="noreferrer">
+                  {lead.title}
+                  {lead.publisherDomain === "espn.com" ? null : ` · ${lead.publisherLabel}`}
+                </a>
+                <StoryFeedbackMenu
+                  storyRef={lead.storyRef}
+                  surface={surface}
+                  onChanged={props.onStoryChanged ?? (() => undefined)}
+                />
+              </>
             ) : (
               <span className="sp-tk__newstx sp-tk__newstx--empty">No recent news</span>
             )
@@ -476,13 +516,18 @@ export function TickerTeam(props: { card: FollowedTeamCard }) {
           )}
           {secondary.length > 0 ? (
             <ul className="sp-tk__stories">
-              {/* FollowedTeamNews carries no id — the url is the stable identity (service dedups by it) */}
+              {/* Old cached stories have no opaque reference, so their feedback menu stays hidden. */}
               {secondary.map((story) => (
-                <li key={story.url}>
+                <li key={story.storyRef}>
                   <a className="sp-tk__storylink" href={story.url} target="_blank" rel="noreferrer">
                     {story.title}
                     {story.publisherDomain === "espn.com" ? null : ` · ${story.publisherLabel}`}
                   </a>
+                  <StoryFeedbackMenu
+                    storyRef={story.storyRef}
+                    surface={surface}
+                    onChanged={props.onStoryChanged ?? (() => undefined)}
+                  />
                 </li>
               ))}
             </ul>
@@ -513,12 +558,18 @@ export function TickerTeam(props: { card: FollowedTeamCard }) {
 // League/tournament cards carry the competition's official logo (Ben 2026-07-09 "I would prefer to
 // have the logo to be clear"); <Crest> falls back to the initials swatch only when the catalog has
 // no logo for that competition.
-export function TickerLeague(props: { card: FollowedLeagueCard }) {
-  const { card } = props;
-  const lead = card.stories[0] ?? null;
+export function TickerLeague(props: {
+  card: FollowedLeagueCard;
+  hiddenStoryRefs?: ReadonlySet<string>;
+  onStoryChanged?: StoryFeedbackChange;
+  surface?: "sports" | "today";
+}) {
+  const { card, surface = "sports" } = props;
+  const stories = card.stories.filter((story) => !props.hiddenStoryRefs?.has(story.storyRef ?? ""));
+  const lead = stories[0] ?? null;
   // Lead story owns the headline slot; bullets start at the next story. Two max — same air-not-wall
   // rule as the team card (mockup keeps these cards light).
-  const secondary = card.stories.slice(1, 3);
+  const secondary = stories.slice(1, 3);
   const kindLabel = card.kind === "tournament" ? "Tournament" : "League";
   return (
     <article className="sp-tk">
@@ -544,21 +595,33 @@ export function TickerLeague(props: { card: FollowedLeagueCard }) {
         ) : null}
         <div className="sp-tk__col">
           {lead ? (
-            <a className="sp-tk__newstx" href={lead.url} target="_blank" rel="noreferrer">
-              {lead.title}
-              {lead.publisherDomain === "espn.com" ? null : ` · ${lead.publisherLabel}`}
-            </a>
+            <>
+              <a className="sp-tk__newstx" href={lead.url} target="_blank" rel="noreferrer">
+                {lead.title}
+                {lead.publisherDomain === "espn.com" ? null : ` · ${lead.publisherLabel}`}
+              </a>
+              <StoryFeedbackMenu
+                storyRef={lead.storyRef}
+                surface={surface}
+                onChanged={props.onStoryChanged ?? (() => undefined)}
+              />
+            </>
           ) : (
             <span className="sp-tk__newstx sp-tk__newstx--empty">No recent news</span>
           )}
           {secondary.length > 0 ? (
             <ul className="sp-tk__stories">
               {secondary.map((story) => (
-                <li key={story.url}>
+                <li key={story.storyRef}>
                   <a className="sp-tk__storylink" href={story.url} target="_blank" rel="noreferrer">
                     {story.title}
                     {story.publisherDomain === "espn.com" ? null : ` · ${story.publisherLabel}`}
                   </a>
+                  <StoryFeedbackMenu
+                    storyRef={story.storyRef}
+                    surface={surface}
+                    onChanged={props.onStoryChanged ?? (() => undefined)}
+                  />
                 </li>
               ))}
             </ul>

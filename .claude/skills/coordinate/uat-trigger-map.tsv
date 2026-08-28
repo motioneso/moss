@@ -92,6 +92,10 @@ blocking	apps/web/src/today/**	tests/uat/specs/1452-briefing-live-content.uat.sp
 # #1909 public Sports sources. The surface assertion is always on; real publisher discovery,
 # composition, recovery, and Moss status require JARVIS_UAT_REAL_CHAT_TOKEN_FILE.
 blocking	packages/sports/**	tests/uat/specs/1909-sports-public-source-completion.uat.spec.ts
+blocking	packages/sports/**	tests/uat/specs/2051-sports-story-preferences.uat.spec.ts
+blocking	packages/shared/src/sports-api.ts	tests/uat/specs/2051-sports-story-preferences.uat.spec.ts
+blocking	packages/usefulness-feedback/**	tests/uat/specs/2051-sports-story-preferences.uat.spec.ts
+blocking	tests/integration/usefulness-feedback-story.test.ts	tests/uat/specs/2051-sports-story-preferences.uat.spec.ts
 blocking	packages/shared/src/sports-sources-api.ts	tests/uat/specs/1909-sports-public-source-completion.uat.spec.ts
 blocking	packages/module-registry/src/index.ts	tests/uat/specs/1909-sports-public-source-completion.uat.spec.ts
 blocking	apps/web/src/today/**	tests/uat/specs/1909-sports-public-source-completion.uat.spec.ts

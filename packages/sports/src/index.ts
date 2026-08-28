@@ -4,7 +4,13 @@ export { collectSportsSourcesExportSection } from "./data-lifecycle.js";
 // repository (same precedent as @moss/auth's hashPassword / @moss/news's NewsPrefsRepository).
 export { SportsFollowsRepository } from "./repository.js";
 export type { SportsRoutesDependencies } from "./routes.js";
-export { SportsService, type SportsFollowsWriter } from "./sports-service.js";
+export {
+  SportsService,
+  type RegisteredStory,
+  type SportsFollowsWriter,
+  type SportsStoryFeedbackPort,
+  type SportsStoryRelevancePort
+} from "./sports-service.js";
 export {
   SPORTS_MODULE_ID,
   sportsAddSourceRequirement,

@@ -3,8 +3,8 @@ import "./styles/sports-3.css";
 import "./styles/sports-4-grid.css";
 import "./styles/sports-5-editorial.css";
 import "./styles/sports-6-newsband.css";
-import { useCallback, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type {
   GamedayGame,
@@ -26,6 +26,7 @@ import { AroundLeaguesBoard, AroundLeaguesTicker } from "./sports-around-ticker.
 import { SOCCER_COMPETITIONS } from "./competitions.js";
 import { useAutoAdvance } from "./use-auto-advance.js";
 import { StandingsRail } from "./sports-standings.js";
+import { StoryFeedbackMenu, type StoryFeedbackChange } from "./story-feedback-menu.js";
 
 const SETTINGS_HREF = "/settings?section=modules&module=sports";
 
@@ -83,6 +84,7 @@ export function hasLiveGame(data: SportsOverviewResponse | undefined): boolean {
 }
 
 export function SportsPage() {
+  const queryClient = useQueryClient();
   const overviewQuery = useQuery({
     queryKey: sportsQueryKeys.overview,
     queryFn: () => getSportsOverview(),
@@ -103,6 +105,35 @@ export function SportsPage() {
   // An index would silently point at a different match; an id resolves to nothing and falls back
   // to the lead, which is the honest behaviour when the game you were reading is gone.
   const [activeGameId, setActiveGameId] = useState<string | null>(null);
+  const [hiddenStoryRefs, setHiddenStoryRefs] = useState<ReadonlySet<string>>(new Set());
+  const onStoryChanged = useCallback<StoryFeedbackChange>(
+    (storyRef, kind) => {
+      if (kind === "less_like_this") {
+        setHiddenStoryRefs((current) => new Set(current).add(storyRef));
+      }
+      void queryClient.invalidateQueries({ queryKey: sportsQueryKeys.overview });
+    },
+    [queryClient]
+  );
+  useEffect(() => {
+    if (!data) return;
+    const responseStoryRefs = new Set([
+      ...data.topStories.flatMap((story) => (story.storyRef ? [story.storyRef] : [])),
+      ...data.followed.flatMap((card) =>
+        card.stories.flatMap((story) => (story.storyRef ? [story.storyRef] : []))
+      ),
+      ...data.followedLeagueCards.flatMap((card) =>
+        card.stories.flatMap((story) => (story.storyRef ? [story.storyRef] : []))
+      ),
+      ...data.leagueNews.flatMap((group) =>
+        group.headlines.flatMap((story) => (story.storyRef ? [story.storyRef] : []))
+      )
+    ]);
+    setHiddenStoryRefs((current) => {
+      const next = new Set([...current].filter((storyRef) => responseStoryRefs.has(storyRef)));
+      return next.size === current.size ? current : next;
+    });
+  }, [data]);
 
   const followedPairs = useMemo(
     () => new Set((data?.followedTeams ?? []).map((f) => `${f.competitionKey}:${f.teamKey}`)),
@@ -158,23 +189,45 @@ export function SportsPage() {
               active={activeGame}
               onSelect={setActiveGameId}
               overview={data}
+              hiddenStoryRefs={hiddenStoryRefs}
+              onStoryChanged={onStoryChanged}
             />
           ) : (
-            <HeroCarousel headlines={data.topStories} />
+            <HeroCarousel
+              headlines={data.topStories}
+              hiddenStoryRefs={hiddenStoryRefs}
+              onStoryChanged={onStoryChanged}
+            />
           )}
-          <SportsTicker followed={data.followed} />
+          <SportsTicker
+            followed={data.followed}
+            hiddenStoryRefs={hiddenStoryRefs}
+            onStoryChanged={onStoryChanged}
+          />
           {SHOW_AROUND_STRIP ? <AroundLeaguesTicker groups={data.scoreboard} /> : null}
           <BroadsheetGrid
             overview={data}
             followedPairs={followedPairs}
+            hiddenStoryRefs={hiddenStoryRefs}
+            onStoryChanged={onStoryChanged}
             // Gameday: the carousel is replaced by the game bar, so the top stories collapse
             // into a combined list at the head of the main column (mrb4w77y).
             withTopStories={hero.mode === "gameday"}
           />
-          <NewsBand groups={data.leagueNews} followedPairs={followedPairs} />
+          <NewsBand
+            groups={data.leagueNews}
+            followedPairs={followedPairs}
+            hiddenStoryRefs={hiddenStoryRefs}
+            onStoryChanged={onStoryChanged}
+          />
         </>
       ) : (
-        <EmptyState data={data} followedPairs={followedPairs} />
+        <EmptyState
+          data={data}
+          followedPairs={followedPairs}
+          hiddenStoryRefs={hiddenStoryRefs}
+          onStoryChanged={onStoryChanged}
+        />
       )}
     </div>
   );
@@ -251,7 +304,11 @@ function SportsSkeleton() {
 // headline about this matchup from the overview payload. Honest data only — if no headline
 // mentions either team, no band renders. Prefers the service's teamKeys join; falls back to
 // scanning titles for a team name, since some sources emit empty teamKeys.
-function findFeaturedStory(game: GameSummary, overview: SportsOverviewResponse): Headline | null {
+function findFeaturedStory(
+  game: GameSummary,
+  overview: SportsOverviewResponse,
+  hiddenStoryRefs?: ReadonlySet<string>
+): Headline | null {
   const keys = new Set([game.home.teamKey, game.away.teamKey]);
   const names = [game.home.shortName, game.away.shortName].map((name) => name.toLowerCase());
   // A story about *this* game (preview, recap, highlights) tags or names both clubs.
@@ -266,7 +323,7 @@ function findFeaturedStory(game: GameSummary, overview: SportsOverviewResponse):
   const candidates = [
     ...overview.topStories,
     ...overview.leagueNews.flatMap((group) => group.headlines)
-  ].filter(aboutThisGame);
+  ].filter((headline) => aboutThisGame(headline) && !hiddenStoryRefs?.has(headline.storyRef ?? ""));
   return (
     candidates.find((h) => h.imageUrl && h.summary) ??
     candidates.find((h) => h.imageUrl) ??
@@ -275,26 +332,33 @@ function findFeaturedStory(game: GameSummary, overview: SportsOverviewResponse):
   );
 }
 
-function FeaturedStoryBand(props: { story: Headline }) {
+function FeaturedStoryBand(props: { story: Headline; onStoryChanged: StoryFeedbackChange }) {
   const { story } = props;
   const [broken, setBroken] = useState(false);
   return (
-    <a className="sp-scorebar__story" href={story.url} target="_blank" rel="noreferrer">
-      {story.imageUrl && !broken ? (
-        <img
-          className="sp-scorebar__photo"
-          src={story.imageUrl}
-          alt=""
-          loading="lazy"
-          onError={() => setBroken(true)}
-        />
-      ) : null}
-      <span className="sp-scorebar__storycopy">
-        <span className="sp-scorebar__storytitle">{story.title}</span>
-        <span className="sp-scorebar__storydek">{story.publisherLabel}</span>
-        {story.summary ? <span className="sp-scorebar__storydek">{story.summary}</span> : null}
-      </span>
-    </a>
+    <>
+      <a className="sp-scorebar__story" href={story.url} target="_blank" rel="noreferrer">
+        {story.imageUrl && !broken ? (
+          <img
+            className="sp-scorebar__photo"
+            src={story.imageUrl}
+            alt=""
+            loading="lazy"
+            onError={() => setBroken(true)}
+          />
+        ) : null}
+        <span className="sp-scorebar__storycopy">
+          <span className="sp-scorebar__storytitle">{story.title}</span>
+          <span className="sp-scorebar__storydek">{story.publisherLabel}</span>
+          {story.summary ? <span className="sp-scorebar__storydek">{story.summary}</span> : null}
+        </span>
+      </a>
+      <StoryFeedbackMenu
+        storyRef={story.storyRef}
+        surface="sports"
+        onChanged={props.onStoryChanged}
+      />
+    </>
   );
 }
 
@@ -307,6 +371,8 @@ function GamedayHero(props: {
   active: GamedayGame;
   onSelect: (gameId: string) => void;
   overview: SportsOverviewResponse;
+  hiddenStoryRefs: ReadonlySet<string>;
+  onStoryChanged: StoryFeedbackChange;
 }) {
   const { games, active, onSelect, overview } = props;
   const count = games.length;
@@ -326,7 +392,13 @@ function GamedayHero(props: {
   const pauseHandlers = useAutoAdvance(count, advance, GAMEDAY_ADVANCE_MS);
 
   if (count === 1) {
-    return <FeaturedGameBar entry={active} story={findFeaturedStory(active.game, overview)} />;
+    return (
+      <FeaturedGameBar
+        entry={active}
+        story={findFeaturedStory(active.game, overview, props.hiddenStoryRefs)}
+        onStoryChanged={props.onStoryChanged}
+      />
+    );
   }
 
   return (
@@ -351,7 +423,11 @@ function GamedayHero(props: {
             aria-hidden={entry.game.id === active.game.id ? undefined : "true"}
             inert={entry.game.id !== active.game.id}
           >
-            <FeaturedGameBar entry={entry} story={findFeaturedStory(entry.game, overview)} />
+            <FeaturedGameBar
+              entry={entry}
+              story={findFeaturedStory(entry.game, overview, props.hiddenStoryRefs)}
+              onStoryChanged={props.onStoryChanged}
+            />
           </div>
         ))}
       </div>
@@ -437,7 +513,11 @@ function GamedayTab(props: {
   );
 }
 
-function FeaturedGameBar(props: { entry: GamedayGame; story: Headline | null }) {
+function FeaturedGameBar(props: {
+  entry: GamedayGame;
+  story: Headline | null;
+  onStoryChanged: StoryFeedbackChange;
+}) {
   const { game, competitionLabel } = props.entry;
   const locale = useUserLocale();
   const soccer = SOCCER_COMPETITIONS.has(game.competitionKey);
@@ -462,7 +542,9 @@ function FeaturedGameBar(props: { entry: GamedayGame; story: Headline | null }) 
       <div className="sp-scorebar__foot">
         <span className="sp-scorebar__comp">{competitionLabel}</span>
       </div>
-      {props.story ? <FeaturedStoryBand story={props.story} /> : null}
+      {props.story ? (
+        <FeaturedStoryBand story={props.story} onStoryChanged={props.onStoryChanged} />
+      ) : null}
     </section>
   );
 }
@@ -510,11 +592,19 @@ function BroadsheetGrid(props: {
   overview: SportsOverviewResponse;
   followedPairs: ReadonlySet<string>;
   withTopStories?: boolean;
+  hiddenStoryRefs?: ReadonlySet<string>;
+  onStoryChanged?: StoryFeedbackChange;
 }) {
   return (
     <div className="sp-grid">
       <div className="sp-grid__main">
-        {props.withTopStories ? <LatestColumn headlines={props.overview.topStories} /> : null}
+        {props.withTopStories ? (
+          <LatestColumn
+            headlines={props.overview.topStories}
+            hiddenStoryRefs={props.hiddenStoryRefs}
+            onStoryChanged={props.onStoryChanged}
+          />
+        ) : null}
         <AroundLeaguesBoard
           groups={props.overview.scoreboard}
           followedPairs={props.followedPairs}
@@ -529,7 +619,12 @@ function BroadsheetGrid(props: {
 
 /* ---------------------------------------------------------------- Empty state */
 
-function EmptyState(props: { data: SportsOverviewResponse; followedPairs: ReadonlySet<string> }) {
+function EmptyState(props: {
+  data: SportsOverviewResponse;
+  followedPairs: ReadonlySet<string>;
+  hiddenStoryRefs?: ReadonlySet<string>;
+  onStoryChanged?: StoryFeedbackChange;
+}) {
   const hasSlate =
     props.data.topStories.length > 0 ||
     props.data.standings.length > 0 ||
@@ -559,8 +654,15 @@ function EmptyState(props: { data: SportsOverviewResponse; followedPairs: Readon
             overview={props.data}
             followedPairs={props.followedPairs}
             withTopStories
+            hiddenStoryRefs={props.hiddenStoryRefs}
+            onStoryChanged={props.onStoryChanged}
           />
-          <NewsBand groups={props.data.leagueNews} followedPairs={props.followedPairs} />
+          <NewsBand
+            groups={props.data.leagueNews}
+            followedPairs={props.followedPairs}
+            hiddenStoryRefs={props.hiddenStoryRefs}
+            onStoryChanged={props.onStoryChanged}
+          />
         </div>
       ) : null}
     </>

@@ -171,6 +171,35 @@
   text-transform: uppercase;
   margin-right: var(--space-2);
 }
+
+.sp-feedback {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+.sp-feedback__editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: min(280px, 100%);
+}
+.sp-feedback__label,
+.sp-feedback__saved,
+.sp-feedback__error {
+  margin: 0;
+}
+.sp-feedback__reason {
+  min-height: 72px;
+  resize: vertical;
+}
+.sp-feedback__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+.sp-feedback__error {
+  max-width: 280px;
+}
 /* Mosaic narrows track-by-track; majors keep their double span until the grid itself is
    two tracks wide (span 2 = full row), then everything stacks single-column. */
 @media (max-width: 1100px) {

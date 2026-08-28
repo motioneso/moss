@@ -19,18 +19,21 @@ import {
   type SportsSportKey,
   type SportsTeamSearchResponse,
   type StandingsGroup,
+  type StoryRelevanceCandidate,
+  type StoryRelevanceResult,
   type TeamRef
 } from "@moss/shared";
 
 import { SPORTS_CATALOG, catalogEntry, competitionLogoUrl } from "./source/catalog.js";
-import { selectFeature } from "./news-ranking.js";
+import { isWrittenArticle, selectFeature } from "./news-ranking.js";
 import {
   canonicalStoryUrl,
   composeSportsNewsGroups,
   mergeHeadlineScope,
   rankTopStories,
   resolveEspnHeadlineTeamKeys,
-  toPublicHeadline
+  toPublicHeadline,
+  type StoryRefFor
 } from "./headline-composition.js";
 import {
   groupFollowedTeams,
@@ -92,6 +95,53 @@ export interface SportsFollowsWriter extends SportsFollowsReader {
   remove(scopedDb: DataContextDb, id: string): Promise<boolean>;
 }
 
+/**
+ * One story the overview actually rendered, registered so the owner is allowed to give feedback on
+ * it (#2019). Registration is the authorisation boundary: the feedback routes refuse a target that
+ * was never registered for this owner AND this surface, so a story registered only for the Sports
+ * page cannot be acted on from the Today widget.
+ *
+ * Carries only the agreed story details. Never a raw link, never an article body.
+ */
+export interface RegisteredStory {
+  readonly storyRef: string;
+  readonly surface: "sports" | "today";
+  readonly headline: string;
+  readonly sourceLabel: string;
+  readonly publishedAt: string;
+  readonly teamRef: string | null;
+  readonly competitionRef: string | null;
+  readonly hasEditorialEvidence: boolean;
+  readonly isOpinion?: boolean;
+}
+
+/**
+ * The relevance filter and the story registrar, both injected (#2019). Sports never imports the
+ * usefulness-feedback package: that is another module's internals, and the composition root owns
+ * the binding. The shapes are structural for the same reason.
+ */
+export interface SportsStoryRelevancePort {
+  (
+    scopedDb: DataContextDb,
+    input: {
+      readonly ownerUserId: string;
+      readonly moduleId: "sports";
+      readonly candidates: readonly StoryRelevanceCandidate[];
+      readonly now: Date;
+    }
+  ): Promise<StoryRelevanceResult>;
+}
+
+export interface SportsStoryFeedbackPort {
+  /** Opaque per-story reference built from the canonical link; the browser cannot compute it. */
+  readonly refFor: StoryRefFor;
+  readonly registerStories: (
+    scopedDb: DataContextDb,
+    ownerUserId: string,
+    stories: readonly RegisteredStory[]
+  ) => Promise<void>;
+}
+
 export interface SportsServiceDependencies {
   /**
    * The dataset-connector-SDK runtime client bound to the sports module's `espn` external
@@ -106,6 +156,12 @@ export interface SportsServiceDependencies {
   readonly espnCoverage?: Pick<SportsEspnCoverageRepository, "get">;
   /** Clock seam (default `() => new Date()`); tests inject a fixed instant. */
   readonly now?: () => Date;
+  /**
+   * Story relevance (#2019). Both optional: a service built without them behaves exactly as it did
+   * before this shipped, which is also how an owner who has saved no preferences pays nothing.
+   */
+  readonly storyRelevance?: SportsStoryRelevancePort;
+  readonly storyFeedback?: SportsStoryFeedbackPort;
 }
 
 // ESPN's `scoreboard?dates=YYYYMMDD` param is interpreted in US Eastern time, not UTC — the
@@ -158,6 +214,41 @@ interface DegradeState {
 
 /** Everything needed to build one member of a merged `FollowedTeamCard` — the same per-follow
  *  data `buildCard` used to consume directly, now stashed so a group's members can be pooled. */
+/**
+ * What one candidate story carried into the relevance pass, kept so the same pass can also supply
+ * the bounded detail the story's registered row is allowed to store (#2019). Never a raw link and
+ * never an article body.
+ */
+interface StoryDetail {
+  readonly candidate: StoryRelevanceCandidate;
+  readonly hasEditorialEvidence: boolean;
+  readonly isOpinion?: boolean;
+}
+
+/**
+ * Every story reference the finished response actually carries, from all five places a story can
+ * appear: the story hero, top stories, the league news band, followed team cards and followed
+ * league cards. A story with no reference (its link would not normalise) is simply absent.
+ */
+function shownStoryRefs(overview: SportsOverviewResponse): ReadonlySet<string> {
+  const refs = new Set<string>();
+  const add = (ref: string | undefined): void => {
+    if (ref !== undefined) refs.add(ref);
+  };
+  if (overview.hero.mode === "story") add(overview.hero.headline?.storyRef);
+  for (const headline of overview.topStories) add(headline.storyRef);
+  for (const group of overview.leagueNews) {
+    for (const headline of group.headlines) add(headline.storyRef);
+  }
+  for (const card of overview.followed) {
+    for (const story of card.stories) add(story.storyRef);
+  }
+  for (const card of overview.followedLeagueCards) {
+    for (const story of card.stories) add(story.storyRef);
+  }
+  return refs;
+}
+
 interface FollowedTeamBundle {
   readonly follow: ResolvedFollow;
   readonly sourceTeamId: string | null;
@@ -180,6 +271,8 @@ export class SportsService {
   private readonly now: () => Date;
   private readonly publicSourceReader?: Pick<SportsPublicSourceReader, "refresh">;
   private readonly espnCoverage?: Pick<SportsEspnCoverageRepository, "get">;
+  private readonly storyRelevance?: SportsStoryRelevancePort;
+  private readonly storyFeedback?: SportsStoryFeedbackPort;
 
   constructor(deps: SportsServiceDependencies) {
     this.datasetClient = deps.datasetClient;
@@ -188,6 +281,8 @@ export class SportsService {
     this.publicSourceReader = deps.publicSourceReader;
     this.espnCoverage = deps.espnCoverage;
     this.now = deps.now ?? (() => new Date());
+    this.storyRelevance = deps.storyRelevance;
+    this.storyFeedback = deps.storyFeedback;
   }
 
   /** League metadata for the follow picker — static catalog data, no ESPN calls. Rosters are
@@ -276,6 +371,9 @@ export class SportsService {
             .catch(() => ({ value: DISABLED_ESPN_COVERAGE, degraded: true }))
         : Promise.resolve({ value: DEFAULT_ESPN_COVERAGE, degraded: false })
     ]);
+    // One story reference builder for the whole pass (#2019). Absent when the port is not wired,
+    // in which case no story carries a reference and the browser renders no feedback menu.
+    const refFor = this.storyFeedback?.refFor;
     const espnCoverage = coverage.value;
     // Skip any follow row whose competitionKey isn't in the catalog (e.g. a retired entry)
     // instead of letting it permanently degrade every load with no explanation — the picker
@@ -413,12 +511,81 @@ export class SportsService {
         };
       })
     );
+    // The gameday slides are settled here, BEFORE anything is filtered (#2019). They depend only
+    // on the scoreboards and the follows, never on top stories, so pulling their teams' feeds now
+    // means the relevance filter sees every headline the page could show and runs exactly once.
+    // Filtering after the hero was known would cost a second model call on every page load.
+    const gamedayGames = this.gamedayGames(followedTeams, scoreboardByComp, this.now());
+
+    // On a gameday, the league-wide news feed rarely covers the featured matchup itself, so
+    // the scorebar's photo+blurb band (findFeaturedStory on the client) usually comes up
+    // empty. Pull each hero team's own ESPN feed into the pool so a real story about the
+    // matchup is available — still honest data, just fetched where ESPN actually files it.
+    // Every hero slide needs its own story band, so this runs per game, not just for the lead
+    // one (#1386). Capped: each game costs two ESPN feed reads, and past a handful of
+    // simultaneous games the reads stop paying for themselves — later slides simply show the
+    // score bar with no band, which is already the normal no-matching-story outcome.
+    for (const { game } of gamedayGames.slice(0, HERO_STORY_FEED_GAMES)) {
+      const heroTeams = teamsByComp.get(game.competitionKey) ?? [];
+      const heroCompetition = catalogEntry(game.competitionKey);
+      // Resolve each hero side's numeric id from the same catalog the followed cards use — the
+      // news endpoint 400s on a soccer abbreviation slug (EspnHeadlinesParams.sourceTeamId),
+      // which would leave a soccer gameday hero with no matchup story at all.
+      const teamFeeds = await Promise.all(
+        [game.home.teamKey, game.away.teamKey].map((teamKey) => {
+          const includeEspnTeamFeed =
+            heroCompetition !== undefined &&
+            sportsNewsCoverageAllows(espnCoverage, follows, {
+              kind: "team",
+              sportKey: heroCompetition.espnSport,
+              competitionKey: game.competitionKey,
+              teamKey
+            });
+          return includeEspnTeamFeed
+            ? this.cached<SourceHeadline[]>(
+                "headlines",
+                {
+                  competitionKey: game.competitionKey,
+                  teamKey,
+                  sourceTeamId:
+                    heroTeams.find((team) => team.teamKey === teamKey)?.sourceTeamId ?? null
+                },
+                [],
+                state
+              )
+            : Promise.resolve([]);
+        })
+      );
+      const existing = headlinesByComp.get(game.competitionKey) ?? [];
+      // Dedup by url, not id: the same story arrives from the league feed and a hero team's own
+      // feed under DIFFERENT ids (ESPN ids are feed-scoped — see the
+      // toTeamStories/followedStoryUrls dedup, which key on url for the same reason). Keying on
+      // id here let a matchup story render twice in the NewsBand (Fable M1). url is the story's
+      // stable cross-feed identity.
+      let merged = [...existing];
+      for (const headline of resolveEspnHeadlineTeamKeys(teamFeeds.flat(), heroTeams)) {
+        merged = mergeHeadlineScope(merged, headline);
+      }
+      headlinesByComp.set(game.competitionKey, merged);
+    }
+
+    // One relevance pass over every headline the page could show, then every pool is cut down to
+    // the survivors (#2019). Doing it here — before followed cards, the hero, top stories and the
+    // league news band are composed from these same pools — is what makes the promise true that a
+    // story the owner asked to see less of cannot come back through a sibling feed.
+    const relevance = await this.applyStoryRelevance(
+      accessContext,
+      { byComp: headlinesByComp, bySport: headlinesBySport, bundles: bundleList },
+      followedTeams,
+      state
+    );
+
     const bundles = new Map(bundleList.map((b) => [b.follow.id, b]));
     // Group by canonical club key (espnSport:sourceTeamId) — spec's dedupe rule (#855). A follow
     // whose sourceTeamId didn't resolve becomes its own singleton group (never merged by name).
     const groups = groupFollowedTeams(followedTeams, (f) => bundles.get(f.id)!.sourceTeamId);
     const cards: FollowedTeamCard[] = groups.map((group) =>
-      this.buildGroupedCard(group, bundles, this.now())
+      this.buildGroupedCard(group, bundles, this.now(), refFor)
     );
 
     // Rank across every followed competition (team or whole-league), not just team-followed
@@ -429,7 +596,7 @@ export class SportsService {
       headlinesByComp,
       competitionKeys
     );
-    const rankedTopStories = rankTopStories(rankingNewsGroups, followedTeams);
+    const rankedTopStories = rankTopStories(rankingNewsGroups, followedTeams, relevance.liftFor);
 
     // The hero must not echo what the followed strip already shows (mrb8ahf7). rankTopStories'
     // first tier IS followed-team stories — the same pool toTeamStories draws each card's ≤3
@@ -454,61 +621,7 @@ export class SportsService {
       rankedTopStories.map((headline) => canonicalStoryUrl(headline.url) ?? headline.url)
     );
 
-    const hero = this.buildHero(followedTeams, scoreboardByComp, topStories, this.now());
-
-    // On a gameday, the league-wide news feed rarely covers the featured matchup itself, so
-    // the scorebar's photo+blurb band (findFeaturedStory on the client) usually comes up
-    // empty. Pull each hero team's own ESPN feed into the pool so a real story about the
-    // matchup is available — still honest data, just fetched where ESPN actually files it.
-    // Every hero slide needs its own story band, so this runs per game, not just for the lead
-    // one (#1386). Capped: each game costs two ESPN feed reads, and past a handful of
-    // simultaneous games the reads stop paying for themselves — later slides simply show the
-    // score bar with no band, which is already the normal no-matching-story outcome.
-    if (hero.mode === "gameday") {
-      for (const { game } of hero.games.slice(0, HERO_STORY_FEED_GAMES)) {
-        const heroTeams = teamsByComp.get(game.competitionKey) ?? [];
-        const heroCompetition = catalogEntry(game.competitionKey);
-        // Resolve each hero side's numeric id from the same catalog the followed cards use — the
-        // news endpoint 400s on a soccer abbreviation slug (EspnHeadlinesParams.sourceTeamId),
-        // which would leave a soccer gameday hero with no matchup story at all.
-        const teamFeeds = await Promise.all(
-          [game.home.teamKey, game.away.teamKey].map((teamKey) => {
-            const includeEspnTeamFeed =
-              heroCompetition !== undefined &&
-              sportsNewsCoverageAllows(espnCoverage, follows, {
-                kind: "team",
-                sportKey: heroCompetition.espnSport,
-                competitionKey: game.competitionKey,
-                teamKey
-              });
-            return includeEspnTeamFeed
-              ? this.cached<SourceHeadline[]>(
-                  "headlines",
-                  {
-                    competitionKey: game.competitionKey,
-                    teamKey,
-                    sourceTeamId:
-                      heroTeams.find((team) => team.teamKey === teamKey)?.sourceTeamId ?? null
-                  },
-                  [],
-                  state
-                )
-              : Promise.resolve([]);
-          })
-        );
-        const existing = headlinesByComp.get(game.competitionKey) ?? [];
-        // Dedup by url, not id: the same story arrives from the league feed and a hero team's own
-        // feed under DIFFERENT ids (ESPN ids are feed-scoped — see the
-        // toTeamStories/followedStoryUrls dedup, which key on url for the same reason). Keying on
-        // id here let a matchup story render twice in the NewsBand (Fable M1). url is the story's
-        // stable cross-feed identity.
-        let merged = [...existing];
-        for (const headline of resolveEspnHeadlineTeamKeys(teamFeeds.flat(), heroTeams)) {
-          merged = mergeHeadlineScope(merged, headline);
-        }
-        headlinesByComp.set(game.competitionKey, merged);
-      }
-    }
+    const hero = this.buildHero(gamedayGames, topStories, this.storyFeedback?.refFor);
 
     const newsGroups = composeSportsNewsGroups(
       headlinesBySport,
@@ -547,7 +660,7 @@ export class SportsService {
     // request per overview, cached by article id (immutable post-publish).
     const publicNewsGroups: SportsNewsGroup[] = newsGroups.map((group) => ({
       ...group,
-      headlines: group.headlines.map(toPublicHeadline)
+      headlines: group.headlines.map((headline) => toPublicHeadline(headline, refFor))
     }));
     const followedPairs = new Set(followedTeams.map((f) => `${f.competitionKey}:${f.teamKey}`));
     const feature = selectFeature(publicNewsGroups, followedPairs);
@@ -583,7 +696,7 @@ export class SportsService {
     const followedLeagueCards: FollowedLeagueCard[] = followedLeagues
       .map((league): FollowedLeagueCard => {
         const games = scoreboardByComp.get(league.competitionKey) ?? [];
-        const stories = toTeamStories(headlinesByComp.get(league.competitionKey) ?? []);
+        const stories = toTeamStories(headlinesByComp.get(league.competitionKey) ?? [], refFor);
         const results = leagueResults(games);
         return {
           competitionKey: league.competitionKey,
@@ -601,11 +714,11 @@ export class SportsService {
       })
       .filter((card) => card.stories.length > 0 || card.results.length > 0);
 
-    return {
+    const overview: SportsOverviewResponse = {
       hero,
       followed: cards,
       scoreboard,
-      topStories: topStories.map(toPublicHeadline),
+      topStories: topStories.map((headline) => toPublicHeadline(headline, refFor)),
       leagueNews: newsGroupsWithBody,
       standings,
       followedTeams: followedTeams.map((f) => ({
@@ -616,6 +729,11 @@ export class SportsService {
       followedLeagueCards,
       degraded: state.degraded
     };
+
+    // Read the references back off the FINISHED response rather than off the candidate pool, so a
+    // story is registered when, and only when, the owner can actually see it and act on it.
+    await this.registerShownStories(accessContext, shownStoryRefs(overview), relevance.details);
+    return overview;
   }
 
   /**
@@ -789,12 +907,205 @@ export class SportsService {
     return this.cached<SourceTeamRef[]>("teams", { competitionKey }, [], state);
   }
 
-  private buildHero(
+  /**
+   * Runs the relevance filter exactly once over every headline the page could show, cuts every
+   * pool down to the survivors in place, and hands back what the rest of the composition needs
+   * (#2019).
+   *
+   * Returns the per-story details for the stories it saw, so the caller can register the ones the
+   * response actually contains, plus the "more like this" lift by story reference.
+   *
+   * Never throws. A relevance failure must not blank the page and must not stop live scores: the
+   * Sports page re-fetches every sixty seconds while a game is in progress, so this is wrapped the
+   * same way every other source call in `getOverview` is wrapped.
+   */
+  private async applyStoryRelevance(
+    accessContext: AccessContext,
+    pools: {
+      readonly byComp: Map<string, SourceHeadline[]>;
+      readonly bySport: Map<SportsSportKey, SourceHeadline[]>;
+      readonly bundles: FollowedTeamBundle[];
+    },
+    followedTeams: readonly ResolvedFollow[],
+    state: DegradeState
+  ): Promise<{
+    readonly details: ReadonlyMap<string, StoryDetail>;
+    readonly liftFor: (headline: SourceHeadline) => number;
+  }> {
+    const policy = this.storyRelevance;
+    const refFor = this.storyFeedback?.refFor;
+    const empty = { details: new Map<string, StoryDetail>(), liftFor: () => 0 };
+    if (!policy || !refFor) return empty;
+
+    const followedPairs = new Set(
+      followedTeams.map((follow) => `${follow.competitionKey}:${follow.teamKey}`)
+    );
+    const refByUrl = new Map<string, string>();
+    const details = new Map<string, StoryDetail>();
+
+    const refOf = (headline: SourceHeadline): string | undefined => {
+      // Keyed on the CANONICAL link, which is this module's cross-feed identity for a story
+      // (canonicalStoryUrl). That is what makes one story arriving from a league feed and from a
+      // team feed a single candidate with a single reference.
+      const canonical = canonicalStoryUrl(headline.url);
+      if (!canonical) return undefined;
+      const known = refByUrl.get(canonical);
+      if (known !== undefined) return known;
+      try {
+        const ref = refFor(canonical);
+        refByUrl.set(canonical, ref);
+        return ref;
+      } catch {
+        return undefined;
+      }
+    };
+
+    const collect = (headlines: readonly SourceHeadline[]): void => {
+      headlines.forEach((headline, feedPosition) => {
+        const storyRef = refOf(headline);
+        if (storyRef === undefined || details.has(storyRef)) return;
+        const competitionKey = headline.competitionKey;
+        const teamRef =
+          competitionKey === null
+            ? null
+            : (headline.teamKeys.find((key) => followedPairs.has(`${competitionKey}:${key}`)) ??
+              null);
+        // A clip or a short blurb is not an opinion piece. A written article MIGHT be, and this
+        // check cannot tell — so the flag is left off rather than guessed. Never invent evidence.
+        const written = isWrittenArticle(headline);
+        details.set(storyRef, {
+          candidate: {
+            storyRef,
+            headline: headline.title,
+            sourceLabel: headline.publisherLabel,
+            publishedAt: headline.publishedAt,
+            feedPosition,
+            teamRef,
+            competitionRef: competitionKey,
+            ...(written ? {} : { isOpinion: false })
+          },
+          // The only editorial signal this module actually has: the source put the story first in
+          // its own feed. Nothing else counts as evidence.
+          hasEditorialEvidence: feedPosition === 0,
+          ...(written ? {} : { isOpinion: false })
+        });
+      });
+    };
+    for (const headlines of pools.byComp.values()) collect(headlines);
+    for (const headlines of pools.bySport.values()) collect(headlines);
+    for (const bundle of pools.bundles) collect(bundle.headlines);
+    if (details.size === 0) return empty;
+
+    let result: StoryRelevanceResult;
+    try {
+      result = await this.dataContext.withDataContext(accessContext, (db) =>
+        policy(db, {
+          ownerUserId: accessContext.actorUserId,
+          moduleId: "sports",
+          candidates: [...details.values()].map((detail) => detail.candidate),
+          now: this.now()
+        })
+      );
+    } catch {
+      // Keep the last good behaviour: every story stays, the page says it is degraded, and the
+      // scoreboard is untouched.
+      state.degraded = true;
+      return { details, liftFor: () => 0 };
+    }
+    if (result.status === "degraded") state.degraded = true;
+
+    const kept = new Set(result.kept.map((candidate) => candidate.storyRef));
+    const keep = (headline: SourceHeadline): boolean => {
+      const storyRef = refOf(headline);
+      // A story we could not build a reference for was never judged, so it is never dropped.
+      return storyRef === undefined || kept.has(storyRef);
+    };
+    for (const [key, headlines] of pools.byComp) pools.byComp.set(key, headlines.filter(keep));
+    for (const [key, headlines] of pools.bySport) pools.bySport.set(key, headlines.filter(keep));
+    pools.bundles.forEach((bundle, index) => {
+      pools.bundles[index] = { ...bundle, headlines: bundle.headlines.filter(keep) };
+    });
+
+    const lifts =
+      result.status === "applied"
+        ? new Map(result.boosts.map((boost) => [boost.storyRef, boost.lift]))
+        : new Map<string, number>();
+    return {
+      details,
+      liftFor: (headline) => {
+        const storyRef = refOf(headline);
+        return storyRef === undefined ? 0 : (lifts.get(storyRef) ?? 0);
+      }
+    };
+  }
+
+  /**
+   * Registers every story the composed response actually carries, so the owner is allowed to give
+   * feedback on it (#2019). Registration is the authorisation boundary — the feedback routes
+   * refuse a target that was never registered for this owner and this surface — so it is not
+   * optional, and it is done once per surface the story can be acted on from.
+   *
+   * Both surfaces are written because the Today widget renders from this very same response
+   * (`web/today-widget.tsx` reuses the overview query). Registering only the Sports page would
+   * make the Today menu fail on a story the user can plainly see.
+   *
+   * Note for the next reader: #2016 left an "a story preference changed" callback unwired, and
+   * this slice deliberately does not wire it. Sports composes its overview live on every request,
+   * so there is no stored snapshot to rebuild and no queue to schedule; the refresh is simply the
+   * browser fetching the overview again, and the next fetch already excludes a rejected story
+   * without any model call because the shared code removes rejections by reference first.
+   *
+   * Never throws: failing to register must not take the page down.
+   */
+  private async registerShownStories(
+    accessContext: AccessContext,
+    shownRefs: ReadonlySet<string>,
+    details: ReadonlyMap<string, StoryDetail>
+  ): Promise<void> {
+    const port = this.storyFeedback;
+    if (!port || shownRefs.size === 0) return;
+    const stories: RegisteredStory[] = [];
+    for (const storyRef of shownRefs) {
+      const detail = details.get(storyRef);
+      if (!detail) continue;
+      for (const surface of ["sports", "today"] as const) {
+        stories.push({
+          storyRef,
+          surface,
+          headline: detail.candidate.headline,
+          sourceLabel: detail.candidate.sourceLabel,
+          publishedAt: detail.candidate.publishedAt,
+          teamRef: detail.candidate.teamRef ?? null,
+          competitionRef: detail.candidate.competitionRef ?? null,
+          hasEditorialEvidence: detail.hasEditorialEvidence,
+          ...(detail.isOpinion === undefined ? {} : { isOpinion: detail.isOpinion })
+        });
+      }
+    }
+    if (stories.length === 0) return;
+    try {
+      // One database call inside one data context: a page can easily carry fifty stories, and two
+      // surfaces each, so a row-at-a-time loop would be a hundred round-trips per page load.
+      await this.dataContext.withDataContext(accessContext, (db) =>
+        port.registerStories(db, accessContext.actorUserId, stories)
+      );
+    } catch {
+      // The page is already composed and correct. A story whose row is missing simply refuses
+      // feedback, which is the safe direction for the authorisation boundary to fail in.
+    }
+  }
+
+  /**
+   * The gameday slides, in final order. Split out of `buildHero` (#2019) because it depends only
+   * on the scoreboards and the follows — not on top stories — so `getOverview` can settle the
+   * gameday games, pull those teams' own feeds and fold them into the headline pools BEFORE the
+   * relevance filter runs. Filtering twice would mean two model calls per page load.
+   */
+  private gamedayGames(
     followedTeams: readonly ResolvedFollow[],
     scoreboardByComp: Map<string, GameSummary[]>,
-    topStories: readonly SourceHeadline[],
     now: Date
-  ): OverviewHero {
+  ): GamedayGame[] {
     // Every followed game in the window becomes a hero slide (#1386), not just the best one.
     const inWindow: GamedayGame[] = [];
     const seenGameIds = new Set<string>();
@@ -824,27 +1135,31 @@ export class SportsService {
         rationale: `You follow ${teamSide.name}.`
       });
     }
-    if (inWindow.length > 0) {
-      // Live games lead; within each group the user's own follow order decides. Two passes over
-      // the array rather than a comparator so the ordering is stable by construction — a sort
-      // whose comparator ties would be free to reshuffle equal games between polls, and the
-      // client tracks the active slide by game id precisely so it never moves under a reader.
-      return {
-        mode: "gameday",
-        games: [
-          ...inWindow.filter((entry) => entry.game.state === "live"),
-          ...inWindow.filter((entry) => entry.game.state !== "live")
-        ]
-      };
-    }
+    // Live games lead; within each group the user's own follow order decides. Two passes over
+    // the array rather than a comparator so the ordering is stable by construction — a sort
+    // whose comparator ties would be free to reshuffle equal games between polls, and the
+    // client tracks the active slide by game id precisely so it never moves under a reader.
+    return [
+      ...inWindow.filter((entry) => entry.game.state === "live"),
+      ...inWindow.filter((entry) => entry.game.state !== "live")
+    ];
+  }
+
+  private buildHero(
+    gamedayGames: readonly GamedayGame[],
+    topStories: readonly SourceHeadline[],
+    refFor: StoryRefFor | undefined
+  ): OverviewHero {
+    if (gamedayGames.length > 0) return { mode: "gameday", games: gamedayGames };
     const top = topStories[0];
-    return { mode: "story", headline: top ? toPublicHeadline(top) : null };
+    return { mode: "story", headline: top ? toPublicHeadline(top, refFor) : null };
   }
 
   private buildGroupedCard(
     group: FollowedTeamGroup,
     bundles: ReadonlyMap<string, FollowedTeamBundle>,
-    now: Date
+    now: Date,
+    refFor: StoryRefFor | undefined
   ): FollowedTeamCard {
     // Primary-first: the primary follow's data wins every precedence tie below (spec Design).
     const orderedFollows = [
@@ -916,7 +1231,7 @@ export class SportsService {
       status,
       primary,
       todayGameState,
-      stories: toTeamStories(storyPool),
+      stories: toTeamStories(storyPool, refFor),
       form: computeFormAcross(resolvedGames),
       formDetail: computeFormDetailAcross(resolvedGames),
       // standing comes ONLY from the primary competition (spec Design) — a Champions League

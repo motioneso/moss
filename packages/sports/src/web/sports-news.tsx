@@ -6,7 +6,12 @@ import { useAutoAdvance } from "./use-auto-advance.js";
 // it needs to fetch the article body for. Re-export `isFollowed` because sports-around-ticker /
 // sports-standings still import it from here.
 import { isWrittenArticle, rankStories, BIG_STORY_WEIGHT } from "../news-ranking.js";
+import { StoryFeedbackMenu, type StoryFeedbackChange } from "./story-feedback-menu.js";
 export { isFollowed } from "../news-ranking.js";
+
+function storyKey(headline: Headline): string {
+  return headline.storyRef || headline.url;
+}
 
 export function NewsIcon(): ReactNode {
   return (
@@ -37,7 +42,15 @@ const CAROUSEL_ADVANCE_MS = 7000;
 
 // One slide = the exact split-hero layout StoryHero used to render (art beside display
 // headline + dek), so the carousel is a rotation of front pages, not a new component idiom.
-function HeroSlide({ headline, active }: { readonly headline: Headline; active: boolean }) {
+function HeroSlide({
+  headline,
+  active,
+  onStoryChanged
+}: {
+  readonly headline: Headline;
+  active: boolean;
+  readonly onStoryChanged: StoryFeedbackChange;
+}) {
   return (
     <article
       className={active ? "sp-carousel__slide sp-carousel__slide--active" : "sp-carousel__slide"}
@@ -101,6 +114,13 @@ function HeroSlide({ headline, active }: { readonly headline: Headline; active: 
           >
             Continue reading<span aria-hidden="true"> →</span>
           </a>
+          {active ? (
+            <StoryFeedbackMenu
+              storyRef={headline.storyRef}
+              surface="sports"
+              onChanged={onStoryChanged}
+            />
+          ) : null}
         </div>
       </div>
     </article>
@@ -112,8 +132,18 @@ function HeroSlide({ headline, active }: { readonly headline: Headline; active: 
 // motion disables auto-advance entirely and leaves the arrows/dots as the only navigation.
 // On a gameday this never mounts — the featured-game bar owns the hero slot and the same
 // topStories collapse into the combined list in the grid instead.
-export function HeroCarousel({ headlines }: { readonly headlines: readonly Headline[] }) {
-  const slides = headlines.slice(0, CAROUSEL_CAP);
+export function HeroCarousel({
+  headlines,
+  hiddenStoryRefs,
+  onStoryChanged = () => undefined
+}: {
+  readonly headlines: readonly Headline[];
+  readonly hiddenStoryRefs?: ReadonlySet<string>;
+  readonly onStoryChanged?: StoryFeedbackChange;
+}) {
+  const slides = headlines
+    .filter((headline) => !hiddenStoryRefs?.has(headline.storyRef ?? ""))
+    .slice(0, CAROUSEL_CAP);
   const count = slides.length;
   const [index, setIndex] = useState(0);
   // A refetch can shrink the pool while we're pointing past its end — clamp, don't crash.
@@ -145,7 +175,12 @@ export function HeroCarousel({ headlines }: { readonly headlines: readonly Headl
           slide's height — no reflow jump between a dek-heavy story and a bare headline. */}
       <div className="sp-carousel__stage">
         {slides.map((headline, i) => (
-          <HeroSlide key={headline.url} headline={headline} active={i === active} />
+          <HeroSlide
+            key={storyKey(headline)}
+            headline={headline}
+            active={i === active}
+            onStoryChanged={onStoryChanged}
+          />
         ))}
       </div>
       {count > 1 ? (
@@ -161,7 +196,7 @@ export function HeroCarousel({ headlines }: { readonly headlines: readonly Headl
           <div className="sp-carousel__dots">
             {slides.map((headline, i) => (
               <button
-                key={headline.url}
+                key={storyKey(headline)}
                 type="button"
                 className="sp-carousel__dot"
                 aria-label={`Story ${i + 1} of ${count}`}
@@ -186,16 +221,23 @@ export function HeroCarousel({ headlines }: { readonly headlines: readonly Headl
 
 /* ------------------------------------------------------------- Latest column */
 
-export function LatestColumn(props: { headlines: readonly Headline[] }) {
+export function LatestColumn(props: {
+  headlines: readonly Headline[];
+  hiddenStoryRefs?: ReadonlySet<string>;
+  onStoryChanged?: StoryFeedbackChange;
+}) {
   // Kicker renamed "Latest" → "Top stories": the pool is ranked by ESPN's editorial feed
   // position with recency only as tiebreak (mrb51pnq), so "Latest" would now lie.
-  if (props.headlines.length === 0) return null;
+  const headlines = props.headlines.filter(
+    (headline) => !props.hiddenStoryRefs?.has(headline.storyRef ?? "")
+  );
+  if (headlines.length === 0) return null;
   return (
     <section className="sp-latest" aria-label="Top stories">
       <p className="sp-col__kicker">Top stories</p>
       <ol className="sp-latest__list">
-        {props.headlines.slice(0, 6).map((headline) => (
-          <li className="sp-latest__item" key={headline.url}>
+        {headlines.slice(0, 6).map((headline) => (
+          <li className="sp-latest__item" key={storyKey(headline)}>
             <a className="sp-hl" href={headline.url} target="_blank" rel="noreferrer">
               {headline.imageUrl ? (
                 <img className="sp-hl__thumb" src={headline.imageUrl} alt="" loading="lazy" />
@@ -207,6 +249,11 @@ export function LatestColumn(props: { headlines: readonly Headline[] }) {
                 <span className="sp-hl__title">{headline.title}</span>
               </span>
             </a>
+            <StoryFeedbackMenu
+              storyRef={headline.storyRef}
+              surface="sports"
+              onChanged={props.onStoryChanged ?? (() => undefined)}
+            />
           </li>
         ))}
       </ol>
@@ -233,10 +280,12 @@ const BRIEFS_CAP = 10;
 // `longform` (written major, isWrittenArticle) trades the tight clamp for a real paragraph.
 function NewsArticle({
   headline,
-  major = false
+  major = false,
+  onStoryChanged
 }: {
   readonly headline: Headline;
   major?: boolean;
+  readonly onStoryChanged: StoryFeedbackChange;
 }) {
   const className = [
     "sp-newsband__art",
@@ -258,6 +307,7 @@ function NewsArticle({
       <a className="sp-newsband__more" href={headline.url} target="_blank" rel="noreferrer">
         Continue reading →
       </a>
+      <StoryFeedbackMenu storyRef={headline.storyRef} surface="sports" onChanged={onStoryChanged} />
     </article>
   );
 }
@@ -266,7 +316,13 @@ function NewsArticle({
 // layout above the sections, art beside a display-size headline (mrb47x3h "give them some
 // more space"). Only a story that clears BIG_STORY_WEIGHT earns the slot — on a quiet day
 // the band opens straight with the mosaic.
-function FeatureArticle({ headline }: { readonly headline: Headline }) {
+function FeatureArticle({
+  headline,
+  onStoryChanged
+}: {
+  readonly headline: Headline;
+  readonly onStoryChanged: StoryFeedbackChange;
+}) {
   // ESPN sometimes hands back a small square team logo/crest instead of story art. Stretched to
   // fill the feature column (object-fit: cover on width:100%) it upscales and pixelates badly
   // (Ben 2026-07-08 /sports annotation #6). Measure the image's INTRINSIC width once it loads and,
@@ -306,7 +362,7 @@ function FeatureArticle({ headline }: { readonly headline: Headline }) {
           headline.body.split("\n\n").map((paragraph, index) => (
             <p
               className="sp-newsband__blurb sp-newsband__blurb--feature"
-              key={`${headline.url}-p${index}`}
+              key={`${storyKey(headline)}-p${index}`}
             >
               {paragraph}
             </p>
@@ -317,6 +373,11 @@ function FeatureArticle({ headline }: { readonly headline: Headline }) {
         <a className="sp-newsband__more" href={headline.url} target="_blank" rel="noreferrer">
           Continue reading →
         </a>
+        <StoryFeedbackMenu
+          storyRef={headline.storyRef}
+          surface="sports"
+          onChanged={onStoryChanged}
+        />
       </div>
     </article>
   );
@@ -324,21 +385,33 @@ function FeatureArticle({ headline }: { readonly headline: Headline }) {
 
 export function NewsBand({
   groups,
-  followedPairs
+  followedPairs,
+  hiddenStoryRefs,
+  onStoryChanged = () => undefined
 }: {
   readonly groups: readonly SportsNewsGroup[];
   readonly followedPairs: ReadonlySet<string>;
+  readonly hiddenStoryRefs?: ReadonlySet<string>;
+  readonly onStoryChanged?: StoryFeedbackChange;
 }) {
   const [filterKey, setFilterKey] = useState<string>("all");
-  if (groups.length === 0) return null;
+  const visibleGroups = groups
+    .map((group) => ({
+      ...group,
+      headlines: group.headlines.filter(
+        (headline) => !hiddenStoryRefs?.has(headline.storyRef ?? "")
+      )
+    }))
+    .filter((group) => group.headlines.length > 0);
+  if (visibleGroups.length === 0) return null;
   const groupKey = (group: SportsNewsGroup) =>
     group.kind === "sport" ? `sport:${group.sportKey}` : `competition:${group.competitionKey}`;
   const shown =
     filterKey === "all"
-      ? groups
+      ? visibleGroups
       : filterKey.startsWith("sport:")
-        ? groups.filter((group) => `sport:${group.sportKey}` === filterKey)
-        : groups.filter((group) => groupKey(group) === filterKey);
+        ? visibleGroups.filter((group) => `sport:${group.sportKey}` === filterKey)
+        : visibleGroups.filter((group) => groupKey(group) === filterKey);
 
   // Flatten every shown league into one weight-ranked pool (mrb5reqq: "we don't really need it
   // to be one column per sport"). Ranking lives in ../news-ranking.js so the server picks the
@@ -355,17 +428,13 @@ export function NewsBand({
   // Majors need art — a double-column slot with no image is just a wide gap. Standards take
   // the next slice of the pool; everything past the caps collapses into the brief rail so a
   // busy day widens the tail instead of running the mosaic forever (mrb5reqq).
-  const majorIds = new Set(
-    rest
-      .filter((s) => s.headline.imageUrl)
-      .slice(0, MAJORS_CAP)
-      .map((s) => s.headline.url)
-  );
-  const flow = rest.filter((s) => !majorIds.has(s.headline.url));
+  const majorStories = rest.filter((s) => s.headline.imageUrl).slice(0, MAJORS_CAP);
+  const majorStoriesSet = new Set(majorStories.map((s) => s.headline));
+  const flow = rest.filter((s) => !majorStoriesSet.has(s.headline));
   const standards = flow.slice(0, STANDARDS_CAP);
-  const mosaicIds = new Set([...majorIds, ...standards.map((s) => s.headline.url)]);
+  const mosaicStoriesSet = new Set([...majorStories, ...standards].map((s) => s.headline));
   // Weight order preserved across both tiers so the page reads big → small.
-  const mosaic = rest.filter((s) => mosaicIds.has(s.headline.url));
+  const mosaic = rest.filter((s) => mosaicStoriesSet.has(s.headline));
   const briefs = flow.slice(STANDARDS_CAP, STANDARDS_CAP + BRIEFS_CAP);
 
   return (
@@ -379,20 +448,25 @@ export function NewsBand({
           onChange={(event) => setFilterKey(event.currentTarget.value)}
         >
           <option value="all">All</option>
-          {groups.map((group) => (
+          {visibleGroups.map((group) => (
             <option key={groupKey(group)} value={groupKey(group)}>
               {group.competitionLabel}
             </option>
           ))}
         </select>
       </div>
-      {feature ? <FeatureArticle headline={feature} /> : null}
+      {feature ? <FeatureArticle headline={feature} onStoryChanged={onStoryChanged} /> : null}
       {/* Cross-league mosaic (mrb5reqq): replaces the one-column-per-league sections — spans
           and text length now vary by story weight instead of every league getting the same
           lead/short/brief ration regardless of how big its day was. */}
       <div className="sp-newsband__mosaic">
         {mosaic.map(({ headline }) => (
-          <NewsArticle key={headline.url} headline={headline} major={majorIds.has(headline.url)} />
+          <NewsArticle
+            key={storyKey(headline)}
+            headline={headline}
+            major={majorStoriesSet.has(headline)}
+            onStoryChanged={onStoryChanged}
+          />
         ))}
       </div>
       {briefs.length > 0 ? (
@@ -400,7 +474,7 @@ export function NewsBand({
           <p className="sp-newsband__briefslabel">In brief</p>
           <ul className="sp-newsband__brieflist">
             {briefs.map(({ headline }) => (
-              <li className="sp-newsband__brief" key={headline.url}>
+              <li className="sp-newsband__brief" key={storyKey(headline)}>
                 <a
                   className="sp-newsband__brieflink"
                   href={headline.url}
@@ -411,6 +485,11 @@ export function NewsBand({
                   <span className="sp-newsband__brieftag">{headline.competitionLabel}</span>
                   {headline.title}
                 </a>
+                <StoryFeedbackMenu
+                  storyRef={headline.storyRef}
+                  surface="sports"
+                  onChanged={onStoryChanged}
+                />
               </li>
             ))}
           </ul>

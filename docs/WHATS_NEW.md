@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Sports story preferences.** You can now tell Sports which stories you want to see more or less of and manage those choices in Sports Settings. [PR #2052](https://github.com/motioneso/moss/pull/2052)
 - **News story feedback.** You can now ask News for more or less of a story and manage those choices in News Settings. [PR #2049](https://github.com/motioneso/moss/pull/2049)
 - **Sign in to Gemini from Settings.** You can now sign in to Google's Gemini command-line tool from Settings or the first-run wizard, the same way you already sign in to Claude and Codex. [PR #2042](https://github.com/motioneso/moss/pull/2042)
 - **Install the Gemini command-line tool.** You can now install the Gemini command-line tool from the app, pinned to a known, verified version. [PR #2039](https://github.com/motioneso/moss/pull/2039)
@@ -134,6 +135,7 @@ feature that is not present in the image you are running.
 
 #### Changed
 
+- **Sports honours your story preferences.** The Sports page now takes account of the stories you have asked to see more or less of, while still showing you a genuinely major story on a subject you muted. [PR #2050](https://github.com/motioneso/moss/pull/2050)
 - **Workshop page shows your real builds.** The Workshop page now shows your actual in-progress and finished module builds instead of a placeholder. [PR #1948](https://github.com/motioneso/moss/pull/1948)
 - **One image for Sports source previews.** Moss now includes Sports public-source previews in its existing download while keeping browser discovery isolated. [PR #1947](https://github.com/motioneso/moss/pull/1947)
 - **Weather chip now shows a 5-day forecast with hover detail.** The weather chip at the top of the Today page now shows a 5-day forecast strip instead of just current conditions. Hover or tab to any day to see humidity, dew point, wind, and high/low, and click a day to open the full forecast for your location in a new tab. [PR #1939](https://github.com/motioneso/moss/pull/1939)

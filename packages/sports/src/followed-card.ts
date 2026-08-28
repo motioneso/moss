@@ -8,6 +8,7 @@ import type {
   GameSummary
 } from "@moss/shared";
 
+import { storyRefFields, type StoryRefFor } from "./headline-composition.js";
 import type { SourceHeadline, StandingsTable } from "./source/sports-source.js";
 
 /** First non-null/non-undefined value `pick` returns over `items`, in order. Used to search a
@@ -129,7 +130,10 @@ function safeHref(url: string): string {
   }
 }
 
-export function toTeamStories(headlines: readonly SourceHeadline[]): FollowedTeamNews[] {
+export function toTeamStories(
+  headlines: readonly SourceHeadline[],
+  refFor?: StoryRefFor
+): FollowedTeamNews[] {
   const seen = new Set<string>();
   return headlines
     .slice()
@@ -144,7 +148,10 @@ export function toTeamStories(headlines: readonly SourceHeadline[]): FollowedTea
       publishedAt: h.publishedAt,
       imageUrl: h.imageUrl,
       publisherLabel: h.publisherLabel,
-      publisherDomain: h.publisherDomain
+      publisherDomain: h.publisherDomain,
+      // Built from the canonical link, not `safeHref` above, so a card story and the same story
+      // in top stories share one reference (#2019).
+      ...storyRefFields(h.url, refFor)
     }));
 }
 
