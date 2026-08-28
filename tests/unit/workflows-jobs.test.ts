@@ -3,6 +3,7 @@ import type { PgBoss } from "@moss/jobs";
 import {
   WORKFLOW_QUEUE_DEFINITIONS,
   WORKFLOW_STEP_EXECUTE_QUEUE,
+  assertWorkflowStepJobPayload,
   enqueueWorkflowStep,
   workflowStepBackoffMs,
   workflowStepSingletonKey
@@ -25,9 +26,9 @@ describe("workflow step jobs", () => {
       }
     } as unknown as PgBoss;
     const step = {
-      id: "step-1",
-      workflowRunId: "run-1",
-      ownerUserId: "user-1",
+      id: "00000000-0000-4000-8000-000000000003",
+      workflowRunId: "00000000-0000-4000-8000-000000000002",
+      ownerUserId: "00000000-0000-4000-8000-000000000001",
       status: "pending" as const,
       attemptCount: 2,
       queueJobId: null
@@ -37,8 +38,12 @@ describe("workflow step jobs", () => {
     expect(calls).toEqual([
       [
         WORKFLOW_STEP_EXECUTE_QUEUE,
-        { actorUserId: "user-1", workflowRunId: "run-1", stepRunId: "step-1" },
-        { singletonKey: "step-1:2", startAfter: 0.1 }
+        {
+          actorUserId: "00000000-0000-4000-8000-000000000001",
+          workflowRunId: "00000000-0000-4000-8000-000000000002",
+          stepRunId: "00000000-0000-4000-8000-000000000003"
+        },
+        { singletonKey: "00000000-0000-4000-8000-000000000003:2", startAfter: 0.1 }
       ]
     ]);
     await expect(enqueueWorkflowStep(boss, { ...step, status: "succeeded" })).resolves.toBeNull();
@@ -58,4 +63,18 @@ describe("workflow step jobs", () => {
       }
     });
   });
+
+  it.each(["workflowRunId", "stepRunId"] as const)(
+    "rejects a malformed %s before it reaches the database",
+    (field) => {
+      const payload = {
+        actorUserId: "00000000-0000-4000-8000-000000000001",
+        workflowRunId: "00000000-0000-4000-8000-000000000002",
+        stepRunId: "00000000-0000-4000-8000-000000000003"
+      };
+      payload[field] = "not-a-uuid";
+
+      expect(() => assertWorkflowStepJobPayload(payload)).toThrow(`${field} must be a UUID`);
+    }
+  );
 });

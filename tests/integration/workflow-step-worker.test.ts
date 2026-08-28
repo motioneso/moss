@@ -1,11 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { sql, type Kysely } from "kysely";
-import type { Job, PgBoss } from "@moss/jobs";
+import { createPgBossClient, type Job, type PgBoss } from "@moss/jobs";
 
 import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
 import {
   enqueueWorkflowStep,
+  registerWorkflowWorkers,
   runWorkflowStep,
+  WORKFLOW_STEP_DEADLETTER_QUEUE,
+  WORKFLOW_STEP_EXECUTE_QUEUE,
   WorkflowsRepository,
   type WorkflowStepJobPayload
 } from "@moss/workflows";
@@ -22,6 +25,29 @@ function job(jobId: string, workflowRunId: string, stepRunId: string): Job<Workf
     id: jobId,
     data: { actorUserId: ownerUserId, workflowRunId, stepRunId }
   } as Job<WorkflowStepJobPayload>;
+}
+
+async function waitForJobState(
+  boss: PgBoss,
+  queue: string,
+  jobId: string,
+  state: "retry" | "failed"
+) {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const current = await boss.getJobById(queue, jobId);
+    if (current?.state === state) return current;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(`Job ${jobId} did not reach ${state}`);
+}
+
+async function waitForJobs(boss: PgBoss, data: object) {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const jobs = await boss.findJobs(WORKFLOW_STEP_DEADLETTER_QUEUE, { data });
+    if (jobs.length > 0) return jobs;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error("Malformed delivery did not reach the dead-letter queue");
 }
 
 beforeAll(async () => {
@@ -238,6 +264,46 @@ describe("workflow step worker", () => {
     } finally {
       releaseHandler();
       vi.useRealTimers();
+    }
+  });
+
+  it("retries and dead-letters malformed deliveries through the real queue", async () => {
+    const boss = createPgBossClient(connectionStrings.worker);
+    try {
+      await boss.start();
+      await registerWorkflowWorkers(boss, {
+        boss,
+        dataContext,
+        registry: new Map()
+      });
+
+      const jobId = await boss.send(
+        WORKFLOW_STEP_EXECUTE_QUEUE,
+        {
+          actorUserId: ownerUserId,
+          workflowRunId: "not-a-uuid",
+          stepRunId: "also-not-a-uuid"
+        },
+        { retryLimit: 1, retryDelay: 1 }
+      );
+      expect(jobId).not.toBeNull();
+
+      const retried = await waitForJobState(boss, WORKFLOW_STEP_EXECUTE_QUEUE, jobId!, "retry");
+      expect(retried.state).toBe("retry");
+
+      await waitForJobState(boss, WORKFLOW_STEP_EXECUTE_QUEUE, jobId!, "failed");
+      const deadLetter = await waitForJobs(boss, {
+        workflowRunId: "not-a-uuid",
+        stepRunId: "also-not-a-uuid"
+      });
+      expect(deadLetter).toHaveLength(1);
+      expect(deadLetter[0]?.data).toMatchObject({
+        actorUserId: ownerUserId,
+        workflowRunId: "not-a-uuid",
+        stepRunId: "also-not-a-uuid"
+      });
+    } finally {
+      await boss.stop({ graceful: false });
     }
   });
 

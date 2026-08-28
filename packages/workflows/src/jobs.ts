@@ -1,3 +1,4 @@
+import { assertUuid } from "@moss/db";
 import type { ActorScopedJobPayload, PgBoss, QueueDefinition } from "@moss/jobs";
 import { assertMetadataOnlyPayload, sendJob } from "@moss/jobs";
 import type { WorkflowStepRetryPolicy } from "@moss/module-sdk";
@@ -43,6 +44,10 @@ export function assertWorkflowStepJobPayload(
   ) {
     throw new Error("Workflow step job payload is missing an id");
   }
+  const workflowPayload = payload as WorkflowStepJobPayload;
+  assertUuid(workflowPayload.actorUserId, "Workflow step job actorUserId");
+  assertUuid(workflowPayload.workflowRunId, "Workflow step job workflowRunId");
+  assertUuid(workflowPayload.stepRunId, "Workflow step job stepRunId");
 }
 
 export function workflowStepSingletonKey(stepRunId: string, attemptCount: number): string {
