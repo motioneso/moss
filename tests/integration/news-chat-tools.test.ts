@@ -16,19 +16,23 @@
 //
 // Harness skeleton: tests/integration/js08-decide-confirm-audit.test.ts.
 // Discovery/availability stubs: tests/integration/news-personalization-routes.test.ts.
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import pg from "pg";
 import type { Kysely } from "kysely";
+import type { PgBoss } from "pg-boss";
 
 import {
   AiRepository,
   AssistantToolGateway,
   ConfirmationRegistry,
   SessionTokenRegistry,
-  type PlatformDiagnosticsService,
-  type GatewaySessionRecord
+  createPlatformDiagnosticsService,
+  type GatewaySessionRecord,
+  type PlatformDiagnosticsService
 } from "@moss/ai";
 import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
+import { createPgBossClient } from "@moss/jobs";
+import { createNewsDiagnosticsProvider, registerNewsJobWorkers } from "@moss/news";
 import { settingsModuleManifest } from "@moss/settings";
 
 import { configureNewsChatTools } from "../../packages/news/src/chat-tools.js";
@@ -43,6 +47,16 @@ import { connectionStrings, ids, resetFoundationDatabase } from "./test-database
 const { Client } = pg;
 
 const feed = `<?xml version="1.0"?><rss><channel><title>Example News</title><item><title>Verified publisher headline</title><link>https://example.com/story</link><pubDate>Fri, 11 Jul 2026 12:00:00 GMT</pubDate></item></channel></rss>`;
+
+function feedForRefresh(url: string): string {
+  const host = new URL(url).hostname;
+  const publisher = host.includes("bbci")
+    ? "www.bbc.com"
+    : host.includes("guardian")
+      ? "www.theguardian.com"
+      : "www.npr.org";
+  return `<?xml version="1.0"?><rss><channel><item><title>Current story from ${publisher}</title><link>https://${publisher}/story</link><pubDate>${new Date().toUTCString()}</pubDate></item></channel></rss>`;
+}
 
 /**
  * Gateway output is always `{ text }` (renderAndCap). For `externalContent`
@@ -73,16 +87,16 @@ type PreviewPayload = {
 describe("news chat tools — previewSource/confirmSource via assistant gateway (#975)", () => {
   let bootstrap: pg.Client;
   let appDb: Kysely<MossDatabase>;
+  let workerDb: Kysely<MossDatabase>;
+  let appContext: DataContextRunner;
+  let workerContext: DataContextRunner;
+  let appBoss: PgBoss;
+  let workerBoss: PgBoss;
+  const newsRepository = new NewsPersonalizationRepository();
 
-  beforeAll(async () => {
-    await resetFoundationDatabase();
-    bootstrap = new Client({ connectionString: connectionStrings.bootstrap });
-    await bootstrap.connect();
-    appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 2 });
-
+  function configureChatTools(boss: PgBoss | null): void {
     // Same deferred-deps seam routes.ts uses at composition time: one shared
-    // preview store, stubbed discovery/availability, boss=null (refresh
-    // trigger degrades to a no-op exactly like the REST confirm route).
+    // preview store, stubbed discovery/availability, and an optional real queue.
     configureNewsChatTools({
       previews: createPreviewStore(),
       discovery: {
@@ -109,13 +123,35 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
         hasJsonModel: async () => true,
         hasWebSearch: async () => true
       },
-      boss: null,
-      repository: new NewsPersonalizationRepository(),
+      boss,
+      repository: newsRepository,
       credentials: { readStatuses: async () => [] }
     });
+  }
+
+  beforeAll(async () => {
+    await resetFoundationDatabase();
+    bootstrap = new Client({ connectionString: connectionStrings.bootstrap });
+    await bootstrap.connect();
+    appDb = createDatabase({ connectionString: connectionStrings.app, maxConnections: 2 });
+    workerDb = createDatabase({ connectionString: connectionStrings.worker, maxConnections: 2 });
+    appContext = new DataContextRunner(appDb);
+    workerContext = new DataContextRunner(workerDb);
+    appBoss = createPgBossClient(connectionStrings.app);
+    workerBoss = createPgBossClient(connectionStrings.worker);
+    await Promise.all([appBoss.start(), workerBoss.start()]);
+    configureChatTools(null);
   }, 60_000);
 
-  afterAll(async () => Promise.allSettled([bootstrap?.end(), appDb?.destroy()]));
+  afterAll(async () =>
+    Promise.allSettled([
+      bootstrap?.end(),
+      appDb?.destroy(),
+      workerDb?.destroy(),
+      appBoss?.stop({ graceful: false }),
+      workerBoss?.stop({ graceful: false })
+    ])
+  );
 
   function makeGateway(options: { diagnostics?: PlatformDiagnosticsService } = {}) {
     const tokens = new SessionTokenRegistry();
@@ -215,78 +251,97 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
     expect(JSON.stringify(result)).not.toContain("fingerprint");
   }, 30_000);
 
-  it("runs self-diagnostics through the gateway with actor-scoped redacted output", async () => {
-    const observed: Array<{ actorUserId: string; query?: Record<string, unknown> }> = [];
-    const diagnostics = {
-      observe: vi.fn(async (_db: unknown, ctx: { actorUserId: string }, query?: unknown) => {
-        observed.push({ actorUserId: ctx.actorUserId, query: query as Record<string, unknown> });
-        return {
-          observedAt: "2026-08-28T00:00:00.000Z",
-          build: { version: "test", buildId: "test-build" },
-          runtime: null,
-          modules: [
-            {
-              domain: "news",
-              providerId: "news.refresh",
-              observedAt: "2026-08-28T00:00:00.000Z",
-              status: "degraded",
-              summary: `Only ${ctx.actorUserId} can see this diagnosis.`,
-              facts: {
-                lastSuccessAt: "2026-08-27T23:00:00.000Z",
-                lastAttemptAt: "2026-08-28T00:00:00.000Z",
-                itemCount: 2,
-                privateArticleText: "must not cross the tool boundary"
-              }
-            }
-          ],
-          errors: [],
-          actions: [],
-          source: null,
-          redactions: ["runtime"],
-          privateRecord: "must not cross the tool boundary"
-        };
-      })
-    } as PlatformDiagnosticsService;
-    const { gateway, emitted, mint } = makeGateway({ diagnostics });
-
-    const resultA = await gateway.callTool(
-      mint(ids.userA, "diagnostics-a"),
-      "settings.platformDiagnostics",
-      {
-        question: "  Is news fresh?  ",
-        module: "news",
-        include: ["modules", "errors", "actions"],
-        limit: 10
+  it("diagnoses, refreshes, and rechecks through the real service and worker", async () => {
+    const diagnostics = createPlatformDiagnosticsService({
+      appMap: { getBuildInfo: () => ({ version: "test", buildId: "test-build" }) },
+      repository: new AiRepository(),
+      moduleProviders: async () => [
+        { moduleId: "news", provider: createNewsDiagnosticsProvider(newsRepository) }
+      ],
+      runInContext: (work, context) =>
+        appContext.withDataContext(
+          { actorUserId: context.actorUserId, requestId: context.requestId },
+          work
+        ),
+      isInstanceAdmin: async () => false,
+      assertDiagnosticsSafe: () => undefined
+    });
+    configureChatTools(appBoss);
+    let generation = 0;
+    await appContext.withDataContext(
+      { actorUserId: ids.userA, requestId: "diagnostics-seed" },
+      async (db) => {
+        generation = await newsRepository.beginRefreshRun(db);
       }
     );
-    expect(resultA).toMatchObject({ ok: true });
-    expect(emitted).toHaveLength(0);
-    const payloadA = parseToolText(resultA);
-    expect(JSON.stringify(payloadA)).toContain(ids.userA);
-    expect(JSON.stringify(payloadA)).not.toContain("privateArticleText");
-    expect(JSON.stringify(payloadA)).not.toContain("privateRecord");
-    expect(payloadA).toMatchObject({ redactions: ["runtime"] });
-    expect(observed[0]).toMatchObject({
-      actorUserId: ids.userA,
-      query: {
-        query: "Is news fresh?",
-        domain: "news",
-        include: ["modules", "errors", "actions"],
-        limit: 10
-      }
+    await newsRepository.failRefreshRunIfCurrent(
+      appContext,
+      { actorUserId: ids.userA, requestId: "diagnostics-seed-failure" },
+      generation,
+      "fetch"
+    );
+    await registerNewsJobWorkers(workerBoss, workerContext, {
+      fetch: async (url) => ({
+        ok: true as const,
+        status: 200,
+        finalUrl: url,
+        contentType: "application/rss+xml",
+        body: feedForRefresh(url),
+        truncated: false
+      }),
+      search: { search: async () => ({ results: [] }) },
+      ai: {
+        fingerprint: async () => "test",
+        generateJson: async () => ({ ok: false as const, error: "provider_error" as const })
+      },
+      logger: { info: () => undefined }
     });
 
-    const resultB = await gateway.callTool(
-      mint(ids.userB, "diagnostics-b"),
-      "settings.platformDiagnostics",
-      {}
-    );
-    expect(resultB).toMatchObject({ ok: true });
-    const payloadB = parseToolText(resultB);
-    expect(JSON.stringify(payloadB)).toContain(ids.userB);
-    expect(JSON.stringify(payloadB)).not.toContain(ids.userA);
-    expect(diagnostics.observe).toHaveBeenCalledTimes(2);
-  }, 30_000);
+    const { gateway, emitted, mint } = makeGateway({ diagnostics });
+    const token = mint(ids.userA, "diagnostics-refresh");
+    const first = await gateway.callTool(token, "settings.platformDiagnostics", {
+      module: "news",
+      include: ["modules", "runtime"]
+    });
+    expect(first).toMatchObject({ ok: true });
+    const firstPayload = parseToolText(first) as {
+      modules: Array<{ status: string; facts?: Record<string, unknown> }>;
+      redactions: string[];
+    };
+    expect(firstPayload.modules[0]).toMatchObject({ status: "failed" });
+    expect(firstPayload.modules[0]?.facts).toMatchObject({ lastFailureKind: "fetch" });
+    expect(firstPayload.redactions).toContain("runtime");
+
+    const pending = gateway.callTool(token, "news.refreshNews", {});
+    const request = await waitForActionRequest(emitted, 0);
+    expect(request.toolName).toBe("news.refreshNews");
+    await gateway.resolveActionRequest(ids.userA, request.actionRequestId, "confirmed");
+    await expect(pending).resolves.toMatchObject({ ok: true });
+
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const state = await appContext.withDataContext(
+        { actorUserId: ids.userA, requestId: "diagnostics-refresh-wait" },
+        (db) => newsRepository.readRefreshState(db)
+      );
+      if (state.state === "idle" && state.lastSuccessAt) break;
+      if (attempt === 99) throw new Error("news refresh worker did not complete");
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    const second = await gateway.callTool(token, "settings.platformDiagnostics", {
+      module: "news",
+      include: ["modules"]
+    });
+    const secondPayload = parseToolText(second) as {
+      modules: Array<{ status: string; facts?: Record<string, unknown> }>;
+    };
+    expect(secondPayload.modules[0]).toMatchObject({ status: "ok" });
+    expect(secondPayload.modules[0]?.facts).toMatchObject({
+      lastSuccessAt: expect.any(String),
+      itemCount: expect.any(Number)
+    });
+    expect(JSON.stringify(secondPayload)).not.toContain("Current story");
+  }, 60_000);
 
   it("confirmSource is confirm-gated: nothing executes until the owner confirms, then row + audit", async () => {
     const { gateway, emitted, mint } = makeGateway();
