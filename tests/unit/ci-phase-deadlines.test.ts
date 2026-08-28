@@ -67,6 +67,21 @@ describe("CI phase deadlines (#1534, #1724)", () => {
     expect(source).toContain("if: github.event_name == 'push' && github.ref == 'refs/heads/main'");
   });
 
+  it("builds the app map on each integration runner before DB-backed tests", () => {
+    const integrationJob = source.slice(
+      source.indexOf("\n  integration:"),
+      source.indexOf("\n  browser:")
+    );
+
+    expect(integrationJob).toContain("- name: Build app map\n        run: pnpm build:app-map");
+    expect(integrationJob.indexOf("pnpm install --frozen-lockfile")).toBeLessThan(
+      integrationJob.indexOf("pnpm build:app-map")
+    );
+    expect(integrationJob.indexOf("pnpm build:app-map")).toBeLessThan(
+      integrationJob.indexOf("pnpm db:up")
+    );
+  });
+
   it("runs the release-hardening audit after migration in integration shard 1", () => {
     const verifyJob = source.slice(
       source.indexOf("\n  verify:"),

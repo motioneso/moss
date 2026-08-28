@@ -169,6 +169,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build app map
+        run: pnpm build:app-map
+
       - name: Start database
         run: pnpm db:up
 
