@@ -34,6 +34,7 @@ import {
   AI_QUEUE_DEFINITIONS,
   AiAutoRegisterService,
   AiRepository,
+  createPlatformDiagnosticsService,
   aiModuleManifest,
   aiModuleSqlMigrationDirectory,
   createUnwiredActionResolver,
@@ -45,6 +46,7 @@ import {
   approveModuleBuildPlan,
   cancelModuleBuild,
   type AssistantToolGateway,
+  type PlatformDiagnosticsService,
   type ProviderKind,
   type TerminalRpcConnectOptions,
   type TerminalRpcHandle
@@ -177,6 +179,7 @@ import type {
   MossModuleManifest,
   JsonMossModuleManifest,
   RegisteredFocusSignal,
+  RegisteredModuleDiagnosticProvider,
   RegisteredProactiveMonitorProvider
 } from "@moss/module-sdk";
 import {
@@ -221,6 +224,8 @@ import {
   type HerdrInstallDependencies,
   type HostRestartDependencies,
   type AppMapReadService,
+  collectHostDiagnostics,
+  assertDiagnosticsSafe,
   loadAppMap,
   createAppMapReadService,
   getModuleBuild,
@@ -460,6 +465,8 @@ export interface BuiltInRouteDependencies {
   readonly mcpServerUrl: string;
   /** #1110 app-map read service, built once in registerBuiltInApiRoutes and threaded to the ai/chat modules' assistant tool wiring. */
   readonly appMapService?: AppMapReadService;
+  /** Read-only platform diagnostics, kept in the chat gateway's read service bag. */
+  readonly platformDiagnostics?: PlatformDiagnosticsService;
   /** Override the live-chat engine factory (tests inject a fake); defaults to real tmux. */
   readonly chatEngineFactory?: ChatEngineFactory;
   /**
@@ -1689,6 +1696,7 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
             })
           : undefined,
         appMapService: deps.appMapService,
+        platformDiagnostics: deps.platformDiagnostics,
         listModuleManifests: deps.listModuleManifests
       }),
     registerWorkers: (boss, deps) =>
@@ -2494,6 +2502,17 @@ export function focusSignalProvidersFor(
   );
 }
 
+/** Build diagnostic providers from the actor's active manifests, so disabled modules contribute nothing. */
+export function moduleDiagnosticProvidersFor(
+  manifests: readonly MossModuleManifest[]
+): RegisteredModuleDiagnosticProvider[] {
+  return manifests.flatMap((manifest) =>
+    manifest.diagnosticsProvider
+      ? [{ moduleId: manifest.id, provider: manifest.diagnosticsProvider }]
+      : []
+  );
+}
+
 type TimeZonePreferences = {
   get(scopedDb: DataContextDb, key: string): Promise<unknown>;
 };
@@ -2690,9 +2709,40 @@ export function registerBuiltInApiRoutes(
     logGap: (fields) => server.log.info(fields, "app-map coverage gap")
   });
 
+  const platformDiagnostics = createPlatformDiagnosticsService({
+    appMap: appMapService,
+    collectHostDiagnostics: dependencies.hostDiagnostics
+      ? (scopedDb) =>
+          collectHostDiagnostics(
+            {
+              repository: new SettingsRepository(),
+              hostDiagnostics: dependencies.hostDiagnostics!,
+              getChatMultiplexerStatus
+            },
+            scopedDb
+          )
+      : undefined,
+    repository: new AiRepository(),
+    moduleProviders: async (actorUserId) =>
+      moduleDiagnosticProvidersFor(await dependencies.resolveActiveModules(actorUserId)),
+    runInContext: (work, context) =>
+      dependencies.dataContext.withDataContext(
+        { actorUserId: context.actorUserId, requestId: context.requestId },
+        work
+      ),
+    isInstanceAdmin: async (scopedDb, actorUserId) => {
+      const user = await new SettingsRepository().getUserById(scopedDb, actorUserId);
+      return user?.is_instance_admin === true;
+    },
+    assertDiagnosticsSafe,
+    onProviderError: (moduleId, errorName) =>
+      server.log.warn({ moduleId, errorName }, "module diagnostics provider was dropped")
+  });
+
   const deps: BuiltInRouteDependencies = {
     ...dependencies,
     appMapService,
+    platformDiagnostics,
     chatEngineFactory,
     createCliStructuredAdapter: createCliStructuredAdapterFactory(structuredChatEngineFactory),
     // #342 (§3.5 boot-time fork): on the socket path hand the chat runtime an `engineSelection` so it

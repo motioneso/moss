@@ -23,6 +23,7 @@ import {
   SessionTokenRegistry,
   type ActiveModulesResolver,
   type GatewaySessionRecord,
+  type PlatformDiagnosticsService,
   type ProviderKind,
   type SessionNotifier
 } from "@moss/ai";
@@ -119,6 +120,8 @@ export interface ChatRoutesDependencies {
   readonly sourceContextService?: SourceContextService;
   /** Injected by the composition root; app-map read tool (#1110). Never bucket under collaborators. */
   readonly appMapService?: AppMapReadService;
+  /** Read-only platform diagnostics service; never exposed in the write service bag. */
+  readonly platformDiagnostics?: PlatformDiagnosticsService;
   /** Injected by the composition root; settings.notificationPreference.setEnabled tool service. */
   readonly listModuleManifests?: () => readonly MossModuleManifest[];
   /**
@@ -257,6 +260,7 @@ export function registerChatRoutes(
                 listModuleManifests: dependencies.listModuleManifests
               },
               appMapService: dependencies.appMapService,
+              platformDiagnostics: dependencies.platformDiagnostics,
               agencyPreferences: dependencies.agencyPreferences,
               localePreferences: dependencies.localePreferences
             })

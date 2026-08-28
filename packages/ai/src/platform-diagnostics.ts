@@ -105,7 +105,9 @@ export function createPlatformDiagnosticsService(dependencies: {
   readonly appMap: Pick<AppMapReadService, "getBuildInfo">;
   readonly collectHostDiagnostics?: (scopedDb: DataContextDb) => Promise<HostDiagnosticsDto>;
   readonly repository: Pick<AiRepository, "listRecentErrors" | "listActionAuditLog">;
-  readonly moduleProviders: () => Promise<readonly RegisteredModuleDiagnosticProvider[]>;
+  readonly moduleProviders: (
+    actorUserId: string
+  ) => Promise<readonly RegisteredModuleDiagnosticProvider[]>;
   readonly runInContext: ModuleDiagnosticContextRunner;
   readonly isInstanceAdmin: (scopedDb: DataContextDb, actorUserId: string) => Promise<boolean>;
   readonly assertDiagnosticsSafe: (dto: HostDiagnosticsDto) => void;
@@ -132,7 +134,7 @@ export function createPlatformDiagnosticsService(dependencies: {
 
       const modules = include.has("modules")
         ? await aggregateModuleDiagnostics(
-            (await dependencies.moduleProviders()).filter(({ provider }) =>
+            (await dependencies.moduleProviders(ctx.actorUserId)).filter(({ provider }) =>
               query?.domain ? provider.domain === query.domain : true
             ),
             dependencies.runInContext,

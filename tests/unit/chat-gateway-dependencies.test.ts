@@ -2,7 +2,12 @@ import { describe, it, expect, vi } from "vitest";
 import { buildChatGatewayDependencies } from "../../packages/chat/src/routes.js";
 import type { PreferencesPort, DataContextRunner } from "@moss/db";
 import type { AiRepository } from "../../packages/ai/src/repository.js";
-import type { SessionTokenRegistry, ConfirmationRegistry, SessionNotifier } from "@moss/ai";
+import type {
+  SessionTokenRegistry,
+  ConfirmationRegistry,
+  SessionNotifier,
+  PlatformDiagnosticsService
+} from "@moss/ai";
 
 describe("buildChatGatewayDependencies", () => {
   it("wires preferences to actionPolicy (regression for production legacy-only pref)", async () => {
@@ -65,5 +70,22 @@ describe("buildChatGatewayDependencies", () => {
       expect.anything(),
       "tasks.agency_auto_execute"
     );
+  });
+
+  it("keeps platform diagnostics in the read service bag", () => {
+    const platformDiagnostics = {} as PlatformDiagnosticsService;
+    const deps = buildChatGatewayDependencies({
+      resolveActiveModules: async () => [],
+      repository: {} as AiRepository,
+      runner: {} as DataContextRunner,
+      tokens: {} as SessionTokenRegistry,
+      confirmations: {} as ConfirmationRegistry,
+      notifier: {} as SessionNotifier,
+      platformDiagnostics,
+      collaborators: {}
+    });
+
+    expect(deps.readToolServices).toMatchObject({ platformDiagnostics });
+    expect(deps.toolServices).not.toHaveProperty("platformDiagnostics");
   });
 });

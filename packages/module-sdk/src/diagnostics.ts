@@ -65,7 +65,8 @@ export interface RegisteredModuleDiagnosticProvider {
  * `@moss/db` dependency. Each provider MUST get its own context — see aggregateModuleDiagnostics.
  */
 export type ModuleDiagnosticContextRunner = <T>(
-  work: (scopedDb: unknown) => Promise<T>
+  work: (scopedDb: unknown) => Promise<T>,
+  ctx: { readonly actorUserId: string; readonly requestId: string }
 ) => Promise<T>;
 
 export interface ModuleDiagnosticAggregateOptions {
@@ -191,7 +192,7 @@ export async function aggregateModuleDiagnostics(
           }, MODULE_DIAGNOSTIC_LIMITS.providerTimeoutMs);
         });
         const observation = await Promise.race([
-          runInContext((scopedDb) => provider.observe(scopedDb, ctx)),
+          runInContext((scopedDb) => provider.observe(scopedDb, ctx), ctx),
           deadline
         ]);
         if (observation === null || observation === undefined) return null;
