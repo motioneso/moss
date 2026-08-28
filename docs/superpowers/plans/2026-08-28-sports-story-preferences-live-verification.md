@@ -34,9 +34,9 @@ Files:
 Verification:
 
 - `pnpm test:uat tests/uat/specs/2051-sports-story-preferences.uat.spec.ts` — expected exit 0.
-- Attach the required desktop and narrow-width normal-state screenshots to PR #2052 without
-  showing private reasons, links, article bodies, or other private data.
-- `gh pr checks 2052 --repo motioneso/moss` — expected all required checks green.
+- Record the UAT exit code and bounded textual evidence from the real UI path on PR #2064; do not
+  capture, attach, or review screenshots for this check.
+- `gh pr checks 2064 --repo motioneso/moss` — expected all required checks green.
 
 ## Kill gate
 
