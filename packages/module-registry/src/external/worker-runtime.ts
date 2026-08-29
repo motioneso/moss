@@ -241,6 +241,9 @@ export class ExternalModuleWorkerRuntime {
     } finally {
       clearTimeout(hardTimer);
       clearTimeout(invocation.stallTimer);
+      // stdout and stderr are independent pipes; let already-written child output
+      // reach their data handlers before flushing this invocation's logs.
+      await new Promise<void>((resolve) => setImmediate(resolve));
       this.flushLogs(module.id, options.lane, invocation);
       state.current = undefined;
       if (this.states.get(key) === state) {
