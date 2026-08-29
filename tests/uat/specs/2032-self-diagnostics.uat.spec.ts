@@ -158,7 +158,9 @@ test("a real Moss conversation diagnoses, refreshes, and rechecks news", async (
   const firstResponse = await firstTurn;
   expect(firstResponse.ok(), `diagnosis chat turn -> ${firstResponse.status()}`).toBeTruthy();
   const firstBody = (await firstResponse.json()) as { reply?: string };
-  expect(firstBody.reply).toMatch(/news|fresh|success|attempt|current|stale/i);
+  expect(firstBody.reply).toMatch(/last success/i);
+  expect(firstBody.reply).toMatch(/latest attempt|last attempt/i);
+  expect(firstBody.reply).toMatch(/\b\d+\s+items?\b/i);
 
   const before = await readDiagnostics(page);
   const refreshTurn = await sendMessage(
@@ -190,7 +192,9 @@ test("a real Moss conversation diagnoses, refreshes, and rechecks news", async (
   const recheckResponse = await recheckTurn;
   expect(recheckResponse.ok(), `recheck chat turn -> ${recheckResponse.status()}`).toBeTruthy();
   const recheckBody = (await recheckResponse.json()) as { reply?: string };
-  expect(recheckBody.reply).toMatch(/fresh|current|success|item|news/i);
+  expect(recheckBody.reply).toMatch(/last success/i);
+  expect(recheckBody.reply).toMatch(/latest attempt|last attempt/i);
+  expect(recheckBody.reply).toMatch(/\b\d+\s+items?\b/i);
   const after = await readDiagnostics(page);
   expect(after.status).toBe("ok");
   expect(after.facts?.lastSuccessAt).toEqual(expect.any(String));

@@ -417,11 +417,13 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
     const token = mint(ids.userA, "diagnostics-refresh");
     const first = await gateway.callTool(token, "settings.platformDiagnostics", {
       module: "news",
-      include: ["modules", "runtime"]
+      include: ["modules", "runtime", "errors", "actions"]
     });
     expect(first).toMatchObject({ ok: true });
     const firstPayload = parseToolText(first) as {
       modules: Array<{ status: string; facts?: Record<string, unknown> }>;
+      errors: readonly Record<string, unknown>[];
+      actions: readonly Record<string, unknown>[];
       redactions: string[];
     };
     expect(firstPayload.modules[0]).toMatchObject({ status: "ok" });
@@ -432,15 +434,20 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
     const firstSuccessAt = firstPayload.modules[0]?.facts?.lastSuccessAt;
     expect(firstSuccessAt).toEqual(expect.any(String));
     expect(firstPayload.redactions).toContain("runtime");
+    expect(JSON.stringify(firstPayload)).not.toMatch(
+      /Refresh test item|opaque-test-fingerprint|secret|provider body/i
+    );
 
     const otherToken = mint(ids.userB, "diagnostics-foreign-owner");
     const other = await gateway.callTool(otherToken, "settings.platformDiagnostics", {
       module: "news",
-      include: ["modules"]
+      include: ["modules", "errors", "actions"]
     });
     expect(other).toMatchObject({ ok: true });
     const otherPayload = parseToolText(other) as {
       modules: Array<{ status: string; facts?: Record<string, unknown> }>;
+      errors: readonly Record<string, unknown>[];
+      actions: readonly Record<string, unknown>[];
     };
     expect(otherPayload.modules[0]).toMatchObject({ status: "unknown" });
     expect(otherPayload.modules[0]?.facts).toMatchObject({
@@ -448,6 +455,8 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
       lastSuccessAt: null,
       itemCount: 0
     });
+    expect(otherPayload.errors).toEqual([]);
+    expect(otherPayload.actions).toEqual([]);
     expect(JSON.stringify(otherPayload)).not.toContain(firstSuccessAt as string);
 
     const pending = gateway.callTool(token, "news.refreshNews", {});
@@ -479,6 +488,16 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
     });
     expect(secondPayload.modules[0]?.facts?.lastSuccessAt).not.toBe(firstSuccessAt);
 
+    const otherAfterRefresh = await gateway.callTool(otherToken, "settings.platformDiagnostics", {
+      module: "news",
+      include: ["modules", "errors", "actions"]
+    });
+    const otherAfterRefreshPayload = parseToolText(otherAfterRefresh) as {
+      errors: readonly Record<string, unknown>[];
+      actions: readonly Record<string, unknown>[];
+    };
+    expect(otherAfterRefreshPayload.errors).toEqual([]);
+    expect(otherAfterRefreshPayload.actions).toEqual([]);
     expect(await listActorAudits(ids.userB)).toEqual([]);
   }, 60_000);
 
