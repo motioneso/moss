@@ -30,7 +30,7 @@ describe("external module AssistantToolGateway", () => {
 
   afterAll(async () => Promise.allSettled([appDb?.destroy(), bootstrap?.end()]));
 
-  it("creates a pending request and audit before/after external write execution", async () => {
+  it("confirms and audits outbound work even when its family is trusted", async () => {
     const discovery: ExternalModuleDiscovery = {
       id: "acme",
       dir: "/unused",
@@ -43,13 +43,24 @@ describe("external module AssistantToolGateway", () => {
         lifecycle: "optional",
         compatibility: { jarv1s: ">=0.0.0" },
         runtime: { workerEntrypoint: "worker.js", workerContractVersion: 1 },
+        assistantActionFamilies: [
+          {
+            id: "messages",
+            label: "Messages",
+            description: "Send messages outside Moss.",
+            defaultTier: "ask_each_time",
+            allowedTiers: ["ask_each_time", "trusted_auto", "always_confirm"]
+          }
+        ],
         assistantTools: [
           {
-            name: "acme.write",
-            description: "Write",
-            permissionId: "acme.write",
-            risk: "write",
-            handler: "write"
+            name: "acme.send",
+            description: "Send",
+            permissionId: "acme.send",
+            risk: "outbound",
+            actionFamilyId: "messages",
+            executionPolicy: "auto",
+            handler: "send"
           }
         ]
       },
@@ -64,10 +75,16 @@ describe("external module AssistantToolGateway", () => {
     const tokens = new SessionTokenRegistry();
     const confirmations = new ConfirmationRegistry();
     const emitted: GatewaySessionRecord[] = [];
+    const repository = new AiRepository();
+    const runner = new DataContextRunner(appDb);
+    await runner.withDataContext(
+      { actorUserId: ids.userA, requestId: "external-install-grant" },
+      (scopedDb) => repository.setActionPolicy(scopedDb, "acme", "messages", "trusted_auto")
+    );
     const gateway = new AssistantToolGateway({
       resolveActiveModules: async () => manifests,
-      repository: new AiRepository(),
-      runner: new DataContextRunner(appDb),
+      repository,
+      runner,
       tokens,
       confirmations,
       notifier: { emit: (_session, record) => emitted.push(record) },
@@ -78,32 +95,34 @@ describe("external module AssistantToolGateway", () => {
       chatSessionId: "external",
       allowedToolNames: null
     });
-    const pending = gateway.callTool(token, "acme.write", { value: 1 });
+    const pending = gateway.callTool(token, "acme.send", { value: 1 });
     while (emitted.length === 0) await new Promise((resolve) => setTimeout(resolve, 5));
     const request = emitted[0];
     if (!request || request.kind !== "action_request") throw new Error("expected action request");
     expect(calls).toHaveLength(0);
     const row = await bootstrap.query(
-      "SELECT status, tool_module_id, tool_name FROM app.ai_assistant_action_requests WHERE id = $1",
+      "SELECT status, tool_module_id, tool_name, risk FROM app.ai_assistant_action_requests WHERE id = $1",
       [request.actionRequestId]
     );
     expect(row.rows[0]).toMatchObject({
       status: "pending",
       tool_module_id: "acme",
-      tool_name: "acme.write"
+      tool_name: "acme.send",
+      risk: "outbound"
     });
     await gateway.resolveActionRequest(ids.userA, request.actionRequestId, "confirmed");
     await expect(pending).resolves.toMatchObject({ ok: true });
     expect(calls).toHaveLength(1);
     for (let attempt = 0; attempt < 100; attempt += 1) {
       const audit = await bootstrap.query(
-        "SELECT outcome, tool_module_id, tool_name FROM app.moss_action_audit_log WHERE tool_module_id = 'acme'"
+        "SELECT outcome, tool_module_id, tool_name, action_kind FROM app.moss_action_audit_log WHERE tool_module_id = 'acme'"
       );
       if (audit.rowCount) {
         expect(audit.rows[0]).toMatchObject({
           outcome: "success",
           tool_module_id: "acme",
-          tool_name: "acme.write"
+          tool_name: "acme.send",
+          action_kind: "outbound"
         });
         return;
       }

@@ -150,4 +150,26 @@ describe("gateway policy resolver", () => {
     // own executionPolicy is "auto".
     await expect(resolvePolicy(tool, "mock_module", true, lookup)).resolves.toBe("confirm");
   });
+
+  it("outbound confirms even under trusted_auto with executionPolicy auto", async () => {
+    const tool: ModuleAssistantToolManifest = {
+      name: "mock.send",
+      description: "Send something off-box",
+      permissionId: "mock.send",
+      actionFamilyId: "mock_family",
+      risk: "outbound",
+      executionPolicy: "auto",
+      inputSchema: {},
+      outputSchema: {},
+      execute: async () => ({ data: {} })
+    };
+    const manifest: ModuleAssistantActionFamilyManifest = {
+      ...baseManifest,
+      allowedTiers: ["ask_each_time", "trusted_auto"]
+    };
+
+    await expect(
+      resolvePolicy(tool, "mock_module", false, createMockLookup("trusted_auto", manifest))
+    ).resolves.toBe("confirm");
+  });
 });

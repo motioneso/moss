@@ -135,19 +135,27 @@ describe("external module action families (#1246)", () => {
     if (!result.ok) expect(result.errors.join(" ")).toContain("confirmWhen");
   });
 
-  it("keeps outbound risk rejected until #1249 lands its audit contract", () => {
+  it("accepts outbound risk with an always-confirm grant", () => {
     const result = validateExternalModuleManifest(
       {
         ...base,
         assistantActionFamilies: [family],
-        assistantTools: [{ ...grantedTool, risk: "outbound" }]
+        assistantTools: [
+          {
+            ...grantedTool,
+            risk: "outbound",
+            executionPolicy: "confirm",
+            selfOperationGrant: "confirm_always"
+          }
+        ]
       },
       "demo",
       "0.1.0"
     );
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.errors.join(" ")).toContain("risk");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.manifest.assistantTools?.[0]?.risk).toBe("outbound");
   });
 
   it("rejects an always-confirm tool that asks for auto execution", () => {

@@ -682,7 +682,7 @@ export function registerAiRoutes(
 
         if (tool.risk !== "read") {
           const pendingTool = tool as AiAssistantToolDto & {
-            readonly risk: "write" | "destructive";
+            readonly risk: "write" | "outbound" | "destructive";
           };
           const action = await dependencies.dataContext.withDataContext(accessContext, (scopedDb) =>
             repository.createPendingAssistantAction(scopedDb, {
@@ -1181,7 +1181,7 @@ function serializeAuditLogEntry(row: MossActionAuditLog): ActionAuditLogEntryDto
     toolModuleId: row.tool_module_id,
     toolName: row.tool_name,
     actionFamilyId: row.action_family_id ?? null,
-    actionKind: row.action_kind as "write" | "destructive",
+    actionKind: row.action_kind as "write" | "outbound" | "destructive",
     approvalMode: row.approval_mode as ActionAuditLogEntryDto["approvalMode"],
     outcome: row.outcome as ActionAuditLogEntryDto["outcome"],
     errorClass: row.error_class ?? null,

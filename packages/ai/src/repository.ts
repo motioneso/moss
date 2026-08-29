@@ -201,7 +201,7 @@ export interface InsertAuditLogInput {
   readonly toolModuleId: string;
   readonly toolName: string;
   readonly actionFamilyId: string | null;
-  readonly actionKind: "write" | "destructive";
+  readonly actionKind: "write" | "outbound" | "destructive";
   readonly approvalMode: "auto" | "yolo" | "confirmed" | "rejected" | "cancelled" | "timeout";
   readonly outcome: "success" | "failed" | "denied" | "cancelled" | "invalid" | "conflict";
   readonly errorClass: string | null;

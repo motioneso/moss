@@ -667,8 +667,13 @@ export function validateExternalModuleManifest(
             "assistant tool actionLabel must be non-empty plain text (max 80 UTF-16 code units) when present"
           );
         }
-        if (tool.risk !== "read" && tool.risk !== "write" && tool.risk !== "destructive") {
-          errors.push('assistant tool risk must be "read", "write", or "destructive"');
+        if (
+          tool.risk !== "read" &&
+          tool.risk !== "write" &&
+          tool.risk !== "outbound" &&
+          tool.risk !== "destructive"
+        ) {
+          errors.push('assistant tool risk must be "read", "write", "outbound", or "destructive"');
         }
         validateAssistantToolPolicy(tool, assistantActionFamilies, errors);
         if (!isNonEmptyString(tool.handler)) errors.push("assistant tool handler is required");

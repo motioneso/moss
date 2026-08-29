@@ -100,7 +100,9 @@ describe("WorkflowApprovalCard", () => {
 
     await act(async () => {
       resolve(approval);
-      await new Promise((done) => setTimeout(done, 0));
+      await vi.waitFor(() => {
+        expect(renderedText(renderer.toJSON())).toContain("Approved");
+      });
     });
     expect(renderedText(renderer.toJSON())).toContain("Approved");
     expect(renderer.root.findAllByType("button")).toHaveLength(0);

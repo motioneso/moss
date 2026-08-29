@@ -368,7 +368,8 @@ describe("MVP foundation schema catalog", () => {
         // owner-only FORCE-RLS refresh-state table; no new grant, no new policy.
         { version: "0203", name: "0203_news_refresh_history.sql" },
         { version: "0204", name: "0204_news_source_health_states.sql" },
-        { version: "0205", name: "0205_news_credential_status_worker_grant.sql" }
+        { version: "0205", name: "0205_news_credential_status_worker_grant.sql" },
+        { version: "0206", name: "0206_outbound_action_risk.sql" }
       ]);
     } finally {
       await client.end();
