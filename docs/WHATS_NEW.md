@@ -23,7 +23,7 @@
 
 - **Settings are closer to where you need them.** Finance, Job Search, and News pages now link to their own settings, so changing a connection or preference takes fewer clicks. [PR #1772](https://github.com/motioneso/moss/pull/1772)
 
-## Edge channel
+## Edge channel — 2026-08-28
 
 Edge builds include the stable history below plus the user-facing changes already available in
 the current edge image. This section is intentionally build-bundled so it never advertises a
@@ -34,6 +34,7 @@ feature that is not present in the image you are running.
 #### Added
 
 - **Sports story preferences.** You can now tell Sports which stories you want to see more or less of and manage those choices in Sports Settings. [PR #2052](https://github.com/motioneso/moss/pull/2052)
+- **Ask Moss about its health.** Moss can explain its current service health and request a news refresh when you ask. [PR #2056](https://github.com/motioneso/moss/pull/2056)
 - **News story feedback.** You can now ask News for more or less of a story and manage those choices in News Settings. [PR #2049](https://github.com/motioneso/moss/pull/2049)
 - **Chat with Google's Gemini.** You can now sign in to Google's Gemini and pick it for chat, alongside Claude and Codex. [PR #2048](https://github.com/motioneso/moss/pull/2048)
 - **Sign in to Gemini from Settings.** You can now sign in to Google's Gemini command-line tool from Settings or the first-run wizard, the same way you already sign in to Claude and Codex. [PR #2042](https://github.com/motioneso/moss/pull/2042)

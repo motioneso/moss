@@ -233,6 +233,7 @@ import {
   assertDiagnosticsSafe,
   loadAppMap,
   createAppMapReadService,
+  createSourceInspector,
   getModuleBuild,
   updateModuleBuildStatus
 } from "@moss/settings";
@@ -1586,7 +1587,8 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
                 })
               }
             : {}),
-          appMap: deps.appMapService!
+          appMap: deps.appMapService!,
+          platformDiagnostics: deps.platformDiagnostics
         },
         // #1059 — the actual @moss/chat dependency for the owner-terminal WS relay lives HERE,
         // not in packages/ai (see the import comment above for why). TerminalRpcClient.connect
@@ -2781,6 +2783,7 @@ export function registerBuiltInApiRoutes(
 
   const platformDiagnostics = createPlatformDiagnosticsService({
     appMap: appMapService,
+    sourceInspector: createSourceInspector(),
     collectHostDiagnostics: dependencies.hostDiagnostics
       ? (scopedDb) =>
           collectHostDiagnostics(

@@ -40,7 +40,11 @@ export {
   newsModuleSqlMigrationDirectory
 } from "./manifest.js";
 export { configureNewsBriefingService, newsTopHeadlinesTodayExecute } from "./briefing-tool.js";
-export { configureNewsChatTools } from "./chat-tools.js";
+export {
+  configureNewsChatTools,
+  newsRefreshNewsExecute,
+  summarizeNewsRefresh
+} from "./chat-tools.js";
 export type { NewsChatToolDependencies } from "./chat-tools.js";
 export {
   createRssDatasetAdapter,

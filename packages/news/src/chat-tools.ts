@@ -56,6 +56,20 @@ export function configureNewsChatTools(config: NewsChatToolDependencies): void {
   deps = config;
 }
 
+/** Queue a refresh after the gateway has completed its normal confirmation flow. */
+export const newsRefreshNewsExecute: ToolExecute = async (
+  scopedDb,
+  _input,
+  ctx
+): Promise<ToolResult> => {
+  assertDataContextDb(scopedDb);
+  const d = requireDeps();
+  const queued = await triggerNewsRefresh(scopedDb, d.repository, d.boss, ctx.actorUserId);
+  return { data: { status: queued ? "queued" : "accepted", asynchronous: true } };
+};
+
+export const summarizeNewsRefresh: ToolSummarize = () => "Refresh news";
+
 function requireDeps(): NewsChatToolDependencies {
   if (!deps) {
     throw new Error(

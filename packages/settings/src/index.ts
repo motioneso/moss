@@ -59,6 +59,11 @@ export {
   appGetMapSliceExecute
 } from "./app-map-tool.js";
 export {
+  platformDiagnosticsInputSchema,
+  platformDiagnosticsOutputSchema,
+  platformDiagnosticsExecute
+} from "./platform-diagnostics-tool.js";
+export {
   themeModeSetInputSchema,
   themeModeSetOutputSchema,
   themeModeSetExecute
