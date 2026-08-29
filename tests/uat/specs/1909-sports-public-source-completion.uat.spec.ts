@@ -61,7 +61,7 @@ interface PreviewResult {
   readonly candidate?: {
     readonly canonicalDomain: string;
     readonly confirmedFetchHosts: readonly string[];
-    readonly targets: readonly { readonly followId: string; readonly targetUrl: string }[];
+    readonly targets: readonly { readonly target: unknown; readonly targetUrl: string }[];
   };
 }
 
@@ -256,7 +256,7 @@ function confirmationInput(preview: PreviewResult, extra: Record<string, unknown
     authorizationAcknowledgement: preview.authorizationAcknowledgement,
     canonicalDomain: preview.candidate.canonicalDomain,
     confirmedFetchHosts: preview.candidate.confirmedFetchHosts,
-    targets: preview.candidate.targets.map(({ followId, targetUrl }) => ({ followId, targetUrl }))
+    targets: preview.candidate.targets.map(({ target, targetUrl }) => ({ target, targetUrl }))
   };
 }
 
