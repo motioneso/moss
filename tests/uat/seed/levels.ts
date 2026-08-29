@@ -90,7 +90,7 @@ export async function seedLevel(options: SeedOptions): Promise<void> {
         const repo = new WorkflowsRepository();
         const { run, firstStepRun } = await repo.createRun(scopedDb, {
           ownerUserId: adminUserId,
-          workflowId: "uat.workflow-approval",
+          workflowId: "workflows.approval-continuation",
           workflowVersion: 1,
           moduleId: "uat",
           startedBy: "user",

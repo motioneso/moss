@@ -2,6 +2,7 @@ import type {
   ChatMessageDto,
   ChatSurface,
   SourceFreshnessV1,
+  WorkflowApprovalDto,
   WorkflowApprovalStatusDto
 } from "@moss/shared";
 import { useCallback, useEffect, useState } from "react";
@@ -14,7 +15,7 @@ import {
   listChatThreads,
   listPendingActionRequests
 } from "../api/client.js";
-import { listPendingWorkflowApprovals } from "../api/workflows-client.js";
+import { listWorkflowApprovals } from "../api/workflows-client.js";
 
 export type ChatRecordKind =
   | "user"
@@ -145,20 +146,9 @@ export function useChatStream(
 
     const refreshWorkflowApprovals = async () => {
       try {
-        const approvals = await listPendingWorkflowApprovals();
+        const approvals = await listWorkflowApprovals();
         if (!active) return;
-        setRecords((current) => [
-          ...current.filter((record) => record.kind !== "workflow_approval"),
-          ...approvals.map(
-            (approval): TranscriptRecord => ({
-              kind: "workflow_approval",
-              text: approval.summary,
-              workflowApprovalId: approval.id,
-              summary: approval.summary,
-              status: approval.status
-            })
-          )
-        ]);
+        setRecords((current) => mergeWorkflowApprovalRecords(current, approvals));
       } catch {
         // The live stream remains authoritative; an unavailable workflow read must not block chat.
       }
@@ -170,15 +160,9 @@ export function useChatStream(
           listChatThreads(surface),
           // #1253 — fetch pending action requests to re-hydrate approval cards on page reload
           listPendingActionRequests().catch(() => ({ actions: [] })),
-          listPendingWorkflowApprovals().catch(() => [])
+          listWorkflowApprovals().catch(() => [])
         ]);
-        const workflowRecords: TranscriptRecord[] = workflowApprovals.map((approval) => ({
-          kind: "workflow_approval",
-          text: approval.summary,
-          workflowApprovalId: approval.id,
-          summary: approval.summary,
-          status: approval.status
-        }));
+        const workflowRecords = workflowApprovals.map(workflowApprovalRecord);
         const { threads } = threadsResult;
         const thread = threads[0];
         if (!thread) {
@@ -216,6 +200,41 @@ export function useChatStream(
   }, [enabled, surface]);
 
   return { records, clearRecords, streamErrorCount };
+}
+
+function workflowApprovalRecord(approval: WorkflowApprovalDto): TranscriptRecord {
+  return {
+    kind: "workflow_approval",
+    text: approval.summary,
+    workflowApprovalId: approval.id,
+    summary: approval.summary,
+    status: approval.status
+  };
+}
+
+export function mergeWorkflowApprovalRecords(
+  records: readonly TranscriptRecord[],
+  approvals: readonly WorkflowApprovalDto[]
+): TranscriptRecord[] {
+  const refreshed = new Map(
+    approvals.map((approval) => [approval.id, workflowApprovalRecord(approval)])
+  );
+  const merged = records.map((record) =>
+    record.kind === "workflow_approval" && record.workflowApprovalId
+      ? (refreshed.get(record.workflowApprovalId) ?? record)
+      : record
+  );
+  const knownIds = new Set(
+    merged.flatMap((record) =>
+      record.kind === "workflow_approval" && record.workflowApprovalId
+        ? [record.workflowApprovalId]
+        : []
+    )
+  );
+  return [
+    ...merged,
+    ...approvals.filter((approval) => !knownIds.has(approval.id)).map(workflowApprovalRecord)
+  ];
 }
 
 function recordsFromMessages(messages: readonly ChatMessageDto[]): TranscriptRecord[] {

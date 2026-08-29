@@ -23,12 +23,10 @@ export function getWorkflowRunDetail(runId: string): Promise<WorkflowRunDetailDt
   return requestJson<WorkflowRunDetailDto>(`/api/workflows/runs/${encodeURIComponent(runId)}`);
 }
 
-export async function listPendingWorkflowApprovals(): Promise<readonly WorkflowApprovalDto[]> {
+export async function listWorkflowApprovals(): Promise<readonly WorkflowApprovalDto[]> {
   const runs = await listWorkflowRuns({ status: "running", limit: 100 });
   const details = await Promise.all(runs.map((run) => getWorkflowRunDetail(run.id)));
-  return details.flatMap((detail) =>
-    detail.approvals.filter((approval) => approval.status === "pending")
-  );
+  return details.flatMap((detail) => detail.approvals);
 }
 
 export async function resolveWorkflowApproval(

@@ -19,6 +19,28 @@ export const workflowsModuleManifest = {
   lifecycle: "required",
   availability: { defaultEnabled: true, required: true },
   compatibility: { jarv1s: ">=0.0.0" },
+  workflows: [
+    {
+      id: "workflows.approval-continuation",
+      displayName: "Approval continuation",
+      version: 1,
+      startStepId: "approval",
+      trigger: "manual",
+      steps: [
+        {
+          id: "approval",
+          kind: "approval",
+          approval: { summary: "Approve the seeded workflow action" }
+        },
+        {
+          id: "finish",
+          kind: "task",
+          handler: async () => ({ status: "finished" })
+        }
+      ],
+      edges: [{ from: "approval", to: "finish", condition: { type: "always" } }]
+    }
+  ],
   database: {
     migrations: ["0202_workflow_runs.sql"],
     ownedTables: [
