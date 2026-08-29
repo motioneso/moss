@@ -29,6 +29,7 @@ describe("sports manifest", () => {
     expect(sportsModuleManifest.routes.map((r) => r.path)).toContain("/api/sports/overview");
     expect(sportsModuleManifest.routes.map((r) => r.path)).toEqual(
       expect.arrayContaining([
+        "/api/sports/standings-preferences",
         "/api/sports/sources/:id/retry",
         "/api/sports/sources/:id/rebuild/preview",
         "/api/sports/sources/:id/rebuild"

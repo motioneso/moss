@@ -3,6 +3,8 @@ import type { Confederation, SportsSportKey, StandingsShape } from "@moss/shared
 export interface CatalogEntry {
   readonly competitionKey: string;
   readonly label: string;
+  readonly sportLabel: string;
+  readonly regionLabel: string | null;
   readonly kind: "league" | "tournament";
   readonly marquee: boolean;
   readonly standingsShape: StandingsShape;
@@ -29,6 +31,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "nfl",
     label: "NFL",
+    sportLabel: "Football",
+    regionLabel: null,
     kind: "league",
     marquee: false,
     standingsShape: "record",
@@ -40,6 +44,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "nba",
     label: "NBA",
+    sportLabel: "Basketball",
+    regionLabel: null,
     kind: "league",
     marquee: false,
     standingsShape: "record",
@@ -51,6 +57,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "nhl",
     label: "NHL",
+    sportLabel: "Hockey",
+    regionLabel: null,
     kind: "league",
     marquee: false,
     standingsShape: "record",
@@ -62,6 +70,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "mlb",
     label: "MLB",
+    sportLabel: "Baseball",
+    regionLabel: null,
     kind: "league",
     marquee: false,
     standingsShape: "record",
@@ -73,6 +83,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "eng.1",
     label: "Premier League",
+    sportLabel: "Soccer",
+    regionLabel: "England",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -86,6 +98,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "eng.2",
     label: "EFL Championship",
+    sportLabel: "Soccer",
+    regionLabel: "England",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -96,6 +110,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "eng.3",
     label: "EFL League One",
+    sportLabel: "Soccer",
+    regionLabel: "England",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -106,6 +122,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "eng.4",
     label: "EFL League Two",
+    sportLabel: "Soccer",
+    regionLabel: "England",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -116,6 +134,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "eng.5",
     label: "National League",
+    sportLabel: "Soccer",
+    regionLabel: "England",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -126,6 +146,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "usa.1",
     label: "MLS",
+    sportLabel: "Soccer",
+    regionLabel: "United States",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -139,6 +161,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "esp.1",
     label: "LaLiga",
+    sportLabel: "Soccer",
+    regionLabel: "Spain",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -149,6 +173,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "ger.1",
     label: "Bundesliga",
+    sportLabel: "Soccer",
+    regionLabel: "Germany",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -159,6 +185,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "ita.1",
     label: "Serie A",
+    sportLabel: "Soccer",
+    regionLabel: "Italy",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -169,6 +197,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "fra.1",
     label: "Ligue 1",
+    sportLabel: "Soccer",
+    regionLabel: "France",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -179,6 +209,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "ned.1",
     label: "Eredivisie",
+    sportLabel: "Soccer",
+    regionLabel: "Netherlands",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -189,6 +221,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "por.1",
     label: "Primeira Liga",
+    sportLabel: "Soccer",
+    regionLabel: "Portugal",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -199,6 +233,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "sco.1",
     label: "Scottish Premiership",
+    sportLabel: "Soccer",
+    regionLabel: "Scotland",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -209,6 +245,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "tur.1",
     label: "Süper Lig",
+    sportLabel: "Soccer",
+    regionLabel: "Turkey",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -219,6 +257,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "bel.1",
     label: "Belgian Pro League",
+    sportLabel: "Soccer",
+    regionLabel: "Belgium",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -229,6 +269,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "gre.1",
     label: "Super League Greece",
+    sportLabel: "Soccer",
+    regionLabel: "Greece",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -239,6 +281,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "sui.1",
     label: "Swiss Super League",
+    sportLabel: "Soccer",
+    regionLabel: "Switzerland",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -249,6 +293,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "aut.1",
     label: "Austrian Bundesliga",
+    sportLabel: "Soccer",
+    regionLabel: "Austria",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -259,6 +305,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "den.1",
     label: "Danish Superliga",
+    sportLabel: "Soccer",
+    regionLabel: "Denmark",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -269,6 +317,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "mex.1",
     label: "Liga MX",
+    sportLabel: "Soccer",
+    regionLabel: "Mexico",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -279,6 +329,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "crc.1",
     label: "Primera División de Costa Rica",
+    sportLabel: "Soccer",
+    regionLabel: "Costa Rica",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -289,6 +341,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "bra.1",
     label: "Brasileirão",
+    sportLabel: "Soccer",
+    regionLabel: "Brazil",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -299,6 +353,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "arg.1",
     label: "Liga Profesional de Fútbol",
+    sportLabel: "Soccer",
+    regionLabel: "Argentina",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -309,6 +365,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "col.1",
     label: "Primera A",
+    sportLabel: "Soccer",
+    regionLabel: "Colombia",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -319,6 +377,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "chi.1",
     label: "Primera División de Chile",
+    sportLabel: "Soccer",
+    regionLabel: "Chile",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -329,6 +389,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "uru.1",
     label: "Liga AUF Uruguaya",
+    sportLabel: "Soccer",
+    regionLabel: "Uruguay",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -339,6 +401,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "uefa.champions",
     label: "Champions League",
+    sportLabel: "Soccer",
+    regionLabel: "Europe",
     kind: "tournament",
     marquee: false,
     standingsShape: "groups",
@@ -352,6 +416,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "fifa.world",
     label: "FIFA World Cup",
+    sportLabel: "Soccer",
+    regionLabel: "International",
     kind: "tournament",
     marquee: true,
     standingsShape: "groups",
@@ -373,6 +439,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "jpn.1",
     label: "J.League",
+    sportLabel: "Soccer",
+    regionLabel: "Japan",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -384,6 +452,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
     // ESPN uses ksa.1, not the ISO-3166 sau.1 — the "sau.1 trap" from spec §4.6.
     competitionKey: "ksa.1",
     label: "Saudi Pro League",
+    sportLabel: "Soccer",
+    regionLabel: "Saudi Arabia",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -394,6 +464,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "chn.1",
     label: "Chinese Super League",
+    sportLabel: "Soccer",
+    regionLabel: "China",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -404,6 +476,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "aus.1",
     label: "A-League Men",
+    sportLabel: "Soccer",
+    regionLabel: "Australia",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -414,6 +488,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "tha.1",
     label: "Thai League 1",
+    sportLabel: "Soccer",
+    regionLabel: "Thailand",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -424,6 +500,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "rsa.1",
     label: "South African Premiership",
+    sportLabel: "Soccer",
+    regionLabel: "South Africa",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -434,6 +512,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "ecu.1",
     label: "LigaPro Ecuador",
+    sportLabel: "Soccer",
+    regionLabel: "Ecuador",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -444,6 +524,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "par.1",
     label: "Paraguayan Primera División",
+    sportLabel: "Soccer",
+    regionLabel: "Paraguay",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -454,6 +536,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "per.1",
     label: "Peruvian Liga 1",
+    sportLabel: "Soccer",
+    regionLabel: "Peru",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -464,6 +548,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "bol.1",
     label: "Bolivian Liga Profesional",
+    sportLabel: "Soccer",
+    regionLabel: "Bolivia",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -474,6 +560,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "ven.1",
     label: "Venezuelan Primera División",
+    sportLabel: "Soccer",
+    regionLabel: "Venezuela",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -484,6 +572,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "hon.1",
     label: "Honduran Liga Nacional",
+    sportLabel: "Soccer",
+    regionLabel: "Honduras",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -494,6 +584,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "gua.1",
     label: "Guatemalan Liga Nacional",
+    sportLabel: "Soccer",
+    regionLabel: "Guatemala",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -504,6 +596,8 @@ export const SPORTS_CATALOG: readonly CatalogEntry[] = [
   {
     competitionKey: "slv.1",
     label: "Salvadoran Primera División",
+    sportLabel: "Soccer",
+    regionLabel: "El Salvador",
     kind: "league",
     marquee: false,
     standingsShape: "table",

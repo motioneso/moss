@@ -14,6 +14,8 @@ import { sportsQueryKeys } from "../../packages/sports/src/web/query-keys.js";
 const NFL: CompetitionRef = {
   competitionKey: "nfl",
   label: "NFL",
+  sportLabel: "Football",
+  regionLabel: null,
   kind: "league",
   marquee: true,
   standingsShape: "record",

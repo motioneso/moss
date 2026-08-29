@@ -36,6 +36,7 @@ export * from "./env.js";
 export * from "./settings-api.js";
 export * from "./themes-api.js";
 export * from "./sports-api.js";
+export * from "./sports-standings-preferences-api.js";
 export * from "./sports-sources-api.js";
 export * from "./news-api.js";
 export * from "./news-credentials-api.js";

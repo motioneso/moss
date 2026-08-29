@@ -18,10 +18,12 @@ import type {
   SportsFollowDto,
   SportsFollowsResponse,
   SportsOverviewResponse,
+  SportsStandingsPreferencesResponse,
   SportsStandingsResponse,
   UpdateUsefulnessFeedbackReasonRequest,
   UpdateSportsEspnCoverageRequest,
-  UpdateSportsEspnCoverageResponse
+  UpdateSportsEspnCoverageResponse,
+  UpdateSportsStandingsPreferencesRequest
 } from "@moss/shared";
 
 import { requestJson } from "@moss/module-web-sdk";
@@ -36,6 +38,19 @@ export async function getSportsCatalog(): Promise<SportsCatalogResponse> {
 
 export async function listSportsFollows(): Promise<SportsFollowsResponse> {
   return requestJson<SportsFollowsResponse>("/api/sports/follows");
+}
+
+export async function getSportsStandingsPreferences(): Promise<SportsStandingsPreferencesResponse> {
+  return requestJson<SportsStandingsPreferencesResponse>("/api/sports/standings-preferences");
+}
+
+export async function updateSportsStandingsPreferences(
+  input: UpdateSportsStandingsPreferencesRequest
+): Promise<SportsStandingsPreferencesResponse> {
+  return requestJson<SportsStandingsPreferencesResponse>("/api/sports/standings-preferences", {
+    method: "PUT",
+    body: input
+  });
 }
 
 export async function getStandingsByLeague(

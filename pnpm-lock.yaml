@@ -1124,6 +1124,9 @@ importers:
       '@moss/shared':
         specifier: workspace:*
         version: link:../shared
+      '@moss/structured-state':
+        specifier: workspace:*
+        version: link:../structured-state
       '@tanstack/react-query':
         specifier: ^5.0.0
         version: 5.101.0(react@19.2.7)

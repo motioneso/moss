@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import type { DatasetClient } from "@moss/datasets";
-import type { AccessContext, DataContextRunner } from "@moss/db";
+import type { AccessContext, DataContextRunner, PreferencesPort } from "@moss/db";
 import { HttpError, handleRouteError } from "@moss/module-sdk";
 import type { NewsAiPort } from "@moss/news";
 import {
@@ -18,10 +18,12 @@ import {
   sportsFollowsResponseSchema,
   sportsLeagueTeamsResponseSchema,
   sportsOverviewResponseSchema,
+  sportsStandingsPreferencesResponseSchema,
   sportsStandingsResponseSchema,
   sportsTeamSearchResponseSchema,
   updateSportsSourceAssignmentsSchema,
   updateSportsEspnCoverageSchema,
+  updateSportsStandingsPreferencesSchema,
   updateSportsSourceRecipeSchema,
   type ConfirmSportsSourceRecipeRequest,
   type ConfirmSportsSourceRequest,
@@ -31,6 +33,7 @@ import {
   type PreviewSportsSourceAssignmentsRequest,
   type UpdateSportsEspnCoverageRequest
 } from "@moss/shared";
+import { PreferencesRepository } from "@moss/structured-state";
 
 import { SportsFollowsRepository } from "./repository.js";
 import {
@@ -39,7 +42,7 @@ import {
   type SportsStoryFeedbackPort,
   type SportsStoryRelevancePort
 } from "./sports-service.js";
-import { catalogEntry } from "./source/catalog.js";
+import { SPORTS_CATALOG, catalogEntry } from "./source/catalog.js";
 import { type SportsDiscoveryBrowserPort, type SportsSafeFetchPort } from "./source/discovery.js";
 import { SportsEspnCoverageRepository } from "./source/espn-coverage-repository.js";
 import { SportsSourcesRepository } from "./source/repository.js";
@@ -48,6 +51,29 @@ import { createSportsPreviewStore } from "./source/preview-store.js";
 import { SportsSourceRequestError, SportsSourceService } from "./source/service.js";
 
 type SportsSourcePreviewStore = ReturnType<typeof createSportsPreviewStore>;
+const STANDINGS_PREFERENCES_KEY = "sports.standings_competition_keys";
+
+function parseStandingsPreferences(body: unknown): readonly string[] {
+  if (
+    body === null ||
+    typeof body !== "object" ||
+    Array.isArray(body) ||
+    Object.keys(body).length !== 1 ||
+    !("selectedCompetitionKeys" in body)
+  ) {
+    throw new HttpError(400, "Invalid standings preferences");
+  }
+  const keys = body.selectedCompetitionKeys;
+  if (
+    !Array.isArray(keys) ||
+    keys.length > 64 ||
+    keys.some((key) => typeof key !== "string") ||
+    new Set(keys).size !== keys.length
+  ) {
+    throw new HttpError(400, "Invalid standings competition keys");
+  }
+  return keys as readonly string[];
+}
 
 export interface SportsRoutesDependencies {
   readonly dataContext: DataContextRunner;
@@ -60,6 +86,7 @@ export interface SportsRoutesDependencies {
   readonly datasetClient: DatasetClient;
   /** Optional injection point for tests; defaults to a real `SportsFollowsRepository`. */
   readonly repository?: SportsFollowsWriter;
+  readonly preferencesRepository?: PreferencesPort;
   /** Clock seam forwarded to the service (default `() => new Date()`). */
   readonly now?: () => Date;
   /** #1572 custom source discovery — required for the preview/confirm/list/assign/delete routes. */
@@ -85,6 +112,7 @@ export function registerSportsRoutes(
   dependencies: SportsRoutesDependencies
 ): void {
   const repository: SportsFollowsWriter = dependencies.repository ?? new SportsFollowsRepository();
+  const preferencesRepository = dependencies.preferencesRepository ?? new PreferencesRepository();
   const sourcesRepository = dependencies.sourcesRepository ?? new SportsSourcesRepository();
   const espnCoverageRepository =
     dependencies.espnCoverageRepository ?? new SportsEspnCoverageRepository();
@@ -119,6 +147,52 @@ export function registerSportsRoutes(
       try {
         await dependencies.resolveAccessContext(request);
         return await service.getCatalog();
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  server.get(
+    "/api/sports/standings-preferences",
+    { schema: sportsStandingsPreferencesResponseSchema },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const stored = await dependencies.dataContext.withDataContext(accessContext, (db) =>
+          preferencesRepository.get(db, STANDINGS_PREFERENCES_KEY)
+        );
+        if (!Array.isArray(stored)) return { selectedCompetitionKeys: null };
+        const selected = new Set(stored.filter((key): key is string => typeof key === "string"));
+        return {
+          selectedCompetitionKeys: SPORTS_CATALOG.map((entry) => entry.competitionKey).filter(
+            (key) => selected.has(key)
+          )
+        };
+      } catch (error) {
+        return handleRouteError(error, reply);
+      }
+    }
+  );
+
+  server.put(
+    "/api/sports/standings-preferences",
+    { schema: { response: updateSportsStandingsPreferencesSchema.response } },
+    async (request, reply) => {
+      try {
+        const accessContext = await dependencies.resolveAccessContext(request);
+        const input = parseStandingsPreferences(request.body);
+        const requested = new Set(input);
+        if (input.some((key) => !catalogEntry(key))) {
+          throw new HttpError(400, "Standings preferences contain an unknown competition");
+        }
+        const selectedCompetitionKeys = SPORTS_CATALOG.map((entry) => entry.competitionKey).filter(
+          (key) => requested.has(key)
+        );
+        await dependencies.dataContext.withDataContext(accessContext, (db) =>
+          preferencesRepository.upsert(db, STANDINGS_PREFERENCES_KEY, selectedCompetitionKeys)
+        );
+        return { selectedCompetitionKeys };
       } catch (error) {
         return handleRouteError(error, reply);
       }

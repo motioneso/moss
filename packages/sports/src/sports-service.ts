@@ -291,6 +291,8 @@ export class SportsService {
     const competitions = SPORTS_CATALOG.map((entry) => ({
       competitionKey: entry.competitionKey,
       label: entry.label,
+      sportLabel: entry.sportLabel,
+      regionLabel: entry.regionLabel,
       kind: entry.kind,
       marquee: entry.marquee,
       standingsShape: entry.standingsShape,

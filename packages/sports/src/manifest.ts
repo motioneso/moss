@@ -16,8 +16,10 @@ import {
   sportsFollowsResponseSchema,
   sportsLeagueTeamsResponseSchema,
   sportsOverviewResponseSchema,
+  sportsStandingsPreferencesResponseSchema,
   sportsStandingsResponseSchema,
   sportsTeamSearchResponseSchema,
+  updateSportsStandingsPreferencesSchema,
   updateSportsSourceAssignmentsSchema,
   updateSportsEspnCoverageSchema,
   updateSportsSourceRecipeSchema
@@ -190,6 +192,19 @@ export const sportsModuleManifest = {
       path: "/api/sports/standings",
       responseSchema: sportsStandingsResponseSchema,
       permissionId: "sports.view"
+    },
+    {
+      method: "GET",
+      path: "/api/sports/standings-preferences",
+      responseSchema: sportsStandingsPreferencesResponseSchema,
+      permissionId: "sports.view"
+    },
+    {
+      method: "PUT",
+      path: "/api/sports/standings-preferences",
+      requestSchema: updateSportsStandingsPreferencesSchema.body,
+      responseSchema: updateSportsStandingsPreferencesSchema.response,
+      permissionId: "sports.follow"
     },
     {
       method: "GET",

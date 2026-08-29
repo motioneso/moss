@@ -19,6 +19,7 @@
     "@moss/news": "workspace:*",
     "@moss/settings-ui": "workspace:*",
     "@moss/shared": "workspace:*",
+    "@moss/structured-state": "workspace:*",
     "@tanstack/react-query": "^5.0.0",
     "ajv": "^8.17.1",
     "css-select": "^7.0.0",
