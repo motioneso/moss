@@ -5,6 +5,8 @@ export {
 } from "./manifest.js";
 
 export { WorkflowsRepository } from "./repository.js";
+export { createWorkflowArtifactPort } from "./artifacts.js";
+export type { WorkflowArtifactPortInput } from "./artifacts.js";
 
 export {
   WORKFLOW_QUEUE_DEFINITIONS,

@@ -685,6 +685,25 @@ export class WorkflowsRepository {
     return rows.map(rowToArtifact);
   }
 
+  async getArtifact(
+    scopedDb: unknown,
+    ownerUserId: string,
+    workflowRunId: string,
+    stepRunId: string,
+    artifactRef: string
+  ): Promise<WorkflowArtifact | null> {
+    assertDataContextDb(scopedDb);
+    const row = await scopedDb.db
+      .selectFrom("app.workflow_artifacts")
+      .selectAll()
+      .where("artifact_ref", "=", artifactRef)
+      .where("workflow_run_id", "=", workflowRunId)
+      .where("step_run_id", "=", stepRunId)
+      .where("owner_user_id", "=", ownerUserId)
+      .executeTakeFirst();
+    return row ? rowToArtifact(row) : null;
+  }
+
   private async requireStepRunRow(scopedDb: DataContextDb, stepRunId: string) {
     const row = await scopedDb.db
       .selectFrom("app.workflow_step_runs")

@@ -1,4 +1,5 @@
 import { createElement } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -13,6 +14,29 @@ const allowedRecord = {
 };
 
 describe("chat drawer activity outcomes", () => {
+  it("renders workflow approval records with the workflow approval card", () => {
+    const html = renderToString(
+      createElement(
+        QueryClientProvider,
+        { client: new QueryClient() },
+        createElement(Thread, {
+          records: [
+            {
+              kind: "workflow_approval",
+              text: "Approve the seeded workflow action",
+              workflowApprovalId: "approval-1",
+              summary: "Approve the seeded workflow action",
+              status: "pending"
+            }
+          ]
+        })
+      )
+    );
+    expect(html).toContain('aria-label="Workflow approval"');
+    expect(html).toContain('data-workflow-approval-id="approval-1"');
+    expect(html).toContain("Approve the seeded workflow action");
+  });
+
   it("renders action outcomes outside Behind the scenes", () => {
     // #1661: was "Allowed by YOLO". A user's own approval now reports this outcome too, and the
     // record carries nothing that says which, so the verb stops naming a cause it cannot know.

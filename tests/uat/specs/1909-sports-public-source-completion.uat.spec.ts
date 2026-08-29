@@ -61,7 +61,7 @@ interface PreviewResult {
   readonly candidate?: {
     readonly canonicalDomain: string;
     readonly confirmedFetchHosts: readonly string[];
-    readonly targets: readonly { readonly followId: string; readonly targetUrl: string }[];
+    readonly targets: readonly { readonly target: unknown; readonly targetUrl: string }[];
   };
 }
 
@@ -217,9 +217,7 @@ async function confirmThroughMoss(
   );
   const composer = page.getByRole("textbox", { name: /^Message/ });
   await composer.fill(
-    toolName === "sports.retrySource"
-      ? `Please retry the sports source with ID ${String(input.sourceId)}.`
-      : `I approve the pending Sports source change. Please use ${toolName} with these confirmation details: ${JSON.stringify(input)}`
+    `Call ${toolName} exactly once with this JSON input. Do not call another tool: ${JSON.stringify(input)}`
   );
   await composer.press("Enter");
 
@@ -258,7 +256,7 @@ function confirmationInput(preview: PreviewResult, extra: Record<string, unknown
     authorizationAcknowledgement: preview.authorizationAcknowledgement,
     canonicalDomain: preview.candidate.canonicalDomain,
     confirmedFetchHosts: preview.candidate.confirmedFetchHosts,
-    targets: preview.candidate.targets.map(({ followId, targetUrl }) => ({ followId, targetUrl }))
+    targets: preview.candidate.targets.map(({ target, targetUrl }) => ({ target, targetUrl }))
   };
 }
 

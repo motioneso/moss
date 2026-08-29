@@ -1,4 +1,5 @@
 import { SharesRepository } from "@moss/db";
+import { WorkflowsRepository } from "@moss/workflows";
 import { createAppRuntimeRunner, createMigrationOwnerDb } from "./connections.js";
 import { seedSecondOwner, seedSoloAdmin } from "./admin.js";
 import { seedOnboardingChunk } from "./chunks/onboarding.js";
@@ -79,6 +80,32 @@ export async function seedLevel(options: SeedOptions): Promise<void> {
       await seedScriptedChatProviderChunk(scriptedRunner, adminUserId);
     } finally {
       await scriptedRunner.destroy();
+    }
+  }
+
+  if (options.workflowApprovalFixture) {
+    const runner = createAppRuntimeRunner();
+    try {
+      await runner.withDataContext({ actorUserId: adminUserId }, async (scopedDb) => {
+        const repo = new WorkflowsRepository();
+        const { run, firstStepRun } = await repo.createRun(scopedDb, {
+          ownerUserId: adminUserId,
+          workflowId: "workflows.approval-continuation",
+          workflowVersion: 1,
+          moduleId: "uat",
+          startedBy: "user",
+          startStepId: "approval"
+        });
+        await repo.markRunRunning(scopedDb, run.id);
+        await repo.createApproval(scopedDb, {
+          workflowRunId: run.id,
+          stepRunId: firstStepRun.id,
+          ownerUserId: adminUserId,
+          summary: "Approve the seeded workflow action"
+        });
+      });
+    } finally {
+      await runner.destroy();
     }
   }
 

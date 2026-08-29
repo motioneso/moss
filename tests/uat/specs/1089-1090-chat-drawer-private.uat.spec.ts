@@ -49,7 +49,7 @@ async function sendAndAwaitReply(page: Page, drawer: Locator, message: string): 
   const response = await turnResponse;
   expect(response.status()).toBe(200);
   expect(response.request().postDataJSON()).toMatchObject({ text: message });
-  await expect(drawer.getByText(SCRIPTED_REPLY, { exact: true })).toBeVisible();
+  await expect(drawer.getByText(SCRIPTED_REPLY, { exact: true }).last()).toBeVisible();
   await expect(response.json()).resolves.toMatchObject({ reply: SCRIPTED_REPLY });
 }
 

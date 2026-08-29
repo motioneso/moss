@@ -13,8 +13,10 @@ import {
   listChatThreads,
   listPendingActionRequests
 } from "../../apps/web/src/api/client.js";
+import { listWorkflowApprovals } from "../../apps/web/src/api/workflows-client.js";
 import {
   parseRecord,
+  mergeWorkflowApprovalRecords,
   shouldEndPrivateChatOnStreamDisconnect,
   useChatStream
 } from "../../apps/web/src/chat/use-chat-stream.js";
@@ -26,11 +28,17 @@ vi.mock("../../apps/web/src/api/client.js", () => ({
   listPendingActionRequests: vi.fn(async () => ({ actions: [] }))
 }));
 
+vi.mock("../../apps/web/src/api/workflows-client.js", () => ({
+  listWorkflowApprovals: vi.fn(async () => [])
+}));
+
 afterEach(() => {
   vi.mocked(listChatThreadMessages).mockReset();
   vi.mocked(listChatThreads).mockReset();
   vi.mocked(listPendingActionRequests).mockReset();
   vi.mocked(listPendingActionRequests).mockResolvedValue({ actions: [] });
+  vi.mocked(listWorkflowApprovals).mockReset();
+  vi.mocked(listWorkflowApprovals).mockResolvedValue([]);
   vi.unstubAllGlobals();
 });
 
@@ -179,6 +187,18 @@ describe("shouldEndPrivateChatOnStreamDisconnect", () => {
 });
 
 describe("useChatStream", () => {
+  it("keeps a resolved approval card when a refresh no longer returns it", () => {
+    const resolved = {
+      kind: "workflow_approval" as const,
+      text: "Approve the seeded workflow action",
+      workflowApprovalId: "approval-1",
+      summary: "Approve the seeded workflow action",
+      status: "approved" as const
+    };
+
+    expect(mergeWorkflowApprovalRecords([resolved], [])).toEqual([resolved]);
+  });
+
   it("replaces the previous transcript when the surface changes", async () => {
     vi.stubGlobal(
       "EventSource",

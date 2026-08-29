@@ -1333,6 +1333,9 @@ importers:
       '@moss/shared':
         specifier: workspace:*
         version: link:../shared
+      '@moss/vault':
+        specifier: workspace:*
+        version: link:../vault
       '@sinclair/typebox':
         specifier: ^0.34.13
         version: 0.34.49

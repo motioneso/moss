@@ -1,4 +1,10 @@
-import type { ChatMessageDto, ChatSurface, SourceFreshnessV1 } from "@moss/shared";
+import type {
+  ChatMessageDto,
+  ChatSurface,
+  SourceFreshnessV1,
+  WorkflowApprovalDto,
+  WorkflowApprovalStatusDto
+} from "@moss/shared";
 import { useCallback, useEffect, useState } from "react";
 
 import type { AnswerSourceSupportCard, ChatAttachmentDto } from "@moss/shared";
@@ -9,6 +15,7 @@ import {
   listChatThreads,
   listPendingActionRequests
 } from "../api/client.js";
+import { listWorkflowApprovals } from "../api/workflows-client.js";
 
 export type ChatRecordKind =
   | "user"
@@ -18,6 +25,7 @@ export type ChatRecordKind =
   | "reply"
   | "error"
   | "action_request"
+  | "workflow_approval"
   | "action_result";
 
 /**
@@ -36,8 +44,10 @@ export interface TranscriptRecord {
   readonly text: string;
   readonly messageId?: string;
   readonly actionRequestId?: string;
+  readonly workflowApprovalId?: string;
   readonly toolName?: string;
   readonly summary?: string;
+  readonly status?: WorkflowApprovalStatusDto;
   readonly outcome?: "executed" | "denied" | "error" | "allowed";
   readonly result?: Record<string, unknown>;
   /** #1310: dot-path tokens into the frontend `queryKeys` object, resolved by app-shell's generic invalidation effect. */
@@ -72,6 +82,7 @@ function isChatRecordKind(value: string): value is ChatRecordKind {
     case "reply":
     case "error":
     case "action_request":
+    case "workflow_approval":
     case "action_result":
       return true;
     default:
@@ -132,16 +143,32 @@ export function useChatStream(
   useEffect(() => {
     if (!surface || !enabled) return;
     let active = true;
+
+    const refreshWorkflowApprovals = async () => {
+      try {
+        const approvals = await listWorkflowApprovals();
+        if (!active) return;
+        setRecords((current) => mergeWorkflowApprovalRecords(current, approvals));
+      } catch {
+        // The live stream remains authoritative; an unavailable workflow read must not block chat.
+      }
+    };
+
     void (async () => {
       try {
-        const [threadsResult, actionsResult] = await Promise.all([
+        const [threadsResult, actionsResult, workflowApprovals] = await Promise.all([
           listChatThreads(surface),
           // #1253 — fetch pending action requests to re-hydrate approval cards on page reload
-          listPendingActionRequests().catch(() => ({ actions: [] }))
+          listPendingActionRequests().catch(() => ({ actions: [] })),
+          listWorkflowApprovals().catch(() => [])
         ]);
+        const workflowRecords = workflowApprovals.map(workflowApprovalRecord);
         const { threads } = threadsResult;
         const thread = threads[0];
-        if (!thread) return;
+        if (!thread) {
+          setRecords((current) => (current.length === 0 ? workflowRecords : current));
+          return;
+        }
         const { messages } = await listChatThreadMessages(thread.id, surface);
         if (!active) return;
         const history = recordsFromMessages(messages);
@@ -158,17 +185,56 @@ export function useChatStream(
             // preview is SSE-only; backend never persists it, so re-hydrated cards show no preview
           };
         });
-        setRecords((current) => (current.length === 0 ? [...history, ...actionRecords] : current));
+        setRecords((current) =>
+          current.length === 0 ? [...history, ...actionRecords, ...workflowRecords] : current
+        );
       } catch {
         // The live stream remains authoritative; an unavailable history read must not block chat.
       }
     })();
+    const timer = setInterval(() => void refreshWorkflowApprovals(), 5_000);
     return () => {
       active = false;
+      clearInterval(timer);
     };
   }, [enabled, surface]);
 
   return { records, clearRecords, streamErrorCount };
+}
+
+function workflowApprovalRecord(approval: WorkflowApprovalDto): TranscriptRecord {
+  return {
+    kind: "workflow_approval",
+    text: approval.summary,
+    workflowApprovalId: approval.id,
+    summary: approval.summary,
+    status: approval.status
+  };
+}
+
+export function mergeWorkflowApprovalRecords(
+  records: readonly TranscriptRecord[],
+  approvals: readonly WorkflowApprovalDto[]
+): TranscriptRecord[] {
+  const refreshed = new Map(
+    approvals.map((approval) => [approval.id, workflowApprovalRecord(approval)])
+  );
+  const merged = records.map((record) =>
+    record.kind === "workflow_approval" && record.workflowApprovalId
+      ? (refreshed.get(record.workflowApprovalId) ?? record)
+      : record
+  );
+  const knownIds = new Set(
+    merged.flatMap((record) =>
+      record.kind === "workflow_approval" && record.workflowApprovalId
+        ? [record.workflowApprovalId]
+        : []
+    )
+  );
+  return [
+    ...merged,
+    ...approvals.filter((approval) => !knownIds.has(approval.id)).map(workflowApprovalRecord)
+  ];
 }
 
 function recordsFromMessages(messages: readonly ChatMessageDto[]): TranscriptRecord[] {
@@ -233,8 +299,17 @@ export function parseRecord(data: unknown): TranscriptRecord | null {
       messageId: typeof parsed.messageId === "string" ? parsed.messageId : undefined,
       actionRequestId:
         typeof parsed.actionRequestId === "string" ? parsed.actionRequestId : undefined,
+      workflowApprovalId:
+        typeof parsed.workflowApprovalId === "string" ? parsed.workflowApprovalId : undefined,
       toolName: typeof parsed.toolName === "string" ? parsed.toolName : undefined,
       summary: typeof parsed.summary === "string" ? parsed.summary : undefined,
+      status:
+        parsed.status === "pending" ||
+        parsed.status === "approved" ||
+        parsed.status === "denied" ||
+        parsed.status === "cancelled"
+          ? parsed.status
+          : undefined,
       outcome:
         parsed.outcome === "executed" ||
         parsed.outcome === "denied" ||
