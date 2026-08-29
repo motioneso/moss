@@ -49,7 +49,7 @@ export interface ChatSelectedToolMetadataDto {
   readonly moduleName: string;
   readonly name: string;
   readonly permissionId: string;
-  readonly risk: "read" | "write" | "destructive";
+  readonly risk: "read" | "write" | "outbound" | "destructive";
 }
 
 /**
@@ -324,7 +324,7 @@ const chatSelectedToolMetadataSchema = {
     moduleName: { type: "string" },
     name: { type: "string" },
     permissionId: { type: "string" },
-    risk: { type: "string", enum: ["read", "write", "destructive"] }
+    risk: { type: "string", enum: ["read", "write", "outbound", "destructive"] }
   }
 } as const;
 

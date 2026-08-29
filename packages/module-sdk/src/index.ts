@@ -53,7 +53,7 @@ import type { ModuleDiagnosticProvider } from "./diagnostics.js";
 export type ModuleLifecycle = "required" | "optional" | "user-toggleable" | "workspace-toggleable";
 export type ModuleScope = "user" | "admin" | "system";
 export type ModulePermissionAction = "view" | "create" | "update" | "delete" | "manage" | "execute";
-export type ModuleAssistantToolRisk = "read" | "write" | "destructive";
+export type ModuleAssistantToolRisk = "read" | "write" | "outbound" | "destructive";
 export type ModuleAssistantToolExecutionPolicy = "auto" | "confirm";
 export type MossActionPermissionTier = "ask_each_time" | "trusted_auto" | "always_confirm";
 /**

@@ -204,7 +204,7 @@ const aiAssistantToolSchema = {
     name: { type: "string" },
     description: { type: "string" },
     permissionId: { type: "string" },
-    risk: { type: "string", enum: ["read", "write", "destructive"] },
+    risk: { type: "string", enum: ["read", "write", "outbound", "destructive"] },
     inputSchema: nullableJsonObjectSchema,
     outputSchema: nullableJsonObjectSchema
   }
@@ -233,7 +233,7 @@ const nullableAiAssistantToolBlockedReasonSchema = {
 
 const aiAssistantActionRiskSchema = {
   type: "string",
-  enum: ["write", "destructive"]
+  enum: ["write", "outbound", "destructive"]
 } as const;
 
 const aiAssistantActionStatusSchema = {
@@ -267,7 +267,7 @@ const aiAssistantToolInvocationSchema = {
     name: { type: "string" },
     description: { type: "string" },
     permissionId: { type: "string" },
-    risk: { type: "string", enum: ["read", "write", "destructive"] },
+    risk: { type: "string", enum: ["read", "write", "outbound", "destructive"] },
     status: aiAssistantToolInvocationStatusSchema,
     blockedReason: nullableAiAssistantToolBlockedReasonSchema,
     actionRequestId: { type: ["string", "null"] },

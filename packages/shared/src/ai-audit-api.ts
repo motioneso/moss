@@ -34,7 +34,7 @@ const actionAuditLogEntrySchema = {
     toolModuleId: { type: "string" },
     toolName: { type: "string" },
     actionFamilyId: { type: ["string", "null"] },
-    actionKind: { type: "string", enum: ["write", "destructive"] },
+    actionKind: { type: "string", enum: ["write", "outbound", "destructive"] },
     approvalMode: {
       type: "string",
       enum: ["auto", "yolo", "confirmed", "rejected", "cancelled", "timeout"]
@@ -85,7 +85,7 @@ export type ActionAuditLogEntryDto = {
   readonly toolModuleId: string;
   readonly toolName: string;
   readonly actionFamilyId: string | null;
-  readonly actionKind: "write" | "destructive";
+  readonly actionKind: "write" | "outbound" | "destructive";
   readonly approvalMode: "auto" | "yolo" | "confirmed" | "rejected" | "cancelled" | "timeout";
   readonly outcome: "success" | "failed" | "denied" | "cancelled" | "invalid" | "conflict";
   readonly errorClass: string | null;

@@ -35,6 +35,7 @@ export async function resolvePolicy(
 ): Promise<PolicyDecision> {
   if (tool.risk === "read") return "run";
   if (tool.risk === "destructive") return "confirm";
+  if (tool.risk === "outbound") return "confirm";
   if (confirmOverride) return "confirm";
 
   const familyId = tool.actionFamilyId;

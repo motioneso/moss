@@ -706,7 +706,7 @@ export class AssistantToolGateway {
         toolModuleName: found.dto.moduleName,
         toolName: found.dto.name,
         permissionId: found.dto.permissionId,
-        risk: found.tool.risk as "write" | "destructive",
+        risk: found.tool.risk as "write" | "outbound" | "destructive",
         inputSummary: summarizeAssistantToolInput(input),
         requestId: ctx.requestId
       })
@@ -880,7 +880,7 @@ export class AssistantToolGateway {
       toolModuleId: string;
       toolName: string;
       actionFamilyId: string | null;
-      actionKind: "write" | "destructive";
+      actionKind: "write" | "outbound" | "destructive";
     },
     opts: {
       approvalMode: InsertAuditLogInput["approvalMode"];
@@ -937,7 +937,7 @@ export class AssistantToolGateway {
         toolModuleId: found.dto.moduleId,
         toolName: found.dto.name,
         actionFamilyId: found.tool.actionFamilyId ?? null,
-        actionKind: found.tool.risk as "write" | "destructive"
+        actionKind: found.tool.risk as "write" | "outbound" | "destructive"
       },
       opts
     );

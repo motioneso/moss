@@ -147,7 +147,7 @@ export interface AiAssistantToolDto {
   readonly name: string;
   readonly description: string;
   readonly permissionId: string;
-  readonly risk: "read" | "write" | "destructive";
+  readonly risk: "read" | "write" | "outbound" | "destructive";
   readonly inputSchema: Record<string, unknown> | null;
   readonly outputSchema: Record<string, unknown> | null;
 }
@@ -157,7 +157,7 @@ export type AiAssistantToolBlockedReason =
   | "confirmation_required"
   | "non_read_risk"
   | "unsupported_tool";
-export type AiAssistantActionRisk = "write" | "destructive";
+export type AiAssistantActionRisk = "write" | "outbound" | "destructive";
 export type AiAssistantActionStatus = "pending" | "confirmed" | "rejected" | "cancelled";
 export type ResolveAiAssistantActionStatus = Exclude<AiAssistantActionStatus, "pending">;
 
@@ -171,7 +171,7 @@ export interface AiAssistantToolInvocationDto {
   readonly name: string;
   readonly description: string;
   readonly permissionId: string;
-  readonly risk: "read" | "write" | "destructive";
+  readonly risk: "read" | "write" | "outbound" | "destructive";
   readonly status: AiAssistantToolInvocationStatus;
   readonly blockedReason: AiAssistantToolBlockedReason | null;
   readonly actionRequestId: string | null;

@@ -94,7 +94,7 @@ export function readTools(value: unknown): ChatSelectedToolMetadataDto[] {
       typeof record.moduleName !== "string" ||
       typeof record.name !== "string" ||
       typeof record.permissionId !== "string" ||
-      (risk !== "read" && risk !== "write" && risk !== "destructive")
+      (risk !== "read" && risk !== "write" && risk !== "outbound" && risk !== "destructive")
     ) {
       return [];
     }
