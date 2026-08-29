@@ -51,11 +51,12 @@ describe("workflow validation is wired into the registry boot check", () => {
     );
   });
 
-  it("exposes a validated workflow lookup, empty until a module declares one", () => {
-    // Empty is the expected result after this slice, not a bug: no built-in declares a workflow
-    // yet. What matters is that the lookup exists and was built from validated definitions.
+  it("exposes the validated built-in workflow lookup", () => {
+    // The workflows module declares the approval continuation workflow. What matters is that the
+    // lookup exists and was built from validated definitions.
     const registry = getWorkflowRegistry();
     expect(registry).toBeInstanceOf(Map);
-    expect(registry.size).toBe(0);
+    expect(registry.size).toBe(1);
+    expect(registry.get("workflows.approval-continuation")).toBeDefined();
   });
 });
