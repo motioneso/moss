@@ -121,10 +121,23 @@ Image probed: `caddy:2.10.0-alpine`, digest
 9. **A global `email {$VAR:}` line fails to adapt when the variable is empty** (`wrong argument
    count ... after 'email'`). We ship no ACME email global; the spec's contract is two variables
    only. Do not add one.
+10. **A recursive ownership fix breaks every restart after the first one.** Caddy's first
+    successful run creates `/data/caddy/certificates`, `/data/caddy/pki`, and `/data/caddy/locks`
+    as owner-only (mode 700, uid 1000). `caddy-init` runs as root but with only the file-ownership
+    capability (`CAP_CHOWN`) — it does not have the capability that lets root read or search a
+    folder it does not own. So on the *next* start, a recursive chown cannot descend into those
+    now-owner-only folders and exits 1 with "Permission denied." Because `caddy` waits for
+    `caddy-init` to finish successfully, this means HTTPS never comes back after a restart.
+    Finding 4's probe only exercised a fresh volume, which is why the first version of this plan
+    missed it; this was caught by a Fable reviewer running the real container through a second
+    start. Fix: make the ownership step non-recursive and idempotent — only touch the two volume
+    roots and `/data/caddy` itself (never their contents), and skip a path entirely once it is
+    already owned by the target uid. See D1 and Task 2.
 
 ### Open questions
 
-None. Every capability this plan assumes was executed, not inferred.
+None. Every capability this plan assumes was executed, or, for finding 10, verified against the
+real container by a Fable reviewer.
 
 ## Design decisions
 
@@ -134,6 +147,12 @@ None. Every capability this plan assumes was executed, not inferred.
 reasons that both have to happen before the proxy runs: it validates the operator's host and
 issuer strings, and it hands `/data` and `/config` to the runtime user. Merging them into one
 service is not possible — the chown needs root, and the proxy must not be root.
+
+The handoff must be idempotent, not just correct on a fresh volume (finding 10): it only chowns
+the two volume roots and `/data/caddy` themselves, never recurses into their contents, and skips
+any of those paths that is already owned by the target uid. That is what lets `caddy-init` succeed
+on every restart, not just the first one, once Caddy has created its own owner-only certificate
+folders underneath `/data/caddy`.
 
 **Steelman of the rejected option** (single service, no init): run Caddy as root and skip the
 ownership problem entirely. That is what most Caddy Compose examples do, and it is simpler. It is
@@ -240,12 +259,21 @@ Placed immediately before the new `caddy` service. Contract:
 The guard, in order: reject an empty or non-`[A-Za-z0-9.-]` host with a message naming
 `JARVIS_TLS_HOST`; reject an issuer that is not exactly `internal` or `acme` naming
 `JARVIS_TLS_ISSUER`; reject an all-digits-and-dots host combined with `acme`, saying public ACME
-cannot validate a LAN address; then
-`chown -R ${JARVIS_HOST_UID:-1000}:${JARVIS_HOST_GID:-1000} /data /config`. Exit 0 only if all
-three pass. Messages go to stderr and name the variable and the offending rule, never the value's
-neighbours — a hostname is fine to echo, per the spec's logging rule.
+cannot validate a LAN address; then the ownership fix. Exit 0 only if all four steps pass.
+Messages go to stderr and name the variable and the offending rule, never the value's neighbours —
+a hostname is fine to echo, per the spec's logging rule.
 
-Use busybox `case` patterns, not `grep -E`; keep it under ~12 lines. `network_mode: none` because
+The ownership fix must be non-recursive and idempotent (finding 10), not a single
+`chown -R ... /data /config`: that form works on a fresh volume but fails on every restart after
+Caddy's first run, because Caddy leaves `/data/caddy/certificates`, `/data/caddy/pki`, and
+`/data/caddy/locks` owner-only and this container's root cannot descend into folders it does not
+own. Instead, for each of `/data`, `/config`, and `/data/caddy` in turn: read the path's current
+owning uid with `stat -c %u`, and chown *that path only* (never `-R`) to
+`${JARVIS_HOST_UID:-1000}:${JARVIS_HOST_GID:-1000}` unless it already reports that uid. This never
+needs to look inside `/data/caddy`'s subfolders, so it is unaffected by whatever permissions Caddy
+has already put on them.
+
+Use busybox `case` patterns, not `grep -E`; keep it under ~20 lines. `network_mode: none` because
 the init needs no network and must not be able to reach the app network.
 
 ### Task 3 — `caddy` service in `infra/docker-compose.prod.yml`
@@ -321,9 +349,17 @@ Test cases, stated as behaviour and why each would catch a broken implementation
    `[::1]` all fail; `10.0.0.5`/`acme` fails. Every one of the failing rows is a value that
    `caddy validate` accepts at exit 0 today, so this test is the entire difference between
    fail-closed and a silent catch-all site.
+10. **The ownership fix still succeeds on a second start, after Caddy has already run once.**
+    Against a fresh named volume: run the `caddy-init` command (exit 0), then run `caddy` itself
+    just long enough for it to create `/data/caddy/certificates`, `/data/caddy/pki`, and
+    `/data/caddy/locks`, stop it, then run the `caddy-init` command against that same volume a
+    second time. Asserts the second run also exits 0. This is the case finding 10 describes and
+    the current plan's test case 6 does not cover, because test case 6 only checks service
+    ordering on a fresh volume, not what the ownership step does once Caddy has left owner-only
+    folders behind. Clean up the temporary volume after the test.
 
-Tests 8 and 9 shell out to `docker run` with the pinned image. That is consistent with unit tests
-here already invoking `docker` (`tests/unit/sports-renderer-compose.test.ts:34`), and CI runs
+Tests 8, 9, and 10 shell out to `docker run` with the pinned image. That is consistent with unit
+tests here already invoking `docker` (`tests/unit/sports-renderer-compose.test.ts:34`), and CI runs
 `pnpm test:unit` with Docker available (`.github/workflows/ci.yml:138`). Give them an explicit
 per-test timeout; the image is small but the first pull is not instant.
 
@@ -419,6 +455,22 @@ echo "EXIT=$?"
 
 Expected exit 0 and "Valid configuration"; the same command with `JARVIS_TLS_ISSUER=bogus` must
 exit non-zero. The host half is the init guard, not this command — see D2.
+
+**Restart check, added after finding 10 — HTTPS still comes up on a second start, not just the
+first.** Not one of the spec's original six checks, but required by this revision. Automated as
+test case 10; manual version:
+
+```bash
+docker compose --profile tls -f infra/docker-compose.prod.yml up -d
+# wait for caddy to report healthy, then:
+docker compose --profile tls -f infra/docker-compose.prod.yml down
+docker compose --profile tls -f infra/docker-compose.prod.yml up -d
+docker compose --profile tls -f infra/docker-compose.prod.yml ps caddy-init caddy
+```
+
+Expected: `caddy-init` exits 0 both times, and `caddy` reports healthy after the second `up` too.
+Before this revision, the second `caddy-init` run fails with "Permission denied" and `caddy` never
+starts.
 
 **Check 6 — the unit test file passes.**
 
