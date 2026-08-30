@@ -14,7 +14,8 @@ import {
   createExternalToolManifests,
   ExternalModuleWorkerRuntime,
   type ExternalModuleAiRequest,
-  type ExternalModuleAiResult
+  type ExternalModuleAiResult,
+  type ExternalToolInvoker
 } from "@moss/module-registry/node";
 import { NotificationsRepository } from "@moss/notifications";
 import { createModuleCredentialSecretCipher, type SettingsRepository } from "@moss/settings";
@@ -37,9 +38,9 @@ export function createExternalModuleTools(input: {
   ) => Promise<ExternalModuleAiResult>;
 }): {
   readonly runtime?: ExternalModuleWorkerRuntime;
-  readonly manifests: readonly MossModuleManifest[];
+  readonly getManifests: () => readonly MossModuleManifest[];
 } {
-  if (!input.workerDataContext) return { manifests: [] };
+  if (!input.workerDataContext) return { getManifests: () => [] };
   const runtime = new ExternalModuleWorkerRuntime({ logger: input.logger });
   const cipher = createModuleCredentialSecretCipher();
   const attachments = new ChatAttachmentsService(new VaultContextRunner(getVaultBaseDir()));
@@ -48,9 +49,7 @@ export function createExternalModuleTools(input: {
   // (apps/worker/src/worker.ts) — a module-posted notification is not deferred
   // by the recipient's quiet hours any more than the system upgrade notice is.
   const notifications = new NotificationsRepository(undefined, createNotificationPreferencePort());
-  const manifests = createExternalToolManifests(
-    input.discoveries(),
-    async (module, tool, toolInput, context) => {
+  const invoke: ExternalToolInvoker = async (module, tool, toolInput, context) => {
       const rpc = createExternalModuleRpcHandler({
         module,
         toolRisk: tool.risk,
@@ -132,9 +131,14 @@ export function createExternalModuleTools(input: {
           }
         )
       );
-    }
-  );
-  return { runtime, manifests };
+  };
+  // #1902: manifests are rebuilt from the live discoveries getter on every call, not once at
+  // construction — createExternalToolManifests is a cheap pure filter/map over discoveries, so a
+  // module discovered after this function ran (an install, a draft, a rescan) shows up on the
+  // next call with no restart. `invoke` itself does not depend on discoveries, so it stays a
+  // single closure built once above.
+  const getManifests = () => createExternalToolManifests(input.discoveries(), invoke);
+  return { runtime, getManifests };
 }
 
 /**
