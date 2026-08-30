@@ -294,12 +294,111 @@ services:
       dockerfile: Dockerfile
     entrypoint: ["node_modules/.bin/tsx", "scripts/setup-prod.ts"]
     command: ["/deploy"]
+    environment:
+      # #1504: forwarded so Child 2's setup script can record the operator's TLS choice.
+      # Empty-safe defaults only — see the caddy-init comment below for why a required
+      # var here would break a plain `docker compose up`.
+      JARVIS_TLS_HOST: ${JARVIS_TLS_HOST:-}
+      JARVIS_TLS_ISSUER: ${JARVIS_TLS_ISSUER:-internal}
     volumes:
       - .:/deploy
     restart: "no"
     profiles: ["setup"]
     networks:
       - jarv1s
+
+  # #1504: opt-in HTTPS reverse proxy, enabled with `--profile tls`. Off by default —
+  # both services below carry profiles: ["tls"] and both new variables have empty-safe
+  # defaults, so an unmodified `docker compose up` is byte-identical to before this change.
+  #
+  # caddy-init (root, one-shot) does two things that must both happen before caddy runs:
+  # validates JARVIS_TLS_HOST/JARVIS_TLS_ISSUER, and hands the two named volumes to the
+  # non-root runtime user. It cannot be merged into the caddy service itself — the chown
+  # needs root, and the proxy holding the local CA's private key must not run as root.
+  #
+  # image caddy:2.10.0-alpine, digest
+  # sha256:ae4458638da8e1a91aafffb231c5f8778e964bca650c8a8cb23a7e8ac557aa3c (repo pins by
+  # tag, not digest, everywhere else — see pgvector/pgvector:pg17 above).
+  #
+  # Enable with:
+  #   docker compose -p jarv1s-prod -f docker-compose.prod.yml --env-file ./env.production.local \
+  #     --profile tls up -d
+  caddy-init:
+    image: caddy:2.10.0-alpine
+    profiles: ["tls"]
+    user: "0:0"
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    security_opt: [no-new-privileges:true]
+    network_mode: none
+    restart: "no"
+    environment:
+      JARVIS_TLS_HOST: ${JARVIS_TLS_HOST:-}
+      JARVIS_TLS_ISSUER: ${JARVIS_TLS_ISSUER:-internal}
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    command:
+      - "sh"
+      - "-c"
+      - |
+        case "$$JARVIS_TLS_HOST" in
+          "") echo "caddy-init: JARVIS_TLS_HOST must not be empty" >&2; exit 1 ;;
+          *[!A-Za-z0-9.-]*) echo "caddy-init: JARVIS_TLS_HOST '$$JARVIS_TLS_HOST' has characters other than letters, digits, dots and hyphens" >&2; exit 1 ;;
+        esac
+        case "$$JARVIS_TLS_ISSUER" in
+          internal|acme) : ;;
+          *) echo "caddy-init: JARVIS_TLS_ISSUER must be 'internal' or 'acme', got '$$JARVIS_TLS_ISSUER'" >&2; exit 1 ;;
+        esac
+        case "$$JARVIS_TLS_HOST" in
+          *[!0-9.]*) : ;;
+          *) if [ "$$JARVIS_TLS_ISSUER" = "acme" ]; then
+               echo "caddy-init: JARVIS_TLS_HOST '$$JARVIS_TLS_HOST' looks like an IPv4 address; public ACME cannot validate a LAN address, use JARVIS_TLS_ISSUER=internal" >&2
+               exit 1
+             fi ;;
+        esac
+        for p in /data /config /data/caddy /config/caddy; do
+          if [ -e "$$p" ]; then
+            owner=$$(stat -c %u "$$p")
+            if [ "$$owner" != "${JARVIS_HOST_UID:-1000}" ]; then
+              chown "${JARVIS_HOST_UID:-1000}:${JARVIS_HOST_GID:-1000}" "$$p"
+            fi
+          fi
+        done
+
+  caddy:
+    image: caddy:2.10.0-alpine
+    profiles: ["tls"]
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+    user: "${JARVIS_HOST_UID:-1000}:${JARVIS_HOST_GID:-1000}"
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    environment:
+      JARVIS_TLS_HOST: ${JARVIS_TLS_HOST:-}
+      JARVIS_TLS_ISSUER: ${JARVIS_TLS_ISSUER:-internal}
+      HOME: /config
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      caddy-init:
+        condition: service_completed_successfully
+      jarv1s:
+        condition: service_healthy
+    networks:
+      jarv1s:
+        # Fixed per the #1505 lane's cross-lane contract: the last usable address in the
+        # default subnet, so #1505's plan can reference it without depending on Docker's
+        # DNS resolution order. Keep in sync with any change to JARVIS_DOCKER_SUBNET.
+        ipv4_address: 10.251.0.254
+    restart: unless-stopped
 
 volumes:
   jarv1s-postgres-data:
@@ -311,6 +410,11 @@ volumes:
   jarv1s-sports-browser-socket:
   # #964: downloaded module packages survive image upgrades — modules are data, not image.
   jarv1s-modules:
+  # #1504: local CA + issued certificates (caddy-data) and Caddy's autosaved running
+  # config (caddy-config). caddy-data is the single point of loss for the local CA —
+  # losing it rotates the CA and every client must re-trust the replacement.
+  caddy-data:
+  caddy-config:
 
 networks:
   jarv1s:
