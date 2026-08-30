@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "kysely";
 
 import type { DataContextDb } from "../data-context.js";
-import { assertDataContextDb } from "../data-context.js";
+import { assertDataContextDb, assertUuid } from "../data-context.js";
 import type { Share, ShareLevel } from "../types.js";
 
 export interface GrantShareInput {
@@ -24,6 +24,15 @@ export interface RevokeShareInput {
 export class SharesRepository {
   async grant(scopedDb: DataContextDb, input: GrantShareInput): Promise<Share> {
     assertDataContextDb(scopedDb);
+    assertUuid(input.granteeUserId, "share grantee user id");
+
+    const granteeResult = await sql<{ id: string }>`
+      SELECT id FROM app.get_user_by_id(${input.granteeUserId}::uuid)
+    `.execute(scopedDb.db);
+
+    if (!granteeResult.rows[0]) {
+      throw new Error("Share target user not found");
+    }
 
     const now = input.now ?? new Date();
 
