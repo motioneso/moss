@@ -131,8 +131,11 @@ Image probed: `caddy:2.10.0-alpine`, digest
     Finding 4's probe only exercised a fresh volume, which is why the first version of this plan
     missed it; this was caught by a Fable reviewer running the real container through a second
     start. Fix: make the ownership step non-recursive and idempotent — only touch the two volume
-    roots and `/data/caddy` itself (never their contents), and skip a path entirely once it is
-    already owned by the target uid. See D1 and Task 2.
+    roots, `/data/caddy`, and `/config/caddy` (never their contents), and skip a path entirely once
+    it is already owned by the target uid. `/config/caddy` is also root-owned by the image and Caddy
+    autosaves its running config there, so missing it makes every start fail to save config even
+    though the proxy still serves — caught by the same Fable reviewer's second-pass run. See D1 and
+    Task 2.
 
 ### Open questions
 
@@ -149,10 +152,11 @@ issuer strings, and it hands `/data` and `/config` to the runtime user. Merging 
 service is not possible — the chown needs root, and the proxy must not be root.
 
 The handoff must be idempotent, not just correct on a fresh volume (finding 10): it only chowns
-the two volume roots and `/data/caddy` themselves, never recurses into their contents, and skips
-any of those paths that is already owned by the target uid. That is what lets `caddy-init` succeed
-on every restart, not just the first one, once Caddy has created its own owner-only certificate
-folders underneath `/data/caddy`.
+the two volume roots, `/data/caddy`, and `/config/caddy` themselves, never recurses into their
+contents, and skips any of those paths that is already owned by the target uid. That is what lets
+`caddy-init` succeed on every restart, not just the first one, once Caddy has created its own
+owner-only certificate folders underneath `/data/caddy` — and it is what lets Caddy autosave its
+running config into `/config/caddy` on every start, not just the first.
 
 **Steelman of the rejected option** (single service, no init): run Caddy as root and skip the
 ownership problem entirely. That is what most Caddy Compose examples do, and it is simpler. It is
@@ -267,8 +271,8 @@ The ownership fix must be non-recursive and idempotent (finding 10), not a singl
 `chown -R ... /data /config`: that form works on a fresh volume but fails on every restart after
 Caddy's first run, because Caddy leaves `/data/caddy/certificates`, `/data/caddy/pki`, and
 `/data/caddy/locks` owner-only and this container's root cannot descend into folders it does not
-own. Instead, for each of `/data`, `/config`, and `/data/caddy` in turn: read the path's current
-owning uid with `stat -c %u`, and chown *that path only* (never `-R`) to
+own. Instead, for each of `/data`, `/config`, `/data/caddy`, and `/config/caddy` in turn: read the
+path's current owning uid with `stat -c %u`, and chown *that path only* (never `-R`) to
 `${JARVIS_HOST_UID:-1000}:${JARVIS_HOST_GID:-1000}` unless it already reports that uid. This never
 needs to look inside `/data/caddy`'s subfolders, so it is unaffected by whatever permissions Caddy
 has already put on them.
