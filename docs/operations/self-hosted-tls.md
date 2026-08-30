@@ -103,8 +103,7 @@ it.
    ```
 
 7. **Trust the certificate on your client** (see "Trust the internal certificate" below), then
-   open `https://<JARVIS_TLS_HOST>` and confirm you can sign in with no browser warning and no
-   403. Keep `http://<host>:1533` bookmarked as the rollback path until you've confirmed HTTPS
+   open `https://<JARVIS_TLS_HOST>` and confirm you can sign in with no browser warning and no 403. Keep `http://<host>:1533` bookmarked as the rollback path until you've confirmed HTTPS
    works end to end.
 
 ## Enable TLS (new install)
@@ -185,7 +184,7 @@ validation). An IPv4 literal is rejected outright with `acme` — public certifi
 cannot validate a private address.
 
 The Caddy preflight in step 5 above (`--profile tls config`) only proves your Compose file and
-Caddyfile *parse* correctly for the `acme` issuer — it cannot check DNS propagation or that ports
+Caddyfile _parse_ correctly for the `acme` issuer — it cannot check DNS propagation or that ports
 80/443 are actually reachable from the public internet. Certificate issuance itself only happens
 once the proxy starts. If HTTPS does not come up after `--profile tls up -d`:
 
