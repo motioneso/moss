@@ -23,11 +23,17 @@
 
 - **Settings are closer to where you need them.** Finance, Job Search, and News pages now link to their own settings, so changing a connection or preference takes fewer clicks. [PR #1772](https://github.com/motioneso/moss/pull/1772)
 
-## Edge channel — 2026-08-28
+## Edge channel
 
 Edge builds include the stable history below plus the user-facing changes already available in
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
+
+### 2026-08-29
+
+#### Changed
+
+- **GitHub removed from Connected accounts.** The GitHub option no longer appears when you add a connected account, since GitHub support is not planned. [PR #2070](https://github.com/motioneso/moss/pull/2070)
 
 ### 2026-08-27
 
