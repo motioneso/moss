@@ -178,6 +178,20 @@ describe("resolveTlsSettings (#1505)", () => {
     });
   });
 
+  it("lowercases an uppercase host so the derived origin matches the real request Host header (#1505 review)", () => {
+    const settings = resolveTlsSettings({
+      host: "Jarv1s.Example.com",
+      issuer: "internal",
+      dockerSubnet
+    });
+    expect(settings).toEqual({
+      host: "jarv1s.example.com",
+      issuer: "internal",
+      httpsOrigin: "https://jarv1s.example.com",
+      trustProxyIp: "10.251.0.254"
+    });
+  });
+
   it("accepts a DNS host with issuer acme", () => {
     expect(
       resolveTlsSettings({ host: "jarvis.example.com", issuer: "acme", dockerSubnet })?.issuer

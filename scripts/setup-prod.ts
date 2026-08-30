@@ -58,6 +58,9 @@ let tlsSettings;
 let authTrustedOrigins: string;
 try {
   tlsSettings = resolveTlsSettings({
+    // Deliberately NOT resolveMossEnv: Docker Compose host-side interpolation and the
+    // Caddyfile read JARVIS_TLS_HOST/JARVIS_TLS_ISSUER directly and cannot see a MOSS_*
+    // rename, so these two names must stay literal (#1505 review).
     host: process.env.JARVIS_TLS_HOST,
     issuer: process.env.JARVIS_TLS_ISSUER,
     dockerSubnet

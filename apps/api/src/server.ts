@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from "node:crypto";
-import { isIP } from "node:net";
 
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
@@ -30,6 +29,7 @@ import {
   createDatabase,
   getMossDatabaseUrls,
   resolveMossEnv,
+  resolveTrustProxy,
   type AccessContext,
   type MossDatabase
 } from "@moss/db";
@@ -147,21 +147,10 @@ export interface ApiServerConfig {
   readonly externalModulesDir: string;
 }
 
-const TRUST_PROXY_ERROR =
-  'JARVIS_TRUST_PROXY must be unset, "loopback", or a comma-separated list of exact IP addresses';
-
-export function resolveTrustProxy(value: string | undefined): false | string | string[] {
-  const normalized = value?.trim() ?? "";
-  if (!normalized) return false;
-  if (normalized.toLowerCase() === "loopback") return "loopback";
-
-  const addresses = normalized.split(",").map((address) => address.trim());
-  if (addresses.some((address) => !address || isIP(address) === 0)) {
-    throw new Error(TRUST_PROXY_ERROR);
-  }
-
-  return addresses.length === 1 ? addresses[0]! : addresses;
-}
+// Moved to @moss/db (#1505) so @moss/auth can reuse the same TLS-in-front-of-us
+// signal for its secure-cookie decision without importing this app package.
+// Re-exported here so existing callers/tests importing it from server.js keep working.
+export { resolveTrustProxy };
 
 export function hasAuthMaterial(request: FastifyRequest): boolean {
   const authorization = request.headers.authorization;

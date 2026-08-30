@@ -118,11 +118,15 @@ export function resolveTlsSettings(input: ResolveTlsSettingsInput): TlsSettings 
 
   const issuer = resolveTlsIssuer(input.issuer);
   validateTlsHost(host, issuer);
+  // Browsers send a lowercased Host header, so the derived origin must be lowercase too —
+  // an uppercase JARVIS_TLS_HOST would otherwise never match the real request's origin
+  // and recreate the lockout this feature exists to prevent (#1505 review).
+  const normalizedHost = host.toLowerCase();
 
   return {
-    host,
+    host: normalizedHost,
     issuer,
-    httpsOrigin: `https://${host}`,
+    httpsOrigin: `https://${normalizedHost}`,
     trustProxyIp: deriveCaddyProxyIp(input.dockerSubnet)
   };
 }

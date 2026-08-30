@@ -15,5 +15,6 @@ export * from "./role-bootstrap.js";
 export * from "./secret-cipher.js";
 export * from "./sharing/index.js";
 export * from "./target-identity-guard.js";
+export * from "./trust-proxy.js";
 export * from "./types.js";
 export * from "./urls.js";
