@@ -38,6 +38,8 @@ function ctx(actorUserId: string): AccessContext {
   return { actorUserId, requestId: "request:shares-test" };
 }
 
+const deactivatedUserId = "00000000-0000-4000-8000-000000000030";
+
 async function seedUsers(): Promise<void> {
   const client = new Client({ connectionString: connectionStrings.bootstrap });
   await client.connect();
@@ -51,6 +53,13 @@ async function seedUsers(): Promise<void> {
           ($3, 'shares-admin@example.test', true)
       `,
       [ids.userA, ids.userB, ids.adminUser]
+    );
+    await client.query(
+      `
+        INSERT INTO app.users (id, email, is_instance_admin, status)
+        VALUES ($1, 'shares-deactivated@example.test', false, 'deactivated')
+      `,
+      [deactivatedUserId]
     );
   } finally {
     await client.end();
@@ -164,6 +173,10 @@ describe("SharesRepository", () => {
   const resourceUpgrade = "30000000-0000-4000-8000-000000000021";
   const resourceRevoke = "30000000-0000-4000-8000-000000000022";
   const resourceDeterministic = "30000000-0000-4000-8000-000000000023";
+  const resourceMissingGrantee = "30000000-0000-4000-8000-000000000024";
+  const resourceMalformedGrantee = "30000000-0000-4000-8000-000000000025";
+  const resourceDeactivatedGrantee = "30000000-0000-4000-8000-000000000026";
+  const resourceSelfShare = "30000000-0000-4000-8000-000000000027";
 
   it("uses an injected timestamp for deterministic fixtures", async () => {
     const now = new Date("2026-01-15T12:00:00.000Z");
@@ -265,5 +278,78 @@ describe("SharesRepository", () => {
     await expect(repository.listForResource({} as never, "demo", resourceRepo)).rejects.toThrow(
       "Repository access requires withDataContext"
     );
+  });
+
+  it("rejects a grant to a grantee that does not exist, with the ordering proved by the exact message", async () => {
+    const missingGrantee = "00000000-0000-4000-8000-0000000000ff";
+
+    await expect(
+      dataContext.withDataContext(ctx(ids.userA), (scopedDb) =>
+        repository.grant(scopedDb, {
+          resourceType: "demo",
+          resourceId: resourceMissingGrantee,
+          ownerUserId: ids.userA,
+          granteeUserId: missingGrantee,
+          level: "view"
+        })
+      )
+    ).rejects.toThrow("Share target user not found");
+
+    // A foreign-key rejection (the check missing, or running after the insert) would surface
+    // Postgres's own "violates foreign key constraint" wording instead — this is what actually
+    // proves the up-front check fired, not just that the transaction rolled back.
+    await expect(
+      dataContext.withDataContext(ctx(ids.userA), (scopedDb) =>
+        repository.grant(scopedDb, {
+          resourceType: "demo",
+          resourceId: resourceMissingGrantee,
+          ownerUserId: ids.userA,
+          granteeUserId: missingGrantee,
+          level: "view"
+        })
+      )
+    ).rejects.not.toThrow(/foreign key/i);
+  });
+
+  it("rejects a malformed grantee id by the shape guard, before it ever reaches Postgres", async () => {
+    await expect(
+      dataContext.withDataContext(ctx(ids.userA), (scopedDb) =>
+        repository.grant(scopedDb, {
+          resourceType: "demo",
+          resourceId: resourceMalformedGrantee,
+          ownerUserId: ids.userA,
+          granteeUserId: "not-a-uuid",
+          level: "view"
+        })
+      )
+    ).rejects.toThrow(/share grantee user id must be a UUID/);
+  });
+
+  it("still rejects a self-share through the database check, not the new lookup", async () => {
+    await expect(
+      dataContext.withDataContext(ctx(ids.userA), (scopedDb) =>
+        repository.grant(scopedDb, {
+          resourceType: "demo",
+          resourceId: resourceSelfShare,
+          ownerUserId: ids.userA,
+          granteeUserId: ids.userA,
+          level: "view"
+        })
+      )
+    ).rejects.toThrow();
+  });
+
+  it("still grants to a deactivated user, since account status is not part of this check", async () => {
+    const share = await dataContext.withDataContext(ctx(ids.userA), (scopedDb) =>
+      repository.grant(scopedDb, {
+        resourceType: "demo",
+        resourceId: resourceDeactivatedGrantee,
+        ownerUserId: ids.userA,
+        granteeUserId: deactivatedUserId,
+        level: "view"
+      })
+    );
+
+    expect(share.grantee_user_id).toBe(deactivatedUserId);
   });
 });
