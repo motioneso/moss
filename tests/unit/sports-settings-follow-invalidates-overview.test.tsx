@@ -7,7 +7,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import SportsSettings from "../../packages/sports/src/settings/index.js";
 import { sportsQueryKeys } from "../../packages/sports/src/web/query-keys.js";
 
-const CATALOG_KEY = sportsQueryKeys.catalog;
 const FOLLOWS_KEY = sportsQueryKeys.follows;
 
 const NFL = {
