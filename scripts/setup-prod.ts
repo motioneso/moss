@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { resolveMossEnv } from "@moss/db";
 
-import { deriveTrustedOrigins } from "./setup-prod-origins.js";
+import { TlsConfigError, deriveTrustedOrigins, resolveTlsSettings } from "./setup-prod-origins.js";
 import { deriveNotesEnvLines } from "./setup-prod-notes.js";
 
 // First-run boot-secret generator. Runs INSIDE the api image as
@@ -33,6 +33,53 @@ if (existsSync(OUT_FILE)) {
   process.exit(1);
 }
 
+// --- Host-specifics (LOCALHOST defaults; override via the setup container env). -
+const apiPort = process.env.JARVIS_API_PORT ?? "3000";
+const webPort = process.env.JARVIS_WEB_PORT ?? "1533";
+// JARVIS_AUTH_BASE_URL is the API process's own in-container URL. Browser origins
+// belong in JARVIS_AUTH_TRUSTED_ORIGINS below and are derived from JARVIS_WEB_PORT
+// plus JARVIS_PUBLIC_ORIGIN unless explicitly overridden.
+const authBaseUrl = resolveMossEnv(process.env, "JARVIS_AUTH_BASE_URL") ?? "http://localhost:3000";
+const embedProvider = process.env.JARVIS_EMBED_PROVIDER ?? "local";
+const hostUid = process.env.JARVIS_HOST_UID ?? "1000";
+const hostGid = process.env.JARVIS_HOST_GID ?? "1000";
+const imageTag = process.env.JARVIS_IMAGE_TAG ?? "v0.1.0";
+// Subnet default matches env.production.example, but it is OVERRIDABLE: docker
+// network subnets are globally unique, so an operator whose host already has a
+// network on 10.251.0.0/24 (e.g. the dev compose `infra_jarv1s`, or any other
+// stack) would otherwise hit a "Pool overlaps" error at `up`.
+const dockerSubnet = process.env.JARVIS_DOCKER_SUBNET ?? "10.251.0.0/24";
+
+// --- TLS (opt-in, #1505) + trusted origins. Validated BEFORE any secret is generated -----
+// or written, so a bad JARVIS_TLS_HOST / JARVIS_TLS_ISSUER never leaves a partially-built
+// file behind (D8). Exit code 3 is reserved for this class of error (1 and 2 are taken by
+// the no-overwrite guard and the bootstrap-password assertion below).
+let tlsSettings;
+let authTrustedOrigins: string;
+try {
+  tlsSettings = resolveTlsSettings({
+    host: process.env.JARVIS_TLS_HOST,
+    issuer: process.env.JARVIS_TLS_ISSUER,
+    dockerSubnet
+  });
+  // #379: build the better-auth trusted-origins list. localhost:<webPort> always (on-box /
+  // port-forward reach), PLUS the host public origin supplied through JARVIS_PUBLIC_ORIGIN
+  // so signup works from the real LAN/tailnet/domain URL, PLUS the TLS HTTPS origin when TLS
+  // is on. An explicit JARVIS_AUTH_TRUSTED_ORIGINS override still wins verbatim, but must
+  // include the HTTPS origin when TLS is on or setup refuses to write the file (D9). A
+  // non-default JARVIS_WEB_PORT is honored (never falls back to :1533).
+  authTrustedOrigins = deriveTrustedOrigins({
+    webPort,
+    publicOrigin: resolveMossEnv(process.env, "JARVIS_PUBLIC_ORIGIN"),
+    override: resolveMossEnv(process.env, "JARVIS_AUTH_TRUSTED_ORIGINS"),
+    httpsOrigin: tlsSettings?.httpsOrigin
+  });
+} catch (error) {
+  const message = error instanceof TlsConfigError ? error.message : String(error);
+  console.error(`ERROR: ${message}`);
+  process.exit(3);
+}
+
 // --- Generate boot secrets once (node:crypto). ------------------------------
 // BETTER_AUTH_SECRET drives session + JWT signing (48 bytes -> base64).
 const betterAuthSecret = randomBytes(48).toString("base64");
@@ -52,32 +99,6 @@ const workerPassword = randomBytes(18).toString("base64url");
 // connection auth hello (RPC-contract §3.6/§6.6). Known ONLY to those two
 // processes; excluded from the CLI-subprocess env allowlist. 32 bytes -> hex.
 const cliRunnerRpcSecret = randomBytes(32).toString("hex");
-
-// --- Host-specifics (LOCALHOST defaults; override via the setup container env). -
-const apiPort = process.env.JARVIS_API_PORT ?? "3000";
-const webPort = process.env.JARVIS_WEB_PORT ?? "1533";
-// JARVIS_AUTH_BASE_URL is the API process's own in-container URL. Browser origins
-// belong in JARVIS_AUTH_TRUSTED_ORIGINS below and are derived from JARVIS_WEB_PORT
-// plus JARVIS_PUBLIC_ORIGIN unless explicitly overridden.
-const authBaseUrl = resolveMossEnv(process.env, "JARVIS_AUTH_BASE_URL") ?? "http://localhost:3000";
-// #379: build the better-auth trusted-origins list. localhost:<webPort> always (on-box /
-// port-forward reach), PLUS the host public origin supplied through JARVIS_PUBLIC_ORIGIN
-// so signup works from the real LAN/tailnet/domain URL. An explicit JARVIS_AUTH_TRUSTED_ORIGINS override
-// still wins verbatim. A non-default JARVIS_WEB_PORT is honored (never falls back to :1533).
-const authTrustedOrigins = deriveTrustedOrigins({
-  webPort,
-  publicOrigin: resolveMossEnv(process.env, "JARVIS_PUBLIC_ORIGIN"),
-  override: resolveMossEnv(process.env, "JARVIS_AUTH_TRUSTED_ORIGINS")
-});
-const embedProvider = process.env.JARVIS_EMBED_PROVIDER ?? "local";
-const hostUid = process.env.JARVIS_HOST_UID ?? "1000";
-const hostGid = process.env.JARVIS_HOST_GID ?? "1000";
-const imageTag = process.env.JARVIS_IMAGE_TAG ?? "v0.1.0";
-// Subnet default matches env.production.example, but it is OVERRIDABLE: docker
-// network subnets are globally unique, so an operator whose host already has a
-// network on 10.251.0.0/24 (e.g. the dev compose `infra_jarv1s`, or any other
-// stack) would otherwise hit a "Pool overlaps" error at `up`.
-const dockerSubnet = process.env.JARVIS_DOCKER_SUBNET ?? "10.251.0.0/24";
 
 // --- DB role URLs (embed the generated per-role passwords). ------------------
 // Host/port are the in-compose service names (postgres:5432), NOT localhost.
@@ -121,6 +142,16 @@ const content = [
   `MOSS_AUTH_BASE_URL=${authBaseUrl}`,
   `MOSS_AUTH_TRUSTED_ORIGINS=${authTrustedOrigins}`,
   "",
+  ...(tlsSettings
+    ? [
+        "# TLS reverse proxy (opt-in; the `tls` Compose profile). Non-secret values.",
+        `JARVIS_TLS_HOST=${tlsSettings.host}`,
+        `JARVIS_TLS_ISSUER=${tlsSettings.issuer}`,
+        "# Exact static Caddy address on the jarv1s network — never the bridge CIDR or gateway.",
+        `MOSS_TRUST_PROXY=${tlsSettings.trustProxyIp}`,
+        ""
+      ]
+    : []),
   "# Database role URLs (distinct generated passwords per role).",
   `MOSS_BOOTSTRAP_DATABASE_URL=${bootstrapDatabaseUrl}`,
   `MOSS_MIGRATION_DATABASE_URL=${migrationDatabaseUrl}`,
@@ -187,6 +218,9 @@ console.log(`  1. Sign-in is trusted for these origins: ${authTrustedOrigins}`);
 console.log("     (set JARVIS_PUBLIC_ORIGIN=https://your.host before setup to add another, or set");
 console.log("     JARVIS_AUTH_TRUSTED_ORIGINS=<comma,list> to control the list yourself, then");
 console.log("     redeploy — no need to re-run setup.)");
+if (tlsSettings) {
+  console.log(`     TLS is on — the stack will be reachable at ${tlsSettings.httpsOrigin}.`);
+}
 console.log("  2. BACK THIS FILE UP. It is the only copy of your auth/encryption keys;");
 console.log("     losing it orphans sessions + encrypted connector/AI data.");
 console.log("  3. Bring the stack up:");
