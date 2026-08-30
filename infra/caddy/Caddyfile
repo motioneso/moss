@@ -17,6 +17,17 @@
 # certificate) lives only in the caddy-data named volume. It must never be
 # copied into this repository, an env file, a log line, or a pull request
 # comment.
+#
+# default_sni: browsers only send the "which site do I want" TLS hint (SNI)
+# when connecting by name. Connecting straight to a numeric IP address makes
+# that hint optional — Chrome and Safari send it anyway, but Firefox and curl
+# correctly omit it, and Caddy has no certificate to offer without it. This
+# tells Caddy which site to assume when the hint is missing, so a bare-IP
+# connection over Firefox (our only fully verified phone pairing) still works.
+{
+	default_sni {$JARVIS_TLS_HOST}
+}
+
 https://{$JARVIS_TLS_HOST} {
 	tls {
 		issuer {$JARVIS_TLS_ISSUER:internal}
