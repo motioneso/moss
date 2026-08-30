@@ -80,6 +80,11 @@ describe("Sports settings follow/unfollow refreshes the standings overview (#209
         createElement(QueryClientProvider, { client }, createElement(SportsSettings))
       );
     });
+    // Flush the initial follows/catalog fetches (each hop is fetch -> Response.json() -> setState,
+    // several microtask turns) so the summary list (and its "Unfollow" button) has mounted.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
 
     const unfollowBtn = findButton(renderer, "Unfollow All NFL");
     await act(async () => {
