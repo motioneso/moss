@@ -371,6 +371,7 @@ describe("prod deploy config — opt-in Caddy TLS profile (#1504, part of #901)"
     () => {
       const dataVolume = `1504-test-data-${process.pid}`;
       const configVolume = `1504-test-config-${process.pid}`;
+      let containerId: string | undefined;
       const initCommand = [
         'case "$JARVIS_TLS_HOST" in',
         '  "") exit 1 ;;',
@@ -449,7 +450,7 @@ describe("prod deploy config — opt-in Caddy TLS profile (#1504, part of #901)"
           "--adapter",
           "caddyfile"
         ], { encoding: "utf8" });
-        const containerId = run.stdout.trim();
+        containerId = run.stdout.trim();
         expect(run.status).toBe(0);
 
         // Give Caddy a few seconds to create its owner-only certificate folders
@@ -457,6 +458,7 @@ describe("prod deploy config — opt-in Caddy TLS profile (#1504, part of #901)"
         spawnSync("sleep", ["3"]);
         spawnSync("docker", ["stop", containerId]);
         spawnSync("docker", ["rm", containerId]);
+        containerId = undefined;
 
         const secondInit = spawnSync("docker", [
           "run",
@@ -485,6 +487,10 @@ describe("prod deploy config — opt-in Caddy TLS profile (#1504, part of #901)"
         ]);
         expect(secondInit.status).toBe(0);
       } finally {
+        if (containerId) {
+          spawnSync("docker", ["stop", containerId]);
+          spawnSync("docker", ["rm", containerId]);
+        }
         spawnSync("docker", ["volume", "rm", dataVolume]);
         spawnSync("docker", ["volume", "rm", configVolume]);
       }

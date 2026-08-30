@@ -393,7 +393,11 @@ services:
       jarv1s:
         condition: service_healthy
     networks:
-      - jarv1s
+      jarv1s:
+        # Fixed per the #1505 lane's cross-lane contract: the last usable address in the
+        # default subnet, so #1505's plan can reference it without depending on Docker's
+        # DNS resolution order. Keep in sync with any change to JARVIS_DOCKER_SUBNET.
+        ipv4_address: 10.251.0.254
     restart: unless-stopped
 
 volumes:
