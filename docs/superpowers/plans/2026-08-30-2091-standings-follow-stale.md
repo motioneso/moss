@@ -30,9 +30,11 @@ already-proven pattern in the same file.
 **File:** `packages/sports/src/settings/index.tsx`
 
 Change:
+
 ```
 const invalidateFollows = () => void queryClient.invalidateQueries({ queryKey: FOLLOWS_KEY });
 ```
+
 to also invalidate `sportsQueryKeys.overview`, following the exact two-line pattern already at
 line 49-50 of this file.
 
@@ -42,9 +44,11 @@ after `unfollowMutation`'s `onSuccess` fires, `queryClient.invalidateQueries` wa
 `FOLLOWS_KEY` is invalidated and the assertion on `sportsQueryKeys.overview` fails.
 
 **Verification:**
+
 ```bash
 pnpm --filter @jarv1s/sports test > /tmp/sports-test.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected exit code: 0.
 
 ## Determinism boundary
@@ -56,11 +60,12 @@ N/A — pure client-side cache invalidation, no model involvement, no chat surfa
 Manual live-path check on the dev instance (this fix has no existing UAT spec and the change is a
 one-line cache-invalidation fix, not a new feature surface — a full Playwright UAT spec is
 disproportionate to the fix size):
+
 1. Log in, follow a team, open the standings dropdown, confirm it shows as followed.
 2. Go to Settings, unfollow that team.
 3. Immediately return to standings (no tab switch, no wait) and confirm the dropdown no longer
    shows the team as followed.
-Screenshot or DOM assertion posted as a PR comment.
+   Screenshot or DOM assertion posted as a PR comment.
 
 ## Kill gate
 

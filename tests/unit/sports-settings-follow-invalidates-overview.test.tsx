@@ -32,7 +32,9 @@ function stubFetch(initialFollows: readonly Follow[]) {
     const url = String(input);
     const method = init?.method ?? "GET";
     if (url === "/api/sports/catalog") {
-      return new Response(JSON.stringify({ competitions: [NFL], degraded: false }), { status: 200 });
+      return new Response(JSON.stringify({ competitions: [NFL], degraded: false }), {
+        status: 200
+      });
     }
     if (url === "/api/sports/follows" && method === "GET") {
       return new Response(JSON.stringify({ follows }), { status: 200 });
