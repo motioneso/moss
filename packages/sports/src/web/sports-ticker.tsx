@@ -347,11 +347,13 @@ function FeaturedTeamCard(props: {
                 {lead.title}
                 {lead.publisherDomain === "espn.com" ? null : ` · ${lead.publisherLabel}`}
               </a>
-              <StoryFeedbackMenu
-                storyRef={lead.storyRef}
-                surface={surface}
-                onChanged={props.onStoryChanged ?? (() => undefined)}
-              />
+              {surface !== "sports" ? (
+                <StoryFeedbackMenu
+                  storyRef={lead.storyRef}
+                  surface={surface}
+                  onChanged={props.onStoryChanged ?? (() => undefined)}
+                />
+              ) : null}
             </>
           ) : (
             // Storyless pre-game/idle card: an honest placeholder, NEVER the matchup — the Next
@@ -388,11 +390,13 @@ function FeaturedTeamCard(props: {
                   {story.title}
                   {story.publisherDomain === "espn.com" ? null : ` · ${story.publisherLabel}`}
                 </a>
-                <StoryFeedbackMenu
-                  storyRef={story.storyRef}
-                  surface={surface}
-                  onChanged={props.onStoryChanged ?? (() => undefined)}
-                />
+                {surface !== "sports" ? (
+                  <StoryFeedbackMenu
+                    storyRef={story.storyRef}
+                    surface={surface}
+                    onChanged={props.onStoryChanged ?? (() => undefined)}
+                  />
+                ) : null}
               </li>
             ))}
           </ul>
