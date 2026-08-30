@@ -96,4 +96,4 @@ Each child must have one primary write set and fit approximately one agent sessi
 - [ ] Security and terms constraints are recorded.
 - [ ] A Supported, Conditional, or Deferred recommendation is explicit.
 - [ ] No implementation child is created without a Supported or explicitly accepted Conditional
-  decision.
+      decision.
