@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import { createMockConnectorAccount, createMockConnectorProviders, mockApi } from "./mock-api.js";
 
-test("service picker offers Google, Email (IMAP), and GitHub coming soon — no Apple or Other (OAuth)", async ({
+test("service picker offers Google and Email (IMAP) — no GitHub, Apple, or Other (OAuth)", async ({
   page
 }) => {
   await mockApi(page, {
@@ -19,7 +19,7 @@ test("service picker offers Google, Email (IMAP), and GitHub coming soon — no 
 
   await expect(page.getByRole("button", { name: "Google", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Email (IMAP)" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /GitHub.*coming soon.*#1061/i })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /GitHub/i })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Apple" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Other (OAuth)" })).toHaveCount(0);
 });
