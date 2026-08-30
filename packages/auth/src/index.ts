@@ -13,6 +13,7 @@ import {
   AuthSessionResolver,
   getMossDatabaseUrls,
   resolveMossEnv,
+  resolveTrustProxy,
   type AccessContext,
   type DataContextRunner,
   type MossDatabase
@@ -247,7 +248,8 @@ export function listConfiguredAuthProviders(
   ];
 }
 
-function createBetterAuthOptions(
+/** Exported for unit testing only (#1505) — not part of the package's runtime API surface. */
+export function createBetterAuthOptions(
   pool: pg.Pool,
   appDb: Kysely<MossDatabase>,
   env: NodeJS.ProcessEnv,
@@ -320,6 +322,11 @@ function createBetterAuthOptions(
       }
     },
     advanced: {
+      // Force Secure / __Secure- cookies once a TLS-terminating reverse proxy is in
+      // front (same JARVIS_TRUST_PROXY signal apps/api uses for XFF trust and HSTS —
+      // see apps/api/src/server.ts). Without this, turning TLS on does not stop the
+      // login cookie from also working over plain HTTP (#1505).
+      useSecureCookies: resolveTrustProxy(resolveMossEnv(env, "JARVIS_TRUST_PROXY")) !== false,
       database: {
         generateId: "uuid"
       }
