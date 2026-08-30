@@ -710,7 +710,10 @@ export default function SportsSettings() {
   const catalogQuery = useQuery({ queryKey: CATALOG_KEY, queryFn: getCatalog });
   const followsQuery = useQuery({ queryKey: FOLLOWS_KEY, queryFn: getFollows });
 
-  const invalidateFollows = () => void queryClient.invalidateQueries({ queryKey: FOLLOWS_KEY });
+  const invalidateFollows = () => {
+    void queryClient.invalidateQueries({ queryKey: FOLLOWS_KEY });
+    void queryClient.invalidateQueries({ queryKey: sportsQueryKeys.overview });
+  };
   const followMutation = useMutation({ mutationFn: createFollow, onSuccess: invalidateFollows });
   const unfollowMutation = useMutation({ mutationFn: deleteFollow, onSuccess: invalidateFollows });
 
