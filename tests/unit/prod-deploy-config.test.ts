@@ -121,12 +121,25 @@ describe("prod deploy config — opt-in Caddy TLS profile (#1504, part of #901)"
   // render, so a developer who happens to have them exported cannot turn a red test
   // green by accident.
   function renderProdCompose(args: readonly string[]): Record<string, ComposeService> {
-    const env = { ...process.env, JARVIS_IMAGE_TAG: "test", POSTGRES_PASSWORD: "test", JARVIS_CLI_RUNNER_RPC_SECRET: "test" };
+    const env: Record<string, string | undefined> = {
+      ...process.env,
+      JARVIS_IMAGE_TAG: "test",
+      POSTGRES_PASSWORD: "test",
+      JARVIS_CLI_RUNNER_RPC_SECRET: "test"
+    };
     delete env.JARVIS_TLS_HOST;
     delete env.JARVIS_TLS_ISSUER;
     const output = execFileSync(
       "docker",
-      ["compose", "-f", resolve(import.meta.dirname, "../../infra/docker-compose.prod.yml"), ...args, "config", "--format", "json"],
+      [
+        "compose",
+        "-f",
+        resolve(import.meta.dirname, "../../infra/docker-compose.prod.yml"),
+        ...args,
+        "config",
+        "--format",
+        "json"
+      ],
       { encoding: "utf8", env }
     );
     return (JSON.parse(output) as { services: Record<string, ComposeService> }).services;
@@ -288,32 +301,28 @@ describe("prod deploy config — opt-in Caddy TLS profile (#1504, part of #901)"
     return { status: result.status, stderr: result.stderr ?? "" };
   }
 
-  it(
-    "test case 8: both issuer modes adapt cleanly and a bad issuer is rejected",
-    () => {
-      const dataVolume = `1504-test8-data-${process.pid}`;
-      const configVolume = `1504-test8-config-${process.pid}`;
-      try {
-        expect(spawnSync("docker", ["volume", "create", dataVolume]).status).toBe(0);
-        expect(spawnSync("docker", ["volume", "create", configVolume]).status).toBe(0);
-        expect(runCaddyInitChown(dataVolume, configVolume)).toBe(0);
+  it("test case 8: both issuer modes adapt cleanly and a bad issuer is rejected", () => {
+    const dataVolume = `1504-test8-data-${process.pid}`;
+    const configVolume = `1504-test8-config-${process.pid}`;
+    try {
+      expect(spawnSync("docker", ["volume", "create", dataVolume]).status).toBe(0);
+      expect(spawnSync("docker", ["volume", "create", configVolume]).status).toBe(0);
+      expect(runCaddyInitChown(dataVolume, configVolume)).toBe(0);
 
-        expect(runCaddyValidate("internal", dataVolume, configVolume).status).toBe(0);
-        expect(runCaddyValidate("acme", dataVolume, configVolume).status).toBe(0);
-        expect(runCaddyValidate("bogus", dataVolume, configVolume).status).not.toBe(0);
-      } finally {
-        spawnSync("docker", ["volume", "rm", dataVolume]);
-        spawnSync("docker", ["volume", "rm", configVolume]);
-      }
-    },
-    60_000
-  );
+      expect(runCaddyValidate("internal", dataVolume, configVolume).status).toBe(0);
+      expect(runCaddyValidate("acme", dataVolume, configVolume).status).toBe(0);
+      expect(runCaddyValidate("bogus", dataVolume, configVolume).status).not.toBe(0);
+    } finally {
+      spawnSync("docker", ["volume", "rm", dataVolume]);
+      spawnSync("docker", ["volume", "rm", configVolume]);
+    }
+  }, 60_000);
 
   function runHostGuard(host: string, issuer: string): number | null {
     const guard = [
       'case "$JARVIS_TLS_HOST" in',
       '  "") echo "JARVIS_TLS_HOST must not be empty" >&2; exit 1 ;;',
-      "  *[!A-Za-z0-9.-]*) echo \"JARVIS_TLS_HOST has characters other than letters, digits, dots and hyphens\" >&2; exit 1 ;;",
+      '  *[!A-Za-z0-9.-]*) echo "JARVIS_TLS_HOST has characters other than letters, digits, dots and hyphens" >&2; exit 1 ;;',
       "esac",
       'case "$JARVIS_TLS_ISSUER" in',
       "  internal|acme) : ;;",
@@ -345,82 +354,78 @@ describe("prod deploy config — opt-in Caddy TLS profile (#1504, part of #901)"
     return result.status;
   }
 
-  it(
-    "test case 9: the host guard rejects values caddy's own validator accepts",
-    () => {
-      expect(runHostGuard("moss.lan", "internal")).toBe(0);
-      expect(runHostGuard("10.0.0.5", "internal")).toBe(0);
-      for (const host of [
-        "",
-        "moss.lan evil.com",
-        "http://moss.lan/path",
-        "moss.lan:8443",
-        "*.moss.lan",
-        "::1",
-        "[::1]"
-      ]) {
-        expect(runHostGuard(host, "internal")).not.toBe(0);
-      }
-      expect(runHostGuard("10.0.0.5", "acme")).not.toBe(0);
-    },
-    60_000
-  );
+  it("test case 9: the host guard rejects values caddy's own validator accepts", () => {
+    expect(runHostGuard("moss.lan", "internal")).toBe(0);
+    expect(runHostGuard("10.0.0.5", "internal")).toBe(0);
+    for (const host of [
+      "",
+      "moss.lan evil.com",
+      "http://moss.lan/path",
+      "moss.lan:8443",
+      "*.moss.lan",
+      "::1",
+      "[::1]"
+    ]) {
+      expect(runHostGuard(host, "internal")).not.toBe(0);
+    }
+    expect(runHostGuard("10.0.0.5", "acme")).not.toBe(0);
+  }, 60_000);
 
-  it(
-    "test case 10: the ownership fix still succeeds on a second start, after caddy has already run once",
-    () => {
-      const dataVolume = `1504-test-data-${process.pid}`;
-      const configVolume = `1504-test-config-${process.pid}`;
-      let containerId: string | undefined;
-      const initCommand = [
-        'case "$JARVIS_TLS_HOST" in',
-        '  "") exit 1 ;;',
-        "  *[!A-Za-z0-9.-]*) exit 1 ;;",
-        "esac",
-        'case "$JARVIS_TLS_ISSUER" in',
-        "  internal|acme) : ;;",
-        "  *) exit 1 ;;",
-        "esac",
-        "for p in /data /config /data/caddy /config/caddy; do",
-        '  if [ -e "$p" ]; then',
-        '    owner=$(stat -c %u "$p")',
-        '    if [ "$owner" != "1000" ]; then chown 1000:1000 "$p"; fi',
-        "  fi",
-        "done"
-      ].join("\n");
+  it("test case 10: the ownership fix still succeeds on a second start, after caddy has already run once", () => {
+    const dataVolume = `1504-test-data-${process.pid}`;
+    const configVolume = `1504-test-config-${process.pid}`;
+    let containerId: string | undefined;
+    const initCommand = [
+      'case "$JARVIS_TLS_HOST" in',
+      '  "") exit 1 ;;',
+      "  *[!A-Za-z0-9.-]*) exit 1 ;;",
+      "esac",
+      'case "$JARVIS_TLS_ISSUER" in',
+      "  internal|acme) : ;;",
+      "  *) exit 1 ;;",
+      "esac",
+      "for p in /data /config /data/caddy /config/caddy; do",
+      '  if [ -e "$p" ]; then',
+      '    owner=$(stat -c %u "$p")',
+      '    if [ "$owner" != "1000" ]; then chown 1000:1000 "$p"; fi',
+      "  fi",
+      "done"
+    ].join("\n");
 
-      try {
-        expect(spawnSync("docker", ["volume", "create", dataVolume]).status).toBe(0);
-        expect(spawnSync("docker", ["volume", "create", configVolume]).status).toBe(0);
+    try {
+      expect(spawnSync("docker", ["volume", "create", dataVolume]).status).toBe(0);
+      expect(spawnSync("docker", ["volume", "create", configVolume]).status).toBe(0);
 
-        const firstInit = spawnSync("docker", [
-          "run",
-          "--rm",
-          "--user",
-          "0:0",
-          "--read-only",
-          "--cap-drop",
-          "ALL",
-          "--cap-add",
-          "CHOWN",
-          "--network",
-          "none",
-          "-e",
-          "JARVIS_TLS_HOST=moss.lan",
-          "-e",
-          "JARVIS_TLS_ISSUER=internal",
-          "-v",
-          `${dataVolume}:/data`,
-          "-v",
-          `${configVolume}:/config`,
-          "caddy:2.10.0-alpine",
-          "sh",
-          "-c",
-          initCommand
-        ]);
-        expect(firstInit.status).toBe(0);
+      const firstInit = spawnSync("docker", [
+        "run",
+        "--rm",
+        "--user",
+        "0:0",
+        "--read-only",
+        "--cap-drop",
+        "ALL",
+        "--cap-add",
+        "CHOWN",
+        "--network",
+        "none",
+        "-e",
+        "JARVIS_TLS_HOST=moss.lan",
+        "-e",
+        "JARVIS_TLS_ISSUER=internal",
+        "-v",
+        `${dataVolume}:/data`,
+        "-v",
+        `${configVolume}:/config`,
+        "caddy:2.10.0-alpine",
+        "sh",
+        "-c",
+        initCommand
+      ]);
+      expect(firstInit.status).toBe(0);
 
-        const run = spawnSync("docker", [
+      const run = spawnSync(
+        "docker",
+        [
           "run",
           "-d",
           "--user",
@@ -449,52 +454,52 @@ describe("prod deploy config — opt-in Caddy TLS profile (#1504, part of #901)"
           "/etc/caddy/Caddyfile",
           "--adapter",
           "caddyfile"
-        ], { encoding: "utf8" });
-        containerId = run.stdout.trim();
-        expect(run.status).toBe(0);
+        ],
+        { encoding: "utf8" }
+      );
+      containerId = run.stdout.trim();
+      expect(run.status).toBe(0);
 
-        // Give Caddy a few seconds to create its owner-only certificate folders
-        // (finding 10's regression is only visible once those folders exist).
-        spawnSync("sleep", ["3"]);
+      // Give Caddy a few seconds to create its owner-only certificate folders
+      // (finding 10's regression is only visible once those folders exist).
+      spawnSync("sleep", ["3"]);
+      spawnSync("docker", ["stop", containerId]);
+      spawnSync("docker", ["rm", containerId]);
+      containerId = undefined;
+
+      const secondInit = spawnSync("docker", [
+        "run",
+        "--rm",
+        "--user",
+        "0:0",
+        "--read-only",
+        "--cap-drop",
+        "ALL",
+        "--cap-add",
+        "CHOWN",
+        "--network",
+        "none",
+        "-e",
+        "JARVIS_TLS_HOST=moss.lan",
+        "-e",
+        "JARVIS_TLS_ISSUER=internal",
+        "-v",
+        `${dataVolume}:/data`,
+        "-v",
+        `${configVolume}:/config`,
+        "caddy:2.10.0-alpine",
+        "sh",
+        "-c",
+        initCommand
+      ]);
+      expect(secondInit.status).toBe(0);
+    } finally {
+      if (containerId) {
         spawnSync("docker", ["stop", containerId]);
         spawnSync("docker", ["rm", containerId]);
-        containerId = undefined;
-
-        const secondInit = spawnSync("docker", [
-          "run",
-          "--rm",
-          "--user",
-          "0:0",
-          "--read-only",
-          "--cap-drop",
-          "ALL",
-          "--cap-add",
-          "CHOWN",
-          "--network",
-          "none",
-          "-e",
-          "JARVIS_TLS_HOST=moss.lan",
-          "-e",
-          "JARVIS_TLS_ISSUER=internal",
-          "-v",
-          `${dataVolume}:/data`,
-          "-v",
-          `${configVolume}:/config`,
-          "caddy:2.10.0-alpine",
-          "sh",
-          "-c",
-          initCommand
-        ]);
-        expect(secondInit.status).toBe(0);
-      } finally {
-        if (containerId) {
-          spawnSync("docker", ["stop", containerId]);
-          spawnSync("docker", ["rm", containerId]);
-        }
-        spawnSync("docker", ["volume", "rm", dataVolume]);
-        spawnSync("docker", ["volume", "rm", configVolume]);
       }
-    },
-    60_000
-  );
+      spawnSync("docker", ["volume", "rm", dataVolume]);
+      spawnSync("docker", ["volume", "rm", configVolume]);
+    }
+  }, 60_000);
 });
