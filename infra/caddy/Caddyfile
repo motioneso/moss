@@ -1,0 +1,25 @@
+# Opt-in TLS reverse proxy for the `tls` Compose profile (#1504, part of #901).
+#
+# Two variables control this file, both supplied by the `caddy` and `caddy-init`
+# services in ../docker-compose.prod.yml — never set them anywhere else:
+#   JARVIS_TLS_HOST   the hostname or LAN IP browsers will use, e.g. moss.lan
+#   JARVIS_TLS_ISSUER internal (default; a self-signed local CA) or acme
+#                     (a publicly trusted certificate; the host must be
+#                     reachable from the internet for ACME validation)
+#
+# The caddy-init service validates both values before this file is ever loaded,
+# so an empty or malformed host, or an issuer other than internal/acme, stops
+# the proxy from starting rather than falling back to a silent catch-all site.
+#
+# This file is mounted into the container read-only.
+#
+# Certificate material (the local CA's private key and every issued
+# certificate) lives only in the caddy-data named volume. It must never be
+# copied into this repository, an env file, a log line, or a pull request
+# comment.
+https://{$JARVIS_TLS_HOST} {
+	tls {
+		issuer {$JARVIS_TLS_ISSUER:internal}
+	}
+	reverse_proxy jarv1s:3000
+}
