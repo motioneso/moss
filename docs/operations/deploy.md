@@ -23,6 +23,9 @@ docker compose -f docker-compose.prod.yml --env-file env.production.local up -d
 
 Open `http://localhost:1533`.
 
+For an optional HTTPS front end (internal-CA or public ACME certificates), see
+[self-hosted-tls.md](./self-hosted-tls.md).
+
 ## Upgrade
 
 ```sh
