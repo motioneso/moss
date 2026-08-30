@@ -1,3 +1,6 @@
+/* Hallmark · component: standings transfer · tone: Moss editorial utility · palette: existing
+   Moss tokens · fingerprint: native dual-list transfer · pre-emit critique: P5 H5 E4 S5 R5 V4
+   · contrast: pass (40–41) · tokens: pass (48) · mobile: pass (34, 49–57) */
 /* Sports settings follow-picker (packages/sports/src/settings/index.tsx). Separate file from
    sports-1.css purely for the 1000-line file-size gate (sports-1.css has no headroom); imported
    directly by index.tsx as a colocated side-effect import (module web registry, #799). */
@@ -206,33 +209,54 @@
 }
 
 .sp-standings-settings {
+  display: grid;
+  gap: var(--space-3);
   margin-bottom: var(--space-6);
 }
-.sp-standings-settings > h2,
-.sp-standings-settings > p,
-.sp-standings-settings h3,
-.sp-standings-settings h4 {
+.sp-standings-settings__head {
+  display: grid;
+  gap: var(--space-1);
+}
+.sp-standings-settings__head > * {
   margin: 0;
 }
-.sp-standings-settings__choices {
+.sp-standings-transfer {
   display: grid;
-  gap: var(--space-4);
-  padding: 0;
+  gap: var(--space-3);
+  min-width: 0;
 }
-.sp-standings-settings__sport,
-.sp-standings-settings__region {
+.sp-standings-transfer__column {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: var(--space-2);
+  min-width: 0;
 }
-.sp-standings-settings__options {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: var(--space-2);
+.sp-standings-transfer__column .jds-selectwrap,
+.sp-standings-transfer__column .jds-select {
+  min-width: 0;
+  height: 100%;
 }
-.sp-standings-settings__options label {
+.sp-standings-transfer__actions {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.sp-standings-transfer__status {
+  text-align: center;
+}
+@media (min-width: 48rem) {
+  .sp-standings-transfer {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: stretch;
+  }
+  .sp-standings-transfer__actions {
+    flex-direction: column;
+  }
+  .sp-standings-transfer__status {
+    grid-column: 1 / -1;
+  }
 }
 .sp-feedback-settings__title,
 .sp-feedback-settings__note {

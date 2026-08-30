@@ -1,3 +1,6 @@
+/* Hallmark · component: progressive standings menu · tone: Moss editorial utility · palette:
+   existing Moss tokens · fingerprint: followed-first drill-down · pre-emit critique:
+   P5 H5 E4 S5 R5 V4 · contrast: pass (40–41) · tokens: pass (48) · mobile: pass (34, 49–57) */
 /* Sports — page-first module. Editorial layout in the Jarvis system:
    followed teams first (latest result + next game), then scores + headlines.
    Ported from the "Jarvis Design System" Claude Design project
@@ -330,8 +333,11 @@
      tall division doesn't tower the grid row. Cap ≈ the board's 6-game band (game 80px * 6 +
      96px header delta) so the two columns bottom out near each other. The --sp-board-game-h var
      isn't in scope here (it's on the board in the sibling column), so the 80px fallback is what
-     resolves — kept in the expression to document the intent. Sticky header + fade cue below. */
-  max-height: calc(var(--sp-board-game-h, 80px) * 6 + 96px);
+     resolves — kept in the expression to document the intent. The header stays outside the
+     scrolling body so its picker menu is not clipped; the fade cue remains inside the body. */
+}
+.sp-standings__body {
+  max-height: calc(var(--sp-board-game-h, 80px) * 6 + 48px);
   overflow-y: auto;
   scrollbar-width: thin;
 }
@@ -360,12 +366,6 @@
      sticky title + division selector align to the standings grid instead of hanging var(--space-2)
      outside it on both edges — Ben 2026-07-08 "standings margin is off, particularly the header". */
   padding: var(--space-3) var(--space-2) var(--space-2);
-  /* The rail now scrolls internally (mrbah9gw): pin the title + division selector so they stay
-     reachable while the standings rows scroll under them. Surface background hides rows passing
-     behind the header. */
-  position: sticky;
-  top: 0;
-  z-index: 1;
 }
 .sp-standings__title,
 .sp-standings__nav {
@@ -382,6 +382,10 @@
   width: auto;
   max-width: 180px;
   padding: 0 var(--space-2);
+  gap: var(--space-1);
+}
+.sp-standings-picker__trigger > span {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -391,14 +395,35 @@
   max-height: min(420px, 70vh);
   overflow-y: auto;
 }
-.sp-standings-picker__heading,
-.sp-standings-picker__region {
-  padding: var(--space-2);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
+.sp-standings-picker__title,
+.sp-standings-picker__group {
+  display: grid;
+  gap: var(--space-1);
 }
-.sp-standings-picker__region {
-  padding-left: var(--space-3);
+.sp-standings-picker__title {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  padding: var(--space-1);
+}
+.sp-standings-picker__title > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sp-standings-picker__heading {
+  padding: var(--space-2);
+}
+.sp-standings-picker__row {
+  width: 100%;
+  justify-content: flex-start;
+}
+.sp-standings-picker__row > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sp-iconbtn {
   width: 24px;

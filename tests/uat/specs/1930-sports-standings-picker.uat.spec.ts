@@ -36,31 +36,31 @@ test("saves a curated league set and uses the keyboard picker on Sports", async 
   const settings = page.getByRole("group", { name: "Standings leagues" });
   await expect(settings).toBeVisible();
   const keptLabels = new Set(["NFL", "Premier League", "MLB"]);
-  const labels = await settings.locator("label").allTextContents();
-  expect(labels.length).toBeGreaterThan(keptLabels.size);
-
-  for (const label of labels) {
-    const name = label.trim();
-    const checkbox = settings.getByRole("checkbox", { name, exact: true });
-    if (keptLabels.has(name)) {
-      await expect(checkbox).toBeChecked();
-      continue;
-    }
-    const saved = page.waitForResponse(
-      (response) =>
-        new URL(response.url()).pathname === "/api/sports/standings-preferences" &&
-        response.request().method() === "PUT"
-    );
-    await checkbox.click();
-    expect((await saved).ok(), `saving standings after unchecking ${name}`).toBe(true);
-    await expect(checkbox).not.toBeChecked();
-  }
+  const selectedLeagues = settings.getByRole("listbox", { name: "Selected leagues" });
+  const selectedOptions = await selectedLeagues.locator("option").evaluateAll((options) =>
+    options.map((option) => ({
+      label: option.textContent?.trim() ?? "",
+      value: (option as HTMLOptionElement).value
+    }))
+  );
+  const removedValues = selectedOptions
+    .filter((option) => !keptLabels.has(option.label))
+    .map((option) => option.value);
+  expect(removedValues.length).toBeGreaterThan(0);
+  await selectedLeagues.selectOption(removedValues);
+  const saved = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/sports/standings-preferences" &&
+      response.request().method() === "PUT"
+  );
+  await settings.getByRole("button", { name: "Remove selected leagues" }).click();
+  expect((await saved).ok(), "saving curated standings leagues").toBe(true);
 
   await page.reload();
   await expect(settings).toBeVisible();
-  await expect(settings.getByRole("checkbox", { checked: true })).toHaveCount(keptLabels.size);
+  await expect(selectedLeagues.getByRole("option")).toHaveCount(keptLabels.size);
   for (const name of keptLabels) {
-    await expect(settings.getByRole("checkbox", { name, exact: true })).toBeChecked();
+    await expect(selectedLeagues.getByRole("option", { name, exact: true })).toHaveCount(1);
   }
   console.log("[live proof] Sports Settings persisted NFL, Premier League, and MLB only");
 
@@ -68,21 +68,25 @@ test("saves a curated league set and uses the keyboard picker on Sports", async 
   const trigger = page.getByRole("button", { name: "Select standings league" });
   await expect(trigger).toBeVisible();
   await trigger.press("Enter");
-  const picker = page.getByRole("listbox", { name: "Standings leagues" });
+  const picker = page.getByRole("menu", { name: "Standings leagues" });
   await expect(picker).toBeVisible();
   const following = picker.getByRole("group", { name: "Following" });
   for (const name of ["NBA", "NFL", "Premier League"]) {
-    await expect(following.getByRole("option", { name, exact: true })).toHaveCount(1);
-    await expect(picker.getByRole("option", { name, exact: true })).toHaveCount(1);
+    await expect(following.getByRole("menuitemradio", { name, exact: true })).toHaveCount(1);
+    await expect(picker.getByRole("menuitemradio", { name, exact: true })).toHaveCount(1);
   }
-  await expect(picker.getByRole("option", { name: "NHL", exact: true })).toHaveCount(0);
+  await expect(picker.getByRole("menuitemradio", { name: "NHL", exact: true })).toHaveCount(0);
+
+  const baseball = picker.getByRole("menuitem", { name: "Baseball", exact: true });
+  await baseball.focus();
+  await baseball.press("Enter");
 
   const standingsResponse = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === "/api/sports/standings" &&
       new URL(response.url()).searchParams.get("competitionKey") === "mlb"
   );
-  const mlb = picker.getByRole("option", { name: "MLB", exact: true });
+  const mlb = picker.getByRole("menuitemradio", { name: "MLB", exact: true });
   await mlb.focus();
   await mlb.press("Enter");
   expect((await standingsResponse).ok(), "lazy MLB standings request").toBe(true);
