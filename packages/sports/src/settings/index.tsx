@@ -17,12 +17,11 @@ import { requestJson } from "@moss/module-web-sdk";
 
 import { sportsQueryKeys } from "../web/query-keys.js";
 import {
-  getSportsStandingsPreferences,
   listSportsStoryFeedback,
-  updateSportsStandingsPreferences,
   undoSportsStoryFeedback,
   updateSportsStoryFeedbackReason
 } from "../web/sports-client.js";
+import { StandingsLeaguesSection } from "./standings-leagues.js";
 import { SportsSourcesSection } from "./sources.js";
 import "./sports-2.css";
 import "./sports-sources.css";
@@ -31,89 +30,7 @@ const CATALOG_KEY = sportsQueryKeys.catalog;
 const FOLLOWS_KEY = sportsQueryKeys.follows;
 const STORY_FEEDBACK_KEY = ["sports", "story-feedback"] as const;
 
-export function StandingsLeaguesSection(props: {
-  readonly competitions: readonly CompetitionRef[];
-}) {
-  const queryClient = useQueryClient();
-  const preferencesQuery = useQuery({
-    queryKey: sportsQueryKeys.standingsPreferences,
-    queryFn: getSportsStandingsPreferences
-  });
-  const mutation = useMutation({
-    mutationFn: (selectedCompetitionKeys: readonly string[]) =>
-      updateSportsStandingsPreferences({ selectedCompetitionKeys }),
-    onSuccess: (response) =>
-      queryClient.setQueryData(sportsQueryKeys.standingsPreferences, response)
-  });
-  const saved = preferencesQuery.data?.selectedCompetitionKeys;
-  const selected = new Set(
-    saved === null || saved === undefined
-      ? props.competitions.map((competition) => competition.competitionKey)
-      : saved
-  );
-  const sports = new Map<string, Map<string | null, CompetitionRef[]>>();
-  for (const competition of props.competitions) {
-    const regions = sports.get(competition.sportLabel) ?? new Map();
-    const entries = regions.get(competition.regionLabel) ?? [];
-    entries.push(competition);
-    regions.set(competition.regionLabel, entries);
-    sports.set(competition.sportLabel, regions);
-  }
-
-  const toggle = (competitionKey: string) => {
-    const next = new Set(selected);
-    if (next.has(competitionKey)) next.delete(competitionKey);
-    else next.add(competitionKey);
-    mutation.mutate(
-      props.competitions
-        .map((competition) => competition.competitionKey)
-        .filter((key) => next.has(key))
-    );
-  };
-
-  return (
-    <section className="sp-standings-settings" aria-labelledby="sp-standings-settings-title">
-      <h2 id="sp-standings-settings-title">Standings leagues</h2>
-      <p>Choose the leagues available in the Sports standings picker.</p>
-      {preferencesQuery.isError ? <Note>Could not load standings leagues. Try again.</Note> : null}
-      {mutation.isError ? (
-        <p role="alert">
-          Could not save standings leagues. Your last saved selection is unchanged.
-        </p>
-      ) : null}
-      <div
-        className="sp-standings-settings__choices"
-        role="group"
-        aria-labelledby="sp-standings-settings-title"
-        aria-disabled={mutation.isPending}
-      >
-        {Array.from(sports, ([sportLabel, regions]) => (
-          <div className="sp-standings-settings__sport" key={sportLabel}>
-            <h3>{sportLabel}</h3>
-            {Array.from(regions, ([regionLabel, competitions]) => (
-              <div className="sp-standings-settings__region" key={regionLabel ?? sportLabel}>
-                {regionLabel ? <h4>{regionLabel}</h4> : null}
-                <div className="sp-standings-settings__options">
-                  {competitions.map((competition) => (
-                    <label key={competition.competitionKey}>
-                      <input
-                        type="checkbox"
-                        disabled={mutation.isPending}
-                        checked={selected.has(competition.competitionKey)}
-                        onChange={() => toggle(competition.competitionKey)}
-                      />
-                      <span>{competition.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
+export { StandingsLeaguesSection };
 
 function metadataText(feedback: UsefulnessFeedbackDto, key: string): string | null {
   const value = feedback.metadata[key];

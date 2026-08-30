@@ -164,7 +164,7 @@ export function StandingsRail(props: {
   // scroll bottom and fade the last visible row as an honest "more below" cue (mirrors the board's
   // right-edge --more mask). Only shows when the list actually overflows, so a short division is
   // left clean.
-  const scrollRef = useRef<HTMLElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const [moreBelow, setMoreBelow] = useState(false);
 
   useEffect(() => {
@@ -243,7 +243,6 @@ export function StandingsRail(props: {
     <section
       className={`sp-standings${moreBelow ? " sp-standings--more" : ""}`}
       aria-label="Standings"
-      ref={scrollRef}
     >
       <div className="sp-standings__hd">
         <span className="sp-standings__title">
@@ -269,48 +268,50 @@ export function StandingsRail(props: {
           ) : null}
         </span>
       </div>
-      {!activeKey ? (
-        <p className="sp-standings__empty">
-          No standings leagues selected.{" "}
-          <a href="/settings?section=modules&module=sports">Choose leagues in Settings.</a>
-        </p>
-      ) : knockout ? (
-        <KnockoutFixtures fixtures={fixtures} />
-      ) : group && shownSections.length > 0 ? (
-        <>
-          {shownSections.map((section, index) => (
-            <StandingsTable
-              key={section.label ?? index}
-              group={group}
-              section={section}
-              label={section.label ?? group.competitionLabel}
-              followedPairs={props.followedPairs}
-              renumber={mergeSections !== null}
-            />
-          ))}
-        </>
-      ) : (
-        <p className="sp-standings__empty">
-          {lazy.isLoading ? "Loading standings…" : "No standings available."}
-        </p>
-      )}
-      {legendNotes.length > 0 ? (
-        <ul className="sp-legend" aria-label="Qualification key">
-          {legendNotes.map((row) => (
-            <li className="sp-legend__item" key={row.qualificationNote}>
-              <span
-                className="sp-legend__marker"
-                aria-hidden="true"
-                style={qualificationStyle(row.qualificationColor)}
+      <div className="sp-standings__body" ref={scrollRef}>
+        {!activeKey ? (
+          <p className="sp-standings__empty">
+            No standings leagues selected.{" "}
+            <a href="/settings?section=modules&module=sports">Choose leagues in Settings.</a>
+          </p>
+        ) : knockout ? (
+          <KnockoutFixtures fixtures={fixtures} />
+        ) : group && shownSections.length > 0 ? (
+          <>
+            {shownSections.map((section, index) => (
+              <StandingsTable
+                key={section.label ?? index}
+                group={group}
+                section={section}
+                label={section.label ?? group.competitionLabel}
+                followedPairs={props.followedPairs}
+                renumber={mergeSections !== null}
               />
-              {row.qualificationNote}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {/* Sticky-bottom fade cue: negative margin so it overlays the last rows without adding
-          scroll length; opacity toggled by --more so it only appears while more rows are below. */}
-      <div className="sp-standings__fade" aria-hidden="true" />
+            ))}
+          </>
+        ) : (
+          <p className="sp-standings__empty">
+            {lazy.isLoading ? "Loading standings…" : "No standings available."}
+          </p>
+        )}
+        {legendNotes.length > 0 ? (
+          <ul className="sp-legend" aria-label="Qualification key">
+            {legendNotes.map((row) => (
+              <li className="sp-legend__item" key={row.qualificationNote}>
+                <span
+                  className="sp-legend__marker"
+                  aria-hidden="true"
+                  style={qualificationStyle(row.qualificationColor)}
+                />
+                {row.qualificationNote}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {/* Sticky-bottom fade cue: negative margin so it overlays the last rows without adding
+            scroll length; opacity toggled by --more so it only appears while more rows are below. */}
+        <div className="sp-standings__fade" aria-hidden="true" />
+      </div>
     </section>
   );
 }

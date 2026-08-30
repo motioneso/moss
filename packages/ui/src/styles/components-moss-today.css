@@ -216,6 +216,11 @@
   border-color: var(--border);
   color: var(--ink);
 }
+.jds-menu__trigger:focus-visible,
+.jds-menu__list button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
 .jds-menu__list {
   position: absolute;
   top: calc(100% + var(--space-1));
@@ -245,6 +250,14 @@
 }
 .jds-menu__list button:hover:not(:disabled) {
   background: var(--surface-sunken);
+}
+.jds-menu__list button:active:not(:disabled) {
+  background: var(--surface-3);
+}
+.jds-menu__list [role="menuitemradio"][aria-checked="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-soft-fg);
+  font-weight: var(--weight-semibold);
 }
 .jds-menu__list button:disabled {
   color: var(--ink-4);

@@ -103,7 +103,7 @@ describe("SportsSettings", () => {
     expect(html).not.toContain("Search above to find teams or leagues to follow.");
   });
 
-  it("renders absent standings preferences as all checked and explicit empty as none", () => {
+  it("renders absent standings preferences as all selected and explicit empty as none", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(CATALOG_KEY, { competitions: TWO_LEAGUES, degraded: false });
     client.setQueryData(FOLLOWS_KEY, { follows: [] });
@@ -111,13 +111,19 @@ describe("SportsSettings", () => {
     expect(html).toContain("Standings leagues");
     expect(html).toContain("Football");
     expect(html).toContain("England");
-    expect(html.match(/type="checkbox" checked=""/g)).toHaveLength(2);
+    let selectedList = html.match(
+      /<select[^>]*aria-label="Selected leagues"[\s\S]*?<\/select>/
+    )?.[0];
+    expect(selectedList).toContain('value="nfl"');
+    expect(selectedList).toContain('value="epl"');
 
     client.setQueryData(sportsQueryKeys.standingsPreferences, {
       selectedCompetitionKeys: []
     });
     html = renderWithQuery(client);
-    expect(html).not.toContain('type="checkbox" checked=""');
+    selectedList = html.match(/<select[^>]*aria-label="Selected leagues"[\s\S]*?<\/select>/)?.[0];
+    expect(selectedList).toContain("No leagues selected");
+    expect(selectedList).not.toContain('value="nfl"');
   });
 
   it("renders only active Sports story preferences with stored story details", () => {

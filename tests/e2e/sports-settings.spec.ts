@@ -430,20 +430,37 @@ test.describe("Sports settings follow picker (#989)", () => {
     await gotoSportsSettings(page);
 
     const standingsSettings = page.getByRole("region", { name: "Standings leagues" });
-    const nbaChoice = standingsSettings.getByRole("checkbox", { name: "NBA" });
-    const mlbChoice = standingsSettings.getByRole("checkbox", { name: "MLB" });
-    await nbaChoice.click();
-    await expect(nbaChoice).not.toBeChecked();
-    await mlbChoice.click();
-    await expect(mlbChoice).not.toBeChecked();
+    for (const width of [320, 375, 414, 768]) {
+      await page.setViewportSize({ width, height: 844 });
+      const geometry = await standingsSettings.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          left: rect.left,
+          right: rect.right,
+          viewport: document.documentElement.clientWidth,
+          scroll: element.scrollWidth,
+          client: element.clientWidth
+        };
+      });
+      expect(geometry.left).toBeGreaterThanOrEqual(0);
+      expect(geometry.right).toBeLessThanOrEqual(geometry.viewport);
+      expect(geometry.scroll).toBeLessThanOrEqual(geometry.client + 1);
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    const selectedLeagues = standingsSettings.getByRole("listbox", { name: "Selected leagues" });
+    await selectedLeagues.selectOption(["nba", "mlb"]);
+    await standingsSettings.getByRole("button", { name: "Remove selected leagues" }).click();
+    await expect(selectedLeagues.getByRole("option", { name: "NBA" })).toHaveCount(0);
+    await expect(selectedLeagues.getByRole("option", { name: "MLB" })).toHaveCount(0);
     await page.getByRole("searchbox", { name: "Find a team or league" }).fill("lakers");
     await page.getByRole("button", { name: "Follow Los Angeles Lakers" }).click();
 
     await page.reload();
-    await expect(standingsSettings.getByRole("checkbox", { name: "NFL" })).toBeChecked();
-    await expect(standingsSettings.getByRole("checkbox", { name: "Premier League" })).toBeChecked();
-    await expect(standingsSettings.getByRole("checkbox", { name: "NBA" })).not.toBeChecked();
-    await expect(standingsSettings.getByRole("checkbox", { name: "MLB" })).not.toBeChecked();
+    await expect(selectedLeagues.getByRole("option", { name: "NFL" })).toHaveCount(1);
+    await expect(selectedLeagues.getByRole("option", { name: "Premier League" })).toHaveCount(1);
+    const availableLeagues = standingsSettings.getByRole("listbox", { name: "Available leagues" });
+    await expect(availableLeagues.getByRole("option", { name: "NBA" })).toHaveCount(1);
+    await expect(availableLeagues.getByRole("option", { name: "MLB" })).toHaveCount(1);
 
     await page.goto("/sports");
     const picker = page.getByRole("button", { name: "Select standings league" });
@@ -451,10 +468,12 @@ test.describe("Sports settings follow picker (#989)", () => {
     await picker.focus();
     await page.keyboard.press("ArrowDown");
     await expect(page.getByRole("group", { name: "Following" })).toBeVisible();
-    await expect(page.getByRole("option", { name: "NBA" })).toHaveCount(1);
-    await expect(page.getByRole("option", { name: "MLB" })).toHaveCount(0);
+    await expect(page.getByRole("menuitemradio", { name: "NBA" })).toHaveCount(1);
+    await expect(page.getByRole("menuitemradio", { name: "MLB" })).toHaveCount(0);
 
     await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("menuitemradio", { name: "NFL" })).toBeFocused();
     const standingsResponse = page.waitForResponse(
       (response) =>
         response.url().includes("/api/sports/standings?competitionKey=nfl") &&
@@ -482,5 +501,14 @@ test.describe("Sports settings follow picker (#989)", () => {
       return { scroll: rail.scrollWidth, client: rail.clientWidth };
     });
     expect(railWidth.scroll).toBeLessThanOrEqual(railWidth.client + 1);
+
+    await picker.click();
+    const pickerMenu = page.getByRole("menu", { name: "Standings leagues" });
+    await expect(pickerMenu.getByRole("group", { name: "Following" })).toBeVisible();
+    await expect(pickerMenu.getByRole("group", { name: "Sports" })).toBeVisible();
+    await page.getByRole("menuitem", { name: "Soccer" }).click();
+    await expect(pickerMenu.getByText("Countries and regions")).toBeVisible();
+    await page.getByRole("menuitem", { name: "England" }).click();
+    await expect(pickerMenu.getByRole("menuitemradio", { name: "Premier League" })).toBeVisible();
   });
 });

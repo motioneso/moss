@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactElement } from "react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import type { CompetitionRef, SportsFollowDto } from "@moss/shared";
 
 export interface StandingsPickerRegion {
@@ -71,37 +72,166 @@ export function buildStandingsPickerGroups(
   return groups;
 }
 
+type PickerView =
+  | { readonly level: "root" }
+  | { readonly level: "sport"; readonly sportLabel: string }
+  | {
+      readonly level: "region";
+      readonly sportLabel: string;
+      readonly regionLabel: string;
+    };
+
+type PickerRow =
+  | { readonly kind: "competition"; readonly competition: CompetitionRef }
+  | { readonly kind: "sport"; readonly label: string }
+  | { readonly kind: "region"; readonly label: string; readonly sportLabel: string }
+  | { readonly kind: "back"; readonly target: PickerView };
+
+interface PickerSection {
+  readonly label: string | null;
+  readonly rows: readonly PickerRow[];
+}
+
 export function StandingsPicker(props: StandingsPickerProps): ReactElement {
   const [open, setOpen] = useState(false);
+  const [view, setView] = useState<PickerView>({ level: "root" });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
-  const optionRefs = useRef<HTMLButtonElement[]>([]);
+  const rowRefs = useRef<HTMLButtonElement[]>([]);
+  const focusTarget = useRef<"current" | "first" | "last">("current");
   const groups = useMemo(
     () => buildStandingsPickerGroups(props.catalog, props.follows, props.selectedCompetitionKeys),
     [props.catalog, props.follows, props.selectedCompetitionKeys]
   );
-  const options = groups.flatMap((group) => group.regions.flatMap((region) => region.competitions));
-  const optionIndex = new Map(
-    options.map((competition, index) => [competition.competitionKey, index])
-  );
+  const following = groups.find((group) => group.label === "Following");
+  const sports = groups.filter((group) => group.label !== "Following");
   const current = props.catalog.find((competition) => competition.competitionKey === props.value);
+
+  const sections = useMemo<readonly PickerSection[]>(() => {
+    if (view.level === "root") {
+      const root: PickerSection[] = [];
+      const followed = following?.regions.flatMap((region) => region.competitions) ?? [];
+      if (followed.length > 0) {
+        root.push({
+          label: "Following",
+          rows: followed.map((competition) => ({ kind: "competition", competition }))
+        });
+      }
+      if (sports.length > 0) {
+        root.push({
+          label: "Sports",
+          rows: sports.map((group) => ({ kind: "sport", label: group.label }))
+        });
+      }
+      return root;
+    }
+
+    const sport = sports.find((group) => group.label === view.sportLabel);
+    if (!sport) return [];
+    if (view.level === "region") {
+      const region = sport.regions.find((entry) => entry.label === view.regionLabel);
+      return region
+        ? [
+            {
+              label: "Leagues",
+              rows: region.competitions.map((competition) => ({
+                kind: "competition",
+                competition
+              }))
+            }
+          ]
+        : [];
+    }
+
+    const regionRows: PickerRow[] = sport.regions
+      .filter((region) => region.label !== null)
+      .map((region) => ({
+        kind: "region",
+        label: region.label as string,
+        sportLabel: sport.label
+      }));
+    const directRows: PickerRow[] = sport.regions
+      .filter((region) => region.label === null)
+      .flatMap((region) =>
+        region.competitions.map((competition) => ({ kind: "competition", competition }))
+      );
+    return [
+      ...(regionRows.length > 0
+        ? [{ label: "Countries and regions", rows: regionRows } satisfies PickerSection]
+        : []),
+      ...(directRows.length > 0
+        ? [{ label: "Leagues", rows: directRows } satisfies PickerSection]
+        : [])
+    ];
+  }, [following, sports, view]);
+
+  const backRow: PickerRow | null =
+    view.level === "root"
+      ? null
+      : {
+          kind: "back",
+          target:
+            view.level === "region"
+              ? { level: "sport", sportLabel: view.sportLabel }
+              : { level: "root" }
+        };
+  const rows = [...(backRow ? [backRow] : []), ...sections.flatMap((section) => section.rows)];
+  const viewTitle =
+    view.level === "root"
+      ? "Standings leagues"
+      : view.level === "sport"
+        ? view.sportLabel
+        : view.regionLabel;
+  const rowKey = (row: PickerRow) =>
+    row.kind === "competition"
+      ? `competition:${row.competition.competitionKey}`
+      : row.kind === "back"
+        ? "back"
+        : `${row.kind}:${row.label}`;
+  const rowIndexes = new Map(rows.map((row, index) => [rowKey(row), index]));
 
   const close = (restoreFocus: boolean) => {
     setOpen(false);
     if (restoreFocus) queueMicrotask(() => triggerRef.current?.focus());
   };
-  const focusAt = (index: number) => optionRefs.current[index]?.focus();
-  const openPicker = (target: "current" | "first" | "last" = "current") => {
-    setOpen(true);
-    queueMicrotask(() => {
-      const currentIndex = options.findIndex(
-        (competition) => competition.competitionKey === props.value
-      );
-      focusAt(
-        target === "first" ? 0 : target === "last" ? options.length - 1 : Math.max(currentIndex, 0)
-      );
-    });
+  const focusAt = (index: number) => rowRefs.current[index]?.focus();
+  const navigate = (next: PickerView) => {
+    focusTarget.current = "first";
+    setView(next);
   };
+  const activate = (row: PickerRow) => {
+    if (row.kind === "competition") {
+      props.onChange(row.competition.competitionKey);
+      close(true);
+    } else if (row.kind === "sport") {
+      navigate({ level: "sport", sportLabel: row.label });
+    } else if (row.kind === "region") {
+      navigate({ level: "region", sportLabel: row.sportLabel, regionLabel: row.label });
+    } else {
+      navigate(row.target);
+    }
+  };
+  const openPicker = (target: "current" | "first" | "last" = "current") => {
+    focusTarget.current = target;
+    setView({ level: "root" });
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open || rows.length === 0) return;
+    const currentIndex = rows.findIndex(
+      (row) => row.kind === "competition" && row.competition.competitionKey === props.value
+    );
+    const firstContentIndex = backRow && rows.length > 1 ? 1 : 0;
+    const index =
+      focusTarget.current === "last"
+        ? rows.length - 1
+        : focusTarget.current === "current" && currentIndex >= 0
+          ? currentIndex
+          : firstContentIndex;
+    focusTarget.current = "first";
+    focusAt(index);
+  }, [open, props.value, rows.length, view]);
 
   useEffect(() => {
     if (!open) return;
@@ -110,8 +240,7 @@ export function StandingsPicker(props: StandingsPickerProps): ReactElement {
         !popupRef.current?.contains(event.target as Node) &&
         !triggerRef.current?.contains(event.target as Node)
       ) {
-        setOpen(false);
-        queueMicrotask(() => triggerRef.current?.focus());
+        close(true);
       }
     };
     document.addEventListener("mousedown", outside);
@@ -130,28 +259,62 @@ export function StandingsPicker(props: StandingsPickerProps): ReactElement {
       );
     }
   };
-  const onOptionKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+  const onRowKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number, row: PickerRow) => {
     if (event.key === "Escape") {
       event.preventDefault();
       close(true);
     } else if (event.key === "Tab") {
       setOpen(false);
+    } else if (event.key === "ArrowLeft" && view.level !== "root") {
+      event.preventDefault();
+      activate(backRow as PickerRow);
+    } else if (event.key === "ArrowRight" && (row.kind === "sport" || row.kind === "region")) {
+      event.preventDefault();
+      activate(row);
     } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
       event.preventDefault();
       const next =
         event.key === "Home"
           ? 0
           : event.key === "End"
-            ? options.length - 1
+            ? rows.length - 1
             : event.key === "ArrowDown"
-              ? (index + 1) % options.length
-              : (index - 1 + options.length) % options.length;
+              ? (index + 1) % rows.length
+              : (index - 1 + rows.length) % rows.length;
       focusAt(next);
     } else if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      props.onChange(options[index]?.competitionKey ?? props.value);
-      close(true);
+      activate(row);
     }
+  };
+
+  const renderRow = (row: PickerRow) => {
+    const index = rowIndexes.get(rowKey(row)) ?? 0;
+    const selected = row.kind === "competition" && row.competition.competitionKey === props.value;
+    const label =
+      row.kind === "competition" ? row.competition.label : row.kind === "back" ? "Back" : row.label;
+    return (
+      <button
+        ref={(element) => {
+          if (element) rowRefs.current[index] = element;
+        }}
+        type="button"
+        role={row.kind === "competition" ? "menuitemradio" : "menuitem"}
+        aria-checked={row.kind === "competition" ? selected : undefined}
+        className="sp-standings-picker__row"
+        key={rowKey(row)}
+        tabIndex={-1}
+        onKeyDown={(event) => onRowKeyDown(event, index, row)}
+        onClick={() => activate(row)}
+      >
+        {row.kind === "back" ? <ChevronLeft size={15} aria-hidden="true" /> : null}
+        <span>{label}</span>
+        {selected ? <Check size={15} aria-hidden="true" /> : null}
+        {row.kind === "sport" || row.kind === "region" ? (
+          <ChevronRight size={15} aria-hidden="true" />
+        ) : null}
+      </button>
+    );
   };
 
   return (
@@ -161,67 +324,39 @@ export function StandingsPicker(props: StandingsPickerProps): ReactElement {
         type="button"
         className="jds-menu__trigger sp-standings-picker__trigger"
         aria-label="Select standings league"
-        aria-haspopup="listbox"
+        aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => (open ? close(false) : openPicker())}
         onKeyDown={onTriggerKeyDown}
       >
-        {current?.label ?? "Select league"}
+        <span>{current?.label ?? "Select league"}</span>
+        <ChevronDown size={14} aria-hidden="true" />
       </button>
       {open ? (
         <div
           ref={popupRef}
           className="jds-menu__list sp-standings-picker__popup"
-          role="listbox"
+          role="menu"
           aria-label="Standings leagues"
         >
-          {groups.map((group) => (
+          <div className="sp-standings-picker__title jds-label">
+            {backRow ? renderRow(backRow) : null}
+            <span>{viewTitle}</span>
+          </div>
+          {sections.map((section) => (
             <div
               className="sp-standings-picker__group"
               role="group"
-              aria-label={group.label}
-              key={group.label}
+              aria-label={section.label ?? undefined}
+              key={section.label}
             >
-              <div className="sp-standings-picker__heading">{group.label}</div>
-              {group.regions.map((region) => (
-                <div
-                  role={region.label ? "group" : undefined}
-                  aria-label={region.label ?? undefined}
-                  key={region.label ?? group.label}
-                >
-                  {region.label ? (
-                    <div className="sp-standings-picker__region">{region.label}</div>
-                  ) : null}
-                  {region.competitions.map((competition) => {
-                    const index = optionIndex.get(competition.competitionKey) ?? 0;
-                    const selected = competition.competitionKey === props.value;
-                    return (
-                      <button
-                        ref={(element) => {
-                          if (element) optionRefs.current[index] = element;
-                        }}
-                        type="button"
-                        role="option"
-                        aria-selected={selected}
-                        className={`sp-standings-picker__option jds-btn jds-btn--sm ${
-                          selected ? "jds-btn--primary" : "jds-btn--quiet"
-                        }`}
-                        key={competition.competitionKey}
-                        tabIndex={selected ? 0 : -1}
-                        onKeyDown={(event) => onOptionKeyDown(event, index)}
-                        onClick={() => {
-                          props.onChange(competition.competitionKey);
-                          close(true);
-                        }}
-                      >
-                        {competition.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
+              {section.label ? (
+                <div className="sp-standings-picker__heading jds-eyebrow">{section.label}</div>
+              ) : null}
+              {section.rows.map(renderRow)}
             </div>
           ))}
+          {rows.length === 0 ? <span className="jds-hint">No leagues available.</span> : null}
         </div>
       ) : null}
     </span>

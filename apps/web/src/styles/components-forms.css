@@ -63,6 +63,15 @@
 .jds-selectwrap .jds-select {
   padding-right: 34px;
 }
+.jds-selectwrap .jds-select[multiple] {
+  height: auto;
+  min-height: 12rem;
+  padding: var(--space-2);
+  appearance: auto;
+}
+.jds-select[multiple] option {
+  padding: var(--space-2);
+}
 .jds-selectwrap__chev {
   position: absolute;
   right: 11px;
