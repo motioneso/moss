@@ -13,10 +13,10 @@
 
 This lane may write exactly three paths:
 
-| Path | State |
-| --- | --- |
-| `infra/docker-compose.prod.yml` | exists, 319 lines |
-| `infra/caddy/Caddyfile` | new (`infra/caddy/` does not exist) |
+| Path                                    | State                                        |
+| --------------------------------------- | -------------------------------------------- |
+| `infra/docker-compose.prod.yml`         | exists, 319 lines                            |
+| `infra/caddy/Caddyfile`                 | new (`infra/caddy/` does not exist)          |
 | `tests/unit/prod-deploy-config.test.ts` | exists, 92 lines — add Caddy assertions only |
 
 Anything else is out of scope. Two adjacent things are deliberately **not** in this build:
@@ -44,21 +44,21 @@ is from memory.
 
 ### Repository facts
 
-| Fact | Evidence |
-| --- | --- |
-| The app service is named `jarv1s` and listens on container port 3000 | `infra/docker-compose.prod.yml:144`, `:153` |
-| It has a health check the proxy can wait on | `infra/docker-compose.prod.yml:187-198` |
-| The direct host mapping is `${JARVIS_WEB_PORT:-1533}:3000` | `infra/docker-compose.prod.yml:199-200` |
-| The shared Compose network is `jarv1s` | `infra/docker-compose.prod.yml:315-319` |
-| Compose interpolates `${...}` for **every** service before profile filtering, so a `:?` required var on a profiled service breaks a plain `up` | comment and workaround at `infra/docker-compose.prod.yml:121-127` |
-| A root one-shot that fixes volume ownership, then a hardened service that depends on it, is existing house style | `sports-browser-socket-init` at `infra/docker-compose.prod.yml:221-233`; consumer `depends_on: service_completed_successfully` at `:250-252` |
-| The hardening vocabulary already used here — `read_only`, `cap_drop: [ALL]`, `security_opt: [no-new-privileges:true]`, numeric `user:` | `infra/docker-compose.prod.yml:235-249` |
-| The `setup` service exists, is profile-gated, and today has **no** `environment:` block | `infra/docker-compose.prod.yml:290-302` |
-| Repo image policy pins by tag, not digest | `pgvector/pgvector:pg17` at `:28`; `ghcr.io/motioneso/moss:${JARVIS_IMAGE_TAG:?...}` at `:146` |
-| Unit tests may shell out to a real `docker compose config` | `tests/unit/sports-renderer-compose.test.ts:33-57`; `tests/unit/prod-compose-cli-tools-prefix.test.ts:23-27` |
-| Unit tests run in CI as `pnpm test:unit` | `.github/workflows/ci.yml:138`; script at `package.json:59` |
-| `JARVIS_TLS_HOST` / `JARVIS_TLS_ISSUER` appear nowhere in code today — only in the two spec files | grep over the tree, excluding `node_modules` |
-| Env names starting `JARVIS_` have a `MOSS_` alias resolver | `packages/db/src/env.ts:86-98` — informational; Child 2's choice, not ours |
+| Fact                                                                                                                                           | Evidence                                                                                                                                     |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| The app service is named `jarv1s` and listens on container port 3000                                                                           | `infra/docker-compose.prod.yml:144`, `:153`                                                                                                  |
+| It has a health check the proxy can wait on                                                                                                    | `infra/docker-compose.prod.yml:187-198`                                                                                                      |
+| The direct host mapping is `${JARVIS_WEB_PORT:-1533}:3000`                                                                                     | `infra/docker-compose.prod.yml:199-200`                                                                                                      |
+| The shared Compose network is `jarv1s`                                                                                                         | `infra/docker-compose.prod.yml:315-319`                                                                                                      |
+| Compose interpolates `${...}` for **every** service before profile filtering, so a `:?` required var on a profiled service breaks a plain `up` | comment and workaround at `infra/docker-compose.prod.yml:121-127`                                                                            |
+| A root one-shot that fixes volume ownership, then a hardened service that depends on it, is existing house style                               | `sports-browser-socket-init` at `infra/docker-compose.prod.yml:221-233`; consumer `depends_on: service_completed_successfully` at `:250-252` |
+| The hardening vocabulary already used here — `read_only`, `cap_drop: [ALL]`, `security_opt: [no-new-privileges:true]`, numeric `user:`         | `infra/docker-compose.prod.yml:235-249`                                                                                                      |
+| The `setup` service exists, is profile-gated, and today has **no** `environment:` block                                                        | `infra/docker-compose.prod.yml:290-302`                                                                                                      |
+| Repo image policy pins by tag, not digest                                                                                                      | `pgvector/pgvector:pg17` at `:28`; `ghcr.io/motioneso/moss:${JARVIS_IMAGE_TAG:?...}` at `:146`                                               |
+| Unit tests may shell out to a real `docker compose config`                                                                                     | `tests/unit/sports-renderer-compose.test.ts:33-57`; `tests/unit/prod-compose-cli-tools-prefix.test.ts:23-27`                                 |
+| Unit tests run in CI as `pnpm test:unit`                                                                                                       | `.github/workflows/ci.yml:138`; script at `package.json:59`                                                                                  |
+| `JARVIS_TLS_HOST` / `JARVIS_TLS_ISSUER` appear nowhere in code today — only in the two spec files                                              | grep over the tree, excluding `node_modules`                                                                                                 |
+| Env names starting `JARVIS_` have a `MOSS_` alias resolver                                                                                     | `packages/db/src/env.ts:86-98` — informational; Child 2's choice, not ours                                                                   |
 
 **Baseline for acceptance check 1.** With no profile selected, the current file renders exactly
 four services:
@@ -88,7 +88,7 @@ Image probed: `caddy:2.10.0-alpine`, digest
 3. **The image's `/data` and `/config` are root-owned, mode 755.** A fresh named volume inherits
    that ownership, so a non-root Caddy cannot write. Proved by running without a fix: exit 1,
    `provisioning CA 'local': generating root: saving root certificate: mkdir /data/caddy/pki:
-   permission denied`.
+permission denied`.
 4. **With ownership handed to 1000:1000 first, the hardened configuration works end to end.**
    Non-root, `--read-only`, `--cap-drop ALL --cap-add NET_BIND_SERVICE`, both named volumes
    mounted, Caddyfile mounted read-only: the container reaches `serving initial configuration`,
@@ -104,12 +104,12 @@ Image probed: `caddy:2.10.0-alpine`, digest
 7. **Issuer selection has a clean, validating seam.** `tls { issuer {$JARVIS_TLS_ISSUER:internal} }`
    accepts exactly the two supported values and rejects anything else at config-adapt time:
 
-   | host | issuer | `caddy validate` exit | message |
-   | --- | --- | --- | --- |
-   | `moss.lan` | `internal` | 0 | Valid configuration |
-   | `moss.lan` | `acme` | 0 | Valid configuration |
-   | `192.168.50.36` | `internal` | 0 | Valid configuration |
-   | `moss.lan` | `bogus` | 1 | `getting module named 'tls.issuance.bogus': module not registered` |
+   | host            | issuer     | `caddy validate` exit | message                                                            |
+   | --------------- | ---------- | --------------------- | ------------------------------------------------------------------ |
+   | `moss.lan`      | `internal` | 0                     | Valid configuration                                                |
+   | `moss.lan`      | `acme`     | 0                     | Valid configuration                                                |
+   | `192.168.50.36` | `internal` | 0                     | Valid configuration                                                |
+   | `moss.lan`      | `bogus`    | 1                     | `getting module named 'tls.issuance.bogus': module not registered` |
 
 8. **Caddy's own validator does not police the hostname — this is the one real surprise.** All of
    these adapt cleanly at exit 0: an empty host (renders `https://` — a catch-all site matching
@@ -119,13 +119,13 @@ Image probed: `caddy:2.10.0-alpine`, digest
    acceptance check 5 would be wrong, and would ship a fail-open catch-all when the variable is
    unset. See the decision on the preflight below.
 9. **A global `email {$VAR:}` line fails to adapt when the variable is empty** (`wrong argument
-   count ... after 'email'`). We ship no ACME email global; the spec's contract is two variables
+count ... after 'email'`). We ship no ACME email global; the spec's contract is two variables
    only. Do not add one.
 10. **A recursive ownership fix breaks every restart after the first one.** Caddy's first
     successful run creates `/data/caddy/certificates`, `/data/caddy/pki`, and `/data/caddy/locks`
     as owner-only (mode 700, uid 1000). `caddy-init` runs as root but with only the file-ownership
     capability (`CAP_CHOWN`) — it does not have the capability that lets root read or search a
-    folder it does not own. So on the *next* start, a recursive chown cannot descend into those
+    folder it does not own. So on the _next_ start, a recursive chown cannot descend into those
     now-owner-only folders and exits 1 with "Permission denied." Because `caddy` waits for
     `caddy-init` to finish successfully, this means HTTPS never comes back after a restart.
     Finding 4's probe only exercised a fresh volume, which is why the first version of this plan
@@ -272,7 +272,7 @@ The ownership fix must be non-recursive and idempotent (finding 10), not a singl
 Caddy's first run, because Caddy leaves `/data/caddy/certificates`, `/data/caddy/pki`, and
 `/data/caddy/locks` owner-only and this container's root cannot descend into folders it does not
 own. Instead, for each of `/data`, `/config`, `/data/caddy`, and `/config/caddy` in turn: read the
-path's current owning uid with `stat -c %u`, and chown *that path only* (never `-R`) to
+path's current owning uid with `stat -c %u`, and chown _that path only_ (never `-R`) to
 `${JARVIS_HOST_UID:-1000}:${JARVIS_HOST_GID:-1000}` unless it already reports that uid. This never
 needs to look inside `/data/caddy`'s subfolders, so it is unaffected by whatever permissions Caddy
 has already put on them.
