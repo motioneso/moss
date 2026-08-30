@@ -155,3 +155,21 @@ describe("assistant-tool invocations carry the actor's module preferences", () =
     expect(options && "localTimezone" in options).toBe(false);
   });
 });
+
+describe("getManifests re-reads discoveries on every call (#1902)", () => {
+  it("reflects a module discovered after construction, with no rebuild step", async () => {
+    const mutableDiscoveries: (typeof discovery)[] = [];
+    const { getManifests } = createExternalModuleTools({
+      discoveries: () => mutableDiscoveries,
+      workerDataContext: noopRunner,
+      appDataContext: noopRunner,
+      settingsRepository: { getUserById: async () => null } as never,
+      logger: { warn: () => undefined }
+    });
+
+    expect(getManifests()).toEqual([]);
+
+    mutableDiscoveries.push(discovery);
+    expect(getManifests().map((manifest) => manifest.id)).toEqual(["demo"]);
+  });
+});

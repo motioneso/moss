@@ -7,7 +7,7 @@
 ## Seams check (file:line citations, current tree)
 
 - The frozen list: `apps/api/src/server.ts:377-391` calls `createExternalModuleTools({ discoveries:
-  externalModuleHolder.getDiscoveries, ... })` once at server-construction time.
+externalModuleHolder.getDiscoveries, ... })` once at server-construction time.
   `apps/api/src/external-module-tools.ts:51` calls `input.discoveries()` exactly once, inline,
   to build `manifests`, and returns that array as a plain field
   (`external-module-tools.ts:38-40,137`). Everything downstream captures that one array.
@@ -19,10 +19,10 @@
   pattern to copy).
 - The array leaks into two more frozen spots:
   - `apps/api/src/server.ts:438-441` — `createActiveModulesResolver({ dataContext, manifests:
-    [...getBuiltInModuleManifests(), ...externalToolManifests] })`. `externalToolManifests` is the
+[...getBuiltInModuleManifests(), ...externalToolManifests] })`. `externalToolManifests` is the
     line-391 snapshot.
   - `apps/api/src/server.ts:442-448` — `createExternalActiveModulesResolver(resolveEnabledModules,
-    new Set(externalToolManifests.map((m) => m.id)), getActiveExternalModules)`. The `Set` is a
+new Set(externalToolManifests.map((m) => m.id)), getActiveExternalModules)`. The `Set` is a
     boot-time snapshot of which manifest ids count as "external" at all.
 - `createActiveModulesResolver` (`packages/module-registry/src/active-modules-resolver.ts:19-51`)
   takes `deps.manifests: readonly MossModuleManifest[]` and closes over it — `.filter` at line 38
@@ -45,7 +45,7 @@
   (`apps/api/src/external-module-tools.ts:161-166`, `visibleToActor`) and is already driven by the
   live `discoveries()` call — no change needed there.
 - `apps/worker/src/worker.ts:186-189` calls `createActiveModulesResolver({ dataContext, manifests:
-  getBuiltInModuleManifests() })` for briefing focus-signal providers only (used at line 417, no
+getBuiltInModuleManifests() })` for briefing focus-signal providers only (used at line 417, no
   external-tools involvement, no chat gateway in this file at all — grepped, zero hits for
   `AssistantToolGateway`/`executableTools`/`createExternalModuleTools`). Its call site changes
   shape (function signature moves to a getter) but its behavior is unchanged: built-ins are already
@@ -63,8 +63,8 @@ Three signatures change from "array" to "function returning the array live". Not
 
 2. `apps/api/src/external-module-tools.ts` — `createExternalModuleTools` return type
    - `{ readonly runtime?: ExternalModuleWorkerRuntime; readonly manifests: readonly
-     MossModuleManifest[]; }` → `{ readonly runtime?: ExternalModuleWorkerRuntime; readonly
-     getManifests: () => readonly MossModuleManifest[]; }`
+MossModuleManifest[]; }` → `{ readonly runtime?: ExternalModuleWorkerRuntime; readonly
+getManifests: () => readonly MossModuleManifest[]; }`
    - body: keep the `invoke` closure (lines 53-136) built once; wrap only the
      `createExternalToolManifests(input.discoveries(), invoke)` call (line 51) in the returned
      `getManifests` function instead of calling it inline. `createExternalToolManifests` itself
@@ -73,7 +73,7 @@ Three signatures change from "array" to "function returning the array live". Not
 
 3. `apps/api/src/external-module-tools.ts` — `createExternalActiveModulesResolver` signature
    - param 2: `externalModuleIds: ReadonlySet<string>` → `getExternalModuleIds: () =>
-     ReadonlySet<string>`
+ReadonlySet<string>`
    - body: move the `externalModuleIds.size === 0` short-circuit inside the returned closure so
      it re-evaluates per call:
      ```ts
@@ -128,7 +128,7 @@ Three signatures change from "array" to "function returning the array live". Not
 ## Test-site changes (existing tests whose fixtures must move to getters)
 
 - `tests/integration/module-enablement.test.ts:408` — `createActiveModulesResolver({ dataContext:
-  runner, manifests: fixtures })` → `manifests: () => fixtures`.
+runner, manifests: fixtures })` → `manifests: () => fixtures`.
 - `tests/unit/external-module-tool-preferences.test.ts:93,119,138` — destructure `{ getManifests }`
   instead of `{ manifests }`, call `getManifests()` before indexing `[0]`.
 

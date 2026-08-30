@@ -491,6 +491,21 @@ describe("createActiveModulesResolver", () => {
     );
     expect((await resolver()(ids.userA)).map((m) => m.id)).toContain("tasks-fixture");
   });
+
+  it("re-reads the manifests getter on every call instead of a value captured at construction (#1902)", async () => {
+    const mutableFixtures = [optionalModule];
+    const liveResolver = createActiveModulesResolver({
+      dataContext: runner,
+      manifests: () => mutableFixtures
+    });
+
+    expect((await liveResolver(ids.userA)).map((m) => m.id)).toEqual(["weather"]);
+
+    mutableFixtures.push(requiredFixtureModule);
+    expect((await liveResolver(ids.userA)).map((m) => m.id).sort()).toEqual(
+      ["tasks-fixture", "weather"].sort()
+    );
+  });
 });
 
 describe("module enable routes grant self-operation policy (#1263 Task 15)", () => {

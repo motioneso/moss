@@ -50,87 +50,87 @@ export function createExternalModuleTools(input: {
   // by the recipient's quiet hours any more than the system upgrade notice is.
   const notifications = new NotificationsRepository(undefined, createNotificationPreferencePort());
   const invoke: ExternalToolInvoker = async (module, tool, toolInput, context) => {
-      const rpc = createExternalModuleRpcHandler({
+    const rpc = createExternalModuleRpcHandler({
+      module,
+      toolRisk: tool.risk,
+      actorUserId: context.actorUserId,
+      requestId: context.requestId,
+      workerDataContext: input.workerDataContext!,
+      cipher,
+      isActorAdmin: () =>
+        input.appDataContext.withDataContext(
+          { actorUserId: context.actorUserId, requestId: context.requestId },
+          async (scopedDb) =>
+            (await input.settingsRepository.getUserById(scopedDb, context.actorUserId))
+              ?.is_instance_admin === true
+        ),
+      // ctx.embed (#1281): resolved from the same runtime seam memory search
+      // uses, so the configured provider/model stays a single decision and is
+      // never named here. Lazy — only an invocation that actually embeds pays
+      // for the config read.
+      embeddingProvider: () =>
+        input.appDataContext.withDataContext(
+          { actorUserId: context.actorUserId, requestId: context.requestId },
+          (scopedDb) => createRuntimeEmbeddingProvider(scopedDb)
+        ),
+      readAttachmentText: async (access, attachmentId) => {
+        const content = await attachments.readContent(access, attachmentId);
+        return content.kind === "text"
+          ? {
+              fileName: content.meta.fileName,
+              mimeType: content.meta.mimeType,
+              text: content.text
+            }
+          : null;
+      },
+      // ctx.notify (Task 2b, #1283): opens its own scoped db via appDataContext,
+      // separate from workerDataContext above — notify.post runs outside the
+      // db.query/ai.generateStructured withDataContext block in worker-rpc-host.ts,
+      // so it needs a context of its own rather than reusing one already closed.
+      postNotification: async (access, notifyInput) => {
+        await input.appDataContext.withDataContext(access, (scopedDb) =>
+          notifications.create(scopedDb, notifyInput)
+        );
+      },
+      // Bind the module id here so the rpc host stays module-agnostic; the host
+      // still enforces risk gating, the composition guard, and the call cap.
+      ...(input.ai ? { ai: (db, req) => input.ai!(db, module.id, req) } : {})
+    });
+    // #1768: resolved per invocation inside the ACTOR's data context, exactly as the
+    // queued path does in apps/worker/src/external-module-invoke.ts. Without this the
+    // synchronous tool path handed the module an empty preference set, so every read
+    // fell back to the manifest default and no saved switch or number the user set in
+    // Settings ever reached the module.
+    const preferences = await resolveModulePreferences(
+      input.appDataContext,
+      { actorUserId: context.actorUserId, requestId: context.requestId },
+      { id: module.id, preferences: module.manifest.preferences ?? [] }
+    );
+    // FIN-04 (#1149, spec delta "Host change 2"): hand the worker the
+    // host-resolved actor identity in tool input, matching the queue job
+    // envelope's actorUserId field. The host value MUST stay spread LAST:
+    // validateToolInput deliberately does not enforce additionalProperties
+    // (#133), so a caller CAN smuggle an `actorUserId` key through schema
+    // validation — spread order, not schema rejection, is the spoof defense.
+    return externalToolResult(
+      await runtime.invoke(
         module,
-        toolRisk: tool.risk,
-        actorUserId: context.actorUserId,
-        requestId: context.requestId,
-        workerDataContext: input.workerDataContext!,
-        cipher,
-        isActorAdmin: () =>
-          input.appDataContext.withDataContext(
-            { actorUserId: context.actorUserId, requestId: context.requestId },
-            async (scopedDb) =>
-              (await input.settingsRepository.getUserById(scopedDb, context.actorUserId))
-                ?.is_instance_admin === true
-          ),
-        // ctx.embed (#1281): resolved from the same runtime seam memory search
-        // uses, so the configured provider/model stays a single decision and is
-        // never named here. Lazy — only an invocation that actually embeds pays
-        // for the config read.
-        embeddingProvider: () =>
-          input.appDataContext.withDataContext(
-            { actorUserId: context.actorUserId, requestId: context.requestId },
-            (scopedDb) => createRuntimeEmbeddingProvider(scopedDb)
-          ),
-        readAttachmentText: async (access, attachmentId) => {
-          const content = await attachments.readContent(access, attachmentId);
-          return content.kind === "text"
-            ? {
-                fileName: content.meta.fileName,
-                mimeType: content.meta.mimeType,
-                text: content.text
-              }
-            : null;
-        },
-        // ctx.notify (Task 2b, #1283): opens its own scoped db via appDataContext,
-        // separate from workerDataContext above — notify.post runs outside the
-        // db.query/ai.generateStructured withDataContext block in worker-rpc-host.ts,
-        // so it needs a context of its own rather than reusing one already closed.
-        postNotification: async (access, notifyInput) => {
-          await input.appDataContext.withDataContext(access, (scopedDb) =>
-            notifications.create(scopedDb, notifyInput)
-          );
-        },
-        // Bind the module id here so the rpc host stays module-agnostic; the host
-        // still enforces risk gating, the composition guard, and the call cap.
-        ...(input.ai ? { ai: (db, req) => input.ai!(db, module.id, req) } : {})
-      });
-      // #1768: resolved per invocation inside the ACTOR's data context, exactly as the
-      // queued path does in apps/worker/src/external-module-invoke.ts. Without this the
-      // synchronous tool path handed the module an empty preference set, so every read
-      // fell back to the manifest default and no saved switch or number the user set in
-      // Settings ever reached the module.
-      const preferences = await resolveModulePreferences(
-        input.appDataContext,
-        { actorUserId: context.actorUserId, requestId: context.requestId },
-        { id: module.id, preferences: module.manifest.preferences ?? [] }
-      );
-      // FIN-04 (#1149, spec delta "Host change 2"): hand the worker the
-      // host-resolved actor identity in tool input, matching the queue job
-      // envelope's actorUserId field. The host value MUST stay spread LAST:
-      // validateToolInput deliberately does not enforce additionalProperties
-      // (#133), so a caller CAN smuggle an `actorUserId` key through schema
-      // validation — spread order, not schema rejection, is the spoof defense.
-      return externalToolResult(
-        await runtime.invoke(
-          module,
-          tool.handler,
-          { ...toolInput, actorUserId: context.actorUserId },
-          rpc,
-          // #1286 Task 2e: an assistant tool call gets its own child process,
-          // separate from this module's queue jobs and briefing invocations.
-          // #1789: the actor's zone, already resolved on the ToolContext by the AI gateway
-          // for every tool call. Built-in tools have always read it straight off ctx; an
-          // external module had no way to see it and had to trust whatever timezone the
-          // model put in the tool input.
-          {
-            lane: "tool",
-            preferences,
-            ...(context.localTimezone ? { localTimezone: context.localTimezone } : {})
-          }
-        )
-      );
+        tool.handler,
+        { ...toolInput, actorUserId: context.actorUserId },
+        rpc,
+        // #1286 Task 2e: an assistant tool call gets its own child process,
+        // separate from this module's queue jobs and briefing invocations.
+        // #1789: the actor's zone, already resolved on the ToolContext by the AI gateway
+        // for every tool call. Built-in tools have always read it straight off ctx; an
+        // external module had no way to see it and had to trust whatever timezone the
+        // model put in the tool input.
+        {
+          lane: "tool",
+          preferences,
+          ...(context.localTimezone ? { localTimezone: context.localTimezone } : {})
+        }
+      )
+    );
   };
   // #1902: manifests are rebuilt from the live discoveries getter on every call, not once at
   // construction — createExternalToolManifests is a cheap pure filter/map over discoveries, so a
