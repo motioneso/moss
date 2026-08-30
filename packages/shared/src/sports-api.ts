@@ -89,6 +89,8 @@ export type Confederation = "UEFA" | "CONCACAF" | "CONMEBOL" | "AFC" | "CAF" | "
 export interface CompetitionRef {
   readonly competitionKey: string;
   readonly label: string; // "NFL", "Premier League"
+  readonly sportLabel: string;
+  readonly regionLabel: string | null;
   readonly kind: "league" | "tournament";
   readonly marquee: boolean; // World Cup flag
   readonly standingsShape: StandingsShape;
@@ -464,10 +466,21 @@ const headlineSchema = {
 const competitionRefSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["competitionKey", "label", "kind", "marquee", "standingsShape", "confederation"],
+  required: [
+    "competitionKey",
+    "label",
+    "sportLabel",
+    "regionLabel",
+    "kind",
+    "marquee",
+    "standingsShape",
+    "confederation"
+  ],
   properties: {
     competitionKey: { type: "string" },
     label: { type: "string" },
+    sportLabel: { type: "string" },
+    regionLabel: { anyOf: [{ type: "string" }, { type: "null" }] },
     kind: { type: "string", enum: ["league", "tournament"] },
     marquee: { type: "boolean" },
     standingsShape: { type: "string", enum: ["table", "groups", "record"] },

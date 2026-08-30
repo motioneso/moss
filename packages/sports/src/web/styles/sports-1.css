@@ -378,8 +378,27 @@
 .sp-standings__nav {
   gap: var(--space-1);
 }
-.sp-standings__select {
-  height: 24px;
+.sp-standings-picker__trigger {
+  width: auto;
+  max-width: 180px;
+  padding: 0 var(--space-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sp-standings-picker__popup {
+  width: min(280px, calc(100vw - var(--space-6)));
+  max-height: min(420px, 70vh);
+  overflow-y: auto;
+}
+.sp-standings-picker__heading,
+.sp-standings-picker__region {
+  padding: var(--space-2);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
+.sp-standings-picker__region {
+  padding-left: var(--space-3);
 }
 .sp-iconbtn {
   width: 24px;

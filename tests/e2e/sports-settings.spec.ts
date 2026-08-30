@@ -8,22 +8,47 @@ import type {
 } from "@moss/shared";
 
 import { mockApi } from "./mock-api.js";
+import { registerMockSportsRoutes } from "./mock-sports-api.js";
 
 const NFL: CompetitionRef = {
   competitionKey: "nfl",
   label: "NFL",
+  sportLabel: "Football",
+  regionLabel: null,
   kind: "league",
   marquee: true,
   standingsShape: "record",
   confederation: "INTL"
 };
 const EPL: CompetitionRef = {
-  competitionKey: "epl",
+  competitionKey: "eng.1",
   label: "Premier League",
+  sportLabel: "Soccer",
+  regionLabel: "England",
   kind: "league",
   marquee: true,
   standingsShape: "table",
   confederation: "UEFA"
+};
+const NBA: CompetitionRef = {
+  competitionKey: "nba",
+  label: "NBA",
+  sportLabel: "Basketball",
+  regionLabel: null,
+  kind: "league",
+  marquee: false,
+  standingsShape: "record",
+  confederation: "INTL"
+};
+const MLB: CompetitionRef = {
+  competitionKey: "mlb",
+  label: "MLB",
+  sportLabel: "Baseball",
+  regionLabel: null,
+  kind: "league",
+  marquee: false,
+  standingsShape: "record",
+  confederation: "INTL"
 };
 const COWBOYS: TeamRef = {
   teamKey: "dal",
@@ -34,9 +59,16 @@ const COWBOYS: TeamRef = {
 };
 const ARSENAL: TeamRef = {
   teamKey: "team.ars",
-  competitionKey: "epl",
+  competitionKey: "eng.1",
   name: "Arsenal",
   shortName: "ARS",
+  crestUrl: null
+};
+const LAKERS: TeamRef = {
+  teamKey: "lal",
+  competitionKey: "nba",
+  name: "Los Angeles Lakers",
+  shortName: "LAL",
   crestUrl: null
 };
 
@@ -60,6 +92,7 @@ async function mockSportsSettings(
   let follows: SportsFollowDto[] = [];
   let nextId = 1;
   let sourceReads = 0;
+  let selectedCompetitionKeys: readonly string[] | null = null;
   let espn = {
     kind: "builtin" as const,
     id: "espn" as const,
@@ -87,9 +120,55 @@ async function mockSportsSettings(
     })
   );
 
+  await registerMockSportsRoutes(page);
+
   await page.route("**/api/sports/catalog", (route) =>
-    fulfillJson(route, { competitions: [NFL, EPL], degraded: false })
+    fulfillJson(route, { competitions: [NFL, NBA, MLB, EPL], degraded: false })
   );
+
+  await page.route("**/api/sports/standings-preferences", (route) => {
+    if (route.request().method() === "PUT") {
+      selectedCompetitionKeys = (
+        route.request().postDataJSON() as { selectedCompetitionKeys: readonly string[] }
+      ).selectedCompetitionKeys;
+    }
+    return fulfillJson(route, { selectedCompetitionKeys });
+  });
+
+  await page.route("**/api/sports/standings?*", (route) => {
+    const competitionKey = new URL(route.request().url()).searchParams.get("competitionKey") ?? "";
+    const competition = [NFL, NBA, MLB, EPL].find(
+      (entry) => entry.competitionKey === competitionKey
+    );
+    return fulfillJson(route, {
+      group: {
+        competitionKey,
+        competitionLabel: competition?.label ?? competitionKey,
+        standingsShape: competition?.standingsShape ?? "record",
+        sections: [
+          {
+            label: null,
+            rows: [
+              {
+                teamKey: `${competitionKey}-leader`,
+                name: `${competition?.label ?? competitionKey} leader`,
+                rank: 1,
+                points: 10,
+                wins: 10,
+                losses: 0,
+                draws: 0,
+                winPercent: null,
+                qualifies: false,
+                qualificationNote: null,
+                qualificationColor: null
+              }
+            ]
+          }
+        ]
+      },
+      fixtures: []
+    });
+  });
 
   await page.route("**/api/sports/sources", (route) => {
     sourceReads += 1;
@@ -136,13 +215,14 @@ async function mockSportsSettings(
 
   await page.route("**/api/sports/teams/search*", (route) => {
     const q = new URL(route.request().url()).searchParams.get("q")?.toLowerCase() ?? "";
-    const teams = [COWBOYS, ARSENAL].filter((t) => t.name.toLowerCase().includes(q));
+    const teams = [COWBOYS, ARSENAL, LAKERS].filter((t) => t.name.toLowerCase().includes(q));
     return fulfillJson(route, { teams, partial: false, degraded: false });
   });
 
   await page.route("**/api/sports/leagues/*/teams", (route) => {
     const key = decodeURIComponent(new URL(route.request().url()).pathname.split("/")[4] ?? "");
-    const teams = key === "nfl" ? [COWBOYS] : key === "epl" ? [ARSENAL] : [];
+    const teams =
+      key === "nfl" ? [COWBOYS] : key === "eng.1" ? [ARSENAL] : key === "nba" ? [LAKERS] : [];
     return fulfillJson(route, { teams, degraded: false });
   });
 
@@ -333,5 +413,74 @@ test.describe("Sports settings follow picker (#989)", () => {
 
     await expect(page.getByText("Inactive for headlines.")).toBeVisible();
     expect(sportsApi.sourceReads()).toBeGreaterThan(1);
+  });
+
+  test("saved leagues and follows assemble into one keyboard-accessible standings picker", async ({
+    page
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockApi(page, {
+      authenticated: true,
+      connectorAccounts: [],
+      connectorProviders: [],
+      notifications: [],
+      tasks: []
+    });
+    await mockSportsSettings(page);
+    await gotoSportsSettings(page);
+
+    const standingsSettings = page.getByRole("region", { name: "Standings leagues" });
+    const nbaChoice = standingsSettings.getByRole("checkbox", { name: "NBA" });
+    const mlbChoice = standingsSettings.getByRole("checkbox", { name: "MLB" });
+    await nbaChoice.click();
+    await expect(nbaChoice).not.toBeChecked();
+    await mlbChoice.click();
+    await expect(mlbChoice).not.toBeChecked();
+    await page.getByRole("searchbox", { name: "Find a team or league" }).fill("lakers");
+    await page.getByRole("button", { name: "Follow Los Angeles Lakers" }).click();
+
+    await page.reload();
+    await expect(standingsSettings.getByRole("checkbox", { name: "NFL" })).toBeChecked();
+    await expect(standingsSettings.getByRole("checkbox", { name: "Premier League" })).toBeChecked();
+    await expect(standingsSettings.getByRole("checkbox", { name: "NBA" })).not.toBeChecked();
+    await expect(standingsSettings.getByRole("checkbox", { name: "MLB" })).not.toBeChecked();
+
+    await page.goto("/sports");
+    const picker = page.getByRole("button", { name: "Select standings league" });
+    await expect(picker).toBeVisible();
+    await picker.focus();
+    await page.keyboard.press("ArrowDown");
+    await expect(page.getByRole("group", { name: "Following" })).toBeVisible();
+    await expect(page.getByRole("option", { name: "NBA" })).toHaveCount(1);
+    await expect(page.getByRole("option", { name: "MLB" })).toHaveCount(0);
+
+    await page.keyboard.press("ArrowDown");
+    const standingsResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/sports/standings?competitionKey=nfl") &&
+        response.status() === 200
+    );
+    await page.keyboard.press("Enter");
+    await standingsResponse;
+    await expect(picker).toHaveText("NFL");
+    await expect(page.getByText("NFL leader")).toBeVisible();
+
+    await picker.focus();
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Escape");
+    await expect(picker).toBeFocused();
+    await expect(picker).toHaveAttribute("aria-expanded", "false");
+
+    const geometry = await picker.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, viewport: document.documentElement.clientWidth };
+    });
+    expect(geometry.left).toBeGreaterThanOrEqual(0);
+    expect(geometry.right).toBeLessThanOrEqual(geometry.viewport);
+    const railWidth = await picker.evaluate((element) => {
+      const rail = element.closest<HTMLElement>(".sp-standings")!;
+      return { scroll: rail.scrollWidth, client: rail.clientWidth };
+    });
+    expect(railWidth.scroll).toBeLessThanOrEqual(railWidth.client + 1);
   });
 });

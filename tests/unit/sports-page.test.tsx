@@ -73,7 +73,7 @@ function followedCard(overrides: Partial<FollowedTeamCard> = {}): FollowedTeamCa
 
 function standingsGroup(): StandingsGroup {
   return {
-    competitionKey: "epl",
+    competitionKey: "eng.1",
     competitionLabel: "Premier League",
     standingsShape: "record",
     sections: [
@@ -102,7 +102,8 @@ function standingsGroup(): StandingsGroup {
 const TEST_COMPETITION_LABELS: Record<string, string> = {
   nfl: "NFL",
   nba: "NBA",
-  epl: "Premier League"
+  epl: "Premier League",
+  "eng.1": "Premier League"
 };
 
 function headline(
@@ -347,7 +348,7 @@ describe("SportsPage", () => {
       makeOverview({
         followedTeams: [
           { competitionKey: "nfl", teamKey: "min" },
-          { competitionKey: "epl", teamKey: "ars" }
+          { competitionKey: "eng.1", teamKey: "ars" }
         ]
       })
     );
@@ -462,9 +463,9 @@ describe("SportsPage", () => {
     expect(html).not.toContain("Next standings");
   });
 
-  it("offers all catalog leagues in the standings selector, not only ones with data", () => {
+  it("names the current league in the standings picker trigger", () => {
     const html = render(makeOverview()); // overview has only one standings group
-    expect(html).toContain(">NBA<");
+    expect(html).toContain('aria-label="Select standings league"');
     expect(html).toContain(">Premier League<");
   });
 
@@ -664,7 +665,7 @@ describe("SportsPage", () => {
       makeOverview({
         followed: [],
         followedTeams: [],
-        followedLeagues: [{ competitionKey: "epl", competitionLabel: "Premier League" }],
+        followedLeagues: [{ competitionKey: "eng.1", competitionLabel: "Premier League" }],
         hero: {
           mode: "story",
           headline: headline("lead", "epl", "The transfer window is heating up")

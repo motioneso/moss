@@ -10,8 +10,14 @@ import type {
 } from "@moss/shared";
 
 import { SPORTS_CATALOG, catalogEntry } from "../source/catalog.js";
-import { getStandingsByLeague } from "./sports-client.js";
+import {
+  getSportsCatalog,
+  getSportsStandingsPreferences,
+  getStandingsByLeague,
+  listSportsFollows
+} from "./sports-client.js";
 import { sportsQueryKeys } from "./query-keys.js";
+import { buildStandingsPickerGroups, StandingsPicker } from "./sports-standings-picker.js";
 import { isFollowed } from "./sports-news.js";
 import { formatDate, formatTime, useUserLocale } from "./locale.js";
 import { TrophyIcon } from "./sports-parts.js";
@@ -116,12 +122,39 @@ export function StandingsRail(props: {
   groups: readonly StandingsGroup[];
   followedPairs: ReadonlySet<string>;
 }) {
+  const catalogQuery = useQuery({ queryKey: sportsQueryKeys.catalog, queryFn: getSportsCatalog });
+  const followsQuery = useQuery({ queryKey: sportsQueryKeys.follows, queryFn: listSportsFollows });
+  const preferencesQuery = useQuery({
+    queryKey: sportsQueryKeys.standingsPreferences,
+    queryFn: getSportsStandingsPreferences
+  });
+  const catalog = catalogQuery.data?.competitions ?? SPORTS_CATALOG;
+  const follows = followsQuery.data?.follows ?? [];
+  const selectedCompetitionKeys = preferencesQuery.data?.selectedCompetitionKeys ?? null;
+  const pickerGroups = useMemo(
+    () => buildStandingsPickerGroups(catalog, follows, selectedCompetitionKeys),
+    [catalog, follows, selectedCompetitionKeys]
+  );
+  const visibleKeys = useMemo(
+    () =>
+      pickerGroups.flatMap((pickerGroup) =>
+        pickerGroup.regions.flatMap((region) =>
+          region.competitions.map((competition) => competition.competitionKey)
+        )
+      ),
+    [pickerGroups]
+  );
   const byKey = useMemo(
     () => new Map(props.groups.map((g) => [g.competitionKey, g])),
     [props.groups]
   );
-  const firstKey = props.groups[0]?.competitionKey ?? SPORTS_CATALOG[0]?.competitionKey ?? "";
+  const firstKey =
+    props.groups.find((standings) => visibleKeys.includes(standings.competitionKey))
+      ?.competitionKey ??
+    visibleKeys[0] ??
+    "";
   const [selectedKey, setSelectedKey] = useState(firstKey);
+  const activeKey = visibleKeys.includes(selectedKey) ? selectedKey : (visibleKeys[0] ?? "");
   // null = follow the derived default (followed team's division); a string = the viewer's own pick.
   const [viewOverride, setViewOverride] = useState<string | null>(null);
 
@@ -134,18 +167,22 @@ export function StandingsRail(props: {
   const scrollRef = useRef<HTMLElement | null>(null);
   const [moreBelow, setMoreBelow] = useState(false);
 
-  const isTournament = catalogEntry(selectedKey)?.kind === "tournament";
+  useEffect(() => {
+    if (selectedKey !== activeKey) setSelectedKey(activeKey);
+  }, [activeKey, selectedKey]);
+
+  const isTournament = catalogEntry(activeKey)?.kind === "tournament";
   // The overview payload only carries standings for followed leagues; selecting a league outside
   // that set lazily fetches it via the dedicated standings route (#842). Tournaments always fetch
   // lazily too, because only that route carries the current-round `fixtures` (#839 follow-up).
   const lazy = useQuery({
-    queryKey: sportsQueryKeys.standings(selectedKey),
-    queryFn: () => getStandingsByLeague(selectedKey),
-    enabled: isTournament || !byKey.has(selectedKey)
+    queryKey: sportsQueryKeys.standings(activeKey),
+    queryFn: () => getStandingsByLeague(activeKey),
+    enabled: activeKey !== "" && (isTournament || !byKey.has(activeKey))
   });
 
   const { group: lazyGroup, fixtures } = unwrapStandings(lazy.data);
-  const group = lazyGroup ?? byKey.get(selectedKey) ?? null;
+  const group = lazyGroup ?? byKey.get(activeKey) ?? null;
   const knockout = isTournament && fixtures.length > 0;
 
   const views = useMemo(() => buildViews(group?.sections ?? []), [group?.sections]);
@@ -214,19 +251,16 @@ export function StandingsRail(props: {
           Standings
         </span>
         <span className="sp-standings__nav">
-          <select
-            className="sp-standings__select"
-            aria-label="Select standings league"
-            value={selectedKey}
-            onChange={(event) => selectLeague(event.currentTarget.value)}
-          >
-            {SPORTS_CATALOG.map((entry) => (
-              <option key={entry.competitionKey} value={entry.competitionKey}>
-                {entry.label}
-              </option>
-            ))}
-          </select>
-          {!knockout && views.length > 1 ? (
+          {activeKey ? (
+            <StandingsPicker
+              catalog={catalog}
+              follows={follows}
+              selectedCompetitionKeys={selectedCompetitionKeys}
+              value={activeKey}
+              onChange={selectLeague}
+            />
+          ) : null}
+          {activeKey && !knockout && views.length > 1 ? (
             <ViewSelect
               views={views}
               value={activeView?.key ?? "all"}
@@ -235,7 +269,12 @@ export function StandingsRail(props: {
           ) : null}
         </span>
       </div>
-      {knockout ? (
+      {!activeKey ? (
+        <p className="sp-standings__empty">
+          No standings leagues selected.{" "}
+          <a href="/settings?section=modules&module=sports">Choose leagues in Settings.</a>
+        </p>
+      ) : knockout ? (
         <KnockoutFixtures fixtures={fixtures} />
       ) : group && shownSections.length > 0 ? (
         <>

@@ -44,6 +44,8 @@ type TeamRefLite = {
 type CompetitionLite = {
   readonly competitionKey: string;
   readonly label: string;
+  readonly sportLabel: string;
+  readonly regionLabel: string | null;
   readonly kind: "league" | "tournament";
   readonly marquee: boolean;
   readonly standingsShape: "table" | "groups" | "record";
@@ -69,6 +71,8 @@ const TWO_LEAGUES: readonly CompetitionLite[] = [
   {
     competitionKey: "nfl",
     label: "NFL",
+    sportLabel: "Football",
+    regionLabel: null,
     kind: "league",
     marquee: false,
     standingsShape: "record",
@@ -77,6 +81,8 @@ const TWO_LEAGUES: readonly CompetitionLite[] = [
   {
     competitionKey: "epl",
     label: "Premier League",
+    sportLabel: "Soccer",
+    regionLabel: "England",
     kind: "league",
     marquee: false,
     standingsShape: "table",
@@ -95,6 +101,23 @@ describe("SportsSettings", () => {
     expect(html).toContain("sp-search__input");
     // ...and the old flat search hint is gone.
     expect(html).not.toContain("Search above to find teams or leagues to follow.");
+  });
+
+  it("renders absent standings preferences as all checked and explicit empty as none", () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(CATALOG_KEY, { competitions: TWO_LEAGUES, degraded: false });
+    client.setQueryData(FOLLOWS_KEY, { follows: [] });
+    let html = renderWithQuery(client);
+    expect(html).toContain("Standings leagues");
+    expect(html).toContain("Football");
+    expect(html).toContain("England");
+    expect(html.match(/type="checkbox" checked=""/g)).toHaveLength(2);
+
+    client.setQueryData(sportsQueryKeys.standingsPreferences, {
+      selectedCompetitionKeys: []
+    });
+    html = renderWithQuery(client);
+    expect(html).not.toContain('type="checkbox" checked=""');
   });
 
   it("renders only active Sports story preferences with stored story details", () => {
@@ -298,7 +321,7 @@ describe("SportsSettings", () => {
     expect(html).toContain('aria-expanded="false"');
     // The confederation catalog itself must not render until expanded.
     expect(html).not.toContain("US majors &amp; global");
-    expect(html).not.toContain("NFL");
+    expect(html).not.toContain('id="sp-browse-panel"');
   });
 
   it("keeps a delayed failed POST local to the named team target", async () => {

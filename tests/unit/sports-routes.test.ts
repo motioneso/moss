@@ -221,6 +221,7 @@ function buildApp(overrides: Partial<SportsRoutesDependencies> & { repo?: FakeRe
     } as unknown as DataContextRunner,
     resolveAccessContext: overrides.resolveAccessContext ?? (async () => userA),
     repository: repo,
+    preferencesRepository: overrides.preferencesRepository,
     now: () => new Date("2026-07-01T18:00:00.000Z"),
     discovery:
       overrides.discovery ??
@@ -348,6 +349,7 @@ describe("sports routes", () => {
       "nfl"
     );
     expect(body.competitions[0].confederation).toBeDefined();
+    expect(body.competitions[0]).toMatchObject({ sportLabel: "Football", regionLabel: null });
     // The wall this spec removes: catalog must not fan out to ESPN per league (#907 §3).
     expect(teamsCalls).toBe(0);
     expect(res.body).not.toContain('"teams"');

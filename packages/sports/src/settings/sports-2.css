@@ -204,6 +204,36 @@
   gap: var(--space-3);
   margin-top: var(--space-6);
 }
+
+.sp-standings-settings {
+  margin-bottom: var(--space-6);
+}
+.sp-standings-settings > h2,
+.sp-standings-settings > p,
+.sp-standings-settings h3,
+.sp-standings-settings h4 {
+  margin: 0;
+}
+.sp-standings-settings__choices {
+  display: grid;
+  gap: var(--space-4);
+  padding: 0;
+}
+.sp-standings-settings__sport,
+.sp-standings-settings__region {
+  display: grid;
+  gap: var(--space-2);
+}
+.sp-standings-settings__options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-2);
+}
+.sp-standings-settings__options label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
 .sp-feedback-settings__title,
 .sp-feedback-settings__note {
   margin: 0;

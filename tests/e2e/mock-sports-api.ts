@@ -14,7 +14,7 @@ import type {
 const COMPETITION_LABELS: Record<string, string> = {
   nfl: "NFL",
   nba: "NBA",
-  epl: "Premier League",
+  "eng.1": "Premier League",
   mlb: "MLB"
 };
 
@@ -119,7 +119,7 @@ function followedCard(overrides: Partial<FollowedTeamCard>): FollowedTeamCard {
 
 function standingsGroup(): StandingsGroup {
   return {
-    competitionKey: "epl",
+    competitionKey: "eng.1",
     competitionLabel: "Premier League",
     standingsShape: "record",
     sections: [
@@ -229,7 +229,7 @@ export const sportsOverviewFixture: SportsOverviewResponse = {
     }),
     followedCard({
       teamKey: "ars",
-      competitionKey: "epl",
+      competitionKey: "eng.1",
       competitionLabel: "Premier League",
       name: "Arsenal",
       status: "today",
@@ -298,7 +298,7 @@ export const sportsOverviewFixture: SportsOverviewResponse = {
   topStories: [
     headline("h1", "nfl", "Vikings clinch division on late field goal"),
     headline("h2", "nba", "Celtics extend win streak to eight"),
-    headline("h3", "epl", "Arsenal chase table advantage before derby")
+    headline("h3", "eng.1", "Arsenal chase table advantage before derby")
   ],
   leagueNews: [
     {
@@ -311,9 +311,9 @@ export const sportsOverviewFixture: SportsOverviewResponse = {
     {
       kind: "competition",
       sportKey: "soccer",
-      competitionKey: "epl",
+      competitionKey: "eng.1",
       competitionLabel: "Premier League",
-      headlines: [headline("h5", "epl", "Chelsea injury list grows before derby")]
+      headlines: [headline("h5", "eng.1", "Chelsea injury list grows before derby")]
     }
   ],
   standings: [standingsGroup()],
@@ -322,7 +322,7 @@ export const sportsOverviewFixture: SportsOverviewResponse = {
     { competitionKey: "nfl", teamKey: "dal" },
     { competitionKey: "nba", teamKey: "lal" },
     { competitionKey: "nba", teamKey: "bos" },
-    { competitionKey: "epl", teamKey: "ars" },
+    { competitionKey: "eng.1", teamKey: "ars" },
     { competitionKey: "mlb", teamKey: "nyy" }
   ],
   followedLeagues: [{ competitionKey: "mlb", competitionLabel: "MLB" }],

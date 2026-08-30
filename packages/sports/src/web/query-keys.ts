@@ -9,6 +9,7 @@ export const sportsQueryKeys = {
   overview: ["sports", "overview"] as const,
   catalog: ["sports", "catalog"] as const,
   follows: ["sports", "follows"] as const,
+  standingsPreferences: ["sports", "standings-preferences"] as const,
   standings: (competitionKey: string) => ["sports", "standings", competitionKey] as const,
   // Follow picker (#907): keyed per league so browse-expand and the followed-chip roster lookup
   // share one cache entry for the same league (React Query dedupes by structural key equality).
