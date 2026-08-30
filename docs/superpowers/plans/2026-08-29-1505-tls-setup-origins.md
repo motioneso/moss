@@ -12,12 +12,12 @@ origin migration" (lines 315-342), with the contract it points at in "2. Certifi
 
 Exclusive file ownership for this lane. The builder touches these four paths and nothing else:
 
-| Path | Change |
-| --- | --- |
-| `scripts/setup-prod-origins.ts` | Add TLS validation + derivation; extend the origins helper |
-| `scripts/setup-prod.ts` | Read TLS inputs, fail closed, emit the TLS lines |
-| `tests/unit/setup-prod-trusted-origins.test.ts` | New pure-helper, subprocess and env-example cases |
-| `infra/env.production.example` | New TLS block; correct the `JARVIS_AUTH_BASE_URL` comment |
+| Path                                            | Change                                                     |
+| ----------------------------------------------- | ---------------------------------------------------------- |
+| `scripts/setup-prod-origins.ts`                 | Add TLS validation + derivation; extend the origins helper |
+| `scripts/setup-prod.ts`                         | Read TLS inputs, fail closed, emit the TLS lines           |
+| `tests/unit/setup-prod-trusted-origins.test.ts` | New pure-helper, subprocess and env-example cases          |
+| `infra/env.production.example`                  | New TLS block; correct the `JARVIS_AUTH_BASE_URL` comment  |
 
 Explicitly **not** in scope: `infra/docker-compose.prod.yml`, `infra/caddy/Caddyfile`,
 `tests/unit/prod-deploy-config.test.ts` (all child 1), the operator runbook (child 3), and the live
@@ -376,11 +376,13 @@ status, so a piped gate reads red as green.
 ```bash
 pnpm exec vitest run tests/unit/setup-prod-trusted-origins.test.ts > /tmp/1505-target.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected `EXIT=0`. This is the spec's named acceptance command.
 
 ```bash
 pnpm exec vitest run tests/unit/setup-prod-notes.test.ts tests/unit/prod-deploy-config.test.ts tests/unit/api-server-config.test.ts > /tmp/1505-neighbors.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected `EXIT=0`. The neighbours most likely to notice a change to the setup script, the env
 example, or the trust-proxy contract.
 
@@ -388,6 +390,7 @@ example, or the trust-proxy contract.
 pnpm exec tsc --noEmit > /tmp/1505-tsc.log 2>&1; echo "EXIT=$?"
 pnpm exec tsc -p tsconfig.tests.json --noEmit > /tmp/1505-tsc-tests.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected `EXIT=0` for both. The second is what catches a break in `tests/uat/provisioner.ts`
 (seams item 3).
 
@@ -395,6 +398,7 @@ Expected `EXIT=0` for both. The second is what catches a break in `tests/uat/pro
 pnpm exec eslint scripts/setup-prod.ts scripts/setup-prod-origins.ts tests/unit/setup-prod-trusted-origins.test.ts --max-warnings=0 > /tmp/1505-lint.log 2>&1; echo "EXIT=$?"
 pnpm exec prettier --check scripts/setup-prod.ts scripts/setup-prod-origins.ts tests/unit/setup-prod-trusted-origins.test.ts infra/env.production.example > /tmp/1505-fmt.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected `EXIT=0` for both. Path-scoped — never run a repo-wide `pnpm format`.
 
 Full gate: `pnpm verify:foundation`, run **only** through the `verify-gate` skill. It touches the
