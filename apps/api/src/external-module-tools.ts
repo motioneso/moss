@@ -200,11 +200,12 @@ export function createInstalledExternalModulesResolverForApi(input: {
 
 export function createExternalActiveModulesResolver(
   resolveEnabledModules: (actorUserId: string) => Promise<readonly MossModuleManifest[]>,
-  externalModuleIds: ReadonlySet<string>,
+  getExternalModuleIds: () => ReadonlySet<string>,
   getActiveExternalModules: (actorUserId: string) => Promise<readonly { id: string }[]>
 ): (actorUserId: string) => Promise<readonly MossModuleManifest[]> {
-  if (externalModuleIds.size === 0) return resolveEnabledModules;
   return async (actorUserId) => {
+    const externalModuleIds = getExternalModuleIds();
+    if (externalModuleIds.size === 0) return resolveEnabledModules(actorUserId);
     const [enabled, activeExternal] = await Promise.all([
       resolveEnabledModules(actorUserId),
       getActiveExternalModules(actorUserId)

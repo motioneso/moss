@@ -17,13 +17,13 @@ it("keeps external tools only when DB reconciliation says active", async () => {
   const external = { ...builtIn, id: "acme", name: "Acme", lifecycle: "optional" as const };
   const resolver = createExternalActiveModulesResolver(
     async () => [builtIn, external],
-    new Set([external.id]),
+    () => new Set([external.id]),
     async () => [{ id: "acme" }]
   );
   await expect(resolver("actor")).resolves.toEqual([builtIn, external]);
   const disabled = createExternalActiveModulesResolver(
     async () => [builtIn, external],
-    new Set([external.id]),
+    () => new Set([external.id]),
     async () => []
   );
   await expect(disabled("actor")).resolves.toEqual([builtIn]);

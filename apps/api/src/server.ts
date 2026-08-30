@@ -381,7 +381,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       })
     });
     externalWorkerRuntime = externalTools.runtime;
-    const externalToolManifests = externalTools.manifests;
+    const getExternalToolManifests = externalTools.getManifests;
     registerPlatformRoutes(server, authRuntime, getActiveExternalModules);
     // #1725: host-owned on/off switches for installed modules.
     registerModulePreferenceRoutes(server, {
@@ -430,11 +430,11 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
 
     const resolveEnabledModules = createActiveModulesResolver({
       dataContext,
-      manifests: [...getBuiltInModuleManifests(), ...externalToolManifests]
+      manifests: () => [...getBuiltInModuleManifests(), ...getExternalToolManifests()]
     });
     const resolveActiveModules = createExternalActiveModulesResolver(
       resolveEnabledModules,
-      new Set(externalToolManifests.map((manifest) => manifest.id)),
+      () => new Set(getExternalToolManifests().map((manifest) => manifest.id)),
       async (actorUserId) =>
         getActiveExternalModules({
           actorUserId,

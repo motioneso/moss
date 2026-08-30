@@ -405,7 +405,7 @@ describe("createActiveModulesResolver", () => {
   });
 
   function resolver() {
-    return createActiveModulesResolver({ dataContext: runner, manifests: fixtures });
+    return createActiveModulesResolver({ dataContext: runner, manifests: () => fixtures });
   }
 
   it("empty store: all fixture modules are active (zero behavior-change baseline)", async () => {
