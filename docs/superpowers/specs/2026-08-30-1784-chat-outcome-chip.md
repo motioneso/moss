@@ -47,14 +47,14 @@ activity and restored by `recordsFromMessages()` after reload. Both paths preser
 
 ## Resolved Decisions
 
-| Decision | Choice | Reason |
-| --- | --- | --- |
-| Chip meaning | Report the observed outcome, not a claim about state change | The contract knows execution/permission/failure/denial; it does not always know side effects. |
-| Labels | `executed` → **Executed**, `allowed` → **Allowed**, `error` → **Failed**, `denied` → **Denied** | These are the canonical, cause-neutral labels already returned by `activityVerb()` after #1661. |
-| Visibility | Keep the chip visible for all four outcomes | Permission, failure, and denial are meaningful terminal outcomes. Hiding uncertain cases would discard known information when truthful labels already exist. |
-| Canonical mapping | Reuse `activityVerb(record)` in the standalone row | It already owns this exact four-state UI vocabulary; a second map caused the present drift. |
-| Contract scope | No producer, persistence, DTO, or audit changes | All layers already retain the distinctions required by the acceptance criteria. This is a presentation-only bug. |
-| Wording approval | No additional Ben decision is required beyond approving this spec | #1661 already established these labels on the sibling rendering, and issue #1784 explicitly permits outcome labels instead of change claims. |
+| Decision          | Choice                                                                                          | Reason                                                                                                                                                       |
+| ----------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Chip meaning      | Report the observed outcome, not a claim about state change                                     | The contract knows execution/permission/failure/denial; it does not always know side effects.                                                                |
+| Labels            | `executed` → **Executed**, `allowed` → **Allowed**, `error` → **Failed**, `denied` → **Denied** | These are the canonical, cause-neutral labels already returned by `activityVerb()` after #1661.                                                              |
+| Visibility        | Keep the chip visible for all four outcomes                                                     | Permission, failure, and denial are meaningful terminal outcomes. Hiding uncertain cases would discard known information when truthful labels already exist. |
+| Canonical mapping | Reuse `activityVerb(record)` in the standalone row                                              | It already owns this exact four-state UI vocabulary; a second map caused the present drift.                                                                  |
+| Contract scope    | No producer, persistence, DTO, or audit changes                                                 | All layers already retain the distinctions required by the acceptance criteria. This is a presentation-only bug.                                             |
+| Wording approval  | No additional Ben decision is required beyond approving this spec                               | #1661 already established these labels on the sibling rendering, and issue #1784 explicitly permits outcome labels instead of change claims.                 |
 
 ## Architecture
 

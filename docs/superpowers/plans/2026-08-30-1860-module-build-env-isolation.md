@@ -20,10 +20,10 @@ integrity independent of those values is explicitly out of scope.
 ## Seams check (file:line citations, current `origin/main` @ e947239ea)
 
 - `apps/worker/src/worker.ts:223` — the defect: `createRealTmuxIo({ ...process.env, HOME:
-  moduleBuildCliHome })` hands the worker's complete environment to every module-build subprocess.
+moduleBuildCliHome })` hands the worker's complete environment to every module-build subprocess.
   `createRealTmuxIo` is imported at `worker.ts:55` from `@moss/ai` and this is its only worker use.
 - `apps/worker/src/worker.ts:224` — `TmuxMultiplexer(moduleBuildIo, { homeBase:
-  moduleBuildCliHome })` consumes the same I/O; `worker.ts:240-246` passes it into
+moduleBuildCliHome })` consumes the same I/O; `worker.ts:240-246` passes it into
   `createModuleBuildLiveAgent({ io: moduleBuildIo, mux: moduleBuildMux, ... })`. One substitution
   at the composition root therefore covers tmux creation, provider launch, and post-write build
   commands.
@@ -64,10 +64,7 @@ integrity independent of those values is explicitly out of scope.
    against a database):
 
    ```ts
-   export function createModuleBuildIo(
-     env: NodeJS.ProcessEnv,
-     moduleBuildCliHome: string
-   ): TmuxIo;
+   export function createModuleBuildIo(env: NodeJS.ProcessEnv, moduleBuildCliHome: string): TmuxIo;
    ```
 
    Body decision (contract, not code): returns

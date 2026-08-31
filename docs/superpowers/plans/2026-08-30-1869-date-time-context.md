@@ -14,19 +14,19 @@ that calls it.
 
 ## Slice ownership (exclusive file sets — no two slices touch the same file)
 
-| Slice | Files owned |
-|---|---|
-| 1 | `packages/chat/src/live/time-context.ts` (new), `packages/chat/src/live/engine-text.ts`, `packages/chat/src/live/chat-session-manager.ts`, `tests/unit/chat-engine-text.test.ts`, `tests/unit/chat-session-manager.test.ts` |
-| 2 | `packages/chat/src/current-time-tool.ts` (new), `packages/chat/src/manifest.ts`, `packages/chat/src/index.ts`, `tests/unit/chat-current-time-tool.test.ts` (new) |
-| 3A | `packages/module-sdk/src/time.ts`, `tests/unit/module-sdk-time.test.ts` |
-| 3B | `external-modules/food/src/domain/meal.ts`, `external-modules/food/src/tools/meals.ts`, `external-modules/food/jarvis.module.json`, `tests/unit/external-module-food-handlers.test.ts`, `tests/unit/external-module-food-domain.test.ts` |
+| Slice | Files owned                                                                                                                                                                                                                              |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | `packages/chat/src/live/time-context.ts` (new), `packages/chat/src/live/engine-text.ts`, `packages/chat/src/live/chat-session-manager.ts`, `tests/unit/chat-engine-text.test.ts`, `tests/unit/chat-session-manager.test.ts`              |
+| 2     | `packages/chat/src/current-time-tool.ts` (new), `packages/chat/src/manifest.ts`, `packages/chat/src/index.ts`, `tests/unit/chat-current-time-tool.test.ts` (new)                                                                         |
+| 3A    | `packages/module-sdk/src/time.ts`, `tests/unit/module-sdk-time.test.ts`                                                                                                                                                                  |
+| 3B    | `external-modules/food/src/domain/meal.ts`, `external-modules/food/src/tools/meals.ts`, `external-modules/food/jarvis.module.json`, `tests/unit/external-module-food-handlers.test.ts`, `tests/unit/external-module-food-domain.test.ts` |
 
 ## Seams check (file:line citations, current `origin/main` @ e947239ea)
 
 Chat turn path:
 
 - `packages/chat/src/live/engine-text.ts:35-40` — `buildEngineText(deps, actorUserId, text,
-  surface)` returns `{ text, pendingItems }`; `engine-text.ts:42-44` is the early return the spec
+surface)` returns `{ text, pendingItems }`; `engine-text.ts:42-44` is the early return the spec
   names: when passive recall, cross-tool read, and notes retrieval are all absent it returns the
   raw user text, bypassing everything — including any time context added inside the try block.
 - `engine-text.ts:46-49` — `getThreadContext` is already read (with `listPriorTurns`) when
@@ -54,7 +54,7 @@ Clock tool path:
   assistant-tool template (name, `permissionId: "chat.view"`, `risk: "read"`, empty strict
   `inputSchema`, `outputSchema`, `execute`). The new tool is a sibling entry.
 - `packages/chat/src/current-view-tool.ts:86` — executor shape `ToolExecute = (scopedDb, input,
-  ctx, services)`; exported via `packages/chat/src/index.ts:20`.
+ctx, services)`; exported via `packages/chat/src/index.ts:20`.
 - `packages/module-sdk/src/index.ts:90-97` — `ToolContext.localTimezone?: string` (IANA, absent
   when no locale); populated by the gateway from the injected resolver
   (`packages/ai/src/gateway/gateway.ts:185-190`), which chat wires to the same locale preferences
