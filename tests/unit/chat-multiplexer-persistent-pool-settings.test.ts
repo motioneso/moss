@@ -16,7 +16,7 @@
  * `createRealEngineFactory` (`@moss/chat`) is mocked so this test proves only what
  * `resolveChatEngineFactory` reads and forwards, without constructing a real pool/engine.
  */
-import { mkdtemp, writeFile, chmod } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -61,6 +61,46 @@ function fakeAppDb(rows: Record<string, string>): Kysely<MossDatabase> {
 describe("resolveChatEngineFactory — persistent-pool settings wiring (#1554 task #5)", () => {
   afterEach(() => {
     createRealEngineFactoryMock.mockReset();
+  });
+
+  it("runs the real multiplexer check with an isolated HOME and no ambient secrets", async () => {
+    createRealEngineFactoryMock.mockReturnValue(vi.fn());
+    const dir = await mkdtemp(join(tmpdir(), "jarv1s-mux-env-"));
+    const capturePath = join(dir, "delivered-env");
+    const bin = join(dir, "tmux");
+    await writeFile(bin, `#!/bin/sh\n/usr/bin/env > "${capturePath}"\n`, { mode: 0o755 });
+
+    try {
+      await resolveChatEngineFactory({
+        appDb: fakeAppDb({}),
+        env: {
+          PATH: `${dir}:${process.env.PATH ?? "/usr/bin"}`,
+          HOME: "/real-user-home",
+          MOSS_CLI_HOME_BASE: "/isolated-cli-home",
+          BETTER_AUTH_SECRET: "must-not-reach-multiplexer"
+        },
+        log: vi.fn()
+      });
+
+      const opts = createRealEngineFactoryMock.mock.calls[0]![0];
+      await opts.mux.open({
+        name: "env-check",
+        cols: 80,
+        rows: 24,
+        launchLine: "true"
+      });
+      const delivered = Object.fromEntries(
+        (await readFile(capturePath, "utf8"))
+          .trim()
+          .split("\n")
+          .map((line) => line.split(/=(.*)/s, 2))
+      );
+      expect(delivered.HOME).toBe("/isolated-cli-home");
+      expect(delivered.BETTER_AUTH_SECRET).toBeUndefined();
+      expect(createRealEngineFactoryMock).toHaveBeenCalledTimes(1);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it("reads chat.persistent_pool_cap and chat.persistent_idle_reap_minutes through the (now-allowlisted) pre-auth exception, not the registry defaults", async () => {

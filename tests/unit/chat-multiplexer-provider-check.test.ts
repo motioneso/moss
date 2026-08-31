@@ -1,9 +1,49 @@
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { makeProviderConnectionCheckProbe } from "../../packages/module-registry/src/chat-multiplexer.js";
 import type { TmuxIo } from "../../packages/ai/src/adapters/tmux-bridge.js";
 
 describe("makeProviderConnectionCheckProbe", () => {
+  it("gives the real provider check an isolated HOME without ambient secrets", async () => {
+    const fakeBin = await mkdtemp(join(tmpdir(), "jarv1s-provider-bin-"));
+    const capturePath = join(fakeBin, "delivered-env");
+    await writeFile(
+      join(fakeBin, "claude"),
+      `#!/bin/sh\n/usr/bin/env > "${capturePath}"\nprintf '{"loggedIn":true}\\n'\n`,
+      { mode: 0o755 }
+    );
+    const probe = makeProviderConnectionCheckProbe({
+      engineFactory: () => {
+        throw new Error("anthropic provider checks should not open an interactive engine");
+      },
+      cliPresent: async () => true,
+      skipInstallCheck: true,
+      env: {
+        PATH: `${fakeBin}:${process.env.PATH ?? "/usr/bin"}`,
+        HOME: "/real-user-home",
+        BETTER_AUTH_SECRET: "must-not-reach-provider"
+      }
+    });
+
+    try {
+      await expect(probe("anthropic")).resolves.toEqual({ status: "ready" });
+      const delivered = Object.fromEntries(
+        (await readFile(capturePath, "utf8"))
+          .trim()
+          .split("\n")
+          .map((line) => line.split(/=(.*)/s, 2))
+      );
+      expect(delivered.HOME?.startsWith(join(tmpdir(), "jarv1s-provider-check-"))).toBe(true);
+      expect(delivered.BETTER_AUTH_SECRET).toBeUndefined();
+    } finally {
+      await rm(fakeBin, { recursive: true, force: true });
+    }
+  });
+
   it("checks Claude with claude auth status instead of opening an interactive engine", async () => {
     const runs: Array<{ cmd: string; args: readonly string[] }> = [];
     const commandIo = {
