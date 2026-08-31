@@ -21,11 +21,19 @@ import {
   unavailableEngineFactory,
   CliChatUnavailableError
 } from "../../packages/chat/src/live/runtime.js";
+import { renderCurrentTimeContext } from "../../packages/chat/src/live/time-context.js";
 import type {
   CliChatEngine,
   EngineLaunchOpts,
   TranscriptRecord
 } from "../../packages/chat/src/live/types.js";
+
+// Fixed "now" for every manager in this file — getThreadContext here always resolves
+// localTimezone: null, so every submitted turn carries this same UTC-only time block (#1869).
+const NOW = new Date("2026-08-30T12:00:00.000Z");
+function withTime(text: string): string {
+  return `${renderCurrentTimeContext(NOW, null)}\n\n${text}`;
+}
 
 // ─── fakes ───────────────────────────────────────────────────────────────────
 
@@ -337,6 +345,7 @@ function makeManager(over: Partial<ChatSessionManagerDeps> = {}): Harness {
     neutralBase: "/tmp/jarvis-test",
     persona: "I am Jarvis, {{userName}}.",
     pollMs: 0,
+    now: () => NOW,
     ...over
   };
 
@@ -354,7 +363,7 @@ describe("ChatSessionManager", () => {
 
     expect(engines).toHaveLength(1);
     expect(engines[0]?.launchCount).toBe(1);
-    expect(engines[0]?.submitted).toEqual(["hello", "again"]);
+    expect(engines[0]?.submitted).toEqual([withTime("hello"), withTime("again")]);
   });
 
   it("renders the user-specific persona when launching the chat context file", async () => {
@@ -422,16 +431,16 @@ describe("ChatSessionManager", () => {
     const { reply } = await manager.submitTurn("user-1", "Ben", "hello");
     unsubscribe();
 
-    expect(reply).toBe("reply to: hello");
+    expect(reply).toBe(`reply to: ${withTime("hello")}`);
     // user echo + thinking + reply all fanned out
     expect(seen).toContainEqual({ kind: "user", text: "hello" });
     expect(seen).toContainEqual({ kind: "thinking", text: "considering" });
-    expect(seen).toContainEqual({ kind: "reply", text: "reply to: hello" });
+    expect(seen).toContainEqual({ kind: "reply", text: `reply to: ${withTime("hello")}` });
 
     expect(persistence.recorded).toHaveLength(1);
     expect(persistence.recorded[0]).toEqual({
       userText: "hello",
-      assistantReply: "reply to: hello",
+      assistantReply: `reply to: ${withTime("hello")}`,
       executed: { provider: "anthropic", model: "claude-x" }
     });
   });
@@ -472,7 +481,7 @@ describe("ChatSessionManager", () => {
     });
 
     expect(engines[0]?.submitted.at(-1)).toBe(
-      'Remote is right.\n\n<module_control>\n{"step":"workmode"}\n</module_control>'
+      `${withTime("Remote is right.")}\n\n<module_control>\n{"step":"workmode"}\n</module_control>`
     );
     expect(persistence.recorded[0]?.userText).toBe("Remote is right.");
     expect(persistence.recorded[0]?.userText).not.toContain("module_control");
@@ -487,8 +496,8 @@ describe("ChatSessionManager", () => {
 
     await manager.submitTurn("user-1", "Ben", "hello");
 
-    expect(a).toContainEqual({ kind: "reply", text: "reply to: hello" });
-    expect(b).toContainEqual({ kind: "reply", text: "reply to: hello" });
+    expect(a).toContainEqual({ kind: "reply", text: `reply to: ${withTime("hello")}` });
+    expect(b).toContainEqual({ kind: "reply", text: `reply to: ${withTime("hello")}` });
   });
 
   it("caps simultaneous subscribers per actor", () => {
@@ -532,9 +541,9 @@ describe("ChatSessionManager", () => {
     // The new engine was seeded with prior-turn content before the new prompt.
     const seed = engines[1]?.submitted[0] ?? "";
     expect(seed).toContain("hello");
-    expect(seed).toContain("reply to: hello");
+    expect(seed).toContain(`reply to: ${withTime("hello")}`);
     // ...and the actual new prompt followed the replay.
-    expect(engines[1]?.submitted).toContain("second question");
+    expect(engines[1]?.submitted).toContain(withTime("second question"));
   });
 
   it("switchProvider kills the old engine, launches one for the new provider, and replays prior turns", async () => {
@@ -554,7 +563,7 @@ describe("ChatSessionManager", () => {
     // Prior turns replayed into the new provider's engine.
     const seed = engines[1]?.submitted[0] ?? "";
     expect(seed).toContain("hello");
-    expect(seed).toContain("reply to: hello");
+    expect(seed).toContain(`reply to: ${withTime("hello")}`);
 
     // Next turn persists under the NEW provider/model.
     await manager.submitTurn("user-1", "Ben", "still you?");
@@ -580,7 +589,7 @@ describe("ChatSessionManager", () => {
     expect(engines[1]?.launchCount).toBe(1);
     // No prior turns existed (conversation was cleared), so the new prompt is sent
     // directly — no <conversation> replay block precedes it.
-    expect(engines[1]?.submitted).toEqual(["fresh start"]);
+    expect(engines[1]?.submitted).toEqual([withTime("fresh start")]);
   });
 
   it("clear() does not replay the previous reply on the next turn", async () => {
@@ -604,23 +613,24 @@ describe("ChatSessionManager", () => {
       idleMs: 1_000,
       neutralBase: "/tmp/jarvis-test",
       persona: "I am Jarvis, {{userName}}.",
-      pollMs: 0
+      pollMs: 0,
+      now: () => NOW
     });
 
     const red = await manager.submitTurn("user-1", "Ben", "say RED");
-    expect(red.reply).toBe("reply to: say RED");
+    expect(red.reply).toBe(`reply to: ${withTime("say RED")}`);
     const blue = await manager.submitTurn("user-1", "Ben", "say BLUE");
-    expect(blue.reply).toBe("reply to: say BLUE");
+    expect(blue.reply).toBe(`reply to: ${withTime("say BLUE")}`);
 
     await manager.clear("user-1");
 
     // The turn right after /clear must reflect the NEW prompt — not replay "say BLUE".
     const green = await manager.submitTurn("user-1", "Ben", "say GREEN");
-    expect(green.reply).toBe("reply to: say GREEN");
+    expect(green.reply).toBe(`reply to: ${withTime("say GREEN")}`);
 
     // And the conversation keeps working (the post-clear turn must not desync the read).
     const yellow = await manager.submitTurn("user-1", "Ben", "say YELLOW");
-    expect(yellow.reply).toBe("reply to: say YELLOW");
+    expect(yellow.reply).toBe(`reply to: ${withTime("say YELLOW")}`);
   });
 
   it("does not double-launch when ensureSession is called concurrently", async () => {
@@ -694,7 +704,8 @@ describe("ChatSessionManager", () => {
       idleMs: 1_000,
       neutralBase: "/tmp/jarvis-test",
       persona: "I am Jarvis, {{userName}}.",
-      pollMs: 0
+      pollMs: 0,
+      now: () => NOW
     });
 
     // Start the first turn; its readNew blocks on the gate, so it stays in-flight.
@@ -711,11 +722,11 @@ describe("ChatSessionManager", () => {
     while (engines.length < 1) await delay(1);
     engines[0]?.open();
     const { reply } = await first;
-    expect(reply).toBe("reply to: first");
+    expect(reply).toBe(`reply to: ${withTime("first")}`);
 
     // The in-flight flag is cleared in finally, so a fresh turn succeeds.
     const next = await manager.submitTurn("user-1", "Ben", "third");
-    expect(next.reply).toBe("reply to: third");
+    expect(next.reply).toBe(`reply to: ${withTime("third")}`);
   });
 
   it("allows concurrent turns for DIFFERENT users (lock is per-actor)", async () => {
@@ -733,7 +744,8 @@ describe("ChatSessionManager", () => {
       idleMs: 1_000,
       neutralBase: "/tmp/jarvis-test",
       persona: "I am Jarvis, {{userName}}.",
-      pollMs: 0
+      pollMs: 0,
+      now: () => NOW
     });
 
     const a = manager.submitTurn("user-1", "Ben", "a");
@@ -744,8 +756,8 @@ describe("ChatSessionManager", () => {
     for (const e of engines) e.open();
 
     const [ra, rb] = await Promise.all([a, b]);
-    expect(ra.reply).toBe("reply to: a");
-    expect(rb.reply).toBe("reply to: b");
+    expect(ra.reply).toBe(`reply to: ${withTime("a")}`);
+    expect(rb.reply).toBe(`reply to: ${withTime("b")}`);
   });
 });
 
