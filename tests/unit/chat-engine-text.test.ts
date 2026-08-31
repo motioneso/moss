@@ -20,6 +20,36 @@ it("states the correct UTC and local weekdays at the Pacific date boundary (#186
   expect(context).toContain("2026-08-30 (Sunday) 21:50 (America/Los_Angeles");
 });
 
+it("tells the model to state a known local zone as fact and stay consistent (#1869)", () => {
+  const context = renderCurrentTimeContext(
+    new Date("2026-08-31T05:13:00.000Z"),
+    "America/Los_Angeles"
+  );
+
+  expect(context).toContain("State that local date, weekday, time and time zone as fact.");
+  expect(context).toContain("Do not hedge");
+  expect(context).toContain("never contradict an earlier turn");
+  expect(context).not.toContain("local time zone is not known");
+});
+
+it("admits an unknown local zone once and forbids guessing it (#1869 run_6 follow-up)", () => {
+  const context = renderCurrentTimeContext(new Date("2026-08-31T05:13:00.000Z"), null);
+
+  expect(context).toContain("The user's local time zone is not known this turn.");
+  expect(context).toContain("once, the first time you mention it");
+  expect(context).toContain("Never guess the user's time zone, region or location");
+  expect(context).toContain("do not show time zone arithmetic unless the user asks for it");
+  expect(context).toContain("never contradict an earlier turn");
+  expect(context).not.toContain("User's local time:");
+});
+
+it("treats an unusable time zone the same as no time zone at all (#1869)", () => {
+  const context = renderCurrentTimeContext(new Date("2026-08-31T05:13:00.000Z"), "Not/AZone");
+
+  expect(context).toContain("The user's local time zone is not known this turn.");
+  expect(context).not.toContain("User's local time:");
+});
+
 it("never injects page context into ordinary engine text (#1109 — pull-only tool replaces the turn push)", async () => {
   const now = new Date("2026-08-22T12:00:00.000Z");
   const result = await buildEngineText(
