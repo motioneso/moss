@@ -52,11 +52,12 @@ import {
 } from "@moss/module-registry/node";
 import {
   AiRepository,
-  createRealTmuxIo,
   runModuleBuildStep,
   TmuxMultiplexer,
-  type ProviderKind
+  type ProviderKind,
+  type TmuxIo
 } from "@moss/ai";
+import { createSanitizedTmuxIo } from "@moss/cli-runner";
 import { ChatAttachmentsService } from "@moss/chat";
 import { ensureProviderLaunchReady } from "@moss/cli-runner/provider-first-run";
 import { NotificationsRepository, type CreateNotificationInput } from "@moss/notifications";
@@ -129,6 +130,15 @@ export function resolveModuleBuildCliHome(
   return (
     resolveMossEnv(env, "JARVIS_CLI_HOME_BASE") ?? resolveMossEnv(env, "JARVIS_CLI_HOME") ?? osHome
   );
+}
+
+/**
+ * The module-build composition root's I/O boundary: every subprocess a module build launches
+ * (tmux, the provider CLI, post-write build commands) runs with the sanitized allowlisted env
+ * (§7.2), not the worker's full environment — closing the same door the chat path already closed.
+ */
+export function createModuleBuildIo(env: NodeJS.ProcessEnv, moduleBuildCliHome: string): TmuxIo {
+  return createSanitizedTmuxIo({ ...env, HOME: moduleBuildCliHome });
 }
 
 /**
@@ -220,7 +230,7 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   const moduleBuildsDir = resolveModuleBuildsDir(process.env);
   const modulesDir = resolveModulesDir(process.env);
   const moduleBuildCliHome = resolveModuleBuildCliHome(process.env);
-  const moduleBuildIo = createRealTmuxIo({ ...process.env, HOME: moduleBuildCliHome });
+  const moduleBuildIo = createModuleBuildIo(process.env, moduleBuildCliHome);
   const moduleBuildMux = new TmuxMultiplexer(moduleBuildIo, { homeBase: moduleBuildCliHome });
   const aiRepository = new AiRepository();
   const moduleBuildNotifications = new NotificationsRepository(
