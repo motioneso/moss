@@ -15,7 +15,12 @@ import {
   SessionTokenRegistry,
   type GatewaySessionRecord
 } from "@moss/ai";
-import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
+import {
+  DataContextRunner,
+  createDatabase,
+  type AccessContext,
+  type MossDatabase
+} from "@moss/db";
 import { SettingsRepository } from "@moss/settings";
 import { PreferencesRepository } from "@moss/structured-state";
 import {
@@ -320,6 +325,70 @@ describe("MCP HTTP transport", () => {
     expect(actionResult.kind).toBe("action_result");
     if (actionResult.kind !== "action_result") throw new Error("unreachable");
     expect(actionResult.outcome).toBe("executed");
+  });
+
+  // #2149: resolveActionRequest used to return as soon as the row was marked confirmed and the
+  // blocked call was woken up — before the woken call's handler had actually run. A caller
+  // reading state right after Approve (e.g. the UAT's status poll) could see the old value. The
+  // slow-write fixture has a real 20ms delay so this test cannot pass by same-tick accident on
+  // either the broken or the fixed code.
+  it("approve response is not observed until the tool's write has actually happened", async () => {
+    const token = tokens.mint({
+      actorUserId: ids.userA,
+      chatSessionId: randomUUID(),
+      allowedToolNames: null
+    });
+
+    const callPromise = app.inject({
+      method: "POST",
+      url: "/api/mcp",
+      headers: { authorization: `Bearer ${token}` },
+      body: {
+        jsonrpc: "2.0",
+        id: 4,
+        method: "tools/call",
+        params: { name: "example.slowWrite", arguments: { value: "approve-me-slowly" } }
+      }
+    });
+
+    await vi.waitFor(() => {
+      expect(emitted).toHaveLength(1);
+    });
+    const req = emitted[0]!.record;
+    expect(req.kind).toBe("action_request");
+    if (req.kind !== "action_request") throw new Error("unreachable");
+
+    await gateway.resolveActionRequest(ids.userA, req.actionRequestId, "confirmed");
+
+    // No vi.waitFor, no extra delay — the resolve above must already have waited out the
+    // handler's 20ms delay.
+    expect(exampleToolCalls.some((call) => call.name === "example.slowWrite")).toBe(true);
+
+    await callPromise;
+  });
+
+  it("resolving a rejected action with no live waiter still returns promptly", async () => {
+    const repository = new AiRepository();
+    const runner = new DataContextRunner(appDb);
+    const access: AccessContext = { actorUserId: ids.userA, requestId: `test_${randomUUID()}` };
+
+    const action = await runner.withDataContext(access, (scopedDb) =>
+      repository.createPendingAssistantAction(scopedDb, {
+        toolModuleId: "example",
+        toolModuleName: "Example",
+        toolName: "example.write",
+        permissionId: "example.update",
+        risk: "write",
+        inputSummary: { value: "no-live-waiter" }
+      })
+    );
+
+    const startedAt = Date.now();
+    const result = await gateway.resolveActionRequest(ids.userA, action.id, "rejected");
+    const elapsedMs = Date.now() - startedAt;
+
+    expect(result).toBe("resolved");
+    expect(elapsedMs).toBeLessThan(1_000);
   });
 
   it("tools/call returns an error when tool is not in the session allowlist", async () => {
