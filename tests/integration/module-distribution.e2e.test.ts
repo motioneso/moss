@@ -24,7 +24,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Kysely } from "kysely";
 import { Client } from "pg";
 
-import { createDatabase, type MossDatabase } from "@moss/db";
+import {
+  createDatabase,
+  moduleInstallRoleName,
+  moduleRuntimeRoleName,
+  type MossDatabase
+} from "@moss/db";
 import { createPgBossClient, type PgBoss } from "@moss/jobs";
 import { getExternalModuleRegistrations, signCatalogBytes } from "@moss/module-registry/node";
 
@@ -83,6 +88,8 @@ let registryIndexRequestCount = 0;
 // for this fixture's owned table name.
 const FIXTURE_MODULE_ID = laneScopedModuleId("acme-widgets");
 const FIXTURE_TABLE_SLUG = FIXTURE_MODULE_ID.replace(/-/g, "_");
+const FIXTURE_INSTALL_ROLE = moduleInstallRoleName(FIXTURE_MODULE_ID);
+const FIXTURE_RUNTIME_ROLE = moduleRuntimeRoleName(FIXTURE_MODULE_ID);
 
 const MANIFEST = {
   schemaVersion: 1,
@@ -420,7 +427,8 @@ describe("module distribution e2e (#964)", () => {
     await client.connect();
     const table = await client.query(`SELECT to_regclass('app.${FIXTURE_TABLE_SLUG}_items') AS t`);
     const roles = await client.query<{ rolname: string; rolcanlogin: boolean }>(
-      `SELECT rolname, rolcanlogin FROM pg_roles WHERE rolname LIKE 'jarvis_mod_${FIXTURE_TABLE_SLUG}_%' ORDER BY rolname`
+      "SELECT rolname, rolcanlogin FROM pg_roles WHERE rolname = ANY($1::text[]) ORDER BY rolname",
+      [[FIXTURE_INSTALL_ROLE, FIXTURE_RUNTIME_ROLE]]
     );
     const ledger = await client.query<{ n: number }>(
       `SELECT count(*)::int AS n FROM app.module_schema_migrations WHERE module_id = '${FIXTURE_MODULE_ID}'`
@@ -430,12 +438,8 @@ describe("module distribution e2e (#964)", () => {
     );
     await client.end();
     expect(table.rows[0].t).toBe(`app.${FIXTURE_TABLE_SLUG}_items`);
-    expect(roles.rows.some((r) => r.rolname === `jarvis_mod_${FIXTURE_TABLE_SLUG}_runtime`)).toBe(
-      true
-    );
-    expect(
-      roles.rows.find((r) => r.rolname === `jarvis_mod_${FIXTURE_TABLE_SLUG}_install`)?.rolcanlogin
-    ).toBe(false);
+    expect(roles.rows.some((r) => r.rolname === FIXTURE_RUNTIME_ROLE)).toBe(true);
+    expect(roles.rows.find((r) => r.rolname === FIXTURE_INSTALL_ROLE)?.rolcanlogin).toBe(false);
     expect(ledger.rows[0]!.n).toBe(1);
     const discovery = getExternalModuleRegistrations({ modulesDir }).discoveries[0]!;
     expect(baseline.rows[0]).toEqual({
@@ -498,9 +502,9 @@ describe("module distribution e2e (#964)", () => {
     const client = new Client({ connectionString: connectionStrings.bootstrap });
     await client.connect();
     const table = await client.query(`SELECT to_regclass('app.${FIXTURE_TABLE_SLUG}_items') AS t`);
-    const role = await client.query(
-      `SELECT 1 FROM pg_roles WHERE rolname = 'jarvis_mod_${FIXTURE_TABLE_SLUG}_runtime'`
-    );
+    const role = await client.query("SELECT 1 FROM pg_roles WHERE rolname = $1", [
+      FIXTURE_RUNTIME_ROLE
+    ]);
     const journal = await client.query(
       `SELECT 1 FROM app.module_installs WHERE module_id = '${FIXTURE_MODULE_ID}'`
     );

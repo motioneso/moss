@@ -20,6 +20,8 @@ import {
   DataContextRunner,
   createDatabase,
   createModuleStorageRpc,
+  moduleInstallRoleName,
+  moduleRuntimeRoleName,
   type DataContextDb,
   type MossDatabase
 } from "@moss/db";
@@ -60,6 +62,8 @@ import {
 
 const urls = getMossDatabaseUrls();
 const moduleId = "finance";
+const installRole = moduleInstallRoleName(moduleId);
+const runtimeRole = moduleRuntimeRoleName(moduleId);
 const ownedTables = [
   "app.finance_items",
   "app.finance_accounts",
@@ -426,7 +430,7 @@ beforeAll(async () => {
   // runtime role for createModuleStorageRpc's per-call SET LOCAL ROLE. Membership is
   // cluster-global, so it goes through the lock rather than this connection (#1013).
   await grantModuleMembershipAtSetup([
-    "GRANT jarvis_mod_finance_runtime TO jarvis_app_runtime WITH INHERIT FALSE"
+    `GRANT ${runtimeRole} TO jarvis_app_runtime WITH INHERIT FALSE`
   ]);
   // external-module-job-search-kv-isolation.test.ts pattern: the lightweight direct
   // bootstrap insert that satisfies jarvis_worker_runtime's module_kv RLS policy
@@ -450,9 +454,7 @@ afterAll(async () => {
   // Role membership first — Postgres refuses to revoke a grant-option privilege while a
   // dependent downstream grant still exists (module-storage-rpc.test.ts's ordering). It is also
   // cluster-global, so it runs under the lock on its own session (#1013).
-  await revokeModuleMembershipAtTeardown([
-    "REVOKE jarvis_mod_finance_runtime FROM jarvis_app_runtime"
-  ]);
+  await revokeModuleMembershipAtTeardown([`REVOKE ${runtimeRole} FROM jarvis_app_runtime`]);
 
   const client = new Client({ connectionString: connectionStrings.bootstrap });
   await client.connect();
@@ -460,18 +462,16 @@ afterAll(async () => {
     for (const table of ownedTables) {
       await client.query(`DROP TABLE IF EXISTS ${table} CASCADE`);
     }
-    await client.query("REVOKE ALL PRIVILEGES ON SCHEMA app FROM jarvis_mod_finance_runtime");
+    await client.query(`REVOKE ALL PRIVILEGES ON SCHEMA app FROM ${runtimeRole}`);
     await client.query(
-      "REVOKE EXECUTE ON FUNCTION app.current_actor_user_id() FROM jarvis_mod_finance_runtime"
+      `REVOKE EXECUTE ON FUNCTION app.current_actor_user_id() FROM ${runtimeRole}`
     );
+    await client.query(`REVOKE ALL PRIVILEGES ON SCHEMA app FROM ${installRole} CASCADE`);
+    await client.query(`REVOKE ALL PRIVILEGES ON app.users FROM ${installRole}`);
     await client.query(
-      "REVOKE ALL PRIVILEGES ON SCHEMA app FROM jarvis_mod_finance_install CASCADE"
+      `REVOKE EXECUTE ON FUNCTION app.current_actor_user_id() FROM ${installRole} CASCADE`
     );
-    await client.query("REVOKE ALL PRIVILEGES ON app.users FROM jarvis_mod_finance_install");
-    await client.query(
-      "REVOKE EXECUTE ON FUNCTION app.current_actor_user_id() FROM jarvis_mod_finance_install CASCADE"
-    );
-    await dropModuleRolesAtTeardown(["jarvis_mod_finance_install", "jarvis_mod_finance_runtime"]);
+    await dropModuleRolesAtTeardown([installRole, runtimeRole]);
     await client.query("DELETE FROM app.module_installs WHERE module_id = $1", [moduleId]);
     await client.query("DELETE FROM app.module_schema_migrations WHERE module_id = $1", [moduleId]);
     await client.query("DELETE FROM app.external_modules WHERE id = $1", [moduleId]);

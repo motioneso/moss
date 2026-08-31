@@ -9,7 +9,7 @@ describe("createDatabaseIsolationPlan", () => {
       "unused-entropy"
     );
 
-    expect(plan).toEqual({ mode: "passthrough" });
+    expect(plan).toEqual({ mode: "passthrough", databaseName: "jarvis_build_537" });
   });
 
   it("generates an isolated database name when JARVIS_PGDATABASE is unset", () => {

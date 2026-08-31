@@ -9,7 +9,7 @@ import pg from "pg";
 const { Client } = pg;
 
 export type DatabaseIsolationPlan =
-  | { readonly mode: "passthrough" }
+  | { readonly mode: "passthrough"; readonly databaseName: string }
   | { readonly mode: "isolated"; readonly databaseName: string };
 
 export function createDatabaseIsolationPlan(
@@ -17,7 +17,7 @@ export function createDatabaseIsolationPlan(
   entropySuffix: string
 ): DatabaseIsolationPlan {
   if (env.JARVIS_PGDATABASE) {
-    return { mode: "passthrough" };
+    return { mode: "passthrough", databaseName: env.JARVIS_PGDATABASE };
   }
 
   return { mode: "isolated", databaseName: `jarvis_test_${entropySuffix}` };
@@ -102,8 +102,9 @@ async function main(): Promise<void> {
     // vitest.config.ts uses pool:"forks" + fileParallelism:false, so JARVIS_PGDATABASE must be
     // set in this parent process before the vitest child spawns (vitest inherits process.env at
     // spawn time) — mutating it from inside a per-file module would be too late.
-    process.env.JARVIS_PGDATABASE = plan.databaseName;
   }
+  process.env.JARVIS_PGDATABASE = plan.databaseName;
+  process.env.JARVIS_TEST_MODULE_ROLE_SCOPE = plan.databaseName;
 
   try {
     await runVitest(resolveVitestArgs(process.argv.slice(2)));
