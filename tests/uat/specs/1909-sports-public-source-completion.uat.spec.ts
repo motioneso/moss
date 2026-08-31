@@ -217,7 +217,9 @@ async function confirmThroughMoss(
   );
   const composer = page.getByRole("textbox", { name: /^Message/ });
   await composer.fill(
-    `Call ${toolName} exactly once with this JSON input. Do not call another tool: ${JSON.stringify(input)}`
+    toolName === "sports.retrySource"
+      ? `Please retry the sports source with ID ${String(input.sourceId)}.`
+      : `Call ${toolName} exactly once with this JSON input. Do not call another tool: ${JSON.stringify(input)}`
   );
   await composer.press("Enter");
 
