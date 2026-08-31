@@ -116,7 +116,10 @@ export function buildChildEnv(
   // the real AI provider CLI — the same image runs in production, so a mode flag is not enough
   // (it would travel into a production container by the same conduit as the setting itself, and
   // authorize nothing an attacker couldn't already set). Instead, only the one fixed value the
-  // UAT fixture ever needs is honored; anything else is dropped.
+  // UAT fixture ever needs is honored; anything else is dropped. This pin applies to the
+  // cli-runner child role built here only — the worker and api roles above receive the full app
+  // env by design, with the worker's own module-build subprocess tree protected separately at
+  // its own composition root (apps/worker/src/worker.ts's createModuleBuildIo).
   if (env.JARVIS_UAT_SCRIPTED_PROVIDER_BIN === UAT_SCRIPTED_PROVIDER_BIN) {
     next.JARVIS_UAT_SCRIPTED_PROVIDER_BIN = UAT_SCRIPTED_PROVIDER_BIN;
     if (env.JARVIS_UAT_SEED_CHAT_SCRIPT !== undefined) {
