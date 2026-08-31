@@ -1,11 +1,11 @@
 # Coordination Run — 2026-08-30-next-ready
 
 **Date:** 2026-08-30
-**Coordinator lock:** registered agent name `coordinator` + visible pane label `Coordinator`; session id `dbbc22c7-342d-410c-bc9d-38ad2d86b64e` (pane `w1:p36`) — successor after the second 70% relay; adopted lock, old pane `w1:p35` (session `fb912a67-...`) had already self-closed by the time this session checked, so it was closed directly.
+**Coordinator lock:** registered agent name `coordinator` + visible pane label `Coordinator`; session id `a2b54fa8-1c5e-42bc-a664-86220d987786` (pane `w1:p38`) — successor after the third 70% relay; adopted lock, old pane `w1:p36` (session `dbbc22c7-...`) was still mid-turn (stuck on a queued self-close request) when checked, so its name/label were cleared directly and the pane was closed.
 **Merge policy:** autonomous after verified QA for `routine`/`sensitive`; `security` needs Ben's explicit merge sign-off.
 **Relay threshold:** relay after every security merge, every two routine/sensitive merges, any context warning, or any compaction summary.
-**merges_since_relay:** 2 (PR #2126 docs, PR #2116 routine — this alone would also trigger relay, on top of the context-meter warning)
-**Infrastructure limitation:** `coordinator-watchdog.timer` is not installed on this host. Not retried this session.
+**merges_since_relay:** 1 (PR #2127 docs)
+**Infrastructure limitation:** `coordinator-watchdog.timer` is still not installed on this host. Not retried this session.
 
 ## Queue
 
@@ -133,6 +133,24 @@ This session (pane `w1:p36`, session id `dbbc22c7-342d-410c-bc9d-38ad2d86b64e`) 
 | #2116 | #1784 truthful chat action chip | routine | **yes — merged 2026-08-31T04:23:57Z, issue #1784 closed** |
 | #2125 | coordinator: flush state before relay (context meter 70%) | routine (docs) | yes |
 | #2126 | coordinator: record lock takeover after 70% relay, merge #2125 | routine (docs) | **yes — merged as `a3b16965e`** |
+| #2127 | coordinator: record #2126/#2116 merges, flush state before third relay | routine (docs) | **yes — merged as `98ac367cb`** |
+
+## Continuation note (2026-08-31, driving — took over after third 70% relay)
+
+New coordinator, pane `w1:p38`, session `a2b54fa8-1c5e-42bc-a664-86220d987786`, took over from pane `w1:p36` (session `dbbc22c7-...`). That pane was still working past its own 70 percent warning (76 percent by the time this session checked) and seemed stuck on a queued instruction to close itself, so this session cleared its name and pane label directly and closed it rather than waiting further.
+
+Merged pull request 2127 (the documentation handoff from the last coordinator) once its checks came back green — a routine, docs-only change.
+
+Cleaned up the finished work from issue 1784: the build agent in pane `w1:p20` had already stopped its two leftover test-server processes and confirmed it was done. This session closed that pane, re-ran the safety check on its work folder (came back clear), confirmed the code is on the main branch, and deleted the work folder. Also closed pane `w1:p37`, the review pane for pull request 2116 — its review was already posted and that pull request is already merged, so there was nothing left for it to do; its now-empty tab closed itself automatically.
+
+Tried to turn on the coordinator watchdog again; it is still not installed on this computer (same finding as every prior session this run).
+
+**Left for whoever picks this up next:**
+1. Keep watching the build lane for issue 1869, slice 1, in pane `w1:p2Y` — it is on its second do-over and must not be allowed a third. Last check: still actively running its own test gate, not stuck, about 66 percent through its available context.
+2. Once that lane finishes, apply the wave-2 kill gate: slice 1 needs its tests, a code review, and a live, Ben-judged check on the dev site of whether the injected time confuses the assistant, before either follow-on slice (2 or 3A) starts.
+3. When spawning the next round of build or review agents, mix in other agent providers rather than defaulting everyone to Claude (Ben's instruction).
+4. Keep every message to Ben, and every message between agents, in plain everyday words — no jargon, no invented shorthand, no strings of technical names packed into one sentence. Keep exact names such as file paths, commands, and error text available only for when someone needs to act on them directly.
+5. All wave-1 lanes end with a hands-on check on the single shared preview site — never run two of those checks at the same time.
 
 ## Reaped sessions
 
@@ -143,3 +161,6 @@ This session (pane `w1:p36`, session id `dbbc22c7-342d-410c-bc9d-38ad2d86b64e`) 
 - Build agent `issue-1860-env-relay1`, pane `w1:p31` — work merged (PR #2117), no further work needed; closed.
 - Build agent `issue-1784-chip` (pane `w1:p2R`) — stale duplicate of the reporting pane `w1:p20`, same worktree/branch, both showed the same finished work; closed after confirming `w1:p20` and PR #2116 already had the full report.
 - Build agent `issue-1860-env`, pane `w1:p2T` — relayed to `issue-1860-env-relay1` (pane `w1:p31`, same worktree/branch) after reporting #1860 done and PR #2117 open; successor confirmed driving before close.
+- Old coordinator, session `dbbc22c7-...`, pane `w1:p36` — stuck past its own 70% warning on a queued self-close instruction; name/label cleared directly, pane closed once successor confirmed driving.
+- Build agent `issue-1784-chip-relay1`, pane `w1:p20` — work merged (PR #2116, issue #1784 closed); confirmed its two leftover processes stopped, then closed; worktree removed after confirming the code landed on main.
+- QA agent `qa-2116-r2`, pane `w1:p37` — verdict already posted and consumed, PR #2116 already merged; closed, no further work needed.
