@@ -69,8 +69,8 @@ export function createRunModuleBuildStepForJob(
     try {
       return await deps.dataContext.withDataContext(access, async (scopedDb) => {
         const build = await deps.getModuleBuild(scopedDb, payload.buildId);
-        if (!build) throw new Error("module build was not found");
-        if (build.status === "cancelled") {
+        if (!build) throw new ModuleBuildSafeError("module build was not found");
+        if (build.status === "cancelled" || build.status === "failed") {
           return { deferred: false };
         }
 
@@ -109,7 +109,7 @@ export function createRunModuleBuildStepForJob(
         if (!build || build.status === "cancelled") return;
         await deps.updateModuleBuildStatus(scopedDb, build.id, {
           status: "failed",
-          error: error instanceof Error ? error.name : "unknown error"
+          error: safeModuleBuildErrorMessage(error)
         });
         await deps.notifyFailed(scopedDb, build.id);
       });

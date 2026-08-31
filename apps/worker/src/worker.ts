@@ -78,7 +78,10 @@ import { createExternalBriefingInvoker } from "./external-module-invoke.js";
 import { createExternalModuleJobHandler } from "./external-module-job-handler.js";
 import { createIsModuleEnabled } from "./worker-module-gate.js";
 import { createModuleBuildLiveAgent } from "./module-build-live-agent.js";
-import { createRunModuleBuildStepForJob } from "./module-build-step-runner.js";
+import {
+  createRunModuleBuildStepForJob,
+  ModuleBuildSafeError
+} from "./module-build-step-runner.js";
 import { WORKSHOP_MODULE_ID } from "@moss/workshop";
 
 // ---------------------------------------------------------------------------
@@ -249,7 +252,7 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
     updateModuleBuildStatus,
     prepareRunStepDeps: async (scopedDb) => {
       const model = await aiRepository.selectChatModelForUser(scopedDb);
-      if (!model) throw new Error("no chat model is configured for module build");
+      if (!model) throw new ModuleBuildSafeError("no chat model is configured for module build");
       const moduleBuildLiveAgent = createModuleBuildLiveAgent({
         io: moduleBuildIo,
         mux: moduleBuildMux,
@@ -265,7 +268,7 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
         finishBuild: async (buildId, workingDir) => {
           const current = await getModuleBuild(scopedDb, buildId);
           if (!current || current.status === "cancelled") {
-            throw new Error("module build was cancelled");
+            throw new ModuleBuildSafeError("module build was cancelled");
           }
           const installed = await installModuleDraft(
             {
@@ -290,7 +293,9 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
             current.ownerUserId
           );
           if (!installed.ok) {
-            throw new Error(`generated module failed validation: ${installed.errors.join("; ")}`);
+            throw new ModuleBuildSafeError(
+              `generated module failed validation: ${installed.errors.join("; ")}`
+            );
           }
           return { moduleId: installed.moduleId };
         }
