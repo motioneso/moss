@@ -215,8 +215,9 @@ export function makeProviderConnectionCheckProbe(deps: {
       neutralDir = await mkdtemp(join(tmpdir(), "jarv1s-provider-check-"));
       const personaPath = join(neutralDir, "persona.md");
       await writeFile(personaPath, PROVIDER_CHECK_PERSONA, "utf8");
-      const commandIo =
-        deps.commandIo ?? createSanitizedTmuxIo({ ...(deps.env ?? process.env), HOME: neutralDir });
+      const env = deps.env ?? process.env;
+      const homeBase = resolveMossEnv(env, "JARVIS_CLI_HOME_BASE") ?? tmpdir();
+      const commandIo = deps.commandIo ?? createSanitizedTmuxIo({ ...env, HOME: homeBase });
 
       if (kind === "anthropic") {
         return await checkAnthropicProviderWithClaudeAuthStatus(commandIo);
