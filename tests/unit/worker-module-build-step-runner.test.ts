@@ -264,6 +264,66 @@ describe("createRunModuleBuildStepForJob", () => {
     expect(notifyFailed).toHaveBeenCalledTimes(1);
   });
 
+  it("preserves the thrown error's real message instead of just its name (#2154)", async () => {
+    const getModuleBuild = vi.fn(async () => build({ status: "building" }));
+    const updateModuleBuildStatus = vi.fn(async () => {});
+    const runStep = vi.fn(async () => {
+      throw new Error("generated module failed validation: jarvis.module.json is too large");
+    });
+    const notifyFinished = vi.fn(async () => {});
+    const notifyFailed = vi.fn(async () => {});
+
+    const runJob = createRunModuleBuildStepForJob({
+      dataContext: fakeDataContext(),
+      getModuleBuild,
+      touchModuleBuildActivity: vi.fn(async () => {}),
+      updateModuleBuildStatus,
+      prepareRunStepDeps: async () => ({}) as never,
+      runStep,
+      notifyFinished,
+      notifyFailed
+    });
+
+    await expect(runJob(payload())).rejects.toThrow();
+    expect(updateModuleBuildStatus).toHaveBeenCalledWith(
+      expect.anything(),
+      "b-1",
+      expect.objectContaining({
+        status: "failed",
+        error: "generated module failed validation: jarvis.module.json is too large"
+      })
+    );
+  });
+
+  it("does not retry against a build already marked failed (#2154)", async () => {
+    const getModuleBuild = vi.fn(async () => build({ status: "failed" }));
+    const updateModuleBuildStatus = vi.fn(async () => {});
+    const prepareRunStepDeps = vi.fn(async () => ({}) as never);
+    const runStep = vi.fn(async () => ({ deferred: false }) as ModuleBuildStepResult);
+    const notifyFinished = vi.fn(async () => {});
+    const notifyFailed = vi.fn(async () => {});
+
+    const runJob = createRunModuleBuildStepForJob({
+      dataContext: fakeDataContext(),
+      getModuleBuild,
+      touchModuleBuildActivity: vi.fn(async () => {}),
+      updateModuleBuildStatus,
+      prepareRunStepDeps,
+      runStep,
+      notifyFinished,
+      notifyFailed
+    });
+
+    const result = await runJob(payload());
+
+    expect(result).toEqual({ deferred: false });
+    expect(prepareRunStepDeps).not.toHaveBeenCalled();
+    expect(runStep).not.toHaveBeenCalled();
+    expect(updateModuleBuildStatus).not.toHaveBeenCalled();
+    expect(notifyFinished).not.toHaveBeenCalled();
+    expect(notifyFailed).not.toHaveBeenCalled();
+  });
+
   it("commits the failed status after the step transaction rolls back", async () => {
     let committedStatus = "building";
     let stagedStatus: string | null = null;
