@@ -1,10 +1,10 @@
 # Coordination Run — 2026-08-30-next-ready
 
 **Date:** 2026-08-30
-**Coordinator lock:** driving. Session `7da0b095-ed27-446c-8093-6aa95518ba11`, pane `w1:p3B`, registered agent name `coordinator`, visible pane label `Coordinator`. Took over from session `74b2593f-a099-4a30-a625-316977758c02` (pane `w1:p39`), which had hit its merge-counter relay trigger (2 merges: #2130, #2131) with context also near 70%; that pane's name/label were cleared and it was closed after this session confirmed it was driving.
+**Coordinator lock:** driving. Session `12e46e3c-518c-4e72-a57e-e2062eb7b465`, pane `w1:p3D`, registered agent name `coordinator`, visible pane label `Coordinator`. Took over from session `7da0b095-ed27-446c-8093-6aa95518ba11` (pane `w1:p3B`), which relayed after its own context warning hit 70%; that pane's name/label were cleared and it was closed after this session confirmed it was driving.
 **Merge policy:** autonomous after verified QA for `routine`/`sensitive`; `security` needs Ben's explicit merge sign-off.
 **Relay threshold:** relay after every security merge, every two routine/sensitive merges, any context warning, or any compaction summary.
-**merges_since_relay:** 1 (PR #2132 — routine documentation flush, merged 2026-08-31T04:49:31Z)
+**merges_since_relay:** 1 (PR #2134 — routine documentation flush recording the 1869 timezone bug, merged 2026-08-31)
 **Infrastructure limitation:** `coordinator-watchdog.timer` is still not installed on this host. Not retried this session.
 
 ## Queue
@@ -226,3 +226,21 @@ A fresh session is now working the fix in the same work folder and branch (`buil
 4. Keep mixing agent providers for future spawns rather than defaulting everyone to Claude.
 5. `coordinator-watchdog.timer` is still not installed on this computer — not urgent.
 6. `merges_since_relay` resets to 0 for the successor — two routine documentation merges (#2132, #2133) already happened this session.
+
+## Continuation note (2026-08-31, driving — new coordinator adopted lock)
+
+New coordinator, pane `w1:p3D`, session `12e46e3c-518c-4e72-a57e-e2062eb7b465`, took over from pane `w1:p3B` (session `7da0b095-...`), which had already relayed on its own context warning and confirmed it was standing back with no further work. Its name and label were cleared and the pane was closed.
+
+Merged pull request 2134 (the prior session's flush recording the timezone bug and the new fix lane) once its checks came back green — a routine, docs-only change.
+
+Checked the file that tracks open questions for Ben. It is still empty of anything waiting on him, same as last time it was checked.
+
+Checked on the fix lane, pane `w1:p3C`, agent name `issue-1869-timezone-fix` (a Codex session). It is still actively working, not stuck: it just ran the unit test file for the date and time code and got a failing result, and is continuing to iterate. No report back yet.
+
+**Next steps for whoever picks this up:**
+1. Keep watching pane `w1:p3C` (agent name `issue-1869-timezone-fix`). When it reports its fix is pushed and its own tests pass, do not merge pull request 2129 yet — spawn or arrange a fresh, real conversation demo on the fixed code first, the same hands-on check as before, and it must come back clean.
+2. Once that repeat demo comes back clean, apply the wave-2 kill gate before starting issue 1869 slice 2 or slice 3A: a live, hands-on check by Ben himself of whether the injected time confuses the assistant, not just automated tests and a code read. This is not something an agent can approve on its own.
+3. Keep every message to Ben, and every message between agents, in plain everyday words — no jargon, no invented shorthand, no strings of technical names packed into one sentence. Keep exact names such as file paths, commands, and error text available only for when someone needs to act on them directly.
+4. Keep mixing agent providers for future spawns rather than defaulting everyone to Claude.
+5. `coordinator-watchdog.timer` is still not installed on this computer — checked again, still true, not urgent.
+6. `merges_since_relay`: 1 (PR #2134, this session's own merge).
