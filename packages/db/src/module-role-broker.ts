@@ -8,7 +8,7 @@
 // IF/ELSE pattern: it makes Phase A self-healing against a crash between Phase B
 // (enableInstallerLogin) and Phase D (disableInstallerLogin), independent of Task 7's
 // retry/cleanup logic. A retried Phase A always leaves the install role login-disabled.
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 
 import { escapeIdentifier, escapeLiteral } from "pg";
 
@@ -25,17 +25,25 @@ function assertValidModuleId(moduleId: string): void {
   }
 }
 
-function moduleSlugForRole(moduleId: string): string {
+function moduleSlugForRole(
+  moduleId: string,
+  scope: string | undefined = process.env.JARVIS_TEST_MODULE_ROLE_SCOPE
+): string {
   assertValidModuleId(moduleId);
-  return moduleId.replace(/-/g, "_");
+  const slug = moduleId.replace(/-/g, "_");
+  // Test-only: the guarded integration runner scopes cluster-global roles to its database lane.
+  // Production never sets this variable, so deployed role names remain byte-for-byte unchanged.
+  if (!scope) return slug;
+  const hash = createHash("sha256").update(`${moduleId}\0${scope}`).digest("hex").slice(0, 8);
+  return `${slug.slice(0, 35)}_${hash}`;
 }
 
-export function moduleRuntimeRoleName(moduleId: string): string {
-  return `jarvis_mod_${moduleSlugForRole(moduleId)}_runtime`;
+export function moduleRuntimeRoleName(moduleId: string, scope?: string): string {
+  return `jarvis_mod_${moduleSlugForRole(moduleId, scope)}_runtime`;
 }
 
-export function moduleInstallRoleName(moduleId: string): string {
-  return `jarvis_mod_${moduleSlugForRole(moduleId)}_install`;
+export function moduleInstallRoleName(moduleId: string, scope?: string): string {
+  return `jarvis_mod_${moduleSlugForRole(moduleId, scope)}_install`;
 }
 
 export interface ModuleRoles {

@@ -8,11 +8,17 @@ import { Client } from "pg";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { installModule } from "../../scripts/module-install.js";
+import {
+  moduleInstallRoleName,
+  moduleRuntimeRoleName
+} from "../../packages/db/src/module-role-broker.js";
 import { getMossDatabaseUrls } from "../../packages/db/src/urls.js";
 import { dropModuleRolesAtTeardown, resetEmptyFoundationDatabase } from "./test-database.js";
 
 const urls = getMossDatabaseUrls();
 const moduleId = "finance";
+const installRole = moduleInstallRoleName(moduleId);
+const runtimeRole = moduleRuntimeRoleName(moduleId);
 const ownedTables = [
   "app.finance_items",
   "app.finance_accounts",
@@ -35,12 +41,12 @@ afterEach(async () => {
   // install role WITH GRANT OPTION (spec D2), and Phase B re-grants onward to the runtime role
   // from that grant option — revoking the install role's own grant needs CASCADE to also strip
   // the runtime role's dependent grant, or Postgres refuses both the revoke and the later DROP ROLE.
-  await client.query("REVOKE ALL PRIVILEGES ON SCHEMA app FROM jarvis_mod_finance_install CASCADE");
-  await client.query("REVOKE ALL PRIVILEGES ON app.users FROM jarvis_mod_finance_install");
+  await client.query(`REVOKE ALL PRIVILEGES ON SCHEMA app FROM ${installRole} CASCADE`);
+  await client.query(`REVOKE ALL PRIVILEGES ON app.users FROM ${installRole}`);
   await client.query(
-    "REVOKE EXECUTE ON FUNCTION app.current_actor_user_id() FROM jarvis_mod_finance_install CASCADE"
+    `REVOKE EXECUTE ON FUNCTION app.current_actor_user_id() FROM ${installRole} CASCADE`
   );
-  await dropModuleRolesAtTeardown(["jarvis_mod_finance_install", "jarvis_mod_finance_runtime"]);
+  await dropModuleRolesAtTeardown([installRole, runtimeRole]);
   await client.query("DELETE FROM app.module_installs WHERE module_id = $1", [moduleId]);
   await client.query("DELETE FROM app.module_schema_migrations WHERE module_id = $1", [moduleId]);
   await client.end();
