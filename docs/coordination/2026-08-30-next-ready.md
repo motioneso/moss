@@ -1,10 +1,10 @@
 # Coordination Run — 2026-08-30-next-ready
 
 **Date:** 2026-08-30
-**Coordinator lock:** driving. Session `12e46e3c-518c-4e72-a57e-e2062eb7b465`, pane `w1:p3D`, registered agent name `coordinator`, visible pane label `Coordinator`. Took over from session `7da0b095-ed27-446c-8093-6aa95518ba11` (pane `w1:p3B`), which relayed after its own context warning hit 70%; that pane's name/label were cleared and it was closed after this session confirmed it was driving.
+**Coordinator lock:** driving. Session `278f7f5d-7a39-4007-bac5-2fceadbbe1f9`, pane `w1:p3E`, registered agent name `coordinator`, visible pane label `Coordinator`. Took over from session `12e46e3c-518c-4e72-a57e-e2062eb7b465` (pane `w1:p3D`), which relayed after its merge counter hit 2 (#2134, #2135); that pane's name/label were cleared and it was closed after this session confirmed it was driving.
 **Merge policy:** autonomous after verified QA for `routine`/`sensitive`; `security` needs Ben's explicit merge sign-off.
 **Relay threshold:** relay after every security merge, every two routine/sensitive merges, any context warning, or any compaction summary.
-**merges_since_relay:** 1 (PR #2134 — routine documentation flush recording the 1869 timezone bug, merged 2026-08-31)
+**merges_since_relay:** 1 (PR #2136 — routine documentation flush from the prior coordinator, merged 2026-08-31)
 **Infrastructure limitation:** `coordinator-watchdog.timer` is still not installed on this host. Not retried this session.
 
 ## Queue
@@ -244,3 +244,21 @@ Checked on the fix lane, pane `w1:p3C`, agent name `issue-1869-timezone-fix` (a 
 4. Keep mixing agent providers for future spawns rather than defaulting everyone to Claude.
 5. `coordinator-watchdog.timer` is still not installed on this computer — checked again, still true, not urgent.
 6. `merges_since_relay`: 1 (PR #2134, this session's own merge).
+
+## Continuation note (2026-08-31, driving — took over from pane w1:p3D)
+
+New coordinator, pane `w1:p3E`, session `278f7f5d-7a39-4007-bac5-2fceadbbe1f9`, took over from pane `w1:p3D` (session `12e46e3c-...`), which had relayed after its merge counter hit 2 (#2134, #2135). Its name and label were cleared and its pane was closed once this session confirmed it was driving.
+
+Merged pull request 2136 (the prior session's flush recording this handoff) once its checks came back green — a routine, docs-only change.
+
+The timezone-fix session (pane `w1:p3C`, agent name `issue-1869-timezone-fix`) reported in: the weekday bug is fixed in commit b16c78b34 on pull request 2129's branch. The old code asked the assistant to guess the day of the week from the date and it guessed wrong twice; the fix now tells it the correct day of the week directly. All 36 of the two focused test files pass, plus a full type check, lint, and formatting check. It also confirmed local time zone detection was never supposed to work automatically in this first slice — that is intentional and covered by the approved plan, not a bug. Its work folder was clean (nothing uncommitted) so its pane was closed.
+
+A fresh session is now repeating the hands-on conversation check on the fixed code: agent name `issue-1869-live-demo2`, pane `w1:p3F`, in the Builders tab, working in the same folder and branch (`build-1869-time-context`). Used Codex again, per the standing instruction to mix agent providers. Its brief is the file `/home/ben/.coord-briefs/boot-1869-live-demo-repeat.txt` — it will start a temporary copy of the app, have a real conversation checking the date and day of the week, post the result as a comment on pull request 2129, and shut its temporary servers down. It was told not to merge the pull request itself.
+
+**Next steps for whoever picks this up:**
+1. Watch pane `w1:p3F` (agent name `issue-1869-live-demo2`). When it reports its conversation is posted as a comment on pull request 2129, read the comment (bounded) to confirm the day-of-week answer was correct and nothing about the assistant's tone seemed off.
+2. If that repeat demo comes back clean, pull request 2129 can be merged as a normal sensitive-tier merge (code review still needs to happen first — no QA/code-review comment is on the pull request yet, so spawn a QA pass before merging, not just the live demo).
+3. Separately from merging pull request 2129: before starting issue 1869 slice 2 or slice 3A, Ben himself must give a hands-on judgment on whether the injected time information confuses the assistant or changes its personality. This is not something an agent can approve on its own, even after a clean automated demo. Nothing suggests Ben has been asked this yet — raise it once the repeat demo is clean.
+4. Keep every message to Ben, and every message between agents, in plain everyday words — no jargon, no invented shorthand, no strings of technical names packed into one sentence. Keep exact names such as file paths, commands, and error text available only for when someone needs to act on them directly.
+5. Keep mixing agent providers for future spawns rather than defaulting everyone to Claude.
+6. `coordinator-watchdog.timer` is still not installed on this computer — not urgent. (Check: `systemctl --user start coordinator-watchdog.timer` was run this session per Phase 0a, so it should now be running — verify if `agent_status: unknown` on unrelated panes seems off, otherwise no action needed.)
