@@ -234,31 +234,20 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
     { stdio: "inherit" }
   );
 
-  // gateway.ts:573 (`runHandler`'s bare `catch {}`, pre-existing, PR #33) swallows every thrown
-  // HttpError message on this path by deliberate fail-closed design (never leak handler-throw
-  // internals into the model-context/chat sink — see gateway.ts:374's cross-referenced invariant).
-  // So the chat UI can only ever assert the generic "Not changed — Tool notes.create failed", not
-  // the specific "path is not within the linked notes source" text write-tools.ts throws. This is
-  // a known precision gap, ruled on by Opus adjudication (docs/coordination/post1632-queue-2026-08-16.md,
-  // "Take 38 — Opus adjudication: 1512 gateway.ts scope fork"): (b) and (c') below produce
-  // byte-identical generic text, so together they prove the guard chain refused the write, but NOT
-  // which specific guard (rejectSymlinkParent vs the #1512 recheck) fired. (c')'s specific guard is
-  // separately proven at the unit level by tests/integration/notes.test.ts:98-105. Fast-follow:
-  // an opt-in per-tool `safeErrors` flag (mirroring `externalContent` at
-  // module-sdk/src/index.ts:561 / gateway.ts:494-497) is tracked to surface safe guard messages
-  // without reversing the security control — see that issue for the real fix.
+  // notes.create opts into the gateway's safe error path: this fixed, path-free guard message is
+  // useful to the user and safe for the assistant to repeat.
   await composer.fill(
     `Use the notes.create tool with path set to exactly "D-${stamp}/x.md" and content set to ` +
       "exactly: should not be written. Do not ask a follow-up question."
   );
   await composer.press("Enter");
   await expect(
-    page.getByRole("status").filter({ hasText: "Not changed — Tool notes.create failed" })
+    page.getByRole("status").filter({ hasText: "path is not within the linked notes source" })
   ).toBeVisible({ timeout: 60_000 });
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
 
   // --- (c') the #1512 guard itself: leaf symlink, kernel-vs-lexical ".." divergence -------
-  // Same gateway.ts:573 generic-text limitation as (b) above — see the comment there.
+  // The opted-in notes.create tool exposes its fixed, path-free guard message.
   execFileSync(
     "docker",
     buildUatComposeArgs(projectName, [
@@ -280,7 +269,7 @@ test("notes write tools: in-root ops succeed, ancestor-symlink and lexical-escap
   );
   await composer.press("Enter");
   await expect(
-    page.getByRole("status").filter({ hasText: "Not changed — Tool notes.create failed" })
+    page.getByRole("status").filter({ hasText: "path is not within the linked notes source" })
   ).toBeVisible({ timeout: 60_000 });
   await expect(page.getByRole("button", { name: "Send" })).toBeVisible({ timeout: 60_000 });
 

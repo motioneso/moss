@@ -616,6 +616,11 @@ export interface ModuleAssistantToolManifest {
    */
   readonly externalContent?: boolean;
   /**
+   * When true, this tool's own HttpError text is shown to the user and assistant. Opt in only
+   * when its messages never include a path, a file name, anything the user typed, or user data.
+   */
+  readonly safeErrors?: true;
+  /**
    * Dot-path tokens into the frontend's `queryKeys` object (e.g. "settings.themes") that this
    * tool's successful write makes stale. The gateway copies this onto the `action_result` live
    * stream record only when the call executed; the frontend resolves each token generically and

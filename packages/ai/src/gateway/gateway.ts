@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { types as nodeUtilTypes } from "node:util";
 
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
 import { HttpError } from "@moss/module-sdk";
@@ -663,9 +664,14 @@ export class AssistantToolGateway {
           ok: false,
           // The cause id goes in the log above; the chat gets ordinary words. The model is free to
           // repeat this text to the user, so it must already read like something a person wrote.
-          error: cause
-            ? `Tool ${found.dto.name} failed: ${describeToolDependencyCause(cause)}.`
-            : `Tool ${found.dto.name} failed`
+          error:
+            found.tool.safeErrors === true &&
+            nodeUtilTypes.isNativeError(error) &&
+            error instanceof HttpError
+              ? error.message
+              : cause
+                ? `Tool ${found.dto.name} failed: ${describeToolDependencyCause(cause)}.`
+                : `Tool ${found.dto.name} failed`
         },
         moduleReportedErrorClass: null
       };

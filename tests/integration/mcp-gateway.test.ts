@@ -10,7 +10,7 @@ import {
   type GatewaySessionRecord
 } from "@moss/ai";
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
-import type { MossModuleManifest, ToolExecute } from "@moss/module-sdk";
+import { HttpError, type MossModuleManifest, type ToolExecute } from "@moss/module-sdk";
 
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 import { exampleToolCalls, exampleToolModule } from "./fixtures/example-tool-module.js";
@@ -179,6 +179,75 @@ describe("AssistantToolGateway", () => {
     });
     await expect(failing.callTool(token, "example.read", {})).rejects.toThrow();
     expect(resolverCalls).toBeGreaterThanOrEqual(2); // both surfaces actually invoked the resolver
+  });
+
+  it("only exposes explicitly safe HttpError messages from handler failures", async () => {
+    const failingTool = (name: string, error: unknown, safeErrors?: true) => ({
+      name,
+      description: "Throws an error.",
+      permissionId: "safe-errors.view",
+      actionFamilyId: "safe-errors",
+      risk: "write" as const,
+      executionPolicy: "auto" as const,
+      ...(safeErrors ? { safeErrors } : {}),
+      inputSchema: { type: "object", properties: {} },
+      execute: async () => {
+        throw error;
+      }
+    });
+    const safeErrorModule = {
+      id: "safe-errors",
+      name: "Safe errors",
+      version: "0",
+      publisher: "test",
+      lifecycle: "optional" as const,
+      compatibility: { jarv1s: "*" },
+      assistantActionFamilies: [
+        {
+          id: "safe-errors",
+          label: "Safe errors",
+          description: "Test handler errors.",
+          defaultTier: "ask_each_time" as const,
+          allowedTiers: ["ask_each_time", "trusted_auto"] as const
+        }
+      ],
+      assistantTools: [
+        failingTool("safe-errors.opted-in", new HttpError(400, "safe message"), true),
+        failingTool("safe-errors.default", new HttpError(400, "should stay hidden")),
+        failingTool("safe-errors.hostile", new Error("SECRET token=private-value"), true)
+      ]
+    } satisfies MossModuleManifest;
+    const safeGateway = new AssistantToolGateway({
+      resolveActiveModules: async () => [safeErrorModule],
+      repository,
+      runner,
+      tokens,
+      confirmations,
+      notifier: { emit: (chatSessionId, record) => emitted.push({ chatSessionId, record }) },
+      confirmTimeoutMs: 1000,
+      actionPolicy: () => ({
+        getFamilyTier: async () => "trusted_auto",
+        getFamilyManifest: async () => safeErrorModule.assistantActionFamilies[0] ?? null
+      })
+    });
+    const token = tokens.mint({
+      actorUserId: ids.userA,
+      chatSessionId: "safe-errors",
+      allowedToolNames: null
+    });
+
+    await expect(safeGateway.callTool(token, "safe-errors.opted-in", {})).resolves.toEqual({
+      ok: false,
+      error: "safe message"
+    });
+    await expect(safeGateway.callTool(token, "safe-errors.default", {})).resolves.toEqual({
+      ok: false,
+      error: "Tool safe-errors.default failed"
+    });
+    await expect(safeGateway.callTool(token, "safe-errors.hostile", {})).resolves.toEqual({
+      ok: false,
+      error: "Tool safe-errors.hostile failed"
+    });
   });
 
   it("auto write tools can receive declared services while read tools cannot", async () => {
