@@ -376,3 +376,51 @@ Provider mix so far on this issue: Codex, Codex, Claude (the fix), Codex (this d
 review). Keep alternating.
 
 `merges_since_relay`: 2 (pull requests 2138 and 2139). At the threshold - relay after the next one.
+
+## Both gates on pull request 2129 came back, 2026-08-31
+
+**The real conversation check passed.** On the fixed code, across three turns, the assistant
+correctly said August 31, 2026 is a Monday, said plainly and consistently that it did not know the
+local time zone, answered from world standard time, never guessed a zone or a region, and never
+walked anything back. Verdict and full conversation are posted on pull request 2129
+(comment 5474241696); the saved conversation is at
+`/tmp/webwright-1869-live-demo/final_runs/run_7/final_script_log.txt`. Both temporary servers were
+stopped and ports 3199 and 5199 confirmed free. That lane's pane was closed; its folder was clean.
+
+**The code review approved it, with notes.** The reviewer read every changed file, checked awkward
+moments by hand (a date boundary, both clock changes, a +13 zone and a 45-minute-offset zone), and
+confirmed nothing private or secret goes into the block and that the time text is never saved into
+the conversation. Its only stated blocker was the live proof, which is now posted. That lane's pane
+and its read-only copy of the branch were both removed.
+
+### Two of the five review notes are being fixed before merge
+
+A short lane is on it: `issue-1869-review-notes`, pane `w1:p3M`, Codex, same branch and folder.
+
+1. Two lines in the text handed to the assistant pull against each other around midnight. One says
+   the fresh time replaces any earlier date; the other says never contradict an earlier turn about
+   the date. The date genuinely does change in a long conversation, so an assistant reading both
+   could decide it must stick with yesterday's date. Being reworded, with tests across local
+   midnight and a daylight saving change - neither is covered today.
+2. If a lookup fails partway through a turn, an already-known time zone is silently lost and the
+   assistant suddenly says it does not know where the person is, mid-conversation. Being fixed to
+   keep the zone once it has been read.
+
+The other three notes were judged not blockers and were explicitly excluded from that lane's job:
+the extra database read on the quiet path is required by the approved design; someone typing text
+that mimics the time block is a pre-existing shape everywhere else and is not made worse here; and
+the length of the "I do not know your time zone" wording is being watched rather than changed.
+
+**After that lane reports and its tests pass, pull request 2129 can merge** - no further live check
+or review is needed, since both gates have now been cleared and these are small follow-ups to an
+already-approved change. Then slice 2 and slice 3A become startable, with no wait on Ben.
+
+### A note on the relay counter
+
+`merges_since_relay` is 3 (pull requests 2138, 2139, 2140), past the threshold of 2. This coordinator
+is deliberately NOT relaying yet. It is early in its context, and this run has just been through a
+failed handoff - the previous session in this pane died mid-relay and had to be recovered. Ben's
+standing feedback is that this project hands off far too much. Relaying a barely-used session to
+satisfy a counter would repeat exactly that. This coordinator will relay when its context actually
+warrants it, or after the 2129 merge, whichever comes first. Flagged here so it is a visible
+decision rather than a silently skipped rule.
