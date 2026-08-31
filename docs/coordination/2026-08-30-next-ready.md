@@ -1,10 +1,10 @@
 # Coordination Run — 2026-08-30-next-ready
 
 **Date:** 2026-08-30
-**Coordinator lock:** relaying now — successor should adopt as registered agent name `coordinator` + visible pane label `Coordinator` once driving. Handing off from session `a2b54fa8-1c5e-42bc-a664-86220d987786` (pane `w1:p38`), relaying because the merge counter hit 2 routine merges (own context also at 67%, close to the warning).
+**Coordinator lock:** driving. Session `74b2593f-a099-4a30-a625-316977758c02`, pane `w1:p39`, registered agent name `coordinator`, visible pane label `Coordinator`. Took over from session `a2b54fa8-1c5e-42bc-a664-86220d987786` (pane `w1:p38`), which confirmed by direct message it was stepping back with no further work.
 **Merge policy:** autonomous after verified QA for `routine`/`sensitive`; `security` needs Ben's explicit merge sign-off.
 **Relay threshold:** relay after every security merge, every two routine/sensitive merges, any context warning, or any compaction summary.
-**merges_since_relay:** 0 (reset — this relay's own flush merge does not count against the successor)
+**merges_since_relay:** 1 (PR #2130)
 **Infrastructure limitation:** `coordinator-watchdog.timer` is still not installed on this host. Not retried this session.
 
 ## Queue
@@ -135,6 +135,7 @@ This session (pane `w1:p36`, session id `dbbc22c7-342d-410c-bc9d-38ad2d86b64e`) 
 | #2126 | coordinator: record lock takeover after 70% relay, merge #2125 | routine (docs) | **yes — merged as `a3b16965e`** |
 | #2127 | coordinator: record #2126/#2116 merges, flush state before third relay | routine (docs) | **yes — merged as `98ac367cb`** |
 | #2128 | coordinator: take over lock after third 70% relay, merge #2127, reap #1784 lane and QA pane | routine (docs) | **yes — merged as `2c10cc981`** |
+| #2130 | coordinator: flush state before relay (merge counter + context meter both hit) | routine (docs) | **yes — merged as `6775c9e3f`** |
 
 ## Continuation note (2026-08-31, driving — took over after third 70% relay)
 
@@ -180,3 +181,22 @@ This session (pane `w1:p38`, session `a2b54fa8-1c5e-42bc-a664-86220d987786`) mer
 - Build agent `issue-1784-chip-relay1`, pane `w1:p20` — work merged (PR #2116, issue #1784 closed); confirmed its two leftover processes stopped, then closed; worktree removed after confirming the code landed on main.
 - QA agent `qa-2116-r2`, pane `w1:p37` — verdict already posted and consumed, PR #2116 already merged; closed, no further work needed.
 - Build agent `issue-1869-time-context-relay2`, pane `w1:p2Y` — finished all code and tests for issue 1869 slice 1, opened pull request 2129, and stopped itself rather than take a third do-over, per the one-relay rule; pane closed once its report was read. Work folder left in place (pull request not yet merged) for the next session to reuse.
+- Old coordinator, pane `w1:p38`, session `a2b54fa8-...` — relayed after hitting both the merge counter and its own context warning at the same time; confirmed by direct message that it was stepping back with no further work, then closed once this session took over the coordinator name.
+
+## Continuation note (2026-08-31, driving — new coordinator adopted lock)
+
+New coordinator, pane `w1:p39`, session `74b2593f-a099-4a30-a625-316977758c02`, took over from pane `w1:p38` (session `a2b54fa8-...`). That pane confirmed by direct message it was stepping back with no further work; its name and label were cleared and it was closed.
+
+Merged pull request 2130 (the documentation handoff from the last coordinator) once its last check went green — a routine, docs-only change, merged as commit `6775c9e3f`.
+
+Confirmed the outstanding wave-2 item from the handoff: pull request 2129 (issue 1869 slice 1, per-turn time context) is code-complete, its own checks have passed, and it is rebased on the latest shared code. The only thing left is a live, hands-on conversation proving the assistant knows the real date and time, posted as a comment on the pull request, then merging it. The prior build lane's pane had already closed itself after finishing the code — no lane was left running.
+
+Spawned a fresh, single-purpose session for just that one step, reusing the same work folder and branch (`build-1869-time-context`). Used Codex this time rather than Claude, per Ben's standing instruction to mix agent providers. Agent name `issue-1869-live-demo`, pane `w1:p3A`, in the Builders tab. It is already working — read its brief and started searching saved memory for the login-on-a-nonstandard-port fix.
+
+Checked the watchdog again: `coordinator-watchdog.timer` is still not installed on this computer, same finding as every prior session this run.
+
+**Next steps for whoever picks this up:**
+1. Watch pane `w1:p3A` (agent name `issue-1869-live-demo`). When it reports the real conversation is posted as a comment on pull request 2129 and the pull request is merged, close its pane and confirm the work folder is safe to remove (all four reap checks), then remove it.
+2. Once pull request 2129 lands, apply the wave-2 kill gate: a live, Ben-judged check of whether the injected time confuses the assistant or changes its personality, before starting issue 1869 slice 2 or slice 3A. This is a judgment call for Ben, not something an agent can tick off on its own — the Codex session's live demo proves the feature works, not that Ben has approved moving on.
+3. Keep every message to Ben, and every message between agents, in plain everyday words — no jargon, no invented shorthand, no strings of technical names packed into one sentence. Keep exact names such as file paths, commands, and error text available only for when someone needs to act on them directly.
+4. Keep mixing agent providers for the next round of build or review agents rather than defaulting everyone to Claude.
