@@ -15,14 +15,19 @@ export { CORE_VERSION, compareMossVersions, satisfiesCoreVersion } from "./core-
 export { createModuleLogger } from "./logger.js";
 // #1723 item 1: local-day arithmetic for modules that record dated data. Intl only, no node:*, so
 // the barrel stays browser-safe.
+// #1869 slice 3A: the shared strict local-wall-clock-to-instant converter, so Food's write
+// boundary (slice 3B) and any future module reuse one canonical DST-safe conversion.
 export {
   addLocalDays,
   isValidTimeZone,
   localDayKey,
   localDayRange,
   resolveLocalDay,
+  StrictLocalWallClockError,
+  strictLocalWallClockToInstant,
   timeZoneOffsetMinutes,
-  todayLocalDayKey
+  todayLocalDayKey,
+  type StrictLocalWallClockErrorReason
 } from "./time.js";
 // #1723 item 3: the shape a module's list tool returns, so the next one does not have to decide
 // which end of an over-long list to drop.

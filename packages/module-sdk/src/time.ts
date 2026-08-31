@@ -154,3 +154,182 @@ export function addLocalDays(localDate: string, days: number): string {
   const shifted = new Date(Date.UTC(year, month - 1, day + days));
   return shifted.toISOString().slice(0, 10);
 }
+
+/** #1869 slice 3A: why a wall clock cannot become a naive `.toISOString()` reinterpretation. */
+export type StrictLocalWallClockErrorReason =
+  | "invalid-syntax"
+  | "invalid-timezone"
+  | "dst-gap"
+  | "dst-fold";
+
+/**
+ * Thrown by {@link strictLocalWallClockToInstant}. `reason` lets a caller (Food's write boundary,
+ * #1869 slice 3B) map this to its own bounded validation error without parsing the message text.
+ */
+export class StrictLocalWallClockError extends Error {
+  readonly reason: StrictLocalWallClockErrorReason;
+
+  constructor(reason: StrictLocalWallClockErrorReason, message: string) {
+    super(message);
+    this.name = "StrictLocalWallClockError";
+    this.reason = reason;
+  }
+}
+
+interface WallClockParts {
+  readonly year: number;
+  readonly month: number;
+  readonly day: number;
+  readonly hour: number;
+  readonly minute: number;
+  readonly second: number;
+}
+
+/** The wall-clock parts `instant` is observed as in `timeZone`, for equality checks against input. */
+function localWallClockParts(instant: Date, timeZone: string): WallClockParts {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  }).formatToParts(instant);
+  const values = new Map(parts.map((part) => [part.type, part.value]));
+  return {
+    year: Number(values.get("year")),
+    month: Number(values.get("month")),
+    day: Number(values.get("day")),
+    hour: Number(values.get("hour")),
+    minute: Number(values.get("minute")),
+    second: Number(values.get("second"))
+  };
+}
+
+function wallClockPartsEqual(a: WallClockParts, b: WallClockParts): boolean {
+  return (
+    a.year === b.year &&
+    a.month === b.month &&
+    a.day === b.day &&
+    a.hour === b.hour &&
+    a.minute === b.minute &&
+    a.second === b.second
+  );
+}
+
+const LOCAL_WALL_CLOCK_PATTERN =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/;
+
+/**
+ * Converts an offset-less local wall-clock date-time (`YYYY-MM-DDTHH:mm[:ss[.sss]]`, no `Z` and no
+ * numeric offset) to the exact UTC instant it denotes in `timeZone`.
+ *
+ * #1869: this is the one canonical version of the conversion Food's write boundary needs, so a
+ * second module never re-derives it slightly differently. An offset-bearing timestamp is already
+ * unambiguous and does not go through this function — parse it directly and never reinterpret it
+ * against a time zone.
+ *
+ * Strict on purpose: silently shifting an ambiguous or nonexistent wall-clock time recreates the
+ * class of corruption this exists to fix. Two situations are rejected rather than guessed at:
+ *
+ * - A spring-forward gap (e.g. 2:30am on the day a zone's clocks jump from 2am to 3am) denotes no
+ *   instant at all.
+ * - A fall-back fold (e.g. 1:30am on the day a zone's clocks repeat 1am-2am) denotes two different
+ *   instants an hour apart.
+ *
+ * Both cases throw a {@link StrictLocalWallClockError}; the caller must supply an explicit offset
+ * instead of calling this function.
+ *
+ * Detection samples the zone's offset a day either side of the wall-clock moment — far enough from
+ * any single transition to land on the settled offset on each side — builds the (at most two)
+ * resulting candidate instants, and keeps only the ones that round-trip back through
+ * `Intl.DateTimeFormat` to the exact wall clock requested. Exactly one surviving candidate is the
+ * valid, unambiguous answer.
+ */
+export function strictLocalWallClockToInstant(localDateTime: string, timeZone: string): Date {
+  const match = LOCAL_WALL_CLOCK_PATTERN.exec(localDateTime);
+  if (!match) {
+    throw new StrictLocalWallClockError(
+      "invalid-syntax",
+      `strictLocalWallClockToInstant: expected an offset-less local date-time like ` +
+        `"YYYY-MM-DDTHH:mm:ss", got ${JSON.stringify(localDateTime)}`
+    );
+  }
+  if (!isValidTimeZone(timeZone)) {
+    throw new StrictLocalWallClockError(
+      "invalid-timezone",
+      `strictLocalWallClockToInstant: "${timeZone}" is not a recognised time zone`
+    );
+  }
+
+  const [, yearStr, monthStr, dayStr, hourStr, minuteStr, secondStr, fractionStr] = match;
+  const wall: WallClockParts = {
+    year: Number(yearStr),
+    month: Number(monthStr),
+    day: Number(dayStr),
+    hour: Number(hourStr),
+    minute: Number(minuteStr),
+    second: secondStr === undefined ? 0 : Number(secondStr)
+  };
+  const millisecond =
+    fractionStr === undefined ? 0 : Number(fractionStr.padEnd(3, "0").slice(0, 3));
+
+  const wallAsUtc = Date.UTC(
+    wall.year,
+    wall.month - 1,
+    wall.day,
+    wall.hour,
+    wall.minute,
+    wall.second,
+    millisecond
+  );
+  const roundTrip = new Date(wallAsUtc);
+  if (
+    roundTrip.getUTCFullYear() !== wall.year ||
+    roundTrip.getUTCMonth() !== wall.month - 1 ||
+    roundTrip.getUTCDate() !== wall.day ||
+    roundTrip.getUTCHours() !== wall.hour ||
+    roundTrip.getUTCMinutes() !== wall.minute ||
+    roundTrip.getUTCSeconds() !== wall.second
+  ) {
+    // Date.UTC silently rolls a nonexistent calendar date (month 13, day 32, ...) into the next
+    // one instead of failing, so the round trip above is the only way to catch it.
+    throw new StrictLocalWallClockError(
+      "invalid-syntax",
+      `strictLocalWallClockToInstant: "${localDateTime}" is not a valid calendar date-time`
+    );
+  }
+
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const settledOffsets = new Set([
+    timeZoneOffsetMinutes(new Date(wallAsUtc - DAY_MS), timeZone),
+    timeZoneOffsetMinutes(new Date(wallAsUtc + DAY_MS), timeZone)
+  ]);
+
+  const candidates = new Set<number>();
+  for (const offsetMinutes of settledOffsets) {
+    const candidateInstantMs = wallAsUtc - offsetMinutes * 60_000;
+    if (wallClockPartsEqual(localWallClockParts(new Date(candidateInstantMs), timeZone), wall)) {
+      candidates.add(candidateInstantMs);
+    }
+  }
+
+  if (candidates.size === 0) {
+    throw new StrictLocalWallClockError(
+      "dst-gap",
+      `strictLocalWallClockToInstant: "${localDateTime}" does not exist in "${timeZone}" ` +
+        `(it falls in a spring-forward gap); supply an explicit offset instead`
+    );
+  }
+  if (candidates.size > 1) {
+    throw new StrictLocalWallClockError(
+      "dst-fold",
+      `strictLocalWallClockToInstant: "${localDateTime}" is ambiguous in "${timeZone}" ` +
+        `(it falls in a fall-back fold); supply an explicit offset instead`
+    );
+  }
+
+  return new Date([...candidates][0] as number);
+}
