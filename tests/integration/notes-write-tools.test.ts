@@ -101,10 +101,14 @@ describe("notes write assistant tools", () => {
     );
     expect(tools.get("notes.create")?.risk).toBe("write");
     expect(tools.get("notes.create")?.executionPolicy).toBe("auto");
+    expect(tools.get("notes.create")?.safeErrors).toBe(true);
     expect(tools.get("notes.edit")?.risk).toBe("write");
     expect(tools.get("notes.edit")?.executionPolicy).toBe("auto");
+    expect(tools.get("notes.edit")?.safeErrors).toBe(true);
     expect(tools.get("notes.delete")?.risk).toBe("write");
     expect(tools.get("notes.delete")?.executionPolicy).toBe("auto");
+    expect(tools.get("notes.delete")?.safeErrors).toBe(true);
+    expect(tools.get("notes.search")?.safeErrors).toBeUndefined();
     expect(
       tools.get("notes.delete")?.summarize?.(
         { path: "x.md" },
