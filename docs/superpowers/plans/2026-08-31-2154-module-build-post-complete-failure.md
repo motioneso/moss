@@ -16,7 +16,7 @@ context from issue #1902. **Task issue:** #2154, `Part of #1739`.
 - `finishBuild` is implemented in `apps/worker/src/worker.ts:265-296`. It calls
   `installModuleDraft` (`packages/module-registry/src/external/install-draft.ts:38-70`) and, on a
   structured failure, throws `new Error(\`generated module failed validation: ${...}\`)`
-  (`worker.ts:292-294`) — a real, useful message that today never survives the catch block above.
+(`worker.ts:292-294`) — a real, useful message that today never survives the catch block above.
 - `installModuleDraft` calls `statSync(manifestPath)` with no try/catch
   (`install-draft.ts:43-44`). If the build never wrote `jarvis.module.json`, this throws a raw
   `ENOENT` fs error instead of the function's own structured `{ ok: false, errors }` shape that
@@ -48,7 +48,7 @@ Change the catch block (currently lines 84-94) so the stored `error` string is
 `error.message`, not `error.name`:
 
 ```ts
-error: error instanceof Error ? error.message : "unknown error"
+error: error instanceof Error ? error.message : "unknown error";
 ```
 
 **Test change:** `tests/unit/worker-module-build-step-runner.test.ts:238-265` — update the
@@ -128,12 +128,14 @@ No prompts, no chat surfaces touched.
 ```bash
 pnpm --filter @moss/worker exec vitest run tests/unit/worker-module-build-step-runner.test.ts > /tmp/2154-step-runner.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`, 3 relevant tests passing (updated regression test + new failed-status test +
 pre-existing tests unchanged).
 
 ```bash
 pnpm --filter @moss/module-registry exec vitest run tests/unit/module-registry-install-draft.test.ts > /tmp/2154-install-draft.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`, new missing-manifest test passing alongside existing suite.
 
 Full isolated gate via the `verify-gate` skill before wrap-up (never run `pnpm verify:foundation`

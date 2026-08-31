@@ -38,7 +38,9 @@ const SAFE_CLASS_NAME = /^[A-Za-z][A-Za-z0-9_]{0,39}$/;
 function safeModuleBuildErrorMessage(error: unknown): string {
   if (error instanceof ModuleBuildSafeError) return error.message;
   const name = error instanceof Error ? error.name : undefined;
-  return name && SAFE_CLASS_NAME.test(name) ? `module build failed (${name})` : "module build failed";
+  return name && SAFE_CLASS_NAME.test(name)
+    ? `module build failed (${name})`
+    : "module build failed";
 }
 
 export interface RunModuleBuildStepForJobDeps {
