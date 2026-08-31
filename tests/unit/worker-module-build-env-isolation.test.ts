@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest";
 import { createModuleBuildIo } from "../../apps/worker/src/worker.js";
 
 async function deliveredEnv(source: NodeJS.ProcessEnv, moduleBuildCliHome: string) {
-  const io = createModuleBuildIo(source, moduleBuildCliHome);
+  const io = createModuleBuildIo(moduleBuildCliHome, source);
   const printEnvScript = "process.stdout.write(JSON.stringify(process.env))";
   const result = await io.run(process.execPath, ["-e", printEnvScript]);
   return JSON.parse(result.stdout) as Record<string, string | undefined>;

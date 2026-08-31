@@ -137,7 +137,10 @@ export function resolveModuleBuildCliHome(
  * (tmux, the provider CLI, post-write build commands) runs with the sanitized allowlisted env
  * (§7.2), not the worker's full environment — closing the same door the chat path already closed.
  */
-export function createModuleBuildIo(env: NodeJS.ProcessEnv, moduleBuildCliHome: string): TmuxIo {
+export function createModuleBuildIo(
+  moduleBuildCliHome: string,
+  env: NodeJS.ProcessEnv = process.env
+): TmuxIo {
   return createSanitizedTmuxIo({ ...env, HOME: moduleBuildCliHome });
 }
 
@@ -230,7 +233,7 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   const moduleBuildsDir = resolveModuleBuildsDir(process.env);
   const modulesDir = resolveModulesDir(process.env);
   const moduleBuildCliHome = resolveModuleBuildCliHome(process.env);
-  const moduleBuildIo = createModuleBuildIo(process.env, moduleBuildCliHome);
+  const moduleBuildIo = createModuleBuildIo(moduleBuildCliHome, process.env);
   const moduleBuildMux = new TmuxMultiplexer(moduleBuildIo, { homeBase: moduleBuildCliHome });
   const aiRepository = new AiRepository();
   const moduleBuildNotifications = new NotificationsRepository(
