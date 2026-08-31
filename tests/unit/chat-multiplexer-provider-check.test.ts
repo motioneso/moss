@@ -1,9 +1,83 @@
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { makeProviderConnectionCheckProbe } from "../../packages/module-registry/src/chat-multiplexer.js";
 import type { TmuxIo } from "../../packages/ai/src/adapters/tmux-bridge.js";
 
+const FAKE_CLAUDE_SCRIPT = (capturePath: string) =>
+  `#!/bin/sh\n` +
+  `/usr/bin/env > "${capturePath}"\n` +
+  `if [ -f "$HOME/credential-marker" ]; then\n` +
+  `  printf '{"loggedIn":true}\\n'\n` +
+  `else\n` +
+  `  printf '{"loggedIn":false}\\n'\n` +
+  `fi\n`;
+
 describe("makeProviderConnectionCheckProbe", () => {
+  it("gives the real provider check the credential-bearing CLI home, not the scratch persona dir", async () => {
+    const fakeBin = await mkdtemp(join(tmpdir(), "jarv1s-provider-bin-"));
+    const capturePath = join(fakeBin, "delivered-env");
+    await writeFile(join(fakeBin, "claude"), FAKE_CLAUDE_SCRIPT(capturePath), { mode: 0o755 });
+    const homeBase = await mkdtemp(join(tmpdir(), "jarv1s-provider-home-"));
+    await writeFile(join(homeBase, "credential-marker"), "logged-in", "utf8");
+    const probe = makeProviderConnectionCheckProbe({
+      engineFactory: () => {
+        throw new Error("anthropic provider checks should not open an interactive engine");
+      },
+      cliPresent: async () => true,
+      skipInstallCheck: true,
+      env: {
+        PATH: `${fakeBin}:${process.env.PATH ?? "/usr/bin"}`,
+        HOME: "/real-user-home",
+        JARVIS_CLI_HOME_BASE: homeBase,
+        BETTER_AUTH_SECRET: "must-not-reach-provider"
+      }
+    });
+
+    try {
+      await expect(probe("anthropic")).resolves.toEqual({ status: "ready" });
+      const delivered = Object.fromEntries(
+        (await readFile(capturePath, "utf8"))
+          .trim()
+          .split("\n")
+          .map((line) => line.split(/=(.*)/s, 2))
+      );
+      expect(delivered.HOME).toBe(homeBase);
+      expect(delivered.BETTER_AUTH_SECRET).toBeUndefined();
+    } finally {
+      await rm(fakeBin, { recursive: true, force: true });
+      await rm(homeBase, { recursive: true, force: true });
+    }
+  });
+
+  it("reports needs_login when the CLI home carries no credential", async () => {
+    const fakeBin = await mkdtemp(join(tmpdir(), "jarv1s-provider-bin-"));
+    const capturePath = join(fakeBin, "delivered-env");
+    await writeFile(join(fakeBin, "claude"), FAKE_CLAUDE_SCRIPT(capturePath), { mode: 0o755 });
+    const homeBase = await mkdtemp(join(tmpdir(), "jarv1s-provider-home-empty-"));
+    const probe = makeProviderConnectionCheckProbe({
+      engineFactory: () => {
+        throw new Error("anthropic provider checks should not open an interactive engine");
+      },
+      cliPresent: async () => true,
+      skipInstallCheck: true,
+      env: {
+        PATH: `${fakeBin}:${process.env.PATH ?? "/usr/bin"}`,
+        JARVIS_CLI_HOME_BASE: homeBase
+      }
+    });
+
+    try {
+      await expect(probe("anthropic")).resolves.toEqual({ status: "needs_login" });
+    } finally {
+      await rm(fakeBin, { recursive: true, force: true });
+      await rm(homeBase, { recursive: true, force: true });
+    }
+  });
+
   it("checks Claude with claude auth status instead of opening an interactive engine", async () => {
     const runs: Array<{ cmd: string; args: readonly string[] }> = [];
     const commandIo = {

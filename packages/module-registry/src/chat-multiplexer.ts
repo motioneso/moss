@@ -1,5 +1,5 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { Kysely } from "kysely";
@@ -13,7 +13,6 @@ import type {
 import {
   cliAvailable,
   createBinaryProbe,
-  createRealTmuxIo,
   decideMultiplexer,
   isRootWorkspaceConfigured,
   resolveMultiplexer,
@@ -28,6 +27,7 @@ import {
   type ChatEngineFactory,
   type RpcConnection
 } from "@moss/chat";
+import { createSanitizedTmuxIo } from "@moss/cli-runner";
 import type { CliChatEngine, PersistentRuntimeLaunchConfig, ReapReason } from "@moss/chat/live";
 import {
   CHAT_PERSISTENT_IDLE_REAP_MINUTES_CONFIG_KEY,
@@ -181,6 +181,7 @@ export function makeProviderConnectionCheckProbe(deps: {
   readonly cliPresent: (kind: OnboardingProviderKind) => Promise<boolean>;
   readonly skipInstallCheck?: boolean;
   readonly commandIo?: Pick<TmuxIo, "run">;
+  readonly env?: NodeJS.ProcessEnv;
   /**
    * #342: when the cli-runner socket is configured, the provider auth/presence check runs INSIDE
    * cli-runner (the CLIs + their auth are not in the api container). Route the whole check through the
@@ -214,19 +215,18 @@ export function makeProviderConnectionCheckProbe(deps: {
       neutralDir = await mkdtemp(join(tmpdir(), "jarv1s-provider-check-"));
       const personaPath = join(neutralDir, "persona.md");
       await writeFile(personaPath, PROVIDER_CHECK_PERSONA, "utf8");
+      const env = deps.env ?? process.env;
+      const homeBase = resolveMossEnv(env, "JARVIS_CLI_HOME_BASE") ?? env.HOME ?? homedir();
+      const commandIo = deps.commandIo ?? createSanitizedTmuxIo({ ...env, HOME: homeBase });
 
       if (kind === "anthropic") {
-        return await checkAnthropicProviderWithClaudeAuthStatus(
-          deps.commandIo ?? createRealTmuxIo()
-        );
+        return await checkAnthropicProviderWithClaudeAuthStatus(commandIo);
       }
       if (kind === "openai-compatible") {
-        return await checkOpenAiCompatibleProviderWithCodexLoginStatus(
-          deps.commandIo ?? createRealTmuxIo()
-        );
+        return await checkOpenAiCompatibleProviderWithCodexLoginStatus(commandIo);
       }
       if (kind === "google") {
-        return await checkGoogleProviderWithOneShotPrompt(deps.commandIo ?? createRealTmuxIo());
+        return await checkGoogleProviderWithOneShotPrompt(commandIo);
       }
 
       engine = await deps.engineFactory(kind, `onboarding-check-${kind}`);
@@ -585,7 +585,8 @@ export async function resolveChatEngineFactory(deps: {
   onPersistentReap?: (sessionKey: string, reason: ReapReason) => void;
 }): Promise<ChatEngineFactory> {
   const env = deps.env ?? process.env;
-  const io = createRealTmuxIo();
+  const homeBase = resolveMossEnv(env, "JARVIS_CLI_HOME_BASE") ?? env.HOME ?? homedir();
+  const io = createSanitizedTmuxIo({ ...env, HOME: homeBase });
   const probe = createBinaryProbe(env);
 
   // Boot resolution must NEVER crash server readiness (the documented "disabled, not

@@ -2719,6 +2719,7 @@ export function registerBuiltInApiRoutes(
       engineFactory: chatEngineFactory,
       cliPresent,
       skipInstallCheck: dependencies.chatEngineFactory !== undefined,
+      env,
       connection: getRpcConnection
     }),
     connectorAccountExists: async (scopedDb: DataContextDb) =>
