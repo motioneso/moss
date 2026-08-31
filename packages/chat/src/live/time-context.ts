@@ -44,7 +44,7 @@ export function renderCurrentTimeContext(instant: Date, timezone: string | null)
   }
   lines.push(
     "This is the authoritative current time for this turn; it supersedes any earlier date or time context in this conversation.",
-    "Say the same thing about the date, weekday and time zone every time it comes up in this conversation; never contradict an earlier turn about them."
+    "Stay consistent with the authoritative time for each turn: let the date and weekday move forward when the current time does, and do not flip-flop about the known time zone."
   );
   lines.push("</current_time_context>");
   return lines.join("\n");

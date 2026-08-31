@@ -42,9 +42,9 @@ export async function buildEngineText(
   surface?: ChatSurface
 ): Promise<{ text: string; pendingItems: AnswerSourceSupport[] }> {
   const instant = deps.now?.() ?? new Date();
+  let timezone: string | null = null;
 
   if (!deps.passiveRetrieval && !deps.crossToolRead && !deps.notesRetrieval) {
-    let timezone: string | null = null;
     try {
       const threadCtx = await deps.persistence.getThreadContext(actorUserId, surface);
       timezone = threadCtx.localTimezone;
@@ -57,7 +57,10 @@ export async function buildEngineText(
   try {
     const [{ recent }, threadCtx] = await Promise.all([
       deps.persistence.listPriorTurns(actorUserId, undefined, surface),
-      deps.persistence.getThreadContext(actorUserId, surface)
+      deps.persistence.getThreadContext(actorUserId, surface).then((context) => {
+        timezone = context.localTimezone;
+        return context;
+      })
     ]);
 
     const timeBlock = renderCurrentTimeContext(instant, threadCtx.localTimezone);
@@ -156,7 +159,7 @@ export async function buildEngineText(
     const bodyText = combined ? `${combined}\n\n${text}` : text;
     return { text: `${timeBlock}\n\n${bodyText}`, pendingItems };
   } catch {
-    const timeBlock = renderCurrentTimeContext(instant, null);
+    const timeBlock = renderCurrentTimeContext(instant, timezone);
     return { text: `${timeBlock}\n\n${text}`, pendingItems: [] };
   }
 }

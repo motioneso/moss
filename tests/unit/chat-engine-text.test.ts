@@ -20,6 +20,36 @@ it("states the correct UTC and local weekdays at the Pacific date boundary (#186
   expect(context).toContain("2026-08-30 (Sunday) 21:50 (America/Los_Angeles");
 });
 
+it("lets the local date and weekday advance across midnight (#1869 review)", () => {
+  const before = renderCurrentTimeContext(
+    new Date("2026-08-31T06:59:00.000Z"),
+    "America/Los_Angeles"
+  );
+  const after = renderCurrentTimeContext(
+    new Date("2026-08-31T07:01:00.000Z"),
+    "America/Los_Angeles"
+  );
+
+  expect(before).toContain("2026-08-30 (Sunday) 23:59");
+  expect(after).toContain("2026-08-31 (Monday) 00:01");
+  expect(after).toContain("let the date and weekday move forward");
+  expect(after).not.toContain("never contradict an earlier turn");
+});
+
+it("keeps the repeated local time distinct across the daylight saving change (#1869 review)", () => {
+  const before = renderCurrentTimeContext(
+    new Date("2026-11-01T08:30:00.000Z"),
+    "America/Los_Angeles"
+  );
+  const after = renderCurrentTimeContext(
+    new Date("2026-11-01T09:30:00.000Z"),
+    "America/Los_Angeles"
+  );
+
+  expect(before).toContain("2026-11-01 (Sunday) 01:30 (America/Los_Angeles, UTC offset -420");
+  expect(after).toContain("2026-11-01 (Sunday) 01:30 (America/Los_Angeles, UTC offset -480");
+});
+
 it("tells the model to state a known local zone as fact and stay consistent (#1869)", () => {
   const context = renderCurrentTimeContext(
     new Date("2026-08-31T05:13:00.000Z"),
@@ -28,7 +58,7 @@ it("tells the model to state a known local zone as fact and stay consistent (#18
 
   expect(context).toContain("State that local date, weekday, time and time zone as fact.");
   expect(context).toContain("Do not hedge");
-  expect(context).toContain("never contradict an earlier turn");
+  expect(context).toContain("do not flip-flop about the known time zone");
   expect(context).not.toContain("local time zone is not known");
 });
 
@@ -39,7 +69,7 @@ it("admits an unknown local zone once and forbids guessing it (#1869 run_6 follo
   expect(context).toContain("once, the first time you mention it");
   expect(context).toContain("Never guess the user's time zone, region or location");
   expect(context).toContain("do not show time zone arithmetic unless the user asks for it");
-  expect(context).toContain("never contradict an earlier turn");
+  expect(context).toContain("do not flip-flop about the known time zone");
   expect(context).not.toContain("User's local time:");
 });
 
@@ -98,12 +128,11 @@ it("keeps the fresh time block even when a retrieval dependency throws inside th
   const result = await buildEngineText(
     {
       persistence: {
-        listPriorTurns: async () => {
-          throw new Error("boom");
-        },
+        listPriorTurns: async () =>
+          new Promise((_, reject) => setTimeout(() => reject(new Error("boom")), 0)),
         getThreadContext: async () => ({
           threadTitle: null,
-          localTimezone: "UTC",
+          localTimezone: "America/Los_Angeles",
           incognito: false
         })
       } as never,
@@ -114,6 +143,8 @@ it("keeps the fresh time block even when a retrieval dependency throws inside th
     "what time is it?"
   );
   expect(result.text).toContain(now.toISOString());
+  expect(result.text).toContain("America/Los_Angeles");
+  expect(result.text).not.toContain("local time zone is not known");
   expect(result.text).toContain("what time is it?");
 });
 
