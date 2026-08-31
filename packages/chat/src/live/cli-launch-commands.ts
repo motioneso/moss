@@ -103,6 +103,7 @@ async function buildClaudeCommand(
       ? ["mcp__jarvis__*", "Read", "Glob", "Grep", "Write", "Edit"].join(" ")
       : ["mcp__jarvis__*", ...vaultReadOnlyToolPatterns()].join(" ");
     parts.push(`--allowedTools ${shellQuote(allowedTools)}`);
+    if (!opts.workspaceWrite) parts.push('--tools "Read,Glob,Grep"');
   } else if (opts.workspaceWrite) {
     parts.push(`--allowedTools ${shellQuote("Read Glob Grep Write Edit")}`);
   } else {

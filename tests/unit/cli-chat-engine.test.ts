@@ -227,6 +227,7 @@ describe("CliChatEngineImpl — vault read-only allowlist (#634)", () => {
     expect(launchLine).toContain("Glob(/data/external-notes/**)");
     expect(launchLine).toContain("Grep(/data/external-notes/**)");
     expect(launchLine).toContain("mcp__jarvis__*");
+    expect(launchLine).toContain('--tools "Read,Glob,Grep"');
   });
 
   it("DENY: a path outside the configured vault root is never allowlisted", async () => {
@@ -298,6 +299,7 @@ describe("CliChatEngineImpl — vault read-only allowlist (#634)", () => {
     expect(launchLine).not.toContain("Write(");
     expect(launchLine).not.toContain("Edit(");
     expect(launchLine).not.toContain("Bash(");
+    expect(launchLine).toContain('--tools "Read,Glob,Grep"');
     expect(launchLine).not.toMatch(/\bWrite\b/);
     expect(launchLine).not.toMatch(/\bEdit\b/);
     expect(launchLine).not.toMatch(/\bBash\b/);
