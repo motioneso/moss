@@ -319,3 +319,21 @@ It is done, and its answer was "not yet".
    started by any coordinator note on record — leave it alone, but be careful with anything that
    touches the whole folder while it is running.
 9. The coordinator watchdog timer is still not installed on this computer. Not urgent.
+
+### Done since that checkpoint (same coordinator, pane w1:p3E)
+
+- Merged pull request 2138, the recovery checkpoint above. Closed pull request 2137 as superseded.
+- Closed pane `w1:p3F`, the finished hands-on-check lane. Its work folder was clean and everything
+  it had was already pushed, so nothing was lost.
+- Started the fix lane for the time zone wobble: agent name `issue-1869-timezone-consistency`, pane
+  `w1:p3H`, in the Builders tab, working in the same folder and branch (`build-1869-time-context`).
+  This one runs on Claude, since the last two lanes here were both Codex. Its brief is the file
+  `/home/ben/.coord-briefs/boot-1869-timezone-consistency.txt`. It was told not to redo the
+  day-of-week work, not to build time zone detection, and not to merge anything.
+- The unnamed Codex session in pane `w1:p3G` turned out to be harmless: it is the rescue session
+  that restarted this coordinator after the previous one stopped working. No action needed.
+- `merges_since_relay`: 1 (pull request 2138, this session's own merge).
+
+**Still to do, in order:** wait for the fix lane to report; then run the hands-on conversation check
+again on a fresh session; then get a code review on pull request 2129; then merge it. Separately,
+Ben's own hands-on judgment is still required before issue 1869 slice 2 or slice 3A starts.
