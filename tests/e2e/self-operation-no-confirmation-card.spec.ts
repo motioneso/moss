@@ -84,6 +84,6 @@ test("self-operation tool executes with no confirmation card; a tool needing con
   // The granted self-operation tool's result never becomes a card; it remains visible as a
   // durable outcome instead.
   const result = drawer.getByRole("status");
-  await expect(result).toContainText("Changed");
+  await expect(result).toContainText("Executed");
   await expect(result).toContainText("Followed the Yankees");
 });
