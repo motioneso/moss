@@ -33,9 +33,11 @@ existing heartbeat/expiry mechanism.
 
 1. `packages/jobs/src/pg-boss.ts` — add a named constant and set it on `MODULE_BUILD_QUEUE`'s
    queue options:
+
    ```ts
    export const MODULE_BUILD_QUEUE_HEARTBEAT_SECONDS = 60;
    ```
+
    In `FOUNDATION_QUEUES` (currently lines 71-78), change the `MODULE_BUILD_QUEUE` entry's
    `options` to also include `heartbeatSeconds: MODULE_BUILD_QUEUE_HEARTBEAT_SECONDS`.
 
@@ -83,6 +85,7 @@ No DB-touching test is added or changed; this is a pure unit test on the exporte
 ```bash
 pnpm vitest run tests/unit/jobs-pg-boss.test.ts > /tmp/2160-unit.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`.
 
 Full gate and live proof happen at wrap-up via the `verify-gate` skill only (never run
@@ -101,6 +104,6 @@ reviews this plan (coordinator) or by the build agent if the test surprises it b
 This is a queue-configuration change with no new user-facing surface — it changes how fast an
 orphaned build recovers, not what the user does. Live proof at wrap-up: trigger a module build on
 the live dev instance and confirm it still completes normally (no behavior regression for the
-happy path); a live proof of the *15-minute-to-1-minute* improvement itself is impractical to
+happy path); a live proof of the _15-minute-to-1-minute_ improvement itself is impractical to
 demonstrate in one session (it requires deliberately killing a worker mid-job) and will be reported
 as verified by the unit test plus code reading, not by live reproduction of the failure.
