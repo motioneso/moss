@@ -19,6 +19,30 @@ import type {
 } from "@moss/settings";
 import type { RunModuleBuildStepDeps } from "@moss/ai";
 
+/**
+ * #2154. The `module_builds.error` column is a sink — it is read back and shown to the build's
+ * owner, so an arbitrary caught `error.message` can leak a filesystem path or other raw detail
+ * (the same trap `packages/notes/src/error-sink.ts` was written to close). A throw site marks its
+ * own message safe by using this class instead of a plain `Error`; anything else degrades to a
+ * generic sentence naming only the error's class name, never its message.
+ */
+export class ModuleBuildSafeError extends Error {
+  constructor(safeMessage: string) {
+    super(safeMessage);
+    this.name = "ModuleBuildSafeError";
+  }
+}
+
+const SAFE_CLASS_NAME = /^[A-Za-z][A-Za-z0-9_]{0,39}$/;
+
+function safeModuleBuildErrorMessage(error: unknown): string {
+  if (error instanceof ModuleBuildSafeError) return error.message;
+  const name = error instanceof Error ? error.name : undefined;
+  return name && SAFE_CLASS_NAME.test(name)
+    ? `module build failed (${name})`
+    : "module build failed";
+}
+
 export interface RunModuleBuildStepForJobDeps {
   readonly dataContext: Pick<DataContextRunner, "withDataContext">;
   readonly getModuleBuild: typeof getModuleBuildFn;
@@ -47,8 +71,8 @@ export function createRunModuleBuildStepForJob(
     try {
       return await deps.dataContext.withDataContext(access, async (scopedDb) => {
         const build = await deps.getModuleBuild(scopedDb, payload.buildId);
-        if (!build) throw new Error("module build was not found");
-        if (build.status === "cancelled") {
+        if (!build) throw new ModuleBuildSafeError("module build was not found");
+        if (build.status === "cancelled" || build.status === "failed") {
           return { deferred: false };
         }
 
@@ -87,7 +111,7 @@ export function createRunModuleBuildStepForJob(
         if (!build || build.status === "cancelled") return;
         await deps.updateModuleBuildStatus(scopedDb, build.id, {
           status: "failed",
-          error: error instanceof Error ? error.name : "unknown error"
+          error: safeModuleBuildErrorMessage(error)
         });
         await deps.notifyFailed(scopedDb, build.id);
       });

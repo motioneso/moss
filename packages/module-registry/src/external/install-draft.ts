@@ -41,7 +41,13 @@ export async function installModuleDraft(
   ownerUserId: string
 ): Promise<InstallModuleDraftResult> {
   const manifestPath = join(buildSourceDir, "jarvis.module.json");
-  if (statSync(manifestPath).size > MAX_MANIFEST_BYTES) {
+  let manifestSize: number;
+  try {
+    manifestSize = statSync(manifestPath).size;
+  } catch {
+    return { ok: false, errors: ["the build did not produce jarvis.module.json"] };
+  }
+  if (manifestSize > MAX_MANIFEST_BYTES) {
     return { ok: false, errors: ["jarvis.module.json is too large"] };
   }
   let raw: unknown;

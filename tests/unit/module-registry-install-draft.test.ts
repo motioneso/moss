@@ -102,6 +102,20 @@ describe("installModuleDraft (#1754)", () => {
     expect(existsSync(join(modulesDir, "videos"))).toBe(false);
   });
 
+  it("returns an actionable error instead of throwing when the build never wrote a manifest (#2154)", async () => {
+    const buildDir = tmp("install-draft-src-");
+    const modulesDir = tmp("install-draft-modules-");
+    const { deps, rows } = makeDeps(modulesDir);
+
+    const result = await installModuleDraft(deps, buildDir, "user-a");
+
+    expect(result).toEqual({
+      ok: false,
+      errors: ["the build did not produce jarvis.module.json"]
+    });
+    expect(rows).toEqual([]);
+  });
+
   it("does not replace an existing module that chose the same id", async () => {
     const buildsRoot = tmp("install-draft-src-");
     const modulesDir = tmp("install-draft-modules-");
