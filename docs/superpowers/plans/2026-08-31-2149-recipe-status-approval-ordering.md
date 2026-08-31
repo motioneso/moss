@@ -41,7 +41,7 @@ module touched.
 ### `packages/ai/src/gateway/confirmation-registry.ts`
 
 Add a second, independently-tracked completion signal alongside the existing outcome signal, so a
-caller can wake the blocked call *and* wait for it to finish, while the woken call still reports
+caller can wake the blocked call _and_ wait for it to finish, while the woken call still reports
 back when it's done — regardless of which of the two call sites above woke it.
 
 ```ts
@@ -111,6 +111,7 @@ is required — without one, a same-tick race can pass by accident on both the b
 code, which would make the test unable to catch a regression.
 
 Test: **"approve response is not observed until the tool's write has actually happened"**
+
 - Start the blocked write call (same pattern as the existing `example.write` test) using
   `example.slowWrite`.
 - Wait for the `action_request` emit (same `vi.waitFor` pattern already used in this file).
@@ -133,14 +134,17 @@ was nothing to wait for.
 ```bash
 pnpm --filter @moss/ai test -- gateway 2>&1 | tee /tmp/2149-ai-gateway.log; echo "EXIT=${PIPESTATUS[0]}"
 ```
+
 Expected: EXIT=0 (adjust the filter/pattern to whatever actually matches `chat-mcp-transport.test.ts`
 and `confirmation-registry` once in the repo — confirm the real vitest project name before running,
 don't guess it).
 
 Then the `verify-gate` skill for the full scoped gate (never run `pnpm verify:foundation` raw), plus:
+
 ```bash
 pnpm vitest run tests/uat/specs/1909-sports-public-source-completion.uat.spec.ts 2>&1 | tee /tmp/2149-uat.log; echo "EXIT=${PIPESTATUS[0]}"
 ```
+
 Expected: EXIT=0, and this is the live regression proof that #2149's actual symptom (recipeStatus
 reads "missing" right after approving a rebuild) is gone.
 

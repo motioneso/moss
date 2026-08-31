@@ -52,7 +52,10 @@ export class ConfirmationRegistry {
    * has fully finished handling the outcome, not merely been signalled). Resolves to false
    * immediately, with no wait, when no live waiter existed — same case `resolve()` covers.
    */
-  async resolveAndAwaitCompletion(actionRequestId: string, status: ResolutionStatus): Promise<boolean> {
+  async resolveAndAwaitCompletion(
+    actionRequestId: string,
+    status: ResolutionStatus
+  ): Promise<boolean> {
     const waiter = this.waiters.get(actionRequestId);
     if (!waiter) return false;
 

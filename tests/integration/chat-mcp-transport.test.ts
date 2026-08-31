@@ -15,12 +15,7 @@ import {
   SessionTokenRegistry,
   type GatewaySessionRecord
 } from "@moss/ai";
-import {
-  DataContextRunner,
-  createDatabase,
-  type AccessContext,
-  type MossDatabase
-} from "@moss/db";
+import { DataContextRunner, createDatabase, type AccessContext, type MossDatabase } from "@moss/db";
 import { SettingsRepository } from "@moss/settings";
 import { PreferencesRepository } from "@moss/structured-state";
 import {
