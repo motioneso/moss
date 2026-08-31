@@ -19,6 +19,11 @@ export { projectPageContextSnapshot } from "./live/page-context.js";
 export { createCurrentViewReadService, type CurrentViewReadService } from "./live/current-view.js";
 export { chatGetCurrentViewExecute, chatGetCurrentViewOutputSchema } from "./current-view-tool.js";
 export {
+  chatGetCurrentTimeExecute,
+  chatGetCurrentTimeOutputSchema,
+  createChatGetCurrentTimeExecute
+} from "./current-time-tool.js";
+export {
   planCrossToolReasoning,
   renderCrossToolContextBlock,
   collectCrossToolContext,

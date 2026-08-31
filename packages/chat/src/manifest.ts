@@ -10,6 +10,7 @@ import {
 
 import { chatListTodaysTurnsExecute } from "./tools.js";
 import { chatGetCurrentViewExecute, chatGetCurrentViewOutputSchema } from "./current-view-tool.js";
+import { chatGetCurrentTimeExecute, chatGetCurrentTimeOutputSchema } from "./current-time-tool.js";
 import { chatReadAttachmentExecute } from "./attachment-tool.js";
 import {
   chatSetResponseStyleExecute,
@@ -207,6 +208,16 @@ export const chatModuleManifest = {
       inputSchema: { type: "object", additionalProperties: false, properties: {} },
       outputSchema: chatGetCurrentViewOutputSchema,
       execute: chatGetCurrentViewExecute
+    },
+    {
+      name: "chat.getCurrentTime",
+      description:
+        "Read the server's current time and the user's timezone as of right now. Use when unsure of the current date or time.",
+      permissionId: "chat.view",
+      risk: "read",
+      inputSchema: { type: "object", additionalProperties: false, properties: {} },
+      outputSchema: chatGetCurrentTimeOutputSchema,
+      execute: chatGetCurrentTimeExecute
     },
     {
       name: "chat.readAttachment",
