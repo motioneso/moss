@@ -1,7 +1,7 @@
 # Coordination Run — 2026-08-30-next-ready
 
 **Date:** 2026-08-30
-**Coordinator lock:** registered agent name `coordinator` + visible pane label `Coordinator`; stable anchor = session id `81f073ee-f2af-4788-a6d5-86e8cd824e21` (pane `w1:p2Q`). Previous coordinator (codex, session `01a050c1-071d-7331-87c8-da8ab80a3909`, pane `w1:p1`) was found idle/done and was reaped after this successor confirmed it was driving.
+**Coordinator lock:** registered agent name `coordinator` + visible pane label `Coordinator`; stable anchor = session id `751e32d2-66d8-4872-b19d-ae242138d52e` (pane `w1:p2S`). Previous coordinator (session `81f073ee-...`, pane `w1:p2Q`) flushed state, relayed, and was closed after this successor confirmed it was driving.
 **Merge policy:** autonomous after verified QA for `routine`/`sensitive`; `security` needs Ben's explicit merge sign-off.
 **Relay threshold:** relay after every security merge, every two routine/sensitive merges, any context warning, or any compaction summary.
 **merges_since_relay:** 0
@@ -11,9 +11,9 @@
 
 | Slice | Issue | Tier | Status | Agent name | Pane | Branch | PR | Relays |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| #1784 truthful chat action chip | #1784 | routine | queued | `issue-1784-chip` | — | `build/1784-chat-outcome-chip` | — | 0 |
-| #1860 module-build environment isolation | #1860 | security | queued | `issue-1860-env` | — | `build/1860-module-build-env` | — | 0 |
-| #1869 Slice 1: per-turn time context | #1869 | sensitive | queued | `issue-1869-time-context` | — | `build/1869-time-context` | — | 0 |
+| #1784 truthful chat action chip | #1784 | routine | building | `issue-1784-chip` | `w1:p2R` | `build/1784-chat-outcome-chip` | — | 0 |
+| #1860 module-build environment isolation | #1860 | security | building | `issue-1860-env` | `w1:p2T` | `build/1860-module-build-env` | — | 0 |
+| #1869 Slice 1: per-turn time context | #1869 | sensitive | building | `issue-1869-time-context` | `w1:p2V` | `build/1869-time-context` | — | 0 |
 | #1869 Slice 2: `chat.getCurrentTime` | #1869 | routine | dependency-gated | `issue-1869-current-time` | — | `build/1869-current-time` | — | 0 |
 | #1869 Slice 3A: SDK wall-clock conversion | #1869 | sensitive | dependency-gated | `issue-1869-sdk-time` | — | `build/1869-sdk-time` | — | 0 |
 | #1869 Slice 3B: Food integration | #1869 | sensitive | dependency-gated | `issue-1869-food-time` | — | `build/1869-food-time` | — | 0 |
@@ -64,31 +64,35 @@ None.
 
 - [x] Run the required one-shot Opus dependency/collision review against the three approved plans. Result: wave 1 is safe as planned; corrections recorded above for wave 2/3.
 - [x] Confirm latest `main` CI is green. Confirmed via `gh run list --branch main` — latest push run succeeded.
-- [x] Integrate plan/spec commit `d97af8896`. PR #2108 (plan/spec docs, formatting fix by the owning agent) and PR #2109 (this manifest's earlier update) both merged to main.
+- [x] Integrate plan/spec commit `d97af8896`. PR #2108 (plan/spec docs) and PR #2109 (manifest update) both merged to main.
 - [x] Ben already approved the specs and instructed one agent per finalized slice (per boot brief) — no separate manifest pause required.
-- [x] Wave-1 handoff docs written and merged via PR #2110: `handoff-1784-chat-outcome-chip.md`, `handoff-1860-module-build-env.md`, `handoff-1869-time-context.md` (all in `docs/coordination/`).
-- [ ] Spawn the wave-1 build agents. Worktrees exist for all three (`.claude/worktrees/build-1784-chat-outcome-chip`, `build-1860-module-build-env`, `build-1869-time-context`, all branched off `origin/main`). Boot briefs written to `~/.coord-briefs/boot-issue-1784-chip.txt`, `boot-issue-1860-env.txt`, `boot-issue-1869-time-context.txt`. Only the #1784 pane has been created so far (`w1:p2R`, moved into the new "builders" tab `w1:tP`) — the `herdr agent start` command for it has NOT been run yet. #1860 and #1869 Slice 1 panes/agents are not yet created.
+- [x] Wave-1 handoff docs written and merged via PR #2110: `handoff-1784-chat-outcome-chip.md`, `handoff-1860-module-build-env.md`, `handoff-1869-time-context.md`.
+- [x] PR #2111 (coordinator manifest flush before relay) merged.
+- [x] All three wave-1 build agents spawned, confirmed on Sonnet, named/labeled, and unblocked. #1784 approved to build after its own plan-drift check came back clean. #1860 approved to build after its own plan-drift re-check came back clean. #1860 and #1869 Slice 1 both hit their handoff docs missing (spawned before PR #2110 had merged) — redirected each to re-fetch `origin/main` and read the merged doc; both confirmed queued and are proceeding.
 
-## Continuation note (relay fired on context-meter 70% warning — immediately after creating the #1784 pane, before starting any agent)
+## Continuation note
 
-Coordinator lock is under session id `81f073ee-f2af-4788-a6d5-86e8cd824e21`, pane `w1:p2Q`, named/labeled `coordinator`/`Coordinator`. The old coordinator (codex, session `01a050c1-...`, pane `w1:p1`) was idle/done and was reaped earlier this session. `coordinator-watchdog.timer` is still not installed on this host (unit not found) — not retried.
+Coordinator lock is under session id `751e32d2-66d8-4872-b19d-ae242138d52e`, pane `w1:p2S`, named/labeled `coordinator`/`Coordinator`. The prior coordinator (session `81f073ee-...`, pane `w1:p2Q`) flushed this manifest, relayed, was confirmed idle after handoff, and its pane was closed.
 
-**What the successor must do, in order:**
-1. Adopt the coordinator lock per the `coordinate` skill (Phase 0a): rename/relabel your own pane to `coordinator`/`Coordinator` only after confirming you're driving; this session (`81f073ee-...`) will then be the stale one to reap.
-2. Finish spawning wave 1. Pane `w1:p2R` (tab `w1:tP`, "builders") already has `cwd` set to `.claude/worktrees/build-1784-chat-outcome-chip` but no agent started yet — run:
-   `herdr agent start issue-1784-chip --kind claude --pane w1:p2R -- --model sonnet --permission-mode bypassPermissions "Read the file /home/ben/.coord-briefs/boot-issue-1784-chip.txt in full. It is your task brief. Follow it exactly."`
-   then confirm the pane says "Sonnet" and rename it (`herdr agent rename w1:p2R issue-1784-chip`, `herdr pane rename w1:p2R "1784 chat outcome chip"`).
-3. Split two more panes off `w1:p2R` (inside the `w1:tP` "builders" tab, NOT off the coordinator pane) for #1860 (`cwd .claude/worktrees/build-1860-module-build-env`, brief `~/.coord-briefs/boot-issue-1860-env.txt`, agent name `issue-1860-env`) and #1869 Slice 1 (`cwd .claude/worktrees/build-1869-time-context`, brief `~/.coord-briefs/boot-issue-1869-time-context.txt`, agent name `issue-1869-time-context`). Start each with `--model sonnet --permission-mode bypassPermissions`, confirm Sonnet, name in both namespaces, record pane/branch in the Queue table below.
-4. Update the Queue table (Status → `building`, fill in Pane/Agent name) for all three as they come up.
-5. Do NOT start #1869 Slice 2 or 3A yet — they wait on Slice 1's kill gate (tests + review + a live, Ben-judged check on the dev site of whether injected time confuses the assistant). When that wave does start, give Slice 2 and Slice 3A **separate** worktrees/branches — the plan document wrongly assumes they share one; see the collision-review note above.
-6. All three wave-1 lanes end with a live check on the single shared dev instance — do not let two run that check at the same time.
+All three wave-1 lanes are now building in the "builders" tab (`w1:tP`): #1784 chip fix (`w1:p2R`), #1860 module-build environment isolation (`w1:p2T`), #1869 Slice 1 per-turn time context (`w1:p2V`). No PRs from wave-1 build agents exist yet. `merges_since_relay: 0`.
 
-No PRs from wave-1 build agents exist yet. No merges pending review. `merges_since_relay: 0`.
+**Next steps for whoever is driving:**
+1. Supervise the three wave-1 lanes to PR (Phase 2 of the coordinate skill) — watch for plan-ready/blocker/stall signals, do not poll.
+2. When each reports done, spawn QA per the coordinate skill's tiering (#1784 routine, #1860 security → Opus adversarial QA + Ben sign-off, #1869 Slice 1 sensitive → matched e2e-UAT).
+3. Kill gate before Wave 2 (#1869 Slice 2/3A): Slice 1 needs tests + review + a live, Ben-judged check on the dev site of whether injected time confuses the assistant. Do not start Slice 2/3A before that. When it does start, Slice 2 and Slice 3A each need their own separate worktree/branch (the plan document wrongly assumes they share one).
+4. All three wave-1 lanes end with a live check on the single shared dev instance — serialize those, never run two at once.
+5. `coordinator-watchdog.timer` is still not installed on this host — not retried this session either.
+6. Ben asked (2026-08-30) to mix agent providers across future spawns rather than defaulting everyone to Claude — plan the next wave of build/QA agents accordingly (some as Codex where suitable), no change needed to the three already running.
 
 ## Merge audit
 
-No merges in this run yet.
+| PR | What | Tier | Merged |
+| --- | --- | --- | --- |
+| #2108 | plan/spec docs integration | routine (docs) | yes |
+| #2109 | coordinator manifest update | routine (docs) | yes |
+| #2110 | wave-1 build handoff docs | routine (docs) | yes, merged this session |
+| #2111 | coordinator manifest flush before relay | routine (docs) | yes, merged this session |
 
 ## Reaped sessions
 
-None in this run yet.
+- Old coordinator, session `81f073ee-...`, pane `w1:p2Q` — closed this session after confirming successor (session `751e32d2-...`, pane `w1:p2S`) was driving.
