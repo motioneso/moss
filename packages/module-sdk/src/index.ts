@@ -617,7 +617,7 @@ export interface ModuleAssistantToolManifest {
   readonly externalContent?: boolean;
   /**
    * When true, this tool's own HttpError text is shown to the user and assistant. Opt in only
-   * when the text never includes a path, file name, user input, or private data.
+   * when its messages never include a path, a file name, anything the user typed, or user data.
    */
   readonly safeErrors?: true;
   /**
