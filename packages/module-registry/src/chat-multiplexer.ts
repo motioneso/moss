@@ -1,5 +1,5 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { Kysely } from "kysely";
@@ -216,7 +216,7 @@ export function makeProviderConnectionCheckProbe(deps: {
       const personaPath = join(neutralDir, "persona.md");
       await writeFile(personaPath, PROVIDER_CHECK_PERSONA, "utf8");
       const env = deps.env ?? process.env;
-      const homeBase = resolveMossEnv(env, "JARVIS_CLI_HOME_BASE") ?? tmpdir();
+      const homeBase = resolveMossEnv(env, "JARVIS_CLI_HOME_BASE") ?? env.HOME ?? homedir();
       const commandIo = deps.commandIo ?? createSanitizedTmuxIo({ ...env, HOME: homeBase });
 
       if (kind === "anthropic") {
@@ -585,7 +585,7 @@ export async function resolveChatEngineFactory(deps: {
   onPersistentReap?: (sessionKey: string, reason: ReapReason) => void;
 }): Promise<ChatEngineFactory> {
   const env = deps.env ?? process.env;
-  const homeBase = resolveMossEnv(env, "JARVIS_CLI_HOME_BASE") ?? tmpdir();
+  const homeBase = resolveMossEnv(env, "JARVIS_CLI_HOME_BASE") ?? env.HOME ?? homedir();
   const io = createSanitizedTmuxIo({ ...env, HOME: homeBase });
   const probe = createBinaryProbe(env);
 
