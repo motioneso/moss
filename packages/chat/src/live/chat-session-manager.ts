@@ -141,6 +141,8 @@ export interface ChatSessionManagerDeps {
    * is selected (socket configured); leave it `false`/absent for the in-process factory.
    */
   readonly serverOwnsDrain?: boolean;
+  // Wall-clock seam for buildEngineText's time context; deliberately separate from `clock` above (idle/heartbeat elapsed time).
+  readonly now?: () => Date;
 }
 
 type Subscriber = (record: TranscriptRecord) => void;
@@ -421,7 +423,8 @@ export class ChatSessionManager {
           passiveRetrieval: this.deps.passiveRetrieval,
           notesRetrieval: this.deps.notesRetrieval,
           crossToolRead: this.deps.crossToolRead,
-          priorityModel: this.deps.priorityModel
+          priorityModel: this.deps.priorityModel,
+          now: this.deps.now
         },
         actorUserId,
         text,
