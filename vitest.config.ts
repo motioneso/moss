@@ -149,6 +149,10 @@ export default defineConfig({
         replacement: fileURLToPath(new URL("./packages/host-fetch/src/index.ts", import.meta.url))
       },
       {
+        find: "@moss/integrations",
+        replacement: fileURLToPath(new URL("./packages/integrations/src/index.ts", import.meta.url))
+      },
+      {
         find: "@moss/jobs",
         replacement: fileURLToPath(new URL("./packages/jobs/src/index.ts", import.meta.url))
       },
