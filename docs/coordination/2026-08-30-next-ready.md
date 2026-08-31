@@ -1,7 +1,7 @@
 # Coordination Run — 2026-08-30-next-ready
 
 **Date:** 2026-08-30
-**Coordinator lock:** registered agent name `coordinator` + visible pane label `Coordinator`; session id `528e6a29-b81a-4773-a46c-bcf524e188c6` (pane `w1:p34`) — successor after the relay following the #1860 security merge; adopted lock, confirmed driving, old pane `w1:p2X` (session `5e13ca3b-...`) closed.
+**Coordinator lock:** registered agent name `coordinator` + visible pane label `Coordinator`; session id `dbbc22c7-342d-410c-bc9d-38ad2d86b64e` (pane `w1:p36`) — successor after the second 70% relay; adopted lock, old pane `w1:p35` (session `fb912a67-...`) had already self-closed by the time this session checked, so it was closed directly.
 **Merge policy:** autonomous after verified QA for `routine`/`sensitive`; `security` needs Ben's explicit merge sign-off.
 **Relay threshold:** relay after every security merge, every two routine/sensitive merges, any context warning, or any compaction summary.
 **merges_since_relay:** 0
@@ -70,25 +70,39 @@ None.
 - [x] PR #2111 (coordinator manifest flush before relay) merged.
 - [x] All three wave-1 build agents spawned, confirmed on Sonnet, named/labeled, and unblocked. #1784 approved to build after its own plan-drift check came back clean. #1860 approved to build after its own plan-drift re-check came back clean. #1860 and #1869 Slice 1 both hit their handoff docs missing (spawned before PR #2110 had merged) — redirected each to re-fetch `origin/main` and read the merged doc; both confirmed queued and are proceeding.
 
-## Continuation note (2026-08-31, relaying — context meter hit 70%)
+## Continuation note (2026-08-31, driving — took over after 70% relay)
 
-Coordinator lock is under session id `528e6a29-b81a-4773-a46c-bcf524e188c6`, pane `w1:p34` — **this session hit the 70% context warning and is relaying now, per the standing rule (no deferral).** The successor must adopt the lock (Phase 0a), then close this pane once confirmed driving. `merges_since_relay: 0` (PR #2124, the manifest-flush docs PR, has already merged and does not count as a code merge).
+Coordinator lock is under session id `fb912a67-7ae3-46ed-89f7-253b57564776`, pane `w1:p35`. Adopted the lock after the prior coordinator (session `528e6a29-...`, pane `w1:p34`) relayed at its context meter's 70% warning; that pane had already closed itself by the time this session checked. `merges_since_relay: 0`.
 
-**Lane status:**
-- **#1860** (security): MERGED (PR #2117). Follow-up tickets #2122 and #2123 are filed but **still not placed on the project board (project 2)** — do that next pass.
-- **#1784** (routine, chip fix), PR #2116: the build agent (`issue-1784-chip-relay1`, pane `w1:p20`) just reported the fix is done, commit `4242c7587`, citing exact file/line for each of the three stale tests it fixed (`tests/e2e/app-shell.spec.ts` lines 715 and 788, `tests/e2e/self-operation-no-confirmation-card.spec.ts` line 87) — all now check for "Executed" instead of the old wrong word "Changed". It also reports one unrelated failing test (`briefing-action-rows.spec.ts`, a reload-timing issue in an unrelated command bar, not touched by this change) — worth a sanity check but likely a pre-existing flake, not a blocker. CI was re-triggered by the push; a background watch on the PR's checks was running in the relaying session but did not survive the relay — **the successor must re-arm it**: `gh pr checks 2116 --watch` (via `run_in_background`, never inline). Once green, spawn a fresh QA pane (routine tier, Sonnet) scoped to the diff since the last reviewed commit (`aa36701c5..4242c7587`) rather than a full re-review, then merge if green — no Ben sign-off needed for routine tier. QA pane/worktree from the first (red) round were already reaped; this is a fresh QA spawn.
-- **#1869 Slice 1** (sensitive), pane `w1:p2Y`, agent `issue-1869-time-context-relay2`: still building, SECOND relay, told not to relay a third time. Last seen mid-gate-run, working normally, not frozen. No PR yet. Keep watching; if it relays again, STOP — take over and re-slice instead of allowing a third same-lane relay.
+Since taking over, this session: merged the handoff pull request #2125 (it was open and green); armed a background watch on pull request #2116's checks now that its test fix (commit 4242c7587) is pushed; placed the two follow-up tickets from issue #1860, numbers #2122 and #2123, onto the project board (they were sitting in the backlog column, unplaced); and confirmed the #1869 slice 1 build lane (pane `w1:p2Y`, second relay, no third allowed) is running normally, not frozen, still mid-way through its test gate.
 
 **Next steps for whoever is driving:**
-1. Adopt the coordinator lock (Phase 0a), confirm driving, close pane `w1:p34`.
-2. Re-arm a background watch on PR #2116's CI checks (`gh pr checks 2116 --watch` via `run_in_background`), merge once green after a diff-scoped QA pass (see above).
-3. Place tickets #2122 and #2123 on the project board (project 2).
-4. Keep supervising #1869 Slice 1 relay2 (`w1:p2Y`) to PR — no third relay allowed for that lane.
-5. Kill gate before Wave 2 (#1869 Slice 2/3A): Slice 1 needs tests + review + a live, Ben-judged check on the dev site of whether injected time confuses the assistant. Do not start Slice 2/3A before that. Slice 2 and Slice 3A each need their own separate worktree/branch.
+1. When the background watch on pull request #2116 reports green, spawn a fresh QA pane (routine tier, Sonnet) scoped to just the new diff since the last review round, then merge if it comes back clean — no sign-off needed.
+2. Keep watching the #1869 slice 1 lane in pane `w1:p2Y`. If it tries to relay a third time on this same lane, stop it and take over the finish line yourself instead of allowing another handoff.
+3. Kill gate before wave 2 (#1869 slices 2 and 3A): slice 1 needs its tests, a code review, and a live, Ben-judged check on the dev site of whether the injected time confuses the assistant, before either follow-on slice starts.
+4. When spawning the next wave of build or QA agents, mix in other agent providers rather than defaulting everyone to Claude (Ben's instruction, 2026-08-30).
+5. Say everything to Ben, and have every spawned agent say everything to each other, in plain everyday words — no jargon, no coined shorthand, no stacked technical identifiers in a sentence. Keep exact names (file paths, commands, error text) available only for when someone needs to act on them directly.
 6. All three wave-1 lanes end with a live check on the single shared dev instance — serialize those, never run two at once.
-7. `coordinator-watchdog.timer` is still not installed on this host (tried again this session, unit not found).
-8. Ben asked (2026-08-30) to mix agent providers across future spawns rather than defaulting everyone to Claude — plan Wave 2 accordingly.
-9. Direct push to `main` is blocked by a required check — any manifest update needs a PR (branch, push, `gh pr create`, wait for green, `gh pr merge --squash --auto`).
+7. `coordinator-watchdog.timer` is still not installed on this host (checked again this session, unit not found).
+8. Direct push to `main` is blocked by a required check — any manifest update needs a pull request (branch, push, open it, wait for green, squash-merge).
+
+## Continuation note (2026-08-31, relaying — context meter hit 70% again)
+
+This session (pane `w1:p35`, session id `fb912a67-7ae3-46ed-89f7-253b57564776`) hit its own 70 percent context warning while writing this same manifest update, and is handing off right now with no further work first, per the no-deferral relay rule.
+
+Pull request #2126 carries this manifest update (branch `coordinator-manifest-flush-1788149660`, commit `f88a8d75a`) and is still open. GitHub reported it as having a conflict with the main branch, but a check just before relaying showed main's tip unchanged since this branch was cut — that reading may simply be GitHub's status lagging. First task for whoever picks this up: check pull request #2126 fresh, resolve any real conflict or just wait out the lag, then merge it once green as a routine documentation change.
+
+Everything else outstanding is unchanged from the note directly above this one: pull request #2116's background CI watch had not reported before this relay; the #1869 slice 1 lane in pane `w1:p2Y` is on its second relay and must not get a third; the wave-2 kill gate, provider-mixing instruction, and plain-English instruction all still apply as written above.
+
+## Continuation note (2026-08-31, driving — new coordinator adopted lock)
+
+New coordinator session `dbbc22c7-342d-410c-bc9d-38ad2d86b64e`, pane `w1:p36`, took over after the second 70% relay. The prior pane `w1:p35` had already cleared its own coordinator name/label and gone idle when this session checked; closed it directly, no live handoff needed.
+
+Pull request #2126 (this branch) turned out to have a real conflict with `main`, not just a stale GitHub status — `main` had moved to include the "relaying — context meter hit 70%" note (from PR #2125) in the same section this branch also edits. Resolved by keeping this branch's fuller, more recent pair of continuation notes and dropping the older duplicate note that PR #2125 had added to `main`; the merge-audit table entries were additive on both sides and needed no change.
+
+Checked pull request #2116: as of this note, all named CI checks are green except one integration-test job still finishing; a background watch is armed and will report when it settles. Once green, the plan from the earlier notes still applies: spawn a fresh routine-tier QA pane scoped to just the new diff, merge if clean, no sign-off needed.
+
+The #1869 slice 1 build lane in pane `w1:p2Y` was confirmed still running normally (not frozen), on its second relay, with no third relay allowed — continuing to watch it.
 
 ## Merge audit
 
@@ -104,6 +118,8 @@ Coordinator lock is under session id `528e6a29-b81a-4773-a46c-bcf524e188c6`, pan
 | #2119 | coordinator: update #2117 sign-off entry with QA re-verification | routine (docs) | yes |
 | #2117 | #1860 module-build environment isolation | security | **yes — Ben signed off "yes" in chat, merged 2026-08-31T04:01:24Z** |
 | #2116 | #1784 truthful chat action chip | routine | QA in progress |
+| #2125 | coordinator: flush state before relay (context meter 70%) | routine (docs) | yes |
+| #2126 | coordinator: record lock takeover after 70% relay, merge #2125 | routine (docs) | pending |
 
 ## Reaped sessions
 
