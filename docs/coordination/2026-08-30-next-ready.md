@@ -86,6 +86,14 @@ Since taking over, this session: merged the handoff pull request #2125 (it was o
 7. `coordinator-watchdog.timer` is still not installed on this host (checked again this session, unit not found).
 8. Direct push to `main` is blocked by a required check — any manifest update needs a pull request (branch, push, open it, wait for green, squash-merge).
 
+## Continuation note (2026-08-31, relaying — context meter hit 70% again)
+
+This session (pane `w1:p35`, session id `fb912a67-7ae3-46ed-89f7-253b57564776`) hit its own 70 percent context warning while writing this same manifest update, and is handing off right now with no further work first, per the no-deferral relay rule.
+
+Pull request #2126 carries this manifest update (branch `coordinator-manifest-flush-1788149660`, commit `f88a8d75a`) and is still open. GitHub reported it as having a conflict with the main branch, but a check just before relaying showed main's tip unchanged since this branch was cut — that reading may simply be GitHub's status lagging. First task for whoever picks this up: check pull request #2126 fresh, resolve any real conflict or just wait out the lag, then merge it once green as a routine documentation change.
+
+Everything else outstanding is unchanged from the note directly above this one: pull request #2116's background CI watch had not reported before this relay; the #1869 slice 1 lane in pane `w1:p2Y` is on its second relay and must not get a third; the wave-2 kill gate, provider-mixing instruction, and plain-English instruction all still apply as written above.
+
 ## Merge audit
 
 | PR | What | Tier | Merged |
@@ -101,6 +109,7 @@ Since taking over, this session: merged the handoff pull request #2125 (it was o
 | #2117 | #1860 module-build environment isolation | security | **yes — Ben signed off "yes" in chat, merged 2026-08-31T04:01:24Z** |
 | #2116 | #1784 truthful chat action chip | routine | QA in progress |
 | #2125 | coordinator: flush state before relay (context meter 70%) | routine (docs) | yes |
+| #2126 | coordinator: record lock takeover after 70% relay, merge #2125 | routine (docs) | pending |
 
 ## Reaped sessions
 
