@@ -55,6 +55,7 @@ describe("module build live-agent composition", () => {
         expect(opts.launchLine).toContain("cd '/build/b1' && claude");
         expect(opts.launchLine).toContain("--permission-mode acceptEdits");
         expect(opts.launchLine).toContain("--disallowedTools Bash");
+        expect(opts.launchLine).not.toContain("--tools");
         expect(opts.launchLine).not.toContain("--settings");
         return "module-build-session";
       }),

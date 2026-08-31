@@ -271,6 +271,7 @@ export class ClaudePrintChatEngine implements CliChatEngine {
       parts.push(`--settings ${shellQuote(settingsPath)}`);
       const allowedTools = ["mcp__jarvis__*", ...vaultReadOnlyToolPatterns()].join(" ");
       parts.push(`--allowedTools ${shellQuote(allowedTools)}`);
+      parts.push('--tools "Read,Glob,Grep"');
     } else {
       parts.push('--tools ""');
     }
