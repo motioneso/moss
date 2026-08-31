@@ -203,7 +203,7 @@ function RecordRow(props: {
 
   if (kind === "action_result") {
     // #1888 — workshop.buildModule hands back a plan for the user to approve. It is the only
-    // action result that owns a card; everything else stays the one-line "Changed" note below.
+    // action result that owns a card; everything else stays the one-line outcome note below.
     if (props.record.toolName === "workshop.buildModule") {
       const parsed = parseModuleBuildPlanResult(props.record.result);
       if (parsed) {
@@ -219,11 +219,7 @@ function RecordRow(props: {
 
     return (
       <div className="chatd-peek__line" role="status">
-        <span className="chatd-peek__kind">
-          {props.record.outcome === "executed" || props.record.outcome === "allowed"
-            ? "Changed"
-            : "Not changed"}
-        </span>
+        <span className="chatd-peek__kind">{activityVerb(props.record)}</span>
         {text}
       </div>
     );
