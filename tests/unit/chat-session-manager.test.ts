@@ -8,6 +8,7 @@ import {
   CliChatDeliveryUnknownError,
   CliChatUnavailableError
 } from "../../packages/chat/src/live/errors.js";
+import { renderCurrentTimeContext } from "../../packages/chat/src/live/time-context.js";
 
 // #1081: exported (not just local) so tests/unit/chat-session-manager-provider-drop.test.ts
 // (split out of this file — see check:file-size, 1000-line cap) can reuse the same fixture
@@ -277,6 +278,7 @@ describe("ChatSessionManager.launchSession — personaText + replayBatch + offse
         complete: true
       }
     ]);
+    const now = new Date("2026-08-30T12:00:00.000Z");
     const manager = new ChatSessionManager({
       ...depsWith(
         engine,
@@ -286,7 +288,8 @@ describe("ChatSessionManager.launchSession — personaText + replayBatch + offse
         },
         true // RPC path: the server drained the replay to offset 100 at launch
       ),
-      pollMs: 0
+      pollMs: 0,
+      now: () => now
     });
 
     const { reply } = await manager.submitTurn("u1", "Ben", "new question");
@@ -294,7 +297,7 @@ describe("ChatSessionManager.launchSession — personaText + replayBatch + offse
     // The engine was launched once and the replay was NOT re-submitted as a turn.
     expect(engine.launchCount).toBe(1);
     // And the server-owned drain meant NO client-side replay submit at all.
-    expect(engine.submitted).toEqual(["new question"]);
+    expect(engine.submitted).toEqual([`${renderCurrentTimeContext(now, null)}\n\nnew question`]);
   });
 
   it("does not submit the first real turn until replay launch has resolved", async () => {
@@ -313,13 +316,15 @@ describe("ChatSessionManager.launchSession — personaText + replayBatch + offse
     const engine = new GatedLaunchEngine(100, [
       { records: [{ kind: "reply", text: "fresh answer" }], offset: 160, complete: true }
     ]);
+    const now = new Date("2026-08-30T12:00:00.000Z");
     const manager = new ChatSessionManager({
       ...depsWith(
         engine,
         { recent: [{ role: "user", content: "replayed" }], oldSummary: null },
         true
       ),
-      pollMs: 0
+      pollMs: 0,
+      now: () => now
     });
 
     const turn = manager.submitTurn("u1", "Ben", "first real turn");
@@ -328,7 +333,9 @@ describe("ChatSessionManager.launchSession — personaText + replayBatch + offse
 
     releaseLaunch();
     await expect(turn).resolves.toMatchObject({ reply: "fresh answer" });
-    expect(engine.submitted).toEqual(["first real turn"]);
+    expect(engine.submitted).toEqual([
+      `${renderCurrentTimeContext(now, null)}\n\nfirst real turn`
+    ]);
   });
 
   it("seeds hidden context by submitting and draining without recording a chat turn", async () => {
@@ -433,11 +440,13 @@ describe("ChatSessionManager.submitTurn turn-lock release (#445)", () => {
     const engines = [first, second];
     const engineFactory = vi.fn(() => engines.shift()!);
     const revokeMcpToken = vi.fn();
+    const now = new Date("2026-08-30T12:00:00.000Z");
     const manager = new ChatSessionManager({
       ...rejectingDeps(first),
       engineFactory,
       revokeMcpToken,
-      pollMs: 0
+      pollMs: 0,
+      now: () => now
     });
 
     await expect(manager.submitTurn("u1", "Ben", "first")).rejects.toBeInstanceOf(
@@ -447,8 +456,8 @@ describe("ChatSessionManager.submitTurn turn-lock release (#445)", () => {
       reply: "second reply"
     });
 
-    expect(first.submitted).toEqual(["first"]);
-    expect(second.submitted).toEqual(["second"]);
+    expect(first.submitted).toEqual([`${renderCurrentTimeContext(now, null)}\n\nfirst`]);
+    expect(second.submitted).toEqual([`${renderCurrentTimeContext(now, null)}\n\nsecond`]);
     expect(engineFactory).toHaveBeenCalledTimes(2);
     expect(revokeMcpToken).toHaveBeenCalledWith("u1:drawer");
   });
@@ -519,15 +528,62 @@ describe("ChatSessionManager passive retrieval", () => {
     const engine = new FakeEngine(0, [
       { records: [{ kind: "reply", text: "answer" }], offset: 10, complete: true }
     ]);
+    const now = new Date("2026-08-30T12:00:00.000Z");
     const manager = new ChatSessionManager(
       depsForPassive(engine, {
-        passiveRetrieval: { retrieve: vi.fn().mockRejectedValue(new Error("boom")) }
+        passiveRetrieval: { retrieve: vi.fn().mockRejectedValue(new Error("boom")) },
+        now: () => now
       })
     );
 
     await manager.submitTurn("u1", "Ben", "what did we decide?");
 
-    expect(engine.submitted.at(-1)).toBe("what did we decide?");
+    expect(engine.submitted.at(-1)).toBe(
+      `${renderCurrentTimeContext(now, null)}\n\nwhat did we decide?`
+    );
+  });
+
+  it("carries a fresh, correct local date on each turn of the same conversation without relaunching (#1869)", async () => {
+    const engine = new FakeEngine(0, [
+      { records: [{ kind: "reply", text: "first answer" }], offset: 10, complete: true },
+      { records: [{ kind: "reply", text: "second answer" }], offset: 20, complete: true }
+    ]);
+    let now = new Date("2026-08-30T03:30:00.000Z"); // 2026-08-29 23:30 America/New_York
+    const writeFile = vi.fn().mockResolvedValue(undefined);
+    const manager = new ChatSessionManager(
+      depsForPassive(engine, {
+        now: () => now,
+        personaFs: { mkdir: vi.fn().mockResolvedValue(undefined), writeFile },
+        persistence: {
+          resolveActiveProvider: vi
+            .fn()
+            .mockResolvedValue({ provider: "anthropic", model: "sonnet" }),
+          listPriorTurns: vi.fn().mockResolvedValue({ recent: [], oldSummary: null }),
+          recordTurn: vi.fn().mockResolvedValue(undefined),
+          openNewConversation: vi.fn().mockResolvedValue(undefined),
+          getThreadContext: vi
+            .fn()
+            .mockResolvedValue({ threadTitle: null, localTimezone: "America/New_York" }),
+          touchExistingThread: vi.fn().mockResolvedValue(true)
+        }
+      })
+    );
+
+    await manager.submitTurn("u1", "Ben", "first");
+    const firstNow = now;
+    now = new Date("2026-08-30T05:00:00.000Z"); // 2026-08-30 01:00 America/New_York — crosses local midnight
+    await manager.submitTurn("u1", "Ben", "second");
+
+    expect(engine.submitted).toEqual([
+      `${renderCurrentTimeContext(firstNow, "America/New_York")}\n\nfirst`,
+      `${renderCurrentTimeContext(now, "America/New_York")}\n\nsecond`
+    ]);
+    expect(engine.submitted[0]).not.toBe(engine.submitted[1]);
+    expect(engine.launchCount).toBe(1); // same session reused across both turns, no relaunch
+
+    // Persona byte-stability: the persona file is written once at launch and never rewritten
+    // with turn-specific content, so no date leaks into the fixed introduction text (#1869).
+    expect(writeFile).toHaveBeenCalledTimes(1);
   });
 });
 
