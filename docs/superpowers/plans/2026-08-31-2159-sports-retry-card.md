@@ -76,16 +76,18 @@ UAT cannot isolate:
      `chat-mcp-transport.test.ts`'s `registerResolveRoute` helper) with `status: "pending"`.
    - Resolving it `"confirmed"` lets `tools/call`'s in-flight promise settle with the retry's real
      result, and a second `notifier.emit` call with `kind: "action_result"`, `outcome: "executed"`.
-   **This is the "row exists" branch of the split**: if step 1 passes but any assertion in step 2
-   fails, the defect is in `confirmAndRun`/notifier/stream delivery, not tool selection, and
-   Phase 2 targets `gateway.ts:701-751` or the SSE stream that carries `action_request` to the
-   browser (`packages/chat/src/routes.ts` — not yet read in this pass; Phase 2 reads it only if
-   this branch is the one that fails).
+     **This is the "row exists" branch of the split**: if step 1 passes but any assertion in step 2
+     fails, the defect is in `confirmAndRun`/notifier/stream delivery, not tool selection, and
+     Phase 2 targets `gateway.ts:701-751` or the SSE stream that carries `action_request` to the
+     browser (`packages/chat/src/routes.ts` — not yet read in this pass; Phase 2 reads it only if
+     this branch is the one that fails).
 
 Verification:
+
 ```bash
 # via verify-gate only — this is a DB-touching test
 ```
+
 Expected: the coordinator/verify-gate skill runs this file in isolation; expected exit code 0 if
 the gateway-level path is intact, non-zero with a specific assertion failure otherwise. Either
 outcome is informative — this phase's job is the signal, not a guaranteed pass.
@@ -110,6 +112,7 @@ outcome is informative — this phase's job is the signal, not a guaranteed pass
 
 Not planned in detail yet, per the kill gate above. Candidate fix locations already identified by
 the seams check, for whichever branch Phase 1 implicates:
+
 - Tool availability/selection: `packages/ai/src/gateway/gateway.ts:836-881`,
   `packages/chat/src/mcp-transport.ts:100-111`.
 - Notifier/stream/card delivery: `packages/ai/src/gateway/gateway.ts:701-751`,
