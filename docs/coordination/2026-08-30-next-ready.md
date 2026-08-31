@@ -1,10 +1,10 @@
 # Coordination Run — 2026-08-30-next-ready
 
 **Date:** 2026-08-30
-**Coordinator lock:** driving. Session `12e46e3c-518c-4e72-a57e-e2062eb7b465`, pane `w1:p3D`, registered agent name `coordinator`, visible pane label `Coordinator`. Took over from session `7da0b095-ed27-446c-8093-6aa95518ba11` (pane `w1:p3B`), which relayed after its own context warning hit 70%; that pane's name/label were cleared and it was closed after this session confirmed it was driving.
+**Coordinator lock:** relaying now — successor should adopt as registered agent name `coordinator` + visible pane label `Coordinator` once driving. Handing off from session `12e46e3c-518c-4e72-a57e-e2062eb7b465` (pane `w1:p3D`), relaying because the merge counter hit 2 routine merges (#2134, #2135).
 **Merge policy:** autonomous after verified QA for `routine`/`sensitive`; `security` needs Ben's explicit merge sign-off.
 **Relay threshold:** relay after every security merge, every two routine/sensitive merges, any context warning, or any compaction summary.
-**merges_since_relay:** 1 (PR #2134 — routine documentation flush recording the 1869 timezone bug, merged 2026-08-31)
+**merges_since_relay:** 0 (reset — this relay's own flush merge does not count against the successor)
 **Infrastructure limitation:** `coordinator-watchdog.timer` is still not installed on this host. Not retried this session.
 
 ## Queue
@@ -244,3 +244,16 @@ Checked on the fix lane, pane `w1:p3C`, agent name `issue-1869-timezone-fix` (a 
 4. Keep mixing agent providers for future spawns rather than defaulting everyone to Claude.
 5. `coordinator-watchdog.timer` is still not installed on this computer — checked again, still true, not urgent.
 6. `merges_since_relay`: 1 (PR #2134, this session's own merge).
+
+## Continuation note (2026-08-31, relaying — merge counter hit 2)
+
+This session (pane `w1:p3D`, session id `12e46e3c-518c-4e72-a57e-e2062eb7b465`) merged two small documentation pull requests in a row (2134, then this session's own flush, 2135), which is the standing rule for a coordinator hand-off — no need to wait for a context warning.
+
+The fix lane for the weekday/timezone bug is close to done. Pane `w1:p3C`, agent name `issue-1869-timezone-fix` (a Codex session), reports the code fix and its focused tests are clean, and it is waiting on a full type check to finish before it commits and pushes. It has not relayed and is not stuck — just waiting on one more check.
+
+**Next steps for whoever picks this up:**
+1. Watch pane `w1:p3C` (agent name `issue-1869-timezone-fix`). When it reports its fix is pushed and its own tests pass, do NOT merge pull request 2129 yet — arrange a fresh, real conversation demo on the fixed code first, the same hands-on check as before, and it must come back clean.
+2. Once that repeat demo comes back clean, apply the wave-2 kill gate before starting issue 1869 slice 2 or slice 3A: a live, hands-on check by Ben himself of whether the injected time confuses the assistant, not just automated tests and a code read. This is not something an agent can approve on its own.
+3. Keep every message to Ben, and every message between agents, in plain everyday words — no jargon, no invented shorthand, no strings of technical names packed into one sentence. Keep exact names such as file paths, commands, and error text available only for when someone needs to act on them directly.
+4. Keep mixing agent providers for future spawns rather than defaulting everyone to Claude.
+5. `coordinator-watchdog.timer` is still not installed on this computer — checked again, still true, not urgent.
