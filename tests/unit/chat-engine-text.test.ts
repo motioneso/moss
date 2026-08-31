@@ -10,6 +10,16 @@ const dataContext: Pick<DataContextRunner, "withDataContext"> = {
   withDataContext: async (_ctx, cb) => cb({} as never)
 };
 
+it("states the correct UTC and local weekdays at the Pacific date boundary (#1869)", () => {
+  const context = renderCurrentTimeContext(
+    new Date("2026-08-31T04:50:00.000Z"),
+    "America/Los_Angeles"
+  );
+
+  expect(context).toContain("2026-08-31T04:50:00.000Z (Monday)");
+  expect(context).toContain("2026-08-30 (Sunday) 21:50 (America/Los_Angeles");
+});
+
 it("never injects page context into ordinary engine text (#1109 — pull-only tool replaces the turn push)", async () => {
   const now = new Date("2026-08-22T12:00:00.000Z");
   const result = await buildEngineText(

@@ -6,9 +6,20 @@ import { isValidTimeZone, localDayKey, timeZoneOffsetMinutes } from "@moss/modul
  * midnight and DST behaviour are deterministic in tests (#1869 spec decisions 3 and 6).
  */
 export function renderCurrentTimeContext(instant: Date, timezone: string | null): string {
-  const lines = ["<current_time_context>", `Current UTC time: ${instant.toISOString()}.`];
+  const utcWeekday = new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    weekday: "long"
+  }).format(instant);
+  const lines = [
+    "<current_time_context>",
+    `Current UTC time: ${instant.toISOString()} (${utcWeekday}).`
+  ];
   if (timezone && isValidTimeZone(timezone)) {
     const localDate = localDayKey(instant, timezone);
+    const localWeekday = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      weekday: "long"
+    }).format(instant);
     const localTime = new Intl.DateTimeFormat("en-GB", {
       timeZone: timezone,
       hourCycle: "h23",
@@ -17,7 +28,7 @@ export function renderCurrentTimeContext(instant: Date, timezone: string | null)
     }).format(instant);
     const offsetMinutes = timeZoneOffsetMinutes(instant, timezone);
     lines.push(
-      `User's local time: ${localDate} ${localTime} (${timezone}, UTC offset ${offsetMinutes} minutes).`
+      `User's local time: ${localDate} (${localWeekday}) ${localTime} (${timezone}, UTC offset ${offsetMinutes} minutes).`
     );
   }
   lines.push(
