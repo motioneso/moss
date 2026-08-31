@@ -12,7 +12,7 @@
 | Slice | Issue | Tier | Status | Agent name | Pane | Branch | PR | Relays |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | #1784 truthful chat action chip | #1784 | routine | **done, QA in progress** | `qa-1784` | `w1:p33` | `build-1784-chat-outcome-chip` | #2116 | 1 |
-| #1860 module-build environment isolation | #1860 | security | **QA green, awaiting Ben sign-off (pinged)** | `issue-1860-env-relay1` | `w1:p31` | `build-1860-module-build-env` | #2117 | 1 |
+| #1860 module-build environment isolation | #1860 | security | **MERGED** | — | — | `build-1860-module-build-env` | #2117 | 1 |
 | #1869 Slice 1: per-turn time context | #1869 | sensitive | building | `issue-1869-time-context-relay2` | `w1:p2Y` | `build-1869-time-context` | — | 2 (no third relay allowed) |
 | #1869 Slice 2: `chat.getCurrentTime` | #1869 | routine | dependency-gated | `issue-1869-current-time` | — | `build/1869-current-time` | — | 0 |
 | #1869 Slice 3A: SDK wall-clock conversion | #1869 | sensitive | dependency-gated | `issue-1869-sdk-time` | — | `build/1869-sdk-time` | — | 0 |
@@ -70,26 +70,27 @@ None.
 - [x] PR #2111 (coordinator manifest flush before relay) merged.
 - [x] All three wave-1 build agents spawned, confirmed on Sonnet, named/labeled, and unblocked. #1784 approved to build after its own plan-drift check came back clean. #1860 approved to build after its own plan-drift re-check came back clean. #1860 and #1869 Slice 1 both hit their handoff docs missing (spawned before PR #2110 had merged) — redirected each to re-fetch `origin/main` and read the merged doc; both confirmed queued and are proceeding.
 
-## Continuation note (2026-08-30, updated after internal compaction — same coordinator session still driving)
+## Continuation note (2026-08-31, relaying — security-tier merge just landed)
 
-Coordinator lock stays under session id `5e13ca3b-d601-47b4-9f95-81c33ab3531a`, pane `w1:p2X`. This was not a relay — the earlier note above was written just before an automatic conversation compaction, and this same session picked back up afterward with the compacted summary as its only memory of that earlier work. Confirmed still driving via `herdr pane list`. The two follow-up PRs from that earlier note (#2114's replacement, and this update) are both merged; see Merge audit below.
+Coordinator lock is currently under session id `5e13ca3b-d601-47b4-9f95-81c33ab3531a`, pane `w1:p2X`. **This session just merged a security-tier PR (#2117), which per the coordinate skill's relay rule means relay now, unconditionally.** The successor must claim the `coordinator` name/label after confirming it is driving (Phase 0a); this session's pane is then stale and should be closed.
 
 **Lane status:**
-- **#1784** (routine, chip fix): DONE. PR #2116. The live-browser proof is complete across two PR comments: "Executed" has a screenshot, and "Denied" has a real snippet of the on-screen markup from an actual rejected action, so both outcomes are proven even though the second build session couldn't get a second clean run of "Denied". Old duplicate pane `w1:p2R` closed. QA now running in pane `w1:p33` (agent `qa-1784`, worktree `.claude/worktrees/qa-1784`). Once QA is green this auto-merges, no Ben sign-off needed.
-- **#1860** (security, module-build env isolation): DONE. PR #2117, QA verdict GREEN/merge-ready, and QA separately confirmed the trimmed environment variable list still has everything a real module build needs. The build agent then fixed one small cosmetic nitpick QA flagged and pushed; still green. BLOCKED ONLY on Ben's explicit merge sign-off — entry is in `docs/coordination/AWAITING-BEN.md`, and a second `needs-ben` phone ping was sent this session (queued as `1788148407386406484.msg`) after the update. Do not merge without his reply. Build lane idle standby in pane `w1:p31`. QA agent (`qa-1860`, pane `w1:p32`, Opus) may still be filing two follow-up tickets; check and reap its worktree (`.claude/worktrees/qa-1860`) once done.
+- **#1860** (security, module-build env isolation): DONE AND MERGED. PR #2117 merged 2026-08-31T04:01:24Z after Ben's explicit "yes" in chat. Build lane pane closed. QA agent (`qa-1860`, pane `w1:p32`, Opus) may still be filing two non-blocking follow-up tickets it flagged during review — check its pane (nudged for a status update, no reply yet) and reap its worktree (`.claude/worktrees/qa-1860`) once confirmed done; it has no unlanded work of its own.
+- **#1784** (routine, chip fix): DONE, PR #2116, awaiting QA. The live-browser proof is complete across two PR comments: "Executed" has a screenshot, and "Denied" has a real snippet of the on-screen markup from an actual rejected action. QA running in pane `w1:p33` (agent `qa-1784`, worktree `.claude/worktrees/qa-1784`). Once QA is green this auto-merges, no Ben sign-off needed.
 - **#1869 Slice 1** (sensitive, per-turn time context): still building in pane `w1:p2Y`, agent `issue-1869-time-context-relay2`, this is its SECOND relay. It was explicitly told not to relay a third time. No PR yet.
 
-`merges_since_relay: 0` (the two merges since the last relay were docs-only manifest housekeeping, not product PRs — #1860 and #1784 are still pending Ben/QA).
+`merges_since_relay: 0` (reset — the security-tier merge that just happened is the relay trigger, counter resets for the successor).
 
 **Next steps for whoever is driving:**
-1. Watch for Ben's sign-off reply on #1860 (needs-ben reply folder or a direct message) — merge PR #2117 the moment he approves, then reap the build lane (`w1:p31`) and the QA worktree/pane (`w1:p32`).
-2. Watch QA on #1784 (pane `w1:p33`) — once green, merge PR #2116 (routine, no sign-off needed), then reap `w1:p20` and `w1:p33`.
-3. Supervise #1869 Slice 1 relay2 (`w1:p2Y`) to PR. If it relays again, STOP — take over yourself or re-slice the remaining work into a smaller lane instead of allowing a third same-lane relay.
-4. Kill gate before Wave 2 (#1869 Slice 2/3A): Slice 1 needs tests + review + a live, Ben-judged check on the dev site of whether injected time confuses the assistant. Do not start Slice 2/3A before that. Slice 2 and Slice 3A each need their own separate worktree/branch.
-5. All three wave-1 lanes end with a live check on the single shared dev instance — serialize those, never run two at once.
-6. `coordinator-watchdog.timer` is still not installed on this host.
-7. Ben asked (2026-08-30) to mix agent providers across future spawns rather than defaulting everyone to Claude — plan Wave 2 accordingly.
-8. Direct push to `main` is blocked by a required check — any manifest update needs a PR (branch, push, `gh pr create`, wait for green, `gh pr merge --squash --auto`).
+1. Adopt the coordinator lock (Phase 0a): confirm driving, claim `coordinator`/`Coordinator` on your own pane, close `w1:p2X`.
+2. Check on QA-1860 (pane `w1:p32`) — confirm its two follow-up tickets are filed, then reap the pane and worktree `.claude/worktrees/qa-1860`.
+3. Watch QA on #1784 (pane `w1:p33`) — once green, merge PR #2116 (routine, no sign-off needed), then reap `w1:p20` and `w1:p33`.
+4. Supervise #1869 Slice 1 relay2 (`w1:p2Y`) to PR. If it relays again, STOP — take over yourself or re-slice the remaining work into a smaller lane instead of allowing a third same-lane relay.
+5. Kill gate before Wave 2 (#1869 Slice 2/3A): Slice 1 needs tests + review + a live, Ben-judged check on the dev site of whether injected time confuses the assistant. Do not start Slice 2/3A before that. Slice 2 and Slice 3A each need their own separate worktree/branch.
+6. All three wave-1 lanes end with a live check on the single shared dev instance — serialize those, never run two at once.
+7. `coordinator-watchdog.timer` is still not installed on this host.
+8. Ben asked (2026-08-30) to mix agent providers across future spawns rather than defaulting everyone to Claude — plan Wave 2 accordingly.
+9. Direct push to `main` is blocked by a required check — any manifest update needs a PR (branch, push, `gh pr create`, wait for green, `gh pr merge --squash --auto`).
 
 ## Merge audit
 
@@ -103,7 +104,7 @@ Coordinator lock stays under session id `5e13ca3b-d601-47b4-9f95-81c33ab3531a`, 
 | #2114 | coordinator: adopt lock + AWAITING-BEN entry (branch-tracking mistake) | routine (docs) | closed, superseded by #2118 |
 | #2118 | coordinator: manifest flush, correct branch history | routine (docs) | yes |
 | #2119 | coordinator: update #2117 sign-off entry with QA re-verification | routine (docs) | yes |
-| #2117 | #1860 module-build environment isolation | security | QA green, **awaiting Ben sign-off** |
+| #2117 | #1860 module-build environment isolation | security | **yes — Ben signed off "yes" in chat, merged 2026-08-31T04:01:24Z** |
 | #2116 | #1784 truthful chat action chip | routine | QA in progress |
 
 ## Reaped sessions
@@ -112,5 +113,6 @@ Coordinator lock stays under session id `5e13ca3b-d601-47b4-9f95-81c33ab3531a`, 
 - Old coordinator, session `751e32d2-...`, pane `w1:p2S` — closed this session after confirming successor (session `5e13ca3b-...`, pane `w1:p2X`) was driving.
 - Build agent `issue-1869-time-context`, pane `w1:p2V` — relayed to `issue-1869-time-context-relay1` (pane `w1:p2W`, same worktree/branch) on its own 70% context warning; successor confirmed driving before close.
 - Build agent `issue-1869-time-context-relay1`, pane `w1:p2W` — relayed to `issue-1869-time-context-relay2` (pane `w1:p2Y`, same worktree/branch), this lane's SECOND relay; successor confirmed driving before close.
+- Build agent `issue-1860-env-relay1`, pane `w1:p31` — work merged (PR #2117), no further work needed; closed.
 - Build agent `issue-1784-chip` (pane `w1:p2R`) — stale duplicate of the reporting pane `w1:p20`, same worktree/branch, both showed the same finished work; closed after confirming `w1:p20` and PR #2116 already had the full report.
 - Build agent `issue-1860-env`, pane `w1:p2T` — relayed to `issue-1860-env-relay1` (pane `w1:p31`, same worktree/branch) after reporting #1860 done and PR #2117 open; successor confirmed driving before close.
