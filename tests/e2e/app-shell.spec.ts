@@ -712,7 +712,7 @@ test.describe("Chat drawer — Approve/Reject card", () => {
 
     // action_result records render as durable outcomes, never Approve/Reject cards.
     const result = page.getByRole("dialog", { name: "Chat with Moss" }).getByRole("status");
-    await expect(result).toContainText("Changed", { timeout: 3000 });
+    await expect(result).toContainText("Executed", { timeout: 3000 });
     await expect(result).toContainText("Switched to dark mode.");
 
     await expect(page.locator(".action-request-card")).toHaveCount(0);
@@ -785,7 +785,7 @@ test.describe("Chat drawer — Approve/Reject card", () => {
     await page.getByRole("button", { name: "Chat with Moss" }).click();
 
     const result = page.getByRole("dialog", { name: "Chat with Moss" }).getByRole("status");
-    await expect(result).toContainText("Changed", { timeout: 3000 });
+    await expect(result).toContainText("Executed", { timeout: 3000 });
     await expect(result).toContainText("Switched to dark mode.");
 
     // No page.reload() anywhere above — the attribute flips purely from the generic

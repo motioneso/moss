@@ -70,6 +70,23 @@ describe("chat drawer activity outcomes", () => {
     );
   });
 
+  it("shows the standalone chip's true outcome for allowed and failed actions", () => {
+    // #1784: the standalone line used to collapse four outcomes into a Changed/Not-changed guess,
+    // wrongly calling "allowed" a change it never observed and calling "error" unchanged.
+    const html = renderToString(
+      createElement(Thread, {
+        records: [
+          { kind: "action_result", text: "Granted: file access", outcome: "allowed" },
+          { kind: "action_result", text: "Broke: example.write", outcome: "error" }
+        ]
+      })
+    );
+    expect(html).toContain(">Allowed<");
+    expect(html).toContain(">Failed<");
+    expect(html).not.toContain("Changed");
+    expect(html).not.toContain("Not changed");
+  });
+
   it("restores terminal action outcomes after history reload", () => {
     const message: ChatMessageDto = {
       id: "m1",
