@@ -1,7 +1,7 @@
 # Coordination Run — 2026-08-30-next-ready
 
 **Date:** 2026-08-30
-**Coordinator lock:** relaying now — successor should adopt as registered agent name `coordinator` + visible pane label `Coordinator` once driving. Handing off from session `12e46e3c-518c-4e72-a57e-e2062eb7b465` (pane `w1:p3D`), relaying because the merge counter hit 2 routine merges (#2134, #2135).
+**Coordinator lock:** driving. Session `a5dc9378-8637-49b1-9e7d-d797fb666221`, pane `w1:p3E`, registered agent name `coordinator`, visible pane label `Coordinator`. Replaced session `278f7f5d-7a39-4007-bac5-2fceadbbe1f9` in the same pane after that session became unusable from repeated server errors at 76% context.
 **Merge policy:** autonomous after verified QA for `routine`/`sensitive`; `security` needs Ben's explicit merge sign-off.
 **Relay threshold:** relay after every security merge, every two routine/sensitive merges, any context warning, or any compaction summary.
 **merges_since_relay:** 0 (reset — this relay's own flush merge does not count against the successor)
@@ -257,3 +257,65 @@ The fix lane for the weekday/timezone bug is close to done. Pane `w1:p3C`, agent
 3. Keep every message to Ben, and every message between agents, in plain everyday words — no jargon, no invented shorthand, no strings of technical names packed into one sentence. Keep exact names such as file paths, commands, and error text available only for when someone needs to act on them directly.
 4. Keep mixing agent providers for future spawns rather than defaulting everyone to Claude.
 5. `coordinator-watchdog.timer` is still not installed on this computer — checked again, still true, not urgent.
+
+## Recovery checkpoint (2026-08-31) — replacement coordinator in pane w1:p3E
+
+The previous coordinator in this pane (session `278f7f5d-...`) stopped working partway through:
+its requests kept failing with server errors and it could not continue. A replacement session
+(`a5dc9378-...`) took over the same pane, kept the same agent name and label, and rebuilt the
+picture below from the repository, GitHub, and the notes the old session left behind. Nothing was
+lost. The merge counter is reset to zero here on purpose.
+
+### What the old session did before it stopped
+
+- Merged pull request 2136, a routine documentation change from the coordinator before it.
+- Opened pull request 2137 to record its own work, but never merged it. That pull request no longer
+  applies cleanly on top of the current main branch, so it is being closed and everything it said is
+  folded into this note instead.
+- Started a second hands-on conversation check on the time-context work, and got its report back.
+
+### The repeat hands-on check found a new problem — pull request 2129 still cannot merge
+
+The day-of-week bug is genuinely fixed. Asked directly, the assistant correctly said today is
+Sunday, August 30, 2026, and correctly said August 31, 2026 is a Monday.
+
+But when asked to double-check its own answer, it wobbled. It first stated the local time zone as a
+plain fact, then walked that back and said the time zone was not actually confirmed. While talking
+through other time zones it also fumbled its own arithmetic out loud, starting to say one date and
+correcting itself mid-sentence. The overall impression was uncertain and self-correcting rather
+than steady and confident. This is exactly what the hands-on check exists to catch.
+
+Evidence is saved on this computer at `/tmp/webwright-1869-live-demo/final_runs/run_6/` — the
+plain-text conversation is `final_script_log.txt` and there is a screenshot of the follow-up answer
+in the `screenshots` folder alongside it.
+
+The agent that ran the check behaved correctly: it stopped rather than trying to fix things itself,
+did not comment on or merge the pull request, and shut down both of its temporary test servers
+(ports 3199 and 5199 confirmed free). Its pane is `w1:p3F`, agent name `issue-1869-live-demo2`, now
+idle. It never edited code, so that pane can be closed directly with no uncommitted-work check.
+
+**Do not re-run this hands-on check and do not comment on or merge pull request 2129 based on it.**
+It is done, and its answer was "not yet".
+
+### What comes next
+
+1. Close pane `w1:p3F` — its report is fully written down above.
+2. Start a fresh fix lane for the wobble described above. Reuse the existing work folder and branch
+   `build-1869-time-context`. Point it at the saved conversation so it can read the exact wording.
+   The goal: the assistant states the local time zone, or says plainly that it does not know it,
+   once and consistently, without contradicting itself or working through arithmetic out loud.
+   Use a different agent provider for variety — the last two lanes here were both Codex.
+3. When that fix is in and its own tests pass, run the hands-on conversation check again on a fresh
+   session before pull request 2129 can merge.
+4. Pull request 2129 also still needs a code review pass. None has been posted yet.
+5. Separate from merging pull request 2129: before issue 1869 slice 2 or slice 3A starts, Ben
+   himself has to give his own hands-on judgment on whether the injected time information confuses
+   the assistant or changes its personality. Given what this round found, he may want to read the
+   saved conversation himself.
+6. Keep every message to Ben, and between agents, in plain everyday words. Keep exact names such as
+   file paths, commands, and error text only where someone has to act on them directly.
+7. Keep mixing agent providers rather than defaulting everyone to Claude.
+8. There is an unnamed Codex session working in the shared main folder at pane `w1:p3G`. It was not
+   started by any coordinator note on record — leave it alone, but be careful with anything that
+   touches the whole folder while it is running.
+9. The coordinator watchdog timer is still not installed on this computer. Not urgent.
