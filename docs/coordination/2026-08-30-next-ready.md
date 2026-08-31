@@ -1,10 +1,10 @@
 # Coordination Run — 2026-08-30-next-ready
 
 **Date:** 2026-08-30
-**Coordinator lock:** relaying now — successor should adopt as registered agent name `coordinator` + visible pane label `Coordinator` once driving. Handing off from session `74b2593f-a099-4a30-a625-316977758c02` (pane `w1:p39`), relaying because the merge counter hit 2 routine merges (#2130, #2131).
+**Coordinator lock:** driving. Session `7da0b095-ed27-446c-8093-6aa95518ba11`, pane `w1:p3B`, registered agent name `coordinator`, visible pane label `Coordinator`. Took over from session `74b2593f-a099-4a30-a625-316977758c02` (pane `w1:p39`), which had hit its merge-counter relay trigger (2 merges: #2130, #2131) with context also near 70%; that pane's name/label were cleared and it was closed after this session confirmed it was driving.
 **Merge policy:** autonomous after verified QA for `routine`/`sensitive`; `security` needs Ben's explicit merge sign-off.
 **Relay threshold:** relay after every security merge, every two routine/sensitive merges, any context warning, or any compaction summary.
-**merges_since_relay:** 0 (reset — this relay's own flush merge does not count against the successor)
+**merges_since_relay:** 1 (PR #2132 — routine documentation flush, merged 2026-08-31T04:49:31Z)
 **Infrastructure limitation:** `coordinator-watchdog.timer` is still not installed on this host. Not retried this session.
 
 ## Queue
