@@ -76,6 +76,16 @@ class FakeLiveEngine implements CliChatEngine {
 const fakeEngineFactory: ChatEngineFactory = (provider, sessionKey) =>
   new FakeLiveEngine(provider, sessionKey);
 
+/**
+ * Every turn now carries a fresh `<current_time_context>` block ahead of the user's text
+ * (#1869), and this suite runs against the real wall clock (no injected `now`), so the exact
+ * timestamp is not asserted — only that the fake engine's echo wraps the original text with
+ * that block still in front.
+ */
+function isTimeEchoOf(body: string, text: string): boolean {
+  return body.startsWith("echo:<current_time_context>\n") && body.endsWith(`\n\n${text}`);
+}
+
 describe("Chat live API (turn / clear / switch / stream)", () => {
   let appDb: Kysely<MossDatabase>;
   let dataContext: DataContextRunner;
@@ -141,7 +151,7 @@ describe("Chat live API (turn / clear / switch / stream)", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json<{ reply: string }>().reply).toBe("echo:hello jarvis");
+    expect(isTimeEchoOf(response.json<{ reply: string }>().reply, "hello jarvis")).toBe(true);
 
     // The turn is persisted as a stored user + stored assistant message in the
     // user's current conversation (no pg-boss job, born complete).
@@ -156,7 +166,7 @@ describe("Chat live API (turn / clear / switch / stream)", () => {
     const assistant = stored.find((m) => m.role === "assistant");
 
     expect(user?.body).toBe("hello jarvis");
-    expect(assistant?.body).toBe("echo:hello jarvis");
+    expect(isTimeEchoOf(assistant?.body ?? "", "hello jarvis")).toBe(true);
     const metadata = assistant?.model_metadata as { executed?: { provider: string } };
     expect(metadata.executed?.provider).toBe("anthropic");
   });
@@ -236,10 +246,10 @@ describe("Chat live API (turn / clear / switch / stream)", () => {
       return repository.listMessages(scopedDb, thread!.id);
     });
     const overrideAssistant = messages.find(
-      (m) => m.role === "assistant" && m.body === "echo:override model"
+      (m) => m.role === "assistant" && isTimeEchoOf(m.body, "override model")
     );
     const defaultAssistant = messages.find(
-      (m) => m.role === "assistant" && m.body === "echo:default model"
+      (m) => m.role === "assistant" && isTimeEchoOf(m.body, "default model")
     );
     const overrideMetadata = overrideAssistant?.model_metadata as {
       executed?: { model?: string };
@@ -271,8 +281,9 @@ describe("Chat live API (turn / clear / switch / stream)", () => {
 
     expect(response.statusCode).toBe(200);
     // The fake engine echoes back exactly what it received as engine text (§FakeLiveEngine.submit
-    // above); a bare, unmodified echo proves no <page_context> block was folded in server-side.
-    expect(response.json<{ reply: string }>().reply).toBe("echo:hello text-only");
+    // above) other than the always-prepended time block; the echo ending in the original text
+    // with nothing else folded in proves no <page_context> block was added server-side.
+    expect(isTimeEchoOf(response.json<{ reply: string }>().reply, "hello text-only")).toBe(true);
   });
 
   it("POST /api/chat/turn without a session returns 401", async () => {
@@ -306,7 +317,7 @@ describe("Chat live API (turn / clear / switch / stream)", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json<{ reply: string }>().reply).toBe("echo:hello from user b");
+    expect(isTimeEchoOf(response.json<{ reply: string }>().reply, "hello from user b")).toBe(true);
   });
 
   it("GET /api/chat/threads/:id/messages returns only the owner's stored thread messages", async () => {
