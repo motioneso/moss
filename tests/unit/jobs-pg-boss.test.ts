@@ -112,6 +112,18 @@ describe("migratePgBoss queue convergence (#158)", () => {
     expect(jobs.FOUNDATION_QUEUES.map((queue) => queue.name)).toContain("platform.module-control");
   });
 
+  it("bounds module-build heartbeat well under pg-boss's 900s expiry default (#2160)", async () => {
+    const jobs = await import("@moss/jobs");
+    const moduleBuildQueue = jobs.FOUNDATION_QUEUES.find(
+      (queue) => queue.name === jobs.MODULE_BUILD_QUEUE
+    );
+
+    expect(moduleBuildQueue?.options?.heartbeatSeconds).toBe(
+      jobs.MODULE_BUILD_QUEUE_HEARTBEAT_SECONDS
+    );
+    expect(jobs.MODULE_BUILD_QUEUE_HEARTBEAT_SECONDS).toBeLessThan(300);
+  });
+
   it("binds the actor and trusted module metadata when sending", async () => {
     const { sendModuleJob } = await import("@moss/jobs");
     const boss = new PgBossMock({});

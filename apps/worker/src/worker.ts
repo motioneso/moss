@@ -23,6 +23,7 @@ import {
   assertModuleControlPayload,
   PLATFORM_MODULE_CONTROL_QUEUE,
   MODULE_BUILD_QUEUE,
+  MODULE_BUILD_QUEUE_HEARTBEAT_SECONDS,
   createModuleBuildWorker,
   sendJob,
   type ExternalModuleJobPayload,
@@ -309,6 +310,7 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   });
   await boss.work<ModuleBuildPayload>(
     MODULE_BUILD_QUEUE,
+    { heartbeatRefreshSeconds: MODULE_BUILD_QUEUE_HEARTBEAT_SECONDS / 3 },
     createModuleBuildWorker({ boss, sendJob, runStep: runModuleBuildStepForJob })
   );
 

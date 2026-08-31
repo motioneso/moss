@@ -19,6 +19,7 @@ export const UPGRADE_CHECK_QUEUE = "system.upgrade-check";
 export const UPGRADE_NOTIFY_QUEUE = "system.upgrade-notify";
 export const PLATFORM_MODULE_CONTROL_QUEUE = "platform.module-control";
 export const MODULE_BUILD_QUEUE = "module-build";
+export const MODULE_BUILD_QUEUE_HEARTBEAT_SECONDS = 60;
 
 export interface ActorScopedJobPayload {
   readonly actorUserId: string;
@@ -73,7 +74,8 @@ export const FOUNDATION_QUEUES: readonly QueueDefinition[] = [
     options: {
       retryLimit: 3,
       deleteAfterSeconds: 3600,
-      retentionSeconds: 3600
+      retentionSeconds: 3600,
+      heartbeatSeconds: MODULE_BUILD_QUEUE_HEARTBEAT_SECONDS
     }
   }
 ];
