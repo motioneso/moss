@@ -1,10 +1,10 @@
 # Coordination Run — 2026-08-30-next-ready
 
 **Date:** 2026-08-30
-**Coordinator lock:** registered agent name `coordinator` + visible pane label `Coordinator`; session id `a2b54fa8-1c5e-42bc-a664-86220d987786` (pane `w1:p38`) — successor after the third 70% relay; adopted lock, old pane `w1:p36` (session `dbbc22c7-...`) was still mid-turn (stuck on a queued self-close request) when checked, so its name/label were cleared directly and the pane was closed.
+**Coordinator lock:** relaying now — successor should adopt as registered agent name `coordinator` + visible pane label `Coordinator` once driving. Handing off from session `a2b54fa8-1c5e-42bc-a664-86220d987786` (pane `w1:p38`), relaying because the merge counter hit 2 routine merges (own context also at 67%, close to the warning).
 **Merge policy:** autonomous after verified QA for `routine`/`sensitive`; `security` needs Ben's explicit merge sign-off.
 **Relay threshold:** relay after every security merge, every two routine/sensitive merges, any context warning, or any compaction summary.
-**merges_since_relay:** 1 (PR #2127 docs)
+**merges_since_relay:** 0 (reset — this relay's own flush merge does not count against the successor)
 **Infrastructure limitation:** `coordinator-watchdog.timer` is still not installed on this host. Not retried this session.
 
 ## Queue
@@ -13,7 +13,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | #1784 truthful chat action chip | #1784 | routine | **MERGED (2026-08-31T04:23:57Z) — lane not yet reaped, see continuation note** | `issue-1784-chip-relay1` | `w1:p20` | `build-1784-chat-outcome-chip` | #2116 | 1 |
 | #1860 module-build environment isolation | #1860 | security | **MERGED** | — | — | `build-1860-module-build-env` | #2117 | 1 |
-| #1869 Slice 1: per-turn time context | #1869 | sensitive | building | `issue-1869-time-context-relay2` | `w1:p2Y` | `build-1869-time-context` | — | 2 (no third relay allowed) |
+| #1869 Slice 1: per-turn time context | #1869 | sensitive | **code-complete, PR open — needs live demo on a throwaway server, then merge; see continuation note** | — (lane stopped itself rather than relay a third time; pane closed) | — | `build-1869-time-context` | #2129 | 2 (stopped, no third relay) |
 | #1869 Slice 2: `chat.getCurrentTime` | #1869 | routine | dependency-gated | `issue-1869-current-time` | — | `build/1869-current-time` | — | 0 |
 | #1869 Slice 3A: SDK wall-clock conversion | #1869 | sensitive | dependency-gated | `issue-1869-sdk-time` | — | `build/1869-sdk-time` | — | 0 |
 | #1869 Slice 3B: Food integration | #1869 | sensitive | dependency-gated | `issue-1869-food-time` | — | `build/1869-food-time` | — | 0 |
@@ -134,6 +134,7 @@ This session (pane `w1:p36`, session id `dbbc22c7-342d-410c-bc9d-38ad2d86b64e`) 
 | #2125 | coordinator: flush state before relay (context meter 70%) | routine (docs) | yes |
 | #2126 | coordinator: record lock takeover after 70% relay, merge #2125 | routine (docs) | **yes — merged as `a3b16965e`** |
 | #2127 | coordinator: record #2126/#2116 merges, flush state before third relay | routine (docs) | **yes — merged as `98ac367cb`** |
+| #2128 | coordinator: take over lock after third 70% relay, merge #2127, reap #1784 lane and QA pane | routine (docs) | **yes — merged as `2c10cc981`** |
 
 ## Continuation note (2026-08-31, driving — took over after third 70% relay)
 
@@ -152,6 +153,20 @@ Tried to turn on the coordinator watchdog again; it is still not installed on th
 4. Keep every message to Ben, and every message between agents, in plain everyday words — no jargon, no invented shorthand, no strings of technical names packed into one sentence. Keep exact names such as file paths, commands, and error text available only for when someone needs to act on them directly.
 5. All wave-1 lanes end with a hands-on check on the single shared preview site — never run two of those checks at the same time.
 
+## Continuation note (2026-08-31, relaying — merge counter hit 2)
+
+This session (pane `w1:p38`, session `a2b54fa8-1c5e-42bc-a664-86220d987786`) merged two small documentation pull requests in a row (2127, then this session's own flush, 2128), which is the standing rule for when a coordinator must hand off — no need to wait for a warning. This session's own context was also already at 67 percent, close to the warning point, so handing off now rather than starting new work is the right call either way.
+
+**What changed since the last note:** the build lane for issue 1869 slice 1 finished its work without asking for a third do-over, which is exactly right — it wrote up pull request 2129 (all its code done, its own full check passed, rebased onto the latest shared code) and stopped, handing the one remaining step back to whoever is coordinating. That lane's pane, `w1:p2Y`, was closed since its work is fully reported; its work folder was left in place because the pull request is not yet merged.
+
+**The one remaining step on issue 1869 slice 1, spelled out in full in a note already saved on that branch** (the file is `docs/superpowers/handoffs/2026-08-30-1869-time-context-relay3.md`, inside the work folder at `.claude/worktrees/build-1869-time-context`): a real conversation with the assistant, run against this branch's code on its own temporary test computer (not the usual shared preview site, which is currently busy with different, unrelated code), proving the assistant now knows the actual date and time. That conversation needs to be posted as a comment on pull request 2129. Only after that should slices 2 and 3A of issue 1869 be allowed to start — that is the wave-2 kill gate mentioned in earlier notes, and it still applies. The note has the exact steps, including how to avoid a login problem that happens on non-standard ports.
+
+**Next steps for whoever is driving:**
+1. Spawn one fresh, narrowly-scoped session for just that one remaining step: the real conversation, posting it to the pull request, then merging the pull request. Use the same work folder and branch (`build-1869-time-context`) since the code is already there — just start a fresh Claude session in that folder rather than continuing an old one. Consider using a different provider for this one, per Ben's standing instruction to mix providers rather than defaulting to Claude every time.
+2. Once that lands, apply the wave-2 kill gate before starting issue 1869 slices 2 or 3A, as described above.
+3. Keep every message to Ben, and every message between agents, in plain everyday words — no jargon, no invented shorthand, no strings of technical names packed into one sentence. Keep exact names such as file paths, commands, and error text available only for when someone needs to act on them directly.
+4. `coordinator-watchdog.timer` is still not installed on this computer — worth fixing at some point, not urgent.
+
 ## Reaped sessions
 
 - Old coordinator, session `81f073ee-...`, pane `w1:p2Q` — closed after confirming successor (session `751e32d2-...`, pane `w1:p2S`) was driving.
@@ -164,3 +179,4 @@ Tried to turn on the coordinator watchdog again; it is still not installed on th
 - Old coordinator, session `dbbc22c7-...`, pane `w1:p36` — stuck past its own 70% warning on a queued self-close instruction; name/label cleared directly, pane closed once successor confirmed driving.
 - Build agent `issue-1784-chip-relay1`, pane `w1:p20` — work merged (PR #2116, issue #1784 closed); confirmed its two leftover processes stopped, then closed; worktree removed after confirming the code landed on main.
 - QA agent `qa-2116-r2`, pane `w1:p37` — verdict already posted and consumed, PR #2116 already merged; closed, no further work needed.
+- Build agent `issue-1869-time-context-relay2`, pane `w1:p2Y` — finished all code and tests for issue 1869 slice 1, opened pull request 2129, and stopped itself rather than take a third do-over, per the one-relay rule; pane closed once its report was read. Work folder left in place (pull request not yet merged) for the next session to reuse.
