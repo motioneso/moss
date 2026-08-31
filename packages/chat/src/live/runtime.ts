@@ -77,6 +77,14 @@ export const MOSS_PERSONA_NOTES_SEARCH =
   "meetings, decisions, plans — search their notes first and answer from what you find; ask " +
   "only when the search comes up empty.";
 
+/** Prefer Moss's domain tools over Claude's native engine tools for end-user actions. */
+export const MOSS_PERSONA_TOOL_GUIDANCE = [
+  "For requests about Moss data or actions — including memory, notes, calendar, email, tasks, and people — use the matching Jarv1s tool through MCP first.",
+  "If the matching Jarv1s tool is not listed yet, use ToolSearch to find it before answering.",
+  "Do not use native Write, Edit, Bash, or Skill tools for these requests.",
+  "If a native tool is denied during a normal chat turn, treat that as a wrong-tool choice, not proof that the user's request failed; look for the matching Jarv1s tool before replying."
+].join("\n");
+
 /** App-map tool-call instructions — drawer surface only (#1259: a module surface has no app map). */
 export const MOSS_PERSONA_APP_MAP = [
   "Treat Moss app structure, behavior, settings, and errors as closed-world facts.",
@@ -95,7 +103,7 @@ export const MOSS_PERSONA_TOOL_RESULT_DEFENSE = [
 ].join("\n");
 
 function composeMossPersona(surface: ChatSurface): string {
-  const parts = [MOSS_PERSONA_BASE, MOSS_PERSONA_NOTES_SEARCH];
+  const parts = [MOSS_PERSONA_BASE, MOSS_PERSONA_NOTES_SEARCH, MOSS_PERSONA_TOOL_GUIDANCE];
   if (surface === DEFAULT_CHAT_SURFACE) parts.push(MOSS_PERSONA_APP_MAP);
   parts.push(MOSS_PERSONA_TOOL_RESULT_DEFENSE);
   return parts.join("\n");

@@ -11,6 +11,7 @@ import {
   MOSS_PERSONA_APP_MAP,
   MOSS_PERSONA_BASE,
   MOSS_PERSONA_NOTES_SEARCH,
+  MOSS_PERSONA_TOOL_GUIDANCE,
   resolveChatPersona
 } from "../../packages/chat/src/live/runtime.js";
 
@@ -42,6 +43,15 @@ describe("MOSS_PERSONA_BASE", () => {
   it("states no assistant identity of its own", () => {
     expect(MOSS_PERSONA_BASE).not.toMatch(/You are \w+, /);
     expect(MOSS_PERSONA_BASE).not.toMatch(/Your name is /);
+  });
+});
+
+describe("MOSS_PERSONA_TOOL_GUIDANCE", () => {
+  it("routes Moss actions to domain tools and recovers from native-tool denials", () => {
+    expect(MOSS_PERSONA_TOOL_GUIDANCE).toContain("matching Jarv1s tool through MCP first");
+    expect(MOSS_PERSONA_TOOL_GUIDANCE).toContain("ToolSearch");
+    expect(MOSS_PERSONA_TOOL_GUIDANCE).toContain("native Write, Edit, Bash, or Skill");
+    expect(MOSS_PERSONA_TOOL_GUIDANCE).toContain("wrong-tool choice");
   });
 });
 
@@ -170,6 +180,8 @@ describe("resolveChatPersona", () => {
 
     expect(drawerPrompt).toContain(MOSS_PERSONA_NOTES_SEARCH);
     expect(modulePrompt).toContain(MOSS_PERSONA_NOTES_SEARCH);
+    expect(drawerPrompt).toContain(MOSS_PERSONA_TOOL_GUIDANCE);
+    expect(modulePrompt).toContain(MOSS_PERSONA_TOOL_GUIDANCE);
   });
 });
 
