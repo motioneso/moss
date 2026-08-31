@@ -250,14 +250,16 @@ describe("cluster DDL lock wiring", () => {
     it("leaves no integration suite issuing cluster-global DDL on its own connection", async () => {
       const offenders: string[] = [];
       const scanned: string[] = [];
-      const membershipCallers: string[] = [];
+      const membershipHelperCallers: string[] = [];
       for (const relativePath of await integrationSources()) {
         if (relativePath === TEST_DATABASE_SOURCE) continue; // the helper module itself
         const withoutComments = stripComments(await readSource(relativePath));
         const source = stripCallArguments(withoutComments, CLUSTER_GLOBAL_HELPERS);
         if (ROLE_DDL.test(source)) offenders.push(`${relativePath}: role DDL`);
         if (MEMBERSHIP_DDL.test(source)) offenders.push(`${relativePath}: membership DDL`);
-        if (MEMBERSHIP_DDL.test(withoutComments)) membershipCallers.push(relativePath);
+        if (MEMBERSHIP_HELPERS.some((helper) => withoutComments.includes(`${helper}(`))) {
+          membershipHelperCallers.push(relativePath);
+        }
         scanned.push(relativePath);
       }
       // Asserted as a list so a failure names the suites rather than just reporting a count.
@@ -265,10 +267,10 @@ describe("cluster DDL lock wiring", () => {
       // A discovery bug — wrong directory, wrong extension filter — would otherwise scan nothing
       // and report a clean surface. There are ~200 integration sources; 50 is a floor, not a count.
       expect(scanned.length).toBeGreaterThan(50);
-      // And the detectors themselves are live, not dead regexes that would pass over anything:
-      // suites DO still contain membership statements — as arguments to the locked helper, which
-      // is the only difference between the clean scan above and the collisions #1013 is about.
-      expect(membershipCallers.length).toBeGreaterThan(0);
+      // The approved helper path must stay represented even when callers derive role names rather
+      // than spelling out jarvis_* literals. Keep the raw detector's liveness proof separate.
+      expect(membershipHelperCallers.length).toBeGreaterThan(0);
+      expect(MEMBERSHIP_DDL.test("GRANT jarvis_mod_example TO jarvis_app_runtime")).toBe(true);
       expect(ROLE_DDL.test(stripComments(await readSource(TEST_DATABASE_SOURCE)))).toBe(true);
     });
 
