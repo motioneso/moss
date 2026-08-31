@@ -156,19 +156,21 @@ describe("strictLocalWallClockToInstant", () => {
     );
   });
 
-  it.each(["2026-08-22T20:14:00Z", "2026-08-22T20:14:00-07:00", "not-a-date", "2026-08-22 20:14:00"])(
-    "rejects syntax it does not own, including offset-bearing input: %s",
-    (input) => {
-      expect(() => strictLocalWallClockToInstant(input, LA)).toThrow(StrictLocalWallClockError);
-      try {
-        strictLocalWallClockToInstant(input, LA);
-        expect.unreachable();
-      } catch (error) {
-        expect(error).toBeInstanceOf(StrictLocalWallClockError);
-        expect((error as StrictLocalWallClockError).reason).toBe("invalid-syntax");
-      }
+  it.each([
+    "2026-08-22T20:14:00Z",
+    "2026-08-22T20:14:00-07:00",
+    "not-a-date",
+    "2026-08-22 20:14:00"
+  ])("rejects syntax it does not own, including offset-bearing input: %s", (input) => {
+    expect(() => strictLocalWallClockToInstant(input, LA)).toThrow(StrictLocalWallClockError);
+    try {
+      strictLocalWallClockToInstant(input, LA);
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(StrictLocalWallClockError);
+      expect((error as StrictLocalWallClockError).reason).toBe("invalid-syntax");
     }
-  );
+  });
 
   it("rejects a calendar date that does not exist", () => {
     expect(() => strictLocalWallClockToInstant("2026-02-30T10:00:00", LA)).toThrow(
