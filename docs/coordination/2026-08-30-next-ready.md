@@ -1,7 +1,7 @@
 # Coordination Run — 2026-08-30-next-ready
 
 **Date:** 2026-08-30
-**Coordinator lock:** registered agent name `coordinator` + visible pane label `Coordinator`; session id `fb912a67-7ae3-46ed-89f7-253b57564776` (pane `w1:p35`) — successor after the relay at the 70% context warning; adopted lock, old pane `w1:p34` (session `528e6a29-...`) had already self-closed by the time this session checked, so no message needed to it.
+**Coordinator lock:** registered agent name `coordinator` + visible pane label `Coordinator`; session id `dbbc22c7-342d-410c-bc9d-38ad2d86b64e` (pane `w1:p36`) — successor after the second 70% relay; adopted lock, old pane `w1:p35` (session `fb912a67-...`) had already self-closed by the time this session checked, so it was closed directly.
 **Merge policy:** autonomous after verified QA for `routine`/`sensitive`; `security` needs Ben's explicit merge sign-off.
 **Relay threshold:** relay after every security merge, every two routine/sensitive merges, any context warning, or any compaction summary.
 **merges_since_relay:** 0
@@ -93,6 +93,16 @@ This session (pane `w1:p35`, session id `fb912a67-7ae3-46ed-89f7-253b57564776`) 
 Pull request #2126 carries this manifest update (branch `coordinator-manifest-flush-1788149660`, commit `f88a8d75a`) and is still open. GitHub reported it as having a conflict with the main branch, but a check just before relaying showed main's tip unchanged since this branch was cut — that reading may simply be GitHub's status lagging. First task for whoever picks this up: check pull request #2126 fresh, resolve any real conflict or just wait out the lag, then merge it once green as a routine documentation change.
 
 Everything else outstanding is unchanged from the note directly above this one: pull request #2116's background CI watch had not reported before this relay; the #1869 slice 1 lane in pane `w1:p2Y` is on its second relay and must not get a third; the wave-2 kill gate, provider-mixing instruction, and plain-English instruction all still apply as written above.
+
+## Continuation note (2026-08-31, driving — new coordinator adopted lock)
+
+New coordinator session `dbbc22c7-342d-410c-bc9d-38ad2d86b64e`, pane `w1:p36`, took over after the second 70% relay. The prior pane `w1:p35` had already cleared its own coordinator name/label and gone idle when this session checked; closed it directly, no live handoff needed.
+
+Pull request #2126 (this branch) turned out to have a real conflict with `main`, not just a stale GitHub status — `main` had moved to include the "relaying — context meter hit 70%" note (from PR #2125) in the same section this branch also edits. Resolved by keeping this branch's fuller, more recent pair of continuation notes and dropping the older duplicate note that PR #2125 had added to `main`; the merge-audit table entries were additive on both sides and needed no change.
+
+Checked pull request #2116: as of this note, all named CI checks are green except one integration-test job still finishing; a background watch is armed and will report when it settles. Once green, the plan from the earlier notes still applies: spawn a fresh routine-tier QA pane scoped to just the new diff, merge if clean, no sign-off needed.
+
+The #1869 slice 1 build lane in pane `w1:p2Y` was confirmed still running normally (not frozen), on its second relay, with no third relay allowed — continuing to watch it.
 
 ## Merge audit
 
