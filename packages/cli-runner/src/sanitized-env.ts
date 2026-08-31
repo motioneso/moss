@@ -57,7 +57,9 @@ const ALLOWED_PREFIXES: readonly string[] = ["LC_"];
 // into a production container by the exact same conduit as the setting it would gate, so it
 // authorizes nothing an attacker couldn't set themselves. Pinning to this literal path means the
 // var is only ever useful for pointing at the fixture binary that already ships at this path —
-// never a lever an attacker can turn to point production PATH-resolution at their own program.
+// never a lever an attacker can turn to point PATH-resolution at their own program in any child
+// built through buildSanitizedCliEnv (chat/cli-runner children, and the worker's module-build
+// children). Any future subprocess root must adopt this policy explicitly, or it is unprotected.
 const UAT_SCRIPTED_PROVIDER_BIN = "/app/tests/uat/fixtures/scripted-provider/bin";
 
 /**
