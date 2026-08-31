@@ -77,3 +77,28 @@ has sixteen cores and was at roughly a third of its memory when the night began.
   that, and confirm the ports are free again afterwards.
 - Anything touching a database must go through the verify-gate skill. Never a bare test command.
 - No two agents in one work folder or on one branch.
+
+## Progress log
+
+**Around 11:15pm.** Pull request 2129 is still waiting on its two integration test jobs; everything
+else on it is green and it is set to merge itself when they finish. Nothing to do but let it land.
+
+All three lanes are working. The issue 1679 lane sent its plan up for approval and I approved it,
+after checking its central security claim myself: every error message in the notes write tools is a
+fixed sentence with no path, no file name and nothing the user typed. The only one that fills
+anything in is a count of how many times some text appeared, which is just a number. So letting
+those three tools show their own error text is safe.
+
+The shape of that change: a new opt-in marker on a tool's description, missing by default, and the
+tool's own message is shown only when the tool is marked AND the failure is the safe kind the code
+already uses for messages meant to be read by people. Everything else still gets the bland "that
+tool failed". I asked for three additions: a comment on the new marker spelling out that an opted-in
+tool's messages must never contain a path, a file name, or anything from the user's data; a test
+where an opted-in tool throws an ordinary error full of secret-looking text and must still get the
+bland message; and an honest report if the live notes check cannot run, rather than a quiet skip.
+Ben pre-approved this one to merge, but that covered his security sign-off, not skipping proof.
+
+**Coordinator context note.** This coordinator passed the seventy percent mark here. Per Ben's rule
+for tonight it does NOT hand off yet - it may be compacted twice first, and hands off before the end
+of the third stretch. Whoever reads this after a compaction: re-orient from this file, not from the
+conversation history.
