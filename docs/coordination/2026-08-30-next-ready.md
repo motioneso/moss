@@ -337,3 +337,42 @@ It is done, and its answer was "not yet".
 **Still to do, in order:** wait for the fix lane to report; then run the hands-on conversation check
 again on a fresh session; then get a code review on pull request 2129; then merge it. Separately,
 Ben's own hands-on judgment is still required before issue 1869 slice 2 or slice 3A starts.
+
+## Ben's rulings, 2026-08-31 (asked and answered directly in chat)
+
+Two questions were put to Ben about the time-context work. His answers:
+
+1. **The time zone wobble does block the merge.** Pull request 2129 stays blocked until the wording
+   is fixed, the hands-on conversation check comes back clean, and a code review passes. He picked
+   this over merging now and fixing later.
+2. **His own hands-on judgment is no longer required.** The wave-2 kill gate said Ben personally had
+   to judge whether the injected time confuses the assistant or changes its personality before slice
+   2 or slice 3A could start. He dropped that requirement: agents judge tone themselves, from the
+   automated checks and the demo conversations. **Do not park work waiting on Ben for this.** The
+   rest of the ordering still stands - slice 2 and slice 3A still wait for slice 1 to merge.
+
+### Where the time-context work stands
+
+The wording fix is done and pushed: commit `aae6dfa36` on branch `build-1869-time-context`. It only
+changes the text handed to the assistant - it does not build time zone detection, which stays out of
+scope on purpose. When the local zone is known, the assistant is told to state it as fact and not
+hedge. When it is not known, the assistant is told to say so plainly once, answer from world
+standard time, never guess a zone or region, and never walk through time zone arithmetic unasked. It
+is also told to say the same thing about the date every time it comes up. Three new tests cover
+this, type checking, lint and formatting were clean, and no database was touched.
+
+Two lanes are now running side by side on the remaining gates:
+
+- `issue-1869-live-demo3`, pane `w1:p3J`, Codex, in the branch's own work folder. It repeats the
+  real conversation check on the fixed code and posts its verdict on pull request 2129.
+- `qa-2129-review`, pane `w1:p3K`, Claude, in a separate read-only copy of the branch at
+  `.claude/worktrees/qa-2129-review` that is deliberately not attached to a branch so it cannot
+  push. It does the code review and posts its verdict on pull request 2129.
+
+Both were told not to merge. Once both come back clean, pull request 2129 can merge as a normal
+sensitive-tier merge, and slice 2 and slice 3A become startable - with no further wait on Ben.
+
+Provider mix so far on this issue: Codex, Codex, Claude (the fix), Codex (this demo), Claude (this
+review). Keep alternating.
+
+`merges_since_relay`: 2 (pull requests 2138 and 2139). At the threshold - relay after the next one.
