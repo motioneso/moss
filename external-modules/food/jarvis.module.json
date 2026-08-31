@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "food",
   "name": "Food",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "publisher": "Moss Project",
   "lifecycle": "optional",
   "compatibility": {
@@ -174,10 +174,12 @@
             "type": "string"
           },
           "consumedAt": {
-            "type": "string"
+            "type": "string",
+            "description": "When the meal was consumed: use an ISO instant with Z or a numeric offset, or an offset-less local date-time interpreted in timeZone. Example: 2026-08-22T20:14:00 with America/Los_Angeles stores 2026-08-23T03:14:00.000Z. DST gaps and folds require an explicit offset."
           },
           "timeZone": {
-            "type": "string"
+            "type": "string",
+            "description": "IANA time zone for an offset-less consumedAt value; for example, 2026-08-22T20:14:00 with America/Los_Angeles stores 2026-08-23T03:14:00.000Z. The host locale takes precedence when available."
           },
           "captureKind": {
             "type": "string",
@@ -237,10 +239,12 @@
             "type": "string"
           },
           "consumedAt": {
-            "type": "string"
+            "type": "string",
+            "description": "When the meal was consumed: use an ISO instant with Z or a numeric offset, or an offset-less local date-time interpreted in timeZone. Example: 2026-08-22T20:14:00 with America/Los_Angeles stores 2026-08-23T03:14:00.000Z. DST gaps and folds require an explicit offset."
           },
           "timeZone": {
-            "type": "string"
+            "type": "string",
+            "description": "IANA time zone for an offset-less consumedAt value; for example, 2026-08-22T20:14:00 with America/Los_Angeles stores 2026-08-23T03:14:00.000Z. The host locale takes precedence when available."
           },
           "items": {
             "type": "array",

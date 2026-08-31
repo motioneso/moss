@@ -15,7 +15,10 @@ import type { ModuleWorkerContext } from "@moss/module-sdk/worker";
 
 import { validateNutrients } from "../../external-modules/food/src/domain/estimate.js";
 import { NO_TARGETS, resolveDailyTargets } from "../../external-modules/food/src/domain/targets.js";
-import { resolveMealLocalDate } from "../../external-modules/food/src/domain/meal.js";
+import {
+  parseConsumedAtInstant,
+  resolveMealLocalDate
+} from "../../external-modules/food/src/domain/meal.js";
 import type { Meal, MealItem, Nutrients } from "../../external-modules/food/src/domain/meal.js";
 import {
   computeDailyTotals,
@@ -186,6 +189,31 @@ describe("resolveMealLocalDate (plan §4 Task 7)", () => {
     const resolved = resolveMealLocalDate(new Date("2026-07-18T23:30:00.000Z"), "Not/AZone");
     expect(resolved.localDate).toBe("2026-07-18");
     expect(resolved.timezoneOffset).toBe(0);
+  });
+});
+
+describe("parseConsumedAtInstant (#1869 slice 3B)", () => {
+  it("interprets an offset-less local wall clock in the effective IANA zone", () => {
+    expect(parseConsumedAtInstant("2026-08-22T20:14:00", "America/Los_Angeles")).toEqual(
+      new Date("2026-08-23T03:14:00.000Z")
+    );
+  });
+
+  it("keeps offset-bearing timestamps as their exact instant", () => {
+    const local = parseConsumedAtInstant("2026-08-22T20:14:00", "America/Los_Angeles");
+    const offset = parseConsumedAtInstant("2026-08-22T20:14:00-07:00", "UTC");
+    const utc = parseConsumedAtInstant("2026-08-23T03:14:00Z", "UTC");
+    expect(offset).toEqual(local);
+    expect(utc).toEqual(local);
+  });
+
+  it.each([
+    ["not-a-date", "America/Los_Angeles"],
+    ["2026-08-22T20:14:00", "Not/AZone"],
+    ["2026-03-08T02:30:00", "America/Los_Angeles"],
+    ["2026-11-01T01:30:00", "America/Los_Angeles"]
+  ])("rejects invalid consumedAt input %s in %s", (raw, zone) => {
+    expect(() => parseConsumedAtInstant(raw, zone)).toThrow();
   });
 });
 

@@ -10,7 +10,7 @@
 // through the SDK is what it is for (#1723); the rule exists to stop a
 // module depending on host packages it does not ship with, and the SDK is
 // not one of those.
-import { resolveLocalDay } from "@moss/module-sdk/time";
+import { resolveLocalDay, strictLocalWallClockToInstant } from "@moss/module-sdk/time";
 
 export type CaptureKind = "text" | "photo" | "voice";
 export type EstimateState = "pending" | "needs_details" | "estimated" | "failed";
@@ -91,6 +91,47 @@ export interface DailyTotals {
   /** True when any meal on this day lacks a completed estimate. */
   readonly incomplete: boolean;
   readonly mealsWithoutEstimate: number;
+}
+
+const ISO_DATE_TIME_PATTERN =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/;
+const ISO_OFFSET_PATTERN =
+  /^(?:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?)(?:Z|[+-]\d{2}:\d{2})$/;
+
+function hasValidCalendarParts(raw: string): boolean {
+  const match = ISO_DATE_TIME_PATTERN.exec(raw.replace(/(?:Z|[+-]\d{2}:\d{2})$/, ""));
+  if (!match) return false;
+  const [, year, month, day, hour, minute, second] = match;
+  const monthNumber = Number(month);
+  const dayNumber = Number(day);
+  const maxDay = new Date(Date.UTC(Number(year), monthNumber, 0)).getUTCDate();
+  return (
+    monthNumber >= 1 &&
+    monthNumber <= 12 &&
+    dayNumber >= 1 &&
+    dayNumber <= maxDay &&
+    Number(hour) <= 23 &&
+    Number(minute) <= 59 &&
+    (second === undefined || Number(second) <= 59)
+  );
+}
+
+/**
+ * Parses the two timestamp forms accepted at Food's write boundary. Exact instants keep their
+ * supplied offset; local wall clocks go through the SDK's strict DST-aware conversion.
+ */
+export function parseConsumedAtInstant(raw: string, effectiveZone: string): Date {
+  if (ISO_OFFSET_PATTERN.test(raw)) {
+    const parsed = new Date(raw);
+    if (!hasValidCalendarParts(raw) || Number.isNaN(parsed.getTime())) {
+      throw new Error("consumedAt must be a valid ISO instant");
+    }
+    return parsed;
+  }
+  if (ISO_DATE_TIME_PATTERN.test(raw)) {
+    return strictLocalWallClockToInstant(raw, effectiveZone);
+  }
+  throw new Error("consumedAt must be an ISO instant or offset-less local date-time");
 }
 
 // ── Local-date resolution ───────────────────────────────────────────────

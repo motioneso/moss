@@ -24,7 +24,7 @@ import { DEFAULT_LIST_LIMIT, applyListLimit } from "@moss/module-sdk/list-limits
 import type { ModuleWorkerContext } from "@moss/module-sdk/worker";
 
 import type { CaptureKind, Meal, Nutrients } from "../domain/meal.js";
-import { resolveMealLocalDate } from "../domain/meal.js";
+import { parseConsumedAtInstant, resolveMealLocalDate } from "../domain/meal.js";
 import { computeDailyTotals } from "../domain/totals.js";
 import { resolveDailyTargets, type DailyTargets } from "../domain/targets.js";
 import type { DailyTotals } from "../domain/meal.js";
@@ -256,6 +256,25 @@ function resolveTimeZone(ctx: ModuleWorkerContext, fromInput: string | undefined
   return ctx.localTimezone ?? fromInput ?? "UTC";
 }
 
+function parseConsumedAt(raw: string, effectiveZone: string): Date {
+  try {
+    return parseConsumedAtInstant(raw, effectiveZone);
+  } catch {
+    throw new InputError(
+      "consumedAt must be an ISO instant or local date-time; supply an explicit UTC offset for DST gaps or folds"
+    );
+  }
+}
+
+function withFixedOffset(raw: string, offsetMinutes: number): string {
+  if (/(?:Z|[+-]\d{2}:\d{2})$/.test(raw)) return raw;
+  const sign = offsetMinutes < 0 ? "-" : "+";
+  const absolute = Math.abs(offsetMinutes);
+  const hours = String(Math.floor(absolute / 60)).padStart(2, "0");
+  const minutes = String(absolute % 60).padStart(2, "0");
+  return `${raw}${sign}${hours}:${minutes}`;
+}
+
 // ── food.meals.log ──────────────────────────────────────────────────────
 
 const MEALS_LOG_KEYS = new Set([
@@ -328,11 +347,7 @@ export function createMealsLogHandler(store: FoodStore) {
     if (consumedAtRaw === undefined) {
       consumedAt = new Date();
     } else {
-      const parsed = new Date(consumedAtRaw);
-      if (Number.isNaN(parsed.getTime())) {
-        throw new InputError("consumedAt must be a valid ISO instant");
-      }
-      consumedAt = parsed;
+      consumedAt = parseConsumedAt(consumedAtRaw, timeZone);
     }
 
     const { localDate, timezoneOffset } = resolveMealLocalDate(consumedAt, timeZone);
@@ -425,10 +440,8 @@ export function createMealsReestimateHandler(store: FoodStore) {
 
 // ── food.meals.correct ──────────────────────────────────────────────────
 
-// timeZone is NOT in the plan's fixed CorrectMealInput signature (plan §4 Task 4) — added here as
-// an OPTIONAL extra field to make a `consumedAt` correction re-resolve `localDate`/`timezoneOffset`
-// with full DST-aware Intl logic (constraint 9) rather than only the fixed-offset fallback below.
-// Flagged in this task's report as a plan gap, not a silent deviation.
+// timeZone is an optional input so a `consumedAt` correction can use the same strict, DST-aware
+// parser as logging. When no zone is available, the stored offset remains the fallback.
 const MEALS_CORRECT_KEYS = new Set([
   "mealId",
   "expectedRevision",
@@ -563,13 +576,11 @@ export function createMealsCorrectHandler(store: FoodStore) {
       | { consumedAt: Date; localDate: string; timezoneOffset: number }
       | undefined;
     if (consumedAtRaw !== undefined) {
-      const consumedAt = new Date(consumedAtRaw);
-      if (Number.isNaN(consumedAt.getTime())) {
-        throw new InputError("consumedAt must be a valid ISO instant");
-      }
+      let consumedAt: Date;
       let localDate: string;
       let timezoneOffset: number;
       if (timeZone !== undefined) {
+        consumedAt = parseConsumedAt(consumedAtRaw, timeZone);
         ({ localDate, timezoneOffset } = resolveMealLocalDate(consumedAt, timeZone));
       } else {
         const existing = await store.getMeal(mealId);
@@ -577,6 +588,7 @@ export function createMealsCorrectHandler(store: FoodStore) {
           throw new InputError("mealId not found");
         }
         timezoneOffset = existing.timezoneOffset;
+        consumedAt = parseConsumedAt(withFixedOffset(consumedAtRaw, timezoneOffset), "UTC");
         localDate = localDateAtFixedOffset(consumedAt, timezoneOffset);
       }
       consumedAtFields = { consumedAt, localDate, timezoneOffset };

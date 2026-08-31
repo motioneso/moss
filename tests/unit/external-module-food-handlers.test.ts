@@ -27,6 +27,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Meal, MealItem, Nutrients } from "../../external-modules/food/src/domain/meal.js";
 import { sumItemNutrients } from "../../external-modules/food/src/domain/totals.js";
 import {
+  createMealsCorrectHandler,
   createMealsListHandler,
   createMealsLogHandler,
   createMealsReestimateHandler
@@ -686,5 +687,110 @@ describe("food.meals.log — the user's timezone decides the day (#1789)", () =>
     // UTC is a last resort, not a preference. Refusing to log because the user never opened
     // their locale settings would be a worse failure than a few hours of drift.
     expect(result.meal.localDate).toBe("2026-08-19");
+  });
+});
+
+describe("food.meals.log/correct — strict consumedAt parsing (#1869)", () => {
+  it("stores an offset-less local time as one exact instant and derived fields", async () => {
+    const store = fakeStore();
+    const result = await createMealsLogHandler(store)(
+      baseCtx({
+        input: {
+          description: "late dinner",
+          idempotencyKey: "idem-1869-local",
+          consumedAt: "2026-08-22T20:14:00"
+        },
+        localTimezone: "America/Los_Angeles",
+        preferences: { aiEstimates: false }
+      })
+    );
+
+    expect(result.meal.consumedAt).toBe("2026-08-23T03:14:00.000Z");
+    expect(result.meal.localDate).toBe("2026-08-22");
+    expect(result.meal.timezoneOffset).toBe(-420);
+  });
+
+  it("rejects bad consumedAt before creating a row", async () => {
+    const store = fakeStore();
+    await expect(
+      createMealsLogHandler(store)(
+        baseCtx({
+          input: {
+            description: "late dinner",
+            idempotencyKey: "idem-1869-gap",
+            consumedAt: "2026-03-08T02:30:00"
+          },
+          localTimezone: "America/Los_Angeles",
+          preferences: { aiEstimates: false }
+        })
+      )
+    ).rejects.toBeInstanceOf(InputError);
+    expect(store.meals.size).toBe(0);
+  });
+
+  it("uses the same parser for correct and leaves time fields alone for description-only edits", async () => {
+    const store = fakeStore();
+    const original = await store.createMeal({
+      mealId: "meal-1869",
+      consumedAt: new Date("2026-08-22T18:00:00.000Z"),
+      localDate: "2026-08-22",
+      timezoneOffset: -420,
+      description: "dinner",
+      servingNote: null,
+      captureKind: "text",
+      idempotencyKey: "idem-1869-original"
+    });
+    const handler = createMealsCorrectHandler(store);
+
+    const corrected = await handler(
+      baseCtx({
+        input: {
+          mealId: original.mealId,
+          expectedRevision: original.estimateRevision,
+          consumedAt: "2026-08-22T20:14:00",
+          timeZone: "America/Los_Angeles"
+        }
+      })
+    );
+    expect(corrected.consumedAt).toBe("2026-08-23T03:14:00.000Z");
+    expect(corrected.localDate).toBe("2026-08-22");
+    expect(corrected.timezoneOffset).toBe(-420);
+
+    const fixedOffsetOriginal = await store.createMeal({
+      mealId: "meal-1869-fixed-offset",
+      consumedAt: new Date("2026-08-22T18:00:00.000Z"),
+      localDate: "2026-08-22",
+      timezoneOffset: -420,
+      description: "another dinner",
+      servingNote: null,
+      captureKind: "text",
+      idempotencyKey: "idem-1869-fixed-offset"
+    });
+    const fixedOffsetCorrected = await handler(
+      baseCtx({
+        input: {
+          mealId: fixedOffsetOriginal.mealId,
+          expectedRevision: fixedOffsetOriginal.estimateRevision,
+          consumedAt: "2026-08-22T20:14:00"
+        }
+      })
+    );
+    expect(fixedOffsetCorrected.consumedAt).toBe("2026-08-23T03:14:00.000Z");
+    expect(fixedOffsetCorrected.localDate).toBe("2026-08-22");
+    expect(fixedOffsetCorrected.timezoneOffset).toBe(-420);
+
+    const described = await handler(
+      baseCtx({
+        input: {
+          mealId: original.mealId,
+          expectedRevision: corrected.estimateRevision,
+          description: "updated dinner"
+        }
+      })
+    );
+    expect(described.description).toBe("updated dinner");
+    expect(described.consumedAt).toBe(corrected.consumedAt);
+    expect(described.localDate).toBe(corrected.localDate);
+    expect(described.timezoneOffset).toBe(corrected.timezoneOffset);
   });
 });
