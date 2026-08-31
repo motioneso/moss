@@ -65,3 +65,17 @@ for a fully green run.
 
 Pull request 1654 — spinning up a dedicated lane to chase issue #1252 (the app's assistant
 program not starting during the live test) now that it's blocking a security fix. -->
+
+## Open: PR #2117 merge sign-off (security tier) — 2026-08-30
+
+What's blocked: PR #2117 (module-build environment isolation, issue #1860) needs Ben's explicit
+merge sign-off before it can merge — security tier, no auto-merge.
+
+Status: QA verdict is green / merge-ready, posted on the PR. Plain summary: background module
+builds used to be handed a full copy of the worker's environment, including database passwords
+and encryption keys; now they get a short filtered list, and QA independently verified this closes
+the leak (including catching it also fixes a second, previously-unnoticed leak path where a shared
+terminal session could have carried secrets into later chat sessions). Six non-blocking follow-up
+items were noted; two are being filed as tracked tickets.
+
+Recommendation: merge as-is. Sign off with a reply here or in chat.

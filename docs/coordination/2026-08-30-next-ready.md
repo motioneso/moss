@@ -1,19 +1,19 @@
 # Coordination Run — 2026-08-30-next-ready
 
 **Date:** 2026-08-30
-**Coordinator lock:** registered agent name `coordinator` + visible pane label `Coordinator`; stable anchor = session id `751e32d2-66d8-4872-b19d-ae242138d52e` (pane `w1:p2S`) — RELAYING NOW on the 70% context warning; successor will take the lock. Previous coordinator (session `81f073ee-...`, pane `w1:p2Q`) flushed state, relayed, and was closed after this session confirmed it was driving.
+**Coordinator lock:** registered agent name `coordinator` + visible pane label `Coordinator`; stable anchor = session id `5e13ca3b-d601-47b4-9f95-81c33ab3531a` (pane `w1:p2X`) — RELAYING NOW on the 70% context warning; successor will take the lock. Previous coordinator (session `751e32d2-...`, pane `w1:p2S`) flushed state, relayed, and was closed after this session confirmed it was driving.
 **Merge policy:** autonomous after verified QA for `routine`/`sensitive`; `security` needs Ben's explicit merge sign-off.
 **Relay threshold:** relay after every security merge, every two routine/sensitive merges, any context warning, or any compaction summary.
 **merges_since_relay:** 0
-**Infrastructure limitation:** `coordinator-watchdog.timer` is not installed on this host. One start attempt returned “unit not found”; no retry loop was run.
+**Infrastructure limitation:** `coordinator-watchdog.timer` is not installed on this host. Not retried this session.
 
 ## Queue
 
 | Slice | Issue | Tier | Status | Agent name | Pane | Branch | PR | Relays |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | #1784 truthful chat action chip | #1784 | routine | building | `issue-1784-chip` | `w1:p2R` | `build/1784-chat-outcome-chip` | — | 0 |
-| #1860 module-build environment isolation | #1860 | security | building | `issue-1860-env` | `w1:p2T` | `build/1860-module-build-env` | — | 0 |
-| #1869 Slice 1: per-turn time context | #1869 | sensitive | building | `issue-1869-time-context-relay1` | `w1:p2W` | `build/1869-time-context` | — | 1 |
+| #1860 module-build environment isolation | #1860 | security | **QA green, awaiting Ben sign-off** | `issue-1860-env-relay1` | `w1:p31` | `build/1860-module-build-env` | #2117 | 1 |
+| #1869 Slice 1: per-turn time context | #1869 | sensitive | building | `issue-1869-time-context-relay2` | `w1:p2Y` | `build/1869-time-context` | — | 2 |
 | #1869 Slice 2: `chat.getCurrentTime` | #1869 | routine | dependency-gated | `issue-1869-current-time` | — | `build/1869-current-time` | — | 0 |
 | #1869 Slice 3A: SDK wall-clock conversion | #1869 | sensitive | dependency-gated | `issue-1869-sdk-time` | — | `build/1869-sdk-time` | — | 0 |
 | #1869 Slice 3B: Food integration | #1869 | sensitive | dependency-gated | `issue-1869-food-time` | — | `build/1869-food-time` | — | 0 |
@@ -70,23 +70,31 @@ None.
 - [x] PR #2111 (coordinator manifest flush before relay) merged.
 - [x] All three wave-1 build agents spawned, confirmed on Sonnet, named/labeled, and unblocked. #1784 approved to build after its own plan-drift check came back clean. #1860 approved to build after its own plan-drift re-check came back clean. #1860 and #1869 Slice 1 both hit their handoff docs missing (spawned before PR #2110 had merged) — redirected each to re-fetch `origin/main` and read the merged doc; both confirmed queued and are proceeding.
 
-## Continuation note (relay fired on context-meter 70% warning, 2026-08-30)
+## Continuation note (2026-08-30, relaying on 70% context warning)
 
-Coordinator lock is currently under session id `751e32d2-66d8-4872-b19d-ae242138d52e`, pane `w1:p2S` — this session hit the 70% context warning and is relaying now. The successor must claim the `coordinator` name/label after confirming it is driving (Phase 0a); this session's pane is then stale and should be closed.
+Coordinator lock is currently under session id `5e13ca3b-d601-47b4-9f95-81c33ab3531a`, pane `w1:p2X` — this session hit the 70% context warning and is relaying now. The successor must claim the `coordinator` name/label after confirming it is driving (Phase 0a); this session's pane is then stale and should be closed.
 
-All three wave-1 lanes are building in the "builders" tab (`w1:tP`): #1784 chip fix (`w1:p2R`, agent `issue-1784-chip`), #1860 module-build environment isolation (`w1:p2T`, agent `issue-1860-env`), #1869 Slice 1 per-turn time context (`w1:p2W`, agent `issue-1869-time-context-relay1` — this is its own relay 1 of 1, already confirmed driving in the same worktree/branch after its predecessor in `w1:p2V` hit its own context warning and was closed). No PRs from any wave-1 build agent exist yet. `merges_since_relay: 0`.
+**Lane status:**
+- **#1784** (routine, chip fix): **DONE. PR #2116 open, mergeable, code/tests green.** Live-browser proof done and posted as a PR comment (ordinary task showed "Executed", a rejected calendar-change approval showed "Denied"). Reporting pane is `w1:p20` (a relay successor of the original `w1:p2R` — that old pane may still exist and need closing/checking, the report flagged it as possibly stale). Routine tier — spawn QA, and once green this one auto-merges (no Ben sign-off needed).
+- **#1860** (security, module-build env isolation): **DONE. PR #2117 open, gate green, QA verdict posted GREEN/merge-ready** (independent Opus review, two live e2e runs, no blockers found). Build lane relayed once and is now idle on standby in pane `w1:p31` (`issue-1860-env-relay1`) watching for review feedback — do not restart it. **This is now BLOCKED ONLY on Ben's explicit merge sign-off** — entry already added to `docs/coordination/AWAITING-BEN.md` and a `needs-ben` phone ping was sent this session (queued as `1788148103774204966.msg`). Do not merge without his reply. QA agent (`qa-1860`, pane `w1:p32`, Opus) may still be filing two GitHub follow-up tickets it flagged (non-blocking nitpicks) — check its pane and reap it (worktree `.claude/worktrees/qa-1860`) once that's done; it has no unlanded work of its own.
+- **#1869 Slice 1** (sensitive, per-turn time context): building in pane `w1:p2Y`, agent `issue-1869-time-context-relay2` — this is its SECOND relay (a scoping-failure signal per the coordinate skill; it was explicitly told not to relay a third time and to report back to the coordinator for a re-slice instead if it hits the warning again). Its scoped remaining work as of the last relay: fix 2 failing tests in `chat-live-manager.test.ts` and 2 in `chat-session-manager-selfheal.test.ts` (both broken by the injected time block changing exact text sent to the fake engine), then run the full slice 1 verification checklist, gate, push, PR, and the live-site demo (sensitive tier live-path gate). All prior work on this lane was committed at `52d899723` before this relay. No PR yet.
 
-Plan checks already done and approved this session, no drift found against the approved specs: #1784 (routine), #1860 (security), #1869 Slice 1 (sensitive, re-approved for its relay successor too). All three are clear to keep building without another plan check unless they hit a fork.
+`merges_since_relay: 0` (no merges happened this session — #1860 is QA-approved but still waiting on Ben).
+
+**Open background housekeeping (not blocking, just not yet done):**
+- Manifest PR #2114 (this file's earlier commits) may still be pending CI — check `gh pr checks 2114` and merge once green, same pattern as #2112 (branch, push, PR, wait for green, squash-merge). A second commit adding the AWAITING-BEN entry was also pushed to that same branch (`coordinator/adopt-run-2026-08-30`).
+- QA tab `w1:tQ` now exists (created this session) with a spare raw shell pane `w1:p2Z` (cwd `.claude/worktrees/qa-1860`) available for reuse — don't recreate a new QA tab.
 
 **Next steps for whoever is driving:**
-1. Adopt the coordinator lock (Phase 0a): confirm driving, claim `coordinator`/`Coordinator` on your own pane, close `w1:p2S`.
-2. Supervise the three wave-1 lanes to PR (Phase 2 of the coordinate skill) — watch for plan-ready/blocker/stall signals, do not poll. Re-arm a liveness Monitor on the current panes (`w1:p2R`, `w1:p2T`, `w1:p2W`) once adopted — the prior one was stopped before this relay.
-3. When each reports done, spawn QA per the coordinate skill's tiering (#1784 routine, #1860 security → Opus adversarial QA + Ben sign-off, #1869 Slice 1 sensitive → matched e2e-UAT).
-4. Kill gate before Wave 2 (#1869 Slice 2/3A): Slice 1 needs tests + review + a live, Ben-judged check on the dev site of whether injected time confuses the assistant. Do not start Slice 2/3A before that. When it does start, Slice 2 and Slice 3A each need their own separate worktree/branch (the plan document wrongly assumes they share one).
-5. All three wave-1 lanes end with a live check on the single shared dev instance — serialize those, never run two at once.
-6. `coordinator-watchdog.timer` is still not installed on this host — not retried this session either.
-7. Ben asked (2026-08-30) to mix agent providers across future spawns rather than defaulting everyone to Claude — plan the next wave of build/QA agents accordingly (some as Codex where suitable), no change needed to the lanes already running.
-8. Direct push to `main` is blocked by a required "CI gate" status check — any manifest update needs a PR (see #2112 for the pattern: branch, push, `gh pr create`, wait for green, `gh pr merge --squash --delete-branch`).
+1. Adopt the coordinator lock (Phase 0a): confirm driving, claim `coordinator`/`Coordinator` on your own pane, close `w1:p2X`.
+2. #1784 is DONE (PR #2116, reporting pane `w1:p20`) — spawn routine-tier QA on it. Its old pane `w1:p2R` now shows `agent_status: done` and is very likely reapable (confirm the work is on the reporting pane/PR first, then close `w1:p2R`).
+3. Watch for Ben's sign-off reply on #1860 (needs-ben reply folder, or a direct message/AWAITING-BEN edit) — merge PR #2117 the moment he approves, then run Phase 3 step 6 reap on the build lane (`w1:p31`) and the QA worktree/pane (`w1:p32`, `.claude/worktrees/qa-1860`).
+4. Supervise #1869 Slice 1 relay2 (`w1:p2Y`) to PR. If it relays again, STOP — per the coordinate skill, two relays without a landed PR means the lane was mis-scoped; take over yourself or re-slice the remaining work into a smaller lane instead of allowing a third same-lane relay.
+5. Kill gate before Wave 2 (#1869 Slice 2/3A): Slice 1 needs tests + review + a live, Ben-judged check on the dev site of whether injected time confuses the assistant. Do not start Slice 2/3A before that. When it does start, Slice 2 and Slice 3A each need their own separate worktree/branch (the plan document wrongly assumes they share one).
+6. All three wave-1 lanes end with a live check on the single shared dev instance — serialize those, never run two at once.
+7. `coordinator-watchdog.timer` is still not installed on this host — not retried this session either.
+8. Ben asked (2026-08-30) to mix agent providers across future spawns rather than defaulting everyone to Claude — plan the next wave of build/QA agents accordingly (some as Codex where suitable), no change needed to the lanes already running.
+9. Direct push to `main` is blocked by a required "CI gate" status check — any manifest update needs a PR (see #2112 for the pattern: branch, push, `gh pr create`, wait for green, `gh pr merge --squash --delete-branch`).
 
 ## Merge audit
 
@@ -97,8 +105,13 @@ Plan checks already done and approved this session, no drift found against the a
 | #2110 | wave-1 build handoff docs | routine (docs) | yes |
 | #2111 | coordinator manifest flush before relay | routine (docs) | yes |
 | #2112 | coordinator: adopt lock, merge wave-1 PRs, spawn build agents | routine (docs) | yes |
+| #2114 | coordinator: adopt lock + AWAITING-BEN entry for #2117 | routine (docs) | pending CI, not yet merged |
+| #2117 | #1860 module-build environment isolation | security | QA green, **awaiting Ben sign-off** |
 
 ## Reaped sessions
 
 - Old coordinator, session `81f073ee-...`, pane `w1:p2Q` — closed after confirming successor (session `751e32d2-...`, pane `w1:p2S`) was driving.
+- Old coordinator, session `751e32d2-...`, pane `w1:p2S` — closed this session after confirming successor (session `5e13ca3b-...`, pane `w1:p2X`) was driving.
 - Build agent `issue-1869-time-context`, pane `w1:p2V` — relayed to `issue-1869-time-context-relay1` (pane `w1:p2W`, same worktree/branch) on its own 70% context warning; successor confirmed driving before close.
+- Build agent `issue-1869-time-context-relay1`, pane `w1:p2W` — relayed to `issue-1869-time-context-relay2` (pane `w1:p2Y`, same worktree/branch), this lane's SECOND relay; successor confirmed driving before close.
+- Build agent `issue-1860-env`, pane `w1:p2T` — relayed to `issue-1860-env-relay1` (pane `w1:p31`, same worktree/branch) after reporting #1860 done and PR #2117 open; successor confirmed driving before close.
