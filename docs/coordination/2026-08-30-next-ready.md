@@ -70,24 +70,25 @@ None.
 - [x] PR #2111 (coordinator manifest flush before relay) merged.
 - [x] All three wave-1 build agents spawned, confirmed on Sonnet, named/labeled, and unblocked. #1784 approved to build after its own plan-drift check came back clean. #1860 approved to build after its own plan-drift re-check came back clean. #1860 and #1869 Slice 1 both hit their handoff docs missing (spawned before PR #2110 had merged) — redirected each to re-fetch `origin/main` and read the merged doc; both confirmed queued and are proceeding.
 
-## Continuation note (2026-08-31, driving — post-relay cleanup done)
+## Continuation note (2026-08-31, relaying — context meter hit 70%)
 
-Coordinator lock is under session id `528e6a29-b81a-4773-a46c-bcf524e188c6`, pane `w1:p34`. Adopted the lock from the prior session (`5e13ca3b-...`, pane `w1:p2X`, closed). `merges_since_relay: 0`.
+Coordinator lock is under session id `528e6a29-b81a-4773-a46c-bcf524e188c6`, pane `w1:p34` — **this session hit the 70% context warning and is relaying now, per the standing rule (no deferral).** The successor must adopt the lock (Phase 0a), then close this pane once confirmed driving. `merges_since_relay: 0` (PR #2124, the manifest-flush docs PR, has already merged and does not count as a code merge).
 
 **Lane status:**
-- **#1860** (security, module-build env isolation): MERGED (PR #2117). Its two follow-up tickets are filed and confirmed: **#2122** (module builds and chat share one terminal-multiplexer server, but build different filtered environments) and **#2123** (chat transcript cleanup spawns a child with the full environment from the secrets-holding API process). Both reference #1860 and #2117, labeled security + minor severity, neither urgent. Not yet placed on the board — do that next pass. QA pane and worktree reaped.
-- **#1784** (routine, chip fix): PR #2116 came back RED from QA, not merge-ready. The label fix itself is correct, but three older browser tests still expect the old wrong wording ("Changed") instead of the new real outcome. Full verdict: https://github.com/motioneso/moss/pull/2116#issuecomment-5473492986. Sent back to the build agent (`issue-1784-chip-relay1`, pane `w1:p20`) with the three exact test locations to fix: `tests/e2e/app-shell.spec.ts` around line 715 and line 788, and `tests/e2e/self-operation-no-confirmation-card.spec.ts` around line 87. Waiting on its fix report (must cite fix commit + file:line per finding). QA pane/worktree already reaped — re-spawn a fresh QA pane once the fix lands.
-- **#1869 Slice 1** (sensitive, per-turn time context): still building in pane `w1:p2Y`, agent `issue-1869-time-context-relay2`, SECOND relay, told not to relay a third time. Currently mid-gate-run (`scripts/run-gate.sh wait --follow`, running normally, not frozen). No PR yet.
+- **#1860** (security): MERGED (PR #2117). Follow-up tickets #2122 and #2123 are filed but **still not placed on the project board (project 2)** — do that next pass.
+- **#1784** (routine, chip fix), PR #2116: the build agent (`issue-1784-chip-relay1`, pane `w1:p20`) just reported the fix is done, commit `4242c7587`, citing exact file/line for each of the three stale tests it fixed (`tests/e2e/app-shell.spec.ts` lines 715 and 788, `tests/e2e/self-operation-no-confirmation-card.spec.ts` line 87) — all now check for "Executed" instead of the old wrong word "Changed". It also reports one unrelated failing test (`briefing-action-rows.spec.ts`, a reload-timing issue in an unrelated command bar, not touched by this change) — worth a sanity check but likely a pre-existing flake, not a blocker. CI was re-triggered by the push; a background watch on the PR's checks was running in the relaying session but did not survive the relay — **the successor must re-arm it**: `gh pr checks 2116 --watch` (via `run_in_background`, never inline). Once green, spawn a fresh QA pane (routine tier, Sonnet) scoped to the diff since the last reviewed commit (`aa36701c5..4242c7587`) rather than a full re-review, then merge if green — no Ben sign-off needed for routine tier. QA pane/worktree from the first (red) round were already reaped; this is a fresh QA spawn.
+- **#1869 Slice 1** (sensitive), pane `w1:p2Y`, agent `issue-1869-time-context-relay2`: still building, SECOND relay, told not to relay a third time. Last seen mid-gate-run, working normally, not frozen. No PR yet. Keep watching; if it relays again, STOP — take over and re-slice instead of allowing a third same-lane relay.
 
 **Next steps for whoever is driving:**
-1. Watch pane `w1:p20` for the #1784 test fix; when it reports, spawn a fresh QA pane (routine tier, Sonnet) to re-check just the diff since the last review round, then merge PR #2116 if green (no sign-off needed).
-2. Place tickets #2122 and #2123 on the project board (project 2).
-3. Keep supervising #1869 Slice 1 relay2 (`w1:p2Y`) to PR. If it relays again, STOP — take over yourself or re-slice the remaining work into a smaller lane instead of allowing a third same-lane relay.
-4. Kill gate before Wave 2 (#1869 Slice 2/3A): Slice 1 needs tests + review + a live, Ben-judged check on the dev site of whether injected time confuses the assistant. Do not start Slice 2/3A before that. Slice 2 and Slice 3A each need their own separate worktree/branch.
-5. All three wave-1 lanes end with a live check on the single shared dev instance — serialize those, never run two at once.
-6. `coordinator-watchdog.timer` is still not installed on this host (attempted again this session, unit not found).
-7. Ben asked (2026-08-30) to mix agent providers across future spawns rather than defaulting everyone to Claude — plan Wave 2 accordingly.
-8. Direct push to `main` is blocked by a required check — any manifest update needs a PR (branch, push, `gh pr create`, wait for green, `gh pr merge --squash --auto`).
+1. Adopt the coordinator lock (Phase 0a), confirm driving, close pane `w1:p34`.
+2. Re-arm a background watch on PR #2116's CI checks (`gh pr checks 2116 --watch` via `run_in_background`), merge once green after a diff-scoped QA pass (see above).
+3. Place tickets #2122 and #2123 on the project board (project 2).
+4. Keep supervising #1869 Slice 1 relay2 (`w1:p2Y`) to PR — no third relay allowed for that lane.
+5. Kill gate before Wave 2 (#1869 Slice 2/3A): Slice 1 needs tests + review + a live, Ben-judged check on the dev site of whether injected time confuses the assistant. Do not start Slice 2/3A before that. Slice 2 and Slice 3A each need their own separate worktree/branch.
+6. All three wave-1 lanes end with a live check on the single shared dev instance — serialize those, never run two at once.
+7. `coordinator-watchdog.timer` is still not installed on this host (tried again this session, unit not found).
+8. Ben asked (2026-08-30) to mix agent providers across future spawns rather than defaulting everyone to Claude — plan Wave 2 accordingly.
+9. Direct push to `main` is blocked by a required check — any manifest update needs a PR (branch, push, `gh pr create`, wait for green, `gh pr merge --squash --auto`).
 
 ## Merge audit
 
