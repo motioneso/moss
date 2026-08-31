@@ -76,6 +76,9 @@ builds used to be handed a full copy of the worker's environment, including data
 and encryption keys; now they get a short filtered list, and QA independently verified this closes
 the leak (including catching it also fixes a second, previously-unnoticed leak path where a shared
 terminal session could have carried secrets into later chat sessions). Six non-blocking follow-up
-items were noted; two are being filed as tracked tickets.
+items were noted; two are being filed as tracked tickets. QA also directly checked whether the
+trimmed environment variable list still has everything a real module build needs, and confirmed it
+does. The build agent then fixed one small cosmetic nitpick QA flagged (an inconsistent argument
+order in the worker code) and all checks are still green.
 
 Recommendation: merge as-is. Sign off with a reply here or in chat.
