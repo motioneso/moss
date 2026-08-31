@@ -13,7 +13,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | #1784 truthful chat action chip | #1784 | routine | **MERGED (2026-08-31T04:23:57Z) — lane not yet reaped, see continuation note** | `issue-1784-chip-relay1` | `w1:p20` | `build-1784-chat-outcome-chip` | #2116 | 1 |
 | #1860 module-build environment isolation | #1860 | security | **MERGED** | — | — | `build-1860-module-build-env` | #2117 | 1 |
-| #1869 Slice 1: per-turn time context | #1869 | sensitive | **code-complete, PR open — needs live demo on a throwaway server, then merge; see continuation note** | — (lane stopped itself rather than relay a third time; pane closed) | — | `build-1869-time-context` | #2129 | 2 (stopped, no third relay) |
+| #1869 Slice 1: per-turn time context | #1869 | sensitive | **BLOCKED — live demo found a real bug (wrong weekday, no local time zone); fix lane running, see continuation note** | `issue-1869-timezone-fix` | `w1:p3C` | `build-1869-time-context` | #2129 | 2 |
 | #1869 Slice 2: `chat.getCurrentTime` | #1869 | routine | dependency-gated | `issue-1869-current-time` | — | `build/1869-current-time` | — | 0 |
 | #1869 Slice 3A: SDK wall-clock conversion | #1869 | sensitive | dependency-gated | `issue-1869-sdk-time` | — | `build/1869-sdk-time` | — | 0 |
 | #1869 Slice 3B: Food integration | #1869 | sensitive | dependency-gated | `issue-1869-food-time` | — | `build/1869-food-time` | — | 0 |
@@ -210,3 +210,19 @@ This session (pane `w1:p39`, session id `74b2593f-a099-4a30-a625-316977758c02`) 
 Everything from the note above still applies unchanged: the Codex session in pane `w1:p3A` (agent name `issue-1869-live-demo`) is still running the live demo for pull request 2129 — last check it had just started working, no report back yet. Watch it, and when it reports done, close it and reap its work folder using the standard four-part safety check. The wave-2 kill gate still needs Ben's own hands-on judgment once pull request 2129 lands, not just an automated pass. Keep messages in plain everyday words, and keep mixing agent providers on future spawns.
 
 `coordinator-watchdog.timer` is still not installed on this computer.
+
+## Continuation note (2026-08-31, relaying — context meter hit 70%)
+
+This session (pane `w1:p3B`, session id `7da0b095-ed27-446c-8093-6aa95518ba11`) took over the coordinator lock from pane `w1:p39` (session `74b2593f-...`), closed that pane after confirming it, and merged one routine documentation pull request (#2132, the prior session's flush) plus its own follow-up flush (#2133). Both were plain documentation changes with no other checks applicable.
+
+**The important news: the live demo for pull request 2129 found a real bug — do not let anyone merge 2129 until this is fixed.** The Codex agent running the live demo (pane `w1:p3A`, agent name `issue-1869-live-demo`) had a real conversation with the assistant on a throwaway test copy of the branch. Asked for today's date and time at 9:50 PM Los Angeles time on August 30, the assistant said August 31 was a Sunday and August 30 was a Saturday, and could not work out the person's local time zone. August 31, 2026 is actually a Monday. So the weekday name is being computed wrong, and separately, local time zone detection does not work at all even though that was meant to be part of this feature. The demo agent made no code changes, shut down its temporary test servers cleanly (ports 3199 and 5199 are clear), and did not comment on or merge the pull request. Its pane was closed.
+
+A fresh session is now working the fix in the same work folder and branch (`build-1869-time-context`), agent name `issue-1869-timezone-fix`, pane `w1:p3C`, in the Builders tab. Used Codex again, per the standing instruction to mix providers. Its brief is the file `/home/ben/.coord-briefs/boot-1869-timezone-fix.txt` — it should find and fix the weekday bug, look into why local time zone detection is not working, add a test that would have caught the weekday mistake, push the fix as a new commit on the same branch, and then report back rather than merging or re-running the live demo itself.
+
+**Next steps for whoever picks this up:**
+1. Watch pane `w1:p3C` (agent name `issue-1869-timezone-fix`). When it reports its fix is pushed and its own tests pass, arrange for the live conversation demo to be repeated on the updated code before pull request 2129 can merge — the same kind of hands-on check as before, not just automated tests.
+2. Pull request 2129 does not merge, and slice 2/3A of issue 1869 do not start, until that repeat demo comes back clean and Ben has separately given his own hands-on judgment on whether the injected time information confuses the assistant or changes its personality.
+3. Keep every message to Ben, and every message between agents, in plain everyday words — no jargon, no invented shorthand, no strings of technical names packed into one sentence. Keep exact names such as file paths, commands, and error text available only for when someone needs to act on them directly.
+4. Keep mixing agent providers for future spawns rather than defaulting everyone to Claude.
+5. `coordinator-watchdog.timer` is still not installed on this computer — not urgent.
+6. `merges_since_relay` resets to 0 for the successor — two routine documentation merges (#2132, #2133) already happened this session.
