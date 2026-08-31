@@ -13,7 +13,10 @@ const dataContext: Pick<DataContextRunner, "withDataContext"> = {
 it("never injects page context into ordinary engine text (#1109 — pull-only tool replaces the turn push)", async () => {
   const now = new Date("2026-08-22T12:00:00.000Z");
   const result = await buildEngineText(
-    { persistence: { getThreadContext: async () => ({ localTimezone: null }) } as never, now: () => now },
+    {
+      persistence: { getThreadContext: async () => ({ localTimezone: null }) } as never,
+      now: () => now
+    },
     "u1",
     "hello"
   );
@@ -23,11 +26,7 @@ it("never injects page context into ordinary engine text (#1109 — pull-only to
 
 it("still carries the fresh time block when no retrieval deps exist at all (#1869 spec decision 5)", async () => {
   const now = new Date("2026-08-22T23:59:00.000Z");
-  const result = await buildEngineText(
-    { persistence: {} as never, now: () => now },
-    "u1",
-    "hello"
-  );
+  const result = await buildEngineText({ persistence: {} as never, now: () => now }, "u1", "hello");
   expect(result.text).toContain("<current_time_context>");
   expect(result.text).toContain(now.toISOString());
   expect(result.text.endsWith("\n\nhello")).toBe(true);
@@ -62,7 +61,11 @@ it("keeps the fresh time block even when a retrieval dependency throws inside th
         listPriorTurns: async () => {
           throw new Error("boom");
         },
-        getThreadContext: async () => ({ threadTitle: null, localTimezone: "UTC", incognito: false })
+        getThreadContext: async () => ({
+          threadTitle: null,
+          localTimezone: "UTC",
+          incognito: false
+        })
       } as never,
       crossToolRead: { runReadTool: vi.fn(async () => ({ ok: true, data: {} })) },
       now: () => now

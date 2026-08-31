@@ -49,7 +49,7 @@ export async function buildEngineText(
       const threadCtx = await deps.persistence.getThreadContext(actorUserId, surface);
       timezone = threadCtx.localTimezone;
     } catch {
-      timezone = null;
+      // keep the null default — no timezone context available
     }
     const timeBlock = renderCurrentTimeContext(instant, timezone);
     return { text: `${timeBlock}\n\n${text}`, pendingItems: [] };

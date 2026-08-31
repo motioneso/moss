@@ -333,9 +333,7 @@ describe("ChatSessionManager.launchSession — personaText + replayBatch + offse
 
     releaseLaunch();
     await expect(turn).resolves.toMatchObject({ reply: "fresh answer" });
-    expect(engine.submitted).toEqual([
-      `${renderCurrentTimeContext(now, null)}\n\nfirst real turn`
-    ]);
+    expect(engine.submitted).toEqual([`${renderCurrentTimeContext(now, null)}\n\nfirst real turn`]);
   });
 
   it("seeds hidden context by submitting and draining without recording a chat turn", async () => {

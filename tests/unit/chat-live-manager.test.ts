@@ -704,7 +704,8 @@ describe("ChatSessionManager", () => {
       idleMs: 1_000,
       neutralBase: "/tmp/jarvis-test",
       persona: "I am Jarvis, {{userName}}.",
-      pollMs: 0
+      pollMs: 0,
+      now: () => NOW
     });
 
     // Start the first turn; its readNew blocks on the gate, so it stays in-flight.
@@ -721,11 +722,11 @@ describe("ChatSessionManager", () => {
     while (engines.length < 1) await delay(1);
     engines[0]?.open();
     const { reply } = await first;
-    expect(reply).toBe("reply to: first");
+    expect(reply).toBe(`reply to: ${withTime("first")}`);
 
     // The in-flight flag is cleared in finally, so a fresh turn succeeds.
     const next = await manager.submitTurn("user-1", "Ben", "third");
-    expect(next.reply).toBe("reply to: third");
+    expect(next.reply).toBe(`reply to: ${withTime("third")}`);
   });
 
   it("allows concurrent turns for DIFFERENT users (lock is per-actor)", async () => {
@@ -743,7 +744,8 @@ describe("ChatSessionManager", () => {
       idleMs: 1_000,
       neutralBase: "/tmp/jarvis-test",
       persona: "I am Jarvis, {{userName}}.",
-      pollMs: 0
+      pollMs: 0,
+      now: () => NOW
     });
 
     const a = manager.submitTurn("user-1", "Ben", "a");
@@ -754,8 +756,8 @@ describe("ChatSessionManager", () => {
     for (const e of engines) e.open();
 
     const [ra, rb] = await Promise.all([a, b]);
-    expect(ra.reply).toBe("reply to: a");
-    expect(rb.reply).toBe("reply to: b");
+    expect(ra.reply).toBe(`reply to: ${withTime("a")}`);
+    expect(rb.reply).toBe(`reply to: ${withTime("b")}`);
   });
 });
 

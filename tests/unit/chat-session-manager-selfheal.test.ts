@@ -6,6 +6,14 @@ import {
   CliChatUnavailableError
 } from "../../packages/chat/src/live/errors.js";
 import { makeMinimalDeps } from "./chat-session-manager.test.js";
+import { renderCurrentTimeContext } from "../../packages/chat/src/live/time-context.js";
+
+// Fixed "now" for every manager in this file — getThreadContext here always resolves
+// localTimezone: null, so every submitted turn carries this same UTC-only time block (#1869).
+const NOW = new Date("2026-08-30T12:00:00.000Z");
+function withTime(text: string): string {
+  return `${renderCurrentTimeContext(NOW, null)}\n\n${text}`;
+}
 
 // #1157 turn-time self-heal: when the engine behind a session dies out-of-band (the daemon
 // killed it after a VerifiedSubmitError, the cli-runner restarted, the tmux server died with
@@ -69,6 +77,7 @@ function makeHarness(engines: ScriptedEngine[]) {
     // Server-owned drain keeps `submitted` to exactly the real turn texts.
     serverOwnsDrain: true,
     pollMs: 0,
+    now: () => NOW,
     revokeMcpToken: (id: string) => revoked.push(id),
     persistence: {
       resolveActiveProvider: vi.fn().mockResolvedValue({ provider: "anthropic", model: "sonnet" }),
@@ -99,7 +108,7 @@ describe("ChatSessionManager self-heal (#1157)", () => {
     expect(result.reply).toBe("ok");
     expect(factoryCalls).toHaveLength(2); // relaunched exactly once
     expect(engineA.killed).toBe(true); // stale handle torn down quietly
-    expect(engineB.submitted).toEqual(["hello"]); // the SAME turn text was resubmitted
+    expect(engineB.submitted).toEqual([withTime("hello")]); // the SAME turn text was resubmitted
     // The relaunch requested a forced conversation replay so the fresh engine has context.
     expect(listPriorTurns.mock.calls.at(-1)?.[1]).toMatchObject({ forceReplay: true });
     // The user sees why the turn took a relaunch.
@@ -149,6 +158,6 @@ describe("ChatSessionManager self-heal (#1157)", () => {
 
     expect(result.reply).toBe("ok");
     expect(factoryCalls).toHaveLength(2);
-    expect(engineB.submitted).toEqual(["hello"]);
+    expect(engineB.submitted).toEqual([withTime("hello")]);
   });
 });
