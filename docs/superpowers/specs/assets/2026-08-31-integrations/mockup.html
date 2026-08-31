@@ -1,0 +1,902 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Integrations — Settings mockups</title>
+    <style>
+      /* Park Press tokens copied from apps/web/src/styles/tokens.css (mockup only) */
+      :root {
+        --paper: #ece4d1;
+        --surface: #f6f0e1;
+        --surface-2: #e3dac4;
+        --surface-3: #d9cfb5;
+        --line-subtle: rgba(46, 40, 30, 0.06);
+        --line: rgba(46, 40, 30, 0.11);
+        --line-strong: rgba(46, 40, 30, 0.22);
+        --ink: #292621;
+        --ink-2: #5b564d;
+        --text-subtle: #615a48;
+        --text-faint: #6a6350;
+        --forest: #294b39;
+        --forest-hover: #244232;
+        --forest-soft: #dbe2d3;
+        --forest-ink: #1e3a2a;
+        --gold: #c2872b;
+        --gold-soft: #f1e2c2;
+        --gold-ink: #6d4a12;
+        --amber: #aa6d18;
+        --amber-soft: #f8edd7;
+        --amber-ink: #5c3d0d;
+        --red: #b23c2e;
+        --red-soft: #f7e2dd;
+        --red-ink: #842519;
+        --steel: #4c6b89;
+        --steel-soft: #e7edf3;
+        --steel-ink: #2f4b66;
+        --font-sans:
+          "Helvetica Neue", Helvetica, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font: 15px/1.45 var(--font-sans);
+      }
+
+      /* mockup chrome */
+      .mk-bar {
+        position: sticky;
+        top: 0;
+        z-index: 9;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding: 10px 20px;
+        background: var(--ink);
+        color: #f6f0e1;
+        font-size: 13px;
+      }
+      .mk-bar b {
+        margin-right: 8px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        font-size: 11px;
+        color: var(--gold);
+      }
+      .mk-tab {
+        background: none;
+        border: 1px solid rgba(246, 240, 225, 0.25);
+        color: #f6f0e1;
+        border-radius: 999px;
+        padding: 5px 14px;
+        font: 600 13px var(--font-sans);
+        cursor: pointer;
+      }
+      .mk-tab.on {
+        background: #f6f0e1;
+        color: var(--ink);
+        border-color: #f6f0e1;
+      }
+      .screen {
+        display: none;
+      }
+      .screen.on {
+        display: block;
+      }
+
+      /* settings shell (mirrors .set2 grid: left nav + pane) */
+      .shell {
+        display: grid;
+        grid-template-columns: 230px 1fr;
+        gap: 36px;
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 34px 40px 80px;
+      }
+      .nav h2 {
+        font-size: 24px;
+        letter-spacing: -0.01em;
+        margin: 0 0 22px;
+      }
+      .navgroup {
+        margin-bottom: 20px;
+      }
+      .navgroup > div:first-child {
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-faint);
+        margin-bottom: 6px;
+      }
+      .navitem {
+        padding: 7px 10px;
+        border-radius: 8px;
+        color: var(--text-subtle);
+        font-size: 14px;
+      }
+      .navitem.on {
+        background: var(--surface);
+        color: var(--ink);
+        font-weight: 600;
+        box-shadow: inset 2px 0 0 var(--forest);
+      }
+
+      .pane {
+        min-width: 0;
+      }
+      .pane-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 20px;
+        margin-bottom: 6px;
+      }
+      .pane-head h1 {
+        font-size: 20px;
+        margin: 0;
+        letter-spacing: -0.01em;
+      }
+      .pane-desc {
+        color: var(--text-subtle);
+        font-size: 13px;
+        margin: 4px 0 22px;
+        max-width: 70ch;
+      }
+
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 6px 22px;
+      }
+      .card + .card {
+        margin-top: 16px;
+      }
+
+      /* buttons */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        border-radius: 9px;
+        border: 1px solid var(--line-strong);
+        background: var(--surface);
+        color: var(--ink);
+        font: 600 13px var(--font-sans);
+        padding: 8px 14px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn--primary {
+        background: var(--forest);
+        border-color: var(--forest);
+        color: #fff;
+      }
+      .btn--danger {
+        color: var(--red-ink);
+        border-color: var(--red);
+        background: none;
+      }
+      .btn--ghost {
+        border-color: transparent;
+        background: none;
+        color: var(--text-subtle);
+      }
+
+      /* status + badges */
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+      }
+      .dot--ok {
+        background: var(--forest);
+      }
+      .dot--err {
+        background: var(--red);
+      }
+      .dot--off {
+        background: var(--line-strong);
+      }
+      .kind {
+        font: 700 10px/1 var(--font-sans);
+        letter-spacing: 0.07em;
+        padding: 4px 7px;
+        border-radius: 5px;
+      }
+      .kind--mcp {
+        background: var(--forest-soft);
+        color: var(--forest-ink);
+      }
+      .kind--api {
+        background: var(--gold-soft);
+        color: var(--gold-ink);
+      }
+      .meta {
+        color: var(--text-faint);
+        font-size: 12.5px;
+      }
+      .meta b {
+        color: var(--text-subtle);
+        font-weight: 600;
+      }
+
+      /* connection rows (mirrors .acct) */
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 17px 0;
+        border-top: 1px solid var(--line-subtle);
+      }
+      .row:first-child {
+        border-top: none;
+      }
+      .row__logo {
+        width: 40px;
+        height: 40px;
+        flex: none;
+        border-radius: 10px;
+        background: var(--surface-2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 15px;
+        color: var(--text-subtle);
+      }
+      .row__main {
+        flex: 1;
+        min-width: 0;
+      }
+      .row__name {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-weight: 600;
+        font-size: 15px;
+      }
+      .row__sub {
+        display: flex;
+        gap: 9px;
+        align-items: center;
+        margin-top: 4px;
+        flex-wrap: wrap;
+      }
+      .row__act {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex: none;
+      }
+      .row--dis .row__main,
+      .row--dis .row__logo {
+        opacity: 0.45;
+      }
+
+      /* alert strip */
+      .alert {
+        display: inline-flex;
+        gap: 8px;
+        align-items: center;
+        margin-top: 8px;
+        padding: 7px 10px;
+        border-radius: 8px;
+        font-size: 12.5px;
+        background: var(--red-soft);
+        color: var(--red-ink);
+      }
+
+      /* switch (mirrors .jds-switch) */
+      .sw {
+        width: 36px;
+        height: 21px;
+        border-radius: 999px;
+        background: var(--surface-3);
+        position: relative;
+        flex: none;
+        cursor: pointer;
+        border: 1px solid var(--line);
+      }
+      .sw::after {
+        content: "";
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 15px;
+        height: 15px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+        transition: left 0.12s;
+      }
+      .sw.on {
+        background: var(--forest);
+        border-color: var(--forest);
+      }
+      .sw.on::after {
+        left: 17px;
+      }
+      .sw--sm {
+        width: 30px;
+        height: 18px;
+      }
+      .sw--sm::after {
+        width: 12px;
+        height: 12px;
+      }
+      .sw--sm.on::after {
+        left: 14px;
+      }
+
+      /* forms */
+      .f-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px 24px;
+        padding: 18px 0;
+      }
+      .f-full {
+        grid-column: 1 / -1;
+      }
+      label.f {
+        display: block;
+      }
+      label.f > span {
+        display: block;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--text-subtle);
+        margin-bottom: 6px;
+      }
+      .in {
+        width: 100%;
+        border: 1px solid var(--line-strong);
+        background: #fff;
+        border-radius: 9px;
+        padding: 9px 12px;
+        font: 14px var(--font-sans);
+        color: var(--ink);
+      }
+      .hint {
+        font-size: 12px;
+        color: var(--text-faint);
+        margin-top: 5px;
+        line-height: 1.45;
+      }
+      .seg {
+        display: inline-flex;
+        border: 1px solid var(--line-strong);
+        border-radius: 10px;
+        overflow: hidden;
+        background: var(--surface);
+      }
+      .seg > div {
+        padding: 9px 18px;
+        font: 600 13.5px var(--font-sans);
+        color: var(--text-subtle);
+        cursor: pointer;
+      }
+      .seg > .on {
+        background: var(--forest);
+        color: #fff;
+      }
+      .kindpick {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        padding: 16px 0 4px;
+      }
+      .kindcard {
+        border: 1px solid var(--line-strong);
+        border-radius: 11px;
+        padding: 14px 16px;
+        cursor: pointer;
+        background: var(--surface);
+      }
+      .kindcard.on {
+        border-color: var(--forest);
+        box-shadow: 0 0 0 1px var(--forest);
+      }
+      .kindcard b {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        font-size: 14.5px;
+      }
+      .kindcard p {
+        margin: 5px 0 0;
+        font-size: 12.5px;
+        color: var(--text-subtle);
+        line-height: 1.45;
+      }
+
+      /* detail */
+      .d-head {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 18px 0;
+      }
+      .d-title {
+        flex: 1;
+        min-width: 0;
+      }
+      .d-title h1 {
+        font-size: 20px;
+        margin: 0;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .d-stats {
+        display: flex;
+        gap: 28px;
+        padding: 14px 0 16px;
+        border-top: 1px solid var(--line-subtle);
+        flex-wrap: wrap;
+      }
+      .stat b {
+        display: block;
+        font-size: 17px;
+        font-variant-numeric: tabular-nums;
+      }
+      .stat span {
+        font-size: 11.5px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--text-faint);
+      }
+      .toolbar {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        justify-content: space-between;
+        margin: 22px 0 10px;
+      }
+      .toolbar h3 {
+        margin: 0;
+        font-size: 15px;
+      }
+      .search {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        border-radius: 9px;
+        padding: 7px 12px;
+        color: var(--text-faint);
+        font-size: 13px;
+        width: 260px;
+      }
+      .grp-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 13px 0 11px;
+        border-top: 1px solid var(--line);
+      }
+      .grp-head:first-child {
+        border-top: none;
+      }
+      .grp-head b {
+        font-size: 14px;
+      }
+      .grp-head .meta {
+        flex: 1;
+      }
+      .tool {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 9px 0 9px 26px;
+        border-top: 1px solid var(--line-subtle);
+      }
+      .tool__name {
+        font-weight: 600;
+        font-size: 13.5px;
+        flex: none;
+        min-width: 220px;
+      }
+      .tool__desc {
+        flex: 1;
+        color: var(--text-subtle);
+        font-size: 12.5px;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .tool--off .tool__name,
+      .tool--off .tool__desc {
+        opacity: 0.4;
+      }
+      .note {
+        display: flex;
+        gap: 9px;
+        align-items: flex-start;
+        background: var(--steel-soft);
+        color: var(--steel-ink);
+        border-radius: 9px;
+        padding: 10px 13px;
+        font-size: 12.5px;
+        line-height: 1.5;
+        margin-top: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="mk-bar">
+      <b>Mockup</b>
+      <button class="mk-tab on" data-s="s1">1 · Integrations list</button>
+      <button class="mk-tab" data-s="s2">2 · Add integration</button>
+      <button class="mk-tab" data-s="s3">3 · Detail — Home Assistant (MCP, small)</button>
+      <button class="mk-tab" data-s="s4">4 · Detail — Sonarr (API, large)</button>
+    </div>
+
+    <!-- ============ SCREEN 1: LIST ============ -->
+    <div class="screen on" id="s1">
+      <div class="shell">
+        <div class="nav">
+          <h2>Settings</h2>
+          <div class="navgroup">
+            <div>Your account</div>
+            <div class="navitem">Account &amp; preferences</div>
+            <div class="navitem">Appearance</div>
+          </div>
+          <div class="navgroup">
+            <div>Moss</div>
+            <div class="navitem">Assistant &amp; AI</div>
+            <div class="navitem">Priorities</div>
+            <div class="navitem">Memory &amp; context</div>
+            <div class="navitem">Activity</div>
+          </div>
+          <div class="navgroup">
+            <div>Connections</div>
+            <div class="navitem">Connected accounts</div>
+            <div class="navitem">Data sources</div>
+            <div class="navitem on">Integrations</div>
+          </div>
+          <div class="navgroup">
+            <div>Extensions</div>
+            <div class="navitem">Modules</div>
+            <div class="navitem">Skills</div>
+          </div>
+        </div>
+        <div class="pane">
+          <div class="pane-head">
+            <div>
+              <h1>Integrations</h1>
+              <div class="pane-desc">Connect Moss to your other tools and services.</div>
+            </div>
+            <button class="btn btn--primary">+ Add integration</button>
+          </div>
+          <div class="card">
+            <div class="row">
+              <div class="row__logo">HA</div>
+              <div class="row__main">
+                <div class="row__name">Home Assistant <span class="kind kind--mcp">MCP</span></div>
+                <div class="row__sub">
+                  <span class="dot dot--ok"></span
+                  ><span class="meta"
+                    ><b>Connected</b> · homeassistant.local · 14 tools on · checked 2 min ago</span
+                  >
+                </div>
+              </div>
+              <div class="row__act">
+                <button class="btn btn--ghost">Manage</button>
+                <div class="sw on"></div>
+              </div>
+            </div>
+            <div class="row">
+              <div class="row__logo">SN</div>
+              <div class="row__main">
+                <div class="row__name">Sonarr <span class="kind kind--api">API</span></div>
+                <div class="row__sub">
+                  <span class="dot dot--ok"></span
+                  ><span class="meta"
+                    ><b>Connected</b> · media-box.lan · 23 of 112 tools on · checked 8 min ago</span
+                  >
+                </div>
+              </div>
+              <div class="row__act">
+                <button class="btn btn--ghost">Manage</button>
+                <div class="sw on"></div>
+              </div>
+            </div>
+            <div class="row">
+              <div class="row__logo">RD</div>
+              <div class="row__main">
+                <div class="row__name">Radarr <span class="kind kind--api">API</span></div>
+                <div class="row__sub">
+                  <span class="dot dot--err"></span
+                  ><span class="meta"
+                    ><b>Can’t reach it</b> · media-box.lan · last worked yesterday 9:12 PM</span
+                  >
+                </div>
+                <div class="alert">Moss can’t reach Radarr. <u>Test again</u></div>
+              </div>
+              <div class="row__act">
+                <button class="btn btn--ghost">Manage</button>
+                <div class="sw on"></div>
+              </div>
+            </div>
+            <div class="row row--dis">
+              <div class="row__logo">PX</div>
+              <div class="row__main">
+                <div class="row__name">Proxmox <span class="kind kind--api">API</span></div>
+                <div class="row__sub">
+                  <span class="dot dot--off"></span><span class="meta"><b>Off</b> · pve.lan</span>
+                </div>
+              </div>
+              <div class="row__act">
+                <button class="btn btn--ghost">Manage</button>
+                <div class="sw"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ SCREEN 2: ADD ============ -->
+    <div class="screen" id="s2">
+      <div class="shell">
+        <div class="nav">
+          <h2>Settings</h2>
+          <div class="navgroup">
+            <div>Connections</div>
+            <div class="navitem">Connected accounts</div>
+            <div class="navitem">Data sources</div>
+            <div class="navitem on">Integrations</div>
+          </div>
+        </div>
+        <div class="pane">
+          <div class="pane-head">
+            <div><h1>Add integration</h1></div>
+            <button class="btn btn--ghost">← Back to list</button>
+          </div>
+          <div class="card">
+            <div class="kindpick">
+              <div class="kindcard on">
+                <b><span class="kind kind--mcp">MCP</span> MCP server</b>
+              </div>
+              <div class="kindcard">
+                <b><span class="kind kind--api">API</span> Service API</b>
+              </div>
+            </div>
+            <div class="f-grid">
+              <label class="f"><span>Name</span><input class="in" value="Home Assistant" /></label>
+              <label class="f"
+                ><span>Server URL</span
+                ><input class="in" value="http://homeassistant.local:8123/mcp_server/sse"
+              /></label>
+              <label class="f f-full" style="max-width: calc(50% - 12px)"
+                ><span>Access token</span
+                ><input class="in" type="password" value="••••••••••••••••••••••" />
+                <div class="hint">Stored encrypted, never shown again.</div></label
+              >
+            </div>
+            <div style="display: flex; gap: 10px; padding: 4px 0 18px">
+              <button class="btn btn--primary">Connect</button>
+            </div>
+          </div>
+          <div class="note">
+            Mockup annotation, not UI copy: the API variant of this form preselects the right
+            credential placement (e.g. header key) and asks for the spec location, with a
+            paste-the-spec fallback.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ SCREEN 3: DETAIL — HA ============ -->
+    <div class="screen" id="s3">
+      <div class="shell">
+        <div class="nav">
+          <h2>Settings</h2>
+          <div class="navgroup">
+            <div>Connections</div>
+            <div class="navitem">Connected accounts</div>
+            <div class="navitem">Data sources</div>
+            <div class="navitem on">Integrations</div>
+          </div>
+        </div>
+        <div class="pane">
+          <div class="pane-head">
+            <div><h1>Integrations</h1></div>
+            <button class="btn btn--ghost">← Back to list</button>
+          </div>
+          <div class="card">
+            <div class="d-head">
+              <div class="row__logo" style="width: 46px; height: 46px">HA</div>
+              <div class="d-title">
+                <h1>Home Assistant <span class="kind kind--mcp">MCP</span></h1>
+                <div class="row__sub">
+                  <span class="dot dot--ok"></span
+                  ><span class="meta"
+                    ><b>Connected</b> · homeassistant.local:8123 · credential set</span
+                  >
+                </div>
+              </div>
+              <div style="display: flex; gap: 8px">
+                <button class="btn">Test connection</button
+                ><button class="btn">Refresh tools</button
+                ><button class="btn btn--danger">Remove</button>
+              </div>
+            </div>
+            <div class="d-stats">
+              <div class="stat"><b>14</b><span>tools found</span></div>
+              <div class="stat"><b>14</b><span>on in chat</span></div>
+              <div class="stat"><b>2 min ago</b><span>last checked</span></div>
+              <div class="stat"><b>31</b><span>calls this week</span></div>
+            </div>
+            <div class="toolbar">
+              <h3>Tools</h3>
+              <div class="search">Filter…</div>
+            </div>
+            <div class="tool" style="padding-left: 0">
+              <div class="tool__name">turn_on</div>
+              <div class="tool__desc">Turn on a device or entity</div>
+              <div class="sw sw--sm on"></div>
+            </div>
+            <div class="tool" style="padding-left: 0">
+              <div class="tool__name">turn_off</div>
+              <div class="tool__desc">Turn off a device or entity</div>
+              <div class="sw sw--sm on"></div>
+            </div>
+            <div class="tool" style="padding-left: 0">
+              <div class="tool__name">get_state</div>
+              <div class="tool__desc">Read the current state of any exposed entity</div>
+              <div class="sw sw--sm on"></div>
+            </div>
+            <div class="tool" style="padding-left: 0">
+              <div class="tool__name">set_temperature</div>
+              <div class="tool__desc">Set a climate device’s target temperature</div>
+              <div class="sw sw--sm on"></div>
+            </div>
+            <div class="tool" style="padding-left: 0">
+              <div class="tool__name">start_timer</div>
+              <div class="tool__desc">Start a timer on a voice satellite or hub</div>
+              <div class="sw sw--sm on"></div>
+            </div>
+            <div class="tool" style="padding-left: 0; border-bottom: none">
+              <div class="tool__name">…9 more</div>
+              <div class="tool__desc"></div>
+            </div>
+            <div class="note">Only entities exposed to Assist in Home Assistant appear here.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ SCREEN 4: DETAIL — SONARR ============ -->
+    <div class="screen" id="s4">
+      <div class="shell">
+        <div class="nav">
+          <h2>Settings</h2>
+          <div class="navgroup">
+            <div>Connections</div>
+            <div class="navitem">Connected accounts</div>
+            <div class="navitem">Data sources</div>
+            <div class="navitem on">Integrations</div>
+          </div>
+        </div>
+        <div class="pane">
+          <div class="pane-head">
+            <div><h1>Integrations</h1></div>
+            <button class="btn btn--ghost">← Back to list</button>
+          </div>
+          <div class="card">
+            <div class="d-head">
+              <div class="row__logo" style="width: 46px; height: 46px">SN</div>
+              <div class="d-title">
+                <h1>Sonarr <span class="kind kind--api">API</span></h1>
+                <div class="row__sub">
+                  <span class="dot dot--ok"></span
+                  ><span class="meta"><b>Connected</b> · media-box.lan:8989 · API key set</span>
+                </div>
+              </div>
+              <div style="display: flex; gap: 8px">
+                <button class="btn">Test connection</button
+                ><button class="btn">Refresh tools</button
+                ><button class="btn btn--danger">Remove</button>
+              </div>
+            </div>
+            <div class="d-stats">
+              <div class="stat"><b>112</b><span>tools found</span></div>
+              <div class="stat"><b>23</b><span>on in chat</span></div>
+              <div class="stat"><b>8 min ago</b><span>last checked</span></div>
+              <div class="stat"><b>6</b><span>calls this week</span></div>
+            </div>
+            <div class="toolbar">
+              <h3>Tools</h3>
+              <div class="search">Filter…</div>
+            </div>
+
+            <div class="grp-head">
+              <div class="sw on"></div>
+              <b>Series</b><span class="meta">12 tools</span><span class="meta">12 on</span>
+            </div>
+            <div class="tool">
+              <div class="tool__name">list_series</div>
+              <div class="tool__desc">All shows in your library with status</div>
+              <div class="sw sw--sm on"></div>
+            </div>
+            <div class="tool">
+              <div class="tool__name">search_series</div>
+              <div class="tool__desc">Search for a new show to add</div>
+              <div class="sw sw--sm on"></div>
+            </div>
+            <div class="tool">
+              <div class="tool__name">add_series</div>
+              <div class="tool__desc">Add a show and start monitoring it</div>
+              <div class="sw sw--sm on"></div>
+            </div>
+            <div class="tool" style="border-bottom: none">
+              <div class="tool__name">…9 more in Series</div>
+              <div class="tool__desc"></div>
+            </div>
+
+            <div class="grp-head">
+              <div class="sw on"></div>
+              <b>Queue &amp; downloads</b><span class="meta">8 tools</span
+              ><span class="meta">8 on</span>
+            </div>
+            <div class="tool">
+              <div class="tool__name">get_queue</div>
+              <div class="tool__desc">Current download queue with progress</div>
+              <div class="sw sw--sm on"></div>
+            </div>
+            <div class="tool" style="border-bottom: none">
+              <div class="tool__name">…7 more in Queue &amp; downloads</div>
+              <div class="tool__desc"></div>
+            </div>
+
+            <div class="grp-head">
+              <div class="sw on"></div>
+              <b>Calendar</b><span class="meta">3 tools</span><span class="meta">3 on</span>
+            </div>
+
+            <div class="grp-head">
+              <div class="sw"></div>
+              <b>Quality profiles</b><span class="meta">14 tools</span><span class="meta">off</span>
+            </div>
+            <div class="grp-head">
+              <div class="sw"></div>
+              <b>Indexers</b><span class="meta">16 tools</span><span class="meta">off</span>
+            </div>
+            <div class="grp-head">
+              <div class="sw"></div>
+              <b>System &amp; config</b><span class="meta">31 tools</span
+              ><span class="meta">off</span>
+            </div>
+            <div class="grp-head" style="border-bottom: none">
+              <div class="sw"></div>
+              <b>4 more groups</b><span class="meta">28 tools</span><span class="meta">off</span>
+            </div>
+
+            <div class="note">Groups start off for large APIs — turn on what you use.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      document.querySelectorAll(".mk-tab").forEach((t) =>
+        t.addEventListener("click", () => {
+          document.querySelectorAll(".mk-tab").forEach((x) => x.classList.remove("on"));
+          document.querySelectorAll(".screen").forEach((x) => x.classList.remove("on"));
+          t.classList.add("on");
+          document.getElementById(t.dataset.s).classList.add("on");
+        })
+      );
+    </script>
+  </body>
+</html>

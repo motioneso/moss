@@ -8,7 +8,7 @@
 
 ## Context
 
-Moss can act as an MCP *server* for external assistants (`packages/chat/src/mcp-transport.ts`), but
+Moss can act as an MCP _server_ for external assistants (`packages/chat/src/mcp-transport.ts`), but
 has no way to consume tools or APIs from external services. The existing `packages/connectors`
 (Google/IMAP email + calendar) is bespoke per-service code, not a reusable integration pattern.
 
@@ -64,13 +64,13 @@ Brainstormed with Ben 2026-08-31. Direction rulings from that session:
 
 ## Design Rulings (from brainstorm)
 
-| Question | Ruling |
-|---|---|
-| Primary consumer | Chat assistant (tools) first; modules/briefings later |
-| Plug-in mechanism | Generic connection kinds (`mcp`, `openapi`); modules remain the escape hatch for deeper per-service features |
-| Transports | Streamable HTTP + SSE for MCP, plain HTTPS for OpenAPI; `transport` field reserved for stdio |
-| Tool surfacing | Connect = live for small tool sets; per-tool mute list, no mandatory review step (consistent with the "installing grants normal use" ruling). Large OpenAPI surfaces default to group-level opt-in — see Tool volume |
-| UI location | A section **inside the existing Settings area**, not a standalone page |
+| Question          | Ruling                                                                                                                                                                                                               |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Primary consumer  | Chat assistant (tools) first; modules/briefings later                                                                                                                                                                |
+| Plug-in mechanism | Generic connection kinds (`mcp`, `openapi`); modules remain the escape hatch for deeper per-service features                                                                                                         |
+| Transports        | Streamable HTTP + SSE for MCP, plain HTTPS for OpenAPI; `transport` field reserved for stdio                                                                                                                         |
+| Tool surfacing    | Connect = live for small tool sets; per-tool mute list, no mandatory review step (consistent with the "installing grants normal use" ruling). Large OpenAPI surfaces default to group-level opt-in — see Tool volume |
+| UI location       | A section **inside the existing Settings area**, not a standalone page                                                                                                                                               |
 
 ## Architecture
 
@@ -165,9 +165,19 @@ panes — not a standalone page). Three surfaces:
    action. This page doubles as the verification screen: it is how the user confirms Moss sees
    everything the service exposes.
 
-Process gate: front-end mockups of these three surfaces must be agreed with Ben before
-implementation (Design System Guardrails). All UI through `jds-*` primitives via the design-system
-skill.
+Mockups agreed with Ben 2026-08-31: `assets/2026-08-31-integrations/mockup.html` (four screens:
+list, add, small-set detail, large-API grouped detail). The mockups fix layout and behavior only —
+styling comes from the authored design system at build time.
+
+Build requirements from the mockup review:
+
+- All UI through the authored settings-pane patterns and `jds-*` primitives via the design-system
+  skill; run the invented-class audit before the PR. No AI-tell styling — specifically no accent
+  left-border on active/selected items (the mockup's nav highlight is a known example of the tell,
+  not something to copy).
+- Copy stays tight (Ben's ruling in mockup review): field titles without explainer hints or
+  service-name examples, bare status lines, one-line notes only where load-bearing (the
+  credential-storage note, the Assist-exposure caveat, the groups-start-off note).
 
 ## Proof paths
 
