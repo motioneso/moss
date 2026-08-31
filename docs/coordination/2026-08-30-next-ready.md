@@ -1,10 +1,10 @@
 # Coordination Run — 2026-08-30-next-ready
 
 **Date:** 2026-08-30
-**Coordinator lock:** driving. Session `74b2593f-a099-4a30-a625-316977758c02`, pane `w1:p39`, registered agent name `coordinator`, visible pane label `Coordinator`. Took over from session `a2b54fa8-1c5e-42bc-a664-86220d987786` (pane `w1:p38`), which confirmed by direct message it was stepping back with no further work.
+**Coordinator lock:** relaying now — successor should adopt as registered agent name `coordinator` + visible pane label `Coordinator` once driving. Handing off from session `74b2593f-a099-4a30-a625-316977758c02` (pane `w1:p39`), relaying because the merge counter hit 2 routine merges (#2130, #2131).
 **Merge policy:** autonomous after verified QA for `routine`/`sensitive`; `security` needs Ben's explicit merge sign-off.
 **Relay threshold:** relay after every security merge, every two routine/sensitive merges, any context warning, or any compaction summary.
-**merges_since_relay:** 1 (PR #2130)
+**merges_since_relay:** 0 (reset — this relay's own flush merge does not count against the successor)
 **Infrastructure limitation:** `coordinator-watchdog.timer` is still not installed on this host. Not retried this session.
 
 ## Queue
@@ -127,6 +127,8 @@ This session (pane `w1:p36`, session id `dbbc22c7-342d-410c-bc9d-38ad2d86b64e`) 
 | #2111 | coordinator manifest flush before relay | routine (docs) | yes |
 | #2112 | coordinator: adopt lock, merge wave-1 PRs, spawn build agents | routine (docs) | yes |
 | #2114 | coordinator: adopt lock + AWAITING-BEN entry (branch-tracking mistake) | routine (docs) | closed, superseded by #2118 |
+| #2130 | coordinator: flush state before relay (merge counter + context meter both hit) | routine (docs) | yes — merged as `6775c9e3f` |
+| #2131 | coordinator: record lock takeover, merge #2130, spawn 1869 live-demo lane | routine (docs) | yes — merged as `f49f51595` |
 | #2118 | coordinator: manifest flush, correct branch history | routine (docs) | yes |
 | #2119 | coordinator: update #2117 sign-off entry with QA re-verification | routine (docs) | yes |
 | #2117 | #1860 module-build environment isolation | security | **yes — Ben signed off "yes" in chat, merged 2026-08-31T04:01:24Z** |
@@ -200,3 +202,11 @@ Checked the watchdog again: `coordinator-watchdog.timer` is still not installed 
 2. Once pull request 2129 lands, apply the wave-2 kill gate: a live, Ben-judged check of whether the injected time confuses the assistant or changes its personality, before starting issue 1869 slice 2 or slice 3A. This is a judgment call for Ben, not something an agent can tick off on its own — the Codex session's live demo proves the feature works, not that Ben has approved moving on.
 3. Keep every message to Ben, and every message between agents, in plain everyday words — no jargon, no invented shorthand, no strings of technical names packed into one sentence. Keep exact names such as file paths, commands, and error text available only for when someone needs to act on them directly.
 4. Keep mixing agent providers for the next round of build or review agents rather than defaulting everyone to Claude.
+
+## Continuation note (2026-08-31, relaying — context meter hit 70% after merge counter hit 2)
+
+This session (pane `w1:p39`, session id `74b2593f-a099-4a30-a625-316977758c02`) hit the merge-counter relay trigger (2 routine merges: #2130, #2131) with its own context meter also near the 70% warning, and is handing off right now with no further merges first, per the no-deferral relay rule.
+
+Everything from the note above still applies unchanged: the Codex session in pane `w1:p3A` (agent name `issue-1869-live-demo`) is still running the live demo for pull request 2129 — last check it had just started working, no report back yet. Watch it, and when it reports done, close it and reap its work folder using the standard four-part safety check. The wave-2 kill gate still needs Ben's own hands-on judgment once pull request 2129 lands, not just an automated pass. Keep messages in plain everyday words, and keep mixing agent providers on future spawns.
+
+`coordinator-watchdog.timer` is still not installed on this computer.
