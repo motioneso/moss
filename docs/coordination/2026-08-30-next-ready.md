@@ -4,14 +4,14 @@
 **Coordinator lock:** registered agent name `coordinator` + visible pane label `Coordinator`; session id `dbbc22c7-342d-410c-bc9d-38ad2d86b64e` (pane `w1:p36`) — successor after the second 70% relay; adopted lock, old pane `w1:p35` (session `fb912a67-...`) had already self-closed by the time this session checked, so it was closed directly.
 **Merge policy:** autonomous after verified QA for `routine`/`sensitive`; `security` needs Ben's explicit merge sign-off.
 **Relay threshold:** relay after every security merge, every two routine/sensitive merges, any context warning, or any compaction summary.
-**merges_since_relay:** 0
+**merges_since_relay:** 2 (PR #2126 docs, PR #2116 routine — this alone would also trigger relay, on top of the context-meter warning)
 **Infrastructure limitation:** `coordinator-watchdog.timer` is not installed on this host. Not retried this session.
 
 ## Queue
 
 | Slice | Issue | Tier | Status | Agent name | Pane | Branch | PR | Relays |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| #1784 truthful chat action chip | #1784 | routine | **QA red — sent back for fix** | `issue-1784-chip-relay1` | `w1:p20` | `build-1784-chat-outcome-chip` | #2116 | 1 |
+| #1784 truthful chat action chip | #1784 | routine | **MERGED (2026-08-31T04:23:57Z) — lane not yet reaped, see continuation note** | `issue-1784-chip-relay1` | `w1:p20` | `build-1784-chat-outcome-chip` | #2116 | 1 |
 | #1860 module-build environment isolation | #1860 | security | **MERGED** | — | — | `build-1860-module-build-env` | #2117 | 1 |
 | #1869 Slice 1: per-turn time context | #1869 | sensitive | building | `issue-1869-time-context-relay2` | `w1:p2Y` | `build-1869-time-context` | — | 2 (no third relay allowed) |
 | #1869 Slice 2: `chat.getCurrentTime` | #1869 | routine | dependency-gated | `issue-1869-current-time` | — | `build/1869-current-time` | — | 0 |
@@ -104,6 +104,19 @@ Checked pull request #2116: as of this note, all named CI checks are green excep
 
 The #1869 slice 1 build lane in pane `w1:p2Y` was confirmed still running normally (not frozen), on its second relay, with no third relay allowed — continuing to watch it.
 
+## Continuation note (2026-08-31, relaying — context meter hit 70%)
+
+This session (pane `w1:p36`, session id `dbbc22c7-342d-410c-bc9d-38ad2d86b64e`) hit the 70 percent context warning right after messaging a build agent, and is handing off now per the no-deferral rule.
+
+**What this session did, in order:** resolved pull request #2126's real conflict with `main` and merged it (commit `a3b16965e`). Spawned a fresh routine-tier QA agent in a new pane (`w1:p37`, tab `w1:tR` labeled "qa", agent name `qa-2116-r2`) scoped to only the diff since the last review round on pull request 2116. It came back clean — verdict posted as a comment on the pull request — and pull request 2116 is now merged. Issue #1784 closed itself automatically on merge. The QA worktree and pane's own throwaway checkout were removed already.
+
+**Left undone, for whoever picks this up:**
+1. **Reap pull request 2116's build lane.** The worktree at `.claude/worktrees/build-1784-chat-outcome-chip` is not yet safe to remove — the build agent (name `issue-1784-chip-relay1`, pane `w1:p20`) still has a live dev server and a few MCP helper processes running with that folder as their working directory, and its pane is still open. This session already asked that agent, by message, to stop its own processes by their exact process id and confirm — that reply had not arrived before this relay. Check the pane, confirm it stopped its processes, run `scripts/worktree-reapable.sh .claude/worktrees/build-1784-chat-outcome-chip` to confirm all clear, then remove the worktree and close pane `w1:p20`.
+2. **Close pane `w1:p37`** (the QA pane for pull request 2116 — its work is done, verdict already posted and consumed) and its now-empty tab `w1:tR`.
+3. **Keep watching the #1869 slice 1 lane**, pane `w1:p2Y` — still on its second relay, no third allowed. It was running normally, not frozen, last checked.
+4. Everything else unchanged from the notes above: the wave-2 kill gate before #1869 Slices 2/3A, the instruction to mix agent providers on the next spawns instead of defaulting to Claude, and the plain-English-only rule for every message to Ben and between agents.
+5. `merges_since_relay` reset to 0 once this note is read and acted on — two routine merges (#2126, #2116) already happened this session, which was itself a relay trigger on top of the context-meter warning.
+
 ## Merge audit
 
 | PR | What | Tier | Merged |
@@ -117,9 +130,9 @@ The #1869 slice 1 build lane in pane `w1:p2Y` was confirmed still running normal
 | #2118 | coordinator: manifest flush, correct branch history | routine (docs) | yes |
 | #2119 | coordinator: update #2117 sign-off entry with QA re-verification | routine (docs) | yes |
 | #2117 | #1860 module-build environment isolation | security | **yes — Ben signed off "yes" in chat, merged 2026-08-31T04:01:24Z** |
-| #2116 | #1784 truthful chat action chip | routine | QA in progress |
+| #2116 | #1784 truthful chat action chip | routine | **yes — merged 2026-08-31T04:23:57Z, issue #1784 closed** |
 | #2125 | coordinator: flush state before relay (context meter 70%) | routine (docs) | yes |
-| #2126 | coordinator: record lock takeover after 70% relay, merge #2125 | routine (docs) | pending |
+| #2126 | coordinator: record lock takeover after 70% relay, merge #2125 | routine (docs) | **yes — merged as `a3b16965e`** |
 
 ## Reaped sessions
 
