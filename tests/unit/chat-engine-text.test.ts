@@ -3,6 +3,7 @@ import { expect, it, vi } from "vitest";
 import type { DataContextRunner } from "@moss/db";
 
 import { buildEngineText } from "../../packages/chat/src/live/engine-text.js";
+import { renderCurrentTimeContext } from "../../packages/chat/src/live/time-context.js";
 import { NotesContextRetriever } from "../../packages/chat/src/live/notes-retrieval.js";
 
 const dataContext: Pick<DataContextRunner, "withDataContext"> = {
@@ -10,9 +11,67 @@ const dataContext: Pick<DataContextRunner, "withDataContext"> = {
 };
 
 it("never injects page context into ordinary engine text (#1109 — pull-only tool replaces the turn push)", async () => {
-  const result = await buildEngineText({ persistence: {} as never }, "u1", "hello");
-  expect(result.text).toBe("hello");
+  const now = new Date("2026-08-22T12:00:00.000Z");
+  const result = await buildEngineText(
+    { persistence: { getThreadContext: async () => ({ localTimezone: null }) } as never, now: () => now },
+    "u1",
+    "hello"
+  );
+  expect(result.text).toBe(`${renderCurrentTimeContext(now, null)}\n\nhello`);
   expect(result.text).not.toContain("<page_context>");
+});
+
+it("still carries the fresh time block when no retrieval deps exist at all (#1869 spec decision 5)", async () => {
+  const now = new Date("2026-08-22T23:59:00.000Z");
+  const result = await buildEngineText(
+    { persistence: {} as never, now: () => now },
+    "u1",
+    "hello"
+  );
+  expect(result.text).toContain("<current_time_context>");
+  expect(result.text).toContain(now.toISOString());
+  expect(result.text.endsWith("\n\nhello")).toBe(true);
+});
+
+it("keeps the fresh UTC instant, but drops the local date, when getThreadContext rejects (#1869 spec decision 6)", async () => {
+  const now = new Date("2026-08-22T23:59:00.000Z");
+  const result = await buildEngineText(
+    {
+      persistence: {
+        listPriorTurns: async () => ({ recent: [] }),
+        getThreadContext: async () => {
+          throw new Error("locale read failed");
+        }
+      } as never,
+      crossToolRead: { runReadTool: vi.fn(async () => ({ ok: true, data: {} })) },
+      now: () => now
+    },
+    "u1",
+    "what time is it?"
+  );
+  expect(result.text).toContain(now.toISOString());
+  expect(result.text).not.toContain("User's local time");
+  expect(result.text).toContain("what time is it?");
+});
+
+it("keeps the fresh time block even when a retrieval dependency throws inside the shared try block", async () => {
+  const now = new Date("2026-08-22T23:59:00.000Z");
+  const result = await buildEngineText(
+    {
+      persistence: {
+        listPriorTurns: async () => {
+          throw new Error("boom");
+        },
+        getThreadContext: async () => ({ threadTitle: null, localTimezone: "UTC", incognito: false })
+      } as never,
+      crossToolRead: { runReadTool: vi.fn(async () => ({ ok: true, data: {} })) },
+      now: () => now
+    },
+    "u1",
+    "what time is it?"
+  );
+  expect(result.text).toContain(now.toISOString());
+  expect(result.text).toContain("what time is it?");
 });
 
 it("uses the guarded retriever as the sole automatic notes path", async () => {
@@ -191,6 +250,7 @@ it("keeps automatic notes retrieval within the approved 500ms budget", async () 
         })
       }
     });
+    const now = new Date("2026-08-22T12:00:00.000Z");
     const pending = buildEngineText(
       {
         persistence: {
@@ -202,7 +262,8 @@ it("keeps automatic notes retrieval within the approved 500ms budget", async () 
           })
         } as never,
         crossToolRead: { runReadTool: vi.fn(async () => ({ ok: true, data: {} })) },
-        notesRetrieval
+        notesRetrieval,
+        now: () => now
       },
       "u1",
       "what is the status of Remodel?"
@@ -211,7 +272,7 @@ it("keeps automatic notes retrieval within the approved 500ms budget", async () 
     await vi.advanceTimersByTimeAsync(501);
 
     await expect(pending).resolves.toEqual({
-      text: "what is the status of Remodel?",
+      text: `${renderCurrentTimeContext(now, "UTC")}\n\nwhat is the status of Remodel?`,
       pendingItems: []
     });
   } finally {

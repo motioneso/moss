@@ -23,6 +23,7 @@ import {
 import { rankChatContext, reorderByPriority } from "../priority-consumer.js";
 import { combineHiddenContextBlocks } from "./chat-session-manager.js";
 import type { NotesContextRetriever } from "./notes-retrieval.js";
+import { renderCurrentTimeContext } from "./time-context.js";
 
 export interface EngineTextDeps {
   readonly persistence: Pick<ChatPersistencePort, "listPriorTurns" | "getThreadContext">;
@@ -30,6 +31,8 @@ export interface EngineTextDeps {
   readonly notesRetrieval?: Pick<NotesContextRetriever, "retrieveWithItems">;
   readonly crossToolRead?: CrossToolReadRunner;
   readonly priorityModel?: { getModel(actorUserId: string): Promise<PriorityModelPreferenceV1> };
+  /** Injectable clock (defaults to wall-clock `new Date()`); tests drive it deterministically. */
+  readonly now?: () => Date;
 }
 
 export async function buildEngineText(
@@ -38,8 +41,18 @@ export async function buildEngineText(
   text: string,
   surface?: ChatSurface
 ): Promise<{ text: string; pendingItems: AnswerSourceSupport[] }> {
+  const instant = deps.now?.() ?? new Date();
+
   if (!deps.passiveRetrieval && !deps.crossToolRead && !deps.notesRetrieval) {
-    return { text, pendingItems: [] };
+    let timezone: string | null = null;
+    try {
+      const threadCtx = await deps.persistence.getThreadContext(actorUserId, surface);
+      timezone = threadCtx.localTimezone;
+    } catch {
+      timezone = null;
+    }
+    const timeBlock = renderCurrentTimeContext(instant, timezone);
+    return { text: `${timeBlock}\n\n${text}`, pendingItems: [] };
   }
   try {
     const [{ recent }, threadCtx] = await Promise.all([
@@ -47,7 +60,8 @@ export async function buildEngineText(
       deps.persistence.getThreadContext(actorUserId, surface)
     ]);
 
-    const localNow = new Date().toISOString();
+    const timeBlock = renderCurrentTimeContext(instant, threadCtx.localTimezone);
+    const localNow = instant.toISOString();
     const plan =
       deps.crossToolRead != null
         ? planCrossToolReasoning({
@@ -139,8 +153,10 @@ export async function buildEngineText(
       crossTool.block,
       notesResult.block
     );
-    return { text: combined ? `${combined}\n\n${text}` : text, pendingItems };
+    const bodyText = combined ? `${combined}\n\n${text}` : text;
+    return { text: `${timeBlock}\n\n${bodyText}`, pendingItems };
   } catch {
-    return { text, pendingItems: [] };
+    const timeBlock = renderCurrentTimeContext(instant, null);
+    return { text: `${timeBlock}\n\n${text}`, pendingItems: [] };
   }
 }
