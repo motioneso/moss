@@ -9,6 +9,8 @@ import {
   localDayKey,
   localDayRange,
   resolveLocalDay,
+  StrictLocalWallClockError,
+  strictLocalWallClockToInstant,
   timeZoneOffsetMinutes,
   todayLocalDayKey
 } from "@moss/module-sdk";
@@ -124,6 +126,99 @@ describe("addLocalDays", () => {
   // Pure calendar arithmetic: it must not shift by 23 or 25 hours on a DST day.
   it("adds a calendar day, not 24 hours, across a DST change", () => {
     expect(addLocalDays("2026-03-08", 1)).toBe("2026-03-09");
+  });
+});
+
+describe("strictLocalWallClockToInstant", () => {
+  // #1869 exit criterion 6: the exact instant, day, and offset a real Food write needs to persist
+  // together.
+  it("converts an ordinary local wall clock to the exact UTC instant", () => {
+    expect(strictLocalWallClockToInstant("2026-08-22T20:14:00", LA).toISOString()).toBe(
+      "2026-08-23T03:14:00.000Z"
+    );
+  });
+
+  it("accepts a local wall clock without seconds", () => {
+    expect(strictLocalWallClockToInstant("2026-08-22T20:14", LA).toISOString()).toBe(
+      "2026-08-23T03:14:00.000Z"
+    );
+  });
+
+  it("accepts fractional seconds", () => {
+    expect(strictLocalWallClockToInstant("2026-08-22T20:14:00.250", LA).toISOString()).toBe(
+      "2026-08-23T03:14:00.250Z"
+    );
+  });
+
+  it("resolves ahead of UTC too", () => {
+    expect(strictLocalWallClockToInstant("2026-08-23T09:00:00", AUCKLAND).toISOString()).toBe(
+      "2026-08-22T21:00:00.000Z"
+    );
+  });
+
+  it.each(["2026-08-22T20:14:00Z", "2026-08-22T20:14:00-07:00", "not-a-date", "2026-08-22 20:14:00"])(
+    "rejects syntax it does not own, including offset-bearing input: %s",
+    (input) => {
+      expect(() => strictLocalWallClockToInstant(input, LA)).toThrow(StrictLocalWallClockError);
+      try {
+        strictLocalWallClockToInstant(input, LA);
+        expect.unreachable();
+      } catch (error) {
+        expect(error).toBeInstanceOf(StrictLocalWallClockError);
+        expect((error as StrictLocalWallClockError).reason).toBe("invalid-syntax");
+      }
+    }
+  );
+
+  it("rejects a calendar date that does not exist", () => {
+    expect(() => strictLocalWallClockToInstant("2026-02-30T10:00:00", LA)).toThrow(
+      StrictLocalWallClockError
+    );
+  });
+
+  it("rejects an unrecognised time zone", () => {
+    try {
+      strictLocalWallClockToInstant("2026-08-22T20:14:00", "Mars/Olympus");
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(StrictLocalWallClockError);
+      expect((error as StrictLocalWallClockError).reason).toBe("invalid-timezone");
+    }
+  });
+
+  // 2026-03-08 is the day Los Angeles clocks jump from 2am straight to 3am: 2:30am never happens.
+  it("rejects a spring-forward gap instead of guessing an instant", () => {
+    try {
+      strictLocalWallClockToInstant("2026-03-08T02:30:00", LA);
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(StrictLocalWallClockError);
+      expect((error as StrictLocalWallClockError).reason).toBe("dst-gap");
+    }
+  });
+
+  // 2026-11-01 is the day Los Angeles clocks fall back from 2am to 1am: 1:30am happens twice, an
+  // hour apart, and there is no correct answer without an explicit offset.
+  it("rejects a fall-back fold instead of picking the earlier or later instant", () => {
+    try {
+      strictLocalWallClockToInstant("2026-11-01T01:30:00", LA);
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(StrictLocalWallClockError);
+      expect((error as StrictLocalWallClockError).reason).toBe("dst-fold");
+    }
+  });
+
+  it("resolves the last unambiguous instant right before the fold begins", () => {
+    expect(strictLocalWallClockToInstant("2026-11-01T00:59:00", LA).toISOString()).toBe(
+      "2026-11-01T07:59:00.000Z"
+    );
+  });
+
+  it("resolves the first unambiguous instant right after the fold ends", () => {
+    expect(strictLocalWallClockToInstant("2026-11-01T02:00:00", LA).toISOString()).toBe(
+      "2026-11-01T10:00:00.000Z"
+    );
   });
 });
 
