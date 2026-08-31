@@ -92,7 +92,7 @@ referencing the module build or its id appears anywhere in the log.
 
 ## Branch / pull request state
 
-- Worktree: `/home/ben/Jarv1s/.claude/worktrees/resume-1902`, branch `resume/1902-live-proof`.
+- Worktree: `~/Jarv1s/.claude/worktrees/resume-1902`, branch `resume/1902-live-proof`.
 - Pushed to `1902-module-tools-live`, which is pull request 2101 (open, targets main).
 - Working tree is clean of feature changes; only this handoff doc and the untracked scratch script
   exist outside committed history.
