@@ -214,8 +214,10 @@ function IntegrationDetailView(props: { readonly id: string; readonly onBack: ()
     return (
       <>
         <PaneHead title="Integrations" />
-        {backLink}
-        <Note>{notFound ? "Connection not found." : readError(detailQuery.error)}</Note>
+        <div className="gflow">
+          {backLink}
+          <Note>{notFound ? "Connection not found." : readError(detailQuery.error)}</Note>
+        </div>
       </>
     );
   }
@@ -255,77 +257,79 @@ function IntegrationDetailView(props: { readonly id: string; readonly onBack: ()
   return (
     <>
       <PaneHead title="Integrations" />
-      {backLink}
-      <Group
-        title={
-          <span className="intg__name">
-            {detail.name}
-            <Badge tone={detail.kind === "mcp" ? "steel" : "amber"}>
-              {detail.kind === "mcp" ? "MCP" : "API"}
-            </Badge>
-          </span>
-        }
-        desc={hostOf(detail.url)}
-        action={
-          <span className="intg__controls">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => refreshMutation.mutate()}
-              disabled={refreshMutation.isPending}
-            >
-              Refresh
-            </Button>
-            <Button variant="quiet" size="sm" onClick={onRemove}>
-              Remove
-            </Button>
-          </span>
-        }
-      >
-        <Row
-          name="Status"
-          desc={`${detail.enabledToolCount} of ${detail.toolCount} tools on`}
-          control={<Badge tone={statusTone}>{status}</Badge>}
-        />
-        {detail.lastError ? (
-          <span className="intg__controls">
-            <Note>{detail.lastError}</Note>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => refreshMutation.mutate()}
-              disabled={refreshMutation.isPending}
-            >
-              Refresh
-            </Button>
-          </span>
-        ) : null}
-      </Group>
-      {detail.groupOptIn ? (
-        <IntegrationGroupedTools
-          detail={detail}
-          onToggleGroup={toggleGroup}
-          onToggleMute={toggleMute}
-          onToggleExplicitTool={toggleExplicitTool}
-        />
-      ) : (
-        <Group title="Tools">
-          {detail.tools.map((tool) => (
-            <Row
-              key={tool.name}
-              name={tool.name}
-              desc={tool.description}
-              control={
-                <Switch
-                  ariaLabel={`Enable ${tool.name}`}
-                  checked={!detail.mutedTools.includes(tool.name)}
-                  onChange={(checked) => toggleMute(tool.name, checked)}
-                />
-              }
-            />
-          ))}
+      <div className="gflow">
+        {backLink}
+        <Group
+          title={
+            <span className="intg__name">
+              {detail.name}
+              <Badge tone={detail.kind === "mcp" ? "steel" : "amber"}>
+                {detail.kind === "mcp" ? "MCP" : "API"}
+              </Badge>
+            </span>
+          }
+          desc={hostOf(detail.url)}
+          action={
+            <span className="intg__controls">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => refreshMutation.mutate()}
+                disabled={refreshMutation.isPending}
+              >
+                Refresh
+              </Button>
+              <Button variant="quiet" size="sm" onClick={onRemove}>
+                Remove
+              </Button>
+            </span>
+          }
+        >
+          <Row
+            name="Status"
+            desc={`${detail.enabledToolCount} tools on`}
+            control={<Badge tone={statusTone}>{status}</Badge>}
+          />
+          {detail.lastError ? (
+            <span className="intg__controls">
+              <Note>{detail.lastError}</Note>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => refreshMutation.mutate()}
+                disabled={refreshMutation.isPending}
+              >
+                Refresh
+              </Button>
+            </span>
+          ) : null}
         </Group>
-      )}
+        {detail.groupOptIn ? (
+          <IntegrationGroupedTools
+            detail={detail}
+            onToggleGroup={toggleGroup}
+            onToggleMute={toggleMute}
+            onToggleExplicitTool={toggleExplicitTool}
+          />
+        ) : (
+          <Group title="Tools">
+            {detail.tools.map((tool) => (
+              <Row
+                key={tool.name}
+                name={tool.name}
+                desc={tool.description}
+                control={
+                  <Switch
+                    ariaLabel={`Enable ${tool.name}`}
+                    checked={!detail.mutedTools.includes(tool.name)}
+                    onChange={(checked) => toggleMute(tool.name, checked)}
+                  />
+                }
+              />
+            ))}
+          </Group>
+        )}
+      </div>
     </>
   );
 }
