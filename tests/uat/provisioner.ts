@@ -488,6 +488,31 @@ function runCapture(command: string, args: readonly string[]): Promise<string> {
 }
 
 /**
+ * #2173: the terminal-failure branch of provisionForUat used to go straight to teardown, which
+ * discards the app container's own log/health evidence before anyone can see why it failed.
+ * Bounded (last 50 log lines, one formatted health read) and Compose project/service scoped
+ * (buildUatComposeArgs -> `-p <projectName>` + the `jarv1s` service) — never the compose file's
+ * hardcoded `container_name: moss` (infra/docker-compose.prod.yml:145), never a bare/full `docker
+ * inspect`, and never the settings file or its contents (security ruling, issue #2173 comment
+ * 5497191033 section 4).
+ */
+async function captureFailureEvidence(projectName: string): Promise<void> {
+  const [logs, health] = await Promise.all([
+    runCapture(
+      "docker",
+      buildUatComposeArgs(projectName, ["logs", "--tail", "50", "jarv1s"])
+    ).catch((error) => `<log capture failed: ${String(error)}>`),
+    runCapture(
+      "docker",
+      buildUatComposeArgs(projectName, ["ps", "jarv1s", "--format", "json"])
+    ).catch((error) => `<health capture failed: ${String(error)}>`)
+  ]);
+  console.error(`[uat] ${projectName} jarv1s failed — last 50 log lines and health status:`);
+  console.error(logs);
+  console.error(health);
+}
+
+/**
  * #1024/#1000: positive proof that `down -v` actually left nothing behind — the Phase 1
  * acceptance criterion is "tears down clean (no leftover containers/volumes/networks)", not just
  * "the down command exited 0". Throws with the leaked names so a failed run is loud, not a silent
@@ -911,6 +936,7 @@ export async function provisionForUat(
         );
         continue;
       }
+      await captureFailureEvidence(projectName);
       await cleanupAttempt({ error });
       throw error; // unreachable: cleanupUatAttempt rethrows the provisioning failure
     }
