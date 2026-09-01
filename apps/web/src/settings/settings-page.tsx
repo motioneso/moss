@@ -13,6 +13,7 @@ import {
   ListChecks,
   Package,
   Palette,
+  Plug,
   ScrollText,
   ServerCog,
   ShieldCheck,
@@ -64,6 +65,7 @@ type PersonalSectionId =
   | "memory"
   | "connected"
   | "sources"
+  | "integrations"
   | "modules"
   | "appearance"
   | "activity"
@@ -90,6 +92,11 @@ const SourcesPane = lazyPane(() =>
 );
 const ModulesPane = lazyPane(() =>
   import("./settings-personal-data-panes").then((module) => ({ default: module.ModulesPane }))
+);
+const IntegrationsPane = lazyPane(() =>
+  import("./settings-integrations-pane").then((module) => ({
+    default: module.SettingsIntegrationsPane
+  }))
 );
 const AppearancePane = lazyPane(() =>
   import("./settings-appearance-pane").then((module) => ({ default: module.AppearancePane }))
@@ -207,6 +214,13 @@ const PERSONAL_GROUPS = [
         label: "Data sources",
         description: coreSettingDescription("sources"),
         Pane: SourcesPane
+      },
+      {
+        id: "integrations",
+        icon: Plug,
+        label: "Integrations",
+        description: coreSettingDescription("integrations"),
+        Pane: IntegrationsPane
       }
     ]
   },

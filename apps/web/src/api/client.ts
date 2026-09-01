@@ -84,6 +84,10 @@ import type {
   ImapConnectRequest,
   ImapTestResult,
   CreateConnectorAccountResponse,
+  CreateIntegrationRequest,
+  IntegrationDetail,
+  ListIntegrationsResponse,
+  UpdateIntegrationRequest,
   InterpretTaskSearchRequest,
   InterpretTaskSearchResponse,
   CreateTaskRequest,
@@ -1386,6 +1390,38 @@ export async function connectImapConnection(
     method: "POST",
     body: input
   });
+}
+
+export async function listIntegrations(): Promise<ListIntegrationsResponse> {
+  return requestJson<ListIntegrationsResponse>("/api/integrations");
+}
+
+export async function createIntegration(body: CreateIntegrationRequest): Promise<IntegrationDetail> {
+  return requestJson<IntegrationDetail>("/api/integrations", { method: "POST", body });
+}
+
+export async function getIntegration(id: string): Promise<IntegrationDetail> {
+  return requestJson<IntegrationDetail>(`/api/integrations/${encodeURIComponent(id)}`);
+}
+
+export async function updateIntegration(
+  id: string,
+  body: UpdateIntegrationRequest
+): Promise<IntegrationDetail> {
+  return requestJson<IntegrationDetail>(`/api/integrations/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body
+  });
+}
+
+export async function refreshIntegration(id: string): Promise<IntegrationDetail> {
+  return requestJson<IntegrationDetail>(`/api/integrations/${encodeURIComponent(id)}/refresh`, {
+    method: "POST"
+  });
+}
+
+export async function deleteIntegration(id: string): Promise<void> {
+  return requestJson<void>(`/api/integrations/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 export async function markNotificationRead(id: string): Promise<MarkNotificationReadResponse> {

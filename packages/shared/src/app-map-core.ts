@@ -124,6 +124,13 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
     scope: "user"
   },
   {
+    id: "integrations",
+    label: "Integrations",
+    description: "Connect external tools and services.",
+    path: "/settings?section=integrations",
+    scope: "user"
+  },
+  {
     id: "modules",
     label: "Modules",
     description: "Enable or disable user-toggleable modules.",
