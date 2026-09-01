@@ -522,7 +522,11 @@ function AddIntegrationView(props: {
             </Field>
           ) : null}
           {kind === "openapi" && !showSpec ? (
-            <button type="button" className="note__link intg__spec-link" onClick={() => setShowSpec(true)}>
+            <button
+              type="button"
+              className="note__link intg__spec-link"
+              onClick={() => setShowSpec(true)}
+            >
               Paste the spec
             </button>
           ) : null}
