@@ -68,10 +68,9 @@ describe("manifest database.ownedTables validation (#964)", () => {
     }
   });
 
-  it("rejects empty, oversized, duplicate, and unknown-key database blocks", () => {
+  it("rejects oversized, duplicate, and unknown-key database blocks", () => {
     const tooMany = Array.from({ length: 33 }, (_, i) => `app.demo_module_t${i}`);
     for (const database of [
-      { ownedTables: [] },
       { ownedTables: tooMany },
       { ownedTables: ["app.demo_module_a", "app.demo_module_a"] },
       { ownedTables: ["app.demo_module_a"], migrations: "sql/" },
@@ -80,6 +79,17 @@ describe("manifest database.ownedTables validation (#964)", () => {
     ]) {
       const result = validateExternalModuleManifest({ ...baseManifest, database }, "demo-module");
       expect(result.ok).toBe(false);
+    }
+  });
+
+  it("accepts a database-less module that declares an empty owned-table list", () => {
+    const result = validateExternalModuleManifest(
+      { ...baseManifest, database: { ownedTables: [] } },
+      "demo-module"
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.manifest.database?.ownedTables).toEqual([]);
     }
   });
 });
