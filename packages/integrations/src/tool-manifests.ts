@@ -4,15 +4,20 @@ import type { AccessContext, DataContextRunner, JsonSecretCipher } from "@moss/d
 import type {
   ModuleAssistantToolManifest,
   MossModuleManifest,
+  ToolContext,
   ToolExecute,
   ToolResult
 } from "@moss/module-sdk";
 
+import { callMemory, type CallMemory } from "./call-memory.js";
 import { effectiveEnabledTools } from "./curation.js";
 import { callMcpTool } from "./mcp-client.js";
 import type { DiscoveredTool } from "./openapi-convert.js";
 import { invokeOpenApiTool } from "./openapi-invoke.js";
 import { IntegrationsRepository, type ConnectionRow } from "./repository.js";
+import { INTEGRATION_SUMMARY } from "./summaries.js";
+
+export { INTEGRATION_SUMMARY } from "./summaries.js";
 
 const ROOT_COMBINATORS = ["anyOf", "oneOf", "allOf", "not"] as const;
 
@@ -23,17 +28,6 @@ export interface IntegrationOutcomeEnvelope {
   readonly summary: string;
   readonly detail: unknown;
 }
-
-/** Fixed Moss-authored summary strings, reused by later tasks too. */
-export const INTEGRATION_SUMMARY = {
-  performedOk: "Action performed successfully.",
-  readOk: "Read succeeded.",
-  callFailed: "Call failed; see detail for the service's error.",
-  blockedRead: "Unchanged result from earlier in this request.",
-  blockedPerformed: "This was already done once in this request and was not done again.",
-  truncated: "Result truncated at 8,000 characters; ask for a narrower query to see more.",
-  requestRefused: "Call limit reached for this request; answer with what you have."
-} as const;
 
 /** Minimal logger shape this module needs — matches FastifyBaseLogger's warn signature. */
 export interface ToolManifestLogger {
@@ -46,6 +40,8 @@ export interface IntegrationsActiveModulesResolverDeps {
   readonly logger: ToolManifestLogger;
   /** Test seam — defaults to a real IntegrationsRepository. */
   readonly repository?: IntegrationsRepository;
+  /** Test seam — defaults to the module-level `callMemory` singleton (#2175 Task 3). */
+  readonly callMemory?: CallMemory;
 }
 
 type ActiveModulesResolver = (actorUserId: string) => Promise<readonly MossModuleManifest[]>;
@@ -116,7 +112,25 @@ function buildToolManifest(
   deps: IntegrationsActiveModulesResolverDeps,
   repository: IntegrationsRepository
 ): ModuleAssistantToolManifest {
-  const execute: ToolExecute = async (scopedDb, input): Promise<ToolResult> => {
+  const memory = deps.callMemory ?? callMemory;
+  const action: IntegrationOutcomeEnvelope["action"] =
+    tool.readOnly === true ? "read" : "performed";
+  const skipSuppression = tool.idempotent === true || conn.unsuppressedTools.includes(tool.name);
+
+  const execute: ToolExecute = async (scopedDb, input, ctx: ToolContext): Promise<ToolResult> => {
+    const scope = { actorUserId: ctx.actorUserId, chatSessionId: ctx.chatSessionId };
+    const key = memory.callKey(conn.id, tool.name, input);
+    const decision = memory.check(scope, conn.id, key, action, skipSuppression);
+    if (decision.kind === "serve") {
+      const envelope: IntegrationOutcomeEnvelope = {
+        status: "ok",
+        action,
+        summary: decision.summary,
+        detail: decision.detail
+      };
+      return { data: envelope as unknown as Record<string, unknown> };
+    }
+
     const credentialEnvelope = await repository.loadCredentialEnvelope(scopedDb as never, conn.id);
     const secret = credentialEnvelope
       ? (deps.cipher.decryptJson(deps.cipher.parseEnvelope(credentialEnvelope)).secret as string)
@@ -130,7 +144,6 @@ function buildToolManifest(
           conn.credentialPlacement
         )
       : await callMcpTool(conn.url, secret, conn.credentialPlacement, tool.name, input);
-    const action: IntegrationOutcomeEnvelope["action"] = tool.readOnly === true ? "read" : "performed";
     const envelope: IntegrationOutcomeEnvelope = outcome.ok
       ? {
           status: "ok",
@@ -144,6 +157,12 @@ function buildToolManifest(
           summary: INTEGRATION_SUMMARY.callFailed,
           detail: outcome.data
         };
+    memory.record(scope, conn.id, key, {
+      ok: outcome.ok,
+      action,
+      summary: envelope.summary,
+      detail: envelope.detail
+    });
     return { data: envelope as unknown as Record<string, unknown> };
   };
 

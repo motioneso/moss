@@ -44,6 +44,8 @@ export interface IntegrationDetail extends IntegrationSummary {
   readonly enabledGroups: readonly string[];
   readonly enabledTools: readonly string[];
   readonly mutedTools: readonly string[];
+  /** Per-connection escape hatch: named tools skip in-burst duplicate suppression (#2175 Task 3). Off by default. */
+  readonly unsuppressedTools: readonly string[];
   /** True when toolCount > threshold: groups start off, user opts in per group. */
   readonly groupOptIn: boolean;
   /** OpenAPI only: true when the spec was pasted rather than fetched from a URL — refresh needs a new paste. */
@@ -70,6 +72,7 @@ export interface UpdateIntegrationRequest {
   readonly enabledGroups?: readonly string[];
   readonly enabledTools?: readonly string[];
   readonly mutedTools?: readonly string[];
+  readonly unsuppressedTools?: readonly string[];
 }
 
 export interface ListIntegrationsResponse {

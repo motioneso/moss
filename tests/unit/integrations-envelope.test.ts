@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { DataContextRunner } from "@moss/db";
 import type { ToolContext } from "@moss/module-sdk";
 import {
+  createCallMemory,
   createIntegrationsActiveModulesResolver,
   createIntegrationsCipher,
   INTEGRATION_SUMMARY
@@ -41,6 +42,7 @@ function connection(overrides: Partial<ConnectionRow>): ConnectionRow {
     enabledGroups: [],
     enabledTools: [],
     mutedTools: [],
+    unsuppressedTools: [],
     discoveredTools: [],
     lastDiscoveryAt: null,
     lastError: null,
@@ -63,6 +65,7 @@ async function buildExecute(baseUrl: string, tool: DiscoveredTool) {
     dataContext: fakeDataContext(),
     cipher: createIntegrationsCipher(),
     logger: { warn: () => {} },
+    callMemory: createCallMemory(),
     repository: {
       listConnections: async () => [
         connection({ id: "conn-1", name: "Conn", baseUrl, discoveredTools: [tool] })

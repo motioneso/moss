@@ -1,3 +1,4 @@
+export * from "./call-memory.js";
 export * from "./credentials.js";
 export * from "./curation.js";
 export * from "./discovery.js";
