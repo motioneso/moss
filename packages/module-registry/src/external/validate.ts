@@ -754,8 +754,8 @@ export function validateExternalModuleManifest(
       }
       const ownedTables = databaseObj.ownedTables;
       const slugPrefix = `app.${expectedId.replace(/-/g, "_")}_`;
-      if (!Array.isArray(ownedTables) || ownedTables.length === 0 || ownedTables.length > 32) {
-        errors.push("database.ownedTables must be a non-empty array of at most 32 table names");
+      if (!Array.isArray(ownedTables) || ownedTables.length > 32) {
+        errors.push("database.ownedTables must be an array of at most 32 table names");
       } else {
         const seen = new Set<string>();
         const validated: string[] = [];
