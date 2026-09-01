@@ -16,7 +16,7 @@
 //
 // Harness skeleton: tests/integration/js08-decide-confirm-audit.test.ts.
 // Discovery/availability stubs: tests/integration/news-personalization-routes.test.ts.
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import pg from "pg";
 import type { Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
@@ -502,6 +502,13 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
   }, 60_000);
 
   it("carries a real assistant conversation through chat, MCP, confirmation, and the worker", async () => {
+    // #2159: this fake engine drives tool calls directly over MCP but never runs a real
+    // tools/list round trip, so the server's readiness wait (SessionTokenRegistry's
+    // waitForToolsListObserved) would otherwise time out on every session launch below. Stub
+    // it to resolve ready immediately — this test isn't exercising readiness.
+    const toolsListReadySpy = vi
+      .spyOn(SessionTokenRegistry.prototype, "waitForToolsListObserved")
+      .mockResolvedValue(true);
     configureChatTools(appBoss);
     await appContext.withDataContext(
       { actorUserId: ids.userA, requestId: "diagnostics-chat-policy" },
@@ -638,6 +645,7 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
       expect(await listActorAudits(ids.userB)).toEqual([]);
     } finally {
       await server.close();
+      toolsListReadySpy.mockRestore();
     }
     configureChatTools(null);
   }, 60_000);

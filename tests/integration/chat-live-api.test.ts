@@ -12,6 +12,7 @@ import type { Kysely } from "kysely";
 import Fastify from "fastify";
 
 import { createApiServer } from "../../apps/api/src/server.js";
+import { SessionTokenRegistry } from "@moss/ai";
 import { ChatRepository, CliChatUnavailableError, registerChatLiveRoutes } from "@moss/chat";
 import { PageContextStore } from "../../packages/chat/src/live/page-context-store.js";
 import type { ChatEngineFactory } from "@moss/module-registry";
@@ -94,10 +95,19 @@ describe("Chat live API (turn / clear / switch / stream)", () => {
   let server: ReturnType<typeof createApiServer>;
   let originalSecretKey: string | undefined;
   let providerId: string;
+  let toolsListReadySpy: ReturnType<typeof vi.spyOn>;
 
   beforeAll(async () => {
     originalSecretKey = process.env.JARVIS_AI_SECRET_KEY;
     process.env.JARVIS_AI_SECRET_KEY = "test-chat-live-api-secret-key";
+
+    // #2159: this suite's fake engine never runs a real MCP client, so the server's real
+    // tools/list-readiness wait (SessionTokenRegistry.waitForToolsListObserved) would otherwise
+    // always time out. Stub it to resolve ready immediately — these tests don't exercise
+    // readiness, only the chat turn behavior.
+    toolsListReadySpy = vi
+      .spyOn(SessionTokenRegistry.prototype, "waitForToolsListObserved")
+      .mockResolvedValue(true);
 
     await resetFoundationDatabase();
 
@@ -135,6 +145,7 @@ describe("Chat live API (turn / clear / switch / stream)", () => {
 
   afterAll(async () => {
     await Promise.allSettled([server?.close(), appDb?.destroy()]);
+    toolsListReadySpy?.mockRestore();
     if (originalSecretKey === undefined) {
       delete process.env.JARVIS_AI_SECRET_KEY;
     } else {
