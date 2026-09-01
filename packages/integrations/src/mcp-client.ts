@@ -50,7 +50,9 @@ export async function callMcpTool(
   toolName: string,
   input: Record<string, unknown>
 ): Promise<{ ok: boolean; data: Record<string, unknown> }> {
-  const client = await connect(url, secret, placement);
+  const client = await connect(url, secret, placement).catch(() => {
+    throw new IntegrationUserError("Could not reach an MCP server at that URL.");
+  });
   try {
     const res = await retryOnce(() =>
       client.callTool({ name: toolName, arguments: input }, undefined, { timeout: TOOL_CALL_TIMEOUT_MS })

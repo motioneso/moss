@@ -5,7 +5,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { afterEach, describe, expect, it } from "vitest";
-import { callMcpTool, discoverMcpTools } from "@moss/integrations";
+import { callMcpTool, discoverMcpTools, IntegrationUserError } from "@moss/integrations";
 
 const SECRET = "sk-super-secret-mcp-value";
 
@@ -119,6 +119,33 @@ describe("discoverMcpTools / callMcpTool", () => {
   it("never leaks the credential value into a thrown error", async () => {
     try {
       await discoverMcpTools("http://127.0.0.1:1", SECRET, { kind: "bearer" });
+      expect.unreachable();
+    } catch (err) {
+      expect(String((err as Error).message ?? err)).not.toContain(SECRET);
+    }
+  });
+
+  it("wraps a callMcpTool connect failure in a plain-English error that does not leak the credential", async () => {
+    try {
+      await callMcpTool("http://127.0.0.1:1", SECRET, { kind: "bearer" }, "add", { a: 1, b: 2 });
+      expect.unreachable();
+    } catch (err) {
+      expect(err).toBeInstanceOf(IntegrationUserError);
+      const message = String((err as Error).message ?? err);
+      expect(message).not.toContain(SECRET);
+      expect(message.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("never leaks a query-placed credential into a callMcpTool connect failure", async () => {
+    try {
+      await callMcpTool(
+        "http://127.0.0.1:1",
+        SECRET,
+        { kind: "query", name: "api_key" },
+        "add",
+        { a: 1, b: 2 }
+      );
       expect.unreachable();
     } catch (err) {
       expect(String((err as Error).message ?? err)).not.toContain(SECRET);
