@@ -336,6 +336,14 @@ Declare `assistantTools` in the manifest with an honest `risk` (`read` / `write`
 access; results must never include secrets. Never name a provider or model — request
 capabilities and let the user's configured router decide.
 
+- Every `assistantTools[].name` and `assistantTools[].permissionId` must be prefixed with
+  `"<moduleId>."` (e.g. `"acme-widgets.lookup"`). This is enforced by
+  `validateExternalModuleManifest` as an anti-spoof check — an unprefixed name or permission id
+  fails the build.
+- Any declared external data source's `fetchHosts` must be a non-empty array of lowercase
+  hostnames, no ports, no IP literals (see §8). An empty or missing `fetchHosts` array fails the
+  build.
+
 ## 12. Registration (composition root)
 
 A bundled module is activated by one entry in `BUILT_IN_MODULES`

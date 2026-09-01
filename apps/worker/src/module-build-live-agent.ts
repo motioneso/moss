@@ -44,7 +44,9 @@ export function createModuleBuildLiveAgent(deps: ModuleBuildLiveAgentDeps) {
         "The finished module must include jarvis.module.json, src/worker/index.ts, and a useful src/web/index.ts UI.",
         "Follow the downloaded-module ABI in docs/module-developer-guide.md and the smallest relevant external-modules example.",
         "Do not use Bash or shell commands; use Read, Glob, Grep, Write, and Edit. The worker runs the module build after writing_code.",
-        "Do not install, enable, publish, or run the host's database commands."
+        "Do not install, enable, publish, or run the host's database commands.",
+        'Every assistantTools entry\'s name and permissionId must start with "<your module id>." (for example "acme-widgets.lookup"), or the build fails validation.',
+        "If you declare an external data source, its fetchHosts must be a non-empty array of lowercase hostnames (no ports, no IPs), or the build fails validation."
       ].join("\n") + "\n"
     );
 

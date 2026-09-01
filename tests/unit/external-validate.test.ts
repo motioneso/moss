@@ -500,6 +500,39 @@ describe("validateExternalModuleManifest (#917)", () => {
       expect(errors).toContain("unique");
     }
   });
+
+  // #2169: the module-generation pipeline (guide §11 + the module-build live-agent persona) was
+  // silent on both rules, so a generated manifest could pass the agent's own review and still fail
+  // here. This is a regression check on the validator behavior the docs/persona now describe, not
+  // new validator logic — it must keep catching a manifest shaped like the real PR #2101 failure:
+  // an unprefixed assistant tool name/permission id, together with an empty fetchHosts array.
+  it("rejects a generated-module-shaped manifest with an unprefixed tool name and an empty fetchHosts array (#2169)", () => {
+    const result = validateExternalModuleManifest(
+      {
+        ...base,
+        runtime: { workerEntrypoint: "dist/worker.js", workerContractVersion: 1 },
+        assistantTools: [
+          {
+            name: "lookup",
+            description: "Look up a widget",
+            permissionId: "lookup",
+            risk: "read",
+            handler: "lookup"
+          }
+        ],
+        fetchHosts: []
+      },
+      "acme-widgets",
+      "0.1.0"
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const errors = result.errors.join(" ");
+      expect(errors).toContain("prefixed");
+      expect(errors).toContain("fetchHosts");
+    }
+  });
+
   // FIN-00 #1145: instanceWritePolicy is only meaningful (and only admin-approved)
   // for namespaces that actually carry instance scope, and only two values exist.
   it("accepts instanceWritePolicy 'module' on an instance-scoped namespace", () => {
