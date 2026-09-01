@@ -60,7 +60,7 @@ test.describe("integrations live path (#2162)", () => {
     await page.getByLabel("Name").fill("Home Assistant");
     await page.getByLabel("URL").fill(HA_MCP_URL);
     await page.getByLabel("Credential").fill(HA_TOKEN);
-    await page.getByRole("button", { name: "Connect" }).click();
+    await page.getByRole("button", { name: "Connect", exact: true }).click();
 
     // Detail view: discovery really happened against the live HA MCP server.
     await expect(page.getByText(/^\d+ tools on$/)).toBeVisible({ timeout: 60_000 });
@@ -88,15 +88,19 @@ test.describe("integrations live path (#2162)", () => {
       !RADARR_URL || !RADARR_KEY || !RADARR_SPEC_FILE,
       "needs LIVE_RADARR_URL, LIVE_RADARR_KEY and LIVE_RADARR_SPEC_FILE"
     );
-    test.setTimeout(420_000);
+    test.setTimeout(900_000);
 
-    // Ground truth straight from Radarr, so the chat answer below cannot be a guess.
+    // Ground truth straight from Radarr, so the chat answer below cannot be a guess. A single
+    // movie looked up by id keeps the tool result inside the response size cap — the full
+    // library listing is megabytes and would come back truncated.
     const movieResponse = await request.get(`${RADARR_URL}/api/v3/movie`, {
       headers: { "X-Api-Key": RADARR_KEY }
     });
     expect(movieResponse.ok()).toBe(true);
-    const movieCount = ((await movieResponse.json()) as unknown[]).length;
-    expect(movieCount).toBeGreaterThan(0);
+    const movies = (await movieResponse.json()) as { id: number; title: string }[];
+    expect(movies.length).toBeGreaterThan(0);
+    const probeMovie = movies[movies.length - 1];
+    expect(probeMovie.title.length).toBeGreaterThan(0);
 
     await signInThroughUi(page);
     await removeConnectionIfPresent(page, "Radarr");
@@ -106,13 +110,13 @@ test.describe("integrations live path (#2162)", () => {
       .getByRole("group", { name: "Kind" })
       .getByRole("button", { name: "API", exact: true })
       .click();
-    await page.getByLabel("Name").fill("Radarr");
+    await page.getByLabel("Name", { exact: true }).fill("Radarr");
     await page.getByLabel("URL").fill(RADARR_URL);
     await page.getByLabel("Credential").fill(RADARR_KEY);
     // "Send as" already defaults to Header with name X-Api-Key — Radarr's exact scheme.
     await page.getByRole("button", { name: "Paste the spec" }).click();
     await page.getByLabel("Spec").fill(readFileSync(RADARR_SPEC_FILE, "utf8"));
-    await page.getByRole("button", { name: "Connect" }).click();
+    await page.getByRole("button", { name: "Connect", exact: true }).click();
 
     // Radarr's spec converts to far more than 30 tools, so groups start off.
     await expect(page.getByText("Groups start off. Turn on the ones Moss should use.")).toBeVisible(
@@ -121,7 +125,11 @@ test.describe("integrations live path (#2162)", () => {
     await expect(page.getByText("0 tools on")).toBeVisible();
 
     // Turn on the Movie group through the real switch.
-    await page.getByRole("checkbox", { name: "Enable group Movie" }).click();
+    // The switch's real checkbox input is visually hidden; the user clicks the styled label.
+    await page
+      .getByRole("checkbox", { name: "Enable group Movie", exact: true })
+      .locator("xpath=ancestor::label")
+      .click();
     await expect(page.getByText(/^[1-9]\d* tools on$/)).toBeVisible({ timeout: 15_000 });
 
     // The credential must never come back to the browser.
@@ -135,18 +143,25 @@ test.describe("integrations live path (#2162)", () => {
     await page.getByRole("button", { name: /^New chat$/ }).click();
 
     await composer.fill(
-      "Use the Radarr connection's tools to count the movies in my Radarr library. " +
-        "Call the tool that lists movies and reply with the exact total as a plain number."
+      `Use the Radarr connection's tools to look up the movie with id ${probeMovie.id} ` +
+        "in my Radarr library and reply with its exact title."
     );
     await composer.press("Enter");
 
-    // The model cannot guess the library size: the exact count appearing proves the tool
-    // call went through Moss -> Radarr and back.
-    await expect(
-      page
-        .getByRole("dialog")
-        .getByText(new RegExp(`\\b${movieCount}\\b`))
-        .first()
-    ).toBeVisible({ timeout: 300_000 });
+    // First use of an external connection's tools raises an Approve/Reject card in the drawer
+    // (gateway confirm policy for outbound tools). Approve it like a real user, then nudge the
+    // model to continue — approval does not auto-resume the turn.
+    await expect(page.getByRole("button", { name: "Approve", exact: true }).first()).toBeVisible({
+      timeout: 300_000
+    });
+    await page.getByRole("button", { name: "Approve", exact: true }).first().click();
+    await composer.fill("Approved. Please fetch it now and reply with the exact title.");
+    await composer.press("Enter");
+
+    // The model cannot guess which title belongs to that id: the exact title appearing proves
+    // the tool call went through Moss -> Radarr and back.
+    await expect(page.getByRole("dialog").getByText(probeMovie.title).first()).toBeVisible({
+      timeout: 300_000
+    });
   });
 });
