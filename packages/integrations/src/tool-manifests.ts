@@ -16,6 +16,25 @@ import { IntegrationsRepository, type ConnectionRow } from "./repository.js";
 
 const ROOT_COMBINATORS = ["anyOf", "oneOf", "allOf", "not"] as const;
 
+/** Fixed shape every integration tool result is wrapped in, whatever the service kind (#2175 Task 2). */
+export interface IntegrationOutcomeEnvelope {
+  readonly status: "ok" | "error";
+  readonly action: "performed" | "read";
+  readonly summary: string;
+  readonly detail: unknown;
+}
+
+/** Fixed Moss-authored summary strings, reused by later tasks too. */
+export const INTEGRATION_SUMMARY = {
+  performedOk: "Action performed successfully.",
+  readOk: "Read succeeded.",
+  callFailed: "Call failed; see detail for the service's error.",
+  blockedRead: "Unchanged result from earlier in this request.",
+  blockedPerformed: "This was already done once in this request and was not done again.",
+  truncated: "Result truncated at 8,000 characters; ask for a narrower query to see more.",
+  requestRefused: "Call limit reached for this request; answer with what you have."
+} as const;
+
 /** Minimal logger shape this module needs — matches FastifyBaseLogger's warn signature. */
 export interface ToolManifestLogger {
   warn(obj: Record<string, unknown>, msg: string): void;
@@ -98,9 +117,9 @@ function buildToolManifest(
   repository: IntegrationsRepository
 ): ModuleAssistantToolManifest {
   const execute: ToolExecute = async (scopedDb, input): Promise<ToolResult> => {
-    const envelope = await repository.loadCredentialEnvelope(scopedDb as never, conn.id);
-    const secret = envelope
-      ? (deps.cipher.decryptJson(deps.cipher.parseEnvelope(envelope)).secret as string)
+    const credentialEnvelope = await repository.loadCredentialEnvelope(scopedDb as never, conn.id);
+    const secret = credentialEnvelope
+      ? (deps.cipher.decryptJson(deps.cipher.parseEnvelope(credentialEnvelope)).secret as string)
       : null;
     const outcome = tool.invoke
       ? await invokeOpenApiTool(
@@ -111,7 +130,21 @@ function buildToolManifest(
           conn.credentialPlacement
         )
       : await callMcpTool(conn.url, secret, conn.credentialPlacement, tool.name, input);
-    return { data: outcome.ok ? outcome.data : { error: true, ...outcome.data } };
+    const action: IntegrationOutcomeEnvelope["action"] = tool.readOnly === true ? "read" : "performed";
+    const envelope: IntegrationOutcomeEnvelope = outcome.ok
+      ? {
+          status: "ok",
+          action,
+          summary: action === "read" ? INTEGRATION_SUMMARY.readOk : INTEGRATION_SUMMARY.performedOk,
+          detail: outcome.data
+        }
+      : {
+          status: "error",
+          action,
+          summary: INTEGRATION_SUMMARY.callFailed,
+          detail: outcome.data
+        };
+    return { data: envelope as unknown as Record<string, unknown> };
   };
 
   return {
