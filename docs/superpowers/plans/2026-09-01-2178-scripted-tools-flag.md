@@ -18,6 +18,7 @@
 ## Change
 
 In `launch-args.ts`, replace the "trio and bare --tools are mutually exclusive" rule with:
+
 - `hasMcpTrio && bareTools === ""` → still rejected (empty --tools alongside the trio is a
   mismatch, not the real shape).
 - `hasMcpTrio && bareTools === undefined` → unchanged, accepted (existing no-`--tools` trio case).
