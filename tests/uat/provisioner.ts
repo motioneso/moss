@@ -233,6 +233,9 @@ export function writeUatEnvFile(input: {
         // #2005 — same boot-crash class as the line above: resolveKeyring throws at
         // startup when this is missing outside development/test.
         "JARVIS_NEWS_CREDENTIAL_SECRET_KEY=22222222222222222222222222222222",
+        // #2173: same boot-crash class — resolveKeyring throws at startup when this is missing
+        // outside development/test. Real crash caught by the cached-image UAT repro.
+        "JARVIS_INTEGRATIONS_SECRET_KEY=33333333333333333333333333333333",
         `JARVIS_CLI_RUNNER_RPC_SECRET=${UAT_CLI_RUNNER_RPC_SECRET}`,
         // #1883: this one chat script needs a real, local embedding provider so notes.search
         // actually calls out over the network and can hit a real connection failure — every other

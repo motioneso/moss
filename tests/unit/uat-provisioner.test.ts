@@ -224,6 +224,13 @@ describe("writeUatEnvFile", () => {
       // is required in production and any non-development/test NODE_ENV).
       expect(contents).toContain("JARVIS_MODULE_CREDENTIAL_SECRET_KEY=");
       expect(contents).toContain("JARVIS_NEWS_CREDENTIAL_SECRET_KEY=");
+      // #2173: resolveKeyring enforces this the same way, and the cached-image repro's real
+      // crash was this key specifically ("JARVIS_INTEGRATIONS_SECRET_KEY is required in
+      // production and any non-development/test NODE_ENV").
+      expect(contents).toContain("JARVIS_INTEGRATIONS_SECRET_KEY=");
+      expect(
+        contents.match(/JARVIS_INTEGRATIONS_SECRET_KEY=(\S+)/)?.[1]?.length
+      ).toBeGreaterThanOrEqual(32);
     } finally {
       cleanup();
     }
