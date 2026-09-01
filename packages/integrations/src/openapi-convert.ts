@@ -89,6 +89,8 @@ export function convertOpenApiSpec(spec: unknown): DiscoveredTool[] {
         ).slice(0, 500),
         group: typeof tags[0] === "string" && tags[0] ? tags[0] : "Other",
         inputSchema: { type: "object", properties, ...(required.length ? { required } : {}) },
+        readOnly: method === "get" || method === "head" ? true : undefined,
+        idempotent: ["get", "head", "put", "delete"].includes(method) ? true : undefined,
         invoke: {
           method: method.toUpperCase(),
           path,

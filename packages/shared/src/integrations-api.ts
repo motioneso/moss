@@ -12,6 +12,10 @@ export interface IntegrationToolDescriptor {
   readonly description: string;
   readonly group: string; // OpenAPI tag; "" for MCP/ungrouped
   readonly inputSchema: Record<string, unknown> | null;
+  /** Absent means "did not say" — never coerced to false. */
+  readonly readOnly?: boolean;
+  readonly idempotent?: boolean;
+  readonly destructive?: boolean;
 }
 
 export interface IntegrationSummary {
