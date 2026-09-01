@@ -26,7 +26,7 @@ cause, then GREEN), not a unit test built around a fabricated log blob.
   (lines 914-915). `projectName` is in scope there (bound at line 764, per-attempt).
 - `buildUatComposeArgs(projectName, extra)`, `tests/uat/provisioner.ts:410-415` - already the
   mandatory wrapper for every docker compose invocation in this file (project-scoped `-p` + `-f
-  infra/docker-compose.prod.yml`). Reused for the new evidence-capture calls rather than hand-rolling
+infra/docker-compose.prod.yml`). Reused for the new evidence-capture calls rather than hand-rolling
   a new invocation shape.
 - `runCapture(command, args)`, `tests/uat/provisioner.ts:472-488` - existing private helper that
   spawns and resolves stdout; reused for the new capture, no new dependency.
@@ -56,21 +56,25 @@ compose file never interpolates it - ruling section 2).
 
 ```ts
 expect(contents).toContain("JARVIS_INTEGRATIONS_SECRET_KEY=");
-expect(
-  contents.match(/JARVIS_INTEGRATIONS_SECRET_KEY=(\S+)/)?.[1]?.length
-).toBeGreaterThanOrEqual(32);
+expect(contents.match(/JARVIS_INTEGRATIONS_SECRET_KEY=(\S+)/)?.[1]?.length).toBeGreaterThanOrEqual(
+  32
+);
 ```
 
 **Verify (red, before the line is added):**
+
 ```bash
 pnpm vitest run tests/unit/uat-provisioner.test.ts > /tmp/2173-task1-red.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=1`, failure is the two new assertions (key absent).
 
 **Verify (green, after):**
+
 ```bash
 pnpm vitest run tests/unit/uat-provisioner.test.ts > /tmp/2173-task1-green.log 2>&1; echo "EXIT=$?"
 ```
+
 Expected: `EXIT=0`.
 
 ## Task 2 - bounded failure evidence, Compose-scoped
@@ -96,9 +100,10 @@ async function captureFailureEvidence(projectName: string): Promise<void> {
 ```
 
 Notes fixing this to the ruling's boundary (section 4):
+
 - `docker compose -p <projectName> -f infra/docker-compose.prod.yml logs --tail 50 jarv1s` -
   Compose project + service scoped, never the bare `moss` container name, never unbounded (`--tail
-  50` caps it the same way the ruling asked for the literal command).
+50` caps it the same way the ruling asked for the literal command).
 - `docker compose ... ps jarv1s --format json` returns each container's status fields including
   health - a formatted status read, not `docker inspect` and not a full container inspect. Never
   touches the settings file (`envFile.path`) or prints `process.env`.
@@ -111,7 +116,9 @@ the existing `await cleanupAttempt({ error });` at line 914:
 ```ts
 await cleanupAttempt({ error });
 ```
+
 becomes
+
 ```ts
 await captureFailureEvidence(projectName);
 await cleanupAttempt({ error });
@@ -141,7 +148,7 @@ so no rebuild is needed, run through `verify-gate` per this repo's DB-touching-t
    `docker compose up -d jarv1s --wait` succeeds, stack reaches `/health/ready`.
 
 Record both runs' tails (bounded, last ~50 lines each) as the PR's live-path evidence comment - this
-*is* the live-path proof for this change (a provisioner/test-tooling fix, not a UI surface, so no
+_is_ the live-path proof for this change (a provisioner/test-tooling fix, not a UI surface, so no
 Playwright/UAT-spec row is needed per the spec's non-goals).
 
 ## Kill gate
