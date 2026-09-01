@@ -533,6 +533,61 @@ describe("validateExternalModuleManifest (#917)", () => {
     }
   });
 
+  it("rejects an assistant tool with executionPolicy auto and no actionFamilyId, accepts confirm, and accepts auto with a declared trusted_auto family (#2177)", () => {
+    const toolBase = {
+      name: "acme-widgets.lookup",
+      description: "Look up a widget",
+      permissionId: "acme-widgets.lookup",
+      risk: "read",
+      handler: "lookup"
+    };
+
+    const autoNoFamily = validateExternalModuleManifest(
+      {
+        ...base,
+        runtime: { workerEntrypoint: "dist/worker.js", workerContractVersion: 1 },
+        assistantTools: [{ ...toolBase, executionPolicy: "auto" }]
+      },
+      "acme-widgets",
+      "0.1.0"
+    );
+    expect(autoNoFamily.ok).toBe(false);
+    if (!autoNoFamily.ok) {
+      expect(autoNoFamily.errors.join(" ")).toContain("requires an actionFamilyId");
+    }
+
+    const confirmNoFamily = validateExternalModuleManifest(
+      {
+        ...base,
+        runtime: { workerEntrypoint: "dist/worker.js", workerContractVersion: 1 },
+        assistantTools: [{ ...toolBase, executionPolicy: "confirm" }]
+      },
+      "acme-widgets",
+      "0.1.0"
+    );
+    expect(confirmNoFamily.ok).toBe(true);
+
+    const autoWithFamily = validateExternalModuleManifest(
+      {
+        ...base,
+        runtime: { workerEntrypoint: "dist/worker.js", workerContractVersion: 1 },
+        assistantActionFamilies: [
+          {
+            id: "write-access",
+            label: "Write",
+            description: "Write access",
+            allowedTiers: ["trusted_auto", "ask_each_time"],
+            defaultTier: "ask_each_time"
+          }
+        ],
+        assistantTools: [{ ...toolBase, executionPolicy: "auto", actionFamilyId: "write-access" }]
+      },
+      "acme-widgets",
+      "0.1.0"
+    );
+    expect(autoWithFamily.ok).toBe(true);
+  });
+
   // FIN-00 #1145: instanceWritePolicy is only meaningful (and only admin-approved)
   // for namespaces that actually carry instance scope, and only two values exist.
   it("accepts instanceWritePolicy 'module' on an instance-scoped namespace", () => {

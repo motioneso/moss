@@ -343,6 +343,13 @@ capabilities and let the user's configured router decide.
 - Any declared external data source's `fetchHosts` must be a non-empty array of lowercase
   hostnames, no ports, no IP literals (see §8). An empty or missing `fetchHosts` array fails the
   build.
+- A tool's `executionPolicy: "auto"` requires `actionFamilyId` to name a declared
+  `assistantActionFamilies` entry whose `allowedTiers` includes `"trusted_auto"`; otherwise omit
+  `executionPolicy` or use `"confirm"` (read-only tools should not set `executionPolicy` at all).
+  Violating this fails with `requires an actionFamilyId` or `requires family ... to allow
+trusted_auto`.
+- Any `actionFamilyId` must match a family id declared in `assistantActionFamilies`, or the build
+  fails with `references undeclared action family`.
 
 ## 12. Registration (composition root)
 
