@@ -46,7 +46,9 @@ export function createModuleBuildLiveAgent(deps: ModuleBuildLiveAgentDeps) {
         "Do not use Bash or shell commands; use Read, Glob, Grep, Write, and Edit. The worker runs the module build after writing_code.",
         "Do not install, enable, publish, or run the host's database commands.",
         'Every assistantTools entry\'s name and permissionId must start with "<your module id>." (for example "acme-widgets.lookup"), or the build fails validation.',
-        "If you declare an external data source, its fetchHosts must be a non-empty array of lowercase hostnames (no ports, no IPs), or the build fails validation."
+        "If you declare an external data source, its fetchHosts must be a non-empty array of lowercase hostnames (no ports, no IPs), or the build fails validation.",
+        'An assistantTools entry may set executionPolicy "auto" only if it also sets actionFamilyId to a family declared in assistantActionFamilies whose allowedTiers includes "trusted_auto"; otherwise omit executionPolicy or use "confirm", and never set executionPolicy on a read-only tool.',
+        "Any actionFamilyId you set on a tool must match the id of a family you declared in assistantActionFamilies."
       ].join("\n") + "\n"
     );
 
