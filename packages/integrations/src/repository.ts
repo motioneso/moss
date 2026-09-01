@@ -20,6 +20,7 @@ export interface ConnectionRow {
   readonly enabledGroups: readonly string[];
   readonly enabledTools: readonly string[];
   readonly mutedTools: readonly string[];
+  readonly unsuppressedTools: readonly string[];
   readonly discoveredTools: readonly DiscoveredTool[];
   readonly lastDiscoveryAt: Date | null;
   readonly lastError: string | null;
@@ -49,6 +50,7 @@ export interface UpdateConnectionInput {
   readonly enabledGroups?: readonly string[];
   readonly enabledTools?: readonly string[];
   readonly mutedTools?: readonly string[];
+  readonly unsuppressedTools?: readonly string[];
 }
 
 interface ConnectionSqlRow {
@@ -66,6 +68,7 @@ interface ConnectionSqlRow {
   enabled_groups: string[];
   enabled_tools: string[];
   muted_tools: string[];
+  unsuppressed_tools: string[];
   discovered_tools: DiscoveredTool[];
   last_discovery_at: Date | null;
   last_error: string | null;
@@ -76,7 +79,7 @@ interface ConnectionSqlRow {
 const SELECT_COLUMNS = `
   id, owner_user_id, name, kind, transport, url, credential_placement,
   (credential IS NOT NULL) AS has_credential, enabled, base_url, spec_pasted,
-  enabled_groups, enabled_tools, muted_tools, discovered_tools,
+  enabled_groups, enabled_tools, muted_tools, unsuppressed_tools, discovered_tools,
   last_discovery_at, last_error, created_at, updated_at
 `;
 
@@ -161,6 +164,9 @@ export class IntegrationsRepository {
     if ("mutedTools" in patch) {
       sets.push(sql`muted_tools = ${[...(patch.mutedTools ?? [])]}::text[]`);
     }
+    if ("unsuppressedTools" in patch) {
+      sets.push(sql`unsuppressed_tools = ${[...(patch.unsuppressedTools ?? [])]}::text[]`);
+    }
     sets.push(sql`updated_at = now()`);
 
     const result = await sql<ConnectionSqlRow>`
@@ -237,6 +243,7 @@ export class IntegrationsRepository {
       enabledGroups: row.enabled_groups,
       enabledTools: row.enabled_tools,
       mutedTools: row.muted_tools,
+      unsuppressedTools: row.unsuppressed_tools,
       discoveredTools: row.discovered_tools,
       lastDiscoveryAt: row.last_discovery_at,
       lastError: row.last_error,

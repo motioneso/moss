@@ -10,6 +10,7 @@ import {
 import {
   MOSS_PERSONA_APP_MAP,
   MOSS_PERSONA_BASE,
+  MOSS_PERSONA_INTEGRATION_RESULT_TRUST,
   MOSS_PERSONA_NOTES_SEARCH,
   MOSS_PERSONA_TOOL_GUIDANCE,
   resolveChatPersona
@@ -182,6 +183,33 @@ describe("resolveChatPersona", () => {
     expect(modulePrompt).toContain(MOSS_PERSONA_NOTES_SEARCH);
     expect(drawerPrompt).toContain(MOSS_PERSONA_TOOL_GUIDANCE);
     expect(modulePrompt).toContain(MOSS_PERSONA_TOOL_GUIDANCE);
+  });
+});
+
+describe("MOSS_PERSONA_INTEGRATION_RESULT_TRUST", () => {
+  it("tells the model not to double-check a confirmed action with a read", () => {
+    expect(MOSS_PERSONA_INTEGRATION_RESULT_TRUST).toContain("status ok");
+    expect(MOSS_PERSONA_INTEGRATION_RESULT_TRUST).toContain("action performed");
+    expect(MOSS_PERSONA_INTEGRATION_RESULT_TRUST).toContain("do not call a read tool");
+  });
+
+  it("stays under 40 words", () => {
+    const words = MOSS_PERSONA_INTEGRATION_RESULT_TRUST.trim().split(/\s+/);
+    expect(words.length).toBeLessThan(40);
+  });
+
+  it("appears on every chat surface, including a module surface", async () => {
+    const drawerPrompt = await composePrompt(
+      { assistantName: "Alfred", personaText: "" },
+      DEFAULT_CHAT_SURFACE
+    );
+    const modulePrompt = await composePrompt(
+      { assistantName: "Alfred", personaText: "" },
+      MODULE_SURFACE
+    );
+
+    expect(drawerPrompt).toContain(MOSS_PERSONA_INTEGRATION_RESULT_TRUST);
+    expect(modulePrompt).toContain(MOSS_PERSONA_INTEGRATION_RESULT_TRUST);
   });
 });
 

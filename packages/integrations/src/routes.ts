@@ -287,6 +287,12 @@ function buildUpdatePatch(
   if ("mutedTools" in value) {
     patch = { ...patch, mutedTools: requiredStringArray(value.mutedTools, "mutedTools") };
   }
+  if ("unsuppressedTools" in value) {
+    patch = {
+      ...patch,
+      unsuppressedTools: requiredStringArray(value.unsuppressedTools, "unsuppressedTools")
+    };
+  }
   return patch;
 }
 

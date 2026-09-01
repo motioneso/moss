@@ -26,6 +26,30 @@ async function connect(
   return client;
 }
 
+interface McpToolLike {
+  readonly name: string;
+  readonly description?: string;
+  readonly inputSchema?: unknown;
+  readonly annotations?: {
+    readonly readOnlyHint?: boolean;
+    readonly idempotentHint?: boolean;
+    readonly destructiveHint?: boolean;
+  };
+}
+
+export function mapMcpTool(t: McpToolLike): DiscoveredTool {
+  const a = t.annotations;
+  return {
+    name: t.name,
+    description: t.description ?? t.name,
+    group: "",
+    inputSchema: (t.inputSchema as Record<string, unknown> | undefined) ?? null,
+    readOnly: typeof a?.readOnlyHint === "boolean" ? a.readOnlyHint : undefined,
+    idempotent: typeof a?.idempotentHint === "boolean" ? a.idempotentHint : undefined,
+    destructive: typeof a?.destructiveHint === "boolean" ? a.destructiveHint : undefined
+  };
+}
+
 export async function discoverMcpTools(
   url: string,
   secret: string | null,
@@ -36,12 +60,7 @@ export async function discoverMcpTools(
   });
   try {
     const res = await client.listTools({}, { timeout: DISCOVERY_TIMEOUT_MS });
-    return res.tools.map((t) => ({
-      name: t.name,
-      description: t.description ?? t.name,
-      group: "",
-      inputSchema: (t.inputSchema as Record<string, unknown> | undefined) ?? null
-    }));
+    return res.tools.map((t) => mapMcpTool(t as McpToolLike));
   } finally {
     await client.close().catch(() => {});
   }

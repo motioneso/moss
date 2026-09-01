@@ -32,6 +32,7 @@ function connection(overrides: Partial<ConnectionRow>): ConnectionRow {
     enabledGroups: [],
     enabledTools: [],
     mutedTools: [],
+    unsuppressedTools: [],
     discoveredTools: [],
     lastDiscoveryAt: null,
     lastError: null,

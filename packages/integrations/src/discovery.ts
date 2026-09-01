@@ -45,6 +45,7 @@ export function toDetail(row: ConnectionRow, tools: readonly DiscoveredTool[]): 
     enabledGroups: row.enabledGroups,
     enabledTools: row.enabledTools,
     mutedTools: row.mutedTools,
+    unsuppressedTools: row.unsuppressedTools,
     groupOptIn: isGroupOptIn(tools),
     specPasted: row.specPasted
   };
