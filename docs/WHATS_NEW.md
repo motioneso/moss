@@ -29,11 +29,60 @@ Edge builds include the stable history below plus the user-facing changes alread
 the current edge image. This section is intentionally build-bundled so it never advertises a
 feature that is not present in the image you are running.
 
+### 2026-09-01
+
+#### Added
+
+- **Connect Moss to external tools.** You can now connect Moss to services that speak MCP or publish an OpenAPI spec from Settings, and use their features from chat. [PR #2171](https://github.com/motioneso/moss/pull/2171)
+
+### 2026-08-31
+
+#### Added
+
+- **Moss can check the exact current time.** When Moss needs to know exactly what time it is, it can now check a live clock instead of relying only on stale context. [PR #2150](https://github.com/motioneso/moss/pull/2150)
+
+#### Fixed
+
+- **Timezone-safe meal logging.** Meals logged with a local time are now saved on the correct calendar day. [PR #2155](https://github.com/motioneso/moss/pull/2155)
+- **More reliable memory and notes actions.** The assistant now looks for Moss's built-in tools first when saving or changing your information, instead of reporting a false failure after trying an unrelated tool. [PR #2144](https://github.com/motioneso/moss/pull/2144)
+- **Show useful safe messages when note changes fail.** When a note change is blocked for a known safe reason, Moss now explains the reason instead of showing only a generic failure message. [PR #2148](https://github.com/motioneso/moss/pull/2148)
+
+### 2026-08-30
+
+#### Fixed
+
+- **Chat action labels now say what actually happened.** the small label next to an assistant action now reports Executed, Allowed, Failed, or Denied instead of guessing whether something changed. [PR #2116](https://github.com/motioneso/moss/pull/2116)
+- **Self-hosted HTTPS now works reliably from Firefox.** Fixed a bug where visiting your self-hosted server's address directly by its numeric network address in Firefox (rather than a name) could fail to load over a secure connection. [PR #2105](https://github.com/motioneso/moss/pull/2105)
+- **Standings dropdown now updates immediately when you follow or unfollow a team.** Following or unfollowing a team in Settings now updates the standings dropdown on the Sports page right away, instead of showing outdated followed status until you navigated away and back. [PR #2094](https://github.com/motioneso/moss/pull/2094)
+- **Removed the story feedback control from the sports Followed-teams strip.** The "More like this / Less like this" option no longer appears on the team cards in the Followed strip on the Sports page. It still appears everywhere else, including the same team cards on the Today page. [PR #2076](https://github.com/motioneso/moss/pull/2076)
+
+#### Changed
+
+- **Assistant always knows the current date and time.** The assistant now checks the real current date and time at the start of every message, so its answers about "today," "now," or elapsed time stay accurate even in long conversations. [PR #2129](https://github.com/motioneso/moss/pull/2129)
+
 ### 2026-08-29
+
+#### Added
+
+- **Curated sports standings leagues.** Users can choose which leagues appear in standings and quickly reach leagues connected to teams they follow. [PR #2069](https://github.com/motioneso/moss/pull/2069)
 
 #### Changed
 
 - **GitHub removed from Connected accounts.** The GitHub option no longer appears when you add a connected account, since GitHub support is not planned. [PR #2070](https://github.com/motioneso/moss/pull/2070)
+
+### 2026-08-28
+
+#### Added
+
+- **Workflow approvals.** You can approve or reject a workflow step in chat, and approved steps continue safely. [PR #2065](https://github.com/motioneso/moss/pull/2065)
+
+#### Fixed
+
+- **Email sync and medication updates stay reliable.** Moss now preserves contact details when optional Google email extraction is unavailable and immediately shows newly added medications. [PR #2059](https://github.com/motioneso/moss/pull/2059)
+
+#### Changed
+
+- **Release notes stay grouped by date.** What's New now keeps updates together by the day they were released. [PR #1896](https://github.com/motioneso/moss/pull/1896)
 
 ### 2026-08-27
 
