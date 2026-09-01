@@ -19,12 +19,12 @@ It is slow, and the measurements say the slowness is entirely ours.
 
 **Measured on the live prod instance, 2026-09-01:**
 
-| Measurement | Value |
-| --- | --- |
-| Connect to the MCP server | 8–52 ms |
-| One tool call, round trip | 45–55 ms |
-| One user request ("turn the kitchen light off"), end to end | ~13 s |
-| Tool calls Moss made for that one request | 5 |
+| Measurement                                                 | Value    |
+| ----------------------------------------------------------- | -------- |
+| Connect to the MCP server                                   | 8–52 ms  |
+| One tool call, round trip                                   | 45–55 ms |
+| One user request ("turn the kitchen light off"), end to end | ~13 s    |
+| Tool calls Moss made for that one request                   | 5        |
 
 The audit log for that single request:
 
@@ -88,7 +88,7 @@ the user's real accounts and devices.
   destructive asks before running — is the obvious next step and is deliberately left to its own
   spec, because it changes what the user is asked to approve.
 - Trusting a service's hints for anything safety-critical. A server can lie or be wrong. The hints
-  are used only to *relax* a restriction (allow a repeat) or to *tighten* one, never to skip a
+  are used only to _relax_ a restriction (allow a repeat) or to _tighten_ one, never to skip a
   check the user relies on.
 
 ## Design Rulings
@@ -128,11 +128,11 @@ The information exists and Moss is throwing it away.
 
 **Change.** Discovery keeps three facts per tool alongside name and description:
 
-| Fact | Where it comes from (MCP) | Where it comes from (OpenAPI) |
-| --- | --- | --- |
-| Only reads, changes nothing | the read-only annotation | the method is a plain fetch (`GET`/`HEAD`) |
-| Safe to call twice with the same result | the idempotent annotation | `GET`/`HEAD`/`PUT`/`DELETE` |
-| Destructive | the destructive annotation | not derivable; left unset |
+| Fact                                    | Where it comes from (MCP)  | Where it comes from (OpenAPI)              |
+| --------------------------------------- | -------------------------- | ------------------------------------------ |
+| Only reads, changes nothing             | the read-only annotation   | the method is a plain fetch (`GET`/`HEAD`) |
+| Safe to call twice with the same result | the idempotent annotation  | `GET`/`HEAD`/`PUT`/`DELETE`                |
+| Destructive                             | the destructive annotation | not derivable; left unset                  |
 
 Each fact is three-valued: yes, no, or **the service did not say**. "Did not say" is treated
 exactly like "no" everywhere a rule branches, per the design ruling above.
@@ -172,8 +172,8 @@ including when the service said nothing. The service's payload passes through un
 `detail` — Moss never rewrites or summarizes a service's words, only frames them.
 
 **Paired instruction.** The chat system prompt gains one rule, applying to integration tools
-generally: *when a tool returns `status: "ok"` and `action: "performed"`, the action happened; do
-not call a read tool to confirm it.* This is the nudge half; section 3 is the enforcement half
+generally: _when a tool returns `status: "ok"` and `action: "performed"`, the action happened; do
+not call a read tool to confirm it._ This is the nudge half; section 3 is the enforcement half
 that holds when the nudge fails.
 
 ### 3. In-request duplicate suppression
@@ -303,11 +303,11 @@ a badly-behaved server does not. Counted after suppression, so repeats do not co
 **The fate of all three caps, stated plainly**, since "two caps where only one fires is what let
 this through" has to apply to the spec's own proposal:
 
-| Cap | What happens to it |
-| --- | --- |
-| 64,000 characters, OpenAPI path only | **Retired.** With 8,000 above it, it can never fire. |
+| Cap                                                        | What happens to it                                                                                                                                                        |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 64,000 characters, OpenAPI path only                       | **Retired.** With 8,000 above it, it can never fire.                                                                                                                      |
 | 16,000 characters, chat gateway, every tool in the product | **Kept, untouched.** It is the product-wide backstop for tools this spec does not govern. Moving it would change every tool in the product, which the Non-Goals rule out. |
-| 8,000 characters, integrations proxy, new | **The one that fires.** It is the only one that carries a message the model can act on, so it must sit meaningfully below the backstop. |
+| 8,000 characters, integrations proxy, new                  | **The one that fires.** It is the only one that carries a message the model can act on, so it must sit meaningfully below the backstop.                                   |
 
 **What the budget measures.** The 24,000-per-request budget counts what the service sent, before
 the gateway's backstop trims anything. That is deliberate — the cost being controlled is the
@@ -352,7 +352,7 @@ The opt-in rule then applies uniformly: **over the threshold, nothing is enabled
 chooses**, whether the groups came from the service or from Moss.
 
 **Grandfathering, with a mechanism, not a promise.** Today Ben's 75-tool connection works
-*because* the opt-in rule never fires: the enabled-tools list is empty and an empty list under the
+_because_ the opt-in rule never fires: the enabled-tools list is empty and an empty list under the
 old rule means everything is on. The moment derived groups exist, the opt-in path takes over, an
 empty list means nothing is on, and the one production connection goes dark on upgrade. "A pull
 request must never break production" makes this a blocker, so the spec names the mechanism:
