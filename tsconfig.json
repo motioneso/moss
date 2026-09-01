@@ -25,6 +25,7 @@
       "@moss/datasets": ["packages/datasets/src/index.ts"],
       "@moss/host-fetch": ["packages/host-fetch/src/index.ts"],
       "@moss/host-fetch/policy": ["packages/host-fetch/src/policy.ts"],
+      "@moss/integrations": ["packages/integrations/src/index.ts"],
       "@moss/db": ["packages/db/src/index.ts"],
       "@moss/db/probes": ["packages/db/src/probes/index.ts"],
       "@moss/db/*": ["packages/db/src/*"],

@@ -25,6 +25,10 @@ import {
   createConnectorSecretCipher
 } from "@moss/connectors";
 import {
+  createIntegrationsActiveModulesResolver,
+  createIntegrationsCipher
+} from "@moss/integrations";
+import {
   DataContextRunner,
   createDatabase,
   getMossDatabaseUrls,
@@ -438,6 +442,15 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
         })
     );
 
+    // Task 7 wired the integrations REST routes (and their cipher) in module-registry,
+    // not here — this is a second cipher instance off the same key chain, used only to
+    // decrypt connection credentials at tool-call time for the synthetic chat tools below.
+    const integrationsCipher = createIntegrationsCipher(process.env);
+    const resolveActiveModulesWithIntegrations = createIntegrationsActiveModulesResolver(
+      resolveActiveModules,
+      { dataContext, cipher: integrationsCipher, logger: server.log }
+    );
+
     // Connector collaborators for the calendar focus-time write tool. A single shared
     // repository + cipher; the service is per-call-scoped via scopedDb, so one instance
     // is fine. createConnectorSecretCipher requires JARVIS_CONNECTOR_SECRET_KEY in a
@@ -512,7 +525,7 @@ export function createApiServer(options: CreateApiServerOptions = {}) {
       resolveAccessContext: authRuntime.resolveAccessContext,
       listConfiguredAuthProviders: authRuntime.listConfiguredProviders,
       listModuleManifests: getBuiltInModuleManifests,
-      resolveActiveModules,
+      resolveActiveModules: resolveActiveModulesWithIntegrations,
       mcpServerUrl: apiServerConfig.mcpServerUrl,
       focusSignals: async (ctx) => {
         // 1) Resolve THIS actor's active manifests (honors per-user/instance disable) — its

@@ -146,7 +146,9 @@ describe("dataLifecycle cascade-truth (#801 Phase A)", () => {
         "app.workflow_runs",
         "app.workflow_step_runs",
         "app.workflow_approvals",
-        "app.workflow_artifacts"
+        "app.workflow_artifacts",
+        // #2162 integrations foundation — owner-keyed connections cascade with the user.
+        "app.integration_connections"
       ].sort()
     );
   });
