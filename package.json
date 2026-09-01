@@ -101,6 +101,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@playwright/test": "^1.60.0",
     "@types/node": "^25.9.2",
     "@types/pg": "^8.20.0",
