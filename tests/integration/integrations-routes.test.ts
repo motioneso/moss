@@ -5,8 +5,19 @@ import Fastify from "fastify";
 import type { Kysely } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import {
+  AiRepository,
+  AssistantToolGateway,
+  ConfirmationRegistry,
+  SessionTokenRegistry
+} from "@moss/ai";
 import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
-import { registerIntegrationsRoutes } from "@moss/integrations";
+import {
+  createIntegrationsActiveModulesResolver,
+  createIntegrationsCipher,
+  IntegrationsRepository,
+  registerIntegrationsRoutes
+} from "@moss/integrations";
 
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
@@ -67,6 +78,7 @@ function startFixtureServer(): Promise<Fixture> {
 
 let appDb: Kysely<MossDatabase>;
 let dataContext: DataContextRunner;
+const integrationsRepository = new IntegrationsRepository();
 
 beforeAll(async () => {
   await resetFoundationDatabase();
@@ -268,6 +280,114 @@ describe("integrations REST routes", () => {
 
       const getAfter = await app.inject({ method: "GET", url: `/api/integrations/${created.id}` });
       expect(getAfter.statusCode).toBe(404);
+    } finally {
+      await app.close();
+      await fixture.close();
+    }
+  });
+
+  it("keeps the old tool list and records a plain-text error when a refresh target has gone dead", async () => {
+    const fixture = await startFixtureServer();
+    const app = buildApp(ids.userA);
+    try {
+      const created = (await createFixtureConnection(app, fixture, "Goes Dark Service")).json();
+      expect(created.toolCount).toBe(1);
+      await fixture.close();
+
+      const refreshed = await app.inject({
+        method: "POST",
+        url: `/api/integrations/${created.id}/refresh`
+      });
+      expect(refreshed.statusCode).toBe(200);
+      const body = refreshed.json();
+      expect(body.toolCount).toBe(1);
+      expect(body.tools).toHaveLength(1);
+      expect(typeof body.lastError).toBe("string");
+      expect(body.lastError.length).toBeGreaterThan(0);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("discovers tools from a pasted spec with no network fetch, then requires a fresh paste to refresh", async () => {
+    const app = buildApp(ids.userA);
+    try {
+      const createRes = await app.inject({
+        method: "POST",
+        url: "/api/integrations",
+        payload: {
+          name: "Pasted Spec Service",
+          kind: "openapi",
+          url: "http://pasted-spec.example.com/base",
+          spec: JSON.stringify(SPEC_V1)
+        }
+      });
+      expect(createRes.statusCode).toBe(201);
+      const created = createRes.json();
+      expect(created.toolCount).toBe(1);
+
+      // baseUrl isn't in the REST response (it's only used internally to invoke tools), so
+      // read it straight from the row to confirm it was set to the pasted body's url.
+      const row = await dataContext.withDataContext(
+        { actorUserId: ids.userA, requestId: "test:pasted-spec-baseurl" },
+        (scopedDb) => integrationsRepository.getConnection(scopedDb, created.id)
+      );
+      expect(row?.baseUrl).toBe("http://pasted-spec.example.com/base");
+
+      const refreshed = await app.inject({
+        method: "POST",
+        url: `/api/integrations/${created.id}/refresh`
+      });
+      expect(refreshed.statusCode).toBe(422);
+      expect(refreshed.json().error).toBe("Paste an updated spec to refresh.");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("surfaces a connection's tools in the chat tool gateway, namespaced and owner-scoped, and never leaks the credential", async () => {
+    const fixture = await startFixtureServer();
+    const app = buildApp(ids.userA);
+    try {
+      const created = (await createFixtureConnection(app, fixture, "Gateway Widgets")).json();
+      expect(created.toolCount).toBe(1);
+
+      const resolveActiveModules = createIntegrationsActiveModulesResolver(async () => [], {
+        dataContext,
+        cipher: createIntegrationsCipher(process.env),
+        logger: { warn: () => {} }
+      });
+      const tokens = new SessionTokenRegistry();
+
+      const gateway = new AssistantToolGateway({
+        resolveActiveModules,
+        repository: new AiRepository(),
+        runner: dataContext,
+        tokens,
+        confirmations: new ConfirmationRegistry(),
+        notifier: { emit: () => {} },
+        confirmTimeoutMs: 30_000,
+        // Outbound tools always require confirmation (see packages/ai/src/gateway/policy.ts) —
+        // YOLO here is only to exercise a real end-to-end call without standing up the confirm
+        // flow, which brief Step 4 doesn't ask this test to cover.
+        yoloMode: async () => true
+      });
+      const toolName = "gateway-widgets.listWidgets";
+
+      const toolsForA = await gateway.listToolsForActor(ids.userA);
+      expect(toolsForA.some((t) => t.name === toolName)).toBe(true);
+
+      const toolsForB = await gateway.listToolsForActor(ids.userB);
+      expect(toolsForB.some((t) => t.name === toolName)).toBe(false);
+
+      const tokenA = tokens.mint({
+        actorUserId: ids.userA,
+        chatSessionId: "s-integrations-gateway",
+        allowedToolNames: null
+      });
+      const result = await gateway.callTool(tokenA, toolName, {});
+      expect(result.ok).toBe(true);
+      expect(JSON.stringify(result)).not.toContain(API_KEY);
     } finally {
       await app.close();
       await fixture.close();

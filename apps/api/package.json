@@ -15,6 +15,7 @@
     "@moss/chat": "workspace:*",
     "@moss/connectors": "workspace:*",
     "@moss/db": "workspace:*",
+    "@moss/integrations": "workspace:*",
     "@moss/jobs": "workspace:*",
     "@moss/module-registry": "workspace:*",
     "@moss/module-sdk": "workspace:*",

@@ -126,6 +126,9 @@ importers:
       '@moss/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@moss/integrations':
+        specifier: workspace:*
+        version: link:../../packages/integrations
       '@moss/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs

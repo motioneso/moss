@@ -9,3 +9,4 @@ export * from "./openapi-convert.js";
 export * from "./openapi-invoke.js";
 export * from "./repository.js";
 export * from "./routes.js";
+export * from "./tool-manifests.js";
