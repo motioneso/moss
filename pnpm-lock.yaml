@@ -664,6 +664,9 @@ importers:
 
   packages/integrations:
     dependencies:
+      '@moss/db':
+        specifier: workspace:*
+        version: link:../db
       '@moss/module-sdk':
         specifier: workspace:*
         version: link:../module-sdk

@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@moss/db": "workspace:*",
     "@moss/module-sdk": "workspace:*",
     "@moss/shared": "workspace:*"
   }
