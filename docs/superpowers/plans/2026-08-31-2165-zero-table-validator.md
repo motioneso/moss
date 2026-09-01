@@ -8,7 +8,7 @@ test flip, one new acceptance test. No broader change.
 - `packages/module-registry/src/external/validate.ts:757-758` — the rejection condition and
   message.
 - `tests/unit/external-module-database-declaration.test.ts:71-84` — the `"rejects empty,
-  oversized, duplicate, and unknown-key database blocks"` case, which includes `{ ownedTables: [] }`
+oversized, duplicate, and unknown-key database blocks"` case, which includes `{ ownedTables: [] }`
   at line 74.
 
 ## Changes
