@@ -1,25 +1,9 @@
 import { sql } from "kysely";
 
 import { assertDataContextDb, type DataContextDb } from "@moss/db";
-import type { CredentialPlacement, IntegrationKind, IntegrationToolDescriptor } from "@moss/shared";
+import type { CredentialPlacement, IntegrationKind } from "@moss/shared";
 
-/**
- * Task 5 (openapi-convert.ts) owns the canonical OpenApiInvocation/DiscoveredTool types per
- * the plan (docs/superpowers/plans/2026-08-31-integrations-foundation.md lines 481-490).
- * Defined here as a placeholder with the identical shape so this task can type the
- * discovered_tools column before that file exists; Task 5 should import these from here (or
- * this file should re-export Task 5's types) rather than declaring a second, drifting copy.
- */
-export interface OpenApiInvocation {
-  readonly method: string;
-  readonly path: string;
-  readonly params: readonly { name: string; in: "path" | "query" | "header" }[];
-  readonly hasBody: boolean;
-}
-
-export interface DiscoveredTool extends IntegrationToolDescriptor {
-  readonly invoke?: OpenApiInvocation;
-}
+import type { DiscoveredTool } from "./openapi-convert.js";
 
 export interface ConnectionRow {
   readonly id: string;
