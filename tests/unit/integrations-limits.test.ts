@@ -122,9 +122,9 @@ describe("capChars (#2175 Task 4)", () => {
 });
 
 describe("request budget (#2175 Task 4)", () => {
-  it("refuses the call once the per-request ceiling is reached", () => {
+  it("refuses the call once the per-session ceiling is reached", () => {
     const budget = createRequestBudget();
-    const scope = { actorUserId: "actor-1", requestId: "req-1" };
+    const scope = { actorUserId: "actor-1", chatSessionId: "sess-1" };
     for (let i = 0; i < INTEGRATION_CALL_CEILING; i++) {
       expect(budget.reserveCall(scope)).toBe(true);
     }
@@ -133,19 +133,43 @@ describe("request budget (#2175 Task 4)", () => {
 
   it("refuses further calls once the combined char budget is spent", () => {
     const budget = createRequestBudget();
-    const scope = { actorUserId: "actor-1", requestId: "req-1" };
+    const scope = { actorUserId: "actor-1", chatSessionId: "sess-1" };
     expect(budget.reserveCall(scope)).toBe(true);
     budget.recordChars(scope, INTEGRATION_REQUEST_CHAR_BUDGET);
     expect(budget.reserveCall(scope)).toBe(false);
   });
 
-  it("keeps separate requests independent", () => {
+  it("keeps separate sessions independent", () => {
     const budget = createRequestBudget();
-    const first = { actorUserId: "actor-1", requestId: "req-1" };
-    const second = { actorUserId: "actor-1", requestId: "req-2" };
+    const first = { actorUserId: "actor-1", chatSessionId: "sess-1" };
+    const second = { actorUserId: "actor-1", chatSessionId: "sess-2" };
     for (let i = 0; i < INTEGRATION_CALL_CEILING; i++) budget.reserveCall(first);
     expect(budget.reserveCall(first)).toBe(false);
     expect(budget.reserveCall(second)).toBe(true);
+  });
+
+  it("accumulates across separate ToolContext calls that share one chat session but each mint their own requestId, matching the real gateway", () => {
+    // #2175 QA round 1: every gateway entry point mints a fresh requestId per individual tool
+    // call (packages/ai/src/gateway/gateway.ts). A budget scoped to requestId can never
+    // accumulate. This test builds distinct ToolContext objects the way the gateway does —
+    // fresh requestId each time, shared chatSessionId — and proves the ceiling still trips
+    // across them.
+    const budget = createRequestBudget();
+    const contexts: ToolContext[] = Array.from({ length: INTEGRATION_CALL_CEILING + 1 }, (_, i) =>
+      ctxFor(`req-${i}`)
+    ).map((ctx) => ({ ...ctx, chatSessionId: "sess-shared" }));
+
+    for (const ctx of contexts.slice(0, INTEGRATION_CALL_CEILING)) {
+      const budgetScope = { actorUserId: ctx.actorUserId, chatSessionId: ctx.chatSessionId };
+      expect(budget.reserveCall(budgetScope)).toBe(true);
+    }
+    const overCeiling = contexts[INTEGRATION_CALL_CEILING]!;
+    expect(
+      budget.reserveCall({
+        actorUserId: overCeiling.actorUserId,
+        chatSessionId: overCeiling.chatSessionId
+      })
+    ).toBe(false);
   });
 });
 

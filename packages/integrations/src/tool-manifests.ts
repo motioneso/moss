@@ -135,7 +135,7 @@ function buildToolManifest(
       return { data: envelope as unknown as Record<string, unknown> };
     }
 
-    const budgetScope = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
+    const budgetScope = { actorUserId: ctx.actorUserId, chatSessionId: ctx.chatSessionId };
     if (!budget.reserveCall(budgetScope)) {
       const envelope: IntegrationOutcomeEnvelope = {
         status: "error",
