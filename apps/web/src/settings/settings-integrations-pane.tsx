@@ -163,7 +163,8 @@ function IntegrationDetailView(props: { readonly id: string; readonly onBack: ()
 
   const invalidateDetail = () =>
     queryClient.invalidateQueries({ queryKey: queryKeys.integrations.detail(id) });
-  const invalidateList = () => queryClient.invalidateQueries({ queryKey: queryKeys.integrations.list });
+  const invalidateList = () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.integrations.list });
 
   const refreshMutation = useMutation({
     mutationFn: () => refreshIntegration(id),
@@ -240,7 +241,9 @@ function IntegrationDetailView(props: { readonly id: string; readonly onBack: ()
   };
 
   const toggleGroup = (groupName: string, enabled: boolean) => {
-    curationMutation.mutate({ enabledGroups: withMember(detail.enabledGroups, groupName, enabled) });
+    curationMutation.mutate({
+      enabledGroups: withMember(detail.enabledGroups, groupName, enabled)
+    });
   };
 
   const toggleExplicitTool = (toolName: string, enabled: boolean) => {
@@ -447,9 +450,7 @@ function AddIntegrationView(props: {
 
   const needsPlacementName = kind === "openapi" && placement !== "bearer";
   const canSubmit =
-    name.trim().length > 0 &&
-    url.trim().length > 0 &&
-    (!showSpec || spec.trim().length > 0);
+    name.trim().length > 0 && url.trim().length > 0 && (!showSpec || spec.trim().length > 0);
 
   return (
     <>

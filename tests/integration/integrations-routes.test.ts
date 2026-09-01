@@ -132,7 +132,10 @@ describe("integrations REST routes", () => {
       expect(created.tools).toHaveLength(1);
       expect(createRes.body).not.toContain(API_KEY);
 
-      const getAsB = await otherApp.inject({ method: "GET", url: `/api/integrations/${created.id}` });
+      const getAsB = await otherApp.inject({
+        method: "GET",
+        url: `/api/integrations/${created.id}`
+      });
       expect(getAsB.statusCode).toBe(404);
 
       const getAsA = await app.inject({ method: "GET", url: `/api/integrations/${created.id}` });
@@ -217,7 +220,10 @@ describe("integrations REST routes", () => {
       expect(created.toolCount).toBe(1);
 
       fixture.setSpec(SPEC_V2);
-      const refreshed = await app.inject({ method: "POST", url: `/api/integrations/${created.id}/refresh` });
+      const refreshed = await app.inject({
+        method: "POST",
+        url: `/api/integrations/${created.id}/refresh`
+      });
       expect(refreshed.statusCode).toBe(200);
       expect(refreshed.json().toolCount).toBe(2);
     } finally {
@@ -230,7 +236,9 @@ describe("integrations REST routes", () => {
     const fixture = await startFixtureServer();
     const app = buildApp(ids.userA);
     try {
-      const created = (await createFixtureConnection(app, fixture, "Partial Update Service")).json();
+      const created = (
+        await createFixtureConnection(app, fixture, "Partial Update Service")
+      ).json();
 
       const patched = await app.inject({
         method: "PATCH",
@@ -253,7 +261,9 @@ describe("integrations REST routes", () => {
     const fixture = await startFixtureServer();
     const app = buildApp(ids.userA);
     try {
-      const created = (await createFixtureConnection(app, fixture, "Clear Credential Service")).json();
+      const created = (
+        await createFixtureConnection(app, fixture, "Clear Credential Service")
+      ).json();
       expect(created.hasCredential).toBe(true);
 
       const patched = await app.inject({

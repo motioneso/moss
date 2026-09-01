@@ -8,7 +8,11 @@ import { IntegrationUserError } from "./errors.js";
 import { DISCOVERY_TIMEOUT_MS, TOOL_CALL_TIMEOUT_MS } from "./limits.js";
 import type { DiscoveredTool } from "./openapi-convert.js";
 
-async function connect(rawUrl: string, secret: string | null, placement: CredentialPlacement | null) {
+async function connect(
+  rawUrl: string,
+  secret: string | null,
+  placement: CredentialPlacement | null
+) {
   const url = new URL(rawUrl);
   const headers = new Headers();
   applyCredential(placement, secret, url, headers);
@@ -54,11 +58,9 @@ export async function callMcpTool(
     throw new IntegrationUserError("Could not reach an MCP server at that URL.");
   });
   try {
-    const res = await client.callTool(
-      { name: toolName, arguments: input },
-      undefined,
-      { timeout: TOOL_CALL_TIMEOUT_MS }
-    );
+    const res = await client.callTool({ name: toolName, arguments: input }, undefined, {
+      timeout: TOOL_CALL_TIMEOUT_MS
+    });
     const text =
       (res.content as { type: string; text?: string }[] | undefined)
         ?.filter((c) => c.type === "text")

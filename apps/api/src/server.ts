@@ -24,7 +24,10 @@ import {
   GoogleApiClient,
   createConnectorSecretCipher
 } from "@moss/connectors";
-import { createIntegrationsActiveModulesResolver, createIntegrationsCipher } from "@moss/integrations";
+import {
+  createIntegrationsActiveModulesResolver,
+  createIntegrationsCipher
+} from "@moss/integrations";
 import {
   DataContextRunner,
   createDatabase,

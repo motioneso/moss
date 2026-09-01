@@ -17,7 +17,11 @@ export async function discoverTools(
 }
 
 export function toDetail(row: ConnectionRow, tools: readonly DiscoveredTool[]): IntegrationDetail {
-  const state = { enabledGroups: row.enabledGroups, enabledTools: row.enabledTools, mutedTools: row.mutedTools };
+  const state = {
+    enabledGroups: row.enabledGroups,
+    enabledTools: row.enabledTools,
+    mutedTools: row.mutedTools
+  };
   const enabled = effectiveEnabledTools(tools, state);
   const groupNames = [...new Set(tools.map((t) => t.group))];
   return {

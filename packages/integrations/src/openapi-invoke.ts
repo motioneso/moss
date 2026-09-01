@@ -2,7 +2,12 @@ import type { CredentialPlacement } from "@moss/shared";
 
 import { applyCredential } from "./credentials.js";
 import { IntegrationUserError } from "./errors.js";
-import { DISCOVERY_TIMEOUT_MS, RESPONSE_CHAR_CAP, retryOnce, TOOL_CALL_TIMEOUT_MS } from "./limits.js";
+import {
+  DISCOVERY_TIMEOUT_MS,
+  RESPONSE_CHAR_CAP,
+  retryOnce,
+  TOOL_CALL_TIMEOUT_MS
+} from "./limits.js";
 import type { OpenApiInvocation } from "./openapi-convert.js";
 
 export async function fetchOpenApiSpec(
@@ -49,7 +54,12 @@ export async function invokeOpenApiTool(
     body = JSON.stringify(input.body);
   }
   const doFetch = () =>
-    fetch(url, { method: invoke.method, headers, body, signal: AbortSignal.timeout(TOOL_CALL_TIMEOUT_MS) });
+    fetch(url, {
+      method: invoke.method,
+      headers,
+      body,
+      signal: AbortSignal.timeout(TOOL_CALL_TIMEOUT_MS)
+    });
   const method = invoke.method.toUpperCase();
   const isSafeToRetry = method === "GET" || method === "HEAD";
   const res = isSafeToRetry ? await retryOnce(doFetch) : await doFetch();

@@ -1,9 +1,7 @@
 import { JsonSecretCipher, resolveKeyring } from "@moss/db";
 import type { CredentialPlacement } from "@moss/shared";
 
-export function createIntegrationsCipher(
-  env: NodeJS.ProcessEnv = process.env
-): JsonSecretCipher {
+export function createIntegrationsCipher(env: NodeJS.ProcessEnv = process.env): JsonSecretCipher {
   return new JsonSecretCipher(
     resolveKeyring(
       "JARVIS_INTEGRATIONS_SECRET_KEY",

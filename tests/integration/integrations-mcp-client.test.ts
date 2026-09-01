@@ -34,7 +34,10 @@ const TOOLS = [
 ];
 
 function buildServer(): Server {
-  const server = new Server({ name: "fixture-mcp", version: "1.0.0" }, { capabilities: { tools: {} } });
+  const server = new Server(
+    { name: "fixture-mcp", version: "1.0.0" },
+    { capabilities: { tools: {} } }
+  );
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     if (req.params.name === "add") {
@@ -139,13 +142,10 @@ describe("discoverMcpTools / callMcpTool", () => {
 
   it("never leaks a query-placed credential into a callMcpTool connect failure", async () => {
     try {
-      await callMcpTool(
-        "http://127.0.0.1:1",
-        SECRET,
-        { kind: "query", name: "api_key" },
-        "add",
-        { a: 1, b: 2 }
-      );
+      await callMcpTool("http://127.0.0.1:1", SECRET, { kind: "query", name: "api_key" }, "add", {
+        a: 1,
+        b: 2
+      });
       expect.unreachable();
     } catch (err) {
       expect(String((err as Error).message ?? err)).not.toContain(SECRET);

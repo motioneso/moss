@@ -31,6 +31,7 @@
 ### Task 1: Package skeleton, shared contracts, curation logic
 
 **Files:**
+
 - Create: `packages/shared/src/integrations-api.ts`
 - Modify: `packages/shared/src/index.ts` (barrel export)
 - Create: `packages/integrations/package.json`, `packages/integrations/src/index.ts`, `packages/integrations/src/curation.ts`
@@ -38,6 +39,7 @@
 - Test: `tests/unit/integrations-curation.test.ts`
 
 **Interfaces:**
+
 - Produces: all DTO types below, `INTEGRATION_LIVE_TOOL_THRESHOLD = 30`, `effectiveEnabledTools(tools, state)`, `isGroupOptIn(toolCount)`. Every later task imports these from `@moss/shared` / `@moss/integrations`.
 
 - [ ] **Step 1: Write the shared contracts** in `packages/shared/src/integrations-api.ts` (types are the contract both API and web import — follow the `notes-api.ts` house pattern of readonly interfaces):
@@ -130,27 +132,44 @@ import { effectiveEnabledTools, isGroupOptIn } from "@moss/integrations";
 import type { IntegrationToolDescriptor } from "@moss/shared";
 
 const tool = (name: string, group = ""): IntegrationToolDescriptor => ({
-  name, description: name, group, inputSchema: null
+  name,
+  description: name,
+  group,
+  inputSchema: null
 });
 
 describe("integration tool curation", () => {
   it("small sets are live minus mutes", () => {
     const tools = [tool("a"), tool("b"), tool("c")];
-    const out = effectiveEnabledTools(tools, { enabledGroups: [], enabledTools: [], mutedTools: ["b"] });
+    const out = effectiveEnabledTools(tools, {
+      enabledGroups: [],
+      enabledTools: [],
+      mutedTools: ["b"]
+    });
     expect(out.map((t) => t.name)).toEqual(["a", "c"]);
   });
 
   it("over the threshold nothing is enabled until a group is flipped", () => {
     const tools = Array.from({ length: 31 }, (_, i) => tool(`t${i}`, i < 5 ? "Queue" : "Series"));
     expect(isGroupOptIn(tools.length)).toBe(true);
-    expect(effectiveEnabledTools(tools, { enabledGroups: [], enabledTools: [], mutedTools: [] })).toEqual([]);
-    const queueOn = effectiveEnabledTools(tools, { enabledGroups: ["Queue"], enabledTools: [], mutedTools: [] });
+    expect(
+      effectiveEnabledTools(tools, { enabledGroups: [], enabledTools: [], mutedTools: [] })
+    ).toEqual([]);
+    const queueOn = effectiveEnabledTools(tools, {
+      enabledGroups: ["Queue"],
+      enabledTools: [],
+      mutedTools: []
+    });
     expect(queueOn).toHaveLength(5);
   });
 
   it("per-tool override enables a tool inside a disabled group, mute wins over both", () => {
     const tools = Array.from({ length: 31 }, (_, i) => tool(`t${i}`, "Series"));
-    const out = effectiveEnabledTools(tools, { enabledGroups: [], enabledTools: ["t3", "t4"], mutedTools: ["t4"] });
+    const out = effectiveEnabledTools(tools, {
+      enabledGroups: [],
+      enabledTools: ["t3", "t4"],
+      mutedTools: ["t4"]
+    });
     expect(out.map((t) => t.name)).toEqual(["t3"]);
   });
 
@@ -199,6 +218,7 @@ export function effectiveEnabledTools(
 ### Task 2: Module manifest, SQL migration, built-in registration
 
 **Files:**
+
 - Create: `packages/integrations/sql/NNNN_integration_connections.sql` (number: run `ls packages/*/sql/*.sql infra/postgres/migrations/*.sql | grep -oE '[0-9]{4}' | sort -n | tail -1` and use max+1)
 - Create: `packages/integrations/src/manifest.ts`
 - Modify: `packages/module-registry/src/index.ts` (BUILT_IN_MODULES entry), `packages/module-registry/package.json` (add `@moss/integrations` dep)
@@ -206,6 +226,7 @@ export function effectiveEnabledTools(
 - Test: existing boot/registration integration tests (they pin the module id list)
 
 **Interfaces:**
+
 - Produces: module id `"integrations"`; table `app.integration_connections`; `integrationsModule: BuiltInModuleRegistration` (routes registered in Task 7).
 
 - [ ] **Step 1: Write the migration.** Copy the RLS/GRANT shape from `packages/goals/sql/0123_*.sql` verbatim (same roles, same FORCE pattern; confirm the FK target used there for the owner column and mirror it), with this table:
@@ -263,11 +284,13 @@ GRANT SELECT ON app.integration_connections TO jarvis_worker_runtime;
 ### Task 3: Credential cipher wiring and placement rendering
 
 **Files:**
+
 - Create: `packages/integrations/src/credentials.ts`
 - Modify: `apps/api/src/server.ts` (build cipher — see the connectors cipher construction for the exact call site), dev compose env file(s) and prod compose env file(s) that carry the connectors secret triple (add the integrations triple next to it)
 - Test: `tests/unit/integrations-credentials.test.ts`
 
 **Interfaces:**
+
 - Consumes: `JsonSecretCipher`, `resolveKeyring` from `@moss/db` (`packages/db/src/secret-cipher.ts:63`, `keyring.ts:22`).
 - Produces: `createIntegrationsCipher(env)`, `applyCredential(placement, secret, url, headers)`. Tasks 5-8 use `applyCredential`; Task 7 uses the cipher in routes.
 
@@ -282,7 +305,9 @@ describe("integration credentials", () => {
     const cipher = createIntegrationsCipher({});
     const envelope = cipher.encryptJson({ secret: "tok-123" });
     expect(JSON.stringify(envelope)).not.toContain("tok-123");
-    expect(cipher.decryptJson(cipher.parseEnvelope(JSON.stringify(envelope)))).toEqual({ secret: "tok-123" });
+    expect(cipher.decryptJson(cipher.parseEnvelope(JSON.stringify(envelope)))).toEqual({
+      secret: "tok-123"
+    });
   });
 
   it("renders bearer, named header, and query placements", () => {
@@ -316,7 +341,9 @@ describe("integration credentials", () => {
 import { JsonSecretCipher, resolveKeyring } from "@moss/db";
 import type { CredentialPlacement } from "@moss/shared";
 
-export function createIntegrationsCipher(env: Record<string, string | undefined>): JsonSecretCipher {
+export function createIntegrationsCipher(
+  env: Record<string, string | undefined>
+): JsonSecretCipher {
   return new JsonSecretCipher(
     resolveKeyring(
       "JARVIS_INTEGRATIONS_SECRET_KEY",
@@ -353,10 +380,12 @@ export function applyCredential(
 ### Task 4: Repository — CRUD with the credential kept out of reads
 
 **Files:**
+
 - Create: `packages/integrations/src/repository.ts`
 - Test: `tests/integration/integrations-repository.test.ts`
 
 **Interfaces:**
+
 - Consumes: `DataContextDb` brand, `resetFoundationDatabase()` / withDataContext harness — copy the setup from `tests/integration/connectors.test.ts:38-60`.
 - Produces (all take `scopedDb: DataContextDb` first):
   - `createConnection(scopedDb, input: { name; kind; url; credentialEnvelope: unknown | null; credentialPlacement: CredentialPlacement | null }): Promise<ConnectionRow>`
@@ -382,10 +411,12 @@ export function applyCredential(
 ### Task 5: OpenAPI spec → tools converter
 
 **Files:**
+
 - Create: `packages/integrations/src/openapi-convert.ts`, `packages/integrations/src/errors.ts`
 - Test: `tests/unit/integrations-openapi-convert.test.ts`
 
 **Interfaces:**
+
 - Produces:
   - `class IntegrationUserError extends Error` (plain-English message safe to show the user; routes map it to 422)
   - `interface OpenApiInvocation { readonly method: string; readonly path: string; readonly params: readonly { name: string; in: "path" | "query" | "header" }[]; readonly hasBody: boolean }`
@@ -423,7 +454,10 @@ const spec = {
       }
     },
     "/api/v3/queue": {
-      get: { summary: "Queue", parameters: [{ name: "page", in: "query", schema: { type: "integer" } }] }
+      get: {
+        summary: "Queue",
+        parameters: [{ name: "page", in: "query", schema: { type: "integer" } }]
+      }
     }
   }
 };
@@ -437,8 +471,10 @@ describe("convertOpenApiSpec", () => {
     expect(get.description).toBe("Get one movie");
     expect(get.inputSchema).toMatchObject({ type: "object", required: ["id"] });
     expect(get.invoke).toEqual({
-      method: "GET", path: "/api/v3/movie/{id}",
-      params: [{ name: "id", in: "path" }], hasBody: false
+      method: "GET",
+      path: "/api/v3/movie/{id}",
+      params: [{ name: "id", in: "path" }],
+      hasBody: false
     });
   });
 
@@ -454,7 +490,8 @@ describe("convertOpenApiSpec", () => {
 
   it("never emits a top-level combinator", () => {
     for (const t of convertOpenApiSpec(spec)) {
-      for (const k of ["anyOf", "oneOf", "allOf", "not"]) expect(k in (t.inputSchema ?? {})).toBe(false);
+      for (const k of ["anyOf", "oneOf", "allOf", "not"])
+        expect(k in (t.inputSchema ?? {})).toBe(false);
     }
   });
 
@@ -492,7 +529,12 @@ export interface DiscoveredTool extends IntegrationToolDescriptor {
 const METHODS = ["get", "post", "put", "patch", "delete"] as const;
 
 export function sanitizeToolName(raw: string): string {
-  return raw.replace(/[^a-zA-Z0-9_-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 64) || "op";
+  return (
+    raw
+      .replace(/[^a-zA-Z0-9_-]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 64) || "op"
+  );
 }
 
 function resolveRefs(node: unknown, doc: Record<string, unknown>, depth: number): unknown {
@@ -503,7 +545,9 @@ function resolveRefs(node: unknown, doc: Record<string, unknown>, depth: number)
   if (typeof ref === "string" && ref.startsWith("#/")) {
     let target: unknown = doc;
     for (const part of ref.slice(2).split("/")) {
-      target = (target as Record<string, unknown> | undefined)?.[part.replace(/~1/g, "/").replace(/~0/g, "~")];
+      target = (target as Record<string, unknown> | undefined)?.[
+        part.replace(/~1/g, "/").replace(/~0/g, "~")
+      ];
     }
     return resolveRefs(target ?? {}, doc, depth + 1);
   }
@@ -526,16 +570,17 @@ export function convertOpenApiSpec(spec: unknown): DiscoveredTool[] {
     for (const method of METHODS) {
       const op = item[method] as Record<string, unknown> | undefined;
       if (!op || typeof op !== "object") continue;
-      const rawName = typeof op.operationId === "string" && op.operationId
-        ? op.operationId
-        : `${method}_${path}`;
+      const rawName =
+        typeof op.operationId === "string" && op.operationId ? op.operationId : `${method}_${path}`;
       let name = sanitizeToolName(rawName);
       for (let i = 2; seen.has(name); i += 1) name = `${sanitizeToolName(rawName)}_${i}`;
       seen.add(name);
 
       const params = [...shared, ...(Array.isArray(op.parameters) ? op.parameters : [])]
         .map((p) => resolveRefs(p, doc, 0) as Record<string, unknown>)
-        .filter((p) => typeof p?.name === "string" && ["path", "query", "header"].includes(p.in as string));
+        .filter(
+          (p) => typeof p?.name === "string" && ["path", "query", "header"].includes(p.in as string)
+        );
 
       const properties: Record<string, unknown> = {};
       const required: string[] = [];
@@ -543,25 +588,33 @@ export function convertOpenApiSpec(spec: unknown): DiscoveredTool[] {
         properties[p.name as string] = resolveRefs(p.schema ?? { type: "string" }, doc, 0);
         if (p.required === true) required.push(p.name as string);
       }
-      const bodySchema = (op.requestBody as Record<string, any> | undefined)?.content?.["application/json"]?.schema;
+      const bodySchema = (op.requestBody as Record<string, any> | undefined)?.content?.[
+        "application/json"
+      ]?.schema;
       if (bodySchema) properties.body = resolveRefs(bodySchema, doc, 0);
 
       const tags = Array.isArray(op.tags) ? op.tags : [];
       tools.push({
         name,
-        description: String(op.summary ?? op.description ?? `${method.toUpperCase()} ${path}`).slice(0, 500),
+        description: String(
+          op.summary ?? op.description ?? `${method.toUpperCase()} ${path}`
+        ).slice(0, 500),
         group: typeof tags[0] === "string" && tags[0] ? tags[0] : "Other",
         inputSchema: { type: "object", properties, ...(required.length ? { required } : {}) },
         invoke: {
           method: method.toUpperCase(),
           path,
-          params: params.map((p) => ({ name: p.name as string, in: p.in as "path" | "query" | "header" })),
+          params: params.map((p) => ({
+            name: p.name as string,
+            in: p.in as "path" | "query" | "header"
+          })),
           hasBody: Boolean(bodySchema)
         }
       });
     }
   }
-  if (tools.length === 0) throw new IntegrationUserError("The spec has no operations Moss can turn into tools.");
+  if (tools.length === 0)
+    throw new IntegrationUserError("The spec has no operations Moss can turn into tools.");
   return tools;
 }
 ```
@@ -573,11 +626,13 @@ export function convertOpenApiSpec(spec: unknown): DiscoveredTool[] {
 ### Task 6: Remote invocation — OpenAPI HTTP renderer and MCP client
 
 **Files:**
+
 - Create: `packages/integrations/src/openapi-invoke.ts`, `packages/integrations/src/mcp-client.ts`, `packages/integrations/src/limits.ts`
 - Modify: `packages/integrations/package.json` (add `@modelcontextprotocol/sdk`)
 - Test: `tests/unit/integrations-openapi-invoke.test.ts`, `tests/integration/integrations-mcp-client.test.ts`
 
 **Interfaces:**
+
 - Consumes: `applyCredential` (Task 3), `OpenApiInvocation`/`DiscoveredTool` (Task 5).
 - Produces:
   - `limits.ts`: `DISCOVERY_TIMEOUT_MS = 15_000`, `TOOL_CALL_TIMEOUT_MS = 30_000`, `RESPONSE_CHAR_CAP = 64_000`
@@ -599,7 +654,9 @@ import { DISCOVERY_TIMEOUT_MS, RESPONSE_CHAR_CAP, TOOL_CALL_TIMEOUT_MS } from ".
 import type { OpenApiInvocation } from "./openapi-convert";
 
 export async function fetchOpenApiSpec(
-  specUrl: string, secret: string | null, placement: CredentialPlacement | null
+  specUrl: string,
+  secret: string | null,
+  placement: CredentialPlacement | null
 ): Promise<unknown> {
   const url = new URL(specUrl);
   const headers = new Headers({ accept: "application/json" });
@@ -640,14 +697,23 @@ export async function invokeOpenApiTool(
     body = JSON.stringify(input.body);
   }
   const res = await retryOnce(() =>
-    fetch(url, { method: invoke.method, headers, body, signal: AbortSignal.timeout(TOOL_CALL_TIMEOUT_MS) })
+    fetch(url, {
+      method: invoke.method,
+      headers,
+      body,
+      signal: AbortSignal.timeout(TOOL_CALL_TIMEOUT_MS)
+    })
   );
   const text = await res.text();
   const truncated = text.length > RESPONSE_CHAR_CAP;
   const capped = truncated ? text.slice(0, RESPONSE_CHAR_CAP) : text;
   let parsed: unknown = capped;
   if (!truncated) {
-    try { parsed = JSON.parse(capped); } catch { /* keep text */ }
+    try {
+      parsed = JSON.parse(capped);
+    } catch {
+      /* keep text */
+    }
   }
   return {
     ok: res.ok,
@@ -670,7 +736,11 @@ import { IntegrationUserError } from "./errors";
 import { DISCOVERY_TIMEOUT_MS, TOOL_CALL_TIMEOUT_MS } from "./limits";
 import type { DiscoveredTool } from "./openapi-convert";
 
-async function connect(rawUrl: string, secret: string | null, placement: CredentialPlacement | null) {
+async function connect(
+  rawUrl: string,
+  secret: string | null,
+  placement: CredentialPlacement | null
+) {
   const url = new URL(rawUrl);
   const headers = new Headers();
   applyCredential(placement, secret, url, headers);
@@ -685,7 +755,9 @@ async function connect(rawUrl: string, secret: string | null, placement: Credent
 }
 
 export async function discoverMcpTools(
-  url: string, secret: string | null, placement: CredentialPlacement | null
+  url: string,
+  secret: string | null,
+  placement: CredentialPlacement | null
 ): Promise<DiscoveredTool[]> {
   const client = await connect(url, secret, placement).catch(() => {
     throw new IntegrationUserError("Could not reach an MCP server at that URL.");
@@ -704,14 +776,22 @@ export async function discoverMcpTools(
 }
 
 export async function callMcpTool(
-  url: string, secret: string | null, placement: CredentialPlacement | null,
-  toolName: string, input: Record<string, unknown>
+  url: string,
+  secret: string | null,
+  placement: CredentialPlacement | null,
+  toolName: string,
+  input: Record<string, unknown>
 ): Promise<{ ok: boolean; data: Record<string, unknown> }> {
   const client = await connect(url, secret, placement);
   try {
-    const res = await client.callTool({ name: toolName, arguments: input }, undefined, { timeout: TOOL_CALL_TIMEOUT_MS });
-    const text = (res.content as { type: string; text?: string }[] | undefined)
-      ?.filter((c) => c.type === "text").map((c) => c.text ?? "").join("\n") ?? "";
+    const res = await client.callTool({ name: toolName, arguments: input }, undefined, {
+      timeout: TOOL_CALL_TIMEOUT_MS
+    });
+    const text =
+      (res.content as { type: string; text?: string }[] | undefined)
+        ?.filter((c) => c.type === "text")
+        .map((c) => c.text ?? "")
+        .join("\n") ?? "";
     return { ok: res.isError !== true, data: { result: text } };
   } finally {
     await client.close().catch(() => {});
@@ -740,11 +820,13 @@ export async function retryOnce<T>(fn: () => Promise<T>): Promise<T> {
 ### Task 7: Discovery service, REST routes, manifest route coverage
 
 **Files:**
+
 - Create: `packages/integrations/src/discovery.ts`, `packages/integrations/src/routes.ts`
 - Modify: `packages/integrations/src/manifest.ts` (fill `routes[]`, wire `registerRoutes`), `packages/integrations/src/index.ts` (exports)
 - Test: `tests/integration/integrations-routes.test.ts`
 
 **Interfaces:**
+
 - Consumes: repository (Task 4), converter/clients (Tasks 5-6), cipher (Task 3), route deps pattern from `packages/goals/src/routes.ts:112-124` (`deps.resolveAccessContext`, `deps.dataContext.withDataContext`), error mapping pattern from `packages/connectors/src/routes.ts:295-298` (`handleRouteError`).
 - Produces REST API (all under `/api/integrations`, all declared in manifest `routes[]`):
   - `GET /api/integrations` → `ListIntegrationsResponse`
@@ -770,21 +852,34 @@ import { fetchOpenApiSpec } from "./openapi-invoke";
 import type { ConnectionRow } from "./repository";
 
 export async function discoverTools(
-  kind: IntegrationKind, url: string, secret: string | null, placement: CredentialPlacement | null
+  kind: IntegrationKind,
+  url: string,
+  secret: string | null,
+  placement: CredentialPlacement | null
 ): Promise<DiscoveredTool[]> {
   if (kind === "mcp") return discoverMcpTools(url, secret, placement);
   return convertOpenApiSpec(await fetchOpenApiSpec(url, secret, placement));
 }
 
 export function toDetail(row: ConnectionRow, tools: readonly DiscoveredTool[]): IntegrationDetail {
-  const state = { enabledGroups: row.enabledGroups, enabledTools: row.enabledTools, mutedTools: row.mutedTools };
+  const state = {
+    enabledGroups: row.enabledGroups,
+    enabledTools: row.enabledTools,
+    mutedTools: row.mutedTools
+  };
   const enabled = effectiveEnabledTools(tools, state);
   const groupNames = [...new Set(tools.map((t) => t.group))];
   return {
-    id: row.id, name: row.name, kind: row.kind, url: row.url, enabled: row.enabled,
+    id: row.id,
+    name: row.name,
+    kind: row.kind,
+    url: row.url,
+    enabled: row.enabled,
     hasCredential: row.hasCredential,
-    toolCount: tools.length, enabledToolCount: enabled.length,
-    lastDiscoveryAt: row.lastDiscoveryAt, lastError: row.lastError,
+    toolCount: tools.length,
+    enabledToolCount: enabled.length,
+    lastDiscoveryAt: row.lastDiscoveryAt,
+    lastError: row.lastError,
     credentialPlacement: row.credentialPlacement,
     tools: tools.map(({ invoke: _invoke, ...t }) => t),
     groups: groupNames.map((name) => ({
@@ -792,7 +887,9 @@ export function toDetail(row: ConnectionRow, tools: readonly DiscoveredTool[]): 
       toolCount: tools.filter((t) => t.group === name).length,
       enabled: row.enabledGroups.includes(name)
     })),
-    enabledGroups: row.enabledGroups, enabledTools: row.enabledTools, mutedTools: row.mutedTools,
+    enabledGroups: row.enabledGroups,
+    enabledTools: row.enabledTools,
+    mutedTools: row.mutedTools,
     groupOptIn: isGroupOptIn(tools.length)
   };
 }
@@ -818,11 +915,13 @@ export function resolveOpenApiBase(spec: unknown, specUrl: string): string {
 ### Task 8: Chat tool proxy — per-user synthetic modules in the gateway
 
 **Files:**
+
 - Create: `packages/integrations/src/tool-manifests.ts`
 - Modify: `apps/api/src/server.ts` (wrap the resolver — currently built at `apps/api/src/server.ts:427-441`)
 - Test: `tests/unit/integrations-tool-manifests.test.ts`, plus extend `tests/integration/integrations-routes.test.ts` with a gateway listing assertion
 
 **Interfaces:**
+
 - Consumes: `ToolExecute`/`ToolContext`/`ToolResult` (`packages/module-sdk/src/index.ts:90-140`), `ModuleAssistantToolManifest` (`:565`), the resolver type used by `createActiveModulesResolver`, repository + curation + invokers.
 - Produces: `createIntegrationsActiveModulesResolver(base, deps)` where `deps = { dataContext, cipher, logger }`. Wrapped resolver output feeds `executableTools` → `tools/list` automatically (CLI already has the `mcp__jarvis__*` wildcard grant — no launch-flag change).
 
@@ -841,7 +940,12 @@ import { listConnections, loadCredentialEnvelope, type ConnectionRow } from "./r
 const ROOT_COMBINATORS = ["anyOf", "oneOf", "allOf", "not"] as const;
 
 export function connectionSlug(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "connection";
+  return (
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "connection"
+  );
 }
 
 function hasRootCombinator(schema: Record<string, unknown> | null): boolean {
@@ -862,11 +966,18 @@ export function createIntegrationsActiveModulesResolver(base, deps) {
     const synthetic = [];
     for (const conn of connections.filter((c) => c.enabled && c.discoveredTools.length > 0)) {
       const slug = connectionSlug(conn.name);
-      const state = { enabledGroups: conn.enabledGroups, enabledTools: conn.enabledTools, mutedTools: conn.mutedTools };
+      const state = {
+        enabledGroups: conn.enabledGroups,
+        enabledTools: conn.enabledTools,
+        mutedTools: conn.mutedTools
+      };
       const tools = [];
       for (const tool of effectiveEnabledTools(conn.discoveredTools, state)) {
         if (hasRootCombinator(tool.inputSchema)) {
-          deps.logger.warn({ connection: conn.name, tool: tool.name }, "integration tool skipped: top-level schema combinator");
+          deps.logger.warn(
+            { connection: conn.name, tool: tool.name },
+            "integration tool skipped: top-level schema combinator"
+          );
           continue; // #1363: the CLI would silently drop it anyway; skip loudly instead
         }
         tools.push(buildToolManifest(conn, slug, tool as DiscoveredTool, deps));
@@ -884,26 +995,40 @@ function buildToolManifest(conn: ConnectionRow, slug: string, tool: DiscoveredTo
     permissionId: `integrations.${conn.id}`,
     risk: "outbound" as const,
     executionPolicy: "auto" as const, // Ben's ruling: connecting grants normal use
-    isExternal: true,   // remote input validation + error hygiene in the gateway
+    isExternal: true, // remote input validation + error hygiene in the gateway
     externalContent: true, // remote results get the gateway's trust wrapper
     inputSchema: tool.inputSchema ?? { type: "object", properties: {} },
-    execute: (async (scopedDb, input, _ctx) => {
+    execute: async (scopedDb, input, _ctx) => {
       const envelope = await loadCredentialEnvelope(scopedDb as never, conn.id);
-      const secret = envelope ? (deps.cipher.decryptJson(envelope) as { secret: string }).secret : null;
+      const secret = envelope
+        ? (deps.cipher.decryptJson(envelope) as { secret: string }).secret
+        : null;
       const outcome = tool.invoke
-        ? await invokeOpenApiTool(conn.url, tool.invoke, input as Record<string, unknown>, secret, conn.credentialPlacement)
-        : await callMcpTool(conn.url, secret, conn.credentialPlacement, tool.name, input as Record<string, unknown>);
+        ? await invokeOpenApiTool(
+            conn.url,
+            tool.invoke,
+            input as Record<string, unknown>,
+            secret,
+            conn.credentialPlacement
+          )
+        : await callMcpTool(
+            conn.url,
+            secret,
+            conn.credentialPlacement,
+            tool.name,
+            input as Record<string, unknown>
+          );
       return { data: outcome.ok ? outcome.data : { error: true, ...outcome.data } };
-    })
+    }
   };
 }
 ```
 
-  For the OpenAPI branch, the invocation base is `conn.baseUrl ?? conn.url` (Task 7's base-URL ruling — `base_url` is always set for openapi connections at discovery time).
+For the OpenAPI branch, the invocation base is `conn.baseUrl ?? conn.url` (Task 7's base-URL ruling — `base_url` is always set for openapi connections at discovery time).
 
-  `buildSyntheticModule(conn, slug, tools)` returns a `MossModuleManifest` carrying `id: \`integration-${slug}\``, `name: conn.name`, `assistantTools: tools`, `supportsUserDisable: false`, and no routes/sql/queues/workers — fill the remaining REQUIRED fields of `MossModuleManifest` (`packages/module-sdk/src/index.ts:663` area) with minimum honest values; the gateway only reads `id`, `name`, and `assistantTools` (`gateway.ts:829-870`), and synthetic modules never pass through boot-time built-in assertions because they exist only in resolver output.
+`buildSyntheticModule(conn, slug, tools)` returns a `MossModuleManifest` carrying `id: \`integration-${slug}\``, `name: conn.name`, `assistantTools: tools`, `supportsUserDisable: false`, and no routes/sql/queues/workers — fill the remaining REQUIRED fields of `MossModuleManifest` (`packages/module-sdk/src/index.ts:663`area) with minimum honest values; the gateway only reads`id`, `name`, and `assistantTools` (`gateway.ts:829-870`), and synthetic modules never pass through boot-time built-in assertions because they exist only in resolver output.
 
-  Notes to preserve: the `execute` closure must never put `secret` in a thrown error or log line; a timeout/network throw is fine to let propagate — the gateway treats `isExternal` tools' thrown errors as opaque (`gateway.ts:644-661`).
+Notes to preserve: the `execute` closure must never put `secret` in a thrown error or log line; a timeout/network throw is fine to let propagate — the gateway treats `isExternal` tools' thrown errors as opaque (`gateway.ts:644-661`).
 
 - [ ] **Step 3: Wire it in `apps/api/src/server.ts`.** Wrap the OUTERMOST existing resolver (after the external-modules layering that ends at `:441`): `const resolveActiveModulesWithIntegrations = createIntegrationsActiveModulesResolver(resolveActiveModules, { dataContext, cipher: integrationsCipher, logger: server.log });` and pass the wrapped one into the chat wiring. Build `integrationsCipher = createIntegrationsCipher(process.env)` next to the connectors cipher.
 
@@ -916,12 +1041,14 @@ function buildToolManifest(conn: ConnectionRow, slug: string, tool: DiscoveredTo
 ### Task 9: Web plumbing — API client, query keys, section registration
 
 **Files:**
+
 - Modify: `apps/web/src/api/client.ts`, `apps/web/src/api/query-keys.ts`
 - Modify: `packages/shared/src/app-map-core.ts` (`CORE_APP_SETTINGS` — required or the settings page THROWS at render, `settings-page.tsx:56`)
 - Modify: `apps/web/src/settings/settings-page.tsx` (section id + group entry + lazy pane)
 - Create: `apps/web/src/settings/settings-integrations-pane.tsx` (stub this task; real UI Tasks 10-11)
 
 **Interfaces:**
+
 - Consumes: `requestJson` (`apps/web/src/api/client.ts:1407`), DTOs from `@moss/shared` (Task 1).
 - Produces: `listIntegrations() / createIntegration(body) / getIntegration(id) / updateIntegration(id, body) / refreshIntegration(id) / deleteIntegration(id)`; `queryKeys.integrations.list` and `queryKeys.integrations.detail(id)`; Settings section id `"integrations"`.
 
@@ -931,17 +1058,27 @@ function buildToolManifest(conn: ConnectionRow, slug: string, tool: DiscoveredTo
 export async function listIntegrations(): Promise<ListIntegrationsResponse> {
   return requestJson<ListIntegrationsResponse>("/api/integrations");
 }
-export async function createIntegration(body: CreateIntegrationRequest): Promise<IntegrationDetail> {
+export async function createIntegration(
+  body: CreateIntegrationRequest
+): Promise<IntegrationDetail> {
   return requestJson<IntegrationDetail>("/api/integrations", { method: "POST", body });
 }
 export async function getIntegration(id: string): Promise<IntegrationDetail> {
   return requestJson<IntegrationDetail>(`/api/integrations/${encodeURIComponent(id)}`);
 }
-export async function updateIntegration(id: string, body: UpdateIntegrationRequest): Promise<IntegrationDetail> {
-  return requestJson<IntegrationDetail>(`/api/integrations/${encodeURIComponent(id)}`, { method: "PATCH", body });
+export async function updateIntegration(
+  id: string,
+  body: UpdateIntegrationRequest
+): Promise<IntegrationDetail> {
+  return requestJson<IntegrationDetail>(`/api/integrations/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body
+  });
 }
 export async function refreshIntegration(id: string): Promise<IntegrationDetail> {
-  return requestJson<IntegrationDetail>(`/api/integrations/${encodeURIComponent(id)}/refresh`, { method: "POST" });
+  return requestJson<IntegrationDetail>(`/api/integrations/${encodeURIComponent(id)}/refresh`, {
+    method: "POST"
+  });
 }
 export async function deleteIntegration(id: string): Promise<void> {
   return requestJson<void>(`/api/integrations/${encodeURIComponent(id)}`, { method: "DELETE" });
@@ -1002,15 +1139,18 @@ export function SettingsIntegrationsPane() {
 ### Task 10: Settings pane — list and add
 
 **Files:**
+
 - Modify: `apps/web/src/settings/settings-integrations-pane.tsx`
 - Modify: `apps/web/src/styles/settings-panes-3.css` (new classes under a `/* ---- Integrations (#2162) ---- */` banner — do NOT create a new CSS file; a new file needs `WEB_DEFINITION_FILES` + import wiring)
 - Test: extend `tests/unit/unstyled-surfaces-css.test.ts` (pin the new non-jds classes; it's the only guard that covers them)
 
 **Interfaces:**
+
 - Consumes: Task 9 client functions + query keys; primitives `{ Badge, Field, Group, Note, PaneHead, Row, Switch }` and `Button`, `Select`, `Segmented` from `./settings-ui` / `@moss/ui`; `useFeedback` toast/confirm; `readError` from `./settings-types`.
 - Produces: view routing on search param `integration` (`null` = list, `"new"` = add, else detail — Task 11 consumes `openIntegration(id)` / `closeToList()`).
 
 **Copy (verbatim — Ben's tight-copy ruling; do not add hints, examples, or extra sentences):**
+
 - Pane head title: `Integrations`. No desc.
 - List: group title `Connections`, action button `Add connection`. Empty state one line: `No connections yet.`
 - Add form: segmented kind choice `MCP server` / `API`; fields `Name`, `URL`, `Credential`, and for API kind a placement `Select` labeled `Send as` with options `Bearer token` / `Header` / `Query parameter` plus a `Header name` / `Parameter name` field when applicable. API kind also gets a plain link `Paste the spec` that reveals a `Spec` textarea (sent as `spec`; the URL field then holds the service address). Submit `Connect`, cancel `Cancel`.
@@ -1024,7 +1164,11 @@ export function SettingsIntegrationsPane() {
   const view = searchParams.get("integration"); // null | "new" | id
   const queryClient = useQueryClient();
   const { toast, confirm } = useFeedback();
-  const listQuery = useQuery({ queryKey: queryKeys.integrations.list, queryFn: listIntegrations, retry: false });
+  const listQuery = useQuery({
+    queryKey: queryKeys.integrations.list,
+    queryFn: listIntegrations,
+    retry: false
+  });
 
   const openIntegration = (id: string) => {
     const next = new URLSearchParams(searchParams);
@@ -1062,10 +1206,12 @@ Add view: local `useState` for kind/name/url/credential/placement; `createIntegr
 ### Task 11: Settings pane — connection detail
 
 **Files:**
+
 - Modify: `apps/web/src/settings/settings-integrations-pane.tsx` (add `IntegrationDetailView`)
 - Modify: `apps/web/src/styles/settings-panes-3.css` (same banner block)
 
 **Interfaces:**
+
 - Consumes: `getIntegration/updateIntegration/refreshIntegration/deleteIntegration`, `queryKeys.integrations.detail(id)`, Task 10's `onBack`.
 
 **Copy (verbatim):** back link `Back to integrations`; actions `Refresh` and `Remove`; remove confirm title `Remove connection?`, body `Its tools disappear from chat.`, confirm label `Remove`; group-opt-in note (shown only when `groupOptIn` and no groups enabled): `Groups start off. Turn on the ones Moss should use.`
@@ -1086,6 +1232,7 @@ Add view: local `useState` for kind/name/url/credential/placement; `createIntegr
 ### Task 12: Full gate, PR, live-path proof, merge
 
 **Files:**
+
 - Modify: PR description (Release note section), `docs/coordination/*` only if a coordinator asks
 
 - [ ] **Step 1: Full gate** via the `verify-gate` skill (`pnpm verify:foundation` semantics — never raw). Known-acceptable local red: `module-sdk-worker` unit tests (green in CI; never bisect over it).

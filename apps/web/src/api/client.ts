@@ -1396,7 +1396,9 @@ export async function listIntegrations(): Promise<ListIntegrationsResponse> {
   return requestJson<ListIntegrationsResponse>("/api/integrations");
 }
 
-export async function createIntegration(body: CreateIntegrationRequest): Promise<IntegrationDetail> {
+export async function createIntegration(
+  body: CreateIntegrationRequest
+): Promise<IntegrationDetail> {
   return requestJson<IntegrationDetail>("/api/integrations", { method: "POST", body });
 }
 

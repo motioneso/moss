@@ -123,7 +123,12 @@ describe("invokeOpenApiTool", () => {
     });
     close = started.close;
 
-    const invoke: OpenApiInvocation = { method: "GET", path: "/secret", params: [], hasBody: false };
+    const invoke: OpenApiInvocation = {
+      method: "GET",
+      path: "/secret",
+      params: [],
+      hasBody: false
+    };
     const result = await invokeOpenApiTool(started.baseUrl, invoke, {}, null, null);
 
     expect(result.ok).toBe(false);
@@ -165,8 +170,15 @@ describe("invokeOpenApiTool", () => {
     const { port } = server.address() as AddressInfo;
     close = () => new Promise<void>((r) => server.close(() => r()));
 
-    const invoke: OpenApiInvocation = { method: "POST", path: "/create", params: [], hasBody: false };
-    await expect(invokeOpenApiTool(`http://127.0.0.1:${port}`, invoke, {}, null, null)).rejects.toThrow();
+    const invoke: OpenApiInvocation = {
+      method: "POST",
+      path: "/create",
+      params: [],
+      hasBody: false
+    };
+    await expect(
+      invokeOpenApiTool(`http://127.0.0.1:${port}`, invoke, {}, null, null)
+    ).rejects.toThrow();
     expect(attempts).toBe(1);
   });
 
@@ -178,8 +190,15 @@ describe("invokeOpenApiTool", () => {
     const { port } = server.address() as AddressInfo;
     close = () => new Promise<void>((r) => server.close(() => r()));
 
-    const invoke: OpenApiInvocation = { method: "GET", path: "/always-drops", params: [], hasBody: false };
-    await expect(invokeOpenApiTool(`http://127.0.0.1:${port}`, invoke, {}, null, null)).rejects.toThrow();
+    const invoke: OpenApiInvocation = {
+      method: "GET",
+      path: "/always-drops",
+      params: [],
+      hasBody: false
+    };
+    await expect(
+      invokeOpenApiTool(`http://127.0.0.1:${port}`, invoke, {}, null, null)
+    ).rejects.toThrow();
   });
 
   it("never leaks the credential value into a thrown error message", async () => {
@@ -190,7 +209,12 @@ describe("invokeOpenApiTool", () => {
     const { port } = server.address() as AddressInfo;
     close = () => new Promise<void>((r) => server.close(() => r()));
 
-    const invoke: OpenApiInvocation = { method: "GET", path: "/always-drops", params: [], hasBody: false };
+    const invoke: OpenApiInvocation = {
+      method: "GET",
+      path: "/always-drops",
+      params: [],
+      hasBody: false
+    };
     try {
       await invokeOpenApiTool(`http://127.0.0.1:${port}`, invoke, {}, SECRET, { kind: "bearer" });
       expect.unreachable();

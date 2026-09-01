@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 
 import type { DataContextRunner } from "@moss/db";
-import { createIntegrationsCipher, createIntegrationsActiveModulesResolver } from "@moss/integrations";
+import {
+  createIntegrationsCipher,
+  createIntegrationsActiveModulesResolver
+} from "@moss/integrations";
 import type { ConnectionRow } from "@moss/integrations";
 import type { DiscoveredTool } from "@moss/integrations";
 
-function tool(name: string, group: string, inputSchema: Record<string, unknown> | null = {}): DiscoveredTool {
+function tool(
+  name: string,
+  group: string,
+  inputSchema: Record<string, unknown> | null = {}
+): DiscoveredTool {
   return { name, description: name, group, inputSchema };
 }
 

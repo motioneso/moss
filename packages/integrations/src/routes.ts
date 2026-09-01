@@ -18,7 +18,11 @@ import { IntegrationUserError } from "./errors.js";
 import { discoverMcpTools } from "./mcp-client.js";
 import { convertOpenApiSpec, type DiscoveredTool } from "./openapi-convert.js";
 import { fetchOpenApiSpec } from "./openapi-invoke.js";
-import { IntegrationsRepository, type ConnectionRow, type UpdateConnectionInput } from "./repository.js";
+import {
+  IntegrationsRepository,
+  type ConnectionRow,
+  type UpdateConnectionInput
+} from "./repository.js";
 
 export interface IntegrationsRouteDependencies {
   readonly resolveAccessContext: (request: FastifyRequest) => Promise<AccessContext>;
@@ -70,7 +74,11 @@ export function registerIntegrationsRoutes(
           baseUrl = body.url;
           specPasted = true;
         } else {
-          const spec = await fetchOpenApiSpec(body.url, body.credential ?? null, credentialPlacement);
+          const spec = await fetchOpenApiSpec(
+            body.url,
+            body.credential ?? null,
+            credentialPlacement
+          );
           tools = convertOpenApiSpec(spec);
           baseUrl = resolveOpenApiBase(spec, body.url);
         }
@@ -81,20 +89,23 @@ export function registerIntegrationsRoutes(
       const credentialEnvelope =
         body.credential !== undefined ? cipher.encryptJson({ secret: body.credential }) : null;
 
-      const detail = await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
-        const created = await repository.createConnection(scopedDb, {
-          name: body.name,
-          kind: body.kind,
-          url: body.url,
-          baseUrl,
-          specPasted,
-          credentialEnvelope,
-          credentialPlacement
-        });
-        await repository.saveDiscovery(scopedDb, created.id, tools, null);
-        const refreshed = await repository.getConnection(scopedDb, created.id);
-        return toDetail(refreshed ?? created, tools);
-      });
+      const detail = await dependencies.dataContext.withDataContext(
+        accessContext,
+        async (scopedDb) => {
+          const created = await repository.createConnection(scopedDb, {
+            name: body.name,
+            kind: body.kind,
+            url: body.url,
+            baseUrl,
+            specPasted,
+            credentialEnvelope,
+            credentialPlacement
+          });
+          await repository.saveDiscovery(scopedDb, created.id, tools, null);
+          const refreshed = await repository.getConnection(scopedDb, created.id);
+          return toDetail(refreshed ?? created, tools);
+        }
+      );
 
       return reply.code(201).send(detail);
     } catch (error) {
@@ -136,26 +147,29 @@ export function registerIntegrationsRoutes(
       const body = (request.body ?? {}) as { spec?: unknown };
       const pastedSpec = body.spec === undefined ? undefined : requiredString(body.spec, "spec");
 
-      const detail = await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
-        const row = await repository.getConnection(scopedDb, request.params.id);
-        if (!row) throw new HttpError(404, "Integration not found");
+      const detail = await dependencies.dataContext.withDataContext(
+        accessContext,
+        async (scopedDb) => {
+          const row = await repository.getConnection(scopedDb, request.params.id);
+          if (!row) throw new HttpError(404, "Integration not found");
 
-        if (row.specPasted) {
-          if (pastedSpec === undefined) {
-            throw new IntegrationUserError("Paste an updated spec to refresh.");
+          if (row.specPasted) {
+            if (pastedSpec === undefined) {
+              throw new IntegrationUserError("Paste an updated spec to refresh.");
+            }
+            const parsed = parseJson(pastedSpec);
+            return refreshWith(scopedDb, row, () => Promise.resolve(convertOpenApiSpec(parsed)));
           }
-          const parsed = parseJson(pastedSpec);
-          return refreshWith(scopedDb, row, () => Promise.resolve(convertOpenApiSpec(parsed)));
-        }
 
-        const envelope = await repository.loadCredentialEnvelope(scopedDb, row.id);
-        const secret = envelope
-          ? (cipher.decryptJson(cipher.parseEnvelope(envelope)).secret as string)
-          : null;
-        return refreshWith(scopedDb, row, () =>
-          discoverTools(row.kind, row.url, secret, row.credentialPlacement)
-        );
-      });
+          const envelope = await repository.loadCredentialEnvelope(scopedDb, row.id);
+          const secret = envelope
+            ? (cipher.decryptJson(cipher.parseEnvelope(envelope)).secret as string)
+            : null;
+          return refreshWith(scopedDb, row, () =>
+            discoverTools(row.kind, row.url, secret, row.credentialPlacement)
+          );
+        }
+      );
 
       return detail;
     } catch (error) {
@@ -234,13 +248,19 @@ function parseCreateBody(body: unknown): CreateIntegrationRequest {
   const kind = requiredKind(value.kind);
   const url = parseHttpUrl(value.url, "url");
   const spec = value.spec === undefined ? undefined : requiredString(value.spec, "spec");
-  const credential = value.credential === undefined ? undefined : requiredString(value.credential, "credential");
+  const credential =
+    value.credential === undefined ? undefined : requiredString(value.credential, "credential");
   const credentialPlacement =
-    value.credentialPlacement === undefined ? undefined : (parsePlacement(value.credentialPlacement) ?? undefined);
+    value.credentialPlacement === undefined
+      ? undefined
+      : (parsePlacement(value.credentialPlacement) ?? undefined);
   return { name, kind, url, spec, credential, credentialPlacement };
 }
 
-function buildUpdatePatch(value: Record<string, unknown>, cipher: JsonSecretCipher): UpdateConnectionInput {
+function buildUpdatePatch(
+  value: Record<string, unknown>,
+  cipher: JsonSecretCipher
+): UpdateConnectionInput {
   let patch: UpdateConnectionInput = {};
   if ("name" in value) patch = { ...patch, name: requiredString(value.name, "name") };
   if ("url" in value) patch = { ...patch, url: parseHttpUrl(value.url, "url") };
@@ -250,7 +270,9 @@ function buildUpdatePatch(value: Record<string, unknown>, cipher: JsonSecretCiph
   }
   if ("credential" in value) {
     const credentialEnvelope =
-      value.credential === null ? null : cipher.encryptJson({ secret: requiredString(value.credential, "credential") });
+      value.credential === null
+        ? null
+        : cipher.encryptJson({ secret: requiredString(value.credential, "credential") });
     patch = { ...patch, credentialEnvelope };
   }
   if ("credentialPlacement" in value) {
@@ -302,7 +324,10 @@ function parseHttpUrl(value: unknown, fieldName: string): string {
 
 function requireObject(value: unknown, label = "body"): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new HttpError(400, label === "body" ? "Expected JSON object body" : `${label} must be a JSON object`);
+    throw new HttpError(
+      400,
+      label === "body" ? "Expected JSON object body" : `${label} must be a JSON object`
+    );
   }
   return value as Record<string, unknown>;
 }
@@ -322,7 +347,8 @@ function requiredStringArray(value: unknown, fieldName: string): string[] {
 function handleRouteError(error: unknown, reply: FastifyReply) {
   return handleModuleRouteError(error, reply, {
     mappers: [
-      (e, r) => (e instanceof IntegrationUserError ? r.code(422).send({ error: e.message }) : undefined)
+      (e, r) =>
+        e instanceof IntegrationUserError ? r.code(422).send({ error: e.message }) : undefined
     ],
     invalidRequestMessage: "Integration request is invalid"
   });
