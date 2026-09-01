@@ -183,7 +183,10 @@ export class ChatSessionManager {
     // client has completed its first tools/list, closing the race where the terminal composer
     // reads "ready" before the CLI's own tool-discovery round trip against our server has landed.
     if (mcpConfig?.token) {
-      await this.deps.waitForToolsListReady?.(mcpConfig.token);
+      const toolsListReady = await this.deps.waitForToolsListReady?.(mcpConfig.token);
+      if (toolsListReady === false) {
+        throw new CliChatUnavailableError("tools list was not ready in time");
+      }
     }
 
     const session: UserSession = {

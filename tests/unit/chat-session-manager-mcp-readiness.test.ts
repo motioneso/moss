@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ChatSessionManager } from "../../packages/chat/src/live/chat-session-manager.js";
+import { CliChatUnavailableError } from "../../packages/chat/src/live/errors.js";
 import { FakeEngine, makeMinimalDeps } from "./chat-session-manager.test.js";
 
 // #2159 — regression for the tools/list readiness race: nothing previously tied "the session
@@ -81,5 +82,32 @@ describe("ChatSessionManager tools/list readiness gate (#2159)", () => {
     await manager.ensureSession("u1", "Ben");
 
     expect(waitForToolsListReady).not.toHaveBeenCalled();
+  });
+
+  it("rejects instead of letting the first message through when waitForToolsListReady times out (resolves false)", async () => {
+    const engine = new FakeEngine(0);
+    const waitForToolsListReady = vi.fn().mockResolvedValue(false);
+    const mintMcpToken = vi
+      .fn()
+      .mockResolvedValue({ token: "jst_x", mcpServerUrl: "http://localhost:3000/api/mcp" });
+    const manager = new ChatSessionManager(
+      makeMinimalDeps({
+        engineFactory: () => engine,
+        mintMcpToken,
+        waitForToolsListReady,
+        persistence: {
+          resolveActiveProvider: vi
+            .fn()
+            .mockResolvedValue({ provider: "anthropic", model: "sonnet" }),
+          listPriorTurns: vi.fn().mockResolvedValue({ recent: [], oldSummary: null }),
+          recordTurn: vi.fn().mockResolvedValue(undefined),
+          openNewConversation: vi.fn().mockResolvedValue(undefined),
+          getThreadContext: vi.fn().mockResolvedValue({ threadTitle: null, localTimezone: null }),
+          touchExistingThread: vi.fn().mockResolvedValue(true)
+        }
+      }) as never
+    );
+
+    await expect(manager.ensureSession("u1", "Ben")).rejects.toThrow(CliChatUnavailableError);
   });
 });
