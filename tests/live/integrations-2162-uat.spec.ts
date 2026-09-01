@@ -99,7 +99,8 @@ test.describe("integrations live path (#2162)", () => {
     expect(movieResponse.ok()).toBe(true);
     const movies = (await movieResponse.json()) as { id: number; title: string }[];
     expect(movies.length).toBeGreaterThan(0);
-    const probeMovie = movies[movies.length - 1];
+    const probeMovie = movies.at(-1);
+    if (!probeMovie) throw new Error("Radarr returned an empty movie list");
     expect(probeMovie.title.length).toBeGreaterThan(0);
 
     await signInThroughUi(page);
