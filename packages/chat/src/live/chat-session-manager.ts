@@ -92,6 +92,15 @@ export interface ChatSessionManagerDeps {
    *  expires under the registry backstop (mirrors lastActivity / idle reaping). */
   readonly touchMcpToken?: (chatSessionId: string) => void;
   /**
+   * #2159 — resolves once this session's MCP client has completed its first tools/list round
+   * trip (or resolves `false` after a bounded timeout if it never does — see
+   * `SessionTokenRegistry.waitForToolsListObserved`). `launchSession` awaits this right after
+   * `engine.launch()`, before the session is added to `sessions`, so nothing can submit a turn
+   * against a session whose CLI has not yet confirmed it knows its real tool set. Absent ⇒ no
+   * gate (host/in-process path that mints no tokens).
+   */
+  readonly waitForToolsListReady?: (token: string) => Promise<boolean>;
+  /**
    * #342 (§5.3 step 2) — revoke every MCP token whose chatSessionId is NOT in the live set.
    * Wraps SessionTokenRegistry.reconcile(liveSessionIds). The ONE source for orphan-token
    * revocation: it works off the token registry, so it sweeps orphaned tokens even when
@@ -276,6 +285,13 @@ export class ChatSessionManager {
       mcpToken: mcpConfig?.token,
       mcpServerUrl: mcpConfig?.mcpServerUrl
     });
+
+    // #2159 — block session readiness (and so the first user message) until this session's MCP
+    // client has completed its first tools/list, closing the race where the terminal composer
+    // reads "ready" before the CLI's own tool-discovery round trip against our server has landed.
+    if (mcpConfig?.token) {
+      await this.deps.waitForToolsListReady?.(mcpConfig.token);
+    }
 
     const session: UserSession = {
       actorUserId,

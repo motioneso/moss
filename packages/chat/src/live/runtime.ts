@@ -386,6 +386,12 @@ export interface CreateChatSessionRuntimeDeps {
      * orphaned mux sessions are reapable by name even when the `sessions` Map is empty (api restart).
      */
     readonly listSessionIds?: () => string[];
+    /**
+     * #2159 — resolves once this token's first MCP tools/list has been observed (or `false`
+     * after a bounded timeout). Wraps `SessionTokenRegistry.waitForToolsListObserved`.
+     * Forwarded to the manager as `waitForToolsListReady`. Absent ⇒ no readiness gate.
+     */
+    readonly waitForReady?: (token: string) => Promise<boolean>;
   };
   /**
    * #342 (§3.5 boot-time fork) — when set, `createChatSessionRuntime` selects the engine factory ITSELF
@@ -556,6 +562,7 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     touchMcpToken: deps.mcpTokenLifecycle?.touch,
     reconcileMcpTokens: deps.mcpTokenLifecycle?.reconcile,
     listMcpTokenSessionIds: deps.mcpTokenLifecycle?.listSessionIds,
+    waitForToolsListReady: deps.mcpTokenLifecycle?.waitForReady,
     // §4.5 kill-by-mux-name for an api-unknown orphan: route through the guard-bypassing reconcile
     // driver while a reconcile is in flight (the only path that calls this), falling back to the public
     // connection method otherwise. Undefined on the in-process/host path (no separate cli-runner holds

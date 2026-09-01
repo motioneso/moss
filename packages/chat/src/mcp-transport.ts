@@ -107,6 +107,9 @@ export function registerMcpTransportRoute(
           request.log.error({ err }, "mcp tools/list resolver failed");
           return reply.code(200).send(jsonRpcError(id, -32603, "Internal error"));
         }
+        // #2159 — first successful tools/list for this token is the readiness signal
+        // ChatSessionManager.launchSession waits on before accepting the session's first message.
+        deps.tokens.markToolsListObserved(token);
         return reply.code(200).send({ jsonrpc: "2.0", id, result: { tools } });
       }
 
