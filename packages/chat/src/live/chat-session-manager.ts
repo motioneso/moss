@@ -40,7 +40,7 @@ export type {
   PassiveRetrievalPort,
   PrivateThreadState
 } from "./chat-session-ports.js";
-import type { ChatPersistencePort, ChatSessionManagerDeps, PassiveRetrievalPort } from "./chat-session-ports.js";
+import type { ChatSessionManagerDeps } from "./chat-session-ports.js";
 
 type Subscriber = (record: TranscriptRecord) => void;
 
