@@ -42,6 +42,8 @@ export interface IntegrationDetail extends IntegrationSummary {
   readonly mutedTools: readonly string[];
   /** True when toolCount > threshold: groups start off, user opts in per group. */
   readonly groupOptIn: boolean;
+  /** OpenAPI only: true when the spec was pasted rather than fetched from a URL — refresh needs a new paste. */
+  readonly specPasted: boolean;
 }
 
 export interface CreateIntegrationRequest {

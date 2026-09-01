@@ -41,7 +41,8 @@ export function toDetail(row: ConnectionRow, tools: readonly DiscoveredTool[]): 
     enabledGroups: row.enabledGroups,
     enabledTools: row.enabledTools,
     mutedTools: row.mutedTools,
-    groupOptIn: isGroupOptIn(tools.length)
+    groupOptIn: isGroupOptIn(tools),
+    specPasted: row.specPasted
   };
 }
 

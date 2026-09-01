@@ -271,14 +271,16 @@ function IntegrationDetailView(props: { readonly id: string; readonly onBack: ()
           desc={hostOf(detail.url)}
           action={
             <span className="intg__controls">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => refreshMutation.mutate()}
-                disabled={refreshMutation.isPending}
-              >
-                Refresh
-              </Button>
+              {detail.specPasted ? null : (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => refreshMutation.mutate()}
+                  disabled={refreshMutation.isPending}
+                >
+                  Refresh
+                </Button>
+              )}
               <Button variant="quiet" size="sm" onClick={onRemove}>
                 Remove
               </Button>
@@ -293,14 +295,16 @@ function IntegrationDetailView(props: { readonly id: string; readonly onBack: ()
           {detail.lastError ? (
             <span className="intg__controls">
               <Note>{detail.lastError}</Note>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => refreshMutation.mutate()}
-                disabled={refreshMutation.isPending}
-              >
-                Refresh
-              </Button>
+              {detail.specPasted ? null : (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => refreshMutation.mutate()}
+                  disabled={refreshMutation.isPending}
+                >
+                  Refresh
+                </Button>
+              )}
             </span>
           ) : null}
         </Group>

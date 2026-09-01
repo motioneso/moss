@@ -5,7 +5,7 @@ import type { CredentialPlacement } from "@moss/shared";
 
 import { applyCredential } from "./credentials.js";
 import { IntegrationUserError } from "./errors.js";
-import { DISCOVERY_TIMEOUT_MS, retryOnce, TOOL_CALL_TIMEOUT_MS } from "./limits.js";
+import { DISCOVERY_TIMEOUT_MS, TOOL_CALL_TIMEOUT_MS } from "./limits.js";
 import type { DiscoveredTool } from "./openapi-convert.js";
 
 async function connect(rawUrl: string, secret: string | null, placement: CredentialPlacement | null) {
@@ -54,8 +54,10 @@ export async function callMcpTool(
     throw new IntegrationUserError("Could not reach an MCP server at that URL.");
   });
   try {
-    const res = await retryOnce(() =>
-      client.callTool({ name: toolName, arguments: input }, undefined, { timeout: TOOL_CALL_TIMEOUT_MS })
+    const res = await client.callTool(
+      { name: toolName, arguments: input },
+      undefined,
+      { timeout: TOOL_CALL_TIMEOUT_MS }
     );
     const text =
       (res.content as { type: string; text?: string }[] | undefined)

@@ -155,6 +155,21 @@ describe("invokeOpenApiTool", () => {
     expect(result.data.result).toEqual({ ok: true });
   });
 
+  it("does not retry a POST that fails once, so a write is never run twice", async () => {
+    let attempts = 0;
+    const server = createServer((_req, res) => {
+      attempts += 1;
+      res.socket?.destroy();
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const { port } = server.address() as AddressInfo;
+    close = () => new Promise<void>((r) => server.close(() => r()));
+
+    const invoke: OpenApiInvocation = { method: "POST", path: "/create", params: [], hasBody: false };
+    await expect(invokeOpenApiTool(`http://127.0.0.1:${port}`, invoke, {}, null, null)).rejects.toThrow();
+    expect(attempts).toBe(1);
+  });
+
   it("throws when every attempt drops the connection", async () => {
     const server = createServer((_req, res) => {
       res.socket?.destroy();

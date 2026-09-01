@@ -7,8 +7,9 @@ export interface CurationState {
   readonly mutedTools: readonly string[];
 }
 
-export function isGroupOptIn(toolCount: number): boolean {
-  return toolCount > INTEGRATION_LIVE_TOOL_THRESHOLD;
+export function isGroupOptIn(tools: readonly Pick<IntegrationToolDescriptor, "group">[]): boolean {
+  if (tools.length <= INTEGRATION_LIVE_TOOL_THRESHOLD) return false;
+  return tools.some((t) => t.group !== "");
 }
 
 export function effectiveEnabledTools(
@@ -16,7 +17,7 @@ export function effectiveEnabledTools(
   state: CurationState
 ): IntegrationToolDescriptor[] {
   const muted = new Set(state.mutedTools);
-  if (!isGroupOptIn(tools.length)) {
+  if (!isGroupOptIn(tools)) {
     return tools.filter((t) => !muted.has(t.name));
   }
   const groups = new Set(state.enabledGroups);

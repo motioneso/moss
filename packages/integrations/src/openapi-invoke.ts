@@ -48,9 +48,11 @@ export async function invokeOpenApiTool(
     headers.set("content-type", "application/json");
     body = JSON.stringify(input.body);
   }
-  const res = await retryOnce(() =>
-    fetch(url, { method: invoke.method, headers, body, signal: AbortSignal.timeout(TOOL_CALL_TIMEOUT_MS) })
-  );
+  const doFetch = () =>
+    fetch(url, { method: invoke.method, headers, body, signal: AbortSignal.timeout(TOOL_CALL_TIMEOUT_MS) });
+  const method = invoke.method.toUpperCase();
+  const isSafeToRetry = method === "GET" || method === "HEAD";
+  const res = isSafeToRetry ? await retryOnce(doFetch) : await doFetch();
   const text = await res.text();
   const truncated = text.length > RESPONSE_CHAR_CAP;
   const capped = truncated ? text.slice(0, RESPONSE_CHAR_CAP) : text;
