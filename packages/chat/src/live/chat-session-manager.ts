@@ -6,6 +6,7 @@ import type { StoredAttachmentMeta } from "../attachments-service.js";
 import { finalizeProvenance, parseAnswerMarkers } from "./answer-provenance.js";
 import { renderAttachmentsManifest } from "./attachments-manifest.js";
 import { renderReplayBlock, renderSummaryBlock } from "./chat-context-blocks.js";
+import { isBoundedFallbackEngine } from "./engine-selection.js";
 import { buildEngineText } from "./engine-text.js";
 import {
   ChatStreamLimitError,
@@ -182,7 +183,11 @@ export class ChatSessionManager {
     // #2159 — block session readiness (and so the first user message) until this session's MCP
     // client has completed its first tools/list, closing the race where the terminal composer
     // reads "ready" before the CLI's own tool-discovery round trip against our server has landed.
-    if (mcpConfig?.token) {
+    // #2164 — bounded-fallback (print/one-shot) engines never start an MCP client inside launch()
+    // (their process only spawns per-turn, in submit()), so there is nothing to observe yet at
+    // this point; waiting here would always time out and tear down a session before its first
+    // message. Only engines that start their MCP client during launch() get the wait.
+    if (mcpConfig?.token && !isBoundedFallbackEngine(provider, executionMode)) {
       const toolsListReady = await this.deps.waitForToolsListReady?.(mcpConfig.token);
       if (toolsListReady === false) {
         // The engine process this launch just started, and the token just minted for it, would

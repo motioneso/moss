@@ -84,6 +84,38 @@ describe("ChatSessionManager tools/list readiness gate (#2159)", () => {
     expect(waitForToolsListReady).not.toHaveBeenCalled();
   });
 
+  it("skips the readiness wait for a bounded-fallback (print/one-shot) engine — launch() never starts an MCP client for it", async () => {
+    const engine = new FakeEngine(0);
+    const waitForToolsListReady = vi.fn().mockReturnValue(
+      new Promise(() => {
+        // Never resolves — proves the gate is not awaited for this engine shape at all.
+      })
+    );
+    const mintMcpToken = vi
+      .fn()
+      .mockResolvedValue({ token: "jst_x", mcpServerUrl: "http://localhost:3000/api/mcp" });
+    const manager = new ChatSessionManager(
+      makeMinimalDeps({
+        engineFactory: () => engine,
+        mintMcpToken,
+        waitForToolsListReady,
+        persistence: {
+          resolveActiveProvider: vi.fn().mockResolvedValue({ provider: "google", model: "gemini" }),
+          listPriorTurns: vi.fn().mockResolvedValue({ recent: [], oldSummary: null }),
+          recordTurn: vi.fn().mockResolvedValue(undefined),
+          openNewConversation: vi.fn().mockResolvedValue(undefined),
+          getThreadContext: vi.fn().mockResolvedValue({ threadTitle: null, localTimezone: null }),
+          touchExistingThread: vi.fn().mockResolvedValue(true)
+        }
+      }) as never
+    );
+
+    await manager.ensureSession("u1", "Ben");
+
+    expect(waitForToolsListReady).not.toHaveBeenCalled();
+    expect(engine.killed).toBe(false);
+  });
+
   it("rejects instead of letting the first message through when waitForToolsListReady times out (resolves false)", async () => {
     const engine = new FakeEngine(0);
     const waitForToolsListReady = vi.fn().mockResolvedValue(false);
