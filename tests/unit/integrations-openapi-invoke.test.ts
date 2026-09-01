@@ -4,7 +4,6 @@ import type { AddressInfo, Socket } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { fetchOpenApiSpec, invokeOpenApiTool } from "@moss/integrations";
 import type { OpenApiInvocation } from "@moss/integrations";
-import { RESPONSE_CHAR_CAP } from "@moss/integrations";
 
 const SECRET = "sk-super-secret-value";
 
@@ -99,21 +98,6 @@ describe("invokeOpenApiTool", () => {
     expect(seenContentType).toBe("application/json");
     expect(JSON.parse(seenBody)).toEqual({ title: "New Movie" });
     expect(result.data.result).toEqual({ created: true });
-  });
-
-  it("truncates a response body longer than the response char cap", async () => {
-    const huge = "x".repeat(RESPONSE_CHAR_CAP + 500);
-    const started = await startServer((_req, res) => {
-      res.writeHead(200, { "content-type": "text/plain" });
-      res.end(huge);
-    });
-    close = started.close;
-
-    const invoke: OpenApiInvocation = { method: "GET", path: "/big", params: [], hasBody: false };
-    const result = await invokeOpenApiTool(started.baseUrl, invoke, {}, null, null);
-
-    expect(result.data.truncated).toBe(true);
-    expect((result.data.result as string).length).toBe(RESPONSE_CHAR_CAP);
   });
 
   it("returns ok:false with the status on an HTTP error, without throwing", async () => {

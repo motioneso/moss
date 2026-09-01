@@ -9,8 +9,14 @@ import type {
   ToolResult
 } from "@moss/module-sdk";
 
-import { callMemory, type CallMemory } from "./call-memory.js";
+import {
+  callMemory,
+  requestBudget,
+  type CallMemory,
+  type RequestBudget
+} from "./call-memory.js";
 import { effectiveEnabledTools } from "./curation.js";
+import { capChars, INTEGRATION_RESPONSE_CHAR_CAP } from "./limits.js";
 import { callMcpTool } from "./mcp-client.js";
 import type { DiscoveredTool } from "./openapi-convert.js";
 import { invokeOpenApiTool } from "./openapi-invoke.js";
@@ -42,6 +48,8 @@ export interface IntegrationsActiveModulesResolverDeps {
   readonly repository?: IntegrationsRepository;
   /** Test seam — defaults to the module-level `callMemory` singleton (#2175 Task 3). */
   readonly callMemory?: CallMemory;
+  /** Test seam — defaults to the module-level `requestBudget` singleton (#2175 Task 4). */
+  readonly requestBudget?: RequestBudget;
 }
 
 type ActiveModulesResolver = (actorUserId: string) => Promise<readonly MossModuleManifest[]>;
@@ -113,6 +121,7 @@ function buildToolManifest(
   repository: IntegrationsRepository
 ): ModuleAssistantToolManifest {
   const memory = deps.callMemory ?? callMemory;
+  const budget = deps.requestBudget ?? requestBudget;
   const action: IntegrationOutcomeEnvelope["action"] =
     tool.readOnly === true ? "read" : "performed";
   const skipSuppression = tool.idempotent === true || conn.unsuppressedTools.includes(tool.name);
@@ -131,6 +140,17 @@ function buildToolManifest(
       return { data: envelope as unknown as Record<string, unknown> };
     }
 
+    const budgetScope = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
+    if (!budget.reserveCall(budgetScope)) {
+      const envelope: IntegrationOutcomeEnvelope = {
+        status: "error",
+        action,
+        summary: INTEGRATION_SUMMARY.requestRefused,
+        detail: undefined
+      };
+      return { data: envelope as unknown as Record<string, unknown> };
+    }
+
     const credentialEnvelope = await repository.loadCredentialEnvelope(scopedDb as never, conn.id);
     const secret = credentialEnvelope
       ? (deps.cipher.decryptJson(deps.cipher.parseEnvelope(credentialEnvelope)).secret as string)
@@ -144,18 +164,31 @@ function buildToolManifest(
           conn.credentialPlacement
         )
       : await callMcpTool(conn.url, secret, conn.credentialPlacement, tool.name, input);
+
+    // #2175 Task 4: the budget counts what the service actually sent, before this cap trims it —
+    // that is the traffic cost being controlled, not what the model ends up seeing.
+    const capped = capChars(outcome.data, INTEGRATION_RESPONSE_CHAR_CAP);
+    budget.recordChars(budgetScope, capped.rawChars);
+    const cappedData = capped.truncated
+      ? ({ ...outcome.data, result: capped.detail, truncated: true } as Record<string, unknown>)
+      : outcome.data;
+
     const envelope: IntegrationOutcomeEnvelope = outcome.ok
       ? {
           status: "ok",
           action,
-          summary: action === "read" ? INTEGRATION_SUMMARY.readOk : INTEGRATION_SUMMARY.performedOk,
-          detail: outcome.data
+          summary: capped.truncated
+            ? INTEGRATION_SUMMARY.truncated
+            : action === "read"
+              ? INTEGRATION_SUMMARY.readOk
+              : INTEGRATION_SUMMARY.performedOk,
+          detail: cappedData
         }
       : {
           status: "error",
           action,
           summary: INTEGRATION_SUMMARY.callFailed,
-          detail: outcome.data
+          detail: cappedData
         };
     memory.record(scope, conn.id, key, {
       ok: outcome.ok,

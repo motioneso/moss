@@ -2,12 +2,7 @@ import type { CredentialPlacement } from "@moss/shared";
 
 import { applyCredential } from "./credentials.js";
 import { IntegrationUserError } from "./errors.js";
-import {
-  DISCOVERY_TIMEOUT_MS,
-  RESPONSE_CHAR_CAP,
-  retryOnce,
-  TOOL_CALL_TIMEOUT_MS
-} from "./limits.js";
+import { DISCOVERY_TIMEOUT_MS, retryOnce, TOOL_CALL_TIMEOUT_MS } from "./limits.js";
 import type { OpenApiInvocation } from "./openapi-convert.js";
 
 export async function fetchOpenApiSpec(
@@ -64,18 +59,14 @@ export async function invokeOpenApiTool(
   const isSafeToRetry = method === "GET" || method === "HEAD";
   const res = isSafeToRetry ? await retryOnce(doFetch) : await doFetch();
   const text = await res.text();
-  const truncated = text.length > RESPONSE_CHAR_CAP;
-  const capped = truncated ? text.slice(0, RESPONSE_CHAR_CAP) : text;
-  let parsed: unknown = capped;
-  if (!truncated) {
-    try {
-      parsed = JSON.parse(capped);
-    } catch {
-      /* keep text */
-    }
+  // #2175 Task 4 retires this path's own char cap: the proxy in tool-manifests.ts now caps
+  // every integration response (MCP and OpenAPI alike) at a lower, message-carrying limit, so a
+  // second cap here could never fire.
+  let parsed: unknown = text;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    /* keep text */
   }
-  return {
-    ok: res.ok,
-    data: { status: res.status, result: parsed, ...(truncated ? { truncated: true } : {}) }
-  };
+  return { ok: res.ok, data: { status: res.status, result: parsed } };
 }
