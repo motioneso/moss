@@ -44,13 +44,13 @@ describe("convertOpenApiSpec hints", () => {
 
     expect(byName.listThings).toMatchObject({ readOnly: true, idempotent: true });
     expect(byName.replaceThing).toMatchObject({ idempotent: true });
-    expect(byName.replaceThing.readOnly).toBeUndefined();
+    expect(byName.replaceThing!.readOnly).toBeUndefined();
     expect(byName.deleteThing).toMatchObject({ idempotent: true });
-    expect(byName.deleteThing.readOnly).toBeUndefined();
-    expect(byName.createThing.readOnly).toBeUndefined();
-    expect(byName.createThing.idempotent).toBeUndefined();
-    expect(byName.patchThing.readOnly).toBeUndefined();
-    expect(byName.patchThing.idempotent).toBeUndefined();
+    expect(byName.deleteThing!.readOnly).toBeUndefined();
+    expect(byName.createThing!.readOnly).toBeUndefined();
+    expect(byName.createThing!.idempotent).toBeUndefined();
+    expect(byName.patchThing!.readOnly).toBeUndefined();
+    expect(byName.patchThing!.idempotent).toBeUndefined();
 
     for (const t of tools) expect(t.destructive).toBeUndefined();
   });
