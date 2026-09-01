@@ -44,6 +44,7 @@ const PLATFORM_PACKAGES = new Set([
   "@moss/datasets", // dataset connector SDK runtime host (host pinning, cache, TTL) — infra, not a product domain
   "@moss/db",
   "@moss/host-fetch", // shared server-only outbound network policy/transport
+  "@moss/integrations", // external MCP/OpenAPI connection runtime consumed by the composition root — infra like @moss/datasets
   "@moss/jobs",
   "@moss/memory",
   "@moss/module-css-confine", // host-only CSS scoping for module contributions (#1388/D9), no product domain
