@@ -144,7 +144,17 @@ describe("ChatSessionManager tools/list readiness gate (#2159)", () => {
       makeMinimalDeps({
         engineFactory: () => engine,
         mintMcpToken,
-        waitForToolsListReady
+        waitForToolsListReady,
+        persistence: {
+          resolveActiveProvider: vi
+            .fn()
+            .mockResolvedValue({ provider: "anthropic", model: "sonnet" }),
+          listPriorTurns: vi.fn().mockResolvedValue({ recent: [], oldSummary: null }),
+          recordTurn: vi.fn().mockResolvedValue(undefined),
+          openNewConversation: vi.fn().mockResolvedValue(undefined),
+          getThreadContext: vi.fn().mockResolvedValue({ threadTitle: null, localTimezone: null }),
+          touchExistingThread: vi.fn().mockResolvedValue(true)
+        }
       }) as never
     );
 
@@ -155,9 +165,7 @@ describe("ChatSessionManager tools/list readiness gate (#2159)", () => {
     });
 
     // Engine launch already happened; the gate is what's holding the session back.
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(engine.launchOpts).not.toBeNull();
+    await vi.waitFor(() => expect(engine.launchOpts).not.toBeNull());
     expect(resolved).toBe(false);
 
     releaseReady(true);
@@ -171,7 +179,20 @@ describe("ChatSessionManager tools/list readiness gate (#2159)", () => {
     const engine = new FakeEngine(0);
     const waitForToolsListReady = vi.fn();
     const manager = new ChatSessionManager(
-      makeMinimalDeps({ engineFactory: () => engine, waitForToolsListReady }) as never
+      makeMinimalDeps({
+        engineFactory: () => engine,
+        waitForToolsListReady,
+        persistence: {
+          resolveActiveProvider: vi
+            .fn()
+            .mockResolvedValue({ provider: "anthropic", model: "sonnet" }),
+          listPriorTurns: vi.fn().mockResolvedValue({ recent: [], oldSummary: null }),
+          recordTurn: vi.fn().mockResolvedValue(undefined),
+          openNewConversation: vi.fn().mockResolvedValue(undefined),
+          getThreadContext: vi.fn().mockResolvedValue({ threadTitle: null, localTimezone: null }),
+          touchExistingThread: vi.fn().mockResolvedValue(true)
+        }
+      }) as never
     );
 
     await manager.ensureSession("u1", "Ben");
