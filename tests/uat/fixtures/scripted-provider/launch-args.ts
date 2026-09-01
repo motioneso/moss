@@ -84,8 +84,11 @@ export function parseClaudeLaunchArgs(argv: readonly string[]): ParsedLaunch {
     (configPath !== undefined || settingsPath !== undefined || allowedToolsRaw !== undefined) &&
     !hasMcpTrio;
   if (hasMcpPartial) return rejected("partial --mcp-config/--settings/--allowedTools combination");
-  if (hasMcpTrio && bareTools !== undefined) {
-    return rejected("both the MCP flag trio and bare --tools present");
+  // The real read-only launch command pairs the MCP trio with a non-empty bare --tools value
+  // (claude-print-chat-engine.ts's buildCommand, '--tools "Read,Glob,Grep"'). An empty --tools
+  // alongside the trio is a mismatch the fixture still rejects.
+  if (hasMcpTrio && bareTools === "") {
+    return rejected("empty --tools alongside the MCP flag trio");
   }
   if (!hasMcpTrio && bareTools !== "") {
     return rejected(
