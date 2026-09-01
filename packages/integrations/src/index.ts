@@ -1,5 +1,6 @@
 export * from "./credentials.js";
 export * from "./curation.js";
+export * from "./discovery.js";
 export * from "./errors.js";
 export * from "./limits.js";
 export * from "./manifest.js";
@@ -7,3 +8,4 @@ export * from "./mcp-client.js";
 export * from "./openapi-convert.js";
 export * from "./openapi-invoke.js";
 export * from "./repository.js";
+export * from "./routes.js";

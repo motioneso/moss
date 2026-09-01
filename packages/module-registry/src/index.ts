@@ -259,7 +259,8 @@ import {
 } from "@moss/goals";
 import {
   integrationsModuleManifest,
-  integrationsModuleSqlMigrationDirectory
+  integrationsModuleSqlMigrationDirectory,
+  registerIntegrationsRoutes
 } from "@moss/integrations";
 import {
   createHostRateLimiter,
@@ -1519,7 +1520,12 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
   {
     manifest: integrationsModuleManifest,
     sqlMigrationDirectories: [integrationsModuleSqlMigrationDirectory],
-    queueDefinitions: []
+    queueDefinitions: [],
+    registerRoutes: (server, deps) =>
+      registerIntegrationsRoutes(server, {
+        resolveAccessContext: deps.resolveAccessContext,
+        dataContext: deps.dataContext
+      })
   },
   {
     manifest: webModuleManifest,

@@ -15,9 +15,16 @@ export const integrationsModuleManifest = {
   lifecycle: "required",
   availability: { defaultEnabled: true, required: true },
   compatibility: { jarv1s: ">=0.0.0" },
-  // Filled in by Task 7. Chat tools are dynamic (one per discovered connection tool), so
-  // there is no static assistantTools list — see Task 8.
-  routes: [],
+  // Chat tools are dynamic (one per discovered connection tool), so there is no static
+  // assistantTools list — see Task 8.
+  routes: [
+    { method: "GET", path: "/api/integrations" },
+    { method: "POST", path: "/api/integrations" },
+    { method: "GET", path: "/api/integrations/:id" },
+    { method: "PATCH", path: "/api/integrations/:id" },
+    { method: "POST", path: "/api/integrations/:id/refresh" },
+    { method: "DELETE", path: "/api/integrations/:id" }
+  ],
   dataLifecycle: {
     exportSections: [],
     deletion: {
