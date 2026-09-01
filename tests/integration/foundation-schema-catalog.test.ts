@@ -369,7 +369,9 @@ describe("MVP foundation schema catalog", () => {
         { version: "0203", name: "0203_news_refresh_history.sql" },
         { version: "0204", name: "0204_news_source_health_states.sql" },
         { version: "0205", name: "0205_news_credential_status_worker_grant.sql" },
-        { version: "0206", name: "0206_outbound_action_risk.sql" }
+        { version: "0206", name: "0206_outbound_action_risk.sql" },
+        // #2162 integrations foundation — owner-only connections with encrypted credential.
+        { version: "0207", name: "0207_integration_connections.sql" }
       ]);
     } finally {
       await client.end();
