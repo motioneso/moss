@@ -32,6 +32,9 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: 24
+          # setup-node v5 caches through the detected package manager by default; pnpm is not
+          # installed in this job (the script is plain Node), so detection fails the whole run.
+          package-manager-cache: false
 
       - name: Check release-note transformer
         run: node scripts/append-release-note.mjs --self-test
