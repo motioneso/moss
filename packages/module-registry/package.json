@@ -23,6 +23,7 @@
     "@moss/email": "workspace:*",
     "@moss/goals": "workspace:*",
     "@moss/host-fetch": "workspace:*",
+    "@moss/integrations": "workspace:*",
     "@moss/jobs": "workspace:*",
     "@moss/memory": "workspace:*",
     "@moss/module-sdk": "workspace:*",

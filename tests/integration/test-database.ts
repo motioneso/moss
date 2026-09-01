@@ -64,6 +64,7 @@ export const expectedBuiltInModuleIds = [
   "connectors",
   "tasks",
   "jarvis.goals",
+  "integrations",
   "web",
   "notifications",
   "calendar",

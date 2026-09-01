@@ -662,6 +662,15 @@ importers:
 
   packages/host-fetch: {}
 
+  packages/integrations:
+    dependencies:
+      '@moss/module-sdk':
+        specifier: workspace:*
+        version: link:../module-sdk
+      '@moss/shared':
+        specifier: workspace:*
+        version: link:../shared
+
   packages/jobs:
     dependencies:
       '@moss/db':
@@ -753,6 +762,9 @@ importers:
       '@moss/host-fetch':
         specifier: workspace:*
         version: link:../host-fetch
+      '@moss/integrations':
+        specifier: workspace:*
+        version: link:../integrations
       '@moss/jobs':
         specifier: workspace:*
         version: link:../jobs

@@ -258,6 +258,10 @@ import {
   GOALS_MEMORY_SYNC_RECONCILE_QUEUE
 } from "@moss/goals";
 import {
+  integrationsModuleManifest,
+  integrationsModuleSqlMigrationDirectory
+} from "@moss/integrations";
+import {
   createHostRateLimiter,
   createRobotsGate,
   fetchWebResource,
@@ -1511,6 +1515,11 @@ const BUILT_IN_MODULES: readonly BuiltInModuleRegistration[] = [
         await registerGoalsMemorySyncReconcileWorker(boss, deps.dataContext, repository)
       ];
     }
+  },
+  {
+    manifest: integrationsModuleManifest,
+    sqlMigrationDirectories: [integrationsModuleSqlMigrationDirectory],
+    queueDefinitions: []
   },
   {
     manifest: webModuleManifest,
