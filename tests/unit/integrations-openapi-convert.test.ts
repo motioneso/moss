@@ -25,7 +25,10 @@ const spec = {
       }
     },
     "/api/v3/queue": {
-      get: { summary: "Queue", parameters: [{ name: "page", in: "query", schema: { type: "integer" } }] }
+      get: {
+        summary: "Queue",
+        parameters: [{ name: "page", in: "query", schema: { type: "integer" } }]
+      }
     }
   }
 };
@@ -39,16 +42,21 @@ describe("convertOpenApiSpec", () => {
     expect(get.description).toBe("Get one movie");
     expect(get.inputSchema).toMatchObject({ type: "object", required: ["id"] });
     expect(get.invoke).toEqual({
-      method: "GET", path: "/api/v3/movie/{id}",
-      params: [{ name: "id", in: "path" }], hasBody: false
+      method: "GET",
+      path: "/api/v3/movie/{id}",
+      params: [{ name: "id", in: "path" }],
+      hasBody: false
     });
   });
 
   it("resolves local $refs into the body schema and names untagged ops into a default group", () => {
     const tools = convertOpenApiSpec(spec);
     const post = tools.find((t) => t.name === "createMovie")!;
-    const props = post.inputSchema!.properties as Record<string, any>;
-    expect(props.body.properties.title).toEqual({ type: "string" });
+    const props = post.inputSchema!.properties as Record<
+      string,
+      { properties: Record<string, unknown> }
+    >;
+    expect(props.body!.properties.title).toEqual({ type: "string" });
     expect(post.invoke!.hasBody).toBe(true);
     const queue = tools.find((t) => t.name === "get_api_v3_queue")!;
     expect(queue.group).toBe("Other");
@@ -56,7 +64,8 @@ describe("convertOpenApiSpec", () => {
 
   it("never emits a top-level combinator", () => {
     for (const t of convertOpenApiSpec(spec)) {
-      for (const k of ["anyOf", "oneOf", "allOf", "not"]) expect(k in (t.inputSchema ?? {})).toBe(false);
+      for (const k of ["anyOf", "oneOf", "allOf", "not"])
+        expect(k in (t.inputSchema ?? {})).toBe(false);
     }
   });
 
