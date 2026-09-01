@@ -371,7 +371,9 @@ describe("MVP foundation schema catalog", () => {
         { version: "0205", name: "0205_news_credential_status_worker_grant.sql" },
         { version: "0206", name: "0206_outbound_action_risk.sql" },
         // #2162 integrations foundation — owner-only connections with encrypted credential.
-        { version: "0207", name: "0207_integration_connections.sql" }
+        { version: "0207", name: "0207_integration_connections.sql" },
+        // #2175 Task 3 — per-connection in-burst duplicate-call suppression memory table.
+        { version: "0208", name: "0208_integration_unsuppressed_tools.sql" }
       ]);
     } finally {
       await client.end();
