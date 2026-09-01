@@ -185,6 +185,14 @@ export class ChatSessionManager {
     if (mcpConfig?.token) {
       const toolsListReady = await this.deps.waitForToolsListReady?.(mcpConfig.token);
       if (toolsListReady === false) {
+        // The engine process this launch just started, and the token just minted for it, would
+        // otherwise leak: nothing else tracks or reaps either once this throw unwinds the launch.
+        try {
+          await engine.kill();
+        } catch {
+          // Best-effort teardown of a process that never finished starting up.
+        }
+        this.deps.revokeMcpToken?.(sessionKey);
         throw new CliChatUnavailableError("tools list was not ready in time");
       }
     }

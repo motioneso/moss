@@ -90,10 +90,12 @@ describe("ChatSessionManager tools/list readiness gate (#2159)", () => {
     const mintMcpToken = vi
       .fn()
       .mockResolvedValue({ token: "jst_x", mcpServerUrl: "http://localhost:3000/api/mcp" });
+    const revokeMcpToken = vi.fn();
     const manager = new ChatSessionManager(
       makeMinimalDeps({
         engineFactory: () => engine,
         mintMcpToken,
+        revokeMcpToken,
         waitForToolsListReady,
         persistence: {
           resolveActiveProvider: vi
@@ -109,5 +111,10 @@ describe("ChatSessionManager tools/list readiness gate (#2159)", () => {
     );
 
     await expect(manager.ensureSession("u1", "Ben")).rejects.toThrow(CliChatUnavailableError);
+
+    // #2164 QA — a timeout must not leak the process it just started or the token it just
+    // minted: both the engine and the token registration must be torn down before the throw.
+    expect(engine.killed).toBe(true);
+    expect(revokeMcpToken).toHaveBeenCalledWith("u1:drawer");
   });
 });
