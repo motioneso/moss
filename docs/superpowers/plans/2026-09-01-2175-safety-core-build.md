@@ -27,10 +27,12 @@ Branch: `build/2175-safety-core`
 **`packages/integrations/src/mcp-client.ts`** — in `discoverMcpTools`, map `t.annotations?.readOnlyHint`, `t.annotations?.idempotentHint`, `t.annotations?.destructiveHint` onto the three fields (MCP SDK's `Tool.annotations` is `ToolAnnotations | undefined` with those three optional booleans per the MCP spec — not re-verified against `node_modules` in this session because that path is permission-denied to Bash/Read here; verify the field names compile during TDD). Only set a field when the annotation is a boolean; otherwise leave it absent (do not coerce `undefined` to `false`).
 
 **`packages/integrations/src/openapi-convert.ts`** — in the per-method loop (`convertOpenApiSpec`, around line 85-101), add:
+
 ```ts
 readOnly: method === "get" || method === "head" ? true : undefined,
 idempotent: ["get", "head", "put", "delete"].includes(method) ? true : undefined,
 ```
+
 (no `destructive` — leave unset). Note: current `METHODS` const only has `get,post,put,patch,delete` (no explicit `head` — confirm during TDD whether `head` needs adding to `METHODS` itself, since today's converter may not even discover HEAD operations; if so this is a pre-existing gap outside this task's scope — just make the mapping correct for the methods the converter already handles).
 
 **Test:** `tests/unit/integrations-tool-hints.test.ts` — one tool list with one read-only-annotated, one idempotent-annotated, one destructive-annotated, one bare tool (MCP); one OpenAPI spec with one operation per method, asserting the exact hint combination per method; a stored connection whose `discovered_tools` JSON predates these fields still loads (no migration — JSON tolerates missing keys).
@@ -38,6 +40,7 @@ idempotent: ["get", "head", "put", "delete"].includes(method) ? true : undefined
 ## Task 2 — Outcome envelope + prompt rule
 
 **`packages/integrations/src/tool-manifests.ts`** — add:
+
 ```ts
 export interface IntegrationOutcomeEnvelope {
   readonly status: "ok" | "error";
@@ -46,7 +49,9 @@ export interface IntegrationOutcomeEnvelope {
   readonly detail: unknown;
 }
 ```
+
 Fixed summary strings (exact wording from the spec, reused by Tasks 3-4 too):
+
 ```ts
 export const INTEGRATION_SUMMARY = {
   performedOk: "Action performed successfully.",
@@ -58,15 +63,18 @@ export const INTEGRATION_SUMMARY = {
   requestRefused: "Call limit reached for this request; answer with what you have."
 } as const;
 ```
+
 `action` is `"read"` exactly when `tool.readOnly === true`; everything else (including both `false` and absent) is `"performed"` — matches spec section 2 exactly. `detail` is the service's payload passed through byte-identical; never rewritten.
 
 **`packages/integrations/src/mcp-client.ts`, `openapi-invoke.ts`** — no shape change needed beyond what Task 4 does to size capping; they keep returning `{ ok, data }`, and `tool-manifests.ts` wraps that into the envelope. (If TDD shows the envelope belongs one level lower for a good reason, keep `status`/`action`/`summary`/`detail` field names and ordering — they're the part of the contract other tasks depend on.)
 
 **Chat system prompt** — in `packages/chat/src/live/runtime.ts`, add one exported constant near `MOSS_PERSONA_TOOL_GUIDANCE` (line ~81-86), under 40 words per the milestone plan's Determinism Boundary section:
+
 ```ts
 export const MOSS_PERSONA_INTEGRATION_RESULT_TRUST =
   "When a connected-service tool reports status ok and action performed, the action happened — do not call a read tool afterward just to confirm it.";
 ```
+
 Add it to the `parts` array in `composeMossPersona` (line 105-110), every surface (not gated on `DEFAULT_CHAT_SURFACE` like the app-map block, since it applies to integration tools generally).
 
 **Test:** `tests/unit/integrations-envelope.test.ts` — envelope shape for success/error/MCP/OpenAPI; `detail` byte-identical to the service's raw payload; no credential-shaped string anywhere in the envelope (grep the serialized JSON for a fixture secret).
@@ -74,6 +82,7 @@ Add it to the `parts` array in `composeMossPersona` (line 105-110), every surfac
 ## Task 3 — In-burst duplicate suppression
 
 **Create `packages/integrations/src/call-memory.ts`** (package-level singleton store, not a resolver closure — Task 8 finding):
+
 ```ts
 export interface CallMemoryScope {
   readonly actorUserId: string;
@@ -113,6 +122,7 @@ export const callMemory: CallMemory;
 ```
 
 Rules `check`/`record` must implement (all from spec section 3, restated as behaviour):
+
 - Read repeat, no successful performed call on that connection since it was stored, entry.detail short (`< 500` chars serialized) -> `serve` with the stored `summary`/`detail`.
 - Read repeat, same but stored detail is long -> `serve` with `summary` only (`INTEGRATION_SUMMARY.blockedRead`), no `detail`.
 - Read repeat, but a successful (`ok: true`) performed call happened on the same connection after the read was stored -> `run` (stale, re-run for real).
@@ -124,11 +134,14 @@ Rules `check`/`record` must implement (all from spec section 3, restated as beha
 - Two different `chatSessionId` scopes for the same user never see each other's entries; two different `actorUserId` never see each other's, even with the same `chatSessionId` string.
 
 **Escape hatch column** — new SQL file `packages/integrations/sql/0208_integration_unsuppressed_tools.sql` (confirm `0208` is free with the coordinator before committing it):
+
 ```sql
 ALTER TABLE app.integration_connections
   ADD COLUMN unsuppressed_tools text[] NOT NULL DEFAULT '{}';
 ```
+
 Plumb it exactly like `muted_tools`:
+
 - `packages/integrations/src/repository.ts`: add `unsuppressedTools: readonly string[]` to `ConnectionRow` (~line 22), `UpdateConnectionInput` (~line 51), `ConnectionSqlRow` (~line 68), `SELECT_COLUMNS` (~line 79), an `updateConnection` patch branch mirroring lines 161-163, and `mapRow` (~line 239).
 - `packages/shared/src/integrations-api.ts`: add `unsuppressedTools: readonly string[]` to `IntegrationDetail` (~line 42) and `unsuppressedTools?: readonly string[]` to `UpdateIntegrationRequest` (~line 68).
 - `packages/integrations/src/routes.ts`: add to the detail-building object (~line 217) and the patch-parsing block (~line 287-288), mirroring `mutedTools` both times.
@@ -140,6 +153,7 @@ Plumb it exactly like `muted_tools`:
 ## Task 4 — Call ceiling and size budget
 
 **`packages/integrations/src/limits.ts`** — add, retire the old cap:
+
 ```ts
 export const INTEGRATION_CALL_CEILING = 12;
 export const INTEGRATION_RESPONSE_CHAR_CAP = 8_000;
@@ -148,6 +162,7 @@ export const INTEGRATION_REQUEST_CHAR_BUDGET = 24_000;
 ```
 
 **`packages/integrations/src/call-memory.ts`** — counters live in the same store (milestone plan: "Task 4's counters live here too"), keyed by the same `CallMemoryScope`:
+
 ```ts
 export interface CallMemory {
   // ...Task 3 members...
@@ -171,6 +186,7 @@ pnpm lint > /tmp/tcd-lint.log 2>&1; echo "EXIT=$?"        # expect 0
 pnpm typecheck > /tmp/tcd-tc.log 2>&1; echo "EXIT=$?"      # expect 0
 pnpm test:unit > /tmp/tcd-unit.log 2>&1; echo "EXIT=$?"    # expect 0 (module-sdk-worker known-red locally)
 ```
+
 `pnpm verify:foundation` only via the `verify-gate` skill, never unscoped, never piped.
 
 ## Kill gate (owner: Ben)

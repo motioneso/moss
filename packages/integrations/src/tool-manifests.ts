@@ -9,12 +9,7 @@ import type {
   ToolResult
 } from "@moss/module-sdk";
 
-import {
-  callMemory,
-  requestBudget,
-  type CallMemory,
-  type RequestBudget
-} from "./call-memory.js";
+import { callMemory, requestBudget, type CallMemory, type RequestBudget } from "./call-memory.js";
 import { effectiveEnabledTools } from "./curation.js";
 import { capChars, INTEGRATION_RESPONSE_CHAR_CAP } from "./limits.js";
 import { callMcpTool } from "./mcp-client.js";

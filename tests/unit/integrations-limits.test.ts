@@ -90,9 +90,7 @@ async function buildTools(baseUrl: string, tools: DiscoveredTool[]) {
     callMemory: createCallMemory(),
     requestBudget: createRequestBudget(),
     repository: {
-      listConnections: async () => [
-        connection({ baseUrl, discoveredTools: tools })
-      ],
+      listConnections: async () => [connection({ baseUrl, discoveredTools: tools })],
       loadCredentialEnvelope: async () => null
     } as never
   });
