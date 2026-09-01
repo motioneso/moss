@@ -17,6 +17,7 @@ import {
   type GatewaySessionRecord
 } from "@moss/ai";
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
+import { createActiveModulesResolver } from "../../packages/module-registry/src/active-modules-resolver.js";
 import {
   configureSportsChatTools,
   resetSportsChatToolsForTests,
@@ -108,7 +109,10 @@ describe("sports.retrySource action card (#2159)", () => {
     emitted = [];
 
     gateway = new AssistantToolGateway({
-      resolveActiveModules: async () => [sportsModuleManifest],
+      resolveActiveModules: createActiveModulesResolver({
+        dataContext: runner,
+        manifests: [sportsModuleManifest]
+      }),
       repository,
       runner,
       tokens,
