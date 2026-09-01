@@ -233,6 +233,9 @@ export function writeUatEnvFile(input: {
         // #2005 — same boot-crash class as the line above: resolveKeyring throws at
         // startup when this is missing outside development/test.
         "JARVIS_NEWS_CREDENTIAL_SECRET_KEY=22222222222222222222222222222222",
+        // #2173: same boot-crash class — resolveKeyring throws at startup when this is missing
+        // outside development/test. Real crash caught by the cached-image UAT repro.
+        "JARVIS_INTEGRATIONS_SECRET_KEY=33333333333333333333333333333333",
         `JARVIS_CLI_RUNNER_RPC_SECRET=${UAT_CLI_RUNNER_RPC_SECRET}`,
         // #1883: this one chat script needs a real, local embedding provider so notes.search
         // actually calls out over the network and can hit a real connection failure — every other
@@ -485,6 +488,31 @@ function runCapture(command: string, args: readonly string[]): Promise<string> {
       reject(new Error(`${command} ${args.join(" ")} exited with status ${code ?? "unknown"}`));
     });
   });
+}
+
+/**
+ * #2173: the terminal-failure branch of provisionForUat used to go straight to teardown, which
+ * discards the app container's own log/health evidence before anyone can see why it failed.
+ * Bounded (last 50 log lines, one formatted health read) and Compose project/service scoped
+ * (buildUatComposeArgs -> `-p <projectName>` + the `jarv1s` service) — never the compose file's
+ * hardcoded `container_name: moss` (infra/docker-compose.prod.yml:145), never a bare/full `docker
+ * inspect`, and never the settings file or its contents (security ruling, issue #2173 comment
+ * 5497191033 section 4).
+ */
+async function captureFailureEvidence(projectName: string): Promise<void> {
+  const [logs, health] = await Promise.all([
+    runCapture(
+      "docker",
+      buildUatComposeArgs(projectName, ["logs", "--tail", "50", "jarv1s"])
+    ).catch((error) => `<log capture failed: ${String(error)}>`),
+    runCapture(
+      "docker",
+      buildUatComposeArgs(projectName, ["ps", "jarv1s", "--format", "json"])
+    ).catch((error) => `<health capture failed: ${String(error)}>`)
+  ]);
+  console.error(`[uat] ${projectName} jarv1s failed — last 50 log lines and health status:`);
+  console.error(logs);
+  console.error(health);
 }
 
 /**
@@ -911,6 +939,7 @@ export async function provisionForUat(
         );
         continue;
       }
+      await captureFailureEvidence(projectName);
       await cleanupAttempt({ error });
       throw error; // unreachable: cleanupUatAttempt rethrows the provisioning failure
     }
