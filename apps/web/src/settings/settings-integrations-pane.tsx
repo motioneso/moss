@@ -193,17 +193,19 @@ function AddIntegrationView(props: {
       <PaneHead title="Integrations" />
       <Group title="Add connection">
         <form className="intg__form" onSubmit={submit}>
-          <Field label="Kind">
-            <Segmented<IntegrationKind>
-              value={kind}
-              options={[
-                { value: "mcp", label: "MCP server" },
-                { value: "openapi", label: "API" }
-              ]}
-              ariaLabel="Kind"
-              onChange={setKind}
-            />
-          </Field>
+          <div className="fld">
+            <div className="fld__row">
+              <Segmented<IntegrationKind>
+                value={kind}
+                options={[
+                  { value: "mcp", label: "MCP server" },
+                  { value: "openapi", label: "API" }
+                ]}
+                ariaLabel="Kind"
+                onChange={setKind}
+              />
+            </div>
+          </div>
           <Field label="Name">
             <input
               className="jds-input"
