@@ -16,7 +16,12 @@ import {
 } from "./errors.js";
 import { renderPersona } from "./persona.js";
 import { renderMemorySeedBlock } from "./recall-seed.js";
-import type { ActionResultMetadata, CliChatEngine, EngineKillOpts, TranscriptRecord } from "./types.js";
+import type {
+  ActionResultMetadata,
+  CliChatEngine,
+  EngineKillOpts,
+  TranscriptRecord
+} from "./types.js";
 import type { ReapReason } from "./provider-runtime.js";
 import { applyRemoteReap, countSubscribersFor, delay } from "./session-runtime-helpers.js";
 import {
