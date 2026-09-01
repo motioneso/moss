@@ -214,7 +214,9 @@ describe("standings picker", () => {
   });
 
   it("disables standings settings until a replacement save is confirmed", async () => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } }
+    });
     client.setQueryData(sportsQueryKeys.standingsPreferences, {
       selectedCompetitionKeys: ["nfl"]
     });
@@ -262,7 +264,9 @@ describe("standings picker", () => {
   });
 
   it("curates standings with available and selected multi-select lists", async () => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } }
+    });
     client.setQueryData(sportsQueryKeys.standingsPreferences, {
       selectedCompetitionKeys: ["nfl"]
     });
@@ -305,10 +309,13 @@ describe("standings picker", () => {
         })
       );
     });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the confirmed standings selection after a failed save", async () => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } }
+    });
     client.setQueryData(sportsQueryKeys.standingsPreferences, {
       selectedCompetitionKeys: ["nfl"]
     });
