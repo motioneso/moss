@@ -602,3 +602,38 @@ button.theme-swatch {
   align-items: center;
   gap: 8px;
 }
+
+/* ---- Integrations (#2162) ---- */
+.intg__name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.intg__status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.intg__controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.intg__form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.intg__acts {
+  display: flex;
+  gap: 8px;
+}
+.intg__spec-link {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
