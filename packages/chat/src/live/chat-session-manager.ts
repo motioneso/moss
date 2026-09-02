@@ -480,17 +480,25 @@ export class ChatSessionManager {
         return { reply };
       }
 
-      // #2164 — a bounded-fallback engine (`ClaudePrintChatEngine`/`GeminiPrintChatEngine`) starts
-      // its MCP client per turn, inside `submit()`, so the #2159 launch-time readiness gate above
-      // is skipped for it. Without this check that race can complete the whole turn — and answer
-      // the user — before the CLI process ever attached the MCP tools, with nothing but the
-      // reply's own prose ("I don't have the Jarv1s MCP tools available") revealing it. Only check
-      // when no tool fired this turn: a tool call already proves the attachment worked, and most
-      // turns legitimately need no tool at all. `waitForToolsListReady` resolves immediately once
-      // the token's first tools/list has EVER landed (any prior turn), so this bounded wait only
-      // fires for a token whose MCP client has never once attached.
+      // #2164 — a bounded-fallback engine (`ClaudePrintChatEngine`) starts its MCP client per
+      // turn, inside `submit()`, so the #2159 launch-time readiness gate above is skipped for it.
+      // Without this check that race can complete the whole turn — and answer the user — before
+      // the CLI process ever attached the MCP tools, with nothing but the reply's own prose ("I
+      // don't have the Jarv1s MCP tools available") revealing it. Only check when no tool fired
+      // this turn: a tool call already proves the attachment worked, and most turns legitimately
+      // need no tool at all. `waitForToolsListReady` resolves immediately once the token's first
+      // tools/list has EVER landed (any prior turn), so this bounded wait only fires for a token
+      // whose MCP client has never once attached.
+      //
+      // Gemini QA fix (r19) — `isBoundedFallbackEngine` is also true for `GeminiPrintChatEngine`
+      // (see `engine-selection.ts`), but Gemini intentionally registers no MCP tools at all, so
+      // its `tools/list` can never land and this guard would wait out every normal, tool-less
+      // Gemini reply and then reject it. Scope the guard to the MCP-backed Claude print path by
+      // also requiring `provider === "anthropic"` (reusing the session's existing provider field,
+      // no new abstraction).
       if (
         session.isBoundedFallbackEngine &&
+        session.provider === "anthropic" &&
         session.mcpToken &&
         invokedToolNames.size === 0 &&
         reply

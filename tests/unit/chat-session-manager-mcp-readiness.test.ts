@@ -253,6 +253,38 @@ describe("ChatSessionManager one-shot tool-attachment guard (#2164)", () => {
     expect(recordTurn).toHaveBeenCalled();
   });
 
+  it("Gemini QA fix (r19) — accepts a tool-less reply without waiting; Gemini never registers MCP tools so tools/list can never land", async () => {
+    const engine = new FakeEngine(0, [
+      { records: [{ kind: "reply", text: "sure, here's the weather" }], offset: 10, complete: true }
+    ]);
+    const recordTurn = vi.fn().mockResolvedValue(undefined);
+    const waitForToolsListReady = vi.fn().mockReturnValue(
+      new Promise(() => {
+        // Never resolves — proves the guard is not awaited for Gemini at all.
+      })
+    );
+    const manager = new ChatSessionManager(
+      boundedFallbackDeps(engine, {
+        waitForToolsListReady,
+        persistence: {
+          resolveActiveProvider: vi.fn().mockResolvedValue({ provider: "google", model: "gemini" }),
+          listPriorTurns: vi.fn().mockResolvedValue({ recent: [], oldSummary: null }),
+          recordTurn,
+          openNewConversation: vi.fn().mockResolvedValue(undefined),
+          getThreadContext: vi.fn().mockResolvedValue({ threadTitle: null, localTimezone: null }),
+          touchExistingThread: vi.fn().mockResolvedValue(true)
+        }
+      })
+    );
+
+    await expect(manager.submitTurn("u1", "Ben", "what's the weather?")).resolves.toMatchObject({
+      reply: "sure, here's the weather"
+    });
+
+    expect(waitForToolsListReady).not.toHaveBeenCalled();
+    expect(recordTurn).toHaveBeenCalled();
+  });
+
   it("never calls waitForToolsListReady when a tool was actually invoked this turn", async () => {
     const engine = new FakeEngine(0, [
       {
