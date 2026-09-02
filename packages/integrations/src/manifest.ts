@@ -31,5 +31,14 @@ export const integrationsModuleManifest = {
       strategy: "cascade",
       tables: [{ table: "app.integration_connections" }]
     }
-  }
+  },
+  features: [
+    {
+      id: "integrations.connection_detail_grouped_tools",
+      description:
+        "A connection's tool list is grouped, with each tool getting a per-tool switch to allow " +
+        "repeated identical calls (off by default). Notes explain grandfathered connections and " +
+        "point to Refresh tools when read/repeat hints are missing."
+    }
+  ]
 } satisfies MossModuleManifest;

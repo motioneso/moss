@@ -189,6 +189,7 @@ function IntegrationDetailView(props: { readonly id: string; readonly onBack: ()
       enabledGroups?: readonly string[];
       enabledTools?: readonly string[];
       mutedTools?: readonly string[];
+      unsuppressedTools?: readonly string[];
     }) => updateIntegration(id, body),
     onSuccess: () => invalidateDetail(),
     onError: (error) => toast(readError(error), { tone: "drift" })
@@ -257,6 +258,23 @@ function IntegrationDetailView(props: { readonly id: string; readonly onBack: ()
     }
   };
 
+  const toggleUnsuppressed = (toolName: string, allow: boolean) => {
+    curationMutation.mutate({
+      unsuppressedTools: withMember(detail.unsuppressedTools, toolName, allow)
+    });
+  };
+
+  // Absent hint fields mean the connection's tools were discovered before Task 1 added
+  // readOnly/idempotent/destructive hints — refresh re-fetches them from the server.
+  const predatesHints =
+    detail.tools.length > 0 &&
+    detail.tools.every(
+      (tool) =>
+        tool.readOnly === undefined &&
+        tool.idempotent === undefined &&
+        tool.destructive === undefined
+    );
+
   return (
     <>
       <PaneHead title="Integrations" />
@@ -317,6 +335,7 @@ function IntegrationDetailView(props: { readonly id: string; readonly onBack: ()
             onToggleGroup={toggleGroup}
             onToggleMute={toggleMute}
             onToggleExplicitTool={toggleExplicitTool}
+            onToggleUnsuppressed={toggleUnsuppressed}
           />
         ) : (
           <Group title="Tools">
@@ -326,16 +345,29 @@ function IntegrationDetailView(props: { readonly id: string; readonly onBack: ()
                 name={tool.name}
                 desc={tool.description}
                 control={
-                  <Switch
-                    ariaLabel={`Enable ${tool.name}`}
-                    checked={!detail.mutedTools.includes(tool.name)}
-                    onChange={(checked) => toggleMute(tool.name, checked)}
-                  />
+                  <>
+                    <Switch
+                      ariaLabel={`Enable ${tool.name}`}
+                      checked={!detail.mutedTools.includes(tool.name)}
+                      onChange={(checked) => toggleMute(tool.name, checked)}
+                    />
+                    <Switch
+                      ariaLabel={`Allow repeated identical calls to ${tool.name}`}
+                      checked={detail.unsuppressedTools.includes(tool.name)}
+                      onChange={(checked) => toggleUnsuppressed(tool.name, checked)}
+                    />
+                  </>
                 }
               />
             ))}
           </Group>
         )}
+        {predatesHints ? (
+          <Note>
+            Refresh tools rereads what {detail.name} says about each tool — press it to pick up read
+            and repeat hints on tools discovered before this changed.
+          </Note>
+        ) : null}
       </div>
     </>
   );
@@ -346,13 +378,25 @@ function IntegrationGroupedTools(props: {
   readonly onToggleGroup: (groupName: string, enabled: boolean) => void;
   readonly onToggleMute: (toolName: string, unmuted: boolean) => void;
   readonly onToggleExplicitTool: (toolName: string, enabled: boolean) => void;
+  readonly onToggleUnsuppressed: (toolName: string, allow: boolean) => void;
 }) {
   const { detail } = props;
-  const showOptInNote = detail.enabledGroups.length === 0;
+  // Mutually exclusive: a connection that opted into grouping either starts fresh (everything
+  // off) or was grandfathered in already fully enabled before grouping existed (#2175 Task 6).
+  const isFreshOptIn =
+    detail.groupOptIn && detail.enabledGroups.length === 0 && detail.enabledTools.length === 0;
+  const isGrandfathered =
+    detail.groupOptIn && detail.enabledGroups.length === 0 && detail.enabledTools.length > 0;
 
   return (
     <>
-      {showOptInNote ? <Note>Groups start off. Turn on the ones Moss should use.</Note> : null}
+      {isFreshOptIn ? <Note>Groups start off. Turn on the ones Moss should use.</Note> : null}
+      {isGrandfathered ? (
+        <Note>
+          This connection kept everything enabled before grouping existed — the groups below are
+          ready to narrow, nothing changes until you turn one off.
+        </Note>
+      ) : null}
       {detail.groups.map((group) => {
         const groupEnabled = detail.enabledGroups.includes(group.name);
         return (
@@ -379,15 +423,22 @@ function IntegrationGroupedTools(props: {
                     name={tool.name}
                     desc={tool.description}
                     control={
-                      <Switch
-                        ariaLabel={`Enable ${tool.name}`}
-                        checked={checked}
-                        onChange={(next) =>
-                          groupEnabled
-                            ? props.onToggleMute(tool.name, next)
-                            : props.onToggleExplicitTool(tool.name, next)
-                        }
-                      />
+                      <>
+                        <Switch
+                          ariaLabel={`Enable ${tool.name}`}
+                          checked={checked}
+                          onChange={(next) =>
+                            groupEnabled
+                              ? props.onToggleMute(tool.name, next)
+                              : props.onToggleExplicitTool(tool.name, next)
+                          }
+                        />
+                        <Switch
+                          ariaLabel={`Allow repeated identical calls to ${tool.name}`}
+                          checked={detail.unsuppressedTools.includes(tool.name)}
+                          onChange={(next) => props.onToggleUnsuppressed(tool.name, next)}
+                        />
+                      </>
                     }
                   />
                 );
