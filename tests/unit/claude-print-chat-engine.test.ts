@@ -810,7 +810,7 @@ describe("#2164 r23 (item 2) multi-line prompt scrub", () => {
     expect(diag.stderrTail).not.toContain(line2);
   });
 
-  it("drops a truncated argv-echo fragment spanning a line boundary in a too-long, every-line-short prompt", async () => {
+  it("drops a truncated argv-echo fragment carrying a whole short prompt line in a too-long, every-line-short prompt", async () => {
     const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
       mux: fakeMux(),
       homeBase: "/home/test",
@@ -821,25 +821,39 @@ describe("#2164 r23 (item 2) multi-line prompt scrub", () => {
       personaPath: "/tmp/jarvis-neutral/persona.md",
       personaText: "persona"
     });
-    // 200 distinct, varied short lines (each well under the 32-char window) so the whole
-    // prompt exceeds the 4096-byte stderr cap while no single line is long enough to ever
-    // produce a window under the r22 algorithm — exactly the hole this correction closes.
+    // 200 distinct lines, each genuinely under the 32-char window after trim (23 chars, so
+    // each also clears the 8-char literal floor), so the whole prompt exceeds the 4096-byte
+    // stderr cap while no single line is ever long enough to produce a window — every line
+    // instead lands in the line-wise literal set this correction adds.
     const lines = Array.from(
       { length: 200 },
-      (_, i) => `vault key fragment ${i.toString().padStart(4, "0")} lives here`
+      (_, i) => `secret token ${i.toString().padStart(4, "0")} value`
     );
     const multiLinePrompt = lines.join("\n");
+    expect(Buffer.byteLength(multiLinePrompt, "utf8")).toBeGreaterThan(4096);
     await engine.submit(multiLinePrompt);
 
-    // A fragment spanning the boundary between two adjacent short lines, as a truncated argv
-    // echo would produce.
-    const boundaryFragment = lines[99]!.slice(-10) + lines[100]!.slice(0, 10);
-    currentChild.stderr.write(`bash: -lc: line 1: claude: ${boundaryFragment}\n`);
+    // A truncated argv echo of the launch command that happens to carry one whole prompt line
+    // verbatim, with no adjacent newline — as a real truncated echo of a single argv token would.
+    const carriedLine = lines[123]!;
+    expect(carriedLine.trim().length).toBeGreaterThanOrEqual(8);
+    expect(carriedLine.trim().length).toBeLessThan(32);
+    currentChild.stderr.write(`bash: -lc: line 1: claude: --resume x ${carriedLine} trailing\n`);
     await new Promise((resolve) => setImmediate(resolve));
 
     const diag = engine.getLastSubmitDiagnostics();
-    expect(diag.stderrTail).not.toContain(lines[99]);
-    expect(diag.stderrTail).not.toContain(lines[100]);
+    // Both halves of the line-wise scrub: no 32-char window of any prompt line survives, and no
+    // whole prompt line of 8+ characters survives.
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (line.length >= 32) {
+        for (let i = 0; i <= line.length - 32; i++) {
+          expect(diag.stderrTail).not.toContain(line.slice(i, i + 32));
+        }
+      } else if (line.length >= 8) {
+        expect(diag.stderrTail).not.toContain(line);
+      }
+    }
   });
 
   it("keeps an unrelated stderr line intact in the presence of a multi-line prompt", async () => {
