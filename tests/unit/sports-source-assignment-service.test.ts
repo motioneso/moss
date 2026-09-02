@@ -631,10 +631,106 @@ describe("SportsSourceService recipe recovery", () => {
     ).resolves.toMatchObject({
       status: "ok",
       candidate: {
-        canonicalDomain: "www.publisher.example.com",
+        canonicalDomain: "publisher.example.com",
         confirmedFetchHosts: ["www.publisher.example.com"]
       }
     });
+  });
+
+  it("keeps the saved canonical domain through a full rebuild-and-confirm when discovery resolves the www host, even though another source already owns it", async () => {
+    const staleBaseline: SportsSourceBaseline = {
+      ...baseline,
+      source: {
+        ...baseline.source,
+        canonicalDomain: "fotmob.com",
+        homepageUrl: "https://www.fotmob.com/",
+        feedUrl: null,
+        retrievalMethod: "scrape",
+        recipeStatus: "missing"
+      },
+      confirmedFetchHosts: ["www.fotmob.com"]
+    };
+    // A second source already owns www.fotmob.com. replaceRecipe is the real repository method's
+    // stand-in: it mirrors the write it performs and would violate
+    // sports_custom_sources_owner_user_id_canonical_domain_key against that row if the rebuilt
+    // candidate's canonicalDomain were ever allowed to drift from the baseline's.
+    let persisted = staleBaseline.source;
+    const replaceRecipe = vi.fn(async (_db: DataContextDb, _id: string, candidate) => {
+      persisted = {
+        ...persisted,
+        canonicalDomain: candidate.canonicalDomain,
+        homepageUrl: candidate.homepageUrl,
+        feedUrl: candidate.feedUrl,
+        retrievalMethod: candidate.retrievalMethod,
+        recipeStatus: candidate.retrievalMethod === "feed" ? "feed" : "ready"
+      };
+      return persisted;
+    });
+    const getBaseline = vi.fn(async () => staleBaseline);
+    const fetch = vi.fn(async (url: string) => ({
+      ok: true as const,
+      status: 200,
+      finalUrl: url,
+      contentType: "application/rss+xml",
+      body: "<rss><channel><title>Publisher</title></channel></rss>",
+      truncated: false
+    }));
+    const service = new SportsSourceService({
+      follows: {
+        list: async () => [
+          { id: followId, competitionKey: "nfl", teamKey: "dal", createdAt: checkedAt }
+        ]
+      },
+      sources: {
+        getBaseline,
+        lockOwnerAssignments: vi.fn(async () => undefined),
+        replaceRecipe
+      } as unknown as SportsSourcesRepository,
+      previews: createSportsPreviewStore(),
+      discovery: {
+        fetch,
+        ai: {
+          generateJson: async () => ({ ok: false as const, error: "needs_config" as const }),
+          fingerprint: async () => null
+        }
+      },
+      resolveTeams: async () => [
+        {
+          teamKey: "dal",
+          competitionKey: "nfl",
+          name: "Dallas Cowboys",
+          shortName: "DAL",
+          crestUrl: null
+        }
+      ]
+    });
+    const db = {} as DataContextDb;
+
+    const preview = await service.previewRecipeRebuild(db, "owner-1", sourceId);
+    if (!preview.confirmationId || !preview.candidate || !preview.authorizationAcknowledgement) {
+      throw new Error("expected successful recipe preview");
+    }
+    expect(preview.candidate.canonicalDomain).toBe("fotmob.com");
+
+    const source = await service.confirmRecipeRebuild(db, "owner-1", sourceId, {
+      confirmationId: preview.confirmationId,
+      authorizationAcknowledgement: preview.authorizationAcknowledgement,
+      canonicalDomain: preview.candidate.canonicalDomain,
+      confirmedFetchHosts: preview.candidate.confirmedFetchHosts,
+      targets: preview.candidate.targets.map((target) => ({
+        target: target.target,
+        targetUrl: target.targetUrl
+      }))
+    });
+
+    expect(replaceRecipe).toHaveBeenCalledWith(
+      db,
+      sourceId,
+      expect.objectContaining({ canonicalDomain: "fotmob.com" })
+    );
+    expect(source.canonicalDomain).toBe("fotmob.com");
+    expect(source.retrievalMethod).toBe("feed");
+    expect(source.recipeStatus).toBe("feed");
   });
 
   it("rejects confirmation after the source baseline changes", async () => {

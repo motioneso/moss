@@ -16,7 +16,7 @@
 //
 // Harness skeleton: tests/integration/js08-decide-confirm-audit.test.ts.
 // Discovery/availability stubs: tests/integration/news-personalization-routes.test.ts.
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import pg from "pg";
 import type { Kysely } from "kysely";
 import type { PgBoss } from "pg-boss";
@@ -502,6 +502,24 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
   }, 60_000);
 
   it("carries a real assistant conversation through chat, MCP, confirmation, and the worker", async () => {
+    // #2159: this fake engine drives tool calls directly over MCP but never runs a real
+    // tools/list round trip, so the server's readiness wait (SessionTokenRegistry's
+    // waitForToolsListObserved) would otherwise time out on every session launch below. Stub
+    // it to resolve ready immediately — this test isn't exercising readiness.
+    const toolsListReadySpy = vi
+      .spyOn(SessionTokenRegistry.prototype, "waitForToolsListObserved")
+      .mockResolvedValue(true);
+
+    // #2164 r21: this fake engine reports its tool calls as news.refreshNews and
+    // settings.platformDiagnostics, neither of which is mcp__-namespaced, so the per-turn gate
+    // (SessionTokenRegistry.getToolsListObservationCount, compared against a per-turn baseline in
+    // ChatSessionManager.waitForNewToolsListObservation) would otherwise time out waiting for an
+    // observation that never comes. Stub it to a strictly increasing count so every baseline
+    // capture is immediately exceeded on the next read — readiness isn't under test here.
+    let toolsListObservationCounter = 0;
+    const toolsListObservationCountSpy = vi
+      .spyOn(SessionTokenRegistry.prototype, "getToolsListObservationCount")
+      .mockImplementation(() => ++toolsListObservationCounter);
     configureChatTools(appBoss);
     await appContext.withDataContext(
       { actorUserId: ids.userA, requestId: "diagnostics-chat-policy" },
@@ -638,6 +656,8 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
       expect(await listActorAudits(ids.userB)).toEqual([]);
     } finally {
       await server.close();
+      toolsListReadySpy.mockRestore();
+      toolsListObservationCountSpy.mockRestore();
     }
     configureChatTools(null);
   }, 60_000);

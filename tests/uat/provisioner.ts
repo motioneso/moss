@@ -491,28 +491,58 @@ function runCapture(command: string, args: readonly string[]): Promise<string> {
 }
 
 /**
- * #2173: the terminal-failure branch of provisionForUat used to go straight to teardown, which
- * discards the app container's own log/health evidence before anyone can see why it failed.
- * Bounded (last 50 log lines, one formatted health read) and Compose project/service scoped
- * (buildUatComposeArgs -> `-p <projectName>` + the `jarv1s` service) — never the compose file's
- * hardcoded `container_name: moss` (infra/docker-compose.prod.yml:145), never a bare/full `docker
- * inspect`, and never the settings file or its contents (security ruling, issue #2173 comment
- * 5497191033 section 4).
+ * #2173: retains bounded app evidence (one health read) plus the 3 newest Claude print-engine
+ * transcripts under the chat engine's configured CLI home base, `$HOME` as fallback — #2164 r17)
+ * before the terminal-failure branch tears down. Compose project/service scoped
+ * (buildUatComposeArgs), never the compose file's hardcoded container name, a bare
+ * `docker inspect`, or the settings file (#2173 comment 5497191033 section 4). Also used by
+ * run-uat.ts's spec-level failure path (#2164).
+ *
+ * #2164 r18: also retains the full (untailed) `postgres` service log — the app deliberately never
+ * re-logs a thrown database error's SQLSTATE/constraint/statement (#1251 hostile-object rule),
+ * but Postgres already writes all three to its own container log, which teardown would otherwise
+ * discard first.
+ *
+ * #2164 r19: transcript capture used to `tail -c 4000` each file, cutting off the exact tool
+ * call/response that would show the root cause. Now captures each transcript in full.
+ *
+ * #2164 r21: the `jarv1s` service log was still `--tail 50`, cutting off the per-turn `mcp
+ * tools/list observed` line (`mcp-transport.ts`) on a run over 50 lines. Now full, same as above.
  */
-async function captureFailureEvidence(projectName: string): Promise<void> {
-  const [logs, health] = await Promise.all([
-    runCapture(
-      "docker",
-      buildUatComposeArgs(projectName, ["logs", "--tail", "50", "jarv1s"])
-    ).catch((error) => `<log capture failed: ${String(error)}>`),
+export async function captureFailureEvidence(projectName: string, reason: string): Promise<void> {
+  const [logs, health, transcripts, postgresLogs] = await Promise.all([
+    runCapture("docker", buildUatComposeArgs(projectName, ["logs", "jarv1s"])).catch(
+      (error) => `<log capture failed: ${String(error)}>`
+    ),
     runCapture(
       "docker",
       buildUatComposeArgs(projectName, ["ps", "jarv1s", "--format", "json"])
-    ).catch((error) => `<health capture failed: ${String(error)}>`)
+    ).catch((error) => `<health capture failed: ${String(error)}>`),
+    runCapture(
+      "docker",
+      buildUatComposeArgs(projectName, [
+        "exec",
+        "-T",
+        "jarv1s",
+        "sh",
+        "-c",
+        'cli_home_base="${MOSS_CLI_HOME_BASE:-${JARVIS_CLI_HOME_BASE:-$HOME}}"; ' +
+          "find \"$cli_home_base/.claude/projects\" -name '*.jsonl' -printf '%T@ %p\\n' 2>/dev/null " +
+          "| sort -rn | head -3 | cut -d' ' -f2- " +
+          '| while read -r f; do echo "--- $f ---"; cat "$f"; done'
+      ])
+    ).catch((error) => `<transcript capture failed: ${String(error)}>`),
+    runCapture("docker", buildUatComposeArgs(projectName, ["logs", "postgres"])).catch(
+      (error) => `<postgres log capture failed: ${String(error)}>`
+    )
   ]);
-  console.error(`[uat] ${projectName} jarv1s failed — last 50 log lines and health status:`);
+  console.error(
+    `[uat] ${projectName} jarv1s ${reason} — last 50 log lines, health status, full Claude print transcript(s), and full postgres log:`
+  );
   console.error(logs);
   console.error(health);
+  console.error(transcripts);
+  console.error(postgresLogs);
 }
 
 /**
@@ -939,7 +969,7 @@ export async function provisionForUat(
         );
         continue;
       }
-      await captureFailureEvidence(projectName);
+      await captureFailureEvidence(projectName, "failed to provision");
       await cleanupAttempt({ error });
       throw error; // unreachable: cleanupUatAttempt rethrows the provisioning failure
     }

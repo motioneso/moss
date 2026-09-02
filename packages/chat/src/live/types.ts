@@ -17,6 +17,16 @@ export interface TranscriptRecord {
   readonly messageId?: string;
   readonly actionRequestId?: string;
   readonly toolName?: string;
+  /**
+   * #2164 r21 correction — the originating `tool_use` block's id (Anthropic transcripts only),
+   * carried on both the call's own "tool" record and, keyed the same way, on a distinct
+   * rejection signal record (`rejected: true`) when that call was answered with an errored
+   * `tool_result`. Lets a caller correlate a call and its rejection even when they arrive on
+   * separate `readNew` reads.
+   */
+  readonly toolCallId?: string;
+  /** #2164 r21 correction — true on a rejection signal record for the call named by `toolCallId`. */
+  readonly rejected?: boolean;
   readonly summary?: string;
   readonly outcome?: "executed" | "denied" | "error" | "allowed";
   /** Live-only structured result for a module-owned inline artifact. */

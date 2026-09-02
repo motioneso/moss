@@ -37,7 +37,21 @@ const DEFAULT_TOKEN_TTL_MS = 60 * 60 * 1000;
 interface TokenEntry {
   readonly identity: SessionIdentity;
   expiresAt: number;
+  /** #2159 — has this token's client completed its first MCP tools/list round trip? */
+  toolsListObserved: boolean;
+  /**
+   * #2164 r21 — monotonic count of tools/list round trips observed for this token, across the
+   * token's whole life (a bounded-fallback engine reconnects a fresh MCP client per turn, so
+   * this increments on every turn's successful attach, not just the first).
+   */
+  observationCount: number;
+  readonly toolsListWaiters: Array<() => void>;
 }
+
+/** Bounded wait for {@link SessionTokenRegistry.waitForToolsListObserved}; mirrors the
+ *  bounded-wait shape of `verifiedSubmitMs` elsewhere in the chat launch path — never blocks
+ *  a session forever if a client's first tools/list never lands. */
+const DEFAULT_TOOLS_LIST_READY_TIMEOUT_MS = 10_000;
 
 export interface SessionTokenRegistryOptions {
   readonly clock?: SessionTokenClock;
@@ -65,7 +79,13 @@ export class SessionTokenRegistry {
     // Opportunistically purge anything already expired (one token per user → cheap).
     this.sweepExpired();
     const token = `jst_${randomUUID()}`;
-    this.tokens.set(token, { identity, expiresAt: this.clock.now() + this.ttlMs });
+    this.tokens.set(token, {
+      identity,
+      expiresAt: this.clock.now() + this.ttlMs,
+      toolsListObserved: false,
+      observationCount: 0,
+      toolsListWaiters: []
+    });
     return token;
   }
 
@@ -97,6 +117,102 @@ export class SessionTokenRegistry {
         entry.expiresAt = expiresAt;
       }
     }
+  }
+
+  /**
+   * #2159 — mark that this token's client has completed its first MCP tools/list round trip.
+   * Called by the MCP transport's tools/list handler on first success for a token. Idempotent
+   * and a no-op for an unknown/revoked/expired token (nothing to wake).
+   */
+  markToolsListObserved(token: string): void {
+    const entry = this.tokens.get(token);
+    if (!entry) return;
+    entry.observationCount++;
+    entry.toolsListObserved = true;
+    const waiters = entry.toolsListWaiters.splice(0);
+    for (const wake of waiters) wake();
+  }
+
+  /**
+   * #2159 — resolves `true` once this token's first tools/list has been observed (immediately,
+   * if already observed), or `false` after `timeoutMs` if it never lands. Bounded so a session
+   * launch can gate the first user message on real MCP readiness without risking an indefinite
+   * hang if the CLI's tools/list round trip never completes. An unknown/revoked/expired token
+   * has nothing to wait for and resolves `false` immediately.
+   */
+  waitForToolsListObserved(
+    token: string,
+    timeoutMs: number = DEFAULT_TOOLS_LIST_READY_TIMEOUT_MS
+  ): Promise<boolean> {
+    const entry = this.tokens.get(token);
+    if (!entry) return Promise.resolve(false);
+    if (entry.toolsListObserved) return Promise.resolve(true);
+    return new Promise<boolean>((resolve) => {
+      let settled = false;
+      const wake = () => {
+        if (settled) return;
+        settled = true;
+        resolve(true);
+      };
+      entry.toolsListWaiters.push(wake);
+      setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        const idx = entry.toolsListWaiters.indexOf(wake);
+        if (idx !== -1) entry.toolsListWaiters.splice(idx, 1);
+        resolve(false);
+      }, timeoutMs);
+    });
+  }
+
+  /**
+   * #2164 r21 — this token's monotonic tools/list observation count (0 if never observed, or
+   * for an unknown/revoked/expired token). Lets a caller capture a baseline before a turn and
+   * later ask "did a NEW tools/list land since then" via {@link waitForToolsListObservedSince} —
+   * distinct from {@link waitForToolsListObserved}'s "ever" semantics, which stay unchanged for
+   * the launch-time gate.
+   */
+  getToolsListObservationCount(token: string): number {
+    return this.tokens.get(token)?.observationCount ?? 0;
+  }
+
+  /**
+   * #2164 r21 — resolves `true` once this token's observation count exceeds `baselineCount`
+   * (immediately, if already past it), or `false` after `timeoutMs` if it never does. NOT used by
+   * the per-turn readiness guard for a bounded-fallback engine: that guard polls
+   * {@link getToolsListObservationCount} on its own loop instead. Was intended for a
+   * bounded-fallback engine reconnecting a fresh MCP client every turn — the launch-time
+   * `waitForToolsListObserved` would report "ready" forever after the very first turn ever
+   * attached, so this variant re-checks against a fresh baseline captured immediately before each
+   * turn's submit — but nothing currently calls it. Reuses the same waiter/timeout shape as
+   * `waitForToolsListObserved`. An unknown/revoked/expired token has nothing to wait for and
+   * resolves `false` immediately.
+   */
+  waitForToolsListObservedSince(
+    token: string,
+    baselineCount: number,
+    timeoutMs: number = DEFAULT_TOOLS_LIST_READY_TIMEOUT_MS
+  ): Promise<boolean> {
+    const entry = this.tokens.get(token);
+    if (!entry) return Promise.resolve(false);
+    if (entry.observationCount > baselineCount) return Promise.resolve(true);
+    return new Promise<boolean>((resolve) => {
+      let settled = false;
+      const wake = () => {
+        if (settled) return;
+        if (entry.observationCount <= baselineCount) return;
+        settled = true;
+        resolve(true);
+      };
+      entry.toolsListWaiters.push(wake);
+      setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        const idx = entry.toolsListWaiters.indexOf(wake);
+        if (idx !== -1) entry.toolsListWaiters.splice(idx, 1);
+        resolve(false);
+      }, timeoutMs);
+    });
   }
 
   revoke(token: string): void {

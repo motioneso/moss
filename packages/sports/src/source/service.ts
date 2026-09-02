@@ -465,13 +465,21 @@ export class SportsSourceService {
     if (!samePublisherIdentity(result.candidate.canonicalDomain, baseline.source.canonicalDomain)) {
       return { status: "rejected", reason: "stale_source" };
     }
+    // A rebuild refreshes retrieval, not identity: the same-publisher check above already
+    // established the candidate is the row's own publisher, so keep the row's canonical_domain
+    // rather than the rediscovered host (e.g. www.), which can collide with another saved source
+    // that already owns that exact domain (sports_custom_sources_owner_user_id_canonical_domain_key).
+    const candidate: VerifiedSportsSourceCandidate = {
+      ...result.candidate,
+      canonicalDomain: baseline.source.canonicalDomain
+    };
 
     const confirmationId = this.dependencies.previews.put({
       kind: "recipe-rebuild",
       ownerUserId,
       sourceId,
       baseline,
-      candidate: result.candidate,
+      candidate,
       authorizationAcknowledgement: SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT,
       createdAt: Date.now()
     });
@@ -479,7 +487,7 @@ export class SportsSourceService {
       status: "ok",
       confirmationId,
       authorizationAcknowledgement: SPORTS_SOURCE_AUTHORIZATION_ACKNOWLEDGEMENT,
-      candidate: candidateResponse(result.candidate)
+      candidate: candidateResponse(candidate)
     };
   }
 

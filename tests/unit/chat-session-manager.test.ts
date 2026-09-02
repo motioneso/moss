@@ -44,7 +44,7 @@ export function makeMinimalDeps(
  * `readNew` replays a queued script of results so a test can model the "replay drained
  * server-side, first real readNew returns the NEW reply" correctness case (§12).
  */
-class FakeEngine {
+export class FakeEngine {
   readonly provider = "anthropic" as const;
   launchOpts: EngineLaunchOpts | null = null;
   readonly submitted: string[] = [];
