@@ -322,7 +322,10 @@ export function registerChatRoutes(
           listSessionIds: () => wiring.tokens.listSessionIds(),
           // #2159 — readiness gate: the manager waits on this right after engine.launch() before
           // accepting the session's first message.
-          waitForReady: (token: string) => wiring.tokens.waitForToolsListObserved(token)
+          waitForReady: (token: string) => wiring.tokens.waitForToolsListObserved(token),
+          // #2164 r21 — per-turn observation reading (see Fable's r21 wiring-amendment ruling).
+          getToolsListObservationCount: (token: string) =>
+            wiring.tokens.getToolsListObservationCount(token)
         }
       : undefined
   });

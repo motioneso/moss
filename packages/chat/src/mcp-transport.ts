@@ -110,6 +110,12 @@ export function registerMcpTransportRoute(
         // #2159 — first successful tools/list for this token is the readiness signal
         // ChatSessionManager.launchSession waits on before accepting the session's first message.
         deps.tokens.markToolsListObserved(token);
+        // #2164 r21 — one info log per successful tools/list, one-way fingerprint + count only
+        // (no actor content, arguments, or results).
+        request.log.info(
+          { tokenFingerprint: mcpSessionRateLimitKey(request), toolCount: tools.length },
+          "mcp tools/list observed"
+        );
         return reply.code(200).send({ jsonrpc: "2.0", id, result: { tools } });
       }
 

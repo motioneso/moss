@@ -184,7 +184,7 @@ describe("ChatSessionManager one-shot tool-attachment guard (#2164)", () => {
     }) as never;
   }
 
-  it("rejects a tool-less reply instead of persisting it when tools/list was never observed for this token", async () => {
+  it("rejects a tool-less reply instead of persisting it when no NEW tools/list observation lands for this turn", async () => {
     const engine = new FakeEngine(0, [
       {
         records: [
@@ -195,10 +195,18 @@ describe("ChatSessionManager one-shot tool-attachment guard (#2164)", () => {
       }
     ]);
     const recordTurn = vi.fn().mockResolvedValue(undefined);
-    const waitForToolsListReady = vi.fn().mockResolvedValue(false);
+    // #2164 r21 — count never advances past the baseline, so the guard must time out. A
+    // monotonically-advancing fake clock (rather than a fixed "second call" value, which other
+    // clock.now() reads earlier in the turn — lastActivity stamps, emission timestamps — would
+    // consume before the guard's own deadline check ever runs) keeps this test from waiting out
+    // the real 10s timeout regardless of how many unrelated clock reads precede it.
+    const getToolsListObservationCount = vi.fn().mockReturnValue(0);
+    let clockNow = 0;
+    const clock = { now: vi.fn(() => (clockNow += 3_000)) };
     const manager = new ChatSessionManager(
       boundedFallbackDeps(engine, {
-        waitForToolsListReady,
+        getToolsListObservationCount,
+        clock,
         persistence: {
           resolveActiveProvider: vi.fn().mockResolvedValue({
             provider: "anthropic",
@@ -218,19 +226,21 @@ describe("ChatSessionManager one-shot tool-attachment guard (#2164)", () => {
       CliChatUnavailableError
     );
 
-    expect(waitForToolsListReady).toHaveBeenCalledWith("jst_x");
+    expect(getToolsListObservationCount).toHaveBeenCalledWith("jst_x");
     expect(recordTurn).not.toHaveBeenCalled();
   });
 
-  it("accepts a tool-less reply once tools/list has been observed for the token", async () => {
+  it("accepts a tool-less reply once a NEW tools/list observation lands after this turn's submit", async () => {
     const engine = new FakeEngine(0, [
       { records: [{ kind: "reply", text: "sure, here's the weather" }], offset: 10, complete: true }
     ]);
     const recordTurn = vi.fn().mockResolvedValue(undefined);
-    const waitForToolsListReady = vi.fn().mockResolvedValue(true);
+    // #2164 r21 — first call is the pre-submit baseline (0); every call after that reports a
+    // fresh attach landed for this turn (1).
+    const getToolsListObservationCount = vi.fn().mockReturnValueOnce(0).mockReturnValue(1);
     const manager = new ChatSessionManager(
       boundedFallbackDeps(engine, {
-        waitForToolsListReady,
+        getToolsListObservationCount,
         persistence: {
           resolveActiveProvider: vi.fn().mockResolvedValue({
             provider: "anthropic",

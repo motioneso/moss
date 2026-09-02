@@ -78,6 +78,8 @@ interface UserSession {
 const MAX_SUBSCRIBERS_PER_ACTOR = 5;
 const MAX_SUBSCRIBERS_TOTAL_PER_ACTOR = MAX_SUBSCRIBERS_PER_ACTOR * 2;
 const PRIVATE_DETACH_GRACE_MS = 30_000;
+const TOOLS_LIST_OBSERVATION_TIMEOUT_MS = 10_000;
+const TOOLS_LIST_OBSERVATION_POLL_MS = 25;
 
 export class ChatSessionManager {
   private readonly sessions = new Map<string, UserSession>();
@@ -240,6 +242,22 @@ export class ChatSessionManager {
     return session;
   }
 
+  // #2164 r21 — true once a fresh attach lands (count exceeds baseline), false after
+  // TOOLS_LIST_OBSERVATION_TIMEOUT_MS, undefined when there's nothing to compare (guard skipped).
+  private async waitForNewToolsListObservation(
+    token: string,
+    baselineCount: number | undefined
+  ): Promise<boolean | undefined> {
+    const getCount = this.deps.getToolsListObservationCount;
+    if (!getCount || baselineCount === undefined) return undefined;
+    const deadline = this.deps.clock.now() + TOOLS_LIST_OBSERVATION_TIMEOUT_MS;
+    for (;;) {
+      if (getCount(token) > baselineCount) return true;
+      if (this.deps.clock.now() >= deadline) return false;
+      await delay(TOOLS_LIST_OBSERVATION_POLL_MS);
+    }
+  }
+
   /**
    * #1157 self-heal: the engine behind this session is gone (the daemon killed it after a
    * VerifiedSubmitError, the cli-runner restarted, or the tmux server died with the
@@ -378,6 +396,9 @@ export class ChatSessionManager {
         ? `${withAttachments}\n\n${opts.moduleControl}`
         : withAttachments;
       this.emit(actorUserId, surface, { kind: "user", text });
+      let toolsListBaseline = session.mcpToken
+        ? this.deps.getToolsListObservationCount?.(session.mcpToken)
+        : undefined;
       try {
         await session.engine.submit(engineText);
       } catch (err) {
@@ -392,6 +413,9 @@ export class ChatSessionManager {
           // #1157: unavailable = the text verifiably never entered the engine (paste failed
           // pre-entry, or the daemon has no live session). Safe to heal + resubmit ONCE.
           session = await this.healAndRelaunch(actorUserId, userName, session);
+          toolsListBaseline = session.mcpToken // #2164 r21 — recapture against the fresh token
+            ? this.deps.getToolsListObservationCount?.(session.mcpToken)
+            : undefined;
           await session.engine.submit(engineText);
         } else {
           throw err;
@@ -480,22 +504,11 @@ export class ChatSessionManager {
         return { reply };
       }
 
-      // #2164 — a bounded-fallback engine (`ClaudePrintChatEngine`) starts its MCP client per
-      // turn, inside `submit()`, so the #2159 launch-time readiness gate above is skipped for it.
-      // Without this check that race can complete the whole turn — and answer the user — before
-      // the CLI process ever attached the MCP tools, with nothing but the reply's own prose ("I
-      // don't have the Jarv1s MCP tools available") revealing it. Only check when no tool fired
-      // this turn: a tool call already proves the attachment worked, and most turns legitimately
-      // need no tool at all. `waitForToolsListReady` resolves immediately once the token's first
-      // tools/list has EVER landed (any prior turn), so this bounded wait only fires for a token
-      // whose MCP client has never once attached.
-      //
-      // Gemini QA fix (r19) — `isBoundedFallbackEngine` is also true for `GeminiPrintChatEngine`
-      // (see `engine-selection.ts`), but Gemini intentionally registers no MCP tools at all, so
-      // its `tools/list` can never land and this guard would wait out every normal, tool-less
-      // Gemini reply and then reject it. Scope the guard to the MCP-backed Claude print path by
-      // also requiring `provider === "anthropic"` (reusing the session's existing provider field,
-      // no new abstraction).
+      // #2164 — a bounded-fallback engine starts its MCP client per turn inside `submit()`, so the
+      // #2159 launch-time gate above is skipped for it; only check when no tool fired this turn.
+      // r21: compares against `toolsListBaseline` (captured before this turn) instead of the
+      // ever-observed check, so a stale "ready" from an earlier turn can't mask this turn's race.
+      // Gemini registers no MCP tools, so `provider === "anthropic"` scopes this to Claude (r19).
       if (
         session.isBoundedFallbackEngine &&
         session.provider === "anthropic" &&
@@ -503,8 +516,20 @@ export class ChatSessionManager {
         invokedToolNames.size === 0 &&
         reply
       ) {
-        const toolsListReady = await this.deps.waitForToolsListReady?.(session.mcpToken);
+        const toolsListReady = await this.waitForNewToolsListObservation(
+          session.mcpToken,
+          toolsListBaseline
+        );
         if (toolsListReady === false) {
+          // #2164 r21 — bounded, scrubbed diagnostic; duck-typed cast since not on CliChatEngine.
+          type Diagnostics = { readonly stderrTail: string; readonly exitCode: number | null };
+          type DiagnosticsCapable = { getLastSubmitDiagnostics?: () => Diagnostics | undefined };
+          const diag = (session.engine as DiagnosticsCapable).getLastSubmitDiagnostics?.();
+          if (diag) {
+            console.error(
+              `[chat] readiness gate failed: exit=${diag.exitCode} stderr=${diag.stderrTail}`
+            );
+          }
           this.emit(actorUserId, surface, {
             kind: "status",
             text: "Chat tools were not available for this reply — please try again."

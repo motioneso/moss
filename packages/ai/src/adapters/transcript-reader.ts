@@ -72,6 +72,15 @@
 
 import type { ChatActivityEvent } from "../chat-adapter.js";
 
+/**
+ * #2164 r21 (item 3) — widens the shared `ChatActivityEvent` locally with an optional
+ * `toolName` so a "tool" event can carry the exact tool name alongside its display text,
+ * without editing the shared `chat-adapter.ts` type (out of the r21 allowlist). Every mapper
+ * still compiles pushing plain `{kind:"tool", text}` since the field is optional; only
+ * `mapAnthropicRecord`'s `tool_use` branch sets it.
+ */
+type ChatActivityEventWithToolName = ChatActivityEvent & { readonly toolName?: string };
+
 export type ProviderKind = "anthropic" | "openai-compatible" | "google";
 export type AckProviderKind = Exclude<ProviderKind, "google">;
 
@@ -80,7 +89,7 @@ export interface AckCursor {
 }
 
 export interface TranscriptParseResult {
-  readonly events: readonly ChatActivityEvent[];
+  readonly events: readonly ChatActivityEventWithToolName[];
   readonly reply: string | null;
   readonly complete: boolean;
 }
@@ -141,7 +150,7 @@ export function parseTranscript(
   const slice = jsonl.slice(afterOffset);
   const lines = slice.split("\n").filter((l) => l.trim().length > 0);
 
-  const events: ChatActivityEvent[] = [];
+  const events: ChatActivityEventWithToolName[] = [];
   const geminiTurn: GeminiTurnState = { assistant: "" };
   let reply: string | null = null;
   let complete = false;
@@ -201,7 +210,7 @@ export function parseTranscript(
 
 function mapAnthropicRecord(
   rec: Record<string, unknown>,
-  events: ChatActivityEvent[],
+  events: ChatActivityEventWithToolName[],
   onFinal: (text: string) => void
 ): void {
   if (rec["type"] !== "assistant") return;
@@ -237,7 +246,7 @@ function mapAnthropicRecord(
       events.push({ kind: "thinking", text });
     } else if (itemType === "tool_use") {
       const name = typeof item["name"] === "string" ? item["name"] : "tool";
-      events.push({ kind: "tool", text: name });
+      events.push({ kind: "tool", text: name, toolName: name });
     } else if (itemType === "text" && typeof item["text"] === "string") {
       // Intermediate text blocks (stop_reason !== "end_turn") are status
       events.push({ kind: "status", text: item["text"] });
@@ -249,7 +258,7 @@ function mapAnthropicRecord(
 
 function mapCodexRecord(
   rec: Record<string, unknown>,
-  events: ChatActivityEvent[],
+  events: ChatActivityEventWithToolName[],
   onFinal: (text: string) => void
 ): void {
   // #1242: codex-cli's `exec --json` stdout stream (0.139.0+) is a DIFFERENT schema from the
@@ -301,7 +310,10 @@ function mapCodexRecord(
   }
 }
 
-function mapCodexResponseItem(rec: Record<string, unknown>, events: ChatActivityEvent[]): void {
+function mapCodexResponseItem(
+  rec: Record<string, unknown>,
+  events: ChatActivityEventWithToolName[]
+): void {
   const payload = rec["payload"] as Record<string, unknown> | undefined;
   if (!payload) return;
 
@@ -325,7 +337,7 @@ function mapCodexResponseItem(rec: Record<string, unknown>, events: ChatActivity
  */
 function mapCodexExecItem(
   rec: Record<string, unknown>,
-  events: ChatActivityEvent[],
+  events: ChatActivityEventWithToolName[],
   onFinal: (text: string) => void
 ): void {
   const item = rec["item"];
@@ -363,7 +375,7 @@ interface GeminiTurnState {
 
 function mapGeminiRecord(
   rec: Record<string, unknown>,
-  events: ChatActivityEvent[],
+  events: ChatActivityEventWithToolName[],
   turn: GeminiTurnState,
   onFinal: (text: string) => void
 ): void {

@@ -6,6 +6,8 @@ import { join } from "node:path";
 import {
   DEFAULT_MODEL_SENTINEL,
   parseTranscript,
+  redactExact,
+  redactSecrets,
   transcriptGlobDir,
   type Multiplexer,
   type TmuxIo
@@ -43,6 +45,9 @@ export class ClaudePrintChatEngine implements CliChatEngine {
   private hasSubmitted = false;
   /** #1353 — one warning per unreadable-transcript streak, not one per 25ms poll. */
   private warnedUnreadable = false;
+  /** #2164 r21 — bounded (oldest-dropped) stderr tail from the most recent `submit()`'s child process. */
+  private lastSubmitStderr = "";
+  private lastSubmitExitCode: number | null = null;
 
   constructor(
     _threadKey: string,
@@ -75,14 +80,37 @@ export class ClaudePrintChatEngine implements CliChatEngine {
     await this.io.writeFile(promptPath, sanitizeInput(prompt));
     const launchLine = await this.buildCommand(this.launchOpts, promptPath);
 
+    this.lastSubmitStderr = "";
+    this.lastSubmitExitCode = null;
     this.currentProcess = spawn("bash", ["-lc", launchLine], {
       cwd: this.launchOpts.neutralDir,
       detached: true,
-      stdio: "ignore"
+      stdio: ["ignore", "ignore", "pipe"]
     });
     this.currentProcess.on("error", () => undefined);
+    // #2164 r21 — bounded (oldest-dropped) stderr capture for last-submit diagnostics.
+    this.currentProcess.stderr?.setEncoding("utf8");
+    this.currentProcess.stderr?.on("data", (chunk: string) => {
+      this.lastSubmitStderr = (this.lastSubmitStderr + chunk).slice(-4096);
+    });
+    this.currentProcess.once("exit", (code) => {
+      this.lastSubmitExitCode = code;
+    });
     this.currentProcess.unref();
     this.hasSubmitted = true;
+  }
+
+  /**
+   * #2164 r21 (item 4) — bounded, scrubbed stderr tail + exit code from the most recent
+   * `submit()`'s child process, for the per-turn readiness-gate failure diagnostic only. Never
+   * includes the prompt, the reply, or the launch command line. Not part of `CliChatEngine` (out
+   * of the r21 file allowlist) — callers reach it via an inline optional cast.
+   */
+  getLastSubmitDiagnostics(): { readonly stderrTail: string; readonly exitCode: number | null } {
+    return {
+      stderrTail: redactExact(redactSecrets(this.lastSubmitStderr), this.launchOpts?.neutralDir),
+      exitCode: this.lastSubmitExitCode
+    };
   }
 
   async launchStructured(
@@ -179,7 +207,8 @@ export class ClaudePrintChatEngine implements CliChatEngine {
     const parsed = parseTranscript("anthropic", jsonl, afterOffset);
     const records: TranscriptRecord[] = parsed.events.map((event) => ({
       kind: event.kind as ChatRecordKind,
-      text: event.text
+      text: event.text,
+      toolName: event.toolName
     }));
     if (parsed.complete && parsed.reply !== null) {
       records.push({ kind: "reply", text: parsed.reply });

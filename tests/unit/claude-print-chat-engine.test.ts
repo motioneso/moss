@@ -13,7 +13,7 @@ vi.mock("node:child_process", async () => ({
 }));
 
 function fakeChild() {
-  const listeners = new Map<string, Array<() => void>>();
+  const listeners = new Map<string, Array<(code?: number | null) => void>>();
   const stdin = new PassThrough();
   const stdout = new PassThrough();
   const stderr = new PassThrough();
@@ -24,11 +24,11 @@ function fakeChild() {
       queueMicrotask(() => listeners.get("exit")?.forEach((listener) => listener()));
       return true;
     }),
-    on: vi.fn((event: string, callback: () => void) => {
+    on: vi.fn((event: string, callback: (code?: number | null) => void) => {
       listeners.set(event, [...(listeners.get(event) ?? []), callback]);
       return child;
     }),
-    once: vi.fn((event: string, callback: () => void) => {
+    once: vi.fn((event: string, callback: (code?: number | null) => void) => {
       listeners.set(event, [...(listeners.get(event) ?? []), callback]);
       return child;
     }),
@@ -132,7 +132,7 @@ describe("ClaudePrintChatEngine", () => {
       expect.objectContaining({
         cwd: "/tmp/jarvis-neutral",
         detached: true,
-        stdio: "ignore"
+        stdio: ["ignore", "ignore", "pipe"]
       })
     );
     expect(await engine.isAlive()).toBe(true);
@@ -438,5 +438,125 @@ describe("ClaudePrintChatEngine — vault read-only allowlist (#634)", () => {
     expect(launchLineAt()).not.toMatch(/\bBash\b/);
     expect(launchLineAt()).not.toContain("Read(/vault)");
     expect(launchLineAt()).toContain("mcp__jarvis__*");
+  });
+
+  describe("#2164 r21 (item 3) toolName passthrough", () => {
+    it("carries toolName through readNew for a tool_use event", async () => {
+      const transcriptPath =
+        "/home/test/.claude/projects/-tmp-jarvis-neutral/00000000-0000-4000-8000-000000000020.jsonl";
+      const transcript = JSON.stringify({
+        type: "assistant",
+        message: {
+          role: "assistant",
+          stop_reason: "tool_use",
+          content: [{ type: "tool_use", name: "read_note", input: {} }]
+        }
+      });
+      const io = fakeIo({ [transcriptPath]: `${transcript}\n` });
+      const engine = new ClaudePrintChatEngine("user-1", io, {
+        mux: fakeMux(),
+        homeBase: "/home/test",
+        sessionId: "00000000-0000-4000-8000-000000000020"
+      });
+      await engine.launch({
+        neutralDir: "/tmp/jarvis-neutral",
+        personaPath: "/tmp/jarvis-neutral/persona.md",
+        personaText: "persona"
+      });
+
+      const result = await engine.readNew(0);
+
+      expect(result.records).toEqual([{ kind: "tool", text: "read_note", toolName: "read_note" }]);
+    });
+  });
+
+  describe("#2164 r21 (item 4) last-submit diagnostics", () => {
+    it("returns undefined-exitCode/empty-stderr diagnostics before any submit", () => {
+      const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+        mux: fakeMux(),
+        homeBase: "/home/test",
+        sessionId: "00000000-0000-4000-8000-000000000021"
+      });
+      expect(engine.getLastSubmitDiagnostics()).toEqual({ stderrTail: "", exitCode: null });
+    });
+
+    it("captures a bounded, scrubbed stderr tail and exit code from the submitted child", async () => {
+      const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+        mux: fakeMux(),
+        homeBase: "/home/test",
+        sessionId: "00000000-0000-4000-8000-000000000022"
+      });
+      await engine.launch({
+        neutralDir: "/tmp/jarvis-neutral",
+        personaPath: "/tmp/jarvis-neutral/persona.md",
+        personaText: "persona"
+      });
+      await engine.submit("hello");
+
+      currentChild.stderr.write(
+        `boom Authorization: Bearer sekrit-token-value and jst_deadbeef and /tmp/jarvis-neutral leaked\n`
+      );
+      const exitCallback = currentChild.once.mock.calls.find(([event]) => event === "exit")?.[1];
+      exitCallback?.(1);
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const diag = engine.getLastSubmitDiagnostics();
+      expect(diag.exitCode).toBe(1);
+      expect(diag.stderrTail).not.toContain("sekrit-token-value");
+      expect(diag.stderrTail).not.toContain("jst_deadbeef");
+      expect(diag.stderrTail).not.toContain("/tmp/jarvis-neutral");
+      expect(diag.stderrTail).toContain("boom");
+    });
+
+    it("bounds the captured stderr tail to ~4KB, dropping the oldest bytes", async () => {
+      const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+        mux: fakeMux(),
+        homeBase: "/home/test",
+        sessionId: "00000000-0000-4000-8000-000000000023"
+      });
+      await engine.launch({
+        neutralDir: "/tmp/jarvis-neutral",
+        personaPath: "/tmp/jarvis-neutral/persona.md",
+        personaText: "persona"
+      });
+      await engine.submit("hello");
+
+      currentChild.stderr.write("a".repeat(3000));
+      currentChild.stderr.write("b".repeat(3000));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const diag = engine.getLastSubmitDiagnostics();
+      // 3000 "a"s + 3000 "b"s = 6000 chars, bounded to the last 4096: the oldest 1904 "a"s drop,
+      // leaving 1096 "a"s followed by all 3000 "b"s.
+      expect(diag.stderrTail.length).toBe(4096);
+      expect(diag.stderrTail).toBe("a".repeat(1096) + "b".repeat(3000));
+    });
+
+    it("resets stderr/exit code diagnostics at the start of each submit", async () => {
+      const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+        mux: fakeMux(),
+        homeBase: "/home/test",
+        sessionId: "00000000-0000-4000-8000-000000000024"
+      });
+      await engine.launch({
+        neutralDir: "/tmp/jarvis-neutral",
+        personaPath: "/tmp/jarvis-neutral/persona.md",
+        personaText: "persona"
+      });
+      await engine.submit("first");
+      currentChild.stderr.write("first failure\n");
+      const firstExit = currentChild.once.mock.calls.find(([event]) => event === "exit")?.[1];
+      firstExit?.(1);
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(engine.getLastSubmitDiagnostics().exitCode).toBe(1);
+
+      currentChild = fakeChild();
+      spawnMock.mockReturnValue(currentChild);
+      await engine.submit("second");
+
+      const diag = engine.getLastSubmitDiagnostics();
+      expect(diag.exitCode).toBeNull();
+      expect(diag.stderrTail).toBe("");
+    });
   });
 });

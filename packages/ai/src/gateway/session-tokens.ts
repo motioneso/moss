@@ -39,6 +39,12 @@ interface TokenEntry {
   expiresAt: number;
   /** #2159 — has this token's client completed its first MCP tools/list round trip? */
   toolsListObserved: boolean;
+  /**
+   * #2164 r21 — monotonic count of tools/list round trips observed for this token, across the
+   * token's whole life (a bounded-fallback engine reconnects a fresh MCP client per turn, so
+   * this increments on every turn's successful attach, not just the first).
+   */
+  observationCount: number;
   readonly toolsListWaiters: Array<() => void>;
 }
 
@@ -77,6 +83,7 @@ export class SessionTokenRegistry {
       identity,
       expiresAt: this.clock.now() + this.ttlMs,
       toolsListObserved: false,
+      observationCount: 0,
       toolsListWaiters: []
     });
     return token;
@@ -119,7 +126,8 @@ export class SessionTokenRegistry {
    */
   markToolsListObserved(token: string): void {
     const entry = this.tokens.get(token);
-    if (!entry || entry.toolsListObserved) return;
+    if (!entry) return;
+    entry.observationCount++;
     entry.toolsListObserved = true;
     const waiters = entry.toolsListWaiters.splice(0);
     for (const wake of waiters) wake();
@@ -143,6 +151,54 @@ export class SessionTokenRegistry {
       let settled = false;
       const wake = () => {
         if (settled) return;
+        settled = true;
+        resolve(true);
+      };
+      entry.toolsListWaiters.push(wake);
+      setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        const idx = entry.toolsListWaiters.indexOf(wake);
+        if (idx !== -1) entry.toolsListWaiters.splice(idx, 1);
+        resolve(false);
+      }, timeoutMs);
+    });
+  }
+
+  /**
+   * #2164 r21 — this token's monotonic tools/list observation count (0 if never observed, or
+   * for an unknown/revoked/expired token). Lets a caller capture a baseline before a turn and
+   * later ask "did a NEW tools/list land since then" via {@link waitForToolsListObservedSince} —
+   * distinct from {@link waitForToolsListObserved}'s "ever" semantics, which stay unchanged for
+   * the launch-time gate.
+   */
+  getToolsListObservationCount(token: string): number {
+    return this.tokens.get(token)?.observationCount ?? 0;
+  }
+
+  /**
+   * #2164 r21 — resolves `true` once this token's observation count exceeds `baselineCount`
+   * (immediately, if already past it), or `false` after `timeoutMs` if it never does. Used by
+   * the per-turn readiness guard for a bounded-fallback engine, which reconnects a fresh MCP
+   * client every turn: the launch-time `waitForToolsListObserved` would report "ready" forever
+   * after the very first turn ever attached, so this variant re-checks against a fresh baseline
+   * captured immediately before each turn's submit. Reuses the same waiter/timeout shape as
+   * `waitForToolsListObserved`. An unknown/revoked/expired token has nothing to wait for and
+   * resolves `false` immediately.
+   */
+  waitForToolsListObservedSince(
+    token: string,
+    baselineCount: number,
+    timeoutMs: number = DEFAULT_TOOLS_LIST_READY_TIMEOUT_MS
+  ): Promise<boolean> {
+    const entry = this.tokens.get(token);
+    if (!entry) return Promise.resolve(false);
+    if (entry.observationCount > baselineCount) return Promise.resolve(true);
+    return new Promise<boolean>((resolve) => {
+      let settled = false;
+      const wake = () => {
+        if (settled) return;
+        if (entry.observationCount <= baselineCount) return;
         settled = true;
         resolve(true);
       };

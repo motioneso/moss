@@ -392,6 +392,12 @@ export interface CreateChatSessionRuntimeDeps {
      * Forwarded to the manager as `waitForToolsListReady`. Absent ⇒ no readiness gate.
      */
     readonly waitForReady?: (token: string) => Promise<boolean>;
+    /**
+     * #2164 r21 — reads a token's current tools/list observation count. Wraps
+     * `SessionTokenRegistry.getToolsListObservationCount`. Forwarded to the manager as
+     * `getToolsListObservationCount`. Absent ⇒ the per-turn readiness guard does not run.
+     */
+    readonly getToolsListObservationCount?: (token: string) => number;
   };
   /**
    * #342 (§3.5 boot-time fork) — when set, `createChatSessionRuntime` selects the engine factory ITSELF
@@ -563,6 +569,7 @@ export function createChatSessionRuntime(deps: CreateChatSessionRuntimeDeps): Ch
     reconcileMcpTokens: deps.mcpTokenLifecycle?.reconcile,
     listMcpTokenSessionIds: deps.mcpTokenLifecycle?.listSessionIds,
     waitForToolsListReady: deps.mcpTokenLifecycle?.waitForReady,
+    getToolsListObservationCount: deps.mcpTokenLifecycle?.getToolsListObservationCount,
     // §4.5 kill-by-mux-name for an api-unknown orphan: route through the guard-bypassing reconcile
     // driver while a reconcile is in flight (the only path that calls this), falling back to the public
     // connection method otherwise. Undefined on the in-process/host path (no separate cli-runner holds

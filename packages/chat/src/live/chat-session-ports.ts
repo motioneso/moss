@@ -153,6 +153,15 @@ export interface ChatSessionManagerDeps {
    */
   readonly waitForToolsListReady?: (token: string) => Promise<boolean>;
   /**
+   * #2164 r21 — reads this token's current tools/list observation count (see
+   * `SessionTokenRegistry.getToolsListObservationCount`). A bounded-fallback engine reconnects
+   * a fresh MCP client every turn, so `runTurn` captures this as a baseline right before each
+   * submit and checks it again after the turn to prove a NEW attach landed for THIS turn —
+   * distinct from `waitForToolsListReady`'s one-time "ever observed" launch gate, which this
+   * does not change. Absent ⇒ the per-turn guard does not run (unchanged from pre-r21 behavior).
+   */
+  readonly getToolsListObservationCount?: (token: string) => number;
+  /**
    * #342 (§5.3 step 2) — revoke every MCP token whose chatSessionId is NOT in the live set.
    * Wraps SessionTokenRegistry.reconcile(liveSessionIds). The ONE source for orphan-token
    * revocation: it works off the token registry, so it sweeps orphaned tokens even when
