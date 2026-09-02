@@ -60,6 +60,19 @@ interface UserSession {
   transcriptOffset: number;
   incognito: boolean;
   readonly seededContextKeys: Set<string>;
+  /**
+   * #2164 — the token this session's engine was launched with, kept so a bounded-fallback
+   * turn can check MCP tools-list readiness after the fact (see `mcpToken` usage in `runTurn`).
+   * Undefined when no MCP client was configured for this session at all.
+   */
+  readonly mcpToken?: string;
+  /**
+   * #2164 — true when this session's engine is a bounded-fallback (one-shot, print) engine.
+   * Those engines start their MCP client per turn inside `submit()`, so the #2159 launch-time
+   * readiness gate is skipped for them (nothing to observe yet at launch) and a tool-less reply
+   * can otherwise be accepted before we know the CLI ever attached the MCP tools at all.
+   */
+  readonly isBoundedFallbackEngine: boolean;
 }
 
 const MAX_SUBSCRIBERS_PER_ACTOR = 5;
@@ -211,7 +224,9 @@ export class ChatSessionManager {
       lastActivity: this.deps.clock.now(),
       transcriptOffset: offset,
       incognito: threadState?.incognito ?? false,
-      seededContextKeys: new Set()
+      seededContextKeys: new Set(),
+      mcpToken: mcpConfig?.token,
+      isBoundedFallbackEngine: isBoundedFallbackEngine(provider, executionMode)
     };
     this.sessions.set(sessionKey, session);
 
@@ -463,6 +478,33 @@ export class ChatSessionManager {
         session.lastActivity = this.deps.clock.now();
         this.deps.touchMcpToken?.(sessionKey);
         return { reply };
+      }
+
+      // #2164 — a bounded-fallback engine (`ClaudePrintChatEngine`/`GeminiPrintChatEngine`) starts
+      // its MCP client per turn, inside `submit()`, so the #2159 launch-time readiness gate above
+      // is skipped for it. Without this check that race can complete the whole turn — and answer
+      // the user — before the CLI process ever attached the MCP tools, with nothing but the
+      // reply's own prose ("I don't have the Jarv1s MCP tools available") revealing it. Only check
+      // when no tool fired this turn: a tool call already proves the attachment worked, and most
+      // turns legitimately need no tool at all. `waitForToolsListReady` resolves immediately once
+      // the token's first tools/list has EVER landed (any prior turn), so this bounded wait only
+      // fires for a token whose MCP client has never once attached.
+      if (
+        session.isBoundedFallbackEngine &&
+        session.mcpToken &&
+        invokedToolNames.size === 0 &&
+        reply
+      ) {
+        const toolsListReady = await this.deps.waitForToolsListReady?.(session.mcpToken);
+        if (toolsListReady === false) {
+          this.emit(actorUserId, surface, {
+            kind: "status",
+            text: "Chat tools were not available for this reply — please try again."
+          });
+          throw new CliChatUnavailableError(
+            "MCP tools were never attached before the reply was accepted"
+          );
+        }
       }
 
       let answerProvenance: AnswerProvenanceMetadataV1 | undefined;

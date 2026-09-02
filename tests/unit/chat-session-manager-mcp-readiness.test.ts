@@ -150,3 +150,127 @@ describe("ChatSessionManager tools/list readiness gate (#2159)", () => {
     expect(revokeMcpToken).toHaveBeenCalledWith("u1:drawer");
   });
 });
+
+// #2164 — a bounded-fallback engine (`ClaudePrintChatEngine`) never starts its MCP client
+// during launch(), so the readiness gate above never runs for it (see the "skips the
+// readiness wait" case). That left a second, uncaught race: this engine starts its MCP
+// client per turn, inside submit(), so a turn can finish and answer the user — with no tool
+// call — before the CLI process ever attached the MCP tools at all. This proves the one-shot
+// submit path now checks tools-list readiness before accepting a tool-less reply.
+describe("ChatSessionManager one-shot tool-attachment guard (#2164)", () => {
+  function boundedFallbackDeps(
+    engine: FakeEngine,
+    overrides: Partial<ConstructorParameters<typeof ChatSessionManager>[0]> = {}
+  ) {
+    return makeMinimalDeps({
+      engineFactory: () => engine,
+      pollMs: 0,
+      mintMcpToken: vi
+        .fn()
+        .mockResolvedValue({ token: "jst_x", mcpServerUrl: "http://localhost:3000/api/mcp" }),
+      persistence: {
+        resolveActiveProvider: vi.fn().mockResolvedValue({
+          provider: "anthropic",
+          model: "sonnet",
+          executionMode: "non_interactive"
+        }),
+        listPriorTurns: vi.fn().mockResolvedValue({ recent: [], oldSummary: null }),
+        recordTurn: vi.fn().mockResolvedValue(undefined),
+        openNewConversation: vi.fn().mockResolvedValue(undefined),
+        getThreadContext: vi.fn().mockResolvedValue({ threadTitle: null, localTimezone: null }),
+        touchExistingThread: vi.fn().mockResolvedValue(true)
+      },
+      ...overrides
+    }) as never;
+  }
+
+  it("rejects a tool-less reply instead of persisting it when tools/list was never observed for this token", async () => {
+    const engine = new FakeEngine(0, [
+      {
+        records: [
+          { kind: "reply", text: "I don't have the Jarv1s MCP tools available in this session." }
+        ],
+        offset: 10,
+        complete: true
+      }
+    ]);
+    const recordTurn = vi.fn().mockResolvedValue(undefined);
+    const waitForToolsListReady = vi.fn().mockResolvedValue(false);
+    const manager = new ChatSessionManager(
+      boundedFallbackDeps(engine, {
+        waitForToolsListReady,
+        persistence: {
+          resolveActiveProvider: vi.fn().mockResolvedValue({
+            provider: "anthropic",
+            model: "sonnet",
+            executionMode: "non_interactive"
+          }),
+          listPriorTurns: vi.fn().mockResolvedValue({ recent: [], oldSummary: null }),
+          recordTurn,
+          openNewConversation: vi.fn().mockResolvedValue(undefined),
+          getThreadContext: vi.fn().mockResolvedValue({ threadTitle: null, localTimezone: null }),
+          touchExistingThread: vi.fn().mockResolvedValue(true)
+        }
+      })
+    );
+
+    await expect(manager.submitTurn("u1", "Ben", "retry the sports source")).rejects.toThrow(
+      CliChatUnavailableError
+    );
+
+    expect(waitForToolsListReady).toHaveBeenCalledWith("jst_x");
+    expect(recordTurn).not.toHaveBeenCalled();
+  });
+
+  it("accepts a tool-less reply once tools/list has been observed for the token", async () => {
+    const engine = new FakeEngine(0, [
+      { records: [{ kind: "reply", text: "sure, here's the weather" }], offset: 10, complete: true }
+    ]);
+    const recordTurn = vi.fn().mockResolvedValue(undefined);
+    const waitForToolsListReady = vi.fn().mockResolvedValue(true);
+    const manager = new ChatSessionManager(
+      boundedFallbackDeps(engine, {
+        waitForToolsListReady,
+        persistence: {
+          resolveActiveProvider: vi.fn().mockResolvedValue({
+            provider: "anthropic",
+            model: "sonnet",
+            executionMode: "non_interactive"
+          }),
+          listPriorTurns: vi.fn().mockResolvedValue({ recent: [], oldSummary: null }),
+          recordTurn,
+          openNewConversation: vi.fn().mockResolvedValue(undefined),
+          getThreadContext: vi.fn().mockResolvedValue({ threadTitle: null, localTimezone: null }),
+          touchExistingThread: vi.fn().mockResolvedValue(true)
+        }
+      })
+    );
+
+    await expect(manager.submitTurn("u1", "Ben", "what's the weather?")).resolves.toMatchObject({
+      reply: "sure, here's the weather"
+    });
+
+    expect(recordTurn).toHaveBeenCalled();
+  });
+
+  it("never calls waitForToolsListReady when a tool was actually invoked this turn", async () => {
+    const engine = new FakeEngine(0, [
+      {
+        records: [
+          { kind: "tool", text: "calling sports.retrySource", toolName: "sports.retrySource" },
+          { kind: "reply", text: "retried it" }
+        ],
+        offset: 10,
+        complete: true
+      }
+    ]);
+    const waitForToolsListReady = vi.fn();
+    const manager = new ChatSessionManager(boundedFallbackDeps(engine, { waitForToolsListReady }));
+
+    await expect(manager.submitTurn("u1", "Ben", "retry the sports source")).resolves.toMatchObject(
+      { reply: "retried it" }
+    );
+
+    expect(waitForToolsListReady).not.toHaveBeenCalled();
+  });
+});
