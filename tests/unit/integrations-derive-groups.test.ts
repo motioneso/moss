@@ -17,7 +17,7 @@ describe("deriveGroups", () => {
       "HassLightSetBrightness",
       "HassFanTurnOn",
       "HassFanTurnOff",
-      "HassClimateSetTemp",
+      "HassClimateSetTemp"
     ];
     const groups = deriveGroups(names);
     // "Hass" is shared by all 6 (>half), so it's dropped; the next segment
@@ -33,7 +33,7 @@ describe("deriveGroups", () => {
       "HassFanTurnOn",
       "HassFanTurnOff",
       "HassFanSetSpeed",
-      "HassClimateSetTemp",
+      "HassClimateSetTemp"
     ];
     const groups = deriveGroups(names);
     expect(groups[0]).toBe(groups[1]);
@@ -62,7 +62,7 @@ describe("deriveGroups", () => {
       "HassLightTurnOn",
       "HassLightTurnOff",
       "HassLightSetBrightness",
-      "HassFanTurnOn", // only 1 fan tool -> below minimum of 3
+      "HassFanTurnOn" // only 1 fan tool -> below minimum of 3
     ];
     const groups = deriveGroups(names);
     expect(groups[3]).toBe("Other");

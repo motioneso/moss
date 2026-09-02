@@ -37,7 +37,11 @@ function groupBySegment(segmented: string[][]): string[] {
   return reduced.map((segs) => (segs.length > 0 ? segs[0]! : OTHER));
 }
 
-function splitOversizedGroup(indices: number[], segmented: string[][], depth: number): Map<number, string> {
+function splitOversizedGroup(
+  indices: number[],
+  segmented: string[][],
+  depth: number
+): Map<number, string> {
   const sub = indices.map((i) => segmented[i]!.slice(depth));
   const subGroups = groupBySegment(sub);
   const result = new Map<number, string>();
@@ -82,7 +86,9 @@ export function deriveGroups(names: readonly string[]): string[] {
 
   const finalCounts = new Map<string, number>();
   for (const g of groups) finalCounts.set(g, (finalCounts.get(g) ?? 0) + 1);
-  groups = groups.map((g) => (g !== OTHER && (finalCounts.get(g) ?? 0) < MIN_GROUP_SIZE ? OTHER : g));
+  groups = groups.map((g) =>
+    g !== OTHER && (finalCounts.get(g) ?? 0) < MIN_GROUP_SIZE ? OTHER : g
+  );
 
   return groups;
 }
