@@ -4,8 +4,10 @@ import { fileURLToPath } from "node:url";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import pg from "pg";
+import { sql, type Kysely } from "kysely";
 
-import { connectionStrings, resetFoundationDatabase } from "./test-database.js";
+import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
+import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 const { Client } = pg;
 
@@ -34,6 +36,7 @@ describe("#2175 Task 5 — 0209 grandfathering migration", () => {
   // through the migration connection so this test proves what the real migration role can do.
   let seedClient: pg.Client;
   let migrationClient: pg.Client;
+  let appDb: Kysely<MossDatabase>;
 
   beforeAll(async () => {
     await resetFoundationDatabase();
@@ -41,11 +44,13 @@ describe("#2175 Task 5 — 0209 grandfathering migration", () => {
     await seedClient.connect();
     migrationClient = new Client({ connectionString: connectionStrings.migration });
     await migrationClient.connect();
+    appDb = createDatabase({ connectionString: connectionStrings.app });
   });
 
   afterAll(async () => {
     await seedClient.end();
     await migrationClient.end();
+    await appDb?.destroy();
   });
 
   async function insertConnection(params: {
@@ -113,5 +118,59 @@ describe("#2175 Task 5 — 0209 grandfathering migration", () => {
     expect(byId.get(underThresholdId)).toEqual([]);
     expect(byId.get(realGroupId)).toEqual([]);
     expect(byId.get(alreadyExplicitId)).toEqual(["tool_0"]);
+  });
+
+  it("leaves row-level security enabled and forced after the migration runs", async () => {
+    await migrationClient.query(migrationSql);
+
+    const { rows } = await seedClient.query<{
+      relrowsecurity: boolean;
+      relforcerowsecurity: boolean;
+    }>(
+      `SELECT relrowsecurity, relforcerowsecurity
+       FROM pg_class
+       WHERE oid = 'app.integration_connections'::regclass`
+    );
+
+    expect(rows).toEqual([{ relrowsecurity: true, relforcerowsecurity: true }]);
+  });
+
+  it("leaves exactly the two original policies on the table after the migration runs", async () => {
+    await migrationClient.query(migrationSql);
+
+    const { rows } = await seedClient.query<{ policyname: string }>(
+      `SELECT policyname
+       FROM pg_policies
+       WHERE schemaname = 'app' AND tablename = 'integration_connections'
+       ORDER BY policyname`
+    );
+
+    expect(rows.map((r) => r.policyname)).toEqual([
+      "integration_connections_owner",
+      "integration_connections_worker_read"
+    ]);
+  });
+
+  it("still hides another user's connections from jarvis_app_runtime after the migration runs", async () => {
+    await insertConnection({
+      name: "grandfather-cross-user-probe",
+      discoveredTools: toolNames(35),
+      mutedTools: [],
+      enabledTools: []
+    });
+    await migrationClient.query(migrationSql);
+
+    const dataContext = new DataContextRunner(appDb);
+    const rows = await dataContext.withDataContext(
+      { actorUserId: ids.userB, requestId: "integrations-grandfathering:cross-user" },
+      async (scopedDb) => {
+        const result = await sql<{ id: string }>`
+          SELECT id FROM app.integration_connections
+        `.execute(scopedDb.db);
+        return result.rows;
+      }
+    );
+
+    expect(rows).toEqual([]);
   });
 });
