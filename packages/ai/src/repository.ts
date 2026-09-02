@@ -203,12 +203,21 @@ export interface InsertAuditLogInput {
   readonly actionFamilyId: string | null;
   readonly actionKind: "write" | "outbound" | "destructive";
   readonly approvalMode: "auto" | "yolo" | "confirmed" | "rejected" | "cancelled" | "timeout";
-  readonly outcome: "success" | "failed" | "denied" | "cancelled" | "invalid" | "conflict";
+  readonly outcome:
+    | "success"
+    | "failed"
+    | "denied"
+    | "cancelled"
+    | "invalid"
+    | "conflict"
+    | "suppressed"
+    | "refused";
   readonly errorClass: string | null;
   readonly requestId: string | null;
   readonly chatSessionId: string | null;
   readonly sourceSurface: "chat" | "proactive" | "scheduled" | "unknown";
   readonly inputSummary: ActionAuditInputSummary | null;
+  readonly durationMs: number | null;
 }
 
 export interface ListAuditLogOptions {
@@ -1996,7 +2005,8 @@ export class AiRepository {
         request_id: input.requestId ?? null,
         chat_session_id: input.chatSessionId ?? null,
         source_surface: input.sourceSurface,
-        input_summary: input.inputSummary
+        input_summary: input.inputSummary,
+        duration_ms: input.durationMs
       })
       .execute();
   }

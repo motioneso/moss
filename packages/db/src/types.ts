@@ -536,6 +536,7 @@ export interface MossActionAuditLogTable {
   source_surface: string;
   input_summary: JsonColumn | null;
   occurred_at: TimestampColumn;
+  duration_ms: number | null;
 }
 
 export interface MossErrorLogTable {

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { performance } from "node:perf_hooks";
 import { types as nodeUtilTypes } from "node:util";
 
 import type { AccessContext, DataContextDb, DataContextRunner } from "@moss/db";
@@ -54,6 +55,14 @@ const defaultGatewayLogger: GatewayLogger = {
 interface RunHandlerOutcome {
   readonly response: GatewayToolResponse;
   readonly moduleReportedErrorClass: string | null;
+  readonly durationMs: number;
+  /**
+   * A tool's execute may request a distinct audit outcome (#2175 Task 7). Only trusted when the
+   * tool is registry-marked built-in (`isExternal === false` — the same trust marker this file
+   * already uses for module-reported-error detection and dependency-failure classification);
+   * see the honouring check at the call sites below.
+   */
+  readonly auditOutcome: "suppressed" | "refused" | undefined;
 }
 
 /**
@@ -232,6 +241,7 @@ export class AssistantToolGateway {
         void this.recordAudit(access, found, {
           approvalMode: "yolo",
           outcome: "denied",
+          durationMs: null,
           errorClass: "rate_limited",
           chatSessionId: ctx.chatSessionId
         });
@@ -241,11 +251,12 @@ export class AssistantToolGateway {
           reason: "Rate limit exceeded for unattended runs of this tool. Try again shortly."
         };
       }
-      const { response: result, moduleReportedErrorClass } = await this.runHandler(
-        found,
-        input,
-        ctx
-      );
+      const {
+        response: result,
+        moduleReportedErrorClass,
+        durationMs,
+        auditOutcome
+      } = await this.runHandler(found, input, ctx);
       this.deps.notifier.emit(ctx.chatSessionId, {
         kind: "action_result",
         actionRequestId: ctx.requestId,
@@ -261,7 +272,9 @@ export class AssistantToolGateway {
       const access: AccessContext = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
       void this.recordAudit(access, found, {
         approvalMode: "yolo",
-        outcome: result.ok && moduleReportedErrorClass === null ? "success" : "failed",
+        outcome:
+          auditOutcome ?? (result.ok && moduleReportedErrorClass === null ? "success" : "failed"),
+        durationMs,
         errorClass: result.ok ? moduleReportedErrorClass : "handler_error",
         chatSessionId: ctx.chatSessionId
       });
@@ -277,6 +290,7 @@ export class AssistantToolGateway {
         void this.recordAudit(access, found, {
           approvalMode: "auto",
           outcome: "denied",
+          durationMs: null,
           errorClass: "rate_limited",
           chatSessionId: ctx.chatSessionId
         });
@@ -287,11 +301,12 @@ export class AssistantToolGateway {
           "Automatic execution hit its rate limit — please confirm this action."
         );
       }
-      const { response: result, moduleReportedErrorClass } = await this.runHandler(
-        found,
-        input,
-        ctx
-      );
+      const {
+        response: result,
+        moduleReportedErrorClass,
+        durationMs,
+        auditOutcome
+      } = await this.runHandler(found, input, ctx);
       if (found.tool.risk !== "read") {
         this.deps.notifier.emit(ctx.chatSessionId, {
           kind: "action_result",
@@ -308,7 +323,9 @@ export class AssistantToolGateway {
         const access: AccessContext = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
         void this.recordAudit(access, found, {
           approvalMode: "auto",
-          outcome: result.ok && moduleReportedErrorClass === null ? "success" : "failed",
+          outcome:
+            auditOutcome ?? (result.ok && moduleReportedErrorClass === null ? "success" : "failed"),
+          durationMs,
           errorClass: result.ok ? moduleReportedErrorClass : "handler_error",
           chatSessionId: ctx.chatSessionId
         });
@@ -617,8 +634,10 @@ export class AssistantToolGateway {
   ): Promise<RunHandlerOutcome> {
     const access: AccessContext = { actorUserId: ctx.actorUserId, requestId: ctx.requestId };
     const services = this.servicesFor(found.tool);
+    const startedAt = performance.now();
     try {
       const result = await this.executeTool(found, input, ctx, services, access);
+      const durationMs = Math.round(performance.now() - startedAt);
       const sanitized = sanitizeAssistantToolResult(found.tool.outputSchema, result);
       // Detection must run on the raw pre-sanitize payload: sanitizeAssistantToolResult
       // allow-lists to schema-declared keys, so an undeclared status/ok/error field would
@@ -649,7 +668,11 @@ export class AssistantToolGateway {
           // the engine's MCP stdio channel — never into logs, DB, or job payloads.
           ...(result.media ? { media: result.media } : {})
         },
-        moduleReportedErrorClass
+        moduleReportedErrorClass,
+        durationMs,
+        // Only a registry-trusted built-in tool's self-reported auditOutcome is honoured — an
+        // external tool cannot claim "suppressed"/"refused" to hide a real failure from audit.
+        auditOutcome: found.tool.isExternal === false ? result.auditOutcome : undefined
       };
     } catch (error) {
       // #1251: a tool handler (including third-party module handlers) can throw an arbitrary
@@ -682,7 +705,9 @@ export class AssistantToolGateway {
                 ? `Tool ${found.dto.name} failed: ${describeToolDependencyCause(cause)}.`
                 : `Tool ${found.dto.name} failed`
         },
-        moduleReportedErrorClass: null
+        moduleReportedErrorClass: null,
+        durationMs: Math.round(performance.now() - startedAt),
+        auditOutcome: undefined
       };
     }
   }
@@ -786,6 +811,7 @@ export class AssistantToolGateway {
         void this.recordAudit(access, found, {
           approvalMode,
           outcome: outcome === "cancelled" ? "cancelled" : "denied",
+          durationMs: null,
           chatSessionId: ctx.chatSessionId
         });
         const reason =
@@ -795,11 +821,12 @@ export class AssistantToolGateway {
         return { ok: false, denied: true, reason };
       }
 
-      const { response: result, moduleReportedErrorClass } = await this.runHandler(
-        found,
-        input,
-        ctx
-      );
+      const {
+        response: result,
+        moduleReportedErrorClass,
+        durationMs,
+        auditOutcome
+      } = await this.runHandler(found, input, ctx);
       this.deps.notifier.emit(ctx.chatSessionId, {
         kind: "action_result",
         actionRequestId: action.id,
@@ -814,7 +841,9 @@ export class AssistantToolGateway {
       });
       void this.recordAudit(access, found, {
         approvalMode: "confirmed",
-        outcome: result.ok && moduleReportedErrorClass === null ? "success" : "failed",
+        outcome:
+          auditOutcome ?? (result.ok && moduleReportedErrorClass === null ? "success" : "failed"),
+        durationMs,
         errorClass: result.ok ? moduleReportedErrorClass : "handler_error",
         chatSessionId: ctx.chatSessionId
       });
@@ -914,6 +943,7 @@ export class AssistantToolGateway {
     opts: {
       approvalMode: InsertAuditLogInput["approvalMode"];
       outcome: InsertAuditLogInput["outcome"];
+      durationMs: number | null;
       errorClass?: string | null;
       chatSessionId?: string;
       inputSummary?: ActionAuditInputSummary | null;
@@ -934,7 +964,8 @@ export class AssistantToolGateway {
           requestId: access.requestId ?? null,
           chatSessionId: opts.chatSessionId ?? null,
           sourceSurface: "chat",
-          inputSummary: opts.inputSummary ?? null
+          inputSummary: opts.inputSummary ?? null,
+          durationMs: opts.durationMs
         })
       );
     } catch {
@@ -956,6 +987,7 @@ export class AssistantToolGateway {
     opts: {
       approvalMode: InsertAuditLogInput["approvalMode"];
       outcome: InsertAuditLogInput["outcome"];
+      durationMs: number | null;
       errorClass?: string | null;
       chatSessionId?: string;
     }

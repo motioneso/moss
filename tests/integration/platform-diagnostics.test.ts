@@ -71,6 +71,7 @@ describe("platform diagnostics", () => {
           actionKind: "write",
           approvalMode: "auto",
           outcome: "success",
+          durationMs: null,
           errorClass: null,
           requestId: `request-${actorUserId}`,
           chatSessionId: null,
