@@ -373,7 +373,9 @@ describe("MVP foundation schema catalog", () => {
         // #2162 integrations foundation — owner-only connections with encrypted credential.
         { version: "0207", name: "0207_integration_connections.sql" },
         // #2175 Task 3 — per-connection in-burst duplicate-call suppression memory table.
-        { version: "0208", name: "0208_integration_unsuppressed_tools.sql" }
+        { version: "0208", name: "0208_integration_unsuppressed_tools.sql" },
+        // #2175 Task 5 — one-time grandfathering for pre-existing over-threshold connections.
+        { version: "0209", name: "0209_integration_group_derivation_grandfather.sql" }
       ]);
     } finally {
       await client.end();
