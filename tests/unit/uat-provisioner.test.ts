@@ -1,10 +1,20 @@
+import type * as ChildProcess from "node:child_process";
+import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+const spawnMock = vi.hoisted(() => vi.fn());
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof ChildProcess>();
+  return { ...actual, spawn: spawnMock };
+});
+
 import {
   bareSeedHook,
   buildSeedHookInput,
   buildUatComposeArgs,
+  captureFailureEvidence,
   cleanupUatAttempt,
   createUatProvisionPlan,
   expectedUatVolumeNames,
@@ -422,5 +432,38 @@ describe("buildSeedHookInput", () => {
       level: "bare",
       excludeChunks: undefined
     });
+  });
+});
+
+describe("captureFailureEvidence transcript search path (#2164 r17)", () => {
+  afterEach(() => {
+    spawnMock.mockReset();
+  });
+
+  it("searches the chat engine's configured CLI home base, not the container's raw $HOME", async () => {
+    spawnMock.mockImplementation(() => {
+      const child = new EventEmitter() as EventEmitter & { stdout: EventEmitter };
+      child.stdout = new EventEmitter();
+      queueMicrotask(() => child.emit("exit", 0));
+      return child;
+    });
+
+    await captureFailureEvidence("uat-abc", "test failed");
+
+    const execCall = spawnMock.mock.calls.find(
+      ([, args]) => Array.isArray(args) && args.includes("exec")
+    );
+    expect(execCall).toBeDefined();
+    const shellScript = (execCall![1] as string[]).at(-1) as string;
+
+    // The old, buggy version searched a bare "$HOME/.claude/projects" — which is /root inside
+    // the jarv1s container (no USER/user: override) — while the live chat engine writes
+    // transcripts under MOSS_CLI_HOME_BASE/JARVIS_CLI_HOME_BASE (/data/cli-auth in prod). The
+    // capture must prefer that engine-configured base before falling back to $HOME.
+    expect(shellScript).toContain(
+      'cli_home_base="${MOSS_CLI_HOME_BASE:-${JARVIS_CLI_HOME_BASE:-$HOME}}"'
+    );
+    expect(shellScript).toContain('find "$cli_home_base/.claude/projects"');
+    expect(shellScript).not.toContain('find "$HOME/.claude/projects"');
   });
 });
