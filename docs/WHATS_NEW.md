@@ -33,6 +33,7 @@ feature that is not present in the image you are running.
 
 #### Added
 
+- **Modules Moss builds can add new things it can do.** When Moss finishes building a module with a new chat ability, that ability is [PR #2101](https://github.com/motioneso/moss/pull/2101)
 - **Connect Moss to external tools.** You can now connect Moss to services that speak MCP or publish an OpenAPI spec from Settings, and use their features from chat. [PR #2171](https://github.com/motioneso/moss/pull/2171)
 
 ### 2026-08-31
