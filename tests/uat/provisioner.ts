@@ -493,14 +493,21 @@ function runCapture(command: string, args: readonly string[]): Promise<string> {
 /**
  * #2173: the terminal-failure branch of provisionForUat used to go straight to teardown, which
  * discards the app container's own log/health evidence before anyone can see why it failed.
- * Bounded (last 50 log lines, one formatted health read) and Compose project/service scoped
+ * Bounded (last 50 log lines, one formatted health read, last 4000 bytes of at most the 3
+ * newest Claude print-engine transcripts) and Compose project/service scoped
  * (buildUatComposeArgs -> `-p <projectName>` + the `jarv1s` service) — never the compose file's
  * hardcoded `container_name: moss` (infra/docker-compose.prod.yml:145), never a bare/full `docker
  * inspect`, and never the settings file or its contents (security ruling, issue #2173 comment
  * 5497191033 section 4).
+ *
+ * #2164: also exported for run-uat.ts's spec-level (Playwright assertion) failure path, not just
+ * this file's own provisioning failures — a live UAT assertion failure used to run straight into
+ * teardown with no record of what the app or the live model actually did. The transcript read
+ * resolves `$HOME` inside the `jarv1s` container at capture time rather than assuming a path, so
+ * it never has to guess the container's user/home layout.
  */
-async function captureFailureEvidence(projectName: string): Promise<void> {
-  const [logs, health] = await Promise.all([
+export async function captureFailureEvidence(projectName: string, reason: string): Promise<void> {
+  const [logs, health, transcripts] = await Promise.all([
     runCapture(
       "docker",
       buildUatComposeArgs(projectName, ["logs", "--tail", "50", "jarv1s"])
@@ -508,11 +515,27 @@ async function captureFailureEvidence(projectName: string): Promise<void> {
     runCapture(
       "docker",
       buildUatComposeArgs(projectName, ["ps", "jarv1s", "--format", "json"])
-    ).catch((error) => `<health capture failed: ${String(error)}>`)
+    ).catch((error) => `<health capture failed: ${String(error)}>`),
+    runCapture(
+      "docker",
+      buildUatComposeArgs(projectName, [
+        "exec",
+        "-T",
+        "jarv1s",
+        "sh",
+        "-c",
+        "find \"$HOME/.claude/projects\" -name '*.jsonl' -printf '%T@ %p\\n' 2>/dev/null " +
+          "| sort -rn | head -3 | cut -d' ' -f2- " +
+          '| while read -r f; do echo "--- $f (last 4000 bytes) ---"; tail -c 4000 "$f"; done'
+      ])
+    ).catch((error) => `<transcript capture failed: ${String(error)}>`)
   ]);
-  console.error(`[uat] ${projectName} jarv1s failed — last 50 log lines and health status:`);
+  console.error(
+    `[uat] ${projectName} jarv1s ${reason} — last 50 log lines, health status, and bounded Claude print transcript(s):`
+  );
   console.error(logs);
   console.error(health);
+  console.error(transcripts);
 }
 
 /**
@@ -939,7 +962,7 @@ export async function provisionForUat(
         );
         continue;
       }
-      await captureFailureEvidence(projectName);
+      await captureFailureEvidence(projectName, "failed to provision");
       await cleanupAttempt({ error });
       throw error; // unreachable: cleanupUatAttempt rethrows the provisioning failure
     }

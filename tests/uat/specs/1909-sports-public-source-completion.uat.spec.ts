@@ -201,6 +201,20 @@ async function listActions(page: Page): Promise<readonly RecordedAction[]> {
   return ((await response.json()) as { actions: readonly RecordedAction[] }).actions;
 }
 
+// #2164 diagnostic: prove the live actor's own tool list carries the retry tool before the chat
+// turn starts, so a later "Approve button never appeared" failure can't be a missing-declaration
+// question — narrows the failure to the model's decision or the SSE delivery path instead.
+async function requireToolInLiveActorList(page: Page, toolName: string): Promise<void> {
+  const response = await page.request.get("/api/ai/assistant-tools");
+  expect(response.ok(), `assistant-tools -> ${response.status()}`).toBeTruthy();
+  const names = ((await response.json()) as { tools: readonly { name: string }[] }).tools.map(
+    (tool) => tool.name
+  );
+  expect(names, "live actor tool list must carry the retry tool before the chat turn").toContain(
+    toolName
+  );
+}
+
 async function confirmThroughMoss(
   page: Page,
   toolName: string,
@@ -314,6 +328,8 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
     section.getByRole("button", { name: /Retry Issue 1909 fixture feed/ })
   ).toBeVisible();
   await expect(section.getByRole("button", { name: /Rebuild FotMob legacy scrape/ })).toBeVisible();
+
+  await requireToolInLiveActorList(page, "sports.retrySource");
 
   await test.step("Moss Retry recovers a controlled partial target failure", async () => {
     await confirmThroughMoss(

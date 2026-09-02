@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  captureFailureEvidence: vi.fn(),
   provisionForUat: vi.fn(),
   readFile: vi.fn(),
   readdir: vi.fn(),
@@ -8,7 +9,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("node:fs/promises", () => ({ readFile: mocks.readFile, readdir: mocks.readdir }));
-vi.mock("./provisioner.js", () => ({ provisionForUat: mocks.provisionForUat }));
+vi.mock("./provisioner.js", () => ({
+  captureFailureEvidence: mocks.captureFailureEvidence,
+  provisionForUat: mocks.provisionForUat
+}));
 vi.mock("node:child_process", () => ({ spawn: mocks.spawn }));
 
 const originalArgv = process.argv;
@@ -139,6 +143,39 @@ describe("run-uat CLI (#1027/#1047)", () => {
       withSportsPublicSourceFixtures: true,
       chatScript: undefined
     });
+  });
+
+  it("#2164: captures bounded failure evidence before teardown when a spec fails", async () => {
+    const teardown = vi.fn().mockResolvedValue(undefined);
+    mocks.provisionForUat.mockResolvedValue({
+      baseURL: "http://127.0.0.1:4321",
+      projectName: "uat-test",
+      teardown
+    });
+    mocks.spawn.mockReturnValue({
+      on: (event: string, listener: (code: number) => void) => {
+        if (event === "exit") listener(1);
+      }
+    });
+    process.argv = ["node", "tests/uat/run-uat.ts", "future-advisory"];
+
+    await import("./run-uat.js");
+
+    expect(mocks.captureFailureEvidence).toHaveBeenCalledWith(
+      "uat-test",
+      expect.stringContaining("future-advisory.uat.spec.ts")
+    );
+    const captureOrder = mocks.captureFailureEvidence.mock.invocationCallOrder[0];
+    const teardownOrder = teardown.mock.invocationCallOrder[0];
+    expect(captureOrder).toBeLessThan(teardownOrder);
+  });
+
+  it("#2164: does not capture failure evidence when a spec passes", async () => {
+    process.argv = ["node", "tests/uat/run-uat.ts", "future-advisory"];
+
+    await import("./run-uat.js");
+
+    expect(mocks.captureFailureEvidence).not.toHaveBeenCalled();
   });
 
   it("#1121 Task 4: fails clearly on an unknown uatLevel.chatScript id", async () => {

@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { readFile, readdir } from "node:fs/promises";
 import { basename, join, matchesGlob } from "node:path";
-import { provisionForUat } from "./provisioner.js";
+import { captureFailureEvidence, provisionForUat } from "./provisioner.js";
 import type { UatChatScript, UatSeedChunk, UatSeedLevel } from "./seed/types.js";
 import { UAT_CHAT_SCRIPTS } from "./seed/types.js";
 
@@ -115,7 +115,7 @@ async function runSpec(specPath: string): Promise<number> {
 
   try {
     console.log(`[uat] running ${specPath} against ${baseURL} (project ${projectName})`);
-    return await new Promise<number>((resolvePromise) => {
+    const exitCode = await new Promise<number>((resolvePromise) => {
       const child = spawn(
         "npx",
         ["playwright", "test", "--config=tests/uat/playwright.uat.config.ts", specPath],
@@ -130,6 +130,16 @@ async function runSpec(specPath: string): Promise<number> {
       );
       child.on("exit", (code) => resolvePromise(code ?? 1));
     });
+    if (exitCode !== 0) {
+      // #2164: capture app/live-model evidence BEFORE teardown (the `finally` below) removes the
+      // container — a spec assertion failure used to go straight to teardown with nothing retained
+      // to distinguish "model never called the tool" from "the SSE delivery path dropped it".
+      await captureFailureEvidence(
+        projectName,
+        `spec ${basename(specPath)} failed (exit ${exitCode})`
+      );
+    }
+    return exitCode;
   } finally {
     process.off("SIGINT", onSignal);
     process.off("SIGTERM", onSignal);
