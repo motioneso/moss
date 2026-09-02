@@ -491,27 +491,20 @@ function runCapture(command: string, args: readonly string[]): Promise<string> {
 }
 
 /**
- * #2173: the terminal-failure branch of provisionForUat used to go straight to teardown, which
- * discards the app container's own log/health evidence before anyone can see why it failed.
- * Bounded (last 50 log lines, one formatted health read, last 4000 bytes of at most the 3
- * newest Claude print-engine transcripts) and Compose project/service scoped
- * (buildUatComposeArgs -> `-p <projectName>` + the `jarv1s` service) — never the compose file's
- * hardcoded `container_name: moss` (infra/docker-compose.prod.yml:145), never a bare/full `docker
- * inspect`, and never the settings file or its contents (security ruling, issue #2173 comment
- * 5497191033 section 4).
+ * #2173: retains bounded app evidence (last 50 jarv1s log lines, one health read, last 4000 bytes
+ * of the 3 newest Claude print-engine transcripts under the chat engine's configured CLI home
+ * base, `$HOME` as fallback — #2164 r17) before the terminal-failure branch tears down. Compose
+ * project/service scoped (buildUatComposeArgs), never the compose file's hardcoded container
+ * name, a bare `docker inspect`, or the settings file (#2173 comment 5497191033 section 4). Also
+ * used by run-uat.ts's spec-level failure path (#2164).
  *
- * #2164: also exported for run-uat.ts's spec-level (Playwright assertion) failure path so a live
- * assertion failure keeps evidence instead of running straight into teardown.
- *
- * #2164 r17 diagnostic: the transcript read used to search `$HOME/.claude/projects`
- * unconditionally, but the `jarv1s` service has no `USER` override so `$HOME` is `/root`, while
- * the chat engine (packages/ai/src/adapters/tmux-bridge.ts, per runtime.ts) writes transcripts
- * under `MOSS_CLI_HOME_BASE`/`JARVIS_CLI_HOME_BASE` (`/data/cli-auth` in prod). Every capture
- * therefore came back empty regardless of what the model did. Now it prefers the engine's
- * configured base, falling back to `$HOME` only if unset.
+ * #2164 r18: also retains the full (untailed) `postgres` service log — the app deliberately never
+ * re-logs a thrown database error's SQLSTATE/constraint/statement (#1251 hostile-object rule), but
+ * Postgres already writes all three to its own container log, which teardown would otherwise
+ * discard first.
  */
 export async function captureFailureEvidence(projectName: string, reason: string): Promise<void> {
-  const [logs, health, transcripts] = await Promise.all([
+  const [logs, health, transcripts, postgresLogs] = await Promise.all([
     runCapture(
       "docker",
       buildUatComposeArgs(projectName, ["logs", "--tail", "50", "jarv1s"])
@@ -533,14 +526,18 @@ export async function captureFailureEvidence(projectName: string, reason: string
           "| sort -rn | head -3 | cut -d' ' -f2- " +
           '| while read -r f; do echo "--- $f (last 4000 bytes) ---"; tail -c 4000 "$f"; done'
       ])
-    ).catch((error) => `<transcript capture failed: ${String(error)}>`)
+    ).catch((error) => `<transcript capture failed: ${String(error)}>`),
+    runCapture("docker", buildUatComposeArgs(projectName, ["logs", "postgres"])).catch(
+      (error) => `<postgres log capture failed: ${String(error)}>`
+    )
   ]);
   console.error(
-    `[uat] ${projectName} jarv1s ${reason} — last 50 log lines, health status, and bounded Claude print transcript(s):`
+    `[uat] ${projectName} jarv1s ${reason} — last 50 log lines, health status, bounded Claude print transcript(s), and full postgres log:`
   );
   console.error(logs);
   console.error(health);
   console.error(transcripts);
+  console.error(postgresLogs);
 }
 
 /**

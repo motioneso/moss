@@ -466,4 +466,27 @@ describe("captureFailureEvidence transcript search path (#2164 r17)", () => {
     expect(shellScript).toContain('find "$cli_home_base/.claude/projects"');
     expect(shellScript).not.toContain('find "$HOME/.claude/projects"');
   });
+
+  it("retains the full postgres container log before teardown (#2164 r18)", async () => {
+    spawnMock.mockImplementation(() => {
+      const child = new EventEmitter() as EventEmitter & { stdout: EventEmitter };
+      child.stdout = new EventEmitter();
+      queueMicrotask(() => child.emit("exit", 0));
+      return child;
+    });
+
+    await captureFailureEvidence("uat-abc", "test failed");
+
+    const postgresLogCall = spawnMock.mock.calls.find(
+      ([, args]) => Array.isArray(args) && args.includes("logs") && args.includes("postgres")
+    );
+    expect(postgresLogCall).toBeDefined();
+    const postgresLogArgs = postgresLogCall![1] as string[];
+
+    // Untailed, unlike the jarv1s app log capture above it — Postgres names the SQLSTATE,
+    // constraint, and failing statement only on its own error path, which the app never re-logs
+    // (#1251 hostile-object rule), so the full log is the only place that evidence survives.
+    expect(postgresLogArgs).not.toContain("--tail");
+    expect(postgresLogArgs).toEqual(buildUatComposeArgs("uat-abc", ["logs", "postgres"]));
+  });
 });

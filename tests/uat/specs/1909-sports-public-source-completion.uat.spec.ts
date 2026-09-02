@@ -259,6 +259,26 @@ async function confirmThroughMoss(
     .toBe("confirmed");
 }
 
+// #2164 r18: a rebuild-step failure used to leave only the friendly `{ error }` result the
+// gateway logs (#1251 hostile-object rule bars logging the thrown database error itself), with
+// the actual preview candidate the confirm call was built from gone by the time anyone looks.
+// Attaches it to the Playwright report on failure, alongside the run's other retained evidence.
+async function withRebuildEvidence<T>(
+  sourceId: string,
+  preview: PreviewResult,
+  action: () => Promise<T>
+): Promise<T> {
+  try {
+    return await action();
+  } catch (error) {
+    await test.info().attach(`rebuild-candidate-${sourceId}`, {
+      body: Buffer.from(JSON.stringify(preview, null, 2), "utf8"),
+      contentType: "application/json"
+    });
+    throw error;
+  }
+}
+
 function confirmationInput(preview: PreviewResult, extra: Record<string, unknown> = {}) {
   expect(preview.status).toBe("ok");
   expect(preview.confirmationId).toBeTruthy();
@@ -375,41 +395,45 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
     const preview = await invokeReadTool<PreviewResult>(page, "sports.rebuildSourceRecipe", {
       sourceId: fotmob.id
     });
-    expect(preview).toMatchObject({
-      status: "ok",
-      candidate: { confirmedFetchHosts: expect.arrayContaining(["www.fotmob.com"]) }
+    await withRebuildEvidence(fotmob.id, preview, async () => {
+      expect(preview).toMatchObject({
+        status: "ok",
+        candidate: { confirmedFetchHosts: expect.arrayContaining(["www.fotmob.com"]) }
+      });
+      await confirmThroughMoss(
+        page,
+        "sports.confirmSourceRecipe",
+        `Please go ahead and rebuild the recipe for sports source ${fotmob.id} exactly as you just previewed it, using ${describeConfirmation(preview, { sourceId: fotmob.id })}.`,
+        new RegExp(`Replace the recipe for sports source ${fotmob.id}`)
+      );
+      const rebuilt = (await listSources(page)).find((source) => source.id === fotmob.id);
+      expect(["feed", "ready"]).toContain(rebuilt?.recipeStatus);
+      expect(rebuilt?.healthReasonCode).toBeNull();
+      expect(
+        rebuilt?.assignments.every((assignment) => assignment.previewStatus === "verified")
+      ).toBe(true);
     });
-    await confirmThroughMoss(
-      page,
-      "sports.confirmSourceRecipe",
-      `Please go ahead and rebuild the recipe for sports source ${fotmob.id} exactly as you just previewed it, using ${describeConfirmation(preview, { sourceId: fotmob.id })}.`,
-      new RegExp(`Replace the recipe for sports source ${fotmob.id}`)
-    );
-    const rebuilt = (await listSources(page)).find((source) => source.id === fotmob.id);
-    expect(["feed", "ready"]).toContain(rebuilt?.recipeStatus);
-    expect(rebuilt?.healthReasonCode).toBeNull();
-    expect(
-      rebuilt?.assignments.every((assignment) => assignment.previewStatus === "verified")
-    ).toBe(true);
   });
 
   await test.step("Moss rebuilds and confirms a drifted recipe", async () => {
     const preview = await invokeReadTool<PreviewResult>(page, "sports.rebuildSourceRecipe", {
       sourceId: drift.id
     });
-    expect(preview.candidate?.confirmedFetchHosts).toContain(DRIFT_FIXTURE_DOMAIN);
-    await confirmThroughMoss(
-      page,
-      "sports.confirmSourceRecipe",
-      `Please go ahead and rebuild the recipe for sports source ${drift.id} exactly as you just previewed it, using ${describeConfirmation(preview, { sourceId: drift.id })}.`,
-      new RegExp(`Replace the recipe for sports source ${drift.id}`)
-    );
-    const rebuilt = (await listSources(page)).find((source) => source.id === drift.id);
-    expect(rebuilt?.recipeStatus).toBe("feed");
-    expect(rebuilt?.healthReasonCode).toBeNull();
-    expect(
-      rebuilt?.assignments.every((assignment) => assignment.previewStatus === "verified")
-    ).toBe(true);
+    await withRebuildEvidence(drift.id, preview, async () => {
+      expect(preview.candidate?.confirmedFetchHosts).toContain(DRIFT_FIXTURE_DOMAIN);
+      await confirmThroughMoss(
+        page,
+        "sports.confirmSourceRecipe",
+        `Please go ahead and rebuild the recipe for sports source ${drift.id} exactly as you just previewed it, using ${describeConfirmation(preview, { sourceId: drift.id })}.`,
+        new RegExp(`Replace the recipe for sports source ${drift.id}`)
+      );
+      const rebuilt = (await listSources(page)).find((source) => source.id === drift.id);
+      expect(rebuilt?.recipeStatus).toBe("feed");
+      expect(rebuilt?.healthReasonCode).toBeNull();
+      expect(
+        rebuilt?.assignments.every((assignment) => assignment.previewStatus === "verified")
+      ).toBe(true);
+    });
   });
 
   const head = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
