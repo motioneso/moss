@@ -833,7 +833,7 @@ describe("#2164 r23 (item 2) multi-line prompt scrub", () => {
 
     // A fragment spanning the boundary between two adjacent short lines, as a truncated argv
     // echo would produce.
-    const boundaryFragment = lines[99].slice(-10) + lines[100].slice(0, 10);
+    const boundaryFragment = lines[99]!.slice(-10) + lines[100]!.slice(0, 10);
     currentChild.stderr.write(`bash: -lc: line 1: claude: ${boundaryFragment}\n`);
     await new Promise((resolve) => setImmediate(resolve));
 
