@@ -9,7 +9,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("node:child_process", () => ({ spawn: mocks.spawn, execFile: vi.fn() }));
 
-const { buildSeedHookInput, composeSeedHook } = await import("./provisioner.js");
+const { buildSeedHookInput, composeSeedHook, captureFailureEvidence } =
+  await import("./provisioner.js");
 
 describe("#1121 Task 4: chatScript arg-building", () => {
   beforeEach(() => {
@@ -57,5 +58,26 @@ describe("#1121 Task 4: chatScript arg-building", () => {
 
     const args = mocks.spawn.mock.calls[0]?.[1] as string[];
     expect(args).toContain("JARVIS_UAT_SPORTS_PUBLIC_SOURCE_FIXTURES=1");
+  });
+});
+
+describe("#2164 r19: captureFailureEvidence transcript capture is not tail-truncated", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.spawn.mockReturnValue({
+      stdout: { on: vi.fn() },
+      on: (event: string, listener: (code: number) => void) => {
+        if (event === "exit") listener(0);
+      }
+    });
+  });
+
+  it("captures each transcript's full content instead of tailing it", async () => {
+    await captureFailureEvidence("proj", "180s timeout");
+
+    const execCall = mocks.spawn.mock.calls.find((call) => (call[1] as string[]).includes("exec"));
+    const shellScript = (execCall?.[1] as string[]).at(-1) ?? "";
+    expect(shellScript).toContain('cat "$f"');
+    expect(shellScript).not.toContain("tail -c");
   });
 });

@@ -491,9 +491,9 @@ function runCapture(command: string, args: readonly string[]): Promise<string> {
 }
 
 /**
- * #2173: retains bounded app evidence (last 50 jarv1s log lines, one health read, last 4000 bytes
- * of the 3 newest Claude print-engine transcripts under the chat engine's configured CLI home
- * base, `$HOME` as fallback — #2164 r17) before the terminal-failure branch tears down. Compose
+ * #2173: retains bounded app evidence (last 50 jarv1s log lines, one health read) plus the 3
+ * newest Claude print-engine transcripts under the chat engine's configured CLI home base,
+ * `$HOME` as fallback — #2164 r17) before the terminal-failure branch tears down. Compose
  * project/service scoped (buildUatComposeArgs), never the compose file's hardcoded container
  * name, a bare `docker inspect`, or the settings file (#2173 comment 5497191033 section 4). Also
  * used by run-uat.ts's spec-level failure path (#2164).
@@ -502,6 +502,10 @@ function runCapture(command: string, args: readonly string[]): Promise<string> {
  * re-logs a thrown database error's SQLSTATE/constraint/statement (#1251 hostile-object rule), but
  * Postgres already writes all three to its own container log, which teardown would otherwise
  * discard first.
+ *
+ * #2164 r19: the transcript capture itself used to `tail -c 4000` each file, cutting off exactly
+ * the tool call/response that would show the retry-card root cause on a long transcript. Now
+ * captures each transcript in full, same as the postgres log above.
  */
 export async function captureFailureEvidence(projectName: string, reason: string): Promise<void> {
   const [logs, health, transcripts, postgresLogs] = await Promise.all([
@@ -524,7 +528,7 @@ export async function captureFailureEvidence(projectName: string, reason: string
         'cli_home_base="${MOSS_CLI_HOME_BASE:-${JARVIS_CLI_HOME_BASE:-$HOME}}"; ' +
           "find \"$cli_home_base/.claude/projects\" -name '*.jsonl' -printf '%T@ %p\\n' 2>/dev/null " +
           "| sort -rn | head -3 | cut -d' ' -f2- " +
-          '| while read -r f; do echo "--- $f (last 4000 bytes) ---"; tail -c 4000 "$f"; done'
+          '| while read -r f; do echo "--- $f ---"; cat "$f"; done'
       ])
     ).catch((error) => `<transcript capture failed: ${String(error)}>`),
     runCapture("docker", buildUatComposeArgs(projectName, ["logs", "postgres"])).catch(
@@ -532,7 +536,7 @@ export async function captureFailureEvidence(projectName: string, reason: string
     )
   ]);
   console.error(
-    `[uat] ${projectName} jarv1s ${reason} — last 50 log lines, health status, bounded Claude print transcript(s), and full postgres log:`
+    `[uat] ${projectName} jarv1s ${reason} — last 50 log lines, health status, full Claude print transcript(s), and full postgres log:`
   );
   console.error(logs);
   console.error(health);
