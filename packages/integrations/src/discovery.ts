@@ -1,6 +1,7 @@
 import type { CredentialPlacement, IntegrationDetail, IntegrationKind } from "@moss/shared";
 
-import { effectiveEnabledTools, isGroupOptIn } from "./curation.js";
+import { effectiveEnabledTools, isGroupOptIn, withDerivedGroups } from "./curation.js";
+import { OTHER_GROUP } from "./derive-groups.js";
 import { discoverMcpTools } from "./mcp-client.js";
 import { convertOpenApiSpec, type DiscoveredTool } from "./openapi-convert.js";
 import { fetchOpenApiSpec } from "./openapi-invoke.js";
@@ -23,7 +24,10 @@ export function toDetail(row: ConnectionRow, tools: readonly DiscoveredTool[]): 
     mutedTools: row.mutedTools
   };
   const enabled = effectiveEnabledTools(tools, state);
-  const groupNames = [...new Set(tools.map((t) => t.group))];
+  const withGroups = withDerivedGroups(tools);
+  const groupNames = [...new Set(withGroups.map((t) => t.group))].sort((a, b) =>
+    a === OTHER_GROUP ? 1 : b === OTHER_GROUP ? -1 : 0
+  );
   return {
     id: row.id,
     name: row.name,
@@ -36,10 +40,10 @@ export function toDetail(row: ConnectionRow, tools: readonly DiscoveredTool[]): 
     lastDiscoveryAt: row.lastDiscoveryAt ? row.lastDiscoveryAt.toISOString() : null,
     lastError: row.lastError,
     credentialPlacement: row.credentialPlacement,
-    tools: tools.map(({ invoke: _invoke, ...t }) => t),
+    tools: withGroups.map(({ invoke: _invoke, ...t }) => t),
     groups: groupNames.map((name) => ({
       name,
-      toolCount: tools.filter((t) => t.group === name).length,
+      toolCount: withGroups.filter((t) => t.group === name).length,
       enabled: row.enabledGroups.includes(name)
     })),
     enabledGroups: row.enabledGroups,
