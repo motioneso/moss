@@ -500,21 +500,15 @@ function runCapture(command: string, args: readonly string[]): Promise<string> {
  * inspect`, and never the settings file or its contents (security ruling, issue #2173 comment
  * 5497191033 section 4).
  *
- * #2164: also exported for run-uat.ts's spec-level (Playwright assertion) failure path, not just
- * this file's own provisioning failures — a live UAT assertion failure used to run straight into
- * teardown with no record of what the app or the live model actually did. The transcript read
- * resolves the chat engine's own CLI home base (`MOSS_CLI_HOME_BASE`/`JARVIS_CLI_HOME_BASE`,
- * e.g. `/data/cli-auth` per infra/docker-compose.prod.yml) inside the `jarv1s` container at
- * capture time, falling back to `$HOME` only if that's unset.
+ * #2164: also exported for run-uat.ts's spec-level (Playwright assertion) failure path so a live
+ * assertion failure keeps evidence instead of running straight into teardown.
  *
- * #2164 r17 diagnostic: this used to search `$HOME/.claude/projects` unconditionally. The
- * `jarv1s` service has no `USER`/`user:` override (Dockerfile has none; see infra
- * docker-compose.prod.yml comment on `module-install`'s override), so it runs as root and
- * `$HOME` is `/root` — but transcriptGlobDir (packages/ai/src/adapters/tmux-bridge.ts) writes
- * under the engine's configured `homeBase`, which runtime.ts sets from
- * `JARVIS_CLI_HOME_BASE`/`MOSS_CLI_HOME_BASE` (`/data/cli-auth` in prod). So every capture
- * searched the wrong directory and always came back empty, regardless of whether the model
- * actually produced a transcript — a harness observability gap, not evidence that no turn ran.
+ * #2164 r17 diagnostic: the transcript read used to search `$HOME/.claude/projects`
+ * unconditionally, but the `jarv1s` service has no `USER` override so `$HOME` is `/root`, while
+ * the chat engine (packages/ai/src/adapters/tmux-bridge.ts, per runtime.ts) writes transcripts
+ * under `MOSS_CLI_HOME_BASE`/`JARVIS_CLI_HOME_BASE` (`/data/cli-auth` in prod). Every capture
+ * therefore came back empty regardless of what the model did. Now it prefers the engine's
+ * configured base, falling back to `$HOME` only if unset.
  */
 export async function captureFailureEvidence(projectName: string, reason: string): Promise<void> {
   const [logs, health, transcripts] = await Promise.all([
