@@ -420,7 +420,9 @@ describe("ChatSessionManager one-shot tool-attachment guard (#2164)", () => {
   });
 
   // Guard against over-tightening: an actual mcp__ tool invocation must still short-circuit
-  // the gate even with no new observation recorded this turn.
+  // the gate even with no new observation recorded this turn. Updated for #2164 r22: the record
+  // now carries a `toolCallId`, the shape the real engine produces since the r22 seam fix —
+  // an id-less attempt no longer counts (see the next test).
   it("still bypasses the gate for an mcp__jarvis__* tool invocation with no new tools/list observation", async () => {
     const engine = new FakeEngine(0, [
       {
@@ -428,7 +430,8 @@ describe("ChatSessionManager one-shot tool-attachment guard (#2164)", () => {
           {
             kind: "tool",
             text: "calling the sports retry tool",
-            toolName: "mcp__jarvis__sports_retry_source"
+            toolName: "mcp__jarvis__sports_retry_source",
+            toolCallId: "toolu_bypass1"
           },
           { kind: "reply", text: "retried it" }
         ],
@@ -464,5 +467,109 @@ describe("ChatSessionManager one-shot tool-attachment guard (#2164)", () => {
     // gate never re-polls it waiting for a new observation.
     expect(getToolsListObservationCount).toHaveBeenCalledTimes(1);
     expect(recordTurn).toHaveBeenCalled();
+  });
+
+  // #2164 r22 security correction — the reader-to-manager seam fix (item 1) means an id-less
+  // `mcp__` attempt can now only happen for a call the real engine never actually observed an
+  // id for. An attempt with no call id must not count as attachment proof and must still run
+  // the readiness gate, closing the same hole the "no such tool" rejection case closes.
+  it("still runs the readiness gate when the only mcp__ activity this turn has no call id", async () => {
+    const engine = new FakeEngine(0, [
+      {
+        records: [
+          {
+            kind: "tool",
+            text: "calling the sports retry tool",
+            toolName: "mcp__jarvis__sports_confirmSourceRecipe"
+          },
+          { kind: "reply", text: "here's what I found" }
+        ],
+        offset: 10,
+        complete: true
+      }
+    ]);
+    const recordTurn = vi.fn().mockResolvedValue(undefined);
+    const getToolsListObservationCount = vi.fn().mockReturnValue(0);
+    let clockNow = 0;
+    const clock = { now: vi.fn(() => (clockNow += 3_000)) };
+    const manager = new ChatSessionManager(
+      boundedFallbackDeps(engine, {
+        getToolsListObservationCount,
+        clock,
+        persistence: {
+          resolveActiveProvider: vi.fn().mockResolvedValue({
+            provider: "anthropic",
+            model: "sonnet",
+            executionMode: "non_interactive"
+          }),
+          listPriorTurns: vi.fn().mockResolvedValue({ recent: [], oldSummary: null }),
+          recordTurn,
+          openNewConversation: vi.fn().mockResolvedValue(undefined),
+          getThreadContext: vi.fn().mockResolvedValue({ threadTitle: null, localTimezone: null }),
+          touchExistingThread: vi.fn().mockResolvedValue(true)
+        }
+      })
+    );
+
+    await expect(manager.submitTurn("u1", "Ben", "retry the sports source")).rejects.toThrow(
+      CliChatUnavailableError
+    );
+
+    expect(getToolsListObservationCount).toHaveBeenCalledWith("jst_x");
+    expect(recordTurn).not.toHaveBeenCalled();
+  });
+
+  // #2164 r22 security correction (item 2) — a rejection signal record (kind "tool", rejected
+  // true, no toolName) must be consumed for gate bookkeeping only, never forwarded to
+  // subscribers as an activity row. A native tool's errored result (has a toolName) is a real
+  // activity step and must still be emitted; readiness behaviour for a native-only turn is
+  // unchanged from the `aea0f27f` ruling.
+  it("suppresses the rejection-signal record from emitted activity but still emits a native tool's own errored result", async () => {
+    const engine = new FakeEngine(0, [
+      {
+        records: [
+          { kind: "tool", text: "reading a file", toolName: "Read" },
+          { kind: "tool", text: "", toolCallId: "toolu_native1", rejected: true },
+          { kind: "reply", text: "here's what I found" }
+        ],
+        offset: 10,
+        complete: true
+      }
+    ]);
+    const recordTurn = vi.fn().mockResolvedValue(undefined);
+    const getToolsListObservationCount = vi.fn().mockReturnValue(0);
+    let clockNow = 0;
+    const clock = { now: vi.fn(() => (clockNow += 3_000)) };
+    const emitted: Array<{ kind: string }> = [];
+    const manager = new ChatSessionManager(
+      boundedFallbackDeps(engine, {
+        getToolsListObservationCount,
+        clock,
+        persistence: {
+          resolveActiveProvider: vi.fn().mockResolvedValue({
+            provider: "anthropic",
+            model: "sonnet",
+            executionMode: "non_interactive"
+          }),
+          listPriorTurns: vi.fn().mockResolvedValue({ recent: [], oldSummary: null }),
+          recordTurn,
+          openNewConversation: vi.fn().mockResolvedValue(undefined),
+          getThreadContext: vi.fn().mockResolvedValue({ threadTitle: null, localTimezone: null }),
+          touchExistingThread: vi.fn().mockResolvedValue(true)
+        }
+      })
+    );
+    manager.subscribe("u1", (record) => {
+      emitted.push(record);
+    });
+
+    await expect(manager.submitTurn("u1", "Ben", "read this file for me")).rejects.toThrow(
+      CliChatUnavailableError
+    );
+
+    expect(emitted.some((r) => r.kind === "tool")).toBe(true);
+    expect(emitted.filter((r) => r.kind === "tool").length).toBe(1);
+    expect(getToolsListObservationCount).toHaveBeenCalledWith("jst_x");
+    expect(recordTurn).not.toHaveBeenCalled();
   });
 });
