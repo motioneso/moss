@@ -119,7 +119,7 @@ describe("sports.retrySource action card (#2159)", () => {
     gateway = new AssistantToolGateway({
       resolveActiveModules: createActiveModulesResolver({
         dataContext: runner,
-        manifests: [sportsModuleManifest]
+        manifests: () => [sportsModuleManifest]
       }),
       repository,
       runner,
@@ -247,7 +247,7 @@ describe("sports.retrySource action card (#2159)", () => {
     const realGateway = new AssistantToolGateway({
       resolveActiveModules: createActiveModulesResolver({
         dataContext: runner,
-        manifests: [sportsModuleManifest]
+        manifests: () => [sportsModuleManifest]
       }),
       repository,
       runner,
