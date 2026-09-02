@@ -16,6 +16,7 @@ import { callMcpTool } from "./mcp-client.js";
 import type { DiscoveredTool } from "./openapi-convert.js";
 import { invokeOpenApiTool } from "./openapi-invoke.js";
 import { IntegrationsRepository, type ConnectionRow } from "./repository.js";
+import { resolverCache, type ResolverCache } from "./resolver-cache.js";
 import { INTEGRATION_SUMMARY } from "./summaries.js";
 
 export { INTEGRATION_SUMMARY } from "./summaries.js";
@@ -45,6 +46,8 @@ export interface IntegrationsActiveModulesResolverDeps {
   readonly callMemory?: CallMemory;
   /** Test seam — defaults to the module-level `requestBudget` singleton (#2175 Task 4). */
   readonly requestBudget?: RequestBudget;
+  /** Test seam — defaults to the module-level `resolverCache` singleton (#2175 Task 8). */
+  readonly resolverCache?: ResolverCache;
 }
 
 type ActiveModulesResolver = (actorUserId: string) => Promise<readonly MossModuleManifest[]>;
@@ -74,9 +77,14 @@ export function createIntegrationsActiveModulesResolver(
   deps: IntegrationsActiveModulesResolverDeps
 ): ActiveModulesResolver {
   const repository = deps.repository ?? new IntegrationsRepository();
+  const cache = deps.resolverCache ?? resolverCache;
 
   return async (actorUserId: string) => {
     const modules = await base(actorUserId);
+
+    const cached = cache.get(actorUserId);
+    if (cached) return [...modules, ...cached];
+
     const accessContext: AccessContext = { actorUserId, requestId: `int_${randomUUID()}` };
     const connections = await deps.dataContext.withDataContext(accessContext, (scopedDb) =>
       repository.listConnections(scopedDb)
@@ -104,6 +112,7 @@ export function createIntegrationsActiveModulesResolver(
       if (tools.length > 0) synthetic.push(buildSyntheticModule(conn, slug, tools));
     }
 
+    cache.set(actorUserId, synthetic);
     return [...modules, ...synthetic];
   };
 }

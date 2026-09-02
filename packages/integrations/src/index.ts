@@ -10,5 +10,6 @@ export * from "./mcp-client.js";
 export * from "./openapi-convert.js";
 export * from "./openapi-invoke.js";
 export * from "./repository.js";
+export * from "./resolver-cache.js";
 export * from "./routes.js";
 export * from "./tool-manifests.js";
