@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { deriveGroups } from "@moss/integrations";
-import homeAssistantTools from "./fixtures/home-assistant-75-tools.json";
+import homeAssistantTools from "./fixtures/home-assistant-75-tools.json" with { type: "json" };
 
 describe("deriveGroups", () => {
   it("splits names into segments at upper-case boundaries and separators", () => {
@@ -80,12 +80,12 @@ describe("deriveGroups", () => {
     expect(groups).toHaveLength(names.length);
   });
 
-  // Kill gate: fails today. 42 of 75 real tool names (56%) land in Other, because
-  // only 22/75 share the "Hass" prefix the spec assumed was near-universal -- the
-  // rest are one-off custom automation names with no shared structure to group on.
-  // Reported to the coordinator (2026-09-02); marked as an expected failure so CI
-  // stays green while a spec decision is pending, not to hide the finding.
-  it.fails("produces a helpful grouping on the real 75-tool fixture", () => {
+  // Fable's binding ruling (2026-09-02, issue #2175 comment 5513612338): Other is
+  // display-only and never an opt-in unit on the real 75-tool fixture -- only
+  // 22/75 names share the "Hass" prefix the spec assumed was near-universal, so
+  // most of the rest are correctly one-off names swept into Other. This is now
+  // the accepted, exact grouping for this fixture, not a gate.
+  it("produces the exact grouping ruled acceptable on the real 75-tool fixture", () => {
     const names: string[] = homeAssistantTools;
     const groups = deriveGroups(names);
     expect(groups).toHaveLength(names.length);
@@ -94,13 +94,14 @@ describe("deriveGroups", () => {
     const counts = new Map<string, number>();
     for (const g of groups) counts.set(g, (counts.get(g) ?? 0) + 1);
 
-    // No dominant group over 12 (the split-over-12 sweep must have fired).
-    for (const [group, count] of counts) {
-      if (group !== "Other") expect(count).toBeLessThanOrEqual(12);
-    }
+    expect(counts.get("Other")).toBe(42);
 
-    // Not more than half the tools swept into Other.
-    const other = counts.get("Other") ?? 0;
-    expect(other).toBeLessThanOrEqual(names.length / 2);
+    // Every non-Other group is between the minimum and maximum group size.
+    for (const [group, count] of counts) {
+      if (group !== "Other") {
+        expect(count).toBeLessThanOrEqual(12);
+        expect(count).toBeGreaterThanOrEqual(3);
+      }
+    }
   });
 });

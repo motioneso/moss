@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { effectiveEnabledTools, isGroupOptIn } from "@moss/integrations";
+import { effectiveEnabledTools, isGroupOptIn, withDerivedGroups } from "@moss/integrations";
 import type { IntegrationToolDescriptor } from "@moss/shared";
 
 const tool = (name: string, group = ""): IntegrationToolDescriptor => ({
@@ -49,14 +49,44 @@ describe("integration tool curation", () => {
     expect(isGroupOptIn(tools)).toBe(false);
   });
 
-  it("over the threshold but every tool has a blank group stays live, not group-gated", () => {
+  it("over the threshold with every tool blank now group-gates via derived groups", () => {
     const tools = Array.from({ length: 31 }, (_, i) => tool(`t${i}`, ""));
-    expect(isGroupOptIn(tools)).toBe(false);
+    expect(isGroupOptIn(tools)).toBe(true);
     const out = effectiveEnabledTools(tools, {
       enabledGroups: [],
       enabledTools: [],
-      mutedTools: ["t1"]
+      mutedTools: []
     });
-    expect(out).toHaveLength(30);
+    expect(out).toEqual([]);
+  });
+
+  it("returned tools carry derived group names, not the blank service-supplied ones", () => {
+    const tools = Array.from({ length: 31 }, (_, i) => tool(`t${i}`, ""));
+    const out = effectiveEnabledTools(tools, {
+      enabledGroups: [],
+      enabledTools: tools.map((t) => t.name),
+      mutedTools: []
+    });
+    expect(out).toHaveLength(31);
+    for (const t of out) expect(t.group).not.toBe("");
+  });
+
+  it("enabledGroups containing Other matches nothing -- Other only enables by explicit tool name", () => {
+    const tools = Array.from({ length: 31 }, (_, i) => tool(`t${i}`, ""));
+    const withOtherFlipped = effectiveEnabledTools(tools, {
+      enabledGroups: ["Other"],
+      enabledTools: [],
+      mutedTools: []
+    });
+    expect(withOtherFlipped).toEqual([]);
+
+    const withoutFlippedButNamed = effectiveEnabledTools(tools, {
+      enabledGroups: ["Other"],
+      enabledTools: ["t0"],
+      mutedTools: []
+    });
+    const derivedGroupOfT0 = withDerivedGroups(tools).find((t) => t.name === "t0")?.group;
+    expect(derivedGroupOfT0).toBe("Other");
+    expect(withoutFlippedButNamed.map((t) => t.name)).toEqual(["t0"]);
   });
 });

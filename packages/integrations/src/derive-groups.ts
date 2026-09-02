@@ -1,6 +1,7 @@
 const MAX_GROUP_SIZE = 12;
 const MIN_GROUP_SIZE = 3;
-const OTHER = "Other";
+export const OTHER_GROUP = "Other";
+const OTHER = OTHER_GROUP;
 
 function splitSegments(name: string): string[] {
   const withBoundaries = name.replace(/[_\-.]+/g, " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2");
@@ -14,7 +15,7 @@ function dropSharedLeadingSegments(segmented: string[][]): string[][] {
     if (nonEmpty.length === 0) break;
     const counts = new Map<string, number>();
     for (const segs of nonEmpty) {
-      const lead = segs[0];
+      const lead = segs[0]!;
       counts.set(lead, (counts.get(lead) ?? 0) + 1);
     }
     let sharedLead: string | undefined;
@@ -25,18 +26,19 @@ function dropSharedLeadingSegments(segmented: string[][]): string[][] {
       }
     }
     if (sharedLead === undefined) break;
-    result = result.map((segs) => (segs.length > 0 && segs[0] === sharedLead ? segs.slice(1) : segs));
+    const lead = sharedLead;
+    result = result.map((segs) => (segs.length > 0 && segs[0] === lead ? segs.slice(1) : segs));
   }
   return result;
 }
 
 function groupBySegment(segmented: string[][]): string[] {
   const reduced = dropSharedLeadingSegments(segmented);
-  return reduced.map((segs) => (segs.length > 0 ? segs[0] : OTHER));
+  return reduced.map((segs) => (segs.length > 0 ? segs[0]! : OTHER));
 }
 
 function splitOversizedGroup(indices: number[], segmented: string[][], depth: number): Map<number, string> {
-  const sub = indices.map((i) => segmented[i].slice(depth));
+  const sub = indices.map((i) => segmented[i]!.slice(depth));
   const subGroups = groupBySegment(sub);
   const result = new Map<number, string>();
   const counts = new Map<string, number>();
@@ -44,7 +46,7 @@ function splitOversizedGroup(indices: number[], segmented: string[][], depth: nu
 
   const groupToIndices = new Map<string, number[]>();
   subGroups.forEach((g, j) => {
-    const idx = indices[j];
+    const idx = indices[j]!;
     if (!groupToIndices.has(g)) groupToIndices.set(g, []);
     groupToIndices.get(g)!.push(idx);
   });
