@@ -95,6 +95,30 @@ describe("run-uat CLI (#1027/#1047)", () => {
     });
   });
 
+  it("#2164: runs multiple specs in the caller's filter order, not readdir order", async () => {
+    // readdir returns filesystem/alphabetical order: "a" before "z".
+    mocks.readdir.mockResolvedValue(["a-spec.uat.spec.ts", "z-spec.uat.spec.ts"]);
+    process.argv = ["node", "tests/uat/run-uat.ts", "z-spec", "a-spec"];
+
+    await import("./run-uat.js");
+
+    expect(mocks.spawn).toHaveBeenCalledTimes(2);
+    const [, firstArgs] = mocks.spawn.mock.calls[0] ?? [];
+    const [, secondArgs] = mocks.spawn.mock.calls[1] ?? [];
+    expect(firstArgs).toEqual([
+      "playwright",
+      "test",
+      "--config=tests/uat/playwright.uat.config.ts",
+      "tests/uat/specs/z-spec.uat.spec.ts"
+    ]);
+    expect(secondArgs).toEqual([
+      "playwright",
+      "test",
+      "--config=tests/uat/playwright.uat.config.ts",
+      "tests/uat/specs/a-spec.uat.spec.ts"
+    ]);
+  });
+
   it("threads the opt-in #1909 public-source fixture flag", async () => {
     mocks.readFile.mockResolvedValue(
       `export const uatLevel = {

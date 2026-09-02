@@ -16,15 +16,26 @@ async function resolveSpecPaths(filters: readonly string[]): Promise<string[]> {
     .map((file) => join(SPEC_DIR, file));
   if (filters.length === 0) return available;
 
-  const selected = available.filter((path) =>
-    filters.some(
-      (filter) =>
-        path === filter ||
-        matchesGlob(path, filter) ||
-        matchesGlob(basename(path), filter) ||
-        basename(path).includes(filter)
-    )
-  );
+  const matchesFilter = (path: string, filter: string) =>
+    path === filter ||
+    matchesGlob(path, filter) ||
+    matchesGlob(basename(path), filter) ||
+    basename(path).includes(filter);
+
+  // #2164: iterate filters in the caller's order, not readdir's filesystem order, so
+  // e.g. `run-uat.ts b.spec a.spec` runs b before a. main() exits on the first spec
+  // failure, so filesystem order silently skipped later-ordered specs (runtime-context
+  // never ran because it sorted after a spec that failed first).
+  const selected: string[] = [];
+  const remaining = new Set(available);
+  for (const filter of filters) {
+    for (const path of remaining) {
+      if (matchesFilter(path, filter)) {
+        selected.push(path);
+        remaining.delete(path);
+      }
+    }
+  }
   if (selected.length === 0) {
     throw new Error(`no UAT spec matched: ${filters.join(", ")}`);
   }
