@@ -509,6 +509,17 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
     const toolsListReadySpy = vi
       .spyOn(SessionTokenRegistry.prototype, "waitForToolsListObserved")
       .mockResolvedValue(true);
+
+    // #2164 r21: this fake engine reports its tool calls as news.refreshNews and
+    // settings.platformDiagnostics, neither of which is mcp__-namespaced, so the per-turn gate
+    // (SessionTokenRegistry.getToolsListObservationCount, compared against a per-turn baseline in
+    // ChatSessionManager.waitForNewToolsListObservation) would otherwise time out waiting for an
+    // observation that never comes. Stub it to a strictly increasing count so every baseline
+    // capture is immediately exceeded on the next read — readiness isn't under test here.
+    let toolsListObservationCounter = 0;
+    const toolsListObservationCountSpy = vi
+      .spyOn(SessionTokenRegistry.prototype, "getToolsListObservationCount")
+      .mockImplementation(() => ++toolsListObservationCounter);
     configureChatTools(appBoss);
     await appContext.withDataContext(
       { actorUserId: ids.userA, requestId: "diagnostics-chat-policy" },
@@ -646,6 +657,7 @@ describe("news chat tools — previewSource/confirmSource via assistant gateway 
     } finally {
       await server.close();
       toolsListReadySpy.mockRestore();
+      toolsListObservationCountSpy.mockRestore();
     }
     configureChatTools(null);
   }, 60_000);
