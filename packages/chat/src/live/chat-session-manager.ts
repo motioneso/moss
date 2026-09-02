@@ -456,7 +456,7 @@ export class ChatSessionManager {
           session.engine.resetActivityDeadline?.();
         }
         for (const record of records) {
-          const rejectionOnly = record.kind === "tool" && record.rejected && !record.toolName;
+          const rejectionOnly = record.kind === "tool" && !record.toolName && !record.text?.trim();
           if (!rejectionOnly) this.emit(actorUserId, surface, record);
           if (record.kind === "reply") reply = record.text;
           if (record.kind === "tool" && record.toolName) {

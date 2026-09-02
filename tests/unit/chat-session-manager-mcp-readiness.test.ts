@@ -572,4 +572,69 @@ describe("ChatSessionManager one-shot tool-attachment guard (#2164)", () => {
     expect(getToolsListObservationCount).toHaveBeenCalledWith("jst_x");
     expect(recordTurn).not.toHaveBeenCalled();
   });
+
+  // #2164 r23 security correction (item 1) — the r22 suppression keyed on `rejected`, but the
+  // interactive Anthropic path (cli-chat-engine.ts) never sets that flag; it can still emit a
+  // blank `{ kind: "tool", text: "" }` record with no toolName. The choke point must suppress
+  // any nameless, textless tool record regardless of `rejected`, while a record that does carry
+  // a toolName — even with empty text, e.g. an mcp__ call — is still a real activity step and
+  // must still be emitted, and gate bookkeeping (mcp__ bypass) must stay unchanged.
+  it("suppresses a nameless textless tool record with no rejected flag, but still emits and bypasses the gate for an mcp__ record with empty text", async () => {
+    const engine = new FakeEngine(0, [
+      {
+        records: [
+          { kind: "tool", text: "" },
+          {
+            kind: "tool",
+            text: "",
+            toolName: "mcp__jarvis__sports_retry_source",
+            toolCallId: "toolu_blank1"
+          },
+          { kind: "reply", text: "retried it" }
+        ],
+        offset: 10,
+        complete: true
+      }
+    ]);
+    const recordTurn = vi.fn().mockResolvedValue(undefined);
+    const getToolsListObservationCount = vi.fn().mockReturnValue(0);
+    const emitted: Array<{ kind: string; toolName?: string; toolCallId?: string; text?: string }> =
+      [];
+    const manager = new ChatSessionManager(
+      boundedFallbackDeps(engine, {
+        getToolsListObservationCount,
+        persistence: {
+          resolveActiveProvider: vi.fn().mockResolvedValue({
+            provider: "anthropic",
+            model: "sonnet",
+            executionMode: "non_interactive"
+          }),
+          listPriorTurns: vi.fn().mockResolvedValue({ recent: [], oldSummary: null }),
+          recordTurn,
+          openNewConversation: vi.fn().mockResolvedValue(undefined),
+          getThreadContext: vi.fn().mockResolvedValue({ threadTitle: null, localTimezone: null }),
+          touchExistingThread: vi.fn().mockResolvedValue(true)
+        }
+      })
+    );
+    manager.subscribe("u1", (record) => {
+      emitted.push(record);
+    });
+
+    await expect(manager.submitTurn("u1", "Ben", "retry the sports source")).resolves.toMatchObject(
+      { reply: "retried it" }
+    );
+
+    expect(emitted.filter((r) => r.kind === "tool")).toEqual([
+      {
+        kind: "tool",
+        text: "",
+        toolName: "mcp__jarvis__sports_retry_source",
+        toolCallId: "toolu_blank1"
+      }
+    ]);
+    // mcp__ bypass: the gate never re-polls waiting for a new observation.
+    expect(getToolsListObservationCount).toHaveBeenCalledTimes(1);
+    expect(recordTurn).toHaveBeenCalled();
+  });
 });

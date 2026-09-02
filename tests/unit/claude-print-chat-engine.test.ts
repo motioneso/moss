@@ -777,3 +777,158 @@ describe("ClaudePrintChatEngine — vault read-only allowlist (#634)", () => {
     });
   });
 });
+
+// #2164 r23 security correction (item 2) — the r22 window scan cut 32-char windows from the
+// sanitized prompt with newlines intact while the stderr side split on "\n" first, so a window
+// straddling a prompt line boundary could never match inside one stderr line. If every line of
+// the prompt is under 32 characters, no window can ever match and the whole prompt survives an
+// argv echo verbatim. The scrub is now line-wise: 32+ char lines still window-match, and
+// 8-31 char trimmed lines are dropped as whole literals.
+describe("#2164 r23 (item 2) multi-line prompt scrub", () => {
+  it("drops stderr lines echoing prompt lines that are each shorter than the 32-char window", async () => {
+    const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+      mux: fakeMux(),
+      homeBase: "/home/test",
+      sessionId: "00000000-0000-4000-8000-000000000029"
+    });
+    await engine.launch({
+      neutralDir: "/tmp/jarvis-neutral",
+      personaPath: "/tmp/jarvis-neutral/persona.md",
+      personaText: "persona"
+    });
+    const line1 = "the vault passphrase is";
+    const line2 = "correct horse battery";
+    const multiLinePrompt = `${line1}\n${line2}`;
+    await engine.submit(multiLinePrompt);
+
+    currentChild.stderr.write(`claude: argv echo: ${line1}\n`);
+    currentChild.stderr.write(`claude: argv echo: ${line2}\n`);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const diag = engine.getLastSubmitDiagnostics();
+    expect(diag.stderrTail).not.toContain(line1);
+    expect(diag.stderrTail).not.toContain(line2);
+  });
+
+  it("drops a truncated argv-echo fragment spanning a line boundary in a too-long, every-line-short prompt", async () => {
+    const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+      mux: fakeMux(),
+      homeBase: "/home/test",
+      sessionId: "00000000-0000-4000-8000-000000000030"
+    });
+    await engine.launch({
+      neutralDir: "/tmp/jarvis-neutral",
+      personaPath: "/tmp/jarvis-neutral/persona.md",
+      personaText: "persona"
+    });
+    // 200 distinct, varied short lines (each well under the 32-char window) so the whole
+    // prompt exceeds the 4096-byte stderr cap while no single line is long enough to ever
+    // produce a window under the r22 algorithm — exactly the hole this correction closes.
+    const lines = Array.from(
+      { length: 200 },
+      (_, i) => `vault key fragment ${i.toString().padStart(4, "0")} lives here`
+    );
+    const multiLinePrompt = lines.join("\n");
+    await engine.submit(multiLinePrompt);
+
+    // A fragment spanning the boundary between two adjacent short lines, as a truncated argv
+    // echo would produce.
+    const boundaryFragment = lines[99].slice(-10) + lines[100].slice(0, 10);
+    currentChild.stderr.write(`bash: -lc: line 1: claude: ${boundaryFragment}\n`);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const diag = engine.getLastSubmitDiagnostics();
+    expect(diag.stderrTail).not.toContain(lines[99]);
+    expect(diag.stderrTail).not.toContain(lines[100]);
+  });
+
+  it("keeps an unrelated stderr line intact in the presence of a multi-line prompt", async () => {
+    const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+      mux: fakeMux(),
+      homeBase: "/home/test",
+      sessionId: "00000000-0000-4000-8000-000000000031"
+    });
+    await engine.launch({
+      neutralDir: "/tmp/jarvis-neutral",
+      personaPath: "/tmp/jarvis-neutral/persona.md",
+      personaText: "persona"
+    });
+    const line1 = "the vault passphrase is";
+    const line2 = "correct horse battery";
+    await engine.submit(`${line1}\n${line2}`);
+
+    currentChild.stderr.write("bash: claude: command not found\n");
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const diag = engine.getLastSubmitDiagnostics();
+    expect(diag.stderrTail).toContain("bash: claude: command not found");
+  });
+});
+
+// #2164 r23 security correction (item 3) — `submit()` never kills the previous turn's child on
+// this path; only teardown or an explicit Stop do. A still-running earlier child's stderr
+// listener previously closed over `this`, so it could keep writing into a shared
+// lastSubmitStderr/lastSubmitExitCode pair after a later submit() reset it, corrupting the
+// current turn's diagnostic with a different turn's private text and exit code. Each submit()
+// now isolates its capture in a local object the listeners close over.
+describe("#2164 r23 (item 3) per-submit capture isolation", () => {
+  it("keeps a later turn's diagnostic clean of an earlier, still-writing turn's stderr and prompt", async () => {
+    const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+      mux: fakeMux(),
+      homeBase: "/home/test",
+      sessionId: "00000000-0000-4000-8000-000000000032"
+    });
+    await engine.launch({
+      neutralDir: "/tmp/jarvis-neutral",
+      personaPath: "/tmp/jarvis-neutral/persona.md",
+      personaText: "persona"
+    });
+
+    const turnOneChild = currentChild;
+    await engine.submit("what is the turn one secret plan");
+    turnOneChild.stderr.write("turn one is still running\n");
+    await new Promise((resolve) => setImmediate(resolve));
+
+    currentChild = fakeChild();
+    spawnMock.mockReturnValue(currentChild);
+    await engine.submit("totally different turn two question");
+
+    // Turn one's abandoned child keeps writing after turn two has been submitted.
+    turnOneChild.stderr.write("turn one wrote again after being abandoned\n");
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const diag = engine.getLastSubmitDiagnostics();
+    expect(diag.stderrTail).not.toContain("turn one is still running");
+    expect(diag.stderrTail).not.toContain("turn one wrote again after being abandoned");
+    expect(diag.stderrTail).not.toContain("turn one secret plan");
+  });
+
+  it("reports the current turn's exit code, never an earlier abandoned turn's late exit", async () => {
+    const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+      mux: fakeMux(),
+      homeBase: "/home/test",
+      sessionId: "00000000-0000-4000-8000-000000000033"
+    });
+    await engine.launch({
+      neutralDir: "/tmp/jarvis-neutral",
+      personaPath: "/tmp/jarvis-neutral/persona.md",
+      personaText: "persona"
+    });
+
+    const turnOneChild = currentChild;
+    await engine.submit("turn one");
+
+    currentChild = fakeChild();
+    spawnMock.mockReturnValue(currentChild);
+    await engine.submit("turn two");
+
+    expect(engine.getLastSubmitDiagnostics().exitCode).toBeNull();
+
+    // Turn one's child finally exits after turn two is already in flight.
+    const turnOneExit = turnOneChild.once.mock.calls.find(([event]) => event === "exit")?.[1];
+    turnOneExit?.(7);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(engine.getLastSubmitDiagnostics().exitCode).toBeNull();
+  });
+});

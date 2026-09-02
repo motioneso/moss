@@ -22,27 +22,44 @@ const PERSONA_FILENAME = "persona.md";
 const CLAUDE_MCP_FILENAME = ".jarvis-claude-mcp.json";
 
 /**
- * #2164 r22 security correction — the r21 whole-literal `redactExact` scrub only matched a stderr
- * line that echoed the *entire* prompt, which never happens once the prompt exceeds the 4096-byte
- * stderr cap (the normal case). Drops any stderr line that contains a 32-char window of the
- * sanitized prompt, so a truncated argv echo still leaks nothing. Falls back to whole-literal
- * scrub for prompts shorter than the window.
+ * #2164 r23 security correction — the r22 window scan cut its 32-char windows from the sanitized
+ * prompt with newlines left intact, while the stderr side was split on `\n` first: a window
+ * straddling a prompt line boundary could never match inside one stderr line, so a multi-line
+ * prompt whose every line is under 32 characters could survive an argv echo verbatim regardless
+ * of total prompt length. The scrub is now line-wise on both sides: split the sanitized prompt on
+ * `\n`, trim each line, and for a line of 32+ characters add its overlapping 32-char windows (as
+ * before); a shorter trimmed line of at least 8 characters is added whole to a separate literal
+ * set instead. A stderr line is dropped in full if it contains any window or any literal. The
+ * 8-character floor is deliberate, mirroring `redactExact`'s own 4-character no-op: scrubbing
+ * 1–7 character prompt lines would delete ordinary diagnostic text (`make`, `npm`, a bare path
+ * segment) that r21 §3 needs to tell the two root-cause hypotheses apart. A prompt line of 7
+ * characters or fewer carrying sensitive text is therefore not scrubbed here — an accepted,
+ * recorded-as-follow-up residual, not a defect this round corrects.
  */
 const PROMPT_FRAGMENT_SCRUB_WINDOW = 32;
+const PROMPT_FRAGMENT_LITERAL_FLOOR = 8;
 
 function scrubPromptFragments(stderrTail: string, sanitizedPrompt: string): string {
-  if (sanitizedPrompt.length < PROMPT_FRAGMENT_SCRUB_WINDOW) {
-    return redactExact(stderrTail, sanitizedPrompt);
-  }
   const windows = new Set<string>();
-  for (let i = 0; i <= sanitizedPrompt.length - PROMPT_FRAGMENT_SCRUB_WINDOW; i++) {
-    windows.add(sanitizedPrompt.slice(i, i + PROMPT_FRAGMENT_SCRUB_WINDOW));
+  const literals = new Set<string>();
+  for (const rawLine of sanitizedPrompt.split("\n")) {
+    const line = rawLine.trim();
+    if (line.length >= PROMPT_FRAGMENT_SCRUB_WINDOW) {
+      for (let i = 0; i <= line.length - PROMPT_FRAGMENT_SCRUB_WINDOW; i++) {
+        windows.add(line.slice(i, i + PROMPT_FRAGMENT_SCRUB_WINDOW));
+      }
+    } else if (line.length >= PROMPT_FRAGMENT_LITERAL_FLOOR) {
+      literals.add(line);
+    }
   }
   return stderrTail
     .split("\n")
     .filter((line) => {
       for (const window of windows) {
         if (line.includes(window)) return false;
+      }
+      for (const literal of literals) {
+        if (line.includes(literal)) return false;
       }
       return true;
     })
@@ -73,16 +90,17 @@ export class ClaudePrintChatEngine implements CliChatEngine {
   private hasSubmitted = false;
   /** #1353 — one warning per unreadable-transcript streak, not one per 25ms poll. */
   private warnedUnreadable = false;
-  /** #2164 r21 — bounded (oldest-dropped) stderr tail from the most recent `submit()`'s child process. */
-  private lastSubmitStderr = "";
-  private lastSubmitExitCode: number | null = null;
   /**
-   * #2164 r21 security correction — the sanitized prompt text from the most recent `submit()`,
-   * retained only so {@link getLastSubmitDiagnostics} can scrub it out of the stderr tail. `bash
-   * -lc` expands `"$(cat <promptPath>)"` before exec, so the `claude` child's argv carries the
-   * full prompt text; an error that echoes argv would otherwise leak it into stderr.
+   * #2164 r23 security correction (item 3) — a prior turn's `submit()` never kills its child on
+   * this path (only teardown/Stop do), so an abandoned still-writing child could keep mutating a
+   * shared `lastSubmitStderr`/`lastSubmitExitCode` pair after a later turn's `submit()` reset it,
+   * corrupting the *current* turn's diagnostic with a *different* turn's stderr and exit code. Each
+   * `submit()` now creates its own capture object and the child's listeners close over that local
+   * object instead of `this`, so an abandoned child's writes land only in its own unreferenced,
+   * garbage-collectable capture. Nothing about child process lifecycle (kill/detach/spawn) changes.
    */
-  private currentSubmitPrompt = "";
+  private currentCapture: { stderrTail: string; exitCode: number | null; readonly prompt: string } =
+    { stderrTail: "", exitCode: null, prompt: "" };
 
   constructor(
     _threadKey: string,
@@ -116,9 +134,8 @@ export class ClaudePrintChatEngine implements CliChatEngine {
     await this.io.writeFile(promptPath, sanitizedPrompt);
     const launchLine = await this.buildCommand(this.launchOpts, promptPath);
 
-    this.lastSubmitStderr = "";
-    this.lastSubmitExitCode = null;
-    this.currentSubmitPrompt = sanitizedPrompt;
+    const capture = { stderrTail: "", exitCode: null as number | null, prompt: sanitizedPrompt };
+    this.currentCapture = capture;
     this.currentProcess = spawn("bash", ["-lc", launchLine], {
       cwd: this.launchOpts.neutralDir,
       detached: true,
@@ -128,20 +145,22 @@ export class ClaudePrintChatEngine implements CliChatEngine {
     // #2164 r21 — bounded (oldest-dropped) stderr capture for last-submit diagnostics. Security
     // correction: when a chunk pushes the accumulator over the cap, drop the leading partial
     // line (through the first newline) from the trimmed tail so a token fragment split by the
-    // window boundary can never survive as an unmatched, unredactable partial match.
+    // window boundary can never survive as an unmatched, unredactable partial match. #2164 r23 —
+    // this listener closes over `capture`, not `this`, so an abandoned earlier child (never
+    // killed on this path) keeps writing only into its own unreferenced capture.
     this.currentProcess.stderr?.setEncoding("utf8");
     this.currentProcess.stderr?.on("data", (chunk: string) => {
-      const combined = this.lastSubmitStderr + chunk;
+      const combined = capture.stderrTail + chunk;
       const wasTruncated = combined.length > 4096;
       let tail = combined.slice(-4096);
       if (wasTruncated) {
         const newlineIdx = tail.indexOf("\n");
         if (newlineIdx !== -1) tail = tail.slice(newlineIdx + 1);
       }
-      this.lastSubmitStderr = tail;
+      capture.stderrTail = tail;
     });
     this.currentProcess.once("exit", (code) => {
-      this.lastSubmitExitCode = code;
+      capture.exitCode = code;
     });
     this.currentProcess.unref();
     this.hasSubmitted = true;
@@ -154,16 +173,19 @@ export class ClaudePrintChatEngine implements CliChatEngine {
    * prompt text is scrubbed line-by-line via {@link scrubPromptFragments} alongside `neutralDir`,
    * guarding against argv being echoed into stderr by an errored child — including a fragment of
    * a too-long prompt truncated by the 4096-byte stderr cap. Not part of `CliChatEngine` (out of
-   * the r21 file allowlist) — callers reach it via an inline optional cast.
+   * the r21 file allowlist) — callers reach it via an inline optional cast. #2164 r23 — reads and
+   * scrubs against this turn's own capture, so the buffer and the scrub target can never come
+   * from two different turns.
    */
   getLastSubmitDiagnostics(): { readonly stderrTail: string; readonly exitCode: number | null } {
+    const { stderrTail, exitCode, prompt } = this.currentCapture;
     const scrubbed = scrubPromptFragments(
-      redactExact(redactSecrets(this.lastSubmitStderr), this.launchOpts?.neutralDir),
-      this.currentSubmitPrompt
+      redactExact(redactSecrets(stderrTail), this.launchOpts?.neutralDir),
+      prompt
     );
     return {
       stderrTail: scrubbed,
-      exitCode: this.lastSubmitExitCode
+      exitCode
     };
   }
 
