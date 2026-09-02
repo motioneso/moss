@@ -53,7 +53,9 @@ function outcomeLabel(outcome: ActionAuditLogEntryDto["outcome"]): string {
     denied: "Declined",
     cancelled: "Cancelled",
     invalid: "Invalid",
-    conflict: "Conflict"
+    conflict: "Conflict",
+    suppressed: "Skipped (already covered)",
+    refused: "Refused (too many requests)"
   };
   return labels[outcome];
 }
@@ -70,7 +72,11 @@ function relativeTime(iso: string): string {
 
 function isDistinct(outcome: ActionAuditLogEntryDto["outcome"]): boolean {
   return (
-    outcome === "failed" || outcome === "denied" || outcome === "invalid" || outcome === "conflict"
+    outcome === "failed" ||
+    outcome === "denied" ||
+    outcome === "invalid" ||
+    outcome === "conflict" ||
+    outcome === "refused"
   );
 }
 
