@@ -167,7 +167,7 @@ describe("run-uat CLI (#1027/#1047)", () => {
     );
     const captureOrder = mocks.captureFailureEvidence.mock.invocationCallOrder[0];
     const teardownOrder = teardown.mock.invocationCallOrder[0];
-    expect(captureOrder).toBeLessThan(teardownOrder);
+    expect(captureOrder).toBeLessThan(teardownOrder ?? 0);
   });
 
   it("#2164: does not capture failure evidence when a spec passes", async () => {
