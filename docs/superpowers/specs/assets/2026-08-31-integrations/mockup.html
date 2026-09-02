@@ -538,7 +538,9 @@
       <button class="mk-tab" data-s="s2">2 · Add integration</button>
       <button class="mk-tab" data-s="s3">3 · Detail — Home Assistant (MCP, small)</button>
       <button class="mk-tab" data-s="s4">4 · Detail — Sonarr (API, large)</button>
-      <button class="mk-tab" data-s="s5">5 · Detail — Home Assistant (MCP, 75-tool, grouped)</button>
+      <button class="mk-tab" data-s="s5">
+        5 · Detail — Home Assistant (MCP, 75-tool, grouped)
+      </button>
     </div>
 
     <!-- ============ SCREEN 1: LIST ============ -->
@@ -931,8 +933,8 @@
               <div class="stat"><b>41</b><span>calls this week</span></div>
             </div>
             <div class="note">
-              This connection kept everything enabled before grouping existed — the groups below
-              are ready to narrow, nothing changes until you turn one off.
+              This connection kept everything enabled before grouping existed — the groups below are
+              ready to narrow, nothing changes until you turn one off.
             </div>
             <div class="toolbar">
               <h3>Tools</h3>
@@ -1085,7 +1087,9 @@
             </div>
             <div class="tool">
               <div class="tool__name">StartTask</div>
-              <div class="tool__desc">Create a task on the household board — does not say it's safe to repeat</div>
+              <div class="tool__desc">
+                Create a task on the household board — does not say it's safe to repeat
+              </div>
               <div style="display: flex; gap: 16px; flex: none">
                 <div class="sw sw--sm on"></div>
                 <div class="sw sw--sm on"></div>
@@ -1110,7 +1114,9 @@
             </div>
             <div class="tool">
               <div class="tool__name">HassTurnOn</div>
-              <div class="tool__desc">Turn on a device or entity — a family of 2, too small to group</div>
+              <div class="tool__desc">
+                Turn on a device or entity — a family of 2, too small to group
+              </div>
               <div style="display: flex; gap: 16px; flex: none">
                 <div class="sw sw--sm on"></div>
                 <div class="sw sw--sm"></div>
@@ -1118,7 +1124,9 @@
             </div>
             <div class="tool">
               <div class="tool__name">HassTurnOff</div>
-              <div class="tool__desc">Turn off a device or entity — a family of 2, too small to group</div>
+              <div class="tool__desc">
+                Turn off a device or entity — a family of 2, too small to group
+              </div>
               <div style="display: flex; gap: 16px; flex: none">
                 <div class="sw sw--sm on"></div>
                 <div class="sw sw--sm"></div>
@@ -1143,11 +1151,11 @@
             </div>
             <div class="note">
               Mockup annotation, not UI copy: tool names above are Home Assistant's real built-in
-              intents plus this connection's own custom scripts, both named in the spec's
-              diagnosis (HassTurnOff, HassBroadcast, AddMovie, AddTaskWork, StartTask). Group
-              membership is illustrative — the real groups come from the 75-name fixture Task 5
-              checks in from the live connection. The turn-on/turn-off pair landing in Other,
-              not its own group, is the spec's own worked example of the minimum-group-size rule.
+              intents plus this connection's own custom scripts, both named in the spec's diagnosis
+              (HassTurnOff, HassBroadcast, AddMovie, AddTaskWork, StartTask). Group membership is
+              illustrative — the real groups come from the 75-name fixture Task 5 checks in from the
+              live connection. The turn-on/turn-off pair landing in Other, not its own group, is the
+              spec's own worked example of the minimum-group-size rule.
             </div>
           </div>
         </div>
