@@ -52,4 +52,42 @@ describe("toDetail derived groups", () => {
     expect(detail.groups.at(-1)?.name).toBe(OTHER_GROUP);
     expect(detail.groups.filter((g) => g.name === OTHER_GROUP)).toHaveLength(1);
   });
+
+  // QA round 1, #2175 comment 5515241034, blocking finding 3: the derived Other bucket must never
+  // report enabled from a stale/irrelevant enabledGroups entry, but a service's own group literally
+  // named Other (OpenAPI's untagged-operation fallback) is an ordinary group and must report its
+  // real enabled state.
+  it("groups[].enabled is false for the derived Other bucket even if enabledGroups names it, and true for a service-supplied Other group that's actually enabled", () => {
+    const lightActions = ["TurnOn", "TurnOff", "SetBrightness", "SetColor", "SetTemp"];
+    const fanActions = ["TurnOn", "TurnOff", "SetSpeed", "Oscillate", "Reset"];
+    const light = lightActions.map((a) => `HassLight${a}`);
+    const fan = fanActions.map((a) => `HassFan${a}`);
+    const oneOffs = Array.from({ length: 22 }, (_, i) => `standalone_oddball_${i}`);
+    const names = [...light, ...fan, ...oneOffs];
+    const tools = names.map(mcpTool);
+    const derivedRow = connection({ discoveredTools: tools, enabledGroups: [OTHER_GROUP] });
+
+    const derivedDetail = toDetail(derivedRow, tools);
+    const derivedOther = derivedDetail.groups.find((g) => g.name === OTHER_GROUP);
+    expect(derivedOther?.enabled).toBe(false);
+
+    const namedTools = [
+      ...Array.from({ length: 20 }, (_, i) => ({
+        name: `named_${i}`,
+        description: `named_${i}`,
+        group: "Named",
+        inputSchema: null
+      })),
+      ...Array.from({ length: 11 }, (_, i) => ({
+        name: `other_${i}`,
+        description: `other_${i}`,
+        group: OTHER_GROUP,
+        inputSchema: null
+      }))
+    ];
+    const namedRow = connection({ discoveredTools: namedTools, enabledGroups: [OTHER_GROUP] });
+    const namedDetail = toDetail(namedRow, namedTools);
+    const namedOther = namedDetail.groups.find((g) => g.name === OTHER_GROUP);
+    expect(namedOther?.enabled).toBe(true);
+  });
 });

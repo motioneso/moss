@@ -122,6 +122,27 @@ describe("#2175 Task 5 — 0209 grandfathering migration", () => {
     expect(byId.get(alreadyExplicitId)).toEqual(["tool_0"]);
   });
 
+  // QA round 1, #2175 comment 5515241034, blocking finding 1: array_agg over an empty result
+  // set is NULL, not '{}', so an eligible connection with every tool muted wrote NULL into a
+  // NOT NULL column and rolled back the whole migration.
+  it("grandfathers an all-muted eligible connection to an empty list instead of failing", async () => {
+    const allTools = toolNames(35);
+    const allMutedId = await insertConnection({
+      name: "grandfather-all-muted",
+      discoveredTools: allTools,
+      mutedTools: allTools.map((t) => t.name),
+      enabledTools: []
+    });
+
+    await expect(migrationClient.query(migrationSql)).resolves.toBeDefined();
+
+    const { rows } = await seedClient.query<{ enabled_tools: string[] }>(
+      `SELECT enabled_tools FROM app.integration_connections WHERE id = $1`,
+      [allMutedId]
+    );
+    expect(rows[0]!.enabled_tools).toEqual([]);
+  });
+
   it("leaves row-level security enabled and forced after the migration runs", async () => {
     await migrationClient.query(migrationSql);
 

@@ -89,4 +89,28 @@ describe("integration tool curation", () => {
     expect(derivedGroupOfT0).toBe("Other");
     expect(withoutFlippedButNamed.map((t) => t.name)).toEqual(["t0"]);
   });
+
+  // QA round 1, #2175 comment 5515241034, blocking finding 3: a service can name a group
+  // "Other" itself (OpenAPI's untagged-operation fallback). That group never went through
+  // derivation -- it must opt-in-gate like any other named group, not be treated as the
+  // algorithm's display-only, non-opt-in-able bucket.
+  it("a service-supplied group literally named Other opts in normally like any other group", () => {
+    const tools = [
+      ...Array.from({ length: 20 }, (_, i) => tool(`named_${i}`, "Named")),
+      ...Array.from({ length: 11 }, (_, i) => tool(`other_${i}`, "Other"))
+    ];
+    const otherOff = effectiveEnabledTools(tools, {
+      enabledGroups: ["Named"],
+      enabledTools: [],
+      mutedTools: []
+    });
+    expect(otherOff.map((t) => t.name)).toEqual(tools.slice(0, 20).map((t) => t.name));
+
+    const otherOn = effectiveEnabledTools(tools, {
+      enabledGroups: ["Named", "Other"],
+      enabledTools: [],
+      mutedTools: []
+    });
+    expect(otherOn).toHaveLength(31);
+  });
 });

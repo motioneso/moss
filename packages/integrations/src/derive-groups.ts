@@ -56,7 +56,11 @@ function splitOversizedGroup(
   });
 
   for (const [g, idxs] of groupToIndices) {
-    if (idxs.length > MAX_GROUP_SIZE) {
+    // Segments run out at depth for names that normalise identically past this point (or for
+    // names shorter than `depth`), so groupBySegment falls back to OTHER for all of them --
+    // recursing here would call splitOversizedGroup with the same index set forever. Same guard
+    // as the top-level loop in deriveGroups: stop, don't recurse into Other.
+    if (g !== OTHER && idxs.length > MAX_GROUP_SIZE) {
       const deeper = splitOversizedGroup(idxs, segmented, depth + 1);
       for (const [i, name] of deeper) result.set(i, name);
     } else {

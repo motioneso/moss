@@ -68,6 +68,25 @@ describe("deriveGroups", () => {
     expect(groups[3]).toBe("Other");
   });
 
+  // QA round 1, #2175 comment 5515241034, blocking finding 2: a sub-group that collapses to
+  // Other at depth had no guard against recursing on the same index set forever. Reproduced with
+  // 13 names that normalise to the identical two-segment ["light", "on"] (separators differ,
+  // segments don't) mixed with 20 "light_dim_N" names -- the "light" lead gets dropped at the top
+  // level, "on" survives as its own 13-tool group (over the 12 max), and splitting it one level
+  // deeper runs out of segments for every member at once, landing all 13 on Other with no smaller
+  // index set to terminate the recursion on.
+  it("does not recurse forever when an oversized sub-group's members all normalise identically", () => {
+    const onVariants = ["light_on", "light-on", "light.on", "light__on"];
+    const names = [
+      ...Array.from({ length: 13 }, (_, i) => onVariants[i % onVariants.length]!),
+      ...Array.from({ length: 20 }, (_, i) => `light_dim_${i}`)
+    ];
+    expect(() => deriveGroups(names)).not.toThrow();
+    const groups = deriveGroups(names);
+    expect(groups).toHaveLength(names.length);
+    for (const g of groups) expect(g).not.toBe("");
+  });
+
   it("never returns an empty group name", () => {
     const names = ["a", "b", "c"];
     const groups = deriveGroups(names);

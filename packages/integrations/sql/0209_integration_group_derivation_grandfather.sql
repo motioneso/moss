@@ -16,10 +16,13 @@
 ALTER TABLE app.integration_connections DISABLE ROW LEVEL SECURITY;
 
 UPDATE app.integration_connections
-SET enabled_tools = (
-  SELECT array_agg(t ->> 'name')
-  FROM jsonb_array_elements(discovered_tools) AS t
-  WHERE NOT (t ->> 'name' = ANY(muted_tools))
+SET enabled_tools = COALESCE(
+  (
+    SELECT array_agg(t ->> 'name')
+    FROM jsonb_array_elements(discovered_tools) AS t
+    WHERE NOT (t ->> 'name' = ANY(muted_tools))
+  ),
+  '{}'
 )
 WHERE enabled_tools = '{}'
   AND jsonb_array_length(discovered_tools) > 30
