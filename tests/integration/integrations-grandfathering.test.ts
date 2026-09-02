@@ -7,6 +7,8 @@ import pg from "pg";
 import { sql, type Kysely } from "kysely";
 
 import { DataContextRunner, createDatabase, type MossDatabase } from "@moss/db";
+import { effectiveEnabledTools } from "@moss/integrations";
+import type { IntegrationToolDescriptor } from "@moss/shared";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 const { Client } = pg;
@@ -149,6 +151,60 @@ describe("#2175 Task 5 — 0209 grandfathering migration", () => {
       "integration_connections_owner",
       "integration_connections_worker_read"
     ]);
+  });
+
+  it("keeps the same effective enabled tools across the migration, and leaves a later-discovered tool off", async () => {
+    const discoveredTools = toolNames(35);
+    const eligibleId = await insertConnection({
+      name: "grandfather-upgrade-path",
+      discoveredTools,
+      mutedTools: ["tool_1"],
+      enabledTools: []
+    });
+
+    function toDescriptors(names: { name: string; group: string }[]): IntegrationToolDescriptor[] {
+      return names.map((t) => ({
+        name: t.name,
+        description: "",
+        group: t.group,
+        inputSchema: null
+      }));
+    }
+
+    // Before the migration, an empty enabled_tools list under the old rule meant
+    // "everything not muted is live" -- that behavior is what the migration must preserve,
+    // not what today's stricter effectiveEnabledTools would compute against an empty list.
+    const beforeMigration = discoveredTools.map((t) => t.name).filter((name) => name !== "tool_1");
+
+    await migrationClient.query(migrationSql);
+
+    const { rows } = await seedClient.query<{
+      enabled_tools: string[];
+      muted_tools: string[];
+    }>(`SELECT enabled_tools, muted_tools FROM app.integration_connections WHERE id = $1`, [
+      eligibleId
+    ]);
+    const row = rows[0]!;
+
+    const afterMigration = effectiveEnabledTools(toDescriptors(discoveredTools), {
+      enabledGroups: [],
+      enabledTools: row.enabled_tools,
+      mutedTools: row.muted_tools
+    }).map((t) => t.name);
+
+    expect(afterMigration.sort()).toEqual(beforeMigration.sort());
+
+    // A later refresh discovers a new tool. saveDiscovery never touches enabled_tools, so the
+    // row's enabled_tools is unchanged; the new tool must stay off until the user opts in.
+    const refreshedTools = [...discoveredTools, { name: "tool_new_from_refresh", group: "" }];
+    const afterRefresh = effectiveEnabledTools(toDescriptors(refreshedTools), {
+      enabledGroups: [],
+      enabledTools: row.enabled_tools,
+      mutedTools: row.muted_tools
+    }).map((t) => t.name);
+
+    expect(row.enabled_tools).not.toContain("tool_new_from_refresh");
+    expect(afterRefresh).not.toContain("tool_new_from_refresh");
   });
 
   it("still hides another user's connections from jarvis_app_runtime after the migration runs", async () => {
