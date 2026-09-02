@@ -511,7 +511,9 @@ export class ChatSessionManager {
       // #2159 launch-time gate above is skipped for it; only check when no MCP tool fired this
       // turn. Native tools (Read/Glob/Grep) don't prove attachment — only a non-rejected
       // `mcp__`-namespaced attempt does (r21 security correction; r21 correction on rejection).
-      const mcpToolInvoked = mcpAttempts.some((a) => a.id !== undefined && !rejectedCallIds.has(a.id));
+      const mcpToolInvoked = mcpAttempts.some(
+        (a) => a.id !== undefined && !rejectedCallIds.has(a.id)
+      );
       if (
         session.isBoundedFallbackEngine &&
         session.provider === "anthropic" &&

@@ -559,7 +559,9 @@ describe("ClaudePrintChatEngine — vault read-only allowlist (#634)", () => {
       io.writes[transcriptPath] = `${assistantLine}\n${userLine}\n`;
       const second = await engine.readNew(first.offset);
 
-      expect(second.records).toMatchObject([{ kind: "tool", toolCallId: "toolu_seam2", rejected: true }]);
+      expect(second.records).toMatchObject([
+        { kind: "tool", toolCallId: "toolu_seam2", rejected: true }
+      ]);
       expect(second.records[0]).not.toHaveProperty("toolName", "mcp__jarvis__sports_retry_source");
     });
   });
