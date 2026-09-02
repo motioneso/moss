@@ -178,11 +178,13 @@ export class SessionTokenRegistry {
 
   /**
    * #2164 r21 — resolves `true` once this token's observation count exceeds `baselineCount`
-   * (immediately, if already past it), or `false` after `timeoutMs` if it never does. Used by
-   * the per-turn readiness guard for a bounded-fallback engine, which reconnects a fresh MCP
-   * client every turn: the launch-time `waitForToolsListObserved` would report "ready" forever
-   * after the very first turn ever attached, so this variant re-checks against a fresh baseline
-   * captured immediately before each turn's submit. Reuses the same waiter/timeout shape as
+   * (immediately, if already past it), or `false` after `timeoutMs` if it never does. NOT used by
+   * the per-turn readiness guard for a bounded-fallback engine: that guard polls
+   * {@link getToolsListObservationCount} on its own loop instead. Was intended for a
+   * bounded-fallback engine reconnecting a fresh MCP client every turn — the launch-time
+   * `waitForToolsListObserved` would report "ready" forever after the very first turn ever
+   * attached, so this variant re-checks against a fresh baseline captured immediately before each
+   * turn's submit — but nothing currently calls it. Reuses the same waiter/timeout shape as
    * `waitForToolsListObserved`. An unknown/revoked/expired token has nothing to wait for and
    * resolves `false` immediately.
    */

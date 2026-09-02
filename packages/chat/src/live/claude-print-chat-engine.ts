@@ -48,6 +48,13 @@ export class ClaudePrintChatEngine implements CliChatEngine {
   /** #2164 r21 — bounded (oldest-dropped) stderr tail from the most recent `submit()`'s child process. */
   private lastSubmitStderr = "";
   private lastSubmitExitCode: number | null = null;
+  /**
+   * #2164 r21 security correction — the sanitized prompt text from the most recent `submit()`,
+   * retained only so {@link getLastSubmitDiagnostics} can scrub it out of the stderr tail. `bash
+   * -lc` expands `"$(cat <promptPath>)"` before exec, so the `claude` child's argv carries the
+   * full prompt text; an error that echoes argv would otherwise leak it into stderr.
+   */
+  private currentSubmitPrompt = "";
 
   constructor(
     _threadKey: string,
@@ -77,21 +84,33 @@ export class ClaudePrintChatEngine implements CliChatEngine {
       !this.hasSubmitted && this.launchOpts.replayBatch
         ? `${this.launchOpts.replayBatch}\n\n${text}`
         : text;
-    await this.io.writeFile(promptPath, sanitizeInput(prompt));
+    const sanitizedPrompt = sanitizeInput(prompt);
+    await this.io.writeFile(promptPath, sanitizedPrompt);
     const launchLine = await this.buildCommand(this.launchOpts, promptPath);
 
     this.lastSubmitStderr = "";
     this.lastSubmitExitCode = null;
+    this.currentSubmitPrompt = sanitizedPrompt;
     this.currentProcess = spawn("bash", ["-lc", launchLine], {
       cwd: this.launchOpts.neutralDir,
       detached: true,
       stdio: ["ignore", "ignore", "pipe"]
     });
     this.currentProcess.on("error", () => undefined);
-    // #2164 r21 — bounded (oldest-dropped) stderr capture for last-submit diagnostics.
+    // #2164 r21 — bounded (oldest-dropped) stderr capture for last-submit diagnostics. Security
+    // correction: when a chunk pushes the accumulator over the cap, drop the leading partial
+    // line (through the first newline) from the trimmed tail so a token fragment split by the
+    // window boundary can never survive as an unmatched, unredactable partial match.
     this.currentProcess.stderr?.setEncoding("utf8");
     this.currentProcess.stderr?.on("data", (chunk: string) => {
-      this.lastSubmitStderr = (this.lastSubmitStderr + chunk).slice(-4096);
+      const combined = this.lastSubmitStderr + chunk;
+      const wasTruncated = combined.length > 4096;
+      let tail = combined.slice(-4096);
+      if (wasTruncated) {
+        const newlineIdx = tail.indexOf("\n");
+        if (newlineIdx !== -1) tail = tail.slice(newlineIdx + 1);
+      }
+      this.lastSubmitStderr = tail;
     });
     this.currentProcess.once("exit", (code) => {
       this.lastSubmitExitCode = code;
@@ -103,12 +122,18 @@ export class ClaudePrintChatEngine implements CliChatEngine {
   /**
    * #2164 r21 (item 4) — bounded, scrubbed stderr tail + exit code from the most recent
    * `submit()`'s child process, for the per-turn readiness-gate failure diagnostic only. Never
-   * includes the prompt, the reply, or the launch command line. Not part of `CliChatEngine` (out
-   * of the r21 file allowlist) — callers reach it via an inline optional cast.
+   * includes the prompt, the reply, or the launch command line: the current turn's sanitized
+   * prompt text is scrubbed out via `redactExact` alongside `neutralDir`, guarding against argv
+   * being echoed into stderr by an errored child. Not part of `CliChatEngine` (out of the r21
+   * file allowlist) — callers reach it via an inline optional cast.
    */
   getLastSubmitDiagnostics(): { readonly stderrTail: string; readonly exitCode: number | null } {
+    const scrubbed = redactExact(
+      redactExact(redactSecrets(this.lastSubmitStderr), this.launchOpts?.neutralDir),
+      this.currentSubmitPrompt
+    );
     return {
-      stderrTail: redactExact(redactSecrets(this.lastSubmitStderr), this.launchOpts?.neutralDir),
+      stderrTail: scrubbed,
       exitCode: this.lastSubmitExitCode
     };
   }

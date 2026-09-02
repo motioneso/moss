@@ -532,6 +532,72 @@ describe("ClaudePrintChatEngine — vault read-only allowlist (#634)", () => {
       expect(diag.stderrTail).toBe("a".repeat(1096) + "b".repeat(3000));
     });
 
+    // #2164 r21 security correction (item 2a) — the launch line runs prompt text through
+    // `bash -lc "$(cat <promptPath>)"`, so bash expands it into the `claude` child's argv before
+    // exec. An error that echoes argv would put the user's prompt text into stderr, and the
+    // docstring's promise that the diagnostic "never includes the prompt" was previously
+    // unenforced. Proves the current turn's sanitized prompt is scrubbed like any other secret.
+    it("scrubs the current turn's prompt text out of a stderr tail that echoes it", async () => {
+      const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+        mux: fakeMux(),
+        homeBase: "/home/test",
+        sessionId: "00000000-0000-4000-8000-000000000025"
+      });
+      await engine.launch({
+        neutralDir: "/tmp/jarvis-neutral",
+        personaPath: "/tmp/jarvis-neutral/persona.md",
+        personaText: "persona"
+      });
+      const promptText = "the secret prompt marker XYZ789 that must never leak";
+      await engine.submit(promptText);
+
+      currentChild.stderr.write(`command failed: claude -p "${promptText}" exited unexpectedly\n`);
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const diag = engine.getLastSubmitDiagnostics();
+      expect(diag.stderrTail).not.toContain(promptText);
+      expect(diag.stderrTail).not.toContain("secret prompt marker XYZ789");
+      expect(diag.stderrTail).toContain("command failed");
+    });
+
+    // #2164 r21 security correction (item 2b) — `.slice(-4096)` previously ran BEFORE
+    // redaction, at accumulation time, so a token whose bytes straddle the trim boundary could
+    // survive as an unmatched fragment missing its "jst_" prefix (unredactable — the regex
+    // requires the prefix). Builds a buffer already at the 4096 cap with a jst_ token sitting
+    // at its very front, then a small later chunk whose length lands the cut exactly inside the
+    // token, evicting its "jst_" prefix but leaving the rest — the exact straddle the ruling
+    // describes.
+    it("does not leak an unmatched token fragment left behind when a jst_ token straddles the 4 KB seam", async () => {
+      const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+        mux: fakeMux(),
+        homeBase: "/home/test",
+        sessionId: "00000000-0000-4000-8000-000000000026"
+      });
+      await engine.launch({
+        neutralDir: "/tmp/jarvis-neutral",
+        personaPath: "/tmp/jarvis-neutral/persona.md",
+        personaText: "persona"
+      });
+      await engine.submit("hello");
+
+      // Token "jst_deadbeefcafe1234" (20 chars) + "\n" (21 chars) at the very front of an
+      // exactly-4096-char buffer.
+      const token = "jst_deadbeefcafe1234";
+      const tokenLine = `${token}\n`;
+      const padding = "z".repeat(4096 - tokenLine.length);
+      currentChild.stderr.write(tokenLine + padding);
+      await new Promise((resolve) => setImmediate(resolve));
+
+      // A 10-char chunk cuts exactly 10 chars off the front — through "jst_deadbe", the first
+      // half of the token — leaving "efcafe1234" as an unmatched, prefix-less fragment.
+      currentChild.stderr.write("MOREDATAXY");
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const diag = engine.getLastSubmitDiagnostics();
+      expect(diag.stderrTail).not.toContain(token);
+      expect(diag.stderrTail).not.toContain("efcafe1234");
+    });
+
     it("resets stderr/exit code diagnostics at the start of each submit", async () => {
       const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
         mux: fakeMux(),

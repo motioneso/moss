@@ -315,4 +315,102 @@ describe("ChatSessionManager one-shot tool-attachment guard (#2164)", () => {
 
     expect(waitForToolsListReady).not.toHaveBeenCalled();
   });
+
+  // #2164 r21 security correction — the MCP path grants "Read,Glob,Grep" alongside the
+  // mcp__jarvis__* tools, so a turn that only used those native tools was previously
+  // mistaken for proof the MCP client attached (`invokedToolNames.size === 0` went false on
+  // ANY tool, native or MCP). This is the exact gap #2164 exists to catch. Must fail on
+  // aea0f27f (before this correction) and pass after it.
+  it("fails closed for a native-tool-only turn (Read/Glob/Grep) with no new tools/list observation", async () => {
+    const engine = new FakeEngine(0, [
+      {
+        records: [
+          { kind: "tool", text: "reading a file", toolName: "Read" },
+          { kind: "tool", text: "listing files", toolName: "Glob" },
+          { kind: "tool", text: "searching text", toolName: "Grep" },
+          { kind: "reply", text: "here's what I found" }
+        ],
+        offset: 10,
+        complete: true
+      }
+    ]);
+    const recordTurn = vi.fn().mockResolvedValue(undefined);
+    // Count never advances past the baseline, so the guard must time out and fail closed —
+    // same monotonically-advancing fake clock pattern as the no-tool-call case above.
+    const getToolsListObservationCount = vi.fn().mockReturnValue(0);
+    let clockNow = 0;
+    const clock = { now: vi.fn(() => (clockNow += 3_000)) };
+    const manager = new ChatSessionManager(
+      boundedFallbackDeps(engine, {
+        getToolsListObservationCount,
+        clock,
+        persistence: {
+          resolveActiveProvider: vi.fn().mockResolvedValue({
+            provider: "anthropic",
+            model: "sonnet",
+            executionMode: "non_interactive"
+          }),
+          listPriorTurns: vi.fn().mockResolvedValue({ recent: [], oldSummary: null }),
+          recordTurn,
+          openNewConversation: vi.fn().mockResolvedValue(undefined),
+          getThreadContext: vi.fn().mockResolvedValue({ threadTitle: null, localTimezone: null }),
+          touchExistingThread: vi.fn().mockResolvedValue(true)
+        }
+      })
+    );
+
+    await expect(manager.submitTurn("u1", "Ben", "read this file for me")).rejects.toThrow(
+      CliChatUnavailableError
+    );
+
+    expect(getToolsListObservationCount).toHaveBeenCalledWith("jst_x");
+    expect(recordTurn).not.toHaveBeenCalled();
+  });
+
+  // Guard against over-tightening: an actual mcp__ tool invocation must still short-circuit
+  // the gate even with no new observation recorded this turn.
+  it("still bypasses the gate for an mcp__jarvis__* tool invocation with no new tools/list observation", async () => {
+    const engine = new FakeEngine(0, [
+      {
+        records: [
+          {
+            kind: "tool",
+            text: "calling the sports retry tool",
+            toolName: "mcp__jarvis__sports_retry_source"
+          },
+          { kind: "reply", text: "retried it" }
+        ],
+        offset: 10,
+        complete: true
+      }
+    ]);
+    const recordTurn = vi.fn().mockResolvedValue(undefined);
+    const getToolsListObservationCount = vi.fn().mockReturnValue(0);
+    const manager = new ChatSessionManager(
+      boundedFallbackDeps(engine, {
+        getToolsListObservationCount,
+        persistence: {
+          resolveActiveProvider: vi.fn().mockResolvedValue({
+            provider: "anthropic",
+            model: "sonnet",
+            executionMode: "non_interactive"
+          }),
+          listPriorTurns: vi.fn().mockResolvedValue({ recent: [], oldSummary: null }),
+          recordTurn,
+          openNewConversation: vi.fn().mockResolvedValue(undefined),
+          getThreadContext: vi.fn().mockResolvedValue({ threadTitle: null, localTimezone: null }),
+          touchExistingThread: vi.fn().mockResolvedValue(true)
+        }
+      })
+    );
+
+    await expect(manager.submitTurn("u1", "Ben", "retry the sports source")).resolves.toMatchObject(
+      { reply: "retried it" }
+    );
+
+    // Called once to capture the pre-turn baseline (unconditional); the mcp__ bypass means the
+    // gate never re-polls it waiting for a new observation.
+    expect(getToolsListObservationCount).toHaveBeenCalledTimes(1);
+    expect(recordTurn).toHaveBeenCalled();
+  });
 });

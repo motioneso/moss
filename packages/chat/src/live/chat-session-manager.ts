@@ -505,15 +505,16 @@ export class ChatSessionManager {
       }
 
       // #2164 — a bounded-fallback engine starts its MCP client per turn inside `submit()`, so the
-      // #2159 launch-time gate above is skipped for it; only check when no tool fired this turn.
-      // r21: compares against `toolsListBaseline` (captured before this turn) instead of the
-      // ever-observed check, so a stale "ready" from an earlier turn can't mask this turn's race.
-      // Gemini registers no MCP tools, so `provider === "anthropic"` scopes this to Claude (r19).
+      // #2159 launch-time gate above is skipped for it; only check when no MCP tool fired this
+      // turn (r21 baseline race fix; provider check scopes to Claude, r19). Security correction:
+      // native tools (Read/Glob/Grep, granted alongside MCP tools) don't prove attachment — only
+      // an invoked `mcp__`-namespaced name does; `invokedToolNames` stays complete otherwise.
+      const mcpToolInvoked = [...invokedToolNames].some((name) => name.startsWith("mcp__"));
       if (
         session.isBoundedFallbackEngine &&
         session.provider === "anthropic" &&
         session.mcpToken &&
-        invokedToolNames.size === 0 &&
+        !mcpToolInvoked &&
         reply
       ) {
         const toolsListReady = await this.waitForNewToolsListObservation(
