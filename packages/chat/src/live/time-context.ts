@@ -34,7 +34,7 @@ export function renderCurrentTimeContext(instant: Date, timezone: string | null)
     const offsetMinutes = timeZoneOffsetMinutes(instant, timezone);
     lines.push(
       `User's local time: ${localDate} (${localWeekday}) ${localTime} (${timezone}, UTC offset ${offsetMinutes} minutes).`,
-      "State that local date, weekday, time and time zone as fact. Do not hedge about them, re-derive them, or offer other time zones unless the user asks."
+      "Keep this local date, weekday, time and time zone in mind for accuracy, but do not volunteer them: mention the date, time, weekday or time zone only when the user asks about them or they are directly relevant to the answer. When you do mention them, state them as fact. Do not hedge about them, re-derive them, or offer other time zones unless the user asks."
     );
   } else {
     lines.push(
