@@ -26,6 +26,14 @@ import {
 } from "@moss/sports";
 import type { SportsCustomSourceDto } from "@moss/shared";
 import { registerMcpTransportRoute } from "../../packages/chat/src/mcp-transport.js";
+import { ChatSessionManager } from "../../packages/chat/src/live/chat-session-manager.js";
+import { ChatGatewayNotifier } from "../../packages/chat/src/gateway-notifier.js";
+import {
+  DEFAULT_CHAT_SURFACE,
+  surfaceSessionKey
+} from "../../packages/chat/src/live/chat-surface.js";
+import type { TranscriptRecord } from "../../packages/chat/src/live/types.js";
+import { makeMinimalDeps } from "../unit/chat-session-manager.test.js";
 
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
@@ -215,5 +223,81 @@ describe("sports.retrySource action card (#2159)", () => {
     expect(resultRecord.kind).toBe("action_result");
     if (resultRecord.kind !== "action_result") throw new Error("unreachable");
     expect(resultRecord.outcome).toBe("executed");
+  });
+
+  // Branch 3: branches 1 and 2 above talk to the gateway with a bare random UUID as
+  // chatSessionId and a hand-rolled notifier that just records what it's given — they never
+  // exercise the real chatSessionId format ("actorId:surface", packages/chat/src/live/
+  // chat-surface.ts) or the real ChatGatewayNotifier that decodes it. That is the one link in
+  // the delivery chain (mint -> gateway notify -> SSE subscribe, all keyed the same way) the
+  // #2164 root-cause relay flagged as unread. This test wires a real ChatSessionManager +
+  // ChatGatewayNotifier + surfaceSessionKey-formatted token and asserts a subscriber shaped
+  // like the SSE route (packages/chat/src/live-routes.ts:498-505 — actor + surface) actually
+  // receives the action_request. If this fails, the defect is in gateway-notifier.ts or
+  // chat-session-manager.ts; if it passes, the boundary is proven end to end and the missing
+  // card is a live-model/prompt problem, not a delivery problem.
+  it("a real-format session key delivers action_request to an actor+surface subscriber via the real notifier", async () => {
+    const manager = new ChatSessionManager(makeMinimalDeps());
+    const realGatewayNotifier = new ChatGatewayNotifier(manager);
+
+    const received: TranscriptRecord[] = [];
+    manager.subscribe(ids.userA, (record) => received.push(record), DEFAULT_CHAT_SURFACE);
+
+    const realTokens = new SessionTokenRegistry();
+    const realGateway = new AssistantToolGateway({
+      resolveActiveModules: createActiveModulesResolver({
+        dataContext: runner,
+        manifests: [sportsModuleManifest]
+      }),
+      repository,
+      runner,
+      tokens: realTokens,
+      confirmations: new ConfirmationRegistry(),
+      notifier: realGatewayNotifier,
+      confirmTimeoutMs: 5_000
+    });
+    const realApp = Fastify({ logger: false });
+    registerMcpTransportRoute(realApp, { gateway: realGateway, tokens: realTokens });
+    registerResolveRoute(realApp, realGateway, ids.userA);
+    await realApp.ready();
+
+    try {
+      // Same session-key shape ChatSessionManager.launchSession mints for a real turn
+      // (chat-session-manager.ts:163).
+      const chatSessionId = surfaceSessionKey(ids.userA, DEFAULT_CHAT_SURFACE);
+      const token = realTokens.mint({
+        actorUserId: ids.userA,
+        chatSessionId,
+        allowedToolNames: null
+      });
+
+      const callPromise = realApp.inject({
+        method: "POST",
+        url: "/api/mcp",
+        headers: { authorization: `Bearer ${token}` },
+        body: {
+          jsonrpc: "2.0",
+          id: 3,
+          method: "tools/call",
+          params: { name: "sports.retrySource", arguments: { sourceId: RETRY_SOURCE_ID } }
+        }
+      });
+
+      await vi.waitFor(() => expect(received).toHaveLength(1), { timeout: 5_000 });
+      const record = received[0]!;
+      expect(record.kind).toBe("action_request");
+      if (record.kind !== "action_request") throw new Error("unreachable");
+      expect(record.toolName).toBe("sports.retrySource");
+
+      const resolveRes = await realApp.inject({
+        method: "POST",
+        url: `/api/chat/action-requests/${record.actionRequestId}/resolve`,
+        payload: { status: "confirmed" }
+      });
+      expect(resolveRes.statusCode).toBe(204);
+      await callPromise;
+    } finally {
+      await realApp.close();
+    }
   });
 });
