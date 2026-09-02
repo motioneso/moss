@@ -96,6 +96,7 @@ describe("Chat live API (turn / clear / switch / stream)", () => {
   let originalSecretKey: string | undefined;
   let providerId: string;
   let toolsListReadySpy: ReturnType<typeof vi.spyOn>;
+  let toolsListObservationCountSpy: ReturnType<typeof vi.spyOn>;
 
   beforeAll(async () => {
     originalSecretKey = process.env.JARVIS_AI_SECRET_KEY;
@@ -108,6 +109,17 @@ describe("Chat live API (turn / clear / switch / stream)", () => {
     toolsListReadySpy = vi
       .spyOn(SessionTokenRegistry.prototype, "waitForToolsListObserved")
       .mockResolvedValue(true);
+
+    // #2164 r21: the fake engine also never produces a real tools/list observation, so the
+    // per-turn gate (SessionTokenRegistry.getToolsListObservationCount, compared against a
+    // per-turn baseline in ChatSessionManager.waitForNewToolsListObservation) would otherwise
+    // time out for any turn where the fake engine reports no invoked tools. Stub it to a
+    // strictly increasing count so every baseline capture is immediately exceeded on the next
+    // read — same "readiness isn't under test here" intent as the stub above.
+    let toolsListObservationCounter = 0;
+    toolsListObservationCountSpy = vi
+      .spyOn(SessionTokenRegistry.prototype, "getToolsListObservationCount")
+      .mockImplementation(() => ++toolsListObservationCounter);
 
     await resetFoundationDatabase();
 
@@ -146,6 +158,7 @@ describe("Chat live API (turn / clear / switch / stream)", () => {
   afterAll(async () => {
     await Promise.allSettled([server?.close(), appDb?.destroy()]);
     toolsListReadySpy?.mockRestore();
+    toolsListObservationCountSpy?.mockRestore();
     if (originalSecretKey === undefined) {
       delete process.env.JARVIS_AI_SECRET_KEY;
     } else {
