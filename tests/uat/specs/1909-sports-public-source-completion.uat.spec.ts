@@ -242,10 +242,19 @@ async function confirmThroughMoss(
     .locator('[role="region"][aria-label="Action request"]')
     .filter({ hasText: summaryText })
     .last();
-  await expect(card.getByRole("button", { name: "Approve" })).toBeVisible({
-    timeout: SOURCE_DEADLINE_MS
-  });
-  await card.getByRole("button", { name: "Approve" }).click();
+  const approveButton = card.getByRole("button", { name: "Approve" });
+  // #2164 r24: a real model can announce an action and then end its turn without taking it.
+  // One plain-English nudge, once, keeps this a real user turn rather than a scripted retry.
+  const NUDGE_WAIT_MS = 60_000;
+  const POST_NUDGE_WAIT_MS = SOURCE_DEADLINE_MS - NUDGE_WAIT_MS;
+  try {
+    await expect(approveButton).toBeVisible({ timeout: NUDGE_WAIT_MS });
+  } catch {
+    await composer.fill("Please go ahead and do that now.");
+    await composer.press("Enter");
+    await expect(approveButton).toBeVisible({ timeout: POST_NUDGE_WAIT_MS });
+  }
+  await approveButton.click();
   const response = await turnSettled;
   expect(response.ok(), `${toolName} chat turn -> ${response.status()}`).toBeTruthy();
   await expect
