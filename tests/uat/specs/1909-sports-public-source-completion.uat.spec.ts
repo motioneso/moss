@@ -215,10 +215,15 @@ async function requireToolInLiveActorList(page: Page, toolName: string): Promise
   );
 }
 
+// #2164 root cause: a dotted internal tool id paired with an imperative "call it exactly
+// once, do not call another tool" instruction and a raw JSON payload reads as an injected
+// command to a healthy model, which then refuses it. The message here must read as an
+// ordinary user request in plain English instead — see the static guard in
+// tests/unit/1909-sports-uat-natural-request.test.ts.
 async function confirmThroughMoss(
   page: Page,
   toolName: string,
-  input: Record<string, unknown>,
+  requestText: string,
   summaryText: RegExp
 ): Promise<void> {
   const before = new Set((await listActions(page)).map((action) => action.id));
@@ -230,9 +235,7 @@ async function confirmThroughMoss(
     { timeout: 300_000 }
   );
   const composer = page.getByRole("textbox", { name: /^Message/ });
-  await composer.fill(
-    `Call ${toolName} exactly once with this JSON input. Do not call another tool: ${JSON.stringify(input)}`
-  );
+  await composer.fill(requestText);
   await composer.press("Enter");
 
   const card = page
@@ -272,6 +275,20 @@ function confirmationInput(preview: PreviewResult, extra: Record<string, unknown
     confirmedFetchHosts: preview.candidate.confirmedFetchHosts,
     targets: preview.candidate.targets.map(({ target, targetUrl }) => ({ target, targetUrl }))
   };
+}
+
+// Spells out the two values the two confirmation steps care about — the confirmation id
+// and the authorization acknowledgement — as ordinary prose, then lists the remaining
+// exact-match fields the schema still requires so the live model can reproduce them.
+function describeConfirmation(preview: PreviewResult, extra: Record<string, unknown> = {}): string {
+  const { confirmationId, authorizationAcknowledgement, ...rest } = confirmationInput(
+    preview,
+    extra
+  );
+  return (
+    `confirmation id ${confirmationId} and authorization acknowledgement ` +
+    `"${authorizationAcknowledgement}", matching these exact preview details: ${JSON.stringify(rest)}`
+  );
 }
 
 test("public publishers reach Sports, Today, recovery, and Moss status (#1909)", async ({
@@ -335,7 +352,7 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
     await confirmThroughMoss(
       page,
       "sports.retrySource",
-      { sourceId: failing.id },
+      `One of my sports sources (id ${failing.id}) is showing a partial target failure — please retry it.`,
       new RegExp(`Retry sports source ${failing.id}`)
     );
     const recovered = (await listSources(page)).find((source) => source.id === failing.id);
@@ -365,7 +382,7 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
     await confirmThroughMoss(
       page,
       "sports.confirmSourceRecipe",
-      confirmationInput(preview, { sourceId: fotmob.id }),
+      `Please go ahead and rebuild the recipe for sports source ${fotmob.id} exactly as you just previewed it, using ${describeConfirmation(preview, { sourceId: fotmob.id })}.`,
       new RegExp(`Replace the recipe for sports source ${fotmob.id}`)
     );
     const rebuilt = (await listSources(page)).find((source) => source.id === fotmob.id);
@@ -384,7 +401,7 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
     await confirmThroughMoss(
       page,
       "sports.confirmSourceRecipe",
-      confirmationInput(preview, { sourceId: drift.id }),
+      `Please go ahead and rebuild the recipe for sports source ${drift.id} exactly as you just previewed it, using ${describeConfirmation(preview, { sourceId: drift.id })}.`,
       new RegExp(`Replace the recipe for sports source ${drift.id}`)
     );
     const rebuilt = (await listSources(page)).find((source) => source.id === drift.id);
@@ -407,7 +424,7 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
     await confirmThroughMoss(
       page,
       "sports.confirmSource",
-      confirmationInput(preview),
+      `Please go ahead and add the sports source you just previewed, using ${describeConfirmation(preview)}.`,
       /Add sports source/
     );
     const created = (await listSources(page)).find(
@@ -426,7 +443,7 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
     await confirmThroughMoss(
       page,
       "sports.confirmSourceAssignments",
-      confirmationInput(preview, { sourceId: mirroredSourceId }),
+      `Please go ahead and replace the assignments for sports source ${mirroredSourceId} exactly as you just previewed it, using ${describeConfirmation(preview, { sourceId: mirroredSourceId })}.`,
       new RegExp(`Replace assignments for sports source ${mirroredSourceId}`)
     );
     const replaced = (await listSources(page)).find((source) => source.id === mirroredSourceId);
