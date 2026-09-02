@@ -187,9 +187,8 @@ export class ChatSessionManager {
       personaPath,
       personaText: persona,
       replayBatch,
-      // #367: pass the resolved model id. The launch builders emit `--model` only for a concrete
-      // settings override; for the `"default"` sentinel they omit it so the CLI rides its own
-      // interactive/account model (the primary path — chat never requires model selection).
+      // #367: launch builders emit `--model` only for a concrete settings override; the
+      // `"default"` sentinel omits it so the CLI rides its own interactive/account model.
       model,
       mcpToken: mcpConfig?.token,
       mcpServerUrl: mcpConfig?.mcpServerUrl
@@ -199,9 +198,8 @@ export class ChatSessionManager {
     // client has completed its first tools/list, closing the race where the terminal composer
     // reads "ready" before the CLI's own tool-discovery round trip against our server has landed.
     // #2164 — bounded-fallback (print/one-shot) engines never start an MCP client inside launch()
-    // (their process only spawns per-turn, in submit()), so there is nothing to observe yet at
-    // this point; waiting here would always time out and tear down a session before its first
-    // message. Only engines that start their MCP client during launch() get the wait.
+    // (only per-turn, in submit()), so waiting here would always time out and tear down the
+    // session before its first message. Only engines that start MCP during launch() get the wait.
     if (mcpConfig?.token && !isBoundedFallbackEngine(provider, executionMode)) {
       const toolsListReady = await this.deps.waitForToolsListReady?.(mcpConfig.token);
       if (toolsListReady === false) {
@@ -355,8 +353,7 @@ export class ChatSessionManager {
     assistantMessageId?: string;
     sourceFreshness?: SourceFreshnessV1 | null;
   }> {
-    // #1157: a failed launch (dead tmux server after a container restart, stale daemon
-    // state) gets exactly one retry with forced replay before surfacing.
+    // #1157: a failed launch (dead tmux server, stale daemon state) gets one retry before surfacing.
     let session: UserSession;
     try {
       session = await this.ensureSession(actorUserId, userName, undefined, surface);
@@ -388,8 +385,7 @@ export class ChatSessionManager {
         text,
         surface
       );
-      // #1133 — attachments ride as a server-composed manifest appended AFTER all
-      // user-influenced text; the engine pulls bytes via chat.readAttachment on demand.
+      // #1133 — attachments ride as a server-composed manifest appended AFTER all user text.
       const manifest = renderAttachmentsManifest(attachments);
       const withAttachments = manifest ? `${builtEngineText}\n\n${manifest}` : builtEngineText;
       const engineText = opts?.moduleControl
@@ -403,8 +399,8 @@ export class ChatSessionManager {
         await session.engine.submit(engineText);
       } catch (err) {
         if (err instanceof CliChatDeliveryUnknownError) {
-          // Delivery MAY have happened — never resubmit (duplicate-turn risk). Evict so
-          // the next turn relaunches cleanly (pre-#1157 behavior, kept).
+          // Delivery MAY have happened — never resubmit (duplicate-turn risk); evict so the
+          // next turn relaunches cleanly (pre-#1157 behavior, kept).
           if (this.sessions.get(sessionKey) === session) this.sessions.delete(sessionKey);
           this.deps.revokeMcpToken?.(sessionKey);
           throw err;
@@ -424,6 +420,9 @@ export class ChatSessionManager {
 
       let reply = "";
       const invokedToolNames = new Set<string>();
+      // #2164 r21 correction — correlates mcp__ calls with rejections across readNew polls.
+      const mcpAttempts: { readonly name: string; readonly id?: string }[] = [];
+      const rejectedCallIds = new Set<string>();
       let lastEmissionAt = this.deps.clock.now();
       let watchdogTripped = false;
       let stopped = false;
@@ -452,8 +451,8 @@ export class ChatSessionManager {
         session.transcriptOffset = offset;
         if (records.length > 0) {
           lastEmissionAt = this.deps.clock.now();
-          // #456 — signal activity so the in-flight RPC turn-verb deadline resets (an
-          // actively-producing turn never trips the 45s deadline; a wedged cli-runner still does).
+          // #456 — signal activity so the in-flight RPC turn-verb deadline resets (a wedged
+          // cli-runner still trips it; an actively-producing turn never does).
           session.engine.resetActivityDeadline?.();
         }
         for (const record of records) {
@@ -461,7 +460,11 @@ export class ChatSessionManager {
           if (record.kind === "reply") reply = record.text;
           if (record.kind === "tool" && record.toolName) {
             invokedToolNames.add(record.toolName);
+            if (record.toolName.startsWith("mcp__"))
+              mcpAttempts.push({ name: record.toolName, id: record.toolCallId });
           }
+          if (record.kind === "tool" && record.rejected && record.toolCallId)
+            rejectedCallIds.add(record.toolCallId);
         }
         if (complete) break;
         // #456 — user-driven Stop: the signal aborts mid-turn; break cleanly (no error) so the
@@ -470,10 +473,8 @@ export class ChatSessionManager {
           stopped = true;
           break;
         }
-        // #456 — idle/heartbeat watchdog: break only when the engine has emitted NOTHING for the
-        // full window. An actively-producing turn (records on every poll) keeps resetting the
-        // deadline, so a multi-tool 3+ min turn never trips it. Emits an accurate status record
-        // (NOT the old broken TIMEOUT_MESSAGE). No reply was produced → recordTurn is skipped.
+        // #456 — idle/heartbeat watchdog: break only when the engine emitted NOTHING for the full
+        // window (an actively-producing turn keeps resetting the deadline). No reply → recordTurn skipped.
         if (
           this.idleWatchdogMs > 0 &&
           this.deps.clock.now() - lastEmissionAt > this.idleWatchdogMs
@@ -506,10 +507,9 @@ export class ChatSessionManager {
 
       // #2164 — a bounded-fallback engine starts its MCP client per turn inside `submit()`, so the
       // #2159 launch-time gate above is skipped for it; only check when no MCP tool fired this
-      // turn (r21 baseline race fix; provider check scopes to Claude, r19). Security correction:
-      // native tools (Read/Glob/Grep, granted alongside MCP tools) don't prove attachment — only
-      // an invoked `mcp__`-namespaced name does; `invokedToolNames` stays complete otherwise.
-      const mcpToolInvoked = [...invokedToolNames].some((name) => name.startsWith("mcp__"));
+      // turn. Native tools (Read/Glob/Grep) don't prove attachment — only a non-rejected
+      // `mcp__`-namespaced attempt does (r21 security correction; r21 correction on rejection).
+      const mcpToolInvoked = mcpAttempts.some((a) => !(a.id && rejectedCallIds.has(a.id)));
       if (
         session.isBoundedFallbackEngine &&
         session.provider === "anthropic" &&

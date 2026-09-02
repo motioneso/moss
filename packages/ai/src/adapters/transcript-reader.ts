@@ -78,8 +78,19 @@ import type { ChatActivityEvent } from "../chat-adapter.js";
  * without editing the shared `chat-adapter.ts` type (out of the r21 allowlist). Every mapper
  * still compiles pushing plain `{kind:"tool", text}` since the field is optional; only
  * `mapAnthropicRecord`'s `tool_use` branch sets it.
+ *
+ * #2164 r21 correction — also carries the `tool_use` block's own `id` (`toolCallId`), and an
+ * optional `rejected` flag for a distinct signal event (keyed by the same `toolCallId`,
+ * pointing back at the call it rejects) emitted when a later `user` record's `tool_result`
+ * block reports `is_error: true` for that id. Anthropic mapper only — the call and its
+ * rejection can land in different transcript reads, so callers correlate by `toolCallId`
+ * across polls rather than assuming both arrive together.
  */
-type ChatActivityEventWithToolName = ChatActivityEvent & { readonly toolName?: string };
+type ChatActivityEventWithToolName = ChatActivityEvent & {
+  readonly toolName?: string;
+  readonly toolCallId?: string;
+  readonly rejected?: boolean;
+};
 
 export type ProviderKind = "anthropic" | "openai-compatible" | "google";
 export type AckProviderKind = Exclude<ProviderKind, "google">;
@@ -213,6 +224,10 @@ function mapAnthropicRecord(
   events: ChatActivityEventWithToolName[],
   onFinal: (text: string) => void
 ): void {
+  if (rec["type"] === "user") {
+    mapAnthropicUserRecord(rec, events);
+    return;
+  }
   if (rec["type"] !== "assistant") return;
 
   const message = rec["message"] as Record<string, unknown> | undefined;
@@ -246,11 +261,39 @@ function mapAnthropicRecord(
       events.push({ kind: "thinking", text });
     } else if (itemType === "tool_use") {
       const name = typeof item["name"] === "string" ? item["name"] : "tool";
-      events.push({ kind: "tool", text: name, toolName: name });
+      const id = typeof item["id"] === "string" ? item["id"] : undefined;
+      events.push({ kind: "tool", text: name, toolName: name, ...(id ? { toolCallId: id } : {}) });
     } else if (itemType === "text" && typeof item["text"] === "string") {
       // Intermediate text blocks (stop_reason !== "end_turn") are status
       events.push({ kind: "status", text: item["text"] });
     }
+  }
+}
+
+/**
+ * #2164 r21 correction — a rejected `mcp__` call (`No such tool available`) arrives as a
+ * `tool_result` block with `is_error: true` inside a later `user` record, not the `assistant`
+ * record that attempted the call. Emits a rejection signal keyed by `tool_use_id` so a caller
+ * can correlate it back to the original `tool_use` event's `toolCallId`, even when the two
+ * land in separate transcript reads. Successful tool_result blocks are ignored here — a
+ * successful call needs no signal beyond the `tool_use` event already emitted.
+ */
+function mapAnthropicUserRecord(
+  rec: Record<string, unknown>,
+  events: ChatActivityEventWithToolName[]
+): void {
+  const message = rec["message"] as Record<string, unknown> | undefined;
+  if (!isRecord(message) || message["role"] !== "user") return;
+  const content = message["content"];
+  if (!Array.isArray(content)) return;
+
+  for (const item of content) {
+    if (!isRecord(item)) continue;
+    if (item["type"] !== "tool_result") continue;
+    if (item["is_error"] !== true) continue;
+    const toolUseId = typeof item["tool_use_id"] === "string" ? item["tool_use_id"] : undefined;
+    if (!toolUseId) continue;
+    events.push({ kind: "tool", text: "", toolCallId: toolUseId, rejected: true });
   }
 }
 

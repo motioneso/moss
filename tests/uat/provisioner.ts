@@ -491,28 +491,29 @@ function runCapture(command: string, args: readonly string[]): Promise<string> {
 }
 
 /**
- * #2173: retains bounded app evidence (last 50 jarv1s log lines, one health read) plus the 3
- * newest Claude print-engine transcripts under the chat engine's configured CLI home base,
- * `$HOME` as fallback — #2164 r17) before the terminal-failure branch tears down. Compose
- * project/service scoped (buildUatComposeArgs), never the compose file's hardcoded container
- * name, a bare `docker inspect`, or the settings file (#2173 comment 5497191033 section 4). Also
- * used by run-uat.ts's spec-level failure path (#2164).
+ * #2173: retains bounded app evidence (one health read) plus the 3 newest Claude print-engine
+ * transcripts under the chat engine's configured CLI home base, `$HOME` as fallback — #2164 r17)
+ * before the terminal-failure branch tears down. Compose project/service scoped
+ * (buildUatComposeArgs), never the compose file's hardcoded container name, a bare
+ * `docker inspect`, or the settings file (#2173 comment 5497191033 section 4). Also used by
+ * run-uat.ts's spec-level failure path (#2164).
  *
  * #2164 r18: also retains the full (untailed) `postgres` service log — the app deliberately never
- * re-logs a thrown database error's SQLSTATE/constraint/statement (#1251 hostile-object rule), but
- * Postgres already writes all three to its own container log, which teardown would otherwise
+ * re-logs a thrown database error's SQLSTATE/constraint/statement (#1251 hostile-object rule),
+ * but Postgres already writes all three to its own container log, which teardown would otherwise
  * discard first.
  *
- * #2164 r19: the transcript capture itself used to `tail -c 4000` each file, cutting off exactly
- * the tool call/response that would show the retry-card root cause on a long transcript. Now
- * captures each transcript in full, same as the postgres log above.
+ * #2164 r19: transcript capture used to `tail -c 4000` each file, cutting off the exact tool
+ * call/response that would show the root cause. Now captures each transcript in full.
+ *
+ * #2164 r21: the `jarv1s` service log was still `--tail 50`, cutting off the per-turn `mcp
+ * tools/list observed` line (`mcp-transport.ts`) on a run over 50 lines. Now full, same as above.
  */
 export async function captureFailureEvidence(projectName: string, reason: string): Promise<void> {
   const [logs, health, transcripts, postgresLogs] = await Promise.all([
-    runCapture(
-      "docker",
-      buildUatComposeArgs(projectName, ["logs", "--tail", "50", "jarv1s"])
-    ).catch((error) => `<log capture failed: ${String(error)}>`),
+    runCapture("docker", buildUatComposeArgs(projectName, ["logs", "jarv1s"])).catch(
+      (error) => `<log capture failed: ${String(error)}>`
+    ),
     runCapture(
       "docker",
       buildUatComposeArgs(projectName, ["ps", "jarv1s", "--format", "json"])

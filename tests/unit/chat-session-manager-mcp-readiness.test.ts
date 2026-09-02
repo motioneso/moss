@@ -367,6 +367,58 @@ describe("ChatSessionManager one-shot tool-attachment guard (#2164)", () => {
     expect(recordTurn).not.toHaveBeenCalled();
   });
 
+  // #2164 r21 correction — a call that was ATTEMPTED and then REJECTED (`No such tool
+  // available`) must not count as attachment proof. Before the correction, the mere presence
+  // of an `mcp__`-prefixed name in `invokedToolNames` skipped the gate regardless of whether
+  // the call actually succeeded.
+  it("still runs the readiness gate when the only mcp__ activity this turn was rejected", async () => {
+    const engine = new FakeEngine(0, [
+      {
+        records: [
+          {
+            kind: "tool",
+            text: "calling the sports retry tool",
+            toolName: "mcp__jarvis__sports_confirmSourceRecipe",
+            toolCallId: "toolu_1"
+          },
+          { kind: "tool", text: "", toolCallId: "toolu_1", rejected: true },
+          { kind: "reply", text: "here's what I found" }
+        ],
+        offset: 10,
+        complete: true
+      }
+    ]);
+    const recordTurn = vi.fn().mockResolvedValue(undefined);
+    const getToolsListObservationCount = vi.fn().mockReturnValue(0);
+    let clockNow = 0;
+    const clock = { now: vi.fn(() => (clockNow += 3_000)) };
+    const manager = new ChatSessionManager(
+      boundedFallbackDeps(engine, {
+        getToolsListObservationCount,
+        clock,
+        persistence: {
+          resolveActiveProvider: vi.fn().mockResolvedValue({
+            provider: "anthropic",
+            model: "sonnet",
+            executionMode: "non_interactive"
+          }),
+          listPriorTurns: vi.fn().mockResolvedValue({ recent: [], oldSummary: null }),
+          recordTurn,
+          openNewConversation: vi.fn().mockResolvedValue(undefined),
+          getThreadContext: vi.fn().mockResolvedValue({ threadTitle: null, localTimezone: null }),
+          touchExistingThread: vi.fn().mockResolvedValue(true)
+        }
+      })
+    );
+
+    await expect(manager.submitTurn("u1", "Ben", "retry the sports source")).rejects.toThrow(
+      CliChatUnavailableError
+    );
+
+    expect(getToolsListObservationCount).toHaveBeenCalledWith("jst_x");
+    expect(recordTurn).not.toHaveBeenCalled();
+  });
+
   // Guard against over-tightening: an actual mcp__ tool invocation must still short-circuit
   // the gate even with no new observation recorded this turn.
   it("still bypasses the gate for an mcp__jarvis__* tool invocation with no new tools/list observation", async () => {
