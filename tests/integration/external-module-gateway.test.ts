@@ -9,10 +9,16 @@ import {
   type GatewaySessionRecord
 } from "@moss/ai";
 import { createDatabase, DataContextRunner, type MossDatabase } from "@moss/db";
+import { createActiveModulesResolver } from "@moss/module-registry";
 import { createExternalToolManifests } from "@moss/module-registry/node";
+import { SettingsRepository } from "@moss/settings";
 import type { ExternalModuleDiscovery } from "../../packages/module-registry/src/external/types.js";
 import type { Kysely } from "kysely";
 
+import {
+  createExternalActiveModulesResolver,
+  createExternalModuleTools
+} from "../../apps/api/src/external-module-tools.js";
 import { connectionStrings, ids, resetFoundationDatabase } from "./test-database.js";
 
 const { Client } = pg;
@@ -242,5 +248,70 @@ describe("external module AssistantToolGateway", () => {
     expect(calls).toHaveLength(0);
     expect((result as { ok: false; error: string }).error).toContain("acme.read");
     expect((result as { ok: false; error: string }).error).toContain("has an invalid format");
+  });
+
+  it("a module discovered after the gateway was built shows up in listToolsForActor with no restart (#1902)", async () => {
+    const discoveries: ExternalModuleDiscovery[] = [];
+    const { getManifests } = createExternalModuleTools({
+      discoveries: () => discoveries,
+      workerDataContext: new DataContextRunner(appDb),
+      appDataContext: new DataContextRunner(appDb),
+      settingsRepository: new SettingsRepository(),
+      logger: { warn: () => undefined }
+    });
+
+    const resolveEnabledModules = createActiveModulesResolver({
+      dataContext: new DataContextRunner(appDb),
+      manifests: () => getManifests()
+    });
+    const resolveActiveModules = createExternalActiveModulesResolver(
+      resolveEnabledModules,
+      () => new Set(getManifests().map((manifest) => manifest.id)),
+      async () => getManifests().map((manifest) => ({ id: manifest.id }))
+    );
+
+    const gateway = new AssistantToolGateway({
+      resolveActiveModules,
+      repository: new AiRepository(),
+      runner: new DataContextRunner(appDb),
+      tokens: new SessionTokenRegistry(),
+      confirmations: new ConfirmationRegistry(),
+      notifier: { emit: () => undefined },
+      confirmTimeoutMs: 5_000
+    });
+
+    expect((await gateway.listToolsForActor(ids.userA)).map((t) => t.name)).not.toContain(
+      "late-arrival.ping"
+    );
+
+    discoveries.push({
+      id: "late-arrival",
+      dir: "/unused",
+      manifest: {
+        schemaVersion: 1,
+        id: "late-arrival",
+        name: "Late Arrival",
+        version: "1.0.0",
+        publisher: "test",
+        lifecycle: "optional",
+        compatibility: { jarv1s: ">=0.0.0" },
+        runtime: { workerEntrypoint: "worker.js", workerContractVersion: 1 },
+        assistantTools: [
+          {
+            name: "late-arrival.ping",
+            description: "Ping",
+            permissionId: "late-arrival.ping",
+            risk: "read",
+            handler: "ping"
+          }
+        ]
+      },
+      manifestHash: "sha256:late",
+      packageHash: "sha256:late"
+    });
+
+    expect((await gateway.listToolsForActor(ids.userA)).map((t) => t.name)).toContain(
+      "late-arrival.ping"
+    );
   });
 });

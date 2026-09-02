@@ -405,7 +405,7 @@ describe("createActiveModulesResolver", () => {
   });
 
   function resolver() {
-    return createActiveModulesResolver({ dataContext: runner, manifests: fixtures });
+    return createActiveModulesResolver({ dataContext: runner, manifests: () => fixtures });
   }
 
   it("empty store: all fixture modules are active (zero behavior-change baseline)", async () => {
@@ -490,6 +490,21 @@ describe("createActiveModulesResolver", () => {
       })
     );
     expect((await resolver()(ids.userA)).map((m) => m.id)).toContain("tasks-fixture");
+  });
+
+  it("re-reads the manifests getter on every call instead of a value captured at construction (#1902)", async () => {
+    const mutableFixtures = [optionalModule];
+    const liveResolver = createActiveModulesResolver({
+      dataContext: runner,
+      manifests: () => mutableFixtures
+    });
+
+    expect((await liveResolver(ids.userA)).map((m) => m.id)).toEqual(["weather"]);
+
+    mutableFixtures.push(requiredFixtureModule);
+    expect((await liveResolver(ids.userA)).map((m) => m.id).sort()).toEqual(
+      ["tasks-fixture", "weather"].sort()
+    );
   });
 });
 

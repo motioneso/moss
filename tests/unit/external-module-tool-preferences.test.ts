@@ -90,7 +90,7 @@ describe("assistant-tool invocations carry the actor's module preferences", () =
   });
 
   it("passes the resolved preferences through to the module runtime", async () => {
-    const { manifests } = createExternalModuleTools({
+    const { getManifests } = createExternalModuleTools({
       discoveries: () => [discovery],
       workerDataContext: noopRunner,
       appDataContext: noopRunner,
@@ -98,7 +98,7 @@ describe("assistant-tool invocations carry the actor's module preferences", () =
       logger: { warn: () => undefined }
     });
 
-    const execute = manifests[0]?.assistantTools?.[0]?.execute;
+    const execute = getManifests()[0]?.assistantTools?.[0]?.execute;
     expect(execute).toBeDefined();
     await execute!({} as never, { localDate: "2026-08-20" }, {
       actorUserId: "user-1",
@@ -116,7 +116,7 @@ describe("assistant-tool invocations carry the actor's module preferences", () =
   // worker boundary, so a module filing anything under a calendar day had to trust whatever
   // zone the model wrote into the tool input, and fell back to UTC when it wrote none.
   it("passes the actor's timezone through to the module runtime", async () => {
-    const { manifests } = createExternalModuleTools({
+    const { getManifests } = createExternalModuleTools({
       discoveries: () => [discovery],
       workerDataContext: noopRunner,
       appDataContext: noopRunner,
@@ -124,7 +124,7 @@ describe("assistant-tool invocations carry the actor's module preferences", () =
       logger: { warn: () => undefined }
     });
 
-    await manifests[0]!.assistantTools![0]!.execute!({} as never, {}, {
+    await getManifests()[0]!.assistantTools![0]!.execute!({} as never, {}, {
       actorUserId: "user-1",
       requestId: "req-1",
       localTimezone: "America/Chicago"
@@ -135,7 +135,7 @@ describe("assistant-tool invocations carry the actor's module preferences", () =
   });
 
   it("omits the timezone rather than inventing one when the host has no locale", async () => {
-    const { manifests } = createExternalModuleTools({
+    const { getManifests } = createExternalModuleTools({
       discoveries: () => [discovery],
       workerDataContext: noopRunner,
       appDataContext: noopRunner,
@@ -143,7 +143,7 @@ describe("assistant-tool invocations carry the actor's module preferences", () =
       logger: { warn: () => undefined }
     });
 
-    await manifests[0]!.assistantTools![0]!.execute!({} as never, {}, {
+    await getManifests()[0]!.assistantTools![0]!.execute!({} as never, {}, {
       actorUserId: "user-1",
       requestId: "req-1"
     } as never);
@@ -153,5 +153,23 @@ describe("assistant-tool invocations carry the actor's module preferences", () =
     // is not.
     const options = invoke.mock.calls[0]?.[4] as Record<string, unknown> | undefined;
     expect(options && "localTimezone" in options).toBe(false);
+  });
+});
+
+describe("getManifests re-reads discoveries on every call (#1902)", () => {
+  it("reflects a module discovered after construction, with no rebuild step", async () => {
+    const mutableDiscoveries: (typeof discovery)[] = [];
+    const { getManifests } = createExternalModuleTools({
+      discoveries: () => mutableDiscoveries,
+      workerDataContext: noopRunner,
+      appDataContext: noopRunner,
+      settingsRepository: { getUserById: async () => null } as never,
+      logger: { warn: () => undefined }
+    });
+
+    expect(getManifests()).toEqual([]);
+
+    mutableDiscoveries.push(discovery);
+    expect(getManifests().map((manifest) => manifest.id)).toEqual(["demo"]);
   });
 });

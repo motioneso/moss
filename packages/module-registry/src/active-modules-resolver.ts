@@ -6,7 +6,10 @@ import type { ActiveModulesResolver } from "@moss/ai";
 
 export interface ActiveModulesResolverDeps {
   readonly dataContext: DataContextRunner;
-  readonly manifests: readonly MossModuleManifest[];
+  // #1902: a getter, not a captured array — called fresh on every resolve so a module
+  // discovered after this resolver was constructed (e.g. an external module installed after
+  // boot) is picked up without restarting the process.
+  readonly manifests: () => readonly MossModuleManifest[];
 }
 
 /**
@@ -35,7 +38,7 @@ export function createActiveModulesResolver(
         .map((r) => r.module_id)
     );
 
-    return deps.manifests.filter((manifest) => {
+    return deps.manifests().filter((manifest) => {
       const availability = manifest.availability;
       // required:true → always keep (ignore any row; defense-in-depth).
       if (availability?.required === true) return true;

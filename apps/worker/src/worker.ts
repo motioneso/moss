@@ -202,7 +202,7 @@ export async function buildWorker(deps?: { connectionString?: string }): Promise
   const boss = createPgBossClient(connectionString, WORKER_BOSS_OPTIONS);
   const resolveActiveModules = createActiveModulesResolver({
     dataContext,
-    manifests: getBuiltInModuleManifests()
+    manifests: () => getBuiltInModuleManifests()
   });
   logScheduleMode();
 

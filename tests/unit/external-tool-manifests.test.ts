@@ -83,7 +83,7 @@ it("filters external modules without changing built-in action metadata", async (
   const external = { ...builtIn, id: "external", name: "External" };
   const resolve = createExternalActiveModulesResolver(
     async () => [builtIn, external],
-    new Set([external.id]),
+    () => new Set([external.id]),
     async () => []
   );
 
@@ -123,7 +123,7 @@ it("keeps the original resolver when there are no external tool manifests", asyn
   const manifests: MossModuleManifest[] = [];
   const enabled = vi.fn(async () => manifests);
   const external = vi.fn(async () => []);
-  const resolve = createExternalActiveModulesResolver(enabled, new Set(), external);
+  const resolve = createExternalActiveModulesResolver(enabled, () => new Set(), external);
 
   await expect(resolve("actor")).resolves.toBe(manifests);
   expect(external).not.toHaveBeenCalled();

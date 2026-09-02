@@ -812,7 +812,7 @@ describe("focus providers honor per-user enablement (Phase-2 seam is LANDED)", (
 
     const resolveActive = createActiveModulesResolver({
       dataContext,
-      manifests: getBuiltInModuleManifests()
+      manifests: () => getBuiltInModuleManifests()
     });
 
     // Before disabling: wellness is active and contributes a provider.
