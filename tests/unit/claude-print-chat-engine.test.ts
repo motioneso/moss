@@ -468,6 +468,100 @@ describe("ClaudePrintChatEngine — vault read-only allowlist (#634)", () => {
 
       expect(result.records).toEqual([{ kind: "tool", text: "read_note", toolName: "read_note" }]);
     });
+
+    it("carries toolCallId and a rejected record through readNew for an mcp__ tool_use plus its errored tool_result", async () => {
+      const transcriptPath =
+        "/home/test/.claude/projects/-tmp-jarvis-neutral/00000000-0000-4000-8000-000000000023.jsonl";
+      const assistantLine = JSON.stringify({
+        type: "assistant",
+        message: {
+          role: "assistant",
+          stop_reason: "tool_use",
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_seam1",
+              name: "mcp__jarvis__sports_retry_source",
+              input: {}
+            }
+          ]
+        }
+      });
+      const userLine = JSON.stringify({
+        type: "user",
+        message: {
+          role: "user",
+          content: [{ type: "tool_result", tool_use_id: "toolu_seam1", is_error: true }]
+        }
+      });
+      const io = fakeIo({ [transcriptPath]: `${assistantLine}\n${userLine}\n` });
+      const engine = new ClaudePrintChatEngine("user-1", io, {
+        mux: fakeMux(),
+        homeBase: "/home/test",
+        sessionId: "00000000-0000-4000-8000-000000000023"
+      });
+      await engine.launch({
+        neutralDir: "/tmp/jarvis-neutral",
+        personaPath: "/tmp/jarvis-neutral/persona.md",
+        personaText: "persona"
+      });
+
+      const result = await engine.readNew(0);
+
+      const toolRecord = result.records.find((r) => r.kind === "tool" && r.toolName);
+      const rejectionRecord = result.records.find((r) => r.kind === "tool" && !r.toolName);
+      expect(toolRecord).toMatchObject({ toolCallId: "toolu_seam1" });
+      expect(rejectionRecord).toMatchObject({ toolCallId: "toolu_seam1", rejected: true });
+    });
+
+    it("carries toolCallId and the rejection record across two separate readNew polls", async () => {
+      const transcriptPath =
+        "/home/test/.claude/projects/-tmp-jarvis-neutral/00000000-0000-4000-8000-000000000024.jsonl";
+      const assistantLine = JSON.stringify({
+        type: "assistant",
+        message: {
+          role: "assistant",
+          stop_reason: "tool_use",
+          content: [
+            {
+              type: "tool_use",
+              id: "toolu_seam2",
+              name: "mcp__jarvis__sports_retry_source",
+              input: {}
+            }
+          ]
+        }
+      });
+      const userLine = JSON.stringify({
+        type: "user",
+        message: {
+          role: "user",
+          content: [{ type: "tool_result", tool_use_id: "toolu_seam2", is_error: true }]
+        }
+      });
+      const io = fakeIo({ [transcriptPath]: `${assistantLine}\n` });
+      const engine = new ClaudePrintChatEngine("user-1", io, {
+        mux: fakeMux(),
+        homeBase: "/home/test",
+        sessionId: "00000000-0000-4000-8000-000000000024"
+      });
+      await engine.launch({
+        neutralDir: "/tmp/jarvis-neutral",
+        personaPath: "/tmp/jarvis-neutral/persona.md",
+        personaText: "persona"
+      });
+
+      const first = await engine.readNew(0);
+      expect(first.records).toMatchObject([
+        { kind: "tool", toolName: "mcp__jarvis__sports_retry_source", toolCallId: "toolu_seam2" }
+      ]);
+
+      io.writes[transcriptPath] = `${assistantLine}\n${userLine}\n`;
+      const second = await engine.readNew(first.offset);
+
+      expect(second.records).toMatchObject([{ kind: "tool", toolCallId: "toolu_seam2", rejected: true }]);
+      expect(second.records[0]).not.toHaveProperty("toolName", "mcp__jarvis__sports_retry_source");
+    });
   });
 
   describe("#2164 r21 (item 4) last-submit diagnostics", () => {
@@ -551,7 +645,13 @@ describe("ClaudePrintChatEngine — vault read-only allowlist (#634)", () => {
       const promptText = "the secret prompt marker XYZ789 that must never leak";
       await engine.submit(promptText);
 
-      currentChild.stderr.write(`command failed: claude -p "${promptText}" exited unexpectedly\n`);
+      // #2164 r22 — the prompt-echo line and the failure-reason line are written separately: the
+      // r22 fragment scrub drops a whole line containing any 32-char window of the prompt, so a
+      // single line carrying both the prompt and "command failed" would drop the failure reason
+      // along with the leak. Splitting them proves the scrub still surfaces unrelated diagnostic
+      // text while removing the leaking line entirely.
+      currentChild.stderr.write(`claude -p "${promptText}" exited unexpectedly\n`);
+      currentChild.stderr.write("command failed\n");
       await new Promise((resolve) => setImmediate(resolve));
 
       const diag = engine.getLastSubmitDiagnostics();
@@ -596,6 +696,55 @@ describe("ClaudePrintChatEngine — vault read-only allowlist (#634)", () => {
       const diag = engine.getLastSubmitDiagnostics();
       expect(diag.stderrTail).not.toContain(token);
       expect(diag.stderrTail).not.toContain("efcafe1234");
+    });
+
+    // #2164 r22 security correction (item 3) — a prompt longer than the 4096-byte stderr cap can
+    // never appear whole in a stderr line, so the r21 whole-literal scrub never matched. Builds a
+    // long prompt, then echoes only a middle slice of it (a realistic argv-echo fragment) and
+    // proves no 32-char window of the prompt survives.
+    it("drops a stderr line containing only a fragment of a too-long prompt", async () => {
+      const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+        mux: fakeMux(),
+        homeBase: "/home/test",
+        sessionId: "00000000-0000-4000-8000-000000000027"
+      });
+      await engine.launch({
+        neutralDir: "/tmp/jarvis-neutral",
+        personaPath: "/tmp/jarvis-neutral/persona.md",
+        personaText: "persona"
+      });
+      const longPrompt = "secret-instruction-marker-" + "x".repeat(5000) + "-end-of-prompt";
+      await engine.submit(longPrompt);
+
+      const fragment = longPrompt.slice(2000, 2100);
+      currentChild.stderr.write(`bash: -lc: line 1: claude: ${fragment}\n`);
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const diag = engine.getLastSubmitDiagnostics();
+      for (let i = 0; i <= longPrompt.length - 32; i += 17) {
+        expect(diag.stderrTail).not.toContain(longPrompt.slice(i, i + 32));
+      }
+    });
+
+    it("keeps a stderr line unrelated to the prompt intact", async () => {
+      const engine = new ClaudePrintChatEngine("user-1", fakeIo(), {
+        mux: fakeMux(),
+        homeBase: "/home/test",
+        sessionId: "00000000-0000-4000-8000-000000000028"
+      });
+      await engine.launch({
+        neutralDir: "/tmp/jarvis-neutral",
+        personaPath: "/tmp/jarvis-neutral/persona.md",
+        personaText: "persona"
+      });
+      const longPrompt = "secret-instruction-marker-" + "x".repeat(5000) + "-end-of-prompt";
+      await engine.submit(longPrompt);
+
+      currentChild.stderr.write("bash: claude: command not found\n");
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const diag = engine.getLastSubmitDiagnostics();
+      expect(diag.stderrTail).toContain("bash: claude: command not found");
     });
 
     it("resets stderr/exit code diagnostics at the start of each submit", async () => {

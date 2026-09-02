@@ -21,6 +21,34 @@ const PROMPT_FILENAME = ".jarvis-claude-print-prompt.txt";
 const PERSONA_FILENAME = "persona.md";
 const CLAUDE_MCP_FILENAME = ".jarvis-claude-mcp.json";
 
+/**
+ * #2164 r22 security correction — the r21 whole-literal `redactExact` scrub only matched a stderr
+ * line that echoed the *entire* prompt, which never happens once the prompt exceeds the 4096-byte
+ * stderr cap (the normal case). Drops any stderr line that contains a 32-char window of the
+ * sanitized prompt, so a truncated argv echo still leaks nothing. Falls back to whole-literal
+ * scrub for prompts shorter than the window.
+ */
+const PROMPT_FRAGMENT_SCRUB_WINDOW = 32;
+
+function scrubPromptFragments(stderrTail: string, sanitizedPrompt: string): string {
+  if (sanitizedPrompt.length < PROMPT_FRAGMENT_SCRUB_WINDOW) {
+    return redactExact(stderrTail, sanitizedPrompt);
+  }
+  const windows = new Set<string>();
+  for (let i = 0; i <= sanitizedPrompt.length - PROMPT_FRAGMENT_SCRUB_WINDOW; i++) {
+    windows.add(sanitizedPrompt.slice(i, i + PROMPT_FRAGMENT_SCRUB_WINDOW));
+  }
+  return stderrTail
+    .split("\n")
+    .filter((line) => {
+      for (const window of windows) {
+        if (line.includes(window)) return false;
+      }
+      return true;
+    })
+    .join("\n");
+}
+
 export interface ClaudePrintChatEngineOpts {
   readonly mux?: Multiplexer;
   readonly homeBase?: string;
@@ -123,12 +151,13 @@ export class ClaudePrintChatEngine implements CliChatEngine {
    * #2164 r21 (item 4) — bounded, scrubbed stderr tail + exit code from the most recent
    * `submit()`'s child process, for the per-turn readiness-gate failure diagnostic only. Never
    * includes the prompt, the reply, or the launch command line: the current turn's sanitized
-   * prompt text is scrubbed out via `redactExact` alongside `neutralDir`, guarding against argv
-   * being echoed into stderr by an errored child. Not part of `CliChatEngine` (out of the r21
-   * file allowlist) — callers reach it via an inline optional cast.
+   * prompt text is scrubbed line-by-line via {@link scrubPromptFragments} alongside `neutralDir`,
+   * guarding against argv being echoed into stderr by an errored child — including a fragment of
+   * a too-long prompt truncated by the 4096-byte stderr cap. Not part of `CliChatEngine` (out of
+   * the r21 file allowlist) — callers reach it via an inline optional cast.
    */
   getLastSubmitDiagnostics(): { readonly stderrTail: string; readonly exitCode: number | null } {
-    const scrubbed = redactExact(
+    const scrubbed = scrubPromptFragments(
       redactExact(redactSecrets(this.lastSubmitStderr), this.launchOpts?.neutralDir),
       this.currentSubmitPrompt
     );
@@ -233,7 +262,9 @@ export class ClaudePrintChatEngine implements CliChatEngine {
     const records: TranscriptRecord[] = parsed.events.map((event) => ({
       kind: event.kind as ChatRecordKind,
       text: event.text,
-      toolName: event.toolName
+      toolName: event.toolName,
+      ...(event.toolCallId ? { toolCallId: event.toolCallId } : {}),
+      ...(event.rejected ? { rejected: event.rejected } : {})
     }));
     if (parsed.complete && parsed.reply !== null) {
       records.push({ kind: "reply", text: parsed.reply });
