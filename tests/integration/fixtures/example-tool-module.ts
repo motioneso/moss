@@ -54,6 +54,22 @@ export const exampleToolModule: MossModuleManifest = {
       summarize: (input) => `Write the value "${String(input.value)}"`
     },
     {
+      name: "example.slowWrite",
+      description: "Write fixture with a real delay before recording the call.",
+      permissionId: "example.update",
+      risk: "write",
+      inputSchema: {
+        type: "object",
+        required: ["value"],
+        properties: { value: { type: "string" } }
+      },
+      execute: async (db, input, ctx) => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return record("example.slowWrite", db as DataContextDb, input, ctx);
+      },
+      summarize: (input) => `Slow write the value "${String(input.value)}"`
+    },
+    {
       name: "example.autoWrite",
       description: "Auto write fixture.",
       permissionId: "example.update",

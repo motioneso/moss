@@ -412,34 +412,43 @@ export class AssistantToolGateway {
       summary: nativeToolSummary(toolName, input)
     });
 
-    const outcome = await pendingResolution;
-    if (outcome !== "confirmed") {
+    // #2149: markDone (in the finally below) unblocks resolveAndAwaitCompletion, which the
+    // Approve/Deny HTTP route awaits before responding. This path has no handler to run — it
+    // only grants a permission decision — but it still shares the wake-up mechanism with
+    // confirmAndRun, so it must report back the same way or an Approve of a native tool would
+    // hang waiting for a markDone that never comes.
+    try {
+      const outcome = await pendingResolution;
+      if (outcome !== "confirmed") {
+        this.deps.notifier.emit(chatSessionId, {
+          kind: "action_result",
+          actionRequestId: action.id,
+          toolName,
+          outcome: "denied",
+          reason: outcome === "timeout" ? "Timed out awaiting confirmation." : "Denied by user."
+        });
+        return {
+          decision: "deny",
+          reason: outcome === "timeout" ? "Timed out awaiting confirmation." : "Denied by user."
+        };
+      }
+
+      // #1661: "allowed", not "executed". This method decides a native tool's PERMISSION and
+      // returns `decision: "allow"` — the tool then runs outside the gateway's sight, so nothing
+      // here ever learns whether it worked. Saying "executed" told the user the action completed
+      // on the strength of their own click. The YOLO branch above already got this right and
+      // says why (#1085 F4: observe the grant, never fire-and-forget a fictional success); this
+      // sibling branch, forty lines down and doing the identical thing, was missed.
       this.deps.notifier.emit(chatSessionId, {
         kind: "action_result",
         actionRequestId: action.id,
         toolName,
-        outcome: "denied",
-        reason: outcome === "timeout" ? "Timed out awaiting confirmation." : "Denied by user."
+        outcome: "allowed"
       });
-      return {
-        decision: "deny",
-        reason: outcome === "timeout" ? "Timed out awaiting confirmation." : "Denied by user."
-      };
+      return { decision: "allow", reason: "Approved by user." };
+    } finally {
+      this.deps.confirmations.markDone(action.id);
     }
-
-    // #1661: "allowed", not "executed". This method decides a native tool's PERMISSION and returns
-    // `decision: "allow"` — the tool then runs outside the gateway's sight, so nothing here ever
-    // learns whether it worked. Saying "executed" told the user the action completed on the
-    // strength of their own click. The YOLO branch above already got this right and says why
-    // (#1085 F4: observe the grant, never fire-and-forget a fictional success); this sibling
-    // branch, forty lines down and doing the identical thing, was missed.
-    this.deps.notifier.emit(chatSessionId, {
-      kind: "action_result",
-      actionRequestId: action.id,
-      toolName,
-      outcome: "allowed"
-    });
-    return { decision: "allow", reason: "Approved by user." };
   }
 
   /**
@@ -548,7 +557,7 @@ export class AssistantToolGateway {
     // Only unblock the pending call if the DB row was actually updated (owner matches + still pending).
     // Without this guard a logged-in user could unblock another user's tool call via a guessed ID.
     if (!resolved) return "not_found";
-    this.deps.confirmations.resolve(actionRequestId, status);
+    await this.deps.confirmations.resolveAndAwaitCompletion(actionRequestId, status);
     return "resolved";
   }
 
@@ -752,53 +761,67 @@ export class AssistantToolGateway {
 
     const outcome = await pendingResolution;
 
-    if (outcome !== "confirmed") {
+    // #2149: markDone unblocks resolveAndAwaitCompletion, which the Approve/Deny HTTP route
+    // awaits before responding — must fire once this call has fully finished handling the
+    // outcome (both branches below), on every exit path, so the caller never observes
+    // "confirmed" before the handler run below has actually happened. Deliberately outside the
+    // fire-and-forget `recordAudit` calls (`void this.recordAudit(...)`) — those stay
+    // unawaited on purpose and must not reopen the same kind of delay on the audit write.
+    try {
+      if (outcome !== "confirmed") {
+        this.deps.notifier.emit(ctx.chatSessionId, {
+          kind: "action_result",
+          actionRequestId: action.id,
+          toolName: found.dto.name,
+          outcome: "denied",
+          reason:
+            outcome === "timeout"
+              ? "Timed out awaiting confirmation."
+              : outcome === "cancelled"
+                ? "Action cancelled."
+                : "Denied by user."
+        });
+        const approvalMode =
+          outcome === "timeout" ? "timeout" : outcome === "rejected" ? "rejected" : "cancelled";
+        void this.recordAudit(access, found, {
+          approvalMode,
+          outcome: outcome === "cancelled" ? "cancelled" : "denied",
+          chatSessionId: ctx.chatSessionId
+        });
+        const reason =
+          outcome === "timeout"
+            ? "Timed out awaiting confirmation — still pending in your drawer."
+            : "Denied by user.";
+        return { ok: false, denied: true, reason };
+      }
+
+      const { response: result, moduleReportedErrorClass } = await this.runHandler(
+        found,
+        input,
+        ctx
+      );
       this.deps.notifier.emit(ctx.chatSessionId, {
         kind: "action_result",
         actionRequestId: action.id,
         toolName: found.dto.name,
-        outcome: "denied",
-        reason:
-          outcome === "timeout"
-            ? "Timed out awaiting confirmation."
-            : outcome === "cancelled"
-              ? "Action cancelled."
-              : "Denied by user."
+        outcome: result.ok && moduleReportedErrorClass === null ? "executed" : "error",
+        ...(result.ok
+          ? { result: liveStreamResult(found.tool, result) }
+          : { reason: gatewayFailureReason(result) }),
+        ...(result.ok && found.tool.affectsQueryKeys
+          ? { affectsQueryKeys: found.tool.affectsQueryKeys }
+          : {})
       });
-      const approvalMode =
-        outcome === "timeout" ? "timeout" : outcome === "rejected" ? "rejected" : "cancelled";
       void this.recordAudit(access, found, {
-        approvalMode,
-        outcome: outcome === "cancelled" ? "cancelled" : "denied",
+        approvalMode: "confirmed",
+        outcome: result.ok && moduleReportedErrorClass === null ? "success" : "failed",
+        errorClass: result.ok ? moduleReportedErrorClass : "handler_error",
         chatSessionId: ctx.chatSessionId
       });
-      const reason =
-        outcome === "timeout"
-          ? "Timed out awaiting confirmation — still pending in your drawer."
-          : "Denied by user.";
-      return { ok: false, denied: true, reason };
+      return result;
+    } finally {
+      this.deps.confirmations.markDone(action.id);
     }
-
-    const { response: result, moduleReportedErrorClass } = await this.runHandler(found, input, ctx);
-    this.deps.notifier.emit(ctx.chatSessionId, {
-      kind: "action_result",
-      actionRequestId: action.id,
-      toolName: found.dto.name,
-      outcome: result.ok && moduleReportedErrorClass === null ? "executed" : "error",
-      ...(result.ok
-        ? { result: liveStreamResult(found.tool, result) }
-        : { reason: gatewayFailureReason(result) }),
-      ...(result.ok && found.tool.affectsQueryKeys
-        ? { affectsQueryKeys: found.tool.affectsQueryKeys }
-        : {})
-    });
-    void this.recordAudit(access, found, {
-      approvalMode: "confirmed",
-      outcome: result.ok && moduleReportedErrorClass === null ? "success" : "failed",
-      errorClass: result.ok ? moduleReportedErrorClass : "handler_error",
-      chatSessionId: ctx.chatSessionId
-    });
-    return result;
   }
 
   private summaryFor(

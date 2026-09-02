@@ -94,11 +94,11 @@ describe("resolveActionRequest owner scope (#1591)", () => {
 
     // Live waiter: resolves for real, row transitions, resolveAssistantAction runs once.
     const pending = confirmations.awaitResolution(row.id, 10_000);
-    await expect(gateway.resolveActionRequest("owner-1", row.id, "confirmed")).resolves.toBe(
-      "resolved"
-    );
+    const resolution = gateway.resolveActionRequest("owner-1", row.id, "confirmed");
+    await expect(pending).resolves.toBe("confirmed");
+    confirmations.markDone(row.id);
+    await expect(resolution).resolves.toBe("resolved");
     expect(row.status).toBe("confirmed");
     expect(resolveAssistantAction).toHaveBeenCalledOnce();
-    await expect(pending).resolves.toBe("confirmed");
   });
 });
