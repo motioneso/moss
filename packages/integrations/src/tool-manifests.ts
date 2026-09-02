@@ -167,7 +167,15 @@ function buildToolManifest(
           secret,
           conn.credentialPlacement
         )
-      : await callMcpTool(conn.url, secret, conn.credentialPlacement, tool.name, input);
+      : await callMcpTool(
+          ctx.actorUserId,
+          conn.id,
+          conn.url,
+          secret,
+          conn.credentialPlacement,
+          tool.name,
+          input
+        );
 
     // #2175 Task 4: the budget counts what the service actually sent, before this cap trims it —
     // that is the traffic cost being controlled, not what the model ends up seeing.
