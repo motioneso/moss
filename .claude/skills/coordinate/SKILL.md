@@ -41,6 +41,12 @@ Why these rules exist: `references/incidents.md` (read on demand, not up front).
     window doing nothing.
   - **Lanes:** the watchdog nudge now CARRIES the pane statuses — read them from the nudge; do not
     answer a nudge with a fresh `herdr pane list` unless you're about to act on a specific pane.
+- **Never mirror an owner's monitor.** Once a builder or QA agent has an active gate/CI monitor,
+  confirm it once, ensure it knows the coordinator routing name, then park/end the coordinator
+  turn. Do not start a second waiter, repeatedly call `agent wait`, inspect its PID, or emit
+  unchanged-state heartbeat updates. The owner's result message or coordinator watchdog is the
+  wake-up. If the owner cannot signal, install one detached one-shot watcher that emits only on a
+  terminal state; never keep the coordinator turn alive just to watch it.
 - **Boot briefs live in `~/.coord-briefs/`, never the repo root.** Untracked `boot-*.txt` files in
   the tree red gates and pile up (39 found in one sweep).
 - **Bound every pane read:** `herdr pane read <pane> --source recent --lines 12`. `--source
@@ -353,6 +359,8 @@ catches silent failures between pushes.
   ≤270s (stays cache-warm) or space ticks 20–30 min — a wake between those pays a full cold
   re-read of your context for nothing. **Never block on `herdr pane run <pane> 'sleep N'`
   poll-loops** — `ScheduleWakeup` / `Monitor` / a background task are the only sanctioned waits.
+  A monitor already owned by the lane is sufficient: do not duplicate it in the coordinator.
+  Read the lane once after its terminal notification, not periodically while it is unchanged.
 - **QA verdicts: `Monitor` is fine, an in-process `Agent`-tool QA agent is not.** A `Monitor`
   polling `gh pr comment`s runs as a detached background task and doesn't block you. A QA agent
   spawned via the `Agent` tool runs in-process and ties up whichever session spawned it until it
