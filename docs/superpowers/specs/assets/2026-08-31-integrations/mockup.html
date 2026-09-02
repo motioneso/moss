@@ -538,6 +538,7 @@
       <button class="mk-tab" data-s="s2">2 · Add integration</button>
       <button class="mk-tab" data-s="s3">3 · Detail — Home Assistant (MCP, small)</button>
       <button class="mk-tab" data-s="s4">4 · Detail — Sonarr (API, large)</button>
+      <button class="mk-tab" data-s="s5">5 · Detail — Home Assistant (MCP, 75-tool, grouped)</button>
     </div>
 
     <!-- ============ SCREEN 1: LIST ============ -->
@@ -883,6 +884,271 @@
             </div>
 
             <div class="note">Groups start off for large APIs — turn on what you use.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ SCREEN 5: DETAIL — HOME ASSISTANT, 75-TOOL, DERIVED GROUPS ============ -->
+    <div class="screen" id="s5">
+      <div class="shell">
+        <div class="nav">
+          <h2>Settings</h2>
+          <div class="navgroup">
+            <div>Connections</div>
+            <div class="navitem">Connected accounts</div>
+            <div class="navitem">Data sources</div>
+            <div class="navitem on">Integrations</div>
+          </div>
+        </div>
+        <div class="pane">
+          <div class="pane-head">
+            <div><h1>Integrations</h1></div>
+            <button class="btn btn--ghost">← Back to list</button>
+          </div>
+          <div class="card">
+            <div class="d-head">
+              <div class="row__logo" style="width: 46px; height: 46px">HA</div>
+              <div class="d-title">
+                <h1>Home Assistant <span class="kind kind--mcp">MCP</span></h1>
+                <div class="row__sub">
+                  <span class="dot dot--ok"></span
+                  ><span class="meta"
+                    ><b>Connected</b> · homeassistant.local:8123 · credential set</span
+                  >
+                </div>
+              </div>
+              <div style="display: flex; gap: 8px">
+                <button class="btn">Test connection</button
+                ><button class="btn">Refresh tools</button
+                ><button class="btn btn--danger">Remove</button>
+              </div>
+            </div>
+            <div class="d-stats">
+              <div class="stat"><b>75</b><span>tools found</span></div>
+              <div class="stat"><b>75</b><span>on in chat</span></div>
+              <div class="stat"><b>3 hours ago</b><span>last checked</span></div>
+              <div class="stat"><b>41</b><span>calls this week</span></div>
+            </div>
+            <div class="note">
+              This connection kept everything enabled before grouping existed — the groups below
+              are ready to narrow, nothing changes until you turn one off.
+            </div>
+            <div class="toolbar">
+              <h3>Tools</h3>
+              <div style="display: flex; align-items: center; gap: 28px">
+                <div style="display: flex; gap: 16px">
+                  <span class="meta" style="width: 30px; text-align: center">On</span>
+                  <span class="meta" style="width: 30px; text-align: center">Repeat</span>
+                </div>
+                <div class="search">Filter…</div>
+              </div>
+            </div>
+
+            <div class="grp-head">
+              <div class="sw on"></div>
+              <b>Media</b><span class="meta">9 tools</span><span class="meta">9 on</span>
+            </div>
+            <div class="tool">
+              <div class="tool__name">HassMediaPause</div>
+              <div class="tool__desc">Pause playback on a media player</div>
+              <div style="display: flex; gap: 16px; flex: none">
+                <div class="sw sw--sm on"></div>
+                <div class="sw sw--sm"></div>
+              </div>
+            </div>
+            <div class="tool">
+              <div class="tool__name">HassMediaUnpause</div>
+              <div class="tool__desc">Resume playback on a media player</div>
+              <div style="display: flex; gap: 16px; flex: none">
+                <div class="sw sw--sm on"></div>
+                <div class="sw sw--sm"></div>
+              </div>
+            </div>
+            <div class="tool">
+              <div class="tool__name">HassMediaNext</div>
+              <div class="tool__desc">Skip to the next track</div>
+              <div style="display: flex; gap: 16px; flex: none">
+                <div class="sw sw--sm on"></div>
+                <div class="sw sw--sm"></div>
+              </div>
+            </div>
+            <div class="tool" style="border-bottom: none">
+              <div class="tool__name">…6 more in Media</div>
+              <div class="tool__desc"></div>
+            </div>
+
+            <div class="grp-head">
+              <div class="sw on"></div>
+              <b>Timer</b><span class="meta">11 tools</span><span class="meta">11 on</span>
+            </div>
+            <div class="tool">
+              <div class="tool__name">HassStartTimer</div>
+              <div class="tool__desc">Start a timer on a voice satellite or hub</div>
+              <div style="display: flex; gap: 16px; flex: none">
+                <div class="sw sw--sm on"></div>
+                <div class="sw sw--sm"></div>
+              </div>
+            </div>
+            <div class="tool">
+              <div class="tool__name">HassCancelTimer</div>
+              <div class="tool__desc">Cancel a running timer</div>
+              <div style="display: flex; gap: 16px; flex: none">
+                <div class="sw sw--sm on"></div>
+                <div class="sw sw--sm"></div>
+              </div>
+            </div>
+            <div class="tool">
+              <div class="tool__name">HassTimerStatus</div>
+              <div class="tool__desc">Report the state of running timers</div>
+              <div style="display: flex; gap: 16px; flex: none">
+                <div class="sw sw--sm on"></div>
+                <div class="sw sw--sm"></div>
+              </div>
+            </div>
+            <div class="tool" style="border-bottom: none">
+              <div class="tool__name">…8 more in Timer</div>
+              <div class="tool__desc"></div>
+            </div>
+
+            <div class="grp-head">
+              <div class="sw on"></div>
+              <b>Light</b><span class="meta">9 tools</span><span class="meta">9 on</span>
+            </div>
+            <div class="tool" style="border-bottom: none">
+              <div class="tool__name">HassLightSet</div>
+              <div class="tool__desc">Set a light's brightness, color, or effect</div>
+              <div style="display: flex; gap: 16px; flex: none">
+                <div class="sw sw--sm on"></div>
+                <div class="sw sw--sm"></div>
+              </div>
+            </div>
+            <div class="tool" style="border-bottom: none">
+              <div class="tool__name">…8 more in Light</div>
+              <div class="tool__desc"></div>
+            </div>
+
+            <div class="grp-head">
+              <div class="sw on"></div>
+              <b>Climate</b><span class="meta">6 tools</span><span class="meta">6 on</span>
+            </div>
+            <div class="grp-head">
+              <div class="sw on"></div>
+              <b>Get</b><span class="meta">8 tools</span><span class="meta">8 on</span>
+            </div>
+            <div class="tool">
+              <div class="tool__name">GetLiveContext</div>
+              <div class="tool__desc">Read the current state of the whole house</div>
+              <div style="display: flex; gap: 16px; flex: none">
+                <div class="sw sw--sm on"></div>
+                <div class="sw sw--sm"></div>
+              </div>
+            </div>
+            <div class="tool" style="border-bottom: none">
+              <div class="tool__name">…7 more in Get</div>
+              <div class="tool__desc"></div>
+            </div>
+
+            <div class="grp-head">
+              <div class="sw on"></div>
+              <b>List</b><span class="meta">6 tools</span><span class="meta">6 on</span>
+            </div>
+            <div class="tool" style="border-bottom: none">
+              <div class="tool__name">HassListAddItem</div>
+              <div class="tool__desc">Add an item to a to-do or shopping list</div>
+              <div style="display: flex; gap: 16px; flex: none">
+                <div class="sw sw--sm on"></div>
+                <div class="sw sw--sm"></div>
+              </div>
+            </div>
+            <div class="tool" style="border-bottom: none">
+              <div class="tool__name">…5 more in List</div>
+              <div class="tool__desc"></div>
+            </div>
+
+            <div class="grp-head">
+              <div class="sw on"></div>
+              <b>Vacuum</b><span class="meta">4 tools</span><span class="meta">4 on</span>
+            </div>
+
+            <div class="grp-head">
+              <div class="sw on"></div>
+              <b>Custom scripts</b><span class="meta">8 tools</span><span class="meta">8 on</span>
+            </div>
+            <div class="tool">
+              <div class="tool__name">AddMovie</div>
+              <div class="tool__desc">Add a title to the watchlist script</div>
+              <div style="display: flex; gap: 16px; flex: none">
+                <div class="sw sw--sm on"></div>
+                <div class="sw sw--sm"></div>
+              </div>
+            </div>
+            <div class="tool">
+              <div class="tool__name">StartTask</div>
+              <div class="tool__desc">Create a task on the household board — does not say it's safe to repeat</div>
+              <div style="display: flex; gap: 16px; flex: none">
+                <div class="sw sw--sm on"></div>
+                <div class="sw sw--sm on"></div>
+              </div>
+            </div>
+            <div class="tool">
+              <div class="tool__name">AddTaskWork</div>
+              <div class="tool__desc">Log work against an existing task</div>
+              <div style="display: flex; gap: 16px; flex: none">
+                <div class="sw sw--sm on"></div>
+                <div class="sw sw--sm"></div>
+              </div>
+            </div>
+            <div class="tool" style="border-bottom: none">
+              <div class="tool__name">…5 more in Custom scripts</div>
+              <div class="tool__desc"></div>
+            </div>
+
+            <div class="grp-head">
+              <div class="sw on"></div>
+              <b>Other</b><span class="meta">14 tools</span><span class="meta">14 on</span>
+            </div>
+            <div class="tool">
+              <div class="tool__name">HassTurnOn</div>
+              <div class="tool__desc">Turn on a device or entity — a family of 2, too small to group</div>
+              <div style="display: flex; gap: 16px; flex: none">
+                <div class="sw sw--sm on"></div>
+                <div class="sw sw--sm"></div>
+              </div>
+            </div>
+            <div class="tool">
+              <div class="tool__name">HassTurnOff</div>
+              <div class="tool__desc">Turn off a device or entity — a family of 2, too small to group</div>
+              <div style="display: flex; gap: 16px; flex: none">
+                <div class="sw sw--sm on"></div>
+                <div class="sw sw--sm"></div>
+              </div>
+            </div>
+            <div class="tool">
+              <div class="tool__name">HassBroadcast</div>
+              <div class="tool__desc">Announce a message on every speaker</div>
+              <div style="display: flex; gap: 16px; flex: none">
+                <div class="sw sw--sm on"></div>
+                <div class="sw sw--sm"></div>
+              </div>
+            </div>
+            <div class="tool" style="border-bottom: none">
+              <div class="tool__name">…11 more, each a family of 1 or 2</div>
+              <div class="tool__desc"></div>
+            </div>
+
+            <div class="note">
+              Refresh tools rereads what Home Assistant says about each tool — press it to pick up
+              read and repeat hints on tools discovered before this changed.
+            </div>
+            <div class="note">
+              Mockup annotation, not UI copy: tool names above are Home Assistant's real built-in
+              intents plus this connection's own custom scripts, both named in the spec's
+              diagnosis (HassTurnOff, HassBroadcast, AddMovie, AddTaskWork, StartTask). Group
+              membership is illustrative — the real groups come from the 75-name fixture Task 5
+              checks in from the live connection. The turn-on/turn-off pair landing in Other,
+              not its own group, is the spec's own worked example of the minimum-group-size rule.
+            </div>
           </div>
         </div>
       </div>
