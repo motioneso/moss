@@ -375,7 +375,11 @@ describe("MVP foundation schema catalog", () => {
         // #2175 Task 3 — per-connection in-burst duplicate-call suppression memory table.
         { version: "0208", name: "0208_integration_unsuppressed_tools.sql" },
         // #2175 Task 5 — one-time grandfathering for pre-existing over-threshold connections.
-        { version: "0209", name: "0209_integration_group_derivation_grandfather.sql" }
+        { version: "0209", name: "0209_integration_group_derivation_grandfather.sql" },
+        // #2175 Task 7 — call duration on the action audit log.
+        { version: "0210", name: "0210_moss_audit_log_duration_ms.sql" },
+        // #2175 Task 7 — audit outcome widened to record suppressed/refused calls.
+        { version: "0211", name: "0211_moss_audit_log_outcome_widen_suppressed_refused.sql" }
       ]);
     } finally {
       await client.end();
