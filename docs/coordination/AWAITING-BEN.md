@@ -111,3 +111,15 @@ and restarted. Original entry:
   Also worth your eye, separately: a provider row showing "Connected" while offering a "Log in"
   button and listing zero models looks like a real display bug - the admin screen says connected
   when the provider cannot serve a request.
+
+<!-- Corrected 2026-09-03, same day, by takeover 32: the entry above blamed a missing credential and
+asked Ben to log a Claude provider in. Wrong cause. Clicking "Log in" returns a 500,
+"onboarding login service not configured". That login route is only wired up when the API starts
+with a socket setting pointing at the helper service that drives command-line tools
+(JARVIS_CLI_RUNNER_SOCKET; see packages/module-registry/src/index.ts ~2669 and ~2770). The dev API
+runs from source via `pnpm dev:api` with that setting unset, so it fails closed no matter who clicks.
+Ben ruled he does not want to set up API billing and does not want to move dev onto the full
+container stack. Lane `dev-cli-runner-host` (pane w1:pC0) is proving whether that helper can run as
+an ordinary process on the dev box, driving the Claude command-line tool already installed there.
+NO BEN ACTION NEEDED right now - this entry is not blocking him.
+Detail: https://github.com/motioneso/moss/issues/2175#issuecomment-5531759370 -->
