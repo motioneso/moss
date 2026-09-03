@@ -5760,3 +5760,47 @@ the evidence, that is a real decision not an environment blocker. A GitHub issue
 the separate defect: a provider row shows "Connected" with a working-looking "Log in" button while
 it cannot connect in this mode and lists zero models, and clicking it shows a raw server error
 instead of an explanation.
+
+## Continuation note (2026-09-03, takeover 34 relay at 70% context)
+
+Only open item: #2175 Task 10, steps 1/4/5. Steps 2/3 proven and merged (PRs 2190, 2191).
+merges_since_relay: 0.
+
+Lock: claimed cleanly. Old coordinator pane w1:pD2 released the name (renamed itself
+coordinator-retiring-34) and was closed. This session (coordinator, pane w1:pD5) is the only
+live coordinator.
+
+Big development: the diagnose lane (cli-runner-login-diagnose, pane w1:pD4) found the login helper
+needed no code fix at all - the "unavailable" error was an old stuck sign-in attempt blocking new
+ones with the same generic message. Once that old attempt aged out, starting a fresh sign-in worked.
+It produced a real Claude sign-in web address and code twice today (around 1:54 PM and 2:12 PM
+Pacific). Ben came into that pane directly both times. First window he missed. Second time he
+pasted back an authorization code; the lane correctly refused to relay or reuse that secret value
+and told him to submit it through the real "Log in" button on the admin Assistant and AI screen
+instead. Ben then said: "I am not able to complete those steps, I still get the provider login is
+currently unavailable" - meaning from the actual browser screen, clicking Log in still fails, even
+though the command-line side of a sign-in attempt clearly works when tried directly against the
+helper's own address. This is now the open question: something between the browser's Log in button
+and the working command-line path is still broken, or the API process serving the browser is not
+picking up the fix the diagnose lane found (for example, a running dev API process started before
+the fix, or a setting that only the diagnose lane's own shell session has). That gap needs the next
+step of the investigation before Ben is asked to try again.
+
+The diagnose lane (pane w1:pD4, agent name cli-runner-login-diagnose) is still live and mid-
+conversation with Ben in its own pane. Do not restart it - resume it, read its recent pane output,
+and pick up from Ben's last message.
+
+Traps already spent time on today, still true: stop dev API/web by explicit process id only, never
+by name pattern, and confirm port 3000 is actually free first (logs /tmp/dev-api.log and
+/tmp/dev-web.log). Eleven leftover fake provider rows ("UAT Fake Provider", "UAT Scripted Provider")
+are harmless, leave them. Never commit directly on this shared checkout - always a worktree under
+.claude/worktrees/ off origin/main, then a PR, then `gh pr merge <n> --squash --auto --delete-branch`
+(never --admin, a ruleset blocks it).
+
+Not yet filed: a provider row shows "Connected" with a "Log in" button while it cannot connect and
+lists zero models, and clicking Log in surfaces a raw server error instead of a real explanation.
+Needs a GitHub issue - still not filed.
+
+Successor: read this note, resume pane w1:pD4 (do not respawn it), find out why the browser's Log in
+button still fails when a direct sign-in attempt against the helper succeeds, then continue with
+steps 1, 4, 5 of Task 10 once a real login actually completes through the real screen.
