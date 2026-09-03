@@ -89,6 +89,15 @@ and restarted. Original entry:
   Assistant on dev before the kitchen-switch proof can run. Finding posted on issue #2175:
   https://github.com/motioneso/moss/issues/2175#issuecomment-5517216596 -->
 
+<!-- Resolved 2026-09-03 by takeover 35: #2175 is closed and this no longer blocks anyone.
+The cause was never a missing credential. Signing in needs a helper service that the development
+API only wires up when it is started with a matching socket setting; running from source that
+setting was unset, so the button failed closed. A later session got the helper running and proved a
+sign-in works when driven directly, but the button on the screen still failed. Ben stopped the
+investigation and decided to test on the live app instead, where signing in already works. #2175 was
+closed with proof steps 1, 4 and 5 unproven and the kill gate unmeasured, and that is stated plainly
+on the issue. The misleading "Connected" display is now its own issue, #2203. Original entry:
+
 - **#2175 Task 10 proof is stuck: no AI provider on dev can answer a chat, and reconnecting one
   needs you.** Chat on the dev instance is unusable for everyone: it says "No AI provider is
   connected yet" and the message box says "No model configured". On the admin Assistant and AI
@@ -123,3 +132,4 @@ container stack. Lane `dev-cli-runner-host` (pane w1:pC0) is proving whether tha
 an ordinary process on the dev box, driving the Claude command-line tool already installed there.
 NO BEN ACTION NEEDED right now - this entry is not blocking him.
 Detail: https://github.com/motioneso/moss/issues/2175#issuecomment-5531759370 -->
+-->
