@@ -370,6 +370,102 @@ describe("AI auto-register default chat model on login (#367)", () => {
     expect(model?.provider_status).toBe("active");
   });
 
+  it("reactivates the clicked disabled config instead of duplicating it (#2205)", async () => {
+    // Settings → AI: the founder clicks "Log in" on a Claude row they had disabled earlier. The
+    // dialog sends that row's id; ready must flip THAT row back to active, keep its models, and
+    // create no second Claude config.
+    const disabledId = await dataContext.withDataContext(adminCtx(), async (db) => {
+      const created = await repository.createProvider(db, {
+        providerKind: "anthropic",
+        displayName: "Claude (disabled)",
+        status: "disabled",
+        authMethod: "cli",
+        encryptedCredential: cipher.encryptJson({ cli: true })
+      });
+      await repository.createModel(db, {
+        providerConfigId: created.id,
+        providerModelId: "default",
+        displayName: "Claude (default model)",
+        capabilities: ["chat"],
+        status: "active",
+        tier: "interactive"
+      });
+      return created.id;
+    });
+
+    await dataContext.withDataContext(adminCtx(), (db) =>
+      service.ensureDefaultChatModel(db, "anthropic", { providerConfigId: disabledId })
+    );
+
+    const { providers, model, models } = await dataContext.withDataContext(
+      adminCtx(),
+      async (db) => ({
+        providers: (await repository.listProviders(db)).filter(
+          (p) => p.provider_kind === "anthropic"
+        ),
+        model: await repository.selectChatModelForUser(db),
+        models: await repository.listModels(db)
+      })
+    );
+
+    expect(providers).toHaveLength(1);
+    expect(providers[0]?.id).toBe(disabledId);
+    expect(providers[0]?.status).toBe("active");
+    expect(providers[0]?.is_instance_default).toBe(true);
+    expect(model?.provider_model_id).toBe("default");
+    expect(models.filter((row) => row.provider_model_id === "default")).toHaveLength(1);
+  });
+
+  it("ignores a clicked id that names another kind and falls back to the kind-only path (#2205)", async () => {
+    const codexId = await dataContext.withDataContext(adminCtx(), async (db) => {
+      const created = await repository.createProvider(db, {
+        providerKind: "openai-compatible",
+        displayName: "Codex",
+        status: "disabled",
+        authMethod: "cli",
+        encryptedCredential: cipher.encryptJson({ cli: true })
+      });
+      return created.id;
+    });
+
+    await dataContext.withDataContext(adminCtx(), (db) =>
+      service.ensureDefaultChatModel(db, "anthropic", { providerConfigId: codexId })
+    );
+
+    const providers = await dataContext.withDataContext(adminCtx(), (db) =>
+      repository.listProviders(db)
+    );
+    expect(providers.find((p) => p.id === codexId)?.status).toBe("disabled");
+    expect(
+      providers.filter((p) => p.provider_kind === "anthropic" && p.status === "active")
+    ).toHaveLength(1);
+  });
+
+  it("passes the clicked row through persistLoginTerminal (#2205)", async () => {
+    const seen: unknown[] = [];
+    const seam = buildOnboardingLogin({
+      enabled: true,
+      getConnection: () => undefined,
+      repository: new SettingsRepository(),
+      autoRegister: {
+        ensureDefaultChatModel: async (_db, kind, options) => {
+          seen.push([kind, options]);
+        }
+      },
+      logger: { warn: () => {} }
+    })!;
+
+    await dataContext.withDataContext(adminCtx(), (db) =>
+      seam.stateStore.persistLoginTerminal(db, {
+        provider: "anthropic",
+        status: "ready",
+        requestId: "r3",
+        providerConfigId: "row-1"
+      })
+    );
+    expect(seen).toEqual([["anthropic", { providerConfigId: "row-1" }]]);
+  });
+
   it("no-ops for a provider without a catalog default", async () => {
     await dataContext.withDataContext(adminCtx(), (db) =>
       service.ensureDefaultChatModel(db, "custom")

@@ -89,7 +89,20 @@ export const DEFAULT_CHAT_MODELS: Partial<Record<AiProviderKind, DefaultChatMode
 
 /** The seam the login flow calls on `ready`. Generic over `providerKind`. */
 export interface AiAutoRegisterPort {
-  ensureDefaultChatModel(scopedDb: DataContextDb, providerKind: AiProviderKind): Promise<void>;
+  ensureDefaultChatModel(
+    scopedDb: DataContextDb,
+    providerKind: AiProviderKind,
+    options?: AiAutoRegisterOptions
+  ): Promise<void>;
+}
+
+export interface AiAutoRegisterOptions {
+  /**
+   * #2205: the provider config the founder clicked "Log in" on (Settings → AI row). When set and it
+   * is an assistant CLI config of this kind, it is the config to reuse — a `disabled` one is
+   * reactivated rather than duplicated. Absent (onboarding wizard) ⇒ kind-only lookup as before.
+   */
+  readonly providerConfigId?: string;
 }
 
 /**
@@ -125,14 +138,22 @@ export class AiAutoRegisterService implements AiAutoRegisterPort {
 
   async ensureDefaultChatModel(
     scopedDb: DataContextDb,
-    providerKind: AiProviderKind
+    providerKind: AiProviderKind,
+    options?: AiAutoRegisterOptions
   ): Promise<void> {
     const def = DEFAULT_CHAT_MODELS[providerKind];
     if (!def) return; // no catalog default for this provider — nothing to register.
 
+    // #2205: the row the founder clicked wins. A disabled one is reactivated BEFORE the gates below
+    // run, so its existing models count and no duplicate config/model set is created.
+    const clicked = options?.providerConfigId
+      ? await this.reactivateClickedProvider(scopedDb, options.providerConfigId, providerKind)
+      : undefined;
+
     // #982/#869 D2: sentinel creation stays idempotent, but its gate must not skip static discovery.
     const hasChatModel = await this.repository.hasChatModelForProviderKind(scopedDb, providerKind);
-    const existing = await this.repository.findReusableProviderByKind(scopedDb, providerKind);
+    const existing =
+      clicked ?? (await this.repository.findReusableProviderByKind(scopedDb, providerKind));
     if (hasChatModel && !existing) return;
     const providerConfig =
       existing ??
@@ -185,5 +206,25 @@ export class AiAutoRegisterService implements AiAutoRegisterPort {
     ) {
       await this.repository.setInstanceDefaultProvider(scopedDb, providerConfig.id);
     }
+  }
+
+  /**
+   * #2205: resolve the clicked config; flip `disabled → active` so it is selectable again. Returns
+   * undefined when the id names nothing usable (wrong kind, revoked, voice, api-key) — the caller
+   * then falls back to the kind-only path, never errors.
+   */
+  private async reactivateClickedProvider(
+    scopedDb: DataContextDb,
+    providerConfigId: string,
+    providerKind: AiProviderKind
+  ) {
+    const target = await this.repository.findLoginTargetProvider(
+      scopedDb,
+      providerConfigId,
+      providerKind
+    );
+    if (!target) return undefined;
+    if (target.status === "active") return target;
+    return this.repository.updateProvider(scopedDb, target.id, { status: "active" });
   }
 }

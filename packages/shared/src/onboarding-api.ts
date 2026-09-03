@@ -101,11 +101,19 @@ export type ProviderLoginFlowStatus =
 
 export interface OnboardingProviderLoginBeginRequest {
   readonly providerKind: OnboardingProviderKind;
+  /**
+   * #2205: the Settings → AI provider row the user clicked "Log in" on. On `ready` the server
+   * reuses (and reactivates, if disabled) THAT config instead of creating a duplicate. Absent from
+   * the onboarding wizard, which has no row yet.
+   */
+  readonly providerConfigId?: string;
 }
 
 export interface OnboardingProviderLoginPollRequest {
   readonly providerKind: OnboardingProviderKind;
   readonly loginId: string;
+  /** #2205: see {@link OnboardingProviderLoginBeginRequest.providerConfigId}. */
+  readonly providerConfigId?: string;
 }
 
 export interface OnboardingProviderLoginSubmitTokenRequest {
@@ -113,6 +121,8 @@ export interface OnboardingProviderLoginSubmitTokenRequest {
   readonly loginId: string;
   /** The pasted authorization code — AUTH MATERIAL: forwarded only, never logged/echoed. */
   readonly token: string;
+  /** #2205: see {@link OnboardingProviderLoginBeginRequest.providerConfigId}. */
+  readonly providerConfigId?: string;
 }
 
 export interface OnboardingProviderLoginResponse {

@@ -315,6 +315,8 @@ export interface ProviderLoginStateStore {
       readonly status: ProviderLoginFlowStatus;
       readonly message?: string;
       readonly requestId: string;
+      /** #2205: the Settings row the founder clicked "Log in" on; absent from the onboarding wizard. */
+      readonly providerConfigId?: string;
     }
   ) => Promise<ProviderInstallState>;
   /** Read the persisted lifecycle state for the cancel response (no row ⇒ `not_installed`). */
@@ -369,7 +371,11 @@ const onboardingLoginBeginRequestSchema = {
   type: "object",
   additionalProperties: false,
   required: ["providerKind"],
-  properties: { providerKind: { type: "string", enum: PROVIDER_KIND_ENUM } }
+  properties: {
+    providerKind: { type: "string", enum: PROVIDER_KIND_ENUM },
+    // #2205: optional — the Settings → AI provider row the founder clicked "Log in" on.
+    providerConfigId: { type: "string", minLength: 1, maxLength: 64 }
+  }
 } as const;
 
 const onboardingLoginPollRequestSchema = {
@@ -378,7 +384,9 @@ const onboardingLoginPollRequestSchema = {
   required: ["providerKind", "loginId"],
   properties: {
     providerKind: { type: "string", enum: PROVIDER_KIND_ENUM },
-    loginId: { type: "string", minLength: 1, maxLength: 200 }
+    loginId: { type: "string", minLength: 1, maxLength: 200 },
+    // #2205: optional — the Settings → AI provider row the founder clicked "Log in" on.
+    providerConfigId: { type: "string", minLength: 1, maxLength: 64 }
   }
 } as const;
 
@@ -390,7 +398,9 @@ const onboardingLoginSubmitTokenRequestSchema = {
     providerKind: { type: "string", enum: PROVIDER_KIND_ENUM },
     loginId: { type: "string", minLength: 1, maxLength: 200 },
     // The pasted authorization code — AUTH MATERIAL (§L.6.3). Bounded; NEVER logged/persisted/echoed.
-    token: { type: "string", minLength: 1, maxLength: 4096 }
+    token: { type: "string", minLength: 1, maxLength: 4096 },
+    // #2205: optional — the Settings → AI provider row the founder clicked "Log in" on.
+    providerConfigId: { type: "string", minLength: 1, maxLength: 64 }
   }
 } as const;
 
@@ -708,7 +718,7 @@ export function registerOnboardingRoutes(
           request.log.error("onboarding provider-login route mounted without onboardingLogin");
           throw new HttpError(500, "onboarding login service not configured");
         }
-        const { providerKind } = parseLoginProviderBody(request.body);
+        const { providerKind, providerConfigId } = parseLoginProviderBody(request.body);
         const accessContext = await dependencies.resolveAccessContext(request);
         const requestId = dependencies.requireRequestId(accessContext);
         // Reject a non-loginable provider (no adapter — agy, or codex if its headless smoke failed)
@@ -725,7 +735,8 @@ export function registerOnboardingRoutes(
             provider: providerKind,
             status: outcome.status,
             ...(outcome.message !== undefined ? { message: outcome.message } : {}),
-            requestId
+            requestId,
+            ...(providerConfigId !== undefined ? { providerConfigId } : {})
           });
           return buildLoginResponse(providerKind, outcome, installState);
         });
@@ -745,7 +756,7 @@ export function registerOnboardingRoutes(
           request.log.error("onboarding provider-login/poll route mounted without onboardingLogin");
           throw new HttpError(500, "onboarding login service not configured");
         }
-        const { providerKind, loginId } = parseLoginHandleBody(request.body);
+        const { providerKind, loginId, providerConfigId } = parseLoginHandleBody(request.body);
         const accessContext = await dependencies.resolveAccessContext(request);
         const requestId = dependencies.requireRequestId(accessContext);
         return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
@@ -755,7 +766,8 @@ export function registerOnboardingRoutes(
             provider: providerKind,
             status: outcome.status,
             ...(outcome.message !== undefined ? { message: outcome.message } : {}),
-            requestId
+            requestId,
+            ...(providerConfigId !== undefined ? { providerConfigId } : {})
           });
           return buildLoginResponse(providerKind, outcome, installState);
         });
@@ -779,7 +791,9 @@ export function registerOnboardingRoutes(
         }
         // The token is AUTH MATERIAL (§L.6.3): parsed for presence, forwarded to the cli-runner,
         // and NEVER logged (we never log the body) / persisted / echoed in the response.
-        const { providerKind, loginId, token } = parseLoginSubmitTokenBody(request.body);
+        const { providerKind, loginId, token, providerConfigId } = parseLoginSubmitTokenBody(
+          request.body
+        );
         const accessContext = await dependencies.resolveAccessContext(request);
         const requestId = dependencies.requireRequestId(accessContext);
         return await dependencies.dataContext.withDataContext(accessContext, async (scopedDb) => {
@@ -789,7 +803,8 @@ export function registerOnboardingRoutes(
             provider: providerKind,
             status: outcome.status,
             ...(outcome.message !== undefined ? { message: outcome.message } : {}),
-            requestId
+            requestId,
+            ...(providerConfigId !== undefined ? { providerConfigId } : {})
           });
           return buildLoginResponse(providerKind, outcome, installState);
         });
@@ -905,27 +920,43 @@ function validateProviderKind(value: unknown): OnboardingProviderKind {
   return value;
 }
 
-function parseLoginProviderBody(body: unknown): { readonly providerKind: OnboardingProviderKind } {
+/** #2205: the optional clicked-row id; anything but a non-empty string is treated as absent. */
+function parseProviderConfigId(value: Record<string, unknown>): {
+  readonly providerConfigId?: string;
+} {
+  const raw = value.providerConfigId;
+  return typeof raw === "string" && raw.length > 0 ? { providerConfigId: raw } : {};
+}
+
+function parseLoginProviderBody(body: unknown): {
+  readonly providerKind: OnboardingProviderKind;
+  readonly providerConfigId?: string;
+} {
   const value = requireObject(body);
-  return { providerKind: validateProviderKind(value.providerKind) };
+  return {
+    providerKind: validateProviderKind(value.providerKind),
+    ...parseProviderConfigId(value)
+  };
 }
 
 function parseLoginHandleBody(body: unknown): {
   readonly providerKind: OnboardingProviderKind;
   readonly loginId: string;
+  readonly providerConfigId?: string;
 } {
   const value = requireObject(body);
   const providerKind = validateProviderKind(value.providerKind);
   if (typeof value.loginId !== "string" || value.loginId.length === 0) {
     throw new HttpError(400, "loginId is required");
   }
-  return { providerKind, loginId: value.loginId };
+  return { providerKind, loginId: value.loginId, ...parseProviderConfigId(value) };
 }
 
 function parseLoginSubmitTokenBody(body: unknown): {
   readonly providerKind: OnboardingProviderKind;
   readonly loginId: string;
   readonly token: string;
+  readonly providerConfigId?: string;
 } {
   const value = requireObject(body);
   const providerKind = validateProviderKind(value.providerKind);
@@ -936,7 +967,12 @@ function parseLoginSubmitTokenBody(body: unknown): {
   if (typeof value.token !== "string" || value.token.length === 0) {
     throw new HttpError(400, "token is required");
   }
-  return { providerKind, loginId: value.loginId, token: value.token };
+  return {
+    providerKind,
+    loginId: value.loginId,
+    token: value.token,
+    ...parseProviderConfigId(value)
+  };
 }
 
 /** Assemble the login response, surfacing only the optional display fields that are present. */

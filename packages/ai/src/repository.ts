@@ -343,6 +343,27 @@ export class AiRepository {
   }
 
   /**
+   * #2205: the assistant CLI provider config the founder clicked "Log in" on, by id, whether it is
+   * currently active or user-disabled (never a revoked one, never the voice endpoint, never another
+   * kind). The login auto-register seam reactivates a disabled match instead of duplicating it.
+   */
+  async findLoginTargetProvider(
+    scopedDb: DataContextDb,
+    providerId: string,
+    providerKind: AiProviderKind
+  ): Promise<AiProviderConfigSafeRow | undefined> {
+    assertDataContextDb(scopedDb);
+
+    return this.safeProviderQuery(scopedDb)
+      .where("id", "=", providerId)
+      .where("provider_kind", "=", providerKind)
+      .where("purpose", "=", "assistant")
+      .where("auth_method", "=", "cli")
+      .where("status", "in", ["active", "disabled"])
+      .executeTakeFirst();
+  }
+
+  /**
    * #367: true if ANY chat-capable model row (ANY model status — active OR user-disabled) exists
    * under an ACTIVE provider config of this kind. The login auto-register seam gates on this:
    *   - a model under an ACTIVE config (active OR user-disabled) ⇒ true ⇒ skip — never duplicate an

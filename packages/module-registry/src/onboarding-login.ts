@@ -124,7 +124,7 @@ export function buildOnboardingLogin(deps: {
     },
     // `needs_login → ready|error` on a SETTLED status; an `awaiting_*` status persists nothing and
     // returns the current lifecycle (begin already set `needs_login`).
-    persistLoginTerminal: async (scopedDb, { provider, status, message }) => {
+    persistLoginTerminal: async (scopedDb, { provider, status, message, providerConfigId }) => {
       if (status === "ready") {
         const state = await repository.upsertProviderInstallState(scopedDb, {
           provider,
@@ -136,7 +136,11 @@ export function buildOnboardingLogin(deps: {
         // Log at WARN with providerKind + reason; never a token/secret (the cause carries neither).
         if (deps.autoRegister) {
           try {
-            await deps.autoRegister.ensureDefaultChatModel(scopedDb, provider as AiProviderKind);
+            await deps.autoRegister.ensureDefaultChatModel(
+              scopedDb,
+              provider as AiProviderKind,
+              providerConfigId !== undefined ? { providerConfigId } : undefined
+            );
           } catch (err) {
             deps.logger?.warn(
               { provider, reason: err instanceof Error ? err.message : String(err) },

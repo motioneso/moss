@@ -95,7 +95,8 @@ export function ProviderLoginDialog(props: {
         try {
           const response = await pollOnboardingProviderLogin({
             providerKind: provider.providerKind,
-            loginId
+            loginId,
+            providerConfigId: provider.id
           });
           if (response.status === "ready") {
             finish();
@@ -139,7 +140,11 @@ export function ProviderLoginDialog(props: {
   const beginLogin = useCallback(async () => {
     setState({ phase: "beginning", token: "" });
     try {
-      const response = await beginOnboardingProviderLogin({ providerKind: provider.providerKind });
+      // #2205: name the clicked row so the server reactivates it instead of adding a duplicate.
+      const response = await beginOnboardingProviderLogin({
+        providerKind: provider.providerKind,
+        providerConfigId: provider.id
+      });
       if (closedRef.current) {
         void cancelOnboardingProviderLogin({
           providerKind: provider.providerKind,
@@ -197,7 +202,8 @@ export function ProviderLoginDialog(props: {
       const response = await submitOnboardingProviderLoginToken({
         providerKind: provider.providerKind,
         loginId,
-        token
+        token,
+        providerConfigId: provider.id
       });
       if (response.status === "ready") {
         finish();
