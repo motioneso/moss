@@ -3,7 +3,7 @@ import { WorkflowsRepository } from "@moss/workflows";
 import { createAppRuntimeRunner, createMigrationOwnerDb } from "./connections.js";
 import { seedSecondOwner, seedSoloAdmin } from "./admin.js";
 import { seedOnboardingChunk } from "./chunks/onboarding.js";
-import { seedAiProviderChunk } from "./chunks/ai.js";
+import { seedActivityOutcomeFixture, seedAiProviderChunk } from "./chunks/ai.js";
 import { seedScriptedChatProviderChunk } from "./chunks/chat-script.js";
 import { seedJobSearchAiProviderChunk } from "./chunks/job-search-ai.js";
 import { seedNewsChunk } from "./chunks/news.js";
@@ -80,6 +80,15 @@ export async function seedLevel(options: SeedOptions): Promise<void> {
       await seedScriptedChatProviderChunk(scriptedRunner, adminUserId);
     } finally {
       await scriptedRunner.destroy();
+    }
+  }
+
+  if (options.activityOutcomeFixture) {
+    const runner = createAppRuntimeRunner();
+    try {
+      await seedActivityOutcomeFixture(runner, adminUserId);
+    } finally {
+      await runner.destroy();
     }
   }
 

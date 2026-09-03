@@ -87,6 +87,8 @@ async function main(): Promise<void> {
     resolveMossEnv(process.env, "JARVIS_UAT_SPORTS_PUBLIC_SOURCE_FIXTURES") === "1";
   const workflowApprovalFixture =
     resolveMossEnv(process.env, "JARVIS_UAT_WORKFLOW_APPROVAL_FIXTURE") === "1";
+  const activityOutcomeFixture =
+    resolveMossEnv(process.env, "JARVIS_UAT_ACTIVITY_OUTCOME_FIXTURE") === "1";
   const chatScript = parseUatChatScript(
     resolveMossEnv(process.env, "JARVIS_UAT_SEED_CHAT_SCRIPT") ?? ""
   );
@@ -98,6 +100,7 @@ async function main(): Promise<void> {
     jobSearchAiProviderBaseUrl,
     sportsPublicSourceFixtures,
     workflowApprovalFixture,
+    activityOutcomeFixture,
     chatScript
   });
   console.log(
