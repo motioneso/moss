@@ -5645,3 +5645,11 @@ Queue: #2175 Task 10 steps 1/4/5 live proof (steps 2/3 already on PRs 2190/2191)
 `~/.coord-briefs/boot-2175-task10-proof-r22.txt`, runs against the shared dev instance (no
 worktree, no git). On PASS: close #2175, board Done, end-coordination. On FAIL: kill-gate reading
 goes to Ben with the evidence.
+
+## Lock note (2026-09-03, takeover 32)
+
+Coordinator lock: session `cc7d1056-ff91-4739-8f80-b0c4a3be6e48`, agent name `coordinator`, label
+`Coordinator`, pane `w1:pD1`. Took over cleanly from takeover 31 (pane `w1:p77`, now renamed
+`coordinator-old-take31`, told to wrap up and close). PR #2194 (docs sync) confirmed merged.
+Watching #2175 for the proof lane's result (background comment watcher armed, no polling).
+Nothing merged yet this session; merges_since_relay: 0.
