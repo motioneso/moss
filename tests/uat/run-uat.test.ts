@@ -56,6 +56,8 @@ describe("run-uat CLI (#1027/#1047)", () => {
       withoutNewsJsonBinding: false,
       withJobSearchFixture: false,
       withSportsPublicSourceFixtures: false,
+      withWorkflowApprovalFixture: false,
+      withActivityOutcomeFixture: false,
       chatScript: undefined
     });
     const [command, args] = mocks.spawn.mock.calls[0] ?? [];
@@ -95,6 +97,8 @@ describe("run-uat CLI (#1027/#1047)", () => {
       withoutNewsJsonBinding: false,
       withJobSearchFixture: false,
       withSportsPublicSourceFixtures: false,
+      withWorkflowApprovalFixture: false,
+      withActivityOutcomeFixture: false,
       chatScript: "phase1-smoke"
     });
   });
@@ -141,6 +145,8 @@ describe("run-uat CLI (#1027/#1047)", () => {
       withoutNewsJsonBinding: true,
       withJobSearchFixture: false,
       withSportsPublicSourceFixtures: true,
+      withWorkflowApprovalFixture: false,
+      withActivityOutcomeFixture: false,
       chatScript: undefined
     });
   });

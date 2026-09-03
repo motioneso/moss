@@ -98,7 +98,10 @@ export const CORE_APP_SETTINGS: readonly CoreAppSurfaceDeclaration[] = [
   {
     id: "activity",
     label: "Activity",
-    description: "Review assistant activity visible to this user.",
+    description:
+      "Review assistant activity visible to this user, including how long each action took to " +
+      "run and, for repeated integration requests, whether a call was skipped because it was " +
+      "already covered or refused for asking too fast.",
     path: "/settings?section=activity",
     scope: "user"
   },

@@ -117,6 +117,9 @@ export interface ToolResult {
   readonly data: Record<string, unknown>;
   readonly columnOrder?: readonly string[];
   readonly media?: ToolResultMedia;
+  /** Overrides the audit outcome the gateway would otherwise derive from ok/error (#2175 Task 7).
+   *  Set by a tool's execute when it served a result without reaching the underlying service. */
+  readonly auditOutcome?: "suppressed" | "refused";
 }
 
 /**

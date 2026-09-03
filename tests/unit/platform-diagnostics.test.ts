@@ -32,7 +32,8 @@ const actionRow = {
   request_id: "req-action",
   chat_session_id: null,
   source_surface: "chat",
-  input_summary: { userContent: "must not cross this boundary" }
+  input_summary: { userContent: "must not cross this boundary" },
+  duration_ms: null
 } as MossActionAuditLog;
 
 describe("platform diagnostics service", () => {

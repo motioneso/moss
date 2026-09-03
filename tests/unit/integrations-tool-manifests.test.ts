@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import type { DataContextRunner } from "@moss/db";
 import {
   createIntegrationsCipher,
-  createIntegrationsActiveModulesResolver
+  createIntegrationsActiveModulesResolver,
+  createResolverCache
 } from "@moss/integrations";
 import type { ConnectionRow } from "@moss/integrations";
 import type { DiscoveredTool } from "@moss/integrations";
@@ -92,6 +93,7 @@ describe("createIntegrationsActiveModulesResolver", () => {
       dataContext: fakeDataContext(),
       cipher: createIntegrationsCipher(),
       logger,
+      resolverCache: createResolverCache(),
       repository: { listConnections: async () => connections } as never
     });
 
@@ -129,6 +131,7 @@ describe("createIntegrationsActiveModulesResolver", () => {
       dataContext: fakeDataContext(),
       cipher: createIntegrationsCipher(),
       logger: { warn: () => {} },
+      resolverCache: createResolverCache(),
       repository: {
         listConnections: async () => [
           connection({ id: "empty", name: "Empty", discoveredTools: [] })

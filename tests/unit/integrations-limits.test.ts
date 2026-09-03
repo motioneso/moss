@@ -11,6 +11,7 @@ import {
   createIntegrationsActiveModulesResolver,
   createIntegrationsCipher,
   createRequestBudget,
+  createResolverCache,
   INTEGRATION_CALL_CEILING,
   INTEGRATION_REQUEST_CHAR_BUDGET,
   INTEGRATION_RESPONSE_CHAR_CAP,
@@ -89,6 +90,7 @@ async function buildTools(baseUrl: string, tools: DiscoveredTool[]) {
     logger: { warn: () => {} },
     callMemory: createCallMemory(),
     requestBudget: createRequestBudget(),
+    resolverCache: createResolverCache(),
     repository: {
       listConnections: async () => [connection({ baseUrl, discoveredTools: tools })],
       loadCredentialEnvelope: async () => null

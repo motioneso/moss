@@ -53,7 +53,9 @@ function outcomeLabel(outcome: ActionAuditLogEntryDto["outcome"]): string {
     denied: "Declined",
     cancelled: "Cancelled",
     invalid: "Invalid",
-    conflict: "Conflict"
+    conflict: "Conflict",
+    suppressed: "Skipped (already covered)",
+    refused: "Refused (too many requests)"
   };
   return labels[outcome];
 }
@@ -68,9 +70,22 @@ function relativeTime(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+/**
+ * #2175: how long the call took, in plain words. Sub-second calls read in milliseconds, longer
+ * ones in seconds with one decimal, so a slow call stands out at a glance.
+ */
+function durationLabel(durationMs: number): string {
+  if (durationMs < 1000) return `took ${durationMs} ms`;
+  return `took ${(durationMs / 1000).toFixed(1)} s`;
+}
+
 function isDistinct(outcome: ActionAuditLogEntryDto["outcome"]): boolean {
   return (
-    outcome === "failed" || outcome === "denied" || outcome === "invalid" || outcome === "conflict"
+    outcome === "failed" ||
+    outcome === "denied" ||
+    outcome === "invalid" ||
+    outcome === "conflict" ||
+    outcome === "refused"
   );
 }
 
@@ -181,6 +196,9 @@ export function ActivityPane(_props: PaneProps) {
                   <Badge tone={isDistinct(entry.outcome) ? "red" : "neutral"}>
                     {outcomeLabel(entry.outcome)}
                   </Badge>
+                  {entry.durationMs !== null && (
+                    <Badge tone="neutral">{durationLabel(entry.durationMs)}</Badge>
+                  )}
                   {entry.sourceSurface !== "chat" && (
                     <Badge tone="steel">{entry.sourceSurface}</Badge>
                   )}
