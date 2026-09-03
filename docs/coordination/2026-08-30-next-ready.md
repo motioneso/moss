@@ -5804,3 +5804,40 @@ Needs a GitHub issue - still not filed.
 Successor: read this note, resume pane w1:pD4 (do not respawn it), find out why the browser's Log in
 button still fails when a direct sign-in attempt against the helper succeeds, then continue with
 steps 1, 4, 5 of Task 10 once a real login actually completes through the real screen.
+
+## Run closed (2026-09-03, takeover 35)
+
+Ben's instruction, in his own words: "I'll update prod if it has been merged. Please close out this
+run and 2175." That is what happened.
+
+**#2175 is closed.** Closing note posted on the issue. All three parts of the work are merged into
+main (#2179 safety, #2190 curation, #2191 speed). Proof steps 2 and 3 were proven live and are
+recorded on #2190 and #2191. Steps 1, 4 and 5 were never proven, and the closing note says so
+plainly: the development instance had no working AI provider for the whole day, so nobody could
+send "turn off the kitchen light" and time it. The kill-gate reading is unmeasured, not passed and
+not failed. Ben is updating the live app himself and testing there. If the live test shows the
+speed or the repeat behaviour is still wrong, that becomes a fresh issue with real numbers.
+
+**The separate defect is now filed as #2203** and added to the board: a provider row can say
+"Connected" next to a "Log in" button while it cannot connect and lists no models, and clicking
+that button shows a raw server error instead of an explanation. This one cost most of a day,
+because several sessions trusted the word "Connected".
+
+**Board:** #2175 moved to Done automatically on close. #2203 added to project 2.
+
+**Panes:** the takeover 34 coordinator pane `w1:pD5` was closed after it released the name. The
+diagnose lane `w1:pD4` (`cli-runner-login-diagnose`) was closed by Ben directly - he judged that
+session unreliable after it repeatedly questioned whether messages in its own pane were really from
+him. Worth remembering: an agent treating Ben's own typed messages as untrusted is a real cost, not
+a safety win.
+
+**Left running on purpose:** the development app is still running from ~/Jarv1s (logs
+/tmp/dev-api.log and /tmp/dev-web.log), along with the helper service the sign-in needs. Eleven
+leftover fake provider rows ("UAT Fake Provider" x10, "UAT Scripted Provider" x1) from an earlier
+proof run are still on the development instance - harmless, and now safe to delete through Settings
+whenever anyone is next in there.
+
+**Not deployed by this session.** Ben is doing the live update himself.
+
+Queue is empty. No lanes building, no worktrees outstanding, nothing blocked on Ben.
+merges_since_relay: 0.
