@@ -234,7 +234,11 @@ export function registerAiRoutes(
             if (created.status === "active") {
               const providers = await repository.listProviders(scopedDb);
               const activeCount = providers.filter((p) => p.status === "active").length;
-              const anyFlagged = providers.some((p) => p.is_instance_default);
+              // #2207: only an active flagged row counts; a revoked row still carrying the flag
+              // (installs from before the revoke fix) must not block adoption.
+              const anyFlagged = providers.some(
+                (p) => p.is_instance_default && p.status === "active"
+              );
               if (!anyFlagged && activeCount === 1) {
                 const flagged = await repository.setInstanceDefaultProvider(scopedDb, created.id);
                 if (flagged) return flagged;

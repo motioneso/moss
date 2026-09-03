@@ -493,6 +493,9 @@ export class AiRepository {
       .set({
         encrypted_credential: encryptedCredential,
         status: "revoked",
+        // #2207: a tombstone must not keep the instance-default flag, or chat has no default and
+        // the sole-provider adopt rules refuse the next provider because "one is already flagged".
+        is_instance_default: false,
         revoked_at: new Date(),
         updated_at: new Date()
       })

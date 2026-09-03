@@ -202,7 +202,8 @@ export class AiAutoRegisterService implements AiAutoRegisterPort {
     if (
       providerConfig.status === "active" &&
       providers.filter((provider) => provider.status === "active").length === 1 &&
-      !providers.some((provider) => provider.is_instance_default)
+      // #2207: a revoked row still carrying the flag must not block adoption.
+      !providers.some((provider) => provider.is_instance_default && provider.status === "active")
     ) {
       await this.repository.setInstanceDefaultProvider(scopedDb, providerConfig.id);
     }

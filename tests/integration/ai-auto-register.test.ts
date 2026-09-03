@@ -295,6 +295,59 @@ describe("AI auto-register default chat model on login (#367)", () => {
     expect(afterAdmin.map((row) => row.provider_model_id)).toEqual(["default"]);
   });
 
+  it("clears the instance-default flag when the default provider is revoked (#2207)", async () => {
+    const id = await dataContext.withDataContext(adminCtx(), async (db) => {
+      const created = await repository.createProvider(db, {
+        providerKind: "anthropic",
+        displayName: "Claude (to be removed)",
+        authMethod: "cli",
+        encryptedCredential: cipher.encryptJson({ cli: true })
+      });
+      await repository.setInstanceDefaultProvider(db, created.id);
+      await repository.revokeProvider(db, created.id, cipher.encryptJson({ revoked: true }));
+      return created.id;
+    });
+
+    const providers = await dataContext.withDataContext(adminCtx(), (db) =>
+      repository.listProviders(db)
+    );
+    const revoked = providers.find((p) => p.id === id);
+    expect(revoked?.status).toBe("revoked");
+    expect(revoked?.is_instance_default).toBe(false);
+    expect(providers.some((p) => p.is_instance_default)).toBe(false);
+  });
+
+  it("still adopts the next sole provider when a revoked row carries a stale default flag (#2207)", async () => {
+    // Installs revoked their default before the fix left the flag on the tombstone. Simulate that
+    // pre-fix state directly, then log in: the new Claude row must become the default anyway.
+    const staleId = await dataContext.withDataContext(adminCtx(), async (db) => {
+      const created = await repository.createProvider(db, {
+        providerKind: "anthropic",
+        displayName: "Claude (stale default)",
+        authMethod: "cli",
+        encryptedCredential: cipher.encryptJson({ cli: true })
+      });
+      await db.db
+        .updateTable("app.ai_provider_configs")
+        .set({ status: "revoked", is_instance_default: true, revoked_at: new Date() })
+        .where("id", "=", created.id)
+        .execute();
+      return created.id;
+    });
+
+    await dataContext.withDataContext(adminCtx(), (db) =>
+      service.ensureDefaultChatModel(db, "anthropic")
+    );
+
+    const providers = await dataContext.withDataContext(adminCtx(), (db) =>
+      repository.listProviders(db)
+    );
+    const active = providers.filter((p) => p.status === "active");
+    expect(active).toHaveLength(1);
+    expect(active[0]?.is_instance_default).toBe(true);
+    expect(providers.find((p) => p.id === staleId)?.is_instance_default).toBe(false);
+  });
+
   it("does not recreate a model the user disabled (never resurrect — decision 2)", async () => {
     await dataContext.withDataContext(adminCtx(), (db) =>
       service.ensureDefaultChatModel(db, "anthropic")
