@@ -92,7 +92,13 @@ async function startMcpServer() {
     url: `http://127.0.0.1:${port}/mcp`,
     getSeenAuth: () => seenAuth,
     getInitializeCount: () => initializeCount,
-    close: () => new Promise<void>((r) => httpServer.close(() => r()))
+    // A held client keeps its keep-alive socket open, and `server.close()` waits for every
+    // connection to end — so without dropping them first the afterEach hook never returns.
+    close: () =>
+      new Promise<void>((r) => {
+        httpServer.closeAllConnections();
+        httpServer.close(() => r());
+      })
   };
 }
 
@@ -234,7 +240,7 @@ describe("discoverMcpTools / callMcpTool", () => {
     expect(fixture.getInitializeCount()).toBe(2);
   });
 
-  it("reconnects once, without surfacing an error, when a held connection is stale", async () => {
+  it("surfaces an error when a held connection dies mid-call, then starts clean on the next call", async () => {
     const fixture = await startMcpServer();
     close = fixture.close;
     const cache = createMcpConnectionCache();
@@ -254,14 +260,32 @@ describe("discoverMcpTools / callMcpTool", () => {
 
     // The fixture server drops its whole HTTP process below, simulating the held client's
     // transport having gone bad server-side (e.g. a restart) between two calls in the same burst.
+    // The client cannot tell that apart from a socket dropping after the remote already acted
+    // on the request, so the failure must reach the caller rather than be retried blindly
+    // (a hidden retry could send an email or create a ticket twice).
     await fixture.close();
     const replacement = await startMcpServer();
     close = replacement.close;
 
     // Same actor+connection key, but callMcpTool only ever sees `url` as a parameter to the
-    // connect() it retries with, never as part of the cache key — pointing it at the new
-    // fixture's URL stands in for "the same connection is reachable again after the outage".
-    const second = await callMcpTool(
+    // connect() it uses for a fresh client, never as part of the cache key — pointing it at the
+    // new fixture's URL stands in for "the same connection is reachable again after the outage".
+    await expect(
+      callMcpTool(
+        "user-1",
+        "conn-stale",
+        replacement.url,
+        null,
+        null,
+        "add",
+        { a: 3, b: 3 },
+        { cache }
+      )
+    ).rejects.toThrow();
+    expect(replacement.getInitializeCount()).toBe(0); // no reconnect-and-retry happened
+
+    // The dead connection was evicted, so the next call opens a fresh one and succeeds.
+    const third = await callMcpTool(
       "user-1",
       "conn-stale",
       replacement.url,
@@ -271,8 +295,8 @@ describe("discoverMcpTools / callMcpTool", () => {
       { a: 3, b: 3 },
       { cache }
     );
-    expect(second.ok).toBe(true);
-    expect(second.data.result).toBe("6");
+    expect(third.ok).toBe(true);
+    expect(third.data.result).toBe("6");
     expect(replacement.getInitializeCount()).toBe(1);
   });
 });
