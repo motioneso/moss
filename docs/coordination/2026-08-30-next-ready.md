@@ -5673,3 +5673,33 @@ provider to produce proof, may not delete the leftover rows, and may not add or 
 If it turns out there is genuinely no working AI provider, that is a credential only Ben can supply
 and goes to him with the screen evidence plus a current-checkout confirmation. Steps 1, 4 and 5
 remain unproven. merges_since_relay: 0 (PR 2195, docs-only, merged).
+
+## Continuation note (2026-09-03, takeover 32 relay at 70% context)
+
+Only open item: #2175 Task 10, steps 1/4/5, unproven and unstarted. Steps 2/3 proven (PRs 2190,
+2191). Merged this session: docs-only PRs 2195, 2196, 2197, 2198. merges_since_relay: 0.
+
+Blocker diagnosed and it is NOT a missing credential. Nobody can chat on dev; clicking "Log in" next
+to either Claude provider returns a 500, "onboarding login service not configured". The login route
+is only wired when the API starts with JARVIS_CLI_RUNNER_SOCKET set (packages/module-registry/
+src/index.ts ~2669 and ~2770; packages/settings/src/onboarding-routes.ts ~709). The dev API runs
+from source via `pnpm dev:api` with it unset, so it fails closed. Only the prod compose file sets
+it; there is no dev compose file that does.
+
+Ben's rulings today: no paid API billing, and do not move dev onto the full container stack. He
+asked whether Moss can drive the Claude command-line tool already installed on the box instead.
+
+Lane running now: `dev-cli-runner-host`, pane w1:pC0, Sonnet, brief
+`~/.coord-briefs/boot-dev-cli-runner-host.txt` - proving whether packages/cli-runner can run as an
+ordinary host process (it has a `start` script and a single-user mode), then restarting the dev API
+with the socket set and proving login plus a real chat answer through the screens. It must stop and
+report if a product code change is needed.
+
+Successor brief: `~/.coord-briefs/boot-coordinator-next-33.txt` (carries the traps and next steps).
+
+Not yet filed: a provider row shows "Connected" with a "Log in" button while unable to connect in
+this mode and listing zero models, and the button surfaces a raw server error. Needs an issue.
+
+Leftover state: eleven fake provider rows ("UAT Fake Provider" x10, "UAT Scripted Provider" x1) from
+the PR 2191 proof run remain on dev. Harmless, leave until #2175 closes, then delete via Settings.
+No coordinator worktrees outstanding - all scratch trees removed after their PRs opened.
