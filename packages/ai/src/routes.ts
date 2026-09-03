@@ -1189,6 +1189,7 @@ function serializeAuditLogEntry(row: MossActionAuditLog): ActionAuditLogEntryDto
     chatSessionId: row.chat_session_id ?? null,
     sourceSurface: row.source_surface as ActionAuditLogEntryDto["sourceSurface"],
     inputSummary: row.input_summary as ActionAuditLogEntryDto["inputSummary"],
+    durationMs: row.duration_ms ?? null,
     occurredAt:
       row.occurred_at instanceof Date ? row.occurred_at.toISOString() : String(row.occurred_at)
   };

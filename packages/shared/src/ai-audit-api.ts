@@ -26,6 +26,7 @@ const actionAuditLogEntrySchema = {
     "chatSessionId",
     "sourceSurface",
     "inputSummary",
+    "durationMs",
     "occurredAt"
   ],
   properties: {
@@ -60,6 +61,8 @@ const actionAuditLogEntrySchema = {
       enum: ["chat", "proactive", "scheduled", "unknown"]
     },
     inputSummary: actionAuditInputSummarySchema,
+    // #2175: how long the tool call took; null when no call happened (e.g. a denial).
+    durationMs: { type: ["integer", "null"] },
     occurredAt: { type: "string" }
   }
 } as const;
@@ -110,6 +113,8 @@ export type ActionAuditLogEntryDto = {
   readonly chatSessionId: string | null;
   readonly sourceSurface: "chat" | "proactive" | "scheduled" | "unknown";
   readonly inputSummary: ActionAuditInputSummary | null;
+  /** #2175: milliseconds the tool call took; null when no call happened (e.g. a denial). */
+  readonly durationMs: number | null;
   readonly occurredAt: string;
 };
 

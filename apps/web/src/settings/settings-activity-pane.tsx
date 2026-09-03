@@ -70,6 +70,15 @@ function relativeTime(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+/**
+ * #2175: how long the call took, in plain words. Sub-second calls read in milliseconds, longer
+ * ones in seconds with one decimal, so a slow call stands out at a glance.
+ */
+function durationLabel(durationMs: number): string {
+  if (durationMs < 1000) return `took ${durationMs} ms`;
+  return `took ${(durationMs / 1000).toFixed(1)} s`;
+}
+
 function isDistinct(outcome: ActionAuditLogEntryDto["outcome"]): boolean {
   return (
     outcome === "failed" ||
@@ -187,6 +196,9 @@ export function ActivityPane(_props: PaneProps) {
                   <Badge tone={isDistinct(entry.outcome) ? "red" : "neutral"}>
                     {outcomeLabel(entry.outcome)}
                   </Badge>
+                  {entry.durationMs !== null && (
+                    <Badge tone="neutral">{durationLabel(entry.durationMs)}</Badge>
+                  )}
                   {entry.sourceSurface !== "chat" && (
                     <Badge tone="steel">{entry.sourceSurface}</Badge>
                   )}
