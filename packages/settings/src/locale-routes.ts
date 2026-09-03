@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 
 import type { AccessContext, DataContextRunner } from "@moss/db";
 import {
+  DEFAULT_LOCALE_SETTINGS,
   getLocaleSettingsRouteSchema,
   putLocaleSettingsRouteSchema,
   type LocaleDateFormat,
@@ -14,11 +15,6 @@ import type { ProfilePreferencesPort } from "./preferences-port.js";
 import { handleSettingsRouteError } from "./route-error.js";
 
 const LOCALE_PREFERENCE_KEY = "locale";
-const DEFAULT_LOCALE_SETTINGS: LocaleSettingsDto = {
-  timezone: "America/Los_Angeles",
-  region: "en-US",
-  dateFormat: "24"
-};
 
 interface LocaleRoutesDependencies {
   readonly dataContext: DataContextRunner;

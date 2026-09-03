@@ -7,7 +7,7 @@
  * fake engine (no real tmux / `claude` binary). Everything else is real.
  */
 import { AiRepository, createRealTmuxIo, type Multiplexer, type ProviderKind } from "@moss/ai";
-import { extractTimezone } from "../locale-utils.js";
+import { resolveEffectiveTimezone } from "../locale-utils.js";
 import { DEFAULT_CHAT_SURFACE, type ChatSurface } from "./chat-surface.js";
 import {
   resolveMossEnv,
@@ -714,10 +714,9 @@ export async function resolveChatPersona(
     userName
   });
 
-  const timezone = extractTimezone(localeRaw);
-  const tzBlock = timezone
-    ? `User's local timezone: ${timezone}. Always display dates and times in this timezone.`
-    : null;
+  // #2157: same effective zone as Settings and chat.getCurrentTime, even before a locale is saved.
+  const timezone = resolveEffectiveTimezone(localeRaw);
+  const tzBlock = `User's local timezone: ${timezone}. Always display dates and times in this timezone.`;
   const chatSettings = normalizeChatSettings(chatRaw);
   const responseStyleBlock = renderChatResponseStyleInstruction(chatSettings.responseStyle);
 

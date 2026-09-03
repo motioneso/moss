@@ -9,7 +9,7 @@
  * episodic-embed job (unless the thread is incognito).
  */
 import type { AiConfiguredModelSafeRow, AiRepository, ProviderKind } from "@moss/ai";
-import { extractTimezone } from "../locale-utils.js";
+import { extractTimezone, resolveEffectiveTimezone } from "../locale-utils.js";
 import { sql, type Kysely } from "kysely";
 import {
   assertDataContextDb,
@@ -410,7 +410,8 @@ export class DataContextChatPersistence implements ChatPersistencePort {
         this.localePreferences?.get(scopedDb, "locale") ?? null
       ]);
       const title = thread?.title ?? null;
-      const localTimezone = extractTimezone(localeRaw);
+      // #2157: the prompt's time block must agree with the clock tool and Settings.
+      const localTimezone = resolveEffectiveTimezone(localeRaw);
       return {
         threadTitle: title && title !== DEFAULT_CONVERSATION_TITLE ? title : null,
         localTimezone,
