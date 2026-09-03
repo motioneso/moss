@@ -1,3 +1,7 @@
+<!-- Entry rule (2026-09-03): an environment blocker may only be filed here with two proofs named in
+the entry: the product's own API/screen showing the thing absent, and the tested checkout at
+origin/main (git rev-list --count HEAD..origin/main = 0). See the coordinate skill, Phase 2. -->
+
 # Awaiting Ben
 
 Decisions that need Ben and only Ben. Each entry says what is blocked and what the options are.
@@ -69,3 +73,18 @@ program not starting during the live test) now that it's blocking a security fix
 <!-- Resolved 2026-08-30/31: Ben replied "yes" to the sign-off ask in chat. PR #2117 (module-build
 environment isolation, issue #1860) merged 2026-08-31T04:01:24Z. -->
 
+## Open
+
+<!-- Resolved 2026-09-03: false alarm. Home Assistant was never disconnected. It lives in the new
+integrations table (packages/integrations), not the old connector_definitions table the proof lane
+queried. On 2026-09-03 the dev API listed it enabled with 75/75 tools and a live refresh returned 200.
+The dev checkout was also 40 commits behind origin/main and had no Integrations screen at all; merged
+and restarted. Original entry:
+
+- **#2175 kill-gate proof blocked: Home Assistant is disconnected on the dev instance.** The proof
+  lane found zero connector accounts and no Home Assistant entry in the connector list on the
+  shared dev database, even though the activity log shows it working as recently as 17:17 UTC
+  today. The lane made no writes — it only started the API and looked. It stopped before making
+  any switch call and reapable. Someone with connection access (Ben) needs to reconnect Home
+  Assistant on dev before the kitchen-switch proof can run. Finding posted on issue #2175:
+  https://github.com/motioneso/moss/issues/2175#issuecomment-5517216596 -->

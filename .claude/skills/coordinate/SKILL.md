@@ -372,6 +372,12 @@ catches silent failures between pushes.
   reason through it inline. Relay the verdict to the agent.
 - **On a blocker:** unblock if you can (answer, point at a file/memory). Real design/scope
   question → model policy, then Ben. Manifest: `blocked` + the open question.
+  **An environment blocker ("X is missing / disconnected / not installed on dev") never reaches
+  Ben on one piece of evidence.** Before it goes in AWAITING-BEN, the entry must cite (a) the
+  product's own API route or screen showing the thing absent, and (b) `git rev-list --count
+  HEAD..origin/main` = 0 for the checkout that was tested. A raw table query is not proof: the
+  2026-09-03 "Home Assistant disconnected" entry queried the old connectors table while HA sat
+  live in the integrations table, and the run parked on Ben for a day for nothing.
 - **On a stall — diagnose which of the two kinds it is before you touch it.** They need opposite
   responses and treating them alike wastes a lane:
   - **Frozen mid-turn** (a spinner that hasn't advanced, an API 529, no new output): the session is
