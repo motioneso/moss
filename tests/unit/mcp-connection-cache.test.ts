@@ -9,19 +9,31 @@ function clock(startMs = 0) {
 
 function fakeClient(overrides?: { call?: () => Promise<string> }) {
   const close = vi.fn(async () => {});
-  const call = overrides?.call ?? (async () => "ok");
+  const call = vi.fn(overrides?.call ?? (async () => "ok"));
   return { close, call };
 }
 
-/** A client that answers fine once (so it gets held), then goes stale on the next reuse. */
-function fakeClientThatGoesStaleAfterOneUse() {
-  let uses = 0;
+/**
+ * A client shaped like the SDK's: `transport` is set while connected and becomes undefined once
+ * the socket has dropped under it. `drop()` simulates that happening between calls.
+ */
+function fakeClientWithTransport() {
   const close = vi.fn(async () => {});
-  const call = async () => {
-    uses += 1;
-    if (uses > 1) throw new Error("connection reset");
-    return "ok";
+  const call = vi.fn(async () => "ok");
+  const client = { close, call, transport: {} as unknown, drop: () => {} };
+  client.drop = () => {
+    client.transport = undefined;
   };
+  return client;
+}
+
+/** A client that answers fine once (so it gets held), then fails mid-call on the next reuse. */
+function fakeClientThatFailsMidCallOnSecondUse() {
+  const close = vi.fn(async () => {});
+  const call = vi.fn(async () => {
+    if (call.mock.calls.length > 1) throw new Error("connection reset mid-call");
+    return "ok";
+  });
   return { close, call };
 }
 
@@ -104,23 +116,51 @@ describe("createMcpConnectionCache", () => {
     expect(client.close).toHaveBeenCalledTimes(1); // closed only after the in-flight call returned
   });
 
-  it("treats a broken held client as a reconnect, not an error", async () => {
+  it("reconnects when a held client is found dead BEFORE the call is sent", async () => {
     const cache = createMcpConnectionCache();
-    const wentStale = fakeClientThatGoesStaleAfterOneUse();
-    const healthy = fakeClient();
+    const dropped = fakeClientWithTransport();
+    const healthy = fakeClientWithTransport();
     const connect = vi
-      .fn(async () => wentStale)
-      .mockResolvedValueOnce(wentStale)
+      .fn(async () => dropped)
+      .mockResolvedValueOnce(dropped)
       .mockResolvedValueOnce(healthy);
 
-    // First call succeeds and the client is held. Second call reuses it, finds it broken, and
-    // must reconnect to a fresh client transparently rather than surfacing the failure.
+    // First call succeeds and the client is held. The socket then drops while idle. The second
+    // call must notice before sending anything and reconnect transparently.
     await cache.withClient("user-1", "conn-1", connect, (c) => c.call());
+    dropped.drop();
     const result = await cache.withClient("user-1", "conn-1", connect, (c) => c.call());
 
     expect(result).toBe("ok");
     expect(connect).toHaveBeenCalledTimes(2);
-    expect(wentStale.close).toHaveBeenCalledTimes(1);
+    expect(dropped.call).toHaveBeenCalledTimes(1); // nothing was sent on the dead client
+    expect(healthy.call).toHaveBeenCalledTimes(1);
+    expect(dropped.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces a failure DURING a reused call as an error and never re-runs the tool call", async () => {
+    const cache = createMcpConnectionCache();
+    const held = fakeClientThatFailsMidCallOnSecondUse();
+    const healthy = fakeClient();
+    const connect = vi
+      .fn(async () => held)
+      .mockResolvedValueOnce(held)
+      .mockResolvedValueOnce(healthy);
+
+    // The remote may already have acted (email sent, ticket created) before the reply was lost.
+    // A hidden retry on a fresh connection would run that action a second time.
+    await cache.withClient("user-1", "conn-1", connect, (c) => c.call());
+    await expect(cache.withClient("user-1", "conn-1", connect, (c) => c.call())).rejects.toThrow(
+      "connection reset mid-call"
+    );
+
+    expect(held.call).toHaveBeenCalledTimes(2); // once per withClient — the failing call ran exactly once
+    expect(connect).toHaveBeenCalledTimes(1); // no fresh connection was opened for a retry
+    expect(held.close).toHaveBeenCalledTimes(1); // the dead connection was evicted
+
+    // The next call starts clean on a new connection rather than reusing the evicted one.
+    await cache.withClient("user-1", "conn-1", connect, (c) => c.call());
+    expect(connect).toHaveBeenCalledTimes(2);
   });
 
   it("lets a genuinely fresh connection's call error propagate without a hidden retry", async () => {

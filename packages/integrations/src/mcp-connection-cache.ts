@@ -10,18 +10,27 @@
  *
  * A client mid-call is never closed underneath itself — expiry marks the entry and removes it
  * from the map immediately, but the actual `close()` only happens once every in-flight use of it
- * has returned. A held client that turns out to be broken when reused is not an error: it is
- * dropped and the call is retried once on a fresh connection (measured 8-52ms).
+ * has returned.
+ *
+ * Reconnect happens ONLY when a held client is found dead before the call is sent (the SDK clears
+ * `transport` when the socket drops under it). A failure DURING the call — reply timeout, socket
+ * reset mid-request, tool error — is surfaced to the caller as-is and the client is evicted; the
+ * call is never re-sent, because the remote may already have performed a side-effecting action
+ * (email sent, ticket created) and a blind retry would run it twice. The duplicate-call guard in
+ * tool-manifests.ts only sees separate top-level calls, so it cannot catch that case.
  */
 export interface McpClientLike {
   close(): Promise<void>;
+  /** SDK `Client` exposes this; it becomes `undefined` once the underlying transport has closed. */
+  readonly transport?: unknown;
 }
 
 export interface McpConnectionCache {
   /**
    * Runs `fn` against a live client for this actor+connection, reusing a held one when the quiet
-   * window hasn't expired. `connect` is only called when there is no live held client, or when a
-   * held one turned out to be broken.
+   * window hasn't expired. `connect` is only called when there is no held client, or when the held
+   * one is found dead before the call is sent. A failure during `fn` propagates and is never
+   * retried on a fresh connection.
    */
   withClient<C extends McpClientLike, T>(
     actorUserId: string,
@@ -54,13 +63,24 @@ export function createMcpConnectionCache(deps?: {
     void entry.client.close().catch(() => {});
   }
 
-  function evictIfExpired(k: string): void {
-    const entry = entries.get(k);
-    if (!entry) return;
-    if (now() - entry.touchedAt <= windowMs) return;
-    entries.delete(k);
+  /** Removes the entry from the map; the real close waits for any in-flight use to return. */
+  function evict(k: string, entry: Entry<McpClientLike>): void {
+    if (entries.get(k) === entry) entries.delete(k);
     if (entry.inFlightCount === 0) closeEntry(entry);
     else entry.expired = true;
+  }
+
+  /** True while the client can still send: the SDK clears `transport` once the socket has closed. */
+  function isLive(client: McpClientLike): boolean {
+    return !("transport" in client) || client.transport !== undefined;
+  }
+
+  function evictIfExpiredOrDead(k: string): void {
+    const entry = entries.get(k);
+    if (!entry) return;
+    const quiet = now() - entry.touchedAt > windowMs;
+    if (!quiet && isLive(entry.client)) return;
+    evict(k, entry);
   }
 
   async function run<C extends McpClientLike, T>(
@@ -86,27 +106,25 @@ export function createMcpConnectionCache(deps?: {
       fn: (client: C) => Promise<T>
     ): Promise<T> {
       const k = key(actorUserId, connectionId);
-      evictIfExpired(k);
+      // The only reconnect path: a held client that is quiet past the window or already dead
+      // BEFORE anything is sent on it (#2175 Task 9).
+      evictIfExpiredOrDead(k);
 
-      const held = entries.get(k) as Entry<C> | undefined;
-      if (held) {
-        try {
-          return await run(held, fn);
-        } catch {
-          // Held connection turned out to be broken (#2175 Task 9) — not an error, reconnect once.
-          entries.delete(k);
-          if (held.inFlightCount === 0) closeEntry(held);
-          const client = await connect();
-          const fresh: Entry<C> = { client, touchedAt: now(), inFlightCount: 0, expired: false };
-          entries.set(k, fresh as unknown as Entry<McpClientLike>);
-          return run(fresh, fn);
-        }
+      let entry = entries.get(k) as Entry<C> | undefined;
+      if (!entry) {
+        const client = await connect();
+        entry = { client, touchedAt: now(), inFlightCount: 0, expired: false };
+        entries.set(k, entry as unknown as Entry<McpClientLike>);
       }
 
-      const client = await connect();
-      const fresh: Entry<C> = { client, touchedAt: now(), inFlightCount: 0, expired: false };
-      entries.set(k, fresh as unknown as Entry<McpClientLike>);
-      return run(fresh, fn);
+      try {
+        return await run(entry, fn);
+      } catch (err) {
+        // A failure DURING the call is never retried: the remote may already have acted on it.
+        // Drop the connection so the next call starts clean, and let the caller see the error.
+        evict(k, entry as unknown as Entry<McpClientLike>);
+        throw err;
+      }
     }
   };
 }
