@@ -88,3 +88,26 @@ and restarted. Original entry:
   any switch call and reapable. Someone with connection access (Ben) needs to reconnect Home
   Assistant on dev before the kitchen-switch proof can run. Finding posted on issue #2175:
   https://github.com/motioneso/moss/issues/2175#issuecomment-5517216596 -->
+
+- **#2175 Task 10 proof is stuck: no AI provider on dev can answer a chat, and reconnecting one
+  needs you.** Chat on the dev instance is unusable for everyone: it says "No AI provider is
+  connected yet" and the message box says "No model configured". On the admin Assistant and AI
+  page, the setting that picks the chat model warns "Needs configuration". There are two rows named
+  "Claude" which claim to be "Connected" but still show a "Log in" button and expose zero models;
+  clicking "Log in" does nothing in the browser, because that provider needs an interactive
+  terminal login an agent session cannot complete. The only rows with stored keys are eleven
+  leftover fakes from this morning's PR 2191 proof run, and every one of them lists zero models, so
+  they cannot answer either - and a scripted fake could not count as proof anyway.
+
+  Verified the way a user would, by two separate lanes hours apart, reading the real screens rather
+  than querying a table; the running dev servers match origin/main on app code. No setting was
+  changed, no test row deleted, no credential touched.
+
+  What we need from you: log a real Claude provider in on dev. Then the proof lane can finish steps
+  1, 4 and 5 and the kill-gate reading for #2175.
+
+  Evidence: https://github.com/motioneso/moss/issues/2175#issuecomment-5531267512
+
+  Also worth your eye, separately: a provider row showing "Connected" while offering a "Log in"
+  button and listing zero models looks like a real display bug - the admin screen says connected
+  when the provider cannot serve a request.
