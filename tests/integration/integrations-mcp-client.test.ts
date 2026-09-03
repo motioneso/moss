@@ -206,12 +206,30 @@ describe("discoverMcpTools / callMcpTool", () => {
     close = fixture.close;
     const cache = createMcpConnectionCache();
 
-    await callMcpTool("user-a", "conn-shared", fixture.url, null, null, "add", { a: 1, b: 1 }, {
-      cache
-    });
-    await callMcpTool("user-b", "conn-shared", fixture.url, null, null, "add", { a: 1, b: 1 }, {
-      cache
-    });
+    await callMcpTool(
+      "user-a",
+      "conn-shared",
+      fixture.url,
+      null,
+      null,
+      "add",
+      { a: 1, b: 1 },
+      {
+        cache
+      }
+    );
+    await callMcpTool(
+      "user-b",
+      "conn-shared",
+      fixture.url,
+      null,
+      null,
+      "add",
+      { a: 1, b: 1 },
+      {
+        cache
+      }
+    );
 
     expect(fixture.getInitializeCount()).toBe(2);
   });

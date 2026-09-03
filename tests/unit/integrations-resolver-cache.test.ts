@@ -52,11 +52,7 @@ function fakeRepository(seed: ConnectionRow) {
     },
     saveDiscovery: async () => {},
     getConnection: async (_scopedDb: unknown, id: string) => rows.get(id) ?? null,
-    updateConnection: async (
-      _scopedDb: unknown,
-      id: string,
-      patch: Partial<ConnectionRow>
-    ) => {
+    updateConnection: async (_scopedDb: unknown, id: string, patch: Partial<ConnectionRow>) => {
       const existing = rows.get(id);
       if (!existing) return null;
       const updated = { ...existing, ...patch };
@@ -144,7 +140,12 @@ describe("integrations routes drop the resolver cache on every edit", () => {
     const response = await server.inject({
       method: "POST",
       url: "/api/integrations",
-      payload: { name: "New API", kind: "openapi", url: "http://example.com/openapi.json", spec: JSON.stringify(SPEC) }
+      payload: {
+        name: "New API",
+        kind: "openapi",
+        url: "http://example.com/openapi.json",
+        spec: JSON.stringify(SPEC)
+      }
     });
 
     expect(response.statusCode).toBe(201);

@@ -132,9 +132,9 @@ describe("createMcpConnectionCache", () => {
     });
     const connect = vi.fn(async () => client);
 
-    await expect(
-      cache.withClient("user-1", "conn-1", connect, (c) => c.call())
-    ).rejects.toThrow("bad tool arguments");
+    await expect(cache.withClient("user-1", "conn-1", connect, (c) => c.call())).rejects.toThrow(
+      "bad tool arguments"
+    );
     expect(connect).toHaveBeenCalledTimes(1);
   });
 });

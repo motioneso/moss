@@ -16,7 +16,10 @@ export interface ResolverCache {
   drop(actorUserId: string): void;
 }
 
-export function createResolverCache(deps?: { now?: () => number; windowMs?: number }): ResolverCache {
+export function createResolverCache(deps?: {
+  now?: () => number;
+  windowMs?: number;
+}): ResolverCache {
   const now = deps?.now ?? (() => Date.now());
   const windowMs = deps?.windowMs ?? 30_000;
   const entries = new Map<string, { modules: readonly MossModuleManifest[]; storedAt: number }>();
