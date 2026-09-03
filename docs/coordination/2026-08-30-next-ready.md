@@ -5703,3 +5703,27 @@ this mode and listing zero models, and the button surfaces a raw server error. N
 Leftover state: eleven fake provider rows ("UAT Fake Provider" x10, "UAT Scripted Provider" x1) from
 the PR 2191 proof run remain on dev. Harmless, leave until #2175 closes, then delete via Settings.
 No coordinator worktrees outstanding - all scratch trees removed after their PRs opened.
+
+## Lock note (2026-09-03, takeover 33)
+
+Coordinator lock: session `696a2d6b-5899-41e4-a196-8e04fd97b360`, agent name `coordinator`, label
+`Coordinator`, pane `w1:pD2`. Took over cleanly from takeover 32 (pane `w1:pD1`, closed once
+driving confirmed).
+
+Lane `dev-cli-runner-host` (pane `w1:pC0`) got the Claude command-line login route working: the
+helper program (cli-runner) now runs as a plain background process (not a container), and the dev
+API was restarted with the matching socket path and secret so the "onboarding login service not
+configured" error is gone. Full settings and commands are in
+`~/.coord-briefs/boot-dev-cli-runner-host-2.txt`. That lane stopped at 76% context with a full
+handoff (one relay, as expected) rather than continuing itself, so its pane was closed and a fresh
+lane started instead of pushing the same session further.
+
+Follow-on lane `dev-cli-runner-host-2` (pane `w1:pD3`, Sonnet, tab "builders") is now debugging why
+the sign-in dialog says "Provider login is currently unavailable" instead of showing a real web
+address or code. First move: restart cli-runner cleanly and try one clean login click. If it needs
+Ben to actually complete a sign-in step, it stops and messages the coordinator rather than doing it
+itself. If it turns out to need a product code change, it stops and reports rather than building.
+
+Dev API/web still running from ~/Jarv1s at origin/main, logs `/tmp/dev-api.log` `/tmp/dev-web.log`.
+The eleven leftover "UAT Fake/Scripted Provider" rows are still untouched. Nothing merged yet this
+session; merges_since_relay: 0. Waiting event-driven for `dev-cli-runner-host-2`'s report.
