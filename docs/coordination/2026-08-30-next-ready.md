@@ -5653,3 +5653,23 @@ Coordinator lock: session `cc7d1056-ff91-4739-8f80-b0c4a3be6e48`, agent name `co
 `coordinator-old-take31`, told to wrap up and close). PR #2194 (docs sync) confirmed merged.
 Watching #2175 for the proof lane's result (background comment watcher armed, no polling).
 Nothing merged yet this session; merges_since_relay: 0.
+
+## Proof lane round 23 (2026-09-03, takeover 32)
+
+Round 22 (`proof-2175-task10`, pane `w1:pC0`) could not run the Task 10 proof: nobody could chat
+with Moss on dev at all. Chat said no AI provider is connected; the setting that picks the chat
+model was unset. The lane gave three conflicting readings of the provider list and retracted two of
+them, then filled its context and began auto-compacting. None of its readings are treated as fact.
+
+Round 22 was stopped and the pane restarted fresh as round 23, Sonnet, brief
+`~/.coord-briefs/boot-2175-task10-proof-r23.txt`. That brief tells the lane to read the provider
+screen slowly and report what each row actually says before concluding anything, and it carries the
+main lead: the lane that proved PR 2191 earlier today seeded about ten fake providers named "UAT
+Fake Provider" / "UAT Scripted Provider" on this shared instance and briefly made one the default,
+so the likely cause is leftover test mess rather than a missing credential. The lane may point the
+chat model at a real working provider (reversible, nobody else is on dev) but may NOT use a fake
+provider to produce proof, may not delete the leftover rows, and may not add or change credentials.
+
+If it turns out there is genuinely no working AI provider, that is a credential only Ben can supply
+and goes to him with the screen evidence plus a current-checkout confirmation. Steps 1, 4 and 5
+remain unproven. merges_since_relay: 0 (PR 2195, docs-only, merged).
