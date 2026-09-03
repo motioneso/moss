@@ -5727,3 +5727,36 @@ itself. If it turns out to need a product code change, it stops and reports rath
 Dev API/web still running from ~/Jarv1s at origin/main, logs `/tmp/dev-api.log` `/tmp/dev-web.log`.
 The eleven leftover "UAT Fake/Scripted Provider" rows are still untouched. Nothing merged yet this
 session; merges_since_relay: 0. Waiting event-driven for `dev-cli-runner-host-2`'s report.
+
+## Continuation note (2026-09-03, takeover 33 relay at 70% context)
+
+State: lane `dev-cli-runner-host-2` narrowed the login failure to the login helper program's own
+code, not a broken connection or a stuck process. When the app asks the login helper to start a
+Claude sign-in, the helper answers "not started"/"unavailable" in about 20 milliseconds - too fast
+to be a timeout. A live presence check on the same connection succeeds, so the shared connection
+itself is fine. Restarting the login helper cleanly did not fix it. Full detail, exact commands,
+and curl reproductions: `~/.coord-briefs/handoff-dev-cli-runner-host-2.txt`.
+
+Lane `cli-runner-login-diagnose` (pane `w1:pD4`, Sonnet, tab "builders") is now reading
+packages/cli-runner/src/login-service.ts and the beginLogin method in
+packages/cli-runner/src/engine-host.ts to find the exact condition causing this, then sorting it
+into one of three outcomes: a small safe fix (asks the coordinator before writing any code), a
+real product bug or design question (stops, reports, no build without an issue and a spec), or an
+expected gate this dev setup cannot satisfy (stops, reports, likely needs Ben's decision). Its
+brief: `~/.coord-briefs/boot-cli-runner-login-diagnose.txt`.
+
+Dev API/web still running from ~/Jarv1s at origin/main, logs `/tmp/dev-api.log` `/tmp/dev-web.log`
+- do not restart. The eleven leftover "UAT Fake/Scripted Provider" rows are still untouched.
+merges_since_relay: 0 (only the docs-only PR 2200 landed this session).
+
+Successor steps: (1) claim the lock (agent name `coordinator`, label `Coordinator`); (2) wait
+event-driven for `cli-runner-login-diagnose`'s report (never poll); (3) route its outcome per the
+three cases above - a code fix needs the coordinator's go-ahead before building, a design question
+or dead end goes to Ben in plain English via AWAITING-BEN plus needs-ben; (4) once a Claude login
+actually works end to end (real chat gets a real answer), restart the #2175 Task 10 proof for
+steps 1, 4, 5 using `~/.coord-briefs/boot-2175-task10-proof-r22.txt` for what those steps are; on
+PASS, close #2175, board Done, end-coordination; on FAIL, the kill-gate reading goes to Ben with
+the evidence, that is a real decision not an environment blocker. A GitHub issue is still owed for
+the separate defect: a provider row shows "Connected" with a working-looking "Log in" button while
+it cannot connect in this mode and lists zero models, and clicking it shows a raw server error
+instead of an explanation.
