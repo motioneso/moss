@@ -71,7 +71,10 @@ export function Combobox(props: ComboboxProps) {
   }, [open]);
 
   useEffect(() => {
-    setActive((current) => Math.min(current, Math.max(filtered.length - 1, 0)));
+    setActive((current) => {
+      if (filtered.length === 0) return 0;
+      return Math.min(Math.max(current, 0), filtered.length - 1);
+    });
   }, [filtered.length]);
 
   useEffect(() => {
@@ -94,6 +97,7 @@ export function Combobox(props: ComboboxProps) {
   const onSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "ArrowDown") {
       event.preventDefault();
+      if (filtered.length === 0) return;
       setActive((current) => Math.min(current + 1, filtered.length - 1));
     } else if (event.key === "ArrowUp") {
       event.preventDefault();

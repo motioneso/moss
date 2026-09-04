@@ -931,6 +931,16 @@ function buildNewsStoryFeedbackPort(
   });
   return {
     storyRef: (canonicalUrl) => storyFeedbackTargetRef("news", canonicalUrl),
+    listDismissedRefs: async (scopedDb, ownerUserId) => {
+      const rules = await usefulnessFeedbackRepository.listActiveStoryRules(
+        scopedDb,
+        ownerUserId,
+        "news"
+      );
+      return new Set(
+        rules.filter((rule) => rule.direction === "less").map((rule) => rule.targetRef)
+      );
+    },
     registerTargets: async (scopedDb, ownerUserId, rows) => {
       for (const row of rows) {
         await usefulnessFeedbackRepository.upsertTarget(scopedDb, {

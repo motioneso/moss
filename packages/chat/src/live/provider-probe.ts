@@ -13,6 +13,30 @@ export interface ProbeProviderResult {
 }
 
 const PROBE_TIMEOUT_MS = 25_000;
+// #2232: the readiness probe now makes a real one-shot call to prove the saved token still
+// works, instead of trusting `claude auth status` (which only checks that a token FILE is
+// present, never that it is still valid). A real call costs real time and, for a metered
+// provider, real money, so the answer is cached briefly rather than re-checked on every request.
+const PROBE_CACHE_TTL_MS = 5 * 60_000;
+
+interface ProbeCacheEntry {
+  readonly result: ProbeProviderResult;
+  readonly expiresAt: number;
+}
+
+/** Keyed by provider + the credential actually used, so a fresh login (a new token) always
+ *  misses the cache instead of replaying a stale answer. */
+const probeCache = new Map<string, ProbeCacheEntry>();
+
+function probeCacheKey(provider: ProviderKind, credentialEnv?: NodeJS.ProcessEnv): string {
+  const token = credentialEnv?.CLAUDE_CODE_OAUTH_TOKEN ?? "";
+  return `${provider}:${token}`;
+}
+
+/** Test-only: drop every cached probe answer so each test starts from a clean slate. */
+export function clearProviderProbeCacheForTests(): void {
+  probeCache.clear();
+}
 
 export async function probeProvider(
   provider: ProviderKind,
@@ -29,19 +53,39 @@ export async function probeProvider(
   }
   try {
     if (!(await deps.cliPresent(provider))) return { status: "not_installed" };
-    switch (provider) {
-      case "anthropic":
-        return await probeClaudeAuth(deps.io, deps.credentialEnv, deps.homeBase);
-      case "openai-compatible":
-        return await probeCodexAuth(deps.io);
-      case "google":
-        return await probeGeminiAuth(deps.io);
+    if (provider !== "anthropic") {
+      switch (provider) {
+        case "openai-compatible":
+          return await probeCodexAuth(deps.io);
+        case "google":
+          return await probeGeminiAuth(deps.io);
+      }
     }
+    const key = probeCacheKey(provider, deps.credentialEnv);
+    const cached = probeCache.get(key);
+    const now = Date.now();
+    if (cached && cached.expiresAt > now) return cached.result;
+    const result = await probeClaudeAuth(deps.io, deps.credentialEnv, deps.homeBase);
+    probeCache.set(key, { result, expiresAt: now + PROBE_CACHE_TTL_MS });
+    return result;
   } catch {
     return { status: "error" };
   }
 }
 
+/** A stale/revoked token is reported by the CLI as an authentication failure, never as a plain
+ *  exit code — match the vendor's own wording so a real 401 is never confused with an unrelated
+ *  crash (network blip, bad flag, etc.), which would wrongly send a working login to needs_login. */
+const CLAUDE_AUTH_FAILURE_RE =
+  /\b(401|invalid bearer token|failed to authenticate|unauthorized)\b/i;
+
+/**
+ * #2232: prove the saved token actually works by running the cheapest real call the CLI
+ * offers — a one-shot `--print` with a trivial prompt — instead of trusting `claude auth
+ * status`, which reports `loggedIn: true` whenever the token env var is merely PRESENT, never
+ * checking it against the API. A stale/expired token used to read as logged in forever; now it
+ * reads as `needs_login` the moment the real call comes back 401.
+ */
 async function probeClaudeAuth(
   io: Pick<TmuxIo, "run">,
   credentialEnv?: NodeJS.ProcessEnv,
@@ -52,20 +96,17 @@ async function probeClaudeAuth(
       ? undefined
       : { ...(homeBase === undefined ? {} : { HOME: homeBase }), ...credentialEnv };
   const result = await probeWithTimeout(
-    io.run("claude", ["auth", "status"], env ? { env } : undefined)
+    io.run("claude", ["--print", "Reply with exactly OK."], env ? { env } : undefined)
   );
-  try {
-    const parsed = JSON.parse(result.stdout) as { loggedIn?: unknown };
-    if (typeof parsed.loggedIn === "boolean") {
-      return parsed.loggedIn ? { status: "ready" } : { status: "needs_login" };
-    }
-  } catch {
-    // Not JSON; use exit status and auth text below.
+  const output = `${result.stdout}\n${result.stderr ?? ""}`;
+  if (result.code === 0 && READY_ANSWER_RE.test(result.stdout)) {
+    return { status: "ready" };
+  }
+  if (CLAUDE_AUTH_FAILURE_RE.test(output)) {
+    return { status: "needs_login" };
   }
   if (result.code !== 0) {
-    return /\b(auth|authentication|authorization|login|sign in)\b/i.test(
-      `${result.stdout}\n${result.stderr ?? ""}`
-    )
+    return /\b(auth|authentication|authorization|login|sign in)\b/i.test(output)
       ? { status: "needs_login" }
       : { status: "error" };
   }
@@ -87,7 +128,7 @@ async function probeGeminiAuth(io: Pick<TmuxIo, "run">): Promise<ProbeProviderRe
   // trip and still be told sign-in failed. There is no dedicated auth-status subcommand, so a
   // successful one-shot IS the readiness signal: it needs working credentials to answer at all.
   const result = await probeWithTimeout(io.run("gemini", ["--prompt", "Reply with exactly OK."]));
-  return result.code === 0 && GEMINI_READY_ANSWER_RE.test(result.stdout)
+  return result.code === 0 && READY_ANSWER_RE.test(result.stdout)
     ? { status: "ready" }
     : { status: "needs_login" };
 }
@@ -100,7 +141,7 @@ async function probeGeminiAuth(io: Pick<TmuxIo, "run">): Promise<ProbeProviderRe
  * The tool sends its own chatter to the error stream rather than mixing it into the answer, so
  * there is nothing else on standard output to match against by accident.
  */
-const GEMINI_READY_ANSWER_RE = /^[\s"'`*_]*ok(ay)?\b/i;
+const READY_ANSWER_RE = /^[\s"'`*_]*ok(ay)?\b/i;
 
 async function probeWithTimeout<T extends { code: number; stdout: string; stderr?: string }>(
   promise: Promise<T>

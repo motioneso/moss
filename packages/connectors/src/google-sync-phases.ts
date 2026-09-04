@@ -257,7 +257,7 @@ export async function runGoogleEmailPhase(
       context.account.id,
       keys
     );
-    await projectEmailActions(context.scopedDb, saved.items, {
+    const projected = await projectEmailActions(context.scopedDb, saved.items, {
       ...projection,
       taskPort: {
         create: (db, input) =>
@@ -265,6 +265,16 @@ export async function runGoogleEmailPhase(
       },
       now: projection.now ?? context.now
     });
+    if (projected.taskFailures > 0) {
+      context.progress.emailFailures += projected.taskFailures;
+      if (!context.progress.errors.includes("email-task-error")) {
+        context.progress.errors.push("email-task-error");
+      }
+      context.logger.warn(
+        { stage: "email-task", taskFailures: projected.taskFailures },
+        "google-sync suggested task save failed"
+      );
+    }
   };
   try {
     const provider = new GoogleEmailReadProvider(context.deps.googleClient, query);
@@ -425,7 +435,8 @@ export async function runGoogleEmailPhase(
     const logData = {
       stage: "email",
       name: (error as Error).name,
-      status: (error as { statusCode?: number }).statusCode ?? null
+      status: (error as { statusCode?: number }).statusCode ?? null,
+      reason: (error as { reason?: string }).reason ?? null
     };
     if (isNeedsConfig) {
       context.logger.info(

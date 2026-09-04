@@ -2,12 +2,13 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Multiplexer } from "../../packages/ai/src/adapters/multiplexer.js";
 import { createRealTmuxIo } from "../../packages/ai/src/adapters/tmux-bridge.js";
 import { CliChatEngineImpl, probeProvider } from "../../packages/chat/src/live/cli-chat-engine.js";
 import { CliChatUnavailableError } from "../../packages/chat/src/live/errors.js";
+import { clearProviderProbeCacheForTests } from "../../packages/chat/src/live/provider-probe.js";
 
 function makeIo() {
   return {
@@ -70,6 +71,10 @@ function makeCodexIo() {
 
 // ─── #342 probeProvider (§4.8) — no token, no replay ─────────────────────────────
 describe("probeProvider (§4.8)", () => {
+  afterEach(() => {
+    clearProviderProbeCacheForTests();
+  });
+
   it("returns not_installed when the binary is absent (no auth command run)", async () => {
     const run = vi.fn().mockResolvedValue({ code: 0, stdout: "", stderr: "" });
     const res = await probeProvider("anthropic", {
@@ -81,34 +86,35 @@ describe("probeProvider (§4.8)", () => {
     expect(run).not.toHaveBeenCalled();
   });
 
-  it("returns ready when claude auth status reports loggedIn", async () => {
+  it("returns ready when the real one-shot call succeeds (#2232)", async () => {
+    // #2232: the probe no longer trusts `claude auth status` (which only checks that a token
+    // FILE is present). It now makes a real `claude --print` call and only reports ready when
+    // that call actually answers.
     const run = vi.fn().mockResolvedValue({
       code: 0,
-      stdout: JSON.stringify({ loggedIn: true }),
+      stdout: "OK\n",
       stderr: ""
     });
     const res = await probeProvider("anthropic", { io: { run }, cliPresent: async () => true });
     expect(res.status).toBe("ready");
   });
 
-  it("returns needs_login when claude auth status prints loggedIn:false but EXITS NON-ZERO", async () => {
-    // Regression (#342): claude 2.1.183 `auth status` prints valid JSON {"loggedIn":false,...}
-    // yet exits rc=1 when not logged in. The probe must parse the JSON regardless of exit code;
-    // the old code hit the rc!=0 branch, the auth-text heuristic missed this JSON, and it
-    // returned "error" → deriveStatus settled every login flow to error ("no such login").
+  it("returns needs_login when the real call fails authentication (#2232, lineage #342)", async () => {
+    // The saved token has expired: the real call exits non-zero and the CLI reports the
+    // failure as an authentication error, not as a plain crash.
     const run = vi.fn().mockResolvedValue({
       code: 1,
-      stdout: JSON.stringify({ loggedIn: false, authMethod: "none", apiProvider: "firstParty" }),
-      stderr: ""
+      stdout: "",
+      stderr: "API Error: 401 invalid bearer token"
     });
     const res = await probeProvider("anthropic", { io: { run }, cliPresent: async () => true });
     expect(res.status).toBe("needs_login");
   });
 
-  it("injects the claude-scoped credentialEnv into the `auth status` run (#363)", async () => {
+  it("injects the claude-scoped credentialEnv into the real probe call (#363, #2232)", async () => {
     const run = vi.fn().mockResolvedValue({
       code: 0,
-      stdout: JSON.stringify({ loggedIn: true }),
+      stdout: "OK\n",
       stderr: ""
     });
     const credentialEnv = { CLAUDE_CODE_OAUTH_TOKEN: "sk-ant-oat-PROBE" };
@@ -119,7 +125,9 @@ describe("probeProvider (§4.8)", () => {
     });
     expect(res.status).toBe("ready");
     // The token is passed per-call via opts.env (claude-scoped), not the global allowlist.
-    expect(run).toHaveBeenCalledWith("claude", ["auth", "status"], { env: credentialEnv });
+    expect(run).toHaveBeenCalledWith("claude", ["--print", "Reply with exactly OK."], {
+      env: credentialEnv
+    });
   });
 
   it("surfaces multiplexer_unavailable when the mux is not usable", async () => {

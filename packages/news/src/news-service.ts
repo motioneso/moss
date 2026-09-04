@@ -134,13 +134,16 @@ export class NewsService {
     onStale?: (scopedDb: DataContextDb) => Promise<void>
   ): Promise<NewsOverviewResponse> {
     return this.dataContext.withDataContext(accessContext, async (db) => {
-      const [prefs, exclusions, customSources, customTopics, snapshot] = await Promise.all([
-        this.repository.list(db),
-        this.personalization.listExclusions(db),
-        this.personalization.listCustomSources(db),
-        this.personalization.listCustomTopics(db),
-        this.personalization.readLatestSnapshot(db)
-      ]);
+      const [prefs, exclusions, customSources, customTopics, snapshot, dismissedRefs] =
+        await Promise.all([
+          this.repository.list(db),
+          this.personalization.listExclusions(db),
+          this.personalization.listCustomSources(db),
+          this.personalization.listCustomTopics(db),
+          this.personalization.readLatestSnapshot(db),
+          this.storyFeedback?.listDismissedRefs(db, accessContext.actorUserId) ??
+            Promise.resolve(new Set<string>())
+        ]);
       const now = this.now();
       const personalized = this.composePersonalized(
         snapshot,
@@ -148,7 +151,8 @@ export class NewsService {
         exclusions,
         customSources,
         customTopics,
-        now
+        now,
+        dismissedRefs
       );
       if (!isNewsSnapshotFresh(snapshot, now) || personalized === null) {
         await onStale?.(db);
@@ -181,7 +185,8 @@ export class NewsService {
         exclusions,
         customSources,
         customTopics,
-        this.now()
+        this.now(),
+        new Set<string>()
       ) ?? (await this.composeOverview(prefs, exclusions));
     return {
       facts: overview.topStories.slice(0, 5).map((h) => `${h.title} — ${h.sourceLabel}`)
@@ -194,7 +199,8 @@ export class NewsService {
     exclusions: readonly NewsSourceExclusionDto[],
     customSources: readonly NewsCustomSourceDto[],
     customTopics: readonly NewsCustomTopicDto[],
-    now: Date
+    now: Date,
+    dismissedRefs: ReadonlySet<string>
   ): NewsOverviewResponse | null {
     if (!snapshot || snapshot.expiresAt.getTime() <= now.getTime()) return null;
     try {
@@ -205,15 +211,25 @@ export class NewsService {
 
     const excludedDomains = exclusions.map((item) => item.canonicalDomain);
     const cutoff = now.getTime() - NEWS_ARTICLE_MAX_AGE_MS;
+    const storyRef = this.storyFeedback?.storyRef.bind(this.storyFeedback);
     const seen = new Set<string>();
     const articles = snapshot.payload.articles.filter((article) => {
       if (Date.parse(article.publishedAt) < cutoff) return false;
       if (hostnameIsExcluded(article.canonicalDomain, excludedDomains)) return false;
       if (seen.has(article.url)) return false;
+      // #2247: a published snapshot can predate a later dismissal, so it is re-checked here on
+      // every read rather than only at compile time. A link that cannot be turned into a
+      // reference was never offered feedback in the first place, so it is never suppressed here.
+      if (dismissedRefs.size > 0 && storyRef) {
+        try {
+          if (dismissedRefs.has(storyRef(article.url))) return false;
+        } catch {
+          // malformed link: not judged, not suppressed
+        }
+      }
       seen.add(article.url);
       return true;
     });
-    const storyRef = this.storyFeedback?.storyRef.bind(this.storyFeedback);
     const headlines = articles.map((article) => toPersonalizedHeadline(article, storyRef));
     const configuredSources = personalizedSources(prefs, customSources, excludedDomains);
     const configuredByDomain = new Map(configuredSources.map((source) => [source.domain, source]));

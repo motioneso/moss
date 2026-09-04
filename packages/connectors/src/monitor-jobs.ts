@@ -72,6 +72,8 @@ export interface MonitorRunResult {
   readonly planned: number;
   readonly created: number;
   readonly degraded: boolean;
+  /** Count of suggested tasks that were planned but could not be saved. */
+  readonly taskFailures: number;
 }
 
 /** Structural subset of PreferencesPort so monitor fakes stay two methods. */
@@ -251,6 +253,7 @@ export async function projectEmailActions(
   });
 
   let created = 0;
+  let taskFailures = 0;
   const consumedDeadlineEvidence = new Map<string, { signature: string; key: string }>();
   for (const task of planned) {
     try {
@@ -283,6 +286,7 @@ export async function projectEmailActions(
       }
     } catch (error) {
       // Sanitized: never the task title or error message (may echo subject lines).
+      taskFailures += 1;
       logger.warn(
         { stage: "task-create", name: (error as Error).name },
         "email-monitor task create failed"
@@ -310,7 +314,8 @@ export async function projectEmailActions(
   return {
     planned: planned.length,
     created,
-    degraded: suppressionReadFailed
+    degraded: suppressionReadFailed,
+    taskFailures
   };
 }
 
@@ -347,7 +352,7 @@ export async function runEmailMonitor(
       nowIso,
       { planned: 0, created: 0 }
     );
-    return { planned: 0, created: 0, degraded: true };
+    return { planned: 0, created: 0, degraded: true, taskFailures: 0 };
   }
 
   const accountResult = result.accounts.find(
@@ -411,7 +416,7 @@ export async function runCalendarMonitor(
     nowIso,
     { planned: 0, created: 0 }
   );
-  return { planned: 0, created: 0, degraded };
+  return { planned: 0, created: 0, degraded, taskFailures: 0 };
 }
 
 export interface RegisterSourceMonitorWorkersDeps {
