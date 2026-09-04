@@ -805,6 +805,24 @@ function buildSportsDiscoveryPorts(
         timeoutMs: options?.timeoutMs,
         signal: options?.signal
       }),
+    // #2211: publication favicons for the source-icon route. Same safety layer as `fetch`, bytes out.
+    fetchBytes: (
+      url: string,
+      options: {
+        readonly allowedHosts: readonly string[];
+        readonly maxBytes: number;
+        readonly rejectOversizedResponses: boolean;
+        readonly timeoutMs: number;
+      }
+    ) =>
+      fetchWebResourceBytes(url, {
+        requireHttps: true,
+        rateLimiter: sportsHostRateLimiter,
+        allowedHosts: options.allowedHosts,
+        maxBytes: options.maxBytes,
+        rejectOversizedResponses: options.rejectOversizedResponses,
+        timeoutMs: options.timeoutMs
+      }),
     ...(browser ? { browser } : {}),
     ai: {
       generateJson: (

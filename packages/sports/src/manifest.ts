@@ -117,6 +117,11 @@ export const sportsModuleManifest = {
   },
   features: [
     {
+      id: "sports.source_icons",
+      description:
+        "Each custom news source in Sports settings shows the publication's own icon next to its name, fetched from the publisher's site. When no icon is available, a neutral newspaper symbol is shown instead."
+    },
+    {
       id: "sports.story_feedback",
       description:
         "Rate a sports story with More like this or Less like this from the dots that appear in its top-right corner while it is hovered or focused, on Today and on Sports. Less like this asks for a reason and hides the story."
@@ -297,6 +302,11 @@ export const sportsModuleManifest = {
       path: "/api/sports/sources/:id",
       responseSchema: deleteSportsCustomSourceSchema,
       permissionId: "sports.sources"
+    },
+    {
+      method: "GET",
+      path: "/api/sports/sources/:sourceId/icon",
+      permissionId: "sports.view"
     }
   ],
   assistantActionFamilies: [

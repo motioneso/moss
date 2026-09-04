@@ -55,15 +55,28 @@ const HEALTH_BADGE: Record<
 };
 
 /* ESPN's own mark, served from a host the module already allows in the web CSP img-src.
-   Publisher favicons for custom sources would need a server-side fetch (arbitrary hosts are
-   blocked by the CSP in production), so custom rows carry a neutral newspaper glyph. */
+   Custom sources get their publication favicon through the module's own icon route (#2211),
+   which fetches server-side because arbitrary publisher hosts are blocked by the CSP. */
 const ESPN_LOGO_URL = "https://a.espncdn.com/i/espn/espn_logos/espn_red.png";
 
+export function sportsSourceIconUrl(sourceId: string): string {
+  return `/api/sports/sources/${encodeURIComponent(sourceId)}/icon`;
+}
+
 function SourceIcon(props: { logoUrl?: string | null }) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const logoUrl = props.logoUrl && props.logoUrl !== failedUrl ? props.logoUrl : null;
   return (
     <span className="sp-src__item-icon" aria-hidden="true">
-      {props.logoUrl ? (
-        <img src={props.logoUrl} alt="" aria-hidden="true" width={24} height={24} />
+      {logoUrl ? (
+        <img
+          src={logoUrl}
+          alt=""
+          aria-hidden="true"
+          width={24}
+          height={24}
+          onError={() => setFailedUrl(logoUrl)}
+        />
       ) : (
         <Newspaper size={16} />
       )}
@@ -323,7 +336,13 @@ export function AddSourceFlow(props: {
             </p>
           ) : null}
           <div className="sp-src__candidate-head">
-            <SourceIcon />
+            <SourceIcon
+              logoUrl={
+                preview.duplicateOfSourceId
+                  ? sportsSourceIconUrl(preview.duplicateOfSourceId)
+                  : null
+              }
+            />
             <p className="sp-src__candidate-label">{preview.candidate.label}</p>
             <span className="jds-badge jds-badge--neutral jds-badge--pill">Preview</span>
           </div>
@@ -618,7 +637,7 @@ export function SportsSourcesSection(props: {
               <li key={source.id} className="sp-src__item">
                 <div className="sp-src__item-row">
                   <div className="sp-src__identity">
-                    <SourceIcon />
+                    <SourceIcon logoUrl={sportsSourceIconUrl(source.id)} />
                     <span className="sp-src__item-label">{source.label}</span>
                     {badge ? <Badge tone={badge.tone}>{badge.label}</Badge> : null}
                   </div>

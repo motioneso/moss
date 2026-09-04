@@ -116,6 +116,17 @@ function renderedText(node: unknown): string {
 describe("Sports source coverage settings", () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it("renders a custom row's icon from the module's own icon route", () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } }
+    });
+    client.setQueryData(sportsQueryKeys.sources, { sources: [espn, fotmob] });
+    const html = renderSection(client);
+
+    expect(html).toContain(`<img src="/api/sports/sources/${fotmobSourceId}/icon"`);
+    expect(html).not.toContain("fotmob.com/favicon.ico");
+  });
+
   it("renders Sports, Leagues, and Teams with the shared checkbox primitive", () => {
     const html = renderToString(
       createElement(SourceAssignmentPicker, {

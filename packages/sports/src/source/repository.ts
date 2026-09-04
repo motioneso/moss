@@ -207,6 +207,20 @@ export class SportsSourcesRepository {
     return Number(row.count);
   }
 
+  /** #2211 icon route: identity only, under the actor's RLS, so a foreign id answers null. */
+  async findById(
+    scopedDb: DataContextDb,
+    id: string
+  ): Promise<{ id: string; canonicalDomain: string } | null> {
+    assertDataContextDb(scopedDb);
+    const row = await scopedDb.db
+      .selectFrom("app.sports_custom_sources")
+      .select(["id", "canonical_domain"])
+      .where("id", "=", id)
+      .executeTakeFirst();
+    return row ? { id: row.id, canonicalDomain: row.canonical_domain } : null;
+  }
+
   async list(scopedDb: DataContextDb): Promise<SportsCustomSourceDto[]> {
     assertDataContextDb(scopedDb);
     const [rows, assignments] = await Promise.all([
