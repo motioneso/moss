@@ -2,15 +2,19 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, PencilLine, GitCommitHorizontal, NotebookText, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import type { ChatResponseStyle } from "@moss/shared";
+
 import { getNotesSource } from "../api/notes-client";
 import {
   getChatArchiveSettings,
   getChatModelOverrideSettings,
+  getChatSettings,
   getYoloSettings,
   getPersonaSettings,
   previewPersona,
   putChatArchiveSettings,
   putChatModelOverride,
+  putChatSettings,
   putYoloSelf,
   putPersonaSettings
 } from "../api/client";
@@ -85,6 +89,17 @@ function Persona({ who }: { readonly who: string }) {
     queryFn: getPersonaSettings,
     retry: false
   });
+  const chatSettingsQuery = useQuery({
+    queryKey: queryKeys.chat.settings,
+    queryFn: getChatSettings
+  });
+  const chatSettingsMutation = useMutation({
+    mutationFn: putChatSettings,
+    onSuccess: (data) => queryClient.setQueryData(queryKeys.chat.settings, data),
+    onError: (error) => toast(readError(error))
+  });
+  const responseStyle = chatSettingsQuery.data?.chat.responseStyle ?? "balanced";
+  const cap = (s: string) => s[0]!.toUpperCase() + s.slice(1);
   useEffect(() => {
     if (!personaQuery.data) return;
     if (receivedInitialSnapshot.current) return;
@@ -202,6 +217,18 @@ function Persona({ who }: { readonly who: string }) {
             value={p.directness}
             options={["Gentle", "Balanced", "Direct"]}
             onChange={(v) => setDial("directness", v as DirectnessDial)}
+          />
+          <Choice
+            key={responseStyle}
+            label="Response style"
+            hint="Saved default for how long chat answers are."
+            value={cap(responseStyle)}
+            options={["Concise", "Balanced", "Detailed"]}
+            onChange={(v) =>
+              chatSettingsMutation.mutate({
+                chat: { responseStyle: v.toLowerCase() as ChatResponseStyle }
+              })
+            }
           />
           <Choice
             key={`hum${rev}`}
@@ -350,7 +377,7 @@ function ChatModel() {
           )}
           <Note>
             Providers, credentials and which model handles each kind of work live in{" "}
-            <b>Admin → Assistant &amp; AI</b>.
+            <b>Admin → Assistant &amp; AI</b>. A transcription model enables the microphone in chat.
           </Note>
         </>
       ) : (

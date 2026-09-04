@@ -193,15 +193,16 @@ test("modules preserve list/detail URL recovery for legacy and contributed setti
   await page.route("**/api/sports/follows", (route) => route.fulfill({ json: { follows: [] } }));
   await page.goto("/settings?section=modules");
 
-  for (const moduleName of ["Briefings", "Chat", "Notifications", "Sports"]) {
+  for (const moduleName of ["Briefings", "Notifications", "Sports"]) {
     await expect(page.getByRole("button", { name: `Configure ${moduleName}` })).toBeVisible();
   }
-  for (const requiredName of ["Briefings", "Chat", "Notifications"]) {
+  await expect(page.getByRole("button", { name: "Configure Chat" })).toHaveCount(0);
+  for (const requiredName of ["Briefings", "Notifications"]) {
     await expect(page.getByRole("checkbox", { name: `Use ${requiredName}` })).toHaveCount(0);
   }
 
-  await page.getByRole("button", { name: "Configure Chat" }).click();
-  await expect(page).toHaveURL(/section=modules&module=chat$/);
+  await page.getByRole("button", { name: "Configure Briefings" }).click();
+  await expect(page).toHaveURL(/section=modules&module=briefings$/);
   await expect(page.getByRole("button", { name: "Back to modules" })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\?section=modules$/);
