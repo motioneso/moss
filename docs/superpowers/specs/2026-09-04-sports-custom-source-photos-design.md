@@ -42,7 +42,8 @@ can be built, verified, and accepted the same way.
 
 The browser only loads images from a fixed set of hosts, so a publisher's photo cannot be
 shown by URL directly. Sports already solves this for source icons with a server-side proxy
-that fetches the image, checks its bytes, and caches it. Photos need the same treatment.
+that fetches the image, checks its bytes, and keeps it in memory. Photos need a stronger
+version of that: a resized copy kept on the box in the owner's vault.
 
 ## Goals
 
@@ -127,8 +128,8 @@ A candidate URL must pass all of these on the server before it is attached to a 
 
 The bytes check happens when the proxy first fetches the image: it must start with JPEG, PNG,
 WebP, or GIF magic bytes, be at most 2 MB, and decode to at least 300 by 200 pixels from its
-header alone. A failed bytes check is cached as a miss so the browser is not sent back to the
-same broken image, and the story is shown without a photo.
+header alone. A failed bytes check is remembered as a miss for the headline cache's lifetime
+so the same broken image is not fetched again, and the story is shown without a photo.
 
 ### 4. Storing and serving the photo
 
