@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CompetitionRef, SportsFollowDto, TeamRef } from "@moss/shared";
 
 import { SourceAssignmentPicker } from "../../packages/sports/src/settings/source-assignment-picker.js";
-import { SportsSourcesSection } from "../../packages/sports/src/settings/sources.js";
+import { AddSourceFlow, SportsSourcesSection } from "../../packages/sports/src/settings/sources.js";
 import { sportsQueryKeys } from "../../packages/sports/src/web/query-keys.js";
 
 const NFL: CompetitionRef = {
@@ -115,6 +115,17 @@ function renderedText(node: unknown): string {
 
 describe("Sports source coverage settings", () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it("renders a custom row's icon from the module's own icon route", () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } }
+    });
+    client.setQueryData(sportsQueryKeys.sources, { sources: [espn, fotmob] });
+    const html = renderSection(client);
+
+    expect(html).toContain(`<img src="/api/sports/sources/${fotmobSourceId}/icon"`);
+    expect(html).not.toContain("fotmob.com/favicon.ico");
+  });
 
   it("renders Sports, Leagues, and Teams with the shared checkbox primitive", () => {
     const html = renderToString(
@@ -285,7 +296,9 @@ describe("Sports source coverage settings", () => {
     expect(renderedText(renderer.toJSON())).not.toContain(fotmobFeedUrl);
     const error = renderer.root.findAllByProps({ role: "alert" })[0];
     expect(error?.props.className).toBe("sp-src__err");
-    expect(renderedText(error)).toContain("Those assignments could not be verified.");
+    expect(renderedText(error)).toContain(
+      "We couldn't reach that site. Check the address and try again."
+    );
   });
 
   it("shows successful assignment previews as identities without raw feed URLs", async () => {
@@ -365,5 +378,130 @@ describe("Sports source coverage settings", () => {
     expect(text).toContain("All NFL");
     expect(text).toContain("Soccer");
     expect(text).not.toContain(fotmobFeedUrl);
+  });
+});
+
+describe("Sports add-source preview card", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function previewWith(overrides: Record<string, unknown>) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              status: "ok",
+              confirmationId: "confirmation-1",
+              authorizationAcknowledgement: "I confirm this public source.",
+              candidate: {
+                label: "FotMob",
+                canonicalDomain: "fotmob.com",
+                homepageUrl: "https://fotmob.com/",
+                retrievalMethod: "feed",
+                sampleCount: 1,
+                confirmedFetchHosts: ["fotmob.com"],
+                sampleHeadlines: ["Shared headline"],
+                targets: [
+                  {
+                    target: { kind: "sport", sportKey: "soccer" },
+                    label: "Soccer",
+                    scope: "sport",
+                    targetUrl: fotmobFeedUrl,
+                    sampleHeadlines: ["Per-coverage headline"]
+                  }
+                ]
+              },
+              ...overrides
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          )
+      )
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        createElement(
+          QueryClientProvider,
+          { client },
+          createElement(AddSourceFlow, {
+            follows: FOLLOWS,
+            competitionsByKey: COMPETITIONS,
+            teamsByCompetition: TEAMS
+          })
+        )
+      );
+    });
+    const input = renderer.root
+      .findAllByType("input")
+      .find((candidate) => candidate.props.id === "sp-addsource-input");
+    act(() => input?.props.onChange({ target: { value: "fotmob.com" } }));
+    const form = renderer.root.findByType("form");
+    await act(async () => form.props.onSubmit({ preventDefault() {} }));
+    return renderer;
+  }
+
+  it("shows sample headlines once, without the per-coverage repeats", async () => {
+    const renderer = await previewWith({});
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("Shared headline");
+    expect(text).not.toContain("Per-coverage headline");
+    expect(text).toContain("I confirm this public source.");
+    expect(
+      renderer.root
+        .findAllByType("button")
+        .some((button) => renderedText(button.props.children) === "Add this source")
+    ).toBe(true);
+  });
+
+  it("previews a subreddit with its sample linked articles and the same coverage picker", async () => {
+    const renderer = await previewWith({
+      candidate: {
+        label: "r/nfl",
+        canonicalDomain: "reddit.com",
+        homepageUrl: "https://www.reddit.com/r/nfl/",
+        retrievalMethod: "reddit",
+        sampleCount: 2,
+        confirmedFetchHosts: ["www.reddit.com"],
+        sampleHeadlines: ["Chiefs sign a new kicker", "Bills extend their coach"],
+        targets: []
+      }
+    });
+    const text = renderedText(renderer.toJSON());
+    expect(text).toContain("r/nfl");
+    expect(text).toContain("Chiefs sign a new kicker");
+    expect(text).toContain("Bills extend their coach");
+    expect(text).toContain("Coverage (optional");
+    expect(
+      renderer.root
+        .findAllByType("button")
+        .some((button) => renderedText(button.props.children) === "Add this source")
+    ).toBe(true);
+  });
+
+  it("tells the user plainly when a subreddit does not exist, is private, or is rate limited", async () => {
+    for (const [reason, copy] of [
+      ["not_found", "That subreddit doesn't exist."],
+      ["auth_required", "That subreddit is private or restricted, so Moss can't read it."],
+      ["rate_limited", "Reddit is rate limiting Moss. Try again in a few minutes."]
+    ] as const) {
+      const renderer = await previewWith({ status: "rejected", reason, candidate: undefined });
+      expect(renderedText(renderer.toJSON())).toContain(copy);
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("makes a duplicate publication obvious and hides the add controls", async () => {
+    const renderer = await previewWith({ duplicateOfSourceId: fotmobSourceId });
+    const notice = renderer.root.findAllByProps({ role: "status" })[0];
+    expect(notice?.props.className).toBe("sp-src__dupe");
+    expect(renderedText(notice)).toContain("Already added");
+    const buttons = renderer.root
+      .findAllByType("button")
+      .map((b) => renderedText(b.props.children));
+    expect(buttons).not.toContain("Add this source");
+    expect(buttons).toContain("Close");
+    expect(renderedText(renderer.toJSON())).not.toContain("I confirm this public source.");
   });
 });

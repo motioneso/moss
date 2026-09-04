@@ -291,13 +291,42 @@
   line-height: 1.4;
 }
 
-.nw-twlead-wrap,
-.nw-twlist__row {
+/* Story feedback overlay (Ben 2026-09-03, same rule as the Sports desk). A .nw-fbhost wraps one
+   story and parks the feedback dots in its top-right corner, over the photo when there is one, on
+   the same line as the text otherwise. Hidden until the story is hovered or holds focus; stays
+   while the menu or the reason form is open. Hover-less devices always show the dots. */
+.nw-fbhost {
   position: relative;
 }
-.nw-feedback {
+.nw-fbhost > .nw-feedback {
   position: absolute;
   top: var(--space-2);
   right: var(--space-2);
   z-index: 2;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.nw-fbhost:hover > .nw-feedback,
+.nw-fbhost:focus-within > .nw-feedback,
+.nw-fbhost > .nw-feedback:has([aria-expanded="true"]),
+.nw-fbhost > .nw-feedback:has(.nw-feedback__form) {
+  opacity: 1;
+}
+@media (hover: none) {
+  .nw-fbhost > .nw-feedback {
+    opacity: 1;
+  }
+}
+/* Text-only rows keep the last words clear of the dots. */
+.nw-briefs__item > .nw-briefs__link,
+.nw-rail__item > .nw-rail__link,
+.nw-twlist__row > .nw-twlist__link {
+  display: block;
+  padding-right: var(--space-7);
+}
+.nw-briefs__item > .nw-feedback,
+.nw-rail__item > .nw-feedback,
+.nw-twlist__row > .nw-feedback {
+  top: 0;
+  right: 0;
 }

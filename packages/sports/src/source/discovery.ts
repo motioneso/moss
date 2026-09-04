@@ -21,12 +21,21 @@ import type { SportsSourceAssignmentTarget } from "@moss/shared";
 import {
   expandSportsSourceRecipe,
   extractSportsSourceRecipe,
-  SPORTS_SOURCE_RECIPE_SCHEMA,
+  SPORTS_SOURCE_RECIPE_AI_SCHEMA,
   validateSportsSourceRecipe,
   type SportsRecipeItem,
   type SportsSourceRecipe
 } from "./recipe.js";
 import { sameSportsPublisher } from "./publisher-identity.js";
+import {
+  parseSubredditInput,
+  readSubreddit,
+  REDDIT_CANONICAL_DOMAIN,
+  REDDIT_FETCH_HOSTS,
+  REDDIT_PREVIEW_SAMPLES,
+  redditSubredditUrl,
+  subredditNameFromUrl
+} from "./reddit.js";
 import { sportsSourceTargetKey } from "./scope.js";
 
 export interface SportsWebRequestHop {
@@ -39,6 +48,8 @@ export type SportsSafeFetchPort = (
   options?: {
     readonly allowedHosts?: readonly string[];
     readonly requestHeaders?: Readonly<Record<string, string>>;
+    /** #2211 Reddit throttles generic agents; only the subreddit calls set this. */
+    readonly userAgent?: string;
     readonly allowedContentTypes?: readonly string[];
     readonly beforeRequest?: (hop: SportsWebRequestHop) => boolean | void | Promise<boolean | void>;
     readonly maxBytes?: number;
@@ -113,14 +124,33 @@ export type VerifiedSportsSourceCandidate = VerifiedSportsSourceCandidateBase &
         readonly recipe: SportsSourceRecipe;
         readonly recipeFingerprint: string;
       }
+    | {
+        /** #2211 the subreddit's public hot-posts feed URL. */
+        readonly feedUrl: string;
+        readonly retrievalMethod: "reddit";
+        readonly recipe: null;
+        readonly recipeFingerprint: null;
+        /** Community icon on Reddit's image hosts, for the source-icon route; null when absent. */
+        readonly iconUrl: string | null;
+      }
   );
+
+export type SportsSourceRejectionReason =
+  | "policy"
+  | "invalid_input"
+  | "unreachable"
+  | "not_https"
+  | "unsupported"
+  /** #2211 the subreddit does not exist or is banned. */
+  | "not_found"
+  /** #2211 the subreddit is private or quarantined. */
+  | "auth_required"
+  /** #2211 Reddit throttled the preview read. */
+  | "rate_limited";
 
 export type SportsSourceResolutionResult =
   | { status: "ok"; candidate: VerifiedSportsSourceCandidate }
-  | {
-      status: "rejected";
-      reason: "policy" | "invalid_input" | "unreachable" | "not_https" | "unsupported";
-    }
+  | { status: "rejected"; reason: SportsSourceRejectionReason }
   | { status: "unavailable" };
 
 export interface SportsDiscoveryBrowserPort {
@@ -268,34 +298,42 @@ function discoverFirstPartyCandidateUrls(
   return [...byHost.values()];
 }
 
-const TARGETED_RECIPE_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: ["recipe", "targets"],
-  properties: {
-    recipe: SPORTS_SOURCE_RECIPE_SCHEMA,
-    targets: {
-      type: "array",
-      maxItems: 20,
-      items: {
+// Parameter names are not pattern-checked here (the structured seam forbids the keyword); the
+// expansion step only accepts keys that name a validated recipe slot.
+const TARGET_MAPPINGS_ARRAY_SCHEMA = {
+  type: "array",
+  maxItems: 20,
+  items: {
+    type: "object",
+    additionalProperties: false,
+    required: ["targetKey", "parameters"],
+    properties: {
+      targetKey: { type: "string", minLength: 1, maxLength: 160 },
+      parameters: {
         type: "object",
-        additionalProperties: false,
-        required: ["targetKey", "parameters"],
-        properties: {
-          targetKey: { type: "string", minLength: 1, maxLength: 160 },
-          parameters: {
-            type: "object",
-            maxProperties: 8,
-            propertyNames: { pattern: "^[A-Za-z][A-Za-z0-9_]*$" },
-            additionalProperties: { type: "string", minLength: 1, maxLength: 128 }
-          }
-        }
+        maxProperties: 8,
+        additionalProperties: { type: "string", minLength: 1, maxLength: 128 }
       }
     }
   }
 } as const;
 
-const TARGET_MAPPINGS_SCHEMA = TARGETED_RECIPE_SCHEMA.properties.targets;
+const TARGETED_RECIPE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["recipe", "targets"],
+  properties: {
+    recipe: SPORTS_SOURCE_RECIPE_AI_SCHEMA,
+    targets: TARGET_MAPPINGS_ARRAY_SCHEMA
+  }
+} as const;
+
+const TARGET_MAPPINGS_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["targets"],
+  properties: { targets: TARGET_MAPPINGS_ARRAY_SCHEMA }
+} as const;
 
 function recipePrompt(
   evidence: readonly SportsRecipeEvidence[],
@@ -345,16 +383,18 @@ async function proposeAndReplayRecipe(
     fixedRecipe?.request.slots.length === 0
       ? {
           ok: true as const,
-          object: targets.map((target) => ({
-            targetKey: sportsSourceTargetKey(target.target),
-            parameters: {}
-          }))
+          object: {
+            targets: targets.map((target) => ({
+              targetKey: sportsSourceTargetKey(target.target),
+              parameters: {}
+            }))
+          }
         }
       : await deps.ai.generateJson(scopedDb, {
           schema: fixedRecipe
             ? TARGET_MAPPINGS_SCHEMA
             : targets.length === 0
-              ? SPORTS_SOURCE_RECIPE_SCHEMA
+              ? SPORTS_SOURCE_RECIPE_AI_SCHEMA
               : TARGETED_RECIPE_SCHEMA,
           prompt: recipePrompt(evidence, targets, fixedRecipe),
           maxOutputTokens: 4_000
@@ -380,12 +420,7 @@ async function proposeAndReplayRecipe(
     return { ok: false, reason: "invalid" };
   }
 
-  const mappings =
-    targets.length === 0
-      ? [{ targetKey: "", parameters: {} }]
-      : fixedRecipe
-        ? proposed.object
-        : proposal.targets;
+  const mappings = targets.length === 0 ? [{ targetKey: "", parameters: {} }] : proposal.targets;
   if (!Array.isArray(mappings) || mappings.length !== Math.max(1, targets.length)) {
     return { ok: false, reason: "invalid" };
   }
@@ -497,6 +532,12 @@ export async function resolveSportsSourceInput(
 ): Promise<SportsSourceResolutionResult> {
   const targets = input.targets ?? [];
   const raw = input.rawUrl.trim();
+  const subreddit = parseSubredditInput(raw);
+  if (subreddit) {
+    return subreddit.kind === "invalid"
+      ? { status: "rejected", reason: "invalid_input" }
+      : resolveSubredditInput(deps.fetch, subreddit.name, targets, input.persistedAuthority);
+  }
   const requestedDomain = normalizePublisherDomain(raw);
   if (!requestedDomain.ok) {
     return {
@@ -785,6 +826,74 @@ export async function resolveSportsSourceInput(
       targets: recipeResult.targets,
       checkedAt: recipeResult.checkedAt,
       samples: recipeResult.samples
+    }
+  };
+}
+
+/**
+ * #2211 A subreddit is read through its newest-posts Atom feed, which carries both the identity
+ * (category term, title) and the sample linked articles in one call. Every assignment target shares the
+ * one listing URL, exactly as a feed does. A saved subreddit's authority must still be reddit.com
+ * pinned to www.reddit.com, or the row is treated as tampered.
+ */
+async function resolveSubredditInput(
+  fetch: SportsSafeFetchPort,
+  name: string,
+  targets: readonly SportsDiscoveryTarget[],
+  authority:
+    | {
+        readonly canonicalDomain: string;
+        readonly recipeJson: Readonly<Record<string, unknown>> | null;
+        readonly confirmedFetchHosts: readonly string[];
+      }
+    | undefined
+): Promise<SportsSourceResolutionResult> {
+  if (
+    authority &&
+    (authority.canonicalDomain !== REDDIT_CANONICAL_DOMAIN ||
+      authority.recipeJson !== null ||
+      authority.confirmedFetchHosts.some((host) => !REDDIT_FETCH_HOSTS.includes(host)))
+  ) {
+    return { status: "rejected", reason: "unsupported" };
+  }
+  if (targets.some((target) => target.exactTargetUrl)) {
+    return { status: "rejected", reason: "invalid_input" };
+  }
+  const read = await readSubreddit(fetch, name);
+  if (!read.ok) return { status: "rejected", reason: read.reason };
+  const displayName = subredditNameFromUrl(read.listingUrl) ?? read.subreddit.displayName;
+  const checkedAt = new Date().toISOString();
+  const samples: SportsRecipeItem[] = read.headlines
+    .slice(0, REDDIT_PREVIEW_SAMPLES)
+    .map((headline) => ({
+      headline: headline.title,
+      url: headline.url,
+      ...(headline.publishedAt ? { publishedAt: headline.publishedAt } : {})
+    }));
+  return {
+    status: "ok",
+    candidate: {
+      candidateId: randomUUID(),
+      label: `r/${displayName}`,
+      canonicalDomain: REDDIT_CANONICAL_DOMAIN,
+      homepageUrl: redditSubredditUrl(displayName),
+      feedUrl: read.listingUrl,
+      retrievalMethod: "reddit",
+      sampleCount: read.headlines.length,
+      validationFingerprint: createHash("sha256").update(read.listingUrl).digest("hex"),
+      recipe: null,
+      recipeFingerprint: null,
+      iconUrl: read.subreddit.iconUrl,
+      confirmedFetchHosts: [...REDDIT_FETCH_HOSTS],
+      checkedAt,
+      samples,
+      targets: targets.map((target) => ({
+        ...target,
+        targetUrl: read.listingUrl,
+        parameters: {},
+        samples,
+        checkedAt
+      }))
     }
   };
 }

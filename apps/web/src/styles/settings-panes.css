@@ -237,7 +237,6 @@
   align-items: center;
   gap: 6px;
   padding: 4px 2px;
-  font: inherit;
   cursor: pointer;
   text-decoration: none;
 }

@@ -368,6 +368,7 @@ test("public publishers reach Sports, Today, recovery, and Moss status (#1909)",
   await bringUpRealModel(page);
   const follows = await createPremierLeagueFollows(page);
   const section = await openSportsSettings(page);
+  await section.getByRole("button", { name: "Add a source" }).click();
   await expect(section.getByLabel("Publication homepage or domain")).toBeVisible();
   await expect(section.getByRole("button", { name: "Check", exact: true })).toBeVisible();
   await expect(

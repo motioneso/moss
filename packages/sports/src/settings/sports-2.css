@@ -1,5 +1,5 @@
 /* Hallmark · component: standings transfer · tone: Moss editorial utility · palette: existing
-   Moss tokens · fingerprint: native dual-list transfer · pre-emit critique: P5 H5 E4 S5 R5 V4
+   Moss tokens · fingerprint: grouped checklist tree · pre-emit critique: P5 H5 E4 S5 R5 V4
    · contrast: pass (40–41) · tokens: pass (48) · mobile: pass (34, 49–57) */
 /* Sports settings follow-picker (packages/sports/src/settings/index.tsx). Separate file from
    sports-1.css purely for the 1000-line file-size gate (sports-1.css has no headroom); imported
@@ -93,6 +93,17 @@
 /* Search-first picker additions (#688): search input, followed-teams summary
    chip row, collapsible browse group header. Token-only, appended. */
 
+/* "Following" section head: same title + sub pairing as News sources and Standings leagues so
+   the three sections of the pane read as one family (Ben's whole-pane review, 2026-09-03). */
+.sp-follow__head {
+  display: grid;
+  gap: var(--space-1);
+  margin: var(--space-5) 0 var(--space-4);
+}
+.sp-follow__head > * {
+  margin: 0;
+}
+
 .sp-search {
   margin-bottom: 14px;
 }
@@ -171,9 +182,16 @@
 }
 /* .sp-whole normally stretches full-width as a standalone search result row; inside a browse
    row it sits beside .sp-browse__league instead, so it needs to give up that stretch. */
+/* One shared column width so every row's Follow all button lines up (Ben, 2026-09-03). The
+   width goes on the wrapper: .sp-action-target is a column flexbox, so a flex-basis on the
+   button itself would set its height. */
+.sp-browse__row > .sp-action-target {
+  flex: 0 0 9.5rem;
+  width: 9.5rem;
+}
 .sp-browse__row .sp-whole {
-  width: auto;
-  flex: 0 0 auto;
+  width: 100%;
+  justify-content: center;
   margin-bottom: 0;
 }
 
@@ -182,6 +200,7 @@
   min-width: 0;
   display: flex;
   align-items: center;
+  gap: 8px;
   padding: 9px 12px;
   cursor: pointer;
   text-align: left;
@@ -208,10 +227,13 @@
   margin-top: var(--space-6);
 }
 
+/* Standings leagues (Ben 2026-09-03): last section of the pane, collapsed behind a header row.
+   The heading itself is the toggle; a count badge and a preview of the chosen leagues keep the
+   collapsed row informative. */
 .sp-standings-settings {
   display: grid;
   gap: var(--space-3);
-  margin-bottom: var(--space-6);
+  margin-top: var(--space-6);
 }
 .sp-standings-settings__head {
   display: grid;
@@ -220,43 +242,81 @@
 .sp-standings-settings__head > * {
   margin: 0;
 }
-.sp-standings-transfer {
+.sp-standings-settings__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.sp-standings-settings__toggle > svg {
+  flex: none;
+}
+.sp-standings-settings__preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+.sp-standings-settings__panel {
   display: grid;
+  gap: var(--space-3);
+}
+.sp-standings-settings__panel[hidden] {
+  display: none;
+}
+.sp-standings-tree {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+.sp-standings-tree__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.sp-standings-tree__sport {
+  display: grid;
+  gap: var(--space-2);
+}
+.sp-standings-tree__region {
+  display: grid;
+  gap: var(--space-2);
+}
+.sp-standings-tree__row {
+  display: flex;
+  align-items: center;
   gap: var(--space-3);
   min-width: 0;
 }
-.sp-standings-transfer__column {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: var(--space-2);
-  min-width: 0;
-}
-.sp-standings-transfer__column .jds-selectwrap,
-.sp-standings-transfer__column .jds-select {
-  min-width: 0;
-  height: 100%;
-}
-.sp-standings-transfer__actions {
-  display: flex;
+.sp-standings-tree__check {
   align-items: center;
-  justify-content: center;
+}
+.sp-standings-tree__toggle {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
   gap: var(--space-2);
-  flex-wrap: wrap;
+  padding: var(--space-1) 0;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
 }
-.sp-standings-transfer__status {
-  text-align: center;
+.sp-standings-tree__toggle > svg {
+  flex: none;
 }
-@media (min-width: 48rem) {
-  .sp-standings-transfer {
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    align-items: stretch;
-  }
-  .sp-standings-transfer__actions {
-    flex-direction: column;
-  }
-  .sp-standings-transfer__status {
-    grid-column: 1 / -1;
-  }
+/* Indent the leagues under a country past the country checkbox and chevron. */
+.sp-standings-tree__leagues {
+  display: grid;
+  gap: var(--space-2);
+  padding-left: calc(19px + var(--space-3) + 16px + var(--space-2));
+}
+.sp-standings-tree__leagues[hidden] {
+  display: none;
 }
 .sp-feedback-settings__title,
 .sp-feedback-settings__note {
