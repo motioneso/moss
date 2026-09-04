@@ -141,7 +141,6 @@ export function AddSourceFlow(props: {
   const [selectedTargets, setSelectedTargets] = useState<Map<string, SportsSourceAssignmentTarget>>(
     new Map()
   );
-  const [exactTargetUrls, setExactTargetUrls] = useState<Map<string, string>>(new Map());
   const [authorizationAccepted, setAuthorizationAccepted] = useState(false);
   const [added, setAdded] = useState(false);
   // The preview card lands below the fold once coverage is picked; bring it into view when it
@@ -170,7 +169,6 @@ export function AddSourceFlow(props: {
       setInput("");
       setPreview(null);
       setSelectedTargets(new Map());
-      setExactTargetUrls(new Map());
       setAuthorizationAccepted(false);
       setAdded(true);
       invalidate();
@@ -185,12 +183,8 @@ export function AddSourceFlow(props: {
     setPreview(null);
     previewMutation.mutate({
       url: trimmed,
-      assignments: [...selectedTargets].map(([key, target]) => ({
-        target,
-        ...(exactTargetUrls.get(key)?.trim()
-          ? { exactTargetUrl: exactTargetUrls.get(key)!.trim() }
-          : {})
-      }))
+      // One text box only: coverage ticks decide the scope, none ticked means general (Ben, 2026-09-03).
+      assignments: [...selectedTargets.values()].map((target) => ({ target }))
     });
   }
 
@@ -295,36 +289,6 @@ export function AddSourceFlow(props: {
           />
         </>
       ) : null}
-      {[...selectedTargets].map(([key, target]) => {
-        const id = `sp-target-${key}`;
-        return (
-          <label key={key} className="sp-src__label" htmlFor={id}>
-            Exact target URL for{" "}
-            {sourceTargetDisplayLabel(
-              target,
-              props.follows,
-              props.competitionsByKey,
-              props.teamsByCompetition
-            )}{" "}
-            (optional)
-            <input
-              id={id}
-              className="jds-input"
-              type="url"
-              placeholder="https://publisher.example/team-or-league-news"
-              value={exactTargetUrls.get(key) ?? ""}
-              disabled={busy}
-              onChange={(event) => {
-                const value = event.target.value;
-                setExactTargetUrls((current) => new Map(current).set(key, value));
-                setPreview(null);
-                setAuthorizationAccepted(false);
-              }}
-            />
-          </label>
-        );
-      })}
-
       {errorMessage ? <SourceError>{errorMessage}</SourceError> : null}
 
       {preview?.status === "ok" && preview.candidate ? (
